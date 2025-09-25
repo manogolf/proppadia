@@ -1,0 +1,39 @@
+# .github/workflows/sync_user_added_derived_and_bvp_stats.yml
+name: Sync User-Added Props & Derived Stats
+
+on:
+  schedule:
+    - cron: "0 11 * * *" # Runs daily at 11:00 AM UTC
+  workflow_dispatch:
+
+jobs:
+  sync-user-added-and-derived:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run syncUserAddedPropsNow.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/syncUserAddedPropsNow.js
+
+      - name: Run generateBvpStats.js (recent games)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node backend/scripts/generateBvpStats.js
+
+      - name: Run generateDerivedStats.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node backend/scripts/generateDerivedStats.js
