@@ -1,0 +1,92 @@
+name: Trigger & Fetch NHL Exports
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "15 10 * * *"  # 03:15 PT daily
+
+concurrency:
+  group: nhl-export
+  cancel-in-progress: false
+
+jobs:
+  export-and-download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Set DATE (UTC)
+        run: echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
+
+      - name: Refresh ready views (optional)
+        run: |
+          curl -fsS -X POST \
+            "https://baseball-streaks-sq44.onrender.com/admin/refresh-ready?token=${{ secrets.EXPORT_TOKEN }}"
+
+      # Ingest schedules via prefetch (avoids Render outbound networking)
+      - name: Set handy dates (UTC)
+        run: |
+          echo "TODAY=$(date -u +%F)" >> $GITHUB_ENV
+          echo "TOMORROW=$(date -u -d 'tomorrow' +%F 2>/dev/null || date -u -v+1d +%F)" >> $GITHUB_ENV
+          echo "YDAY=$(date -u -d 'yesterday' +%F 2>/dev/null || date -u -v-1d +%F)" >> $GITHUB_ENV
+
+      - name: Fetch & ingest YESTERDAY schedule
+        run: |
+          curl -fsSL "https://statsapi.web.nhl.com/api/v1/schedule?date=${YDAY}&expand=schedule.teams,schedule.linescore" -o sched_yday.json
+          curl -fsS -X POST \
+            "https://baseball-streaks-sq44.onrender.com/admin/ingest-schedule?token=${{ secrets.EXPORT_TOKEN }}&date_str=${YDAY}" \
+            -H "Content-Type: application/json" --data-binary @sched_yday.json
+
+      - name: Fetch & ingest TODAY schedule
+        run: |
+          curl -fsSL "https://statsapi.web.nhl.com/api/v1/schedule?date=${TODAY}&expand=schedule.teams,schedule.linescore" -o sched_today.json
+          curl -fsS -X POST \
+            "https://baseball-streaks-sq44.onrender.com/admin/ingest-schedule?token=${{ secrets.EXPORT_TOKEN }}&date_str=${TODAY}" \
+            -H "Content-Type: application/json" --data-binary @sched_today.json
+
+      - name: Fetch & ingest TOMORROW schedule
+        run: |
+          curl -fsSL "https://statsapi.web.nhl.com/api/v1/schedule?date=${TOMORROW}&expand=schedule.teams,schedule.linescore" -o sched_tomorrow.json
+          curl -fsS -X POST \
+            "https://baseball-streaks-sq44.onrender.com/admin/ingest-schedule?token=${{ secrets.EXPORT_TOKEN }}&date_str=${TOMORROW}" \
+            -H "Content-Type: application/json" --data-binary @sched_tomorrow.json
+
+      # Trigger the export on the server (writes CSVs to /var/data/...)
+      - name: Trigger export on Render
+        run: |
+          curl -fsS -X POST \
+            "https://baseball-streaks-sq44.onrender.com/admin/refresh-export?token=${{ secrets.EXPORT_TOKEN }}" \
+            -o response.json
+          cat response.json
+
+      - name: List recent exports (sanity)
+        run: |
+          curl -fsS \
+            "https://baseball-streaks-sq44.onrender.com/admin/list-exports?token=${{ secrets.EXPORT_TOKEN }}" \
+            | head -c 2000 || true
+
+      # Download both CSVs for today's date (UTC)
+      - name: Download CSVs
+        run: |
+          curl -fSL \
+            "https://baseball-streaks-sq44.onrender.com/admin/download-export?token=${{ secrets.EXPORT_TOKEN }}&which=sog&date_str=${DATE}" \
+            -o train_nhl_sog_v2.csv
+          curl -fSL \
+            "https://baseball-streaks-sq44.onrender.com/admin/download-export?token=${{ secrets.EXPORT_TOKEN }}&which=goalie&date_str=${DATE}" \
+            -o train_goalie_saves_v2.csv
+          ls -lh *.csv
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nhl-exports-${{ env.DATE }}
+          path: |
+            train_nhl_sog_v2.csv
+            train_goalie_saves_v2.csv
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Cleanup old exports on server (optional)
+        run: |
+          curl -fsS -X POST \
+            "https://baseball-streaks-sq44.onrender.com/admin/cleanup-exports?token=${{ secrets.EXPORT_TOKEN }}&keep_days=45"

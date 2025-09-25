@@ -1,0 +1,21 @@
+# requirements.txt — NHL props pipeline
+
+# Core numerics & data
+numpy>=2.1,<3
+pandas>=2.2,<3
+scipy>=1.11,<2
+
+# Modeling
+scikit-learn>=1.5,<2         # isotonic calibration, utilities
+statsmodels>=0.14,<1         # Poisson / Negative Binomial GLM
+
+# Plotting (optional; used by calibration/report scripts)
+matplotlib>=3.8,<4
+
+# Database
+psycopg2-binary>=2.9,<3      # Postgres (Session Pooler URI)
+
+# Convenience
+tqdm>=4.66,<5
+python-dateutil>=2.8.2,<3
+requests==2.32.5

@@ -1,0 +1,55 @@
+name: NHL Daily Refresh (Repo SQL)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "15 10 * * *" # runs 10:15 UTC daily
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Check DB connectivity
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT now();"
+
+      - name: Run repo SQL (scripts/refresh.sql)
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/refresh.sql
+
+      - name: Verify ready view counts
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+          SELECT 'sog_ready' AS which, COUNT(*) AS rows FROM nhl.training_features_nhl_sog_v2_ready
+          UNION ALL
+          SELECT 'goalie_ready', COUNT(*) FROM nhl.training_features_goalie_saves_v2_ready;
+          "
+
+      - name: Export SOG training CSV
+        run: |
+          mkdir -p ml
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (SELECT * FROM nhl.export_training_nhl_sog_v2 ORDER BY game_date, player_id) TO STDOUT WITH CSV HEADER" > ml/train_nhl_sog_v2.csv
+
+      - name: Export Goalie training CSV
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (SELECT * FROM nhl.export_training_goalie_saves_v2 ORDER BY game_date, player_id) TO STDOUT WITH CSV HEADER" > ml/train_goalie_saves_v2.csv
+
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nhl-training-csvs
+          path: |
+            ml/train_nhl_sog_v2.csv
+            ml/train_goalie_saves_v2.csv
+          if-no-files-found: error
