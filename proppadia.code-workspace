@@ -1,0 +1,14 @@
+{
+  "folders": [
+    { "path": "." } // the repo root (recommended to keep just this)
+    // { "path": "nhl" },        // optional duplicates; safe to remove
+    // { "path": "mlb" }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": ".venv/bin/python",
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "files.exclude": {
+      "**/__pycache__": true
+    }
+  }
+}

@@ -1,0 +1,20 @@
+# OS / editor
+.DS_Store
+.vscode/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Data & models (keep big artifacts out of git)
+nhl/data/raw/
+nhl/data/interim/
+nhl/data/processed/*.csv
+nhl/models/archive/
+nhl/models/latest/*.pkl
+mlb/data/raw/
+mlb/data/interim/
+mlb/data/processed/*.csv
+mlb/models/archive/
+mlb/models/latest/*.pkl
