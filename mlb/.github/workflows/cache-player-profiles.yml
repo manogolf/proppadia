@@ -1,0 +1,29 @@
+name: Cache Player Profiles
+
+on:
+  schedule:
+    # Runs every day at 3:20 AM Eastern Time (07:20 UTC)
+    - cron: "20 7 * * *"
+  workflow_dispatch: # allows manual runs from GitHub Actions tab
+
+jobs:
+  cache-profiles:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: 🚀 Run profile caching script
+        run: node backend/scripts/cache/generateCachedPlayerProfiles.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
