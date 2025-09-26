@@ -2,13 +2,35 @@ from __future__ import annotations
 import os, sys
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Any
-from shared.supabase_utils import supabase  # type: ignore
 from fastapi import APIRouter
 from backend.app.deps import pg_fetchone  # absolute import avoids relative import issues in editors
 try:
     import psycopg  # type: ignore
 except Exception:
     psycopg = None  # type: ignore
+
+APP_DIR = Path(__file__).resolve().parent      # backend/app
+BACKEND_DIR = APP_DIR.parent                   # backend/
+ROOT_SCRIPTS = BACKEND_DIR / "scripts"
+if ROOT_SCRIPTS.exists() and str(ROOT_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(ROOT_SCRIPTS))
+
+# resolve backend/scripts so we can import backend/scripts/shared/supabase_utils.py
+ROOT_SCRIPTS = BACKEND_DIR / "scripts"
+if ROOT_SCRIPTS.exists() and str(ROOT_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(ROOT_SCRIPTS))
+
+# robust import: prefer package-style `shared.supabase_utils`,
+# fall back to direct module import if `shared/` isn't a package
+try:
+    from shared.supabase_utils import supabase  # type: ignore
+except ModuleNotFoundError:
+    SHARED_DIR = ROOT_SCRIPTS / "shared"
+    if SHARED_DIR.exists() and str(SHARED_DIR) not in sys.path:
+        sys.path.insert(0, str(SHARED_DIR))
+    import importlib
+    supabase = importlib.import_module("supabase_utils").supabase  # type: ignore
+
 
 router = APIRouter(tags=["nhl"])
 
