@@ -3,17 +3,12 @@
     "is_home",
     "rest_days",
     "b2b_flag",
-    "d5_sog_per60",
     "d10_sog_per60",
-    "d20_sog_per60",
-    "d5_attempts_per60",
-    "d10_pp_toi",
     "role_pp_share",
     "opponent_id",
     "team_d10_sf_per60",
     "team_d10_sa_per60",
     "opp_d10_sf_per60",
-    "opp_d10_sa_per60",
     "pace_matchup_index"
   ],
   "goalie_saves": [

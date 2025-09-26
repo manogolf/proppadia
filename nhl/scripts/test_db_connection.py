@@ -16,6 +16,8 @@ Notes:
 """
 
 import argparse, socket, subprocess, sys, time
+import psycopg2  # type: ignore
+
 from urllib.parse import urlparse, unquote
 
 def resolve_host(host: str) -> str | None:
@@ -83,7 +85,6 @@ def main():
     except Exception:
         print("ℹ️ Installing psycopg2-binary…")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-qU", "psycopg2-binary"])
-        import psycopg2  # type: ignore
 
     # Prefer a DSN that includes host (for TLS/SNI) + hostaddr (to bypass DNS) when we have an IP.
     if ip:
