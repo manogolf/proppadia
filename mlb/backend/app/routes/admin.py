@@ -578,3 +578,18 @@ def cleanup_exports(token: str, keep_days: int = Query(30, ge=7, le=365)):
         else:
             kept += 1
     return {"ok": True, "deleted": deleted, "kept": kept, "cutoff": str(cutoff)}
+
+@router.get("/whoami")
+def whoami():
+    import os, sys, pathlib
+    here = pathlib.Path(__file__).resolve()
+    return {
+        "cwd": os.getcwd(),
+        "file": str(here),
+        "argv": sys.argv,
+        "exists": {
+            "backend/app/api_server.py": os.path.exists("backend/app/api_server.py"),
+            "mlb/backend/app/api_server.py": os.path.exists("mlb/backend/app/api_server.py"),
+        }
+    }
+
