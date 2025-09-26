@@ -18,3 +18,11 @@ mlb/data/interim/
 mlb/data/processed/*.csv
 mlb/models/archive/
 mlb/models/latest/*.pkl
+# proppadia cleanup
+mlb/backend/node_modules/
+mlb/backend/build/
+mlb/frontend/node_modules/
+mlb/frontend/build/
+**/__pycache__/
+**/*.pyc
+.venv/
