@@ -29,12 +29,18 @@ except Exception:
     psycopg = None  # type: ignore
 
 def _db_url() -> Optional[str]:
-    # accept any common env var name; Render already has DATABASE_URL
-    return (
+    raw = (
         os.getenv("SUPABASE_DB_URL")
         or os.getenv("DATABASE_URL")
         or os.getenv("SUPABASE_POSTGRES_URL")
     )
+    if not raw:
+        return None
+    cleaned = raw.strip()
+    # if someone pasted with surrounding quotes, drop them
+    if (cleaned.startswith(("'", '"')) and cleaned.endswith(("'", '"')) and len(cleaned) > 1):
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
 
 def pg_fetchone(sql: str, params: tuple = ()) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
     """
