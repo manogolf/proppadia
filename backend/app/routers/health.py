@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from ..deps import ping_db, env_summary
 
 router = APIRouter(tags=["health"])
 
@@ -8,5 +9,5 @@ def live():
 
 @router.get("/health/ready")
 def ready():
-    # Add lightweight checks later (e.g., DB ping)
-    return {"ok": True}
+    db_ok, err = ping_db()
+    return {"ok": db_ok, "db_ok": db_ok, "error": err, "env": env_summary()}
