@@ -26,11 +26,13 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
 import numpy as np
 import pandas as pd
+import pandas.api.types as ptypes
 from sklearn.linear_model import PoissonRegressor
 from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import log_loss, roc_auc_score
 from scipy.stats import nbinom, poisson
 import statsmodels.api as sm
+
 
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -86,19 +88,68 @@ def make_temporal_folds(df: pd.DataFrame, date_col: str, n_folds: int, gap_days:
         folds.append((tr_idx.values, va_idx.values))
     return folds
 
-def prepare_features(df: pd.DataFrame, feature_list: List[str], numeric_clip: bool = True) -> pd.DataFrame:
+def is_bool_or_binary(s: pd.Series) -> bool:
+    """True if column is boolean or strictly {0,1} after numeric coercion."""
+    if ptypes.is_bool_dtype(s):
+        return True
+    vals = pd.to_numeric(pd.Series(s.dropna().unique()), errors="coerce")
+    vals = vals[~vals.isna()]
+    if len(vals) == 0:
+        return False
+    try:
+        uniq = set(vals.astype(int).unique())
+        return uniq.issubset({0, 1})
+    except Exception:
+        return False
+
+def winsorize_numeric(s: pd.Series, p_low: float = 0.01, p_high: float = 0.99) -> pd.Series:
+    """Clamp extremes to reduce outlier impact; no-op on failure."""
+    try:
+        lo, hi = s.quantile(p_low), s.quantile(p_high)
+        return s.clip(lo, hi)
+    except Exception:
+        return s
+
+def prepare_features(df: pd.DataFrame, feature_list: List[str], schema: Optional[List[str]] = None) -> pd.DataFrame:
+    """Cast numerics, coerce boolean-like strings to 0/1, one-hot categoricals; if schema
+    is provided, reindex to that column set (fill missing with 0.0) for stability."""
     X = df[feature_list].copy()
-    for col in X.columns:
-        if pd.api.types.is_numeric_dtype(X[col]):
-            X[col] = X[col].astype(float)
-            if numeric_clip:
-                X[col] = winsorize_series(X[col])
-            X[col] = X[col].fillna(X[col].median())
+
+    # helper: detect boolean-like strings
+    def _is_boolish_strings(series: pd.Series) -> bool:
+        vals = series.dropna().astype(str).str.strip().str.lower().unique()
+        if len(vals) == 0:
+            return False
+        allowed = {"t","f","true","false","y","n","yes","no","1","0"}
+        return set(vals).issubset(allowed)
+
+    for c in X.columns:
+        col = X[c]
+        if is_bool_or_binary(col) or _is_boolish_strings(col):
+            # map common string booleans to 0/1 then to float
+            s = col.astype(str).str.strip().str.lower()
+            mapped = s.replace({"t":1,"true":1,"y":1,"yes":1,"1":1,
+                                "f":0,"false":0,"n":0,"no":0,"0":0})
+            X[c] = pd.to_numeric(mapped, errors="coerce").fillna(0).astype(float)
+        elif ptypes.is_numeric_dtype(col):
+            X[c] = pd.to_numeric(col, errors="coerce").astype(float)
+            X[c] = winsorize_numeric(X[c]).fillna(X[c].median())
         else:
-            X[col] = X[col].fillna("other").astype(str)
-    cat_cols = [c for c in X.columns if not pd.api.types.is_numeric_dtype(X[c])]
+            X[c] = col.astype(str).fillna("other")
+
+    # one-hot any non-numerics that remain
+    cat_cols = [c for c in X.columns if not ptypes.is_numeric_dtype(X[c])]
     if cat_cols:
         X = pd.get_dummies(X, columns=cat_cols, dummy_na=False)
+
+    # ensure numeric dtype
+    for c in X.columns:
+        X[c] = pd.to_numeric(X[c], errors="coerce").fillna(0.0)
+
+    # align to a fixed schema for consistency across splits
+    if schema is not None:
+        X = X.reindex(columns=schema, fill_value=0.0)
+
     return X
 
 def prob_over_poisson(mu: np.ndarray, line: float) -> np.ndarray:
@@ -172,6 +223,10 @@ def run_cv_and_select(
             yt, yv = y[tr_idx], y[va_idx]
             Xt_sm = sm.add_constant(Xt, has_constant="add")
             Xv_sm = sm.add_constant(Xv, has_constant="add")
+            # NEW: force pure float arrays to avoid statsmodels object-dtype error
+            Xt_sm = np.asarray(Xt_sm, dtype=np.float64)
+            Xv_sm = np.asarray(Xv_sm, dtype=np.float64)
+
             fam = sm.families.NegativeBinomial(alpha=disp_alpha)
             try:
                 nb_model = sm.GLM(yt, Xt_sm, family=fam)
@@ -391,13 +446,22 @@ def main():
         feat_meta = json.load(f)
     if args.feature_key not in feat_meta:
         raise ValueError(f"feature_key '{args.feature_key}' not found in {args.feature_json}")
-    features = feat_meta[args.feature_key]
-    feature_hash = sha256_str(json.dumps(features, sort_keys=True))
+    raw_features = feat_meta[args.feature_key]
+    all_cols = set(df.columns)
 
-    # Ensure required features exist
-    missing = [c for c in features if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing features in CSV: {missing}")
+    required = {"is_home", "rest_days", "b2b_flag"}
+
+    missing_required = [c for c in required if c not in all_cols]
+    if missing_required:
+        raise ValueError(f"Missing REQUIRED features: {missing_required}")
+
+    used_features = [c for c in raw_features if c in all_cols]
+    skipped = [c for c in raw_features if c not in all_cols]
+    if skipped:
+        print(f"[warn] Skipping missing optional features: {skipped}")
+
+    features = used_features
+    feature_hash = sha256_str(json.dumps(features, sort_keys=True))
 
     eval_lines = [float(x) for x in args.eval_lines.split(",") if x.strip()]
     alpha_grid_poisson = [float(x) for x in args.alpha_grid_poisson.split(",") if x.strip()]

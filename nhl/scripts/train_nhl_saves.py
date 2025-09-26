@@ -373,12 +373,29 @@ def main():
         feat_meta = json.load(f)
     if args.feature_key not in feat_meta:
         raise ValueError(f"feature_key '{args.feature_key}' not found in {args.feature_json}")
-    features = feat_meta[args.feature_key]
-    feature_hash = sha256_str(json.dumps(features, sort_keys=True))
+    # original registry from JSON
+    raw_features = feat_meta[args.feature_key]
+    all_cols = set(df.columns)
 
-    missing = [c for c in features if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing features in CSV: {missing}")
+    # minimal columns we truly require
+    required = {"is_home", "rest_days", "b2b_flag"}
+    # if the spec includes start_prob for goalies, make it required too
+    if "start_prob" in raw_features:
+        required.add("start_prob")
+
+    missing_required = [c for c in required if c not in all_cols]
+    if missing_required:
+        raise ValueError(f"Missing REQUIRED features: {missing_required}")
+
+    # keep only features that actually exist in the CSV; warn about the rest
+    used_features = [c for c in raw_features if c in all_cols]
+    skipped = [c for c in raw_features if c not in all_cols]
+    if skipped:
+        print(f"[warn] Skipping missing optional features: {skipped}")
+
+    # from here on, train with the gated list
+    features = used_features
+    feature_hash = sha256_str(json.dumps(features, sort_keys=True))
 
     eval_lines = [float(x) for x in args.eval_lines.split(",") if x.strip()]
     alpha_grid_poisson = [float(x) for x in args.alpha_grid_poisson.split(",") if x.strip()]
