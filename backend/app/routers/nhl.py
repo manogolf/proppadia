@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from ..deps import supabase  # centralized root helper
 from backend.app.deps import pg_fetchone
 
 router = APIRouter(tags=["nhl"])
