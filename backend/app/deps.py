@@ -29,15 +29,10 @@ except Exception:
     psycopg = None  # type: ignore
 
 def _db_url() -> Optional[str]:
-    raw = (
-        os.getenv("SUPABASE_DB_URL")
-        or os.getenv("DATABASE_URL")
-        or os.getenv("SUPABASE_POSTGRES_URL")
-    )
+    raw = os.getenv("DATABASE_URL")
     if not raw:
         return None
     cleaned = raw.strip()
-    # if someone pasted with surrounding quotes, drop them
     if (cleaned.startswith(("'", '"')) and cleaned.endswith(("'", '"')) and len(cleaned) > 1):
         cleaned = cleaned[1:-1].strip()
     return cleaned
@@ -69,7 +64,7 @@ def env_summary() -> dict:
         "SUPABASE_URL_set": bool(os.getenv("SUPABASE_URL")),
         "SUPABASE_ANON_KEY_set": bool(os.getenv("SUPABASE_ANON_KEY")),
         "SUPABASE_SERVICE_ROLE_KEY_set": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
-        "SUPABASE_DB_URL_set": bool(_db_url()),
+        "DATABASE_URL_set": bool(os.getenv("DATABASE_URL")),
         "helper": "backend/scripts/shared/supabase_utils.py",
     }
 
