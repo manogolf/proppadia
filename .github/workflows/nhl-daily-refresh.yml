@@ -54,15 +54,23 @@ jobs:
           python -m pip install -r nhl/training/requirements.txt
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31"
 
-      # ─── Ingest (fetch/load yesterday) ─────────────────────────────────────────
-      - name: Ingest (run_daily_slate.py) # runs only if script exists
+      # ─── Ingest (run_daily_slate.py) without a separate SUPABASE_PROJECT secret ───
+      - name: Ingest (run_daily_slate.py)
         run: |
-          if [ -f nhl/scripts/run_daily_slate.py ]; then
-            echo "Ingesting for ${YDAY}..."
-            python nhl/scripts/run_daily_slate.py --date "${YDAY}"
-          else
-            echo "No nhl/scripts/run_daily_slate.py found; skipping ingest step."
-          fi
+          # derive project ref from https://<ref>.supabase.co
+          PROJECT_REF="$(python - <<'PY'
+          import os, urllib.parse as u
+          host = u.urlparse(os.environ['SUPABASE_URL']).hostname or ''
+          print(host.split('.')[0])
+          PY
+          )"
+              echo "Using PROJECT_REF=${PROJECT_REF}"
+              mkdir -p exports
+              python nhl/scripts/run_daily_slate.py \
+                --project "$PROJECT_REF" \
+                --sog-csv exports/train_nhl_sog_v2.csv \
+                --saves-csv exports/train_goalie_saves_v2.csv \
+                --db-url "$SUPABASE_DB_URL"
 
       # ─── Transform (refresh features/views) ────────────────────────────────────
       - name: Refresh features/views (refresh.sql)
