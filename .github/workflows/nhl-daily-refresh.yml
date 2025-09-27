@@ -117,12 +117,16 @@ jobs:
           ls -lh nhl/data/processed/sog_predictions.csv || true
           ls -lh nhl/data/processed/saves_predictions.csv || true
 
-      - name: Load predictions to DB (if separate loader is used)
+      - name: Load predictions to DB
         run: |
           if [ -f nhl/scripts/load_predictions_to_db.py ]; then
-            python nhl/scripts/load_predictions_to_db.py --date "${DATE}"
+            python nhl/scripts/load_predictions_to_db.py \
+              --project nhl \
+              --db-url "$SUPABASE_DB_URL" \
+              --sog-csv nhl/data/processed/sog_predictions.csv \
+              --saves-csv nhl/data/processed/saves_predictions.csv
           else
-            echo "No separate loader; assuming scoring wrote directly to DB."
+            echo "No separate loader; predictions remain as CSVs."
           fi
 
       # ─── Quick sanity counts (optional) ───────────────────────────────────────
