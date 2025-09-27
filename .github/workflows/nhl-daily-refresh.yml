@@ -54,7 +54,71 @@ jobs:
           python -m pip install -r nhl/training/requirements.txt
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31"
 
-      # ─── Transform (refresh features/views) ────────────────────────────────────
+      - name: Ingest preseason schedule (NHL API → nhl.games)
+        env:
+          START_DATE: ${{ env.START_DATE }} # optional: set in workflow_dispatch inputs or repo env
+          END_DATE: ${{ env.END_DATE }} # optional: defaults to DATE
+        run: |
+          python - <<'PY'
+          import os, requests, psycopg, datetime as dt
+
+          # Date window: default to last 14 days through ${DATE}
+          date_end = os.getenv("END_DATE") or os.environ["DATE"]
+          end = dt.date.fromisoformat(date_end)
+          start = dt.date.fromisoformat(os.getenv("START_DATE") or (end - dt.timedelta(days=14)).isoformat())
+
+          def map_status(s):
+            s = (s or "").lower()
+            if "final" in s: return "final"
+            if "progress" in s: return "live"
+            if "sched" in s: return "scheduled"
+            return "scheduled"
+
+          def map_type(code):
+            code = (code or "").upper()
+            return {"PR":"preseason","R":"regular","P":"postseason"}.get(code, code.lower() or "scheduled")
+
+          rows = []
+          d = start
+          while d <= end:
+            url = f"https://statsapi.web.nhl.com/api/v1/schedule?date={d.isoformat()}"
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
+            js = r.json()
+            games = (js.get("dates") or [{}])[0].get("games") or []
+            for g in games:
+              gid = int(g["gamePk"])
+              iso = g.get("gameDate")
+              ts  = dt.datetime.fromisoformat(iso.replace("Z","+00:00")) if iso else None
+              home = int(g["teams"]["home"]["team"]["id"])
+              away = int(g["teams"]["away"]["team"]["id"])
+              stat = map_status(g.get("status",{}).get("detailedState"))
+              gtyp = map_type(g.get("gameType"))
+              rows.append((gid, d.isoformat(), ts, home, away, stat, gtyp))
+            d += dt.timedelta(days=1)
+
+          if not rows:
+            print(f"No games found between {start} and {end}.")
+            raise SystemExit(0)
+
+          sql = """
+          INSERT INTO nhl.games
+            (game_id, game_date, start_time_utc, home_team_id, away_team_id, status, game_type)
+          VALUES (%s,%s,%s,%s,%s,%s,%s)
+          ON CONFLICT (game_id) DO UPDATE
+          SET status = EXCLUDED.status,
+              start_time_utc = COALESCE(EXCLUDED.start_time_utc, nhl.games.start_time_utc),
+              game_type = COALESCE(EXCLUDED.game_type, nhl.games.game_type);
+          """
+          with psycopg.connect(os.environ["SUPABASE_DB_URL"]) as conn:
+            with conn.cursor() as cur:
+              cur.executemany(sql, rows)
+            conn.commit()
+          print(f"Upserted {len(rows)} games into nhl.games for {start}..{end}.")
+          PY
+
+
+          # ─── Transform (refresh features/views) ────────────────────────────────────
       - name: Refresh features/views (refresh.sql)
         run: |
           SQL_PATH="nhl/scripts/refresh.sql"
