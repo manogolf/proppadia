@@ -47,12 +47,14 @@ def ensure_psycopg():
         sh(f'{sys.executable} -m pip install -qU psycopg2-binary')
         import psycopg2  # noqa
 
-def copy_csv(conn, table, csv_path, columns):
-    import psycopg2
-    with conn.cursor() as cur, open(csv_path, "r") as f:
-        cur.execute(f"TRUNCATE {table};")
-        cols = ", ".join(columns)
-        sql = f"COPY {table} ({cols}) FROM STDIN WITH CSV HEADER"
+def copy_csv(conn, table: str, path: str, cols: list[str]) -> None:
+    """
+    COPY a CSV into table using explicit column list.
+    Always quote identifiers to support names like p_over_0.5.
+    """
+    cols_sql = ", ".join([f'"{c}"' for c in cols])  # quote every column
+    sql = f"COPY {table} ({cols_sql}) FROM STDIN WITH CSV HEADER"
+    with conn.cursor() as cur, open(path, "r", encoding="utf-8") as f:
         cur.copy_expert(sql, f)
 
 def run_loader(conn, sql):
