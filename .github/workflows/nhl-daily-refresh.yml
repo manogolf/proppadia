@@ -54,52 +54,64 @@ jobs:
           python -m pip install -r nhl/training/requirements.txt
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31"
 
-      - name: Ingest preseason schedule (NHL API → nhl.games)
+      - name: Ingest preseason schedule (NHL API → nhl.games) with retries
         env:
-          START_DATE: ${{ env.START_DATE }} # optional: set in workflow_dispatch inputs or repo env
-          END_DATE: ${{ env.END_DATE }} # optional: defaults to DATE
+          START_DATE: ${{ env.START_DATE }} # optional window start
+          END_DATE: ${{ env.END_DATE }} # optional window end (defaults to DATE)
         run: |
           python - <<'PY'
-          import os, requests, psycopg, datetime as dt
+          import os, time, requests, psycopg, datetime as dt
 
-          # Date window: default to last 14 days through ${DATE}
+          # Window: default to last 14 days through DATE
           date_end = os.getenv("END_DATE") or os.environ["DATE"]
           end = dt.date.fromisoformat(date_end)
           start = dt.date.fromisoformat(os.getenv("START_DATE") or (end - dt.timedelta(days=14)).isoformat())
 
           def map_status(s):
-            s = (s or "").lower()
-            if "final" in s: return "final"
-            if "progress" in s: return "live"
-            if "sched" in s: return "scheduled"
-            return "scheduled"
+              s = (s or "").lower()
+              if "final" in s: return "final"
+              if "progress" in s: return "live"
+              if "sched" in s: return "scheduled"
+              return "scheduled"
 
           def map_type(code):
-            code = (code or "").upper()
-            return {"PR":"preseason","R":"regular","P":"postseason"}.get(code, code.lower() or "scheduled")
+              code = (code or "").upper()
+              return {"PR":"preseason","R":"regular","P":"postseason"}.get(code, code.lower() or "scheduled")
+
+          def fetch_schedule(date_str, attempts=6, base_delay=2.0):
+              url = f"https://statsapi.web.nhl.com/api/v1/schedule?date={date_str}"
+              for i in range(1, attempts+1):
+                  try:
+                      r = requests.get(url, timeout=20)
+                      r.raise_for_status()
+                      return r.json()
+                  except requests.RequestException as e:
+                      delay = base_delay * (2 ** (i-1))
+                      print(f"[{date_str}] fetch error ({i}/{attempts}): {e}. retrying in {delay:.1f}s...", flush=True)
+                      time.sleep(delay)
+              print(f"[{date_str}] giving up after {attempts} attempts.", flush=True)
+              return None
 
           rows = []
           d = start
           while d <= end:
-            url = f"https://statsapi.web.nhl.com/api/v1/schedule?date={d.isoformat()}"
-            r = requests.get(url, timeout=30)
-            r.raise_for_status()
-            js = r.json()
-            games = (js.get("dates") or [{}])[0].get("games") or []
-            for g in games:
-              gid = int(g["gamePk"])
-              iso = g.get("gameDate")
-              ts  = dt.datetime.fromisoformat(iso.replace("Z","+00:00")) if iso else None
-              home = int(g["teams"]["home"]["team"]["id"])
-              away = int(g["teams"]["away"]["team"]["id"])
-              stat = map_status(g.get("status",{}).get("detailedState"))
-              gtyp = map_type(g.get("gameType"))
-              rows.append((gid, d.isoformat(), ts, home, away, stat, gtyp))
-            d += dt.timedelta(days=1)
+              js = fetch_schedule(d.isoformat())
+              if js:
+                  games = (js.get("dates") or [{}])[0].get("games") or []
+                  for g in games:
+                      gid  = int(g["gamePk"])
+                      iso  = g.get("gameDate")
+                      ts   = dt.datetime.fromisoformat(iso.replace("Z","+00:00")) if iso else None
+                      home = int(g["teams"]["home"]["team"]["id"])
+                      away = int(g["teams"]["away"]["team"]["id"])
+                      stat = map_status(g.get("status",{}).get("detailedState"))
+                      gtyp = map_type(g.get("gameType"))
+                      rows.append((gid, d.isoformat(), ts, home, away, stat, gtyp))
+              d += dt.timedelta(days=1)
 
           if not rows:
-            print(f"No games found between {start} and {end}.")
-            raise SystemExit(0)
+              print(f"No schedules could be fetched for {start}..{end}. Proceeding without upserts.")
+              raise SystemExit(0)  # soft exit; rest of pipeline can still run
 
           sql = """
           INSERT INTO nhl.games
@@ -111,14 +123,13 @@ jobs:
               game_type = COALESCE(EXCLUDED.game_type, nhl.games.game_type);
           """
           with psycopg.connect(os.environ["SUPABASE_DB_URL"]) as conn:
-            with conn.cursor() as cur:
-              cur.executemany(sql, rows)
-            conn.commit()
+              with conn.cursor() as cur:
+                  cur.executemany(sql, rows)
+              conn.commit()
           print(f"Upserted {len(rows)} games into nhl.games for {start}..{end}.")
           PY
 
-
-          # ─── Transform (refresh features/views) ────────────────────────────────────
+        # ─── Transform (refresh features/views) ────────────────────────────────────
       - name: Refresh features/views (refresh.sql)
         run: |
           SQL_PATH="nhl/scripts/refresh.sql"
