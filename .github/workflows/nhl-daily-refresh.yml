@@ -1,19 +1,37 @@
-name: NHL Daily Refresh (Repo SQL)
+name: NHL Daily (Ingest → Refresh → Score → Export)
 
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "15 10 * * *" # runs 10:15 UTC daily
+    - cron: "15 10 * * *" # ~03:15 PT daily, after games finalize
+
+concurrency:
+  group: nhl-daily
+  cancel-in-progress: false
 
 jobs:
-  refresh:
+  daily:
     runs-on: ubuntu-latest
     env:
+      # Required secrets in this repo (Settings → Secrets and variables → Actions)
+      # - SUPABASE_DB_URL: postgres connection string (pooled OK)
+      # - SUPABASE_URL:    https://<project>.supabase.co
+      # - SUPABASE_SERVICE_ROLE_KEY: service role key
+      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TZ: UTC
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set dates (yesterday in UTC)
+        run: |
+          echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
+          echo "YDAY=$(date -u -d 'yesterday' +%F)" >> $GITHUB_ENV
+          echo "Dates -> DATE=${DATE} YDAY=${YDAY}"
 
       - name: Install psql client
         run: |
@@ -21,35 +39,98 @@ jobs:
           sudo apt-get install -y postgresql-client
 
       - name: Check DB connectivity
-        run: |
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT now();"
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT now();"
 
-      - name: Run repo SQL (scripts/refresh.sql)
-        run: |
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/refresh.sql
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
 
-      - name: Verify ready view counts
+      - name: Install Python deps for scripts
+        run: |
+          python -m pip install --upgrade pip
+          # Training/runtime libs for scripts (lightweight; avoids backend FastAPI deps)
+          python -m pip install -r nhl/training/requirements.txt
+          python -m pip install "psycopg[binary]>=3.1" "requests>=2.31"
+
+      # ─── Ingest (fetch/load yesterday) ─────────────────────────────────────────
+      - name: Ingest (run_daily_slate.py) # runs only if script exists
+        run: |
+          if [ -f nhl/scripts/run_daily_slate.py ]; then
+            echo "Ingesting for ${YDAY}..."
+            python nhl/scripts/run_daily_slate.py --date "${YDAY}"
+          else
+            echo "No nhl/scripts/run_daily_slate.py found; skipping ingest step."
+          fi
+
+      # ─── Transform (refresh features/views) ────────────────────────────────────
+      - name: Refresh features/views (refresh.sql)
+        run: |
+          SQL_PATH="nhl/scripts/refresh.sql"
+          ls -l "$SQL_PATH"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$SQL_PATH"
+
+      # ─── Score predictions for today's slate (uses latest promoted model) ─────
+      - name: Score props (today)
+        run: |
+          if [ -f nhl/scripts/score_nhl_props.py ]; then
+            echo "Scoring props for ${DATE}..."
+            python nhl/scripts/score_nhl_props.py --date "${DATE}"
+          else
+            echo "No nhl/scripts/score_nhl_props.py found; skipping scoring step."
+          fi
+
+      - name: Load predictions to DB (if separate loader is used)
+        run: |
+          if [ -f nhl/scripts/load_predictions_to_db.py ]; then
+            python nhl/scripts/load_predictions_to_db.py --date "${DATE}"
+          else
+            echo "No separate loader; assuming scoring wrote directly to DB."
+          fi
+
+      # ─── Quick sanity counts (optional but helpful) ───────────────────────────
+      - name: Verify counts
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
-          SELECT 'sog_ready' AS which, COUNT(*) AS rows FROM nhl.training_features_nhl_sog_v2_ready
-          UNION ALL
-          SELECT 'goalie_ready', COUNT(*) FROM nhl.training_features_goalie_saves_v2_ready;
-          "
+            WITH d AS (
+              SELECT (SELECT MAX(game_date) FROM nhl.games WHERE game_type='regular' AND status='final') AS last_reg
+            )
+            SELECT
+              'games_last_reg' AS which,
+              (SELECT COUNT(*) FROM nhl.games g, d WHERE g.game_date=d.last_reg AND g.game_type='regular' AND g.status='final') AS n
+            UNION ALL
+            SELECT
+              'features_last_reg',
+              (SELECT COUNT(*) FROM nhl.training_features_nhl_sog_v2 t, d WHERE t.game_date=d.last_reg) AS n
+            UNION ALL
+            SELECT
+              'predictions_today',
+              (SELECT COUNT(*) FROM nhl.predictions p WHERE p.game_id IN (
+                SELECT game_id FROM nhl.games WHERE game_date='${DATE}'::date
+              )) AS n
+          ;"
 
+      # ─── Export training CSVs (full snapshots) ────────────────────────────────
       - name: Export SOG training CSV
         run: |
-          mkdir -p ml
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (SELECT * FROM nhl.export_training_nhl_sog_v2 ORDER BY game_date, player_id) TO STDOUT WITH CSV HEADER" > ml/train_nhl_sog_v2.csv
+          mkdir -p exports
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+            SELECT * FROM nhl.export_training_nhl_sog_v2 ORDER BY game_date, player_id
+          ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
 
       - name: Export Goalie training CSV
         run: |
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (SELECT * FROM nhl.export_training_goalie_saves_v2 ORDER BY game_date, player_id) TO STDOUT WITH CSV HEADER" > ml/train_goalie_saves_v2.csv
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+            SELECT * FROM nhl.export_training_goalie_saves_v2 ORDER BY game_date, player_id
+          ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
 
-      - name: Upload training artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nhl-training-csvs
+          name: nhl-exports-${{ env.DATE }}
           path: |
-            ml/train_nhl_sog_v2.csv
-            ml/train_goalie_saves_v2.csv
-          if-no-files-found: error
+            exports/train_nhl_sog_v2.csv
+            exports/train_goalie_saves_v2.csv
+          if-no-files-found: warn
+          retention-days: 14
