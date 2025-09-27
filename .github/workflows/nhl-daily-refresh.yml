@@ -54,23 +54,33 @@ jobs:
           python -m pip install -r nhl/training/requirements.txt
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31"
 
-      # ─── Ingest (run_daily_slate.py) ─────────────────────────────────────────
-      - name: Ingest (run_daily_slate.py)
-        run: |
-          PROJECT_DIR="nhl"
-          mkdir -p exports
-          python nhl/scripts/run_daily_slate.py \
-            --project "$PROJECT_DIR" \
-            --sog-csv exports/train_nhl_sog_v2.csv \
-            --saves-csv exports/train_goalie_saves_v2.csv \
-            --db-url "$SUPABASE_DB_URL"
-
       # ─── Transform (refresh features/views) ────────────────────────────────────
       - name: Refresh features/views (refresh.sql)
         run: |
           SQL_PATH="nhl/scripts/refresh.sql"
           ls -l "$SQL_PATH"
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$SQL_PATH"
+
+      # ─── Pre-export training feature CSVs for scorer ───────────────────────────
+      - name: Pre-export training feature CSVs for scorer
+        run: |
+          mkdir -p exports
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+            SELECT * FROM nhl.export_training_nhl_sog_v2 ORDER BY game_date, player_id
+          ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+            SELECT * FROM nhl.export_training_goalie_saves_v2 ORDER BY game_date, player_id
+          ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          ls -lh exports/
+
+      # ─── Ingest/Score orchestration (uses the pre-exported CSVs) ──────────────
+      - name: Ingest/Score (run_daily_slate.py)
+        run: |
+          python nhl/scripts/run_daily_slate.py \
+            --project nhl \
+            --sog-csv exports/train_nhl_sog_v2.csv \
+            --saves-csv exports/train_goalie_saves_v2.csv \
+            --db-url "$SUPABASE_DB_URL"
 
       # ─── Score predictions for today's slate (uses latest promoted model) ─────
       - name: Score props (today)
