@@ -61,45 +61,45 @@ jobs:
           ls -l "$SQL_PATH"
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$SQL_PATH"
 
-          - name: Pre-export training feature CSVs for scorer
-          run: |
-            # disable statement timeout for this session
-            export PGOPTIONS='-c statement_timeout=0'
-            mkdir -p exports
+      - name: Pre-export training feature CSVs for scorer
+        run: |
+          # avoid timeouts for heavy \COPY
+          export PGOPTIONS='-c statement_timeout=0'
+          mkdir -p exports
 
-            # SOG: only today's rows (fast)
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY ( 
-              SELECT * 
-              FROM nhl.export_training_nhl_sog_v2 
-              WHERE game_date = '${DATE}'::date
-            ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          # SOG: only today's rows (fast)
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+            SELECT * FROM nhl.export_training_nhl_sog_v2
+            WHERE game_date = '${DATE}'::date
+            ORDER BY game_date, player_id
+          ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
 
-            # Goalie: today's rows, wide schema (synthesize a few expected cols)
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY ( 
-              SELECT
-                player_id, game_id, team_id, opponent_id, is_home, game_date,
-                1.0::numeric                                AS start_prob,
-                COALESCE(d5_saves_per60, 0)::numeric        AS d5_saves_per60,
-                COALESCE(d10_saves_per60, 0)::numeric       AS d10_saves_per60,
-                0::numeric                                  AS d20_saves_per60,
-                COALESCE(d5_shots_faced_per60, 0)::numeric  AS d5_shots_faced_per60,
-                COALESCE(d10_shots_faced_per60, 0)::numeric AS d10_shots_faced_per60,
-                COALESCE(season_save_pct, 0)::numeric       AS season_save_pct,
-                COALESCE(team_d10_sf_per_game, 0)::numeric  AS team_d10_sf_per_game,
-                COALESCE(opp_d10_sf_allowed_per_game, 0)::numeric AS opp_d10_sf_allowed_per_game,
-                COALESCE(team_d10_sa_per60, 0)::numeric     AS team_d10_sa_per60,
-                COALESCE(opp_d10_sf_per60, 0)::numeric      AS opp_d10_sf_per60,
-                0::numeric                                  AS team_d10_sf_per60,
-                0::numeric                                  AS opp_d10_sa_per60,
-                COALESCE(pace_index, 0)::numeric            AS pace_index,
-                COALESCE(pace_matchup_index, 0)::numeric    AS pace_matchup_index,
-                COALESCE(rest_days, 0)::smallint            AS rest_days,
-                COALESCE(b2b_flag, false)                   AS b2b_flag
-              FROM nhl.training_features_goalie_saves_v2
-              WHERE game_date = '${DATE}'::date
-            ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          # Goalie: wide schema; synthesize a few expected cols; today's rows
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+            SELECT
+              player_id, game_id, team_id, opponent_id, is_home, game_date,
+              1.0::numeric                                AS start_prob,
+              COALESCE(d5_saves_per60, 0)::numeric        AS d5_saves_per60,
+              COALESCE(d10_saves_per60, 0)::numeric       AS d10_saves_per60,
+              0::numeric                                  AS d20_saves_per60,
+              COALESCE(d5_shots_faced_per60, 0)::numeric  AS d5_shots_faced_per60,
+              COALESCE(d10_shots_faced_per60, 0)::numeric AS d10_shots_faced_per60,
+              COALESCE(season_save_pct, 0)::numeric       AS season_save_pct,
+              COALESCE(team_d10_sf_per_game, 0)::numeric  AS team_d10_sf_per_game,
+              COALESCE(opp_d10_sf_allowed_per_game, 0)::numeric AS opp_d10_sf_allowed_per_game,
+              COALESCE(team_d10_sa_per60, 0)::numeric     AS team_d10_sa_per60,
+              COALESCE(opp_d10_sf_per60, 0)::numeric      AS opp_d10_sf_per60,
+              0::numeric                                  AS team_d10_sf_per60,
+              0::numeric                                  AS opp_d10_sa_per60,
+              COALESCE(pace_index, 0)::numeric            AS pace_index,
+              COALESCE(pace_matchup_index, 0)::numeric    AS pace_matchup_index,
+              COALESCE(rest_days, 0)::smallint            AS rest_days,
+              COALESCE(b2b_flag, false)                   AS b2b_flag
+            FROM nhl.training_features_goalie_saves_v2
+            WHERE game_date = '${DATE}'::date
+          ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
 
-            ls -lh exports/
+          ls -lh exports/
 
       # ─── Ingest/Score orchestration (uses the pre-exported CSVs) ──────────────
       - name: Ingest/Score (run_daily_slate.py)
