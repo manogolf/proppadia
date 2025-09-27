@@ -110,15 +110,12 @@ jobs:
             --saves-csv exports/train_goalie_saves_v2.csv \
             --db-url "$SUPABASE_DB_URL"
 
-      # ─── Score predictions for today's slate (uses latest promoted model) ─────
-      - name: Score props (today)
+      # ─── Score predictions for today's slate (redundant) ─────────────────────
+      - name: Score props (today) — handled in run_daily_slate
         run: |
-          if [ -f nhl/scripts/score_nhl_props.py ]; then
-            echo "Scoring props for ${DATE}..."
-            python nhl/scripts/score_nhl_props.py --date "${DATE}"
-          else
-            echo "No nhl/scripts/score_nhl_props.py found; skipping scoring step."
-          fi
+          echo "Skipped: already scored inside nhl/scripts/run_daily_slate.py"
+          ls -lh nhl/data/processed/sog_predictions.csv || true
+          ls -lh nhl/data/processed/saves_predictions.csv || true
 
       - name: Load predictions to DB (if separate loader is used)
         run: |
