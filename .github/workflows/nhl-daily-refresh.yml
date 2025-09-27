@@ -132,33 +132,33 @@ jobs:
       # ─── Quick sanity counts (optional) ───────────────────────────────────────
       - name: Verify counts (preseason-friendly)
         run: |
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v DATE="$DATE" -c "
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
             WITH g AS (
-              SELECT game_id FROM nhl.games WHERE game_date = :'DATE'::date
+              SELECT game_id FROM nhl.games WHERE game_date = '${DATE}'::date
             )
             SELECT 'games_today' AS which, COUNT(*) AS n
-            FROM nhl.games WHERE game_date = :'DATE'::date
+            FROM nhl.games WHERE game_date = '${DATE}'::date
             UNION ALL
             SELECT 'skater_logs_today', COUNT(*)
-            FROM nhl.skater_game_logs_raw WHERE game_date = :'DATE'::date
+            FROM nhl.skater_game_logs_raw WHERE game_date = '${DATE}'::date
             UNION ALL
             SELECT 'goalie_logs_today', COUNT(*)
-            FROM nhl.goalie_game_logs_raw WHERE game_date = :'DATE'::date
+            FROM nhl.goalie_game_logs_raw WHERE game_date = '${DATE}'::date
             UNION ALL
             SELECT 'features_sog_today', COUNT(*)
-            FROM nhl.training_features_nhl_sog_v2 WHERE game_date = :'DATE'::date
+            FROM nhl.training_features_nhl_sog_v2 WHERE game_date = '${DATE}'::date
             UNION ALL
             SELECT 'features_goalie_today', COUNT(*)
-            FROM nhl.training_features_goalie_saves_v2 WHERE game_date = :'DATE'::date
+            FROM nhl.training_features_goalie_saves_v2 WHERE game_date = '${DATE}'::date
             UNION ALL
             SELECT 'sog_stage_rows', COUNT(*)
-            FROM nhl.predictions_sog_stage s WHERE EXISTS (SELECT 1 FROM g WHERE g.game_id = s.game_id)
+            FROM nhl.predictions_sog_stage s WHERE s.game_id IN (SELECT game_id FROM g)
             UNION ALL
             SELECT 'saves_stage_rows', COUNT(*)
-            FROM nhl.predictions_saves_stage s WHERE EXISTS (SELECT 1 FROM g WHERE g.game_id = s.game_id)
+            FROM nhl.predictions_saves_stage s WHERE s.game_id IN (SELECT game_id FROM g)
             UNION ALL
             SELECT 'predictions_today', COUNT(*)
-            FROM nhl.predictions p WHERE EXISTS (SELECT 1 FROM g WHERE g.game_id = p.game_id)
+            FROM nhl.predictions p WHERE p.game_id IN (SELECT game_id FROM g)
           ;"
 
       # ─── Upload artifacts (CSV snapshots) ─────────────────────────────────────
