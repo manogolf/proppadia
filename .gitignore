@@ -26,3 +26,4 @@ mlb/frontend/build/
 **/__pycache__/
 **/*.pyc
 .venv/
+.env*
