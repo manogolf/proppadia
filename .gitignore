@@ -27,3 +27,7 @@ mlb/frontend/build/
 **/*.pyc
 .venv/
 .env*
+!nhl/models/
+!nhl/models/latest/
+!nhl/models/latest/**/MODEL_ARTIFACT.json
+!nhl/models/latest/MODEL_INDEX.json

@@ -1,6 +1,6 @@
 {
   "models": {
-    "shots_on_goal": "shots_on_goal.json",
-    "goalie_saves": "goalie_saves.json"
+    "shots_on_goal": "shots_on_goal/MODEL_ARTIFACT.json",
+    "goalie_saves": "goalie_saves/MODEL_ARTIFACT.json"
   }
 }
