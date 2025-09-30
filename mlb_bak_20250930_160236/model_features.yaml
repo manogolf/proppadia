@@ -1,0 +1,288 @@
+features:
+  # ────────── Game Context ──────────
+  is_home:
+    type: binary
+    required: true
+    description: Whether the player was the home team
+
+  opponent:
+    type: categorical
+    required: true
+    transform: one_hot
+    description: Opponent team abbreviation
+
+  opponent_encoded:
+    type: numeric
+    required: false
+    description: Integer encoding of opponent team
+
+  game_day_of_week:
+    type: categorical
+    required: true
+    transform: one_hot
+    description: Day of the week (Monday–Sunday)
+
+  time_of_day_bucket:
+    type: categorical
+    required: true
+    transform: one_hot
+    description: Morning, afternoon, evening
+
+  game_time:
+    type: time
+    required: false
+    transform: bucketize
+    description: Start time of game (ET)
+
+  # ────────── Streaks ──────────
+  streak_type:
+    type: categorical
+    categories: [hot, cold, neutral]
+    required: false
+
+  streak_count:
+    type: numeric
+    required: false
+    description: Number of games in current streak
+
+  hit_streak:
+    type: numeric
+    required: false
+
+  win_streak:
+    type: numeric
+    required: false
+
+  # ────────── Rolling Results ──────────
+  rolling_result_avg_7:
+    type: numeric
+    required: false
+
+  # ────────── Rolling Averages ──────────
+  d7_hits:
+    type: numeric
+    required: false
+  d7_home_runs:
+    type: numeric
+    required: false
+  d7_rbis:
+    type: numeric
+    required: false
+  d7_strikeouts:
+    type: numeric
+    required: false
+  d7_walks:
+    type: numeric
+    required: false
+
+  d15_hits:
+    type: numeric
+    required: false
+  d15_home_runs:
+    type: numeric
+    required: false
+  d15_rbis:
+    type: numeric
+    required: false
+  d15_strikeouts:
+    type: numeric
+    required: false
+  d15_walks:
+    type: numeric
+    required: false
+
+  d30_hits: 
+    type: numeric
+    required: false
+  d30_home_runs:
+    type: numeric
+    required: false
+  d30_rbis:
+    type: numeric
+    required: false
+  d30_strikeouts:
+    type: numeric
+    required: false
+  d30_walks:
+    type: numeric
+    required:
+      false
+
+      # ────────── Total Bases ──────────
+  d7_total_bases:
+    type: numeric
+    required: false
+  d15_total_bases:
+    type: numeric
+    required: false
+  d30_total_bases:
+    type: numeric
+    required: false
+
+  # ────────── Hits + Runs + RBI Combo ──────────
+  d7_hits_runs_rbis:
+    type: numeric
+    required: false
+  d15_hits_runs_rbis:
+    type: numeric
+    required: false
+  d30_hits_runs_rbis:
+    type: numeric
+    required: false
+
+  # ────────── Stolen Bases ──────────
+  d7_stolen_bases:
+    type: numeric
+    required: false
+  d15_stolen_bases:
+    type: numeric
+    required: false
+  d30_stolen_bases:
+    type: numeric
+    required: false
+
+  # ────────── Walks (Batting) ──────────
+  d7_walks:
+    type: numeric
+    required: false
+  d15_walks:
+    type: numeric
+    required: false
+  d30_walks:
+    type: numeric
+    required: false
+
+  # ────────── Strikeouts (Batting) ──────────
+  d7_strikeouts_batting:
+    type: numeric
+    required: false
+  d15_strikeouts_batting:
+    type: numeric
+    required: false
+  d30_strikeouts_batting:
+    type: numeric
+    required: false
+
+  # ────────── Strikeouts (Pitching) ──────────
+  d7_strikeouts_pitching:
+    type: numeric
+    required: false
+  d15_strikeouts_pitching:
+    type: numeric
+    required: false
+  d30_strikeouts_pitching:
+    type: numeric
+    required: false
+
+  # ────────── Walks Allowed (Pitching) ──────────
+  d7_walks_allowed:
+    type: numeric
+    required: false
+  d15_walks_allowed:
+    type: numeric
+    required: false
+  d30_walks_allowed:
+    type: numeric
+    required: false
+
+  # ────────── Earned Runs (Pitching) ──────────
+  d7_earned_runs:
+    type: numeric
+    required: false
+  d15_earned_runs:
+    type: numeric
+    required: false
+  d30_earned_runs:
+    type: numeric
+    required: false
+
+  # ────────── Hits Allowed (Pitching) ──────────
+  d7_hits_allowed:
+    type: numeric
+    required: false
+  d15_hits_allowed:
+    type: numeric
+    required: false
+  d30_hits_allowed:
+    type: numeric
+    required: false
+
+  # ────────── BvP ──────────
+  bvp_at_bats:
+    type: numeric
+    required: false
+  bvp_hits:
+    type: numeric
+    required: false
+  bvp_home_runs:
+    type: numeric
+    required: false
+  bvp_rbi:
+    type: numeric
+    required: false
+  bvp_strikeouts:
+    type: numeric
+    required: false
+  bvp_walks:
+    type: numeric
+    required: false
+  #bvp_avg:
+  #  type: numeric
+  #  required: false
+  bvp_plate_appearances:
+    type: numeric
+    required: false
+
+  # ──────────── PvB ────────────
+  # pvb_at_bats:
+  #   type: numeric
+  #   required: false
+  # pvb_hits:
+  #   type: numeric
+  #   required: false
+  # pvb_home_runs:
+  #   type: numeric
+  #   required: false
+  # pvb_strikeouts:
+  #   type: numeric
+  #   required: false
+  # pvb_walks:
+  #   type: numeric
+  #   required: false
+  # pvb_avg:
+  #   type: numeric
+  #   required: false
+  # pvb_plate_appearances:
+  #   type: numeric
+  #   required: false
+  # pvb_hits_allowed:
+  #   type: numeric
+  #   required: false
+  # pvb_home_runs_allowed:
+  #   type: numeric
+  #   required: false
+  # pvb_walks_issued:
+  #   type: numeric
+  #   required: false
+
+  # ────────── Team Context ──────────
+  #opponent_avg_result_vs_player:
+  #  type: numeric
+  #  required: false
+
+  #opponent_avg_win_rate:
+  #  type: numeric
+  #  required: false
+
+  # ────────── Line Info ──────────
+  line:
+    type: numeric
+    required: false
+
+  line_diff:
+    type: numeric
+    required: false
+
+  prop_source:
+    type: categorical
+    required: true

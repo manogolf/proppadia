@@ -1,7 +1,12 @@
 from __future__ import annotations
-import os, sys
-from pathlib import Path
+from backend.scripts.shared.supabase_utils import supabase
 from typing import Tuple, Optional, Dict, Any
+
+try:
+    from backend.scripts.shared.supabase_utils import supabase  # type: ignore
+except Exception:
+    supabase = None
+
 
 # ---- paths so we can import backend/scripts/shared/supabase_utils.py ----
 APP_DIR = Path(__file__).resolve().parent         # backend/app
