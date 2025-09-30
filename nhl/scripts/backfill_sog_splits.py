@@ -5,6 +5,9 @@ import os, sys, time, argparse
 from typing import Dict, List, Tuple, Optional
 import requests
 import psycopg
+import bootstrap_env
+
+
 
 # ───────────────────────── config / helpers ─────────────────────────
 
@@ -264,6 +267,113 @@ def compute_skater_sog_splits(pbp_obj, home_id: int, away_id: int, home_abbr: st
 plays_list = _plays_list
 shooter_id_from_play = _shooter_id
 
+# --- Robust: normalize & merge SOG plays from api-web + statsapi ---------
+
+def _period_num(p: dict) -> Optional[int]:
+    pd = p.get("periodDescriptor") or (p.get("about") or {}).get("period")
+    if isinstance(pd, dict):
+        v = pd.get("number")
+    else:
+        v = pd
+    try:
+        return int(v)
+    except Exception:
+        return None
+
+def _time_in_period(p: dict) -> Optional[str]:
+    # Prefer "timeInPeriod" (api-web), else statsapi "about.periodTime"
+    v = p.get("timeInPeriod")
+    if isinstance(v, str) and v:
+        return v
+    about = p.get("about") or {}
+    v = about.get("periodTime")
+    if isinstance(v, str) and v:
+        return v
+    return None
+
+def _xy_tuple(p: dict) -> Tuple[Optional[int], Optional[int]]:
+    d = p.get("details") or {}
+    x = d.get("xCoord"); y = d.get("yCoord")
+    try: x = int(x) if x is not None else None
+    except: x = None
+    try: y = int(y) if y is not None else None
+    except: y = None
+    return x, y
+
+def _shot_type(p: dict) -> str:
+    d = p.get("details") or {}
+    st = d.get("shotType") or ""
+    return str(st).strip().upper()
+
+def _merge_key(p: dict, home_id:int, away_id:int, home_abbr:str, away_abbr:str) -> tuple:
+    """
+    Build a stable key across sources:
+      (period, time, side, x, y, shotType)
+    """
+    per  = _period_num(p) or -1
+    t    = _time_in_period(p) or ""
+    side = _play_team_side(p, home_id, away_id, home_abbr, away_abbr) or "UNK"
+    x, y = _xy_tuple(p)
+    st   = _shot_type(p)
+    return (per, t, side, x, y, st)
+
+def _normalize_sog_plays(pbp_obj, home_id, away_id, home_abbr, away_abbr) -> List[dict]:
+    """Return list of dicts: {'key', 'pid', 'side', 'hs', 'aw'} for SOG-like events."""
+    out = []
+    for p in _plays_list(pbp_obj):
+        if not _is_sog_like(p):
+            continue
+        pid  = _shooter_id(p)
+        side = _play_team_side(p, home_id, away_id, home_abbr, away_abbr)
+        if side is None:
+            continue
+        hs, aw = _sit_counts(p)
+        out.append({
+            "key": _merge_key(p, home_id, away_id, home_abbr, away_abbr),
+            "pid": pid,
+            "side": side,
+            "hs": hs, "aw": aw
+        })
+    return out
+
+def sog_map_for_game(cur, gid: int) -> Dict[int, int]:
+    cur.execute("""
+        SELECT player_id, shots_on_goal
+        FROM nhl.skater_game_logs_raw
+        WHERE game_id = %s AND shots_on_goal IS NOT NULL AND shots_on_goal > 0
+    """, (gid,))
+    return {int(pid): int(sog) for pid, sog in cur.fetchall()}
+
+def merge_pbp_for_sog(pbp_web, pbp_stats, home_id, away_id, home_abbr, away_abbr) -> List[dict]:
+    """
+    Merge api-web + statsapi SOG-like plays by composite key; fill missing shooter from the other source.
+    """
+    web_norm   = _normalize_sog_plays(pbp_web,   home_id, away_id, home_abbr, away_abbr) if pbp_web else []
+    stats_norm = _normalize_sog_plays(pbp_stats, home_id, away_id, home_abbr, away_abbr) if pbp_stats else []
+
+    merged = { r["key"]: r for r in web_norm }
+    for r in stats_norm:
+        k = r["key"]
+        if k in merged:
+            if merged[k]["pid"] is None and r["pid"] is not None:
+                merged[k]["pid"] = r["pid"]
+            # keep existing side/hs/aw from either; they should agree
+        else:
+            merged[k] = r
+    return list(merged.values())
+
+def compute_skater_sog_splits_from_norm(norm_plays: List[dict]) -> Dict[int, Dict[str, int]]:
+    out: Dict[int, Dict[str, int]] = {}
+    for r in norm_plays:
+        pid = r.get("pid")
+        if pid is None:
+            continue  # cannot attribute to a player
+        hs, aw = r.get("hs"), r.get("aw")
+        shoot_home = (r.get("side") == "HOME")
+        lab = _strength(shoot_home, hs, aw)
+        d = out.setdefault(int(pid), {"EV": 0, "PP": 0, "SH": 0})
+        d[lab] += 1
+    return out
 
 # ───────────────────────── main backfill loop ─────────────────────────
 
@@ -320,75 +430,95 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
                     conn.commit()
                     continue
 
-                # fetch PBP (api-web then statsapi)
-                pbp = fetch_json(API_WEB_PBP.format(gid=gid))
-                if not pbp:
-                    pbp = fetch_json(STATSAPI_FEED.format(gid=gid))
-                plays = plays_list(pbp)
-                if not plays:
-                    print(f"[{gid}] no plays; skipping")
-                    set_last_game_id(cur, gid)
-                    conn.commit()
-                    continue
+                # fetch PBP (api-web AND statsapi), then merge
+                pbp_web   = fetch_json(API_WEB_PBP.format(gid=gid))
+                pbp_stats = fetch_json(STATSAPI_FEED.format(gid=gid))
 
-                # compute splits
-                sk_splits = compute_skater_sog_splits(pbp, home_id, away_id, home_abbr, away_abbr)
+                norm = merge_pbp_for_sog(pbp_web, pbp_stats, home_id, away_id, home_abbr, away_abbr)
+                if not norm:
+                    print(f"[{gid}] no sog-like plays after merge; skipping")
+                    set_last_game_id(cur, gid); conn.commit(); continue
 
+                sk_splits = compute_skater_sog_splits_from_norm(norm)
                 if not sk_splits:
                     print(f"[{gid}] no skater splits derived; skipping")
-                    set_last_game_id(cur, gid)
-                    conn.commit()
+                    set_last_game_id(cur, gid); conn.commit(); continue
+
+                norm_count = len(norm or [])
+                shooters_count = len(sk_splits or {})
+
+                # --- build updates only where our total matches DB SOG ---
+                # --- reconcile against DB SOG: fill any shortfall into EV, skip excess ---
+            sog_by_pid = sog_map_for_game(cur, gid)  # {pid: shots_on_goal} you already have this
+
+            updates: List[tuple] = []  # (ev, pp, sh, gid, pid)
+            stats_ok = stats_filled = stats_excess = 0
+
+            for pid, sog in sog_by_pid.items():
+                if not sog or sog <= 0:
+                    continue
+                d = sk_splits.get(pid, {"EV": 0, "PP": 0, "SH": 0})
+                ev, pp, sh = int(d.get("EV", 0)), int(d.get("PP", 0)), int(d.get("SH", 0))
+                total = ev + pp + sh
+
+                if total == sog:
+                    stats_ok += 1
+                    # use as-is
+                elif total < sog:
+                    # undercount in PBP: fill remainder into EV
+                    ev += (sog - total)
+                    total = sog
+                    stats_filled += 1
+                else:
+                    # overcount/noisy PBP: skip to avoid corrupting data
+                    stats_excess += 1
                     continue
 
-                # build batch parameters for players who have SOG-like events
-                params: List[tuple] = []
-                for pid, d in sk_splits.items():
-                    ev, pp, sh = int(d.get("EV", 0)), int(d.get("PP", 0)), int(d.get("SH", 0))
-                    total = ev + pp + sh
-                    # we only update rows where SOG exists and our total matches SOG
-                    params.append((ev, pp, sh, gid, pid, total, total, total))
+                updates.append((ev, pp, sh, gid, pid))
 
-                # --- per-game update (commit-aware) ---
-                updated_rows = 0
-                if commit:
-                    # Do real updates and count accurately
-                    for pr in params:
-                        cur.execute(f"""
-                            UPDATE nhl.skater_game_logs_raw
-                            SET ev_sog = %s, pp_sog = %s, sh_sog = %s
-                            WHERE game_id = %s AND player_id = %s
-                            AND {OFFENDER_PRED}
-                            AND (%s + %s + %s) = shots_on_goal
-                        """, pr)
-                        updated_rows += cur.rowcount
-                    print(f"[{gid}] COMMIT updated_rows={updated_rows} plays={len(plays)} shooters={len(sk_splits)}")
-                else:
-                    # Dry-run: estimate how many rows WOULD update (no writes)
-                    would = 0
-                    for pr in params:
-                        ev, pp, sh, g_id, p_id = pr[0], pr[1], pr[2], pr[3], pr[4]
-                        cur.execute(f"""
-                            SELECT COUNT(*)
-                            FROM nhl.skater_game_logs_raw
-                            WHERE game_id = %s AND player_id = %s
-                            AND {OFFENDER_PRED}
-                            AND (%s + %s + %s) = shots_on_goal
-                        """, (g_id, p_id, ev, pp, sh))
-                        would += cur.fetchone()[0]
-                    updated_rows = would  # for unified print below
-                    # ensure no accidental writes take effect
-                    conn.rollback()
-                    print(f"[{gid}] DRY-RUN would_update={updated_rows} plays={len(plays)} shooters={len(sk_splits)}")
+            updated_rows = 0
+            if commit:
+                # Update only rows that are offenders (nulls or sum mismatch)
+                for ev, pp, sh, g_id, p_id in updates:
+                    cur.execute(f"""
+                        UPDATE nhl.skater_game_logs_raw
+                        SET ev_sog = %s, pp_sog = %s, sh_sog = %s
+                        WHERE game_id = %s AND player_id = %s
+                        AND (
+                            ev_sog IS NULL OR pp_sog IS NULL OR sh_sog IS NULL
+                            OR (COALESCE(ev_sog,0)+COALESCE(pp_sog,0)+COALESCE(sh_sog,0)) <> shots_on_goal
+                        )
+                    """, (ev, pp, sh, g_id, p_id))
+                    updated_rows += cur.rowcount
+                print(f"[{gid}] COMMIT updated_rows={updated_rows} ok={stats_ok} filled_ev={stats_filled} skipped_excess={stats_excess} sog_rows={len(sog_by_pid)}")
+            else:
+                # Dry-run: count how many would update
+                would = 0
+                for ev, pp, sh, g_id, p_id in updates:
+                    cur.execute(f"""
+                        SELECT 1
+                        FROM nhl.skater_game_logs_raw
+                        WHERE game_id = %s AND player_id = %s
+                        AND (
+                            ev_sog IS NULL OR pp_sog IS NULL OR sh_sog IS NULL
+                            OR (COALESCE(ev_sog,0)+COALESCE(pp_sog,0)+COALESCE(sh_sog,0)) <> shots_on_goal
+                        )
+                        LIMIT 1
+                    """, (g_id, p_id))
+                    if cur.fetchone():
+                        would += 1
+                conn.rollback()
+                print(f"[{gid}] DRY-RUN would_update={would} ok={stats_ok} filled_ev={stats_filled} skipped_excess={stats_excess} sog_rows={len(sog_by_pid)}")
 
-                # Advance checkpoint & persist it (even in dry-run, so resume works)
-                set_last_game_id(cur, gid)
-                conn.commit()
+            # advance checkpoint & commit each game
+            set_last_game_id(cur, gid)
+            conn.commit()
 
-                if delay > 0:
-                    time.sleep(delay)
+            if delay > 0:
+                time.sleep(delay)
 
-                now_remaining = offenders_count(cur)
-                print(f"[bf] remaining={now_remaining}")
+            now_remaining = offenders_count(cur)
+            print(f"[bf] remaining={now_remaining}")
 
 
         # loop continues to next page until no offenders remain

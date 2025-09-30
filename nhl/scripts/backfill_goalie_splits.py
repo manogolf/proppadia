@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os, time, argparse
+from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import requests
 import psycopg
@@ -14,8 +15,6 @@ STATSAPI_FEED = "https://statsapi.web.nhl.com/api/v1/game/{gid}/feed/live"
 
 TASK_KEY = "goalie_splits_v1"
 
-import os
-from pathlib import Path
 
 def _load_env_upwards():
     """Load .env from current dir or any parent (first hit wins)."""
@@ -38,17 +37,6 @@ def env_db_url() -> str:
     if not db:
         raise SystemExit("Missing SUPABASE_DB_URL / DATABASE_URL")
     # Supabase pooler: require SSL and disable GSS
-    if "?sslmode=" not in db and "&sslmode=" not in db:
-        db += ("&" if "?" in db else "?") + "sslmode=require"
-    if "?gssencmode=" not in db and "&gssencmode=" not in db:
-        db += ("&" if "?" in db else "?") + "gssencmode=disable"
-    return db
-
-
-def env_db_url() -> str:
-    db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-    if not db:
-        raise SystemExit("Missing SUPABASE_DB_URL / DATABASE_URL")
     if "?sslmode=" not in db and "&sslmode=" not in db:
         db += ("&" if "?" in db else "?") + "sslmode=require"
     if "?gssencmode=" not in db and "&gssencmode=" not in db:

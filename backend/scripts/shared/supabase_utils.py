@@ -1,7 +1,13 @@
 from __future__ import annotations
 import os
 from typing import Optional
-from supabase import create_client, Client
+try:
+    from supabase import create_client, Client
+except ImportError as e:
+    raise RuntimeError(
+        "Missing 'supabase' package in the current interpreter. "
+        "Activate your venv and `pip install supabase==2.*`."
+    ) from e
 
 SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
 # Prefer service role if available; fall back to anon for read-only usage
