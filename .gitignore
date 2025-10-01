@@ -33,3 +33,4 @@ mlb/frontend/build/
 !nhl/models/latest/MODEL_INDEX.json
 !nhl/models/latest/**/MODEL_INDEX.json
 mlb/
+node_modules

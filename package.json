@@ -1,1 +1,19 @@
-{}
+{
+  "name": "proppadia-root",
+  "private": true,
+  "scripts": {
+    "start": "node -e \"const fs=require('fs');const opts=['frontend','mlb/frontend'];const dir=opts.find(d=>fs.existsSync(d+'/package.json'));if(!dir){console.error('No frontend found (looked in '+opts.join(', ')+')');process.exit(1);}require('child_process').spawn('npm',['start','--prefix',dir],{stdio:'inherit'});\"",
+    "start:frontend": "npm --prefix frontend start",
+    "start:frontend:mlb": "npm --prefix mlb/frontend start",
+    "start:backend": "PYTHONPATH=. uvicorn backend.app.api_server:app --reload --port 8000",
+    "dev": "npx concurrently -n FRONTEND,BACKEND -c auto \"npm run start\" \"PYTHONPATH=. uvicorn backend.app.api_server:app --reload --port 8000\"",
+    "build": "npm --prefix frontend run build || npm --prefix mlb/frontend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0",
+    "luxon": "^3.7.2"
+  }
+}

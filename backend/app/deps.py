@@ -1,82 +1,93 @@
+# backend/app/deps.py
 from __future__ import annotations
-from backend.scripts.shared.supabase_utils import supabase
-from typing import Tuple, Optional, Dict, Any
+import os
+from typing import Tuple, Dict, Any
 
+# If you use bootstrap_env to load .env / normalize DB URL, keep this
 try:
-    from backend.scripts.shared.supabase_utils import supabase  # type: ignore
+    import bootstrap_env  # noqa: F401
 except Exception:
-    supabase = None
+    pass
 
-
-# ---- paths so we can import backend/scripts/shared/supabase_utils.py ----
-APP_DIR = Path(__file__).resolve().parent         # backend/app
-BACKEND_DIR = APP_DIR.parent                      # backend/
-ROOT_SCRIPTS = BACKEND_DIR / "scripts"
-if ROOT_SCRIPTS.exists() and str(ROOT_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(ROOT_SCRIPTS))
-
-# ---- robust import of the centralized Supabase helper ----
-try:
-    # package style: backend/scripts/shared/__init__.py exists
-    from shared.supabase_utils import supabase  # type: ignore
-except ModuleNotFoundError:
-    # module style: import the file directly
-    SHARED_DIR = ROOT_SCRIPTS / "shared"
-    if SHARED_DIR.exists() and str(SHARED_DIR) not in sys.path:
-        sys.path.insert(0, str(SHARED_DIR))
-    import importlib
-    supabase = importlib.import_module("supabase_utils").supabase  # type: ignore
-
-# ---- optional direct Postgres access for non-public schemas (e.g., nhl.*) ----
 try:
     import psycopg  # type: ignore
 except Exception:
     psycopg = None  # type: ignore
 
-def _db_url() -> Optional[str]:
-    raw = os.getenv("DATABASE_URL")
-    if not raw:
+
+def _env_db_url() -> str | None:
+    """Return DB URL with safe defaults for Supabase; None if not set."""
+    db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    if not db:
         return None
-    cleaned = raw.strip()
-    if (cleaned.startswith(("'", '"')) and cleaned.endswith(("'", '"')) and len(cleaned) > 1):
-        cleaned = cleaned[1:-1].strip()
-    return cleaned
+    if "?sslmode=" not in db and "&sslmode=" not in db:
+        db += ("&" if "?" in db else "?") + "sslmode=require"
+    if "?gssencmode=" not in db and "&gssencmode=" not in db:
+        db += ("&" if "?" in db else "?") + "gssencmode=disable"
+    return db
 
-def pg_fetchone(sql: str, params: tuple = ()) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
-    """
-    Execute read-only SQL and return a single row as dict.
-    Requires psycopg and a DB URL env var.
-    """
+
+def ping_db(timeout: float = 3.0) -> Tuple[bool, str]:
+    """Lightweight DB health check used by /health."""
     if psycopg is None:
-        return False, None, "psycopg not installed"
-    url = _db_url()
-    if not url:
-        return False, None, "SUPABASE_DB_URL/DATABASE_URL not set"
+        return False, "psycopg not installed"
+    db = _env_db_url()
+    if not db:
+        return False, "Missing SUPABASE_DB_URL/DATABASE_URL"
     try:
-        with psycopg.connect(url) as conn:
+        with psycopg.connect(db, connect_timeout=int(timeout)) as conn:
             with conn.cursor() as cur:
-                cur.execute(sql, params)
-                row = cur.fetchone()
-                if not row:
-                    return True, None, None
-                cols = [d[0] for d in cur.description]
-                return True, dict(zip(cols, row)), None
-    except Exception as e:
-        return False, None, f"{type(e).__name__}: {e}"
-
-def env_summary() -> dict:
-    return {
-        "SUPABASE_URL_set": bool(os.getenv("SUPABASE_URL")),
-        "SUPABASE_ANON_KEY_set": bool(os.getenv("SUPABASE_ANON_KEY")),
-        "SUPABASE_SERVICE_ROLE_KEY_set": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
-        "DATABASE_URL_set": bool(os.getenv("DATABASE_URL")),
-        "helper": "backend/scripts/shared/supabase_utils.py",
-    }
-
-def ping_db() -> Tuple[bool, Optional[str]]:
-    """Lightweight readiness check via a public table; adjust if needed."""
-    try:
-        supabase.table("player_props").select("id").limit(1).execute()
-        return True, None
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return True, "ok"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
+
+
+def env_summary() -> Dict[str, Any]:
+    """Tiny snapshot for /health so you can see what’s configured."""
+    return {
+        "has_SUPABASE_DB_URL": bool(os.getenv("SUPABASE_DB_URL")),
+        "has_DATABASE_URL": bool(os.getenv("DATABASE_URL")),
+        "has_SUPABASE_URL": bool(os.getenv("SUPABASE_URL")),
+        "has_SUPABASE_ANON_KEY": bool(os.getenv("SUPABASE_ANON_KEY")),
+    }
+
+# --- minimal DB helpers used by routers ---------------------------------
+
+def _require_db_url() -> str:
+    db = _env_db_url()
+    if not db:
+        raise RuntimeError("Missing SUPABASE_DB_URL/DATABASE_URL")
+    if psycopg is None:
+        raise RuntimeError("psycopg not installed")
+    return db
+
+def pg_fetchone(sql: str, params=None):
+    """Execute a query and return the first row (or None)."""
+    db = _require_db_url()
+    with psycopg.connect(db) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+            return cur.fetchone()
+
+def pg_fetchall(sql: str, params=None):
+    """Execute a query and return all rows as a list of tuples."""
+    db = _require_db_url()
+    with psycopg.connect(db) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+            return cur.fetchall()
+
+def pg_execute(sql: str, params=None) -> int:
+    """Execute a write (INSERT/UPDATE/DELETE); returns affected rowcount."""
+    db = _require_db_url()
+    with psycopg.connect(db) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+        conn.commit()
+        return cur.rowcount
+
+# Back-compat alias used by older routers
+def _db_url() -> str:
+    return _env_db_url()

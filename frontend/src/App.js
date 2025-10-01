@@ -1,18 +1,6 @@
-import { useEffect, useState } from "react";
+// src/App.js
+import Home from "./Pages/Home.js"; // or "./Pages/Home" if your folder is capitalized
 
 export default function App() {
-  const [resp, setResp] = useState("…");
-  useEffect(() => {
-    const base = process.env.REACT_APP_API_BASE || "";
-    fetch(`${base}/admin/ping`)
-      .then(r => r.json())
-      .then(j => setResp(JSON.stringify(j)))
-      .catch(e => setResp(String(e)));
-  }, []);
-  return (
-    <div style={{padding: 24, fontFamily: "system-ui, sans-serif"}}>
-      <h1>Proppadia MLB</h1>
-      <p>API ping: {resp}</p>
-    </div>
-  );
+  return <Home />;
 }
