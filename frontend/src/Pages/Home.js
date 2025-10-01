@@ -1,3 +1,5 @@
+//  frontend / src / Pages / Home.js;
+
 import React, { useState, useEffect } from "react";
 import TodayGames from "../components/TodayGames.js";
 import StreakCard from "../components/StreakCard.js";
