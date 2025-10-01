@@ -31,6 +31,30 @@ export default function Header() {
           {/* Try w-2, w-8, or px-4 to test spacing */}
         </div>
 
+        <div className="flex items-center gap-6">
+          <Link
+            to="/"
+            className="text-lg font-semibold text-blue-900 hover:text-blue-700"
+          >
+            Proppadia
+          </Link>
+          {/* sport quick links */}
+          <nav className="flex items-center gap-4">
+            <Link
+              to="/mlb"
+              className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
+            >
+              MLB
+            </Link>
+            <Link
+              to="/nhl"
+              className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
+            >
+              NHL
+            </Link>
+          </nav>
+        </div>
+
         {/* RIGHT: Stacked text + auth */}
         <div className="flex flex-col items-end text-right space-y-1">
           <div className="text-med text-gray-600 font-medium">

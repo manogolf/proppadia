@@ -7,7 +7,7 @@ import {
   TableBody,
   TableCell,
 } from "../components/ui/table.js";
-import { getPropDisplayLabel } from "../../shared/propUtils.js";
+import { getPropDisplayLabel } from "../shared/propUtils.js";
 import { DateTime } from "luxon";
 
 export default function WeeklyModelAccuracyTable({ data }) {

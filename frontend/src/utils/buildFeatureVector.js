@@ -1,9 +1,9 @@
 // File: src/utils/buildFeatureVector.js
 
 import { supabase } from "./supabaseFrontend.js";
-//import { checkIfHome, getPlayerID } from "../../shared/playerUtilsFrontend.js";
+//import { checkIfHome, getPlayerID } from "../shared/playerUtilsFrontend.js";
 import { toISODate } from "../shared/timeUtils.js";
-import { getOpponentAbbreviation } from "../../shared/teamNameMap.js";
+import { getOpponentAbbreviation } from "../shared/teamNameMap.js";
 import yaml from "js-yaml";
 
 const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:3001";

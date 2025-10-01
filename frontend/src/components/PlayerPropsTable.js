@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { format, isValid } from "date-fns";
 import { supabase } from "../utils/supabaseFrontend.js";
 import { todayET } from "../shared/timeUtils.js";
-import { getPropDisplayLabel } from "../../shared/propUtils.js";
+import { getPropDisplayLabel } from "../shared/propUtils.js";
 // (Optional) if you want "only my props":
 // import { useAuth } from "../context/AuthContext.js";
 

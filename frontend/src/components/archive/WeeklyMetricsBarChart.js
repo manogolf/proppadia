@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { getPropDisplayLabel } from "../../shared/archive/propUtils.js";
+import { getPropDisplayLabel } from "../shared/archive/propUtils.js";
 
 export default function WeeklyMetricsBarChart({ data }) {
   return (

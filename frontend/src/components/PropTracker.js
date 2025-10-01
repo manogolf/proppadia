@@ -5,7 +5,7 @@ import { todayET } from "../shared/timeUtils.js";
 import { supabase } from "../utils/supabaseFrontend.js";
 import Calendar from "./ui/calendar.js";
 import AccuracyByPropType from "./AccuracyByPropType.js";
-import { getPropDisplayLabel } from "../../shared/propUtils.js";
+import { getPropDisplayLabel } from "../shared/propUtils.js";
 
 export default function PropTracker({ selectedDate, setSelectedDate }) {
   // default to ET today if nothing chosen

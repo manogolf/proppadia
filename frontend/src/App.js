@@ -1,6 +1,6 @@
 // src/App.js
-import Home from "./Pages/Home.js"; // or "./Pages/Home" if your folder is capitalized
+import AppRouter from "./routes/AppRouter";
 
 export default function App() {
-  return <Home />;
+  return <AppRouter />;
 }
