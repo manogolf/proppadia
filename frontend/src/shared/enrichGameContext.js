@@ -1,9 +1,9 @@
 //  shared/enrichGameContext.js
 
-import { teamIdMap } from "./teamNameMap.js";
-import { getGamePkForTeamOnDate } from "../backend/scripts/shared/fetchGameID.js";
+import { teamIdMap } from "./teamNameMap.jsx";
+import { getGamePkForTeamOnDate } from "../backend/scripts/shared/fetchGameID.jsx";
 import { getGameSchedule } from "./mlbApiUtilsFrontend.js";
-import { getTimeOfDayBucketET } from "./timeUtils.js"; // shared-safe
+import { getTimeOfDayBucketET } from "./timeUtils.jsx"; // shared-safe
 
 async function getFeedLive(gameId) {
   const url = `https://statsapi.mlb.com/api/v1.1/game/${gameId}/feed/live`;

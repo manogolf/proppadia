@@ -1,5 +1,5 @@
 // 📁 File: src/pages/api/getGamePk.js
-import { getGamePkForTeamOnDate } from "../../../backend/scripts/shared/fetchGameID.js";
+import { getGamePkForTeamOnDate } from "../../../backend/scripts/shared/fetchGameID.jsx";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {

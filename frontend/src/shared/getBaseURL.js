@@ -1,6 +1,6 @@
 // src/shared/getBaseURL.js
 export function getBaseURL() {
-  const env = (process.env.REACT_APP_API_BASE || "").trim();
+  const env = (import.meta.env.VITE_API_BASE || "").trim();
   if (env) return env.replace(/\/+$/, "");
   if (
     typeof window !== "undefined" &&

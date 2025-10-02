@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent } from "../components/ui/card.js";
+import { Card, CardContent } from "../components/ui/card.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 import {
   normalizePropType,
   getPropDisplayLabel,
 } from "../shared/propUtils.js";
 import { formatDateET } from "../shared/timeUtils.js";
-import MetricsTable from "../components/MetricsTable.js";
-import MetricsBarChart from "../components/MetricsBarChart.js";
-import ModelAccuracyTable from "../components/ModelAccuracyTable.js";
-import ModelAccuracyBarChart from "../components/ModelAccuracyBarChart.js";
-import WeeklyModelAccuracyBarChart from "../components/WeeklyModelAccuracyBarChart.js";
-import WeeklyModelAccuracyTable from "../components/WeeklyModelAccuracyTable.js";
-import WeeklyUserVsModelBarChart from "../components/WeeklyUserVsModelBarChart.js";
+import MetricsTable from "../components/MetricsTable.jsx";
+import MetricsBarChart from "../components/MetricsBarChart.jsx";
+import ModelAccuracyTable from "../components/ModelAccuracyTable.jsx";
+import ModelAccuracyBarChart from "../components/ModelAccuracyBarChart.jsx";
+import WeeklyModelAccuracyBarChart from "../components/WeeklyModelAccuracyBarChart.jsx";
+import WeeklyModelAccuracyTable from "../components/WeeklyModelAccuracyTable.jsx";
+import WeeklyUserVsModelBarChart from "../components/WeeklyUserVsModelBarChart.jsx";
 
 export default function ModelMetricsDashboard() {
   const [metrics, setMetrics] = useState([]);

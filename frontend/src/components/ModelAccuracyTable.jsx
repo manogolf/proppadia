@@ -5,7 +5,7 @@ import {
   TableHead,
   TableBody,
   TableCell,
-} from "../components/ui/table.js";
+} from "../components/ui/table.jsx";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
 
 export default function ModelAccuracyTable({ data }) {

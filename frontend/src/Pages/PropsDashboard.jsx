@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import PropTracker from "../components/PropTracker.js"; // 📅 Calendar
-import PlayerPropsTable from "../components/PlayerPropsTable.js"; // 📊 Table
-// import PlayerPropForm from "../components/PlayerPropForm.js"; // 📝 Form
-import PlayerPropFormV2 from "../components/PlayerPropFormv2.js"; // V2
-import { useAuth } from "../context/AuthContext.js";
+import PropTracker from "../components/PropTracker.jsx"; // 📅 Calendar
+import PlayerPropsTable from "../components/PlayerPropsTable.jsx"; // 📊 Table
+// import PlayerPropForm from "../components/PlayerPropForm.jsx"; // 📝 Form
+import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx"; // V2
+import { useAuth } from "../context/AuthContext.jsx";
 import { todayET } from "../shared/timeUtils.js";
 
 export default function PropsDashboard() {

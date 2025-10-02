@@ -1,6 +1,6 @@
 // shared/playerUtilsFrontend.js
 
-import { getFullTeamAbbreviationFromID } from "./teamNameMap.js";
+import { getFullTeamAbbreviationFromID } from "./teamNameMap.jsx";
 
 // ✅ Safely usable in frontend (no node-fetch or backend imports)
 

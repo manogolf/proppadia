@@ -6,7 +6,7 @@ import {
   TableHead,
   TableBody,
   TableCell,
-} from "../ui/table.js";
+} from "../ui/table.jsx";
 import { getPropDisplayLabel } from "../shared/archive/propUtils.js";
 import { DateTime } from "luxon";
 

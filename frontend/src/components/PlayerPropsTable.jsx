@@ -5,7 +5,7 @@ import { supabase } from "../utils/supabaseFrontend.js";
 import { todayET } from "../shared/timeUtils.js";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
 // (Optional) if you want "only my props":
-// import { useAuth } from "../context/AuthContext.js";
+// import { useAuth } from "../context/AuthContext.jsx";
 
 const statusColor = {
   win: "bg-green-100 text-green-700",

@@ -1,7 +1,7 @@
 // utils/updateGameIDs.js
 
-import { supabase } from './supabaseClient.js'; // ✅ correct
-import { getGamePkForTeamOnDate } from './fetchGameID.js';
+import { supabase } from './supabaseClient.jsx'; // ✅ correct
+import { getGamePkForTeamOnDate } from './fetchGameID.jsx';
 
 async function updateMissingGameIDs() {
     const { data: props, error } = await supabase

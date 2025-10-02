@@ -1,5 +1,5 @@
 // 📁 File: src/pages/api/getGameContext.js
-import { getGameContextFields } from "../../../backend/scripts/shared/mlbApiUtils.js";
+import { getGameContextFields } from "../../../backend/scripts/shared/mlbApiUtils.jsx";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {

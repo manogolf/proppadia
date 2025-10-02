@@ -3,8 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { format, isValid } from "date-fns";
 import { todayET } from "../shared/timeUtils.js";
 import { supabase } from "../utils/supabaseFrontend.js";
-import Calendar from "./ui/calendar.js";
-import AccuracyByPropType from "./AccuracyByPropType.js";
+import Calendar from "./ui/calendar.jsx";
+import AccuracyByPropType from "./AccuracyByPropType.jsx";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
 
 export default function PropTracker({ selectedDate, setSelectedDate }) {

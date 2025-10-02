@@ -1,5 +1,5 @@
 import React from "react";
-import OwnerLogin from "../components/OwnerLogin.js";
+import OwnerLogin from "../components/OwnerLogin.jsx";
 import { Link } from "react-router-dom";
 
 export default function LoginPage() {

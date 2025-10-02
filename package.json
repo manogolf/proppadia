@@ -6,8 +6,9 @@
     "start:frontend": "npm --prefix frontend start",
     "start:frontend:mlb": "npm --prefix mlb/frontend start",
     "start:backend": "PYTHONPATH=. uvicorn backend.app.api_server:app --reload --port 8000",
-    "dev": "npx concurrently -n FRONTEND,BACKEND -c auto \"npm run start\" \"PYTHONPATH=. uvicorn backend.app.api_server:app --reload --port 8000\"",
-    "build": "npm --prefix frontend run build || npm --prefix mlb/frontend run build"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 3000"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

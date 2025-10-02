@@ -1,6 +1,6 @@
 // File: src/utils/buildFeatureVector.js
 
-import { supabase } from "./supabaseFrontend.js";
+import { supabase } from "./supabaseFrontend.jsx";
 //import { checkIfHome, getPlayerID } from "../shared/playerUtilsFrontend.js";
 import { toISODate } from "../shared/timeUtils.js";
 import { getOpponentAbbreviation } from "../shared/teamNameMap.js";

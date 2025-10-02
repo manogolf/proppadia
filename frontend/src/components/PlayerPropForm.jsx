@@ -5,7 +5,7 @@ import Select from "react-select";
 import { resolvePlayerAndTeam } from "../shared/resolvePlayerAndTeam.js";
 import { supabase } from "../utils/supabaseFrontend.js";
 import { nowET, todayET } from "../shared/timeUtils.js";
-import { useAuth } from "../context/AuthContext.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import { getPropTypeOptions } from "../shared/propUtils.js";
 import { enrichGameContext } from "../shared/enrichGameContext.js";
 import { useRef, useCallback } from "react";

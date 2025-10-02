@@ -1,8 +1,8 @@
 // WeeklyUserVsAccuracy.js
 import { useEffect, useState } from "react";
-import { Card, CardContent } from "../components/ui/card.js";
-import WeeklyMetricsTable from "./archive/WeeklyMetricsTable.js";
-import WeeklyMetricsBarChart from "./archive/WeeklyMetricsBarChart.js";
+import { Card, CardContent } from "../components/ui/card.jsx";
+import WeeklyMetricsTable from "./archive/WeeklyMetricsTable.jsx";
+import WeeklyMetricsBarChart from "./archive/WeeklyMetricsBarChart.jsx";
 import { getBaseURL } from "@shared/getBaseURL.js";
 import { DateTime } from "luxon";
 

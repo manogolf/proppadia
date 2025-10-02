@@ -1,7 +1,7 @@
 // frontend/src/Pages/Home.js
 import React, { useState, useEffect } from "react";
-import TodayGames from "../components/TodayGames.js";
-import StreakCard from "../components/StreakCard.js";
+import TodayGames from "../components/TodayGames.jsx";
+import StreakCard from "../components/StreakCard.jsx";
 import { todayET } from "../shared/timeUtils.js";
 
 export default function Home() {

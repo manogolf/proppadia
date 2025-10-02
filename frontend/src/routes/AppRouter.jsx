@@ -5,15 +5,15 @@ import {
   Link,
   useLocation,
 } from "react-router-dom";
-import PropsDashboard from "../Pages/PropsDashboard.js";
-import LoginPage from "../Pages/Login.js";
-import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.js"; // adjust path if needed
-import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.js";
-import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.js";
-import PlayerPropsPage from "../Pages/PlayerPropsPage.js";
-import Header from "../components/Header.js";
-import Home from "../Pages/Home.js"; // ← existing MLB dashboard (kept as-is, now lives at /mlb)
-import HomeGateway from "../Pages/HomeGateway.js"; // ← new multi-sport Home for "/"
+import PropsDashboard from "../Pages/PropsDashboard.jsx";
+import LoginPage from "../Pages/Login.jsx";
+import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.jsx"; // adjust path if needed
+import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.jsx";
+import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.jsx";
+import PlayerPropsPage from "../Pages/PlayerPropsPage.jsx";
+import Header from "../components/Header.jsx";
+import Home from "../Pages/Home.jsx"; // ← existing MLB dashboard (kept as-is, now lives at /mlb)
+import HomeGateway from "../Pages/HomeGateway.jsx"; // ← new multi-sport Home for "/"
 
 export default function AppRouter() {
   return (

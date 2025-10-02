@@ -7,7 +7,7 @@ import {
   TableHead,
   TableBody,
   TableCell,
-} from "./ui/table.js";
+} from "./ui/table.jsx";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
 
 export default function MetricsTable({ metrics }) {

@@ -6,6 +6,9 @@ from typing import Dict, List, Tuple, Optional
 import requests
 import psycopg
 import bootstrap_env
+import time
+from psycopg.errors import InternalError, OperationalError
+
 
 
 
@@ -16,6 +19,51 @@ API_WEB_BOX   = "https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore"
 STATSAPI_FEED = "https://statsapi.web.nhl.com/api/v1/game/{gid}/feed/live"
 
 TASK_KEY = "sog_splits_v1"
+
+def open_conn(dsn: str):
+    """
+    Open a psycopg3 connection with sensible timeouts/keepalives and return (conn, cur).
+    """
+    conn = psycopg.connect(
+        dsn,
+        # libpq keepalives so dead TCPs are noticed quickly
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=3,
+        # set statement_timeout etc. at connection time
+        options="-c statement_timeout=120000 -c idle_in_transaction_session_timeout=60000 -c lock_timeout=5000",
+    )
+    cur = conn.cursor()
+    return conn, cur
+
+
+def exec_with_retry(get_cur, sql, params=None, *, who="", max_retries=5, backoff=1.5):
+    """
+    Execute a SELECT (or any non-DML) with automatic reconnect + retry.
+    `get_cur()` must return a live (conn, cur) tuple; we call it again after reconnect.
+    """
+    params = params or ()
+    last_e = None
+    for attempt in range(1, max_retries + 1):
+        conn, cur = get_cur()
+        try:
+            cur.execute(sql, params)
+            return cur
+        except (InternalError, OperationalError) as e:
+            last_e = e
+            try:
+                cur.close()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+            print(f"[retry] {who} attempt {attempt}/{max_retries} failed: {e}")
+            time.sleep(backoff * attempt)
+    raise RuntimeError(f"{who} failed after {max_retries} attempts") from last_e
+
 
 def env_db_url() -> str:
     db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
@@ -336,13 +384,15 @@ def _normalize_sog_plays(pbp_obj, home_id, away_id, home_abbr, away_abbr) -> Lis
         })
     return out
 
-def sog_map_for_game(cur, gid: int) -> Dict[int, int]:
-    cur.execute("""
+def sog_map_for_game(gid, get_cur):
+    sql = """
         SELECT player_id, shots_on_goal
         FROM nhl.skater_game_logs_raw
-        WHERE game_id = %s AND shots_on_goal IS NOT NULL AND shots_on_goal > 0
-    """, (gid,))
-    return {int(pid): int(sog) for pid, sog in cur.fetchall()}
+        WHERE game_id = %s
+    """
+    c = exec_with_retry(get_cur, sql, (gid,), who=f"sog_map_for_game gid={gid}")
+    rows = c.fetchall()
+    return {pid: sog for (pid, sog) in rows}
 
 def merge_pbp_for_sog(pbp_web, pbp_stats, home_id, away_id, home_abbr, away_abbr) -> List[dict]:
     """
@@ -379,15 +429,26 @@ def compute_skater_sog_splits_from_norm(norm_plays: List[dict]) -> Dict[int, Dic
 
 def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool = False):
     DB = env_db_url()
-    with psycopg.connect(DB) as conn, conn.cursor() as cur:
-        start_remaining = offenders_count(cur)
-        print(f"[bf] starting remaining={start_remaining}")
 
-        ensure_progress_table(cur)
-        # If not resuming, start from the beginning each run
-        if not resume:
-            set_last_game_id(cur, None)
-        conn.commit()
+    # keep a single mutable holder for the live connection/cursor
+    _holder = {"conn": None, "cur": None}
+
+    def ensure_live():
+        # reopen if missing/closed
+        if _holder["conn"] is None or _holder["conn"].closed:
+            _holder["conn"], _holder["cur"] = open_conn(DB)
+        return _holder["conn"], _holder["cur"]
+
+    # open once up front
+    conn, cur = ensure_live()
+
+    start_remaining = offenders_count(cur)
+    print(f"[bf] starting remaining={start_remaining}")
+
+    ensure_progress_table(cur)
+    if not resume:
+        set_last_game_id(cur, None)
+    conn.commit()
 
     # loop until no offenders remain
     while True:
@@ -449,7 +510,7 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
 
                 # --- build updates only where our total matches DB SOG ---
                 # --- reconcile against DB SOG: fill any shortfall into EV, skip excess ---
-            sog_by_pid = sog_map_for_game(cur, gid)  # {pid: shots_on_goal} you already have this
+            sog_by_pid = sog_map_for_game(gid, ensure_live)  # {pid: shots_on_goal} you already have this
 
             updates: List[tuple] = []  # (ev, pp, sh, gid, pid)
             stats_ok = stats_filled = stats_excess = 0

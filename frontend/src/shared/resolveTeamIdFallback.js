@@ -1,5 +1,5 @@
 // shared/resolveTeamIdFallback.js
-import { getTeamIdFromAbbr } from "./teamNameMap.js";
+import { getTeamIdFromAbbr } from "./teamNameMap.jsx";
 
 /**
  * Safely resolve team_id using all known fallbacks.

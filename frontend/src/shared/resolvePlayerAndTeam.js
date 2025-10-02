@@ -1,7 +1,7 @@
 // src/shared/resolvePlayerAndTeam.js
 
 import { supabase } from "../utils/supabaseFrontend.js";
-import { normalizeTeamAbbreviation, getTeamIdFromAbbr } from "./teamNameMap.js";
+import { normalizeTeamAbbreviation, getTeamIdFromAbbr } from "./teamNameMap.jsx";
 
 /**
  * Normalize player names (remove accents and lowercase).
