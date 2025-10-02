@@ -8,7 +8,6 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { getPropDisplayLabel } from "../shared/propUtils.js";
 
 export default function WeeklyModelAccuracyBarChart({ data }) {
   if (!data?.length) return null;

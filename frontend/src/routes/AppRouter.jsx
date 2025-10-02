@@ -1,10 +1,4 @@
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Link,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import PropsDashboard from "../Pages/PropsDashboard.jsx";
 import LoginPage from "../Pages/Login.jsx";
 import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.jsx"; // adjust path if needed
