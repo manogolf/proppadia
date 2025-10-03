@@ -3,7 +3,7 @@ name: NHL Daily (Ingest → Refresh → Score → Export)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "15 10 * * *" # ~03:15 PT daily, after games finalize
+    - cron: "15 10 * * *" # ~03:15 PT daily (runs 10:15 UTC)
 
 concurrency:
   group: nhl-daily
@@ -13,10 +13,10 @@ jobs:
   daily:
     runs-on: ubuntu-latest
     env:
-      # Required repo secrets:
-      # - SUPABASE_DB_URL: postgres connection string (pooled OK)
-      # - SUPABASE_URL:    https://<project>.supabase.co
-      # - SUPABASE_SERVICE_ROLE_KEY: service role key
+      # REQUIRED repo secrets:
+      # SUPABASE_DB_URL: postgres connection string (pooled is fine)
+      # SUPABASE_URL:    https://<project>.supabase.co
+      # SUPABASE_SERVICE_ROLE_KEY: service role key
       DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -27,11 +27,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set dates (yesterday in UTC)
+      - name: Set dates (UTC)
         run: |
           echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
           echo "YDAY=$(date -u -d 'yesterday' +%F)" >> $GITHUB_ENV
-          echo "Dates -> DATE=${DATE} YDAY=${YDAY}"
+          echo "DATE=${DATE} YDAY=${YDAY}"
 
       - name: Install psql client
         run: |
@@ -47,137 +47,114 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Python deps for scripts
+      - name: Install Python deps (scripts only)
         run: |
           python -m pip install --upgrade pip
-          # Training/runtime libs for scripts (avoid backend FastAPI deps)
-          python -m pip install -r nhl/training/requirements.txt
+          # training/runtime libs your scripts might import
+          if [ -f nhl/training/requirements.txt ]; then
+            python -m pip install -r nhl/training/requirements.txt
+          fi
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31"
 
-      - name: Ingest preseason schedule (NHL API → nhl.games) with retries
+      # ───────── MUST: import teams (only if you have a teams importer) ─────────
+      # Optional: uncomment if you have these stage->merge steps scripted.
+      # - name: Import/merge teams (optional)
+      #   run: |
+      #     python nhl/scripts/import_teams.py  # your script if present
+
+      # ───────── MUST: import schedule into nhl.games ─────────
+      - name: Import today's schedule (API → nhl.games)
         env:
-          START_DATE: ${{ env.START_DATE }} # optional window start
-          END_DATE: ${{ env.END_DATE }} # optional window end (defaults to DATE)
+          SLATE_DATE: ${{ env.DATE }}
         run: |
-          python - <<'PY'
-          import os, time, requests, psycopg, datetime as dt
+          python nhl/scripts/import_schedule_today.py
 
-          # Window: default to last 14 days through DATE
-          date_end = os.getenv("END_DATE") or os.environ["DATE"]
-          end = dt.date.fromisoformat(date_end)
-          start = dt.date.fromisoformat(os.getenv("START_DATE") or (end - dt.timedelta(days=14)).isoformat())
-
-          def map_status(s):
-              s = (s or "").lower()
-              if "final" in s: return "final"
-              if "progress" in s: return "live"
-              if "sched" in s: return "scheduled"
-              return "scheduled"
-
-          def map_type(code):
-              code = (code or "").upper()
-              return {"PR":"preseason","R":"regular","P":"postseason"}.get(code, code.lower() or "scheduled")
-
-          def fetch_schedule(date_str, attempts=6, base_delay=2.0):
-              url = f"https://statsapi.web.nhl.com/api/v1/schedule?date={date_str}"
-              for i in range(1, attempts+1):
-                  try:
-                      r = requests.get(url, timeout=20)
-                      r.raise_for_status()
-                      return r.json()
-                  except requests.RequestException as e:
-                      delay = base_delay * (2 ** (i-1))
-                      print(f"[{date_str}] fetch error ({i}/{attempts}): {e}. retrying in {delay:.1f}s...", flush=True)
-                      time.sleep(delay)
-              print(f"[{date_str}] giving up after {attempts} attempts.", flush=True)
-              return None
-
-          rows = []
-          d = start
-          while d <= end:
-              js = fetch_schedule(d.isoformat())
-              if js:
-                  games = (js.get("dates") or [{}])[0].get("games") or []
-                  for g in games:
-                      gid  = int(g["gamePk"])
-                      iso  = g.get("gameDate")
-                      ts   = dt.datetime.fromisoformat(iso.replace("Z","+00:00")) if iso else None
-                      home = int(g["teams"]["home"]["team"]["id"])
-                      away = int(g["teams"]["away"]["team"]["id"])
-                      stat = map_status(g.get("status",{}).get("detailedState"))
-                      gtyp = map_type(g.get("gameType"))
-                      rows.append((gid, d.isoformat(), ts, home, away, stat, gtyp))
-              d += dt.timedelta(days=1)
-
-          if not rows:
-              print(f"No schedules could be fetched for {start}..{end}. Proceeding without upserts.")
-              raise SystemExit(0)  # soft exit; rest of pipeline can still run
-
-          sql = """
-          INSERT INTO nhl.games
-            (game_id, game_date, start_time_utc, home_team_id, away_team_id, status, game_type)
-          VALUES (%s,%s,%s,%s,%s,%s,%s)
-          ON CONFLICT (game_id) DO UPDATE
-          SET status = EXCLUDED.status,
-              start_time_utc = COALESCE(EXCLUDED.start_time_utc, nhl.games.start_time_utc),
-              game_type = COALESCE(EXCLUDED.game_type, nhl.games.game_type);
-          """
-          with psycopg.connect(os.environ["SUPABASE_DB_URL"]) as conn:
-              with conn.cursor() as cur:
-                  cur.executemany(sql, rows)
-              conn.commit()
-          print(f"Upserted {len(rows)} games into nhl.games for {start}..{end}.")
-          PY
-
-        # ─── Transform (refresh features/views) ────────────────────────────────────
-      - name: Refresh features/views (refresh.sql)
+      # ───────── MUST: import rosters into nhl.roster_status ─────────
+      - name: Import today's rosters (API → nhl.roster_status)
+        env:
+          SLATE_DATE: ${{ env.DATE }}
         run: |
-          SQL_PATH="nhl/scripts/refresh.sql"
-          ls -l "$SQL_PATH"
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$SQL_PATH"
+          python nhl/scripts/import_roster_today.py
 
-      - name: Pre-export training feature CSVs for scorer
+      # ───────── MUST: refresh features / views (if you have a SQL file) ─────────
+      - name: Refresh features/views (if present)
         run: |
-          # avoid timeouts for heavy \COPY
+          set -e
+          if [ -f nhl/scripts/refresh.sql ]; then
+            echo "Running nhl/scripts/refresh.sql …"
+            # Avoid timeout for heavier refreshes
+            export PGOPTIONS='-c statement_timeout=0'
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f nhl/scripts/refresh.sql
+          else
+            echo "No refresh.sql found — skipping."
+          fi
+
+      # ───────── MUST: export slate feature CSVs for the scorer ─────────
+      - name: Export slate CSVs (today only)
+        run: |
+          set -e
           export PGOPTIONS='-c statement_timeout=0'
           mkdir -p exports
 
-          # SOG: only today's rows (fast)
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
-            SELECT * FROM nhl.export_training_nhl_sog_v2
-            WHERE game_date = '${DATE}'::date
-            ORDER BY game_date, player_id
-          ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          # Skater SOG
+          # Use your dedicated view if you created it (preferred):
+          if psql "$SUPABASE_DB_URL" -Atqc "SELECT 1 FROM pg_views WHERE schemaname='nhl' AND viewname='v_slate_sog_features'"; then
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                NULL::int AS shots_on_goal,
+                d5_sog_per60, d10_sog_per60, d20_sog_per60,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
+                pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.v_slate_sog_features
+              WHERE game_date = '${DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          else
+            # Fallback: if you didn’t create the view, export directly from training_features table
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT *
+              FROM nhl.training_features_nhl_sog_v2
+              WHERE game_date = '${DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          fi
 
-          # Goalie: wide schema; synthesize a few expected cols; today's rows
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
-            SELECT
-              player_id, game_id, team_id, opponent_id, is_home, game_date,
-              1.0::numeric                                AS start_prob,
-              COALESCE(d5_saves_per60, 0)::numeric        AS d5_saves_per60,
-              COALESCE(d10_saves_per60, 0)::numeric       AS d10_saves_per60,
-              0::numeric                                  AS d20_saves_per60,
-              COALESCE(d5_shots_faced_per60, 0)::numeric  AS d5_shots_faced_per60,
-              COALESCE(d10_shots_faced_per60, 0)::numeric AS d10_shots_faced_per60,
-              COALESCE(season_save_pct, 0)::numeric       AS season_save_pct,
-              COALESCE(team_d10_sf_per_game, 0)::numeric  AS team_d10_sf_per_game,
-              COALESCE(opp_d10_sf_allowed_per_game, 0)::numeric AS opp_d10_sf_allowed_per_game,
-              COALESCE(team_d10_sa_per60, 0)::numeric     AS team_d10_sa_per60,
-              COALESCE(opp_d10_sf_per60, 0)::numeric      AS opp_d10_sf_per60,
-              0::numeric                                  AS team_d10_sf_per60,
-              0::numeric                                  AS opp_d10_sa_per60,
-              COALESCE(pace_index, 0)::numeric            AS pace_index,
-              COALESCE(pace_matchup_index, 0)::numeric    AS pace_matchup_index,
-              COALESCE(rest_days, 0)::smallint            AS rest_days,
-              COALESCE(b2b_flag, false)                   AS b2b_flag
-            FROM nhl.training_features_goalie_saves_v2
-            WHERE game_date = '${DATE}'::date
-          ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          # Goalie Saves
+          if psql "$SUPABASE_DB_URL" -Atqc "SELECT 1 FROM pg_views WHERE schemaname='nhl' AND viewname='v_slate_saves_features'"; then
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                d10_shots_faced_per60, d10_save_pct,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                pace_index, rest_days, b2b_flag,
+                d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
+                opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.v_slate_saves_features
+              WHERE game_date = '${DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          else
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                d10_shots_faced_per60, d10_save_pct,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                pace_index, rest_days, b2b_flag,
+                d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
+                opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.training_features_goalie_saves_v2
+              WHERE game_date = '${DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          fi
 
+          echo "Exported:"
           ls -lh exports/
 
-      # ─── Ingest/Score orchestration (uses the pre-exported CSVs) ──────────────
-      - name: Ingest/Score (run_daily_slate.py)
+      # ───────── MUST: score + load (your existing script) ─────────
+      - name: Score & Load predictions
         run: |
           python nhl/scripts/run_daily_slate.py \
             --project nhl \
@@ -185,59 +162,19 @@ jobs:
             --saves-csv exports/train_goalie_saves_v2.csv \
             --db-url "$SUPABASE_DB_URL"
 
-      # ─── Score predictions for today's slate (redundant) ─────────────────────
-      - name: Score props (today) — handled in run_daily_slate
-        run: |
-          echo "Skipped: already scored inside nhl/scripts/run_daily_slate.py"
-          ls -lh nhl/data/processed/sog_predictions.csv || true
-          ls -lh nhl/data/processed/saves_predictions.csv || true
-
-      - name: Load predictions to DB
-        run: |
-          if [ -f nhl/scripts/load_predictions_to_db.py ]; then
-            python nhl/scripts/load_predictions_to_db.py \
-              --project nhl \
-              --db-url "$SUPABASE_DB_URL" \
-              --sog-csv nhl/data/processed/sog_predictions.csv \
-              --saves-csv nhl/data/processed/saves_predictions.csv
-          else
-            echo "No separate loader; predictions remain as CSVs."
-          fi
-
-      # ─── Quick sanity counts (optional) ───────────────────────────────────────
-      - name: Verify counts (preseason-friendly)
+      # Quick sanity counts
+      - name: Verify counts
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
-            WITH g AS (
-              SELECT game_id FROM nhl.games WHERE game_date = '${DATE}'::date
-            )
-            SELECT 'games_today' AS which, COUNT(*) AS n
-            FROM nhl.games WHERE game_date = '${DATE}'::date
-            UNION ALL
-            SELECT 'skater_logs_today', COUNT(*)
-            FROM nhl.skater_game_logs_raw WHERE game_date = '${DATE}'::date
-            UNION ALL
-            SELECT 'goalie_logs_today', COUNT(*)
-            FROM nhl.goalie_game_logs_raw WHERE game_date = '${DATE}'::date
-            UNION ALL
-            SELECT 'features_sog_today', COUNT(*)
-            FROM nhl.training_features_nhl_sog_v2 WHERE game_date = '${DATE}'::date
-            UNION ALL
-            SELECT 'features_goalie_today', COUNT(*)
-            FROM nhl.training_features_goalie_saves_v2 WHERE game_date = '${DATE}'::date
-            UNION ALL
-            SELECT 'sog_stage_rows', COUNT(*)
-            FROM nhl.predictions_sog_stage s WHERE s.game_id IN (SELECT game_id FROM g)
-            UNION ALL
-            SELECT 'saves_stage_rows', COUNT(*)
-            FROM nhl.predictions_saves_stage s WHERE s.game_id IN (SELECT game_id FROM g)
-            UNION ALL
-            SELECT 'predictions_today', COUNT(*)
-            FROM nhl.predictions p WHERE p.game_id IN (SELECT game_id FROM g)
-          ;"
+            WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = '${DATE}'::date)
+            SELECT 'games_today' AS which, COUNT(*) FROM nhl.games WHERE game_date = '${DATE}'::date
+            UNION ALL SELECT 'roster_rows_today', COUNT(*) FROM nhl.roster_status r WHERE r.game_id IN (SELECT game_id FROM g)
+            UNION ALL SELECT 'sog_stage', COUNT(*) FROM nhl.predictions_sog_stage s WHERE s.game_id IN (SELECT game_id FROM g)
+            UNION ALL SELECT 'saves_stage', COUNT(*) FROM nhl.predictions_saves_stage s WHERE s.game_id IN (SELECT game_id FROM g)
+            UNION ALL SELECT 'predictions', COUNT(*) FROM nhl.predictions p WHERE p.game_id IN (SELECT game_id FROM g);
+          "
 
-      # ─── Upload artifacts (CSV snapshots) ─────────────────────────────────────
-      - name: Upload artifacts
+      - name: Upload exported CSVs (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: nhl-exports-${{ env.DATE }}

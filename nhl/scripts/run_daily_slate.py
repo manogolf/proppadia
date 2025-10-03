@@ -10,9 +10,9 @@ What it does (in order):
 
 Usage (replace the CSVs with your daily feature files when you have them):
   python scripts/run_daily_slate.py \
-    --project /Users/jerrystrain/Projects/Proppadia/nhl-props \
-    --sog-csv /Users/jerrystrain/Projects/Proppadia/nhl-props/data/processed/nhl_sog_training.csv \
-    --saves-csv /Users/jerrystrain/Projects/Proppadia/nhl-props/data/processed/nhl_saves_training.csv \
+    --project /Users/jerrystrain/Projects/Proppadia/nhl \
+    --sog-csv /Users/jerrystrain/Projects/Proppadia/nhl/data/processed/nhl_sog_training.csv \
+    --saves-csv /Users/jerrystrain/Projects/Proppadia/nhl/data/processed/nhl_saves_training.csv \
     --db-url "postgresql://USER:PASSWORD@HOST:PORT/DBNAME?sslmode=require"
 
 Notes:
