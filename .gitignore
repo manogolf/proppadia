@@ -74,3 +74,4 @@ mlb/backend/node_modules/
 mlb/backend/build/
 mlb/frontend/node_modules/
 mlb/frontend/build/
+.DS_Store
