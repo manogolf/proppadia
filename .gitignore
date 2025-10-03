@@ -1,35 +1,76 @@
-# OS / editor
+# ── OS / editor junk ───────────────────────────────────────────────
 .DS_Store
+Thumbs.db
+.idea/
 .vscode/
+.history/
+*.log
+*.swp
+*.swo
+*.orig
+*.rej
+*.tmp
+*.bak
+*.backup
+*/._*
 
-# Python
+# ── Node / JS projects (CRA/Vite/any subpackage) ───────────────────
+**/node_modules/
+**/dist/
+**/build/
+.eslintcache
+coverage/
+*.local
+# Vite cache
+**/node_modules/.vite/
+.vite/
+
+# ── Env files (NEVER commit secrets) ───────────────────────────────
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+db_url.txt
+
+# ── Python ─────────────────────────────────────────────────────────
 .venv/
+venv/
 __pycache__/
+**/__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
 
-# Data & models (keep big artifacts out of git)
+# ── Data / exports / reports (keep templates) ──────────────────────
+exports/
+reports/**
 nhl/data/raw/
 nhl/data/interim/
 nhl/data/processed/*.csv
-nhl/models/archive/
-nhl/models/latest/*.pkl
 mlb/data/raw/
 mlb/data/interim/
 mlb/data/processed/*.csv
+data/**
+!data/import_templates/**
+!data/README.md
+
+# ── Models / artifacts (ignore bulk; keep minimal metadata) ────────
+nhl/models/**
+!nhl/models/
+!nhl/models/latest/
+!nhl/models/latest/**/
+!nhl/models/latest/**/MODEL_INDEX.json
+!nhl/models/latest/**/FEATURE_HASH.txt
+!nhl/models/latest/**/MODEL_ARTIFACT.json
 mlb/models/archive/
 mlb/models/latest/*.pkl
-# proppadia cleanup
+
+# ── Legacy CRA subprojects that may linger ─────────────────────────
 mlb/backend/node_modules/
 mlb/backend/build/
 mlb/frontend/node_modules/
 mlb/frontend/build/
-**/__pycache__/
-**/*.pyc
-.venv/
-.env*
-!nhl/models/
-!nhl/models/latest/
-!nhl/models/latest/**/MODEL_ARTIFACT.json
-!nhl/models/latest/MODEL_INDEX.json
-!nhl/models/latest/**/MODEL_INDEX.json
-node_modules
