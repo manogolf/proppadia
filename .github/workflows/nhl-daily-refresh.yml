@@ -13,6 +13,7 @@ jobs:
   daily:
     runs-on: ubuntu-latest
     env:
+      PYTHONPATH: backend/sports
       # REQUIRED repo secrets:
       # SUPABASE_DB_URL: postgres connection string (pooled is fine)
       # SUPABASE_URL:    https://<project>.supabase.co

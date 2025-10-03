@@ -5,6 +5,11 @@ import os, sys, time, argparse
 from typing import Dict, List, Tuple, Optional
 import requests
 import psycopg
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # loads variables from .env into process env if present
+except Exception:
+    pass
 
 # ───────────────────────── config / helpers ─────────────────────────
 

@@ -22,6 +22,7 @@ jobs:
 
       - name: Debug env presence (non-secret)
         env:
+          PYTHONPATH: backend/sports
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >
