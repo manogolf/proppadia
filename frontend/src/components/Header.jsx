@@ -1,3 +1,4 @@
+// frontend/src/components/Header.jsx
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -25,12 +26,7 @@ export default function Header() {
           </span>
         </Link>
 
-        {/* CENTER: Optional Spacer */}
-        <div className="flex-1 flex justify-center">
-          <div className="w-4"></div>{" "}
-          {/* Try w-2, w-8, or px-4 to test spacing */}
-        </div>
-
+        {/* CENTER: Brand + sport quick links */}
         <div className="flex items-center gap-6">
           <Link
             to="/"
@@ -38,7 +34,6 @@ export default function Header() {
           >
             Proppadia
           </Link>
-          {/* sport quick links */}
           <nav className="flex items-center gap-4">
             <Link
               to="/mlb"
@@ -55,12 +50,23 @@ export default function Header() {
           </nav>
         </div>
 
-        {/* RIGHT: Stacked text + auth */}
+        {/* RIGHT: Tagline + auth */}
         <div className="flex flex-col items-end text-right space-y-1">
           <div className="text-med text-gray-600 font-medium">
             Player Prop Predictions
           </div>
           <div className="text-xs text-gray-400">Powered by Momentum</div>
+
+          {/* Signed-in indicator */}
+          {user?.email && (
+            <span
+              className="text-xs text-gray-600 border border-gray-300 rounded-full px-2 py-0.5 whitespace-nowrap"
+              title={user.email}
+            >
+              Signed in as {user.email}
+            </span>
+          )}
+
           {user ? (
             <button
               onClick={handleLogout}
@@ -71,7 +77,7 @@ export default function Header() {
           ) : (
             <Link
               to="/login"
-              className="text-xs text-indigo-00 hover:underline"
+              className="text-xs text-indigo-600 hover:underline"
             >
               Login
             </Link>
