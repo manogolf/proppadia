@@ -28,12 +28,12 @@ export default function Header() {
 
         {/* CENTER: Brand + sport quick links */}
         <div className="flex items-center gap-6">
-          <Link
+          {/* <Link
             to="/"
             className="text-lg font-semibold text-blue-900 hover:text-blue-700"
           >
             Proppadia
-          </Link>
+          </Link> */}
           <nav className="flex items-center gap-4">
             <Link
               to="/mlb"

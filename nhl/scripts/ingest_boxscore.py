@@ -1,21 +1,54 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse, os, re
+import datetime as dt
+from zoneinfo import ZoneInfo
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 from typing import Any, Dict, List, Tuple, Iterable, Optional
 import requests
 import psycopg
 import sys
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+# ---- load DB config from the repo root .env and force SSL ----
+from pathlib import Path
+import os
+
+try:
+    from dotenv import load_dotenv
+    ROOT = Path(__file__).resolve().parents[2]   # nhl/scripts -> nhl -> <repo root>
+    load_dotenv(ROOT / ".env", override=True)
+except Exception:
+    pass
+
+os.environ.setdefault("PGSSLMODE", "require")
+os.environ.setdefault("PGGSSENCMODE", "disable")
+
+DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+if not DB:
+    raise SystemExit("Missing SUPABASE_DB_URL / DATABASE_URL")
+
 
 # ───────────────────────── helpers ─────────────────────────
 
-def env_db_url() -> str:
-    db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-    if not db:
-        raise SystemExit("Missing SUPABASE_DB_URL / DATABASE_URL")
-    return db
+
+def _http() -> requests.Session:
+    r = Retry(
+        total=5, connect=5, read=5, backoff_factor=0.4,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset({"GET"}),
+    )
+    s = requests.Session()
+    s.headers.update({"User-Agent": "proppadia-nhl-boxscore/1.0"})
+    s.mount("https://", HTTPAdapter(max_retries=r))
+    return s
+
+S = _http()
 
 def fetch_json(url: str, timeout: int = 15) -> dict:
-    r = requests.get(url, timeout=timeout)
+    r = S.get(url, timeout=timeout)
+    if r.status_code == 404:
+        return {}
     r.raise_for_status()
     return r.json()
 
@@ -44,11 +77,34 @@ def to_int(x) -> Optional[int]:
 TEAM_ID_BY_ABBR = {
     "ANA":24,"ARI":53,"BOS":6,"BUF":7,"CGY":20,"CAR":12,"CHI":16,"COL":21,"CBJ":29,"DAL":25,
     "DET":17,"EDM":22,"FLA":13,"LAK":26,"MIN":30,"MTL":8,"NSH":18,"NJD":1,"NYI":2,"NYR":3,
-    "OTT":9,"PHI":4,"PIT":5,"SEA":55,"SJS":28,"STL":19,"TBL":14,"TOR":10,"UTA":41,
+    "OTT":9,"PHI":4,"PIT":5,"SEA":55,"SJS":28,"STL":19,"TBL":14,"TOR":10,"UTA":68,
     "VAN":23,"VGK":54,"WPG":52,"WSH":15
 }
 
 # ───────────── PBP utilities (best-effort; safe if empty) ─────────────
+
+def iso_to_et_date(iso_str) -> Optional[str]:
+    if not iso_str:
+        return None
+    s = str(iso_str).strip()
+    try:
+        if s.endswith("Z"):
+            dt_utc = dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+        else:
+            dt_utc = dt.datetime.fromisoformat(s)
+        return dt_utc.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    except Exception:
+        return s.split("T",1)[0] if "T" in s else None
+
+def map_api_state_to_db(state: str) -> str:
+    m = {
+        "FUT":"scheduled", "PRE":"scheduled",
+        "LIVE":"live", "CRIT":"live",
+        "FINAL":"final", "OFF":"final",
+        "POSTPONED":"postponed", "CANCELED":"canceled",
+    }
+    return m.get((state or "").upper(), "scheduled")
+
 
 def plays_list(pbp_obj) -> list:
     """Return a flat list of plays across several NHL payload shapes."""
@@ -461,37 +517,36 @@ def ingest_game(game_id: int) -> None:
     box = fetch_json(box_url)
     try:
         pbp = fetch_json(pbp_url)
-        _dbg_probe_pbp(pbp)  # << add this line
-
+        if os.getenv("DEBUG_PBP") not in (None, "", "0", "false", "False"):
+            _dbg_probe_pbp(pbp)
     except Exception:
         pbp = {}
 
-        # --- DEBUG: inspect first 2 shot-like plays to find shooter id fields ---
+    # --- quick probe of first 2 SOG-like plays (optional debug) ---
     try:
-        shown = 0
-        for _p in plays_list(pbp):
-            if isinstance(_p, dict) and _is_sog_like(_p):
-                shown += 1
-                print(f"[probe] shot-like #{shown}  event_type={event_type(_p)}")
-                print("  top keys:", sorted(list(_p.keys())))
-                det = _p.get("details") or {}
-                print("  details keys:", sorted(list(det.keys())))
-                # show likely shooter fields if present
-                for k in ("playerId", "shooterId", "shootingPlayerId", "scoringPlayerId"):
-                    if k in det:
-                        print(f"  details.{k} =", det[k])
-                # show players[] roles / ids (first 4)
-                pls = _p.get("players") or []
-                snippet = []
-                for pl in pls[:4]:
-                    if isinstance(pl, dict):
-                        snippet.append({
-                            "playerType": pl.get("playerType") or pl.get("type") or pl.get("role"),
-                            "id": (pl.get("player") or {}).get("id") or pl.get("playerId")
-                        })
-                print("  players snippet:", snippet)
-                if shown >= 2:
-                    break
+        if os.getenv("DEBUG_PBP") not in (None, "", "0", "false", "False"):
+            shown = 0
+            for _p in plays_list(pbp):
+                if isinstance(_p, dict) and _is_sog_like(_p):
+                    shown += 1
+                    print(f"[probe] shot-like #{shown}  event_type={event_type(_p)}")
+                    print("  top keys:", sorted(list(_p.keys())))
+                    det = _p.get("details") or {}
+                    print("  details keys:", sorted(list(det.keys())))
+                    for k in ("playerId", "shooterId", "shootingPlayerId", "scoringPlayerId"):
+                        if k in det:
+                            print(f"  details.{k} =", det[k])
+                    pls = _p.get("players") or []
+                    snippet = []
+                    for pl in pls[:4]:
+                        if isinstance(pl, dict):
+                            snippet.append({
+                                "playerType": pl.get("playerType") or pl.get("type") or pl.get("role"),
+                                "id": (pl.get("player") or {}).get("id") or pl.get("playerId")
+                            })
+                    print("  players snippet:", snippet)
+                    if shown >= 2:
+                        break
     except Exception as _e:
         print("[probe error]", _e)
 
@@ -505,21 +560,44 @@ def ingest_game(game_id: int) -> None:
     if not home_id or not away_id:
         raise SystemExit("Could not resolve team IDs from API; extend TEAM_ID_BY_ABBR.")
 
-    game_date = box.get("gameDate") or box.get("startTimeUTC")
-    if game_date and "T" in game_date:
-        game_date = game_date.split("T",1)[0]
+    # Game date and status
+    start_iso = box.get("startTimeUTC") or box.get("gameDate") or ""
+    if "iso_to_et_date" in globals():
+        game_date = iso_to_et_date(start_iso)
+    else:
+        game_date = start_iso.split("T", 1)[0] if "T" in start_iso else (start_iso or None)
 
-    attempts   = aggregate_attempts_from_pbp(pbp)                   # pid -> {sog,...}
-    sk_splits  = compute_splits_from_pbp(pbp, home_id, away_id, home_abbr, away_abbr)
-    team_sf = compute_team_sf_splits_from_pbp(pbp, home_abbr, away_abbr, home_id, away_id)
+    state_raw = (box.get("gameState")
+                 or box.get("gameScheduleState")
+                 or (box.get("game") or {}).get("gameState")
+                 or "")
+    if "map_api_state_to_db" in globals():
+        status = map_api_state_to_db(state_raw)
+    else:
+        sr = str(state_raw).upper()
+        status = "final" if sr in ("FINAL", "OFF") else ("live" if sr in ("LIVE", "INPROGRESS") else "scheduled")
+
+    # ───────────── PBP-derived aggregations (safe if PBP is empty) ─────────────
+    attempts: Dict[int, Dict[str, int]] = aggregate_attempts_from_pbp(pbp)               # {pid: {sog, missed, blocked}}
+    sk_splits: Dict[int, Dict[str, int]] = compute_splits_from_pbp(                      # {pid: EV/PP/SH}
+        pbp, home_id, away_id, home_abbr, away_abbr
+    )
+    _team_sf = compute_team_sf_splits_from_pbp(                                          # {team_id: EV/PP/SH} (unused -> underscore)
+        pbp, home_abbr, away_abbr, home_id, away_id
+    )
     home_goalie_ids, away_goalie_ids = _goalie_ids_from_box(box)
-    goalie_splits = compute_goalie_splits_from_pbp(pbp, home_goalie_ids, away_goalie_ids)
+    goalie_splits: Dict[int, Dict[str, int]] = compute_goalie_splits_from_pbp(
+        pbp, list(home_goalie_ids), list(away_goalie_ids)
+    )
 
+    if os.getenv("DEBUG_PBP") not in (None, "", "0", "false", "False"):
+        print(f"[dbg] attempts has {sum(1 for v in attempts.values() if (v or {}).get('sog'))} shooters")
+        print(f"[dbg] sk_splits has {len(sk_splits)} shooters")
 
-            # ---- Build name_by_pid (shared by skaters & goalies) ----
+    # Build name map (prefer playerByGameStats)
     name_by_pid: Dict[int, str] = {}
 
-    def add_names_from_pbg(side_key: str):
+    def add_names_from_pbg(side_key: str) -> None:
         pbg = (box.get("playerByGameStats") or {}).get(side_key) or {}
         for key in ("forwards", "defense", "goalies"):
             for p in pbg.get(key, []) or []:
@@ -534,56 +612,21 @@ def ingest_game(game_id: int) -> None:
     add_names_from_pbg("homeTeam")
     add_names_from_pbg("awayTeam")
 
-    # Fallback: derive names from box.homeTeam/awayTeam.players{} if still missing
-    for side in ("homeTeam", "awayTeam"):
-        team = box.get(side) or {}
-        players = team.get("players") or {}
-        if isinstance(players, dict):
-            for pid_s, pdata in players.items():
-                pid = to_int(pid_s)
-                if not pid or pid in name_by_pid:
-                    continue
-                fn = ((pdata.get("firstName") or {}).get("default")
-                      or pdata.get("firstName") or "").strip()
-                ln = ((pdata.get("lastName") or {}).get("default")
-                      or pdata.get("lastName") or "").strip()
-                nm = (fn + " " + ln).strip()
-                if nm:
-                    name_by_pid[pid] = nm
-
-    # Build name map from playerByGameStats (preferred)
-    name_by_pid: Dict[int, str] = {}
-
-    def add_names_from_pbg(side_key: str):
-        pbg = (box.get("playerByGameStats") or {}).get(side_key) or {}
-        for key in ("forwards","defense","goalies"):
-            for p in pbg.get(key, []) or []:
-                pid = to_int(p.get("playerId"))
-                if not pid:
-                    continue
-                nm_node = p.get("name") or {}
-                nm = nm_node.get("default") or ""
-                name_by_pid[pid] = str(nm).strip() or f"Player {pid}"
-
-    add_names_from_pbg("homeTeam")
-    add_names_from_pbg("awayTeam")
-
-    # Fallback name collection (rarely needed)
-    def add_names_from_players_dict(section: str):
+    # Fallback name collection (rare)
+    def add_names_from_players_dict(section: str) -> None:
         team = box.get(section) or {}
         players = team.get("players")
         if isinstance(players, dict):
             for pid_s, pdata in players.items():
                 m = re.search(r"\d+", str(pid_s))
-                if not m: 
+                if not m:
                     continue
                 pid = int(m.group())
-                fn = ((pdata.get("firstName") or {}).get("default") 
-                      or pdata.get("firstName") or "")
-                ln = ((pdata.get("lastName")  or {}).get("default") 
-                      or pdata.get("lastName")  or "")
-                nm = (f"{fn} {ln}").strip() or f"Player {pid}"
-                name_by_pid.setdefault(pid, nm)
+                fn = ((pdata.get("firstName") or {}).get("default") or pdata.get("firstName") or "").strip()
+                ln = ((pdata.get("lastName")  or {}).get("default") or pdata.get("lastName")  or "").strip()
+                nm = (f"{fn} {ln}").strip()
+                if nm:
+                    name_by_pid.setdefault(pid, nm)
 
     add_names_from_players_dict("homeTeam")
     add_names_from_players_dict("awayTeam")
@@ -592,22 +635,21 @@ def ingest_game(game_id: int) -> None:
     def iter_skaters(section: str) -> Iterable[Tuple[int, dict, str]]:
         pbg = (box.get("playerByGameStats") or {}).get(section) or {}
         had_any = False
-        for key in ("forwards","defense"):
+        for key in ("forwards", "defense"):
             for p in pbg.get(key, []) or []:
                 pid = to_int(p.get("playerId"))
-                if not pid: 
+                if not pid:
                     continue
                 had_any = True
                 yield pid, p, section
         if had_any:
             return
-        # fallback: players dict (exclude goalies) or legacy arrays
         team = box.get(section) or {}
         players = team.get("players")
         if isinstance(players, dict):
             for pid_s, pdata in players.items():
                 m = re.search(r"\d+", str(pid_s))
-                if not m: 
+                if not m:
                     continue
                 pid = int(m.group())
                 pos = (pdata.get("positionCode") or pdata.get("position") or "").upper()
@@ -624,7 +666,7 @@ def ingest_game(game_id: int) -> None:
         had_any = False
         for p in pbg.get("goalies", []) or []:
             pid = to_int(p.get("playerId"))
-            if not pid: 
+            if not pid:
                 continue
             had_any = True
             yield pid, p, section
@@ -635,7 +677,7 @@ def ingest_game(game_id: int) -> None:
         if isinstance(players, dict):
             for pid_s, pdata in players.items():
                 m = re.search(r"\d+", str(pid_s))
-                if not m: 
+                if not m:
                     continue
                 pid = int(m.group())
                 pos = (pdata.get("positionCode") or pdata.get("position") or "").upper()
@@ -646,11 +688,7 @@ def ingest_game(game_id: int) -> None:
             if pid:
                 yield pid, p, section
 
-    # Aggregations from PBP (safe if empty)
-    attempts = aggregate_attempts_from_pbp(pbp)  # {pid: {sog, missed, blocked}}
-
     # ───────────── DB upserts ─────────────
-    DB = env_db_url()
     with psycopg.connect(DB) as conn, conn.cursor() as cur:
         try:
             # Teams
@@ -668,27 +706,23 @@ def ingest_game(game_id: int) -> None:
             # Game
             cur.execute("""
                 INSERT INTO nhl.games (game_id, game_date, home_team_id, away_team_id, status)
-                VALUES (%s, %s, %s, %s, 'final')
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (game_id) DO UPDATE
                   SET game_date     = EXCLUDED.game_date,
                       home_team_id  = EXCLUDED.home_team_id,
                       away_team_id  = EXCLUDED.away_team_id,
                       status        = EXCLUDED.status;
-            """, (game_id, game_date, home_id, away_id))
+            """, (game_id, game_date, home_id, away_id, status))
 
             def pos_code(raw: dict, default: str) -> str:
                 code = (raw.get("positionCode") or raw.get("position") or "").upper()
-                if code in ("G","D","F"): return code
-                if code in ("LW","RW","C"): return "F"
+                if code in ("G", "D", "F"): return code
+                if code in ("LW", "RW", "C"): return "F"
                 return default
 
-            print(f"[dbg] attempts has {len(attempts)} shooters")
-            print(f"[dbg] sk_splits has {len(sk_splits)} shooters")
-
-            # ── Skaters (use boxscore SOG; attempts from PBP if available) ──
+            # Skaters
             did_log = False
             sk_batch: List[tuple] = []
-
             for pid, raw, sect in list(iter_skaters("homeTeam")) + list(iter_skaters("awayTeam")):
                 team_id = home_id if sect == "homeTeam" else away_id
                 opp_id  = away_id if sect == "homeTeam" else home_id
@@ -705,7 +739,6 @@ def ingest_game(game_id: int) -> None:
                           status          = 'active';
                 """, (pid, nm, team_id, pos_code(raw, "F")))
 
-                # SOG from boxscore; attempts via PBP if present
                 sog_box = to_int(raw.get("sog") or raw.get("shotsOnGoal") or raw.get("shots"))
 
                 agg = attempts.get(pid)
@@ -714,63 +747,54 @@ def ingest_game(game_id: int) -> None:
                     miss    = to_int(agg.get("missed"))
                     blk     = to_int(agg.get("blocked"))
                     attempts_total = (sog_pbp or 0) + (miss or 0) + (blk or 0)
-                    # prefer boxscore SOG if present
                     sog = sog_box if sog_box is not None else sog_pbp
                 else:
                     sog = sog_box
-                    attempts_total = None  # unknown without PBP
+                    attempts_total = None
 
                 toi    = parse_mmss_to_minutes(raw.get("toi") or raw.get("timeOnIce"))
                 pp_toi = parse_mmss_to_minutes(raw.get("ppToi") or raw.get("powerPlayToi"))
 
-                # SOG strength splits from PBP (EV/PP/SH)
                 spl = sk_splits.get(pid, {"EV": 0, "PP": 0, "SH": 0})
-                ev_sog = int(spl["EV"])
-                pp_sog = int(spl["PP"])
-                sh_sog = int(spl["SH"])
+                ev_sog = int(spl["EV"]); pp_sog = int(spl["PP"]); sh_sog = int(spl["SH"])
 
-                if not did_log:
+                if not did_log and os.getenv("DEBUG_PBP") not in (None, "", "0", "false", "False"):
                     print(f"[dbg] first skater pid={pid} sog_pbp={attempts.get(pid,{}).get('sog')} box_sog={sog_box} splits={sk_splits.get(pid)}")
                     did_log = True
 
                 sk_batch.append((
                     pid, game_id, team_id, opp_id, is_home, game_date,
-                    sog, attempts_total, toi, pp_toi,
-                    ev_sog, pp_sog, sh_sog
+                    sog, attempts_total, toi, pp_toi, ev_sog, pp_sog, sh_sog
                 ))
 
             if sk_batch:
                 cur.executemany("""
                     INSERT INTO nhl.skater_game_logs_raw
                     (player_id, game_id, team_id, opponent_id, is_home, game_date,
-                    shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes,
-                    ev_sog, pp_sog, sh_sog)
+                     shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes,
+                     ev_sog, pp_sog, sh_sog)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (player_id, game_id) DO UPDATE SET
-                    team_id        = EXCLUDED.team_id,
-                    opponent_id    = EXCLUDED.opponent_id,
-                    is_home        = EXCLUDED.is_home,
-                    game_date      = EXCLUDED.game_date,
-                    shots_on_goal  = EXCLUDED.shots_on_goal,
-                    shot_attempts  = EXCLUDED.shot_attempts,
-                    toi_minutes    = EXCLUDED.toi_minutes,
-                    pp_toi_minutes = EXCLUDED.pp_toi_minutes,
-                    ev_sog         = EXCLUDED.ev_sog,
-                    pp_sog         = EXCLUDED.pp_sog,
-                    sh_sog         = EXCLUDED.sh_sog;
+                      team_id        = EXCLUDED.team_id,
+                      opponent_id    = EXCLUDED.opponent_id,
+                      is_home        = EXCLUDED.is_home,
+                      game_date      = EXCLUDED.game_date,
+                      shots_on_goal  = EXCLUDED.shots_on_goal,
+                      shot_attempts  = EXCLUDED.shot_attempts,
+                      toi_minutes    = EXCLUDED.toi_minutes,
+                      pp_toi_minutes = EXCLUDED.pp_toi_minutes,
+                      ev_sog         = EXCLUDED.ev_sog,
+                      pp_sog         = EXCLUDED.pp_sog,
+                      sh_sog         = EXCLUDED.sh_sog;
                 """, sk_batch)
 
-            # ---- DEBUG & collect goalie rows (place here) ----------------------------
+            # Goalies
             home_goalie_rows = list(iter_goalies("homeTeam"))
             away_goalie_rows = list(iter_goalies("awayTeam"))
-            print(
-                f"[dbg] iter_goalies: home={len(home_goalie_rows)} "
-                f"away={len(away_goalie_rows)} "
-                f"idsH={[pid for pid,_,_ in home_goalie_rows]} "
-                f"idsA={[pid for pid,_,_ in away_goalie_rows]}"
-            )
+            if os.getenv("DEBUG_PBP") not in (None, "", "0", "false", "False"):
+                print(f"[dbg] iter_goalies: home={len(home_goalie_rows)} away={len(away_goalie_rows)} "
+                      f"idsH={[pid for pid,_,_ in home_goalie_rows]} idsA={[pid for pid,_,_ in away_goalie_rows]}")
 
-            # ── Goalies (totals from boxscore; add splits if available) ──
             gl_batch: List[tuple] = []
             for pid, raw, sect in home_goalie_rows + away_goalie_rows:
                 team_id = home_id if sect == "homeTeam" else away_id
@@ -781,11 +805,11 @@ def ingest_game(game_id: int) -> None:
                 cur.execute("""
                     INSERT INTO nhl.players (player_id, full_name, current_team_id, position, status)
                     VALUES (%s, %s, %s, %s, 'active')
-                    ON CONFLICT (player_id) DO UPDATE
-                    SET full_name      = EXCLUDED.full_name,
-                        current_team_id = COALESCE(EXCLUDED.current_team_id, nhl.players.current_team_id),
-                        position        = EXCLUDED.position,
-                        status          = 'active';
+                    ON CONFLICT (player_id) DO UPDATE SET
+                      full_name      = EXCLUDED.full_name,
+                      current_team_id = COALESCE(EXCLUDED.current_team_id, nhl.players.current_team_id),
+                      position        = EXCLUDED.position,
+                      status          = 'active';
                 """, (pid, nm, team_id, "G"))
 
                 toi = parse_mmss_to_minutes(raw.get("toi") or raw.get("timeOnIce"))
@@ -795,14 +819,10 @@ def ingest_game(game_id: int) -> None:
                 start_flag    = bool(raw.get("starter") or raw.get("isStarter") or False)
                 pulled_flag   = bool(raw.get("pulled") or False)
 
-                # Strength-faced splits from precomputed goalie_splits (if present)
                 ev_sf = pp_sf = sh_sf = None
-                if 'goalie_splits' in locals() and isinstance(goalie_splits, dict):
-                    gs = goalie_splits.get(pid)
-                    if gs:
-                        ev_sf = to_int(gs.get("EV"))
-                        pp_sf = to_int(gs.get("PP"))
-                        sh_sf = to_int(gs.get("SH"))
+                gs = goalie_splits.get(pid)
+                if gs:
+                    ev_sf = to_int(gs.get("EV")); pp_sf = to_int(gs.get("PP")); sh_sf = to_int(gs.get("SH"))
 
                 gl_batch.append((
                     pid, game_id, team_id, opp_id, is_home, game_date,
@@ -815,24 +835,24 @@ def ingest_game(game_id: int) -> None:
                 cur.executemany("""
                     INSERT INTO nhl.goalie_game_logs_raw
                     (player_id, game_id, team_id, opponent_id, is_home, game_date,
-                    toi_minutes, shots_faced, saves, goals_allowed,
-                    start_flag, pulled_flag,
-                    ev_shots_faced, pp_shots_faced, sh_shots_faced, rebounds_allowed)
+                     toi_minutes, shots_faced, saves, goals_allowed,
+                     start_flag, pulled_flag,
+                     ev_shots_faced, pp_shots_faced, sh_shots_faced, rebounds_allowed)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (game_id, player_id) DO UPDATE SET
-                    team_id         = EXCLUDED.team_id,
-                    opponent_id     = EXCLUDED.opponent_id,
-                    is_home         = EXCLUDED.is_home,
-                    game_date       = EXCLUDED.game_date,
-                    toi_minutes     = EXCLUDED.toi_minutes,
-                    shots_faced     = EXCLUDED.shots_faced,
-                    saves           = EXCLUDED.saves,
-                    goals_allowed   = EXCLUDED.goals_allowed,
-                    start_flag      = EXCLUDED.start_flag,
-                    pulled_flag     = EXCLUDED.pulled_flag,
-                    ev_shots_faced  = COALESCE(EXCLUDED.ev_shots_faced, nhl.goalie_game_logs_raw.ev_shots_faced),
-                    pp_shots_faced  = COALESCE(EXCLUDED.pp_shots_faced, nhl.goalie_game_logs_raw.pp_shots_faced),
-                    sh_shots_faced  = COALESCE(EXCLUDED.sh_shots_faced, nhl.goalie_game_logs_raw.sh_shots_faced);
+                      team_id         = EXCLUDED.team_id,
+                      opponent_id     = EXCLUDED.opponent_id,
+                      is_home         = EXCLUDED.is_home,
+                      game_date       = EXCLUDED.game_date,
+                      toi_minutes     = EXCLUDED.toi_minutes,
+                      shots_faced     = EXCLUDED.shots_faced,
+                      saves           = EXCLUDED.saves,
+                      goals_allowed   = EXCLUDED.goals_allowed,
+                      start_flag      = EXCLUDED.start_flag,
+                      pulled_flag     = EXCLUDED.pulled_flag,
+                      ev_shots_faced  = COALESCE(EXCLUDED.ev_shots_faced, nhl.goalie_game_logs_raw.ev_shots_faced),
+                      pp_shots_faced  = COALESCE(EXCLUDED.pp_shots_faced, nhl.goalie_game_logs_raw.pp_shots_faced),
+                      sh_shots_faced  = COALESCE(EXCLUDED.sh_shots_faced, nhl.goalie_game_logs_raw.sh_shots_faced);
                 """, gl_batch)
 
             conn.commit()
