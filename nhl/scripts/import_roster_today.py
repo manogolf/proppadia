@@ -293,7 +293,12 @@ def _ensure_players_and_mappings(cur, rosters: dict[str, list[dict]]) -> tuple[i
     return players_upserted, mappings_upserted
 
 def main():
-    with psycopg.connect(DB) as conn, conn.cursor() as cur:
+    with psycopg.connect(DB, prepare_threshold=0) as conn, conn.cursor() as cur:
+    # extra safety in pooled environments
+        try:
+            cur.execute("DEALLOCATE ALL;")
+        except Exception:
+            pass
         # Today's games (ET day) → get team tri codes to fetch rosters
         cur.execute("""
             select
