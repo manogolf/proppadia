@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       game_id:
-        description: "Optional NHL gamePk to ingest"
+        description: "Optional NHL gamePk to ingest (some scripts may ignore)"
         required: false
         default: ""
+      debug_pbp:
+        description: "Enable verbose PBP debug logging (0 or 1)"
+        required: false
+        default: "0"
   schedule:
     - cron: "15 11 * * *" # ~07:15 ET (EDT) / 06:15 ET (EST)
     - cron: "15 5 * * *" # ~01:15 ET (EDT) / 00:15 ET (EST)
@@ -20,53 +24,200 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: backend/sports
-      DEBUG_PBP: "0"
+      # Global debug/env for ALL scripts called in this job:
+      DEBUG_PBP: ${{ github.event.inputs.debug_pbp || '0' }}
       PGSSLMODE: require
       TZ: UTC
-      # secrets
+      # required repo secrets:
       DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Show debug toggle
+        run: echo "DEBUG_PBP=${DEBUG_PBP} (0=off, 1=on)"
+
+      - name: Set dates (ET)
+        id: dates
+        run: |
+          SLATE_DATE=$(TZ=America/New_York date +%F)
+          YDAY=$(TZ=America/New_York date -d 'yesterday' +%F)
+          echo "SLATE_DATE=$SLATE_DATE" >> $GITHUB_ENV
+          echo "YDAY=$YDAY"           >> $GITHUB_ENV
+          echo "SLATE_DATE=${SLATE_DATE} YDAY=${YDAY}"
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Check DB connectivity
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT now();"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install deps
+      - name: Install Python deps (scripts only)
         run: |
           python -m pip install --upgrade pip
-          pip install requests psycopg[binary] python-dotenv
+          if [ -f nhl/training/requirements.txt ]; then
+            python -m pip install -r nhl/training/requirements.txt
+          fi
+          python -m pip install "psycopg[binary]>=3.1" "requests>=2.31" python-dotenv
 
-      # If a game_id is provided when dispatching, run only that one
-      - name: Ingest single game (manual)
-        if: ${{ github.event.inputs.game_id != '' }}
-        run: python nhl/scripts/ingest_boxscore.py --game-id ${{ github.event.inputs.game_id }}
-
-      # Otherwise, fetch today's schedule and ingest all games
-      - name: Ingest today’s games
-        if: ${{ github.event.inputs.game_id == '' }}
+      - name: Define retry helper
+        shell: bash
         run: |
-          python - <<'PY'
-          import requests, datetime as dt, os, sys
-          today = dt.date.today().isoformat()
-          url = f"https://api-web.nhle.com/v1/schedule/{today}"
-          r = requests.get(url, timeout=20); r.raise_for_status()
-          js = r.json()
-          game_ids = []
-          for bucket in js.get('gameWeek', []):
-              for g in bucket.get('games', []):
-                  gid = g.get('id') or g.get('gamePk') or g.get('gameId')
-                  if gid: game_ids.append(int(gid))
-          if not game_ids:
-              print("No games found for", today); sys.exit(0)
-          print("Ingesting:", game_ids)
-          for gid in game_ids:
-              rc = os.system(f"python nhl/scripts/ingest_boxscore.py --game-id {gid}")
-              if rc != 0:
-                  sys.exit(os.WEXITSTATUS(rc))
-          PY
+          cat > /tmp/retry.sh << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          CMD="$*"
+          s=1
+          for n in 1 2 3; do
+            echo "→ Attempt $n: $CMD"
+            if bash -lc "$CMD"; then s=0; break; fi
+            sleep $((n*10))
+          done
+          exit $s
+          EOF
+          chmod +x /tmp/retry.sh
+
+      # ───────── OPTIONAL: import/merge teams if you have a script ─────────
+      # - name: Import/merge teams (optional)
+      #   run: python nhl/scripts/import_teams.py
+
+      # ───────── Schedule (ET) → nhl.games (sets status) ─────────
+      - name: Import today's schedule (API → nhl.games)
+        env:
+          SLATE_DATE: ${{ env.SLATE_DATE }}
+        run: /tmp/retry.sh "python nhl/scripts/import_schedule_today.py"
+
+      # ───────── Quick slate check to skip heavy work on dark days ─────────
+      - name: Check slate
+        id: slate
+        run: |
+          HAS=$(psql "$SUPABASE_DB_URL" -Atqc "select exists (select 1 from nhl.games where game_date='${SLATE_DATE}')")
+          echo "has_games=$HAS" >> $GITHUB_OUTPUT
+          echo "has_games=${HAS}"
+
+      # ───────── Rosters (ET day) ─────────
+      - name: Import today's rosters (API → nhl.roster_status)
+        if: steps.slate.outputs.has_games == 't'
+        env:
+          SLATE_DATE: ${{ env.SLATE_DATE }}
+        run: /tmp/retry.sh "python nhl/scripts/import_roster_today.py"
+
+      # ───────── Refresh features / materialized views ─────────
+      - name: Refresh features/views (if present)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -e
+          if [ -f nhl/scripts/refresh.sql ]; then
+            echo "Running nhl/scripts/refresh.sql …"
+            export PGOPTIONS='-c statement_timeout=0'
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f nhl/scripts/refresh.sql
+          else
+            echo "No refresh.sql found — skipping."
+          fi
+
+      # ───────── Export slate features (ET day) ─────────
+      - name: Export slate CSVs (today only)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -e
+          export PGOPTIONS='-c statement_timeout=0'
+          mkdir -p exports
+
+          # Skater SOG (prefer view if present)
+          if psql "$SUPABASE_DB_URL" -Atqc "SELECT 1 FROM pg_views WHERE schemaname='nhl' AND viewname='v_slate_sog_features'"; then
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                NULL::int AS shots_on_goal,
+                d5_sog_per60, d10_sog_per60, d20_sog_per60,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
+                pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.v_slate_sog_features
+              WHERE game_date = '${SLATE_DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          else
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT *
+              FROM nhl.training_features_nhl_sog_v2
+              WHERE game_date = '${SLATE_DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
+          fi
+
+          # Goalie Saves
+          if psql "$SUPABASE_DB_URL" -Atqc "SELECT 1 FROM pg_views WHERE schemaname='nhl' AND viewname='v_slate_saves_features'"; then
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                d10_shots_faced_per60, d10_save_pct,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                pace_index, rest_days, b2b_flag,
+                d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
+                opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.v_slate_saves_features
+              WHERE game_date = '${SLATE_DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          else
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                d10_shots_faced_per60, d10_save_pct,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                pace_index, rest_days, b2b_flag,
+                d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
+                opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.training_features_goalie_saves_v2
+              WHERE game_date = '${SLATE_DATE}'::date
+              ORDER BY game_id, player_id
+            ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
+          fi
+
+          echo "Exported:"
+          ls -lh exports/
+
+      # ───────── Score & Load predictions ─────────
+      - name: Score & Load predictions
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          python nhl/scripts/run_daily_slate.py \
+            --project nhl \
+            --sog-csv exports/train_nhl_sog_v2.csv \
+            --saves-csv exports/train_goalie_saves_v2.csv \
+            --db-url "$SUPABASE_DB_URL"
+
+      # ───────── YDAY finals sweep (status refresh) ─────────
+      - name: Finals sweep (yesterday)
+        run: |
+          echo "Refreshing statuses for YDAY=${YDAY}"
+          SLATE_DATE="${YDAY}" /tmp/retry.sh "python nhl/scripts/import_schedule_today.py"
+          if [ -f nhl/scripts/refresh.sql ]; then
+            echo "Refreshing views after finals sweep…"
+            export PGOPTIONS='-c statement_timeout=0'
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f nhl/scripts/refresh.sql
+          fi
+
+      - name: Upload exported CSVs (artifact)
+        if: steps.slate.outputs.has_games == 't'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nhl-exports-${{ env.SLATE_DATE }}
+          path: |
+            exports/train_nhl_sog_v2.csv
+            exports/train_goalie_saves_v2.csv
+          if-no-files-found: warn
+          retention-days: 14
