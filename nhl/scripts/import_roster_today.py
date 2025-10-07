@@ -57,20 +57,50 @@ def _map_game_state(g: dict) -> str | None:
     return None
 
 
-def fetch_roster(team_tri: str) -> list[dict]:
-    """Return a list of roster items for the team (as of 'current')."""
-    url = f"{BASE}/roster/{team_tri}/current"
-    resp = S.get(url, timeout=12)
-    resp.raise_for_status()
-    data = resp.json()
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
-        items = []
-        for k, v in data.items():
-            if isinstance(v, list):
-                items.extend(v)
-        return items
+def season_code_from_date(iso_date: str) -> str:
+    """Return NHL season code like '20252026' from 'YYYY-MM-DD'."""
+    y, m, _ = map(int, iso_date.split("-"))
+    start = y if m >= 7 else y - 1
+    return f"{start}{start+1}"
+
+def _normalize_apiweb_roster(j: dict) -> list[dict]:
+    """
+    Normalize api-web roster shapes to a StatsAPI-like list:
+      [{'person': {'id': <int>}, 'position': {'code': 'G'|'D'|'C'|'L'|'R'}}]
+    """
+    out = []
+    # common api-web keys: 'forwards', 'defense', 'goalies'
+    for key, default_pos in (("forwards", "F"), ("defense", "D"), ("goalies", "G")):
+        for p in (j.get(key) or []):
+            pid = p.get("id") or p.get("playerId") or (p.get("player") or {}).get("id")
+            if not pid:
+                continue
+            pos = (p.get("positionCode") or p.get("position") or default_pos or "").upper()
+            out.append({"person": {"id": int(pid)}, "position": {"code": pos}})
+
+    # some payloads are wrapped: {"roster": {...}}
+    if not out and isinstance(j.get("roster"), dict):
+        return _normalize_apiweb_roster(j["roster"])
+    return out
+
+def fetch_roster(team_tri: str, when_iso: str = DATE) -> list[dict]:
+    """
+    Fetch roster using team tri-code (e.g., 'LAK'). Try /current then explicit season.
+    Returns normalized list compatible with your downstream code.
+    """
+    tri = str(team_tri).upper()
+    season = season_code_from_date(when_iso)
+    urls = [
+        f"https://api-web.nhle.com/v1/roster/{tri}/current",
+        f"https://api-web.nhle.com/v1/roster/{tri}/{season}",
+    ]
+    for url in urls:
+        resp = requests.get(url, timeout=20)
+        if resp.status_code == 404:
+            continue
+        resp.raise_for_status()
+        return _normalize_apiweb_roster(resp.json() or {})
+    print(f"⚠️ roster 404 for {tri} on {when_iso} (tried current & {season})")
     return []
 
 def _normalize_pos(code: str | None) -> str | None:
@@ -301,23 +331,21 @@ def main():
         except Exception:
             pass
 
-        # 1) Get today's games (ET day) with NHL provider team ids
-        cur.execute("""
-            select
-              g.game_id,
-              g.home_team_id,
-              g.away_team_id,
-              th.provider_team_id::text as home_nhl_id,
-              ta.provider_team_id::text as away_nhl_id
-            from nhl.games g
-            join nhl.team_external_ids th
-              on th.team_id = g.home_team_id and th.provider = 'nhl'
-            join nhl.team_external_ids ta
-              on ta.team_id = g.away_team_id and ta.provider = 'nhl'
-            where g.game_date = %s
-            order by g.game_id
-        """, (DATE,))
-        games = cur.fetchall()
+# 1) Get today’s games (ET day) with team tri-codes (use tris for roster fetch)
+            cur.execute("""
+                SELECT
+                g.game_id,
+                g.home_team_id,
+                g.away_team_id,
+                ht.abbr AS home_tri,
+                at.abbr AS away_tri
+                FROM nhl.games g
+                JOIN nhl.teams ht ON ht.team_id = g.home_team_id
+                JOIN nhl.teams at ON at.team_id = g.away_team_id
+                WHERE g.game_date = %s::date
+                ORDER BY g.game_id
+            """, (DATE,))
+            games = cur.fetchall()
         if not games:
             print(f"ℹ️ No games for {DATE} in nhl.games; run import_schedule_today.py first.")
             return
@@ -343,9 +371,9 @@ def main():
 
         try:
             # 3) For each team in each game: fetch roster, upsert players + mappings, insert roster_status
-            for game_id, home_tid, away_tid, home_nhl, away_nhl in games:
-                for nhl_tid, team_id in ((home_nhl, home_tid), (away_nhl, away_tid)):
-                    roster = fetch_roster(nhl_tid) or []
+            for game_id, home_tid, away_tid, home_tri, away_tri in games:
+                for tri, tid in ((home_tri, home_tid), (away_tri, away_tid)):
+                    roster = fetch_roster(tri, DATE) or []
                     for item in roster:
                         person = item.get("person") or {}
                         nhl_pid = person.get("id")
@@ -367,7 +395,7 @@ def main():
                                       current_team_id = coalesce(excluded.current_team_id, nhl.players.current_team_id),
                                       position        = excluded.position,
                                       status          = 'active'
-                            """, (internal_pid, full_name, team_id, pos))
+                            """, (internal_pid, full_name, tid, pos))
                             upserted_players += 1
 
                             # seed mapping provider→internal
@@ -388,7 +416,7 @@ def main():
                                        position = %s,
                                        status = 'active'
                                  where player_id = %s
-                            """, (full_name, team_id, pos, internal_pid))
+                            """, (full_name, tid, pos, internal_pid))
 
                         # roster_status row
                         cur.execute("""
@@ -396,12 +424,14 @@ def main():
                               (game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts)
                             values (%s, %s, %s, true, null, 'None', now())
                             on conflict (team_id, asof_ts, game_id, player_id) do nothing
-                        """, (game_id, team_id, internal_pid))
+                        """, (game_id, tid, internal_pid))
                         inserted_rs += 1
 
             conn.commit()
-        except Exception:
+        except Exception as e:
+            # make sure an earlier SQL error doesn't poison the rest of the run
             conn.rollback()
+            print("[FATAL] roster import failed:", type(e).__name__, e, file=sys.stderr)
             raise
 
         print(f"🔧 Upserted/confirmed {upserted_players} players in nhl.players")
