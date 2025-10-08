@@ -120,13 +120,10 @@ jobs:
             echo "No refresh.sql found — skipping."
           fi
 
-      # Export CSVs (paths unchanged except for backend prefix)
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'
-        env:
-          SLATE_DATE: ${{ steps.dates.outputs.slate_date }} # use the output you already set
         run: |
-          set -euo pipefail
+          set -e
           export PGOPTIONS='-c statement_timeout=0'
           mkdir -p exports
 
