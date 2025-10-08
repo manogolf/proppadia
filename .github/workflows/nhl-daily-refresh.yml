@@ -19,7 +19,7 @@ jobs:
   daily:
     runs-on: ubuntu-latest
     env:
-      PYTHONPATH: backend # <<— important: makes 'sports' importable
+      PYTHONPATH: backend
       DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -57,9 +57,9 @@ jobs:
       - name: Install Python deps (scripts only)
         run: |
           python -m pip install --upgrade pip
-          # If you keep training reqs under backend/sports/nhl/training/requirements.txt:
-          if [ -f backend/sports/nhl/training/requirements.txt ]; then
-            python -m pip install -r backend/sports/nhl/training/requirements.txt
+          # If you keep training reqs under backend/nhl/training/requirements.txt:
+          if [ -f backend/nhl/training/requirements.txt ]; then
+            python -m pip install -r backend/nhl/training/requirements.txt
           fi
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31" python-dotenv
 
@@ -84,7 +84,7 @@ jobs:
       - name: Import today's schedule (API → nhl.games)
         env:
           SLATE_DATE: ${{ env.SLATE_DATE }}
-        run: /tmp/retry.sh "python backend/sports/nhl/scripts/import_schedule_today.py"
+        run: /tmp/retry.sh "python backend/nhl/scripts/import_schedule_today.py"
 
       - name: Check slate
         id: slate
@@ -98,17 +98,17 @@ jobs:
         if: steps.slate.outputs.has_games == 't'
         env:
           SLATE_DATE: ${{ env.SLATE_DATE }}
-        run: /tmp/retry.sh "python backend/sports/nhl/scripts/import_roster_today.py"
+        run: /tmp/retry.sh "python backend/nhl/scripts/import_roster_today.py"
 
       # Views / features refresh (optional)
       - name: Refresh features/views (if present)
         if: steps.slate.outputs.has_games == 't'
         run: |
           set -e
-          if [ -f backend/sports/nhl/scripts/refresh.sql ]; then
-            echo "Running backend/sports/nhl/scripts/refresh.sql …"
+          if [ -f backend/nhl/scripts/refresh.sql ]; then
+            echo "Running backend/nhl/scripts/refresh.sql …"
             export PGOPTIONS='-c statement_timeout=0'
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/sports/nhl/scripts/refresh.sql
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
           else
             echo "No refresh.sql found — skipping."
           fi
@@ -177,7 +177,7 @@ jobs:
       - name: Score & Load predictions
         if: steps.slate.outputs.has_games == 't'
         run: |
-          python backend/sports/nhl/scripts/run_daily_slate.py \
+          python backend/nhl/scripts/run_daily_slate.py \
             --project nhl \
             --sog-csv exports/train_nhl_sog_v2.csv \
             --saves-csv exports/train_goalie_saves_v2.csv \
@@ -198,11 +198,11 @@ jobs:
       - name: Finals sweep (yesterday)
         run: |
           echo "Refreshing statuses for YDAY=${YDAY}"
-          SLATE_DATE="${YDAY}" /tmp/retry.sh "python backend/sports/nhl/scripts/import_schedule_today.py"
-          if [ -f backend/sports/nhl/scripts/refresh.sql ]; then
+          SLATE_DATE="${YDAY}" /tmp/retry.sh "python backend/nhl/scripts/import_schedule_today.py"
+          if [ -f backend/nhl/scripts/refresh.sql ]; then
             echo "Refreshing views after finals sweep…"
             export PGOPTIONS='-c statement_timeout=0'
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/sports/nhl/scripts/refresh.sql
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
           fi
 
       - name: Upload exported CSVs (artifact)
