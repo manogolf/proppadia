@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 import os, sys, json, datetime as dt
 from zoneinfo import ZoneInfo
-import os
+
+# ---- absolutely disable server-side prepares (must run before importing psycopg) ----
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
+
 import psycopg
 import psycopg.rows
 
-# optional: load .env locally
+# Force every cursor.execute(...) to use simple execution (no PREPARE)
+_ORIG_EXECUTE = psycopg.Cursor.execute
+def _no_prep_execute(self, query, params=None, **kw):
+    kw["prepare"] = False
+    return _ORIG_EXECUTE(self, query, params, **kw)
+psycopg.Cursor.execute = _no_prep_execute
+
+# optional: load .env locally when running on your laptop
 try:
     from dotenv import load_dotenv, find_dotenv
     load_dotenv(find_dotenv())
@@ -16,18 +25,6 @@ except Exception:
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-with psycopg.connect(DB, prepare_threshold=0) as conn:
-    try:
-        conn.prepare_threshold = 0  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    with conn.cursor() as cur:
-
-        _ORIG_EXECUTE = psycopg.Cursor.execute
-def _no_prep_execute(self, query, params=None, **kw):
-    kw["prepare"] = False
-    return _ORIG_EXECUTE(self, query, params, **kw)
-psycopg.Cursor.execute = _no_prep_execute
 
 
 ET = ZoneInfo("America/New_York")
