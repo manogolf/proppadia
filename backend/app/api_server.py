@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+# backend/app/api_server.py
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), override=False)  # load repo-root .env if present
 
 from .routers import health, mlb, nhl
 
@@ -22,7 +25,7 @@ app.add_middleware(
 # Mount routers under /api/*
 app.include_router(health.router, prefix="/api")
 app.include_router(mlb.router, prefix="/api")
-app.include_router(nhl.router, prefix="/api")
+app.include_router(nhl.router)
 
 @app.get("/")
 def root():

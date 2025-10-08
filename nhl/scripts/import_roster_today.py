@@ -323,116 +323,105 @@ def _ensure_players_and_mappings(cur, rosters: dict[str, list[dict]]) -> tuple[i
     return players_upserted, mappings_upserted
 
 def main():
-    # disable server-side prepared statements to avoid DuplicatePreparedStatement on GH Actions
-    with psycopg.connect(DB, prepare_threshold=0) as conn, conn.cursor() as cur:
-        # extra safety if this runs in a pooled/long-lived connection
-        try:
-            cur.execute("DEALLOCATE ALL;")
-        except Exception:
-            pass
+    # PgBouncer-safe: autocommit + no server-side prepares
+    with psycopg.connect(DB, autocommit=True, prepare_threshold=0) as conn, conn.cursor() as cur:
 
-# 1) Get today’s games (ET day) with team tri-codes (use tris for roster fetch)
-            cur.execute("""
-                SELECT
-                g.game_id,
-                g.home_team_id,
-                g.away_team_id,
-                ht.abbr AS home_tri,
-                at.abbr AS away_tri
-                FROM nhl.games g
-                JOIN nhl.teams ht ON ht.team_id = g.home_team_id
-                JOIN nhl.teams at ON at.team_id = g.away_team_id
-                WHERE g.game_date = %s::date
-                ORDER BY g.game_id
-            """, (DATE,))
-            games = cur.fetchall()
+        # 1) Get today’s games (ET day) with team tri-codes (use tris for roster fetch)
+        cur.execute("""
+            SELECT
+              g.game_id,
+              g.home_team_id,
+              g.away_team_id,
+              ht.abbr AS home_tri,
+              at.abbr AS away_tri
+            FROM nhl.games g
+            JOIN nhl.teams ht ON ht.team_id = g.home_team_id
+            JOIN nhl.teams at ON at.team_id = g.away_team_id
+            WHERE g.game_date = %s::date
+            ORDER BY g.game_id
+        """, (DATE,))
+        games = cur.fetchall()
         if not games:
             print(f"ℹ️ No games for {DATE} in nhl.games; run import_schedule_today.py first.")
             return
 
         # 2) Existing player map: provider_player_id (nhl) -> internal player_id
         cur.execute("""
-            select provider_player_id::text, player_id
-            from nhl.player_external_ids
-            where provider = 'nhl'
+            SELECT provider_player_id::text, player_id
+            FROM nhl.player_external_ids
+            WHERE provider = 'nhl'
         """)
         player_map_by_provider = {pid: pl for (pid, pl) in cur.fetchall()}
 
         # convenience: normalize position codes to your {F,D,G} check constraint
         def norm_pos(code: str | None) -> str:
             c = (code or "").upper()
-            if c in ("G", "D"): return c
-            if c in ("LW", "RW", "C", "F"): return "F"
+            if c in ("G", "D"):
+                return c
+            if c in ("LW", "RW", "C", "F"):
+                return "F"
             return "F"
 
         inserted_rs = 0
         upserted_players = 0
         seeded_maps = 0
 
-        try:
-            # 3) For each team in each game: fetch roster, upsert players + mappings, insert roster_status
-            for game_id, home_tid, away_tid, home_tri, away_tri in games:
-                for tri, tid in ((home_tri, home_tid), (away_tri, away_tid)):
-                    roster = fetch_roster(tri, DATE) or []
-                    for item in roster:
-                        person = item.get("person") or {}
-                        nhl_pid = person.get("id")
-                        if nhl_pid is None:
-                            continue
-                        nhl_pid = str(nhl_pid)
-                        full_name = (person.get("fullName") or f"Player {nhl_pid}").strip()
-                        pos = norm_pos((item.get("position") or {}).get("code"))
+        # 3) For each team in each game: fetch roster, upsert players + mappings, insert roster_status
+        for game_id, home_tid, away_tid, home_tri, away_tri in games:
+            for tri, tid in ((home_tri, home_tid), (away_tri, away_tid)):
+                roster = fetch_roster(tri, DATE) or []
+                for item in roster:
+                    person = item.get("person") or {}
+                    nhl_pid = person.get("id")
+                    if nhl_pid is None:
+                        continue
+                    nhl_pid = str(nhl_pid)
+                    full_name = (person.get("fullName") or f"Player {nhl_pid}").strip()
+                    pos = norm_pos((item.get("position") or {}).get("code"))
 
-                        # ensure player exists (use NHL id as internal id — consistent with your earlier loads)
-                        internal_pid = player_map_by_provider.get(nhl_pid)
-                        if internal_pid is None:
-                            internal_pid = int(nhl_pid)
-                            cur.execute("""
-                                insert into nhl.players (player_id, full_name, current_team_id, position, status)
-                                values (%s, %s, %s, %s, 'active')
-                                on conflict (player_id) do update
-                                  set full_name      = excluded.full_name,
-                                      current_team_id = coalesce(excluded.current_team_id, nhl.players.current_team_id),
-                                      position        = excluded.position,
-                                      status          = 'active'
-                            """, (internal_pid, full_name, tid, pos))
-                            upserted_players += 1
-
-                            # seed mapping provider→internal
-                            cur.execute("""
-                                insert into nhl.player_external_ids (player_id, provider, provider_player_id)
-                                values (%s, 'nhl', %s)
-                                on conflict (player_id, provider) do update
-                                  set provider_player_id = excluded.provider_player_id
-                            """, (internal_pid, nhl_pid))
-                            player_map_by_provider[nhl_pid] = internal_pid
-                            seeded_maps += 1
-                        else:
-                            # keep player active & update team/position if we already know them
-                            cur.execute("""
-                                update nhl.players
-                                   set full_name = coalesce(nullif(%s,''), full_name),
-                                       current_team_id = coalesce(%s, current_team_id),
-                                       position = %s,
-                                       status = 'active'
-                                 where player_id = %s
-                            """, (full_name, tid, pos, internal_pid))
-
-                        # roster_status row
+                    # ensure player exists (use NHL id as internal id — consistent with your earlier loads)
+                    internal_pid = player_map_by_provider.get(nhl_pid)
+                    if internal_pid is None:
+                        internal_pid = int(nhl_pid)
                         cur.execute("""
-                            insert into nhl.roster_status
-                              (game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts)
-                            values (%s, %s, %s, true, null, 'None', now())
-                            on conflict (team_id, asof_ts, game_id, player_id) do nothing
-                        """, (game_id, tid, internal_pid))
-                        inserted_rs += 1
+                            INSERT INTO nhl.players (player_id, full_name, current_team_id, position, status)
+                            VALUES (%s, %s, %s, %s, 'active')
+                            ON CONFLICT (player_id) DO UPDATE
+                              SET full_name       = EXCLUDED.full_name,
+                                  current_team_id = COALESCE(EXCLUDED.current_team_id, nhl.players.current_team_id),
+                                  position        = EXCLUDED.position,
+                                  status          = 'active'
+                        """, (internal_pid, full_name, tid, pos))
+                        upserted_players += 1
 
-            conn.commit()
-        except Exception as e:
-            # make sure an earlier SQL error doesn't poison the rest of the run
-            conn.rollback()
-            print("[FATAL] roster import failed:", type(e).__name__, e, file=sys.stderr)
-            raise
+                        # seed mapping provider→internal
+                        cur.execute("""
+                            INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
+                            VALUES (%s, 'nhl', %s)
+                            ON CONFLICT (player_id, provider) DO UPDATE
+                              SET provider_player_id = EXCLUDED.provider_player_id
+                        """, (internal_pid, nhl_pid))
+                        player_map_by_provider[nhl_pid] = internal_pid
+                        seeded_maps += 1
+                    else:
+                        # keep player active & update team/position if we already know them
+                        cur.execute("""
+                            UPDATE nhl.players
+                               SET full_name       = COALESCE(NULLIF(%s,''), full_name),
+                                   current_team_id = COALESCE(%s, current_team_id),
+                                   position        = %s,
+                                   status          = 'active'
+                             WHERE player_id = %s
+                        """, (full_name, tid, pos, internal_pid))
+
+                    # roster_status row
+                    cur.execute("""
+                        INSERT INTO nhl.roster_status
+                          (game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts)
+                        VALUES (%s, %s, %s, true, NULL, 'None', now())
+                        ON CONFLICT (team_id, asof_ts, game_id, player_id) DO NOTHING
+                    """, (game_id, tid, internal_pid))
+                    inserted_rs += 1
 
         print(f"🔧 Upserted/confirmed {upserted_players} players in nhl.players")
         print(f"🔄 Seeded {seeded_maps} mappings in nhl.player_external_ids (provider='nhl')")
