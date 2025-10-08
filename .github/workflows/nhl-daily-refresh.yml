@@ -1,12 +1,16 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
 name: NHL Daily (Ingest → Refresh → Score → Export)
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       debug_pbp:
         description: "Set DEBUG_PBP (0/1)"
-        required: false
+        type: choice
+        options: ["0", "1"]
         default: "0"
+        required: false
   schedule:
     - cron: "15 11 * * *"
     - cron: "15 5 * * *"
@@ -25,7 +29,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       TZ: UTC
-      DEBUG_PBP: ${{ github.event.inputs.debug_pbp || '0' }} # <<— toggleable debug
+      DEBUG_PBP: ${{ github.event.inputs.debug_pbp }}
 
     steps:
       - name: Checkout
@@ -209,7 +213,7 @@ jobs:
         if: steps.slate.outputs.has_games == 't'
         uses: actions/upload-artifact@v4
         with:
-          name: nhl-exports-${{ env.SLATE_DATE }}
+          name: nhl-exports-${{ steps.dates.outputs.slate_date }}
           path: |
             exports/train_nhl_sog_v2.csv
             exports/train_goalie_saves_v2.csv
