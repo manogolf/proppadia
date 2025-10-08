@@ -1,192 +1,226 @@
 #!/usr/bin/env python3
 """
-run_daily_slate.py — one-shot runner to score today's NHL slate and load to Supabase.
+run_daily_slate.py — score today's NHL slate and (optionally) load to Supabase.
 
-What it does (in order):
-1) Scores SOG for lines 0.5,1.5,2.5,3.5 with your latest model
-2) Scores Goalie Saves for lines 24.5,28.5 with your latest model
-3) If a Postgres URL is provided, truncates staging tables, bulk-loads the CSVs,
-   and calls the existing loader functions to upsert into nhl.predictions.
+What it does:
+1) Scores SOG for lines 0.5,1.5,2.5,3.5
+2) Scores Goalie Saves for lines 24.5,28.5
+3) If a Postgres URL is provided, COPYs the results into stage tables and calls loaders.
 
-Usage (replace the CSVs with your daily feature files when you have them):
-  python scripts/run_daily_slate.py \
-    --project /Users/jerrystrain/Projects/Proppadia/nhl \
-    --sog-csv /Users/jerrystrain/Projects/Proppadia/nhl/data/processed/nhl_sog_training.csv \
-    --saves-csv /Users/jerrystrain/Projects/Proppadia/nhl/data/processed/nhl_saves_training.csv \
-    --db-url "postgresql://USER:PASSWORD@HOST:PORT/DBNAME?sslmode=require"
+Usage (CI example):
+  python backend/nhl/scripts/run_daily_slate.py \
+    --project nhl \
+    --sog-csv exports/train_nhl_sog_v2.csv \
+    --saves-csv exports/train_goalie_saves_v2.csv \
+    --db-url "$SUPABASE_DB_URL"
 
 Notes:
-- If --db-url is omitted, this script just writes the CSVs; you can import via Table Editor and run the loaders manually.
-- Requires your existing score script at scripts/score_nhl_props.py
-- Installs psycopg2-binary on first run if needed (for DB loading).
+- Paths are resolved relative to this script (backend/nhl as BASE).
+- Installs psycopg2-binary on first run if needed for COPY.
 """
 
-import argparse, json, os, sys, subprocess, shlex, tempfile
+from __future__ import annotations
+
+import argparse, json, os, sys, subprocess, tempfile, csv
 from pathlib import Path
 
-# ---------- helpers ----------
+# -------- Paths --------
+HERE = Path(__file__).resolve().parent                  # backend/nhl/scripts
+BASE = HERE.parent                                      # backend/nhl
+SCORER = HERE / "score_nhl_props.py"
+if not SCORER.exists():
+    raise SystemExit(f"Missing scorer: {SCORER}")
 
-def sh(cmd, env=None):
-    print(f"$ {cmd}")
-    proc = subprocess.run(cmd, shell=True, env=env)
-    if proc.returncode != 0:
-        sys.exit(proc.returncode)
+MODEL_SOG_DIR   = BASE / "models" / "latest" / "shots_on_goal"
+MODEL_SAVES_DIR = BASE / "models" / "latest" / "goalie_saves"
+FEATURE_JSON    = BASE / "features" / "feature_metadata_nhl.json"
+OUT_SOG         = BASE / "data" / "processed" / "sog_predictions.csv"
+OUT_SAVES       = BASE / "data" / "processed" / "saves_predictions.csv"
 
-def read_model_index(model_dir: Path):
+# -------- Helpers --------
+def read_model_index(model_dir: Path) -> dict:
     idx = json.loads((model_dir / "MODEL_INDEX.json").read_text())
-    fh_txt = (model_dir / "FEATURE_HASH.txt")
-    if fh_txt.exists():
-        idx["feature_hash"] = fh_txt.read_text().strip()
+    fh = model_dir / "FEATURE_HASH.txt"
+    if fh.exists():
+        idx["feature_hash"] = fh.read_text().strip()
     return idx
 
-def ensure_psycopg():
+def ensure_psycopg2():
     try:
-        import psycopg2  # noqa
+        import psycopg2  # noqa: F401
     except Exception:
-        print("🔧 Installing psycopg2-binary...")
-        sh(f'{sys.executable} -m pip install -qU psycopg2-binary')
-        import psycopg2  # noqa
+        print("🔧 Installing psycopg2-binary…")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-qU", "psycopg2-binary"])
+        import psycopg2  # noqa: F401
 
-def copy_csv(conn, table: str, path: str, cols: list[str]) -> None:
+def copy_csv(conn, table: str, path: Path, cols: list[str]) -> None:
     """
     COPY a CSV into table using explicit column list.
-    Always quote identifiers to support names like p_over_0.5.
+    Quotes identifiers so names like p_over_0_5 work.
     """
-    cols_sql = ", ".join([f'"{c}"' for c in cols])  # quote every column
+    cols_sql = ", ".join([f'"{c}"' for c in cols])
     sql = f"COPY {table} ({cols_sql}) FROM STDIN WITH CSV HEADER"
     with conn.cursor() as cur, open(path, "r", encoding="utf-8") as f:
         cur.copy_expert(sql, f)
 
-def run_loader(conn, sql):
+def run_loader(conn, sql: str):
     with conn.cursor() as cur:
         cur.execute(sql)
-        row = cur.fetchone()
-        print("⬆️ loader result:", row)
+        print("⬆️ loader result:", cur.fetchone())
     conn.commit()
 
-# ---------- main ----------
+def project_csv_allow_dotted(src: Path, dest: Path, wanted_cols: list[str]) -> None:
+    """
+    Write a CSV containing only wanted_cols, accepting either underscore
+    or dotted variants in the source (e.g., p_over_0_5 or p_over_0.5).
+    """
+    def resolve_val(row: dict, col: str):
+        v = row.get(col)
+        if v is not None:
+            return v
+        # try dotted <-> underscore variants
+        if col.endswith("_5"):
+            dotted = col[:-2] + ".5"
+            v = row.get(dotted)
+            if v is not None:
+                return v
+        if ".5" in col:
+            underscored = col.replace(".5", "_5")
+            v = row.get(underscored)
+            if v is not None:
+                return v
+        return ""
 
+    with open(src, "r", newline="") as fin, open(dest, "w", newline="") as fout:
+        r = csv.DictReader(fin)
+        w = csv.DictWriter(fout, fieldnames=wanted_cols)
+        w.writeheader()
+        for row in r:
+            w.writerow({c: resolve_val(row, c) for c in wanted_cols})
+
+# -------- Main --------
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--project", required=True, help="Project root (contains scripts/, models/, data/)")
-    ap.add_argument("--sog-csv", required=True, help="CSV with SOG features for the slate")
-    ap.add_argument("--saves-csv", required=True, help="CSV with Saves features for the slate")
-    ap.add_argument("--db-url", default=os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL"),
-                    help="Postgres connection URL (optional). If present, will load to DB.")
+    ap.add_argument("--project", required=True, help="Project label (e.g., nhl). Label only; not a path.")
+    ap.add_argument("--sog-csv", required=True, help="CSV with SOG features for the slate (exported earlier).")
+    ap.add_argument("--saves-csv", required=True, help="CSV with Saves features for the slate (exported earlier).")
+    ap.add_argument(
+        "--db-url",
+        default=os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL"),
+        help="Postgres URL (optional). If present, will load stage tables and run loaders.",
+    )
     args = ap.parse_args()
 
-    proj = Path(args.project).resolve()
-    score_py = proj / "scripts" / "score_nhl_props.py"
-    if not score_py.exists():
-        sys.exit(f"Missing scorer: {score_py}")
-
-    # Models
-    model_sog_dir   = proj / "models" / "latest" / "shots_on_goal"
-    model_saves_dir = proj / "models" / "latest" / "goalie_saves"
-    if not model_sog_dir.exists() or not model_saves_dir.exists():
-        sys.exit("Missing latest models. Train first.")
+    # Sanity checks
+    if not MODEL_SOG_DIR.exists() or not MODEL_SAVES_DIR.exists():
+        sys.exit("Missing latest models under backend/nhl/models/latest/(shots_on_goal|goalie_saves). Train first.")
+    if not FEATURE_JSON.exists():
+        sys.exit(f"Missing feature metadata: {FEATURE_JSON}")
 
     # Read model metadata (family, params, feature_hash)
-    sog_idx   = read_model_index(model_sog_dir)
-    saves_idx = read_model_index(model_saves_dir)
+    sog_idx   = read_model_index(MODEL_SOG_DIR)
+    saves_idx = read_model_index(MODEL_SAVES_DIR)
 
-    # Outputs
-    out_sog   = proj / "data" / "processed" / "sog_predictions.csv"
-    out_saves = proj / "data" / "processed" / "saves_predictions.csv"
+    # 1) Score SOG (0.5/1.5/2.5/3.5)
+    sog_cmd = [
+        sys.executable, str(SCORER),
+        "--model-dir", str(MODEL_SOG_DIR),
+        "--csv", args.sog_csv,
+        "--feature-json", str(FEATURE_JSON),
+        "--feature-key", "shots_on_goal",
+        "--line", "0.5,1.5,2.5,3.5",
+        "--out", str(OUT_SOG),
+    ]
+    print("▶ Scoring SOG:", " ".join(sog_cmd))
+    subprocess.check_call(sog_cmd)
 
-    # 1) Score SOG for 0.5/1.5/2.5/3.5
-    sog_lines = "0.5,1.5,2.5,3.5"
-    cmd_sog = f"""
-    {shlex.quote(sys.executable)} {shlex.quote(str(score_py))} \
-      --model-dir {shlex.quote(str(model_sog_dir))} \
-      --csv {shlex.quote(args.sog_csv)} \
-      --feature-json {shlex.quote(str(proj / "features" / "feature_metadata_nhl.json"))} \
-      --feature-key shots_on_goal \
-      --line {sog_lines} \
-      --out {shlex.quote(str(out_sog))}
-    """
-    sh(cmd_sog)
+    # 2) Score SAVES (24.5/28.5)
+    saves_cmd = [
+        sys.executable, str(SCORER),
+        "--model-dir", str(MODEL_SAVES_DIR),
+        "--csv", args.saves_csv,
+        "--feature-json", str(FEATURE_JSON),
+        "--feature-key", "goalie_saves",
+        "--line", "24.5,28.5",
+        "--out", str(OUT_SAVES),
+    ]
+    print("▶ Scoring SAVES:", " ".join(saves_cmd))
+    subprocess.check_call(saves_cmd)
 
-    # 2) Score Goalie Saves for 24.5/28.5
-    saves_lines = "24.5,28.5"
-    cmd_saves = f"""
-    {shlex.quote(sys.executable)} {shlex.quote(str(score_py))} \
-      --model-dir {shlex.quote(str(model_saves_dir))} \
-      --csv {shlex.quote(args.saves_csv)} \
-      --feature-json {shlex.quote(str(proj / "features" / "feature_metadata_nhl.json"))} \
-      --feature-key goalie_saves \
-      --line {saves_lines} \
-      --out {shlex.quote(str(out_saves))}
-    """
-    sh(cmd_saves)
+    print(f"✅ Wrote: {OUT_SOG}")
+    print(f"✅ Wrote: {OUT_SAVES}")
 
-    print(f"✅ Wrote: {out_sog}")
-    print(f"✅ Wrote: {out_saves}")
+    # 3) Optional: load to DB
+    if not args.db_url:
+        print("ℹ️ No --db-url provided. CSVs are ready to import via Table Editor:")
+        print(f"   SOG   → {OUT_SOG}")
+        print(f"   SAVES → {OUT_SAVES}")
+        return
 
-    # 3) Optional: load to DB (if URL provided)
-    if args.db_url:
-        ensure_psycopg()
-        import psycopg2, csv
+    ensure_psycopg2()
+    import psycopg2  # now safe to import
 
-        # Map CSVs to staging schemas
-        sog_cols = ["player_id","game_id","p_over_0.5","p_over_1.5","p_over_2.5","p_over_3.5"]
-        saves_cols = ["player_id","game_id","p_over_24.5","p_over_28.5"]
+    # Use underscore column names expected by stage tables
+    sog_cols   = ["player_id", "game_id", "p_over_0_5",  "p_over_1_5",  "p_over_2_5",  "p_over_3_5"]
+    saves_cols = ["player_id", "game_id", "p_over_24_5", "p_over_28_5"]
 
-        # Create filtered temp CSVs with only staging columns (in case the scorer wrote extra columns)
-        def project_csv(src_path, cols, dest_path):
-            with open(src_path, "r") as fin, open(dest_path, "w", newline="") as fout:
-                r = csv.DictReader(fin)
-                w = csv.DictWriter(fout, fieldnames=cols)
-                w.writeheader()
-                for row in r:
-                    w.writerow({c: row.get(c, "") for c in cols})
+    with tempfile.TemporaryDirectory() as td:
+        tmp_sog   = Path(td) / "sog_stage.csv"
+        tmp_saves = Path(td) / "saves_stage.csv"
 
-        with tempfile.TemporaryDirectory() as td:
-            tmp_sog   = Path(td) / "sog_stage.csv"
-            tmp_saves = Path(td) / "saves_stage.csv"
-            project_csv(out_sog, sog_cols, tmp_sog)
-            project_csv(out_saves, saves_cols, tmp_saves)
+        # Normalize possible dotted/underscore variants from scorer output
+        project_csv_allow_dotted(OUT_SOG,   tmp_sog,   sog_cols)
+        project_csv_allow_dotted(OUT_SAVES, tmp_saves, saves_cols)
 
-            print("🔌 Connecting to DB…")
-            conn = psycopg2.connect(args.db_url)
+        print("🔌 Connecting to DB…")
+        conn = psycopg2.connect(args.db_url)
 
-            # COPY into stage (truncate first to avoid dup-on-conflict issues)
-            copy_csv(conn, "nhl.predictions_sog_stage", str(tmp_sog), sog_cols)
-            copy_csv(conn, "nhl.predictions_saves_stage", str(tmp_saves), saves_cols)
+        # COPY into stage
+        copy_csv(conn, "nhl.predictions_sog_stage",   tmp_sog,   sog_cols)
+        copy_csv(conn, "nhl.predictions_saves_stage", tmp_saves, saves_cols)
 
-            # Run loaders (SOG uses family/params/feature_hash from its model index; Saves likewise)
-            sog_params_json = json.dumps(sog_idx.get("params", {}))
-            saves_params_json = json.dumps(saves_idx.get("params", {}))
+        # Run loaders
+        run_loader(conn, f"""
+            SELECT nhl.load_sog_predictions_from_stage(
+              p_model_family  => %s,
+              p_model_params  => %s::jsonb,
+              p_feature_hash  => %s,
+              p_model_version => %s
+            );
+        """,)  # type: ignore
 
-            run_loader(conn, f"""
+        with conn.cursor() as cur:
+            cur.execute(
+                """
                 SELECT nhl.load_sog_predictions_from_stage(
-                  p_model_family  => '{sog_idx["family"]}',
-                  p_model_params  => '{sog_params_json}'::jsonb,
-                  p_feature_hash  => '{sog_idx["feature_hash"]}',
-                  p_model_version => 'latest/shots_on_goal'
+                  p_model_family  => %s,
+                  p_model_params  => %s::jsonb,
+                  p_feature_hash  => %s,
+                  p_model_version => %s
                 );
-            """)
-
-            run_loader(conn, f"""
+                """,
+                (sog_idx["family"], json.dumps(sog_idx.get("params", {})), sog_idx["feature_hash"], "latest/shots_on_goal"),
+            )
+            cur.execute(
+                """
                 SELECT nhl.load_saves_predictions_from_stage(
-                  p_model_family  => '{saves_idx["family"]}',
-                  p_model_params  => '{saves_params_json}'::jsonb,
-                  p_feature_hash  => '{saves_idx["feature_hash"]}',
-                  p_model_version => 'latest/goalie_saves'
+                  p_model_family  => %s,
+                  p_model_params  => %s::jsonb,
+                  p_feature_hash  => %s,
+                  p_model_version => %s
                 );
-            """)
+                """,
+                (saves_idx["family"], json.dumps(saves_idx.get("params", {})), saves_idx["feature_hash"], "latest/goalie_saves"),
+            )
+        conn.commit()
 
-            # Clear stage
-            with conn.cursor() as cur:
-                cur.execute("TRUNCATE nhl.predictions_sog_stage; TRUNCATE nhl.predictions_saves_stage;")
-            conn.commit()
-            conn.close()
+        # Clear stage
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE nhl.predictions_sog_stage; TRUNCATE nhl.predictions_saves_stage;")
+        conn.commit()
+        conn.close()
 
-        print("✅ Upserted predictions to nhl.predictions and cleared staging.")
-    else:
-        print("ℹ️ No --db-url provided. CSVs are ready to import:")
-        print(f"   SOG  → {out_sog}")
-        print(f"   SAVES→ {out_saves}")
+    print("✅ Upserted predictions to nhl.predictions and cleared staging.")
 
 if __name__ == "__main__":
     main()
