@@ -1,44 +1,47 @@
-from fastapi import APIRouter
-from backend.app.deps import pg_fetchone
-from fastapi import APIRouter, Query
+# backend/app/routers/nhl.py
+from __future__ import annotations
+
 from datetime import datetime
-from zoneinfo import ZoneInfo
-import psycopg  # already installed for ping-db
-from backend.app.deps import _db_url
 from typing import Optional, List, Dict, Any
+from zoneinfo import ZoneInfo
 
-router = APIRouter(tags=["nhl"])
+import psycopg
+import psycopg.rows
+from fastapi import APIRouter, Query
 
-@router.get("/nhl/ping")
+from backend.app.deps import pg_fetchone
+from backend.supabase.supabase_utils import get_database_url
+
+router = APIRouter(prefix="/api/nhl", tags=["nhl"])
+
+
+# ---- small helper to get a dict-row connection ----
+def _conn():
+    url = get_database_url()
+    if not url:
+        raise RuntimeError("DATABASE_URL not set")
+    return psycopg.connect(url, row_factory=psycopg.rows.dict_row)
+
+
+@router.get("/ping", summary="Ping Nhl")
 def ping_nhl():
     return {"sport": "nhl", "ok": True}
 
-@router.get("/nhl/ping-db")
-def nhl_ping_db():
-    sql = """
-        SELECT player_id, game_id, team_id, opponent_id, is_home, game_date
-        FROM nhl.training_features_nhl_sog_v2
-        ORDER BY game_date DESC
-        LIMIT 1
-    """
-    ok, row, err = pg_fetchone(sql)
-    if ok:
-        return {
-            "ok": True,
-            "source": "postgres",
-            "table": "nhl.training_features_nhl_sog_v2",
-            "sample": row,
-        }
-    return {"ok": False, "error": err}
 
-@router.get("/nhl/games/today")
+@router.get("/ping-db", summary="Nhl Ping Db")
+def nhl_ping_db():
+    ok, row, err = pg_fetchone("SELECT 1 AS ok")
+    return {"ok": bool(row), "err": err}
+
+
+@router.get("/games/today", summary="Nhl Games Today",
+            description="Return today's NHL games with team names/abbrs (schema: nhl.games + nhl.teams).")
 def nhl_games_today(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today in America/Los_Angeles)"),
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> Dict[str, Any]:
-    """Return today's NHL games with team names/abbrs (schema: nhl.games + nhl.teams)."""
-    # Resolve target date in America/Los_Angeles unless user overrides
+    # Resolve date in America/Los_Angeles unless overridden
     if date:
         try:
             target_date = datetime.fromisoformat(date).date()
@@ -46,10 +49,6 @@ def nhl_games_today(
             return {"ok": False, "error": "invalid date format; expected YYYY-MM-DD"}
     else:
         target_date = datetime.now(ZoneInfo("America/Los_Angeles")).date()
-
-    url = _db_url()
-    if not url:
-        return {"ok": False, "error": "DATABASE_URL not set"}
 
     sql = """
         SELECT
@@ -65,24 +64,21 @@ def nhl_games_today(
         LIMIT %s OFFSET %s
     """
     try:
-        with psycopg.connect(url) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (target_date, limit, offset))
-                rows = cur.fetchall()
-                cols = [d[0] for d in cur.description]
-        data: List[Dict[str, Any]] = [dict(zip(cols, r)) for r in rows]
-        return {"ok": True, "date": str(target_date), "count": len(data), "rows": data}
+        with _conn() as conn, conn.cursor() as cur:
+            cur.execute(sql, (target_date, limit, offset))
+            rows = cur.fetchall()
+        return {"ok": True, "date": str(target_date), "count": len(rows), "rows": rows}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-@router.get("/nhl/props/today")
+
+@router.get("/props/today", summary="Nhl Props Today",
+            description="Return a small page of predictions for today's games.")
 def nhl_props_today(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today in America/Los_Angeles)"),
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    """Return a small page of predictions for today's games."""
-    # Resolve target date in America/Los_Angeles unless user overrides
     if date:
         try:
             target_date = datetime.fromisoformat(date).date()
@@ -90,10 +86,6 @@ def nhl_props_today(
             return {"ok": False, "error": "invalid date format; expected YYYY-MM-DD"}
     else:
         target_date = datetime.now(ZoneInfo("America/Los_Angeles")).date()
-
-    url = _db_url()
-    if not url:
-        return {"ok": False, "error": "DATABASE_URL not set"}
 
     sql = """
         SELECT
@@ -106,13 +98,55 @@ def nhl_props_today(
         LIMIT %s OFFSET %s
     """
     try:
-        with psycopg.connect(url) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (target_date, limit, offset))
-                rows = cur.fetchall()
-                cols = [d[0] for d in cur.description]
-        data = [dict(zip(cols, r)) for r in rows]
-        return {"ok": True, "date": str(target_date), "count": len(data), "rows": data}
+        with _conn() as conn, conn.cursor() as cur:
+            cur.execute(sql, (target_date, limit, offset))
+            rows = cur.fetchall()
+        return {"ok": True, "date": str(target_date), "count": len(rows), "rows": rows}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    
+
+
+@router.get("/sog_stage", summary="Skater SOG predictions (stage)")
+def sog_stage(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    sql = """
+      SELECT player_id, game_id, game_date,
+             p_over_0_5, p_over_1_5, p_over_2_5, p_over_3_5
+      FROM nhl.predictions_sog_stage
+      WHERE (%s::date IS NULL OR game_date = %s::date)
+      ORDER BY game_id, player_id
+      LIMIT %s OFFSET %s
+    """
+    try:
+        with _conn() as conn, conn.cursor() as cur:
+            cur.execute(sql, (date, date, limit, offset))
+            rows = cur.fetchall()
+        return rows
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+@router.get("/saves_stage", summary="Goalie Saves predictions (stage)")
+def saves_stage(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    sql = """
+      SELECT player_id, game_id, game_date,
+             p_over_24_5, p_over_28_5
+      FROM nhl.predictions_saves_stage
+      WHERE (%s::date IS NULL OR game_date = %s::date)
+      ORDER BY game_id, player_id
+      LIMIT %s OFFSET %s
+    """
+    try:
+        with _conn() as conn, conn.cursor() as cur:
+            cur.execute(sql, (date, date, limit, offset))
+            rows = cur.fetchall()
+        return rows
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
