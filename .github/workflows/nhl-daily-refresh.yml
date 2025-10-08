@@ -30,6 +30,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       TZ: UTC
       DEBUG_PBP: ${{ github.event.inputs.debug_pbp }}
+      PSYCOPG_DISABLE_PREPARES: "1"
 
     steps:
       - name: Checkout

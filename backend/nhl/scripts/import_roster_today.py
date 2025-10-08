@@ -3,6 +3,8 @@ import os, sys, json, datetime as dt
 from zoneinfo import ZoneInfo
 import os
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
+import psycopg
+import psycopg.rows
 
 # optional: load .env locally
 try:
@@ -14,7 +16,14 @@ except Exception:
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-import psycopg
+with psycopg.connect(DB, prepare_threshold=0) as conn:
+    try:
+        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    with conn.cursor() as cur:
+        ...
+
 
 ET = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
