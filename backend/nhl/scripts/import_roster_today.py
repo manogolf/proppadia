@@ -324,8 +324,7 @@ def _ensure_players_and_mappings(cur, rosters: dict[str, list[dict]]) -> tuple[i
 
 def main():
     # PgBouncer-safe: autocommit + no server-side prepares
-    with psycopg.connect(DB, autocommit=True, prepare_threshold=0) as conn, conn.cursor() as cur:
-
+    with psycopg.connect(DB, prepare_threshold=0) as conn, conn.cursor() as cur:
         # 1) Get today’s games (ET day) with team tri-codes (use tris for roster fetch)
         cur.execute("""
             SELECT
