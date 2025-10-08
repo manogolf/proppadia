@@ -42,7 +42,9 @@ jobs:
           YDAY=$(TZ=America/New_York date -d 'yesterday' +%F)
           echo "SLATE_DATE=$SLATE_DATE" >> $GITHUB_ENV
           echo "YDAY=$YDAY"           >> $GITHUB_ENV
-          echo "SLATE_DATE=${SLATE_DATE} YDAY=${YDAY}"
+          # add these lines so the 'steps.dates.outputs.*' context actually exists
+          echo "slate_date=$SLATE_DATE" >> $GITHUB_OUTPUT
+          echo "yday=$YDAY"             >> $GITHUB_OUTPUT
 
       - name: Install psql client
         run: |
