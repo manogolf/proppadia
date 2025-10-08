@@ -22,7 +22,12 @@ with psycopg.connect(DB, prepare_threshold=0) as conn:
     except Exception:
         pass
     with conn.cursor() as cur:
-        ...
+
+        _ORIG_EXECUTE = psycopg.Cursor.execute
+def _no_prep_execute(self, query, params=None, **kw):
+    kw["prepare"] = False
+    return _ORIG_EXECUTE(self, query, params, **kw)
+psycopg.Cursor.execute = _no_prep_execute
 
 
 ET = ZoneInfo("America/New_York")
