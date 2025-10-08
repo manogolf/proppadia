@@ -123,13 +123,19 @@ jobs:
       # Export CSVs (paths unchanged except for backend prefix)
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'
+        env:
+          SLATE_DATE: ${{ steps.dates.outputs.slate_date }} # use the output you already set
         run: |
-          set -e
+          set -euo pipefail
           export PGOPTIONS='-c statement_timeout=0'
           mkdir -p exports
 
-          HAS_SOG_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select to_regclass('nhl.v_slate_sog_features') is not null")
-          if [ "$HAS_SOG_VIEW" = "t" ]; then
+          # --- Detect views robustly (string, no boolean parsing surprises) ---
+          HAS_SOG_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_sog_features')::text,'')" | tr -d '\r\n')
+          HAS_SAVES_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_saves_features')::text,'')" | tr -d '\r\n')
+
+          # --- SOG export: prefer view if present, else fallback table ---
+          if [ -n "$HAS_SOG_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
                 player_id, game_id, team_id, opponent_id, is_home, game_date,
@@ -151,8 +157,8 @@ jobs:
             ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
           fi
 
-          HAS_SAVES_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select to_regclass('nhl.v_slate_saves_features') is not null")
-          if [ "$HAS_SAVES_VIEW" = "t" ]; then
+          # --- SAVES export: prefer view if present, else fallback table ---
+          if [ -n "$HAS_SAVES_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
                 player_id, game_id, team_id, opponent_id, is_home, game_date,
