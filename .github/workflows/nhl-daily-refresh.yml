@@ -193,6 +193,7 @@ jobs:
             --sog-csv exports/train_nhl_sog_v2.csv \
             --saves-csv exports/train_goalie_saves_v2.csv \
             --db-url "$SUPABASE_DB_URL"
+            --scorer backend/nhl/scripts/score_nhl_props.py
 
       - name: Verify counts
         if: steps.slate.outputs.has_games == 't'
