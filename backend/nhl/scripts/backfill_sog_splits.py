@@ -15,7 +15,8 @@ except Exception:
 
 API_WEB_PBP   = "https://api-web.nhle.com/v1/gamecenter/{gid}/play-by-play"
 API_WEB_BOX   = "https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore"
-STATSAPI_FEED = "https://statsapi.web.nhl.com/api/v1/game/{gid}/feed/live"
+STATSAPI_FEED = "https://statsapi.web.nhl.com/api/v1/game/{gid}/feed/live"  
+
 
 TASK_KEY = "sog_splits_v1"
 
@@ -251,29 +252,45 @@ def _event_type(play: dict) -> str:
     return ""
 
 def _is_sog_like(play: dict) -> bool:
+    """
+    Return True for shots-on-goal and goals, handling both api-web and statsapi shapes.
+    Excludes shootout by default.
+    """
     d = play.get("details") or {}
-    # Explicit flags first (api-web)
+
+    # --- exclude shootout plays (api-web often flags SO via periodDescriptor.periodType) ---
+    pd = play.get("periodDescriptor") or {}
+    pt = (pd.get("periodType") or "").upper()
+    if pt == "SO":
+        return False
+
+    # --- explicit flags (api-web) ---
     if d.get("isGoal") is True:
         return True
     if d.get("shotOnGoal") is True:
         return True
 
+    # --- canonical event type where available ---
     et = (_event_type(play) or "").upper()
-
-    # Always accept goals
-    if et == "GOAL":
+    if et in {"SHOT", "SHOT-ON-GOAL", "SHOT_ON_GOAL", "GOAL"}:
         return True
 
-    # StatsAPI semantics: eventTypeId == "SHOT" means on-target only
-    res = play.get("result") or {}
-    if (res.get("eventTypeId") or "").upper() == "SHOT":
-        return True
+    # --- additional fallbacks for api-web/statsapi variants ---
+    # Sometimes event type id/name lives under different keys
+    for key in ("eventTypeId", "eventType", "type", "event"):
+        v = play.get(key) or d.get(key)
+        if isinstance(v, str) and v.strip().upper() in {"SHOT", "GOAL"}:
+            return True
 
-    # Some api-web payloads use explicit on-goal labels
-    if et in ("SHOT-ON-GOAL", "SHOT_ON_GOAL"):
-        return True
+    # Some api-web payloads only have a numeric 'typeCode' but still mark shots with
+    # a 'shotType' or shooter in 'details'. If we have a shooter and not a block/miss hint,
+    # allow it when there's an explicit on-goal hint.
+    # (Deliberately conservative to avoid counting MISSED/BLOCKED.)
+    if d.get("shootingPlayerId") or d.get("playerId"):
+        on_goal_hint = d.get("shotOnGoal") is True or d.get("isGoal") is True
+        if on_goal_hint:
+            return True
 
-    # IMPORTANT: Do NOT treat plain "SHOT" from api-web as on-target.
     return False
 
 def _shooter_id(play: dict):
@@ -358,31 +375,60 @@ def _play_team_side(play: dict, home_id: int, away_id: int, home_abbr: str, away
     return None
 
 def _sit_counts(play: dict):
-    code = play.get("situationCode")
-    if isinstance(code, str) and "v" in code:
+    """
+    Return (home_skaters, away_skaters) if we can infer counts.
+    Priority:
+      1) StatsAPI explicit strength code
+      2) api-web 'situationCode' like '5v4' or '1551'
+    """
+    # 1) StatsAPI explicit strength (most reliable)
+    # e.g. play['result']['strength']['code'] in {'EVEN','PP','SH','PPG','SHG'}
+    res = play.get("result") or {}
+    str_node = res.get("strength") or {}
+    code = (str_node.get("code") or "").upper()
+    if code:
+        if code == "EVEN":
+            return 5, 5
+        # For PP/SH we don't know exact counts, but treat as 5v4 (common case)
+        if code in {"PP", "PPG"}:
+            # shooting team has more skaters; actual EV/PP decision happens later
+            return 5, 4
+        if code in {"SH", "SHG"}:
+            return 4, 5
+        # fall through if unknown
+
+    # 2) api-web: situationCode like "5v4"
+    d = play.get("details") or {}
+    sc = d.get("situationCode")
+    if isinstance(sc, str) and "v" in sc:
         try:
-            a, b = code.split("v", 1)
+            a, b = sc.split("v", 1)
             return int(a), int(b)
         except Exception:
             pass
-    if isinstance(code, str) and len(code) == 4 and code.isdigit():
+
+    # 2b) api-web: situationCode like "1551" (heuristic: middle digits are home, last-but-one is away)
+    if isinstance(sc, str) and len(sc) == 4 and sc.isdigit():
+        # Observed formats suggest positions [1] and [2] are the skater counts
+        # e.g., "1551" => home=5, away=5 ; "1541" => home=5, away=4 ; "1451" => home=4, away=5
         try:
-            # api-web 4-digit encoding: use the 2nd and 3rd digits
-            # examples: 1551 -> 5v5 ; 1541 -> 5v4 ; 1451 -> 4v5 ; 1560 -> 5v6
-            h = int(code[1])
-            a = int(code[2])
-            return h, a
+            home = int(sc[1])
+            away = int(sc[2])
+            return home, away
         except Exception:
             pass
+
     return None, None
 
 def _strength(shoot_home: bool, hs: int | None, as_: int | None) -> str:
+    # Unknown counts → best guess is EV
     if hs is None or as_ is None:
         return "EV"
     if hs == as_:
         return "EV"
-    # PP if shoot team has more skaters, else SH
+    # If the shooting side has more skaters => PP, else SH
     return "PP" if (shoot_home and hs > as_) or ((not shoot_home) and as_ > hs) else "SH"
+
 
 def compute_skater_sog_splits(pbp_obj, home_id: int, away_id: int, home_abbr: str, away_abbr: str):
     """
@@ -415,30 +461,30 @@ shooter_id_from_play = _shooter_id
 # ───────────────────────── main backfill loop ─────────────────────────
 
 def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool = False):
+    """
+    Iterate through games that have NULL split fields (EV/PP/SH) and try to fill them by
+    parsing PBP. We only write rows where our EV+PP+SH == skater_game_logs_raw.shots_on_goal.
+    """
     DB = env_db_url()
     with psycopg.connect(DB) as conn, conn.cursor() as cur:
         start_remaining = offenders_count(cur)
         print(f"[bf] starting remaining={start_remaining}")
 
         ensure_progress_table(cur)
-        # If not resuming, start from the beginning each run
         if not resume:
             set_last_game_id(cur, None)
         conn.commit()
 
-    # loop until no offenders remain
     while True:
         with psycopg.connect(DB) as conn, conn.cursor() as cur:
             ensure_progress_table(cur)
             last_gid = get_last_game_id(cur)
 
-            # page of offender games
             game_ids = find_offender_games(cur, batch_size, last_gid)
             if not game_ids:
                 if last_gid is None:
                     print("✅ No offending games remain. Done.")
                     return
-                # wrap to the beginning once
                 print("↻ Wrapped to beginning (no offenders after last checkpoint).")
                 set_last_game_id(cur, None)
                 conn.commit()
@@ -447,8 +493,7 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
             print(f"[page] processing {len(game_ids)} games {min(game_ids)}–{max(game_ids)} (resume after {last_gid})")
 
             for gid in game_ids:
-                updated_rows = 0
-                # fetch boxscore
+                # ---- boxscore (team ids/abbrs) ----
                 box = fetch_json(API_WEB_BOX.format(gid=gid))
                 if not isinstance(box, dict):
                     print(f"[{gid}] box fetch failed; skipping")
@@ -460,78 +505,124 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
                 away = (box.get("awayTeam") or {})
                 home_abbr = (home.get("abbrev") or home.get("teamAbbrev") or "").upper()
                 away_abbr = (away.get("abbrev") or away.get("teamAbbrev") or "").upper()
-                home_id = to_int(home.get("id")); away_id = to_int(away.get("id"))
+                home_id = to_int(home.get("id"))
+                away_id = to_int(away.get("id"))
                 if not home_id or not away_id:
                     print(f"[{gid}] missing team ids; skipping")
                     set_last_game_id(cur, gid)
                     conn.commit()
                     continue
 
-                # fetch PBP (api-web first for situationCode + shootingPlayerId; fallback to StatsAPI)
-                pbp = fetch_json(API_WEB_PBP.format(gid=gid))
-                if not pbp:
-                    pbp = fetch_json(STATSAPI_FEED.format(gid=gid))
-                plays = plays_list(pbp)
-                if not plays:
+                # ---- fetch both PBP sources (inside loop!) ----
+                pbp_web   = fetch_json(API_WEB_PBP.format(gid=gid))
+                pbp_stats = fetch_json(STATSAPI_FEED.format(gid=gid))
+
+                plays_web   = plays_list(pbp_web)
+                plays_stats = plays_list(pbp_stats)
+
+                if not plays_web and not plays_stats:
                     print(f"[{gid}] no plays; skipping")
                     set_last_game_id(cur, gid)
                     conn.commit()
                     continue
 
-                sk_splits = compute_skater_sog_splits(pbp, home_id, away_id, home_abbr, away_abbr)
+                # Prefer StatsAPI if any SHOT/GOAL has a strength code
+                use_stats = False
+                if plays_stats:
+                    for p in plays_stats:
+                        r = p.get("result") or {}
+                        et = (r.get("eventTypeId") or "").upper()
+                        if et in ("SHOT", "GOAL") and (r.get("strength") or {}).get("code"):
+                            use_stats = True
+                            break
 
-                # map NHL ids -> internal player_id for this game
+                if use_stats:
+                    sk_splits, used = compute_skater_sog_splits_statsapi(plays_stats, home_abbr, away_abbr)
+                    plays_count = len(plays_stats)
+                else:
+                    sk_splits = compute_skater_sog_splits(pbp_web or {}, home_id, away_id, home_abbr, away_abbr)
+                    used = sum(sum(v.values()) for v in sk_splits.values())
+                    plays_count = len(plays_web)
+
+                if not sk_splits:
+                    print(f"[{gid}] no skater splits derived; skipping")
+                    set_last_game_id(cur, gid)
+                    conn.commit()
+                    continue
+
+                # ---- map NHL ids -> internal player_id ----
                 nhl_ids = list(sk_splits.keys())
                 id_map = map_nhl_to_internal(cur, nhl_ids)
 
                 missing = [x for x in nhl_ids if x not in id_map]
                 if missing:
-                    # Not fatal; we just won't update those rows
-                    print(f"[{gid}] note: {len(missing)} NHL ids lack mapping to internal player_id (provider='nhl'); skipping those.")
+                    print(f"[{gid}] note: {len(missing)} NHL ids lack mapping to internal player_id; skipping those.")
 
-                # build batch parameters using INTERNAL player_id
+                # ---- fetch per-game SOG targets (only rows with NULL splits & SOG > 0) ----
+                cur.execute("""
+                    SELECT player_id, shots_on_goal
+                    FROM nhl.skater_game_logs_raw
+                    WHERE game_id = %s
+                      AND (ev_sog IS NULL OR pp_sog IS NULL OR sh_sog IS NULL)
+                      AND shots_on_goal > 0
+                """, (gid,))
+                sog_target = {int(pid): int(sog) for pid, sog in cur.fetchall()}
+
+                # ---- build params guarded by mapping AND target match ----
+                from typing import List
+                unmapped: list[int] = []
+                mismatches: list[tuple[int, int, int]] = []  # (internal_pid, ours_total, target_sog)
                 params: List[tuple] = []
+
                 for nhl_pid, d in sk_splits.items():
                     internal_pid = id_map.get(nhl_pid)
                     if internal_pid is None:
+                        unmapped.append(nhl_pid)
                         continue
-                    ev, pp, sh = int(d.get("EV", 0)), int(d.get("PP", 0)), int(d.get("SH", 0))
-                    total = ev + pp + sh
-                    params.append((ev, pp, sh, gid, internal_pid, total, total, total))
 
-                # --- per-game update (commit-aware) ---
+                    ev = int(d.get("EV", 0)); pp = int(d.get("PP", 0)); sh = int(d.get("SH", 0))
+                    total = ev + pp + sh
+
+                    tgt = sog_target.get(internal_pid)
+                    if tgt is None:
+                        # no eligible row to fill (either not in game rows, or splits not NULL, or SOG=0)
+                        continue
+
+                    if total != tgt:
+                        mismatches.append((internal_pid, total, tgt))
+                        continue
+
+                    # Eligible: totals match; only fill NULLs in the UPDATE
+                    params.append((ev, pp, sh, gid, internal_pid))
+
+                if unmapped:
+                    print(f"[{gid}] note: {len(unmapped)} NHL ids lack mapping to internal player_id; skipping those.")
+
+                if mismatches:
+                    sample = ", ".join([f"pid={p} ours={o} tgt={t}" for p, o, t in mismatches[:6]])
+                    more = f" (+{len(mismatches)-6} more)" if len(mismatches) > 6 else ""
+                    print(f"[{gid}] split≠target: {len(mismatches)} rows differ; {sample}{more}")
+
+                # ---- write or dry-run ----
                 updated_rows = 0
                 if commit:
-                    # Do real updates and count accurately
-                    for pr in params:
-                        cur.execute(f"""
+                    if params:
+                        cur.executemany("""
                             UPDATE nhl.skater_game_logs_raw
-                            SET ev_sog = %s, pp_sog = %s, sh_sog = %s
+                            SET ev_sog = COALESCE(ev_sog, %s),
+                                pp_sog = COALESCE(pp_sog, %s),
+                                sh_sog = COALESCE(sh_sog, %s)
                             WHERE game_id = %s AND player_id = %s
-                            AND {OFFENDER_PRED}
-                            AND (%s + %s + %s) = shots_on_goal
-                        """, pr)
-                        updated_rows += cur.rowcount
-                    print(f"[{gid}] COMMIT updated_rows={updated_rows} plays={len(plays)} shooters={len(sk_splits)}")
+                              AND (ev_sog IS NULL OR pp_sog IS NULL OR sh_sog IS NULL)
+                        """, params)
+                        updated_rows = cur.rowcount
+                    print(f"[{gid}] COMMIT updated_rows={updated_rows} plays={plays_count} shooters={len(sk_splits)} used={used}")
                 else:
-                    # Dry-run: estimate how many rows WOULD update (no writes)
-                    would = 0
-                    for pr in params:
-                        ev, pp, sh, g_id, p_id = pr[0], pr[1], pr[2], pr[3], pr[4]
-                        cur.execute(f"""
-                            SELECT COUNT(*)
-                            FROM nhl.skater_game_logs_raw
-                            WHERE game_id = %s AND player_id = %s
-                            AND {OFFENDER_PRED}
-                            AND (%s + %s + %s) = shots_on_goal
-                        """, (g_id, p_id, ev, pp, sh))
-                        would += cur.fetchone()[0]
-                    updated_rows = would  # for unified print below
-                    # ensure no accidental writes take effect
+                    updated_rows = len(params)
                     conn.rollback()
-                    print(f"[{gid}] DRY-RUN would_update={updated_rows} plays={len(plays)} shooters={len(sk_splits)}")
+                    print(f"[{gid}] DRY-RUN would_update={updated_rows} plays={plays_count} shooters={len(sk_splits)} used={used}")
 
-                # Advance checkpoint & persist it (even in dry-run, so resume works)
+                # ---- checkpoint & progress ----
                 set_last_game_id(cur, gid)
                 conn.commit()
 
@@ -540,8 +631,6 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
 
                 now_remaining = offenders_count(cur)
                 print(f"[bf] remaining={now_remaining}")
-
-
         # loop continues to next page until no offenders remain
 
 # ───────────────────────── CLI ─────────────────────────
