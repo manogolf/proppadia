@@ -33,8 +33,20 @@ jobs:
       PSYCOPG_DISABLE_PREPARES: "1"
 
     steps:
+      # replace your existing Checkout step with this
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 1
+
+      # add this step immediately after Checkout
+      - name: Fetch LFS models & verify
+        run: |
+          git lfs pull
+          ls -lh backend/nhl/models/latest || true
+          ls -lh backend/nhl/models/latest/shots_on_goal || true
+          ls -lh backend/nhl/models/latest/goalie_saves || true
 
       - name: Set dates (ET)
         id: dates
