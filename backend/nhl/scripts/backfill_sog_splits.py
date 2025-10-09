@@ -39,13 +39,22 @@ def to_int(x) -> Optional[int]:
         except Exception:
             return None
 
-def fetch_json(url: str, timeout=12) -> Optional[dict]:
-    try:
-        r = requests.get(url, timeout=timeout)
-        r.raise_for_status()
-        return r.json()
-    except Exception:
-        return None
+def fetch_json(url: str, timeout=12, tries=3, pause=0.7) -> Optional[dict]:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        )
+    }
+    for attempt in range(tries):
+        try:
+            r = requests.get(url, timeout=timeout, headers=headers)
+            r.raise_for_status()
+            return r.json()
+        except Exception:
+            if attempt == tries - 1:
+                return None
+            time.sleep(pause)
     
 def offenders_count(cur) -> int:
     cur.execute(f"SELECT COUNT(*) FROM nhl.skater_game_logs_raw WHERE {OFFENDER_NULLS_PRED}")
@@ -243,32 +252,72 @@ def _event_type(play: dict) -> str:
 
 def _is_sog_like(play: dict) -> bool:
     d = play.get("details") or {}
+    # Explicit flags first (api-web)
     if d.get("isGoal") is True:
         return True
     if d.get("shotOnGoal") is True:
         return True
-    et = _event_type(play)
-    return et in ("SHOT", "SHOT-ON-GOAL", "SHOT_ON_GOAL", "GOAL")
+
+    et = (_event_type(play) or "").upper()
+
+    # Always accept goals
+    if et == "GOAL":
+        return True
+
+    # StatsAPI semantics: eventTypeId == "SHOT" means on-target only
+    res = play.get("result") or {}
+    if (res.get("eventTypeId") or "").upper() == "SHOT":
+        return True
+
+    # Some api-web payloads use explicit on-goal labels
+    if et in ("SHOT-ON-GOAL", "SHOT_ON_GOAL"):
+        return True
+
+    # IMPORTANT: Do NOT treat plain "SHOT" from api-web as on-target.
+    return False
 
 def _shooter_id(play: dict):
-    # api-web primary
+    """
+    Return the NHL personId for the shooter/scorer.
+
+    api-web variants seen in the wild include (non-exhaustive):
+      details.shootingPlayerId, details.scoringPlayerId, details.shooterId,
+      details.scorerId, details.primaryPlayerId, details.byPlayerId,
+      details.playerId
+
+    statsapi fallback:
+      players[].player.id where players[].playerType in ('Shooter','Scorer')
+    """
     d = play.get("details") or {}
-    pid = d.get("shootingPlayerId")  # <-- important for api-web
-    if pid is None:
-        pid = d.get("playerId")       # some payloads use this
-    if pid is not None:
-        try:
-            return int(pid)
-        except Exception:
-            return None
-    # statsapi fallback
-    for pl in play.get("players", []) or []:
-        if (pl.get("playerType") or "").lower() in ("shooter", "scorer"):
-            pid = (pl.get("player") or {}).get("id") or pl.get("playerId")
+
+    # Try the common api-web keys in order
+    for k in (
+        "shootingPlayerId",
+        "scoringPlayerId",
+        "shooterId",
+        "scorerId",
+        "primaryPlayerId",
+        "byPlayerId",
+        "playerId",
+    ):
+        pid = d.get(k)
+        if pid is not None:
             try:
                 return int(pid)
             except Exception:
-                return None
+                pass  # keep trying other fields
+
+    # statsapi fallback (used by /feed/live and some api-web hybrids)
+    for pl in (play.get("players") or []):
+        ptype = (pl.get("playerType") or "").strip().lower()
+        if ptype in ("shooter", "scorer"):
+            pid = (pl.get("player") or {}).get("id") or pl.get("playerId")
+            if pid is not None:
+                try:
+                    return int(pid)
+                except Exception:
+                    continue
+
     return None
 
 def _play_team_side(play: dict, home_id: int, away_id: int, home_abbr: str, away_abbr: str):
@@ -309,7 +358,6 @@ def _play_team_side(play: dict, home_id: int, away_id: int, home_abbr: str, away
     return None
 
 def _sit_counts(play: dict):
-    # api-web: situationCode like "1551" (home v away skaters)
     code = play.get("situationCode")
     if isinstance(code, str) and "v" in code:
         try:
@@ -319,14 +367,13 @@ def _sit_counts(play: dict):
             pass
     if isinstance(code, str) and len(code) == 4 and code.isdigit():
         try:
-            # heuristic: last two digits are away, middle two are home
-            # e.g., 1551 => 5v5 ; 1541 => 5v4 ; 1451 => 4v5 ; 1560 => 5v6 (goalie pulled)
-            h = int(code[1:3])
-            a = int(code[2:4])
+            # api-web 4-digit encoding: use the 2nd and 3rd digits
+            # examples: 1551 -> 5v5 ; 1541 -> 5v4 ; 1451 -> 4v5 ; 1560 -> 5v6
+            h = int(code[1])
+            a = int(code[2])
             return h, a
         except Exception:
             pass
-    # statsapi doesn't carry counts on SHOT; default to EV if unknown
     return None, None
 
 def _strength(shoot_home: bool, hs: int | None, as_: int | None) -> str:
@@ -420,7 +467,7 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
                     conn.commit()
                     continue
 
-                # fetch PBP (api-web then statsapi)
+                # fetch PBP (api-web first for situationCode + shootingPlayerId; fallback to StatsAPI)
                 pbp = fetch_json(API_WEB_PBP.format(gid=gid))
                 if not pbp:
                     pbp = fetch_json(STATSAPI_FEED.format(gid=gid))
