@@ -29,7 +29,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       TZ: UTC
-      DEBUG_PBP: ${{ github.event.inputs.debug_pbp }}
+      DEBUG_PBP: ${{ github.event.inputs.debug_pbp || '0' }}
       PSYCOPG_DISABLE_PREPARES: "1"
 
     steps:
@@ -42,10 +42,11 @@ jobs:
           SLATE_DATE=$(TZ=America/New_York date +%F)
           YDAY=$(TZ=America/New_York date -d 'yesterday' +%F)
           echo "SLATE_DATE=$SLATE_DATE" >> $GITHUB_ENV
-          echo "YDAY=$YDAY"           >> $GITHUB_ENV
-          # add these lines so the 'steps.dates.outputs.*' context actually exists
+          echo "YDAY=$YDAY" >> $GITHUB_ENV
+          # also expose as step outputs for references like steps.dates.outputs.slate_date
           echo "slate_date=$SLATE_DATE" >> $GITHUB_OUTPUT
-          echo "yday=$YDAY"             >> $GITHUB_OUTPUT
+          echo "yday=$YDAY" >> $GITHUB_OUTPUT
+          echo "SLATE_DATE=${SLATE_DATE} YDAY=${YDAY}"
 
       - name: Install psql client
         run: |
@@ -64,7 +65,6 @@ jobs:
       - name: Install Python deps (scripts only)
         run: |
           python -m pip install --upgrade pip
-          # If you keep training reqs under backend/nhl/training/requirements.txt:
           if [ -f backend/nhl/training/requirements.txt ]; then
             python -m pip install -r backend/nhl/training/requirements.txt
           fi
@@ -120,6 +120,7 @@ jobs:
             echo "No refresh.sql found — skipping."
           fi
 
+      # Export CSVs for the slate (prefer views; fallback to training tables)
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'
         run: |
@@ -127,11 +128,9 @@ jobs:
           export PGOPTIONS='-c statement_timeout=0'
           mkdir -p exports
 
-          # --- Detect views robustly (string, no boolean parsing surprises) ---
           HAS_SOG_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_sog_features')::text,'')" | tr -d '\r\n')
           HAS_SAVES_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_saves_features')::text,'')" | tr -d '\r\n')
 
-          # --- SOG export: prefer view if present, else fallback table ---
           if [ -n "$HAS_SOG_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
@@ -154,7 +153,6 @@ jobs:
             ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
           fi
 
-          # --- SAVES export: prefer view if present, else fallback table ---
           if [ -n "$HAS_SAVES_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
@@ -186,6 +184,7 @@ jobs:
           echo "Exported:"
           ls -lh exports/
 
+      # ---------- DAILY SLATE (score + load) ----------
       - name: Score & Load predictions
         if: steps.slate.outputs.has_games == 't'
         run: |
