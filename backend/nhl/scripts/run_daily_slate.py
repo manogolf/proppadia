@@ -27,9 +27,6 @@ from pathlib import Path
 # -------- Paths --------
 HERE = Path(__file__).resolve().parent                  # backend/nhl/scripts
 BASE = HERE.parent                                      # backend/nhl
-SCORER = HERE / "score_nhl_props.py"
-if not SCORER.exists():
-    raise SystemExit(f"Missing scorer: {SCORER}")
 
 MODEL_SOG_DIR   = BASE / "models" / "latest" / "shots_on_goal"
 MODEL_SAVES_DIR = BASE / "models" / "latest" / "goalie_saves"
@@ -104,12 +101,19 @@ def main():
     ap.add_argument("--project", required=True, help="Project label (e.g., nhl). Label only; not a path.")
     ap.add_argument("--sog-csv", required=True, help="CSV with SOG features for the slate (exported earlier).")
     ap.add_argument("--saves-csv", required=True, help="CSV with Saves features for the slate (exported earlier).")
+    default_scorer = HERE / "score_nhl_props.py"
+    ap.add_argument("--scorer", default=str(default_scorer), help="Path to scorer script.")
     ap.add_argument(
         "--db-url",
         default=os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL"),
         help="Postgres URL (optional). If present, will load stage tables and run loaders.",
     )
     args = ap.parse_args()
+
+    # insert this check immediately after args are parsed
+    scorer_path = Path(args.scorer).resolve()
+    if not scorer_path.exists():
+        sys.exit(f"Missing scorer: {scorer_path}")
 
     # Sanity checks
     if not MODEL_SOG_DIR.exists() or not MODEL_SAVES_DIR.exists():
@@ -123,7 +127,7 @@ def main():
 
     # 1) Score SOG (0.5/1.5/2.5/3.5)
     sog_cmd = [
-        sys.executable, str(SCORER),
+        sys.executable, str(scorer_path),
         "--model-dir", str(MODEL_SOG_DIR),
         "--csv", args.sog_csv,
         "--feature-json", str(FEATURE_JSON),
@@ -136,7 +140,7 @@ def main():
 
     # 2) Score SAVES (24.5/28.5)
     saves_cmd = [
-        sys.executable, str(SCORER),
+        sys.executable, str(scorer_path),
         "--model-dir", str(MODEL_SAVES_DIR),
         "--csv", args.saves_csv,
         "--feature-json", str(FEATURE_JSON),
