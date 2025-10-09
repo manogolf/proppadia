@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#  backend/nhl/scripts/run_daily_slate.py
 """
 run_daily_slate.py — score today's NHL slate and (optionally) load to Supabase.
 
