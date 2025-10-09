@@ -101,7 +101,7 @@ def main():
     ap.add_argument("--project", required=True, help="Project label (e.g., nhl). Label only; not a path.")
     ap.add_argument("--sog-csv", required=True, help="CSV with SOG features for the slate (exported earlier).")
     ap.add_argument("--saves-csv", required=True, help="CSV with Saves features for the slate (exported earlier).")
-    default_scorer = HERE / "score_nhl_props.py"
+    default_scorer = BASE / "scripts" / "score_nhl_props.py"
     ap.add_argument("--scorer", default=str(default_scorer), help="Path to scorer script.")
     ap.add_argument(
         "--db-url",
