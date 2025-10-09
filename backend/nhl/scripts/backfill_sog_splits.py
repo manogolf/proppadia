@@ -48,7 +48,7 @@ def fetch_json(url: str, timeout=12) -> Optional[dict]:
         return None
     
 def offenders_count(cur) -> int:
-    cur.execute(f"SELECT COUNT(*) FROM nhl.skater_game_logs_raw WHERE {OFFENDER_PRED}")
+    cur.execute(f"SELECT COUNT(*) FROM nhl.skater_game_logs_raw WHERE {OFFENDER_NULLS_PRED}")
     return cur.fetchone()[0]
 
 # ───────────────────────── offenders & progress ─────────────────────────
@@ -58,6 +58,11 @@ shots_on_goal > 0 AND (
   ev_sog IS NULL OR pp_sog IS NULL OR sh_sog IS NULL
   OR (COALESCE(ev_sog,0)+COALESCE(pp_sog,0)+COALESCE(sh_sog,0)) <> shots_on_goal
 )
+"""
+
+# rows we can actually fix: any split is NULL (regardless of current total mismatch)
+OFFENDER_NULLS_PRED = """
+(ev_sog IS NULL OR pp_sog IS NULL OR sh_sog IS NULL)
 """
 
 def ensure_progress_table(cur):
@@ -86,7 +91,7 @@ def find_offender_games(cur, limit: int, min_game_id: Optional[int]) -> List[int
         cur.execute(f"""
             SELECT DISTINCT game_id
             FROM nhl.skater_game_logs_raw
-            WHERE {OFFENDER_PRED}
+            WHERE {OFFENDER_NULLS_PRED}
             ORDER BY game_id
             LIMIT %s
         """, (limit,))
@@ -94,11 +99,101 @@ def find_offender_games(cur, limit: int, min_game_id: Optional[int]) -> List[int
         cur.execute(f"""
             SELECT DISTINCT game_id
             FROM nhl.skater_game_logs_raw
-            WHERE game_id > %s AND {OFFENDER_PRED}
+            WHERE game_id > %s AND {OFFENDER_NULLS_PRED}
             ORDER BY game_id
             LIMIT %s
         """, (min_game_id, limit))
     return [r[0] for r in cur.fetchall()]
+
+def map_nhl_to_internal(cur, nhl_ids: List[int]) -> dict[int, int]:
+    """
+    Map NHL player ids -> internal player_id.
+
+    Strategy:
+      1) nhl.player_external_ids using auto-detected external id column
+         and provider in {'nhl','api-web','statsapi','web'} (or whatever exists).
+      2) Fallback: nhl.players using any plausible NHL id column.
+    """
+    if not nhl_ids:
+        return {}
+    nhl_ids = list({int(i) for i in nhl_ids if i is not None})
+
+    # ---- discover columns/providers in player_external_ids ----
+    cur.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema='nhl' AND table_name='player_external_ids'
+    """)
+    pei_cols = {r[0] for r in cur.fetchall()}
+
+    # external id column candidates
+    pei_ext_candidates = [
+        "external_id",
+        "provider_player_id",
+        "nhl_player_id",
+        "player_nhl_id",
+        "ext_id",
+        "source_id",
+    ]
+    pei_ext_col = next((c for c in pei_ext_candidates if c in pei_cols), None)
+    if pei_ext_col is None:
+        pei_ext_col = next((c for c in pei_cols if c.endswith("_id") and c not in {"player_id", "game_id", "team_id"}), None)
+
+    # gather providers present; restrict to nhl-like first
+    cur.execute("SELECT DISTINCT provider FROM nhl.player_external_ids")
+    providers_found = [r[0] for r in cur.fetchall()]
+    preferred_providers = [p for p in providers_found if str(p).lower() in {"nhl", "api-web", "statsapi", "web"}]
+    use_providers = preferred_providers or providers_found  # if no preferred, try all
+
+    mapping: dict[int, int] = {}
+
+    # ---- query player_external_ids if usable ----
+    if pei_ext_col:
+        sql = f"""
+            SELECT CAST({pei_ext_col} AS bigint) AS nhl_id, player_id
+            FROM nhl.player_external_ids
+            WHERE provider = ANY(%s) AND CAST({pei_ext_col} AS bigint) = ANY(%s)
+        """
+        cur.execute(sql, (use_providers, nhl_ids))
+        for nhl_id, pid in cur.fetchall():
+            if nhl_id is not None and pid is not None:
+                mapping[int(nhl_id)] = int(pid)
+
+    # Early exit if we covered all
+    if len(mapping) == len(nhl_ids):
+        return mapping
+
+    # ---- fallback: check nhl.players for a plausible NHL id column ----
+    cur.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema='nhl' AND table_name='players'
+    """)
+    p_cols = {r[0] for r in cur.fetchall()}
+    players_ext_candidates = [
+        "nhl_player_id",
+        "nhl_id",
+        "player_nhl_id",
+        "external_id_nhl",
+        "provider_player_id",
+    ]
+    players_ext_col = next((c for c in players_ext_candidates if c in p_cols), None)
+    if players_ext_col is None:
+        players_ext_col = next((c for c in p_cols if c.endswith("_nhl_id") or c == "external_id"), None)
+
+    if players_ext_col:
+        sql = f"""
+            SELECT CAST({players_ext_col} AS bigint) AS nhl_id, player_id
+            FROM nhl.players
+            WHERE CAST({players_ext_col} AS bigint) = ANY(%s)
+        """
+        cur.execute(sql, (nhl_ids,))
+        for nhl_id, pid in cur.fetchall():
+            if nhl_id is not None and pid is not None and nhl_id not in mapping:
+                mapping[int(nhl_id)] = int(pid)
+
+    return mapping
+
 
 # --- PBP parsing for backfill (api-web + statsapi) -----------------
 
@@ -336,22 +431,26 @@ def backfill(batch_size: int, delay: float, commit: bool = False, resume: bool =
                     conn.commit()
                     continue
 
-                # compute splits
                 sk_splits = compute_skater_sog_splits(pbp, home_id, away_id, home_abbr, away_abbr)
 
-                if not sk_splits:
-                    print(f"[{gid}] no skater splits derived; skipping")
-                    set_last_game_id(cur, gid)
-                    conn.commit()
-                    continue
+                # map NHL ids -> internal player_id for this game
+                nhl_ids = list(sk_splits.keys())
+                id_map = map_nhl_to_internal(cur, nhl_ids)
 
-                # build batch parameters for players who have SOG-like events
+                missing = [x for x in nhl_ids if x not in id_map]
+                if missing:
+                    # Not fatal; we just won't update those rows
+                    print(f"[{gid}] note: {len(missing)} NHL ids lack mapping to internal player_id (provider='nhl'); skipping those.")
+
+                # build batch parameters using INTERNAL player_id
                 params: List[tuple] = []
-                for pid, d in sk_splits.items():
+                for nhl_pid, d in sk_splits.items():
+                    internal_pid = id_map.get(nhl_pid)
+                    if internal_pid is None:
+                        continue
                     ev, pp, sh = int(d.get("EV", 0)), int(d.get("PP", 0)), int(d.get("SH", 0))
                     total = ev + pp + sh
-                    # we only update rows where SOG exists and our total matches SOG
-                    params.append((ev, pp, sh, gid, pid, total, total, total))
+                    params.append((ev, pp, sh, gid, internal_pid, total, total, total))
 
                 # --- per-game update (commit-aware) ---
                 updated_rows = 0
