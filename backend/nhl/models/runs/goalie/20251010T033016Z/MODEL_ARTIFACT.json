@@ -233,7 +233,7 @@
       -0.02881233277033034,
       -0.004396163667899705,
       0.029273682991793226,
-      0.000014807531785590077,
+      1.4807531785590077e-05,
       0.006380902714381878,
       0.007091443617453157,
       -0.0008788873710245714,
@@ -252,24 +252,5 @@
       "season_save_pct",
       "opponent_id"
     ]
-  },
-  "target": "saves",
-  "features": [
-    "is_home",
-    "rest_days",
-    "b2b_flag",
-    "start_prob",
-    "d5_saves_per60",
-    "d10_saves_per60",
-    "d20_saves_per60",
-    "d5_shots_faced_per60",
-    "season_save_pct",
-    "opponent_id",
-    "team_d10_sf_per60",
-    "team_d10_sa_per60",
-    "opp_d10_sf_per60",
-    "opp_d10_sa_per60",
-    "pace_matchup_index"
-  ],
-  "prop": "goalie_saves"
+  }
 }
