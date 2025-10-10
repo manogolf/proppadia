@@ -1,0 +1,37 @@
+{
+  "family": "poisson",
+  "params": {
+    "alpha": 0.1
+  },
+  "feature_key": "goalie_saves",
+  "eval_lines": [
+    24.5,
+    28.5
+  ],
+  "calibration": {},
+  "sklearn_poisson": {
+    "coef": [
+      0.0,
+      -0.006955618091996956,
+      0.0,
+      -5.318267353100689e-07,
+      0.005823026278179046,
+      0.007387546869682055,
+      -0.00038488385499380376,
+      0.030782811196030272,
+      -0.0010194010894670935
+    ],
+    "intercept": 2.8792202657039074,
+    "feature_order": [
+      "is_home",
+      "rest_days",
+      "b2b_flag",
+      "start_prob",
+      "d5_saves_per60",
+      "d10_saves_per60",
+      "d5_shots_faced_per60",
+      "season_save_pct",
+      "opponent_id"
+    ]
+  }
+}
