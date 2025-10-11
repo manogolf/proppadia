@@ -132,7 +132,7 @@ jobs:
             echo "No refresh.sql found — skipping."
           fi
 
-      # Export CSVs for the slate (prefer views; fallback to training tables)
+      # ---------- DAILY SLATE (export only) ----------
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'
         run: |
@@ -140,19 +140,21 @@ jobs:
           export PGOPTIONS='-c statement_timeout=0'
           mkdir -p exports
 
-          HAS_SOG_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_sog_features')::text,'')" | tr -d '\r\n')
-          HAS_SAVES_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_saves_features')::text,'')" | tr -d '\r\n')
+          # Detect the READY feature views you actually have
+          HAS_SOG_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.training_features_nhl_sog_v2_ready')::text,'')" | tr -d '\r\n')
+          HAS_SAVES_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.training_features_goalie_saves_v2_ready')::text,'')" | tr -d '\r\n')
 
           if [ -n "$HAS_SOG_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
+            # training_features_nhl_sog_v2_ready does NOT include d5/d20, so alias them as NULLs
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
                 player_id, game_id, team_id, opponent_id, is_home, game_date,
                 NULL::int AS shots_on_goal,
-                d5_sog_per60, d10_sog_per60, d20_sog_per60,
+                NULL::numeric AS d5_sog_per60, d10_sog_per60, NULL::numeric AS d20_sog_per60,
                 team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
                 role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
                 pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
-              FROM nhl.v_slate_sog_features
+              FROM nhl.training_features_nhl_sog_v2_ready
               WHERE game_date = '${SLATE_DATE}'::date
               ORDER BY game_id, player_id
             ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
@@ -174,7 +176,7 @@ jobs:
                 pace_index, rest_days, b2b_flag,
                 d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
                 opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
-              FROM nhl.v_slate_saves_features
+              FROM nhl.training_features_goalie_saves_v2_ready
               WHERE game_date = '${SLATE_DATE}'::date
               ORDER BY game_id, player_id
             ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
