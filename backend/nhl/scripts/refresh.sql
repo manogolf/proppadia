@@ -347,6 +347,7 @@ WHERE t.player_id = a.player_id AND t.game_id = a.game_id
 
 -------------------------------------------------------------------------------
 -- D) READY matviews: widen to full export contract (matches YAML column list)
+--    Populate immediately (non-concurrent) and add indexes (incl. UNIQUE).
 -------------------------------------------------------------------------------
 
 -- SOG READY: carry d5/d20 through from base; include all export columns
@@ -376,8 +377,16 @@ WHERE
   AND t.pace_index IS NOT NULL
 WITH NO DATA;
 
-CREATE INDEX IF NOT EXISTS idx_sog_ready_date_player ON nhl.training_features_nhl_sog_v2_ready (game_date, player_id);
-CREATE INDEX IF NOT EXISTS idx_sog_ready_date_game   ON nhl.training_features_nhl_sog_v2_ready (game_date, game_id);
+-- Initial populate (must be non-concurrent right after CREATE … WITH NO DATA)
+REFRESH MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready;
+
+-- Indexes (UNIQUE enables future CONCURRENTLY if you stop dropping/recreating)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sog_ready_player_game
+  ON nhl.training_features_nhl_sog_v2_ready (player_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_sog_ready_date_player
+  ON nhl.training_features_nhl_sog_v2_ready (game_date, player_id);
+CREATE INDEX IF NOT EXISTS idx_sog_ready_date_game
+  ON nhl.training_features_nhl_sog_v2_ready (game_date, game_id);
 
 -- SAVES READY: carry opp/team per-60 + matchup through from base; include all export columns
 DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_goalie_saves_v2_ready CASCADE;
@@ -403,8 +412,16 @@ WHERE
   AND t.pace_index IS NOT NULL
 WITH NO DATA;
 
-CREATE INDEX IF NOT EXISTS idx_saves_ready_date_player ON nhl.training_features_goalie_saves_v2_ready (game_date, player_id);
-CREATE INDEX IF NOT EXISTS idx_saves_ready_date_game   ON nhl.training_features_goalie_saves_v2_ready (game_date, game_id);
+-- Initial populate (non-concurrent)
+REFRESH MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready;
+
+-- Indexes (UNIQUE enables future CONCURRENTLY if you stop dropping/recreating)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_saves_ready_player_game
+  ON nhl.training_features_goalie_saves_v2_ready (player_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_saves_ready_date_player
+  ON nhl.training_features_goalie_saves_v2_ready (game_date, player_id);
+CREATE INDEX IF NOT EXISTS idx_saves_ready_date_game
+  ON nhl.training_features_goalie_saves_v2_ready (game_date, game_id);
 
 -------------------------------------------------------------------------------
 -- E) Slate views (exact contract used by the workflow export)
@@ -434,8 +451,9 @@ FROM nhl.training_features_goalie_saves_v2_ready r;
 -------------------------------------------------------------------------------
 -- F) Refresh READY MVs (so v_slate_* see fresh data)
 -------------------------------------------------------------------------------
-REFRESH MATERIALIZED VIEW CONCURRENTLY nhl.training_features_nhl_sog_v2_ready;
-REFRESH MATERIALIZED VIEW CONCURRENTLY nhl.training_features_goalie_saves_v2_ready;
+-- Optional safety refresh (non-concurrent)
+REFRESH MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready;
+REFRESH MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready;
 
 -------------------------------------------------------------------------------
 -- G) Data-quality snapshot
