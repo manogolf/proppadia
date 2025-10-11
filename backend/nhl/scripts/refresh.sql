@@ -2,9 +2,7 @@
 -- Daily refresh: fill SOG context, goalie cadence & season %, refresh ready MVs, and log an audit.
 
 -- Bump timeouts for long rollups/refreshes (Supabase default ~2m)
-cp backend/nhl/scripts/refresh.sql backend/nhl/scripts/refresh.sql.bak.$(date +%s)
 
-cat > backend/nhl/scripts/refresh.sql <<'SQL'
 SET statement_timeout = '10min';
 SET lock_timeout = '30s';
 SET idle_in_transaction_session_timeout = '5min';
@@ -423,6 +421,5 @@ ON CONFLICT (check_name, audit_date) DO UPDATE
 SET result = EXCLUDED.result, level = EXCLUDED.level;
 
 COMMIT;
-SQL
 
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
