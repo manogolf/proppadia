@@ -422,4 +422,3 @@ SET result = EXCLUDED.result, level = EXCLUDED.level;
 
 COMMIT;
 
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
