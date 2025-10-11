@@ -2,7 +2,6 @@
 -- Daily refresh: fill SOG context, goalie cadence & season %, refresh ready MVs, and log an audit.
 
 -- Bump timeouts for long rollups/refreshes (Supabase default ~2m)
-ppb
 cp backend/nhl/scripts/refresh.sql backend/nhl/scripts/refresh.sql.bak.$(date +%s)
 
 cat > backend/nhl/scripts/refresh.sql <<'SQL'
