@@ -140,11 +140,11 @@ jobs:
           echo "SLATE_DATE=${SLATE_DATE}"
 
           # SOG
-          psql --no-psqlrc "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
+          psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
             -f backend/nhl/sql/export_sog.sql > exports/train_nhl_sog_v2.csv
 
           # SAVES
-          psql --no-psqlrc "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
+          psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
             -f backend/nhl/sql/export_saves.sql > exports/train_goalie_saves_v2.csv
 
           echo "Exported:"

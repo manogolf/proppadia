@@ -1,11 +1,15 @@
+\set QUIET on
+\set ON_ERROR_STOP on
 \pset pager off
 \pset tuples_only on
 
+
 -- Detect if the view exists
-SELECT (to_regclass('nhl.v_slate_saves_features') IS NOT NULL)::int AS has_view;
+-- Detect if the view exists (explicit 1/0 and explicit compare)
+SELECT CASE WHEN to_regclass('nhl.v_slate_saves_features') IS NULL THEN 0 ELSE 1 END AS has_view;
 \gset
 
-\if :has_view
+\if :has_view = 1
 -- Preflight: assert required columns on the view
 DO $$
 DECLARE missing text[];
