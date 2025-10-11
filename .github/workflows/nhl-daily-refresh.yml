@@ -239,3 +239,10 @@ jobs:
             exports/train_goalie_saves_v2.csv
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Seed goalie logs for yesterday (ET)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          export SLATE_DATE=$(TZ=America/New_York date -d 'yesterday' +%F)
+          python backend/nhl/scripts/seed_goalie_logs_for_date.py
