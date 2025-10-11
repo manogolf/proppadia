@@ -37,7 +37,7 @@ COPY (
     d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
     opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
   FROM nhl.v_slate_saves_features
-  WHERE game_date = :slate_date::date
+  WHERE game_date = :'slate_date'::date
   ORDER BY game_id, player_id
 ) TO STDOUT WITH CSV HEADER;
 \else
@@ -72,7 +72,7 @@ COPY (
     d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
     opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
   FROM nhl.training_features_goalie_saves_v2
-  WHERE game_date = :slate_date::date
+  WHERE game_date = :'slate_date'::date
   ORDER BY game_id, player_id
 ) TO STDOUT WITH CSV HEADER;
 \endif
