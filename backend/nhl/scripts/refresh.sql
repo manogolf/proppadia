@@ -1,11 +1,13 @@
 -- scripts/refresh.sql
--- Daily refresh: fill SOG context, goalie cadence & season %, refresh ready MVs, and log an audit.
+-- Daily refresh: compute team & goalie rollups, update training features,
+-- widen READY matviews to the full export contract, expose v_slate_* views,
+-- refresh READY, and log a data-quality snapshot.
 
--- Bump timeouts for long rollups/refreshes (Supabase default ~2m)
-
+-- ---------- Session safety / timeouts ----------
 SET statement_timeout = '10min';
 SET lock_timeout = '30s';
 SET idle_in_transaction_session_timeout = '5min';
+\set ON_ERROR_STOP on
 
 BEGIN;
 
@@ -236,6 +238,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS goalie_roll_feats_m_uniq
 
 REFRESH MATERIALIZED VIEW nhl.goalie_roll_feats_m;
 
+-- Upsert goalie rolling features into training_features_goalie_saves_v2
 INSERT INTO nhl.training_features_goalie_saves_v2 AS t
   (player_id, game_id, team_id, opponent_id, is_home, game_date,
    d5_shots_faced_per60, d5_saves_per60, d10_shots_faced_per60, d10_saves_per60, d10_save_pct)
@@ -343,13 +346,99 @@ WHERE t.player_id = a.player_id AND t.game_id = a.game_id
   AND (t.season_save_pct IS DISTINCT FROM CASE WHEN a.den_shots > 0 THEN a.num_saves / a.den_shots ELSE NULL END);
 
 -------------------------------------------------------------------------------
--- D) Refresh ready MVs
+-- D) READY matviews: widen to full export contract (matches YAML column list)
 -------------------------------------------------------------------------------
-REFRESH MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready;
-REFRESH MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready;
+
+-- SOG READY: carry d5/d20 through from base; include all export columns
+DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_nhl_sog_v2_ready CASCADE;
+CREATE MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready AS
+SELECT
+  t.player_id, t.game_id, t.team_id, t.opponent_id, t.is_home, t.game_date,
+  t.shots_on_goal,
+  t.d5_sog_per60,                -- added (was missing)
+  t.d10_sog_per60,
+  t.d20_sog_per60,               -- added (was missing)
+  t.team_d10_sf_per_game,
+  t.opp_d10_sf_allowed_per_game,
+  t.role_pp_share,
+  t.rest_days,
+  t.b2b_flag,
+  t.attempts_d10_per60,
+  t.pace_index,
+  t.opp_d10_sf_per60,
+  t.team_d10_sa_per60,
+  t.pace_matchup_index
+FROM nhl.training_features_nhl_sog_v2 t
+WHERE
+  t.d10_sog_per60 IS NOT NULL
+  AND t.team_d10_sf_per_game IS NOT NULL
+  AND t.opp_d10_sf_allowed_per_game IS NOT NULL
+  AND t.pace_index IS NOT NULL
+WITH NO DATA;
+
+CREATE INDEX IF NOT EXISTS idx_sog_ready_date_player ON nhl.training_features_nhl_sog_v2_ready (game_date, player_id);
+CREATE INDEX IF NOT EXISTS idx_sog_ready_date_game   ON nhl.training_features_nhl_sog_v2_ready (game_date, game_id);
+
+-- SAVES READY: carry opp/team per-60 + matchup through from base; include all export columns
+DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_goalie_saves_v2_ready CASCADE;
+CREATE MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready AS
+SELECT
+  t.player_id, t.game_id, t.team_id, t.opponent_id, t.is_home, t.game_date,
+  g.saves,                         -- label (present when logged)
+  t.d10_shots_faced_per60, t.d10_save_pct,
+  t.team_d10_sf_per_game, t.opp_d10_sf_allowed_per_game,
+  t.pace_index, t.rest_days, t.b2b_flag,
+  t.d5_saves_per60, t.d10_saves_per60, t.d5_shots_faced_per60, t.season_save_pct,
+  t.opp_d10_sf_per60,              -- added (was missing)
+  t.team_d10_sa_per60,             -- added (was missing)
+  t.pace_matchup_index             -- added (was missing)
+FROM nhl.training_features_goalie_saves_v2 t
+JOIN nhl.goalie_game_logs_raw g
+  ON g.player_id = t.player_id AND g.game_id = t.game_id
+WHERE
+  t.d10_shots_faced_per60 IS NOT NULL
+  AND t.d10_save_pct IS NOT NULL
+  AND t.team_d10_sf_per_game IS NOT NULL
+  AND t.opp_d10_sf_allowed_per_game IS NOT NULL
+  AND t.pace_index IS NOT NULL
+WITH NO DATA;
+
+CREATE INDEX IF NOT EXISTS idx_saves_ready_date_player ON nhl.training_features_goalie_saves_v2_ready (game_date, player_id);
+CREATE INDEX IF NOT EXISTS idx_saves_ready_date_game   ON nhl.training_features_goalie_saves_v2_ready (game_date, game_id);
 
 -------------------------------------------------------------------------------
--- E) Data-quality snapshot
+-- E) Slate views (exact contract used by the workflow export)
+-------------------------------------------------------------------------------
+DROP VIEW IF EXISTS nhl.v_slate_sog_features;
+CREATE VIEW nhl.v_slate_sog_features AS
+SELECT
+  r.player_id, r.game_id, r.team_id, r.opponent_id, r.is_home, r.game_date,
+  r.shots_on_goal,
+  r.d5_sog_per60, r.d10_sog_per60, r.d20_sog_per60,
+  r.team_d10_sf_per_game, r.opp_d10_sf_allowed_per_game,
+  r.role_pp_share, r.rest_days, r.b2b_flag, r.attempts_d10_per60,
+  r.pace_index, r.opp_d10_sf_per60, r.team_d10_sa_per60, r.pace_matchup_index
+FROM nhl.training_features_nhl_sog_v2_ready r;
+
+DROP VIEW IF EXISTS nhl.v_slate_saves_features;
+CREATE VIEW nhl.v_slate_saves_features AS
+SELECT
+  r.player_id, r.game_id, r.team_id, r.opponent_id, r.is_home, r.game_date,
+  r.d10_shots_faced_per60, r.d10_save_pct,
+  r.team_d10_sf_per_game, r.opp_d10_sf_allowed_per_game,
+  r.pace_index, r.rest_days, r.b2b_flag,
+  r.d5_saves_per60, r.d10_saves_per60, r.d5_shots_faced_per60, r.season_save_pct,
+  r.opp_d10_sf_per60, r.team_d10_sa_per60, r.pace_matchup_index
+FROM nhl.training_features_goalie_saves_v2_ready r;
+
+-------------------------------------------------------------------------------
+-- F) Refresh READY MVs (so v_slate_* see fresh data)
+-------------------------------------------------------------------------------
+REFRESH MATERIALIZED VIEW CONCURRENTLY nhl.training_features_nhl_sog_v2_ready;
+REFRESH MATERIALIZED VIEW CONCURRENTLY nhl.training_features_goalie_saves_v2_ready;
+
+-------------------------------------------------------------------------------
+-- G) Data-quality snapshot
 -------------------------------------------------------------------------------
 WITH sog AS (
   SELECT
@@ -380,7 +469,10 @@ goal AS (
     COUNT(d5_saves_per60)::bigint AS d5_sv60_nn,
     COUNT(d10_saves_per60)::bigint AS d10_sv60_nn,
     COUNT(d5_shots_faced_per60)::bigint AS d5_sf60_nn,
-    COUNT(season_save_pct)::bigint AS season_sv_nn
+    COUNT(season_save_pct)::bigint AS season_sv_nn,
+    COUNT(opp_d10_sf_per60)::bigint AS opp_d10_sf_per60_nn,
+    COUNT(team_d10_sa_per60)::bigint AS team_d10_sa_per60_nn,
+    COUNT(pace_matchup_index)::bigint AS pace_matchup_index_nn
   FROM nhl.training_features_goalie_saves_v2_ready
 )
 INSERT INTO nhl.data_quality_audit (audit_date, check_name, level, result)
@@ -414,11 +506,13 @@ SELECT CURRENT_DATE, 'goalie_ready_coverage', 'info',
     'd5_saves_per60_nn', g.d5_sv60_nn,
     'd10_saves_per60_nn', g.d10_sv60_nn,
     'd5_shots_faced_per60_nn', g.d5_sf60_nn,
-    'season_save_pct_nn', g.season_sv_nn
+    'season_save_pct_nn', g.season_sv_nn,
+    'opp_d10_sf_per60_nn', g.opp_d10_sf_per60_nn,
+    'team_d10_sa_per60_nn', g.team_d10_sa_per60_nn,
+    'pace_matchup_index_nn', g.pace_matchup_index_nn
   )
 FROM goal g
 ON CONFLICT (check_name, audit_date) DO UPDATE
 SET result = EXCLUDED.result, level = EXCLUDED.level;
 
 COMMIT;
-

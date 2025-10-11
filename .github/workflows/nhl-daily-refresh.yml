@@ -1,8 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-
 name: NHL Daily (Ingest → Refresh → Score → Export)
 
-"on":
+on:
   workflow_dispatch:
     inputs:
       debug_pbp:
@@ -12,8 +11,8 @@ name: NHL Daily (Ingest → Refresh → Score → Export)
         default: "0"
         required: false
   schedule:
-    - cron: "15 11 * * *"
-    - cron: "15 5 * * *"
+    - cron: "15 11 * * *" # 04:15 PT / 07:15 ET
+    - cron: "15 5 * * *" # 22:15 PT / 01:15 ET
 
 concurrency:
   group: nhl-daily
@@ -33,14 +32,13 @@ jobs:
       PSYCOPG_DISABLE_PREPARES: "1"
 
     steps:
-      # replace your existing Checkout step with this
+      # -------------------- Checkout & models --------------------
       - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
           fetch-depth: 1
 
-      # add this step immediately after Checkout
       - name: Fetch LFS models & verify
         run: |
           git lfs pull
@@ -48,6 +46,7 @@ jobs:
           ls -lh backend/nhl/models/latest/shots_on_goal || true
           ls -lh backend/nhl/models/latest/goalie_saves || true
 
+      # -------------------- Dates (ET) --------------------
       - name: Set dates (ET)
         id: dates
         run: |
@@ -55,11 +54,11 @@ jobs:
           YDAY=$(TZ=America/New_York date -d 'yesterday' +%F)
           echo "SLATE_DATE=$SLATE_DATE" >> $GITHUB_ENV
           echo "YDAY=$YDAY" >> $GITHUB_ENV
-          # also expose as step outputs for references like steps.dates.outputs.slate_date
           echo "slate_date=$SLATE_DATE" >> $GITHUB_OUTPUT
           echo "yday=$YDAY" >> $GITHUB_OUTPUT
           echo "SLATE_DATE=${SLATE_DATE} YDAY=${YDAY}"
 
+      # -------------------- Tooling --------------------
       - name: Install psql client
         run: |
           sudo apt-get update
@@ -99,7 +98,7 @@ jobs:
           EOF
           chmod +x /tmp/retry.sh
 
-      # Schedule → nhl.games
+      # -------------------- Ingest (schedule + rosters) --------------------
       - name: Import today's schedule (API → nhl.games)
         env:
           SLATE_DATE: ${{ env.SLATE_DATE }}
@@ -112,15 +111,14 @@ jobs:
           echo "has_games=$HAS" >> $GITHUB_OUTPUT
           echo "has_games=${HAS}"
 
-      # Rosters
       - name: Import today's rosters (API → nhl.roster_status)
         if: steps.slate.outputs.has_games == 't'
         env:
           SLATE_DATE: ${{ env.SLATE_DATE }}
         run: /tmp/retry.sh "python backend/nhl/scripts/import_roster_today.py"
 
-      # Views / features refresh (optional)
-      - name: Refresh features/views (if present)
+      # -------------------- Schema / features refresh --------------------
+      - name: Refresh features/views (align contract)
         if: steps.slate.outputs.has_games == 't'
         run: |
           set -e
@@ -132,7 +130,7 @@ jobs:
             echo "No refresh.sql found — skipping."
           fi
 
-      # ---------- DAILY SLATE (export only) ----------
+      # -------------------- Export (CSV) --------------------
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'
         run: |
@@ -140,34 +138,45 @@ jobs:
           export PGOPTIONS='-c statement_timeout=0'
           mkdir -p exports
 
-          # Detect the READY feature views you actually have
-          HAS_SOG_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.training_features_nhl_sog_v2_ready')::text,'')" | tr -d '\r\n')
-          HAS_SAVES_VIEW=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.training_features_goalie_saves_v2_ready')::text,'')" | tr -d '\r\n')
+          # Prefer stable v_slate_* views (created by refresh.sql); fallback to base tables for full coverage.
+          HAS_V_SOG=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_sog_features')::text,'')" | tr -d '\r\n')
+          HAS_V_SAVES=$(psql "$SUPABASE_DB_URL" -Atqc "select coalesce(to_regclass('nhl.v_slate_saves_features')::text,'')" | tr -d '\r\n')
 
-          if [ -n "$HAS_SOG_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
-            # training_features_nhl_sog_v2_ready does NOT include d5/d20, so alias them as NULLs
+          echo "HAS_V_SOG=${HAS_V_SOG:-(none)}"
+          echo "HAS_V_SAVES=${HAS_V_SAVES:-(none)}"
+
+          # ---- SOG export ----
+          if [ -n "$HAS_V_SOG" ]; then
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
                 player_id, game_id, team_id, opponent_id, is_home, game_date,
-                NULL::int AS shots_on_goal,
-                NULL::numeric AS d5_sog_per60, d10_sog_per60, NULL::numeric AS d20_sog_per60,
+                NULL::int AS shots_on_goal,                     -- force label blank at scoring time
+                d5_sog_per60, d10_sog_per60, d20_sog_per60,
                 team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
                 role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
                 pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
-              FROM nhl.training_features_nhl_sog_v2_ready
+              FROM nhl.v_slate_sog_features
               WHERE game_date = '${SLATE_DATE}'::date
               ORDER BY game_id, player_id
             ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
           else
+            echo "v_slate_sog_features not found — using base table fallback."
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
-              SELECT *
+              SELECT
+                player_id, game_id, team_id, opponent_id, is_home, game_date,
+                NULL::int AS shots_on_goal,
+                d5_sog_per60, d10_sog_per60, d20_sog_per60,
+                team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+                role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
+                pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
               FROM nhl.training_features_nhl_sog_v2
               WHERE game_date = '${SLATE_DATE}'::date
               ORDER BY game_id, player_id
             ) TO STDOUT WITH CSV HEADER" > exports/train_nhl_sog_v2.csv
           fi
 
-          if [ -n "$HAS_SAVES_VIEW" ] && [ "${FORCE_FALLBACK_EXPORT:-0}" != "1" ]; then
+          # ---- SAVES export ----
+          if [ -n "$HAS_V_SAVES" ]; then
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
                 player_id, game_id, team_id, opponent_id, is_home, game_date,
@@ -175,12 +184,13 @@ jobs:
                 team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
                 pace_index, rest_days, b2b_flag,
                 d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
-                NULL::numeric AS opp_d10_sf_per60, NULL::numeric AS team_d10_sa_per60, pace_matchup_index
-              FROM nhl.training_features_goalie_saves_v2_ready
+                opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+              FROM nhl.v_slate_saves_features
               WHERE game_date = '${SLATE_DATE}'::date
               ORDER BY game_id, player_id
             ) TO STDOUT WITH CSV HEADER" > exports/train_goalie_saves_v2.csv
           else
+            echo "v_slate_saves_features not found — using base table fallback."
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "\COPY (
               SELECT
                 player_id, game_id, team_id, opponent_id, is_home, game_date,
@@ -198,7 +208,7 @@ jobs:
           echo "Exported:"
           ls -lh exports/
 
-      # ---------- DAILY SLATE (score + load) ----------
+      # -------------------- Score & load --------------------
       - name: Score & Load predictions
         if: steps.slate.outputs.has_games == 't'
         run: |
@@ -209,6 +219,7 @@ jobs:
             --db-url "$SUPABASE_DB_URL" \
             --scorer "$GITHUB_WORKSPACE/backend/nhl/scripts/score_nhl_props.py"
 
+      # -------------------- Sanity counts --------------------
       - name: Verify counts
         if: steps.slate.outputs.has_games == 't'
         run: |
@@ -221,6 +232,7 @@ jobs:
             UNION ALL SELECT 'predictions',       COUNT(*) FROM nhl.predictions p             WHERE p.game_id IN (SELECT game_id FROM g);
           "
 
+      # -------------------- Finals sweep (yesterday) --------------------
       - name: Finals sweep (yesterday)
         run: |
           echo "Refreshing statuses for YDAY=${YDAY}"
@@ -231,6 +243,7 @@ jobs:
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
           fi
 
+      # -------------------- Artifacts --------------------
       - name: Upload exported CSVs (artifact)
         if: steps.slate.outputs.has_games == 't'
         uses: actions/upload-artifact@v4
@@ -242,6 +255,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      # -------------------- Seed goalie logs (yesterday ET) --------------------
       - name: Seed goalie logs for yesterday (ET)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
