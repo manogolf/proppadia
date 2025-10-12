@@ -23,7 +23,6 @@ BEGIN
   LEFT JOIN information_schema.columns c
     ON c.table_schema='nhl' AND c.table_name='v_slate_saves_features' AND c.column_name=n.col
   WHERE c.column_name IS NULL;
-
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'Missing columns on nhl.v_slate_saves_features: %', missing;
   END IF;
@@ -38,6 +37,8 @@ COPY (
     opponent_id                 AS "opponent_id",
     is_home                     AS "is_home",
     game_date::date             AS "game_date",
+
+    -- core goalie features
     d10_shots_faced_per60       AS "d10_shots_faced_per60",
     d10_save_pct                AS "d10_save_pct",
     team_d10_sf_per_game        AS "team_d10_sf_per_game",
@@ -51,7 +52,15 @@ COPY (
     season_save_pct             AS "season_save_pct",
     opp_d10_sf_per60            AS "opp_d10_sf_per60",
     team_d10_sa_per60           AS "team_d10_sa_per60",
-    pace_matchup_index          AS "pace_matchup_index"
+    pace_matchup_index          AS "pace_matchup_index",
+
+    -- compatibility aliases (harmless extras if unused by metadata)
+    d10_shots_faced_per60       AS "d10_sf_per60",
+    d5_shots_faced_per60        AS "d5_sf_per60",
+    d10_save_pct                AS "sv_pct_d10",
+    pace_index                  AS "pace_idx",
+    opp_d10_sf_per60            AS "d10_sf_per60_opp",
+    team_d10_sa_per60           AS "d10_sa_per60_team"
   FROM nhl.v_slate_saves_features
   WHERE game_date = :'slate_date'::date
   ORDER BY game_id, player_id
@@ -75,7 +84,6 @@ BEGIN
   LEFT JOIN information_schema.columns c
     ON c.table_schema='nhl' AND c.table_name='training_features_goalie_saves_v2' AND c.column_name=n.col
   WHERE c.column_name IS NULL;
-
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'Missing columns on nhl.training_features_goalie_saves_v2: %', missing;
   END IF;
@@ -90,6 +98,7 @@ COPY (
     opponent_id                 AS "opponent_id",
     is_home                     AS "is_home",
     game_date::date             AS "game_date",
+
     d10_shots_faced_per60       AS "d10_shots_faced_per60",
     d10_save_pct                AS "d10_save_pct",
     team_d10_sf_per_game        AS "team_d10_sf_per_game",
@@ -103,7 +112,15 @@ COPY (
     season_save_pct             AS "season_save_pct",
     opp_d10_sf_per60            AS "opp_d10_sf_per60",
     team_d10_sa_per60           AS "team_d10_sa_per60",
-    pace_matchup_index          AS "pace_matchup_index"
+    pace_matchup_index          AS "pace_matchup_index",
+
+    -- compatibility aliases
+    d10_shots_faced_per60       AS "d10_sf_per60",
+    d5_shots_faced_per60        AS "d5_sf_per60",
+    d10_save_pct                AS "sv_pct_d10",
+    pace_index                  AS "pace_idx",
+    opp_d10_sf_per60            AS "d10_sf_per60_opp",
+    team_d10_sa_per60           AS "d10_sa_per60_team"
   FROM nhl.training_features_goalie_saves_v2
   WHERE game_date = :'slate_date'::date
   ORDER BY game_id, player_id
