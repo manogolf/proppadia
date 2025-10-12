@@ -3,108 +3,161 @@
 \pset pager off
 \pset tuples_only on
 
--- Existence check without leaking output to STDOUT
+-- 1) Does the view exist?
 SELECT to_regclass('nhl.v_slate_sog_features') AS v_sog \gset
+
 \if :{?v_sog}
-
--- Preflight: assert required columns on the view
-DO $$
-DECLARE missing text[];
-BEGIN
-  SELECT array_agg(n.col) INTO missing
-  FROM (VALUES
-    ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'), ('is_home'), ('game_date'),
-    ('d5_sog_per60'), ('d10_sog_per60'), ('d20_sog_per60'),
-    ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
-    ('role_pp_share'), ('rest_days'), ('b2b_flag'), ('attempts_d10_per60'),
-    ('pace_index'), ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index')
-  ) AS n(col)
-  LEFT JOIN information_schema.columns c
-    ON c.table_schema='nhl' AND c.table_name='v_slate_sog_features' AND c.column_name=n.col
-  WHERE c.column_name IS NULL;
-
-  IF missing IS NOT NULL THEN
-    RAISE EXCEPTION 'Missing columns on nhl.v_slate_sog_features: %', missing;
-  END IF;
-END $$;
-
--- Export from the view
-COPY (
-  SELECT
-    player_id                   AS "player_id",
-    game_id                     AS "game_id",
-    team_id                     AS "team_id",
-    opponent_id                 AS "opponent_id",
-    is_home                     AS "is_home",
-    game_date::date             AS "game_date",
-    NULL::int                   AS "shots_on_goal",
-    d5_sog_per60                AS "d5_sog_per60",
-    d10_sog_per60               AS "d10_sog_per60",
-    d20_sog_per60               AS "d20_sog_per60",
-    team_d10_sf_per_game        AS "team_d10_sf_per_game",
-    opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
-    role_pp_share               AS "role_pp_share",
-    rest_days                   AS "rest_days",
-    b2b_flag                    AS "b2b_flag",
-    attempts_d10_per60          AS "attempts_d10_per60",
-    pace_index                  AS "pace_index",
-    opp_d10_sf_per60            AS "opp_d10_sf_per60",
-    team_d10_sa_per60           AS "team_d10_sa_per60",
-    pace_matchup_index          AS "pace_matchup_index"
+  -- 2) Does the view have rows for this slate_date?
+  SELECT 1 AS sog_present
   FROM nhl.v_slate_sog_features
   WHERE game_date = :'slate_date'::date
-  ORDER BY game_id, player_id
-) TO STDOUT WITH CSV HEADER;
+  LIMIT 1 \gset
+
+  \if :{?sog_present}
+    -- ---- View branch (preflight + export) ----
+    DO $$
+    DECLARE missing text[];
+    BEGIN
+      SELECT array_agg(n.col) INTO missing
+      FROM (VALUES
+        ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'), ('is_home'), ('game_date'),
+        ('d5_sog_per60'), ('d10_sog_per60'), ('d20_sog_per60'),
+        ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
+        ('role_pp_share'), ('rest_days'), ('b2b_flag'), ('attempts_d10_per60'),
+        ('pace_index'), ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index')
+      ) AS n(col)
+      LEFT JOIN information_schema.columns c
+        ON c.table_schema='nhl' AND c.table_name='v_slate_sog_features' AND c.column_name=n.col
+      WHERE c.column_name IS NULL;
+
+      IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'Missing columns on nhl.v_slate_sog_features: %', missing;
+      END IF;
+    END $$;
+
+    COPY (
+      SELECT
+        player_id                   AS "player_id",
+        game_id                     AS "game_id",
+        team_id                     AS "team_id",
+        opponent_id                 AS "opponent_id",
+        is_home                     AS "is_home",
+        game_date::date             AS "game_date",
+        NULL::int                   AS "shots_on_goal",
+        d5_sog_per60                AS "d5_sog_per60",
+        d10_sog_per60               AS "d10_sog_per60",
+        d20_sog_per60               AS "d20_sog_per60",
+        team_d10_sf_per_game        AS "team_d10_sf_per_game",
+        opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
+        role_pp_share               AS "role_pp_share",
+        rest_days                   AS "rest_days",
+        b2b_flag                    AS "b2b_flag",
+        attempts_d10_per60          AS "attempts_d10_per60",
+        pace_index                  AS "pace_index",
+        opp_d10_sf_per60            AS "opp_d10_sf_per60",
+        team_d10_sa_per60           AS "team_d10_sa_per60",
+        pace_matchup_index          AS "pace_matchup_index"
+      FROM nhl.v_slate_sog_features
+      WHERE game_date = :'slate_date'::date
+      ORDER BY game_id, player_id
+    ) TO STDOUT WITH CSV HEADER;
+
+  \else
+    -- ---- Fallback branch (no rows in view for date) ----
+    DO $$
+    DECLARE missing text[];
+    BEGIN
+      SELECT array_agg(n.col) INTO missing
+      FROM (VALUES
+        ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'), ('is_home'), ('game_date'),
+        ('d5_sog_per60'), ('d10_sog_per60'), ('d20_sog_per60'),
+        ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
+        ('role_pp_share'), ('rest_days'), ('b2b_flag'), ('attempts_d10_per60'),
+        ('pace_index'), ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index')
+      ) AS n(col)
+      LEFT JOIN information_schema.columns c
+        ON c.table_schema='nhl' AND c.table_name='training_features_nhl_sog_v2' AND c.column_name=n.col
+      WHERE c.column_name IS NULL;
+
+      IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'Missing columns on nhl.training_features_nhl_sog_v2: %', missing;
+      END IF;
+    END $$;
+
+    COPY (
+      SELECT
+        player_id                   AS "player_id",
+        game_id                     AS "game_id",
+        team_id                     AS "team_id",
+        opponent_id                 AS "opponent_id",
+        is_home                     AS "is_home",
+        game_date::date             AS "game_date",
+        NULL::int                   AS "shots_on_goal",
+        d5_sog_per60                AS "d5_sog_per60",
+        d10_sog_per60               AS "d10_sog_per60",
+        d20_sog_per60               AS "d20_sog_per60",
+        team_d10_sf_per_game        AS "team_d10_sf_per_game",
+        opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
+        role_pp_share               AS "role_pp_share",
+        rest_days                   AS "rest_days",
+        b2b_flag                    AS "b2b_flag",
+        attempts_d10_per60          AS "attempts_d10_per60",
+        pace_index                  AS "pace_index",
+        opp_d10_sf_per60            AS "opp_d10_sf_per60",
+        team_d10_sa_per60           AS "team_d10_sa_per60",
+        pace_matchup_index          AS "pace_matchup_index"
+      FROM nhl.training_features_nhl_sog_v2
+      WHERE game_date = :'slate_date'::date
+      ORDER BY game_id, player_id
+    ) TO STDOUT WITH CSV HEADER;
+  \endif
 
 \else
+  -- ---- Fallback (view does not exist) ----
+  DO $$
+  DECLARE missing text[];
+  BEGIN
+    SELECT array_agg(n.col) INTO missing
+    FROM (VALUES
+      ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'), ('is_home'), ('game_date'),
+      ('d5_sog_per60'), ('d10_sog_per60'), ('d20_sog_per60'),
+      ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
+      ('role_pp_share'), ('rest_days'), ('b2b_flag'), ('attempts_d10_per60'),
+      ('pace_index'), ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index')
+    ) AS n(col)
+    LEFT JOIN information_schema.columns c
+      ON c.table_schema='nhl' AND c.table_name='training_features_nhl_sog_v2' AND c.column_name=n.col
+    WHERE c.column_name IS NULL;
 
--- Preflight: assert required columns on the base table fallback
-DO $$
-DECLARE missing text[];
-BEGIN
-  SELECT array_agg(n.col) INTO missing
-  FROM (VALUES
-    ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'), ('is_home'), ('game_date'),
-    ('d5_sog_per60'), ('d10_sog_per60'), ('d20_sog_per60'),
-    ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
-    ('role_pp_share'), ('rest_days'), ('b2b_flag'), ('attempts_d10_per60'),
-    ('pace_index'), ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index')
-  ) AS n(col)
-  LEFT JOIN information_schema.columns c
-    ON c.table_schema='nhl' AND c.table_name='training_features_nhl_sog_v2' AND c.column_name=n.col
-  WHERE c.column_name IS NULL;
+    IF missing IS NOT NULL THEN
+      RAISE EXCEPTION 'Missing columns on nhl.training_features_nhl_sog_v2: %', missing;
+    END IF;
+  END $$;
 
-  IF missing IS NOT NULL THEN
-    RAISE EXCEPTION 'Missing columns on nhl.training_features_nhl_sog_v2: %', missing;
-  END IF;
-END $$;
-
--- Export from the base table
-COPY (
-  SELECT
-    player_id                   AS "player_id",
-    game_id                     AS "game_id",
-    team_id                     AS "team_id",
-    opponent_id                 AS "opponent_id",
-    is_home                     AS "is_home",
-    game_date::date             AS "game_date",
-    NULL::int                   AS "shots_on_goal",
-    d5_sog_per60                AS "d5_sog_per60",
-    d10_sog_per60               AS "d10_sog_per60",
-    d20_sog_per60               AS "d20_sog_per60",
-    team_d10_sf_per_game        AS "team_d10_sf_per_game",
-    opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
-    role_pp_share               AS "role_pp_share",
-    rest_days                   AS "rest_days",
-    b2b_flag                    AS "b2b_flag",
-    attempts_d10_per60          AS "attempts_d10_per60",
-    pace_index                  AS "pace_index",
-    opp_d10_sf_per60            AS "opp_d10_sf_per60",
-    team_d10_sa_per60           AS "team_d10_sa_per60",
-    pace_matchup_index          AS "pace_matchup_index"
-  FROM nhl.training_features_nhl_sog_v2
-  WHERE game_date = :'slate_date'::date
-  ORDER BY game_id, player_id
-) TO STDOUT WITH CSV HEADER;
-
+  COPY (
+    SELECT
+      player_id                   AS "player_id",
+      game_id                     AS "game_id",
+      team_id                     AS "team_id",
+      opponent_id                 AS "opponent_id",
+      is_home                     AS "is_home",
+      game_date::date             AS "game_date",
+      NULL::int                   AS "shots_on_goal",
+      d5_sog_per60                AS "d5_sog_per60",
+      d10_sog_per60               AS "d10_sog_per60",
+      d20_sog_per60               AS "d20_sog_per60",
+      team_d10_sf_per_game        AS "team_d10_sf_per_game",
+      opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
+      role_pp_share               AS "role_pp_share",
+      rest_days                   AS "rest_days",
+      b2b_flag                    AS "b2b_flag",
+      attempts_d10_per60          AS "attempts_d10_per60",
+      pace_index                  AS "pace_index",
+      opp_d10_sf_per60            AS "opp_d10_sf_per60",
+      team_d10_sa_per60           AS "team_d10_sa_per60",
+      pace_matchup_index          AS "pace_matchup_index"
+    FROM nhl.training_features_nhl_sog_v2
+    WHERE game_date = :'slate_date'::date
+    ORDER BY game_id, player_id
+  ) TO STDOUT WITH CSV HEADER;
 \endif

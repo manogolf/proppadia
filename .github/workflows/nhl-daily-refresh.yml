@@ -179,28 +179,31 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "== CSV headers =="
+          echo "== CSV headers & row counts =="
           for f in exports/train_nhl_sog_v2.csv exports/train_goalie_saves_v2.csv; do
             echo "$f:"
             head -n1 "$f" | tr ',' '\n' | nl -ba
-            echo
             echo "rows: $(wc -l < "$f")"
             echo "------"
           done
 
           echo "== Feature metadata keys =="
           python - <<'PY'
-          import json, sys
-          p = "backend/nhl/features/feature_metadata_nhl.json"
-          with open(p) as f: meta = json.load(f)
-          print("keys:", list(meta.keys()))
-          for k in ("shots_on_goal","goalie_saves","saves"):
-              if k in meta:
-                  m = meta[k]
-                  # Try common field names for feature lists
-                  feats = m.get("features") or m.get("columns") or m.get("feature_cols") or []
-                  print(f"[{k}] features count:", len(feats))
-                  print(f"[{k}] features (first 20):", feats[:20])
+            import json, sys
+            p = "backend/nhl/features/feature_metadata_nhl.json"
+            with open(p) as f: meta = json.load(f)
+            print("keys:", list(meta.keys()))
+            for k in ("shots_on_goal","goalie_saves","saves"):
+                if k in meta:
+                    v = meta[k]
+                    if isinstance(v, dict):
+                        feats = v.get("features") or v.get("columns") or v.get("feature_cols") or []
+                    elif isinstance(v, list):
+                        feats = v
+                    else:
+                        feats = []
+                    print(f"[{k}] feature count:", len(feats))
+                    print(f"[{k}] first 20:", feats[:20])
           PY
 
       # -------------------- Score & load --------------------
