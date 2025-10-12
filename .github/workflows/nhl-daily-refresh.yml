@@ -152,6 +152,29 @@ jobs:
           head -n 3 exports/train_nhl_sog_v2.csv || true
           head -n 3 exports/train_goalie_saves_v2.csv || true
 
+      - name: Validate CSV headers (must match scorer expectations)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          echo "== Header check =="
+          for f in exports/train_nhl_sog_v2.csv exports/train_goalie_saves_v2.csv; do
+            echo "$f:"
+            head -n1 "$f" | tr ',' '\n' | nl -ba
+          done
+
+          python - <<'PY'
+          import csv, sys
+          required = {"player_id","game_id","team_id","opponent_id","is_home","game_date"}
+          for path in ("exports/train_nhl_sog_v2.csv","exports/train_goalie_saves_v2.csv"):
+              with open(path, newline="") as f:
+                  header = next(csv.reader(f), [])
+              missing = required - set(header)
+              if missing:
+                  print(f"FATAL: {path} missing columns: {sorted(missing)}", file=sys.stderr)
+                  sys.exit(2)
+          print("Header validation OK")
+          PY
+
       # -------------------- Score & load --------------------
       - name: Score & Load predictions
         if: steps.slate.outputs.has_games == 't'
