@@ -8,12 +8,16 @@ SELECT to_regclass('nhl.v_slate_sog_features') AS v_sog \gset
 
 \if :{?v_sog}
   -- 2) Does the view have rows for this slate_date?
-  SELECT 1 AS sog_present
-  FROM nhl.v_slate_sog_features
-  WHERE game_date = :'slate_date'::date
-  LIMIT 1 \gset
+  --    Use CASE/EXISTS so the query ALWAYS returns exactly one row for \gset.
+  SELECT CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM nhl.v_slate_sog_features
+             WHERE game_date = :'slate_date'::date
+           ) THEN 'on' ELSE 'off'
+         END AS sog_present \gset
 
-  \if :{?sog_present}
+  \if :sog_present
     -- ---- View branch (preflight + export) ----
     DO $$
     DECLARE missing text[];
