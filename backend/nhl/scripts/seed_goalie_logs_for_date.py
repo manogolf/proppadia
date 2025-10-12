@@ -1,169 +1,273 @@
 #!/usr/bin/env python3
-import os, sys, math, datetime as dt
-from zoneinfo import ZoneInfo
-from typing import List, Dict, Tuple, Optional
+"""
+Seed goalie boxscore stats for SLATE_DATE into nhl.import_goalie_logs_stage.
 
+Sources (in this order):
+- Games (primary):   nhl.games for SLATE_DATE (DB)
+- Games (fallback):  https://api-web.nhle.com/v1/schedule/YYYY-MM-DD
+
+- Boxscore (primary & only): https://api-web.nhle.com/v1/gamecenter/{gamePk}/boxscore
+  (No statsapi.* usage)
+
+Mapping:
+- Prefer name match against nhl.roster_status for that game
+- Fallback to nhl.player_external_ids (provider='nhl', provider_player_id)
+"""
+
+import os, sys, datetime as dt
+from typing import Iterable, Tuple, Dict, Any, List, Optional
 import requests
-from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import psycopg
 
-ET = ZoneInfo("America/New_York")
-DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
+# ---------------- Env & date ----------------
+DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+if not DB_URL:
+    print("Set SUPABASE_DB_URL or DATABASE_URL", file=sys.stderr); sys.exit(2)
 
-DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-if not DB:
-    sys.exit("Missing SUPABASE_DB_URL / DATABASE_URL")
-if "?sslmode=" not in DB and "&sslmode=" not in DB:
-    DB += ("&" if "?" in DB else "?") + "sslmode=require"
-if "?gssencmode=" not in DB and "&gssencmode=" not in DB:
-    DB += ("&" if "?" in DB else "?") + "gssencmode=disable"
+SLATE_DATE = os.environ.get("SLATE_DATE")
+if not SLATE_DATE:
+    print("Set SLATE_DATE=YYYY-MM-DD", file=sys.stderr); sys.exit(2)
+try:
+    _ = dt.date.fromisoformat(SLATE_DATE)
+except ValueError:
+    print(f"Bad SLATE_DATE: {SLATE_DATE}", file=sys.stderr); sys.exit(2)
 
-BOX = "https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore"
-S = requests.Session()
-S.headers.update({"User-Agent": "proppadia-nhl-goalie-seed"})
-S.mount("https://", HTTPAdapter(max_retries=Retry(
-    total=4, connect=4, read=4, backoff_factor=0.4,
-    status_forcelist=[429,500,502,503,504],
-    allowed_methods=frozenset({"GET"}),
-    raise_on_status=False,
-)))
+# Ensure ssl params for cloud PG if missing
+if "?sslmode=" not in DB_URL and "&sslmode=" not in DB_URL:
+    DB_URL += ("&" if "?" in DB_URL else "?") + "sslmode=require"
+if "?gssencmode=" not in DB_URL and "&gssencmode=" not in DB_URL:
+    DB_URL += ("&" if "?" in DB_URL else "?") + "gssencmode=disable"
 
-def _toi_to_minutes(s: Optional[str]) -> Optional[float]:
-    if not s or ":" not in s: return None
+API_SCHEDULE = "https://api-web.nhle.com/v1/schedule"
+API_BOXSCORE = "https://api-web.nhle.com/v1/gamecenter/{gamePk}/boxscore"
+
+# ---------------- HTTP ----------------
+def _session() -> requests.Session:
+    r = Retry(
+        total=5, connect=5, read=5,
+        backoff_factor=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    s = requests.Session()
+    s.headers.update({"User-Agent": "proppadia-nhl-goalie-seed"})
+    s.mount("https://", HTTPAdapter(max_retries=r))
+    return s
+
+S = _session()
+
+# ---------------- Helpers ----------------
+def toi_to_minutes(s: Optional[str]) -> Optional[float]:
+    """
+    Convert 'MM:SS' or 'HH:MM:SS' to minutes (float). Accept numeric minutes too.
+    """
+    if s is None:
+        return None
+    if isinstance(s, (int, float)):
+        return float(s)
+    s = str(s).strip()
+    if not s or s == "0":
+        return 0.0
+    parts = [p for p in s.split(":") if p != ""]
     try:
-        mm, ss = s.split(":")
-        return round(int(mm) + int(ss)/60.0, 2)
+        if len(parts) == 3:
+            h, m, sec = map(int, parts)
+            return 60*h + m + sec/60.0
+        if len(parts) == 2:
+            m, sec = map(int, parts)
+            return m + sec/60.0
+        # fallback: plain number
+        return float(s)
     except Exception:
         return None
 
-def _split_pair(val: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
-    # API strings like "21/24" (saves/shots). Return (saves, shots)
-    if not val or "/" not in val: return (None, None)
-    a, b = val.split("/", 1)
-    try: return (int(a), int(b))
-    except Exception: return (None, None)
+def normalize_name(s: Optional[str]) -> str:
+    return (s or "").strip().lower().replace("  ", " ")
 
-def fetch_goalies(gid: int) -> Tuple[List[Dict], List[Dict], int, int]:
-    r = S.get(BOX.format(gid=gid), timeout=10)
-    r.raise_for_status()
-    js = r.json()
+# ---------------- DB lookups ----------------
+def roster_name_map(conn, game_id: int) -> Dict[str, Tuple[int, int]]:
+    """
+    Return {normalized_full_name -> (player_id, team_id)} from roster for this game.
+    """
+    sql = """
+      SELECT r.player_id, r.team_id, LOWER(REGEXP_REPLACE(p.full_name, '\s+', ' ', 'g')) AS nm
+      FROM nhl.roster_status r
+      JOIN nhl.players p ON p.player_id = r.player_id
+      WHERE r.game_id = %s
+    """
+    mp = {}
+    with conn.cursor() as cur:
+        cur.execute(sql, (game_id,))
+        for pid, tid, nm in cur.fetchall():
+            mp[nm] = (int(pid), int(tid))
+    return mp
 
-    pbgs = js.get("playerByGameStats") or {}
-    home = pbgs.get("homeTeam") or {}
-    away = pbgs.get("awayTeam") or {}
+def external_map(conn, nhl_ids: List[int]) -> Dict[int, int]:
+    """
+    Map NHL numeric IDs -> internal player_id using nhl.player_external_ids
+    (provider='nhl', provider_player_id TEXT).
+    """
+    if not nhl_ids:
+        return {}
+    sql = """
+      SELECT provider_player_id, player_id
+      FROM nhl.player_external_ids
+      WHERE provider = 'nhl' AND provider_player_id = ANY(%s)
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (list(map(str, nhl_ids)),))
+        mp = {}
+        for ext, pid in cur.fetchall():
+            try:
+                mp[int(ext)] = int(pid)
+            except (TypeError, ValueError):
+                pass
+        return mp
 
-    home_id = (js.get("homeTeam") or {}).get("id") or home.get("id")
-    away_id = (js.get("awayTeam") or {}).get("id") or away.get("id")
+def game_ids_from_db(conn, date_str: str) -> List[int]:
+    sql = "SELECT game_id::bigint FROM nhl.games WHERE game_date = %s ORDER BY game_id"
+    with conn.cursor() as cur:
+        cur.execute(sql, (date_str,))
+        return [int(r[0]) for r in cur.fetchall()]
 
-    h_goalies = home.get("goalies") or []
-    a_goalies = away.get("goalies") or []
-    return h_goalies, a_goalies, int(home_id), int(away_id)
+def game_ids_from_api(date_str: str) -> List[int]:
+    url = f"{API_SCHEDULE}/{date_str}"
+    r = S.get(url, timeout=12); r.raise_for_status()
+    data = r.json()
+    games = []
+    if isinstance(data, dict) and "gameWeek" in data:
+        for day in data.get("gameWeek", []):
+            for g in day.get("games", []):
+                gid = g.get("id") or g.get("gamePk") or g.get("gameId")
+                if gid: games.append(int(gid))
+    elif isinstance(data, dict) and isinstance(data.get("games"), list):
+        for g in data["games"]:
+            gid = g.get("id") or g.get("gamePk") or g.get("gameId")
+            if gid: games.append(int(gid))
+    return sorted(set(games))
 
-def rows_for_game(gid: int, game_date: str) -> List[Tuple]:
-    h_goalies, a_goalies, home_tid, away_tid = fetch_goalies(gid)
-    out: List[Tuple] = []
+# ---------------- Boxscore (api-web) ----------------
+def fetch_boxscore_api(game_pk: int) -> Dict[str, Any]:
+    url = API_BOXSCORE.format(gamePk=int(game_pk))
+    r = S.get(url, timeout=15); r.raise_for_status()
+    return r.json()
 
-    def add(side: str, g: Dict, team_id: int, opp_id: int, is_home: bool):
-        pid = int(g.get("playerId"))
-        saves = int(g.get("saves") or 0)
-        shots = int(g.get("shotsAgainst") or 0)
-        ga    = int(g.get("goalsAgainst") or 0)
-        toi_m = _toi_to_minutes(g.get("toi"))
-        # Per-strength shots (denominators)
-        _, ev_shots = _split_pair(g.get("evenStrengthShotsAgainst"))
-        _, pp_shots = _split_pair(g.get("powerPlayShotsAgainst"))
-        _, sh_shots = _split_pair(g.get("shorthandedShotsAgainst"))
-        started = bool(g.get("starter", False))
-        start_prob = 1.0 if started else 0.0
+def iter_goalies_from_box(box: Dict[str, Any]) -> Iterable[Tuple[Optional[int], str, Optional[int], Optional[int], Optional[float]]]:
+    """
+    Yield tuples: (nhl_player_id, full_name, saves, shots_against, toi_minutes)
 
-        out.append((
-            pid, gid, team_id, opp_id, is_home,
-            shots, saves, ga, toi_m, start_prob, game_date,
-            ev_shots, pp_shots, sh_shots, None, None
-        ))
+    JSON shape (api-web) varies a bit; we target:
+      box["playerByGameStats"]["homeTeam"]["goalies"]  (list/dict)
+      box["playerByGameStats"]["awayTeam"]["goalies"]
+    Each goalie item should have: playerId, timeOnIce, saves or shotsAgainst(+goalsAgainst)
+    """
+    pbgs = box.get("playerByGameStats") or {}
+    for side_key in ("homeTeam", "awayTeam"):
+        team = pbgs.get(side_key) or {}
+        goalies = team.get("goalies") or team.get("goalie") or []
+        if isinstance(goalies, dict):
+            goalies = list(goalies.values())
+        for g in goalies:
+            nhl_id = g.get("playerId") or (g.get("player") or {}).get("id")
+            # Try multiple name locations
+            full_name = (
+                (g.get("name") or {}).get("default") or
+                (g.get("player") or {}).get("fullName") or
+                g.get("fullName") or
+                ""
+            )
+            saves = g.get("saves")
+            shots_against = g.get("shotsAgainst") or g.get("shots")
+            goals_against = g.get("goalsAgainst") or g.get("ga")
+            if saves is None and shots_against is not None and goals_against is not None:
+                try:
+                    saves = int(shots_against) - int(goals_against)
+                except Exception:
+                    pass
+            toi = toi_to_minutes(g.get("timeOnIce") or g.get("toi"))
+            try:
+                nhl_id_int = int(nhl_id) if nhl_id is not None else None
+            except Exception:
+                nhl_id_int = None
+            yield nhl_id_int, full_name, (None if saves is None else int(saves)), \
+                  (None if shots_against is None else int(shots_against)), toi
 
-    for g in (h_goalies or []):
-        add("HOME", g, home_tid, away_tid, True)
-    for g in (a_goalies or []):
-        add("AWAY", g, away_tid, home_tid, False)
-    return out
+# ---------------- Upsert ----------------
+def upsert_rows(conn, rows: List[Tuple[int,int,str,Optional[int],Optional[int],Optional[float]]]) -> int:
+    """
+    rows of: (player_id, game_id, game_date, saves, shots_faced, toi_minutes)
+    """
+    if not rows: return 0
+    sql = """
+    INSERT INTO nhl.import_goalie_logs_stage
+      (player_id, game_id, game_date, saves, shots_faced, toi_minutes)
+    VALUES (%s,%s,%s,%s,%s,%s)
+    ON CONFLICT (player_id, game_id) DO UPDATE SET
+      saves       = EXCLUDED.saves,
+      shots_faced = EXCLUDED.shots_faced,
+      toi_minutes = EXCLUDED.toi_minutes
+    """
+    with conn.cursor() as cur:
+        cur.executemany(sql, rows)
+    return len(rows)
 
+# ---------------- Main ----------------
 def main():
-    with psycopg.connect(DB) as conn, conn.cursor() as cur:
-        cur.execute("""
-            SELECT game_id, home_team_id, away_team_id
-            FROM nhl.games
-            WHERE game_date = %s::date
-              AND status = 'final'
-            ORDER BY game_id
-        """, (DATE,))
-        games = [r[0] for r in cur.fetchall()]
-        if not games:
-            print(f"[seed_goalies] No FINAL games for {DATE}")
+    inserted_total = 0
+    skipped_no_map = 0
+
+    with psycopg.connect(DB_URL, autocommit=False) as conn:
+        game_ids = game_ids_from_db(conn, SLATE_DATE)
+        if not game_ids:
+            game_ids = game_ids_from_api(SLATE_DATE)
+
+        if not game_ids:
+            print(f"No games on {SLATE_DATE}")
             return
 
-        # stage → merge (stage table columns match this order)  ⬇︎
-        # player_id, game_id, team_id, opponent_id, is_home, shots_faced, saves,
-        # goals_allowed, toi_minutes, start_prob, game_date, ev_shots_faced,
-        # pp_shots_faced, sh_shots_faced, high_danger_shots_faced, rebounds_allowed
-        # (as defined in your schema). :contentReference[oaicite:0]{index=0}
-        cur.execute("TRUNCATE nhl.import_goalie_logs_stage")
-        staged = 0
-        for gid in games:
+        for gpk in game_ids:
             try:
-                rows = rows_for_game(gid, DATE)
-                if not rows:
-                    print(f"[{gid}] no goalie rows in boxscore")
-                    continue
-                cur.executemany("""
-                    INSERT INTO nhl.import_goalie_logs_stage
-                    (player_id, game_id, team_id, opponent_id, is_home,
-                     shots_faced, saves, goals_allowed, toi_minutes,
-                     start_prob, game_date,
-                     ev_shots_faced, pp_shots_faced, sh_shots_faced,
-                     high_danger_shots_faced, rebounds_allowed)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """, rows)
-                staged += len(rows)
-                print(f"[{gid}] staged {len(rows)} goalie rows")
+                box = fetch_boxscore_api(gpk)
             except Exception as e:
-                print(f"[{gid}] error: {e}")
+                print(f"[{gpk}] boxscore fetch failed: {e}", file=sys.stderr)
+                continue
 
-        # merge into raw with upsert on (player_id, game_id)  ⬇︎
-        # (that’s the PK in your schema). :contentReference[oaicite:1]{index=1}
-        cur.execute("""
-            INSERT INTO nhl.goalie_game_logs_raw
-            (player_id, game_id, team_id, opponent_id, is_home,
-             shots_faced, saves, goals_allowed, toi_minutes,
-             start_prob, game_date,
-             ev_shots_faced, pp_shots_faced, sh_shots_faced,
-             high_danger_shots_faced, rebounds_allowed)
-            SELECT
-             s.player_id, s.game_id, s.team_id, s.opponent_id, s.is_home,
-             s.shots_faced, s.saves, s.goals_allowed, s.toi_minutes,
-             s.start_prob, s.game_date,
-             s.ev_shots_faced, s.pp_shots_faced, s.sh_shots_faced,
-             s.high_danger_shots_faced, s.rebounds_allowed
-            FROM nhl.import_goalie_logs_stage s
-            ON CONFLICT (player_id, game_id) DO UPDATE SET
-             team_id = EXCLUDED.team_id,
-             opponent_id = EXCLUDED.opponent_id,
-             is_home = EXCLUDED.is_home,
-             shots_faced = EXCLUDED.shots_faced,
-             saves = EXCLUDED.saves,
-             goals_allowed = EXCLUDED.goals_allowed,
-             toi_minutes = EXCLUDED.toi_minutes,
-             start_prob = COALESCE(EXCLUDED.start_prob, nhl.goalie_game_logs_raw.start_prob),
-             game_date = EXCLUDED.game_date,
-             ev_shots_faced = COALESCE(EXCLUDED.ev_shots_faced, nhl.goalie_game_logs_raw.ev_shots_faced),
-             pp_shots_faced = COALESCE(EXCLUDED.pp_shots_faced, nhl.goalie_game_logs_raw.pp_shots_faced),
-             sh_shots_faced = COALESCE(EXCLUDED.shots_faced, nhl.goalie_game_logs_raw.sh_shots_faced),
-             high_danger_shots_faced = COALESCE(EXCLUDED.high_danger_shots_faced, nhl.goalie_game_logs_raw.high_danger_shots_faced),
-             rebounds_allowed = COALESCE(EXCLUDED.rebounds_allowed, nhl.goalie_game_logs_raw.rebounds_allowed)
-        """)
-        print(f"done. upserted total {staged} staged rows for {DATE}")
-        conn.commit()
+            roster_map = roster_name_map(conn, gpk)  # name -> (player_id, team_id)
+
+            # collect raw goalie rows from API
+            raw_goalies = list(iter_goalies_from_box(box))
+            nhl_ids = [int(x[0]) for x in raw_goalies if x[0] is not None]
+            ext_map = external_map(conn, nhl_ids)
+
+            rows = []
+            for nhl_id, full_name, saves, shots_against, toi_min in raw_goalies:
+                pid = None
+                nm = normalize_name(full_name)
+                # first: roster match
+                if nm in roster_map:
+                    pid = roster_map[nm][0]
+                # fallback: external id
+                if pid is None and nhl_id is not None:
+                    pid = ext_map.get(int(nhl_id))
+                if pid is None:
+                    skipped_no_map += 1
+                    continue
+                rows.append((
+                    int(pid), int(gpk), SLATE_DATE,
+                    saves if saves is not None else None,
+                    shots_against if shots_against is not None else None,
+                    toi_min if toi_min is not None else None
+                ))
+
+            inserted = upsert_rows(conn, rows)
+            conn.commit()
+            inserted_total += inserted
+            print(f"[{gpk}] upserted {inserted} goalie rows; skipped_no_map_so_far={skipped_no_map}")
+
+    print(f"Done. Upserted total {inserted_total} goalie rows for {SLATE_DATE}; skipped_no_map={skipped_no_map}")
 
 if __name__ == "__main__":
     main()

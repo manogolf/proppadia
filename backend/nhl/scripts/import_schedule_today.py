@@ -6,7 +6,7 @@ Import NHL schedule for SLATE_DATE (ET) into staging and merge.
 - Self-heals: upserts real team rows into nhl.teams and seeds nhl.team_external_ids.
 """
 
-import os
+import os, requests, time
 import sys
 import json
 import datetime as dt
@@ -20,7 +20,6 @@ try:
 except Exception:
     pass
 
-import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 import psycopg
@@ -36,7 +35,7 @@ if "?sslmode=" not in DB and "&sslmode=" not in DB:
 if "?gssencmode=" not in DB and "&gssencmode=" not in DB:
     DB += ("&" if "?" in DB else "?") + "gssencmode=disable"
 
-BASE_URL = "https://api-web.nhle.com/v1/schedule"
+BASE_URL = os.getenv("NHL_API_BASE", "https://api-web.nhle.com") + "/v1/schedule"
 
 
 # ---------------- HTTP helpers ----------------
@@ -65,10 +64,24 @@ def _to_et_date(iso_utc: str) -> str | None:
 def fetch_schedule_for_date(date_str: str) -> list[dict]:
     """Fetch the schedule and keep only games whose start time falls on date_str in ET."""
     s = _session()
-    url = f"{BASE_URL}/{date_str}"
-    r = s.get(url, timeout=12)
-    r.raise_for_status()
-    data = r.json()
+    candidates = [
+        f"{BASE_URL}/{date_str}",
+        f"{BASE_URL}?date={date_str}",
+        # stats REST fallback (kept last)
+        f"https://api.nhle.com/stats/rest/en/schedule?cayenneExp=gameDate=%22{date_str}%22",
+    ]
+    data = None
+    last_err = None
+    for url in candidates:
+        try:
+            r = s.get(url, timeout=12); r.raise_for_status()
+            data = r.json()
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if data is None:
+        raise RuntimeError(f"No schedule JSON for {date_str} (last error: {last_err})")
 
     # flatten games from gameWeek[] or top-level games
     games_in: list[dict] = []
@@ -79,14 +92,68 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
         games_in = data["games"]
 
     out, seen = [], set()
-    for g in games_in:
-        start_iso = g.get("startTimeUTC") or g.get("gameDate")
-        if _to_et_date(start_iso) == date_str:
+    # Handle both api-web shape and stats REST fallback
+    # api-web: items sit in `games_in` (from gameWeek[...] or top-level games)
+    # stats REST: when we hit the fallback URL, `data.get("data")` has rows
+    if isinstance(data, dict) and "data" in data:
+        games_in = data["data"]
+        for g in games_in:
+            start_iso = g.get("startTimeUTC") or g.get("gameDate")
+            if _to_et_date(start_iso) != date_str:
+                continue
+            gid = g.get("gameId") or g.get("id")
+            if gid in seen: 
+                continue
+            out.append({
+                "id": gid,
+                "startTimeUTC": start_iso,
+                "homeTeam": {"abbrev": g.get("homeTeamAbbrev") or g.get("homeTeamCode")},
+                "awayTeam": {"abbrev": g.get("awayTeamAbbrev") or g.get("awayTeamCode")},
+                "gameState": g.get("gameState") or g.get("state"),
+            })
+            seen.add(gid)
+    else:
+        for g in games_in:
+            start_iso = g.get("startTimeUTC") or g.get("gameDate")
+            if _to_et_date(start_iso) != date_str:
+                continue
             gid = g.get("id") or g.get("gamePk") or g.get("gameId")
-            if gid not in seen:
-                out.append(g)
-                seen.add(gid)
+            if gid in seen:
+                continue
+            out.append(g)
+            seen.add(gid)
     return out
+
+def get_schedule(date_str: str) -> list[dict]:
+    """
+    Normalize to legacy-like shape used elsewhere:
+      [{"gamePk": <int>, "gameDate": <iso>, 
+        "teams": {"home":{"team":{"abbreviation": "XYZ"}},
+                  "away":{"team":{"abbreviation": "ABC"}}},
+        "gameState": "..."}]
+    """
+    games = fetch_schedule_for_date(date_str)
+    norm = []
+    for g in games:
+        gid = g.get("gamePk") or g.get("id") or g.get("gameId")
+        try:
+            gid_int = int(str(gid))
+        except Exception:
+            gid_int = gid
+        home_abbr = (g.get("homeTeam") or {}).get("abbrev") \
+                    or ((g.get("teams") or {}).get("home") or {}).get("team", {}).get("abbreviation")
+        away_abbr = (g.get("awayTeam") or {}).get("abbrev") \
+                    or ((g.get("teams") or {}).get("away") or {}).get("team", {}).get("abbreviation")
+        norm.append({
+            "gamePk": gid_int,
+            "gameDate": g.get("startTimeUTC") or g.get("gameDate"),
+            "gameState": g.get("gameState") or g.get("state"),
+            "teams": {
+                "home": {"team": {"abbreviation": home_abbr}},
+                "away": {"team": {"abbreviation": away_abbr}},
+            },
+        })
+    return norm
 
 def _map_game_state(g: dict) -> str | None:
     """
