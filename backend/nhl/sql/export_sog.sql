@@ -3,7 +3,7 @@
 \pset pager off
 \pset tuples_only on
 
--- Detect if the view exists (explicit 1/0) 
+-- Detect if the view exists (explicit 1/0 + explicit compare)
 SELECT CASE WHEN to_regclass('nhl.v_slate_sog_features') IS NULL THEN 0 ELSE 1 END AS has_view;
 \gset
 
@@ -33,7 +33,12 @@ END $$;
 -- Export from the view (label left NULL at scoring time)
 COPY (
   SELECT
-    player_id, game_id, team_id, opponent_id, is_home, game_date,
+    player_id,
+    game_id,
+    team_id,
+    opponent_id,
+    is_home,
+    game_date::date AS game_date,
     NULL::int AS shots_on_goal,
     d5_sog_per60, d10_sog_per60, d20_sog_per60,
     team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
@@ -43,7 +48,9 @@ COPY (
   WHERE game_date = :'slate_date'::date
   ORDER BY game_id, player_id
 ) TO STDOUT WITH CSV HEADER;
+
 \else
+
 -- Preflight: assert required columns on the base table fallback
 DO $$
 DECLARE missing text[];
@@ -68,7 +75,12 @@ END $$;
 -- Export from the base table (same contract)
 COPY (
   SELECT
-    player_id, game_id, team_id, opponent_id, is_home, game_date,
+    player_id,
+    game_id,
+    team_id,
+    opponent_id,
+    is_home,
+    game_date::date AS game_date,
     NULL::int AS shots_on_goal,
     d5_sog_per60, d10_sog_per60, d20_sog_per60,
     team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
@@ -78,4 +90,5 @@ COPY (
   WHERE game_date = :'slate_date'::date
   ORDER BY game_id, player_id
 ) TO STDOUT WITH CSV HEADER;
+
 \endif
