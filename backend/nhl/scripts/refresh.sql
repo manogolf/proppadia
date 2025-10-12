@@ -130,7 +130,7 @@ WHERE t.pace_index IS DISTINCT FROM CASE
   ELSE sqrt(t.team_d10_sf_per_game * t.opp_d10_sf_allowed_per_game) END;
 
 -------------------------------------------------------------------------------
--- A1) Goalie rolling features (d5/d10 per-60 + d10_save_pct), leakage-safe
+-- A1) Goalie rolling features (d5/d10/d20 per-60 + d10_save_pct), leakage-safe
 -------------------------------------------------------------------------------
 
 -- Detect goalie cols for A1
@@ -182,11 +182,16 @@ roll AS (
     SUM(toi) OVER w5  AS toi_d5,
     SUM(sf)  OVER w10 AS sf_d10,
     SUM(sv)  OVER w10 AS sv_d10,
-    SUM(toi) OVER w10 AS toi_d10
+    SUM(toi) OVER w10 AS toi_d10,
+    -- NEW 20-game window
+    SUM(sf)  OVER w20 AS sf_d20,
+    SUM(sv)  OVER w20 AS sv_d20,
+    SUM(toi) OVER w20 AS toi_d20
   FROM gl
   WINDOW
     w5  AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING),
-    w10 AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)
+    w10 AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING),
+    w20 AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING)
 )
 SELECT
   player_id, game_id, team_id, opponent_id, is_home, game_date,
@@ -194,7 +199,9 @@ SELECT
   CASE WHEN toi_d5  > 0 THEN 60*sv_d5 /toi_d5  END AS d5_saves_per60,
   CASE WHEN toi_d10 > 0 THEN 60*sf_d10/toi_d10 END AS d10_shots_faced_per60,
   CASE WHEN toi_d10 > 0 THEN 60*sv_d10/toi_d10 END AS d10_saves_per60,
-  CASE WHEN sf_d10  > 0 THEN    sv_d10/sf_d10 END AS d10_save_pct
+  CASE WHEN sf_d10  > 0 THEN    sv_d10/sf_d10 END AS d10_save_pct,
+  -- NEW 20-game feature
+  CASE WHEN toi_d20 > 0 THEN 60*sv_d20/toi_d20 END AS d20_saves_per60
 FROM roll
 ORDER BY game_date, player_id, game_id;
 \else
@@ -216,11 +223,16 @@ roll AS (
     SUM(toi) OVER w5  AS toi_d5,
     SUM(sf)  OVER w10 AS sf_d10,
     SUM(sv)  OVER w10 AS sv_d10,
-    SUM(toi) OVER w10 AS toi_d10
+    SUM(toi) OVER w10 AS toi_d10,
+    -- NEW 20-game window
+    SUM(sf)  OVER w20 AS sf_d20,
+    SUM(sv)  OVER w20 AS sv_d20,
+    SUM(toi) OVER w20 AS toi_d20
   FROM gl
   WINDOW
     w5  AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING),
-    w10 AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)
+    w10 AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING),
+    w20 AS (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING)
 )
 SELECT
   player_id, game_id, team_id, opponent_id, is_home, game_date,
@@ -228,7 +240,9 @@ SELECT
   CASE WHEN toi_d5  > 0 THEN 60*sv_d5 /toi_d5  END AS d5_saves_per60,
   CASE WHEN toi_d10 > 0 THEN 60*sf_d10/toi_d10 END AS d10_shots_faced_per60,
   CASE WHEN toi_d10 > 0 THEN 60*sv_d10/toi_d10 END AS d10_saves_per60,
-  CASE WHEN sf_d10  > 0 THEN    sv_d10/sf_d10 END AS d10_save_pct
+  CASE WHEN sf_d10  > 0 THEN    sv_d10/sf_d10 END AS d10_save_pct,
+  -- NEW 20-game feature
+  CASE WHEN toi_d20 > 0 THEN 60*sv_d20/toi_d20 END AS d20_saves_per60
 FROM roll
 ORDER BY game_date, player_id, game_id;
 \endif
@@ -238,13 +252,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS goalie_roll_feats_m_uniq
 
 REFRESH MATERIALIZED VIEW nhl.goalie_roll_feats_m;
 
+-- Ensure target column exists before upsert
+ALTER TABLE nhl.training_features_goalie_saves_v2
+  ADD COLUMN IF NOT EXISTS d20_saves_per60 numeric;
+
 -- Upsert goalie rolling features into training_features_goalie_saves_v2
 INSERT INTO nhl.training_features_goalie_saves_v2 AS t
   (player_id, game_id, team_id, opponent_id, is_home, game_date,
-   d5_shots_faced_per60, d5_saves_per60, d10_shots_faced_per60, d10_saves_per60, d10_save_pct)
+   d5_shots_faced_per60, d5_saves_per60,
+   d10_shots_faced_per60, d10_saves_per60, d10_save_pct,
+   d20_saves_per60)
 SELECT
   m.player_id, m.game_id, m.team_id, m.opponent_id, m.is_home, m.game_date,
-  m.d5_shots_faced_per60, m.d5_saves_per60, m.d10_shots_faced_per60, m.d10_saves_per60, m.d10_save_pct
+  m.d5_shots_faced_per60, m.d5_saves_per60,
+  m.d10_shots_faced_per60, m.d10_saves_per60, m.d10_save_pct,
+  m.d20_saves_per60
 FROM nhl.goalie_roll_feats_m m
 WHERE m.game_date >= current_date - interval '60 days'
 ON CONFLICT (player_id, game_id) DO UPDATE
@@ -252,7 +274,8 @@ SET d5_shots_faced_per60  = EXCLUDED.d5_shots_faced_per60,
     d5_saves_per60        = EXCLUDED.d5_saves_per60,
     d10_shots_faced_per60 = EXCLUDED.d10_shots_faced_per60,
     d10_saves_per60       = EXCLUDED.d10_saves_per60,
-    d10_save_pct          = EXCLUDED.d10_save_pct;
+    d10_save_pct          = EXCLUDED.d10_save_pct,
+    d20_saves_per60       = EXCLUDED.d20_saves_per60;
 
 \else
 \echo 'ERROR[A1]: missing saves column on nhl.v_goalie_game_logs_played (tried saves/sv)'
@@ -356,9 +379,9 @@ CREATE MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready AS
 SELECT
   t.player_id, t.game_id, t.team_id, t.opponent_id, t.is_home, t.game_date,
   t.shots_on_goal,
-  t.d5_sog_per60,                -- added (was missing)
+  t.d5_sog_per60,
   t.d10_sog_per60,
-  t.d20_sog_per60,               -- added (was missing)
+  t.d20_sog_per60,
   t.team_d10_sf_per_game,
   t.opp_d10_sf_allowed_per_game,
   t.role_pp_share,
@@ -388,7 +411,7 @@ CREATE INDEX IF NOT EXISTS idx_sog_ready_date_player
 CREATE INDEX IF NOT EXISTS idx_sog_ready_date_game
   ON nhl.training_features_nhl_sog_v2_ready (game_date, game_id);
 
--- SAVES READY: carry opp/team per-60 + matchup through from base; include all export columns
+-- SAVES READY: include d20_saves_per60 and carry opp/team per-60 + matchup
 DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_goalie_saves_v2_ready CASCADE;
 CREATE MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready AS
 SELECT
@@ -398,9 +421,10 @@ SELECT
   t.team_d10_sf_per_game, t.opp_d10_sf_allowed_per_game,
   t.pace_index, t.rest_days, t.b2b_flag,
   t.d5_saves_per60, t.d10_saves_per60, t.d5_shots_faced_per60, t.season_save_pct,
-  t.opp_d10_sf_per60,              -- added (was missing)
-  t.team_d10_sa_per60,             -- added (was missing)
-  t.pace_matchup_index             -- added (was missing)
+  t.opp_d10_sf_per60,
+  t.team_d10_sa_per60,
+  t.pace_matchup_index,
+  t.d20_saves_per60               -- NEW
 FROM nhl.training_features_goalie_saves_v2 t
 JOIN nhl.goalie_game_logs_raw g
   ON g.player_id = t.player_id AND g.game_id = t.game_id
@@ -445,7 +469,8 @@ SELECT
   r.team_d10_sf_per_game, r.opp_d10_sf_allowed_per_game,
   r.pace_index, r.rest_days, r.b2b_flag,
   r.d5_saves_per60, r.d10_saves_per60, r.d5_shots_faced_per60, r.season_save_pct,
-  r.opp_d10_sf_per60, r.team_d10_sa_per60, r.pace_matchup_index
+  r.opp_d10_sf_per60, r.team_d10_sa_per60, r.pace_matchup_index,
+  r.d20_saves_per60                -- NEW in view
 FROM nhl.training_features_goalie_saves_v2_ready r;
 
 -------------------------------------------------------------------------------
@@ -490,7 +515,8 @@ goal AS (
     COUNT(season_save_pct)::bigint AS season_sv_nn,
     COUNT(opp_d10_sf_per60)::bigint AS opp_d10_sf_per60_nn,
     COUNT(team_d10_sa_per60)::bigint AS team_d10_sa_per60_nn,
-    COUNT(pace_matchup_index)::bigint AS pace_matchup_index_nn
+    COUNT(pace_matchup_index)::bigint AS pace_matchup_index_nn,
+    COUNT(d20_saves_per60)::bigint AS d20_sv60_nn       -- track coverage
   FROM nhl.training_features_goalie_saves_v2_ready
 )
 INSERT INTO nhl.data_quality_audit (audit_date, check_name, level, result)
@@ -527,7 +553,8 @@ SELECT CURRENT_DATE, 'goalie_ready_coverage', 'info',
     'season_save_pct_nn', g.season_sv_nn,
     'opp_d10_sf_per60_nn', g.opp_d10_sf_per60_nn,
     'team_d10_sa_per60_nn', g.team_d10_sa_per60_nn,
-    'pace_matchup_index_nn', g.pace_matchup_index_nn
+    'pace_matchup_index_nn', g.pace_matchup_index_nn,
+    'd20_saves_per60_nn', g.d20_sv60_nn
   )
 FROM goal g
 ON CONFLICT (check_name, audit_date) DO UPDATE
