@@ -3,9 +3,9 @@
 \pset pager off
 \pset tuples_only on
 
--- Detect if the view exists (explicit 1/0 + explicit compare)
-SELECT CASE WHEN to_regclass('nhl.v_slate_sog_features') IS NULL THEN 0 ELSE 1 END AS has_view;
-\gset
+-- Detect if the view exists (no output leaks to STDOUT)
+SELECT to_regclass('nhl.v_slate_sog_features') AS v_sog \gset
+\if :{?v_sog}
 
 \if :has_view = 1
 DO $$
