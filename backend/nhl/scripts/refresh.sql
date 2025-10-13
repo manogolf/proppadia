@@ -183,7 +183,6 @@ roll AS (
     SUM(sf)  OVER w10 AS sf_d10,
     SUM(sv)  OVER w10 AS sv_d10,
     SUM(toi) OVER w10 AS toi_d10,
-    -- NEW 20-game window
     SUM(sf)  OVER w20 AS sf_d20,
     SUM(sv)  OVER w20 AS sv_d20,
     SUM(toi) OVER w20 AS toi_d20
@@ -200,7 +199,6 @@ SELECT
   CASE WHEN toi_d10 > 0 THEN 60*sf_d10/toi_d10 END AS d10_shots_faced_per60,
   CASE WHEN toi_d10 > 0 THEN 60*sv_d10/toi_d10 END AS d10_saves_per60,
   CASE WHEN sf_d10  > 0 THEN    sv_d10/sf_d10 END AS d10_save_pct,
-  -- NEW 20-game feature
   CASE WHEN toi_d20 > 0 THEN 60*sv_d20/toi_d20 END AS d20_saves_per60
 FROM roll
 ORDER BY game_date, player_id, game_id;
@@ -224,7 +222,6 @@ roll AS (
     SUM(sf)  OVER w10 AS sf_d10,
     SUM(sv)  OVER w10 AS sv_d10,
     SUM(toi) OVER w10 AS toi_d10,
-    -- NEW 20-game window
     SUM(sf)  OVER w20 AS sf_d20,
     SUM(sv)  OVER w20 AS sv_d20,
     SUM(toi) OVER w20 AS toi_d20
@@ -241,7 +238,6 @@ SELECT
   CASE WHEN toi_d10 > 0 THEN 60*sf_d10/toi_d10 END AS d10_shots_faced_per60,
   CASE WHEN toi_d10 > 0 THEN 60*sv_d10/toi_d10 END AS d10_saves_per60,
   CASE WHEN sf_d10  > 0 THEN    sv_d10/sf_d10 END AS d10_save_pct,
-  -- NEW 20-game feature
   CASE WHEN toi_d20 > 0 THEN 60*sv_d20/toi_d20 END AS d20_saves_per60
 FROM roll
 ORDER BY game_date, player_id, game_id;
@@ -252,11 +248,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS goalie_roll_feats_m_uniq
 
 REFRESH MATERIALIZED VIEW nhl.goalie_roll_feats_m;
 
--- Ensure target column exists before upsert
+-- Upsert goalie rolling features into training_features_goalie_saves_v2
 ALTER TABLE nhl.training_features_goalie_saves_v2
   ADD COLUMN IF NOT EXISTS d20_saves_per60 numeric;
 
--- Upsert goalie rolling features into training_features_goalie_saves_v2
 INSERT INTO nhl.training_features_goalie_saves_v2 AS t
   (player_id, game_id, team_id, opponent_id, is_home, game_date,
    d5_shots_faced_per60, d5_saves_per60,
@@ -283,6 +278,55 @@ SET d5_shots_faced_per60  = EXCLUDED.d5_shots_faced_per60,
 \else
 \echo 'ERROR[A1]: missing shots column on nhl.v_goalie_game_logs_played (tried shots_faced/shots_against/sa/shots)'
 \endif
+
+-------------------------------------------------------------------------------
+-- A1.5) Wire team matchup features into goalie features for game-date rows
+--       (fills: team_d10_sf_per_game, opp_d10_sf_allowed_per_game, pace_index,
+--        opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index)
+-------------------------------------------------------------------------------
+WITH g AS (
+  SELECT player_id, game_id, team_id, opponent_id, game_date::date AS game_date
+  FROM nhl.goalie_roll_feats_m
+),
+team_feats AS (
+  SELECT
+    g.player_id,
+    g.game_id,
+    tr.team_d10_sf_per_game,
+    tr.opp_d10_sf_allowed_per_game,
+    tr.pace_index,
+    /* proxies for per60 counterparts using per-game roll10 */
+    tro.team_d10_sf_per_game       AS opp_d10_sf_per60,
+    tr.opp_d10_sf_allowed_per_game AS team_d10_sa_per60,
+    CASE
+      WHEN tr.pace_index IS NOT NULL AND tro.pace_index IS NOT NULL
+      THEN sqrt(tr.pace_index * tro.pace_index)
+      ELSE NULL
+    END AS pace_matchup_index
+  FROM g
+  LEFT JOIN nhl.tf_team_roll10 tr
+    ON tr.team_id = g.team_id AND tr.game_date = g.game_date
+  LEFT JOIN nhl.tf_team_roll10 tro
+    ON tro.team_id = g.opponent_id AND tro.game_date = g.game_date
+)
+UPDATE nhl.training_features_goalie_saves_v2 t
+SET
+  team_d10_sf_per_game        = tf.team_d10_sf_per_game,
+  opp_d10_sf_allowed_per_game = tf.opp_d10_sf_allowed_per_game,
+  pace_index                  = tf.pace_index,
+  opp_d10_sf_per60            = tf.opp_d10_sf_per60,
+  team_d10_sa_per60           = tf.team_d10_sa_per60,
+  pace_matchup_index          = tf.pace_matchup_index
+FROM team_feats tf
+WHERE t.player_id = tf.player_id AND t.game_id = tf.game_id
+  AND (
+    t.team_d10_sf_per_game        IS DISTINCT FROM tf.team_d10_sf_per_game OR
+    t.opp_d10_sf_allowed_per_game IS DISTINCT FROM tf.opp_d10_sf_allowed_per_game OR
+    t.pace_index                  IS DISTINCT FROM tf.pace_index OR
+    t.opp_d10_sf_per60            IS DISTINCT FROM tf.opp_d10_sf_per60 OR
+    t.team_d10_sa_per60           IS DISTINCT FROM tf.team_d10_sa_per60 OR
+    t.pace_matchup_index          IS DISTINCT FROM tf.pace_matchup_index
+  );
 
 -------------------------------------------------------------------------------
 -- B) Goalie rest_days / b2b from previous appearance
@@ -373,7 +417,7 @@ WHERE t.player_id = a.player_id AND t.game_id = a.game_id
 --    Populate immediately (non-concurrent) and add indexes (incl. UNIQUE).
 -------------------------------------------------------------------------------
 
--- SOG READY: carry d5/d20 through from base; include all export columns
+-- SOG READY (permissive: no WHERE filter)
 DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_nhl_sog_v2_ready CASCADE;
 CREATE MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready AS
 SELECT
@@ -393,17 +437,10 @@ SELECT
   t.team_d10_sa_per60,
   t.pace_matchup_index
 FROM nhl.training_features_nhl_sog_v2 t
-WHERE
-  t.d10_sog_per60 IS NOT NULL
-  AND t.team_d10_sf_per_game IS NOT NULL
-  AND t.opp_d10_sf_allowed_per_game IS NOT NULL
-  AND t.pace_index IS NOT NULL
 WITH NO DATA;
 
--- Initial populate (must be non-concurrent right after CREATE … WITH NO DATA)
 REFRESH MATERIALIZED VIEW nhl.training_features_nhl_sog_v2_ready;
 
--- Indexes (UNIQUE enables future CONCURRENTLY if you stop dropping/recreating)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_sog_ready_player_game
   ON nhl.training_features_nhl_sog_v2_ready (player_id, game_id);
 CREATE INDEX IF NOT EXISTS idx_sog_ready_date_player
@@ -411,35 +448,34 @@ CREATE INDEX IF NOT EXISTS idx_sog_ready_date_player
 CREATE INDEX IF NOT EXISTS idx_sog_ready_date_game
   ON nhl.training_features_nhl_sog_v2_ready (game_date, game_id);
 
--- SAVES READY: include d20_saves_per60 and carry opp/team per-60 + matchup
+-- SAVES READY (permissive: LEFT JOIN label and no WHERE filter)
 DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_goalie_saves_v2_ready CASCADE;
 CREATE MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready AS
 SELECT
   t.player_id, t.game_id, t.team_id, t.opponent_id, t.is_home, t.game_date,
-  g.saves,                         -- label (present when logged)
-  t.d10_shots_faced_per60, t.d10_save_pct,
-  t.team_d10_sf_per_game, t.opp_d10_sf_allowed_per_game,
-  t.pace_index, t.rest_days, t.b2b_flag,
-  t.d5_saves_per60, t.d10_saves_per60, t.d5_shots_faced_per60, t.season_save_pct,
+  g.saves,  -- optional label; NULL pre-game
+  t.d10_shots_faced_per60,
+  t.d10_save_pct,
+  t.team_d10_sf_per_game,
+  t.opp_d10_sf_allowed_per_game,
+  t.pace_index,
+  t.rest_days,
+  t.b2b_flag,
+  t.d5_saves_per60,
+  t.d10_saves_per60,
+  t.d5_shots_faced_per60,
+  t.season_save_pct,
   t.opp_d10_sf_per60,
   t.team_d10_sa_per60,
   t.pace_matchup_index,
-  t.d20_saves_per60               -- NEW
+  t.d20_saves_per60
 FROM nhl.training_features_goalie_saves_v2 t
-JOIN nhl.goalie_game_logs_raw g
+LEFT JOIN nhl.goalie_game_logs_raw g
   ON g.player_id = t.player_id AND g.game_id = t.game_id
-WHERE
-  t.d10_shots_faced_per60 IS NOT NULL
-  AND t.d10_save_pct IS NOT NULL
-  AND t.team_d10_sf_per_game IS NOT NULL
-  AND t.opp_d10_sf_allowed_per_game IS NOT NULL
-  AND t.pace_index IS NOT NULL
 WITH NO DATA;
 
--- Initial populate (non-concurrent)
 REFRESH MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready;
 
--- Indexes (UNIQUE enables future CONCURRENTLY if you stop dropping/recreating)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_saves_ready_player_game
   ON nhl.training_features_goalie_saves_v2_ready (player_id, game_id);
 CREATE INDEX IF NOT EXISTS idx_saves_ready_date_player
@@ -448,7 +484,7 @@ CREATE INDEX IF NOT EXISTS idx_saves_ready_date_game
   ON nhl.training_features_goalie_saves_v2_ready (game_date, game_id);
 
 -------------------------------------------------------------------------------
--- E) Slate views (exact contract used by the workflow export)
+-- E) Slate views (exact contract used by the workflow export; robust aliases)
 -------------------------------------------------------------------------------
 DROP VIEW IF EXISTS nhl.v_slate_sog_features;
 CREATE VIEW nhl.v_slate_sog_features AS
@@ -469,8 +505,15 @@ SELECT
   r.team_d10_sf_per_game, r.opp_d10_sf_allowed_per_game,
   r.pace_index, r.rest_days, r.b2b_flag,
   r.d5_saves_per60, r.d10_saves_per60, r.d5_shots_faced_per60, r.season_save_pct,
-  r.opp_d10_sf_per60, r.team_d10_sa_per60, r.pace_matchup_index,
-  r.d20_saves_per60                -- NEW in view
+  -- NEW: 20-game saves/60
+  r.d20_saves_per60,
+  -- Robust aliases expected by the scorer (derive from *_per_game so they always exist)
+  r.team_d10_sf_per_game        AS team_d10_sf_per60,
+  r.opp_d10_sf_allowed_per_game AS opp_d10_sa_per60,
+  -- Keep legacy passthroughs if your scorer/exports still reference them
+  r.opp_d10_sf_per60,
+  r.team_d10_sa_per60,
+  r.pace_matchup_index
 FROM nhl.training_features_goalie_saves_v2_ready r;
 
 -------------------------------------------------------------------------------
