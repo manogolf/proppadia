@@ -84,6 +84,34 @@ def prepare_X(df: pd.DataFrame, raw_feature_list: List[str], model_feature_order
 
     return X
 
+# --- add near the top (after imports) or alongside other helpers ---
+def resolve_feature_list(meta: dict, key: str) -> list[str]:
+    """
+    Accepts either:
+      - a list of feature names, or
+      - a dict with one of: 'features', 'columns', 'feature_cols'
+    Returns a concrete list[str] suitable for df[feature_cols].
+    """
+    if key not in meta:
+        raise KeyError(f"feature_key '{key}' not found. Available: {list(meta.keys())}")
+
+    spec = meta[key]
+    if isinstance(spec, list):
+        feats = spec
+    elif isinstance(spec, dict):
+        feats = (spec.get("features")
+                 or spec.get("columns")
+                 or spec.get("feature_cols"))
+    else:
+        raise TypeError(f"feature spec for '{key}' must be list or dict, got {type(spec).__name__}")
+
+    if not isinstance(feats, list) or not feats:
+        raise ValueError(f"feature spec for '{key}' did not resolve to a non-empty list")
+
+    # normalize to strings
+    return [str(c) for c in feats]
+
+
 def prob_over_poisson(mu: np.ndarray, line: float) -> np.ndarray:
     k = int(math.floor(line))
     return 1.0 - poi_dist.cdf(k, mu)
@@ -138,23 +166,79 @@ def main():
     lines = [float(x) for x in args.line.split(",") if x.strip()]
     lines = sorted(lines)
 
-    # Load feature registry
+    # ---- Load CSV now (needed for sanity checks) ----
+    df = pd.read_csv(args.csv)
+
+    # ---- Load & normalize feature metadata ----
     with open(args.feature_json, "r") as f:
         feat_meta = json.load(f)
+
     if args.feature_key not in feat_meta:
         sys.exit(f"feature_key '{args.feature_key}' not found in {args.feature_json}")
-    raw_feature_list = feat_meta[args.feature_key]
 
-    # Load data
-    df = pd.read_csv(args.csv)
-    if args.date_col not in df.columns:
-        sys.exit(f"Missing date column: {args.date_col}")
+    meta_item = feat_meta[args.feature_key]
+
+    def _to_feature_list(x):
+        """Accept list or dict; if dict, prefer common list fields; else use keys."""
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            for k in ("features", "columns", "feature_cols", "cols"):
+                v = x.get(k)
+                if isinstance(v, list):
+                    return v
+            return list(x.keys())
+        if isinstance(x, str):
+            return [x]
+        return []
+
+    feature_cols = _to_feature_list(meta_item)
+    if not feature_cols:
+        sys.exit(f"No usable feature list for key '{args.feature_key}' in {args.feature_json}")
+
+    # Allow metadata to override the date column if provided
+    meta_date_col = meta_item.get("date_col") if isinstance(meta_item, dict) else None
+    date_col = meta_date_col or args.date_col
+
+    # ---- Model's expected order (from artifact) ----
+    if family == "poisson":
+        model_feature_order = artifact["sklearn_poisson"]["feature_order"]
+    elif family == "neg_binomial":
+        order_with_const = artifact["statsmodels_nb"]["feature_order_with_const"]
+        model_feature_order = [c for c in order_with_const if c != "const"]
+    else:
+        sys.exit(f"Unsupported family in model index: {family}")
+
+    # ---- CSV sanity ----
+    if date_col not in df.columns:
+        sys.exit(f"Missing date column: {date_col}")
+
+    # Informational: identifiers present
+    id_cols = [c for c in ("player_id", "game_id") if c in df.columns]
+
+    # What the model expects vs what the CSV actually has
+    missing_in_csv = [c for c in model_feature_order if c not in df.columns]
+    extra_in_csv   = [c for c in df.columns if c not in model_feature_order]
+    unused_from_meta = [c for c in feature_cols if c not in model_feature_order]
+
+    print("Feature check:")
+    print("  family:", family)
+    print("  date_col:", date_col)
+    print("  expected (model):", len(model_feature_order))
+    print("  provided (meta):", len(feature_cols))
+    print("  missing_in_csv:", missing_in_csv)
+    print("  extra_in_csv (ignored):", extra_in_csv[:25], "…(%d total)" % max(0, len(extra_in_csv) - 25) if len(extra_in_csv) > 25 else "")
+    if unused_from_meta:
+        print("  note: metadata includes features not used by this model:", unused_from_meta)
+
+    if missing_in_csv:
+        sys.exit(f"CSV missing required model features: {missing_in_csv}")
 
     # Recreate feature matrix in model's order
     if family == "poisson":
         art = artifact["sklearn_poisson"]
         model_feature_order = art["feature_order"]
-        X = prepare_X(df, raw_feature_list, model_feature_order)
+        X = prepare_X(df, feature_cols, model_feature_order)
         coef = np.asarray(art["coef"], dtype=float)
         intercept = float(art["intercept"])
         eta = X.values @ coef + intercept
@@ -165,7 +249,7 @@ def main():
         art = artifact["statsmodels_nb"]
         order_with_const = art["feature_order_with_const"]
         model_feature_order = [c for c in order_with_const if c != "const"]
-        X = prepare_X(df, raw_feature_list, model_feature_order)
+        X = prepare_X(df, feature_cols, model_feature_order)
         Xc = X.copy()
         Xc.insert(0, "const", 1.0)
         Xc = Xc.reindex(columns=order_with_const, fill_value=0.0)

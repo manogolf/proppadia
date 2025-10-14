@@ -130,6 +130,27 @@ jobs:
             echo "No refresh.sql found — skipping."
           fi
 
+                # -------------------- Pre-slate seed (tomorrow, ET) --------------------
+      - name: Pre-slate seed (tomorrow, ET)
+        run: |
+          set -euo pipefail
+          TMRW=$(TZ=America/New_York date -d 'tomorrow' +%F)
+          echo "Tomorrow (ET): ${TMRW}"
+
+          # ensure schedule/rosters exist for tomorrow
+          SLATE_DATE="${TMRW}" python backend/nhl/scripts/import_schedule_today.py || true
+          SLATE_DATE="${TMRW}" python backend/nhl/scripts/import_roster_today.py || true
+
+          # seed goalie & skater features for tomorrow
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="${TMRW}" \
+            -f backend/nhl/sql/seed_goalie_features_for_slate.sql || true
+
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="${TMRW}" \
+            -f backend/nhl/sql/seed_sog_features_for_slate.sql || true
+
+          # refresh READY so v_slate_* can see any newly seeded rows
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
+
       # -------------------- Export (CSV) --------------------
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'

@@ -453,7 +453,6 @@ DROP MATERIALIZED VIEW IF EXISTS nhl.training_features_goalie_saves_v2_ready CAS
 CREATE MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready AS
 SELECT
   t.player_id, t.game_id, t.team_id, t.opponent_id, t.is_home, t.game_date,
-  g.saves,  -- optional label; NULL pre-game
   t.d10_shots_faced_per60,
   t.d10_save_pct,
   t.team_d10_sf_per_game,
@@ -468,10 +467,9 @@ SELECT
   t.opp_d10_sf_per60,
   t.team_d10_sa_per60,
   t.pace_matchup_index,
-  t.d20_saves_per60
+  t.d20_saves_per60,
+  t.start_prob
 FROM nhl.training_features_goalie_saves_v2 t
-LEFT JOIN nhl.goalie_game_logs_raw g
-  ON g.player_id = t.player_id AND g.game_id = t.game_id
 WITH NO DATA;
 
 REFRESH MATERIALIZED VIEW nhl.training_features_goalie_saves_v2_ready;
@@ -507,6 +505,7 @@ SELECT
   r.d5_saves_per60, r.d10_saves_per60, r.d5_shots_faced_per60, r.season_save_pct,
   -- NEW: 20-game saves/60
   r.d20_saves_per60,
+  r.start_prob,
   -- Robust aliases expected by the scorer (derive from *_per_game so they always exist)
   r.team_d10_sf_per_game        AS team_d10_sf_per60,
   r.opp_d10_sf_allowed_per_game AS opp_d10_sa_per60,
