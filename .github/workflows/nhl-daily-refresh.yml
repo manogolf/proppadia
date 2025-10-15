@@ -195,39 +195,40 @@ jobs:
                   sys.exit(2)
           print("Header validation OK")
           PY
-          - name: Inspect exports & metadata (before scoring)
-          if: steps.slate.outputs.has_games == 't'
-          run: |
-            set -euo pipefail
 
-            echo "== CSV headers & row counts =="
-            for f in exports/train_nhl_sog_v2.csv exports/train_goalie_saves_v2.csv; do
-              echo "$f:"
-              head -n1 "$f" | tr ',' '\n' | nl -ba
-              echo "rows: $(wc -l < "$f")"
-              echo "------"
-            done
+      - name: Inspect exports & metadata (before scoring)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
 
-            echo "== Feature metadata keys (from model indexes) =="
-            sudo apt-get update >/dev/null && sudo apt-get install -y jq >/dev/null
+          echo "== CSV headers & row counts =="
+          for f in exports/train_nhl_sog_v2.csv exports/train_goalie_saves_v2.csv; do
+            echo "$f:"
+            head -n1 "$f" | tr ',' '\n' | nl -ba
+            echo "rows: $(wc -l < "$f")"
+            echo "------"
+          done
 
-            for P in \
-              backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json \
-              backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json
-            ; do
-              echo "== $P =="
-              if [[ -f "$P" ]]; then
-                jq -r '
-                  "family: \(.family)" ,
-                  "feature_keys: " + (if (.feature_registry|type)=="object"
-                    then (.feature_registry|keys|join(", "))
-                    else ""
-                  end)
-                ' "$P" || true
-              else
-                echo "missing"
-              fi
-            done
+          echo "== Feature metadata keys (from model indexes) =="
+          sudo apt-get update >/dev/null && sudo apt-get install -y jq >/dev/null
+
+          for P in \
+            backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json \
+            backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json
+          ; do
+            echo "== $P =="
+            if [[ -f "$P" ]]; then
+              jq -r '
+                "family: \(.family)",
+                "feature_keys: " + (if (.feature_registry|type)=="object"
+                  then (.feature_registry|keys|join(", "))
+                  else ""
+                end)
+              ' "$P" || true
+            else
+              echo "missing"
+            fi
+          done
 
       # -------------------- Score & load --------------------
       - name: Score & Load predictions
