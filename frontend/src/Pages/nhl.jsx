@@ -28,7 +28,17 @@ function useFetch(url) {
     };
   }, [url]);
 
-  return { data, loading, err };
+  return { data: data || [], loading, err };
+}
+
+function ProbCell({ value }) {
+  if (value == null) return <td></td>;
+  const v = Number(value);
+  const pct = (v * 100).toFixed(1) + "%";
+  const hot = v >= 0.6; // simple visual cue; tweak as you like
+  const warm = !hot && v >= 0.56;
+  const bg = hot ? "#ffe7e7" : warm ? "#fff5d6" : "transparent";
+  return <td style={{ background: bg }}>{pct}</td>;
 }
 
 export default function NHLPage() {
@@ -40,24 +50,36 @@ export default function NHLPage() {
     return `${yyyy}-${mm}-${dd}`;
   });
 
-  // Point the page at your backend API (uses VITE_API_BASE from .env)
   const gamesUrl = useMemo(
     () => `${API_BASE}/api/nhl/games/today?date=${encodeURIComponent(date)}`,
     [date]
   );
-
   const sogUrl = useMemo(
     () => `${API_BASE}/api/nhl/sog_stage?date=${encodeURIComponent(date)}`,
     [date]
   );
-
   const savesUrl = useMemo(
     () => `${API_BASE}/api/nhl/saves_stage?date=${encodeURIComponent(date)}`,
     [date]
   );
 
   const games = useFetch(gamesUrl);
-  const props = useFetch(propsUrl);
+  const sog = useFetch(sogUrl);
+  const saves = useFetch(savesUrl);
+
+  // Helper to detect available p_over_* columns (underscored style)
+  const sogProbCols = useMemo(() => {
+    const row = sog.data[0] || {};
+    return Object.keys(row)
+      .filter((k) => k.startsWith("p_over_"))
+      .sort();
+  }, [sog.data]);
+  const savesProbCols = useMemo(() => {
+    const row = saves.data[0] || {};
+    return Object.keys(row)
+      .filter((k) => k.startsWith("p_over_"))
+      .sort();
+  }, [saves.data]);
 
   return (
     <div style={{ padding: 24, fontFamily: "ui-sans-serif, system-ui" }}>
@@ -82,6 +104,7 @@ export default function NHLPage() {
         <small>API: {API_BASE}</small>
       </div>
 
+      {/* Games */}
       <section style={{ marginBottom: 24 }}>
         <h2>Games</h2>
         {games.loading ? (
@@ -103,7 +126,7 @@ export default function NHLPage() {
               </tr>
             </thead>
             <tbody>
-              {(games.data || []).map((g) => (
+              {games.data.map((g) => (
                 <tr key={g.game_id}>
                   <td>{g.game_id}</td>
                   <td>{g.game_date}</td>
@@ -117,12 +140,13 @@ export default function NHLPage() {
         )}
       </section>
 
-      <section>
-        <h2>Props (today)</h2>
-        {props.loading ? (
+      {/* SOG */}
+      <section style={{ marginBottom: 24 }}>
+        <h2>Skater SOG</h2>
+        {sog.loading ? (
           <p>Loading…</p>
-        ) : props.err ? (
-          <p>Error: {props.err}</p>
+        ) : sog.err ? (
+          <p>Error: {sog.err}</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table
@@ -131,17 +155,69 @@ export default function NHLPage() {
             >
               <thead>
                 <tr>
-                  {Object.keys(props.data?.[0] || {}).map((k) => (
-                    <th key={k}>{k}</th>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Game</th>
+                  {sogProbCols.map((c) => (
+                    <th key={c}>{c.replaceAll("_", ".")}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {(props.data || []).map((r, i) => (
+                {sog.data.map((r, i) => (
                   <tr key={i}>
-                    {Object.keys(props.data?.[0] || {}).map((k) => (
-                      <td key={k}>{String(r[k])}</td>
+                    <td>{r.full_name ?? r.player_id}</td>
+                    <td>{r.team ?? r.team_id}</td>
+                    <td>{r.game_id}</td>
+                    {sogProbCols.map((c) => (
+                      <ProbCell key={c} value={r[c]} />
                     ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Saves */}
+      <section>
+        <h2>Goalie Saves</h2>
+        {saves.loading ? (
+          <p>Loading…</p>
+        ) : saves.err ? (
+          <p>Error: {saves.err}</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              cellPadding={6}
+              style={{ borderCollapse: "collapse", width: "100%" }}
+            >
+              <thead>
+                <tr>
+                  <th>Goalie</th>
+                  <th>Team</th>
+                  <th>Game</th>
+                  {savesProbCols.map((c) => (
+                    <th key={c}>{c.replaceAll("_", ".")}</th>
+                  ))}
+                  <th>start_prob</th>
+                </tr>
+              </thead>
+              <tbody>
+                {saves.data.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.full_name ?? r.player_id}</td>
+                    <td>{r.team ?? r.team_id}</td>
+                    <td>{r.game_id}</td>
+                    {savesProbCols.map((c) => (
+                      <ProbCell key={c} value={r[c]} />
+                    ))}
+                    <td>
+                      {r.start_prob != null
+                        ? (Number(r.start_prob) * 100).toFixed(0) + "%"
+                        : ""}
+                    </td>
                   </tr>
                 ))}
               </tbody>

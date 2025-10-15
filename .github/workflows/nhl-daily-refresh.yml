@@ -255,6 +255,13 @@ jobs:
             --db-url "$SUPABASE_DB_URL" \
             --scorer "$GITHUB_WORKSPACE/backend/nhl/scripts/score_nhl_props.py"
 
+      - name: Attach player names to predictions
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          python backend/nhl/scripts/attach_names.py
+          head -n 3 backend/nhl/data/processed/sog_with_names.csv  || true
+          head -n 3 backend/nhl/data/processed/saves_with_names.csv || true
+
       # -------------------- Sanity counts --------------------
       - name: Verify counts
         if: steps.slate.outputs.has_games == 't'

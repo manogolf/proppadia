@@ -42,6 +42,10 @@ def read_model_index(model_dir: Path) -> dict:
         idx["feature_hash"] = fh.read_text().strip()
     return idx
 
+def get_model_family(model_dir: str) -> str:
+    with open(os.path.join(model_dir, "MODEL_INDEX.json"), "r") as f:
+        return json.load(f)["family"]
+
 def ensure_psycopg2():
     try:
         import psycopg2  # noqa: F401
@@ -60,10 +64,9 @@ def copy_csv(conn, table: str, path: Path, cols: list[str]) -> None:
     with conn.cursor() as cur, open(path, "r", encoding="utf-8") as f:
         cur.copy_expert(sql, f)
 
-def run_loader(conn, sql: str):
+def run_loader(conn, sql: str, params: tuple | list):
     with conn.cursor() as cur:
-        cur.execute(sql)
-        print("⬆️ loader result:", cur.fetchone())
+        cur.execute(sql, params)   # <-- pass params so %s get bound
     conn.commit()
 
 def project_csv_allow_dotted(src: Path, dest: Path, wanted_cols: list[str]) -> None:
@@ -153,6 +156,39 @@ def main():
 
     print(f"✅ Wrote: {OUT_SOG}")
     print(f"✅ Wrote: {OUT_SAVES}")
+
+        # Determine model family from the model dirs (e.g., "poisson")
+    sog_family   = get_model_family(MODEL_SOG_DIR)
+    saves_family = get_model_family(MODEL_SAVES_DIR)
+
+    # Load SOG predictions into stage
+    run_loader(
+        conn,
+        """
+        SELECT nhl.load_predictions_stage(
+            p_project         => %s,
+            p_model_family    => %s,
+            p_prop_key        => %s,      -- if your SQL func uses p_line_key instead, change this name
+            p_predictions_csv => %s
+        );
+        """,
+        (args.project, sog_family, "shots_on_goal", str(OUT_SOG))
+    )
+
+    # Load SAVES predictions into stage
+    run_loader(
+        conn,
+        """
+        SELECT nhl.load_predictions_stage(
+            p_project         => %s,
+            p_model_family    => %s,
+            p_prop_key        => %s,      -- if your SQL func uses p_line_key instead, change this name
+            p_predictions_csv => %s
+        );
+        """,
+        (args.project, saves_family, "goalie_saves", str(OUT_SAVES))
+    )
+
 
     # 3) Optional: load to DB
     if not args.db_url:
