@@ -130,7 +130,7 @@ jobs:
             echo "No refresh.sql found — skipping."
           fi
 
-                # -------------------- Pre-slate seed (tomorrow, ET) --------------------
+      # -------------------- Pre-slate seed (tomorrow, ET) --------------------
       - name: Pre-slate seed (tomorrow, ET)
         run: |
           set -euo pipefail
@@ -210,20 +210,23 @@ jobs:
           done
 
           echo "== Feature metadata keys (from model indexes) =="
-          sudo apt-get update >/dev/null && sudo apt-get install -y jq >/dev/null
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y jq >/dev/null
 
-          for P in \
-            backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json \
+          FILES=(
+            backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json
             backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json
-          ; do
+          )
+          for P in "${FILES[@]}"; do
             echo "== $P =="
             if [[ -f "$P" ]]; then
               jq -r '
                 "family: \(.family)",
-                "feature_keys: " + (if (.feature_registry|type)=="object"
+                "feature_keys: " + (
+                  if (.feature_registry|type)=="object"
                   then (.feature_registry|keys|join(", "))
                   else ""
-                end)
+                )
               ' "$P" || true
             else
               echo "missing"
