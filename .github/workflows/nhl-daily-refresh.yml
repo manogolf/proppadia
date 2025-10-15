@@ -198,6 +198,7 @@ jobs:
 
       - name: Inspect exports & metadata (before scoring)
         if: steps.slate.outputs.has_games == 't'
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -210,28 +211,38 @@ jobs:
           done
 
           echo "== Feature metadata keys (from model indexes) =="
-          sudo apt-get update >/dev/null
-          sudo apt-get install -y jq >/dev/null
+          sudo apt-get update >/dev/null || true
+          sudo apt-get install -y jq >/dev/null || true
 
-          FILES=(
-            backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json
-            backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json
-          )
-          for P in "${FILES[@]}"; do
-            echo "== $P =="
-            if [[ -f "$P" ]]; then
-              jq -r '
-                "family: \(.family)",
-                "feature_keys: " + (
-                  if (.feature_registry|type)=="object"
-                  then (.feature_registry|keys|join(", "))
-                  else ""
-                )
-              ' "$P" || true
-            else
-              echo "missing"
-            fi
-          done
+          P="backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json"
+          echo "== $P =="
+          if [[ -f "$P" ]]; then
+            jq -r '
+              "family: " + (.family|tostring),
+              "feature_keys: " + (
+                if (.feature_registry|type)=="object"
+                then (.feature_registry|keys|join(", "))
+                else ""
+              )
+            ' "$P" || true
+          else
+            echo "missing"
+          fi
+
+          P="backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json"
+          echo "== $P =="
+          if [[ -f "$P" ]]; then
+            jq -r '
+              "family: " + (.family|tostring),
+              "feature_keys: " + (
+                if (.feature_registry|type)=="object"
+                then (.feature_registry|keys|join(", "))
+                else ""
+              )
+            ' "$P" || true
+          else
+            echo "missing"
+          fi
 
       # -------------------- Score & load --------------------
       - name: Score & Load predictions
