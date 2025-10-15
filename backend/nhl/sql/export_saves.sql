@@ -5,22 +5,19 @@
 
 -- Expect: -v slate_date=YYYY-MM-DD
 
--- 1) Ensure the view exists
+-- 1) Check if the view exists
 SELECT to_regclass('nhl.v_slate_saves_features') AS v_saves \gset
 
 \if :{?v_saves}
-
-  -- 2) Ensure the view has rows for this slate_date
-  SELECT CASE
-           WHEN EXISTS (
-             SELECT 1
-             FROM nhl.v_slate_saves_features
-             WHERE game_date = :'slate_date'::date
-           ) THEN 1 ELSE 0
-         END AS has_rows \gset
+  -- 2) Does it have rows for this slate_date?
+  SELECT EXISTS (
+    SELECT 1
+    FROM nhl.v_slate_saves_features
+    WHERE game_date = :'slate_date'::date
+  ) AS has_rows \gset
 
   \if :has_rows
-    -- 3) Preflight: required export columns (now includes start_prob)
+    -- 3) Schema preflight (only when rows exist)
     DO $$
     DECLARE missing text[];
     BEGIN
@@ -33,12 +30,13 @@ SELECT to_regclass('nhl.v_slate_saves_features') AS v_saves \gset
         ('d5_saves_per60'), ('d10_saves_per60'), ('d5_shots_faced_per60'), ('season_save_pct'),
         ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index'),
         ('d20_saves_per60'),
-        ('team_d10_sf_per60'),            -- alias provided in the view
-        ('opp_d10_sa_per60'),             -- alias provided in the view
+        ('team_d10_sf_per60'), ('opp_d10_sa_per60'),
         ('start_prob')
       ) AS n(col)
       LEFT JOIN information_schema.columns c
-        ON c.table_schema='nhl' AND c.table_name='v_slate_saves_features' AND c.column_name=n.col
+        ON c.table_schema='nhl'
+       AND c.table_name='v_slate_saves_features'
+       AND c.column_name=n.col
       WHERE c.column_name IS NULL;
 
       IF missing IS NOT NULL THEN
@@ -46,7 +44,7 @@ SELECT to_regclass('nhl.v_slate_saves_features') AS v_saves \gset
       END IF;
     END $$;
 
-    -- 4) Export
+    -- 4) Export data rows
     COPY (
       SELECT
         player_id                   AS "player_id",
@@ -79,11 +77,65 @@ SELECT to_regclass('nhl.v_slate_saves_features') AS v_saves \gset
     ) TO STDOUT WITH CSV HEADER;
 
   \else
-    \echo 'export_saves.sql: no rows in v_slate_saves_features for this date'
-    \q 0
+    -- 5) No rows → header-only CSV
+    COPY (
+      SELECT
+        NULL::bigint  AS player_id,
+        NULL::bigint  AS game_id,
+        NULL::bigint  AS team_id,
+        NULL::bigint  AS opponent_id,
+        NULL::boolean AS is_home,
+        NULL::date    AS game_date,
+        NULL::numeric AS d10_shots_faced_per60,
+        NULL::numeric AS d10_save_pct,
+        NULL::numeric AS team_d10_sf_per_game,
+        NULL::numeric AS opp_d10_sf_allowed_per_game,
+        NULL::numeric AS pace_index,
+        NULL::int     AS rest_days,
+        NULL::boolean AS b2b_flag,
+        NULL::numeric AS d5_saves_per60,
+        NULL::numeric AS d10_saves_per60,
+        NULL::numeric AS d5_shots_faced_per60,
+        NULL::numeric AS season_save_pct,
+        NULL::numeric AS opp_d10_sf_per60,
+        NULL::numeric AS team_d10_sa_per60,
+        NULL::numeric AS pace_matchup_index,
+        NULL::numeric AS d20_saves_per60,
+        NULL::numeric AS team_d10_sf_per60,
+        NULL::numeric AS opp_d10_sa_per60,
+        NULL::numeric AS start_prob
+      WHERE FALSE
+    ) TO STDOUT WITH CSV HEADER;
   \endif
 
 \else
-  \echo 'export_saves.sql: view nhl.v_slate_saves_features is missing'
-  \q 1
+  -- View missing → header-only CSV
+  COPY (
+    SELECT
+      NULL::bigint  AS player_id,
+      NULL::bigint  AS game_id,
+      NULL::bigint  AS team_id,
+      NULL::bigint  AS opponent_id,
+      NULL::boolean AS is_home,
+      NULL::date    AS game_date,
+      NULL::numeric AS d10_shots_faced_per60,
+      NULL::numeric AS d10_save_pct,
+      NULL::numeric AS team_d10_sf_per_game,
+      NULL::numeric AS opp_d10_sf_allowed_per_game,
+      NULL::numeric AS pace_index,
+      NULL::int     AS rest_days,
+      NULL::boolean AS b2b_flag,
+      NULL::numeric AS d5_saves_per60,
+      NULL::numeric AS d10_saves_per60,
+      NULL::numeric AS d5_shots_faced_per60,
+      NULL::numeric AS season_save_pct,
+      NULL::numeric AS opp_d10_sf_per60,
+      NULL::numeric AS team_d10_sa_per60,
+      NULL::numeric AS pace_matchup_index,
+      NULL::numeric AS d20_saves_per60,
+      NULL::numeric AS team_d10_sf_per60,
+      NULL::numeric AS opp_d10_sa_per60,
+      NULL::numeric AS start_prob
+    WHERE FALSE
+  ) TO STDOUT WITH CSV HEADER;
 \endif

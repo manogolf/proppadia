@@ -1,0 +1,1 @@
+psql:backend/nhl/sql/export_saves.sql:12: error: unrecognized value "TRUE = 0" for "\if expression": Boolean expected

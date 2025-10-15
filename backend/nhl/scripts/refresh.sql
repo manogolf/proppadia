@@ -2,6 +2,13 @@
 -- Daily refresh: compute team & goalie rollups, update training features,
 -- widen READY matviews to the full export contract, expose v_slate_* views,
 -- refresh READY, and log a data-quality snapshot.
+-- Keep the server quiet (hide NOTICEs like “already exists, skipping”)
+SET client_min_messages = WARNING;
+
+-- Usual psql cosmetics
+\set QUIET on
+\pset pager off
+\pset tuples_only on
 
 -- ---------- Session safety / timeouts ----------
 SET statement_timeout = '10min';

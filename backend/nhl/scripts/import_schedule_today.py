@@ -304,6 +304,17 @@ def main():
         return
 
     with psycopg.connect(DB) as conn, conn.cursor() as cur:
+            # Optional: stop psycopg from auto-creating server-side prepared stmts
+        try:
+            conn.prepare_threshold = None  # psycopg3
+        except Exception:
+            pass
+
+        # Safety: drop any leftover prepared statements in this session
+        try:
+            cur.execute("DEALLOCATE ALL;")
+        except Exception:
+            pass
         # 1) Ensure real team rows exist (fixes placeholder T1/T2… rows)
         _ensure_teams_exist(cur, games)
 
