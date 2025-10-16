@@ -17,6 +17,7 @@ Usage:
 """
 
 from __future__ import annotations
+import csv  
 
 import argparse, json, os, sys, subprocess
 from pathlib import Path
@@ -58,6 +59,48 @@ def run_loader(conn, sql: str, params: tuple | list):
     with conn.cursor() as cur:
         cur.execute(sql, params)
     conn.commit()
+
+def load_stage(conn, table: str, csv_path: Path, cols: list[str]) -> int:
+    """
+    Insert rows into a stage table from a predictions CSV.
+    Accepts p_over_* with underscore or dotted (.5) column names.
+    Returns number of inserted rows.
+    """
+    ins_cols_sql = ", ".join(f'"{c}"' for c in cols)
+    placeholders = ", ".join(["%s"] * len(cols))
+    sql = f"INSERT INTO {table} ({ins_cols_sql}) VALUES ({placeholders})"
+    n = 0
+
+    def resolve(row: dict, col: str):
+        # exact
+        if col in row: 
+            return row[col]
+        # allow dotted (.5) vs underscore (_5)
+        if col.startswith("p_over_") and col.endswith("_5"):
+            alt = col[:-2] + ".5"        # p_over_2_5 -> p_over_2.5
+            if alt in row:
+                return row[alt]
+        return None
+
+    with conn.cursor() as cur, open(csv_path, newline="") as f:
+        rdr = csv.DictReader(f)
+        batch = []
+        for row in rdr:
+            vals = [resolve(row, c) for c in cols]
+            # skip fully empty lines (e.g., header-only files)
+            if all(v in (None, "",) for v in vals):
+                continue
+            batch.append(vals)
+            if len(batch) >= 1000:
+                cur.executemany(sql, batch)
+                n += len(batch)
+                batch.clear()
+        if batch:
+            cur.executemany(sql, batch)
+            n += len(batch)
+    conn.commit()
+    return n
+
 
 # -------- Main --------
 def main():
@@ -117,88 +160,78 @@ def main():
     print(f"✅ Wrote: {OUT_SOG}")
     print(f"✅ Wrote: {OUT_SAVES}")
 
-    # -------- 3) Optional DB load & finalize --------
+    # 3) Optional: load to DB
     if not args.db_url:
-        print("ℹ️ No --db-url provided. CSVs are ready to import manually:")
+        print("ℹ️ No --db-url provided. CSVs are ready:")
         print(f"   SOG   → {OUT_SOG}")
         print(f"   SAVES → {OUT_SAVES}")
         return
 
-    sog_family   = get_model_family(MODEL_SOG_DIR)
-    saves_family = get_model_family(MODEL_SAVES_DIR)
+    # Determine families (e.g., "poisson")
+    sog_family   = get_model_family(str(MODEL_SOG_DIR))
+    saves_family = get_model_family(str(MODEL_SAVES_DIR))
 
     print("🔌 Connecting to DB…")
     conn = db_connect(args.db_url)
 
-    try:
-        # 3a) Stage both CSVs via unified function
-        run_loader(
-            conn,
-            """
-            SELECT nhl.load_predictions_stage(
-                p_project         => %s,
-                p_model_family    => %s,
-                p_prop_key        => %s,
-                p_predictions_csv => %s
-            );
-            """,
-            (args.project, sog_family, "shots_on_goal", str(OUT_SOG)),
-        )
-        run_loader(
-            conn,
-            """
-            SELECT nhl.load_predictions_stage(
-                p_project         => %s,
-                p_model_family    => %s,
-                p_prop_key        => %s,
-                p_predictions_csv => %s
-            );
-            """,
-            (args.project, saves_family, "goalie_saves", str(OUT_SAVES)),
-        )
-        print("✅ Staged SOG & SAVES via nhl.load_predictions_stage")
+    # Stage schema expects underscore variant names
+    sog_cols   = ["player_id", "game_id", "p_over_0_5",  "p_over_1_5",  "p_over_2_5",  "p_over_3_5"]
+    saves_cols = ["player_id", "game_id", "p_over_24_5", "p_over_28_5"]
 
-        # 3b) Finalize from stage into nhl.predictions
-        run_loader(
-            conn,
-            """
-            SELECT nhl.load_sog_predictions_from_stage(
-              p_model_family  => %s,
-              p_model_params  => %s::jsonb,
-              p_feature_hash  => %s,
-              p_model_version => %s
-            );
-            """,
-            (
-                sog_idx["family"],
-                json.dumps(sog_idx.get("params", {})),
-                sog_idx.get("feature_hash"),
-                "latest/shots_on_goal",
-            ),
-        )
-        run_loader(
-            conn,
-            """
-            SELECT nhl.load_saves_predictions_from_stage(
-              p_model_family  => %s,
-              p_model_params  => %s::jsonb,
-              p_feature_hash  => %s,
-              p_model_version => %s
-            );
-            """,
-            (
-                saves_idx["family"],
-                json.dumps(saves_idx.get("params", {})),
-                saves_idx.get("feature_hash"),
-                "latest/goalie_saves",
-            ),
-        )
-        print("✅ Finalized predictions from stage")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE nhl.predictions_sog_stage; TRUNCATE nhl.predictions_saves_stage;")
+        conn.commit()
+
+        n_sog   = load_stage(conn, "nhl.predictions_sog_stage",   OUT_SOG,   sog_cols)
+        n_saves = load_stage(conn, "nhl.predictions_saves_stage", OUT_SAVES, saves_cols)
+        print(f"📥 Staged rows — SOG: {n_sog}, SAVES: {n_saves}")
+
+        # finalize into predictions using your existing loaders
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT nhl.load_sog_predictions_from_stage(
+                  p_model_family  => %s,
+                  p_model_params  => %s::jsonb,
+                  p_feature_hash  => %s,
+                  p_model_version => %s
+                );
+                """,
+                (
+                    sog_idx["family"],
+                    json.dumps(sog_idx.get("params", {})),
+                    sog_idx.get("feature_hash", ""),
+                    "latest/shots_on_goal",
+                ),
+            )
+            cur.execute(
+                """
+                SELECT nhl.load_saves_predictions_from_stage(
+                  p_model_family  => %s,
+                  p_model_params  => %s::jsonb,
+                  p_feature_hash  => %s,
+                  p_model_version => %s
+                );
+                """,
+                (
+                    saves_idx["family"],
+                    json.dumps(saves_idx.get("params", {})),
+                    saves_idx.get("feature_hash", ""),
+                    "latest/goalie_saves",
+                ),
+            )
+        conn.commit()
+        print("✅ Upserted predictions to nhl.predictions")
+
+        # clear stage at the end (optional)
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE nhl.predictions_sog_stage; TRUNCATE nhl.predictions_saves_stage;")
+        conn.commit()
     finally:
         try:
             conn.close()
         except Exception:
             pass
 
-if __name__ == "__main__":
-    main()
+    print("✅ Done.")
