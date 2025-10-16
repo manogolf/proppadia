@@ -214,35 +214,25 @@ jobs:
           sudo apt-get update >/dev/null || true
           sudo apt-get install -y jq >/dev/null || true
 
-          P="backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json"
-          echo "== $P =="
-          if [[ -f "$P" ]]; then
-            jq -r '
-              "family: " + (.family|tostring),
-              "feature_keys: " + (
-                if (.feature_registry|type)=="object"
-                then (.feature_registry|keys|join(", "))
-                else ""
-              )
-            ' "$P" || true
-          else
-            echo "missing"
-          fi
-
-          P="backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json"
-          echo "== $P =="
-          if [[ -f "$P" ]]; then
-            jq -r '
-              "family: " + (.family|tostring),
-              "feature_keys: " + (
-                if (.feature_registry|type)=="object"
-                then (.feature_registry|keys|join(", "))
-                else ""
-              )
-            ' "$P" || true
-          else
-            echo "missing"
-          fi
+          for P in \
+            backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json \
+            backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json
+          do
+            echo "== $P =="
+            if [[ -f "$P" ]]; then
+              jq -r '
+                def keys_from_index:
+                  if   (.feature_registry|type) == "object" then (.feature_registry|keys)
+                  elif (.features|type)         == "array"  then .features
+                  elif (.feature_cols|type)     == "array"  then .feature_cols
+                  else [] end;
+                "family: \(.family)",
+                "feature_keys: " + (keys_from_index | join(", "))
+              ' "$P" || true
+            else
+              echo "missing"
+            fi
+          done
 
       # -------------------- Score & load --------------------
       - name: Score & Load predictions
