@@ -144,7 +144,7 @@ def main():
         "--csv", args.saves_csv,
         "--feature-json", str(FEATURE_JSON),
         "--feature-key", "goalie_saves",
-        "--line", "24.5,28.5",
+        "--line", "19.5,20.5,22.5,23.5,24.5,26.5,28.5,30.5",
         "--out", str(OUT_SAVES),
     ]
     print("▶ Scoring SAVES:", " ".join(saves_cmd))

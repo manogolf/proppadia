@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NHL Top 20 — Props Snapshot</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #111735;
+        --muted: #96a0c3;
+        --text: #e7ecff;
+        --green: #36d399;
+        --red: #ff6b6b;
+        --accent: #7aa2ff;
+        --chip: #1c244d;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto,
+          "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+          "Segoe UI Emoji";
+        color: var(--text);
+        background: radial-gradient(
+          1200px 700px at 15% -10%,
+          #18204b 0%,
+          #0b1020 60%
+        );
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 20px;
+      }
+      .panel {
+        background: linear-gradient(180deg, #101636, #0e1430);
+        border: 1px solid #25306a;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+      .controls {
+        margin: 18px 0;
+        gap: 12px;
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr 1.4fr 1.4fr;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      select,
+      input[type="number"],
+      input[type="text"],
+      input[type="file"] {
+        background: #0d1330;
+        border: 1px solid #2a3472;
+        color: var(--text);
+        padding: 10px 12px;
+        border-radius: 10px;
+        outline: none;
+        font-size: 14px;
+      }
+      .btn {
+        background: #1a2354;
+        border: 1px solid #334099;
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .btn:hover {
+        filter: brightness(1.08);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--chip);
+        color: var(--muted);
+        border: 1px solid #303a7c;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .grid {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      .grid th,
+      .grid td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #1d2553;
+        white-space: nowrap;
+      }
+      .grid th {
+        text-align: left;
+        color: #b8c3ff;
+        position: sticky;
+        top: 0;
+        background: #0d1330;
+      }
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .good {
+        color: var(--green);
+        font-weight: 600;
+      }
+      .bad {
+        color: var(--red);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .dropzone {
+        border: 1px dashed #334099;
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .kbd {
+        background: #12194a;
+        border: 1px solid #2f3a7b;
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        color: #cfe0ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>NHL Top 20 — Props Snapshot</h1>
+      <p class="sub">
+        Client-only page. Put CSV/JSON under
+        <span class="kbd">nhl/site/data/</span> (<span class="kbd"
+          >sog_with_names.csv</span
+        >, <span class="kbd">saves_with_names.csv</span>, optional
+        <span class="kbd">odds_latest.json</span>), or drop them below.
+      </p>
+
+      <div class="panel">
+        <div class="controls">
+          <label>
+            Market
+            <select id="market">
+              <option value="sog">Shots on Goal</option>
+              <option value="saves">Goalie Saves</option>
+            </select>
+          </label>
+
+          <label>
+            Line
+            <select id="line"></select>
+          </label>
+
+          <label>
+            Top N
+            <input
+              id="topN"
+              type="number"
+              min="1"
+              max="200"
+              step="1"
+              value="20"
+            />
+          </label>
+
+          <label>
+            American Price (optional)
+            <input id="price" type="number" placeholder="e.g., -120 or 145" />
+          </label>
+
+          <label>
+            Min Edge bps
+            <input id="minEdge" type="number" step="5" value="0" />
+          </label>
+
+          <label>
+            Search player/team
+            <input id="q" type="text" placeholder="type to filter…" />
+          </label>
+
+          <label>
+            Posted lines only (from odds JSON)
+            <input type="checkbox" id="useOdds" />
+          </label>
+        </div>
+
+        <div class="row" style="margin-bottom: 12px">
+          <div class="pill">
+            Status: <span id="status">waiting for data…</span>
+          </div>
+          <div style="margin-left: auto; display: flex; gap: 8px">
+            <button class="btn" id="btnExport">Export table CSV</button>
+            <button class="btn" id="btnReload">Reload from ./data</button>
+          </div>
+        </div>
+
+        <div class="split">
+          <div>
+            <div class="dropzone" id="dzSog">
+              Drop <b>sog_with_names.csv</b> here or
+              <input type="file" id="fileSog" accept=".csv" />
+            </div>
+          </div>
+          <div>
+            <div class="dropzone" id="dzSaves">
+              Drop <b>saves_with_names.csv</b> here or
+              <input type="file" id="fileSaves" accept=".csv" />
+            </div>
+          </div>
+          <div>
+            <div class="dropzone" id="dzOdds">
+              Drop <b>odds_latest.json</b> here or
+              <input type="file" id="fileOdds" accept=".json" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 16px"></div>
+
+      <div class="panel">
+        <table class="grid" id="tbl">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <p class="muted" style="margin-top: 12px">
+        Edge vs price uses EV per 1u and probability breakeven from the American
+        price. Fair odds are computed from model probability. “Posted lines
+        only” shows rows that books actually offer (matched by player name &
+        exact line).
+      </p>
+    </div>
+
+    <script>
+      // ---- Tiny CSV parser (no embedded quoted commas expected) ----
+      function parseCSV(text) {
+        const lines = text.replace(/\r/g, "").trim().split(/\n+/);
+        if (!lines.length) return { header: [], rows: [] };
+        const header = lines[0].split(",").map((h) => h.trim());
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(",");
+          const obj = {};
+          for (let j = 0; j < header.length; j++)
+            obj[header[j]] = (parts[j] ?? "").trim();
+          rows.push(obj);
+        }
+        return { header, rows };
+      }
+
+      // ---- Formatting helpers ----
+      function pct(x, d = 1) {
+        return (x * 100).toFixed(d) + "%";
+      }
+      function num(x, d = 3) {
+        return Number(x).toFixed(d);
+      }
+      function toFloat(v) {
+        const x = parseFloat(v);
+        return Number.isFinite(x) ? x : NaN;
+      }
+
+      function probFromAmerican(price) {
+        price = Number(price);
+        if (!Number.isFinite(price) || price === 0) return NaN;
+        return price > 0 ? 100 / (price + 100) : -price / (-price + 100);
+      }
+      function americanFromProb(p) {
+        if (!(p > 0)) return "";
+        return p >= 0.5
+          ? "-" + Math.round((p / (1 - p)) * 100)
+          : "" + Math.round(((1 - p) / p) * 100);
+      }
+      function evPerUnit(p, american) {
+        const A = Number(american);
+        if (!Number.isFinite(A) || A === 0 || !(p > 0)) return NaN;
+        const dec = A > 0 ? 1 + A / 100 : 1 + 100 / -A;
+        return p * (dec - 1) - (1 - p) * 1; // expected profit per 1u stake
+      }
+
+      // ---- Name & odds helpers ----
+      function normalizeName(s) {
+        return (s || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9\s'.-]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      }
+
+      function parseOddsJSON(text) {
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          return { sog: {}, saves: {} };
+        }
+        const arr = Array.isArray(data) ? data : [data];
+        const out = { sog: {}, saves: {} };
+        for (const game of arr) {
+          for (const bm of game.bookmakers || []) {
+            for (const mkt of bm.markets || []) {
+              const kind =
+                mkt.key === "player_shots_on_goal"
+                  ? "sog"
+                  : mkt.key === "player_total_saves"
+                  ? "saves"
+                  : null;
+              if (!kind) continue;
+              for (const o of mkt.outcomes || []) {
+                const name = normalizeName(o.description || o.player || "");
+                const point = o.point == null ? "" : String(o.point);
+                if (!name || !point) continue;
+                (out[kind][name] ||= new Set()).add(point);
+              }
+            }
+          }
+        }
+        return out;
+      }
+
+      // ---- State ----
+      const state = {
+        sog: { header: [], rows: [] },
+        saves: { header: [], rows: [] },
+        odds: { sog: {}, saves: {} },
+        lastLineOptsSig: "", // to avoid needless repaints of the line <select>
+      };
+
+      function normalizeKeys(rows) {
+        // Ensure underscore variants exist for dotted p_over columns (e.g., 24.5 -> 24_5)
+        return rows.map((r) => {
+          const row = { ...r };
+          for (const k of Object.keys(r)) {
+            if (k.includes(".5")) row[k.replace(".5", "_5")] = r[k];
+          }
+          return row;
+        });
+      }
+
+      // ---- File loading helpers ----
+      async function fetchIfExists(path) {
+        try {
+          const res = await fetch(path, { cache: "no-store" });
+          if (!res.ok) return null;
+          const txt = await res.text();
+          return txt.trim().length ? txt : null;
+        } catch {
+          return null;
+        }
+      }
+
+      async function tryLoadFromDataFolder() {
+        const s1 = await fetchIfExists("./data/sog_with_names.csv");
+        const s2 = await fetchIfExists("./data/saves_with_names.csv");
+        const s3 = await fetchIfExists("./data/odds_latest.json");
+        let loaded = 0;
+        if (s1) {
+          const { header, rows } = parseCSV(s1);
+          state.sog = { header, rows: normalizeKeys(rows) };
+          loaded++;
+          setupLineOptionsIfNeeded(); // build from new header
+        }
+        if (s2) {
+          const { header, rows } = parseCSV(s2);
+          state.saves = { header, rows: normalizeKeys(rows) };
+          loaded++;
+          setupLineOptionsIfNeeded();
+        }
+        if (s3) {
+          state.odds = parseOddsJSON(s3);
+          loaded++;
+        }
+        updateStatus();
+        render();
+        return loaded;
+      }
+
+      function updateStatus() {
+        const sogCount = state.sog.rows.length;
+        const savesCount = state.saves.rows.length;
+        const sogOdds = Object.keys(state.odds.sog || {}).length;
+        const svsOdds = Object.keys(state.odds.saves || {}).length;
+        document.getElementById(
+          "status"
+        ).textContent = `SOG: ${sogCount} | SAVES: ${savesCount} | odds(players) SOG/SAVES: ${sogOdds}/${svsOdds}`;
+      }
+
+      // ---- Build dynamic Line options from CSV headers ----
+      function extractLinesFromHeader(header) {
+        // Find p_over_* columns, accept underscore or dotted halves
+        const lines = [];
+        for (const h of header) {
+          let m = /^p_over_(\d+)_5$/i.exec(h); // underscore half-point
+          if (m) {
+            lines.push(`${parseInt(m[1], 10)}.5`);
+            continue;
+          }
+          m = /^p_over_(\d+(?:\.\d+)?)$/i.exec(h); // dotted form p_over_24.5
+          if (m) {
+            lines.push(m[1]);
+            continue;
+          }
+          m = /^p_over_(\d+)$/i.exec(h); // integer lines (just in case)
+          if (m) {
+            lines.push(`${parseInt(m[1], 10)}`);
+            continue;
+          }
+        }
+        // unique & numeric sort
+        const uniq = Array.from(new Set(lines));
+        uniq.sort((a, b) => parseFloat(a) - parseFloat(b));
+        return uniq;
+      }
+
+      function setupLineOptionsIfNeeded() {
+        const market = document.getElementById("market").value;
+        const header =
+          (market === "saves" ? state.saves.header : state.sog.header) || [];
+        const lines = extractLinesFromHeader(header);
+        const sel = document.getElementById("line");
+
+        const sig = market + "::" + lines.join(",");
+        if (sig === state.lastLineOptsSig) return; // nothing changed; keep current selection
+
+        const prev = sel.value;
+        sel.innerHTML = "";
+        for (const l of lines) {
+          const op = document.createElement("option");
+          op.value = l;
+          op.textContent = l;
+          sel.appendChild(op);
+        }
+        // Keep previous if still available, else select the last (usually the most aggressive line)
+        if (prev && lines.includes(prev)) sel.value = prev;
+        else if (lines.length) sel.value = lines[lines.length - 1];
+
+        state.lastLineOptsSig = sig;
+      }
+
+      function currentLineKey() {
+        const market = document.getElementById("market").value;
+        const key = document.getElementById("line").value;
+        return { market, key };
+      }
+      function currentDataset() {
+        const { market } = currentLineKey();
+        return market === "saves" ? state.saves.rows : state.sog.rows;
+      }
+
+      // assumes you have a Set<string> called postedKeys like:
+      // key format: `${market}|${player_id}|${game_id}|${line}` (e.g., "sog|8475166|2025020061|2.5")
+
+      function filterAndRank() {
+        const { key, market } = currentLineKey();
+        const price = toFloat(document.getElementById("price").value);
+        const minEdgeBps =
+          Number(document.getElementById("minEdge").value) || 0;
+        const q = (document.getElementById("q").value || "").toLowerCase();
+        const onlyPosted =
+          document.getElementById("onlyPosted")?.checked === true;
+
+        const pcol = `p_over_${key.replace(".", "_")}`;
+        const allRows = currentDataset().filter((r) => r[pcol] !== undefined);
+
+        // Optional: restrict to posted lines, but DO NOT slice here
+        const rows = onlyPosted
+          ? allRows.filter((r) =>
+              postedKeys.has(`${market}|${r.player_id}|${r.game_id}|${key}`)
+            )
+          : allRows;
+
+        const be = Number.isFinite(price) ? probFromAmerican(price) : NaN;
+
+        const enriched = rows
+          .map((r) => {
+            const p = toFloat(r[pcol]);
+            const fair = americanFromProb(p);
+            const edge = Number.isFinite(be) && p > 0 ? p - be : NaN;
+            const ev = evPerUnit(p, price);
+            return { ...r, p, fair, edge, ev };
+          })
+          .filter((r) => {
+            if (q) {
+              const hay = `${r.full_name || ""} ${r.team || ""} ${
+                r.game_id || ""
+              }`.toLowerCase();
+              if (!hay.includes(q)) return false;
+            }
+            if (Number.isFinite(price) && Number.isFinite(r.edge)) {
+              if (r.edge * 10000 < minEdgeBps) return false; // bps
+            }
+            return true;
+          });
+
+        // Sort: if a price is entered → by EV desc, else by probability desc
+        enriched.sort((a, b) => {
+          if (Number.isFinite(price)) {
+            const ea = Number.isFinite(a.ev) ? a.ev : -1e9;
+            const eb = Number.isFinite(b.ev) ? b.ev : -1e9;
+            return eb - ea;
+          }
+          return (b.p || 0) - (a.p || 0);
+        });
+
+        const topN = Math.max(
+          1,
+          Math.min(200, Number(document.getElementById("topN").value) || 20)
+        );
+        return { pcol, rows: enriched.slice(0, topN) }; // slice ONCE here
+      }
+
+      function render() {
+        // Only rebuild line options if needed (handled elsewhere)
+        updateStatus();
+        const { key } = currentLineKey();
+        const { rows } = filterAndRank();
+
+        const thead = document.querySelector("#tbl thead");
+        const tbody = document.querySelector("#tbl tbody");
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+
+        const th = document.createElement("tr");
+        for (const c of [
+          "#",
+          "Player",
+          "Team",
+          "Game",
+          "Line",
+          "Model P(over)",
+          "Fair Odds",
+          "Edge (pp)",
+          "EV (per 1u)",
+        ]) {
+          const td = document.createElement("th");
+          td.textContent = c;
+          th.appendChild(td);
+        }
+        thead.appendChild(th);
+
+        rows.forEach((r, i) => {
+          const tr = document.createElement("tr");
+          const edgePP = Number.isFinite(r.edge)
+            ? (r.edge * 100).toFixed(1) + " pp"
+            : "";
+          const evTxt = Number.isFinite(r.ev) ? num(r.ev, 3) + "u" : "";
+          tr.innerHTML = `
+            <td class="num">${i + 1}</td>
+            <td>${r.full_name || r.player_id || ""}</td>
+            <td>${r.team || ""}</td>
+            <td class="num">${r.game_id || ""}</td>
+            <td class="num">${key}</td>
+            <td class="num">${Number.isFinite(r.p) ? pct(r.p, 1) : ""}</td>
+            <td class="num">${r.fair}</td>
+            <td class="num ${
+              Number.isFinite(r.edge) && r.edge > 0 ? "good" : "bad"
+            }">${edgePP}</td>
+            <td class="num ${
+              Number.isFinite(r.ev) && r.ev > 0 ? "good" : "bad"
+            }">${evTxt}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // ---- Export current table as CSV ----
+      function exportCurrentTable() {
+        const { key, market } = currentLineKey();
+        const { rows } = filterAndRank();
+        const out = [
+          [
+            "market",
+            "player",
+            "team",
+            "game_id",
+            "line",
+            "model_prob_over",
+            "fair_odds",
+            "edge_prob_points",
+            "ev_per_unit",
+            "player_id",
+          ],
+        ];
+        for (const r of rows) {
+          out.push([
+            market,
+            r.full_name || r.player_id || "",
+            r.team || "",
+            r.game_id || "",
+            key,
+            Number.isFinite(r.p) ? r.p : "",
+            r.fair || "",
+            Number.isFinite(r.edge) ? r.edge : "",
+            Number.isFinite(r.ev) ? r.ev : "",
+            r.player_id || "",
+          ]);
+        }
+        const csv = out.map((row) => row.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `nhl_${market}_top_${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      // ---- Wire UI ----
+      function wire() {
+        document.getElementById("market").addEventListener("change", () => {
+          setupLineOptionsIfNeeded(); // refresh lines when switching market
+          render();
+        });
+        document.getElementById("line").addEventListener("change", render);
+        ["topN", "price", "minEdge", "q"].forEach((id) =>
+          document.getElementById(id).addEventListener("input", render)
+        );
+        document.getElementById("useOdds").addEventListener("change", render);
+        document
+          .getElementById("btnExport")
+          .addEventListener("click", exportCurrentTable);
+        document
+          .getElementById("btnReload")
+          .addEventListener("click", async () => {
+            await tryLoadFromDataFolder();
+            render();
+          });
+
+        // File inputs / drag-drop
+        const fileSog = document.getElementById("fileSog");
+        const fileSaves = document.getElementById("fileSaves");
+        const fileOdds = document.getElementById("fileOdds");
+
+        fileSog.addEventListener("change", async (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          const txt = await f.text();
+          const { header, rows } = parseCSV(txt);
+          state.sog = { header, rows: normalizeKeys(rows) };
+          setupLineOptionsIfNeeded();
+          updateStatus();
+          render();
+        });
+        fileSaves.addEventListener("change", async (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          const txt = await f.text();
+          const { header, rows } = parseCSV(txt);
+          state.saves = { header, rows: normalizeKeys(rows) };
+          setupLineOptionsIfNeeded();
+          updateStatus();
+          render();
+        });
+        fileOdds.addEventListener("change", async (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          const txt = await f.text();
+          state.odds = parseOddsJSON(txt);
+          updateStatus();
+          render();
+        });
+
+        function makeDZ(id, kind) {
+          const dz = document.getElementById(id);
+          dz.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dz.style.borderColor = "#7aa2ff";
+          });
+          dz.addEventListener("dragleave", () => {
+            dz.style.borderColor = "#334099";
+          });
+          dz.addEventListener("drop", async (e) => {
+            e.preventDefault();
+            dz.style.borderColor = "#334099";
+            const f = e.dataTransfer.files[0];
+            if (!f) return;
+            const txt = await f.text();
+            if (kind === "odds") {
+              state.odds = parseOddsJSON(txt);
+            } else {
+              const { header, rows } = parseCSV(txt);
+              const norm = normalizeKeys(rows);
+              if (kind === "sog") state.sog = { header, rows: norm };
+              else state.saves = { header, rows: norm };
+              setupLineOptionsIfNeeded();
+            }
+            updateStatus();
+            render();
+          });
+        }
+        makeDZ("dzSog", "sog");
+        makeDZ("dzSaves", "saves");
+        makeDZ("dzOdds", "odds");
+      }
+
+      (async function init() {
+        wire();
+        await tryLoadFromDataFolder(); // will also build line options if CSVs are found
+        setupLineOptionsIfNeeded(); // ensure options exist even if user loads files manually
+        render();
+      })();
+    </script>
+  </body>
+</html>
