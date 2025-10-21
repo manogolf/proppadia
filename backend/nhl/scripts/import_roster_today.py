@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
-import psycopg.rows
+from psycopg.rows import dict_row  # (not strictly needed here, but fine to keep)
+from psycopg import errors as pg_errors  # noqa: F401  (may be unused depending on path)
 
 # Force every cursor.execute(...) to use simple execution (no PREPARE)
 _ORIG_EXECUTE = psycopg.Cursor.execute
@@ -25,7 +26,6 @@ except Exception:
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-
 
 ET = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
@@ -55,21 +55,6 @@ def _session() -> requests.Session:
 
 S = _session()
 
-def _map_game_state(g: dict) -> str | None:
-    """
-    Map NHL schedule state -> your games.status enum
-    Allowed: scheduled | live | final | postponed | canceled
-    """
-    s = (g.get("gameState") or g.get("state") or "").upper()
-    if s in {"FUT", "PRE"}:       return "scheduled"
-    if s in {"LIVE"}:             return "live"
-    if s in {"FINAL", "END", "OFF"}:  # OFF/END seen post-game; treat as final
-                                   return "final"
-    if s in {"POSTPONED"}:        return "postponed"
-    if s in {"CANCELED", "CANCELLED"}: return "canceled"
-    return None
-
-
 def season_code_from_date(iso_date: str) -> str:
     """Return NHL season code like '20252026' from 'YYYY-MM-DD'."""
     y, m, _ = map(int, iso_date.split("-"))
@@ -82,7 +67,6 @@ def _normalize_apiweb_roster(j: dict) -> list[dict]:
       [{'person': {'id': <int>}, 'position': {'code': 'G'|'D'|'C'|'L'|'R'}}]
     """
     out = []
-    # common api-web keys: 'forwards', 'defense', 'goalies'
     for key, default_pos in (("forwards", "F"), ("defense", "D"), ("goalies", "G")):
         for p in (j.get(key) or []):
             pid = p.get("id") or p.get("playerId") or (p.get("player") or {}).get("id")
@@ -90,8 +74,6 @@ def _normalize_apiweb_roster(j: dict) -> list[dict]:
                 continue
             pos = (p.get("positionCode") or p.get("position") or default_pos or "").upper()
             out.append({"person": {"id": int(pid)}, "position": {"code": pos}})
-
-    # some payloads are wrapped: {"roster": {...}}
     if not out and isinstance(j.get("roster"), dict):
         return _normalize_apiweb_roster(j["roster"])
     return out
@@ -99,16 +81,16 @@ def _normalize_apiweb_roster(j: dict) -> list[dict]:
 def fetch_roster(team_tri: str, when_iso: str = DATE) -> list[dict]:
     """
     Fetch roster using team tri-code (e.g., 'LAK'). Try /current then explicit season.
-    Returns normalized list compatible with your downstream code.
+    Returns normalized list compatible with downstream code.
     """
     tri = str(team_tri).upper()
     season = season_code_from_date(when_iso)
     urls = [
-        f"https://api-web.nhle.com/v1/roster/{tri}/current",
-        f"https://api-web.nhle.com/v1/roster/{tri}/{season}",
+        f"{BASE}/roster/{tri}/current",
+        f"{BASE}/roster/{tri}/{season}",
     ]
     for url in urls:
-        resp = requests.get(url, timeout=20)
+        resp = S.get(url, timeout=20)
         if resp.status_code == 404:
             continue
         resp.raise_for_status()
@@ -120,49 +102,24 @@ def _normalize_pos(code: str | None) -> str | None:
     if not code:
         return None
     c = str(code).upper().strip()
-    # Goalie
     if c in {"G", "GOALIE"}:
         return "G"
-    # Defense
     if c in {"D", "LD", "RD", "DEF", "DEFENSE", "DEFENCE"}:
         return "D"
-    # Forwards (collapse everything to F)
     if c in {"C", "L", "R", "LW", "RW", "F", "W", "CENTER", "LEFT WING", "RIGHT WING", "FORWARD"}:
         return "F"
     return None
 
-def _extract_position_code(item: dict) -> str | None:
-    pos = item.get("position")
-    if isinstance(pos, dict) and isinstance(pos.get("code"), str):
-        return _normalize_pos(pos["code"])
-    if isinstance(item.get("positionCode"), str):
-        return _normalize_pos(item["positionCode"])
-    if isinstance(item.get("position"), str):
-        return _normalize_pos(item["position"])
-    return None
-
-def _extract_player_id(item: dict) -> str | None:
-    if isinstance(item.get("person"), dict) and "id" in item["person"]:
-        return str(item["person"]["id"])
-    if "id" in item and isinstance(item["id"], (int, str)):
-        return str(item["id"])
-    if "playerId" in item and isinstance(item["playerId"], (int, str)):
-        return str(item["playerId"])
-    return None
-
 def fetch_player_name(nhl_pid: str) -> str | None:
-    """
-    Try to fetch a single player's profile to get a reliable full name.
-    Endpoint observed: /v1/player/{id}/landing
-    """
+    """Best-effort: fetch a single player's profile to get a reliable full name."""
     try:
         resp = S.get(f"{BASE}/player/{nhl_pid}/landing", timeout=8)
         resp.raise_for_status()
-        j = resp.json()
-        # common fields: fullName, firstName, lastName, playerName
+        j = resp.json() or {}
         for k in ("fullName", "playerName", "name"):
-            if isinstance(j.get(k), str) and j[k].strip():
-                return j[k].strip()
+            v = j.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
         first = j.get("firstName"); last = j.get("lastName")
         if isinstance(first, str) and isinstance(last, str):
             nm = f"{first.strip()} {last.strip()}".strip()
@@ -171,174 +128,9 @@ def fetch_player_name(nhl_pid: str) -> str | None:
         pass
     return None
 
-def _extract_player_name(item: dict) -> str | None:
-    p = item.get("person")
-    if isinstance(p, dict):
-        for k in ("fullName", "name"):
-            v = p.get(k)
-            if isinstance(v, str) and v.strip():
-                return v.strip()
-        first = p.get("firstName"); last = p.get("lastName")
-        if isinstance(first, str) and isinstance(last, str):
-            nm = f"{first.strip()} {last.strip()}".strip()
-            if nm:
-                return nm
-    # flat shapes
-    for k in ("fullName", "playerName", "name"):
-        v = item.get(k)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-    first = item.get("firstName"); last = item.get("lastName")
-    if isinstance(first, str) and isinstance(last, str):
-        nm = f"{first.strip()} {last.strip()}".strip()
-        if nm:
-            return nm
-    return None
-
-def fetch_player_info(nhl_pid: str) -> tuple[str | None, str | None]:
-    """
-    Fetches player profile to get reliable name and position.
-    Observed endpoint: /v1/player/{id}/landing
-    Returns (full_name, position_code) where position_code is normalized.
-    """
-    try:
-        resp = S.get(f"{BASE}/player/{nhl_pid}/landing", timeout=8)
-        resp.raise_for_status()
-        j = resp.json()
-
-        # name
-        nm = None
-        for k in ("fullName", "playerName", "name"):
-            v = j.get(k)
-            if isinstance(v, str) and v.strip():
-                nm = v.strip(); break
-        if not nm:
-            first = j.get("firstName"); last = j.get("lastName")
-            if isinstance(first, str) and isinstance(last, str):
-                nm = f"{first.strip()} {last.strip()}".strip() or None
-
-        # position
-        pos = j.get("position") or j.get("positionCode")
-        pos = _normalize_pos(pos)
-
-        return nm, pos
-    except Exception:
-        return None, None
-    
-def _get_table_columns(cur, schema: str, table: str) -> list[str]:
-    cur.execute("""
-        select column_name
-        from information_schema.columns
-        where table_schema = %s and table_name = %s
-        order by ordinal_position
-    """, (schema, table))
-    return [r[0] for r in cur.fetchall()]
-
-def _ensure_players_and_mappings(cur, rosters: dict[str, list[dict]]) -> tuple[int, int]:
-    """
-    Ensure nhl.players(player_id, full_name, position?) and nhl.player_external_ids mappings exist.
-    Guarantees non-null full_name and position if those columns are NOT NULL.
-    """
-    # discover columns + nullability
-    cur.execute("""
-        select column_name, is_nullable
-        from information_schema.columns
-        where table_schema='nhl' and table_name='players'
-    """)
-    cols = {name: (nullable == "YES") for (name, nullable) in cur.fetchall()}
-    has_full_name = "full_name" in cols
-    full_name_nullable = cols.get("full_name", True)
-    has_position = "position" in cols
-    position_nullable = cols.get("position", True)
-
-    # existing external mappings
-    cur.execute("""
-        select provider_player_id::text, player_id
-        from nhl.player_external_ids
-        where provider = 'nhl'
-    """)
-    existing_map = {pid: plid for (pid, plid) in cur.fetchall()}
-
-    players_upserted = 0
-    mappings_upserted = 0
-
-    seen = set()
-    for tri, items in rosters.items():
-        for it in items:
-            nhl_pid = _extract_player_id(it)
-            if not nhl_pid or nhl_pid in seen:
-                continue
-            seen.add(nhl_pid)
-
-            # gather name/pos from roster
-            name = _extract_player_name(it)
-            pos = _extract_position_code(it)
-
-            # backfill from profile if required fields missing
-            need_name = has_full_name and not full_name_nullable and not name
-            need_pos  = has_position and not position_nullable and not pos
-            if need_name or need_pos:
-                prof_name, prof_pos = fetch_player_info(nhl_pid)
-                if need_name and prof_name:
-                    name = prof_name
-                if need_pos and prof_pos:
-                    pos = prof_pos
-
-            # enforce non-null if required (final fallback)
-            if has_full_name and not full_name_nullable and not name:
-                name = f"Player {nhl_pid}"
-            if has_position and not position_nullable and not pos:
-                pos = "F"  # <- was "C"; use "F" to satisfy check constraint
-            # Build a dynamic insert/upsert based on columns present
-            insert_cols = ["player_id"]
-            insert_vals = [int(nhl_pid)]
-            update_sets = []  # coalesce updates to avoid overwriting with NULL
-
-            if has_full_name:
-                insert_cols.append("full_name")
-                insert_vals.append(name)
-                update_sets.append("full_name = coalesce(excluded.full_name, nhl.players.full_name)")
-
-            if has_position:
-                insert_cols.append("position")
-                insert_vals.append(pos)
-                update_sets.append("position = coalesce(excluded.position, nhl.players.position)")
-
-            cols_sql = ", ".join(insert_cols)
-            placeholders = ", ".join(["%s"] * len(insert_vals))
-            update_sql = ", ".join(update_sets) if update_sets else "player_id = nhl.players.player_id"
-
-            cur.execute(
-                f"""
-                insert into nhl.players ({cols_sql})
-                values ({placeholders})
-                on conflict (player_id)
-                do update set {update_sql}
-                """,
-                insert_vals,
-            )
-            players_upserted += 1
-
-            # external id mapping
-            if nhl_pid not in existing_map:
-                cur.execute("""
-                    insert into nhl.player_external_ids (player_id, provider, provider_player_id)
-                    values (%s, 'nhl', %s)
-                    on conflict (provider, provider_player_id)
-                    do update set player_id = excluded.player_id
-                """, (int(nhl_pid), nhl_pid))
-                mappings_upserted += 1
-
-    if players_upserted:
-        print(f"🔧 Upserted/confirmed {players_upserted} players in nhl.players")
-    if mappings_upserted:
-        print(f"🔄 Seeded {mappings_upserted} mappings in nhl.player_external_ids (provider='nhl')")
-    return players_upserted, mappings_upserted
-
 def main():
     # PgBouncer-safe: no server-side prepares, all executes inside one cursor
     with psycopg.connect(DB, prepare_threshold=0) as conn:
-        # extra safety in case the kwarg gets lost in a refactor
         try:
             conn.prepare_threshold = 0  # type: ignore[attr-defined]
         except Exception:
@@ -357,6 +149,7 @@ def main():
             return "F"
 
         try:
+            # ---------- PLAYER UPSERTS (separate cursor context) ----------
             with conn.cursor() as cur:
                 # 1) Get today’s games (ET day) with team tri-codes (use tris for roster fetch)
                 cur.execute("""
@@ -385,17 +178,24 @@ def main():
                 """)
                 player_map_by_provider = {pid: pl for (pid, pl) in cur.fetchall()}
 
-                # 3) For each team in each game: fetch roster, upsert players + mappings, insert roster_status
+                # 3) For each team in each game: fetch roster, upsert players + mappings
                 for game_id, home_tid, away_tid, home_tri, away_tri in games:
                     for tri, tid in ((home_tri, home_tid), (away_tri, away_tid)):
-                        roster = fetch_roster(tri, DATE) or []
+                        try:
+                            roster = fetch_roster(tri, DATE) or []
+                        except Exception as e:
+                            print(f"[warn] roster fetch failed for {tri}: {e}")
+                            roster = []
+
                         for item in roster:
                             person = item.get("person") or {}
-                            nhl_pid = person.get("id")
-                            if nhl_pid is None:
+                            nhl_pid_raw = person.get("id")
+                            if nhl_pid_raw is None:
                                 continue
-                            nhl_pid = str(nhl_pid)
-                            full_name = (person.get("fullName") or f"Player {nhl_pid}").strip()
+                            nhl_pid = str(nhl_pid_raw)
+
+                            # best-effort name (keeps NOT NULL happy even if offline)
+                            full_name = fetch_player_name(nhl_pid) or f"Player {nhl_pid}"
                             pos = norm_pos((item.get("position") or {}).get("code"))
 
                             internal_pid = player_map_by_provider.get(nhl_pid)
@@ -430,18 +230,87 @@ def main():
                                      WHERE player_id = %s
                                 """, (full_name, tid, pos, internal_pid))
 
-                            cur.execute("""
-                                INSERT INTO nhl.roster_status
-                                  (game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts)
-                                VALUES (%s, %s, %s, true, NULL, 'None', now())
-                                ON CONFLICT (team_id, asof_ts, game_id, player_id) DO NOTHING
-                            """, (game_id, tid, internal_pid))
-                            inserted_rs += 1
+            # ---------- ROSTER_STATUS UPSERT (separate cursor context) ----------
+            if os.environ.get("SKIP_ROSTER_STATUS", "1") == "1":
+                print("↪︎ SKIP_ROSTER_STATUS=1: importer will not write nhl.roster_status")
+            else:
+                slate_date = os.environ.get("SLATE_DATE") or DATE
+                with conn.cursor() as cur:
+                    # Check if the session-local temp table exists (avoid exceptions entirely)
+                    cur.execute("""
+                      SELECT (to_regclass('pg_temp.tmp_import_roster') IS NOT NULL)
+                          OR (to_regclass('tmp_import_roster') IS NOT NULL) AS has_tmp
+                    """)
+                    has_tmp = bool(cur.fetchone()[0])
 
-            # commit once after the cursor block
+                    if has_tmp:
+                        # Use rows staged by the importer
+                        cur.execute("""
+                        WITH src AS (
+                          SELECT DISTINCT
+                            g.game_id,
+                            r.team_id,
+                            r.player_id,
+                            COALESCE(r.active_flag, TRUE) AS active_flag,
+                            NULL::text                    AS line_role,
+                            COALESCE(r.pp_unit, 'None')   AS pp_unit
+                          FROM tmp_import_roster r
+                          JOIN nhl.games g
+                            ON g.game_date = r.game_date
+                           AND (g.home_team_id = r.team_id OR g.away_team_id = r.team_id)
+                        )
+                        INSERT INTO nhl.roster_status (
+                          game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts
+                        )
+                        SELECT
+                          s.game_id, s.team_id, s.player_id, s.active_flag, s.line_role, s.pp_unit, now()
+                        FROM src s
+                        ON CONFLICT (game_id, team_id, player_id)
+                        DO UPDATE
+                        SET active_flag = EXCLUDED.active_flag,
+                            line_role   = COALESCE(EXCLUDED.line_role, nhl.roster_status.line_role),
+                            pp_unit     = EXCLUDED.pp_unit,
+                            asof_ts     = now();
+                        """)
+                    else:
+                        # Offline/fallback: derive from feature views for this slate_date
+                        cur.execute("""
+                        WITH f AS (
+                          SELECT game_id, team_id, player_id
+                            FROM nhl.v_slate_sog_features   WHERE game_date = %s
+                          UNION
+                          SELECT game_id, team_id, player_id
+                            FROM nhl.v_slate_saves_features WHERE game_date = %s
+                        ),
+                        new_rows AS (
+                          SELECT DISTINCT game_id, team_id, player_id FROM f
+                        )
+                        INSERT INTO nhl.roster_status (
+                          game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts
+                        )
+                        SELECT
+                          nr.game_id, nr.team_id, nr.player_id, TRUE, NULL::text, 'None', now()
+                        FROM new_rows nr
+                        ON CONFLICT (game_id, team_id, player_id)
+                        DO UPDATE
+                        SET active_flag = TRUE,
+                            asof_ts     = now();
+                        """, (slate_date, slate_date))
+
+            # ---------- LOGGING COUNT (separate cursor context) ----------
+            with conn.cursor() as cur:
+                cur.execute("""
+                  SELECT COUNT(*)
+                    FROM nhl.roster_status rs
+                    JOIN nhl.games g USING (game_id)
+                   WHERE g.game_date = %s::date
+                """, (DATE,))
+                inserted_rs = cur.fetchone()[0]
+
+            # ---------- COMMIT ONCE ----------
             conn.commit()
 
-        except Exception as e:
+        except Exception:
             # make sure an earlier SQL error doesn't poison the rest of the run
             try:
                 conn.rollback()
@@ -451,8 +320,7 @@ def main():
 
         print(f"🔧 Upserted/confirmed {upserted_players} players in nhl.players")
         print(f"🔄 Seeded {seeded_maps} mappings in nhl.player_external_ids (provider='nhl')")
-        print(f"✅ Inserted {inserted_rs} roster_status rows for {DATE}.")
-
+        print(f"✅ roster_status rows present for {DATE}: {inserted_rs}")
 
 if __name__ == "__main__":
     main()

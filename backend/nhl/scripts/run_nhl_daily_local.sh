@@ -37,9 +37,12 @@ python3 -c 'import sys' >/dev/null || { echo "python not found"; exit 1; }
 # 0) Ensure players & roster_status are up-to-date for the slate
 SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/refresh_players_and_roster_today.py
 
-# 1) Import schedule & rosters
+# 1) Import schedule & rosters (writes teams/games and may write roster_status)
 SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/import_schedule_today.py
 SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/import_roster_today.py
+
+# 1b) Ensure players & roster_status are up-to-date (idempotent UPSERT)
+SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/refresh_players_and_roster_today.py
 
 # 2) Refresh features/views
 if [[ -f backend/nhl/scripts/refresh.sql ]]; then
