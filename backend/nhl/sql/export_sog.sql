@@ -4,12 +4,11 @@
 \pset tuples_only on
 
 -- Expect: -v slate_date=YYYY-MM-DD
--- Adds full_name via LEFT JOIN to nhl.roster_daily (by player_id, team_id, slate_date),
--- with fallback to nhl.players.full_name/name.
 
-SELECT to_regclass('nhl.v_slate_sog_features') AS v_sog \gset
+SELECT to_regclass('nhl.v_slate_sog_features') IS NOT NULL AS has_view   \gset
+SELECT to_regclass('nhl.players')                IS NOT NULL AS has_players \gset
 
-\if :{?v_sog}
+\if :has_view
   SELECT EXISTS (
     SELECT 1
     FROM nhl.v_slate_sog_features
@@ -33,50 +32,54 @@ SELECT to_regclass('nhl.v_slate_sog_features') AS v_sog \gset
        AND c.table_name='v_slate_sog_features'
        AND c.column_name=n.col
       WHERE c.column_name IS NULL;
-
       IF missing IS NOT NULL THEN
         RAISE EXCEPTION 'Missing columns on nhl.v_slate_sog_features: %', missing;
       END IF;
     END $$;
 
-    COPY (
-      SELECT
-        COALESCE(r.full_name, p.full_name, p.name) AS "full_name",  -- NEW
-        vsf.player_id                   AS "player_id",
-        vsf.game_id                     AS "game_id",
-        vsf.team_id                     AS "team_id",
-        vsf.opponent_id                 AS "opponent_id",
-        vsf.is_home                     AS "is_home",
-        vsf.game_date::date             AS "game_date",
-        NULL::int                       AS "shots_on_goal",
-        vsf.d5_sog_per60                AS "d5_sog_per60",
-        vsf.d10_sog_per60               AS "d10_sog_per60",
-        vsf.d20_sog_per60               AS "d20_sog_per60",
-        vsf.team_d10_sf_per_game        AS "team_d10_sf_per_game",
-        vsf.opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
-        vsf.role_pp_share               AS "role_pp_share",
-        vsf.rest_days                   AS "rest_days",
-        vsf.b2b_flag                    AS "b2b_flag",
-        vsf.attempts_d10_per60          AS "attempts_d10_per60",
-        vsf.pace_index                  AS "pace_index",
-        vsf.opp_d10_sf_per60            AS "opp_d10_sf_per60",
-        vsf.team_d10_sa_per60           AS "team_d10_sa_per60",
-        vsf.pace_matchup_index          AS "pace_matchup_index"
-      FROM nhl.v_slate_sog_features AS vsf
-      LEFT JOIN nhl.roster_daily AS r
-             ON r.player_id  = vsf.player_id
-            AND r.team_id    = vsf.team_id
-            AND r.slate_date = :'slate_date'::date
-      LEFT JOIN nhl.players AS p
-             ON p.player_id = vsf.player_id
-      WHERE vsf.game_date = :'slate_date'::date
-      ORDER BY vsf.game_id, vsf.player_id
-    ) TO STDOUT WITH CSV HEADER;
+    \if :has_players
+      COPY (
+        SELECT
+          COALESCE(p.full_name, p.first_name || ' ' || p.last_name) AS "full_name",
+          vsf.player_id                   AS "player_id",
+          vsf.game_id                     AS "game_id",
+          vsf.team_id                     AS "team_id",
+          vsf.opponent_id                 AS "opponent_id",
+          vsf.is_home                     AS "is_home",
+          vsf.game_date::date             AS "game_date",
+          NULL::int                       AS "shots_on_goal",
+          vsf.d5_sog_per60                AS "d5_sog_per60",
+          vsf.d10_sog_per60               AS "d10_sog_per60",
+          vsf.d20_sog_per60               AS "d20_sog_per60",
+          vsf.team_d10_sf_per_game        AS "team_d10_sf_per_game",
+          vsf.opp_d10_sf_allowed_per_game AS "opp_d10_sf_allowed_per_game",
+          vsf.role_pp_share               AS "role_pp_share",
+          vsf.rest_days                   AS "rest_days",
+          vsf.b2b_flag                    AS "b2b_flag",
+          vsf.attempts_d10_per60          AS "attempts_d10_per60",
+          vsf.pace_index                  AS "pace_index",
+          vsf.opp_d10_sf_per60            AS "opp_d10_sf_per60",
+          vsf.team_d10_sa_per60           AS "team_d10_sa_per60",
+          vsf.pace_matchup_index          AS "pace_matchup_index"
+        FROM nhl.v_slate_sog_features AS vsf
+        LEFT JOIN nhl.players AS p ON p.player_id = vsf.player_id
+        WHERE vsf.game_date = :'slate_date'::date
+        ORDER BY vsf.game_id, vsf.player_id
+      ) TO STDOUT WITH CSV HEADER;
+    \else
+      COPY (
+        SELECT
+          NULL::text AS "full_name",
+          vsf.*
+        FROM nhl.v_slate_sog_features vsf
+        WHERE FALSE
+      ) TO STDOUT WITH CSV HEADER;
+    \endif
 
   \else
     COPY (
       SELECT
-        NULL::text    AS full_name,  -- NEW
+        NULL::text    AS full_name,
         NULL::bigint  AS player_id,
         NULL::bigint  AS game_id,
         NULL::bigint  AS team_id,
@@ -104,7 +107,7 @@ SELECT to_regclass('nhl.v_slate_sog_features') AS v_sog \gset
 \else
   COPY (
     SELECT
-      NULL::text    AS full_name,  -- NEW
+      NULL::text    AS full_name,
       NULL::bigint  AS player_id,
       NULL::bigint  AS game_id,
       NULL::bigint  AS team_id,

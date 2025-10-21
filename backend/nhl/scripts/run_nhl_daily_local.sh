@@ -34,6 +34,9 @@ echo "SLATE_DATE=${SLATE_DATE}"
 command -v psql >/dev/null || { echo "psql not found"; exit 1; }
 python3 -c 'import sys' >/dev/null || { echo "python not found"; exit 1; }
 
+# 0) Ensure players & roster_status are up-to-date for the slate
+SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/refresh_players_and_roster_today.py
+
 # 1) Import schedule & rosters
 SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/import_schedule_today.py
 SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/import_roster_today.py
