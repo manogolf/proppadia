@@ -106,12 +106,9 @@ jobs:
 
       - name: Check slate
         id: slate
-        shell: bash
         run: |
           set -euo pipefail
-          HAS=$(psql "$SUPABASE_DB_URL" -Atqc \
-            "select exists (select 1 from nhl.games where game_date = :'d'::date)" \
-            -v d="$SLATE_DATE")
+          HAS=$(psql "$SUPABASE_DB_URL" -Atq -c "select exists (select 1 from nhl.games where game_date = DATE '$SLATE_DATE')")
           echo "has_games=$HAS" >> "$GITHUB_OUTPUT"
           echo "has_games=${HAS}"
 
