@@ -167,7 +167,8 @@
         Client-only page. Put CSV/JSON under
         <span class="kbd">nhl/site/data/</span> (<span class="kbd"
           >sog_with_names.csv</span
-        >, <span class="kbd">saves_with_names.csv</span>, optional
+        >, <span class="kbd">saves_with_names.csv</span>,
+        <span class="kbd">points_with_names.csv</span>, optional
         <span class="kbd">odds_latest.json</span>), or drop them below.
       </p>
 
@@ -178,6 +179,7 @@
             <select id="market">
               <option value="sog">Shots on Goal</option>
               <option value="saves">Goalie Saves</option>
+              <option value="points">Points</option>
             </select>
           </label>
 
@@ -243,9 +245,9 @@
             </div>
           </div>
           <div>
-            <div class="dropzone" id="dzOdds">
-              Drop <b>odds_latest.json</b> here or
-              <input type="file" id="fileOdds" accept=".json" />
+            <div class="dropzone" id="dzPoints">
+              Drop <b>points_with_names.csv</b> here or
+              <input type="file" id="filePoints" accept=".csv" />
             </div>
           </div>
         </div>
@@ -331,10 +333,10 @@
         try {
           data = JSON.parse(text);
         } catch {
-          return { sog: {}, saves: {} };
+          return { sog: {}, saves: {}, points: {} };
         }
         const arr = Array.isArray(data) ? data : [data];
-        const out = { sog: {}, saves: {} };
+        const out = { sog: {}, saves: {}, points: {} };
         for (const game of arr) {
           for (const bm of game.bookmakers || []) {
             for (const mkt of bm.markets || []) {
@@ -343,6 +345,8 @@
                   ? "sog"
                   : mkt.key === "player_total_saves"
                   ? "saves"
+                  : mkt.key === "player_points"
+                  ? "points"
                   : null;
               if (!kind) continue;
               for (const o of mkt.outcomes || []) {
@@ -361,8 +365,9 @@
       const state = {
         sog: { header: [], rows: [] },
         saves: { header: [], rows: [] },
-        odds: { sog: {}, saves: {} },
-        lastLineOptsSig: "", // to avoid needless repaints of the line <select>
+        points: { header: [], rows: [] }, // NEW
+        odds: { sog: {}, saves: {}, points: {} }, // NEW key
+        lastLineOptsSig: "",
       };
 
       function normalizeKeys(rows) {
@@ -388,40 +393,57 @@
         }
       }
 
+      // 2) Load points CSV (and leave odds as-is)
       async function tryLoadFromDataFolder() {
-        const s1 = await fetchIfExists("./data/sog_with_names.csv");
-        const s2 = await fetchIfExists("./data/saves_with_names.csv");
-        const s3 = await fetchIfExists("./data/odds_latest.json");
+        const sSog = await fetchIfExists("./data/sog_with_names.csv");
+        const sSaves = await fetchIfExists("./data/saves_with_names.csv");
+        const sPts = await fetchIfExists("./data/points_with_names.csv"); // NEW
+        const sOdds = await fetchIfExists("./data/odds_latest.json");
+
         let loaded = 0;
-        if (s1) {
-          const { header, rows } = parseCSV(s1);
+
+        if (sSog) {
+          const { header, rows } = parseCSV(sSog);
           state.sog = { header, rows: normalizeKeys(rows) };
           loaded++;
-          setupLineOptionsIfNeeded(); // build from new header
+          setupLineOptionsIfNeeded();
         }
-        if (s2) {
-          const { header, rows } = parseCSV(s2);
+        if (sSaves) {
+          const { header, rows } = parseCSV(sSaves);
           state.saves = { header, rows: normalizeKeys(rows) };
           loaded++;
           setupLineOptionsIfNeeded();
         }
-        if (s3) {
-          state.odds = parseOddsJSON(s3);
+        if (sPts) {
+          // NEW
+          const { header, rows } = parseCSV(sPts);
+          state.points = { header, rows: normalizeKeys(rows) };
+          loaded++;
+          setupLineOptionsIfNeeded();
+        }
+        if (sOdds) {
+          state.odds = parseOddsJSON(sOdds);
           loaded++;
         }
+
         updateStatus();
         render();
         return loaded;
       }
 
+      // 3) Include points in the status pill
       function updateStatus() {
         const sogCount = state.sog.rows.length;
         const savesCount = state.saves.rows.length;
+        const ptsCount = state.points.rows.length; // NEW
+
         const sogOdds = Object.keys(state.odds.sog || {}).length;
         const svsOdds = Object.keys(state.odds.saves || {}).length;
-        document.getElementById(
-          "status"
-        ).textContent = `SOG: ${sogCount} | SAVES: ${savesCount} | odds(players) SOG/SAVES: ${sogOdds}/${svsOdds}`;
+        const ptsOdds = Object.keys(state.odds.points || {}).length; // NEW
+
+        document.getElementById("status").textContent =
+          `SOG: ${sogCount} | SAVES: ${savesCount} | POINTS: ${ptsCount} ` +
+          `| odds(players) SOG/SAVES/PTS: ${sogOdds}/${svsOdds}/${ptsOdds}`;
       }
 
       // ---- Build dynamic Line options from CSV headers ----
@@ -451,10 +473,15 @@
         return uniq;
       }
 
+      // 4) Make line options work for points
       function setupLineOptionsIfNeeded() {
         const market = document.getElementById("market").value;
         const header =
-          (market === "saves" ? state.saves.header : state.sog.header) || [];
+          (market === "saves"
+            ? state.saves.header
+            : market === "points"
+            ? state.points.header
+            : state.sog.header) || [];
         const lines = extractLinesFromHeader(header);
         const sel = document.getElementById("line");
 
@@ -481,32 +508,41 @@
         const key = document.getElementById("line").value;
         return { market, key };
       }
+
+      // 5) Route dataset by market
       function currentDataset() {
         const { market } = currentLineKey();
-        return market === "saves" ? state.saves.rows : state.sog.rows;
+        if (market === "saves") return state.saves.rows;
+        if (market === "points") return state.points.rows; // NEW
+        return state.sog.rows;
       }
 
-      // assumes you have a Set<string> called postedKeys like:
-      // key format: `${market}|${player_id}|${game_id}|${line}` (e.g., "sog|8475166|2025020061|2.5")
-
+      // 6/7) Filter, rank, and (optionally) restrict to posted lines from odds
       function filterAndRank() {
         const { key, market } = currentLineKey();
         const price = toFloat(document.getElementById("price").value);
         const minEdgeBps =
           Number(document.getElementById("minEdge").value) || 0;
         const q = (document.getElementById("q").value || "").toLowerCase();
-        const onlyPosted =
-          document.getElementById("onlyPosted")?.checked === true;
+        const useOdds = document.getElementById("useOdds")?.checked === true;
 
         const pcol = `p_over_${key.replace(".", "_")}`;
         const allRows = currentDataset().filter((r) => r[pcol] !== undefined);
 
-        // Optional: restrict to posted lines, but DO NOT slice here
-        const rows = onlyPosted
-          ? allRows.filter((r) =>
-              postedKeys.has(`${market}|${r.player_id}|${r.game_id}|${key}`)
-            )
-          : allRows;
+        // Posted-lines-only using odds JSON (name+line match)
+        let rows;
+        if (useOdds) {
+          const bucket = state.odds[market] || {};
+          rows = allRows.filter((r) => {
+            const name = normalizeName(
+              r.full_name || r.player || r.player_name || ""
+            );
+            const set = bucket[name];
+            return set && set.has(key);
+          });
+        } else {
+          rows = allRows;
+        }
 
         const be = Number.isFinite(price) ? probFromAmerican(price) : NaN;
 
@@ -549,7 +585,6 @@
       }
 
       function render() {
-        // Only rebuild line options if needed (handled elsewhere)
         updateStatus();
         const { key } = currentLineKey();
         const { rows } = filterAndRank();
@@ -670,39 +705,59 @@
         // File inputs / drag-drop
         const fileSog = document.getElementById("fileSog");
         const fileSaves = document.getElementById("fileSaves");
-        const fileOdds = document.getElementById("fileOdds");
+        const filePoints = document.getElementById("filePoints");
+        const fileOdds = document.getElementById("fileOdds"); // optional (guarded)
 
-        fileSog.addEventListener("change", async (e) => {
-          const f = e.target.files[0];
-          if (!f) return;
-          const txt = await f.text();
-          const { header, rows } = parseCSV(txt);
-          state.sog = { header, rows: normalizeKeys(rows) };
-          setupLineOptionsIfNeeded();
-          updateStatus();
-          render();
-        });
-        fileSaves.addEventListener("change", async (e) => {
-          const f = e.target.files[0];
-          if (!f) return;
-          const txt = await f.text();
-          const { header, rows } = parseCSV(txt);
-          state.saves = { header, rows: normalizeKeys(rows) };
-          setupLineOptionsIfNeeded();
-          updateStatus();
-          render();
-        });
-        fileOdds.addEventListener("change", async (e) => {
-          const f = e.target.files[0];
-          if (!f) return;
-          const txt = await f.text();
-          state.odds = parseOddsJSON(txt);
-          updateStatus();
-          render();
-        });
+        if (fileSog) {
+          fileSog.addEventListener("change", async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const txt = await f.text();
+            const { header, rows } = parseCSV(txt);
+            state.sog = { header, rows: normalizeKeys(rows) };
+            setupLineOptionsIfNeeded();
+            updateStatus();
+            render();
+          });
+        }
+        if (fileSaves) {
+          fileSaves.addEventListener("change", async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const txt = await f.text();
+            const { header, rows } = parseCSV(txt);
+            state.saves = { header, rows: normalizeKeys(rows) };
+            setupLineOptionsIfNeeded();
+            updateStatus();
+            render();
+          });
+        }
+        if (filePoints) {
+          filePoints.addEventListener("change", async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const txt = await f.text();
+            const { header, rows } = parseCSV(txt);
+            state.points = { header, rows: normalizeKeys(rows) };
+            setupLineOptionsIfNeeded();
+            updateStatus();
+            render();
+          });
+        }
+        if (fileOdds) {
+          fileOdds.addEventListener("change", async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const txt = await f.text();
+            state.odds = parseOddsJSON(txt);
+            updateStatus();
+            render();
+          });
+        }
 
         function makeDZ(id, kind) {
           const dz = document.getElementById(id);
+          if (!dz) return; // allow optional zones
           dz.addEventListener("dragover", (e) => {
             e.preventDefault();
             dz.style.borderColor = "#7aa2ff";
@@ -722,7 +777,8 @@
               const { header, rows } = parseCSV(txt);
               const norm = normalizeKeys(rows);
               if (kind === "sog") state.sog = { header, rows: norm };
-              else state.saves = { header, rows: norm };
+              else if (kind === "saves") state.saves = { header, rows: norm };
+              else if (kind === "points") state.points = { header, rows: norm };
               setupLineOptionsIfNeeded();
             }
             updateStatus();
@@ -731,7 +787,8 @@
         }
         makeDZ("dzSog", "sog");
         makeDZ("dzSaves", "saves");
-        makeDZ("dzOdds", "odds");
+        makeDZ("dzPoints", "points");
+        makeDZ("dzOdds", "odds"); // optional if present
       }
 
       (async function init() {

@@ -137,14 +137,15 @@ def main():
     print("▶ Scoring SOG:", " ".join(sog_cmd))
     subprocess.check_call(sog_cmd)
 
-    # 2) Score SAVES (24.5/28.5)
+    # 2) Score SAVES (more lines)
     saves_cmd = [
         sys.executable, str(scorer_path),
         "--model-dir", str(MODEL_SAVES_DIR),
         "--csv", args.saves_csv,
         "--feature-json", str(FEATURE_JSON),
         "--feature-key", "goalie_saves",
-        "--line", "19.5,20.5,22.5,23.5,24.5,26.5,28.5,30.5",
+        # add more lines here:
+        "--line", "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5",
         "--out", str(OUT_SAVES),
     ]
     print("▶ Scoring SAVES:", " ".join(saves_cmd))

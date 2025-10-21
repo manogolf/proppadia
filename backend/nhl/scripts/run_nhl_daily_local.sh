@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- Bootstrap Python env (venv + deps) ---
-# repo root
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# repo root (three levels up from backend/nhl/scripts/)
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
 # venv
@@ -13,17 +13,17 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-# install deps if missing
-python - <<'PY' || {
-    python -m pip install -U pip wheel >/dev/null
-    python -m pip install "psycopg[binary]>=3.1" requests python-dotenv >/dev/null
-}
+# Try to import deps; if it fails, install them.
+if ! python3 - <<'PY'; then
 try:
     import requests, psycopg, dotenv  # noqa: F401
     print("deps_ok")
 except Exception:
     raise SystemExit(1)
 PY
+  python3 -m pip install -U pip wheel >/dev/null
+  python3 -m pip install "psycopg[binary]>=3.1" requests python-dotenv >/dev/null
+fi
 # --- end bootstrap ---
 
 # --- Config ---
