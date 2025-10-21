@@ -106,17 +106,21 @@ jobs:
 
       - name: Check slate
         id: slate
+        shell: bash
         run: |
-          HAS=$(psql "$SUPABASE_DB_URL" -Atqc "select exists (select 1 from nhl.games where game_date='${SLATE_DATE}')")
-          echo "has_games=$HAS" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          HAS=$(psql "$SUPABASE_DB_URL" -Atqc \
+            "select exists (select 1 from nhl.games where game_date = :'d'::date)" \
+            -v d="$SLATE_DATE")
+          echo "has_games=$HAS" >> "$GITHUB_OUTPUT"
           echo "has_games=${HAS}"
 
-          - name: Import today's rosters (API → nhl.roster_status)
-          if: steps.slate.outputs.has_games == 't'
-          env:
-            SLATE_DATE: ${{ env.SLATE_DATE }}
-            SKIP_ROSTER_STATUS: "1"     # <— ADD THIS
-          run: /tmp/retry.sh "python backend/nhl/scripts/import_roster_today.py"
+      - name: Import today's rosters (API → nhl.roster_status)
+        if: steps.slate.outputs.has_games == 't'
+        env:
+          SLATE_DATE: ${{ env.SLATE_DATE }}
+          SKIP_ROSTER_STATUS: "1" # <— ADD THIS
+        run: /tmp/retry.sh "python backend/nhl/scripts/import_roster_today.py"
 
       # -------------------- Schema / features refresh --------------------
       - name: Refresh features/views (align contract)

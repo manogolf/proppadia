@@ -49,4 +49,4 @@ mkdir -p nhl/site/data
 cp backend/nhl/data/processed/sog_with_names.csv   nhl/site/data/ || true
 cp backend/nhl/data/processed/saves_with_names.csv nhl/site/data/ || true
 
-echo "Done." Open your page at http://localhost:8080 (if serving nhl/site)"
+echo "Done. Open your page at http://localhost:8080 (if serving nhl/site)"
