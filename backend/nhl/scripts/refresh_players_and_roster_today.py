@@ -159,19 +159,27 @@ def ensure_players_exist(cur, player_ids: list[int]) -> None:
     """Insert minimal player rows if missing, so joins never break."""
     if not player_ids:
         return
+
+    # we expect dict_row in most places, but handle tuples too
     cur.execute("SELECT player_id FROM nhl.players WHERE player_id = ANY(%s);", (player_ids,))
-    rows = cur.fetchall()
-    have = {(r["player_id"] if isinstance(r, dict) else r[0]) for r in rows}
+    have_rows = cur.fetchall()
+    have = { (r["player_id"] if isinstance(r, dict) else r[0]) for r in have_rows }
+
     missing = [int(pid) for pid in set(player_ids) if pid not in have]
     if not missing:
         return
-    cur.executemany("""
-        INSERT INTO nhl.players (player_id, full_name, position, active, updated_at)
-        VALUES (%(pid)s, %(name)s, 'F', TRUE, now())
+
+    payload = [{"pid": pid, "name": f"Player {pid}"} for pid in missing]
+    cur.executemany(
+        """
+        INSERT INTO nhl.players (player_id, full_name, position, status, active, updated_at)
+        VALUES (%(pid)s, %(name)s, 'F', 'active', TRUE, now())
         ON CONFLICT (player_id) DO UPDATE
-           SET active = TRUE,
-               updated_at = now();
-    """, [{"pid": pid, "name": f"Player {pid}"} for pid in missing])
+          SET active = TRUE,
+              updated_at = now();
+        """,
+        payload,
+    )
     print(f"[info] players: inserted/activated {len(missing)} placeholder rows")
 
 def _dedupe_roster_rows(rows: list[dict]) -> list[dict]:
