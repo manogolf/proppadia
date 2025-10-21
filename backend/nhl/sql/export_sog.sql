@@ -40,7 +40,12 @@ SELECT to_regclass('nhl.players')                IS NOT NULL AS has_players \gse
     \if :has_players
       COPY (
         SELECT
-          COALESCE(NULLIF(p.full_name, ''), 'Player ' || vsf.player_id::text) AS "full_name",
+          COALESCE(
+          NULLIF(btrim(p.full_name), ''),
+          NULLIF(btrim(concat_ws(' ', p.first_name, p.last_name)), ''),
+          'Player ' || vsf.player_id::text
+        ) AS "full_name",
+
           vsf.player_id                   AS "player_id",
           vsf.game_id                     AS "game_id",
           vsf.team_id                     AS "team_id",
