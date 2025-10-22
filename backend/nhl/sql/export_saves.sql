@@ -28,7 +28,7 @@ SELECT to_regclass('nhl.players')                IS NOT NULL AS has_players \gse
         ('d10_shots_faced_per60'), ('d10_save_pct'),
         ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
         ('pace_index'), ('rest_days'), ('b2b_flag'),
-        -- goalie-specific model features (these MUST exist)
+        -- goalie-specific model features
         ('d5_saves_per60'), ('d10_saves_per60'), ('d5_shots_faced_per60'), ('season_save_pct'),
         ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index'),
         ('d20_saves_per60'),
@@ -49,11 +49,22 @@ SELECT to_regclass('nhl.players')                IS NOT NULL AS has_players \gse
     \if :has_players
       COPY (
         SELECT
+          -- Robust name: strip placeholders, then try first+last (ignoring "Player <digits>")
           COALESCE(
-          NULLIF(btrim(p.full_name), ''),
-          NULLIF(btrim(concat_ws(' ', p.first_name, p.last_name)), ''),
-          'Player ' || svf.player_id::text
-        ) AS "full_name",
+            NULLIF(
+              CASE
+                WHEN p.full_name ~* '^(player|unknown)\s+\d+$' THEN ''
+                ELSE btrim(p.full_name)
+              END, ''
+            ),
+            NULLIF(
+              btrim(concat_ws(' ',
+                CASE WHEN p.first_name ~* '^(player|unknown)$' THEN NULL ELSE NULLIF(btrim(p.first_name), '') END,
+                CASE WHEN p.last_name  ~  '^\d+$'             THEN NULL ELSE NULLIF(btrim(p.last_name),  '') END
+              )), ''
+            ),
+            'Player ' || svf.player_id::text
+          ) AS "full_name",
 
           svf.player_id                     AS "player_id",
           svf.game_id                       AS "game_id",
@@ -71,13 +82,13 @@ SELECT to_regclass('nhl.players')                IS NOT NULL AS has_players \gse
           svf.rest_days                     AS "rest_days",
           svf.b2b_flag                      AS "b2b_flag",
 
-          -- Required by the model (these were missing in your run)
+          -- Required by the model
           svf.d5_saves_per60                AS "d5_saves_per60",
           svf.d10_saves_per60               AS "d10_saves_per60",
           svf.d5_shots_faced_per60          AS "d5_shots_faced_per60",
           svf.season_save_pct               AS "season_save_pct",
 
-          -- Additional context features used by metadata (extras OK)
+          -- Additional context features
           svf.opp_d10_sf_per60              AS "opp_d10_sf_per60",
           svf.team_d10_sa_per60             AS "team_d10_sa_per60",
           svf.pace_matchup_index            AS "pace_matchup_index",
