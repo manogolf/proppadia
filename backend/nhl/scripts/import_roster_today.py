@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
-from psycopg.rows import dict_row  # (ok to keep)
+from psycopg.rows import dict_row  # ok to keep
 from psycopg import errors as pg_errors  # noqa: F401
 
 # Force every cursor.execute(...) to use simple execution (no PREPARE)
@@ -35,7 +35,7 @@ def _flag(name: str, default: str = "0") -> bool:
     v = os.getenv(name, default).strip().lower()
     return v in ("1", "true", "t", "yes", "y")
 
-SKIP_PLAYERS = _flag("SKIP_PLAYERS", "0")          # <— NEW: hard gate all writes to nhl.players / player_external_ids
+SKIP_PLAYERS = _flag("SKIP_PLAYERS", "0")          # gate writes to nhl.players / nhl.player_external_ids
 SKIP_ROSTER_STATUS = _flag("SKIP_ROSTER_STATUS", "1")
 
 DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
@@ -66,7 +66,6 @@ S = _session()
 
 # --------------------------- helpers ---------------------------
 PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
-
 
 def is_placeholder(name: str | None) -> bool:
     if not name or not str(name).strip():
@@ -141,7 +140,7 @@ def fetch_player_name(nhl_pid: str) -> str | None:
             return None if is_placeholder(nm) else (nm or None)
     except Exception:
         pass
-    return None  # << never fabricate "Player {id}"
+    return None  # never fabricate "Player {id}"
 
 # --------------------------- main ---------------------------
 def main():
@@ -162,6 +161,12 @@ def main():
             if c in ("LW", "RW", "C", "F"):
                 return "F"
             return "F"
+
+        def _cast_int_or_none(x):
+            try:
+                return None if x is None else int(x)
+            except Exception:
+                return None
 
         try:
             with conn.cursor() as cur:
@@ -211,52 +216,55 @@ def main():
                                 continue
                             nhl_pid = str(nhl_pid_raw)
                             pos = norm_pos((item.get("position") or {}).get("code"))
+                            team_id_int = _cast_int_or_none(tid)
 
                             # Only fetch name if we might write players
                             full_name = None if SKIP_PLAYERS else fetch_player_name(nhl_pid)
 
                             internal_pid = player_map_by_provider.get(nhl_pid)
 
-                            # If skipping player writes, we still keep the map cache as-is and move on
+                            # If skipping player writes, keep the map cache as-is and move on
                             if SKIP_PLAYERS:
                                 continue
 
                             # If no internal mapping and we *don't* have a valid name, skip to avoid CHECK violation
                             if internal_pid is None and (not full_name or is_placeholder(full_name)):
-                                # no safe insert possible; skip this player now (backfill handles names elsewhere)
+                                # no safe insert possible; skip (backfill handles names elsewhere)
                                 continue
 
                             if internal_pid is None:
-                                # Insert *only* with a real name
-                                internal_pid = int(nhl_pid)
+                                internal_pid = _cast_int_or_none(nhl_pid)
+                                # INSERT with explicit casts
                                 cur.execute("""
                                     INSERT INTO nhl.players (player_id, full_name, current_team_id, position, status)
-                                    VALUES (%s, %s, %s, %s, 'active')
+                                    VALUES (%s::bigint, %s::text, %s::int, %s::text, 'active')
                                     ON CONFLICT (player_id) DO NOTHING
-                                """, (internal_pid, full_name, tid, pos))
-                                # if inserted, seed mapping
+                                """, (internal_pid, full_name, team_id_int, pos))
+                                # if inserted, seed mapping (explicit casts)
                                 cur.execute("""
                                     INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
-                                    VALUES (%s, 'nhl', %s)
+                                    VALUES (%s::bigint, 'nhl', %s::text)
                                     ON CONFLICT (player_id, provider) DO NOTHING
                                 """, (internal_pid, nhl_pid))
                                 player_map_by_provider[nhl_pid] = internal_pid
                                 upserted_players += 1
                                 seeded_maps += 1
                             else:
-                                # Update existing row—but never clobber real names with blanks/placeholders
+                                # UPDATE existing row—never clobber real names with blanks/placeholders
                                 cur.execute("""
                                     UPDATE nhl.players
-                                       SET current_team_id = COALESCE(%s, current_team_id),
-                                           position        = COALESCE(%s, position),
+                                       SET current_team_id = COALESCE(%s::int, current_team_id),
+                                           position        = COALESCE(%s::text, position),
                                            status          = 'active',
                                            full_name       = CASE
-                                                               WHEN %s IS NOT NULL AND %s <> '' AND %s !~* '^(player|unknown)\\s+\\d+$'
-                                                                 THEN %s
+                                                               WHEN %s::text IS NOT NULL
+                                                                AND %s::text <> ''
+                                                                AND %s::text !~* '^(player|unknown)\\s+\\d+$'
+                                                                 THEN %s::text
                                                                ELSE full_name
                                                              END
-                                     WHERE player_id = %s
-                                """, (tid, pos, full_name, full_name, full_name, full_name, internal_pid))
+                                     WHERE player_id = %s::bigint
+                                """, (team_id_int, pos, full_name, full_name, full_name, full_name, internal_pid))
 
             # ---------- ROSTER_STATUS UPSERT ----------
             if SKIP_ROSTER_STATUS:
@@ -283,8 +291,8 @@ def main():
                             COALESCE(r.pp_unit, 'None')   AS pp_unit
                           FROM tmp_import_roster r
                           JOIN nhl.games g
-                            ON g.game_date = r.game_date
-                           AND (g.home_team_id = r.team_id OR g.away_team_id = r.team_id)
+                            ON g.game_id = r.game_id
+                           AND g.game_date = %s::date
                         )
                         INSERT INTO nhl.roster_status (
                           game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts
@@ -298,16 +306,16 @@ def main():
                             line_role   = COALESCE(EXCLUDED.line_role, nhl.roster_status.line_role),
                             pp_unit     = EXCLUDED.pp_unit,
                             asof_ts     = now();
-                        """)
+                        """, (slate_date,))
                     else:
                         # Offline/fallback: derive from slate views
                         cur.execute("""
                         WITH f AS (
                           SELECT game_id, team_id, player_id
-                            FROM nhl.v_slate_sog_features   WHERE game_date = %s
+                            FROM nhl.v_slate_sog_features   WHERE game_date = %s::date
                           UNION
                           SELECT game_id, team_id, player_id
-                            FROM nhl.v_slate_saves_features WHERE game_date = %s
+                            FROM nhl.v_slate_saves_features WHERE game_date = %s::date
                         ),
                         new_rows AS (
                           SELECT DISTINCT game_id, team_id, player_id FROM f
