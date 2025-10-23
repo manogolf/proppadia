@@ -65,7 +65,8 @@ def _session() -> requests.Session:
 S = _session()
 
 # --------------------------- helpers ---------------------------
-PLACEHOLDER_RE = re.compile(r"^(?i)\s*(player|unknown)\s+\d+\s*$")
+PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
+
 
 def is_placeholder(name: str | None) -> bool:
     if not name or not str(name).strip():
