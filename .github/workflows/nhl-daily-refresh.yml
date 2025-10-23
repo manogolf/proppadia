@@ -159,6 +159,26 @@ jobs:
           SLATE_DATE: ${{ env.SLATE_DATE }}
         run: /tmp/retry.sh "python backend/nhl/scripts/refresh_players_and_roster_today.py"
 
+      - name: Seed features for TODAY (ET)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          # Seed today’s skater & goalie features for the slate date
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
+            -f backend/nhl/sql/seed_sog_features_for_slate.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
+            -f backend/nhl/sql/seed_goalie_features_for_slate.sql
+
+          # Make sure views/materializations see the new rows
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
+            -f backend/nhl/scripts/refresh.sql
+
+          # (Optional) sanity: require non-zero rows so exports aren’t header-only
+          SOG=$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from nhl.v_slate_sog_features where game_date = date '$SLATE_DATE';")
+          SAV=$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from nhl.v_slate_saves_features where game_date = date '$SLATE_DATE';")
+          echo "today counts → sog=${SOG} saves=${SAV}"
+          test "${SOG}" -gt 0 && test "${SAV}" -gt 0
+
       # -------------------- Export (CSV) --------------------
       - name: Export slate CSVs (today only)
         if: steps.slate.outputs.has_games == 't'

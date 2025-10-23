@@ -400,17 +400,17 @@ def main():
                     ensure_players_exist(cur, pids)
                     upsert_roster_status_from_features(cur, SLATE_DATE)
 
-                # Logging
-                cur.execute("""
-                    SELECT COUNT(*) AS cnt
-                    FROM nhl.roster_status rs
-                    JOIN nhl.games g USING (game_id)
-                    WHERE g.game_date = %s::date
-                """, (SLATE_DATE,))
-                row = cur.fetchone()
-                total_rs = (row["cnt"] if isinstance(row, dict) else row[0])
-                print(f"Refreshed players & roster_status for {SLATE_DATE} (source={source})")
-                print(f"✅ roster_status rows present for {SLATE_DATE}: {total_rs}")
+                    # Logging
+                    cur.execute("""
+                        SELECT COUNT(*) AS cnt
+                        FROM nhl.roster_status rs
+                        JOIN nhl.games g USING (game_id)
+                        WHERE g.game_date = %s::date
+                    """, (SLATE_DATE,))
+                    row = cur.fetchone()
+                    total_rs = (row["cnt"] if isinstance(row, dict) else row[0])
+                    print(f"Refreshed players & roster_status for {SLATE_DATE} (source={source})")
+                    print(f"✅ roster_status rows present for {SLATE_DATE}: {total_rs}")
 
 if __name__ == "__main__":
     main()

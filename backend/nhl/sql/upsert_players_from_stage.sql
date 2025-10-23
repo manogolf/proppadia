@@ -1,9 +1,19 @@
 WITH norm AS (
   SELECT
-    s.player_id::bigint                             AS player_id,
-    s.team_id::bigint                               AS team_id,
-    NULLIF(btrim(s.first_name), '')                 AS first_name,
-    NULLIF(btrim(s.last_name),  '')                 AS last_name,
+    s.player_id::bigint AS player_id,
+    s.team_id::bigint   AS team_id,
+
+    -- Sanitize names coming from stage:
+    -- - first_name of 'Player' or 'Unknown' → NULL
+    -- - last_name that is purely digits → NULL
+    CASE
+      WHEN s.first_name ~* '^(player|unknown)$' THEN NULL
+      ELSE NULLIF(btrim(s.first_name), '')
+    END AS first_name,
+    CASE
+      WHEN s.last_name ~ '^[0-9]+$' THEN NULL
+      ELSE NULLIF(btrim(s.last_name), '')
+    END AS last_name,
 
     -- Normalize position to {F,D,G}
     CASE UPPER(COALESCE(s.position, ''))
@@ -15,16 +25,16 @@ WITH norm AS (
       WHEN 'F' THEN 'F'  WHEN 'W' THEN 'F'  WHEN 'CENTER' THEN 'F'
       WHEN 'LEFT WING' THEN 'F'  WHEN 'RIGHT WING' THEN 'F'  WHEN 'FORWARD' THEN 'F'
       ELSE 'F'
-    END                                             AS position_norm,
+    END AS position_norm,
 
     -- Normalize shoots_catches to {L,R}
     CASE UPPER(COALESCE(s.shoots_catches, ''))
       WHEN 'L' THEN 'L'
       WHEN 'R' THEN 'R'
       ELSE NULL
-    END                                             AS shoots_catches_norm,
+    END AS shoots_catches_norm,
 
-    COALESCE(s.active, TRUE)                        AS active
+    COALESCE(s.active, TRUE) AS active
   FROM nhl.import_players_stage s
   WHERE s.player_id IS NOT NULL
 ),
@@ -34,14 +44,21 @@ prep AS (
     team_id,
     first_name,
     last_name,
-    NULLIF(btrim(concat_ws(' ', first_name, last_name)), '') AS full_name_final,
+
+    -- Build a real full name (reject placeholder-shaped results)
+    CASE
+      WHEN btrim(concat_ws(' ', first_name, last_name)) ~* '^(player|unknown)\s+\d+$'
+        THEN NULL
+      ELSE NULLIF(btrim(concat_ws(' ', first_name, last_name)), '')
+    END AS full_name_final,
+
     position_norm,
     shoots_catches_norm,
     active
   FROM norm
 ),
 src AS (
-  -- only rows with a *real* name
+  -- only rows with a real name survive
   SELECT *
   FROM prep
   WHERE full_name_final IS NOT NULL AND btrim(full_name_final) <> ''
@@ -65,7 +82,8 @@ ON CONFLICT (player_id) DO UPDATE
 SET
   -- Prefer real names over placeholders/blank
   full_name = CASE
-    WHEN tgt.full_name ~* '^(player|unknown)\s+[0-9]+$' OR btrim(tgt.full_name) = '' THEN EXCLUDED.full_name
+    WHEN tgt.full_name ~* '^(player|unknown)\s+[0-9]+$' OR btrim(tgt.full_name) = ''
+      THEN EXCLUDED.full_name
     ELSE tgt.full_name
   END,
   current_team_id = COALESCE(EXCLUDED.current_team_id, tgt.current_team_id),
