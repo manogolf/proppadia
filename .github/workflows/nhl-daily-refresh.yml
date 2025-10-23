@@ -117,6 +117,7 @@ jobs:
         env:
           SLATE_DATE: ${{ env.SLATE_DATE }}
           SKIP_ROSTER_STATUS: "1" # <— ADD THIS
+          SKIP_PLAYERS: "1" # ← add this
         run: /tmp/retry.sh "python backend/nhl/scripts/import_roster_today.py"
 
       # -------------------- Schema / features refresh --------------------

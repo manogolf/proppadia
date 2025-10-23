@@ -14,7 +14,8 @@ command -v psql >/dev/null || { echo "psql not found"; exit 1; }
 
 # 1) Import schedule & rosters
 SLATE_DATE="${SLATE_DATE}" python3 backend/nhl/scripts/import_schedule_today.py
-SLATE_DATE="${SLATE_DATE}" SKIP_ROSTER_STATUS=1 python3 backend/nhl/scripts/import_roster_today.py
+SLATE_DATE="$SLATE_DATE" SKIP_ROSTER_STATUS=1 SKIP_PLAYERS=1 \
+  python3 backend/nhl/scripts/import_roster_today.py
 
 # 2) Refresh views (so offline fallback has fresh v_slate_*)
 if [[ -f backend/nhl/scripts/refresh.sql ]]; then
