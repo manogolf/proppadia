@@ -324,3 +324,21 @@ jobs:
         run: |
           export SLATE_DATE=$(TZ=America/New_York date -d 'yesterday' +%F)
           python backend/nhl/scripts/seed_goalie_logs_for_date.py
+
+                # -------------------- Seed skater logs (yesterday ET) --------------------
+      - name: Seed skater logs for yesterday (ET)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          export SLATE_DATE=$(TZ=America/New_York date -d 'yesterday' +%F)
+          if [ -f backend/nhl/scripts/seed_skater_logs_for_date.py ]; then
+            python backend/nhl/scripts/seed_skater_logs_for_date.py
+          elif [ -f backend/nhl/scripts/import_skater_logs_for_date.py ]; then
+            python backend/nhl/scripts/import_skater_logs_for_date.py
+          elif [ -f backend/nhl/scripts/import_skater_logs.py ]; then
+            python backend/nhl/scripts/import_skater_logs.py
+          else
+            echo "No skater logs import script found; skipping."
+          fi
+          # ensure views see new rows
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
