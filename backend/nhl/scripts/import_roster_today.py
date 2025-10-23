@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-import os, sys, json, datetime as dt
+import os, sys, json, datetime as dt, re
 from zoneinfo import ZoneInfo
 
 # ---- absolutely disable server-side prepares (must run before importing psycopg) ----
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
-from psycopg.rows import dict_row  # (not strictly needed here, but fine to keep)
-from psycopg import errors as pg_errors  # noqa: F401  (may be unused depending on path)
+from psycopg.rows import dict_row  # (ok to keep)
+from psycopg import errors as pg_errors  # noqa: F401
 
 # Force every cursor.execute(...) to use simple execution (no PREPARE)
 _ORIG_EXECUTE = psycopg.Cursor.execute
@@ -16,7 +16,7 @@ def _no_prep_execute(self, query, params=None, **kw):
     return _ORIG_EXECUTE(self, query, params, **kw)
 psycopg.Cursor.execute = _no_prep_execute
 
-# optional: load .env locally when running on your laptop
+# optional: load .env locally
 try:
     from dotenv import load_dotenv, find_dotenv
     load_dotenv(find_dotenv())
@@ -27,8 +27,16 @@ import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
+# --------------------------- flags & env ---------------------------
 ET = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
+
+def _flag(name: str, default: str = "0") -> bool:
+    v = os.getenv(name, default).strip().lower()
+    return v in ("1", "true", "t", "yes", "y")
+
+SKIP_PLAYERS = _flag("SKIP_PLAYERS", "0")          # <— NEW: hard gate all writes to nhl.players / player_external_ids
+SKIP_ROSTER_STATUS = _flag("SKIP_ROSTER_STATUS", "1")
 
 DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
 if not DB:
@@ -40,6 +48,7 @@ if "?gssencmode=" not in DB and "&gssencmode=" not in DB:
 
 BASE = "https://api-web.nhle.com/v1"
 
+# --------------------------- HTTP session ---------------------------
 def _session() -> requests.Session:
     r = Retry(
         total=5, connect=5, read=5,
@@ -54,6 +63,14 @@ def _session() -> requests.Session:
     return s
 
 S = _session()
+
+# --------------------------- helpers ---------------------------
+PLACEHOLDER_RE = re.compile(r"^(?i)\s*(player|unknown)\s+\d+\s*$")
+
+def is_placeholder(name: str | None) -> bool:
+    if not name or not str(name).strip():
+        return True
+    return PLACEHOLDER_RE.match(str(name)) is not None
 
 def season_code_from_date(iso_date: str) -> str:
     """Return NHL season code like '20252026' from 'YYYY-MM-DD'."""
@@ -79,10 +96,6 @@ def _normalize_apiweb_roster(j: dict) -> list[dict]:
     return out
 
 def fetch_roster(team_tri: str, when_iso: str = DATE) -> list[dict]:
-    """
-    Fetch roster using team tri-code (e.g., 'LAK'). Try /current then explicit season.
-    Returns normalized list compatible with downstream code.
-    """
     tri = str(team_tri).upper()
     season = season_code_from_date(when_iso)
     urls = [
@@ -111,7 +124,7 @@ def _normalize_pos(code: str | None) -> str | None:
     return None
 
 def fetch_player_name(nhl_pid: str) -> str | None:
-    """Best-effort: fetch a single player's profile to get a reliable full name."""
+    """Best-effort: fetch a single player's profile to get a reliable full name. Returns None for blanks/placeholders."""
     try:
         resp = S.get(f"{BASE}/player/{nhl_pid}/landing", timeout=8)
         resp.raise_for_status()
@@ -119,26 +132,27 @@ def fetch_player_name(nhl_pid: str) -> str | None:
         for k in ("fullName", "playerName", "name"):
             v = j.get(k)
             if isinstance(v, str) and v.strip():
-                return v.strip()
+                v = v.strip()
+                return None if is_placeholder(v) else v
         first = j.get("firstName"); last = j.get("lastName")
         if isinstance(first, str) and isinstance(last, str):
             nm = f"{first.strip()} {last.strip()}".strip()
-            return nm or None
+            return None if is_placeholder(nm) else (nm or None)
     except Exception:
         pass
-    return None
+    return None  # << never fabricate "Player {id}"
 
+# --------------------------- main ---------------------------
 def main():
-    # PgBouncer-safe: no server-side prepares, all executes inside one cursor
     with psycopg.connect(DB, prepare_threshold=0) as conn:
         try:
             conn.prepare_threshold = 0  # type: ignore[attr-defined]
         except Exception:
             pass
 
-        inserted_rs = 0
         upserted_players = 0
         seeded_maps = 0
+        inserted_rs = 0
 
         def norm_pos(code: str | None) -> str:
             c = (code or "").upper()
@@ -149,9 +163,8 @@ def main():
             return "F"
 
         try:
-            # ---------- PLAYER UPSERTS (separate cursor context) ----------
             with conn.cursor() as cur:
-                # 1) Get today’s games (ET day) with team tri-codes (use tris for roster fetch)
+                # 1) Today’s games (ET)
                 cur.execute("""
                     SELECT
                       g.game_id,
@@ -170,7 +183,7 @@ def main():
                     print(f"ℹ️ No games for {DATE} in nhl.games; run import_schedule_today.py first.")
                     return
 
-                # 2) Existing player map: provider_player_id (nhl) -> internal player_id
+                # 2) Existing provider→internal map
                 cur.execute("""
                     SELECT provider_player_id::text, player_id
                     FROM nhl.player_external_ids
@@ -178,7 +191,10 @@ def main():
                 """)
                 player_map_by_provider = {pid: pl for (pid, pl) in cur.fetchall()}
 
-                # 3) For each team in each game: fetch roster, upsert players + mappings
+                if SKIP_PLAYERS:
+                    print("↪︎ SKIP_PLAYERS=1: will not write nhl.players or nhl.player_external_ids")
+
+                # 3) For each team/game, fetch roster and (optionally) upsert players/mappings
                 for game_id, home_tid, away_tid, home_tri, away_tri in games:
                     for tri, tid in ((home_tri, home_tid), (away_tri, away_tid)):
                         try:
@@ -193,50 +209,61 @@ def main():
                             if nhl_pid_raw is None:
                                 continue
                             nhl_pid = str(nhl_pid_raw)
-
-                            # best-effort name (keeps NOT NULL happy even if offline)
-                            full_name = fetch_player_name(nhl_pid) or f"Player {nhl_pid}"
                             pos = norm_pos((item.get("position") or {}).get("code"))
 
+                            # Only fetch name if we might write players
+                            full_name = None if SKIP_PLAYERS else fetch_player_name(nhl_pid)
+
                             internal_pid = player_map_by_provider.get(nhl_pid)
+
+                            # If skipping player writes, we still keep the map cache as-is and move on
+                            if SKIP_PLAYERS:
+                                continue
+
+                            # If no internal mapping and we *don't* have a valid name, skip to avoid CHECK violation
+                            if internal_pid is None and (not full_name or is_placeholder(full_name)):
+                                # no safe insert possible; skip this player now (backfill handles names elsewhere)
+                                continue
+
                             if internal_pid is None:
+                                # Insert *only* with a real name
                                 internal_pid = int(nhl_pid)
                                 cur.execute("""
                                     INSERT INTO nhl.players (player_id, full_name, current_team_id, position, status)
                                     VALUES (%s, %s, %s, %s, 'active')
-                                    ON CONFLICT (player_id) DO UPDATE
-                                      SET full_name       = EXCLUDED.full_name,
-                                          current_team_id = COALESCE(EXCLUDED.current_team_id, nhl.players.current_team_id),
-                                          position        = EXCLUDED.position,
-                                          status          = 'active'
+                                    ON CONFLICT (player_id) DO NOTHING
                                 """, (internal_pid, full_name, tid, pos))
-                                upserted_players += 1
-
+                                # if inserted, seed mapping
                                 cur.execute("""
                                     INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
                                     VALUES (%s, 'nhl', %s)
-                                    ON CONFLICT (player_id, provider) DO UPDATE
-                                      SET provider_player_id = EXCLUDED.provider_player_id
+                                    ON CONFLICT (player_id, provider) DO NOTHING
                                 """, (internal_pid, nhl_pid))
                                 player_map_by_provider[nhl_pid] = internal_pid
+                                upserted_players += 1
                                 seeded_maps += 1
                             else:
+                                # Update existing row—but never clobber real names with blanks/placeholders
                                 cur.execute("""
                                     UPDATE nhl.players
-                                       SET full_name       = COALESCE(NULLIF(%s,''), full_name),
-                                           current_team_id = COALESCE(%s, current_team_id),
-                                           position        = %s,
-                                           status          = 'active'
+                                       SET current_team_id = COALESCE(%s, current_team_id),
+                                           position        = COALESCE(%s, position),
+                                           status          = 'active',
+                                           full_name       = CASE
+                                                               WHEN %s IS NOT NULL AND %s <> '' AND %s !~* '^(player|unknown)\\s+\\d+$'
+                                                                 THEN %s
+                                                               ELSE full_name
+                                                             END
                                      WHERE player_id = %s
-                                """, (full_name, tid, pos, internal_pid))
+                                """, (tid, pos, full_name, full_name, full_name, full_name, internal_pid))
 
-            # ---------- ROSTER_STATUS UPSERT (separate cursor context) ----------
-            if os.environ.get("SKIP_ROSTER_STATUS", "1") == "1":
+            # ---------- ROSTER_STATUS UPSERT ----------
+            if SKIP_ROSTER_STATUS:
                 print("↪︎ SKIP_ROSTER_STATUS=1: importer will not write nhl.roster_status")
             else:
-                slate_date = os.environ.get("SLATE_DATE") or DATE
+                slate_date = os.getenv("SLATE_DATE") or DATE
                 with conn.cursor() as cur:
-                    # Check if the session-local temp table exists (avoid exceptions entirely)
+                    # temp table present?
                     cur.execute("""
                       SELECT (to_regclass('pg_temp.tmp_import_roster') IS NOT NULL)
                           OR (to_regclass('tmp_import_roster') IS NOT NULL) AS has_tmp
@@ -244,7 +271,6 @@ def main():
                     has_tmp = bool(cur.fetchone()[0])
 
                     if has_tmp:
-                        # Use rows staged by the importer
                         cur.execute("""
                         WITH src AS (
                           SELECT DISTINCT
@@ -273,7 +299,7 @@ def main():
                             asof_ts     = now();
                         """)
                     else:
-                        # Offline/fallback: derive from feature views for this slate_date
+                        # Offline/fallback: derive from slate views
                         cur.execute("""
                         WITH f AS (
                           SELECT game_id, team_id, player_id
@@ -297,7 +323,7 @@ def main():
                             asof_ts     = now();
                         """, (slate_date, slate_date))
 
-            # ---------- LOGGING COUNT (separate cursor context) ----------
+            # ---------- counts ----------
             with conn.cursor() as cur:
                 cur.execute("""
                   SELECT COUNT(*)
@@ -307,11 +333,9 @@ def main():
                 """, (DATE,))
                 inserted_rs = cur.fetchone()[0]
 
-            # ---------- COMMIT ONCE ----------
             conn.commit()
 
         except Exception:
-            # make sure an earlier SQL error doesn't poison the rest of the run
             try:
                 conn.rollback()
             except Exception:
