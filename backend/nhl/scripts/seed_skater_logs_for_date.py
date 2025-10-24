@@ -187,17 +187,26 @@ def _expand_initial_last(nm_norm: str, roster_map_keys: list[str]) -> str | None
 
 
 def roster_name_map(conn, game_id: int):
-    # returns {norm_full_name -> (player_id, team_id)}
+    """
+    returns {norm_full_name -> (player_id, team_id)}
+    """
     sql = """
-      SELECT r.player_id, r.team_id, LOWER(REGEXP_REPLACE(p.full_name, '\s+', ' ', 'g')) AS nm
+      SELECT
+        r.player_id,
+        r.team_id,
+        LOWER(REGEXP_REPLACE(p.full_name, '\s+', ' ', 'g')) AS nm
       FROM nhl.roster_status r
       JOIN nhl.players p ON p.player_id = r.player_id
       WHERE r.game_id = %s
     """
     mp = {}
-    with conn.cursor() as cur:
+    # force dict rows here so we read by column name
+    with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql, (game_id,))
-        for pid, tid, nm in cur.fetchall():
+        for r in cur.fetchall():
+            pid = int(r["player_id"])
+            tid = int(r["team_id"])
+            nm  = r["nm"]
             mp[nm] = (pid, tid)
     return mp
 
