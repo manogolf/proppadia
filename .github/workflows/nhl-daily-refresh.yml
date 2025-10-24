@@ -11,8 +11,12 @@ on:
         default: "0"
         required: false
   schedule:
-    - cron: "15 11 * * *" # 04:15 PT / 07:15 ET
-    - cron: "15 5 * * *" # 22:15 PT / 01:15 ET
+    # All times are in UTC. Comments show EST/EDT and PST/PDT for convenience.
+
+    - cron: "30 12 * * *" # Morning seed → 07:30 EST / 08:30 EDT • 04:30 PST / 05:30 PDT
+    - cron: "30 20 * * *" # Midday refresh → 15:30 EST / 16:30 EDT • 12:30 PST / 13:30 PDT
+    - cron: "45 00 * * *" # Pre-puck check → 19:45 EST / 20:45 EDT • 16:45 PST / 17:45 PDT
+    - cron: "30 07 * * *" # PST final sweep → 23:30 PST (prev day) / 00:30 PDT • 02:30 EST / 03:30 EDT
 
 concurrency:
   group: nhl-daily
@@ -81,22 +85,45 @@ jobs:
           fi
           python -m pip install "psycopg[binary]>=3.1" "requests>=2.31" python-dotenv
 
-      - name: Define retry helper
+      # -------------------- Helpers: retry + timeout guards --------------------
+      - name: Define retry & timeout helpers
         shell: bash
         run: |
+          set -euo pipefail
+
+          # Retry wrapper with per-attempt timeout and hard-kill grace
+          # Usage: /tmp/retry.sh "CMD ..."
           cat > /tmp/retry.sh << 'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
           CMD="$*"
-          s=1
+          : "${RETRY_TIMEOUT:=600}"       # 10m soft timeout
+          : "${RETRY_KILL_GRACE:=30}"     # 30s SIGKILL grace
+          trap 'jobs -rp | xargs -r kill -9 || true' EXIT
           for n in 1 2 3; do
             echo "→ Attempt $n: $CMD"
-            if bash -lc "$CMD"; then s=0; break; fi
+            if timeout --preserve-status -k "${RETRY_KILL_GRACE}s" "${RETRY_TIMEOUT}s" bash -lc "stdbuf -oL -eL $CMD"; then
+              exit 0
+            fi
+            echo "Attempt $n failed; sleeping $((n*10))s..."
             sleep $((n*10))
           done
-          exit $s
+          echo "All attempts failed."
+          exit 1
           EOF
           chmod +x /tmp/retry.sh
+
+          # Single-run guard with timeout
+          # Usage: /tmp/guard.sh "CMD ..." [SECONDS]
+          cat > /tmp/guard.sh << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          CMD="$1"; shift || true
+          TO="${1:-600}"
+          trap 'jobs -rp | xargs -r kill -9 || true' EXIT
+          timeout --preserve-status -k 30s "${TO}s" bash -lc "stdbuf -oL -eL $CMD"
+          EOF
+          chmod +x /tmp/guard.sh
 
       # -------------------- Ingest (schedule + rosters) --------------------
       - name: Import today's schedule (API → nhl.games)
@@ -128,7 +155,7 @@ jobs:
           if [ -f backend/nhl/scripts/refresh.sql ]; then
             echo "Running backend/nhl/scripts/refresh.sql …"
             export PGOPTIONS='-c statement_timeout=0'
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
+            /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
           else
             echo "No refresh.sql found — skipping."
           fi
@@ -145,14 +172,11 @@ jobs:
           SLATE_DATE="${TMRW}" SKIP_ROSTER_STATUS=1 python backend/nhl/scripts/import_roster_today.py || true
 
           # seed goalie & skater features for tomorrow
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="${TMRW}" \
-            -f backend/nhl/sql/seed_goalie_features_for_slate.sql || true
-
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="${TMRW}" \
-            -f backend/nhl/sql/seed_sog_features_for_slate.sql || true
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='${TMRW}' -f backend/nhl/sql/seed_goalie_features_for_slate.sql" || true
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='${TMRW}' -f backend/nhl/sql/seed_sog_features_for_slate.sql" || true
 
           # refresh READY so v_slate_* can see any newly seeded rows
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
 
       - name: Refresh players & roster (API → stage → upsert)
         if: steps.slate.outputs.has_games == 't'
@@ -165,14 +189,11 @@ jobs:
         run: |
           set -euo pipefail
           # Seed today’s skater & goalie features for the slate date
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
-            -f backend/nhl/sql/seed_sog_features_for_slate.sql
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
-            -f backend/nhl/sql/seed_goalie_features_for_slate.sql
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/seed_sog_features_for_slate.sql"
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/seed_goalie_features_for_slate.sql"
 
           # Make sure views/materializations see the new rows
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
-            -f backend/nhl/scripts/refresh.sql
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
 
           # (Optional) sanity: require non-zero rows so exports aren’t header-only
           SOG=$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from nhl.v_slate_sog_features where game_date = date '$SLATE_DATE';")
@@ -189,13 +210,8 @@ jobs:
           mkdir -p exports
           echo "SLATE_DATE=${SLATE_DATE}"
 
-          # SOG
-          psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
-            -f backend/nhl/sql/export_sog.sql > exports/train_nhl_sog_v2.csv
-
-          # SAVES
-          psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
-            -f backend/nhl/sql/export_saves.sql > exports/train_goalie_saves_v2.csv
+          /tmp/retry.sh "psql --no-psqlrc -q \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/export_sog.sql > exports/train_nhl_sog_v2.csv"
+          /tmp/retry.sh "psql --no-psqlrc -q \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/export_saves.sql > exports/train_goalie_saves_v2.csv"
 
           echo "Exported:"
           wc -l exports/train_nhl_sog_v2.csv exports/train_goalie_saves_v2.csv || true
@@ -212,18 +228,18 @@ jobs:
             head -n1 "$f" | tr ',' '\n' | nl -ba
           done
 
-          python - <<'PY'
+          /tmp/guard.sh "python - <<'PY'
           import csv, sys
-          required = {"player_id","game_id","team_id","opponent_id","is_home","game_date"}
-          for path in ("exports/train_nhl_sog_v2.csv","exports/train_goalie_saves_v2.csv"):
-              with open(path, newline="") as f:
+          required = {'player_id','game_id','team_id','opponent_id','is_home','game_date'}
+          for path in ('exports/train_nhl_sog_v2.csv','exports/train_goalie_saves_v2.csv'):
+              with open(path, newline='') as f:
                   header = next(csv.reader(f), [])
               missing = required - set(header)
               if missing:
-                  print(f"FATAL: {path} missing columns: {sorted(missing)}", file=sys.stderr)
+                  print(f'FATAL: {path} missing columns: {sorted(missing)}', file=sys.stderr)
                   sys.exit(2)
-          print("Header validation OK")
-          PY
+          print('Header validation OK')
+          PY" 120
 
       - name: Inspect exports & metadata (before scoring)
         if: steps.slate.outputs.has_games == 't'
@@ -249,15 +265,15 @@ jobs:
           do
             echo "== $P =="
             if [[ -f "$P" ]]; then
-              jq -r '
+              /tmp/guard.sh "jq -r '
                 def keys_from_index:
-                  if   (.feature_registry|type) == "object" then (.feature_registry|keys)
-                  elif (.features|type)         == "array"  then .features
-                  elif (.feature_cols|type)     == "array"  then .feature_cols
+                  if   (.feature_registry|type) == \"object\" then (.feature_registry|keys)
+                  elif (.features|type)         == \"array\"  then .features
+                  elif (.feature_cols|type)     == \"array\"  then .feature_cols
                   else [] end;
-                "family: \(.family)",
-                "feature_keys: " + (keys_from_index | join(", "))
-              ' "$P" || true
+                \"family: \(.family)\",
+                \"feature_keys: \" + (keys_from_index | join(\", \"))
+              ' \"$P\"" 60
             else
               echo "missing"
             fi
@@ -267,17 +283,17 @@ jobs:
       - name: Score & Load predictions
         if: steps.slate.outputs.has_games == 't'
         run: |
-          python backend/nhl/scripts/run_daily_slate.py \
+          /tmp/guard.sh "python backend/nhl/scripts/run_daily_slate.py \
             --project nhl \
             --sog-csv exports/train_nhl_sog_v2.csv \
             --saves-csv exports/train_goalie_saves_v2.csv \
-            --db-url "$SUPABASE_DB_URL" \
-            --scorer "$GITHUB_WORKSPACE/backend/nhl/scripts/score_nhl_props.py"
+            --db-url \"$SUPABASE_DB_URL\" \
+            --scorer \"$GITHUB_WORKSPACE/backend/nhl/scripts/score_nhl_props.py\"" 1200
 
       - name: Attach player names to predictions
         if: steps.slate.outputs.has_games == 't'
         run: |
-          python backend/nhl/scripts/attach_names.py
+          /tmp/guard.sh "python backend/nhl/scripts/attach_names.py" 300
           head -n 3 backend/nhl/data/processed/sog_with_names.csv  || true
           head -n 3 backend/nhl/data/processed/saves_with_names.csv || true
 
@@ -285,14 +301,14 @@ jobs:
       - name: Verify counts
         if: steps.slate.outputs.has_games == 't'
         run: |
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+          /tmp/guard.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -c \"
             WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = '${SLATE_DATE}'::date)
             SELECT 'games_today'            AS which, COUNT(*) FROM nhl.games                 WHERE game_date = '${SLATE_DATE}'::date
             UNION ALL SELECT 'roster_rows_today', COUNT(*) FROM nhl.roster_status r           WHERE r.game_id IN (SELECT game_id FROM g)
             UNION ALL SELECT 'sog_stage',         COUNT(*) FROM nhl.predictions_sog_stage s   WHERE s.game_id IN (SELECT game_id FROM g)
             UNION ALL SELECT 'saves_stage',       COUNT(*) FROM nhl.predictions_saves_stage s WHERE s.game_id IN (SELECT game_id FROM g)
             UNION ALL SELECT 'predictions',       COUNT(*) FROM nhl.predictions p             WHERE p.game_id IN (SELECT game_id FROM g);
-          "
+          \"" 120
 
       # -------------------- Finals sweep (yesterday) --------------------
       - name: Finals sweep (yesterday)
@@ -302,7 +318,7 @@ jobs:
           if [ -f backend/nhl/scripts/refresh.sql ]; then
             echo "Refreshing views after finals sweep…"
             export PGOPTIONS='-c statement_timeout=0'
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
+            /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
           fi
 
       # -------------------- Artifacts --------------------
@@ -323,7 +339,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           export SLATE_DATE=$(TZ=America/New_York date -d 'yesterday' +%F)
-          python backend/nhl/scripts/seed_goalie_logs_for_date.py
+          /tmp/retry.sh "python backend/nhl/scripts/seed_goalie_logs_for_date.py"
 
       # -------------------- Seed skater logs (yesterday ET) --------------------
       - name: Seed skater logs for yesterday (ET)
@@ -334,7 +350,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Seeding skater logs for YDAY=${YDAY}"
-
           if [ -f backend/nhl/scripts/seed_skater_logs_for_date.py ]; then
             /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/seed_skater_logs_for_date.py"
           elif [ -f backend/nhl/scripts/import_skater_logs_for_date.py ]; then
@@ -361,8 +376,7 @@ jobs:
           )
           echo "Promoting staged skater logs for ${YDAY}"
 
-          # UPSERT from stage into raw for YDAY (join team_id, opponent_id, is_home)
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -c \"
           WITH src AS (
             SELECT DISTINCT
               s.player_id, s.game_id, s.game_date,
@@ -417,12 +431,10 @@ jobs:
             shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
             toi_minutes    = EXCLUDED.toi_minutes,
             pp_toi_minutes = EXCLUDED.pp_toi_minutes;
-          "
+          \""
 
-          # Refresh views/materializations
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
+          /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
 
-          # Sanity: stage vs raw counts for YDAY
           psql "$SUPABASE_DB_URL" -F $'\t' -Atqc "
             SELECT 'stage_yday', COUNT(*) FROM nhl.import_skater_logs_stage WHERE game_date = DATE '${YDAY}'
             UNION ALL
