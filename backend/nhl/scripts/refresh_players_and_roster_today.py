@@ -35,11 +35,14 @@ def _no_prep_execute(self, query, params=None, **kw):
     return _ORIG_EXECUTE(self, query, params, **kw)
 psycopg.Cursor.execute = _no_prep_execute
 
-# Force executemany(...) to avoid PREPARE as well (this is the missing piece)
+# Force executemany(...) to avoid PREPARE by delegating to execute() per item
 _ORIG_EXECUTEMANY = psycopg.Cursor.executemany
 def _no_prep_executemany(self, query, params_seq=None, **kw):
-    kw["prepare"] = False
-    return _ORIG_EXECUTEMANY(self, query, params_seq, **kw)
+    # Don’t pass prepare=… here; executemany() doesn’t accept it in psycopg3.
+    # Instead, call our patched execute() which already forces prepare=False.
+    for params in (params_seq or []):
+        _no_prep_execute(self, query, params, **kw)
+    return None
 psycopg.Cursor.executemany = _no_prep_executemany
 
 # Optional: load .env locally
