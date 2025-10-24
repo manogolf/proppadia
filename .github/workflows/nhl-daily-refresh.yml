@@ -91,18 +91,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Retry wrapper with per-attempt timeout and hard-kill grace
-          # Usage: /tmp/retry.sh "CMD ..."
           cat > /tmp/retry.sh << 'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
           CMD="$*"
-          : "${RETRY_TIMEOUT:=600}"       # 10m soft timeout
-          : "${RETRY_KILL_GRACE:=30}"     # 30s SIGKILL grace
+          : "${RETRY_TIMEOUT:=600}"
+          : "${RETRY_KILL_GRACE:=30}"
           trap 'jobs -rp | xargs -r kill -9 || true' EXIT
           for n in 1 2 3; do
             echo "→ Attempt $n: $CMD"
-            if timeout --preserve-status -k "${RETRY_KILL_GRACE}s" "${RETRY_TIMEOUT}s" bash -lc "stdbuf -oL -eL $CMD"; then
+            if timeout --preserve-status -k "${RETRY_KILL_GRACE}s" "${RETRY_TIMEOUT}s" \
+                 stdbuf -oL -eL bash -lc "$CMD"; then   # <-- changed: stdbuf wraps inner bash
               exit 0
             fi
             echo "Attempt $n failed; sleeping $((n*10))s..."
@@ -113,15 +112,13 @@ jobs:
           EOF
           chmod +x /tmp/retry.sh
 
-          # Single-run guard with timeout
-          # Usage: /tmp/guard.sh "CMD ..." [SECONDS]
           cat > /tmp/guard.sh << 'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
           CMD="$1"; shift || true
           TO="${1:-600}"
           trap 'jobs -rp | xargs -r kill -9 || true' EXIT
-          timeout --preserve-status -k 30s "${TO}s" bash -lc "stdbuf -oL -eL $CMD"
+          timeout --preserve-status -k 30s "${TO}s" stdbuf -oL -eL bash -lc "$CMD"   # <-- same change
           EOF
           chmod +x /tmp/guard.sh
 
