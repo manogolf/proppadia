@@ -116,8 +116,8 @@ jobs:
         if: steps.slate.outputs.has_games == 't'
         env:
           SLATE_DATE: ${{ env.SLATE_DATE }}
-          SKIP_ROSTER_STATUS: "1" # <— ADD THIS
-          SKIP_PLAYERS: "1" # ← add this
+          SKIP_ROSTER_STATUS: "1"
+          SKIP_PLAYERS: "1"
         run: /tmp/retry.sh "python backend/nhl/scripts/import_roster_today.py"
 
       # -------------------- Schema / features refresh --------------------
@@ -327,32 +327,60 @@ jobs:
 
       # -------------------- Seed skater logs (yesterday ET) --------------------
       - name: Seed skater logs for yesterday (ET)
+        if: steps.slate.outputs.has_games == 't'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           PSYCOPG_DISABLE_PREPARES: "1"
         run: |
           set -euo pipefail
-
-          # Compute yesterday in ET (portable; avoids GNU/BSD date differences)
-          SLATE_DATE="$(python - <<'PY'
-          import datetime as dt
-          from zoneinfo import ZoneInfo
-          et = ZoneInfo('America/New_York')
-          print((dt.datetime.now(et).date() - dt.timedelta(days=1)).isoformat())
-          PY
-          )"
-
-          echo "Seeding skater logs for SLATE_DATE=${SLATE_DATE} (ET)"
+          echo "Seeding skater logs for YDAY=${YDAY}"
 
           if [ -f backend/nhl/scripts/seed_skater_logs_for_date.py ]; then
-            /tmp/retry.sh "SLATE_DATE='${SLATE_DATE}' python backend/nhl/scripts/seed_skater_logs_for_date.py"
+            /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/seed_skater_logs_for_date.py"
           elif [ -f backend/nhl/scripts/import_skater_logs_for_date.py ]; then
-            /tmp/retry.sh "SLATE_DATE='${SLATE_DATE}' python backend/nhl/scripts/import_skater_logs_for_date.py"
+            /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/import_skater_logs_for_date.py"
           elif [ -f backend/nhl/scripts/import_skater_logs.py ]; then
-            /tmp/retry.sh "SLATE_DATE='${SLATE_DATE}' python backend/nhl/scripts/import_skater_logs.py"
+            /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/import_skater_logs.py"
           else
-            echo "No skater logs import script found; skipping."
+            echo 'No skater logs import script found; skipping.'
           fi
 
-          # Make sure views/materializations see the new rows
+      # -------------------- Promote skater logs (stage → raw) --------------------
+      - name: Promote skater logs (stage → raw) for yesterday (ET)
+        if: steps.slate.outputs.has_games == 't'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          echo "Promoting staged skater logs for ${YDAY}"
+
+          # UPSERT from stage into raw for YDAY (idempotent)
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+          WITH src AS (
+            SELECT DISTINCT
+              player_id, game_id, game_date,
+              shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes
+            FROM nhl.import_skater_logs_stage
+            WHERE game_date = DATE '${YDAY}'
+          )
+          INSERT INTO nhl.skater_game_logs_raw
+            (player_id, game_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+          SELECT
+            player_id, game_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes
+          FROM src
+          ON CONFLICT (player_id, game_id) DO UPDATE SET
+            shots_on_goal  = EXCLUDED.shots_on_goal,
+            shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
+            toi_minutes    = EXCLUDED.toi_minutes,
+            pp_toi_minutes = EXCLUDED.pp_toi_minutes;
+          "
+
+          # Make views/materializations see the new rows
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
+
+          # Quick sanity: show stage vs raw counts for YDAY
+          psql "$SUPABASE_DB_URL" -F $'\t' -Atqc "
+            SELECT 'stage_yday', COUNT(*) FROM nhl.import_skater_logs_stage WHERE game_date = DATE '${YDAY}'
+            UNION ALL
+            SELECT 'raw_yday',   COUNT(*) FROM nhl.skater_game_logs_raw   WHERE game_date = DATE '${YDAY}';
+          "
