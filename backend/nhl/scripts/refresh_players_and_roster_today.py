@@ -22,11 +22,11 @@ import os, sys, datetime as dt, re
 from zoneinfo import ZoneInfo
 
 # ---- absolutely disable server-side prepares (must run before importing psycopg) ----
+import os
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg import errors as pg_errors  # noqa: F401
 
 # Force every cursor.execute(...) to use simple execution (no PREPARE)
 _ORIG_EXECUTE = psycopg.Cursor.execute
@@ -34,6 +34,13 @@ def _no_prep_execute(self, query, params=None, **kw):
     kw["prepare"] = False
     return _ORIG_EXECUTE(self, query, params, **kw)
 psycopg.Cursor.execute = _no_prep_execute
+
+# Force executemany(...) to avoid PREPARE as well (this is the missing piece)
+_ORIG_EXECUTEMANY = psycopg.Cursor.executemany
+def _no_prep_executemany(self, query, params_seq=None, **kw):
+    kw["prepare"] = False
+    return _ORIG_EXECUTEMANY(self, query, params_seq, **kw)
+psycopg.Cursor.executemany = _no_prep_executemany
 
 # Optional: load .env locally
 try:
