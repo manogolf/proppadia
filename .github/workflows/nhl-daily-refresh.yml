@@ -347,38 +347,76 @@ jobs:
 
       # -------------------- Promote skater logs (stage → raw) --------------------
       - name: Promote skater logs (stage → raw) for yesterday (ET)
-        if: steps.slate.outputs.has_games == 't'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
+
+          # Portable "yesterday in ET" (works on GNU/BSD/macOS)
+          YDAY=$(python - <<'PY'
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+          et = ZoneInfo("America/New_York")
+          print((dt.datetime.now(et).date() - dt.timedelta(days=1)).isoformat())
+          PY
+          )
           echo "Promoting staged skater logs for ${YDAY}"
 
-          # UPSERT from stage into raw for YDAY (idempotent)
+          # Preflight: how many staged rows for YDAY?
+          psql "$SUPABASE_DB_URL" -F $'\t' -Atqc "
+            SELECT 'stage_yday', COUNT(*)
+            FROM nhl.import_skater_logs_stage
+            WHERE game_date = DATE '${YDAY}';
+          "
+
+          # UPSERT from stage into raw for YDAY, supplying team_id from roster_status
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
           WITH src AS (
             SELECT DISTINCT
-              player_id, game_id, game_date,
-              shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes
-            FROM nhl.import_skater_logs_stage
-            WHERE game_date = DATE '${YDAY}'
+              s.player_id, s.game_id, s.game_date,
+              s.shots_on_goal, s.shot_attempts, s.toi_minutes, s.pp_toi_minutes
+            FROM nhl.import_skater_logs_stage s
+            WHERE s.game_date = DATE '${YDAY}'
+          ),
+          rs AS (
+            SELECT DISTINCT game_id, team_id, player_id
+            FROM nhl.roster_status
+            WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '${YDAY}')
+          ),
+          joined AS (
+            SELECT
+              src.player_id,
+              src.game_id,
+              rs.team_id,
+              src.game_date,
+              src.shots_on_goal,
+              src.shot_attempts,
+              src.toi_minutes,
+              src.pp_toi_minutes
+            FROM src
+            LEFT JOIN rs
+              ON rs.game_id  = src.game_id
+             AND rs.player_id = src.player_id
+            WHERE rs.team_id IS NOT NULL
           )
           INSERT INTO nhl.skater_game_logs_raw
-            (player_id, game_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+            (player_id, game_id, team_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
           SELECT
-            player_id, game_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes
-          FROM src
+            player_id, game_id, team_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes
+          FROM joined
           ON CONFLICT (player_id, game_id) DO UPDATE SET
+            team_id        = EXCLUDED.team_id,
+            game_date      = EXCLUDED.game_date,
             shots_on_goal  = EXCLUDED.shots_on_goal,
             shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
             toi_minutes    = EXCLUDED.toi_minutes,
             pp_toi_minutes = EXCLUDED.pp_toi_minutes;
           "
 
-          # Make views/materializations see the new rows
+          # Refresh views/materializations
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
 
-          # Quick sanity: show stage vs raw counts for YDAY
+          # Sanity: stage vs raw counts for YDAY
           psql "$SUPABASE_DB_URL" -F $'\t' -Atqc "
             SELECT 'stage_yday', COUNT(*) FROM nhl.import_skater_logs_stage WHERE game_date = DATE '${YDAY}'
             UNION ALL
