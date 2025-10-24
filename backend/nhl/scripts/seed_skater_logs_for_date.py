@@ -6,11 +6,31 @@
 #   - Boxscore:  https://api-web.nhle.com/v1/gamecenter/{gamePk}/boxscore
 
 import os, sys, datetime as dt
+from zoneinfo import ZoneInfo
+
+# ---------------- No-prepares guard (prevents DuplicatePreparedStatement) ----------------
+os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
+
+import psycopg
+from psycopg.rows import dict_row
+
+# Force every cursor.execute(...) to use simple execution (no PREPARE)
+_ORIG_EXECUTE = psycopg.Cursor.execute
+def _no_prep_execute(self, query, params=None, **kw):
+    kw["prepare"] = False
+    return _ORIG_EXECUTE(self, query, params, **kw)
+psycopg.Cursor.execute = _no_prep_execute
+
+# optional: load .env locally
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except Exception:
+    pass
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import psycopg
-from zoneinfo import ZoneInfo
 
 # ---------------- Env / args ----------------
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
@@ -25,8 +45,13 @@ try:
 except ValueError:
     print(f"Bad SLATE_DATE: {SLATE_DATE}", file=sys.stderr); sys.exit(2)
 
-ET = ZoneInfo("America/New_York")
+# Reliable SSL / GSS settings for Supabase/PG
+if "?sslmode=" not in DB_URL and "&sslmode=" not in DB_URL:
+    DB_URL += ("&" if "?" in DB_URL else "?") + "sslmode=require"
+if "?gssencmode=" not in DB_URL and "&gssencmode=" not in DB_URL:
+    DB_URL += ("&" if "?" in DB_URL else "?") + "gssencmode=disable"
 
+ET = ZoneInfo("America/New_York")
 BASE_SCHEDULE = "https://api-web.nhle.com/v1/schedule"
 BASE_BOXSCORE = "https://api-web.nhle.com/v1/gamecenter"
 
@@ -42,7 +67,10 @@ def _session() -> requests.Session:
     s = requests.Session()
     s.headers.update({"User-Agent": "proppadia-nhl-cron"})
     s.mount("https://", HTTPAdapter(max_retries=retry))
+    s.mount("http://", HTTPAdapter(max_retries=retry))
     return s
+
+S = _session()
 
 def _et_date_from_utc(iso_utc: str | None) -> str | None:
     if not iso_utc:
@@ -75,7 +103,6 @@ def normalize_name(s):
     Normalize a player's name into a lowercased, single-spaced string.
     Be defensive: the caller might pass a dict instead of a string.
     """
-    # If an object/dict sneaks in, try common name fields
     if isinstance(s, dict):
         s = (
             s.get("fullName")
@@ -85,7 +112,6 @@ def normalize_name(s):
         )
     if s is None:
         s = ""
-    # Collapse whitespace and lowercase
     return " ".join(str(s).split()).lower()
 
 # ---------------- Data fetch (new endpoints) ----------------
@@ -95,9 +121,8 @@ def get_schedule(date_str: str):
     Response may be {"games":[...]} OR {"gameWeek":[{"games":[...]}...]}.
     We also ensure the start time falls on date_str in ET.
     """
-    s = _session()
     url = f"{BASE_SCHEDULE}/{date_str}"
-    r = s.get(url, timeout=15); r.raise_for_status()
+    r = S.get(url, timeout=15); r.raise_for_status()
     data = r.json()
 
     games_in = []
@@ -105,7 +130,7 @@ def get_schedule(date_str: str):
         for day in data.get("gameWeek", []):
             games_in.extend(day.get("games", []))
     else:
-        games_in = list(data.get("games") or [])
+        games_in = list((data or {}).get("games") or [])
 
     out = []
     seen = set()
@@ -128,9 +153,11 @@ def get_boxscore(game_pk: int):
     https://api-web.nhle.com/v1/gamecenter/{gamePk}/boxscore
     Returns gamecenter JSON. Skater stats live under playerByGameStats.{homeTeam,awayTeam}.
     """
-    s = _session()
     url = f"{BASE_BOXSCORE}/{game_pk}/boxscore"
-    r = s.get(url, timeout=15); r.raise_for_status()
+    r = S.get(url, timeout=20)
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
     return r.json()
 
 # ---------------- DB helpers ----------------
@@ -165,10 +192,9 @@ def external_map(conn, nhl_ids):
             try:
                 mp[int(ext)] = int(pid)
             except (TypeError, ValueError):
-                # ignore non-numeric provider ids
                 pass
         return mp
-    
+
 def upsert_external_id(conn, player_id: int, nhl_id: int):
     """
     Learn NHL external id whenever we successfully identify a player via roster mapping.
@@ -204,61 +230,50 @@ def upsert_rows(conn, rows):
     return len(rows)
 
 # ---------------- Parse skaters from new boxscore ----------------
-def _iter_skaters_from_box(box: dict, game_pk: int, game_date_iso: str):
+def _iter_skaters_from_box(box: dict):
     """
     Yields tuples (nhl_id, full_name, sog, attempts, toi_min, pp_min)
     reading from api-web.nhle.com gamecenter payload.
     """
     pstats = (box.get("playerByGameStats") or {})
-    sides = (
-        ("homeTeam", True),
-        ("awayTeam", False),
-    )
-    for side_key, _is_home in sides:
+    for side_key in ("homeTeam", "awayTeam"):
         team = pstats.get(side_key) or {}
         # Buckets we care about for skaters
-        buckets = []
         for k in ("forwards", "defense"):  # goalies excluded here
             arr = team.get(k) or []
-            if isinstance(arr, list):
-                buckets.extend(arr)
-        for p in buckets:
-            # IDs & names
-            nhl_id = p.get("playerId") or p.get("id")
-            name = (
-                p.get("name")
-                or (f"{p.get('firstName','')} {p.get('lastName','')}".strip())
-                or p.get("lastFirstName")
-            )
-
-            stats = p.get("stats") or {}
-            # SOG
-            sog = stats.get("shotsOnGoal")
-            if sog is None:
-                sog = stats.get("shots")
-
-            # Attempts (best-effort): explicit or compose shots+missed+blocked
-            attempts = (
-                stats.get("shotsAttempted")
-                if "shotsAttempted" in stats
-                else (
-                    (stats.get("shotsOnGoal") or stats.get("shots") or 0)
-                    + (stats.get("missedShots") or 0)
-                    + (stats.get("blockedShots") or 0)
+            if not isinstance(arr, list):
+                continue
+            for p in arr:
+                nhl_id = p.get("playerId") or p.get("id")
+                name = (
+                    p.get("name")
+                    or (f"{p.get('firstName','')} {p.get('lastName','')}".strip())
+                    or p.get("lastFirstName")
+                    or ""
                 )
-            )
-            # TOI
-            toi_s = stats.get("toi") or stats.get("timeOnIce")
-            pp_toi_s = stats.get("powerPlayToi") or stats.get("powerPlayTimeOnIce")
+                stats = p.get("stats") or {}
+                # shots on goal
+                sog = stats.get("shotsOnGoal", stats.get("shots"))
+                # attempts
+                attempts = (
+                    stats.get("shotsAttempted")
+                    if "shotsAttempted" in stats
+                    else ((stats.get("shotsOnGoal") or stats.get("shots") or 0)
+                          + (stats.get("missedShots") or 0)
+                          + (stats.get("blockedShots") or 0))
+                )
+                # TOI
+                toi_s = stats.get("toi") or stats.get("timeOnIce")
+                pp_toi_s = stats.get("powerPlayToi") or stats.get("powerPlayTimeOnIce")
 
-            yield (
-                nhl_id if nhl_id is not None else None,
-                name or "",
-                sog if sog is not None else None,
-                attempts if attempts is not None else None,
-                toi_to_minutes(toi_s),
-                toi_to_minutes(pp_toi_s),
-            )
+                yield (
+                    int(nhl_id) if nhl_id is not None else None,
+                    name,
+                    int(sog) if sog is not None else None,
+                    int(attempts) if attempts is not None else None,
+                    toi_to_minutes(toi_s),
+                    toi_to_minutes(pp_toi_s),
+                )
 
 # ---------------- Main ----------------
 def main():
@@ -268,72 +283,73 @@ def main():
         return
 
     inserted_total = 0
-    skipped_no_map = 0
-    unmapped_rows = []  # accumulate for optional audit table
+    skipped_no_map_total = 0
 
-    with psycopg.connect(DB_URL, autocommit=False) as conn:
+    with psycopg.connect(DB_URL, autocommit=False, row_factory=dict_row, prepare_threshold=0) as conn:
+        try:
+            conn.prepare_threshold = 0  # some drivers expose this
+        except Exception:
+            pass
+
         for gpk in games:
+            # Everything for this game happens inside the loop to keep gpk scoped
             try:
                 box = get_boxscore(gpk)
-            except Exception as e:
-                print(f"[{gpk}] boxscore fetch failed: {e}", file=sys.stderr)
-                continue
-
-            roster_map = roster_name_map(conn, gpk)  # name -> (player_id, team_id)
-
-            # Collect rows
-            skaters = list(_iter_skaters_from_box(box, gpk, SLATE_DATE))
-            nhl_ids = [int(s[0]) for s in skaters if s[0] is not None]
-            ext_map = external_map(conn, nhl_ids)
-
-            rows = []
-            for nhl_id, fullName, sog, attempts, toi_min, pp_min in skaters:
-                pid = None
-
-            # preferred: roster name match for THIS game
-                nm = normalize_name(fullName)
-                if nm in roster_map:
-                    pid = roster_map[nm][0]
-                    # learn NHL external id for future lookups
-                    if nhl_id is not None:
-                        upsert_external_id(conn, pid, nhl_id)
-                # fallback: external id mapping
-                if pid is None and nhl_id is not None:
-                    pid = ext_map.get(int(nhl_id))
-
-                if pid is None:
-                    skipped_no_map += 1
-                    # keep a record so we can fix mappings later (audit table is optional)
-                    unmapped_rows.append((int(gpk), int(nhl_id) if nhl_id is not None else None, fullName, None))
+                if not box:
+                    print(f"[{gpk}] boxscore 404/empty; skipping")
+                    conn.rollback()
                     continue
 
-                rows.append((
-                    int(pid), int(gpk), SLATE_DATE,
-                    int(sog) if sog is not None else None,
-                    int(attempts) if attempts is not None else None,
-                    float(toi_min) if toi_min is not None else None,
-                    float(pp_min) if pp_min is not None else None
-                ))
+                roster_map = roster_name_map(conn, gpk)  # name -> (player_id, team_id)
 
-            inserted = upsert_rows(conn, rows)
-            # persist any unmapped rows for this game (if the audit table exists)
-            if unmapped_rows:
+                skaters = list(_iter_skaters_from_box(box))
+                nhl_ids = [int(s[0]) for s in skaters if s[0] is not None]
+                ext_map = external_map(conn, nhl_ids)
+
+                rows = []
+                skipped_no_map = 0
+                for nhl_id, fullName, sog, attempts, toi_min, pp_min in skaters:
+                    pid = None
+
+                    # preferred: roster name match for THIS game
+                    nm = normalize_name(fullName)
+                    if nm in roster_map:
+                        pid = roster_map[nm][0]
+                        # learn NHL external id for future lookups
+                        if nhl_id is not None:
+                            upsert_external_id(conn, pid, nhl_id)
+
+                    # fallback: external id mapping
+                    if pid is None and nhl_id is not None:
+                        pid = ext_map.get(int(nhl_id))
+
+                    if pid is None:
+                        skipped_no_map += 1
+                        continue
+
+                    rows.append((
+                        int(pid), int(gpk), SLATE_DATE,
+                        sog if sog is not None else None,
+                        attempts if attempts is not None else None,
+                        float(toi_min) if toi_min is not None else None,
+                        float(pp_min) if pp_min is not None else None
+                    ))
+
+                inserted = upsert_rows(conn, rows)
+                conn.commit()
+                inserted_total += inserted
+                skipped_no_map_total += skipped_no_map
+                print(f"[{gpk}] upserted {inserted} skater rows; skipped_no_map={skipped_no_map}")
+
+            except Exception as e:
+                # Isolate failures per game; continue to next game
                 try:
-                    with conn.cursor() as cur:
-                        cur.executemany(
-                            "INSERT INTO nhl.import_skater_logs_unmapped (game_id, nhl_id, full_name, team_side) VALUES (%s,%s,%s,%s)",
-                            unmapped_rows
-                        )
+                    conn.rollback()
                 except Exception:
-                    # table might not exist; keep pipeline resilient
                     pass
-                finally:
-                    unmapped_rows.clear()
-            conn.commit()
-            inserted_total += inserted
-            print(f"[{gpk}] upserted {inserted} skater rows; skipped_no_map_so_far={skipped_no_map}")
+                print(f"[{gpk}] ERROR: {e}", file=sys.stderr)
 
-    print(f"Done. Upserted total {inserted_total} skater rows for {SLATE_DATE}; skipped_no_map={skipped_no_map}")
+    print(f"Done. Upserted total {inserted_total} skater rows for {SLATE_DATE}; skipped_no_map={skipped_no_map_total}")
 
 if __name__ == "__main__":
     main()
