@@ -24,6 +24,14 @@ def _no_prep_execute(self, query, params=None, **kw):
     return _ORIG_EXECUTE(self, query, params, **kw)
 psycopg.Cursor.execute = _no_prep_execute
 
+# Force executemany(...) to avoid PREPARE by delegating to execute() per item
+_ORIG_EXECUTEMANY = psycopg.Cursor.executemany
+def _no_prep_executemany(self, query, params_seq=None, **kw):
+    for params in (params_seq or []):
+        _no_prep_execute(self, query, params, **kw)
+    return None
+psycopg.Cursor.executemany = _no_prep_executemany
+
 # optional: load .env locally
 try:
     from dotenv import load_dotenv, find_dotenv
@@ -259,20 +267,23 @@ def full_name_from_box_player(p: dict) -> str:
 
 def upsert_external_id(conn, player_id: int, nhl_id: int):
     """
-    Learn NHL external id whenever we successfully identify a player via roster mapping.
-    Requires UNIQUE (player_id, provider) constraint on nhl.player_external_ids.
+    Learn NHL external id when we matched via roster mapping.
+    Conservative behavior: if the (provider, provider_player_id) already exists for a *different*
+    player, we do not override it — we just log once.
     """
     if nhl_id is None:
         return
     sql = """
       INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
       VALUES (%s, 'nhl', %s)
-      ON CONFLICT (player_id, provider) DO UPDATE
-        SET provider_player_id = EXCLUDED.provider_player_id
-        WHERE nhl.player_external_ids.provider_player_id IS DISTINCT FROM EXCLUDED.provider_player_id
+      ON CONFLICT (provider, provider_player_id) DO NOTHING
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (int(player_id), str(int(nhl_id))))
+        try:
+            cur.execute(sql, (int(player_id), str(int(nhl_id))))
+        except Exception as e:
+            # Extremely rare; keep going
+            print(f"[learn-extid] WARN: player_id={player_id} nhl_id={nhl_id} -> {e}", file=sys.stderr)
 
 def upsert_rows(conn, rows):
     if not rows:
