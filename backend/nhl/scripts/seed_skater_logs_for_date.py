@@ -358,14 +358,14 @@ def refresh_roster_status_from_box(conn, gpk: int):
         return
 
     # existing skater rows (F/D) for this game
-    with conn.cursor() as cur:
+    with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""
             SELECT r.team_id, r.player_id
             FROM nhl.roster_status r
             JOIN nhl.players p ON p.player_id = r.player_id
             WHERE r.game_id=%s AND p.position IN ('F','D')
         """, (gpk,))
-        existing = {(int(t), int(p)) for t, p in cur.fetchall()}
+        existing = {(int(r["team_id"]), int(r["player_id"])) for r in cur.fetchall()}
 
     to_insert = desired - existing
     if not to_insert:
