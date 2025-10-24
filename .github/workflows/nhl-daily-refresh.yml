@@ -341,6 +341,14 @@ jobs:
           export SLATE_DATE=$(TZ=America/New_York date -d 'yesterday' +%F)
           /tmp/retry.sh "python backend/nhl/scripts/seed_goalie_logs_for_date.py"
 
+      # -------------------- Refresh players & roster (yesterday ET) --------------------
+      - name: Refresh players & roster for yesterday (ET)
+        if: steps.slate.outputs.has_games == 't'
+        env:
+          SLATE_DATE: ${{ env.YDAY }}
+        run: |
+          /tmp/retry.sh "python backend/nhl/scripts/refresh_players_and_roster_today.py"
+
       # -------------------- Seed skater logs (yesterday ET) --------------------
       - name: Seed skater logs for yesterday (ET)
         if: steps.slate.outputs.has_games == 't'
