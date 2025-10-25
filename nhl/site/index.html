@@ -176,9 +176,9 @@
       <p class="sub">
         Client-only page. Put CSV/JSON under
         <span class="kbd">nhl/site/data/</span> (<span class="kbd"
-          >sog_with_names.csv</span
-        >, <span class="kbd">saves_with_names.csv</span>,
-        <span class="kbd">points_with_names.csv</span>, optional
+          >sog_with _market.csv</span
+        >, <span class="kbd">saves_with _market.csv</span>,
+        <span class="kbd">points_with _market.csv</span>, optional
         <span class="kbd">odds_latest.json</span>), or drop them below.
       </p>
 
@@ -244,19 +244,19 @@
         <div class="split">
           <div>
             <div class="dropzone" id="dzSog">
-              Drop <b>sog_with_names.csv</b> here or
+              Drop <b>sog_with_market.csv</b> here or
               <input type="file" id="fileSog" accept=".csv" />
             </div>
           </div>
           <div>
             <div class="dropzone" id="dzSaves">
-              Drop <b>saves_with_names.csv</b> here or
+              Drop <b>saves_with _market.csv</b> here or
               <input type="file" id="fileSaves" accept=".csv" />
             </div>
           </div>
           <div>
             <div class="dropzone" id="dzPoints">
-              Drop <b>points_with_names.csv</b> here or
+              Drop <b>points_with _market.csv</b> here or
               <input type="file" id="filePoints" accept=".csv" />
             </div>
           </div>
@@ -609,9 +609,9 @@
 
       // 2) Load points CSV (and leave odds as-is)
       async function tryLoadFromDataFolder() {
-        const sSog = await fetchIfExists("./data/sog_with_names.csv");
-        const sSaves = await fetchIfExists("./data/saves_with_names.csv");
-        const sPts = await fetchIfExists("./data/points_with_names.csv"); // NEW
+        const sSog = await fetchIfExists("./data/sog_with_market.csv");
+        const sSaves = await fetchIfExists("./data/saves_with_market.csv");
+        const sPts = await fetchIfExists("./data/points_with_market.csv"); // NEW
         const sOdds =
           (await fetchIfExists("./data/odds_latest.json")) ??
           (await fetchIfExists("./data/odds_nhl_playerprops_today.json"));

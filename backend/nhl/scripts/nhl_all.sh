@@ -2,122 +2,99 @@
 set -euo pipefail
 
 # =========================
-# NHL all-in-one daily run
+# NHL end-to-end daily runner (LOCAL, ALL-IN-ONE)
+# - Imports schedule/roster
+# - Seeds features, exports, scores, loads predictions
+# - Fetches odds (SOG + Saves) inline (uses ODDS_API_KEY if present)
+# - Builds sog_with_market (+ vig-less when odds present)
+# - Finalizes yesterday’s logs (goalies + skaters stage→raw)
 # =========================
-# What it does:
-# - Imports TODAY schedule & roster, seeds features, exports CSVs
-# - Scores & builds site CSV (includes Odds API fetch + vig-less build)
-# - Finalizes YDAY goalie+skater logs and promotes to raw
-#
-# Required env:
-#   SUPABASE_DB_URL   -> your Postgres URL (no quotes)
-#   ODDS_API_KEY     5d2de2712453ef000413ca071a812191
-#
-# Optional env:
-#   PYTHON            -> python interpreter (default python3)
 
-# -------- Config / Env guards --------
-: "${SUPABASE_DB_URL:?Set SUPABASE_DB_URL to your Postgres URL}"
-export PSYCOPG_DISABLE_PREPARES=1
+# ---- portable date helpers (BSD/macOS & GNU/Linux) ----
+date_et_today()      { TZ=America/New_York date +%F; }
+date_et_yesterday()  {
+  if TZ=America/New_York date -v-1d +%F >/dev/null 2>&1; then
+    TZ=America/New_York date -v-1d +%F     # macOS/BSD
+  else
+    TZ=America/New_York date -d 'yesterday' +%F   # GNU/Linux
+  fi
+}
+date_et_tomorrow()   {
+  if TZ=America/New_York date -v+1d +%F >/dev/null 2>&1; then
+    TZ=America/New_York date -v+1d +%F
+  else
+    TZ=America/New_York date -d 'tomorrow' +%F
+  fi
+}
+
+# ---- repo root & python ----
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT"
 PYTHON="${PYTHON:-python3}"
 
-# Harden DB URL flags (avoid DNS/SSL funk)
-case "$SUPABASE_DB_URL" in
-  *sslmode=* ) : ;;
-  *\?* ) SUPABASE_DB_URL="${SUPABASE_DB_URL}&sslmode=require" ;;
-  *   ) SUPABASE_DB_URL="${SUPABASE_DB_URL}?sslmode=require" ;;
-esac
-case "$SUPABASE_DB_URL" in
-  *gssencmode=* ) : ;;
-  *\?* ) SUPABASE_DB_URL="${SUPABASE_DB_URL}&gssencmode=disable" ;;
-  *   ) SUPABASE_DB_URL="${SUPABASE_DB_URL}?gssencmode=disable" ;;
-esac
-export SUPABASE_DB_URL
-
-# -------- Dates (ET) --------
-if TZ=America/New_York date -v-1d +%F >/dev/null 2>&1; then
-  # macOS/BSD date(1)
-  SLATE_DATE="${SLATE_DATE:-$(TZ=America/New_York date +%F)}"
-  YDAY="$(TZ=America/New_York date -v-1d +%F)"
-else
-  # GNU date(1)
-  SLATE_DATE="${SLATE_DATE:-$(TZ=America/New_York date +%F)}"
-  YDAY="$(TZ=America/New_York date -d 'yesterday' +%F)"
-fi
+# ---- dates (allow override via env) ----
+SLATE_DATE="${SLATE_DATE:-$(date_et_today)}"
+YDAY="${YDAY:-$(date_et_yesterday)}"
 echo "SLATE_DATE (ET): ${SLATE_DATE}    YDAY (ET): ${YDAY}"
 
-# -------- Helpers --------
+# ---- small retry helper ----
 retry() {
-  # retry CMD up to 3 times with backoff
-  local n=1 max=3
-  until "$@"; do
-    if (( n == max )); then return 1; fi
-    echo "Retry $n/$max failed: $* — sleeping $((n*10))s..."
-    sleep $((n*10)); ((n++))
+  local n=1; local max=3; local delay=5
+  while true; do
+    "$@" && break || {
+      if [[ $n -lt $max ]]; then
+        echo "Attempt $n for '$*' failed; retrying in ${delay}s..." >&2
+        sleep $delay
+        n=$((n+1))
+        delay=$((delay*2))
+      else
+        echo "All attempts for '$*' failed." >&2
+        return 1
+      fi
+    }
   done
 }
 
-guard_psql() {
-  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -c "select now();" >/dev/null
-}
-
-mkdir -p exports nhl/site/data backend/nhl/data/processed
-
+# ---- sanity: DB connectivity ----
 echo "Checking DB connectivity..."
-retry guard_psql
+psql "${SUPABASE_DB_URL:?SUPABASE_DB_URL missing}" -v ON_ERROR_STOP=1 -c "select now();" >/dev/null
 echo "DB OK."
 
-# =========================
-# 1) TODAY: ingest + seed
-# =========================
-echo ""
+echo
 echo "== TODAY: import schedule & roster =="
-retry $PYTHON backend/nhl/scripts/import_schedule_today.py
+SLATE_DATE="$SLATE_DATE" retry $PYTHON backend/nhl/scripts/import_schedule_today.py
+SLATE_DATE="$SLATE_DATE" SKIP_ROSTER_STATUS=1 SKIP_PLAYERS=1 retry $PYTHON backend/nhl/scripts/import_roster_today.py
+SLATE_DATE="$SLATE_DATE" retry $PYTHON backend/nhl/scripts/refresh_players_and_roster_today.py
 
-# Ensure players and roster_status actually update from API
-SKIP_ROSTER_STATUS=0 SKIP_PLAYERS=0 retry $PYTHON backend/nhl/scripts/import_roster_today.py
-retry $PYTHON backend/nhl/scripts/refresh_players_and_roster_today.py
-
+echo
 echo "== TODAY: seed features (SOG + goalies) =="
-retry psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
   -f backend/nhl/sql/seed_sog_features_for_slate.sql
-retry psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
   -f backend/nhl/sql/seed_goalie_features_for_slate.sql
 
-# Keep views/materializations fresh
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql >/dev/null
-
+echo
 echo "== TODAY: export training joins (SOG + goalies) =="
+export PGOPTIONS='-c statement_timeout=0'
+mkdir -p exports
 psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
   -f backend/nhl/sql/export_sog.sql > exports/train_nhl_sog_v2.csv
-
 psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" \
   -f backend/nhl/sql/export_saves.sql > exports/train_goalie_saves_v2.csv
 
-# Guard: ensure SOG export is for SLATE_DATE
-awk -F, -v want="$SLATE_DATE" '
-  NR==1 { for(i=1;i<=NF;i++) if($i=="game_date") c=i; next }
-  NR>1 { d[$c]=1 }
-  END {
-    if (!c) { print "FATAL: no game_date column" >"/dev/stderr"; exit 2 }
-    if (length(d)==0) { print "FATAL: export has no rows" >"/dev/stderr"; exit 2 }
-    for (k in d) if (k!=want) { print "FATAL: export contains " k " (want " want ")" >"/dev/stderr"; exit 2 }
-  }
-' exports/train_nhl_sog_v2.csv
-
+echo
 echo "== TODAY: score & attach names =="
-retry $PYTHON backend/nhl/scripts/run_daily_slate.py \
+$PYTHON backend/nhl/scripts/run_daily_slate.py \
   --project nhl \
   --sog-csv exports/train_nhl_sog_v2.csv \
   --saves-csv exports/train_goalie_saves_v2.csv \
   --db-url "$SUPABASE_DB_URL" \
-  --scorer "$PWD/backend/nhl/scripts/score_nhl_props.py"
-
-$PYTHON backend/nhl/scripts/attach_names.py || true
+  --scorer "$ROOT/backend/nhl/scripts/score_nhl_props.py"
 
 # =========================
-# 2) TODAY: Odds fetch + build site CSVs
+# INTEGRATED ODDS FETCH + BUILD
 # =========================
+echo
 echo "== TODAY: fetch player props odds (SOG + Saves) =="
 OUTDIR="nhl/site/data"
 MARKETS="player_shots_on_goal,player_total_saves"
@@ -125,50 +102,63 @@ REGIONS="us"
 FORMAT="american"
 mkdir -p "$OUTDIR"
 
-# Ensure jq
+# If jq missing, skip live fetch but keep last-known odds if present
 if ! command -v jq >/dev/null 2>&1; then
-  echo "Installing jq (sudo may prompt) ..."
-  if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update -y >/dev/null && sudo apt-get install -y jq >/dev/null
-  else
-    echo "jq not found and automatic install unavailable. Please install jq." >&2
-    exit 1
-  fi
-fi
-
-if [[ -n "${ODDS_API_KEY:-}" ]]; then
-  echo "Fetching NHL events…"
-  curl -fsS "https://api.the-odds-api.com/v4/sports/icehockey_nhl/events?dateFormat=iso&daysFrom=1&apiKey=${ODDS_API_KEY}" \
-    -o "${OUTDIR}/events_today.json"
-
-  EIDS=$(jq -r '.[].id' "${OUTDIR}/events_today.json" || true)
-  if [[ -z "${EIDS}" ]]; then
-    echo "⚠️  No events in events_today.json — writing empty odds file."
-    echo "[]" > "${OUTDIR}/odds_nhl_playerprops_today.json"
-    cp -f "${OUTDIR}/odds_nhl_playerprops_today.json" "${OUTDIR}/odds_latest.json"
-  else
-    echo "${EIDS}" | \
-      xargs -I{} -n1 -P4 bash -c '
-        EID="$1"; OUTDIR="$2"; MARKETS="$3"; REGIONS="$4"; FORMAT="$5"; KEY="$6"
-        for n in 1 2 3; do
-          if curl -fsS "https://api.the-odds-api.com/v4/sports/icehockey_nhl/events/${EID}/odds?regions=${REGIONS}&markets=${MARKETS}&oddsFormat=${FORMAT}&apiKey=${KEY}"; then
-            exit 0
-          fi
-          sleep $((n*2))
-        done
-        curl -sS "https://api.the-odds-api.com/v4/sports/icehockey_nhl/events/${EID}/odds?regions=${REGIONS}&markets=${MARKETS}&oddsFormat=${FORMAT}&apiKey=${KEY}" || echo "{}"
-      ' _ {} "${OUTDIR}" "${MARKETS}" "${REGIONS}" "${FORMAT}" "${ODDS_API_KEY}" \
-      | jq -s 'map(select(type=="object"))' > "${OUTDIR}/odds_nhl_playerprops_today.json"
-
-    cp -f "${OUTDIR}/odds_nhl_playerprops_today.json" "${OUTDIR}/odds_latest.json"
-  fi
-  echo "Wrote ${OUTDIR}/odds_nhl_playerprops_today.json"
-else
-  echo "⚠️  ODDS_API_KEY not set — skipping odds fetch. (build will still run)"
-  # ensure a fallback exists if previous run didn’t
+  echo "⚠️  jq not found — skipping live odds fetch. Using previous odds if available."
   [[ -f "${OUTDIR}/odds_latest.json" ]] || echo "[]" > "${OUTDIR}/odds_latest.json"
+else
+  if [[ -n "${ODDS_API_KEY:-}" ]]; then
+    echo "→ Fetching events (daysFrom=1)…"
+    if curl -fsS "https://api.the-odds-api.com/v4/sports/icehockey_nhl/events?dateFormat=iso&daysFrom=1&apiKey=${ODDS_API_KEY}" \
+      -o "${OUTDIR}/events_today.json"; then
+
+      ECOUNT=$(jq 'length' "${OUTDIR}/events_today.json" 2>/dev/null || echo 0)
+      echo "   events_today.json → ${ECOUNT} events"
+
+      if [[ "${ECOUNT}" -gt 0 ]]; then
+        TMP_NDJSON="$(mktemp)"
+        : > "${TMP_NDJSON}"
+
+        echo "→ Fetching player props (markets=${MARKETS}, regions=${REGIONS})…"
+        # Safe loop (no xargs-too-long), mild retries per event
+        while IFS= read -r EID; do
+          ok=""
+          for n in 1 2 3; do
+            if curl -fsS \
+              "https://api.the-odds-api.com/v4/sports/icehockey_nhl/events/${EID}/odds?regions=${REGIONS}&markets=${MARKETS}&oddsFormat=${FORMAT}&apiKey=${ODDS_API_KEY}" \
+              >> "${TMP_NDJSON}"; then
+              ok="yes"
+              echo "" >> "${TMP_NDJSON}"   # newline separator
+              break
+            fi
+            sleep $((n*2))
+          done
+          [[ -z "$ok" ]] && echo "{}" >> "${TMP_NDJSON}"
+        done < <(jq -r '.[].id' "${OUTDIR}/events_today.json")
+
+        jq -s 'map(select(type=="object"))' "${TMP_NDJSON}" > "${OUTDIR}/odds_nhl_playerprops_today.json" || echo "[]" > "${OUTDIR}/odds_nhl_playerprops_today.json"
+        cp -f "${OUTDIR}/odds_nhl_playerprops_today.json" "${OUTDIR}/odds_latest.json"
+        rm -f "${TMP_NDJSON}"
+
+        SIZE=$(wc -c < "${OUTDIR}/odds_nhl_playerprops_today.json" 2>/dev/null || echo 0)
+        echo "✅ Wrote ${OUTDIR}/odds_nhl_playerprops_today.json"
+        echo "   size: ${SIZE} bytes | events: ${ECOUNT}"
+      else
+        echo "⚠️  No events — writing empty odds and preserving odds_latest.json if any."
+        echo "[]" > "${OUTDIR}/odds_nhl_playerprops_today.json"
+        [[ -f "${OUTDIR}/odds_latest.json" ]] || cp -f "${OUTDIR}/odds_nhl_playerprops_today.json" "${OUTDIR}/odds_latest.json"
+      fi
+    else
+      echo "⚠️  Event fetch failed — keeping odds_latest.json if present."
+      [[ -f "${OUTDIR}/odds_latest.json" ]] || echo "[]" > "${OUTDIR}/odds_latest.json"
+    fi
+  else
+    echo "⚠️  ODDS_API_KEY not set — skipping live odds fetch. Using previous odds if available."
+    [[ -f "${OUTDIR}/odds_latest.json" ]] || echo "[]" > "${OUTDIR}/odds_latest.json"
+  fi
 fi
 
+echo
 echo "== TODAY: build sog_with_market.csv (and vig-less if odds present) =="
 $PYTHON backend/nhl/scripts/build_sog_with_market.py \
   --pred backend/nhl/data/processed/sog_predictions.csv \
@@ -181,57 +171,90 @@ $PYTHON - <<'PY' || true
 import json, unicodedata as ud, math
 from pathlib import Path
 import pandas as pd
-def norm(s): 
-    s=(s or ""); s=ud.normalize("NFKD",s).encode("ascii","ignore").decode("ascii")
+
+def norm(s):
+    s=(s or "")
+    s=ud.normalize("NFKD",s).encode("ascii","ignore").decode("ascii")
     return " ".join(s.replace("-", " ").replace(".", " ").replace("’","").replace("'","").lower().split())
+
 def a2p(a):
     try: A=float(a)
     except: return float("nan")
-    return 100/(A+100) if A>0 else (-A)/((-A)+100) if A<0 else float("nan")
-def p2a(p): 
-    return f"-{round((p/(1-p))*100)}" if 0<p<1 and p>=0.5 else (f"+{round(((1-p)/p)*100)}" if 0<p<1 else "")
+    if A==0 or not math.isfinite(A): return float("nan")
+    return 100/(A+100) if A>0 else (-A)/((-A)+100)
+
+def p2a(p):
+    if not (0<p<1): return ""
+    return f"-{round((p/(1-p))*100)}" if p>=0.5 else f"+{round(((1-p)/p)*100)}"
+
 csv=Path("nhl/site/data/sog_with_market.csv")
 if not csv.exists(): raise SystemExit
 df=pd.read_csv(csv)
-if "full_name" not in df and "player" in df: df=df.rename(columns={"player":"full_name"})
-df["name_norm"]=df.get("full_name","").map(norm); df["line_str"]=df["line"].astype(str)
+if "full_name" not in df.columns and "player" in df.columns:
+    df=df.rename(columns={"player":"full_name"})
+df["name_norm"]=df.get("full_name","").map(norm)
+df["line_str"]=df["line"].astype(str)
+
 raw=None
 for p in (Path("nhl/site/data/odds_nhl_playerprops_today.json"), Path("nhl/site/data/odds_latest.json")):
     if p.exists():
-        try: raw=json.loads(p.read_text()); break
-        except: pass
-if raw is None: print("No odds JSON; skipping vig-less."); raise SystemExit
+        try:
+            raw=json.loads(p.read_text())
+            break
+        except Exception:
+            pass
+if raw is None:
+    print("No odds JSON; skipping vig-less.")
+    raise SystemExit
+
 recs=[]
 def walk(x):
     if isinstance(x, dict):
         if x.get("key")=="player_shots_on_goal":
-            for o in x.get("outcomes") or []:
-                side=o.get("name"); pt=o.get("point"); desc=o.get("description") or o.get("player") or ""; price=o.get("price")
+            for o in (x.get("outcomes") or []):
+                side=o.get("name"); pt=o.get("point")
+                desc=o.get("description") or o.get("player") or ""
+                price=o.get("price")
                 if side in ("Over","Under") and price is not None and pt is not None:
                     recs.append({"name_norm":norm(desc),"line_str":str(pt),"side":side,"price":float(price)})
-        for v in x.values(): walk(v)
+        for v in x.values():
+            walk(v)
     elif isinstance(x, list):
-        for it in x: walk(it)
+        for it in x:
+            walk(it)
+
 walk(raw)
-import pandas as pd
 od=pd.DataFrame(recs)
-if od.empty: print("Odds JSON had no SOG; skipping vig-less."); raise SystemExit
-med=(od.groupby(["name_norm","line_str","side"],as_index=False).agg(price_median=("price","median"))
-        .pivot(index=["name_norm","line_str"],columns="side",values="price_median").reset_index().rename_axis(None,axis=1))
-med["p_over_raw"]=med["Over"].map(a2p); med["p_under_raw"]=med["Under"].map(a2p)
+if od.empty:
+    print("Odds JSON had no SOG; skipping vig-less.")
+    raise SystemExit
+
+med=(od.groupby(["name_norm","line_str","side"],as_index=False)
+        .agg(price_median=("price","median"))
+        .pivot(index=["name_norm","line_str"],columns="side",values="price_median")
+        .reset_index().rename_axis(None,axis=1))
+med["p_over_raw"]=med["Over"].map(a2p)
+med["p_under_raw"]=med["Under"].map(a2p)
 med["sum"]=med["p_over_raw"]+med["p_under_raw"]
 med["p_over_vigless"]=med.apply(lambda r: r["p_over_raw"]/r["sum"] if isinstance(r["sum"],float) and r["sum"]>0 else float("nan"),axis=1)
 med["fair_over_vigless"]=med["p_over_vigless"].map(p2a)
 med=med.rename(columns={"Over":"price_over_median","Under":"price_under_median"})
+
 m=df.merge(med,on=["name_norm","line_str"],how="left")
 m["diff_pp"]=(m["p_over"]-m["p_over_vigless"])*100.0
-keep=[c for c in ["full_name","player_id","game_id","team_id","line","p_over","price_over",
-                  "price_over_median","price_under_median","p_over_mkt","edge_over",
-                  "p_over_vigless","fair_over_vigless","diff_pp"] if c in m.columns]
+
+keep=[c for c in [
+  "full_name","player_id","game_id","team_id",
+  "line","p_over","price_over",
+  "price_over_median","price_under_median",
+  "p_over_mkt","edge_over",
+  "p_over_vigless","fair_over_vigless","diff_pp"
+] if c in m.columns]
 m[keep].to_csv("nhl/site/data/sog_with_market_vigless.csv",index=False)
 print("Wrote nhl/site/data/sog_with_market_vigless.csv")
 PY
 
+echo
 echo "== TODAY: sanity counts =="
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
   WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '${SLATE_DATE}')
@@ -242,16 +265,19 @@ psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
   UNION ALL SELECT 'predictions',       COUNT(*) FROM nhl.predictions p             WHERE p.game_id IN (SELECT game_id FROM g);
 "
 
-# =========================
-# 3) YDAY: logs & promote
-# =========================
-echo ""
+echo
 echo "== YDAY: goalie logs =="
-SLATE_DATE="$YDAY" retry $PYTHON backend/nhl/scripts/seed_goalie_logs_for_date.py || true
+SLATE_DATE="$YDAY" retry $PYTHON backend/nhl/scripts/seed_goalie_logs_for_date.py
 
+echo
 echo "== YDAY: skater logs (ID-mapped) & promote =="
-SLATE_DATE="$YDAY" retry $PYTHON backend/nhl/scripts/seed_skater_logs_for_date.py || true
+# Make sure YDAY roster is refreshed before mapping
+SLATE_DATE="$YDAY" retry $PYTHON backend/nhl/scripts/refresh_players_and_roster_today.py
 
+# Seed stage → import_skater_logs_stage
+SLATE_DATE="$YDAY" retry $PYTHON backend/nhl/scripts/seed_skater_logs_for_date.py
+
+# Promote stage → raw
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
 WITH src AS (
   SELECT DISTINCT
@@ -309,14 +335,13 @@ ON CONFLICT (player_id, game_id) DO UPDATE SET
   pp_toi_minutes = EXCLUDED.pp_toi_minutes;
 "
 
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql >/dev/null
-
-echo "== YDAY: stage vs raw counts =="
+# Refresh views/materializations and show counts for YDAY
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql
 psql "$SUPABASE_DB_URL" -F $'\t' -Atqc "
   SELECT 'stage_yday', COUNT(*) FROM nhl.import_skater_logs_stage WHERE game_date = DATE '${YDAY}'
   UNION ALL
   SELECT 'raw_yday',   COUNT(*) FROM nhl.skater_game_logs_raw   WHERE game_date = DATE '${YDAY}';
 "
 
-echo ""
+echo
 echo "✅ Done. Site files under nhl/site/data/. Enjoy the coffee ☕"
