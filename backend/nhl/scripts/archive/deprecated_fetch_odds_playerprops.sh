@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- load .env files (backend/.env, then backend/.env.local if present) ---
+# Resolve repo root (two levels up from this script: backend/nhl/scripts)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+BACKEND_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+
+# Export variables defined in .env files into this process
+if [[ -f "${BACKEND_DIR}/.env" ]]; then
+  set -a
+  . "${BACKEND_DIR}/.env"
+  set +a
+fi
+if [[ -f "${BACKEND_DIR}/.env.local" ]]; then
+  set -a
+  . "${BACKEND_DIR}/.env.local"
+  set +a
+fi
+
 # Usage:
 #   backend/nhl/scripts/fetch_odds_playerprops.sh [daysFrom]
 # Defaults to daysFrom=1 (today + live + a bit ahead).
@@ -15,7 +32,8 @@ fi
 OUTDIR="nhl/site/data"
 mkdir -p "$OUTDIR"
 
-MARKETS="${MARKETS:-player_shots_on_goal,player_total_saves}"
+# Include player_points (skater Points O/U) alongside SOG and Saves
+MARKETS="${MARKETS:-player_shots_on_goal,player_total_saves,player_points}"
 REGIONS="${REGIONS:-us}"      # us | eu | uk | au
 FORMAT="${FORMAT:-american}"
 CONCURRENCY="${CONCURRENCY:-6}"  # parallel fetch limit

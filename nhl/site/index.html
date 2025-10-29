@@ -325,7 +325,10 @@
         return price > 0 ? 100 / (price + 100) : -price / (-price + 100);
       }
       function americanFromProb(p) {
-        if (!(p > 0)) return "";
+        // Only valid for 0<p<1; also clamp extreme tiny/huge probs
+        if (!(p > 0 && p < 1)) return "";
+        if (p < 0.001) return ""; // ~0.1% -> hide instead of +100000 odds
+        if (p > 0.999) return ""; // ~99.9%
         return p >= 0.5
           ? "-" + Math.round((p / (1 - p)) * 100)
           : "" + Math.round(((1 - p) / p) * 100);
@@ -335,6 +338,13 @@
         if (!Number.isFinite(A) || A === 0 || !(p > 0)) return NaN;
         const dec = A > 0 ? 1 + A / 100 : 1 + 100 / -A;
         return p * (dec - 1) - (1 - p) * 1; // expected profit per 1u stake
+      }
+      function equalLine(a, b) {
+        const x = parseFloat(a);
+        const y = parseFloat(b);
+        return (
+          Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) < 1e-9
+        );
       }
 
       // ---- Name & odds helpers ----
@@ -346,6 +356,22 @@
           .replace(/\s+/g, " ")
           .trim()
           .toLowerCase();
+      }
+
+      function findOddsNode(market, nm) {
+        const bucket = state.odds[market] || {};
+        if (bucket[nm]) return bucket[nm];
+
+        // Try common variants (team suffixes, extra spaces, initials)
+        // 1) startsWith match: "andrei vasilevskiy" matches "andrei vasilevskiy tbl"
+        for (const k of Object.keys(bucket)) {
+          if (k.startsWith(nm + " ")) return bucket[k];
+        }
+        // 2) contains (fallback): "andrei vasilevskiy" inside "tbl andrei vasilevskiy"
+        for (const k of Object.keys(bucket)) {
+          if (k.includes(nm)) return bucket[k];
+        }
+        return null;
       }
 
       // --- Team ID → abbreviation (NHL Stats IDs) ---
@@ -469,12 +495,21 @@
       }
 
       function lookupOddsPrice(market, nameNorm, lineStr) {
-        const kind = market; // "sog" | "saves" | "points"
-        const bucket = state.odds[kind] || {};
-        const node = bucket[nameNorm];
-        if (!node) return NaN;
-        const price = node.prices?.[lineStr];
-        return Number.isFinite(price) ? price : NaN;
+        const node = findOddsNode(market, nameNorm);
+        if (!node || !node.prices) return NaN;
+
+        // exact string first
+        if (Object.prototype.hasOwnProperty.call(node.prices, lineStr)) {
+          const v = node.prices[lineStr];
+          return Number.isFinite(v) ? v : NaN;
+        }
+        // numeric-equal fallback
+        const keyNum = parseFloat(lineStr);
+        for (const [pt, price] of Object.entries(node.prices)) {
+          if (equalLine(pt, keyNum))
+            return Number.isFinite(price) ? price : NaN;
+        }
+        return NaN;
       }
 
       function updateUseOddsCheckboxAvailability() {
@@ -584,15 +619,27 @@
 
       // Row-level “is posted” check: true if CSV has market data for the row OR odds JSON says this (name,line) is posted
       function isRowPosted(r, market, lineStr) {
+        // CSV says it's posted (either price or market prob present)
         const hasCsvMarket =
           Number.isFinite(toFloat(r.price_over)) ||
           Number.isFinite(toFloat(r.p_over_mkt));
         if (hasCsvMarket) return true;
+
+        // Otherwise consult odds JSON
         const nm = normalizeName(
           r.full_name || r.player || r.player_name || ""
         );
         const node = (state.odds[market] || {})[nm];
-        return !!node?.lines?.has(lineStr);
+        if (!node || !node.lines) return false;
+
+        const keyStr = String(lineStr);
+        if (node.lines.has(keyStr)) return true;
+
+        // tolerate numeric-equal lines (e.g., "24.5" vs 24.5)
+        for (const pt of node.lines) {
+          if (equalLine(pt, keyStr)) return true;
+        }
+        return false;
       }
 
       // ---- File loading helpers ----
@@ -609,9 +656,19 @@
 
       // 2) Load points CSV (and leave odds as-is)
       async function tryLoadFromDataFolder() {
-        const sSog = await fetchIfExists("./data/sog_with_market.csv");
-        const sSaves = await fetchIfExists("./data/saves_with_market.csv");
-        const sPts = await fetchIfExists("./data/points_with_market.csv"); // NEW
+        // prefer *_with_market.csv; fallback to *_with_names.csv
+        const sSog =
+          (await fetchIfExists("./data/sog_with_market.csv")) ??
+          (await fetchIfExists("./data/sog_with_names.csv"));
+
+        const sSaves =
+          (await fetchIfExists("./data/saves_with_market.csv")) ??
+          (await fetchIfExists("./data/saves_with_names.csv"));
+
+        const sPts =
+          (await fetchIfExists("./data/points_with_market.csv")) ??
+          (await fetchIfExists("./data/points_with_names.csv"));
+
         const sOdds =
           (await fetchIfExists("./data/odds_latest.json")) ??
           (await fetchIfExists("./data/odds_nhl_playerprops_today.json"));
@@ -622,20 +679,16 @@
           const { header, rows } = parseCSV(sSog);
           state.sog = { header, rows: normalizeKeys(rows) };
           loaded++;
-          setupLineOptionsIfNeeded();
         }
         if (sSaves) {
           const { header, rows } = parseCSV(sSaves);
           state.saves = { header, rows: normalizeKeys(rows) };
           loaded++;
-          setupLineOptionsIfNeeded();
         }
         if (sPts) {
-          // NEW
           const { header, rows } = parseCSV(sPts);
           state.points = { header, rows: normalizeKeys(rows) };
           loaded++;
-          setupLineOptionsIfNeeded();
         }
         if (sOdds) {
           state.odds = parseOddsJSON(sOdds);
@@ -643,7 +696,7 @@
         }
 
         updateUseOddsCheckboxAvailability();
-
+        setupLineOptionsIfNeeded();
         updateStatus();
         render();
         return loaded;
@@ -700,20 +753,23 @@
             : market === "points"
             ? state.points
             : state.sog;
+
         const header = ds.header || [];
         const useOdds = document.getElementById("useOdds")?.checked === true;
 
-        // Prefer wide headers; fall back to long format
+        // Build candidate lines from CSV (prefer wide p_over_* headers; fall back to long format)
         let lines = extractLinesFromHeader(header);
         if (!lines.length && hasLongFormat(header)) {
           lines = uniqueSortedLinesFromRows(ds.rows || []);
         }
 
-        // If "Posted lines only" is checked, keep only lines present in odds JSON
+        // If “Posted lines only” is checked, keep only lines that are actually posted (union of CSV/odds JSON)
         if (useOdds) {
-          rows = baseRows.filter((r) => isRowPosted(r, market, key));
+          const posted = postedLineSet(market); // returns Set of strings like "24.5"
+          lines = lines.filter((l) => posted.has(String(l)));
         }
 
+        // Render the Line dropdown
         const sel = document.getElementById("line");
         const sig =
           market +
@@ -754,9 +810,6 @@
       // 6/7) Filter, rank, and (optionally) restrict to posted lines from odds
       function filterAndRank() {
         const { key, market } = currentLineKey();
-        const typedPrice = toFloat(document.getElementById("price").value);
-        const minEdgeBps =
-          Number(document.getElementById("minEdge").value) || 0;
         const q = (document.getElementById("q").value || "").toLowerCase();
         const useOdds = document.getElementById("useOdds")?.checked === true;
 
@@ -772,46 +825,51 @@
         // Choose the source rows and probability accessor based on format
         let baseRows, pGetter;
         if (longMode) {
-          baseRows = dsRows.filter((r) => String(r.line) === key);
+          // long format: has columns: full_name, line, p_over, ...
+          baseRows = dsRows.filter((r) => equalLine(r.line, key)); // numeric-safe compare
           pGetter = (r) => toFloat(r.p_over);
         } else {
-          const pcol = `p_over_${key.replace(".", "_")}`;
+          // wide format: p_over_18_5, p_over_24_5, ...
+          const pcol = `p_over_${String(key).replace(".", "_")}`;
           baseRows = dsRows.filter((r) => r[pcol] !== undefined);
           pGetter = (r) => toFloat(r[pcol]);
         }
 
-        // "Posted lines only" using odds JSON (name + exact line)
+        // "Posted lines only" using odds JSON (name + exact line, tolerant to 24.5 vs "24.5")
         let rows = baseRows;
         if (useOdds) {
           const bucket = state.odds[market] || {};
           rows = baseRows.filter((r) => {
-            const name = normalizeName(
-              r.full_name || r.player || r.player_name || ""
-            );
-            const set = bucket[name];
-            return set && set.has(key);
-          });
-        }
-
-        const enriched = rows
-          .map((r) => {
-            // Model probability
-            const p = pGetter(r);
-
-            // Manual override (typed)
-            const typedPrice = toFloat(document.getElementById("price").value);
-
-            // CSV market columns
-            const csvPrice = toFloat(r.price_over);
-            const csvProb = toFloat(r.p_over_mkt);
-
-            // Odds JSON price (median per name+line) if available
             const nm = normalizeName(
               r.full_name || r.player || r.player_name || ""
             );
-            const oddsPrice = lookupOddsPrice(market, nm, key);
+            const node = bucket[nm];
+            if (!node || !node.lines) return false;
 
-            // Final price to compute EV from: manual > CSV > JSON
+            const keyStr = String(key);
+            return (
+              node.lines.has(keyStr) ||
+              [...node.lines].some((pt) => equalLine(pt, key))
+            );
+          });
+        }
+
+        // Enrich with prices/EV/edges
+        const enriched = rows
+          .map((r) => {
+            const p = pGetter(r); // model probability
+
+            // Inputs/derived market info
+            const typedPrice = toFloat(document.getElementById("price").value);
+            const csvPrice = toFloat(r.price_over);
+            const csvProb = toFloat(r.p_over_mkt);
+
+            const nm = normalizeName(
+              r.full_name || r.player || r.player_name || ""
+            );
+            const oddsPrice = lookupOddsPrice(market, nm, String(key)); // median from odds JSON
+
+            // Final price used for EV: manual > CSV > JSON
             const priceForCalc = Number.isFinite(typedPrice)
               ? typedPrice
               : Number.isFinite(csvPrice)
@@ -820,7 +878,14 @@
               ? oddsPrice
               : NaN;
 
-            // “Market” probability for display: CSV p_over_mkt > JSON derived from price
+            // What to show in the Market Price column: CSV > JSON > blank
+            const showPrice = Number.isFinite(csvPrice)
+              ? csvPrice
+              : Number.isFinite(oddsPrice)
+              ? oddsPrice
+              : NaN;
+
+            // Market probability for display (CSV wins; else from odds price)
             const p_over_mkt = Number.isFinite(csvProb)
               ? csvProb
               : Number.isFinite(oddsPrice)
@@ -832,7 +897,7 @@
               ? probFromAmerican(priceForCalc)
               : NaN;
 
-            // Edge priority: vs breakeven if we have a price; else against p_over_mkt if present
+            // Edge priority: vs breakeven if we have a price; else vs p_over_mkt
             const edge =
               Number.isFinite(be) && Number.isFinite(p)
                 ? p - be
@@ -845,40 +910,47 @@
                 ? evPerUnit(p, priceForCalc)
                 : NaN;
 
-            // What to show in "Market Price" column: CSV > JSON > blank (rendered nicely)
-            const showPrice = Number.isFinite(csvPrice)
-              ? csvPrice
-              : Number.isFinite(oddsPrice)
-              ? oddsPrice
-              : NaN;
-
             return {
               ...r,
               p,
               fair,
               edge,
               ev,
-              price_over: showPrice,
+              price_over: showPrice, // what we render
               p_over_mkt,
             };
           })
           .filter((r) => {
+            // Text filter
             if (q) {
               const hay = `${r.full_name || ""} ${r.team || ""} ${
                 r.game_id || ""
               }`.toLowerCase();
               if (!hay.includes(q)) return false;
             }
-            // bps filter only if edge is finite
-            if (Number.isFinite(r.edge)) {
-              const minEdgeBps =
-                Number(document.getElementById("minEdge").value) || 0;
-              if (r.edge * 10000 < minEdgeBps) return false;
+
+            // --- Edge filter (bps) ---
+            // Behavior:
+            // • Blank input => NO FILTER (show everything).
+            // • Numeric input (e.g. -500, 0, 250) => keep rows with finite edge where edge*10000 >= threshold.
+            // • Rows without a finite edge are shown only in the no-filter mode.
+            const edgeTxt = (
+              document.getElementById("minEdge")?.value ?? ""
+            ).trim();
+            if (edgeTxt !== "") {
+              const thresholdBps = Number(edgeTxt);
+              if (Number.isFinite(thresholdBps)) {
+                // if (!Number.isFinite(r.edge)) return false; // require an edge when filtering
+                if (!Number.isFinite(r.edge)) return true; // keep "no edge" rows even while filtering
+                const edgeBps = r.edge * 10000;
+                if (edgeBps < thresholdBps) return false; // below threshold → hide
+              }
             }
+            // (no return here; fall through to keep the row)
             return true;
           });
 
-        // Sort: if any price is present (manual/CSV/JSON), sort by EV; else by probability
+        // Sort: if any row has a price, sort by EV; else by model probability
         const anyPrice = enriched.some((r) => Number.isFinite(r.price_over));
         enriched.sort((a, b) => {
           if (anyPrice) {
@@ -1019,6 +1091,11 @@
             await tryLoadFromDataFolder();
             render();
           });
+        document.getElementById("market").addEventListener("change", () => {
+          updateUseOddsCheckboxAvailability();
+          setupLineOptionsIfNeeded();
+          render();
+        });
 
         // File inputs / drag-drop
         const fileSog = document.getElementById("fileSog");

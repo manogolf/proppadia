@@ -27,6 +27,8 @@ date_et_tomorrow()   {
   fi
 }
 
+mkdir -p nhl/site/data exports
+
 # ---- repo root & python ----
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
@@ -35,6 +37,8 @@ PYTHON="${PYTHON:-python3}"
 # ---- dates (allow override via env) ----
 SLATE_DATE="${SLATE_DATE:-$(date_et_today)}"
 YDAY="${YDAY:-$(date_et_yesterday)}"
+export SLATE_DATE
+export YDAY
 echo "SLATE_DATE (ET): ${SLATE_DATE}    YDAY (ET): ${YDAY}"
 
 # ---- small retry helper ----
@@ -84,12 +88,25 @@ psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_
 
 echo
 echo "== TODAY: score & attach names =="
+
+# 1) Do the usual wrapper (SOG + SAVES) so DB gets refreshed
 $PYTHON backend/nhl/scripts/run_daily_slate.py \
   --project nhl \
   --sog-csv exports/train_nhl_sog_v2.csv \
   --saves-csv exports/train_goalie_saves_v2.csv \
   --db-url "$SUPABASE_DB_URL" \
   --scorer "$ROOT/backend/nhl/scripts/score_nhl_props.py"
+
+# 2) Force goalie-saves re-score with our exact line set (includes 17.5)
+SAVES_LINES="17.5,18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5"
+echo "▶ Re-scoring SAVES with lines: $SAVES_LINES"
+$PYTHON backend/nhl/scripts/score_nhl_props.py \
+  --model-dir backend/nhl/models/latest/goalie_saves \
+  --csv exports/train_goalie_saves_v2.csv \
+  --feature-json backend/nhl/features/feature_metadata_nhl.json \
+  --feature-key goalie_saves \
+  --line "$SAVES_LINES" \
+  --out backend/nhl/data/processed/saves_predictions.csv
 
 # =========================
 # INTEGRATED ODDS FETCH + BUILD
@@ -160,7 +177,7 @@ fi
 
 echo
 echo "== TODAY: build sog_with_market.csv (and vig-less if odds present) =="
-$PYTHON backend/nhl/scripts/build_sog_with_market.py \
+SLATE_DATE="$SLATE_DATE" $PYTHON backend/nhl/scripts/build_sog_with_market.py \
   --pred backend/nhl/data/processed/sog_predictions.csv \
   --names exports/train_nhl_sog_v2.csv \
   --out nhl/site/data/sog_with_market.csv \
@@ -253,6 +270,16 @@ keep=[c for c in [
 m[keep].to_csv("nhl/site/data/sog_with_market_vigless.csv",index=False)
 print("Wrote nhl/site/data/sog_with_market_vigless.csv")
 PY
+
+echo
+echo "== TODAY: build saves_with_market.csv =="
+mkdir -p nhl/site/data
+SLATE_DATE="$SLATE_DATE" $PYTHON backend/nhl/scripts/build_saves_with_market.py \
+  --pred backend/nhl/data/processed/saves_predictions.csv \
+  --names exports/train_goalie_saves_v2.csv \
+  --odds-json nhl/site/data/odds_latest.json \
+  --out nhl/site/data/saves_with_market.csv \
+  --unmatched nhl/site/data/unmatched_saves.csv
 
 echo
 echo "== TODAY: sanity counts =="

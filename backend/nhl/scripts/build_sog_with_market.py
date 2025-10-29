@@ -1,341 +1,244 @@
 #!/usr/bin/env python3
 """
-Build sog_with_market.csv by combining model predictions, the names export, and odds JSON.
+Build SOG CSV with market columns.
 
-- Predictions: backend/nhl/data/processed/sog_predictions.csv
-  (wide columns: p_over_0.5, p_over_1.5, p_over_2.5, p_over_3.5, ...)
+Inputs
+------
+--pred       backend/nhl/data/processed/sog_predictions.csv
+--names      exports/train_nhl_sog_v2.csv              (has full_name, team_id, game_date, etc.)
+--odds-json  nhl/site/data/odds_latest.json           (optional but recommended)
+--out        nhl/site/data/sog_with_market.csv
+--unmatched  nhl/site/data/unmatched_sog.csv
 
-- Names Export: exports/train_nhl_sog_v2.csv
-  (must include: full_name, player_id, game_id, team_id, game_date)
+Env
+---
+SLATE_DATE=YYYY-MM-DD  (required; used to filter by game_date in --names)
 
-- Odds JSON: nhl/site/data/odds_nhl_playerprops_today.json (or any equivalent structure)
-  (expects markets with key = "player_shots_on_goal" and outcomes Over/Under)
-
-Outputs:
-- nhl/site/data/sog_with_market.csv
-- nhl/site/data/unmatched_sog.csv
+Output columns (when available):
+full_name, player_id, game_id, team_id, line, p_over,
+price_over, p_over_mkt, edge_over, fair_over, game_date
 """
-
 from __future__ import annotations
-
-import argparse
-import json
-import math
-import os
-import sys
-from dataclasses import dataclass
-from statistics import median
-from typing import Iterable, Tuple, Dict, Any, List
-
+import argparse, json, math, os, sys, re
+from pathlib import Path
 import pandas as pd
-from zoneinfo import ZoneInfo
-from datetime import datetime
+import unicodedata as ud
 
-
-ET = ZoneInfo("America/New_York")
-
-
-# --------------------------- helpers ---------------------------
-
-def log(msg: str) -> None:
-    print(f"[sog_with_market] {msg}")
-
-def fail(msg: str, code: int = 3) -> "NoReturn":  # type: ignore[name-defined]
+# ---------- helpers ----------
+def die(msg: str, code: int = 3):
     print(f"[sog_with_market] FATAL: {msg}", file=sys.stderr)
     sys.exit(code)
 
 def norm_name(s: str) -> str:
-    """ASCII fold, normalize whitespace/punct, lower-case."""
-    if not isinstance(s, str):
-        return ""
-    import unicodedata as ud
+    if not isinstance(s, str): return ""
     s = ud.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
-    s = s.replace("-", " ").replace(".", " ").replace("'", "").replace("’", "")
-    s = " ".join(s.lower().split())
-    return s
+    s = s.replace("-", " ").replace(".", " ").replace("’","").replace("'", "")
+    return " ".join(s.lower().split())
 
-def american_to_prob(price) -> float | None:
+def american_to_prob(a) -> float:
     try:
-        p = float(price)
+        A = float(a)
     except Exception:
-        return None
-    if p > 0:
-        return 100.0 / (p + 100.0)
-    if p < 0:
-        return (-p) / ((-p) + 100.0)
+        return float("nan")
+    if not math.isfinite(A) or A == 0: return float("nan")
+    return 100.0 / (A + 100.0) if A > 0 else (-A) / ((-A) + 100.0)
+
+def prob_to_american(p) -> str:
+    if not (isinstance(p,(int,float)) and 0 < p < 1): return ""
+    return f"-{round((p/(1-p))*100)}" if p >= 0.5 else f"+{round(((1-p)/p)*100)}"
+
+def read_csv_required(path: Path, need_cols: set[str] | None = None) -> pd.DataFrame:
+    if not path.exists():
+        die(f"missing CSV: {path}")
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        die(f"failed reading CSV {path}: {e}")
+    if need_cols:
+        miss = [c for c in need_cols if c not in df.columns]
+        if miss:
+            die(f"{path.name} missing columns: {miss}")
+    return df
+
+def load_odds_json(path: Path | None) -> list | dict | None:
+    # Try explicit path, then standard locations if not present
+    for p in [path, Path("nhl/site/data/odds_nhl_playerprops_today.json"), Path("nhl/site/data/odds_latest.json")]:
+        if p and p.exists():
+            try:
+                return json.loads(p.read_text())
+            except Exception:
+                pass
     return None
 
-def parse_lines_arg(lines_str: str) -> List[float]:
-    if not lines_str:
-        return [1.5, 2.5, 3.5]
-    out = []
-    for tok in lines_str.split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        try:
-            out.append(float(tok))
-        except Exception:
-            pass
-    if not out:
-        out = [1.5, 2.5, 3.5]
-    return out
-
-
-# --------------------------- odds parsing & devig ---------------------------
-
-@dataclass
-class PriceRow:
-    name_norm: str
-    line: float
-    book: str
-    price_over: float | None
-    price_under: float | None
-    p_over_raw: float | None
-    p_under_raw: float | None
-    p_over_mkt: float | None  # devigged P(Over)
-
-def _walk_odds_collect(root: Any, lines: set[float]) -> List[PriceRow]:
-    """
-    Walk a (possibly nested) odds JSON payload and extract Over/Under prices
-    for key == "player_shots_on_goal". Returns per-(name,line,book) rows.
-    """
-    rows: Dict[Tuple[str, float, str], Dict[str, float | None]] = {}
-
-    def ensure(nm: str, ln: float, bk: str) -> Dict[str, float | None]:
-        k = (nm, ln, bk)
-        if k not in rows:
-            rows[k] = {"over": None, "under": None}
-        return rows[k]
-
-    def visit(node: Any, book: str | None = None) -> None:
-        if isinstance(node, dict):
-            # detect a bookmaker-ish node to carry book identity along
-            if "title" in node and "markets" in node:
-                book = str(node.get("title") or node.get("key") or book or "")
-            # collect market outcomes
-            if node.get("key") == "player_shots_on_goal":
-                for o in (node.get("outcomes") or []):
-                    side = o.get("name")
-                    if side not in ("Over", "Under"):
-                        continue
-                    try:
-                        line = float(o.get("point"))
-                    except Exception:
-                        continue
-                    if line not in lines:
-                        continue
-                    nm = norm_name(o.get("description") or o.get("player") or "")
-                    if not nm:
-                        continue
-                    price = o.get("price")
-                    try:
-                        price = float(price)
-                    except Exception:
-                        price = None
-                    slot = ensure(nm, line, book or "")
-                    if side == "Over":
-                        slot["over"] = price
-                    else:
-                        slot["under"] = price
-            # recurse
-            for v in node.values():
-                if isinstance(v, (dict, list)):
-                    visit(v, book)
-        elif isinstance(node, list):
-            for it in node:
-                visit(it, book)
-
-    visit(root, None)
-
-    out: List[PriceRow] = []
-    for (nm, ln, bk), pr in rows.items():
-        po = american_to_prob(pr.get("over"))
-        pu = american_to_prob(pr.get("under"))
-        if po is None and pu is None:
-            continue
-        if po is None or pu is None:
-            p_over_mkt = po if po is not None else None  # one-sided fallback
-        else:
-            total = po + pu
-            p_over_mkt = po / total if total > 0 else None
-        out.append(PriceRow(
-            name_norm=nm,
-            line=ln,
-            book=bk,
-            price_over=pr.get("over"),
-            price_under=pr.get("under"),
-            p_over_raw=po,
-            p_under_raw=pu,
-            p_over_mkt=p_over_mkt,
-        ))
-    return out
-
-
-# --------------------------- main build ---------------------------
-
+# ---------- main ----------
 def main():
-    ap = argparse.ArgumentParser(description="Build sog_with_market.csv from predictions + names + odds.")
-    ap.add_argument("--pred", default="backend/nhl/data/processed/sog_predictions.csv", help="Predictions CSV (wide p_over_*).")
-    ap.add_argument("--names", default="exports/train_nhl_sog_v2.csv", help="Names export CSV.")
-    ap.add_argument("--odds", default="nhl/site/data/odds_nhl_playerprops_today.json", help="Odds JSON file.")
-    ap.add_argument("--out", default="nhl/site/data/sog_with_market.csv", help="Output CSV path.")
-    ap.add_argument("--unmatched", default="nhl/site/data/unmatched_sog.csv", help="Unmatched output CSV path.")
-    ap.add_argument("--lines", default="1.5,2.5,3.5", help="Comma-separated lines to keep (e.g. '1.5,2.5,3.5').")
-    ap.add_argument("--slate-date", default=None, help="YYYY-MM-DD (ET). If omitted, uses ET 'today'.")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--pred", required=True)
+    ap.add_argument("--names", required=True)
+    ap.add_argument("--odds-json", default="nhl/site/data/odds_latest.json")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--unmatched", required=True)
+    ap.add_argument("--slate-date", dest="slate_date", default=None,
+                help="YYYY-MM-DD (ET). If omitted, falls back to SLATE_DATE env.")
+
     args = ap.parse_args()
 
-    lines = set(parse_lines_arg(args.lines))
+    slate = args.slate_date or os.environ.get("SLATE_DATE")
+    if not slate:
+        die("Provide --slate-date YYYY-MM-DD or set SLATE_DATE env (ET).")
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    unmatched_path = Path(args.unmatched)
+    unmatched_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Slate date (ET)
-    slate_date = args.slate_date or datetime.now(ET).date().isoformat()
-    log(f"SLATE_DATE (ET) = {slate_date}")
+    # --- load predictions (WIDE form expected; e.g., p_over_0.5, p_over_1.5, …) ---
+    pred = read_csv_required(Path(args.pred))
+    if pred.empty:
+        die("predictions CSV has no rows")
 
-    # ---------------- predictions (wide → long) ----------------
-    try:
-        pred = pd.read_csv(args.pred)
-    except FileNotFoundError:
-        fail(f"missing predictions CSV: {args.pred}")
+    # Accept both dotted and underscore half-point columns
+    p_cols = [c for c in pred.columns if c.startswith("p_over_")]
+    if not p_cols:
+        die(f"predictions CSV missing p_over_* columns. Header={list(pred.columns)}")
 
-    pcols = [c for c in pred.columns if c.startswith("p_over_")]
-    if not pcols or pred.empty:
-        fail(f"predictions CSV missing p_over_* columns or has no rows. Header={list(pred.columns)}")
+    # Extract numeric line from either p_over_0.5 or p_over_0_5
+    def col_to_line(c: str) -> float | None:
+        # p_over_12.5 or p_over_12_5
+        m = re.match(r"^p_over_(\d+(?:\.\d+)?)$", c)
+        if m:
+            return float(m.group(1))
+        m = re.match(r"^p_over_(\d+)_5$", c)
+        if m:
+            return float(f"{m.group(1)}.5")
+        m = re.match(r"^p_over_(\d+)$", c)  # integer line (just in case)
+        if m:
+            return float(m.group(1))
+        return None
 
-    # coerce IDs now to avoid dtype mismatches later
-    for c in ("player_id", "game_id"):
-        if c in pred.columns:
-            pred[c] = pd.to_numeric(pred[c], errors="coerce").astype("Int64")
+    # Melt to long: player_id, game_id, line, p_over
+    long_rows = []
+    base_cols = [c for c in ["player_id","game_id","team_id","full_name"] if c in pred.columns]
+    for c in p_cols:
+        ln = col_to_line(c)
+        if ln is None:
+            continue
+        tmp = pred[base_cols + [c]].copy()
+        tmp = tmp.rename(columns={c: "p_over"})
+        tmp["line"] = ln
+        long_rows.append(tmp)
 
-    pred_long = pred.melt(
-        id_vars=["player_id", "game_id"],
-        value_vars=pcols,
-        var_name="k",
-        value_name="p_over",
-    )
-    pred_long["line"] = pd.to_numeric(pred_long["k"].str.replace("p_over_", "", regex=False), errors="coerce")
-    pred_long.drop(columns=["k"], inplace=True)
-    pred_long = pred_long[pred_long["line"].isin(lines)].copy()
+    if not long_rows:
+        die(f"could not interpret any p_over_* columns. Header={list(pred.columns)}")
+    pred_long = pd.concat(long_rows, ignore_index=True)
 
-    # ---------------- names (must have full_name, player_id, game_id, team_id, game_date) ----------------
-    need_cols = {"full_name", "player_id", "game_id", "team_id", "game_date"}
-    try:
-        names = pd.read_csv(args.names, usecols=lambda c: c in need_cols)
-    except FileNotFoundError:
-        fail(f"missing names CSV: {args.names}")
+    # --- load names/export CSV and filter to SLATE_DATE ---
+    names = read_csv_required(Path(args.names))
+    if "game_date" not in names.columns:
+        die(f"{args.names} missing game_date column")
 
-    missing = need_cols - set(names.columns)
-    if missing:
-        fail(f"{args.names} missing required columns: {sorted(missing)}")
+    # Restrict to slate
+    names["game_date"] = pd.to_datetime(names["game_date"]).dt.date.astype(str)
+    date_values = sorted(set(names["game_date"]))
+    if slate not in date_values:
+        die(f"export does not contain SLATE_DATE={slate}. Found dates: {date_values}")
+    names = names[names["game_date"] == slate].copy()
 
-    # type alignment
-    for c in ("player_id", "game_id", "team_id"):
-        names[c] = pd.to_numeric(names[c], errors="coerce").astype("Int64")
-    names["game_date"] = pd.to_datetime(names["game_date"], errors="coerce").dt.date
+    # Keep only columns we want from names to avoid collisions
+    keep_name_cols = [c for c in ["player_id","game_id","team_id","full_name","game_date"] if c in names.columns]
+    names = names[keep_name_cols].drop_duplicates()
 
-    # Merge predictions → names to validate dates present
-    m = pred_long.merge(
-        names[["player_id", "game_id", "game_date"]],
-        on=["player_id", "game_id"], how="left"
-    )
-    dates_present = sorted(set([d for d in m["game_date"].dropna().tolist()]))
+    # --- merge predictions + names (fill team_id/full_name if missing in pred) ---
+    df = pred_long.merge(names, on=["player_id","game_id"], how="left", suffixes=("",""))
 
-    if not len(m):
-        fail("predictions melted rows = 0 after line filter (check p_over_* and --lines).")
-    if not dates_present:
-        fail("predictions do not join to any names on (player_id,game_id). Dates present via join: []")
+    # Fill team_id from names if not provided by pred
+    if "team_id_x" in df.columns and "team_id_y" in df.columns:
+        df["team_id"] = df["team_id_x"].fillna(df["team_id_y"])
+        df = df.drop(columns=["team_id_x","team_id_y"])
+    elif "team_id" not in df.columns and "team_id_y" in df.columns:
+        df["team_id"] = df["team_id_y"]
+        df = df.drop(columns=["team_id_y"])
 
-    # require SLATE_DATE present
-    try:
-        sd = pd.to_datetime(slate_date).date()
-    except Exception:
-        fail(f"invalid --slate-date: {slate_date}")
+    # Try to fill missing full_name if we got it in pred already
+    if "full_name_x" in df.columns and "full_name_y" in df.columns:
+        df["full_name"] = df["full_name_x"].fillna(df["full_name_y"])
+        df = df.drop(columns=["full_name_x","full_name_y"])
+    elif "full_name" not in df.columns and "full_name_y" in df.columns:
+        df["full_name"] = df["full_name_y"]
+        df = df.drop(columns=["full_name_y"])
 
-    if sd not in dates_present:
-        fail(f"export does not contain SLATE_DATE={sd}. Found dates: {dates_present}")
+    # Normalize names & line string for odds join
+    df["name_norm"] = df.get("full_name","").map(norm_name)
+    df["line_str"]  = df["line"].map(lambda x: str(float(x)).rstrip("0").rstrip(".") if pd.notna(x) else "")
 
-    # strict keep only this slate (defensive)
-    pred_named = pred_long.merge(
-        names, on=["player_id", "game_id"], how="left"
-    )
-    before = len(pred_named)
-    pred_named = pred_named[pred_named["game_date"] == sd].copy()
-    after = len(pred_named)
+    # --- parse odds JSON (player_shots_on_goal) and build median Over price by (name,line) ---
+    odds_raw = load_odds_json(Path(args.odds_json) if args.odds_json else None)
+    med_prices = None
+    if odds_raw is not None:
+        recs = []
+        def walk(x):
+            if isinstance(x, dict):
+                if x.get("key") == "player_shots_on_goal":
+                    for o in x.get("outcomes",[]) or []:
+                        if o.get("name") != "Over":
+                            continue
+                        nm = norm_name(o.get("description") or o.get("player") or "")
+                        pt = o.get("point")
+                        pr = o.get("price")
+                        if nm and pt is not None and pr is not None:
+                            recs.append({"name_norm": nm, "line_str": str(pt), "price": float(pr)})
+                for v in x.values(): walk(v)
+            elif isinstance(x, list):
+                for it in x: walk(it)
+        walk(odds_raw)
+        if recs:
+            od = pd.DataFrame(recs)
+            med_prices = (
+                od.groupby(["name_norm","line_str"], as_index=False)
+                  .agg(price_over=("price","median"))
+            )
 
-    log(f"names rows: kept {names[names['game_date'].eq(sd)].shape[0]}/{len(names)} for {sd}")
-    log(f"pred rows after merge/filter: {after}")
-
-    pred_named["full_name"] = pred_named["full_name"].fillna("")
-    pred_named["name_norm"] = pred_named["full_name"].map(norm_name)
-
-    # ---------------- odds JSON (optional) → devig ----------------
-    odds_df = pd.DataFrame()
-    have_odds = False
-    try:
-        with open(args.odds, "r") as f:
-            raw = json.load(f)
-        rows = _walk_odds_collect(raw, lines)
-        if rows:
-            have_odds = True
-            odds_df = pd.DataFrame([r.__dict__ for r in rows])
-    except FileNotFoundError:
-        log(f"odds JSON not found (optional): {args.odds}")
-    except Exception as e:
-        log(f"odds JSON parse error (treated as optional): {e}")
-
-    if have_odds:
-        # aggregate per (name,line) across books: median prices, median devig probability
-        agg = (odds_df.groupby(["name_norm", "line"], as_index=False)
-               .agg(price_over=("price_over", "median"),
-                    price_under=("price_under", "median"),
-                    p_over_mkt=("p_over_mkt", "median")))
-        unique_pairs = len(agg)
-        by_line = (agg.groupby("line")["name_norm"].nunique()
-                      .to_dict())
-        log(f"Matched-capable (unique name,line) in odds: {unique_pairs} | by line: {by_line}")
-        merged = pred_named.merge(agg, on=["name_norm", "line"], how="left")
+    # --- attach price_over (median) & compute p_over_mkt / edge / fair ---
+    if med_prices is not None:
+        df = df.merge(med_prices, on=["name_norm","line_str"], how="left")
     else:
-        merged = pred_named.copy()
-        merged["price_over"] = pd.NA
-        merged["price_under"] = pd.NA
-        merged["p_over_mkt"] = pd.NA
+        df["price_over"] = pd.NA
 
-    # ---------------- edge + outputs ----------------
-    merged["edge_over"] = merged["p_over"] - merged["p_over_mkt"]
+    # model probability
+    df["p_over"] = df["p_over"].astype(float)
 
-    keep = ["full_name", "player_id", "game_id", "team_id",
-            "line", "p_over", "price_over", "p_over_mkt", "edge_over", "game_date"]
+    # market probability from price if present
+    df["p_over_mkt"] = df["price_over"].map(american_to_prob)
 
-    out_path = args.out
-    unmatched_path = args.unmatched
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(unmatched_path).parent.mkdir(parents=True, exist_ok=True)
+    # edge vs market prob (if we have it)
+    def edge(a, b):
+        if isinstance(a, float) and isinstance(b, float) and math.isfinite(a) and math.isfinite(b):
+            return a - b
+        return float("nan")
+    df["edge_over"] = [edge(a,b) for a,b in zip(df["p_over"], df["p_over_mkt"])]
 
-    # defensive: filter to slate_date again
-    b2 = len(merged)
-    merged = merged[merged["game_date"].eq(sd)].copy()
-    a2 = len(merged)
-    log(f"final filter by date (defensive): kept {a2}/{b2}")
+    # fair odds from model prob
+    df["fair_over"] = df["p_over"].map(prob_to_american)
 
-    # Save main file
-    merged[keep].to_csv(out_path, index=False)
+    # --- unmatched report (no price) ---
+    unmatched = df[df["price_over"].isna()].copy()
+    unmatched_cols = [c for c in ["full_name","player_id","game_id","team_id","line","p_over","game_date"] if c in df.columns]
+    unmatched[unmatched_cols].to_csv(unmatched_path, index=False)
 
-    # Save unmatched (no p_over_mkt)
-    u = merged[merged["p_over_mkt"].isna()].copy()
-    u[keep].to_csv(unmatched_path, index=False)
+    # --- final select & write ---
+    out_cols = [c for c in [
+        "full_name","player_id","game_id","team_id",
+        "line","p_over","price_over","p_over_mkt","edge_over","fair_over","game_date"
+    ] if c in df.columns]
+    df[out_cols].to_csv(out_path, index=False)
 
-    matched = merged["p_over_mkt"].notna().sum()
-    total = len(merged)
-    line_list = sorted({float(l) for l in lines})
-    log(f"Matched prices for {matched}/{total} rows.")
-    log(f"Lines present (requested): {line_list}")
-    log(f"✅ Wrote: {out_path}  rows={total}")
-    log(f"Wrote unmatched to: {unmatched_path}  rows={len(u)}")
-
-    # small sample print
-    if total:
-        print(merged[keep].head(12).to_string(index=False))
-
+    kept = len(df)
+    matched = kept - len(unmatched)
+    lines_present = sorted(set(df["line"].dropna().tolist()))
+    print(f"[sog_with_market] SLATE_DATE (ET) = {slate}")
+    print(f"[sog_with_market] rows: {kept} | matched price: {matched}/{kept}")
+    print(f"[sog_with_market] Lines present: {lines_present}")
+    print(f"[sog_with_market] ✅ Wrote: {out_path}")
+    print(f"[sog_with_market] Wrote unmatched to: {unmatched_path}  rows={len(unmatched)}")
 
 if __name__ == "__main__":
-    from pathlib import Path
     main()
