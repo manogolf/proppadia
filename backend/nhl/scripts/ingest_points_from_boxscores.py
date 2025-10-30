@@ -36,17 +36,18 @@ def load_events():
 
 # backend/nhl/scripts/ingest_points_from_boxscores.py
 def fetch_gamecenter(game_pk: int) -> dict:
-    # api-web.nhle.com v1 gamecenter (needs a UA header or returns 403)
+    # api-web.nhle.com v1 gamecenter — some edges 403 unless Referer/UA look browser-like
     url = f"https://api-web.nhle.com/v1/gamecenter/{game_pk}/boxscore"
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0 Safari/537.36",
-            "Accept": "application/json",
-            "Accept-Language": "en-US,en;q=0.9",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json,text/plain,*/*",
+            "Referer": "https://www.nhl.com/",
             "Connection": "keep-alive",
         },
-        method="GET",
     )
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))

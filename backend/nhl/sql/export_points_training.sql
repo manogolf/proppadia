@@ -2,15 +2,17 @@
 
 WITH base AS (
   SELECT
-    rs.player_id,
-    rs.game_id,
+    l.player_id,
+    l.game_id,
     g.game_date,
-    rs.team_id,
-    CASE WHEN rs.team_id = g.home_team_id THEN g.away_team_id
-         WHEN rs.team_id = g.away_team_id THEN g.home_team_id
-         ELSE NULL END AS opponent_id,
-    (rs.team_id = g.home_team_id) AS is_home
-  FROM nhl.roster_status rs
+    l.team_id,
+    CASE
+      WHEN l.team_id = g.home_team_id THEN g.away_team_id
+      WHEN l.team_id = g.away_team_id THEN g.home_team_id
+      ELSE NULL
+    END AS opponent_id,
+    (l.team_id = g.home_team_id) AS is_home
+  FROM nhl.skater_game_logs_raw l
   JOIN nhl.games g USING (game_id)
   WHERE g.game_date >= CURRENT_DATE - INTERVAL '3 years'
 ),

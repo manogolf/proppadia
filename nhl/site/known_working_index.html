@@ -133,19 +133,27 @@
       .bad {
         color: var(--red);
       }
+      /* replace your current .split block with this */
       .split {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        grid-template-columns: repeat(
+          auto-fit,
+          minmax(260px, 1fr)
+        ); /* auto-size */
         gap: 16px;
-        align-items: stretch;
+        align-items: stretch; /* equal heights */
       }
+
+      /* extend your existing .dropzone block (you can just append these lines) */
       .dropzone {
-        min-height: 120px;
-        display: flex;
+        min-height: 120px; /* give each box some height */
+        display: flex; /* center content vertically */
         flex-direction: column;
         justify-content: center;
         gap: 8px;
       }
+
+      /* make the file input fill the box width */
       .dropzone input[type="file"] {
         width: 100%;
         max-width: 100%;
@@ -168,10 +176,9 @@
       <p class="sub">
         Client-only page. Put CSV/JSON under
         <span class="kbd">nhl/site/data/</span> (<span class="kbd"
-          >sog_with_market.csv</span
-        >, <span class="kbd">saves_with_market.csv</span>,
-        <span class="kbd">points_with_market.csv</span> or
-        <span class="kbd">points_predictions.csv</span>, optional
+          >sog_with _market.csv</span
+        >, <span class="kbd">saves_with _market.csv</span>,
+        <span class="kbd">points_with _market.csv</span>, optional
         <span class="kbd">odds_latest.json</span>), or drop them below.
       </p>
 
@@ -225,7 +232,9 @@
         </div>
 
         <div class="row" style="margin-bottom: 12px">
-          <div class="pill">Status: <span id="status">loading…</span></div>
+          <div class="pill">
+            Status: <span id="status">waiting for data…</span>
+          </div>
           <div style="margin-left: auto; display: flex; gap: 8px">
             <button class="btn" id="btnExport">Export table CSV</button>
             <button class="btn" id="btnReload">Reload from ./data</button>
@@ -241,14 +250,13 @@
           </div>
           <div>
             <div class="dropzone" id="dzSaves">
-              Drop <b>saves_with_market.csv</b> here or
+              Drop <b>saves_with _market.csv</b> here or
               <input type="file" id="fileSaves" accept=".csv" />
             </div>
           </div>
           <div>
             <div class="dropzone" id="dzPoints">
-              Drop <b>points_with_market.csv</b> (or
-              <b>points_predictions.csv</b>) here or
+              Drop <b>points_with _market.csv</b> here or
               <input type="file" id="filePoints" accept=".csv" />
             </div>
           </div>
@@ -275,7 +283,7 @@
       </div>
 
       <p class="muted" style="margin-top: 12px">
-        Edge vs price uses EV per 1u and breakeven probability from the American
+        Edge vs price uses EV per 1u and probability breakeven from the American
         price. Fair odds are computed from model probability. “Posted lines
         only” shows rows that books actually offer (matched by player name &
         exact line).
@@ -299,7 +307,7 @@
         return { header, rows };
       }
 
-      // ---- Formatting / math helpers ----
+      // ---- Formatting helpers ----
       function pct(x, d = 1) {
         return (x * 100).toFixed(d) + "%";
       }
@@ -310,14 +318,17 @@
         const x = parseFloat(v);
         return Number.isFinite(x) ? x : NaN;
       }
+
       function probFromAmerican(price) {
         price = Number(price);
         if (!Number.isFinite(price) || price === 0) return NaN;
         return price > 0 ? 100 / (price + 100) : -price / (-price + 100);
       }
       function americanFromProb(p) {
+        // Only valid for 0<p<1; also clamp extreme tiny/huge probs
         if (!(p > 0 && p < 1)) return "";
-        if (p < 0.001 || p > 0.999) return "";
+        if (p < 0.001) return ""; // ~0.1% -> hide instead of +100000 odds
+        if (p > 0.999) return ""; // ~99.9%
         return p >= 0.5
           ? "-" + Math.round((p / (1 - p)) * 100)
           : "" + Math.round(((1 - p) / p) * 100);
@@ -326,21 +337,14 @@
         const A = Number(american);
         if (!Number.isFinite(A) || A === 0 || !(p > 0)) return NaN;
         const dec = A > 0 ? 1 + A / 100 : 1 + 100 / -A;
-        return p * (dec - 1) - (1 - p) * 1;
+        return p * (dec - 1) - (1 - p) * 1; // expected profit per 1u stake
       }
       function equalLine(a, b) {
-        const x = parseFloat(a),
-          y = parseFloat(b);
+        const x = parseFloat(a);
+        const y = parseFloat(b);
         return (
           Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) < 1e-9
         );
-      }
-      function fmtAmerican(x) {
-        return Number.isFinite(x)
-          ? x > 0
-            ? `+${Math.round(x)}`
-            : `${Math.round(x)}`
-          : "";
       }
 
       // ---- Name & odds helpers ----
@@ -357,9 +361,13 @@
       function findOddsNode(market, nm) {
         const bucket = state.odds[market] || {};
         if (bucket[nm]) return bucket[nm];
+
+        // Try common variants (team suffixes, extra spaces, initials)
+        // 1) startsWith match: "andrei vasilevskiy" matches "andrei vasilevskiy tbl"
         for (const k of Object.keys(bucket)) {
           if (k.startsWith(nm + " ")) return bucket[k];
         }
+        // 2) contains (fallback): "andrei vasilevskiy" inside "tbl andrei vasilevskiy"
         for (const k of Object.keys(bucket)) {
           if (k.includes(nm)) return bucket[k];
         }
@@ -403,10 +411,10 @@
       };
 
       function displayTeam(r) {
-        const idStr = String(r.team_id ?? r.teamId ?? "").trim();
-        const idNum = Number(idStr);
-        const ab = Number.isFinite(idNum) ? TEAM_ABBR[idNum] : undefined;
-        return r.team || ab || idStr || "";
+        // Prefer any existing text field, else map team_id → abbrev, else fall back to the id
+        const id = String(r.team_id ?? r.teamId ?? "").trim();
+        const ab = id && TEAM_ABBR[id];
+        return r.team || ab || id || "";
       }
 
       function parseOddsJSON(text) {
@@ -417,7 +425,11 @@
           return { sog: {}, saves: {}, points: {} };
         }
         const arr = Array.isArray(data) ? data : [data];
+
+        // out[kind][name] = { lines: Set([...]), prices: { "1.5": medianAmerican, "2.5": ... } }
         const out = { sog: {}, saves: {}, points: {} };
+
+        // temporary buckets to collect all prices then take median
         const tmp = { sog: {}, saves: {}, points: {} };
 
         const ensure = (bucket, name) => {
@@ -448,11 +460,12 @@
                   ? "saves"
                   : "points";
               for (const o of x.outcomes || []) {
-                if (!o || o.name !== "Over") continue;
+                if (!o || o.name !== "Over") continue; // Over only
                 const name = normalizeName(o.description || o.player || "");
                 const point = o.point == null ? "" : String(o.point);
                 const price = Number(o.price);
                 if (!name || !point || !Number.isFinite(price)) continue;
+
                 ensure(out[kind], name).lines.add(point);
                 ensureTmp(tmp[kind], name, point).push(price);
               }
@@ -462,6 +475,7 @@
         };
         walk(arr);
 
+        // finalize prices as median per (name,line)
         for (const kind of ["sog", "saves", "points"]) {
           for (const [name, byPt] of Object.entries(tmp[kind])) {
             const node = ensure(out[kind], name);
@@ -473,7 +487,7 @@
                   ? prices[(prices.length - 1) / 2]
                   : 0.5 *
                     (prices[prices.length / 2 - 1] + prices[prices.length / 2]);
-              node.prices[pt] = m;
+              node.prices[pt] = m; // median American price
             }
           }
         }
@@ -483,78 +497,19 @@
       function lookupOddsPrice(market, nameNorm, lineStr) {
         const node = findOddsNode(market, nameNorm);
         if (!node || !node.prices) return NaN;
+
+        // exact string first
         if (Object.prototype.hasOwnProperty.call(node.prices, lineStr)) {
           const v = node.prices[lineStr];
           return Number.isFinite(v) ? v : NaN;
         }
+        // numeric-equal fallback
         const keyNum = parseFloat(lineStr);
         for (const [pt, price] of Object.entries(node.prices)) {
           if (equalLine(pt, keyNum))
             return Number.isFinite(price) ? price : NaN;
         }
         return NaN;
-      }
-
-      // ---- State ----
-      const state = {
-        sog: { header: [], rows: [] },
-        saves: { header: [], rows: [] },
-        points: { header: [], rows: [] },
-        odds: { sog: {}, saves: {}, points: {} },
-        lastLineOptsSig: "",
-      };
-
-      function normalizeKeys(rows) {
-        return rows.map((r) => {
-          const row = { ...r };
-          for (const k of Object.keys(r))
-            if (k.includes(".5")) row[k.replace(".5", "_5")] = r[k];
-          return row;
-        });
-      }
-
-      function hasLongFormat(header) {
-        const h = new Set((header || []).map((x) => (x || "").toLowerCase()));
-        return h.has("line") && h.has("p_over");
-      }
-      function uniqueSortedLinesFromRows(rows) {
-        const vals = rows.map((r) => String(r.line ?? "")).filter(Boolean);
-        return Array.from(new Set(vals)).sort(
-          (a, b) => parseFloat(a) - parseFloat(b)
-        );
-      }
-
-      function hasMarketCols(header) {
-        const h = new Set((header || []).map((x) => (x || "").toLowerCase()));
-        return h.has("price_over") || h.has("p_over_mkt") || h.has("edge_over");
-      }
-      function csvPostedLines(rows) {
-        const L = new Set();
-        for (const r of rows || []) {
-          const ln = r.line != null ? String(r.line) : "";
-          const hasPrice = Number.isFinite(toFloat(r.price_over));
-          const hasProb = Number.isFinite(toFloat(r.p_over_mkt));
-          if (ln && (hasPrice || hasProb)) L.add(ln);
-        }
-        return L;
-      }
-      function postedLineSet(market) {
-        const ds =
-          market === "saves"
-            ? state.saves
-            : market === "points"
-            ? state.points
-            : state.sog;
-        const csvSet = hasMarketCols(ds.header)
-          ? csvPostedLines(ds.rows)
-          : new Set();
-        const bucket = state.odds[market] || {};
-        const oddsSet = new Set();
-        for (const name in bucket)
-          for (const l of bucket[name].lines || []) oddsSet.add(l);
-        const out = new Set(csvSet);
-        for (const l of oddsSet) out.add(l);
-        return out;
       }
 
       function updateUseOddsCheckboxAvailability() {
@@ -566,10 +521,125 @@
             : market === "points"
             ? state.points
             : state.sog;
+
         const hasJson = Object.keys(state.odds[market] || {}).length > 0;
         const hasCsvMarket = hasMarketCols(ds.header);
+
         cb.disabled = !(hasJson || hasCsvMarket);
         if (cb.disabled) cb.checked = false;
+      }
+
+      function fmtAmerican(x) {
+        return Number.isFinite(x)
+          ? x > 0
+            ? `+${Math.round(x)}`
+            : `${Math.round(x)}`
+          : "";
+      }
+
+      // ---- State ----
+      const state = {
+        sog: { header: [], rows: [] },
+        saves: { header: [], rows: [] },
+        points: { header: [], rows: [] }, // NEW
+        odds: { sog: {}, saves: {}, points: {} }, // NEW key
+        lastLineOptsSig: "",
+      };
+
+      function normalizeKeys(rows) {
+        // Ensure underscore variants exist for dotted p_over columns (e.g., 24.5 -> 24_5)
+        return rows.map((r) => {
+          const row = { ...r };
+          for (const k of Object.keys(r)) {
+            if (k.includes(".5")) row[k.replace(".5", "_5")] = r[k];
+          }
+          return row;
+        });
+      }
+
+      // Accept long format (line + p_over) in addition to wide p_over_* columns
+      function hasLongFormat(header) {
+        const h = new Set((header || []).map((x) => (x || "").toLowerCase()));
+        return h.has("line") && h.has("p_over");
+      }
+      function uniqueSortedLinesFromRows(rows) {
+        const vals = rows.map((r) => String(r.line ?? "")).filter(Boolean);
+        return Array.from(new Set(vals)).sort(
+          (a, b) => parseFloat(a) - parseFloat(b)
+        );
+      }
+      function fmtAmerican(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return "";
+        return n > 0 ? `+${Math.round(n)}` : `${Math.round(n)}`;
+      }
+      // Union of all posted lines in odds JSON for a market
+      function postedLineSet(market) {
+        const ds =
+          market === "saves"
+            ? state.saves
+            : market === "points"
+            ? state.points
+            : state.sog;
+
+        // CSV-derived posted lines (only if CSV has market columns)
+        const csvSet = hasMarketCols(ds.header)
+          ? csvPostedLines(ds.rows)
+          : new Set();
+
+        // JSON-derived posted lines
+        const bucket = state.odds[market] || {};
+        const oddsSet = new Set();
+        for (const name in bucket) {
+          for (const l of bucket[name].lines || []) oddsSet.add(l);
+        }
+
+        // Union
+        const out = new Set(csvSet);
+        for (const l of oddsSet) out.add(l);
+        return out;
+      }
+
+      function hasMarketCols(header) {
+        const h = new Set((header || []).map((x) => (x || "").toLowerCase()));
+        return h.has("price_over") || h.has("p_over_mkt") || h.has("edge_over");
+      }
+
+      // Distinct lines present in CSV that have market info (price_over or p_over_mkt)
+      function csvPostedLines(rows) {
+        const L = new Set();
+        for (const r of rows || []) {
+          const ln = r.line != null ? String(r.line) : "";
+          const hasPrice = Number.isFinite(toFloat(r.price_over));
+          const hasProb = Number.isFinite(toFloat(r.p_over_mkt));
+          if (ln && (hasPrice || hasProb)) L.add(ln);
+        }
+        return L;
+      }
+
+      // Row-level “is posted” check: true if CSV has market data for the row OR odds JSON says this (name,line) is posted
+      function isRowPosted(r, market, lineStr) {
+        // CSV says it's posted (either price or market prob present)
+        const hasCsvMarket =
+          Number.isFinite(toFloat(r.price_over)) ||
+          Number.isFinite(toFloat(r.p_over_mkt));
+        if (hasCsvMarket) return true;
+
+        // Otherwise consult odds JSON
+        const nm = normalizeName(
+          r.full_name || r.player || r.player_name || ""
+        );
+        const node = (state.odds[market] || {})[nm];
+        if (!node || !node.lines) return false;
+
+        const keyStr = String(lineStr);
+        if (node.lines.has(keyStr)) return true;
+
+        // tolerate numeric-equal lines (e.g., "24.5" vs 24.5)
+        for (const pt of node.lines) {
+          if (equalLine(pt, keyStr)) return true;
+        }
+        return false;
       }
 
       // ---- File loading helpers ----
@@ -584,7 +654,9 @@
         }
       }
 
+      // 2) Load points CSV (and leave odds as-is)
       async function tryLoadFromDataFolder() {
+        // prefer *_with_market.csv; fallback to *_with_names.csv
         const sSog =
           (await fetchIfExists("./data/sog_with_market.csv")) ??
           (await fetchIfExists("./data/sog_with_names.csv"));
@@ -595,8 +667,7 @@
 
         const sPts =
           (await fetchIfExists("./data/points_with_market.csv")) ??
-          (await fetchIfExists("./data/points_with_names.csv")) ??
-          (await fetchIfExists("./data/points_predictions.csv")); // NEW fallback
+          (await fetchIfExists("./data/points_with_names.csv"));
 
         const sOdds =
           (await fetchIfExists("./data/odds_latest.json")) ??
@@ -624,14 +695,6 @@
           loaded++;
         }
 
-        // Default market to "points" if we loaded points successfully
-        if (
-          state.points.rows.length &&
-          document.getElementById("market").value !== "points"
-        ) {
-          document.getElementById("market").value = "points";
-        }
-
         updateUseOddsCheckboxAvailability();
         setupLineOptionsIfNeeded();
         updateStatus();
@@ -639,42 +702,49 @@
         return loaded;
       }
 
+      // 3) Include points in the status pill
       function updateStatus() {
         const sogCount = state.sog.rows.length;
         const savesCount = state.saves.rows.length;
-        const ptsCount = state.points.rows.length;
+        const ptsCount = state.points.rows.length; // NEW
+
         const sogOdds = Object.keys(state.odds.sog || {}).length;
         const svsOdds = Object.keys(state.odds.saves || {}).length;
-        const ptsOdds = Object.keys(state.odds.points || {}).length;
+        const ptsOdds = Object.keys(state.odds.points || {}).length; // NEW
+
         document.getElementById("status").textContent =
           `SOG: ${sogCount} | SAVES: ${savesCount} | POINTS: ${ptsCount} ` +
           `| odds(players) SOG/SAVES/PTS: ${sogOdds}/${svsOdds}/${ptsOdds}`;
       }
 
+      // ---- Build dynamic Line options from CSV headers ----
       function extractLinesFromHeader(header) {
+        // Find p_over_* columns, accept underscore or dotted halves
         const lines = [];
         for (const h of header) {
-          let m = /^p_over_(\d+)_5$/i.exec(h);
+          let m = /^p_over_(\d+)_5$/i.exec(h); // underscore half-point
           if (m) {
             lines.push(`${parseInt(m[1], 10)}.5`);
             continue;
           }
-          m = /^p_over_(\d+(?:\.\d+)?)$/i.exec(h);
+          m = /^p_over_(\d+(?:\.\d+)?)$/i.exec(h); // dotted form p_over_24.5
           if (m) {
             lines.push(m[1]);
             continue;
           }
-          m = /^p_over_(\d+)$/i.exec(h);
+          m = /^p_over_(\d+)$/i.exec(h); // integer lines (just in case)
           if (m) {
             lines.push(`${parseInt(m[1], 10)}`);
             continue;
           }
         }
+        // unique & numeric sort
         const uniq = Array.from(new Set(lines));
         uniq.sort((a, b) => parseFloat(a) - parseFloat(b));
         return uniq;
       }
 
+      // 4) Make line options work for points
       function setupLineOptionsIfNeeded() {
         const market = document.getElementById("market").value;
         const ds =
@@ -683,20 +753,23 @@
             : market === "points"
             ? state.points
             : state.sog;
+
         const header = ds.header || [];
         const useOdds = document.getElementById("useOdds")?.checked === true;
 
+        // Build candidate lines from CSV (prefer wide p_over_* headers; fall back to long format)
         let lines = extractLinesFromHeader(header);
-        if (!lines.length && hasLongFormat(header))
+        if (!lines.length && hasLongFormat(header)) {
           lines = uniqueSortedLinesFromRows(ds.rows || []);
-        if (!lines.length && hasMarketCols(header))
-          lines = uniqueSortedLinesFromRows(ds.rows || []); // fallback for points_predictions.csv
+        }
 
+        // If “Posted lines only” is checked, keep only lines that are actually posted (union of CSV/odds JSON)
         if (useOdds) {
-          const posted = postedLineSet(market);
+          const posted = postedLineSet(market); // returns Set of strings like "24.5"
           lines = lines.filter((l) => posted.has(String(l)));
         }
 
+        // Render the Line dropdown
         const sel = document.getElementById("line");
         const sig =
           market +
@@ -715,7 +788,7 @@
           sel.appendChild(op);
         }
         if (prev && lines.includes(prev)) sel.value = prev;
-        else if (lines.length) sel.value = lines[0];
+        else if (lines.length) sel.value = lines[lines.length - 1];
 
         state.lastLineOptsSig = sig;
       }
@@ -726,13 +799,15 @@
         return { market, key };
       }
 
+      // 5) Route dataset by market
       function currentDataset() {
         const { market } = currentLineKey();
         if (market === "saves") return state.saves.rows;
-        if (market === "points") return state.points.rows;
+        if (market === "points") return state.points.rows; // NEW
         return state.sog.rows;
       }
 
+      // 6/7) Filter, rank, and (optionally) restrict to posted lines from odds
       function filterAndRank() {
         const { key, market } = currentLineKey();
         const q = (document.getElementById("q").value || "").toLowerCase();
@@ -747,21 +822,20 @@
             : state.sog.header) || [];
         const longMode = hasLongFormat(header);
 
+        // Choose the source rows and probability accessor based on format
         let baseRows, pGetter;
         if (longMode) {
-          baseRows = dsRows.filter((r) => equalLine(r.line, key));
+          // long format: has columns: full_name, line, p_over, ...
+          baseRows = dsRows.filter((r) => equalLine(r.line, key)); // numeric-safe compare
           pGetter = (r) => toFloat(r.p_over);
         } else {
+          // wide format: p_over_18_5, p_over_24_5, ...
           const pcol = `p_over_${String(key).replace(".", "_")}`;
-          baseRows = dsRows.filter(
-            (r) => r[pcol] !== undefined || equalLine(r.line, key)
-          );
-          pGetter = (r) => {
-            const v = toFloat(r[pcol]);
-            return Number.isFinite(v) ? v : NaN;
-          };
+          baseRows = dsRows.filter((r) => r[pcol] !== undefined);
+          pGetter = (r) => toFloat(r[pcol]);
         }
 
+        // "Posted lines only" using odds JSON (name + exact line, tolerant to 24.5 vs "24.5")
         let rows = baseRows;
         if (useOdds) {
           const bucket = state.odds[market] || {};
@@ -771,6 +845,7 @@
             );
             const node = bucket[nm];
             if (!node || !node.lines) return false;
+
             const keyStr = String(key);
             return (
               node.lines.has(keyStr) ||
@@ -779,10 +854,12 @@
           });
         }
 
+        // Enrich with prices/EV/edges
         const enriched = rows
           .map((r) => {
-            const p = pGetter(r); // model prob (may be NaN for points_predictions.csv)
+            const p = pGetter(r); // model probability
 
+            // Inputs/derived market info
             const typedPrice = toFloat(document.getElementById("price").value);
             const csvPrice = toFloat(r.price_over);
             const csvProb = toFloat(r.p_over_mkt);
@@ -790,8 +867,9 @@
             const nm = normalizeName(
               r.full_name || r.player || r.player_name || ""
             );
-            const oddsPrice = lookupOddsPrice(market, nm, String(key));
+            const oddsPrice = lookupOddsPrice(market, nm, String(key)); // median from odds JSON
 
+            // Final price used for EV: manual > CSV > JSON
             const priceForCalc = Number.isFinite(typedPrice)
               ? typedPrice
               : Number.isFinite(csvPrice)
@@ -800,12 +878,14 @@
               ? oddsPrice
               : NaN;
 
+            // What to show in the Market Price column: CSV > JSON > blank
             const showPrice = Number.isFinite(csvPrice)
               ? csvPrice
               : Number.isFinite(oddsPrice)
               ? oddsPrice
               : NaN;
 
+            // Market probability for display (CSV wins; else from odds price)
             const p_over_mkt = Number.isFinite(csvProb)
               ? csvProb
               : Number.isFinite(oddsPrice)
@@ -817,6 +897,7 @@
               ? probFromAmerican(priceForCalc)
               : NaN;
 
+            // Edge priority: vs breakeven if we have a price; else vs p_over_mkt
             const edge =
               Number.isFinite(be) && Number.isFinite(p)
                 ? p - be
@@ -835,11 +916,12 @@
               fair,
               edge,
               ev,
-              price_over: showPrice,
+              price_over: showPrice, // what we render
               p_over_mkt,
             };
           })
           .filter((r) => {
+            // Text filter
             if (q) {
               const hay = `${r.full_name || ""} ${r.team || ""} ${
                 r.game_id || ""
@@ -847,22 +929,28 @@
               if (!hay.includes(q)) return false;
             }
 
-            // Edge filter (bps): blank => no filter; with value => keep rows with finite edge >= threshold.
-            // Rows with non-finite edge remain visible even when filtering.
+            // --- Edge filter (bps) ---
+            // Behavior:
+            // • Blank input => NO FILTER (show everything).
+            // • Numeric input (e.g. -500, 0, 250) => keep rows with finite edge where edge*10000 >= threshold.
+            // • Rows without a finite edge are shown only in the no-filter mode.
             const edgeTxt = (
               document.getElementById("minEdge")?.value ?? ""
             ).trim();
             if (edgeTxt !== "") {
               const thresholdBps = Number(edgeTxt);
               if (Number.isFinite(thresholdBps)) {
-                if (!Number.isFinite(r.edge)) return true;
+                // if (!Number.isFinite(r.edge)) return false; // require an edge when filtering
+                if (!Number.isFinite(r.edge)) return true; // keep "no edge" rows even while filtering
                 const edgeBps = r.edge * 10000;
-                if (edgeBps < thresholdBps) return false;
+                if (edgeBps < thresholdBps) return false; // below threshold → hide
               }
             }
+            // (no return here; fall through to keep the row)
             return true;
           });
 
+        // Sort: if any row has a price, sort by EV; else by model probability
         const anyPrice = enriched.some((r) => Number.isFinite(r.price_over));
         enriched.sort((a, b) => {
           if (anyPrice) {
@@ -878,18 +966,6 @@
           Math.min(200, Number(document.getElementById("topN").value) || 20)
         );
         return { rows: enriched.slice(0, topN) };
-      }
-
-      function updateStatus() {
-        const sogCount = state.sog.rows.length;
-        const savesCount = state.saves.rows.length;
-        const ptsCount = state.points.rows.length;
-        const sogOdds = Object.keys(state.odds.sog || {}).length;
-        const svsOdds = Object.keys(state.odds.saves || {}).length;
-        const ptsOdds = Object.keys(state.odds.points || {}).length;
-        document.getElementById("status").textContent =
-          `SOG: ${sogCount} | SAVES: ${savesCount} | POINTS: ${ptsCount} ` +
-          `| odds(players) SOG/SAVES/PTS: ${sogOdds}/${svsOdds}/${ptsOdds}`;
       }
 
       function render() {
@@ -910,7 +986,7 @@
           "Game",
           "Line",
           "Model P(over)",
-          "Market Price",
+          "Market Price", // ← new
           "Fair Odds",
           "Edge (pp)",
           "EV (per 1u)",
@@ -928,25 +1004,28 @@
             : "";
           const evTxt = Number.isFinite(r.ev) ? num(r.ev, 3) + "u" : "";
           tr.innerHTML = `
-            <td class="num">${i + 1}</td>
-            <td>${r.full_name || r.player_id || ""}</td>
-            <td>${displayTeam(r)}</td>
-            <td class="num">${r.game_id || ""}</td>
-            <td class="num">${key}</td>
-            <td class="num">${Number.isFinite(r.p) ? pct(r.p, 1) : ""}</td>
-            <td class="num">${fmtAmerican(r.price_over)}</td>
-            <td class="num">${r.fair}</td>
-            <td class="num ${
-              Number.isFinite(r.edge) && r.edge > 0 ? "good" : "bad"
-            }">${edgePP}</td>
-            <td class="num ${
-              Number.isFinite(r.ev) && r.ev > 0 ? "good" : "bad"
-            }">${evTxt}</td>
-          `;
+                  <td class="num">${i + 1}</td>
+                  <td>${r.full_name || r.player_id || ""}</td>
+                  <td>${displayTeam(r)}</td>
+                  <td class="num">${r.game_id || ""}</td>
+                  <td class="num">${key}</td>
+                  <td class="num">${
+                    Number.isFinite(r.p) ? pct(r.p, 1) : ""
+                  }</td>
+                  <td class="num">${fmtAmerican(r.price_over)}</td>
+                  <td class="num">${r.fair}</td>
+                  <td class="num ${
+                    Number.isFinite(r.edge) && r.edge > 0 ? "good" : "bad"
+                  }">${edgePP}</td>
+                  <td class="num ${
+                    Number.isFinite(r.ev) && r.ev > 0 ? "good" : "bad"
+                  }">${evTxt}</td>
+                `;
           tbody.appendChild(tr);
         });
       }
 
+      // ---- Export current table as CSV ----
       function exportCurrentTable() {
         const { key, market } = currentLineKey();
         const { rows } = filterAndRank();
@@ -973,7 +1052,7 @@
             r.game_id || "",
             key,
             Number.isFinite(r.p) ? r.p : "",
-            Number.isFinite(r.price_over) ? Math.round(r.price_over) : "",
+            Number.isFinite(r.price_over) ? Math.round(r.price_over) : "", // raw number
             r.fair || "",
             Number.isFinite(r.edge) ? r.edge : "",
             Number.isFinite(r.ev) ? r.ev : "",
@@ -992,6 +1071,7 @@
         URL.revokeObjectURL(url);
       }
 
+      // ---- Wire UI ----
       function wire() {
         document.getElementById("useOdds").addEventListener("change", () => {
           setupLineOptionsIfNeeded();
@@ -1001,6 +1081,7 @@
         ["topN", "price", "minEdge", "q"].forEach((id) =>
           document.getElementById(id).addEventListener("input", render)
         );
+        document.getElementById("useOdds").addEventListener("change", render);
         document
           .getElementById("btnExport")
           .addEventListener("click", exportCurrentTable);
@@ -1016,12 +1097,13 @@
           render();
         });
 
+        // File inputs / drag-drop
         const fileSog = document.getElementById("fileSog");
         const fileSaves = document.getElementById("fileSaves");
         const filePoints = document.getElementById("filePoints");
-        const fileOdds = document.getElementById("fileOdds");
+        const fileOdds = document.getElementById("fileOdds"); // optional (guarded)
 
-        if (fileSog)
+        if (fileSog) {
           fileSog.addEventListener("change", async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
@@ -1032,7 +1114,8 @@
             updateStatus();
             render();
           });
-        if (fileSaves)
+        }
+        if (fileSaves) {
           fileSaves.addEventListener("change", async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
@@ -1043,7 +1126,8 @@
             updateStatus();
             render();
           });
-        if (filePoints)
+        }
+        if (filePoints) {
           filePoints.addEventListener("change", async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
@@ -1054,20 +1138,23 @@
             updateStatus();
             render();
           });
-        if (fileOdds)
+        }
+        if (fileOdds) {
           fileOdds.addEventListener("change", async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
             const txt = await f.text();
             state.odds = parseOddsJSON(txt);
-            updateUseOddsCheckboxAvailability();
             updateStatus();
             render();
           });
+        }
+
+        updateUseOddsCheckboxAvailability();
 
         function makeDZ(id, kind) {
           const dz = document.getElementById(id);
-          if (!dz) return;
+          if (!dz) return; // allow optional zones
           dz.addEventListener("dragover", (e) => {
             e.preventDefault();
             dz.style.borderColor = "#7aa2ff";
@@ -1083,7 +1170,6 @@
             const txt = await f.text();
             if (kind === "odds") {
               state.odds = parseOddsJSON(txt);
-              updateUseOddsCheckboxAvailability();
             } else {
               const { header, rows } = parseCSV(txt);
               const norm = normalizeKeys(rows);
@@ -1099,14 +1185,13 @@
         makeDZ("dzSog", "sog");
         makeDZ("dzSaves", "saves");
         makeDZ("dzPoints", "points");
-        makeDZ("dzOdds", "odds");
+        makeDZ("dzOdds", "odds"); // back in the row
       }
 
-      (async function init() {
+      (function init() {
         wire();
-        await tryLoadFromDataFolder(); // AUTO-LOAD from ./data on open
+        // no auto-load; user can click Reload or drop files
         setupLineOptionsIfNeeded();
-        updateUseOddsCheckboxAvailability();
         updateStatus();
         render();
       })();
