@@ -118,6 +118,79 @@ def safe_json(obj, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
 
+def make_names_csv(slate: str) -> Path:
+    """
+    Build a slate-scoped names file straight from the DB:
+      columns: full_name,player_id,team_id
+    Prefer roster_status team_id for today's games; fall back to players.team_id.
+    """
+    out = EXPORTS_DIR / f"names_{slate}.csv"
+    tmp_sql = EXPORTS_DIR / "_tmp_names_points.sql"
+    tmp_sql.write_text(
+        """
+        \\pset format csv
+        \\pset footer off
+        WITH g AS (
+          SELECT game_id
+          FROM nhl.games
+          WHERE game_date = DATE :'slate_date'
+        ),
+        rs AS (
+          SELECT DISTINCT player_id, team_id
+          FROM nhl.roster_status
+          WHERE game_id IN (SELECT game_id FROM g)
+        )
+        SELECT DISTINCT
+          COALESCE(p.full_name, '')        AS full_name,
+          p.player_id,
+          COALESCE(rs.team_id, p.team_id)  AS team_id
+        FROM nhl.players p
+        LEFT JOIN rs USING (player_id)
+        WHERE p.player_id IS NOT NULL
+        ORDER BY 2;
+        """
+    )
+    csv_bytes = psql_stdout(tmp_sql, vars={"slate_date": slate})
+    out.write_bytes(csv_bytes)
+    print(f"[cli] names CSV → {out}")
+    return out
+
+
+# --- DB-backed names export for the slate ---
+def export_names_csv(slate: str) -> Path:
+    """
+    Writes exports/names_{slate}.csv with columns:
+      full_name, player_id, team_id
+    Sourced from nhl.players + nhl.roster_status for games on the slate date.
+    """
+    out_path = EXPORTS_DIR / f"names_{slate}.csv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    sql = f"""
+    COPY (
+      SELECT DISTINCT
+        p.full_name,
+        rs.player_id,
+        rs.team_id
+      FROM nhl.roster_status rs
+      JOIN nhl.games g   ON g.game_id = rs.game_id
+      JOIN nhl.players p ON p.player_id = rs.player_id
+      WHERE g.game_date = DATE '{slate}'
+      ORDER BY p.full_name, rs.player_id
+    ) TO STDOUT WITH CSV HEADER
+    """
+    # Use psql_stdout to capture COPY output bytes and write to file
+    tmp_sql = EXPORTS_DIR / "_export_names.sql"
+    tmp_sql.write_text(sql)
+    csv_bytes = psql_stdout(tmp_sql)  # existing helper you already use
+    out_path.write_bytes(csv_bytes)
+    try:
+        tmp_sql.unlink()
+    except Exception:
+        pass
+
+    return out_path
+
 # ---------------- odds (requests) ----------------
 def fetch_odds(days_from: int = 1,
                markets: str = "player_shots_on_goal,player_total_saves,player_points",
@@ -200,24 +273,29 @@ def build_saves(slate: str):
 
 def build_points(slate: str):
     """
-    Points builder supports two modes:
-      - Odds-only (no predictions yet): writes minimal CSV for values dropdown.
-      - Full merge (when predictions exist): edge/pricing columns included.
-    The build_points_with_market.py script auto-detects mode based on flags.
+    Points builder supports two modes automatically:
+      - Odds-only (no preds/names) → minimal CSV for UI dropdowns.
+      - Full merge when both preds + names exist → adds edge/pricing columns.
     """
     args = [
         PY, str(SCRIPTS_DIR / "build_points_with_market.py"),
-        "--odds-json", str(SITE_DIR / "odds_latest.json"),
+        "--odds-json",   str(SITE_DIR / "odds_latest.json"),
         "--events-json", str(SITE_DIR / "events_today.json"),
-        "--out", str(SITE_DIR / "points_with_market.csv"),
-        "--unmatched", str(SITE_DIR / "unmatched_points.csv"),
+        "--out",         str(SITE_DIR / "points_with_market.csv"),
+        "--unmatched",   str(SITE_DIR / "unmatched_points.csv"),
     ]
-    # If predictions exist, pass them to enable edge calculations
-    pred = PROC_DIR / "points_predictions.csv"
-    names = EXPORTS_DIR / "train_nhl_points_v2.csv"
-    if pred.exists() and names.exists():
-        args += ["--pred", str(pred), "--names", str(names)]
-    run(args, env={"SLATE_DATE": slate})
+
+    # Wire in predictions if present
+    pred_path  = Path(PROC_DIR / "points_predictions.csv")
+    if pred_path.exists():
+        args += ["--pred", str(pred_path)]
+
+    # Prefer the DB-backed names export for this slate
+    names_path = EXPORTS_DIR / f"names_{slate}.csv"
+    if names_path.exists():
+        args += ["--names", str(names_path)]
+
+    run(args)
 
 # ---------------- daily pipeline ----------------
 def cmd_daily(with_odds: bool):
@@ -252,6 +330,13 @@ def cmd_daily(with_odds: bool):
     run_psql_file(SQL_DIR / "seed_goalie_features_for_slate.sql", vars={"slate_date": slate})
     # (Points) — when we add SQL feature seeding for points, it will go here.
 
+    # Export slate names from DB for points merge (full_name, player_id, team_id)
+    try:
+        names_csv = export_names_csv(slate)
+        print(f"   names → {names_csv}")
+    except Exception as e:
+        print(f"   ⚠️ names export failed (will fall back to odds-only merge): {e}")
+
     # 3) exports
     # export SOG to CSV
     sog_csv = psql_stdout(SQL_DIR / "export_sog.sql", vars={"slate_date": slate})
@@ -262,14 +347,6 @@ def cmd_daily(with_odds: bool):
     (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
 
     # export POINTS to CSV (new)
-    try:
-        points_csv = psql_stdout(SQL_DIR / "export_points.sql", vars={"slate_date": slate})
-        (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
-        print("   export_points.sql → exports/train_nhl_points_v2.csv")
-    except Exception as e:
-        print(f"   ⚠️ points export skipped: {e}")
-
-    # ensure we write train_nhl_points_v2.csv for today's slate (inference features)
     points_csv = psql_stdout(SQL_DIR / "export_points.sql", vars={"slate_date": slate})
     (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
     print("   export_points.sql → exports/train_nhl_points_v2.csv")
@@ -316,8 +393,8 @@ def cmd_daily(with_odds: bool):
     # 6) site CSVs
     build_sog(slate)
     build_saves(slate)
-    build_points(slate)
-
+    build_points(slate)    
+    
     # 7) yesterday logs (goalies + skaters)
     run([PY, str(SCRIPTS_DIR / "seed_goalie_logs_for_date.py")], env={"SLATE_DATE": yday})
     run([PY, str(SCRIPTS_DIR / "refresh_players_and_roster_today.py")], env={"SLATE_DATE": yday})
