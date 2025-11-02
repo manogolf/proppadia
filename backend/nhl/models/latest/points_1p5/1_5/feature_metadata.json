@@ -1,0 +1,18 @@
+{
+  "prop_type": "points",
+  "line": 1.5,
+  "features": [
+    "d5_points_avg",
+    "d10_points_avg",
+    "d10_sog_avg",
+    "d10_attempts_avg",
+    "d10_toi_min_avg",
+    "d10_pp_min_avg"
+  ],
+  "version": "v1",
+  "trained_from": "exports/train_nhl_points_history.csv",
+  "metrics": {
+    "lr_auc": 0.74817066306428,
+    "rf_auc": 1.0
+  }
+}

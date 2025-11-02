@@ -2,153 +2,180 @@
 \set ON_ERROR_STOP on
 \pset pager off
 \pset tuples_only on
--- Expect: -v slate_date=YYYY-MM-DD
+-- Usage:
+--   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
+--     -v slate_date=2025-10-28 \
+--     -f backend/nhl/sql/export_saves.sql > exports/train_goalie_saves_v2.csv
 
-SELECT to_regclass('nhl.v_slate_saves_features') IS NOT NULL AS has_view    \gset
-SELECT to_regclass('nhl.players')                IS NOT NULL AS has_players \gset
+WITH base AS (
+  SELECT
+    rs.player_id,
+    rs.game_id,
+    g.game_date,
+    rs.team_id,
+    CASE
+      WHEN rs.team_id = g.home_team_id THEN g.away_team_id
+      WHEN rs.team_id = g.away_team_id THEN g.home_team_id
+      ELSE NULL
+    END AS opponent_id,
+    (rs.team_id = g.home_team_id) AS is_home
+  FROM nhl.roster_status rs
+  JOIN nhl.games g USING (game_id)
+  WHERE g.game_date = DATE :'slate_date'
+),
 
-\if :has_view
-  SELECT EXISTS (
-    SELECT 1 FROM nhl.v_slate_saves_features
-    WHERE game_date = :'slate_date'::date
-  ) AS has_rows \gset
+-- Goalie logs with per-60 rates and rolling windows that EXCLUDE the current game
+glogs AS (
+  SELECT
+    l.player_id,
+    l.game_id,
+    l.game_date,
+    l.saves,
+    l.shots_against,
+    l.toi_minutes,
 
-  \if :has_rows
-    DO $$
-    DECLARE missing text[];
-    BEGIN
-      SELECT array_agg(n.col) INTO missing
-      FROM (VALUES
-        ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'),
-        ('is_home'), ('game_date'),
-        ('d10_shots_faced_per60'), ('d10_save_pct'),
-        ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
-        ('pace_index'), ('rest_days'), ('b2b_flag'),
-        -- goalie model req
-        ('d5_saves_per60'), ('d10_saves_per60'), ('d5_shots_faced_per60'),
-        ('season_save_pct'),
-        -- extra context
-        ('opp_d10_sf_per60'), ('team_d10_sa_per60'),
-        ('pace_matchup_index'), ('d20_saves_per60'),
-        ('team_d10_sf_per60'), ('opp_d10_sa_per60'),
-        -- required by pipeline
-        ('start_prob')
-      ) AS n(col)
-      LEFT JOIN information_schema.columns c
-        ON c.table_schema='nhl'
-       AND c.table_name='v_slate_saves_features'
-       AND c.column_name=n.col
-      WHERE c.column_name IS NULL;
-      IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'Missing columns on nhl.v_slate_saves_features: %', missing;
-      END IF;
-    END $$;
+    -- per-60 (guard divide-by-zero)
+    CASE WHEN COALESCE(l.toi_minutes,0) > 0
+         THEN (l.saves::double precision / l.toi_minutes::double precision) * 60.0
+         ELSE NULL END AS saves_per60,
+    CASE WHEN COALESCE(l.toi_minutes,0) > 0
+         THEN (l.shots_against::double precision / l.toi_minutes::double precision) * 60.0
+         ELSE NULL END AS sa_per60,
 
-    \if :has_players
-      COPY (
-        SELECT
-          COALESCE(
-            NULLIF(btrim(p.full_name), ''),
-            NULLIF(btrim(concat_ws(' ', p.first_name, p.last_name)), ''),
-            'Player ' || svf.player_id::text
-          )                              AS full_name,
-          svf.player_id                  AS player_id,
-          svf.game_id                    AS game_id,
-          svf.team_id                    AS team_id,
-          svf.opponent_id                AS opponent_id,
-          svf.is_home                    AS is_home,
-          svf.game_date::date            AS game_date,
-          -- features
-          svf.d10_shots_faced_per60,
-          svf.d10_save_pct,
-          svf.team_d10_sf_per_game,
-          svf.opp_d10_sf_allowed_per_game,
-          svf.pace_index,
-          svf.rest_days,
-          svf.b2b_flag,
-          svf.d5_saves_per60,
-          svf.d10_saves_per60,
-          svf.d5_shots_faced_per60,
-          svf.season_save_pct,
-          svf.opp_d10_sf_per60,
-          svf.team_d10_sa_per60,
-          svf.pace_matchup_index,
-          svf.d20_saves_per60,
-          svf.team_d10_sf_per60,
-          svf.opp_d10_sa_per60,
-          svf.start_prob
-        FROM nhl.v_slate_saves_features AS svf
-        LEFT JOIN nhl.players AS p USING (player_id)
-        WHERE svf.game_date = :'slate_date'::date
-        ORDER BY svf.game_id, svf.player_id
-      ) TO STDOUT WITH CSV HEADER;
-    \else
-      COPY (
-        SELECT NULL::text AS full_name, svf.*
-        FROM nhl.v_slate_saves_features svf
-        WHERE FALSE
-      ) TO STDOUT WITH CSV HEADER;
-    \endif
+    -- per-game save%
+    CASE WHEN COALESCE(l.shots_against,0) > 0
+         THEN (l.saves::double precision / l.shots_against::double precision)
+         ELSE NULL END AS save_pct,
 
-  \else
-    COPY (
-      SELECT
-        NULL::text    AS full_name,
-        NULL::bigint  AS player_id,
-        NULL::bigint  AS game_id,
-        NULL::bigint  AS team_id,
-        NULL::bigint  AS opponent_id,
-        NULL::boolean AS is_home,
-        NULL::date    AS game_date,
-        NULL::numeric AS d10_shots_faced_per60,
-        NULL::numeric AS d10_save_pct,
-        NULL::numeric AS team_d10_sf_per_game,
-        NULL::numeric AS opp_d10_sf_allowed_per_game,
-        NULL::numeric AS pace_index,
-        NULL::int     AS rest_days,
-        NULL::boolean AS b2b_flag,
-        NULL::numeric AS d5_saves_per60,
-        NULL::numeric AS d10_saves_per60,
-        NULL::numeric AS d5_shots_faced_per60,
-        NULL::numeric AS season_save_pct,
-        NULL::numeric AS opp_d10_sf_per60,
-        NULL::numeric AS team_d10_sa_per60,
-        NULL::numeric AS pace_matchup_index,
-        NULL::numeric AS d20_saves_per60,
-        NULL::numeric AS team_d10_sf_per60,
-        NULL::numeric AS opp_d10_sa_per60,
-        NULL::numeric AS start_prob
-      WHERE FALSE
-    ) TO STDOUT WITH CSV HEADER;
-  \endif
-\else
-  COPY (
-    SELECT
-      NULL::text    AS full_name,
-      NULL::bigint  AS player_id,
-      NULL::bigint  AS game_id,
-      NULL::bigint  AS team_id,
-      NULL::bigint  AS opponent_id,
-      NULL::boolean AS is_home,
-      NULL::date    AS game_date,
-      NULL::numeric AS d10_shots_faced_per60,
-      NULL::numeric AS d10_save_pct,
-      NULL::numeric AS team_d10_sf_per_game,
-      NULL::numeric AS opp_d10_sf_allowed_per_game,
-      NULL::numeric AS pace_index,
-      NULL::int     AS rest_days,
-      NULL::boolean AS b2b_flag,
-      NULL::numeric AS d5_saves_per60,
-      NULL::numeric AS d10_saves_per60,
-      NULL::numeric AS d5_shots_faced_per60,
-      NULL::numeric AS season_save_pct,
-      NULL::numeric AS opp_d10_sf_per60,
-      NULL::numeric AS team_d10_sa_per60,
-      NULL::numeric AS pace_matchup_index,
-      NULL::numeric AS d20_saves_per60,
-      NULL::numeric AS team_d10_sf_per60,
-      NULL::numeric AS opp_d10_sa_per60,
-      NULL::numeric AS start_prob
-    WHERE FALSE
-  ) TO STDOUT WITH CSV HEADER;
-\endif
+    -- d5/d10/d20 rolling windows (exclude current row)
+    AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
+             THEN (l.saves::double precision / l.toi_minutes::double precision) * 60.0 END)
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING)  AS d5_saves_per60,
+
+    AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
+             THEN (l.saves::double precision / l.toi_minutes::double precision) * 60.0 END)
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_saves_per60,
+
+    AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
+             THEN (l.saves::double precision / l.toi_minutes::double precision) * 60.0 END)
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING) AS d20_saves_per60,
+
+    AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
+             THEN (l.shots_against::double precision / l.toi_minutes::double precision) * 60.0 END)
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING)  AS d5_sa_per60,
+
+    AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
+             THEN (l.shots_against::double precision / l.toi_minutes::double precision) * 60.0 END)
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_sa_per60
+  FROM nhl.goalie_game_logs_raw l
+),
+
+-- Most recent prior log snapshot for each goalie on the slate
+snap AS (
+  SELECT
+    b.player_id,
+    b.game_id,
+    (SELECT r.d5_saves_per60   FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d5_saves_per60,
+    (SELECT r.d10_saves_per60  FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d10_saves_per60,
+    (SELECT r.d20_saves_per60  FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d20_saves_per60,
+    (SELECT r.d5_sa_per60      FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d5_shots_faced_per60,
+    (SELECT r.d10_sa_per60     FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d10_shots_faced_per60,
+    (SELECT AVG(r.save_pct)    FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 10) AS d10_save_pct
+  FROM base b
+),
+
+-- Last prior appearance → rest_days / b2b
+last_game AS (
+  SELECT DISTINCT ON (b.player_id)
+         b.player_id, lg.game_date AS prev_game_date
+  FROM base b
+  JOIN glogs lg
+    ON lg.player_id = b.player_id
+   AND lg.game_date <  b.game_date
+  ORDER BY b.player_id, lg.game_date DESC, lg.game_id DESC
+),
+
+-- Season-to-date save% (exclude today) using NHL season key (year flips on July 1)
+season_to_date AS (
+  SELECT
+    b.player_id,
+    AVG(r.save_pct) AS season_save_pct
+  FROM base b
+  JOIN glogs r
+    ON r.player_id = b.player_id
+   AND r.game_date < b.game_date
+  WHERE (
+    CASE WHEN EXTRACT(MONTH FROM r.game_date) >= 7
+         THEN EXTRACT(YEAR FROM r.game_date)+1
+         ELSE EXTRACT(YEAR FROM r.game_date) END
+  ) = (
+    CASE WHEN EXTRACT(MONTH FROM b.game_date) >= 7
+         THEN EXTRACT(YEAR FROM b.game_date)+1
+         ELSE EXTRACT(YEAR FROM b.game_date) END
+  )
+  GROUP BY b.player_id
+)
+
+SELECT
+  NULL::text                              AS full_name,      -- name join is downstream
+
+  b.player_id,
+  b.game_id,
+  b.team_id,
+  b.opponent_id,
+  (b.is_home)::int                        AS is_home,
+  b.game_date::date                       AS game_date,
+
+  -- Core features (snapshots from rolling windows)
+  s.d10_shots_faced_per60,
+  s.d10_save_pct,
+  tc.d10_sf_per60                         AS team_d10_sf_per_game,       -- naming compatibility
+  tc.opp_d10_sf_per60                     AS opp_d10_sf_allowed_per_game,
+
+  NULL::numeric                           AS pace_index,                  -- column present; source optional
+  GREATEST(0, (b.game_date - lg.prev_game_date))::int AS rest_days,
+  (GREATEST(0, (b.game_date - lg.prev_game_date)) = 1) AS b2b_flag,
+
+  s.d5_saves_per60,
+  s.d10_saves_per60,
+  s.d5_shots_faced_per60,
+  std.season_save_pct,
+
+  tc.opp_d10_sf_per60,
+  tc.d10_sa_per60                         AS team_d10_sa_per60,
+  tc.pace_matchup_index,
+  s.d20_saves_per60,
+  tc.d10_sf_per60                         AS team_d10_sf_per60,
+  tc.opp_d10_sa_per60,
+  NULL::numeric                           AS start_prob                   -- keep column; value filled upstream if available
+
+FROM base b
+LEFT JOIN snap s
+  ON s.player_id = b.player_id AND s.game_id = b.game_id
+LEFT JOIN last_game lg
+  ON lg.player_id = b.player_id
+LEFT JOIN season_to_date std
+  ON std.player_id = b.player_id
+LEFT JOIN nhl.team_context_rolling tc
+  ON tc.game_id = b.game_id
+ AND tc.team_id = b.team_id
+ORDER BY b.game_id, b.player_id;
+
+-- Emit CSV
+\copy (
+  SELECT
+    full_name, player_id, game_id, team_id, opponent_id, is_home, game_date,
+    d10_shots_faced_per60, d10_save_pct,
+    team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+    pace_index, rest_days, b2b_flag,
+    d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
+    opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index,
+    d20_saves_per60, team_d10_sf_per60, opp_d10_sa_per60,
+    start_prob
+  FROM pg_temp._psql_query_result
+) TO STDOUT WITH CSV HEADER

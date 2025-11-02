@@ -2,133 +2,148 @@
 \set ON_ERROR_STOP on
 \pset pager off
 \pset tuples_only on
--- Expect: -v slate_date=YYYY-MM-DD
+-- Usage:
+--   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
+--     -v slate_date=2025-10-28 \
+--     -f backend/nhl/sql/export_sog.sql > exports/train_nhl_sog_v2.csv
 
-SELECT to_regclass('nhl.v_slate_sog_features')  IS NOT NULL AS has_view    \gset
-SELECT to_regclass('nhl.players')               IS NOT NULL AS has_players \gset
+WITH base AS (
+  SELECT
+    rs.player_id,
+    rs.game_id,
+    g.game_date,
+    rs.team_id,
+    CASE
+      WHEN rs.team_id = g.home_team_id THEN g.away_team_id
+      WHEN rs.team_id = g.away_team_id THEN g.home_team_id
+      ELSE NULL
+    END AS opponent_id,
+    (rs.team_id = g.home_team_id) AS is_home
+  FROM nhl.roster_status rs
+  JOIN nhl.games g USING (game_id)
+  WHERE g.game_date = DATE :'slate_date'
+),
 
-\if :has_view
-  SELECT EXISTS (
-    SELECT 1 FROM nhl.v_slate_sog_features
-    WHERE game_date = :'slate_date'::date
-  ) AS has_rows \gset
+-- Raw logs with per-60 rates and rolling windows that EXCLUDE the current row
+logs AS (
+  SELECT
+    l.player_id,
+    l.game_id,
+    l.game_date,
+    l.shots_on_goal,
+    l.shot_attempts,
+    l.toi_minutes,
+    l.pp_toi_minutes,
 
-  \if :has_rows
-    DO $$
-    DECLARE missing text[];
-    BEGIN
-      SELECT array_agg(n.col) INTO missing
-      FROM (VALUES
-        ('player_id'::text), ('game_id'), ('team_id'), ('opponent_id'),
-        ('is_home'), ('game_date'),
-        ('d5_sog_per60'), ('d10_sog_per60'), ('d20_sog_per60'),
-        ('team_d10_sf_per_game'), ('opp_d10_sf_allowed_per_game'),
-        ('role_pp_share'), ('rest_days'), ('b2b_flag'),
-        ('attempts_d10_per60'), ('pace_index'),
-        ('opp_d10_sf_per60'), ('team_d10_sa_per60'), ('pace_matchup_index')
-      ) AS n(col)
-      LEFT JOIN information_schema.columns c
-        ON c.table_schema='nhl'
-       AND c.table_name='v_slate_sog_features'
-       AND c.column_name=n.col
-      WHERE c.column_name IS NULL;
-      IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'Missing columns on nhl.v_slate_sog_features: %', missing;
-      END IF;
-    END $$;
+    -- per-60 rates (guard divide-by-zero)
+    CASE WHEN COALESCE(l.toi_minutes,0) > 0
+         THEN (l.shots_on_goal::double precision / l.toi_minutes::double precision) * 60.0
+         ELSE NULL END AS sog_per60,
+    CASE WHEN COALESCE(l.toi_minutes,0) > 0
+         THEN (l.shot_attempts::double precision / l.toi_minutes::double precision) * 60.0
+         ELSE NULL END AS attempts_per60,
 
-    \if :has_players
-      COPY (
-        SELECT
-          COALESCE(
-            NULLIF(btrim(p.full_name), ''),
-            NULLIF(btrim(concat_ws(' ', p.first_name, p.last_name)), ''),
-            'Player ' || vsf.player_id::text
-          )                               AS full_name,
-          vsf.player_id                   AS player_id,
-          vsf.game_id                     AS game_id,
-          vsf.team_id                     AS team_id,
-          vsf.opponent_id                 AS opponent_id,
-          vsf.is_home                     AS is_home,
-          vsf.game_date::date             AS game_date,
-          NULL::int                       AS shots_on_goal,
-          vsf.d5_sog_per60,
-          vsf.d10_sog_per60,
-          vsf.d20_sog_per60,
-          vsf.team_d10_sf_per_game,
-          vsf.opp_d10_sf_allowed_per_game,
-          vsf.role_pp_share,
-          vsf.rest_days,
-          vsf.b2b_flag,
-          vsf.attempts_d10_per60,
-          vsf.pace_index,
-          vsf.opp_d10_sf_per60,
-          vsf.team_d10_sa_per60,
-          vsf.pace_matchup_index
-        FROM nhl.v_slate_sog_features AS vsf
-        LEFT JOIN nhl.players AS p USING (player_id)
-        WHERE vsf.game_date = :'slate_date'::date
-        ORDER BY vsf.game_id, vsf.player_id
-      ) TO STDOUT WITH CSV HEADER;
-    \else
-      COPY (
-        SELECT NULL::text AS full_name, vsf.*
-        FROM nhl.v_slate_sog_features vsf
-        WHERE FALSE
-      ) TO STDOUT WITH CSV HEADER;
-    \endif
+    -- d5/d10/d20 rolling per-60 windows (exclude current row with 1 PRECEDING end)
+    AVG( CASE WHEN COALESCE(l.toi_minutes,0) > 0
+              THEN (l.shots_on_goal::double precision / l.toi_minutes::double precision) * 60.0 END )
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING) AS d5_sog_per60,
 
-  \else
-    COPY (
-      SELECT
-        NULL::text    AS full_name,
-        NULL::bigint  AS player_id,
-        NULL::bigint  AS game_id,
-        NULL::bigint  AS team_id,
-        NULL::bigint  AS opponent_id,
-        NULL::boolean AS is_home,
-        NULL::date    AS game_date,
-        NULL::int     AS shots_on_goal,
-        NULL::numeric AS d5_sog_per60,
-        NULL::numeric AS d10_sog_per60,
-        NULL::numeric AS d20_sog_per60,
-        NULL::numeric AS team_d10_sf_per_game,
-        NULL::numeric AS opp_d10_sf_allowed_per_game,
-        NULL::numeric AS role_pp_share,
-        NULL::int     AS rest_days,
-        NULL::boolean AS b2b_flag,
-        NULL::numeric AS attempts_d10_per60,
-        NULL::numeric AS pace_index,
-        NULL::numeric AS opp_d10_sf_per60,
-        NULL::numeric AS team_d10_sa_per60,
-        NULL::numeric AS pace_matchup_index
-      WHERE FALSE
-    ) TO STDOUT WITH CSV HEADER;
-  \endif
-\else
-  COPY (
-    SELECT
-      NULL::text    AS full_name,
-      NULL::bigint  AS player_id,
-      NULL::bigint  AS game_id,
-      NULL::bigint  AS team_id,
-      NULL::bigint  AS opponent_id,
-      NULL::boolean AS is_home,
-      NULL::date    AS game_date,
-      NULL::int     AS shots_on_goal,
-      NULL::numeric AS d5_sog_per60,
-      NULL::numeric AS d10_sog_per60,
-      NULL::numeric AS d20_sog_per60,
-      NULL::numeric AS team_d10_sf_per_game,
-      NULL::numeric AS opp_d10_sf_allowed_per_game,
-      NULL::numeric AS role_pp_share,
-      NULL::int     AS rest_days,
-      NULL::boolean AS b2b_flag,
-      NULL::numeric AS attempts_d10_per60,
-      NULL::numeric AS pace_index,
-      NULL::numeric AS opp_d10_sf_per60,
-      NULL::numeric AS team_d10_sa_per60,
-      NULL::numeric AS pace_matchup_index
-    WHERE FALSE
-  ) TO STDOUT WITH CSV HEADER;
-\endif
+    AVG( CASE WHEN COALESCE(l.toi_minutes,0) > 0
+              THEN (l.shots_on_goal::double precision / l.toi_minutes::double precision) * 60.0 END )
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_sog_per60,
+
+    AVG( CASE WHEN COALESCE(l.toi_minutes,0) > 0
+              THEN (l.shots_on_goal::double precision / l.toi_minutes::double precision) * 60.0 END )
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING) AS d20_sog_per60,
+
+    AVG( CASE WHEN COALESCE(l.toi_minutes,0) > 0
+              THEN (l.shot_attempts::double precision / l.toi_minutes::double precision) * 60.0 END )
+      OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
+            ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS attempts_d10_per60
+  FROM nhl.skater_game_logs_raw l
+),
+
+-- Last appearance before the slate date (for rest_days / b2b)
+last_game AS (
+  SELECT DISTINCT ON (b.player_id)
+         b.player_id,
+         lg.game_date AS prev_game_date
+  FROM base b
+  JOIN logs lg
+    ON lg.player_id = b.player_id
+   AND lg.game_date <  b.game_date
+  ORDER BY b.player_id, lg.game_date DESC, lg.game_id DESC
+)
+
+SELECT
+  -- name left to the UI join; keep a placeholder column to match scorer output
+  NULL::text                      AS full_name,
+
+  b.player_id,
+  b.game_id,
+  b.team_id,
+  b.opponent_id,
+  (b.is_home)::int                AS is_home,
+  b.game_date::date               AS game_date,
+
+  NULL::int                       AS shots_on_goal,            -- unknown pregame
+
+  -- Rolling features from most recent prior log row
+  w.d5_sog_per60,
+  w.d10_sog_per60,
+  w.d20_sog_per60,
+
+  -- Team context (per-60); mapped to expected column names
+  t.d10_sf_per60                  AS team_d10_sf_per_game,     -- same units for now
+  t.opp_d10_sf_per60              AS opp_d10_sf_allowed_per_game,
+
+  -- Extra features expected by scorer; fill what we can
+  NULL::numeric                   AS role_pp_share,            -- TODO: wire from roster usage
+  GREATEST(0, (b.game_date - lg.prev_game_date))::int AS rest_days,
+  (GREATEST(0, (b.game_date - lg.prev_game_date)) = 1) AS b2b_flag,
+
+  w.attempts_d10_per60,
+  NULL::numeric                   AS pace_index,               -- TODO: if you keep this, define source
+  t.opp_d10_sf_per60,
+  t.d10_sa_per60                  AS team_d10_sa_per60,
+  t.pace_matchup_index
+
+FROM base b
+LEFT JOIN LATERAL (
+  -- Most recent prior log row for this player (to snapshot the rolling windows)
+  SELECT
+    r.d5_sog_per60,
+    r.d10_sog_per60,
+    r.d20_sog_per60,
+    r.attempts_d10_per60
+  FROM logs r
+  WHERE r.player_id = b.player_id
+    AND r.game_date <  b.game_date
+  ORDER BY r.game_date DESC, r.game_id DESC
+  LIMIT 1
+) AS w ON TRUE
+LEFT JOIN last_game lg
+  ON lg.player_id = b.player_id
+LEFT JOIN nhl.team_context_rolling t
+  ON t.game_id = b.game_id
+ AND t.team_id = b.team_id
+ORDER BY b.game_id, b.player_id;
+
+-- Emit CSV
+\copy (SELECT * FROM (
+  SELECT
+    full_name, player_id, game_id, team_id, opponent_id, is_home, game_date,
+    shots_on_goal,
+    d5_sog_per60, d10_sog_per60, d20_sog_per60,
+    team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+    role_pp_share, rest_days, b2b_flag,
+    attempts_d10_per60, pace_index,
+    opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
+  FROM (
+    SELECT * FROM pg_temp.export_sog_materialized
+  ) e
+) q) TO STDOUT WITH CSV HEADER
+\gset

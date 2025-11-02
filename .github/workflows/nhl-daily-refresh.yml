@@ -215,6 +215,38 @@ jobs:
           head -n 3 exports/train_nhl_sog_v2.csv || true
           head -n 3 exports/train_goalie_saves_v2.csv || true
 
+      - name: Export points CSV (today only)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          export PGOPTIONS='-c statement_timeout=0'
+          echo "SLATE_DATE=${SLATE_DATE}"
+          /tmp/retry.sh "psql --no-psqlrc -q \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/export_points.sql > exports/train_nhl_points_v2.csv"
+          echo "Exported points:"
+          wc -l exports/train_nhl_points_v2.csv || true
+          head -n 3 exports/train_nhl_points_v2.csv || true
+
+      - name: Export slate names CSV (full_name,player_id,team_id)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          cat > exports/_export_names.sql <<'SQL'
+          COPY (
+            SELECT DISTINCT
+              p.full_name,
+              rs.player_id,
+              rs.team_id
+            FROM nhl.roster_status rs
+            JOIN nhl.games   g ON g.game_id = rs.game_id
+            JOIN nhl.players p ON p.player_id = rs.player_id
+            WHERE g.game_date = DATE :'slate_date'
+            ORDER BY p.full_name, rs.player_id
+          ) TO STDOUT WITH CSV HEADER
+          SQL
+          psql --no-psqlrc -q "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date="$SLATE_DATE" -f exports/_export_names.sql > "exports/names_${SLATE_DATE}.csv"
+          echo "Exported names:"
+          head -n 3 "exports/names_${SLATE_DATE}.csv" || true
+
       - name: Validate CSV headers (must match scorer expectations)
         if: steps.slate.outputs.has_games == 't'
         run: |
@@ -287,12 +319,65 @@ jobs:
             --db-url \"$SUPABASE_DB_URL\" \
             --scorer \"$GITHUB_WORKSPACE/backend/nhl/scripts/score_nhl_props.py\"" 1200
 
+      - name: Score points (if model exists)
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          FEATURES="exports/train_nhl_points_v2.csv"
+          if [ ! -s "$FEATURES" ]; then
+            echo "No points features CSV present; skipping points scoring."
+            exit 0
+          fi
+
+          # Discover latest points model under models_out/nhl/points/v*
+          MDL_DIR=$(ls -dt models_out/nhl/points/v* 2>/dev/null | head -n1 || true)
+          if [ -z "$MDL_DIR" ]; then
+            echo "No points model found (models_out/nhl/points/v*). Skipping points scoring."
+            exit 0
+          fi
+
+          echo "Using model: $MDL_DIR"
+          /tmp/guard.sh "python backend/nhl/scripts/score_points_poisson.py \
+            --features-csv \"$FEATURES\" \
+            --model-dir \"$MDL_DIR\" \
+            --odds-json nhl/site/data/odds_nhl_playerprops_today.json \
+            --out backend/nhl/data/processed/points_predictions.csv" 600
+
+          head -n 3 backend/nhl/data/processed/points_predictions.csv || true
+
       - name: Attach player names to predictions
         if: steps.slate.outputs.has_games == 't'
         run: |
           /tmp/guard.sh "python backend/nhl/scripts/attach_names.py" 300
           head -n 3 backend/nhl/data/processed/sog_with_names.csv  || true
           head -n 3 backend/nhl/data/processed/saves_with_names.csv || true
+
+      - name: Build points_with_market.csv
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          # Ensure the names file exists for this slate
+          NAMES="exports/names_${SLATE_DATE}.csv"
+          test -s "$NAMES" || { echo "Names file missing ($NAMES) — builder will still run odds-only."; }
+
+          python backend/nhl/cli.py build-points --slate "$SLATE_DATE" || {
+            echo "CLI build-points failed; trying direct script…"
+            python backend/nhl/scripts/build_points_with_market.py \
+              --odds-json nhl/site/data/odds_latest.json \
+              --events-json nhl/site/data/events_today.json \
+              --pred backend/nhl/data/processed/points_predictions.csv \
+              --names "$NAMES" \
+              --out nhl/site/data/points_with_market.csv \
+              --unmatched nhl/site/data/unmatched_points.csv || true
+          }
+
+          head -n 3 nhl/site/data/points_with_market.csv || true
+
+      - name: Fetch odds for player props (points included)
+        run: |
+          set -euo pipefail
+          # Uses CLI which writes nhl/site/data/odds_latest.json and events_today.json
+          python backend/nhl/cli.py fetch-odds --days-from 1 || true
 
       # -------------------- Sanity counts --------------------
       - name: Verify counts
@@ -327,6 +412,9 @@ jobs:
           path: |
             exports/train_nhl_sog_v2.csv
             exports/train_goalie_saves_v2.csv
+            exports/train_nhl_points_v2.csv
+            nhl/site/data/points_with_market.csv
+
           if-no-files-found: warn
           retention-days: 14
 
