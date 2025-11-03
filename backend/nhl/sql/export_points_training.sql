@@ -1,11 +1,10 @@
+COPY (
 \pset format csv
 \pset footer off
 \pset tuples_only on
 
--- Export historical training set (last 3 years) with label y_points and rolling features.
-COPY (
 WITH logs AS (
-  SELECT
+  SELECT DISTINCT ON (l.player_id, l.game_id)
     l.player_id,
     l.game_id,
     l.team_id,
@@ -24,28 +23,38 @@ WITH logs AS (
   FROM nhl.skater_game_logs_raw l
   JOIN nhl.games g USING (game_id)
   WHERE g.game_date >= CURRENT_DATE - INTERVAL '3 years'
+  ORDER BY l.player_id, l.game_id, l.created_at DESC NULLS LAST
 ),
+
 roll AS (
   SELECT
     player_id, game_id, team_id, opponent_id, is_home, game_date, points,
-    AVG(points::float)   OVER (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING)  AS d5_points_avg,
-    AVG(points::float)   OVER (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)  AS d10_points_avg,
-    AVG(sog)             OVER (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)  AS d10_sog_avg,
-    AVG(attempts)        OVER (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)  AS d10_attempts_avg,
-    AVG(toi_min)         OVER (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)  AS d10_toi_min_avg,
-    AVG(pp_min)          OVER (PARTITION BY player_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING)  AS d10_pp_min_avg
+    AVG(points::float) OVER (PARTITION BY player_id ORDER BY game_date, game_id
+                             ROWS BETWEEN 5 PRECEDING AND 1 PRECEDING)  AS d5_points_avg,
+    AVG(points::float) OVER (PARTITION BY player_id ORDER BY game_date, game_id
+                             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_points_avg,
+    AVG(sog)           OVER (PARTITION BY player_id ORDER BY game_date, game_id
+                             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_sog_avg,
+    AVG(attempts)      OVER (PARTITION BY player_id ORDER BY game_date, game_id
+                             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_attempts_avg,
+    AVG(toi_min)       OVER (PARTITION BY player_id ORDER BY game_date, game_id
+                             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_toi_min_avg,
+    AVG(pp_min)        OVER (PARTITION BY player_id ORDER BY game_date, game_id
+                             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_pp_min_avg
   FROM logs
 ),
+
 team_pp AS (
-  SELECT DISTINCT
+  SELECT
     team_id,
     game_id,
-    game_date,
-    AVG(pp_min) OVER (PARTITION BY team_id ORDER BY game_date, game_id ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_team_pp_min
+    AVG(pp_min) OVER (PARTITION BY team_id ORDER BY game_date, game_id
+                      ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_team_pp_min
   FROM logs
 ),
+
 team_goals AS (
-  -- goals_for per (game_id, team_id) from whichever table has it
+  -- goals_for per (game_id, team_id)
   SELECT
     g.game_id,
     g.game_date,
@@ -62,22 +71,33 @@ team_goals AS (
   FROM nhl.games g
   JOIN LATERAL (VALUES (g.home_team_id),(g.away_team_id)) AS t(team_id) ON TRUE
 ),
-opp_allowed AS (
-  -- opponent goals-for in the same game → rolling “goals allowed” for my team
+
+opp_for AS (
+  -- For each (my team, game) attach opponent's goals in that same game
   SELECT
     my.team_id,
     my.game_id,
     my.game_date,
-    (AVG(opp.goals_for) OVER (
-       PARTITION BY my.team_id
-       ORDER BY my.game_date, my.game_id
-       ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING
-     ))::float AS opp_d5_goals_allowed_avg
+    opp.goals_for AS opp_goals_for
   FROM team_goals my
   JOIN team_goals opp
     ON opp.game_id = my.game_id
    AND opp.team_id <> my.team_id
+),
+
+opp_allowed AS (
+  -- Rolling average of opponent goals over prior N games (exclude current)
+  SELECT
+    team_id,
+    game_id,
+    AVG(opp_goals_for)::float OVER (
+      PARTITION BY team_id
+      ORDER BY game_date, game_id
+      ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING
+    ) AS opp_d5_goals_allowed_avg
+  FROM opp_for
 )
+
 SELECT
   r.player_id,
   r.game_id,
@@ -85,15 +105,15 @@ SELECT
   r.opponent_id,
   (r.is_home)::int AS is_home,
   r.game_date,
-  COALESCE(r.d5_points_avg,       0.0) AS d5_points_avg,
-  COALESCE(r.d10_points_avg,      0.0) AS d10_points_avg,
-  COALESCE(r.d10_sog_avg,         0.0) AS d10_sog_avg,
-  COALESCE(r.d10_attempts_avg,    0.0) AS d10_attempts_avg,
-  COALESCE(r.d10_toi_min_avg,     0.0) AS d10_toi_min_avg,
-  r.d10_pp_min_avg                         AS d10_pp_min_avg,        -- keep NULL if no PP history
-  COALESCE(tp.d10_team_pp_min,     0.0) AS d10_team_pp_min,
-  COALESCE(oa.opp_d5_goals_allowed_avg, 0.0) AS opp_d5_goals_allowed_avg,
-  COALESCE(r.points, 0)              AS y_points
+  COALESCE(r.d5_points_avg,          0.0) AS d5_points_avg,
+  COALESCE(r.d10_points_avg,         0.0) AS d10_points_avg,
+  COALESCE(r.d10_sog_avg,            0.0) AS d10_sog_avg,
+  COALESCE(r.d10_attempts_avg,       0.0) AS d10_attempts_avg,
+  COALESCE(r.d10_toi_min_avg,        0.0) AS d10_toi_min_avg,
+  r.d10_pp_min_avg                           AS d10_pp_min_avg,      -- keep NULL if no PP history
+  COALESCE(tp.d10_team_pp_min,        0.0) AS d10_team_pp_min,
+  COALESCE(oa.opp_d5_goals_allowed_avg,0.0) AS opp_d5_goals_allowed_avg,
+  COALESCE(r.points, 0)                      AS y_points
 FROM roll r
 LEFT JOIN team_pp     tp ON tp.team_id = r.team_id AND tp.game_id = r.game_id
 LEFT JOIN opp_allowed oa ON oa.team_id = r.team_id AND oa.game_id = r.game_id

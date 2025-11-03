@@ -12,7 +12,7 @@
   "version": "v1",
   "trained_from": "exports/train_nhl_points_history.csv",
   "metrics": {
-    "lr_auc": 0.6277324263038548,
-    "rf_auc": 1.0
+    "lr_auc": 0.6058823529411765,
+    "rf_auc": 0.6176470588235294
   }
 }
