@@ -28,3 +28,31 @@ scripts/train_nhl_saves.py # trainer for Saves
 scripts/load_predictions_pooler.py # loader (pooler-safe inserts + upsert RPC)
 scripts/nhl_daily.sh # one-command daily runner
 db_url.txt # Session Pooler URL (not committed)
+
+2025.11.09:
+
+- nhl.shots_stage_2023:
+  raw CSV, column names match vendor exactly.
+
+- nhl.games:
+  game_id = 10-digit canonical (season || '0' || LPAD(short_game_id, 5, '0'))
+  short_game_id = original short ID from shots/schedule
+  home_team_code = vendor team code
+  away_team_code = vendor team code
+  home_team_id/away_team_id from nhl.teams
+
+- nhl.shots_all:
+  game_id = canonical 10-digit from nhl.games
+  season = from feed
+  shotID = from feed
+  homeTeamCode = from feed
+  awayTeamCode = from feed
+  teamCode = from feed
+  isHomeTeam = from feed (fallback: teamCode == homeTeamCode)
+  shooterPlayerId/goalieIdForShot = feed IDs with trailing ".0" stripped
+  shooterName/goalieNameForShot/period/time/xCord/yCord/shotType/event from feed
+
+- Join rule:
+  shots_all.game_id is populated via:
+  (season || '0' || LPAD(short_game_id, 5, '0')) == nhl.games.game_id
+  plus matching home/away codes.

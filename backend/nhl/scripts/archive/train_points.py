@@ -105,6 +105,9 @@ def pick_features(df: pd.DataFrame, preferred: list[str]) -> list[str]:
             "opponent_id",
             "game_date",
             "line",
+            "season",      # meta, not a feature
+            "game_seq",    # synthetic index, we don't want it learning on this
+            "home_flag",   # duplicate of is_home
         }
         feats = [
             c for c in df.columns

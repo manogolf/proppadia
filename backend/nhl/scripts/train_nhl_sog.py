@@ -449,7 +449,7 @@ def main():
     raw_features = feat_meta[args.feature_key]
     all_cols = set(df.columns)
 
-    required = {"is_home", "rest_days", "b2b_flag"}
+    required = {"is_home"}
 
     missing_required = [c for c in required if c not in all_cols]
     if missing_required:

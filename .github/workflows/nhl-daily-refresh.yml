@@ -12,7 +12,6 @@ on:
         required: false
   schedule:
     # All times are in UTC. Comments show EST/EDT and PST/PDT for convenience.
-
     - cron: "30 12 * * *" # Morning seed → 07:30 EST / 08:30 EDT • 04:30 PST / 05:30 PDT
     - cron: "30 20 * * *" # Midday refresh → 15:30 EST / 16:30 EDT • 12:30 PST / 13:30 PDT
     - cron: "45 00 * * *" # Pre-puck check → 19:45 EST / 20:45 EDT • 16:45 PST / 17:45 PDT
@@ -46,9 +45,11 @@ jobs:
       - name: Fetch LFS models & verify
         run: |
           git lfs pull
-          ls -lh backend/nhl/models/latest || true
-          ls -lh backend/nhl/models/latest/shots_on_goal || true
-          ls -lh backend/nhl/models/latest/goalie_saves || true
+          echo "Listing model directories:"
+          ls -lh backend/nhl/models || true
+          ls -lh backend/nhl/models/sog || true
+          ls -lh backend/nhl/models/saves || true
+          ls -lh backend/nhl/models/points || true
 
       # -------------------- Dates (ET) --------------------
       - name: Set dates (ET)
@@ -101,7 +102,7 @@ jobs:
           for n in 1 2 3; do
             echo "→ Attempt $n: $CMD"
             if timeout --preserve-status -k "${RETRY_KILL_GRACE}s" "${RETRY_TIMEOUT}s" \
-                 stdbuf -oL -eL bash -lc "$CMD"; then   # <-- changed: stdbuf wraps inner bash
+                 stdbuf -oL -eL bash -lc "$CMD"; then
               exit 0
             fi
             echo "Attempt $n failed; sleeping $((n*10))s..."
@@ -118,7 +119,7 @@ jobs:
           CMD="$1"; shift || true
           TO="${1:-600}"
           trap 'jobs -rp | xargs -r kill -9 || true' EXIT
-          timeout --preserve-status -k 30s "${TO}s" stdbuf -oL -eL bash -lc "$CMD"   # <-- same change
+          timeout --preserve-status -k 30s "${TO}s" stdbuf -oL -eL bash -lc "$CMD"
           EOF
           chmod +x /tmp/guard.sh
 
@@ -164,15 +165,12 @@ jobs:
           TMRW=$(TZ=America/New_York date -d 'tomorrow' +%F)
           echo "Tomorrow (ET): ${TMRW}"
 
-          # ensure schedule/rosters exist for tomorrow
           SLATE_DATE="${TMRW}" python backend/nhl/scripts/import_schedule_today.py || true
           SLATE_DATE="${TMRW}" SKIP_ROSTER_STATUS=1 python backend/nhl/scripts/import_roster_today.py || true
 
-          # seed goalie & skater features for tomorrow
           /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='${TMRW}' -f backend/nhl/sql/seed_goalie_features_for_slate.sql" || true
           /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='${TMRW}' -f backend/nhl/sql/seed_sog_features_for_slate.sql" || true
 
-          # refresh READY so v_slate_* can see any newly seeded rows
           /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
 
       - name: Refresh players & roster (API → stage → upsert)
@@ -185,14 +183,11 @@ jobs:
         if: steps.slate.outputs.has_games == 't'
         run: |
           set -euo pipefail
-          # Seed today’s skater & goalie features for the slate date
           /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/seed_sog_features_for_slate.sql"
           /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -v slate_date='$SLATE_DATE' -f backend/nhl/sql/seed_goalie_features_for_slate.sql"
 
-          # Make sure views/materializations see the new rows
           /tmp/retry.sh "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f backend/nhl/scripts/refresh.sql"
 
-          # (Optional) sanity: require non-zero rows so exports aren’t header-only
           SOG=$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from nhl.v_slate_sog_features where game_date = date '$SLATE_DATE';")
           SAV=$(psql "$SUPABASE_DB_URL" -Atqc "select count(*) from nhl.v_slate_saves_features where game_date = date '$SLATE_DATE';")
           echo "today counts → sog=${SOG} saves=${SAV}"
@@ -284,13 +279,14 @@ jobs:
             echo "------"
           done
 
-          echo "== Feature metadata keys (from model indexes) =="
+          echo "== Model indexes (if present) =="
           sudo apt-get update >/dev/null || true
           sudo apt-get install -y jq >/dev/null || true
 
           for P in \
-            backend/nhl/models/latest/shots_on_goal/MODEL_INDEX.json \
-            backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json
+            backend/nhl/models/sog/MODEL_INDEX.json \
+            backend/nhl/models/saves/MODEL_INDEX.json \
+            backend/nhl/models/points/MODEL_INDEX.json
           do
             echo "== $P =="
             if [[ -f "$P" ]]; then
@@ -308,18 +304,56 @@ jobs:
             fi
           done
 
-      # -------------------- Score & load --------------------
-      - name: Score & Load predictions
+      # -------------------- Score SOG (phoenix) --------------------
+      - name: Score SOG (phoenix)
         if: steps.slate.outputs.has_games == 't'
         run: |
-          /tmp/guard.sh "python backend/nhl/scripts/run_daily_slate.py \
-            --project nhl \
-            --sog-csv exports/train_nhl_sog_v2.csv \
-            --saves-csv exports/train_goalie_saves_v2.csv \
-            --db-url \"$SUPABASE_DB_URL\" \
-            --scorer \"$GITHUB_WORKSPACE/backend/nhl/scripts/score_nhl_props.py\"" 1200
+          set -euo pipefail
+          FEATURES="exports/train_nhl_sog_v2.csv"
+          if [ ! -s "$FEATURES" ]; then
+            echo "No SOG features CSV present; skipping SOG scoring."
+            exit 0
+          fi
 
-      - name: Score points (if model exists)
+          MDL_ROOT="backend/nhl/models/sog"
+          if [ ! -d "$MDL_ROOT" ]; then
+            echo "No SOG models found at $MDL_ROOT; skipping SOG scoring."
+            exit 0
+          fi
+
+          python backend/nhl/scripts/score_sog_phoenix.py \
+            --features-csv "$FEATURES" \
+            --model-root "$MDL_ROOT" \
+            --out backend/nhl/data/processed/sog_predictions.csv
+
+          head -n 5 backend/nhl/data/processed/sog_predictions.csv || true
+
+      # -------------------- Score Saves --------------------
+      - name: Score Saves
+        if: steps.slate.outputs.has_games == 't'
+        run: |
+          set -euo pipefail
+          FEATURES="exports/train_goalie_saves_v2.csv"
+          if [ ! -s "$FEATURES" ]; then
+            echo "No saves features CSV present; skipping saves scoring."
+            exit 0
+          fi
+
+          MDL_ROOT="backend/nhl/models/saves"
+          if [ ! -d "$MDL_ROOT" ]; then
+            echo "No saves models found at $MDL_ROOT; skipping saves scoring."
+            exit 0
+          fi
+
+          python backend/nhl/scripts/score_goalie_saves.py \
+            --features-csv "$FEATURES" \
+            --model-root "$MDL_ROOT" \
+            --out backend/nhl/data/processed/saves_predictions.csv
+
+          head -n 5 backend/nhl/data/processed/saves_predictions.csv || true
+
+      # -------------------- Score Points (phoenix) --------------------
+      - name: Score points (phoenix)
         if: steps.slate.outputs.has_games == 't'
         run: |
           set -euo pipefail
@@ -329,21 +363,18 @@ jobs:
             exit 0
           fi
 
-          # Discover latest points model under models_out/nhl/points/v*
-          MDL_DIR=$(ls -dt models_out/nhl/points/v* 2>/dev/null | head -n1 || true)
-          if [ -z "$MDL_DIR" ]; then
-            echo "No points model found (models_out/nhl/points/v*). Skipping points scoring."
+          MDL_ROOT="backend/nhl/models/points"
+          if [ ! -d "$MDL_ROOT" ]; then
+            echo "No points models found at $MDL_ROOT. Skipping points scoring."
             exit 0
           fi
 
-          echo "Using model: $MDL_DIR"
-          /tmp/guard.sh "python backend/nhl/scripts/score_points_poisson.py \
+          /tmp/guard.sh "python backend/nhl/scripts/score_points_phoenix.py \
             --features-csv \"$FEATURES\" \
-            --model-dir \"$MDL_DIR\" \
-            --odds-json nhl/site/data/odds_nhl_playerprops_today.json \
+            --model-root \"$MDL_ROOT\" \
             --out backend/nhl/data/processed/points_predictions.csv" 600
 
-          head -n 3 backend/nhl/data/processed/points_predictions.csv || true
+          head -n 5 backend/nhl/data/processed/points_predictions.csv || true
 
       - name: Attach player names to predictions
         if: steps.slate.outputs.has_games == 't'
@@ -356,7 +387,6 @@ jobs:
         if: steps.slate.outputs.has_games == 't'
         run: |
           set -euo pipefail
-          # Ensure the names file exists for this slate
           NAMES="exports/names_${SLATE_DATE}.csv"
           test -s "$NAMES" || { echo "Names file missing ($NAMES) — builder will still run odds-only."; }
 
@@ -376,7 +406,6 @@ jobs:
       - name: Fetch odds for player props (points included)
         run: |
           set -euo pipefail
-          # Uses CLI which writes nhl/site/data/odds_latest.json and events_today.json
           python backend/nhl/cli.py fetch-odds --days-from 1 || true
 
       # -------------------- Sanity counts --------------------
@@ -414,7 +443,6 @@ jobs:
             exports/train_goalie_saves_v2.csv
             exports/train_nhl_points_v2.csv
             nhl/site/data/points_with_market.csv
-
           if-no-files-found: warn
           retention-days: 14
 

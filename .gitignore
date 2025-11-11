@@ -59,15 +59,16 @@ data/**
 !data/README.md
 
 # ── Models / artifacts (ignore bulk; keep minimal metadata) ────────
-nhl/models/**
-!nhl/models/
-!nhl/models/latest/
-!nhl/models/latest/**/
-!nhl/models/latest/**/MODEL_INDEX.json
-!nhl/models/latest/**/FEATURE_HASH.txt
-!nhl/models/latest/**/MODEL_ARTIFACT.json
-mlb/models/archive/
-mlb/models/latest/*.pkl
+backend/nhl/models/**
+!backend/nhl/models/
+!backend/nhl/models/latest/
+!backend/nhl/models/latest/**/
+!backend/nhl/models/latest/**/MODEL_INDEX.json
+!backend/nhl/models/latest/**/FEATURE_HASH.txt
+!backend/nhl/models/latest/**/MODEL_ARTIFACT.json
+
+backend/mlb/models/archive/
+backend/mlb/models/latest/*.pkl
 
 # ── Legacy CRA subprojects that may linger ─────────────────────────
 mlb/backend/node_modules/
