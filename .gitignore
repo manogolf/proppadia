@@ -76,3 +76,4 @@ mlb/backend/build/
 mlb/frontend/node_modules/
 mlb/frontend/build/
 .DS_Store
+backend/nhl/models/
