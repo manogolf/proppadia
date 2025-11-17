@@ -8,25 +8,41 @@
 -- ---------- one-time safety: dedupe existing table & ensure unique index ----------
 DO $$
 BEGIN
-  -- remove accidental dupes so we can have a clean unique index
-  DELETE FROM nhl.training_features_nhl_sog_v2 t
-  USING nhl.training_features_nhl_sog_v2 z
-  WHERE t.player_id = z.player_id
-    AND t.game_id   = z.game_id
-    AND t.ctid < z.ctid;
+  -- Only run this maintenance if the legacy training table exists
+  IF to_regclass('nhl.training_features_nhl_sog_v2') IS NOT NULL THEN
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_indexes
-    WHERE schemaname='nhl'
-      AND indexname='uq_training_features_nhl_sog_v2_player_game'
-  ) THEN
-    EXECUTE 'CREATE UNIQUE INDEX uq_training_features_nhl_sog_v2_player_game
-             ON nhl.training_features_nhl_sog_v2 (player_id, game_id)';
+    -- remove accidental dupes so we can have a clean unique index
+    DELETE FROM nhl.training_features_nhl_sog_v2 t
+    USING nhl.training_features_nhl_sog_v2 z
+    WHERE t.player_id = z.player_id
+      AND t.game_id   = z.game_id
+      AND t.ctid < z.ctid;
+
+    -- ensure unique index on (player_id, game_id)
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'nhl'
+        AND indexname = 'uq_training_features_nhl_sog_v2_player_game'
+    ) THEN
+      EXECUTE '
+        CREATE UNIQUE INDEX uq_training_features_nhl_sog_v2_player_game
+        ON nhl.training_features_nhl_sog_v2 (player_id, game_id)
+      ';
+    END IF;
+
   END IF;
 END $$;
 
+-- ---------- ensure feature columns exist (we are ADDING features, not deleting them) ----------
+ALTER TABLE nhl.training_features_nhl_sog_v2
+  ADD COLUMN IF NOT EXISTS attempts_d10_per60   numeric,
+  ADD COLUMN IF NOT EXISTS pace_index           numeric,
+  ADD COLUMN IF NOT EXISTS opp_d10_sf_per60     numeric,
+  ADD COLUMN IF NOT EXISTS team_d10_sa_per60    numeric;
+
 WITH params AS (
+  -- IMPORTANT: this uses a psql variable :slate_date
   SELECT :'slate_date'::date AS d
 ),
 
@@ -75,12 +91,18 @@ last_feat AS (
     t.team_d10_sf_per_game,
     t.opp_d10_sf_allowed_per_game,
     t.role_pp_share,
-    t.rest_days,            -- prior (we recompute below)
-    t.b2b_flag,             -- prior (we recompute below)
+    t.rest_days,             -- prior (we recompute below)
+    t.b2b_flag,              -- prior (we recompute below)
+
+    -- Placeholder: attempts_d10_per60 lives in this table now.
+    -- For existing history this will be NULL until we wire up a backfill / upstream view.
     t.attempts_d10_per60,
+
+    -- Placeholders for new features; these columns exist now and can be populated later.
     t.pace_index,
     t.opp_d10_sf_per60,
     t.team_d10_sa_per60,
+
     t.pace_matchup_index,
     t.game_date AS prev_game_date
   FROM nhl.training_features_nhl_sog_v2 t
@@ -96,8 +118,7 @@ team_roll AS (
     t.team_d10_sf_per_game,
     t.opp_d10_sf_allowed_per_game
   FROM nhl.tf_team_roll10 t
-  WHERE t.game_date <= (SELECT d FROM params)
-  ORDER BY t.team_id, t.game_date DESC
+  ORDER BY t.team_id, t.game_id DESC
 ),
 
 -- assemble seed rows
@@ -147,7 +168,8 @@ INSERT INTO nhl.training_features_nhl_sog_v2 AS t (
   shots_on_goal,
   d5_sog_per60, d10_sog_per60, d20_sog_per60,
   team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
-  role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
+  role_pp_share, rest_days, b2b_flag,
+  attempts_d10_per60,
   pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
 )
 SELECT
@@ -155,7 +177,8 @@ SELECT
   shots_on_goal,
   d5_sog_per60, d10_sog_per60, d20_sog_per60,
   team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
-  role_pp_share, rest_days, b2b_flag, attempts_d10_per60,
+  role_pp_share, rest_days, b2b_flag,
+  attempts_d10_per60,
   pace_index, opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index
 FROM seed_one
 ON CONFLICT (player_id, game_id) DO UPDATE

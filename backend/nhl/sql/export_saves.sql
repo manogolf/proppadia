@@ -7,6 +7,9 @@
 --     -v slate_date=2025-10-28 \
 --     -f backend/nhl/sql/export_saves.sql > exports/train_goalie_saves_v2.csv
 
+SET statement_timeout = 0;  -- allow this heavy export to finish
+
+COPY (
 WITH base AS (
   SELECT
     rs.player_id,
@@ -31,7 +34,7 @@ glogs AS (
     l.game_id,
     l.game_date,
     l.saves,
-    l.shots_against,
+    l.shots_faced AS shots_against,
     l.toi_minutes,
 
     -- per-60 (guard divide-by-zero)
@@ -39,12 +42,12 @@ glogs AS (
          THEN (l.saves::double precision / l.toi_minutes::double precision) * 60.0
          ELSE NULL END AS saves_per60,
     CASE WHEN COALESCE(l.toi_minutes,0) > 0
-         THEN (l.shots_against::double precision / l.toi_minutes::double precision) * 60.0
+         THEN (l.shots_faced::double precision / l.toi_minutes::double precision) * 60.0
          ELSE NULL END AS sa_per60,
 
     -- per-game save%
-    CASE WHEN COALESCE(l.shots_against,0) > 0
-         THEN (l.saves::double precision / l.shots_against::double precision)
+    CASE WHEN COALESCE(l.shots_faced,0) > 0
+        THEN (l.saves::double precision / l.shots_faced::double precision)
          ELSE NULL END AS save_pct,
 
     -- d5/d10/d20 rolling windows (exclude current row)
@@ -64,12 +67,12 @@ glogs AS (
             ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING) AS d20_saves_per60,
 
     AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
-             THEN (l.shots_against::double precision / l.toi_minutes::double precision) * 60.0 END)
+            THEN (l.shots_faced::double precision / l.toi_minutes::double precision) * 60.0 END)
       OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
             ROWS BETWEEN 5  PRECEDING AND 1 PRECEDING)  AS d5_sa_per60,
 
     AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
-             THEN (l.shots_against::double precision / l.toi_minutes::double precision) * 60.0 END)
+             THEN (l.shots_faced::double precision / l.toi_minutes::double precision) * 60.0 END)
       OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_sa_per60
   FROM nhl.goalie_game_logs_raw l
@@ -85,7 +88,17 @@ snap AS (
     (SELECT r.d20_saves_per60  FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d20_saves_per60,
     (SELECT r.d5_sa_per60      FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d5_shots_faced_per60,
     (SELECT r.d10_sa_per60     FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 1) AS d10_shots_faced_per60,
-    (SELECT AVG(r.save_pct)    FROM glogs r WHERE r.player_id=b.player_id AND r.game_date<b.game_date ORDER BY r.game_date DESC, r.game_id DESC LIMIT 10) AS d10_save_pct
+    (
+      SELECT AVG(sub.save_pct)
+      FROM (
+        SELECT r.save_pct
+        FROM glogs r
+        WHERE r.player_id = b.player_id
+          AND r.game_date < b.game_date
+        ORDER BY r.game_date DESC, r.game_id DESC
+        LIMIT 10
+      ) AS sub
+    ) AS d10_save_pct
   FROM base b
 ),
 
@@ -164,18 +177,5 @@ LEFT JOIN season_to_date std
 LEFT JOIN nhl.team_context_rolling tc
   ON tc.game_id = b.game_id
  AND tc.team_id = b.team_id
-ORDER BY b.game_id, b.player_id;
-
--- Emit CSV
-\copy (
-  SELECT
-    full_name, player_id, game_id, team_id, opponent_id, is_home, game_date,
-    d10_shots_faced_per60, d10_save_pct,
-    team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
-    pace_index, rest_days, b2b_flag,
-    d5_saves_per60, d10_saves_per60, d5_shots_faced_per60, season_save_pct,
-    opp_d10_sf_per60, team_d10_sa_per60, pace_matchup_index,
-    d20_saves_per60, team_d10_sf_per60, opp_d10_sa_per60,
-    start_prob
-  FROM pg_temp._psql_query_result
-) TO STDOUT WITH CSV HEADER
+ORDER BY b.game_id, b.player_id
+) TO STDOUT WITH CSV HEADER;

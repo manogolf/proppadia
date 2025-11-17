@@ -15,54 +15,126 @@ from sklearn.ensemble import RandomForestClassifier
 import joblib
 
 """
-Train NHL SOG models at the player-game level (phoenix spine).
+Train NHL SOG models at the player-game level (Denali spine).
 
 Expected input (--train-csv):
 
-  - One row per (season, game_id, shooterPlayerId)
-  - Columns (from nhl.training_features_sog_player_game):
-      season, game_id, teamCode, isHomeTeam, shooterPlayerId,
-      y_sog,
-      shots_attempts_game, sog_game,
-      num_event_shot_last5, num_event_shot_last10,
-      num_shotWasOnGoal_last5, num_shotWasOnGoal_last10,
-      num_event_shot_season_to_date, num_shotWasOnGoal_season_to_date,
-      team_num_event_shot_for_last10, team_num_shotWasOnGoal_for_last10, ...
+  - One row per (season, game_id, player_id)
+  - Columns from nhl.training_features_sog_denali_export (or similar),
+    e.g.:
 
-We train a binary model for: Over(line) = (y_sog >= line).
+      season, game_date, game_id, player_id, team_id, opponent_id,
+      shots_on_goal,
+      d5_sog_per60, d10_sog_per60, d20_sog_per60,
+      attempts_d10_per60,
+      team_d10_sf_per_game, opp_d10_sf_allowed_per_game,
+      pace_index,
+      rest_days, b2b_flag,
+      role_pp_share,
+      opp_d10_sf_per60, team_d10_sa_per60, opp_d10_sa_per60,
+      is_home,
+      last10_team_sog_share, hot_last5_flag,
+      num_shotwasongoal_last5, num_shotwasongoal_last10,
+      num_shotwasongoal_season_to_date,
+      num_event_shot_last5, num_event_shot_last10,
+      num_event_shot_season_to_date,
+      team_num_event_shot_for_last10,
+      team_num_shotwasongoal_for_last10, ...
+
+We train a binary model for: Over(line) = (shots_on_goal >= line).
+
+Feature set is taken from backend/nhl/features/feature_metadata_nhl.json
+under key "shots_on_goal_denali".
 """
 
+# ---- Denali / feature-registry wiring ----
+
+BACKEND_NHL_DIR = Path(__file__).resolve().parents[1]
+FEATURE_REGISTRY_PATH = BACKEND_NHL_DIR / "features" / "feature_metadata_nhl.json"
+SOG_FEATURE_KEY = "shots_on_goal_denali"
+
+# Denali IDs (we do NOT treat is_home as an ID; it's a feature)
 ID_COLS = {
     "season",
+    "game_date",
     "game_id",
-    "shooterplayerid",
-    "teamCode",
-    "isHomeTeam",
+    "player_id",
+    "team_id",
+    "opponent_id",
 }
 
-TARGET_COL = "y_sog"
+TARGET_COL = "shots_on_goal"
 
+# Columns we never want as features
 LEAK_COLS = {
     TARGET_COL,
-    "y_over",
-    "sog_game",
-    "shots_attempts_game",
-    "y_goals",
-    "goals",
-    "assists",
+    "y_over",  # label we construct
 }
+
+
+def load_feature_list() -> list[str]:
+    """
+    Load the SOG feature list for Denali from the global feature registry JSON.
+    """
+    if not FEATURE_REGISTRY_PATH.exists():
+        print(
+            f"FATAL: feature registry not found at {FEATURE_REGISTRY_PATH}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    meta = json.loads(FEATURE_REGISTRY_PATH.read_text())
+
+    # meta can be { "shots_on_goal_denali": [...] } or nested under "feature_registry"
+    if isinstance(meta, dict) and "feature_registry" in meta:
+        fr = meta["feature_registry"]
+    else:
+        fr = meta
+
+    if not isinstance(fr, dict):
+        print(
+            f"FATAL: unexpected structure in {FEATURE_REGISTRY_PATH}; "
+            f"expected an object mapping keys -> feature lists.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    feats = fr.get(SOG_FEATURE_KEY)
+    if not isinstance(feats, list) or not feats:
+        print(
+            f"FATAL: key '{SOG_FEATURE_KEY}' missing or empty in {FEATURE_REGISTRY_PATH}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    print(f"Using feature set '{SOG_FEATURE_KEY}' with {len(feats)} columns.", file=sys.stderr)
+    return feats
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Train NHL SOG player-game models (phoenix).")
-    ap.add_argument("--train-csv", required=True,
-                    help="CSV exported from nhl.training_features_sog_player_game.")
-    ap.add_argument("--line", type=float, required=True,
-                    help="SOG line to train for, e.g. 1.5, 2.5, 3.5.")
-    ap.add_argument("--outdir", default="models_out/nhl/sog_player",
-                    help="Output directory base for models.")
-    ap.add_argument("--test-size", type=float, default=0.2,
-                    help="Holdout fraction (default 0.2).")
+    ap = argparse.ArgumentParser(description="Train NHL SOG player-game models (Denali).")
+    ap.add_argument(
+        "--train-csv",
+        required=True,
+        help="CSV exported from nhl.training_features_sog_denali_export (or compatible).",
+    )
+    ap.add_argument(
+        "--line",
+        type=float,
+        required=True,
+        help="SOG line to train for, e.g. 1.5, 2.5, 3.5.",
+    )
+    ap.add_argument(
+        "--outdir",
+        default="models_out/nhl/sog_player_denali",
+        help="Output directory base for models.",
+    )
+    ap.add_argument(
+        "--test-size",
+        type=float,
+        default=0.2,
+        help="Holdout fraction (default 0.2).",
+    )
     args = ap.parse_args()
 
     path = Path(args.train_csv)
@@ -77,23 +149,25 @@ def main():
         sys.exit(2)
 
     line = float(args.line)
+
     # Label: Over(line)
     df["y_over"] = (df[TARGET_COL] >= (line - 1e-9)).astype(int)
 
-    # Select numeric features excluding IDs/targets
-    ignore = ID_COLS.union(LEAK_COLS)
-    feats = [
-        c for c in df.columns
-        if c not in ignore and pd.api.types.is_numeric_dtype(df[c])
-    ]
+    # Load canonical feature list and ensure all are present
+    feats = load_feature_list()
 
-    if not feats:
-        print("FATAL: no usable numeric feature columns found.", file=sys.stderr)
+    missing = [c for c in feats if c not in df.columns]
+    if missing:
+        print(
+            f"FATAL: training CSV is missing required feature columns: {missing}",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
-    # Coerce numeric and clean
+    # Coerce numeric for features + label
     for c in feats + ["y_over"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     before = len(df)
@@ -116,25 +190,32 @@ def main():
 
     strat = y if np.unique(y).size == 2 else None
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
+        X,
+        y,
         test_size=args.test_size,
         random_state=42,
         stratify=strat,
     )
 
     # Logistic Regression model
-    lr = Pipeline([
-        ("scaler", StandardScaler(with_mean=True, with_std=True)),
-        ("lr", LogisticRegression(
-            max_iter=400,
-            solver="liblinear",
-            class_weight="balanced",
-        )),
-    ])
+    lr = Pipeline(
+        [
+            ("scaler", StandardScaler(with_mean=True, with_std=True)),
+            (
+                "lr",
+                LogisticRegression(
+                    max_iter=400,
+                    solver="liblinear",
+                    class_weight="balanced",
+                ),
+            ),
+        ]
+    )
     lr.fit(X_train, y_train)
     lr_auc = (
         roc_auc_score(y_test, lr.predict_proba(X_test)[:, 1])
-        if np.unique(y_test).size == 2 else float("nan")
+        if np.unique(y_test).size == 2
+        else float("nan")
     )
 
     # Random Forest model
@@ -149,7 +230,8 @@ def main():
     rf.fit(X_train, y_train)
     rf_auc = (
         roc_auc_score(y_test, rf.predict_proba(X_test)[:, 1])
-        if np.unique(y_test).size == 2 else float("nan")
+        if np.unique(y_test).size == 2
+        else float("nan")
     )
 
     # Save models + metadata under line-specific dir
@@ -160,29 +242,35 @@ def main():
     joblib.dump(rf, outdir / "rf.joblib")
 
     metadata = {
-        "prop_type": "sog",
+        "prop_type": "shots_on_goal",
         "line": line,
+        "feature_key": SOG_FEATURE_KEY,
         "features": feats,
         "trained_from": str(path),
         "metrics": {
             "lr_auc": float(lr_auc),
             "rf_auc": float(rf_auc),
         },
-        "phoenix_spine": True,
+        "denali_spine": True,
     }
     (outdir / "feature_metadata.json").write_text(json.dumps(metadata, indent=2))
-    (outdir / "METRICS.json").write_text(json.dumps({
-        "n_rows": int(after),
-        "pos_rate": float(pos_rate),
-        "lr_auc": float(lr_auc),
-        "rf_auc": float(rf_auc),
-    }, indent=2))
+    (outdir / "METRICS.json").write_text(
+        json.dumps(
+            {
+                "n_rows": int(after),
+                "pos_rate": float(pos_rate),
+                "lr_auc": float(lr_auc),
+                "rf_auc": float(rf_auc),
+            },
+            indent=2,
+        )
+    )
 
     print(f"✅ Trained SOG models for line {line}")
     print(f"   n={after}, pos_rate={pos_rate:.3f}")
     print(f"   Features ({len(feats)}): {feats}")
-    print(f"   AUC — LR: {lr_auc if lr_auc==lr_auc else 'NA'} | RF: {rf_auc if rf_auc==rf_auc else 'NA'}")
-    print(f"   Saved to: {outdir}")
+    print(f"   Saved to: {outdir}", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()

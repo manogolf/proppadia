@@ -74,35 +74,39 @@ def main():
 
     rows = [
         (
-            args.project,
-            args.prop_type,
             int(r.player_id),
             int(r.game_id),
+            args.prop_type,      # becomes nhl.predictions.prop (e.g. "sog")
             float(r.line),
-            float(r.prob_over),
-            str(r.model),
+            float(r.prob_over),  # becomes p_over
+            str(r.model),        # becomes model_family (e.g. "sog_phoenix_lr")
+            "phoenix_v2",        # model_version tag – pick any label you like
         )
         for r in df.itertuples(index=False)
     ]
 
     print(f"→ Loading {len(rows)} SOG predictions into nhl.predictions")
 
-    # Adjust column names here if your schema is different.
+    # Adjust column names to match nhl.predictions schema.
+    # We treat prop_type as "prop", prob_over as "p_over",
+    # model_name as "model_family", and hard-code a simple model_version.
     insert_sql = """
     INSERT INTO nhl.predictions (
-      project,
-      prop_type,
       player_id,
       game_id,
+      prop,
       line,
-      prob_over,
-      model_name
+      p_over,
+      model_family,
+      model_version
     )
     VALUES (%s,%s,%s,%s,%s,%s,%s)
-    ON CONFLICT (project, prop_type, player_id, game_id, line)
+    ON CONFLICT (player_id, game_id, prop, line)
     DO UPDATE SET
-      prob_over = EXCLUDED.prob_over,
-      model_name = EXCLUDED.model_name;
+      p_over       = EXCLUDED.p_over,
+      model_family = EXCLUDED.model_family,
+      model_version= EXCLUDED.model_version,
+      updated_at   = now();
     """
 
     with psycopg.connect(args.db_url) as conn:

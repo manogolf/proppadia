@@ -147,37 +147,53 @@ prev AS (
 -- team context (latest <= slate date) for both team & opponent
 teamctx AS (
   SELECT
-    c.player_id, c.game_id,
-    t.team_d10_sf_per_game                                AS team_d10_sf_per_game,
-    o.opp_d10_sf_allowed_per_game                         AS opp_d10_sf_allowed_per_game,
+    c.player_id,
+    c.game_id,
+
+    -- rolling team shots for / against
+    t.team_d10_sf_per_game        AS team_d10_sf_per_game,
+    o.opp_d10_sf_allowed_per_game AS opp_d10_sf_allowed_per_game,
+
+    -- simple pace index (team offense vs opp shots allowed)
     CASE
-      WHEN t.team_d10_sf_per_game IS NOT NULL AND o.opp_d10_sf_allowed_per_game IS NOT NULL
+      WHEN t.team_d10_sf_per_game IS NOT NULL
+       AND o.opp_d10_sf_allowed_per_game IS NOT NULL
       THEN sqrt(t.team_d10_sf_per_game * o.opp_d10_sf_allowed_per_game)
       ELSE NULL
     END AS pace_index,
-    o.team_d10_sf_per_game                                AS opp_d10_sf_per60,
-    t.opp_d10_sf_allowed_per_game                         AS team_d10_sa_per60,
+
+    -- SOG-style extras (kept for downstream columns)
+    -- team’s opponent shots-for per 60 ≈ opp team’s SF
+    o.team_d10_sf_per_game        AS opp_d10_sf_per60,
+    -- team’s shots-against per 60 ≈ its own SA
+    t.opp_d10_sf_allowed_per_game AS team_d10_sa_per60,
+    -- symmetric pace matchup based on both offenses
     CASE
-      WHEN t.team_d10_sf_per_game IS NOT NULL AND o.team_d10_sf_per_game IS NOT NULL
+      WHEN t.team_d10_sf_per_game IS NOT NULL
+       AND o.team_d10_sf_per_game IS NOT NULL
       THEN sqrt(t.team_d10_sf_per_game * o.team_d10_sf_per_game)
       ELSE NULL
     END AS pace_matchup_index
+
   FROM cand c
   LEFT JOIN LATERAL (
     SELECT team_d10_sf_per_game, opp_d10_sf_allowed_per_game
-    FROM nhl.tf_team_roll10 tt
-    WHERE tt.team_id = c.team_id AND tt.game_date < c.game_date
-    ORDER BY tt.game_date DESC
+    FROM nhl.team_roll10_m tt
+    WHERE tt.team_id = c.team_id
+      AND tt.game_id < c.game_id
+    ORDER BY tt.game_id DESC
     LIMIT 1
   ) t ON TRUE
   LEFT JOIN LATERAL (
     SELECT team_d10_sf_per_game, opp_d10_sf_allowed_per_game
-    FROM nhl.tf_team_roll10 tt
-    WHERE tt.team_id = c.opponent_id AND tt.game_date < c.game_date
-    ORDER BY tt.game_date DESC
+    FROM nhl.team_roll10_m tt
+    WHERE tt.team_id = c.opponent_id
+      AND tt.game_id < c.game_id
+    ORDER BY tt.game_id DESC
     LIMIT 1
   ) o ON TRUE
 ),
+
 -- assemble rows
 seed AS (
   SELECT

@@ -491,17 +491,46 @@ CREATE INDEX IF NOT EXISTS idx_saves_ready_date_game
 -------------------------------------------------------------------------------
 -- E) Slate views (exact contract used by the workflow export; robust aliases)
 -------------------------------------------------------------------------------
+-- SOG slate view (UPDATED: now from canonical table)
+-- SOG slate view sourced from canonical table
+-- SOG slate view sourced from canonical pregame features table
 DROP VIEW IF EXISTS nhl.v_slate_sog_features;
 CREATE VIEW nhl.v_slate_sog_features AS
 SELECT
-  r.player_id, r.game_id, r.team_id, r.opponent_id, r.is_home, r.game_date,
-  r.shots_on_goal,
-  r.d5_sog_per60, r.d10_sog_per60, r.d20_sog_per60,
-  r.team_d10_sf_per_game, r.opp_d10_sf_allowed_per_game,
-  r.role_pp_share, r.rest_days, r.b2b_flag, r.attempts_d10_per60,
-  r.pace_index, r.opp_d10_sf_per60, r.team_d10_sa_per60, r.pace_matchup_index
-FROM nhl.training_features_nhl_sog_v2_ready r;
+  r.player_id,
+  r.game_id,
+  r.team_id,
+  r.opponent_id,
+  r.is_home,        -- from canonical table
+  r.game_date,
+  r.season,
 
+  -- SOG + rolling
+  r.shots_on_goal,
+  r.d5_sog_per60,
+  r.d10_sog_per60,
+  r.d20_sog_per60,
+
+  -- team-level pace-ish
+  r.team_d10_sf_per_game,
+  r.opp_d10_sf_allowed_per_game,
+  r.pace_matchup_index,
+
+  -- usage / schedule
+  r.role_pp_share,
+  r.rest_days,
+  r.b2b_flag,
+
+  -- extra game metadata from nhl.games (safe to add)
+  g.game_type,
+  g.home_team_id,
+  g.away_team_id,
+  (r.team_id = g.home_team_id) AS is_home_team
+FROM nhl.training_features_nhl_sog_enriched_pregame_v2 AS r
+JOIN nhl.games AS g
+  ON r.game_id = g.game_id;
+
+-- SAVES slate view (unchanged)
 DROP VIEW IF EXISTS nhl.v_slate_saves_features;
 CREATE VIEW nhl.v_slate_saves_features AS
 SELECT

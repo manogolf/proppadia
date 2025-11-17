@@ -1061,6 +1061,29 @@ def ingest_game(game_id: int) -> None:
                  or "")
     status = map_api_state_to_db(state_raw)
 
+    # --- Canonical game identifiers derived from game_id ---
+    gid_str = str(game_id)
+    if len(gid_str) != 10:
+        raise SystemExit(f"Unexpected game_id format: {game_id}")
+
+    season = int(gid_str[:4])
+    game_type = int(gid_str[4:6])
+    game_number = int(gid_str[6:])
+    short_game_id = game_type * 10000 + game_number
+
+    home_team_code = home_abbr
+    away_team_code = away_abbr
+
+    start_time_utc = None
+    if start_iso:
+        try:
+            if start_iso.endswith("Z"):
+                start_time_utc = dt.datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+            else:
+                start_time_utc = dt.datetime.fromisoformat(start_iso)
+        except Exception:
+            start_time_utc = None
+
     # ───────────── PBP-derived aggregations (safe if PBP is empty) ─────────────
     attempts: Dict[int, Dict[str, int]] = aggregate_attempts_from_pbp(pbp)               # {pid: {sog, missed, blocked}}
     sk_splits: Dict[int, Dict[str, int]] = compute_splits_from_pbp(                      # {pid: EV/PP/SH}
@@ -1250,21 +1273,56 @@ def ingest_game(game_id: int) -> None:
 
             # Game
             cur.execute("""
-                INSERT INTO nhl.games (game_id, game_date, home_team_id, away_team_id, status)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO nhl.games (
+                    game_id,
+                    season,
+                    short_game_id,
+                    game_type,
+                    game_number,
+                    game_date,
+                    start_time_utc,
+                    home_team_code,
+                    away_team_code,
+                    home_team_id,
+                    away_team_id,
+                    status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (game_id) DO UPDATE
-                  SET game_date     = EXCLUDED.game_date,
-                      home_team_id  = EXCLUDED.home_team_id,
-                      away_team_id  = EXCLUDED.away_team_id,
-                      status        = EXCLUDED.status;
-            """, (game_id, game_date, home_id, away_id, status))
+                  SET season         = EXCLUDED.season,
+                      short_game_id  = EXCLUDED.short_game_id,
+                      game_type      = EXCLUDED.game_type,
+                      game_number    = EXCLUDED.game_number,
+                      game_date      = EXCLUDED.game_date,
+                      start_time_utc = EXCLUDED.start_time_utc,
+                      home_team_code = EXCLUDED.home_team_code,
+                      away_team_code = EXCLUDED.away_team_code,
+                      home_team_id   = EXCLUDED.home_team_id,
+                      away_team_id   = EXCLUDED.away_team_id,
+                      status         = EXCLUDED.status;
+            """, (
+                game_id,
+                season,
+                short_game_id,
+                game_type,
+                game_number,
+                game_date,
+                start_time_utc,
+                home_team_code,
+                away_team_code,
+                home_id,
+                away_id,
+                status,
+            ))
 
             def pos_code(raw: dict, default: str) -> str:
                 code = (raw.get("positionCode") or raw.get("position") or "").upper()
-                if code in ("G", "D", "F"): return code
-                if code in ("LW", "RW", "C"): return "F"
+                if code in ("G", "D", "F"):
+                    return code
+                if code in ("LW", "RW", "C"):
+                    return "F"
                 return default
-
+            
             # ───── Skaters
             did_log = False
             sk_batch: List[tuple] = []

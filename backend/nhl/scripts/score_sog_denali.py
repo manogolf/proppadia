@@ -5,13 +5,13 @@ score_sog_phoenix.py
 Use phoenix-trained SOG models to score a slate.
 
 Inputs:
-  --features-csv : CSV from backend/nhl/sql/export_sog.sql
+  --features-csv : CSV exported for the slate (now from the Denali union view)
   --model-root   : root dir containing per-line subdirs
-                   e.g. backend/nhl/models/sog
+                   e.g. backend/nhl/models/latest/shots_on_goal/sog_player_v2
   --out          : output CSV path
 
 Models layout (per line):
-  backend/nhl/models/sog/
+  backend/nhl/models/latest/shots_on_goal/sog_player_v2/
     1_5/
       lr.joblib
     2_5/
@@ -38,19 +38,69 @@ import numpy as np
 import pandas as pd
 
 
-# Canonical feature registry
+# Feature registry (single source of truth)
 FEATURE_REGISTRY_PATH = Path("backend/nhl/features/feature_metadata_nhl.json")
 
-# Candidate keys to look up in the registry for SOG phoenix models.
-# First one found wins. Adjust this list if your registry uses a specific key.
 SOG_FEATURE_KEYS_PREFERENCE = [
-    "shots_on_goal_phoenix",
-    "shots_on_goal_sog_phoenix",
-    "shots_on_goal",          # fallback to legacy if phoenix-specific not present
+    "shots_on_goal_denali",
 ]
 
+def load_sog_denali_features(csv_path: str):
+    """
+    Load a Denali SOG features CSV and return:
+      - df:   full DataFrame with all feature columns
+      - meta: DataFrame with identifiers + outcome
+    """
+
+    df = pd.read_csv(csv_path)
+
+    # ---- Alias / fill missing features that have clear semantics ----
+    # pace_matchup_index := pace_index (by design, until we have a real matchup metric)
+    if "pace_matchup_index" not in df.columns and "pace_index" in df.columns:
+        print("[info] slate CSV missing pace_matchup_index; filling from pace_index")
+        df["pace_matchup_index"] = df["pace_index"]
+
+    meta_cols = [
+        "season",
+        "game_date",
+        "game_id",
+        "player_id",
+        "team_id",
+        "opponent_id",
+        "shots_on_goal",
+    ]
+    meta = df[meta_cols].copy()
+
+    return df, meta
+
+def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
+    """
+    Export all columns from nhl.training_features_sog_denali_export
+    for the given slate_date into out_path.
+
+    This keeps the CSV in lockstep with the view definition.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    sql = f"""
+    COPY (
+      SELECT *
+      FROM nhl.training_features_sog_denali_export
+      WHERE game_date = DATE '{slate_date}'
+      ORDER BY game_id, player_id
+    ) TO STDOUT WITH CSV HEADER
+    """
+
+    with psycopg2.connect(db_url) as conn, conn.cursor() as cur, open(out_path, "w", newline="") as f:
+        cur.copy_expert(sql, f)
 
 def load_feature_list() -> list[str]:
+    """
+    Load the SOG feature list from the global feature registry JSON.
+
+    We prefer the "shots_on_goal" key (v2 spec). If not present, we try the other
+    keys in SOG_FEATURE_KEYS_PREFERENCE.
+    """
     if not FEATURE_REGISTRY_PATH.exists():
         raise SystemExit(
             f"FATAL: feature registry not found at {FEATURE_REGISTRY_PATH}. "
@@ -60,7 +110,7 @@ def load_feature_list() -> list[str]:
     meta = json.loads(FEATURE_REGISTRY_PATH.read_text())
 
     # meta can be either:
-    # - { "shots_on_goal_phoenix": [..], "points": [..], ... }
+    # - { "shots_on_goal": [..], "shots_on_goal_phoenix": [..], ... }
     # - or nested under "features"/"feature_registry"
     if isinstance(meta, dict) and "feature_registry" in meta:
         fr = meta["feature_registry"]
@@ -105,6 +155,10 @@ def load_line_model(line_dir: Path):
 
 
 def prepare_features(df: pd.DataFrame, feats: list[str]) -> pd.DataFrame:
+    """
+    Given the full Denali df and a feature list, build the X matrix
+    in the correct column order, applying minimal aliases (e.g. home_flag).
+    """
     X = df.copy()
 
     # Minimal / explicit aliasing only.
@@ -144,10 +198,11 @@ def main():
     if not features_path.exists():
         raise SystemExit(f"FATAL: features CSV not found: {features_path}")
 
-    df = pd.read_csv(features_path)
+    # Load Denali features: full df + meta (ids/outcome)
+    df, meta = load_sog_denali_features(features_path)
 
     # Guard: empty slate (header only)
-    if df.shape[0] == 0:
+    if meta.shape[0] == 0:
         print(f"ℹ️ No rows in features CSV ({features_path}); nothing to score for this slate.")
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,11 +211,12 @@ def main():
         ).to_csv(out_path, index=False)
         return
 
+    # Required columns guard (check against meta)
     for col in ("player_id", "game_id"):
-        if col not in df.columns:
+        if col not in meta.columns:
             raise SystemExit(f"FATAL: features CSV missing required column '{col}'")
 
-    # Load global SOG feature list
+    # Load global SOG feature list (v2 spec preferred)
     feats = load_feature_list()
 
     model_root = Path(args.model_root)
@@ -189,9 +245,10 @@ def main():
             print(f"[warn] skipping line {line}: no lr.joblib in {line_dir}")
             continue
 
-        # Validate features presence up front
+        # Validate features presence up front against df (Denali CSV)
         missing = [
-            c for c in feats
+            c
+            for c in feats
             if c not in df.columns
             and not (c == "home_flag" and "is_home" in df.columns)
         ]
@@ -213,7 +270,7 @@ def main():
         p_over = proba[:, 1]
 
         for (player_id, game_id), prob in zip(
-            zip(df["player_id"].values, df["game_id"].values),
+            zip(meta["player_id"].values, meta["game_id"].values),
             p_over,
         ):
             out_rows.append(

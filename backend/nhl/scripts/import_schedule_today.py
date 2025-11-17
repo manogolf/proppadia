@@ -375,7 +375,7 @@ def main():
 
             rows += 1
 
-                    # NEW: apply status updates without changing schema
+        # NEW: apply status updates without changing schema
         for gid, st in state_updates:
             cur.execute("""
                 update nhl.games
@@ -384,27 +384,43 @@ def main():
                   and (status is distinct from %s)
             """, (st, gid, st))
 
-
-        # 4) Merge stage → base
+        # 4) Merge stage → base (cast season/game_type; fill team codes via nhl.teams)
         cur.execute("""
-            insert into nhl.games (game_id, game_date, start_time_utc, season, game_type, home_team_id, away_team_id)
-            select distinct game_id, game_date, start_time_utc, season, game_type, home_team_id, away_team_id
-            from nhl.import_games_stage
+            insert into nhl.games (
+                game_id,
+                game_date,
+                start_time_utc,
+                season,
+                game_type,
+                home_team_code,
+                away_team_code,
+                home_team_id,
+                away_team_id
+            )
+            select distinct
+                s.game_id,
+                s.game_date,
+                s.start_time_utc,
+                nullif(s.season::text, '')::int,
+                nullif(s.game_type::text, '')::int,
+                th.abbr as home_team_code,
+                ta.abbr as away_team_code,
+                s.home_team_id,
+                s.away_team_id
+            from nhl.import_games_stage s
+            join nhl.teams th on th.team_id = s.home_team_id
+            join nhl.teams ta on ta.team_id = s.away_team_id
+            where th.abbr is not null
+              and ta.abbr is not null
             on conflict (game_id) do update
               set game_date      = excluded.game_date,
                   start_time_utc = excluded.start_time_utc,
                   season         = excluded.season,
                   game_type      = excluded.game_type,
+                  home_team_code = excluded.home_team_code,
+                  away_team_code = excluded.away_team_code,
                   home_team_id   = excluded.home_team_id,
                   away_team_id   = excluded.away_team_id
-        """)
-
-        cur.execute("""
-            insert into nhl.game_external_ids (game_id, provider, provider_game_id)
-            select distinct game_id, provider, provider_game_id
-            from nhl.import_game_external_ids_stage
-            on conflict (game_id, provider) do update
-              set provider_game_id = excluded.provider_game_id
         """)
 
         conn.commit()
