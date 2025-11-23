@@ -46,8 +46,10 @@ COPY (
       ON g.game_id = rs.game_id
     WHERE g.game_date = DATE :'slate_date'
   ),
+
   player_logs AS (
     -- Historical skater logs used to derive rolling features
+    -- REGULAR SEASON ONLY: game_id segment '02', but spans all years.
     SELECT
       l.player_id,
       l.game_id,
@@ -57,9 +59,13 @@ COPY (
       COALESCE(l.shot_attempts, 0)::float  AS shot_attempts,
       NULLIF(l.toi_minutes, 0)::float      AS toi_minutes
     FROM nhl.skater_game_logs_raw l
+    JOIN nhl.games g2
+      ON g2.game_id = l.game_id
+    WHERE substring(g2.game_id::text, 5, 2) = '02'  -- regular season
   ),
+
   team_logs AS (
-    -- Team-level SOG / attempts per game
+    -- Team-level SOG / attempts per game (regular season only)
     SELECT
       l.team_id,
       l.game_id,
@@ -69,8 +75,10 @@ COPY (
     FROM nhl.skater_game_logs_raw l
     JOIN nhl.games g
       ON g.game_id = l.game_id
+    WHERE substring(g.game_id::text, 5, 2) = '02'  -- regular season
     GROUP BY l.team_id, l.game_id, g.game_date
   )
+
   SELECT
     b.player_id,
     b.game_id,
@@ -204,7 +212,7 @@ COPY (
       ) x
     ), 0.0) AS num_shotwasongoal_last10,
 
-    -- num_shotwasongoal_season_to_date: total SOG before today
+    -- num_shotwasongoal_season_to_date: total SOG before today (regular season games only)
     COALESCE((
       SELECT SUM(pl.shots_on_goal)
       FROM player_logs pl
@@ -238,7 +246,7 @@ COPY (
       ) x
     ), 0.0) AS num_event_shot_last10,
 
-    -- num_event_shot_season_to_date: total attempts before today
+    -- num_event_shot_season_to_date: total attempts before today (regular season only)
     COALESCE((
       SELECT SUM(pl.shot_attempts)
       FROM player_logs pl

@@ -43,16 +43,49 @@ def read_csv_required(p: Path) -> pd.DataFrame:
         die(f"failed reading CSV {p}: {e}")
 
 def melt_preds(pred: pd.DataFrame) -> pd.DataFrame:
-    """Wide p_over_* → long rows with columns: player_id, game_id, line, p_over."""
+    """
+    Normalize predictions to long format with columns:
+      player_id, game_id, line, p_over
+
+    Accepts either:
+      - Tall Denali/Phoenix format:
+          player_id, game_id, line, prob_over (or p_over)
+      - Legacy wide format with p_over_* columns.
+    """
+    # Always need these IDs
     need = [c for c in ("player_id", "game_id") if c not in pred.columns]
     if need:
         die(f"pred file missing columns: {need}")
+
+    # ---- Case 1: tall format (current points + Denali SOG) ----
+    if "line" in pred.columns and ("prob_over" in pred.columns or "p_over" in pred.columns):
+        df = pred.copy()
+
+        # Normalize prob_over → p_over
+        if "p_over" not in df.columns and "prob_over" in df.columns:
+            df["p_over"] = df["prob_over"]
+
+        long = df[["player_id", "game_id", "line", "p_over"]].copy()
+
+        # Ensure numeric and drop NaNs
+        long["line"] = pd.to_numeric(long["line"], errors="coerce")
+        long["p_over"] = pd.to_numeric(long["p_over"], errors="coerce")
+        long = long[long["line"].notna() & long["p_over"].notna()].copy()
+        return long
+
+    # ---- Case 2: legacy wide p_over_* → long (old models) ----
     pat = re.compile(r"^p_over_(\d+(?:[._]\d+)?)$")
     pcols = [c for c in pred.columns if pat.match(str(c))]
     if not pcols:
-        die("no p_over_* columns found in predictions")
+        die(
+            "no p_over_* columns found in predictions and no tall "
+            "format columns (line + prob_over/p_over) present. "
+            f"Header={list(pred.columns)}"
+        )
+
     if "p_over" in pred.columns:
-        pred = pred.drop(columns=["p_over"])  # avoid value_name collision
+        # avoid value_name collision
+        pred = pred.drop(columns=["p_over"])
 
     long = pred.melt(
         id_vars=["player_id", "game_id"],
@@ -60,6 +93,7 @@ def melt_preds(pred: pd.DataFrame) -> pd.DataFrame:
         var_name="pcol",
         value_name="p_over",
     )
+
     def to_line(s: str) -> float:
         s = s.replace("p_over_", "").replace("_", ".")
         try:

@@ -192,6 +192,7 @@ def _api_team_full_name(team: dict) -> str | None:
     """
     Prefer 'name' when present; otherwise compose place + teamName.
     Handles multi-language fields like { default: "Vegas" }.
+    This value is stored in nhl.teams.full_team_name.
     """
     val = team.get("name")
     if isinstance(val, str) and val.strip():
@@ -216,9 +217,10 @@ def _api_team_full_name(team: dict) -> str | None:
         return f"{place} {tname}"
     return tname or place  # last resort
 
+
 def _ensure_teams_exist(cur, games: Iterable[dict]) -> int:
     """
-    Ensure nhl.teams has correct rows (team_id, name, abbr) for any teams seen in `games`.
+    Ensure nhl.teams has correct rows (team_id, full_team_name, team) for any teams seen in `games`.
     Uses provider id as team_id. Returns count of upserts performed.
     """
     seen: set[int] = set()
@@ -233,20 +235,21 @@ def _ensure_teams_exist(cur, games: Iterable[dict]) -> int:
                 continue
             seen.add(pid)
 
-            abbr = _api_team_abbr(team_obj)
-            name = _api_team_full_name(team_obj)
-            if not abbr or not name:
+            abbr = _api_team_abbr(team_obj)            # e.g. "BUF"
+            full_name = _api_team_full_name(team_obj)  # e.g. "Buffalo Sabres"
+            if not abbr or not full_name:
                 # if we can't determine both, skip; mapping may still succeed if already present
                 continue
 
-            # Upsert into nhl.teams; this will convert your placeholder rows (e.g., team_id=7, abbr='T7')
-            # into real rows (team_id=7, abbr='BUF', name='Buffalo Sabres'), satisfying the UNIQUE(abbr) constraint.
+            # Upsert into nhl.teams; this will convert your placeholder rows (e.g., team_id=7, team='T7')
+            # into real rows (team_id=7, team='BUF', full_team_name='Buffalo Sabres').
             cur.execute("""
-                insert into nhl.teams (team_id, name, abbr)
+                insert into nhl.teams (team_id, full_team_name, team)
                 values (%s, %s, %s)
                 on conflict (team_id)
-                do update set name = excluded.name, abbr = excluded.abbr
-            """, (pid, name, abbr))
+                do update set full_team_name = excluded.full_team_name,
+                              team = excluded.team
+            """, (pid, full_name, abbr))
             upserts += 1
     if upserts:
         print(f"🔧 Upserted/confirmed {upserts} team rows in nhl.teams")
@@ -403,15 +406,15 @@ def main():
                 s.start_time_utc,
                 nullif(s.season::text, '')::int,
                 nullif(s.game_type::text, '')::int,
-                th.abbr as home_team_code,
-                ta.abbr as away_team_code,
+                th.team as home_team_code,
+                ta.team as away_team_code,
                 s.home_team_id,
                 s.away_team_id
             from nhl.import_games_stage s
             join nhl.teams th on th.team_id = s.home_team_id
             join nhl.teams ta on ta.team_id = s.away_team_id
-            where th.abbr is not null
-              and ta.abbr is not null
+            where th.team is not null
+              and ta.team is not null
             on conflict (game_id) do update
               set game_date      = excluded.game_date,
                   start_time_utc = excluded.start_time_utc,

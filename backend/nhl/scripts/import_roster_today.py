@@ -176,8 +176,8 @@ def main():
                       g.game_id,
                       g.home_team_id,
                       g.away_team_id,
-                      ht.abbr AS home_tri,
-                      at.abbr AS away_tri
+                      ht.team AS home_tri,
+                      at.team AS away_tri
                     FROM nhl.games g
                     JOIN nhl.teams ht ON ht.team_id = g.home_team_id
                     JOIN nhl.teams at ON at.team_id = g.away_team_id

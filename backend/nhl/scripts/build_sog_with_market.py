@@ -48,6 +48,10 @@ def prob_to_american(p) -> str:
     return f"-{round((p/(1-p))*100)}" if p >= 0.5 else f"+{round(((1-p)/p)*100)}"
 
 def read_csv_required(path: Path, need_cols: set[str] | None = None) -> pd.DataFrame:
+    """
+    Strict CSV loader: used for required inputs (names, odds, etc.).
+    Missing file or bad shape is a fatal error.
+    """
     if not path.exists():
         die(f"missing CSV: {path}")
     try:
@@ -58,6 +62,47 @@ def read_csv_required(path: Path, need_cols: set[str] | None = None) -> pd.DataF
         miss = [c for c in need_cols if c not in df.columns]
         if miss:
             die(f"{path.name} missing columns: {miss}")
+    return df
+
+
+def read_pred_csv_or_exit_quiet(path: Path, need_cols: set[str] | None = None) -> pd.DataFrame:
+    """
+    Softer CSV loader used only for SOG predictions:
+    - If missing or empty → log info and exit(0) (nothing to build for this slate).
+    - If present but malformed (parse error / missing cols) → fatal (die()).
+    """
+    slate = os.environ.get("SLATE_DATE", "")
+
+    if not path.exists():
+        if slate:
+            print(
+                f"[sog_with_market] ℹ️ predictions CSV not found at {path} for SLATE_DATE={slate}; nothing to build."
+            )
+        else:
+            print(
+                f"[sog_with_market] ℹ️ predictions CSV not found at {path}; nothing to build."
+            )
+        sys.exit(0)
+
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        die(f"failed reading CSV {path}: {e}")
+
+    if df.empty:
+        if slate:
+            print(
+                f"[sog_with_market] ℹ️ predictions CSV has no rows for SLATE_DATE={slate}; nothing to build."
+            )
+        else:
+            print("[sog_with_market] ℹ️ predictions CSV has no rows; nothing to build.")
+        sys.exit(0)
+
+    if need_cols:
+        miss = [c for c in need_cols if c not in df.columns]
+        if miss:
+            die(f"{path.name} missing columns: {miss}")
+
     return df
 
 def load_odds_json(path: Path | None) -> list | dict | None:
@@ -96,10 +141,58 @@ def main():
     if pred.empty:
         die("predictions CSV has no rows")
 
-    # Accept both dotted and underscore half-point columns
+    # Accept both old wide p_over_* format and new tall Denali format
     p_cols = [c for c in pred.columns if c.startswith("p_over_")]
+
     if not p_cols:
-        die(f"predictions CSV missing p_over_* columns. Header={list(pred.columns)}")
+        # New Denali-style tall format expected:
+        # columns: player_id, game_id, line, prob_over, model
+        required = {"player_id", "game_id", "line", "prob_over"}
+        missing_req = required - set(pred.columns)
+        if missing_req:
+            die(
+                "predictions CSV is neither wide p_over_* nor tall Denali format. "
+                f"Header={list(pred.columns)}, missing required={sorted(missing_req)}"
+            )
+
+        # Convert line (e.g. 0.5, 1.5, 2.5) to suffix used in p_over_* names
+        def line_to_suffix(x):
+            s = str(x).strip()
+            # Normalize typical decimal odds like 0.5 -> 0_5
+            if s.endswith(".5"):
+                s = s.replace(".5", "_5")
+            # Fallback normalization: replace dot with underscore, handle +/- if they ever show up
+            s = s.replace(".", "_").replace("+", "p").replace("-", "m")
+            return s
+
+        # Build a wide frame: one row per (player_id, game_id), columns p_over_{suffix}
+        tmp = pred.copy()
+        tmp["line_suffix"] = tmp["line"].apply(line_to_suffix)
+
+        wide = (
+            tmp.pivot_table(
+                index=["player_id", "game_id"],
+                columns="line_suffix",
+                values="prob_over",
+                aggfunc="mean",  # if dupes somehow exist, average them
+            )
+            .reset_index()
+        )
+
+        # Flatten the pivoted columns and rename to p_over_*
+        wide.columns = [
+            f"p_over_{c}" if c not in ("player_id", "game_id") else c
+            for c in wide.columns
+        ]
+
+        pred = wide
+        p_cols = [c for c in pred.columns if c.startswith("p_over_")]
+
+        if not p_cols:
+            die(
+                "after pivoting tall Denali predictions, no p_over_* columns were created. "
+                f"Columns={list(pred.columns)}"
+            )
 
     # Extract numeric line from either p_over_0.5 or p_over_0_5
     def col_to_line(c: str) -> float | None:

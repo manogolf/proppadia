@@ -28,6 +28,8 @@ WITH base AS (
 ),
 
 -- Goalie logs with per-60 rates and rolling windows that EXCLUDE the current game
+-- Goalie logs with per-60 rates and rolling windows that EXCLUDE the current game,
+-- using ONLY regular-season games (game_type = 2).
 glogs AS (
   SELECT
     l.player_id,
@@ -50,7 +52,7 @@ glogs AS (
         THEN (l.saves::double precision / l.shots_faced::double precision)
          ELSE NULL END AS save_pct,
 
-    -- d5/d10/d20 rolling windows (exclude current row)
+    -- d5/d10/d20 rolling windows (exclude current row), across ALL prior regular-season games
     AVG(CASE WHEN COALESCE(l.toi_minutes,0) > 0
              THEN (l.saves::double precision / l.toi_minutes::double precision) * 60.0 END)
       OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
@@ -76,6 +78,9 @@ glogs AS (
       OVER (PARTITION BY l.player_id ORDER BY l.game_date, l.game_id
             ROWS BETWEEN 10 PRECEDING AND 1 PRECEDING) AS d10_sa_per60
   FROM nhl.goalie_game_logs_raw l
+  JOIN nhl.games g
+    ON g.game_id = l.game_id
+   AND g.game_type = 2  -- regular season only
 ),
 
 -- Most recent prior log snapshot for each goalie on the slate

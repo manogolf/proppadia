@@ -36,6 +36,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+import psycopg2
 
 
 # Feature registry (single source of truth)
@@ -261,6 +262,17 @@ def main():
         if X.shape[0] == 0:
             print(f"[warn] line {line}: no usable rows after feature selection; skipping.")
             continue
+
+        # --- NaN guardrail for Denali features ---
+        # LogisticRegression (and the scaler) can't handle NaNs; fill numeric features.
+        nan_counts = X.isna().sum()
+        if nan_counts.any():
+            print(
+                f"⚠️ NaNs in feature matrix for line {line}; filling with 0. "
+                "Counts by column:",
+                {col: int(cnt) for col, cnt in nan_counts.items() if cnt > 0},
+            )
+            X = X.fillna(0.0)
 
         try:
             proba = lr.predict_proba(X)

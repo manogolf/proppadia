@@ -134,101 +134,105 @@ def safe_json(obj, path: Path):
     path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
 
 
-def export_sog_denali_features(db_url: str, slate_date: str, out_csv: Path) -> None:
+def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
     """
-    Export SOG features for the given slate_date from nhl.training_features_sog_denali_export
-    into out_csv (which nhl-cli will pass to score_sog_phoenix.py).
+    Export Denali SOG features for a given slate_date directly from
+    nhl.training_features_sog_denali into a CSV used by score_sog_denali.py.
 
-    slate_date: 'YYYY-MM-DD'
+    This no longer depends on nhl.training_features_sog_denali_export.
     """
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-
     sql = f"""
-    COPY (
-      SELECT
-        season,
-        game_date,
-        game_id,
-        player_id,
-        team_id,
-        opponent_id,
-        shots_on_goal,
-        d5_sog_per60,
-        d10_sog_per60,
-        d20_sog_per60,
-        attempts_d10_per60,
-        team_d10_sf_per_game,
-        opp_d10_sf_allowed_per_game,
-        pace_index,
-        role_pp_share,
-        rest_days,
-        b2b_flag,
-        opp_d10_sf_per60,
-        team_d10_sa_per60,
-        opp_d10_sa_per60,
-        is_home,
-        num_shotwasongoal_last5,
-        num_shotwasongoal_last10,
-        num_shotwasongoal_season_to_date,
-        num_event_shot_last5,
-        num_event_shot_last10,
-        num_event_shot_season_to_date,
-        team_num_event_shot_for_last10,
-        team_num_shotwasongoal_for_last10,
-        last10_team_sog_share,
-        hot_last5_flag
-      FROM nhl.training_features_sog_denali_export
-      WHERE game_date = DATE '{slate_date}'
-      ORDER BY game_id, player_id
-    ) TO STDOUT WITH CSV HEADER
-    """
+COPY (
+  SELECT
+    player_id,
+    game_id,
+    team_id,
+    opponent_id,
+    is_home,
+    game_date,
+    season,
 
-    with psycopg2.connect(db_url) as conn, conn.cursor() as cur, open(out_csv, "w", newline="") as f:
+    shots_on_goal,
+
+    d5_sog_per60,
+    d10_sog_per60,
+    d20_sog_per60,
+    attempts_d10_per60,
+
+    rest_days,
+    b2b_flag,
+
+    pace_index,
+    pace_matchup_index,
+
+    team_d10_sf_per_game,
+    opp_d10_sf_allowed_per_game,
+    opp_d10_sf_per60,
+    team_d10_sa_per60,
+    opp_d10_sa_per60,
+
+    role_pp_share,
+
+    szn_toi_per_game_5on5,
+    szn_toi_per_game_pp,
+    szn_toi_per_game_pk,
+    szn_shifts_per_game_5on5,
+    szn_shifts_per_game_pp,
+    szn_shifts_per_game_pk,
+
+    season_5on5_icetime_per_game,
+    season_5on4_icetime_per_game,
+    season_4on5_icetime_per_game,
+    season_5on5_shifts_per_game,
+    season_5on4_shifts_per_game,
+    season_4on5_shifts_per_game,
+
+    team_szn_5on5_top_line_xgf_share,
+    team_5v5_top_line_icetime_share,
+    team_5v5_top_line_shotattempts_share,
+
+    last10_team_sog_share,
+    team_num_sog_last10,
+    team_num_event_last10,
+
+    num_sog_last5,
+    num_sog_last10,
+    num_sog_szn_to_date,
+
+    num_event_last5,
+    num_event_last10,
+    num_event_szn_to_date,
+
+    hot_last5_flag
+  FROM nhl.training_features_sog_denali
+  WHERE game_date = DATE '{slate_date}'
+  ORDER BY game_date, game_id, player_id
+) TO STDOUT WITH CSV HEADER
+"""
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    import psycopg2
+    with psycopg2.connect(db_url) as conn, conn.cursor() as cur, open(out_path, "w", newline="") as f:
         cur.copy_expert(sql, f)
-
 
 # ---------- names export ----------
 
 def export_names_csv(slate: str) -> Path:
     """
     exports/names_{slate}.csv with columns:
-      player_id,full_name,team_id,team_abbr,game_id,game_date
-    pulled from nhl.roster_status + nhl.players + nhl.games (+ nhl.teams for abbr).
+      player_id,full_name,team_id,team_code,game_id,game_date
+
+    Uses the static SQL file backend/nhl/exports/_export_names.sql, which expects:
+      -v slate_date=YYYY-MM-DD
     """
     out_path = EXPORTS_DIR / f"names_{slate}.csv"
-    tmp_sql = EXPORTS_DIR / "_export_names.sql"
-    tmp_sql.write_text(f"""
-    COPY (
-      WITH g AS (
-        SELECT game_id, game_date::date AS game_date, home_team_id, away_team_id
-        FROM nhl.games
-        WHERE game_date = DATE '{slate}'
-      ),
-      r AS (
-        SELECT DISTINCT r.player_id, r.team_id, r.game_id
-        FROM nhl.roster_status r
-        JOIN g USING (game_id)
-      )
-      SELECT
-        r.player_id,
-        COALESCE(NULLIF(btrim(p.full_name), ''), 'Player '||r.player_id::text) AS full_name,
-        r.team_id,
-        COALESCE(t.abbr, '') AS team_abbr,
-        r.game_id,
-        g.game_date
-      FROM r
-      LEFT JOIN nhl.players p ON p.player_id = r.player_id
-      LEFT JOIN nhl.teams   t ON t.team_id   = r.team_id
-      JOIN g USING (game_id)
-      ORDER BY team_abbr, full_name, r.player_id
-    ) TO STDOUT WITH CSV HEADER;
-    """)
-    csv_bytes = psql_stdout(tmp_sql)
+    sql_path = EXPORTS_DIR / "_export_names.sql"  # backend/nhl/exports/_export_names.sql
+
+    # Run the static SQL with a bound slate_date variable
+    csv_bytes = psql_stdout(sql_path, vars={"slate_date": slate})
     out_path.write_bytes(csv_bytes)
-    try:
-        tmp_sql.unlink()
-    except Exception:
-        pass
+
     print(f"[cli] names CSV → {out_path}")
     return out_path
 
@@ -395,7 +399,7 @@ def cmd_daily(with_odds: bool):
     # 4 Export feature CSVs for this slate
 
     # 4a) SOG (Denali view → helper)
-    export_sog_denali_features(db, slate, EXPORTS_DIR / "train_nhl_sog_v2.csv")
+    export_sog_denali_features(db, slate, EXPORTS_DIR / "train_nhl_sog_denali.csv")
 
     # 4b) Saves / Points via existing SQL exporters
     saves_csv  = psql_stdout(SQL_DIR / "export_saves.sql",  vars={"slate_date": slate})
@@ -404,10 +408,10 @@ def cmd_daily(with_odds: bool):
     (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
     (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
 
-    print("exports → train_nhl_sog_v2.csv (Denali), train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
+    print("exports → train_nhl_sog_denali.csv (Denali), train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
 
     # 5) Score SOG (Denali logistic models under backend/nhl/models/latest/shots_on_goal/sog_player_v2)
-    sog_model_root = MODELS_DIR / "latest" / "shots_on_goal" / "sog_player_v2"
+    sog_model_root = MODELS_DIR / "latest" / "shots_on_goal" / "sog_player_denali"
     if not sog_model_root.exists():
         raise SystemExit(f"Missing SOG models at {sog_model_root}; train sog_player_v2 first.")
 
@@ -415,7 +419,7 @@ def cmd_daily(with_odds: bool):
         [
             PY,
             SCRIPTS_DIR / "score_sog_denali.py",
-            "--features-csv", EXPORTS_DIR / "train_nhl_sog_v2.csv",
+            "--features-csv", EXPORTS_DIR / "train_nhl_sog_denali.csv",
             "--model-root",   sog_model_root,
             "--out",          PROC_DIR / "sog_predictions.csv",
         ]

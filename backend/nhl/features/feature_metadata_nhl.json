@@ -1,21 +1,84 @@
 {
   "shots_on_goal_denali": [
+    "is_home",
+
     "d5_sog_per60",
     "d10_sog_per60",
     "d20_sog_per60",
     "attempts_d10_per60",
-    "team_d10_sf_per_game",
-    "opp_d10_sf_allowed_per_game",
-    "pace_index",
+
     "rest_days",
     "b2b_flag",
-    "role_pp_share",
+
+    "pace_index",
+    "pace_matchup_index",
+
+    "team_d10_sf_per_game",
+    "opp_d10_sf_allowed_per_game",
     "opp_d10_sf_per60",
     "team_d10_sa_per60",
     "opp_d10_sa_per60",
-    "is_home",
+
+    "role_pp_share",
+
+    "szn_toi_per_game_5on5",
+    "szn_toi_per_game_pp",
+    "szn_toi_per_game_pk",
+    "szn_shifts_per_game_5on5",
+    "szn_shifts_per_game_pp",
+    "szn_shifts_per_game_pk",
+
+    "season_5on5_icetime_per_game",
+    "season_5on4_icetime_per_game",
+    "season_4on5_icetime_per_game",
+    "season_5on5_shifts_per_game",
+    "season_5on4_shifts_per_game",
+    "season_4on5_shifts_per_game",
+
+    "team_szn_5on5_top_line_xgf_share",
+    "team_5v5_top_line_icetime_share",
+    "team_5v5_top_line_shotattempts_share",
+
     "last10_team_sog_share",
-    "hot_last5_flag",
+    "team_num_sog_last10",
+    "team_num_event_last10",
+
+    "num_sog_last5",
+    "num_sog_last10",
+    "num_sog_szn_to_date",
+
+    "num_event_last5",
+    "num_event_last10",
+    "num_event_szn_to_date",
+
+    "hot_last5_flag"
+  ],
+
+  "goalie_saves": [
+    "is_home",
+    "rest_days",
+    "b2b_flag",
+    "start_prob",
+    "d5_saves_per60",
+    "d10_saves_per60",
+    "d20_saves_per60",
+    "d5_shots_faced_per60",
+    "season_save_pct",
+    "opponent_id",
+    "team_d10_sf_per60",
+    "team_d10_sa_per60",
+    "opp_d10_sf_per60",
+    "opp_d10_sa_per60",
+    "pace_matchup_index"
+  ],
+
+  "points": [
+    "is_home",
+    "d5_sog_per60",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share",
     "num_shotwasongoal_last5",
     "num_shotwasongoal_last10",
     "num_shotwasongoal_season_to_date",
@@ -23,6 +86,7 @@
     "num_event_shot_last10",
     "num_event_shot_season_to_date",
     "team_num_event_shot_for_last10",
-    "team_num_shotwasongoal_for_last10"
+    "team_num_shotwasongoal_for_last10",
+    "hot_last5_flag"
   ]
 }
