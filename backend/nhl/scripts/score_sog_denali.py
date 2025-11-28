@@ -281,14 +281,19 @@ def main():
 
         p_over = proba[:, 1]
 
-        for (player_id, game_id), prob in zip(
-            zip(meta["player_id"].values, meta["game_id"].values),
-            p_over,
-        ):
+        # Carry through meta info (season, game_date, team_id, opponent_id) so
+        # downstream scripts (export_names_csv, build_sog_with_market) can see it.
+        for m, prob in zip(meta.itertuples(index=False), p_over):
             out_rows.append(
                 {
-                    "player_id": int(player_id),
-                    "game_id": int(game_id),
+                    "season": int(m.season),
+                    "game_date": str(m.game_date),
+                    "player_id": int(m.player_id),
+                    "team_id": int(m.team_id) if pd.notna(m.team_id) else None,
+                    "opponent_id": int(m.opponent_id)
+                    if pd.notna(m.opponent_id)
+                    else None,
+                    "game_id": int(m.game_id),
                     "line": float(line),
                     "prob_over": float(prob),
                     "model": "sog_phoenix_lr",

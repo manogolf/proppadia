@@ -20,6 +20,20 @@ def norm_name(s: str) -> str:
     s = s.replace("-", " ").replace(".", " ").replace("’", "").replace("'", "")
     return " ".join(s.lower().split())
 
+def short_key(norm: str) -> str:
+    """
+    Build a name key like 't meier' from either 'timo meier' or 't meier'.
+    This lets OddsAPI full names and scoreboard-style 'T. Meier' align.
+    """
+    if not isinstance(norm, str):
+        return ""
+    parts = norm.split()
+    if not parts:
+        return ""
+    last = parts[-1]
+    first_initial = parts[0][0]
+    return f"{first_initial} {last}"
+
 def american_to_prob(a) -> float:
     try:
         A = float(a)
@@ -117,8 +131,8 @@ def load_odds_json(path: Path | None):
 
 def parse_points_odds(raw) -> pd.DataFrame | None:
     """
-    Return median Over price per (name_norm, line_str) and a representative full_name for display.
-    Columns: name_norm, line_str, price_over, full_name_odds
+    Return median Over price per (name_short, line_str) and a representative full_name for display.
+    Columns: name_short, line_str, price_over, full_name_odds
     """
     if raw is None:
         return None
@@ -131,13 +145,14 @@ def parse_points_odds(raw) -> pd.DataFrame | None:
                     if o.get("name") != "Over":
                         continue
                     disp = (o.get("description") or o.get("player") or "").strip()
-                    nm = norm_name(disp)
+                    nm_norm = norm_name(disp)
+                    nm_short = short_key(nm_norm)
                     pt = o.get("point")
                     pr = o.get("price")
-                    if nm and (pt is not None) and (pr is not None):
+                    if nm_short and (pt is not None) and (pr is not None):
                         recs.append(
                             {
-                                "name_norm": nm,
+                                "name_short": nm_short,
                                 "full_name_odds": disp,
                                 "line_str": str(pt),
                                 "price": float(pr),
@@ -153,7 +168,7 @@ def parse_points_odds(raw) -> pd.DataFrame | None:
     if not recs:
         return None
     od = pd.DataFrame(recs)
-    med = od.groupby(["name_norm", "line_str"], as_index=False).agg(
+    med = od.groupby(["name_short", "line_str"], as_index=False).agg(
         price_over=("price", "median"),
         full_name_odds=("full_name_odds", "first"),
     )
@@ -178,7 +193,7 @@ def main():
 
     # ---- Odds (used in both modes)
     odds_raw = load_odds_json(Path(args.odds_json) if args.odds_json else None)
-    med = parse_points_odds(odds_raw)  # name_norm, line_str, price_over, full_name_odds
+    med = parse_points_odds(odds_raw)  # name_short, line_str, price_over, full_name_odds
 
     # ---- Mode
     have_preds = bool(args.pred and args.names and Path(args.pred).exists() and Path(args.names).exists())
@@ -196,7 +211,8 @@ def main():
             print(f"[points_with_market] odds-only: no player_points found; wrote empty {out}")
             return
 
-        df = med.copy()  # columns: name_norm, line_str, price_over, full_name
+        df = med.copy()  # name_short, line_str, price_over, full_name_odds
+        df["full_name"] = df["full_name_odds"]
         df["line"] = pd.to_numeric(df["line_str"], errors="coerce")
         df["p_over_mkt"] = df["price_over"].map(american_to_prob)
         df["fair_over"] = df["p_over_mkt"].map(prob_to_american)
@@ -239,7 +255,6 @@ def main():
             except Exception:
                 pass
 
-
     # Normalize ID types once (BEFORE any mapping by id)
     for c in ("player_id", "team_id", "game_id"):
         if c in long.columns:
@@ -250,19 +265,25 @@ def main():
     # Primary join: by player_id (brings team_id and full_name when available)
     df = long.merge(names, on=["player_id"], how="left")
 
-    # Build name_norm for odds join (after we’ve pulled names from names CSV)
+    # Build name_norm/short for odds join (after we’ve pulled names from names CSV)
     base_name = df["full_name"].fillna("")
     df["name_norm"] = base_name.astype(str).map(norm_name)
+    df["name_short"] = df["name_norm"].map(short_key)
 
     # line_str for odds
-    df["line_str"] = df["line"].map(lambda x: (str(float(x)).rstrip("0").rstrip(".")) if pd.notna(x) else "")
+    df["line_str"] = df["line"].map(
+        lambda x: (str(float(x)).rstrip("0").rstrip(".")) if pd.notna(x) else ""
+    )
 
     # Merge market medians; avoid column collision and use odds display name only as fallback
     if med is not None:
-        df = df.merge(med, on=["name_norm", "line_str"], how="left", suffixes=("", "_odds"))
+        df = df.merge(med, on=["name_short", "line_str"], how="left", suffixes=("", "_odds"))
         # fill missing display name from odds, but do NOT overwrite valid names
         if "full_name_odds" in df.columns:
-            df["full_name"] = df["full_name"].where(df["full_name"].notna() & (df["full_name"].astype(str).str.strip() != ""), df["full_name_odds"])
+            df["full_name"] = df["full_name"].where(
+                df["full_name"].notna() & (df["full_name"].astype(str).str.strip() != ""),
+                df["full_name_odds"],
+            )
     else:
         df["price_over"] = pd.NA  # no odds available
 
@@ -278,7 +299,7 @@ def main():
     )
     df["fair_over"] = df["p_over"].map(prob_to_american)
 
-# ---- Final cleanup before writing ----
+    # ---- Final cleanup before writing ----
 
     # 1) Normalize names: turn real NaN and the strings "nan"/"NaN"/"None" into empty,
     #    then also blank numeric-only names so UI falls back to player_id when needed.

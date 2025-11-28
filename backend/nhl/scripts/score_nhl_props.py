@@ -200,6 +200,22 @@ def main():
     meta_date_col = meta_item.get("date_col") if isinstance(meta_item, dict) else None
     date_col = meta_date_col or args.date_col
 
+    if date_col:
+        # If the expected date column isn't present, try to salvage, then degrade gracefully
+        if date_col not in df.columns:
+            # try forgiving match (strip + lowercase)
+            normalized = {c.strip().lower(): c for c in df.columns}
+            key = date_col.strip().lower()
+            if key in normalized:
+                real_col = normalized[key]
+                if real_col != date_col:
+                    print(f"⚠️ Using column '{real_col}' as '{date_col}' (normalized match)")
+                df[date_col] = df[real_col]
+            else:
+                # last resort: log and continue without date-based behavior
+                print(f"⚠️ Missing date column: {date_col}; continuing without date-based calibration")
+                date_col = None
+
     # ---- Model's expected order (from artifact) ----
     if family == "poisson":
         model_feature_order = artifact["sklearn_poisson"]["feature_order"]
@@ -210,8 +226,11 @@ def main():
         sys.exit(f"Unsupported family in model index: {family}")
 
     # ---- CSV sanity ----
-    if date_col not in df.columns:
-        sys.exit(f"Missing date column: {date_col}")
+    if not date_col or date_col not in df.columns:
+        # We already logged a warning earlier if we knew the name;
+        # here we just skip date-based calibration entirely.
+        print(f"Missing date column: {date_col}; skipping date-based calibration")
+        return df
 
     # Informational: identifiers present
     id_cols = [c for c in ("player_id", "game_id") if c in df.columns]

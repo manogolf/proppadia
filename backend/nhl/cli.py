@@ -27,11 +27,12 @@ import argparse
 import json
 import os
 import sys
+import subprocess
 import subprocess as sp
 from pathlib import Path
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 import psycopg2  # or psycopg2-binary, whichever you're using
-
 import requests
 
 # ---------- bootstrap env ----------
@@ -131,7 +132,7 @@ def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
 
 def safe_json(obj, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
+    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2))
 
 
 def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
@@ -223,17 +224,17 @@ def export_names_csv(slate: str) -> Path:
     exports/names_{slate}.csv with columns:
       player_id,full_name,team_id,team_code,game_id,game_date
 
-    Uses the static SQL file backend/nhl/exports/_export_names.sql, which expects:
+    Uses backend/nhl/exports/_export_names.sql, which expects:
       -v slate_date=YYYY-MM-DD
     """
     out_path = EXPORTS_DIR / f"names_{slate}.csv"
     sql_path = EXPORTS_DIR / "_export_names.sql"  # backend/nhl/exports/_export_names.sql
 
-    # Run the static SQL with a bound slate_date variable
+    # Run the static SQL with a bound slate_date variable and capture CSV bytes
     csv_bytes = psql_stdout(sql_path, vars={"slate_date": slate})
     out_path.write_bytes(csv_bytes)
 
-    print(f"[cli] names CSV → {out_path}")
+    print(f"[export_names_csv] wrote names CSV → {out_path}")
     return out_path
 
 # ---------- odds fetch ----------
@@ -247,6 +248,7 @@ def fetch_odds(
     out_today: Path = SITE_DIR / "odds_nhl_playerprops_today.json",
 ):
     key = os.environ.get("ODDS_API_KEY", "").strip()
+    print(f"[fetch_odds] Using ODDS_API_KEY starting with: {key[:8]!r}")
     if not key:
         print("⚠️  ODDS_API_KEY not set — writing empty odds files.")
         safe_json([], out_today)
@@ -258,51 +260,119 @@ def fetch_odds(
 
     base = "https://api.the-odds-api.com/v4/sports/icehockey_nhl"
 
-    # Events
+    # 1) Fetch events
     ev_url = f"{base}/events?dateFormat=iso&daysFrom={days_from}&apiKey={key}"
-    print(f"→ Fetching events (daysFrom={days_from}) …")
-    r = requests.get(ev_url, timeout=30)
-    r.raise_for_status()
-    events = r.json()
+    print(f"→ Fetching events (daysFrom={days_from}) … {ev_url}")
+    try:
+        r = requests.get(ev_url, timeout=30)
+        print(f"   events status={r.status_code}")
+        r.raise_for_status()
+    except Exception as e:
+        print(f"❌ Failed to fetch events from The Odds API: {e}")
+        safe_json([], out_today)
+        try:
+            out_latest.write_text(out_today.read_text())
+        except Exception:
+            pass
+        return
+
+    try:
+        events = r.json()
+    except Exception as e:
+        print(f"❌ Failed to parse events JSON: {e}")
+        safe_json([], out_today)
+        try:
+            out_latest.write_text(out_today.read_text())
+        except Exception:
+            pass
+        return
+
+    if not isinstance(events, list):
+        print(f"❌ Unexpected events payload type: {type(events)}; writing empty odds.")
+        safe_json([], out_today)
+        try:
+            out_latest.write_text(out_today.read_text())
+        except Exception:
+            pass
+        return
+
     (SITE_DIR / "events_today.json").write_text(json.dumps(events))
     print(f"   events_today.json → {len(events)} events")
 
-    # Player props
+    # 2) Fetch player props per event
     print(f"→ Fetching player props (markets={markets}, regions={regions}) …")
-    all_event_odds = []
+    all_event_odds: list[dict] = []
+    ok_count = 0
+    fail_no_id = 0
+    fail_http = 0
+
     for ev in events:
         eid = ev.get("id")
+        home = ev.get("home_team") or ev.get("homeTeam")
+        away = ev.get("away_team") or ev.get("awayTeam")
+
         if not eid:
+            fail_no_id += 1
+            print(f"   ⚠️  Event missing id; home={home}, away={away} → appending empty dict")
             all_event_odds.append({})
             continue
+
         url = (
             f"{base}/events/{eid}/odds"
             f"?regions={regions}&markets={markets}&oddsFormat={odds_format}&apiKey={key}"
         )
-        ok = False
-        for _ in (1, 2, 3):
+
+        last_status = None
+        last_text = None
+        success = False
+
+        for attempt in (1, 2, 3):
             try:
                 rr = requests.get(url, timeout=30)
+                last_status = rr.status_code
                 if rr.ok:
-                    all_event_odds.append(rr.json())
-                    ok = True
-                    break
-            except Exception:
-                pass
-        if not ok:
+                    try:
+                        j = rr.json()
+                        all_event_odds.append(j)
+                        ok_count += 1
+                        success = True
+                        break
+                    except Exception as e:
+                        print(f"   ❌ JSON parse error for event {eid} (attempt {attempt}): {e}")
+                else:
+                    last_text = rr.text[:200]
+                    print(
+                        f"   ⚠️  Odds request failed for event {eid} (attempt {attempt}) "
+                        f"status={rr.status_code}"
+                    )
+            except Exception as e:
+                print(f"   ❌ Exception fetching odds for event {eid} (attempt {attempt}): {e}")
+
+        if not success:
+            fail_http += 1
+            print(
+                f"   ⚠️  Giving up on event {eid} after retries; "
+                f"last_status={last_status}, snippet={last_text!r}"
+            )
             all_event_odds.append({})
 
-    safe_json(all_event_odds, out_today)
+    # 3) Summary + write files
+    print(
+        f"✅ fetch_odds summary: events={len(events)}, "
+        f"success={ok_count}, missing_id={fail_no_id}, http_fail={fail_http}"
+    )
+
+    # If literally everything failed, prefer an empty array over [ {}, {}, ... ]
+    if ok_count == 0:
+        print("⚠️  No odds succeeded — writing [] instead of list of empty dicts.")
+        safe_json([], out_today)
+    else:
+        safe_json(all_event_odds, out_today)
+
     try:
         out_latest.write_text(out_today.read_text())
-    except Exception:
-        pass
-
-    total_bm = 0
-    for ev_obj in all_event_odds:
-        if isinstance(ev_obj, dict) and isinstance(ev_obj.get("bookmakers"), list):
-            total_bm += len(ev_obj["bookmakers"])
-    print(f"✅ Wrote {out_today} | events={len(events)} | bookmaker_arrays={total_bm}")
+    except Exception as e:
+        print(f"⚠️  Failed to mirror odds to odds_latest.json: {e}")
 
 # ---------- builders (CSV for site) ----------
 
@@ -402,7 +472,7 @@ def cmd_daily(with_odds: bool):
     export_sog_denali_features(db, slate, EXPORTS_DIR / "train_nhl_sog_denali.csv")
 
     # 4b) Saves / Points via existing SQL exporters
-    saves_csv  = psql_stdout(SQL_DIR / "export_saves.sql",  vars={"slate_date": slate})
+    saves_csv  = psql_stdout(SQL_DIR / "export_saves_from_denali.sql",  vars={"slate_date": slate})
     points_csv = psql_stdout(SQL_DIR / "export_points.sql", vars={"slate_date": slate})
 
     (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
@@ -425,7 +495,15 @@ def cmd_daily(with_odds: bool):
         ]
     )
 
-    # 5b) Load SOG predictions into nhl.predictions (Denali)
+    # 5b) Calibrate SOG probabilities with Poisson baseline by line
+    run(
+        [
+            PY,
+            SCRIPTS_DIR / "calibrate_sog_poisson.py",
+        ]
+    )
+
+    # 5c) Load SOG predictions into nhl.predictions (Denali)
     run(
         [
             PY,
@@ -455,30 +533,40 @@ def cmd_daily(with_odds: bool):
     else:
         print(f"⚠️  No saves models at {saves_model_dir} — skipping saves scoring.")
 
-    # 7) Score POINTS using phoenix models under backend/nhl/models/latest/points
-    points_model_root = MODELS_DIR / "latest" / "points"
-    if points_model_root.exists():
-        run(
-            [
-                PY,
-                SCRIPTS_DIR / "score_points_phoenix.py",
-                "--features-csv", EXPORTS_DIR / "train_nhl_points_v2.csv",
-                "--model-root",   points_model_root,
-                "--out",          PROC_DIR / "points_predictions.csv",
-            ]
-        )
-    else:
-        print(f"⚠️  No points models at {points_model_root} — skipping points scoring.")
+    # 7) Phoenix points scoring (raw model probabilities)
+    run(
+        [
+            PY,
+            SCRIPTS_DIR / "score_points_phoenix.py",
+            "--features-csv",
+            EXPORTS_DIR / "train_nhl_points_v2.csv",
+            "--model-root",
+            MODELS_DIR / "latest" / "points",
+            "--out",
+            PROC_DIR / "points_predictions.csv",
+        ]
+    )
+
+    # 7b) Calibrate Phoenix points to sane probabilities by line
+    #     This will overwrite backend/nhl/data/processed/points_predictions.csv
+    #     with calibrated probabilities (prob_over), while preserving
+    #     prob_over_raw and prob_over_calibrated columns for inspection.
+    run(
+        [
+            PY,
+            SCRIPTS_DIR / "calibrate_points_phoenix.py",
+        ]
+    )
 
     # 8) Odds
     if with_odds:
         fetch_odds()
 
-    # 9) Build site CSVs
+    # 9) Build site CSVs (points now see calibrated prob_over)
     build_sog(slate)
     build_saves(slate)
     build_points(slate)
-
+    
     # 10) Yesterday logs → promote to raw
     run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
     run([PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env={"SLATE_DATE": yday})

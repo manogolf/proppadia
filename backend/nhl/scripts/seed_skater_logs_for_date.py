@@ -193,6 +193,38 @@ def _expand_initial_last(nm_norm: str, roster_map_keys: list[str]) -> str | None
              if k.endswith(" " + last_norm) and k[0] == first_init]
     return cands[0] if len(cands) == 1 else None
 
+def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int | None):
+    """
+    Upsert a basic row into nhl.players for a given NHL player ID.
+
+    Safe to call repeatedly:
+      - If the player doesn't exist yet, it inserts them.
+      - If they do exist, it only fills in missing name / team_id.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO nhl.players (player_id, full_name, team_id)
+            VALUES (
+              %s,
+              COALESCE(NULLIF(%s, ''), 'Player ' || %s::text),
+              %s
+            )
+            ON CONFLICT (player_id) DO UPDATE
+            SET
+              full_name = COALESCE(
+                NULLIF(EXCLUDED.full_name, ''),
+                nhl.players.full_name
+              ),
+              team_id   = COALESCE(EXCLUDED.team_id, nhl.players.team_id)
+            """,
+            (
+                nhl_id,
+                full_name or "",
+                nhl_id,
+                team_id,
+            ),
+        )
 
 def roster_name_map(conn, game_id: int):
     """
@@ -508,6 +540,30 @@ def main():
                             pid = ext_map.get(int(s["nhl_id"]))
 
                     if pid is None:
+                        # Auto-heal nhl.players so future runs can map this skater.
+                        nhl_id_val = s.get("nhl_id")
+                        team_id_val = s.get("team_id")
+                        full_name_val = (
+                            s.get("full_name")
+                            or s.get("name")
+                            or s.get("player")
+                            or None
+                        )
+
+                        if nhl_id_val is not None:
+                            try:
+                                ensure_player_exists(
+                                    conn,
+                                    nhl_id=int(nhl_id_val),
+                                    full_name=full_name_val,
+                                    team_id=int(team_id_val) if team_id_val is not None else None,
+                                )
+                            except Exception as e:
+                                print(
+                                    f"[seed_skater_logs] warn: ensure_player_exists "
+                                    f"failed for nhl_id={nhl_id_val}: {e}"
+                                )
+
                         skipped_no_map += 1
                         continue
 

@@ -403,6 +403,41 @@
         68: "UTA",
       };
 
+      // Hydrate each dataset's rows with a `team` string (e.g. "NJD") from team_id.
+      // This restores the old behavior where search by team (e.g. "njd") works.
+      function hydrateTeamsForDataset(ds) {
+        if (!ds || !Array.isArray(ds.rows)) return;
+        for (const r of ds.rows) {
+          // Normalize team_id to a number if it comes in as string
+          const tid = r.team_id != null ? Number(r.team_id) : NaN;
+          const abbr = Number.isFinite(tid) ? TEAM_ABBR[tid] || "" : "";
+
+          // Only fill if `team` is missing / empty; don't overwrite if already present
+          const existing = (r.team || "").toString().trim();
+          if (!existing && abbr) {
+            r.team = abbr;
+          }
+        }
+      }
+
+      // IMPORTANT: call hydrateTeamsForDataset() right after you load each dataset.
+      // For example, wherever you currently assign state.sog/state.saves/state.points:
+
+      // Example shape (adapt this to your actual load code):
+      // state.sog = { header, rows };
+      // state.saves = { header, rows };
+      // state.points = { header, rows };
+
+      // After those assignments, add:
+      //   hydrateTeamsForDataset(state.sog);
+      //   hydrateTeamsForDataset(state.saves);
+      //   hydrateTeamsForDataset(state.points);
+
+      // With that in place, this existing filter code:
+      //   const hay = `${r.full_name || ""} ${r.team || ""} ${r.game_id || ""}`.toLowerCase();
+      // will now see values like "njd" in `r.team`, and searching "njd" / "NJD"
+      // will work again.
+
       function displayTeam(r) {
         const idStr = String(r.team_id ?? r.teamId ?? "").trim();
         const idNum = Number(idStr);
@@ -750,9 +785,11 @@
 
         let baseRows, pGetter;
         if (longMode) {
+          // Long format: one row per (player, line)
           baseRows = dsRows.filter((r) => equalLine(r.line, key));
           pGetter = (r) => toFloat(r.p_over);
         } else {
+          // Wide format: per-line p_over columns
           const pcol = `p_over_${String(key).replace(".", "_")}`;
           baseRows = dsRows.filter(
             (r) => r[pcol] !== undefined || equalLine(r.line, key)
@@ -763,6 +800,7 @@
           };
         }
 
+        // Optional filter: keep only rows that actually have a posted book line
         let rows = baseRows;
         if (useOdds) {
           const bucket = state.odds[market] || {};
@@ -841,10 +879,27 @@
             };
           })
           .filter((r) => {
+            // Text search
             if (q) {
-              const hay = `${r.full_name || ""} ${r.team || ""} ${
-                r.game_id || ""
-              }`.toLowerCase();
+              let teamAbbr = "";
+              const rawTid = r.team_id ?? r.teamId;
+              if (rawTid != null) {
+                const tid = Number(rawTid);
+                if (Number.isFinite(tid) && TEAM_ABBR[tid]) {
+                  teamAbbr = TEAM_ABBR[tid];
+                }
+              }
+
+              const hay = [
+                r.full_name || r.player || r.player_name || "",
+                r.team || "",
+                teamAbbr || "",
+                String(r.team_id ?? r.teamId ?? ""),
+                String(r.game_id ?? r.gameId ?? ""),
+              ]
+                .join(" ")
+                .toLowerCase();
+
               if (!hay.includes(q)) return false;
             }
 
@@ -865,19 +920,32 @@
           });
 
         const anyPrice = enriched.some((r) => Number.isFinite(r.price_over));
+
         enriched.sort((a, b) => {
           if (anyPrice) {
-            const ea = Number.isFinite(a.ev) ? a.ev : -1e9;
-            const eb = Number.isFinite(b.ev) ? b.ev : -1e9;
-            return eb - ea;
+            const aHasEv = Number.isFinite(a.ev);
+            const bHasEv = Number.isFinite(b.ev);
+
+            // 1) Both have EV → sort by EV desc
+            if (aHasEv && bHasEv) {
+              return b.ev - a.ev;
+            }
+
+            // 2) One has EV, the other doesn't → EV row first
+            if (aHasEv && !bHasEv) return -1;
+            if (!aHasEv && bHasEv) return 1;
+
+            // 3) Neither has EV → fall back to model probability
+            return (b.p || 0) - (a.p || 0);
           }
+
+          // No prices at all → sort purely by model probability
           return (b.p || 0) - (a.p || 0);
         });
 
-        const topN = Math.max(
-          1,
-          Math.min(200, Number(document.getElementById("topN").value) || 20)
-        );
+        const topNInput = Number(document.getElementById("topN").value) || 20;
+        const topN = Math.max(1, Math.min(500, topNInput));
+
         return { rows: enriched.slice(0, topN) };
       }
 
