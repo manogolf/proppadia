@@ -55,10 +55,77 @@ def main():
         print(f"ℹ️ No SOG predictions in {pred_path}; nothing to load.")
         return
 
+    # We ultimately want one row per (player, game, line, model)
     required_cols = {"player_id", "game_id", "line", "prob_over", "model"}
     missing = required_cols - set(df.columns)
+
     if missing:
-        raise SystemExit(f"FATAL: missing required columns in {pred_path}: {sorted(missing)}")
+        # Try to adapt from wide Denali format:
+        #   player_id, game_id, ..., p_over_lr_0_5, p_over_rf_0_5, p_over_0_5, ...
+        #
+        # We *only* use the blended p_over_* columns for loading, not the lr/rf
+        # components. So we look for columns like p_over_0_5, p_over_1_5, etc.
+        wide_blend_cols = [
+            c
+            for c in df.columns
+            if c.startswith("p_over_")
+            and "_lr_" not in c
+            and "_rf_" not in c
+        ]
+
+        if wide_blend_cols:
+            base_cols = [
+                c
+                for c in [
+                    "player_id",
+                    "game_id",
+                    "team_id",
+                    "opponent_id",
+                    "is_home",
+                    "game_date",
+                ]
+                if c in df.columns
+            ]
+
+            long_rows = []
+            for _, row in df.iterrows():
+                base = {k: row[k] for k in base_cols}
+                for col in wide_blend_cols:
+                    val = row[col]
+                    if pd.isna(val):
+                        continue
+
+                    # col like "p_over_2_5" -> suffix "2_5" -> line 2.5
+                    suffix = col[len("p_over_"):]  # e.g. "2_5"
+                    try:
+                        line_val = float(suffix.replace("_", "."))
+                    except ValueError:
+                        # If somehow a non-line column sneaks in, skip it
+                        continue
+
+                    long_rows.append(
+                        {
+                            **base,
+                            "line": line_val,
+                            "model": "denali_blend",
+                            "prob_over": float(val),
+                        }
+                    )
+
+            if not long_rows:
+                raise SystemExit(
+                    f"FATAL: could not build long-format predictions from wide p_over_* "
+                    f"columns in {pred_path}"
+                )
+
+            df = pd.DataFrame(long_rows)
+            # Recompute required/missing after reshaping
+            missing = required_cols - set(df.columns)
+
+    if missing:
+        raise SystemExit(
+            f"FATAL: missing required columns in {pred_path}: {sorted(missing)}"
+        )
 
     # Clean / coerce types
     df = df.copy()

@@ -197,33 +197,54 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
     """
     Upsert a basic row into nhl.players for a given NHL player ID.
 
-    Safe to call repeatedly:
-      - If the player doesn't exist yet, it inserts them.
-      - If they do exist, it only fills in missing name / team_id.
+    Behavior:
+      - If the player already exists, only fills in missing team_id (and leaves
+        full_name/position alone).
+      - If they do not exist, inserts them with a real name and a generic 'F'
+        position. No placeholder names are ever written.
     """
+    raw_name = (full_name or "").strip()
+
     with conn.cursor() as cur:
+        # 1) Does this player already exist?
         cur.execute(
             """
-            INSERT INTO nhl.players (player_id, full_name, team_id)
-            VALUES (
-              %s,
-              COALESCE(NULLIF(%s, ''), 'Player ' || %s::text),
-              %s
-            )
-            ON CONFLICT (player_id) DO UPDATE
-            SET
-              full_name = COALESCE(
-                NULLIF(EXCLUDED.full_name, ''),
-                nhl.players.full_name
-              ),
-              team_id   = COALESCE(EXCLUDED.team_id, nhl.players.team_id)
+            SELECT player_id, full_name, position, team_id
+            FROM nhl.players
+            WHERE player_id = %s
             """,
-            (
-                nhl_id,
-                full_name or "",
-                nhl_id,
-                team_id,
-            ),
+            (nhl_id,),
+        )
+        row = cur.fetchone()
+
+        if row:
+            # Player already in table; only patch team_id if it's currently NULL
+            existing_team_id = row[3]
+            if team_id is not None and existing_team_id is None:
+                cur.execute(
+                    """
+                    UPDATE nhl.players
+                    SET team_id = %s
+                    WHERE player_id = %s
+                    """,
+                    (team_id, nhl_id),
+                )
+            # Done – do NOT touch full_name or position
+            return
+
+        # 2) Player does not exist yet — we must have a real, non-placeholder name
+        if not raw_name or raw_name.startswith("Player "):
+            raise ValueError(
+                f"Refusing to insert placeholder/empty name for nhl_id={nhl_id}: {raw_name!r}"
+            )
+
+        # 3) Insert a new, minimal but valid row
+        cur.execute(
+            """
+            INSERT INTO nhl.players (player_id, full_name, team_id, position)
+            VALUES (%s, %s, %s, 'F')
+            """,
+            (nhl_id, raw_name, team_id),
         )
 
 def roster_name_map(conn, game_id: int):

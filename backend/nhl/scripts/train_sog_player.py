@@ -71,7 +71,6 @@ LEAK_COLS = {
     "y_over",  # label we construct
 }
 
-
 def load_feature_list() -> list[str]:
     """
     Load the SOG feature list for Denali from the global feature registry JSON.
@@ -110,6 +109,84 @@ def load_feature_list() -> list[str]:
     print(f"Using feature set '{SOG_FEATURE_KEY}' with {len(feats)} columns.", file=sys.stderr)
     return feats
 
+# Default training CSV for SOG Denali
+TRAIN_SOG_DENALI_CSV = (
+    Path(__file__).resolve().parents[1] / "exports" / "train_sog_denali.csv"
+)
+
+def load_denali_training_df(csv_path: str | None = None) -> pd.DataFrame:
+    """
+    Load SOG Denali *training* data from CSV, enforcing:
+      - non-null shots_on_goal
+      - numeric dtypes where needed
+
+    This is the *only* source for training the SOG Denali models.
+    """
+    path = Path(csv_path) if csv_path is not None else TRAIN_SOG_DENALI_CSV
+    df = pd.read_csv(path)
+
+    if "shots_on_goal" not in df.columns:
+        print(
+            f"FATAL: shots_on_goal column missing in {path}", file=sys.stderr
+        )
+        sys.exit(1)
+
+    # drop rows with null label, just in case
+    df = df[df["shots_on_goal"].notna()].copy()
+    if df.empty:
+        print(
+            f"FATAL: no non-null shots_on_goal rows in {path}", file=sys.stderr
+        )
+        sys.exit(1)
+
+    # Make sure label is numeric
+    df["shots_on_goal"] = df["shots_on_goal"].astype(float)
+
+    return df
+
+def build_X_y_for_line(
+    df: pd.DataFrame,
+    line: float,
+    feature_cols: list[str],
+) -> tuple[pd.DataFrame, pd.Series]:
+    """
+    Given the full Denali training df and a target line (e.g., 1.5),
+    construct (X, y_over) for classification.
+
+    y_over = 1{ shots_on_goal > line }
+    """
+    if "shots_on_goal" not in df.columns:
+        print("FATAL: shots_on_goal column missing in training df.", file=sys.stderr)
+        sys.exit(1)
+
+    # no additional filtering here; df already has only training rows
+    df_line = df.copy()
+
+    # Label: over vs under
+    y_over = (df_line["shots_on_goal"] > line).astype(int)
+
+    # Make sure both classes are present
+    n_classes = y_over.nunique(dropna=True)
+    if n_classes < 2:
+        print(
+            f"FATAL: only one class present in y_over for line {line}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Feature matrix
+    missing_feats = [c for c in feature_cols if c not in df_line.columns]
+    if missing_feats:
+        print(
+            "FATAL: missing feature columns for SOG Denali:\n  "
+            + ", ".join(missing_feats),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    X = df_line[feature_cols].astype(float)
+
+    return X, y_over
 
 def main():
     ap = argparse.ArgumentParser(description="Train NHL SOG player-game models (Denali).")
@@ -142,16 +219,16 @@ def main():
         print(f"FATAL: training CSV not found: {path}", file=sys.stderr)
         sys.exit(2)
 
-    df = pd.read_csv(path)
-
-    if TARGET_COL not in df.columns:
-        print(f"FATAL: '{TARGET_COL}' column is required in training CSV.", file=sys.stderr)
-        sys.exit(2)
+    # ✅ Use the helper so we’re guaranteed:
+    #    - correct schema
+    #    - non-null shots_on_goal
+    df = load_denali_training_df(str(path))
 
     line = float(args.line)
 
-    # Label: Over(line)
-    df["y_over"] = (df[TARGET_COL] >= (line - 1e-9)).astype(int)
+    # --- Label: Over(line) ---
+    # Recommended: strict "over" (>) rather than >= with an epsilon.
+    df["y_over"] = (df[TARGET_COL] > line).astype(int)
 
     # Load canonical feature list and ensure all are present
     feats = load_feature_list()
@@ -164,23 +241,56 @@ def main():
         )
         sys.exit(2)
 
-    # Coerce numeric for features + label
+    # Normalize boolean-like features to 0/1 first
+    BOOL_FEATURES = {"is_home", "b2b_flag", "hot_last5_flag"}
+
+    for c in feats:
+        if c in df.columns and c in BOOL_FEATURES:
+            df[c] = (
+                df[c]
+                .replace(
+                    {
+                        True: 1,
+                        False: 0,
+                        "t": 1,
+                        "f": 0,
+                        "true": 1,
+                        "false": 0,
+                        "True": 1,
+                        "False": 0,
+                    }
+                )
+            )
+
+    # --- Coerce numeric + handle NaNs (Denali-friendly) ---
+
+    # Force everything to numeric first
     for c in feats + ["y_over"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    # Replace infinities with NaN, then:
+    #   - features: fill NaN with 0.0
+    #   - label:    fill NaN with 0 and cast to int
+    df[feats] = (
+        df[feats]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
+    df["y_over"] = (
+        df["y_over"]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+        .astype(int)
+    )
 
-    before = len(df)
-    df = df.dropna(subset=feats + ["y_over"])
     after = len(df)
-    if after < before:
-        print(f"Dropped {before - after} rows with NaNs.", file=sys.stderr)
     if after < 500:
-        print(f"WARNING: small training set after filtering (n={after}).", file=sys.stderr)
+        print(f"WARNING: small training set after cleaning (n={after}).", file=sys.stderr)
 
     X = df[feats].to_numpy(dtype=float)
     y = df["y_over"].to_numpy(dtype=int)
 
+    # Still keep the guard for pathological cases
     if np.unique(y).size < 2:
         print("FATAL: only one class present in y_over.", file=sys.stderr)
         sys.exit(2)

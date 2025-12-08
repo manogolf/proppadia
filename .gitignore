@@ -69,6 +69,7 @@ backend/nhl/models/**
 
 backend/mlb/models/archive/
 backend/mlb/models/latest/*.pkl
+models_out/
 
 # ── Legacy CRA subprojects that may linger ─────────────────────────
 mlb/backend/node_modules/

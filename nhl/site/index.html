@@ -1,4 +1,41 @@
 <!DOCTYPE html>
+<!--
+NHL Top 20 — Props Snapshot
+
+Purpose:
+  - Client-only dashboard to inspect NHL player props.
+  - No backend calls; everything runs in the browser using static CSV/JSON files.
+  - Primary data source is nhl/site/data/, but you can also drag-and-drop files.
+
+Expected inputs under ./data/:
+  - sog_with_market.csv
+      • One row per (player_id, game_id, line) for Shots on Goal.
+      • Includes calibrated Denali probabilities in p_over_* columns
+        (built from sog_predictions_wide_calibrated.csv).
+      • This page uses those calibrated p_over_* values as “Model P(over)”.
+  - saves_with_market.csv
+      • Goalie Saves props with model p_over_* and market columns.
+  - points_with_market.csv or points_predictions.csv
+      • Points props (with or without attached market info).
+  - odds_latest.json (optional)
+      • Player prop odds blob (SOG / Saves / Points).
+      • Used to restrict to “posted lines only” and to fill in prices
+        when they’re not present in the CSV.
+
+What “Model P(over)” shows:
+  - For SOG:
+      • Calibrated Denali LR/RF blend probabilities from p_over_<line> columns
+        in sog_with_market.csv.
+  - For Saves / Points:
+      • Whatever p_over_* you feed in those CSVs (currently raw model outputs).
+
+Usage:
+  - Drop the files into nhl/site/data/ and open this HTML file in a browser,
+    or drag-and-drop CSV/JSON directly onto the page.
+  - Use the controls to filter by market, line, player/team, edge threshold,
+    and optional American price to see EV and edge vs the market.
+-->
+
 <html lang="en">
   <head>
     <meta charset="utf-8" />

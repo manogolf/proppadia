@@ -1,318 +1,278 @@
 #!/usr/bin/env python3
 """
-score_sog_phoenix.py
-
-Use phoenix-trained SOG models to score a slate.
+Score NHL SOG (Denali) models for a single slate.
 
 Inputs:
-  --features-csv : CSV exported for the slate (now from the Denali union view)
-  --model-root   : root dir containing per-line subdirs
-                   e.g. backend/nhl/models/latest/shots_on_goal/sog_player_v2
-  --out          : output CSV path
+  --features-csv : CSV exported from export_sog_denali_pregame.sql
+                   (one row per player-game with Denali features)
+  --model-root   : Directory containing per-line subdirs:
+                     <model-root>/0_5/{lr.joblib, rf.joblib, feature_metadata.json}
+                     <model-root>/1_5/...
+                     <model-root>/2_5/...
+                     <model-root>/3_5/...
+  --out          : Output CSV (one row per player-game-line) with:
+                     player_id, game_id, team_id, opponent_id, is_home, game_date, season,
+                     prop_type, line, prob_over, prob_over_lr, prob_over_rf
 
-Models layout (per line):
-  backend/nhl/models/latest/shots_on_goal/sog_player_v2/
-    1_5/
-      lr.joblib
-    2_5/
-      lr.joblib
-    3_5/
-      lr.joblib
-    4_5/
-      lr.joblib
-
-Features:
-  Loaded from backend/nhl/features/feature_metadata_nhl.json
-
-We DO NOT read per-line feature_metadata.json anymore.
+This is prediction-only and kept separate from the training export.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
-import psycopg2
+from sklearn.preprocessing import StandardScaler
 
+# Lines we train/score for
+SOG_LINES = [0.5, 1.5, 2.5, 3.5]
 
-# Feature registry (single source of truth)
-FEATURE_REGISTRY_PATH = Path("backend/nhl/features/feature_metadata_nhl.json")
+# Bool-like features to coerce to 0/1
+BOOL_FEATURES = {"is_home", "b2b_flag", "hot_last5_flag"}
 
-SOG_FEATURE_KEYS_PREFERENCE = [
-    "shots_on_goal_denali",
+# ID/context columns we expect in the features CSV
+ID_COLS = [
+    "player_id",
+    "game_id",
+    "team_id",
+    "opponent_id",
+    "is_home",
+    "game_date",
+    "season",
 ]
 
-def load_sog_denali_features(csv_path: str):
+
+def line_dir_name(line: float) -> str:
+    """Convert 0.5 -> '0_5', 1.5 -> '1_5', etc."""
+    return str(line).replace(".", "_")
+
+
+def load_line_models(model_root: Path, line: float):
     """
-    Load a Denali SOG features CSV and return:
-      - df:   full DataFrame with all feature columns
-      - meta: DataFrame with identifiers + outcome
+    Load LR + RF models and feature list for a given line from:
+      <model_root>/<dir_name>/
     """
+    dname = line_dir_name(line)
+    line_dir = model_root / dname
+    if not line_dir.exists():
+        print(f"FATAL: model directory missing for line {line}: {line_dir}", file=sys.stderr)
+        sys.exit(2)
 
-    df = pd.read_csv(csv_path)
-
-    # ---- Alias / fill missing features that have clear semantics ----
-    # pace_matchup_index := pace_index (by design, until we have a real matchup metric)
-    if "pace_matchup_index" not in df.columns and "pace_index" in df.columns:
-        print("[info] slate CSV missing pace_matchup_index; filling from pace_index")
-        df["pace_matchup_index"] = df["pace_index"]
-
-    meta_cols = [
-        "season",
-        "game_date",
-        "game_id",
-        "player_id",
-        "team_id",
-        "opponent_id",
-        "shots_on_goal",
-    ]
-    meta = df[meta_cols].copy()
-
-    return df, meta
-
-def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
-    """
-    Export all columns from nhl.training_features_sog_denali_export
-    for the given slate_date into out_path.
-
-    This keeps the CSV in lockstep with the view definition.
-    """
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    sql = f"""
-    COPY (
-      SELECT *
-      FROM nhl.training_features_sog_denali_export
-      WHERE game_date = DATE '{slate_date}'
-      ORDER BY game_id, player_id
-    ) TO STDOUT WITH CSV HEADER
-    """
-
-    with psycopg2.connect(db_url) as conn, conn.cursor() as cur, open(out_path, "w", newline="") as f:
-        cur.copy_expert(sql, f)
-
-def load_feature_list() -> list[str]:
-    """
-    Load the SOG feature list from the global feature registry JSON.
-
-    We prefer the "shots_on_goal" key (v2 spec). If not present, we try the other
-    keys in SOG_FEATURE_KEYS_PREFERENCE.
-    """
-    if not FEATURE_REGISTRY_PATH.exists():
-        raise SystemExit(
-            f"FATAL: feature registry not found at {FEATURE_REGISTRY_PATH}. "
-            f"Expected a JSON file with SOG feature list."
-        )
-
-    meta = json.loads(FEATURE_REGISTRY_PATH.read_text())
-
-    # meta can be either:
-    # - { "shots_on_goal": [..], "shots_on_goal_phoenix": [..], ... }
-    # - or nested under "features"/"feature_registry"
-    if isinstance(meta, dict) and "feature_registry" in meta:
-        fr = meta["feature_registry"]
-    else:
-        fr = meta
-
-    if not isinstance(fr, dict):
-        raise SystemExit(
-            f"FATAL: unexpected structure in {FEATURE_REGISTRY_PATH}; "
-            f"expected an object mapping keys -> feature lists."
-        )
-
-    for key in SOG_FEATURE_KEYS_PREFERENCE:
-        if key in fr:
-            feats = fr[key]
-            if not isinstance(feats, list) or not feats:
-                raise SystemExit(
-                    f"FATAL: feature key '{key}' in {FEATURE_REGISTRY_PATH} is empty or not a list."
-                )
-            print(f"Using SOG feature set from key '{key}' in feature registry.")
-            return feats
-
-    raise SystemExit(
-        f"FATAL: none of {SOG_FEATURE_KEYS_PREFERENCE} found in {FEATURE_REGISTRY_PATH}. "
-        f"Please add a SOG feature list there."
-    )
-
-
-def load_line_model(line_dir: Path):
-    """
-    Load LR model for a specific line directory.
-
-    We expect:
-      line_dir / lr.joblib
-    Feature list is global (from FEATURE_REGISTRY_PATH), not stored here.
-    """
     lr_path = line_dir / "lr.joblib"
-    if not lr_path.exists():
-        return None
-    lr = joblib.load(lr_path)
-    return lr
+    rf_path = line_dir / "rf.joblib"
+    meta_path = line_dir / "feature_metadata.json"
+
+    if not lr_path.exists() or not rf_path.exists():
+        print(
+            f"FATAL: missing lr/rf models for line {line} in {line_dir}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if not meta_path.exists():
+        print(
+            f"FATAL: feature_metadata.json missing for line {line} in {line_dir}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    try:
+        lr = joblib.load(lr_path)
+        rf = joblib.load(rf_path)
+    except Exception as e:
+        print(f"FATAL: failed to load models for line {line}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        meta = json.loads(meta_path.read_text())
+        feats = meta.get("features") or []
+    except Exception as e:
+        print(f"FATAL: failed to read features from {meta_path}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if not feats:
+        print(
+            f"FATAL: empty feature list in metadata for line {line} ({meta_path})",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    return lr, rf, feats
 
 
 def prepare_features(df: pd.DataFrame, feats: list[str]) -> pd.DataFrame:
     """
-    Given the full Denali df and a feature list, build the X matrix
-    in the correct column order, applying minimal aliases (e.g. home_flag).
+    Prepare feature frame:
+      - Normalize bool-like columns to 0/1
+      - Coerce to numeric
+      - Replace inf with NaN, then fill with 0.0
+    Mirrors the trainer's behavior.
     """
-    X = df.copy()
+    df_feat = df.copy()
 
-    # Minimal / explicit aliasing only.
-    # home_flag <- is_home (if model expects home_flag and CSV has is_home).
-    if "home_flag" in feats and "home_flag" not in X.columns and "is_home" in X.columns:
-        X["home_flag"] = X["is_home"].astype(int)
-
-    # Coerce numeric where appropriate.
+    # Bool normalization
     for c in feats:
-        if c in X.columns:
-            X[c] = pd.to_numeric(X[c], errors="coerce")
+        if c in df_feat.columns and c in BOOL_FEATURES:
+            df_feat[c] = (
+                df_feat[c]
+                .replace(
+                    {
+                        True: 1,
+                        False: 0,
+                        "t": 1,
+                        "f": 0,
+                        "true": 1,
+                        "false": 0,
+                        "True": 1,
+                        "False": 0,
+                    }
+                )
+            )
 
-    # Build matrix strictly in feature order
-    try:
-        X_mat = X[feats].astype(float)
-    except KeyError as e:
-        missing = [m for m in feats if m not in X.columns]
-        raise SystemExit(
-            f"FATAL: missing required feature columns in slate CSV: {missing}"
-        ) from e
+    # Coerce to numeric
+    for c in feats:
+        if c not in df_feat.columns:
+            continue
+        df_feat[c] = pd.to_numeric(df_feat[c], errors="coerce")
 
-    # NOTE: We assume training already handled NaNs/scale appropriately.
-    # If any NaNs sneak in here (e.g., totally empty features for today),
-    # caller should decide whether to drop or treat as zero. For now,
-    # mirror training behavior and drop rows with NaNs upstream if needed.
-    return X_mat
+    # Replace infinities with NaN, then fill NaN with 0.0
+    df_feat[feats] = (
+        df_feat[feats]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
+
+    return df_feat[feats]
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--features-csv", required=True)
-    ap.add_argument("--model-root", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(description="Score NHL SOG Denali models for a slate.")
+    ap.add_argument(
+        "--features-csv",
+        required=True,
+        help="Pregame features CSV from export_sog_denali_pregame.sql",
+    )
+    ap.add_argument(
+        "--model-root",
+        required=True,
+        help="Root directory containing per-line Denali SOG models.",
+    )
+    ap.add_argument(
+        "--out",
+        required=True,
+        help="Output CSV path for SOG predictions.",
+    )
     args = ap.parse_args()
 
     features_path = Path(args.features_csv)
     if not features_path.exists():
-        raise SystemExit(f"FATAL: features CSV not found: {features_path}")
-
-    # Load Denali features: full df + meta (ids/outcome)
-    df, meta = load_sog_denali_features(features_path)
-
-    # Guard: empty slate (header only)
-    if meta.shape[0] == 0:
-        print(f"ℹ️ No rows in features CSV ({features_path}); nothing to score for this slate.")
-        out_path = Path(args.out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(
-            columns=["player_id", "game_id", "line", "prob_over", "model"]
-        ).to_csv(out_path, index=False)
-        return
-
-    # Required columns guard (check against meta)
-    for col in ("player_id", "game_id"):
-        if col not in meta.columns:
-            raise SystemExit(f"FATAL: features CSV missing required column '{col}'")
-
-    # Load global SOG feature list (v2 spec preferred)
-    feats = load_feature_list()
+        print(f"FATAL: features CSV not found: {features_path}", file=sys.stderr)
+        sys.exit(2)
 
     model_root = Path(args.model_root)
     if not model_root.exists():
-        raise SystemExit(f"FATAL: model root not found: {model_root}")
-
-    # Discover per-line model dirs (e.g., 1_5, 2_5, 3_5, 4_5)
-    line_dirs = []
-    for d in sorted(model_root.iterdir()):
-        if not d.is_dir():
-            continue
-        try:
-            line = float(d.name.replace("_", "."))
-        except ValueError:
-            continue
-        line_dirs.append((line, d))
-
-    if not line_dirs:
-        raise SystemExit(f"FATAL: no line subdirs found under {model_root}")
-
-    out_rows = []
-
-    for line, line_dir in line_dirs:
-        lr = load_line_model(line_dir)
-        if lr is None:
-            print(f"[warn] skipping line {line}: no lr.joblib in {line_dir}")
-            continue
-
-        # Validate features presence up front against df (Denali CSV)
-        missing = [
-            c
-            for c in feats
-            if c not in df.columns
-            and not (c == "home_flag" and "is_home" in df.columns)
-        ]
-        if missing:
-            raise SystemExit(
-                f"FATAL: line {line}: slate CSV missing required features: {missing}"
-            )
-
-        X = prepare_features(df, feats)
-        if X.shape[0] == 0:
-            print(f"[warn] line {line}: no usable rows after feature selection; skipping.")
-            continue
-
-        # --- NaN guardrail for Denali features ---
-        # LogisticRegression (and the scaler) can't handle NaNs; fill numeric features.
-        nan_counts = X.isna().sum()
-        if nan_counts.any():
-            print(
-                f"⚠️ NaNs in feature matrix for line {line}; filling with 0. "
-                "Counts by column:",
-                {col: int(cnt) for col, cnt in nan_counts.items() if cnt > 0},
-            )
-            X = X.fillna(0.0)
-
-        try:
-            proba = lr.predict_proba(X)
-        except Exception as e:
-            raise SystemExit(f"FATAL: predict_proba failed for line {line}: {e}")
-
-        p_over = proba[:, 1]
-
-        # Carry through meta info (season, game_date, team_id, opponent_id) so
-        # downstream scripts (export_names_csv, build_sog_with_market) can see it.
-        for m, prob in zip(meta.itertuples(index=False), p_over):
-            out_rows.append(
-                {
-                    "season": int(m.season),
-                    "game_date": str(m.game_date),
-                    "player_id": int(m.player_id),
-                    "team_id": int(m.team_id) if pd.notna(m.team_id) else None,
-                    "opponent_id": int(m.opponent_id)
-                    if pd.notna(m.opponent_id)
-                    else None,
-                    "game_id": int(m.game_id),
-                    "line": float(line),
-                    "prob_over": float(prob),
-                    "model": "sog_phoenix_lr",
-                }
-            )
+        print(f"FATAL: model_root does not exist: {model_root}", file=sys.stderr)
+        sys.exit(2)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if not out_rows:
-        print("ℹ️ No predictions generated; writing empty file.")
-        pd.DataFrame(
-            columns=["player_id", "game_id", "line", "prob_over", "model"]
-        ).to_csv(out_path, index=False)
-        return
+    # Load features CSV
+    df = pd.read_csv(features_path)
+    if df.empty:
+        print(f"FATAL: features CSV {features_path} is empty.", file=sys.stderr)
+        sys.exit(2)
 
-    out_df = pd.DataFrame(out_rows)
-    out_df.to_csv(out_path, index=False)
-    print(f"✅ wrote {len(out_df)} SOG predictions to {out_path}")
+    missing_ids = [c for c in ID_COLS if c not in df.columns]
+    if missing_ids:
+        print(
+            f"FATAL: features CSV missing required ID/context columns: {missing_ids}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    # Base identity/context frame to carry through
+    df_ids = df[ID_COLS].copy()
+
+    # Collect all per-line results
+    out_rows = []
+
+    print(
+        f"[score_sog_denali] Scoring {len(df)} player-game rows "
+        f"with models from {model_root}",
+        file=sys.stderr,
+    )
+
+    # We'll reuse the same StandardScaler behavior from training:
+    # note: the LR pipeline inside joblib already contains scaling,
+    # so we only need to feed raw numeric features; no external scaler.
+
+    for line in SOG_LINES:
+        print(f"[score_sog_denali] Loading models for line {line}", file=sys.stderr)
+        lr, rf, feats = load_line_models(model_root, line)
+
+        # Ensure the CSV has all needed features
+        missing_feats = [c for c in feats if c not in df.columns]
+        if missing_feats:
+            print(
+                f"FATAL: features CSV is missing required columns for line {line}: "
+                f"{missing_feats}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+        # Prepare features
+        X_df = prepare_features(df, feats)
+        X = X_df.to_numpy(dtype=float)
+
+        # Predict probabilities for Over(line)
+        # Assumes both models are binary classifiers with predict_proba
+        try:
+            p_lr = lr.predict_proba(X)[:, 1]
+        except Exception as e:
+            print(f"FATAL: LR predict_proba failed for line {line}: {e}", file=sys.stderr)
+            sys.exit(2)
+
+        try:
+            p_rf = rf.predict_proba(X)[:, 1]
+        except Exception as e:
+            print(f"FATAL: RF predict_proba failed for line {line}: {e}", file=sys.stderr)
+            sys.exit(2)
+
+        prob_over = 0.5 * (p_lr + p_rf)
+
+        # Build per-line output frame
+        df_line = df_ids.copy()
+        df_line["prop_type"] = "shots_on_goal"
+        df_line["line"] = float(line)
+        df_line["prob_over_lr"] = p_lr
+        df_line["prob_over_rf"] = p_rf
+        df_line["prob_over"] = prob_over
+
+        out_rows.append(df_line)
+
+    if not out_rows:
+        print("FATAL: no predictions produced.", file=sys.stderr)
+        sys.exit(2)
+
+    # Concatenate all lines into one long frame
+    df_out = pd.concat(out_rows, axis=0, ignore_index=True)
+
+    # Optional: sort for stable ordering
+    sort_cols = [c for c in ("game_date", "game_id", "team_id", "player_id", "line") if c in df_out.columns]
+    if sort_cols:
+        df_out = df_out.sort_values(sort_cols).reset_index(drop=True)
+
+    df_out.to_csv(out_path, index=False)
+    print(
+        f"[score_sog_denali] Wrote {len(df_out)} rows to {out_path}",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

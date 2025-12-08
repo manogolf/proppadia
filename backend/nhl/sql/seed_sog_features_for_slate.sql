@@ -253,15 +253,14 @@ seed_one AS (
   WHERE rn = 1
 )
 
-INSERT INTO nhl.training_features_sog_denali AS t (
-  season,
+INSERT INTO nhl.training_features_nhl_sog_enriched_pregame_v2 AS t (
   player_id,
   game_id,
   team_id,
   opponent_id,
   is_home,
   game_date,
-
+  season,
   shots_on_goal,
 
   d5_sog_per60,
@@ -272,108 +271,71 @@ INSERT INTO nhl.training_features_sog_denali AS t (
   rest_days,
   b2b_flag,
 
-  pace_index,
   pace_matchup_index,
 
   team_d10_sf_per_game,
   opp_d10_sf_allowed_per_game,
-  opp_d10_sf_per60,
-  team_d10_sa_per60,
-  opp_d10_sa_per60,
 
   role_pp_share,
 
-  szn_toi_per_game_5on5,
-  szn_toi_per_game_pp,
-  szn_toi_per_game_pk,
-  szn_shifts_per_game_5on5,
-  szn_shifts_per_game_pp,
-  szn_shifts_per_game_pk,
-
-  season_5on5_icetime_per_game,
-  season_5on4_icetime_per_game,
-  season_4on5_icetime_per_game,
-  season_5on5_shifts_per_game,
-  season_5on4_shifts_per_game,
-  season_4on5_shifts_per_game,
-
-  team_szn_5on5_top_line_xgf_share,
-  team_5v5_top_line_icetime_share,
-  team_5v5_top_line_shotattempts_share,
-
   last10_team_sog_share,
-  team_num_sog_last10,
-  team_num_event_last10,
+  team_num_shotwasongoal_for_last10,
+  team_num_event_shot_for_last10,
 
-  num_sog_last5,
-  num_sog_last10,
-  num_sog_szn_to_date,
+  num_shotwasongoal_last5,
+  num_shotwasongoal_last10,
+  num_shotwasongoal_season_to_date,
 
-  num_event_last5,
-  num_event_last10,
-  num_event_szn_to_date,
+  num_event_shot_last5,
+  num_event_shot_last10,
+  num_event_shot_season_to_date,
 
   hot_last5_flag
 )
 SELECT
-  (game_id / 1000000)::int AS season,
+  -- IDs / context
   player_id,
   game_id,
   team_id,
   opponent_id,
   is_home,
   game_date,
-
+  (game_id / 1000000)::int AS season,
   shots_on_goal,
 
+  -- core rolling SOG features
   d5_sog_per60,
   d10_sog_per60,
   d20_sog_per60,
   attempts_d10_per60,
 
+  -- rest / schedule
   rest_days,
   b2b_flag,
 
-  pace_index,
+  -- pace (we only persist pace_matchup_index here; pace_index is a Denali extra)
   pace_matchup_index,
 
+  -- team / opp environment
   team_d10_sf_per_game,
   opp_d10_sf_allowed_per_game,
-  opp_d10_sf_per60,
-  team_d10_sa_per60,
-  opp_d10_sa_per60,
 
+  -- role
   role_pp_share,
 
-  szn_toi_per_game_5on5,
-  szn_toi_per_game_pp,
-  szn_toi_per_game_pk,
-  szn_shifts_per_game_5on5,
-  szn_shifts_per_game_pp,
-  szn_shifts_per_game_pk,
-
-  season_5on5_icetime_per_game,
-  season_5on4_icetime_per_game,
-  season_4on5_icetime_per_game,
-  season_5on5_shifts_per_game,
-  season_5on4_shifts_per_game,
-  season_4on5_shifts_per_game,
-
-  team_szn_5on5_top_line_xgf_share,
-  team_5v5_top_line_icetime_share,
-  team_5v5_top_line_shotattempts_share,
-
+  -- team + streak context
   last10_team_sog_share,
-  team_num_sog_last10,
+  team_num_sog_last10           AS team_num_shotwasongoal_for_last10,
   team_num_event_last10,
 
-  num_sog_last5,
-  num_sog_last10,
-  num_sog_szn_to_date,
+  -- player SOG/event rolling
+  num_sog_last5                 AS num_shotwasongoal_last5,
+  num_sog_last10                AS num_shotwasongoal_last10,
+  num_sog_szn_to_date           AS num_shotwasongoal_season_to_date,
 
   num_event_last5,
   num_event_last10,
-  num_event_szn_to_date,
+  num_event_szn_to_date         AS num_event_shot_season_to_date,
 
   hot_last5_flag
 FROM seed_one
@@ -382,6 +344,7 @@ SET team_id                         = EXCLUDED.team_id,
     opponent_id                     = EXCLUDED.opponent_id,
     is_home                         = EXCLUDED.is_home,
     game_date                       = EXCLUDED.game_date,
+    season                          = EXCLUDED.season,
     shots_on_goal                   = EXCLUDED.shots_on_goal,
     d5_sog_per60                    = EXCLUDED.d5_sog_per60,
     d10_sog_per60                   = EXCLUDED.d10_sog_per60,
@@ -389,39 +352,22 @@ SET team_id                         = EXCLUDED.team_id,
     attempts_d10_per60              = EXCLUDED.attempts_d10_per60,
     rest_days                       = EXCLUDED.rest_days,
     b2b_flag                        = EXCLUDED.b2b_flag,
-    pace_index                      = EXCLUDED.pace_index,
     pace_matchup_index              = EXCLUDED.pace_matchup_index,
     team_d10_sf_per_game            = EXCLUDED.team_d10_sf_per_game,
     opp_d10_sf_allowed_per_game     = EXCLUDED.opp_d10_sf_allowed_per_game,
-    opp_d10_sf_per60                = EXCLUDED.opp_d10_sf_per60,
-    team_d10_sa_per60               = EXCLUDED.team_d10_sa_per60,
-    opp_d10_sa_per60                = EXCLUDED.opp_d10_sa_per60,
     role_pp_share                   = EXCLUDED.role_pp_share,
-    szn_toi_per_game_5on5           = EXCLUDED.szn_toi_per_game_5on5,
-    szn_toi_per_game_pp             = EXCLUDED.szn_toi_per_game_pp,
-    szn_toi_per_game_pk             = EXCLUDED.szn_toi_per_game_pk,
-    szn_shifts_per_game_5on5        = EXCLUDED.szn_shifts_per_game_5on5,
-    szn_shifts_per_game_pp          = EXCLUDED.szn_shifts_per_game_pp,
-    szn_shifts_per_game_pk          = EXCLUDED.szn_shifts_per_game_pk,
-    season_5on5_icetime_per_game    = EXCLUDED.season_5on5_icetime_per_game,
-    season_5on4_icetime_per_game    = EXCLUDED.season_5on4_icetime_per_game,
-    season_4on5_icetime_per_game    = EXCLUDED.season_4on5_icetime_per_game,
-    season_5on5_shifts_per_game     = EXCLUDED.season_5on5_shifts_per_game,
-    season_5on4_shifts_per_game     = EXCLUDED.season_5on4_shifts_per_game,
-    season_4on5_shifts_per_game     = EXCLUDED.season_4on5_shifts_per_game,
-    team_szn_5on5_top_line_xgf_share= EXCLUDED.team_szn_5on5_top_line_xgf_share,
-    team_5v5_top_line_icetime_share = EXCLUDED.team_5v5_top_line_icetime_share,
-    team_5v5_top_line_shotattempts_share = EXCLUDED.team_5v5_top_line_shotattempts_share,
     last10_team_sog_share           = EXCLUDED.last10_team_sog_share,
-    team_num_sog_last10             = EXCLUDED.team_num_sog_last10,
-    team_num_event_last10           = EXCLUDED.team_num_event_last10,
-    num_sog_last5                   = EXCLUDED.num_sog_last5,
-    num_sog_last10                  = EXCLUDED.num_sog_last10,
-    num_sog_szn_to_date             = EXCLUDED.num_sog_szn_to_date,
-    num_event_last5                 = EXCLUDED.num_event_last5,
-    num_event_last10                = EXCLUDED.num_event_last10,
-    num_event_szn_to_date           = EXCLUDED.num_event_szn_to_date,
-    hot_last5_flag                  = EXCLUDED.hot_last5_flag;
+    team_num_shotwasongoal_for_last10 = EXCLUDED.team_num_shotwasongoal_for_last10,
+    team_num_event_shot_for_last10 = EXCLUDED.team_num_event_shot_for_last10,
+    num_shotwasongoal_last5        = EXCLUDED.num_shotwasongoal_last5,
+    num_shotwasongoal_last10       = EXCLUDED.num_shotwasongoal_last10,
+    num_shotwasongoal_season_to_date = EXCLUDED.num_shotwasongoal_season_to_date,
+    num_event_shot_last5           = EXCLUDED.num_event_shot_last5,
+    num_event_shot_last10          = EXCLUDED.num_event_shot_last10,
+    num_event_shot_season_to_date  = EXCLUDED.num_event_shot_season_to_date,
+    hot_last5_flag                 = EXCLUDED.hot_last5_flag;
 
 \echo 'seed_sog_features_for_slate: upserted rows for slate_date=' :'slate_date'
-SELECT COUNT(*) FROM nhl.training_features_sog_denali WHERE game_date = :'slate_date'::date;
+SELECT COUNT(*)
+FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+WHERE game_date = :'slate_date'::date;

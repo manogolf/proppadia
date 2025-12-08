@@ -257,19 +257,30 @@ def main():
     names = names[names["game_date"] == slate].copy()
 
     # Keep only columns we want from names to avoid collisions
-    keep_name_cols = [c for c in ["player_id", "game_id", "team_id", "full_name", "game_date"] if c in names.columns]
+    keep_name_cols = [
+        c
+        for c in ["player_id", "game_id", "team_id", "full_name", "game_date"]
+        if c in names.columns
+    ]
     names = names[keep_name_cols].drop_duplicates()
 
     # --- merge predictions + names (fill team_id/full_name if missing in pred) ---
-    df = pred_long.merge(names, on=["player_id", "game_id"], how="left", suffixes=("", ""))
+    df = pred_long.merge(
+        names,
+        on=["player_id", "game_id"],
+        how="left",
+        suffixes=("", "_names"),
+    )
 
     # Fill team_id from names if not provided by pred
-    if "team_id_x" in df.columns and "team_id_y" in df.columns:
-        df["team_id"] = df["team_id_x"].fillna(df["team_id_y"])
-        df = df.drop(columns=["team_id_x", "team_id_y"])
-    elif "team_id" not in df.columns and "team_id_y" in df.columns:
-        df["team_id"] = df["team_id_y"]
-        df = df.drop(columns=["team_id_y"])
+    if "team_id" in df.columns and "team_id_names" in df.columns:
+        # prefer team_id from predictions; fall back to names when null
+        df["team_id"] = df["team_id"].fillna(df["team_id_names"])
+        df = df.drop(columns=["team_id_names"])
+    elif "team_id" not in df.columns and "team_id_names" in df.columns:
+        # predictions had no team_id; take it entirely from names
+        df["team_id"] = df["team_id_names"]
+        df = df.drop(columns=["team_id_names"])
 
     # Try to fill missing full_name if we got it in pred already
     if "full_name_x" in df.columns and "full_name_y" in df.columns:

@@ -218,42 +218,55 @@ def _api_team_full_name(team: dict) -> str | None:
     return tname or place  # last resort
 
 
-def _ensure_teams_exist(cur, games: Iterable[dict]) -> int:
+def _ensure_teams_exist(cur, games):
     """
-    Ensure nhl.teams has correct rows (team_id, full_team_name, team) for any teams seen in `games`.
-    Uses provider id as team_id. Returns count of upserts performed.
+    Ensure all teams from today's schedule exist in nhl.teams.
+
+    Idempotent: if a team (by abbreviation) already exists, we update its
+    team_id/name; otherwise we insert it.
     """
-    seen: set[int] = set()
-    upserts = 0
+    # Collect unique teams from schedule payload
+    teams = {}  # key: abbr, value: (team_id, name)
+
     for g in games:
-        for role in ("home", "away"):
-            pid_str, team_obj = _extract_provider_team_id_and_teamobj(g, role)
-            if not pid_str:
-                continue
-            pid = int(pid_str)
-            if pid in seen:
-                continue
-            seen.add(pid)
+        for side_key in ("home", "away"):
+            team_obj = g.get(side_key, {}).get("team") or {}
+            tid = team_obj.get("id")
+            abbr = (
+                team_obj.get("abbreviation")
+                or team_obj.get("triCode")
+                or team_obj.get("code")
+            )
+            name = team_obj.get("name")
 
-            abbr = _api_team_abbr(team_obj)            # e.g. "BUF"
-            full_name = _api_team_full_name(team_obj)  # e.g. "Buffalo Sabres"
-            if not abbr or not full_name:
-                # if we can't determine both, skip; mapping may still succeed if already present
+            if not tid or not abbr:
                 continue
 
-            # Upsert into nhl.teams; this will convert your placeholder rows (e.g., team_id=7, team='T7')
-            # into real rows (team_id=7, team='BUF', full_team_name='Buffalo Sabres').
-            cur.execute("""
-                insert into nhl.teams (team_id, full_team_name, team)
-                values (%s, %s, %s)
-                on conflict (team_id)
-                do update set full_team_name = excluded.full_team_name,
-                              team = excluded.team
-            """, (pid, full_name, abbr))
-            upserts += 1
-    if upserts:
-        print(f"🔧 Upserted/confirmed {upserts} team rows in nhl.teams")
-    return upserts
+            tid = int(tid)
+            teams[abbr] = (tid, name)
+
+    if not teams:
+        print("[import_schedule_today] WARNING: no teams found in schedule payload")
+        return
+
+    params = [
+        (abbr, tid, name)
+        for abbr, (tid, name) in teams.items()
+    ]
+
+    cur.executemany(
+        """
+        INSERT INTO nhl.teams (team, team_id, name)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (team) DO NOTHING
+        SET
+          team_id = EXCLUDED.team_id,
+          name    = EXCLUDED.name;
+        """,
+        params,
+    )
+
+    print(f"[import_schedule_today] ensured {len(params)} team rows in nhl.teams")
 
 def _ensure_team_mappings(cur, games: Iterable[dict]) -> dict[str, int]:
     """
