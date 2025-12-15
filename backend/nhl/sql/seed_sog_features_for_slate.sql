@@ -76,6 +76,24 @@ skaters AS (
   WHERE COALESCE(p.position,'') <> 'G'
 ),
 
+/*
+  ✅ Authoritative previous-appearance date:
+  Use skater logs + games, not training_features_sog_denali, so rest_days/b2b
+  don’t break when Denali features are stale or missing recent games.
+*/
+last_game AS (
+  SELECT DISTINCT ON (l.player_id)
+    l.player_id,
+    g2.game_date::date AS prev_game_date
+  FROM nhl.skater_game_logs_raw l
+  JOIN nhl.games g2
+    ON g2.game_id = l.game_id
+  JOIN skaters s
+    ON s.player_id = l.player_id
+  WHERE g2.game_date::date < (SELECT d FROM params)
+  ORDER BY l.player_id, g2.game_date DESC, l.game_id DESC
+),
+
 -- latest per-player feature row (strictly before slate_date) from existing Denali table
 last_feat AS (
   SELECT DISTINCT ON (t.player_id)
@@ -87,7 +105,7 @@ last_feat AS (
     t.d20_sog_per60,
     t.attempts_d10_per60,
 
-    -- rest / schedule
+    -- rest / schedule (NOTE: no longer trusted for prev_game_date)
     t.rest_days,
     t.b2b_flag,
 
@@ -138,9 +156,7 @@ last_feat AS (
     t.num_event_last10,
     t.num_event_szn_to_date,
 
-    t.hot_last5_flag,
-
-    t.game_date AS prev_game_date
+    t.hot_last5_flag
   FROM nhl.training_features_sog_denali t
   JOIN skaters s ON s.player_id = t.player_id
   WHERE t.game_date < (SELECT d FROM params)
@@ -176,15 +192,15 @@ seed AS (
     lf.d20_sog_per60,
     lf.attempts_d10_per60,
 
-    -- rest / schedule (recomputed from last_feat.prev_game_date if available)
+    -- ✅ rest / schedule (computed from last_game.prev_game_date)
     CASE
-      WHEN lf.prev_game_date IS NOT NULL
-        THEN GREATEST(0, ((SELECT d FROM params) - lf.prev_game_date))::int
+      WHEN lg.prev_game_date IS NOT NULL
+        THEN GREATEST(0, ((SELECT d FROM params) - lg.prev_game_date))::int
       ELSE NULL
     END AS rest_days,
     CASE
-      WHEN lf.prev_game_date IS NOT NULL
-        THEN ((SELECT d FROM params) - lf.prev_game_date = 1)
+      WHEN lg.prev_game_date IS NOT NULL
+        THEN (((SELECT d FROM params) - lg.prev_game_date) = 1)
       ELSE NULL
     END AS b2b_flag,
 
@@ -222,7 +238,7 @@ seed AS (
     lf.team_5v5_top_line_icetime_share,
     lf.team_5v5_top_line_shotattempts_share,
 
-    -- last-10 / last-5 team counts (unchanged – still from Denali)
+    -- last-10 / last-5 team counts (from Denali)
     lf.last10_team_sog_share,
     lf.team_num_sog_last10,
     lf.team_num_event_last10,
@@ -239,6 +255,7 @@ seed AS (
     lf.hot_last5_flag
   FROM skaters s
   LEFT JOIN last_feat lf ON lf.player_id = s.player_id
+  LEFT JOIN last_game lg ON lg.player_id = s.player_id
   LEFT JOIN team_roll tr ON tr.team_id = s.team_id
 ),
 
@@ -358,14 +375,14 @@ SET team_id                         = EXCLUDED.team_id,
     role_pp_share                   = EXCLUDED.role_pp_share,
     last10_team_sog_share           = EXCLUDED.last10_team_sog_share,
     team_num_shotwasongoal_for_last10 = EXCLUDED.team_num_shotwasongoal_for_last10,
-    team_num_event_shot_for_last10 = EXCLUDED.team_num_event_shot_for_last10,
-    num_shotwasongoal_last5        = EXCLUDED.num_shotwasongoal_last5,
-    num_shotwasongoal_last10       = EXCLUDED.num_shotwasongoal_last10,
+    team_num_event_shot_for_last10  = EXCLUDED.team_num_event_shot_for_last10,
+    num_shotwasongoal_last5         = EXCLUDED.num_shotwasongoal_last5,
+    num_shotwasongoal_last10        = EXCLUDED.num_shotwasongoal_last10,
     num_shotwasongoal_season_to_date = EXCLUDED.num_shotwasongoal_season_to_date,
-    num_event_shot_last5           = EXCLUDED.num_event_shot_last5,
-    num_event_shot_last10          = EXCLUDED.num_event_shot_last10,
-    num_event_shot_season_to_date  = EXCLUDED.num_event_shot_season_to_date,
-    hot_last5_flag                 = EXCLUDED.hot_last5_flag;
+    num_event_shot_last5            = EXCLUDED.num_event_shot_last5,
+    num_event_shot_last10           = EXCLUDED.num_event_shot_last10,
+    num_event_shot_season_to_date   = EXCLUDED.num_event_shot_season_to_date,
+    hot_last5_flag                  = EXCLUDED.hot_last5_flag;
 
 \echo 'seed_sog_features_for_slate: upserted rows for slate_date=' :'slate_date'
 SELECT COUNT(*)

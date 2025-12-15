@@ -194,19 +194,9 @@ def _expand_initial_last(nm_norm: str, roster_map_keys: list[str]) -> str | None
     return cands[0] if len(cands) == 1 else None
 
 def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int | None):
-    """
-    Upsert a basic row into nhl.players for a given NHL player ID.
-
-    Behavior:
-      - If the player already exists, only fills in missing team_id (and leaves
-        full_name/position alone).
-      - If they do not exist, inserts them with a real name and a generic 'F'
-        position. No placeholder names are ever written.
-    """
     raw_name = (full_name or "").strip()
 
-    with conn.cursor() as cur:
-        # 1) Does this player already exist?
+    with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
             SELECT player_id, full_name, position, team_id
@@ -218,8 +208,7 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
         row = cur.fetchone()
 
         if row:
-            # Player already in table; only patch team_id if it's currently NULL
-            existing_team_id = row[3]
+            existing_team_id = row.get("team_id")
             if team_id is not None and existing_team_id is None:
                 cur.execute(
                     """
@@ -229,16 +218,13 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
                     """,
                     (team_id, nhl_id),
                 )
-            # Done – do NOT touch full_name or position
             return
 
-        # 2) Player does not exist yet — we must have a real, non-placeholder name
         if not raw_name or raw_name.startswith("Player "):
             raise ValueError(
                 f"Refusing to insert placeholder/empty name for nhl_id={nhl_id}: {raw_name!r}"
             )
 
-        # 3) Insert a new, minimal but valid row
         cur.execute(
             """
             INSERT INTO nhl.players (player_id, full_name, team_id, position)
@@ -458,12 +444,16 @@ def refresh_roster_status_from_box(conn, gpk: int):
 
 
 # ---------------- Parse skaters from new boxscore ----------------
+# =========================
+# 1) REPLACE _iter_skaters_from_box WITH THIS
+# =========================
 def _iter_skaters_from_box(box: dict):
     """
-    Yields dicts with normalized name + stats from api-web.nhle.com gamecenter payload:
-      {"nhl_id": int|None, "nm": <normalized name>, "sog": int|None, "attempts": int|None,
-       "toi_min": float, "pp_min": float}
+    Parse skaters from api-web.nhle.com gamecenter/{gamePk}/boxscore
+    using the VERIFIED payload shape you showed:
+      p["toi"] (e.g. "16:28"), p["sog"], p["blockedShots"], etc.
     """
+
     pstats = (box.get("playerByGameStats") or {})
     for side_key in ("homeTeam", "awayTeam"):
         team = pstats.get(side_key) or {}
@@ -471,6 +461,7 @@ def _iter_skaters_from_box(box: dict):
             arr = team.get(k) or []
             if not isinstance(arr, list):
                 continue
+
             for p in arr:
                 nhl_id = p.get("playerId") or p.get("id")
                 try:
@@ -481,21 +472,22 @@ def _iter_skaters_from_box(box: dict):
                 name_raw = _extract_box_name(p)
                 nm = _norm_name(name_raw)
 
-                stats = p.get("stats") or {}
-                sog = stats.get("shotsOnGoal")
-                if sog is None:
-                    sog = stats.get("shots")
+                # VERIFIED top-level fields
+                toi_s = p.get("toi")  # "MM:SS"
+                sog = p.get("sog")    # int
+                pp_g = p.get("powerPlayGoals")  # not pp toi, but present in your sample
 
-                attempts = (
-                    stats.get("shotsAttempted")
-                    if "shotsAttempted" in stats
-                    else ((stats.get("shotsOnGoal") or stats.get("shots") or 0)
-                          + (stats.get("missedShots") or 0)
-                          + (stats.get("blockedShots") or 0))
-                )
+                # Attempts: if the payload has shotAttempts/missedShots, use them;
+                # otherwise derive attempts from sog + missedShots + blockedShots.
+                attempts = p.get("shotAttempts")
+                if attempts is None:
+                    try:
+                        attempts = int(p.get("sog") or 0) + int(p.get("missedShots") or 0) + int(p.get("blockedShots") or 0)
+                    except Exception:
+                        attempts = None
 
-                toi_s    = stats.get("toi") or stats.get("timeOnIce")
-                pp_toi_s = stats.get("powerPlayToi") or stats.get("powerPlayTimeOnIce")
+                # PP TOI: only if payload provides it; otherwise 0.0 (don’t guess)
+                pp_toi_s = p.get("ppToi") or p.get("powerPlayToi") or p.get("powerPlayTimeOnIce")
 
                 yield {
                     "nhl_id": nhl_id,
@@ -503,9 +495,9 @@ def _iter_skaters_from_box(box: dict):
                     "sog": int(sog) if sog is not None else None,
                     "attempts": int(attempts) if attempts is not None else None,
                     "toi_min": toi_to_minutes(toi_s),
-                    "pp_min":  toi_to_minutes(pp_toi_s),
+                    "pp_min": toi_to_minutes(pp_toi_s),
                 }
-
+                
 # ---------------- Main ----------------
 def main():
     games = get_schedule(SLATE_DATE)
@@ -562,14 +554,10 @@ def main():
 
                     if pid is None:
                         # Auto-heal nhl.players so future runs can map this skater.
-                        nhl_id_val = s.get("nhl_id")
-                        team_id_val = s.get("team_id")
-                        full_name_val = (
-                            s.get("full_name")
-                            or s.get("name")
-                            or s.get("player")
-                            or None
-                        )
+                        # ✅ Use the fields we *actually have* from the boxscore now.
+                        nhl_id_val   = s.get("nhl_id")
+                        team_id_val  = s.get("team_id")
+                        full_name_val = s.get("full_name")
 
                         if nhl_id_val is not None:
                             try:
@@ -581,13 +569,11 @@ def main():
                                 )
                             except Exception as e:
                                 print(
-                                    f"[seed_skater_logs] warn: ensure_player_exists "
-                                    f"failed for nhl_id={nhl_id_val}: {e}"
+                                    f"[seed_skater_logs] warn: ensure_player_exists failed for nhl_id={nhl_id_val}: {e}"
                                 )
 
                         skipped_no_map += 1
                         continue
-
                     # teach external id only when we matched via roster path
                     if learned_from_roster and s["nhl_id"] is not None:
                         upsert_external_id(conn, pid, s["nhl_id"])

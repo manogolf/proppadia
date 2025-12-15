@@ -106,47 +106,99 @@ def nhl_props_today(
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-@router.get("/sog_stage", summary="Skater SOG predictions (stage)")
+# --- SOG (wide) ---
+# Canonical route (new)
+@router.get("/sog", summary="Skater SOG predictions (wide)")
+def sog(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    sql = """
+    WITH base AS (
+      SELECT
+        player_id,
+        game_id,
+        game_date,
+        line,
+        p_over
+      FROM nhl.predictions
+      WHERE prop = 'shots_on_goal'
+        AND (%s::date IS NULL OR game_date = %s::date)
+    )
+    SELECT
+      player_id,
+      game_id,
+      game_date,
+      MAX(p_over) FILTER (WHERE line = 0.5) AS p_over_0_5,
+      MAX(p_over) FILTER (WHERE line = 1.5) AS p_over_1_5,
+      MAX(p_over) FILTER (WHERE line = 2.5) AS p_over_2_5,
+      MAX(p_over) FILTER (WHERE line = 3.5) AS p_over_3_5
+    FROM base
+    GROUP BY player_id, game_id, game_date
+    ORDER BY game_id, player_id
+    LIMIT %s OFFSET %s
+    """
+    try:
+        with _conn() as conn, conn.cursor() as cur:
+            cur.execute(sql, (date, date, limit, offset))
+            return cur.fetchall()
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+# Back-compat alias (old route name)
+@router.get("/sog_stage", summary="(legacy) Skater SOG predictions (wide)")
 def sog_stage(
     date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    sql = """
-      SELECT player_id, game_id, game_date,
-             p_over_0_5, p_over_1_5, p_over_2_5, p_over_3_5
-      FROM nhl.predictions_sog_stage
-      WHERE (%s::date IS NULL OR game_date = %s::date)
-      ORDER BY game_id, player_id
-      LIMIT %s OFFSET %s
-    """
-    try:
-        with _conn() as conn, conn.cursor() as cur:
-            cur.execute(sql, (date, date, limit, offset))
-            rows = cur.fetchall()
-        return rows
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return sog(date=date, limit=limit, offset=offset)
 
 
-@router.get("/saves_stage", summary="Goalie Saves predictions (stage)")
-def saves_stage(
+# --- Saves (wide) ---
+# Canonical route (new)
+@router.get("/saves", summary="Goalie Saves predictions (wide)")
+def saves(
     date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(25, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     sql = """
-      SELECT player_id, game_id, game_date,
-             p_over_24_5, p_over_28_5
-      FROM nhl.predictions_saves_stage
-      WHERE (%s::date IS NULL OR game_date = %s::date)
-      ORDER BY game_id, player_id
-      LIMIT %s OFFSET %s
+    WITH base AS (
+      SELECT
+        player_id,
+        game_id,
+        game_date,
+        line,
+        p_over
+      FROM nhl.predictions
+      WHERE prop = 'goalie_saves'
+        AND (%s::date IS NULL OR game_date = %s::date)
+    )
+    SELECT
+      player_id,
+      game_id,
+      game_date,
+      MAX(p_over) FILTER (WHERE line = 24.5) AS p_over_24_5,
+      MAX(p_over) FILTER (WHERE line = 28.5) AS p_over_28_5
+    FROM base
+    GROUP BY player_id, game_id, game_date
+    ORDER BY game_id, player_id
+    LIMIT %s OFFSET %s
     """
     try:
         with _conn() as conn, conn.cursor() as cur:
             cur.execute(sql, (date, date, limit, offset))
-            rows = cur.fetchall()
-        return rows
+            return cur.fetchall()
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+# Back-compat alias (old route name)
+@router.get("/saves_stage", summary="(legacy) Goalie Saves predictions (wide)")
+def saves_stage(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return saves(date=date, limit=limit, offset=offset)

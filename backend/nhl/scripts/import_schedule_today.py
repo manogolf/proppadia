@@ -225,43 +225,63 @@ def _ensure_teams_exist(cur, games):
     Idempotent: if a team (by abbreviation) already exists, we update its
     team_id/name; otherwise we insert it.
     """
-    # Collect unique teams from schedule payload
-    teams = {}  # key: abbr, value: (team_id, name)
+    # Collect unique teams from schedule payload (supports api-web + legacy)
+    # Idempotent: if a team (by abbreviation) already exists, we update its
+    # team_id/full_team_name; otherwise we insert it.
+    teams: dict[str, tuple[int, str | None]] = {}  # key: abbr, value: (team_id, full_team_name)
+
+    def _name_text(v) -> str | None:
+        # api-web sometimes returns multi-language objects: {"default": "Vegas"}
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v.strip() or None
+        if isinstance(v, dict):
+            for k in ("default", "en", "English", "name"):
+                s = v.get(k)
+                if isinstance(s, str) and s.strip():
+                    return s.strip()
+        return None
 
     for g in games:
-        for side_key in ("home", "away"):
-            team_obj = g.get(side_key, {}).get("team") or {}
-            tid = team_obj.get("id")
-            abbr = (
-                team_obj.get("abbreviation")
-                or team_obj.get("triCode")
-                or team_obj.get("code")
-            )
-            name = team_obj.get("name")
-
-            if not tid or not abbr:
+        for role in ("home", "away"):
+            pid_str, team_obj = _extract_provider_team_id_and_teamobj(g, role)
+            if not pid_str:
                 continue
 
-            tid = int(tid)
-            teams[abbr] = (tid, name)
+            abbr = _api_team_abbr(team_obj)
+            if not abbr and isinstance(team_obj, dict):
+                # legacy-ish fallback
+                abbr = team_obj.get("abbreviation")
+            if not abbr:
+                continue
+
+            try:
+                tid = int(pid_str)
+            except Exception:
+                continue
+
+            name = None
+            if isinstance(team_obj, dict):
+                name = _name_text(team_obj.get("name"))
+            name = name or _api_team_full_name(team_obj)
+
+            teams[str(abbr)] = (tid, name)
 
     if not teams:
         print("[import_schedule_today] WARNING: no teams found in schedule payload")
         return
 
-    params = [
-        (abbr, tid, name)
-        for abbr, (tid, name) in teams.items()
-    ]
+    params = [(abbr, tid, name) for abbr, (tid, name) in teams.items()]
 
+    # Upsert teams by abbreviation (team)
     cur.executemany(
         """
-        INSERT INTO nhl.teams (team, team_id, name)
+        INSERT INTO nhl.teams (team, team_id, full_team_name)
         VALUES (%s, %s, %s)
-        ON CONFLICT (team) DO NOTHING
-        SET
-          team_id = EXCLUDED.team_id,
-          name    = EXCLUDED.name;
+        ON CONFLICT (team) DO UPDATE
+        SET team_id        = EXCLUDED.team_id,
+            full_team_name = COALESCE(EXCLUDED.full_team_name, nhl.teams.full_team_name);
         """,
         params,
     )
@@ -320,7 +340,7 @@ def main():
         return
 
     with psycopg.connect(DB) as conn, conn.cursor() as cur:
-            # Optional: stop psycopg from auto-creating server-side prepared stmts
+        # Optional: stop psycopg from auto-creating server-side prepared stmts
         try:
             conn.prepare_threshold = None  # psycopg3
         except Exception:
@@ -337,12 +357,9 @@ def main():
         # 2) Ensure provider→internal mappings
         team_map = _ensure_team_mappings(cur, games)
 
-        # 3) Stage (fresh each run)
-        cur.execute("truncate nhl.import_games_stage")
-        cur.execute("truncate nhl.import_game_external_ids_stage")
-
+        # 3) JSON bridge (no stage tables)
+        payload = []
         rows = 0
-        state_updates: list[tuple[int, str]] = [] 
 
         for g in games:
             gid_raw = g.get("id") or g.get("gamePk") or g.get("gameId")
@@ -371,76 +388,81 @@ def main():
             home_team_id = team_map.get(home_pid_str) or int(home_pid_str)
             away_team_id = team_map.get(away_pid_str) or int(away_pid_str)
 
-            # NEW: compute mapped status
+            # mapped status (optional)
             st = _map_game_state(g)
-            if st:
-                state_updates.append((gid, st))     # NEW
 
-            # Stage rows (PLAIN INSERTS — no ON CONFLICT in stage tables)
-            cur.execute("""
-                insert into nhl.import_games_stage
-                  (game_id, game_date, start_time_utc, season, game_type, home_team_id, away_team_id)
-                values (%s, %s, %s, %s, %s, %s, %s)
-            """, (gid, DATE, start_iso, season, game_type, home_team_id, away_team_id))
-
-            cur.execute("""
-                insert into nhl.import_game_external_ids_stage
-                  (game_id, provider, provider_game_id)
-                values (%s, 'nhl', %s)
-            """, (gid, str(gid)))
-
+            payload.append({
+                "game_id": gid,
+                "game_date": str(DATE),              # ET date key you’re using
+                "start_time_utc": start_iso,         # ISO string
+                "season": season,
+                "game_type": game_type,
+                "home_team_id": home_team_id,
+                "away_team_id": away_team_id,
+                "status": st
+            })
             rows += 1
 
-        # NEW: apply status updates without changing schema
-        for gid, st in state_updates:
-            cur.execute("""
-                update nhl.games
-                set status = %s
-                where game_id = %s
-                  and (status is distinct from %s)
-            """, (st, gid, st))
-
-        # 4) Merge stage → base (cast season/game_type; fill team codes via nhl.teams)
-        cur.execute("""
-            insert into nhl.games (
-                game_id,
-                game_date,
-                start_time_utc,
-                season,
-                game_type,
-                home_team_code,
-                away_team_code,
-                home_team_id,
-                away_team_id
+        # 4) Upsert directly into base using jsonb_to_recordset + join teams (no stage tables)
+        cur.execute(
+            """
+            WITH src AS (
+              SELECT *
+              FROM jsonb_to_recordset(%s::jsonb) AS s(
+                game_id       bigint,
+                game_date     date,
+                start_time_utc text,
+                season        int,
+                game_type     int,
+                home_team_id  int,
+                away_team_id  int,
+                status        text
+              )
             )
-            select distinct
-                s.game_id,
-                s.game_date,
-                s.start_time_utc,
-                nullif(s.season::text, '')::int,
-                nullif(s.game_type::text, '')::int,
-                th.team as home_team_code,
-                ta.team as away_team_code,
-                s.home_team_id,
-                s.away_team_id
-            from nhl.import_games_stage s
-            join nhl.teams th on th.team_id = s.home_team_id
-            join nhl.teams ta on ta.team_id = s.away_team_id
-            where th.team is not null
-              and ta.team is not null
-            on conflict (game_id) do update
-              set game_date      = excluded.game_date,
-                  start_time_utc = excluded.start_time_utc,
-                  season         = excluded.season,
-                  game_type      = excluded.game_type,
-                  home_team_code = excluded.home_team_code,
-                  away_team_code = excluded.away_team_code,
-                  home_team_id   = excluded.home_team_id,
-                  away_team_id   = excluded.away_team_id
-        """)
+            INSERT INTO nhl.games (
+              game_id,
+              game_date,
+              start_time_utc,
+              season,
+              game_type,
+              home_team_code,
+              away_team_code,
+              home_team_id,
+              away_team_id,
+              status
+            )
+            SELECT
+              s.game_id,
+              s.game_date,
+              NULLIF(s.start_time_utc, '')::timestamptz,
+              s.season,
+              s.game_type,
+              th.team AS home_team_code,
+              ta.team AS away_team_code,
+              s.home_team_id,
+              s.away_team_id,
+              s.status
+            FROM src s
+            JOIN nhl.teams th ON th.team_id = s.home_team_id
+            JOIN nhl.teams ta ON ta.team_id = s.away_team_id
+            WHERE th.team IS NOT NULL
+              AND ta.team IS NOT NULL
+            ON CONFLICT (game_id) DO UPDATE
+              SET game_date      = EXCLUDED.game_date,
+                  start_time_utc = EXCLUDED.start_time_utc,
+                  season         = EXCLUDED.season,
+                  game_type      = EXCLUDED.game_type,
+                  home_team_code = EXCLUDED.home_team_code,
+                  away_team_code = EXCLUDED.away_team_code,
+                  home_team_id   = EXCLUDED.home_team_id,
+                  away_team_id   = EXCLUDED.away_team_id,
+                  status         = COALESCE(EXCLUDED.status, nhl.games.status)
+            """,
+            (json.dumps(payload),)
+        )
 
         conn.commit()
-        print(f"✅ Staged & merged {rows} games for {DATE} (ET)")
+        print(f"✅ Upserted {rows} games for {DATE} (ET) (no stage tables)")
 
 
 if __name__ == "__main__":

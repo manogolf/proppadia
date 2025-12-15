@@ -130,6 +130,95 @@ def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     res = sp.run(cmd, cwd=str(ROOT), env=os.environ, check=True, capture_output=True)
     return res.stdout
 
+def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str) -> None:
+    """
+    Recompute + persist rolling SOG features into:
+      nhl.training_features_nhl_sog_enriched_pregame_v2
+
+    This prevents 'frozen' rollups by making the daily runner actively refresh them.
+
+    Window behavior:
+      - Only updates target rows where game_date in [start_date, end_date]
+      - Computes rolling sums from nhl.skater_game_logs_raw joined to nhl.games
+      - Converts to per60 using TOI minutes
+    """
+    sql = f"""
+    BEGIN;
+
+    WITH params AS (
+      SELECT DATE '{start_date}' AS start_date, DATE '{end_date}' AS end_date
+    ),
+    realized AS (
+      SELECT
+        l.player_id::bigint AS player_id,
+        g.game_id::bigint   AS game_id,
+        g.game_date::date   AS game_date,
+
+        -- safe numeric casts (handle '' and NULL)
+        COALESCE(NULLIF(BTRIM(l.shots_on_goal::text), ''), '0')::numeric AS sog,
+        COALESCE(NULLIF(BTRIM(l.shot_attempts::text), ''), '0')::numeric AS attempts,
+
+        NULLIF(COALESCE(NULLIF(BTRIM(l.toi_minutes::text), ''), '0')::numeric, 0) AS toi_min
+      FROM nhl.skater_game_logs_raw l
+      JOIN nhl.games g USING (game_id)
+      JOIN params p ON TRUE
+      -- include enough history before start_date so rolling windows at start_date aren't empty
+      WHERE g.game_date BETWEEN (p.start_date - INTERVAL '260 days') AND p.end_date
+    ),
+    rolls AS (
+      SELECT
+        r.player_id,
+        r.game_id,
+        r.game_date,
+
+        SUM(r.sog)      OVER w5  AS sog_5,
+        SUM(r.toi_min)  OVER w5  AS toi_5,
+
+        SUM(r.sog)      OVER w10 AS sog_10,
+        SUM(r.attempts) OVER w10 AS att_10,
+        SUM(r.toi_min)  OVER w10 AS toi_10,
+
+        SUM(r.sog)      OVER w20 AS sog_20,
+        SUM(r.toi_min)  OVER w20 AS toi_20
+
+      FROM realized r
+      WINDOW
+        w5  AS (PARTITION BY r.player_id ORDER BY r.game_date, r.game_id ROWS BETWEEN 4  PRECEDING AND CURRENT ROW),
+        w10 AS (PARTITION BY r.player_id ORDER BY r.game_date, r.game_id ROWS BETWEEN 9  PRECEDING AND CURRENT ROW),
+        w20 AS (PARTITION BY r.player_id ORDER BY r.game_date, r.game_id ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)
+    ),
+    rollups AS (
+      SELECT
+        player_id,
+        game_id,
+        game_date,
+
+        CASE WHEN toi_5  IS NULL OR toi_5  <= 0 THEN NULL ELSE (sog_5  / toi_5 ) * 60 END AS d5_sog_per60,
+        CASE WHEN toi_10 IS NULL OR toi_10 <= 0 THEN NULL ELSE (sog_10 / toi_10) * 60 END AS d10_sog_per60,
+        CASE WHEN toi_20 IS NULL OR toi_20 <= 0 THEN NULL ELSE (sog_20 / toi_20) * 60 END AS d20_sog_per60,
+        CASE WHEN toi_10 IS NULL OR toi_10 <= 0 THEN NULL ELSE (att_10 / toi_10) * 60 END AS attempts_d10_per60
+      FROM rolls
+    )
+    UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 t
+    SET
+      d5_sog_per60       = r.d5_sog_per60,
+      d10_sog_per60      = r.d10_sog_per60,
+      d20_sog_per60      = r.d20_sog_per60,
+      attempts_d10_per60 = r.attempts_d10_per60
+    FROM rollups r, params p
+    WHERE
+      t.player_id = r.player_id
+      AND t.game_id = r.game_id
+      AND t.game_date = r.game_date
+      AND t.game_date BETWEEN p.start_date AND p.end_date;
+
+    COMMIT;
+    """
+
+    print(f"↻ Refreshing SOG rollups in-table for {start_date}..{end_date} ...")
+    run(["psql", db, "--no-psqlrc", "-v", "ON_ERROR_STOP=1", "-c", sql])
+    print("✅ SOG rollups refreshed.")
+
 def safe_json(obj, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2))
@@ -386,22 +475,48 @@ def build_points(slate: str):
 
 # ---------- daily pipeline ----------
 
+# --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
 def cmd_daily(with_odds: bool):
     db = require_db_url()
 
+    # Always honor explicit env; otherwise default to ET today/yesterday.
     slate = os.environ.get("SLATE_DATE") or et_today()
-    yday  = os.environ.get("YDAY")       or et_yesterday()
+
+    # CRITICAL FIX:
+    # If you manually run a historical slate with only SLATE_DATE set,
+    # do NOT let yday default to "real yesterday" (which drags the pipeline to Dec).
+    # Instead, default YDAY to the same day as SLATE_DATE unless explicitly provided.
+    yday = os.environ.get("YDAY")
+    if not yday:
+        yday = slate if os.environ.get("SLATE_DATE") else et_yesterday()
+
     os.environ["SLATE_DATE"] = slate
     os.environ["YDAY"] = yday
 
     print(f"SLATE_DATE (ET): {slate}")
     print(f"YDAY       (ET): {yday}")
+    # --- end replacement ---
 
     # 0 DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
 
     # 1 Today: schedule & roster
     run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
+
+    # --- EARLY EXIT: no NHL games on this slate date ---
+    # If the schedule importer found no games, everything downstream (exports/scoring)
+    # will produce empty CSVs and crash. Treat "no games" as a clean skip.
+    no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
+    res = sp.run(
+        ["psql", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
+        capture_output=True, text=True, check=True
+    )
+    game_count = int((res.stdout or "").strip() or "0")
+    if game_count == 0:
+        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps.")
+        return
+    # --- end early exit ---
+
     run(
         [PY, SCRIPTS_DIR / "import_roster_today.py"],
         env={"SLATE_DATE": slate, "SKIP_ROSTER_STATUS": "1", "SKIP_PLAYERS": "1"},
@@ -414,6 +529,13 @@ def cmd_daily(with_odds: bool):
     # 2 Seed features for today (SOG + Saves). Points features SQL can be added here when ready.
     run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",   vars={"slate_date": slate})
     run_psql_file(SQL_DIR / "seed_goalie_features_for_slate.sql", vars={"slate_date": slate})
+
+    # 2b) Refresh rolling SOG features (persist into the pregame table so exports can't be frozen)
+    # Default: rebuild a 260-day lookback window ending on SLATE_DATE.
+    # One-time full season rebuild: set ROLLUP_START_DATE=2025-10-07 in env (or hardcode below).
+    rollup_start = os.environ.get("ROLLUP_START_DATE") or (datetime.fromisoformat(slate) - timedelta(days=260)).strftime("%Y-%m-%d")
+    rollup_end   = slate
+    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=rollup_end)
 
     # 3 Export names (used by all builders)
     try:
@@ -523,6 +645,21 @@ def cmd_daily(with_odds: bool):
                 "--out",         PROC_DIR / "saves_predictions.csv",
             ]
         )
+
+        # 6b) Load saves into nhl.predictions
+        saves_pred_csv = PROC_DIR / "saves_predictions.csv"
+        if saves_pred_csv.exists():
+            run(
+                [
+                    PY,
+                    SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                    "--pred-csv", str(saves_pred_csv),
+                    "--project",  "nhl",
+                    "--prop",     "goalie_saves",
+                ]
+            )
+        else:
+            print(f"⚠️ saves_predictions.csv not found at {saves_pred_csv} — skipping saves load.")
     else:
         print(f"⚠️  No saves models at {saves_model_dir} — skipping saves scoring.")
 
@@ -540,16 +677,34 @@ def cmd_daily(with_odds: bool):
         ]
     )
 
-    # 7b) Calibrate Phoenix points to sane probabilities by line
-    #     This will overwrite backend/nhl/data/processed/points_predictions.csv
-    #     with calibrated probabilities (prob_over), while preserving
-    #     prob_over_raw and prob_over_calibrated columns for inspection.
-    run(
-        [
-            PY,
-            SCRIPTS_DIR / "calibrate_points_phoenix.py",
-        ]
-    )
+    # --- EARLY EXIT: no NHL games on this slate date ---
+    # If the schedule importer found no games, everything downstream (exports/scoring)
+    # will produce empty CSVs and crash. Treat "no games" as a clean skip.
+    no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
+    res = sp.run(["psql", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
+                 capture_output=True, text=True, check=True)
+    game_count = int((res.stdout or "").strip() or "0")
+    if game_count == 0:
+        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps.")
+        return
+    # --- end early exit ---
+
+
+    # 7c) Load points into nhl.predictions (calibrator overwrites points_predictions.csv in-place)
+    points_pred_csv = PROC_DIR / "points_predictions.csv"
+
+    if points_pred_csv.exists():
+        run(
+            [
+                PY,
+                SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                "--pred-csv", str(points_pred_csv),
+                "--project",  "nhl",
+                "--prop",     "player_points",
+            ]
+        )
+    else:
+        print(f"⚠️ points predictions CSV not found at {points_pred_csv} — skipping points load.")
 
     # 8) Odds
     if with_odds:
@@ -628,13 +783,15 @@ def cmd_daily(with_odds: bool):
     if refresh_sql.exists():
         run(["psql", db, "-v", "ON_ERROR_STOP=1", "-f", refresh_sql])
 
+    # ✅ Sanity: treat nhl.predictions as the source of truth (not *_stage)
     sanity = f"""
-      WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '{slate}')
-      SELECT 'games_today'            AS which, COUNT(*) FROM nhl.games                 WHERE game_date = DATE '{slate}'
-      UNION ALL SELECT 'roster_rows_today', COUNT(*) FROM nhl.roster_status r           WHERE r.game_id IN (SELECT game_id FROM g)
-      UNION ALL SELECT 'sog_stage',         COUNT(*) FROM nhl.predictions_sog_stage s   WHERE s.game_id IN (SELECT game_id FROM g)
-      UNION ALL SELECT 'saves_stage',       COUNT(*) FROM nhl.predictions_saves_stage s WHERE s.game_id IN (SELECT game_id FROM g)
-      UNION ALL SELECT 'predictions',       COUNT(*) FROM nhl.predictions p             WHERE p.game_id IN (SELECT game_id FROM g);
+    WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '{slate}')
+    SELECT 'games_today'            AS which, COUNT(*) FROM nhl.games         WHERE game_date = DATE '{slate}'
+    UNION ALL SELECT 'roster_rows_today', COUNT(*) FROM nhl.roster_status r   WHERE r.game_id IN (SELECT game_id FROM g)
+    UNION ALL SELECT 'preds_sog',         COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'shots_on_goal'
+    UNION ALL SELECT 'preds_saves',       COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'goalie_saves'
+    UNION ALL SELECT 'preds_points',      COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'player_points'
+    UNION ALL SELECT 'predictions_total', COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g);
     """
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", sanity])
 
