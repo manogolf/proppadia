@@ -296,6 +296,37 @@ def main() -> None:
         if not payload:
             raise SystemExit(f"No valid rows to load from {csv_path} (bad_rows={bad}, total_rows={len(rows)})")
 
+                # --- DEDUPE: avoid CardinalityViolation on ON CONFLICT DO UPDATE ---
+        # Postgres errors if the same (prop, player_id, game_id, line, feature_hash)
+        # appears more than once in *this* insert payload.
+        default_model_family = "phoenix"
+        default_feature_hash = "phoenix_v2"
+
+        dedup: Dict[tuple, Dict[str, Any]] = {}
+        for row in payload:
+            # normalize naming: sometimes upstream code used prob_over; DB expects p_over
+            if row.get("p_over") is None and row.get("prob_over") is not None:
+                row["p_over"] = row["prob_over"]
+                row.pop("prob_over", None)
+
+            prop = row.get("prop")
+            pid  = row.get("player_id")
+            gid  = row.get("game_id")
+            ln   = row.get("line")
+
+            # these may be absent in payload; SQL COALESCE uses defaults too
+            fh = row.get("feature_hash") or default_feature_hash
+
+            if prop is None or pid is None or gid is None or ln is None:
+                continue
+
+            key = (prop, int(pid), int(gid), float(ln), fh)
+            # keep the *last* row we saw for this key
+            dedup[key] = row
+
+        payload = list(dedup.values())
+        # --- end dedupe ---
+
         now = datetime.now(timezone.utc).isoformat()
 
         # IMPORTANT: adjust conflict target if your unique constraint differs.

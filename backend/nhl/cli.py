@@ -729,9 +729,13 @@ def cmd_daily(with_odds: bool):
       WHERE s.game_date = DATE '{yday}'
     ),
     rs AS (
-      SELECT DISTINCT game_id, team_id, player_id
-      FROM nhl.roster_status
-      WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '{yday}')
+    SELECT DISTINCT ON (game_id, player_id)
+        game_id,
+        team_id,
+        player_id
+    FROM nhl.roster_status
+    WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '{yday}')
+    ORDER BY game_id, player_id, asof_ts DESC
     ),
     g AS (
       SELECT game_id, home_team_id, away_team_id

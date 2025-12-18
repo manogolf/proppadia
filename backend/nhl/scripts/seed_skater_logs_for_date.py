@@ -194,9 +194,34 @@ def _expand_initial_last(nm_norm: str, roster_map_keys: list[str]) -> str | None
     return cands[0] if len(cands) == 1 else None
 
 def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int | None):
+    """
+    Ensure nhl.players has a row for this NHL player_id.
+    Rules:
+      - Never insert from empty/placeholder names.
+      - If name is missing, try to resolve from NHL API by player id.
+    """
+    import json
+    from urllib.request import urlopen, Request
+
+    def _fetch_player_full_name_by_id(pid: int) -> str | None:
+        # NHL "player landing" endpoint (authoritative for name)
+        # If this ever changes, the curl test below will tell you immediately.
+        url = f"https://api-web.nhle.com/v1/player/{pid}/landing"
+        try:
+            req = Request(url, headers={"User-Agent": "proppadia/1.0"})
+            with urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            first = (data.get("firstName") or {}).get("default") or ""
+            last  = (data.get("lastName")  or {}).get("default") or ""
+            nm = f"{first} {last}".strip()
+            return nm or None
+        except Exception:
+            return None
+
     raw_name = (full_name or "").strip()
 
     with conn.cursor(row_factory=dict_row) as cur:
+        # 1) Already exists?
         cur.execute(
             """
             SELECT player_id, full_name, position, team_id
@@ -220,11 +245,19 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
                 )
             return
 
+        # 2) Missing name → try to resolve via NHL API
+        if (not raw_name) or raw_name.startswith("Player "):
+            resolved = _fetch_player_full_name_by_id(nhl_id)
+            if resolved:
+                raw_name = resolved.strip()
+
+        # 3) Still no real name → refuse (same safety as before)
         if not raw_name or raw_name.startswith("Player "):
             raise ValueError(
                 f"Refusing to insert placeholder/empty name for nhl_id={nhl_id}: {raw_name!r}"
             )
 
+        # 4) Insert
         cur.execute(
             """
             INSERT INTO nhl.players (player_id, full_name, team_id, position)
@@ -558,6 +591,23 @@ def main():
                         nhl_id_val   = s.get("nhl_id")
                         team_id_val  = s.get("team_id")
                         full_name_val = s.get("full_name")
+
+                        # If boxscore didn't include team_id, fall back to roster_status (latest snapshot for this game+player).
+                    if team_id_val is None and nhl_id_val is not None:
+                        with conn.cursor(row_factory=dict_row) as cur2:
+                            cur2.execute(
+                                """
+                                SELECT team_id
+                                FROM nhl.roster_status
+                                WHERE game_id = %s AND player_id = %s AND team_id IS NOT NULL
+                                ORDER BY asof_ts DESC
+                                LIMIT 1
+                                """,
+                                (int(gpk), int(nhl_id_val)),
+                            )
+                            rr = cur2.fetchone()
+                            if rr and rr.get("team_id") is not None:
+                                team_id_val = int(rr["team_id"])
 
                         if nhl_id_val is not None:
                             try:
