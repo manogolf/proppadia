@@ -571,6 +571,11 @@ def main():
                     pid = None
                     learned_from_roster = False
 
+                    # Always initialize these so we never reference an unassigned local.
+                    nhl_id_val = None
+                    team_id_val = None
+                    full_name_val = None
+
                     # a) exact roster full-name match
                     if s["nm"] in roster_map:
                         pid = roster_map[s["nm"]][0]
@@ -588,26 +593,30 @@ def main():
                     if pid is None:
                         # Auto-heal nhl.players so future runs can map this skater.
                         # ✅ Use the fields we *actually have* from the boxscore now.
-                        nhl_id_val   = s.get("nhl_id")
-                        team_id_val  = s.get("team_id")
+                        nhl_id_val = s.get("nhl_id")
+                        team_id_val = s.get("team_id")
                         full_name_val = s.get("full_name")
 
-                        # If boxscore didn't include team_id, fall back to roster_status (latest snapshot for this game+player).
-                    if team_id_val is None and nhl_id_val is not None:
-                        with conn.cursor(row_factory=dict_row) as cur2:
-                            cur2.execute(
-                                """
-                                SELECT team_id
-                                FROM nhl.roster_status
-                                WHERE game_id = %s AND player_id = %s AND team_id IS NOT NULL
-                                ORDER BY asof_ts DESC
-                                LIMIT 1
-                                """,
-                                (int(gpk), int(nhl_id_val)),
-                            )
-                            rr = cur2.fetchone()
-                            if rr and rr.get("team_id") is not None:
-                                team_id_val = int(rr["team_id"])
+                        # If boxscore didn't include team_id, fall back to roster_status
+                        # (latest snapshot for this game+player). Note: roster_status.player_id
+                        # is expected to be the NHL player id used by your boxscore iterator.
+                        if team_id_val is None and nhl_id_val is not None:
+                            with conn.cursor(row_factory=dict_row) as cur2:
+                                cur2.execute(
+                                    """
+                                    SELECT team_id
+                                    FROM nhl.roster_status
+                                    WHERE game_id = %s
+                                      AND player_id = %s
+                                      AND team_id IS NOT NULL
+                                    ORDER BY asof_ts DESC
+                                    LIMIT 1
+                                    """,
+                                    (int(gpk), int(nhl_id_val)),
+                                )
+                                rr = cur2.fetchone()
+                                if rr and rr.get("team_id") is not None:
+                                    team_id_val = int(rr["team_id"])
 
                         if nhl_id_val is not None:
                             try:
@@ -624,16 +633,22 @@ def main():
 
                         skipped_no_map += 1
                         continue
+
                     # teach external id only when we matched via roster path
                     if learned_from_roster and s["nhl_id"] is not None:
                         upsert_external_id(conn, pid, s["nhl_id"])
 
-                    rows.append((
-                        int(pid), int(gpk), SLATE_DATE,
-                        s["sog"], s["attempts"],
-                        float(s["toi_min"]) if s["toi_min"] is not None else None,
-                        float(s["pp_min"])  if s["pp_min"]  is not None else None,
-                    ))
+                    rows.append(
+                        (
+                            int(pid),
+                            int(gpk),
+                            SLATE_DATE,
+                            s["sog"],
+                            s["attempts"],
+                            float(s["toi_min"]) if s["toi_min"] is not None else None,
+                            float(s["pp_min"]) if s["pp_min"] is not None else None,
+                        )
+                    )
 
                 inserted = upsert_rows(conn, rows)
                 conn.commit()

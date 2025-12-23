@@ -285,8 +285,8 @@ def export_names_csv(slate: str) -> Path:
 
 def fetch_odds(
     days_from: int = 1,
-    markets: str = "player_shots_on_goal,player_total_saves,player_points",
-    regions: str = "us",
+    markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
+    regions: str = "us,us2",
     odds_format: str = "american",
     out_latest: Path = SITE_DIR / "odds_latest.json",
     out_today: Path = SITE_DIR / "odds_nhl_playerprops_today.json",
@@ -542,6 +542,9 @@ def cmd_daily(with_odds: bool):
         export_names_csv(slate)
     except Exception as e:
         print(f"⚠️ names export failed; downstream builders will fall back if possible: {e}")
+
+    # 3.9) Ensure team_roll10_m + team_context_rolling are current for this slate
+    run_psql_file(SQL_DIR / "upsert_team_context_for_slate.sql", vars={"slate_date": slate})
 
     # 4 Export feature CSVs for this slate
 

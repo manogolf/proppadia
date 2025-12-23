@@ -39,6 +39,7 @@ def norm_name(s: str) -> str:
         return ""
     s = ud.normalize("NFD", s)
     s = "".join(ch for ch in s if ud.category(ch) != "Mn")  # strip accents
+    s = s.replace(".", "")
     s = re.sub(r"[^a-zA-Z0-9\s'.-]", "", s)
     s = re.sub(r"\s+", " ", s).strip().lower()
     return s
@@ -127,11 +128,25 @@ def parse_odds_prices(raw) -> pd.DataFrame | None:
                 for o in x.get("outcomes",[]) or []:
                     if o.get("name") != "Over":
                         continue
-                    nm = norm_name(o.get("description") or o.get("player") or "")
+                    base_name = (o.get("description") or o.get("player") or "").strip()
                     pt = o.get("point")
                     pr = o.get("price")
-                    if nm and (pt is not None) and (pr is not None):
-                        recs.append({"name_norm": nm, "line_str": line_key(pt), "price": float(pr)})
+
+                    # Build aliases: full normalized name + "initial last" normalized name
+                    aliases = set()
+                    nm_full = norm_name(base_name)
+                    if nm_full:
+                        aliases.add(nm_full)
+
+                    # initial + last (e.g., "Nikita Kucherov" -> "n kucherov")
+                    if nm_full:
+                        parts = nm_full.split()
+                        if len(parts) >= 2:
+                            aliases.add(f"{parts[0][0]} {parts[-1]}")
+
+                    if aliases and (pt is not None) and (pr is not None):
+                        for nm in aliases:
+                            recs.append({"name_norm": nm, "line_str": line_key(pt), "price": float(pr)})
             for v in x.values():
                 walk(v)
         elif isinstance(x, list):
@@ -169,6 +184,13 @@ def main():
     pred_wide = read_csv_required(Path(args.pred))
     long = melt_preds_wide_to_long(pred_wide)   # player_id, game_id, line, p_over
 
+    # --- carry full_name from predictions if present (goalies may not be in names export) ---
+    carry_cols = [c for c in ["player_id", "game_id", "full_name", "team_id", "game_date"] if c in pred_wide.columns]
+    if "full_name" in carry_cols:
+        carry = pred_wide[carry_cols].drop_duplicates(subset=["player_id", "game_id"])
+        long = long.merge(carry, on=["player_id", "game_id"], how="left", suffixes=("", "_pred"))
+
+
     # --- load names (merge first, filter after) ---
     names = read_csv_required(Path(args.names))
     keep = [c for c in ["player_id","game_id","team_id","full_name","game_date"] if c in names.columns]
@@ -178,14 +200,36 @@ def main():
     if not keys:
         die("cannot merge names: missing both player_id and game_id in one of the files")
     df = long.merge(names, on=keys, how="left", suffixes=("",""))
+    # Prefer full_name from predictions when present; fall back to names export
+    if "full_name_x" in df.columns and "full_name_y" in df.columns:
+        df["full_name"] = df["full_name_x"].fillna(df["full_name_y"])
+        df = df.drop(columns=["full_name_x", "full_name_y"])
+
 
     # post-merge filter by SLATE_DATE if game_date exists
     if "game_date" in df.columns:
         df = df[df["game_date"].astype(str) == slate].copy()
 
     # canonical keys for join with odds
-    df["name_norm"] = df.get("full_name","").map(norm_name)
+    df["name_norm"] = df.get("full_name", "").map(norm_name)
     df["line_str"]  = df["line"].map(line_key)
+
+    # NEW: alias keys (full + initial-last) to match odds formatting differences
+    def aliases_for_name(full_name: str) -> list[str]:
+        base = norm_name(full_name)
+        if not base:
+            return [""]
+        parts = base.split()
+        if len(parts) >= 2:
+            first, last = parts[0], parts[-1]
+            initial_last = f"{first[0]} {last}" if first else last
+            return list(dict.fromkeys([base, initial_last]))  # preserve order, unique
+        return [base]
+
+    df["alias_key"] = df["full_name"].map(lambda x: aliases_for_name(x))
+    df = df.explode("alias_key")
+    df["alias_key"] = df["alias_key"].astype(str)
+
 
     # --- odds (median Over price) ---
     odds_raw = load_odds_json(Path(args.odds_json) if args.odds_json else None)
