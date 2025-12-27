@@ -368,12 +368,23 @@ def main():
                 continue
             gid = int(gid_raw)
 
-            season = g.get("season")
+            # Project rule: season is 4-digit season start year (int).
+            # Never trust API-provided season fields (some sources use 8-digit like 20252026).
+            season = None
+            try:
+                season = int(str(gid)[:4])
+            except Exception:
+                season = None
+
             if season is None:
-                try:
-                    season = int(str(gid)[:4])
-                except Exception:
-                    season = None
+                # Fallback: derive from start/game date if id parsing fails
+                gd = g.get("startTimeUTC") or g.get("gameDate")
+                if isinstance(gd, str) and len(gd) >= 10:
+                    y, m, _ = map(int, gd[:10].split("-"))
+                    season = y if m >= 7 else y - 1
+
+            if season is None:
+                raise RuntimeError(f"Could not derive 4-digit season for game_id={gid}")
 
             game_type = g.get("gameType")
             start_iso = g.get("startTimeUTC") or g.get("gameDate")

@@ -228,8 +228,15 @@ def main():
         for r in reader:
             try:
                 season = _i(r.get("season"))
-                if args.season and season != args.season:
-                    continue
+
+                # Normalize to 4-digit season start year only
+                if season is not None and season > 2200:
+                    season_str = str(season)
+                    if len(season_str) == 8 and season_str.isdigit():
+                        season = int(season_str[:4])
+                    else:
+                        season = None
+
 
                 situation = _norm_situation(r.get("situation"))
                 if situation not in ("all","5on5","5on4","4on5"):

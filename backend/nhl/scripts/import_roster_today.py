@@ -72,11 +72,16 @@ def is_placeholder(name: str | None) -> bool:
         return True
     return PLACEHOLDER_RE.match(str(name)) is not None
 
-def season_code_from_date(iso_date: str) -> str:
-    """Return NHL season code like '20252026' from 'YYYY-MM-DD'."""
+def season_start_year_from_date(iso_date: str) -> int:
+    """
+    Project rule: NHL season is the 4-digit season start year.
+    Examples:
+      2025-12-23 -> 2025
+      2026-01-15 -> 2025
+    """
     y, m, _ = map(int, iso_date.split("-"))
     start = y if m >= 7 else y - 1
-    return f"{start}{start+1}"
+    return int(start)
 
 def _normalize_apiweb_roster(j: dict) -> list[dict]:
     """
@@ -97,7 +102,7 @@ def _normalize_apiweb_roster(j: dict) -> list[dict]:
 
 def fetch_roster(team_tri: str, when_iso: str = DATE) -> list[dict]:
     tri = str(team_tri).upper()
-    season = season_code_from_date(when_iso)
+    season = season_start_year_from_date(when_iso)
     urls = [
         f"{BASE}/roster/{tri}/current",
         f"{BASE}/roster/{tri}/{season}",

@@ -20,6 +20,8 @@ Env:
 
 import os, sys, datetime as dt, re
 from zoneinfo import ZoneInfo
+import datetime as dt, os, sys
+
 
 # ---- absolutely disable server-side prepares (must run before importing psycopg) ----
 import os
@@ -100,10 +102,16 @@ def is_placeholder(name: str | None) -> bool:
         return True
     return PLACEHOLDER_RE.match(str(name)) is not None
 
-def season_code_from_date(iso_date: str) -> str:
+def season_start_year_from_date(iso_date: str) -> int:
+    """
+    Project rule: NHL season is the 4-digit season start year.
+    Examples:
+      2025-12-23 -> 2025
+      2026-01-15 -> 2025
+    """
     y, m, _ = map(int, iso_date.split("-"))
     start = y if m >= 7 else y - 1
-    return f"{start}{start+1}"
+    return int(start)
 
 def _normalize_pos(code: str | None) -> str | None:
     if not code:
@@ -311,26 +319,11 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
     Returns items with person.id, position.code, firstName/lastName when present.
     """
     tri = str(team_tri).upper()
-    season = season_code_from_date(when_iso)
+    season = season_start_year_from_date(when_iso)
     urls = [
         f"{BASE}/roster/{tri}/current",
         f"{BASE}/roster/{tri}/{season}",
     ]
-
-    def _append_from_section(out: list, section: list | None, default_pos: str):
-        for p in (section or []):
-            pid = p.get("id") or p.get("playerId") or (p.get("player") or {}).get("id")
-            if not pid:
-                continue
-            pos = _normalize_pos(p.get("positionCode") or p.get("position") or default_pos) or "F"
-            first = _safe_str(p.get("firstName"))
-            last  = _safe_str(p.get("lastName"))
-            out.append({
-                "person":   {"id": int(pid)},
-                "position": {"code": pos},
-                "firstName": first,
-                "lastName":  last,
-            })
 
     for url in urls:
         resp = S.get(url, timeout=20)
@@ -340,20 +333,48 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
         j = resp.json() or {}
 
         out: list[dict] = []
-        _append_from_section(out, j.get("forwards"), "F")
-        _append_from_section(out, j.get("defense"),  "D")
-        _append_from_section(out, j.get("goalies"),  "G")
 
+        # api-web uses "defensemen" (not "defense") for the roster endpoint
+        _append_from_section(out, j.get("forwards"), "F")
+        _append_from_section(out, j.get("defensemen") or j.get("defense"), "D")
+        _append_from_section(out, j.get("goalies"), "G")
+
+        # some variants wrap under {"roster": {...}}
         if not out and isinstance(j.get("roster"), dict):
             r = j["roster"]
             _append_from_section(out, r.get("forwards"), "F")
-            _append_from_section(out, r.get("defense"),  "D")
-            _append_from_section(out, r.get("goalies"),  "G")
+            _append_from_section(out, r.get("defensemen") or r.get("defense"), "D")
+            _append_from_section(out, r.get("goalies"), "G")
 
         if out:
             return out
 
     return []
+
+def _append_from_section(out: list[dict], section: list | None, default_pos: str) -> None:
+    """
+    Normalizes a roster "section" list into the api-web style items:
+      {"person":{"id":...}, "position":{"code":...}, "firstName":..., "lastName":...}
+    Works with both shapes:
+      - keys like id/playerId, firstName/lastName (strings)
+      - keys like player:{id:...}
+    """
+    for p in (section or []):
+        pid = p.get("id") or p.get("playerId") or (p.get("player") or {}).get("id")
+        if not pid:
+            continue
+
+        pos = _normalize_pos(p.get("positionCode") or p.get("position") or default_pos) or default_pos
+
+        first = _safe_str(p.get("firstName"))
+        last  = _safe_str(p.get("lastName"))
+
+        out.append({
+            "person":    {"id": int(pid)},
+            "position":  {"code": pos},
+            "firstName": first,
+            "lastName":  last,
+        })
 
 # ---------------- Main ----------------
 def main():

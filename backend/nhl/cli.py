@@ -19,6 +19,8 @@ Conventions:
       backend/nhl/models/sog
       backend/nhl/models/saves
       backend/nhl/models/points
+
+  - Daily Run: python -m backend.nhl.cli daily --with-odds    
 """
 
 from __future__ import annotations

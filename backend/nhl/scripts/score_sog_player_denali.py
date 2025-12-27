@@ -60,11 +60,26 @@ def load_feature_list_for_line(models_root: Path, line: float) -> list[str]:
 
 def normalize_booleans_inplace(df: pd.DataFrame, feats: list[str]) -> None:
     """
-    Normalize "boolean-like" features to 0/1, in-place, just like training.
+    Normalize boolean-like features to 0/1, in-place, just like training.
+
+    IMPORTANT:
+      - Hard-fail if any required feature in `feats` is missing from the CSV.
+        (Prevents silent zero-fill / constant features from missing columns.)
+      - Extra columns in the CSV are allowed (future buildouts).
     """
+    missing = [c for c in feats if c not in df.columns]
+    if missing:
+        raise RuntimeError(
+            "[DENALI_SOG] Features CSV missing required columns (hard error; no fill).\n"
+            f"Missing ({len(missing)}): {missing}"
+        )
+
+    # Non-fatal visibility into forward-compatible columns
+    extra = sorted(set(df.columns) - set(feats))
+    if extra:
+        print(f"[DENALI_SOG] extra_in_csv (ignored): {extra}")
+
     for c in feats:
-        if c not in df.columns:
-            continue
         if c not in BOOL_FEATURES:
             continue
 
@@ -82,6 +97,7 @@ def normalize_booleans_inplace(df: pd.DataFrame, feats: list[str]) -> None:
                     "False": 0,
                 }
             )
+            .infer_objects(copy=False)
         )
 
 

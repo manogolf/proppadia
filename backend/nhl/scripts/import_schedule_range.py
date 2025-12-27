@@ -71,7 +71,7 @@ def fetch_games_for_date(ds: str):
                 continue
             games.append({
                 "id": int(gid),
-                "season": g.get("season"),
+                "season": int(str(g.get("id") or g.get("gamePk") or g.get("gameId"))[:4]),
                 "gameType": g.get("gameType"),
             })
 

@@ -88,19 +88,80 @@ def load_line_models(model_root: Path, line: float):
         print(f"FATAL: failed to load models for line {line}: {e}", file=sys.stderr)
         sys.exit(2)
 
+    # --- Canonical feature selection (Denali SOG) ---
+    # Priority:
+    #   1) model.feature_names_in_ (if present)
+    #   2) backend/nhl/features/feature_metadata_nhl.json -> shots_on_goal_denali
+    # And we *loudly fail* if the per-line feature_metadata.json disagrees (prevents drift).
+
+    # Load per-line model metadata features (kept for drift detection)
     try:
-        meta = json.loads(meta_path.read_text())
-        feats = meta.get("features") or []
+        line_meta = json.loads(meta_path.read_text())
+        line_feats = line_meta.get("features") or []
     except Exception as e:
         print(f"FATAL: failed to read features from {meta_path}: {e}", file=sys.stderr)
         sys.exit(2)
 
-    if not feats:
+    if not line_feats:
         print(
             f"FATAL: empty feature list in metadata for line {line} ({meta_path})",
             file=sys.stderr,
         )
         sys.exit(2)
+
+    # Load repo-level canonical Denali feature list
+    repo_meta_path = Path(__file__).resolve().parents[1] / "features" / "feature_metadata_nhl.json"
+    try:
+        repo_meta = json.loads(repo_meta_path.read_text())
+        canonical_feats = repo_meta.get("shots_on_goal_denali") or []
+    except Exception as e:
+        print(f"FATAL: failed to read {repo_meta_path}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if not isinstance(canonical_feats, list) or not canonical_feats:
+        print(
+            f"FATAL: shots_on_goal_denali missing/empty in {repo_meta_path}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    # Prefer model-native feature list if available (strongest contract)
+    model_feats = None
+    try:
+        model_feats = list(getattr(lr, "feature_names_in_", [])) or None
+    except Exception:
+        model_feats = None
+
+    feats = model_feats if model_feats is not None else list(canonical_feats)
+
+    # Drift checks (fail loudly so scorer cannot silently score with the wrong set)
+    if set(feats) != set(canonical_feats):
+        only_in_feats = sorted(set(feats) - set(canonical_feats))
+        only_in_canon = sorted(set(canonical_feats) - set(feats))
+        print(
+            "FATAL: feature set mismatch vs canonical shots_on_goal_denali.\n"
+            f"  canonical: {repo_meta_path}\n"
+            f"  line: {line} ({line_dir})\n"
+            f"  only_in_feats({len(only_in_feats)}): {only_in_feats}\n"
+            f"  only_in_canonical({len(only_in_canon)}): {only_in_canon}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if set(line_feats) != set(canonical_feats):
+        only_in_line = sorted(set(line_feats) - set(canonical_feats))
+        only_in_canon2 = sorted(set(canonical_feats) - set(line_feats))
+        print(
+            "FATAL: per-line feature_metadata.json disagrees with canonical shots_on_goal_denali.\n"
+            f"  meta_path: {meta_path}\n"
+            f"  canonical: {repo_meta_path}\n"
+            f"  line: {line}\n"
+            f"  only_in_line_meta({len(only_in_line)}): {only_in_line}\n"
+            f"  only_in_canonical({len(only_in_canon2)}): {only_in_canon2}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    # --- end canonical feature selection ---
 
     return lr, rf, feats
 
@@ -148,6 +209,60 @@ def prepare_features(df: pd.DataFrame, feats: list[str]) -> pd.DataFrame:
     )
 
     return df_feat[feats]
+
+def report_feature_coverage(X_df, feature_list, tag=""):
+    """
+    Lightweight sanity report:
+      - top null features
+      - constant-ish features (nunique<=1) + sample value
+    """
+    n = len(X_df)
+    if n == 0:
+        print(f"[feature_check]{tag} rows=0 (nothing to score)")
+        return
+
+    # Nulls per feature
+    nulls = X_df.isna().sum().sort_values(ascending=False)
+    top_nulls = nulls[nulls > 0].head(15)
+
+    # Constant-ish features (nunique<=1)
+    nunique = X_df.nunique(dropna=True)
+    const = nunique[nunique <= 1].sort_values()
+
+    print(f"[feature_check]{tag} rows={n} features={len(feature_list)}")
+
+    if len(top_nulls) > 0:
+        pct = (top_nulls / n * 100).round(1)
+        print(f"[feature_check]{tag} top_null_features (count / %):")
+        for c in top_nulls.index:
+            print(f"  - {c}: {int(top_nulls[c])} / {pct[c]}%")
+    else:
+        print(f"[feature_check]{tag} nulls: none ✅")
+
+    if len(const) > 0:
+        print(f"[feature_check]{tag} constant_features (nunique<=1): {len(const)}")
+
+        # Print every constant feature + a sample value so we can see if it's all 0/1/etc.
+        # (Use the first non-null if available; else None.)
+        for c in const.index:
+            series = X_df[c]
+            sample = None
+            try:
+                non_null = series.dropna()
+                if len(non_null) > 0:
+                    sample = non_null.iloc[0]
+            except Exception:
+                sample = None
+
+            # Keep formatting readable
+            if isinstance(sample, float):
+                sample_str = f"{sample:.6g}"
+            else:
+                sample_str = str(sample)
+
+            print(f"  - {c}: nunique={int(const[c])} sample={sample_str}")
+    else:
+        print(f"[feature_check]{tag} constant_features: none ✅")
 
 
 def main():
@@ -228,6 +343,7 @@ def main():
 
         # Prepare features
         X_df = prepare_features(df, feats)
+        report_feature_coverage(X_df, feats, tag=f" line={line}")
         X = X_df.to_numpy(dtype=float)
 
         # Predict probabilities for Over(line)
