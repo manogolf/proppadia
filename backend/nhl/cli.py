@@ -539,6 +539,12 @@ def cmd_daily(with_odds: bool):
     rollup_end   = slate
     refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=rollup_end)
 
+    # 2c) Fill TOI-derived exposure/stability/trend features for this slate (hands-off)
+    # Safe to run daily: ALTERs are IF NOT EXISTS; UPDATE targets only rows for slate_date.
+
+    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql", vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_season_toi_features_for_slate.sql", vars={"slate_date": slate})
+    
     # 3 Export names (used by all builders)
     try:
         export_names_csv(slate)
@@ -719,6 +725,27 @@ def cmd_daily(with_odds: bool):
     build_sog(slate)
     build_saves(slate)
     build_points(slate)
+
+    # 9b) SOG integrity report (WARN-ONLY; never fail the pipeline)
+    try:
+        run(
+            [
+                PY,
+                SCRIPTS_DIR / "sog_integrity_report.py",
+                "--slate-date",
+                slate,
+                "--feature-key",
+                "shots_on_goal_denali",
+                "--db-toi-check",
+                "--db-toi-source",
+                "nhl.skater_game_logs_raw",
+                "--db-toi-days-back",
+                "30",
+            ]
+        )
+    except Exception as e:
+        print(f"⚠️ sog_integrity_report failed (continuing): {e}")
+
     
     # 10) Yesterday logs → promote to raw
     run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
@@ -772,7 +799,7 @@ def cmd_daily(with_odds: bool):
        shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
     SELECT
       player_id, game_id, team_id, opponent_id, is_home, game_date,
-      shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes
+      shots_on_goal, shot_attempts, toi_minutes, NULLIF(pp_toi_minutes, 0) AS pp_toi_minutes
     FROM joined
     WHERE opponent_id IS NOT NULL
     ON CONFLICT (player_id, game_id) DO UPDATE SET
@@ -783,9 +810,11 @@ def cmd_daily(with_odds: bool):
       shots_on_goal  = EXCLUDED.shots_on_goal,
       shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
       toi_minutes    = EXCLUDED.toi_minutes,
-      pp_toi_minutes = EXCLUDED.pp_toi_minutes;
+      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes);
     """
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
+
+    run([PY, SCRIPTS_DIR / "approx_pp_toi_from_pbp.py"], env={"SLATE_DATE": yday})
 
     # 11) Refresh views/materializations + sanity counts
     refresh_sql = SCRIPTS_DIR / "refresh.sql"

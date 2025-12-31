@@ -5,9 +5,12 @@
 #   - Schedule:  https://api-web.nhle.com/v1/schedule/YYYY-MM-DD
 #   - Boxscore:  https://api-web.nhle.com/v1/gamecenter/{gamePk}/boxscore
 
+#  python backend/nhl/scripts/seed_skater_logs_for_date.py
+
 import os, sys, datetime as dt
 from zoneinfo import ZoneInfo
 import re, unicodedata
+from typing import Optional, Any
 
 # ---------------- No-prepares guard (prevents DuplicatePreparedStatement) ----------------
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
@@ -93,22 +96,66 @@ def _et_date_from_utc(iso_utc: str | None) -> str | None:
         return None
 
 # ---------------- Utilities ----------------
-def toi_to_minutes(s):
-    """Accepts 'MM:SS', 'H:MM:SS', or numeric seconds; returns minutes (float)."""
-    if s is None or s == "":
-        return 0.0
-    if isinstance(s, (int, float)):
-        return float(s) / 60.0
-    parts = [p for p in str(s).split(":")]
+def toi_to_minutes(x: Any) -> Optional[float]:
+    """
+    Convert TOI formats to minutes.
+    - None / "" -> None (IMPORTANT: do NOT coerce missing to 0.0)
+    - "MM:SS" or "M:SS" -> minutes as float
+    - numeric seconds -> minutes as float
+    """
+    if x is None:
+        return None
+    if isinstance(x, (int, float)):
+        # assume seconds
+        return float(x) / 60.0
+    s = str(x).strip()
+    if not s:
+        return None
+    # common formats: "0:00", "03:21", "12:34"
+    if ":" in s:
+        parts = s.split(":")
+        if len(parts) == 2:
+            mm, ss = parts
+            try:
+                return float(int(mm)) + float(int(ss)) / 60.0
+            except Exception:
+                return None
+        # if weird, bail safely
+        return None
+    # last resort numeric string (seconds)
     try:
-        if len(parts) == 3:
-            h, m, sec = map(int, parts)
-            return 60*h + m + sec/60.0
-        m, sec = map(int, parts)
-        return m + sec/60.0
+        return float(s) / 60.0
     except Exception:
-        return 0.0
+        return None
 
+def extract_pp_toi_minutes(p: dict) -> Optional[float]:
+    """
+    Extract PP TOI from whatever we have.
+    If the key doesn't exist, return None (not 0.0).
+    """
+    # Most likely keys you intended:
+    v = (
+        p.get("ppToi")
+        or p.get("powerPlayToi")
+        or p.get("powerPlayTimeOnIce")
+        or p.get("powerPlayTime")
+    )
+
+    # Sometimes it's nested under stats/timeOnIce blobs
+    if v is None:
+        for k in ("timeOnIce", "toi", "stats", "playerStats"):
+            blob = p.get(k)
+            if isinstance(blob, dict):
+                v = (
+                    blob.get("ppToi")
+                    or blob.get("powerPlayToi")
+                    or blob.get("powerPlayTimeOnIce")
+                    or blob.get("powerPlayTime")
+                )
+                if v is not None:
+                    break
+
+    return toi_to_minutes(v)
 # ---------------- Data fetch (new endpoints) ----------------
 def get_schedule(date_str: str):
     """
@@ -368,7 +415,14 @@ def upsert_rows(conn, rows):
       shots_on_goal   = EXCLUDED.shots_on_goal,
       shot_attempts   = COALESCE(EXCLUDED.shot_attempts, nhl.import_skater_logs_stage.shot_attempts),
       toi_minutes     = EXCLUDED.toi_minutes,
-      pp_toi_minutes  = EXCLUDED.pp_toi_minutes
+
+      -- IMPORTANT:
+      -- Do NOT clobber existing PP TOI with NULL or 0 (often "unknown" in current history).
+      -- Only take the incoming value when it's present AND > 0.
+      pp_toi_minutes  = COALESCE(
+                          NULLIF(EXCLUDED.pp_toi_minutes, 0),
+                          nhl.import_skater_logs_stage.pp_toi_minutes
+                        )
     """
     with conn.cursor() as cur:
         cur.executemany(sql, rows)
@@ -482,15 +536,18 @@ def refresh_roster_status_from_box(conn, gpk: int):
 # =========================
 def _iter_skaters_from_box(box: dict):
     """
-    Parse skaters from api-web.nhle.com gamecenter/{gamePk}/boxscore
-    using the VERIFIED payload shape you showed:
-      p["toi"] (e.g. "16:28"), p["sog"], p["blockedShots"], etc.
-    """
+    Parse skaters from api-web.nhle.com gamecenter/{gamePk}/boxscore.
 
+    NOTE:
+      - Boxscore payload often does NOT include PP TOI reliably.
+      - We attempt extract_pp_toi_minutes(p) first (your canonical extractor),
+        then fall back to legacy key guesses.
+      - We only coerce to 0.0 at the very end for training stability.
+    """
     pstats = (box.get("playerByGameStats") or {})
     for side_key in ("homeTeam", "awayTeam"):
         team = pstats.get(side_key) or {}
-        for k in ("forwards", "defense"):  # goalies excluded here
+        for k in ("forwards", "defense"):  # goalies excluded
             arr = team.get(k) or []
             if not isinstance(arr, list):
                 continue
@@ -505,13 +562,11 @@ def _iter_skaters_from_box(box: dict):
                 name_raw = _extract_box_name(p)
                 nm = _norm_name(name_raw)
 
-                # VERIFIED top-level fields
+                # VERIFIED top-level fields in your sample
                 toi_s = p.get("toi")  # "MM:SS"
-                sog = p.get("sog")    # int
-                pp_g = p.get("powerPlayGoals")  # not pp toi, but present in your sample
+                sog = p.get("sog")
 
-                # Attempts: if the payload has shotAttempts/missedShots, use them;
-                # otherwise derive attempts from sog + missedShots + blockedShots.
+                # Attempts: prefer explicit attempts if present, else proxy
                 attempts = p.get("shotAttempts")
                 if attempts is None:
                     try:
@@ -519,17 +574,38 @@ def _iter_skaters_from_box(box: dict):
                     except Exception:
                         attempts = None
 
-                # PP TOI: only if payload provides it; otherwise 0.0 (don’t guess)
-                pp_toi_s = p.get("ppToi") or p.get("powerPlayToi") or p.get("powerPlayTimeOnIce")
+                toi_min = toi_to_minutes(toi_s)
+
+                # --- PP TOI minutes ---
+                # 1) canonical extractor (this is what you asked about)
+                pp_min = extract_pp_toi_minutes(p)
+
+                # 2) fallback to older key guesses (if extractor returns None)
+                if pp_min is None:
+                    pp_toi_s = (
+                        p.get("ppToi")
+                        or p.get("powerPlayToi")
+                        or p.get("powerPlayTimeOnIce")
+                        or p.get("ppTimeOnIce")
+                        or p.get("pp_time_on_ice")
+                        or p.get("pp_toi")
+                    )
+                    pp_min = toi_to_minutes(pp_toi_s)
+
+                # 3) final coercion to 0.0 for model/training stability
+                #    If you ever want “unknown” to remain NULL, delete this.
+                if pp_min is None:
+                    pp_min = None
 
                 yield {
                     "nhl_id": nhl_id,
                     "nm": nm,
                     "sog": int(sog) if sog is not None else None,
                     "attempts": int(attempts) if attempts is not None else None,
-                    "toi_min": toi_to_minutes(toi_s),
-                    "pp_min": toi_to_minutes(pp_toi_s),
+                    "toi_min": toi_min,
+                    "pp_min": pp_min,
                 }
+
                 
 # ---------------- Main ----------------
 def main():

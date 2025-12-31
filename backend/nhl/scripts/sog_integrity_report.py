@@ -9,7 +9,7 @@ Adds optional TOI integrity checks against skater logs.
 Usage:
   export SLATE_DATE=2025-12-09
   export SUPABASE_DB_URL='postgresql://...'
-  python backend/nhl/scripts/sog_integrity_report.py --slate-date 2025-12-09
+  python backend/nhl/scripts/sog_integrity_report.py --slate-date 2025-12-23
 
 If SUPABASE_DB_URL (or DATABASE_URL) is not set, DB checks are skipped.
 """
@@ -23,7 +23,8 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
-
+from datetime import date, datetime
+from datetime import date, timedelta
 import pandas as pd
 
 
@@ -150,79 +151,162 @@ def db_toi_integrity_check(
     print("\n=== DB TOI integrity ===")
     print(f"[sog_integrity] toi_source={source}  days_back={days_back}")
 
-    # ---- Slate-day checks ----
+    try:
+        toi_date = (date.fromisoformat(slate) - timedelta(days=1)).isoformat()
+    except Exception:
+        toi_date = None
+
+    # ---- YDAY checks (TOI source should exist for completed games) ----
+    check_date = toi_date  # derived above
+
     slate_sql = f"""
-WITH g AS (
-  SELECT game_id
-  FROM nhl.games
-  WHERE game_date = DATE '{slate}'
-),
-s AS (
-  SELECT
-    player_id,
-    game_id,
-    toi_minutes,
-    pp_toi_minutes
-  FROM {source}
-  WHERE game_id IN (SELECT game_id FROM g)
-)
-SELECT
-  COUNT(*)::int                                                      AS rows,
-  COUNT(DISTINCT player_id)::int                                     AS players,
-  SUM(CASE WHEN toi_minutes IS NULL THEN 1 ELSE 0 END)::int          AS toi_null,
-  SUM(CASE WHEN toi_minutes = 0 THEN 1 ELSE 0 END)::int              AS toi_zero,
-  SUM(CASE WHEN toi_minutes < 1 THEN 1 ELSE 0 END)::int              AS toi_lt1,
-  SUM(CASE WHEN toi_minutes > 35 THEN 1 ELSE 0 END)::int             AS toi_gt35,
-  SUM(CASE WHEN toi_minutes < 0 THEN 1 ELSE 0 END)::int              AS toi_lt0,
-  SUM(CASE WHEN pp_toi_minutes IS NULL THEN 1 ELSE 0 END)::int       AS pp_toi_null,
-  SUM(CASE WHEN pp_toi_minutes > toi_minutes THEN 1 ELSE 0 END)::int AS pp_gt_toi,
-  ROUND(MIN(toi_minutes)::numeric, 2)                                AS toi_min,
-  ROUND(MAX(toi_minutes)::numeric, 2)                                AS toi_max,
-  ROUND(AVG(toi_minutes)::numeric, 2)                                AS toi_avg
-FROM s;
-"""
+    WITH g AS (
+    SELECT game_id
+    FROM nhl.games
+    WHERE game_date = DATE '{check_date}'
+    ),
+    s AS (
+    SELECT
+        player_id,
+        game_id,
+        toi_minutes,
+        pp_toi_minutes
+    FROM {source}
+    WHERE game_id IN (SELECT game_id FROM g)
+    )
+    SELECT
+    COUNT(*)::int                                                      AS rows,
+    COUNT(DISTINCT player_id)::int                                     AS players,
+    SUM(CASE WHEN toi_minutes IS NULL THEN 1 ELSE 0 END)::int          AS toi_null,
+    SUM(CASE WHEN toi_minutes = 0 THEN 1 ELSE 0 END)::int              AS toi_zero,
+    SUM(CASE WHEN toi_minutes < 1 THEN 1 ELSE 0 END)::int              AS toi_lt1,
+    SUM(CASE WHEN toi_minutes > 35 THEN 1 ELSE 0 END)::int             AS toi_gt35,
+    SUM(CASE WHEN toi_minutes < 0 THEN 1 ELSE 0 END)::int              AS toi_lt0,
+    SUM(CASE WHEN pp_toi_minutes IS NULL THEN 1 ELSE 0 END)::int       AS pp_toi_null,
+    SUM(CASE WHEN pp_toi_minutes > toi_minutes THEN 1 ELSE 0 END)::int AS pp_gt_toi,
+    ROUND(MIN(toi_minutes)::numeric, 2)                                AS toi_min,
+    ROUND(MAX(toi_minutes)::numeric, 2)                                AS toi_max,
+    ROUND(AVG(toi_minutes)::numeric, 2)                                AS toi_avg
+    FROM s;
+    """
     out = run_psql(db_url, slate_sql)
     if out:
-        print("[sog_integrity] slate_toi|" + out)
+        print(f"[sog_integrity] yday_toi({check_date})| " + out)
 
-    if out and out.startswith("0|0|"): print("[sog_integrity] ⚠️ slate has games but no rows in TOI source; ingestion/seed likely missing for this date.")
-    
+        # Cheap regression detector for "nothing came back"
+        if out.startswith("0|0|"):
+            print(f"[sog_integrity] ⚠️ yday has 0 rows in TOI source for {check_date}; seed/ingest may be missing.")
 
-    # ---- Last N days checks ----
-    window_sql = f"""
-WITH w AS (
-  SELECT game_id
-  FROM nhl.games
-  WHERE game_date >= (CURRENT_DATE - INTERVAL '{days_back} days')
-),
-s AS (
-  SELECT
-    player_id,
-    game_id,
-    toi_minutes,
-    pp_toi_minutes
-  FROM {source}
-  WHERE game_id IN (SELECT game_id FROM w)
-)
-SELECT
-  COUNT(*)::int                                                      AS rows,
-  COUNT(DISTINCT player_id)::int                                     AS players,
-  SUM(CASE WHEN toi_minutes IS NULL THEN 1 ELSE 0 END)::int          AS toi_null,
-  SUM(CASE WHEN toi_minutes = 0 THEN 1 ELSE 0 END)::int              AS toi_zero,
-  SUM(CASE WHEN toi_minutes > 35 THEN 1 ELSE 0 END)::int             AS toi_gt35,
-  SUM(CASE WHEN toi_minutes < 0 THEN 1 ELSE 0 END)::int              AS toi_lt0,
-  SUM(CASE WHEN pp_toi_minutes IS NULL THEN 1 ELSE 0 END)::int       AS pp_toi_null,
-  SUM(CASE WHEN pp_toi_minutes > toi_minutes THEN 1 ELSE 0 END)::int AS pp_gt_toi,
-  ROUND(MIN(toi_minutes)::numeric, 2)                                AS toi_min,
-  ROUND(MAX(toi_minutes)::numeric, 2)                                AS toi_max,
-  ROUND(AVG(toi_minutes)::numeric, 2)                                AS toi_avg,
-  ROUND(STDDEV(toi_minutes)::numeric, 4)                             AS toi_sd
-FROM s;
-"""
-    out2 = run_psql(db_url, window_sql)
-    if out2:
-        print("[sog_integrity] window_toi|" + out2)
+        # ---- Last N days checks ----
+        window_sql = f"""
+    WITH w AS (
+    SELECT game_id
+    FROM nhl.games
+    WHERE game_date >= (CURRENT_DATE - INTERVAL '{days_back} days')
+    ),
+    s AS (
+    SELECT
+        player_id,
+        game_id,
+        toi_minutes,
+        pp_toi_minutes
+    FROM {source}
+    WHERE game_id IN (SELECT game_id FROM w)
+    )
+    SELECT
+    COUNT(*)::int                                                      AS rows,
+    COUNT(DISTINCT player_id)::int                                     AS players,
+    SUM(CASE WHEN toi_minutes IS NULL THEN 1 ELSE 0 END)::int          AS toi_null,
+    SUM(CASE WHEN toi_minutes = 0 THEN 1 ELSE 0 END)::int              AS toi_zero,
+    SUM(CASE WHEN toi_minutes > 35 THEN 1 ELSE 0 END)::int             AS toi_gt35,
+    SUM(CASE WHEN toi_minutes < 0 THEN 1 ELSE 0 END)::int              AS toi_lt0,
+    SUM(CASE WHEN pp_toi_minutes IS NULL THEN 1 ELSE 0 END)::int       AS pp_toi_null,
+    SUM(CASE WHEN pp_toi_minutes > toi_minutes THEN 1 ELSE 0 END)::int AS pp_gt_toi,
+    ROUND(MIN(toi_minutes)::numeric, 2)                                AS toi_min,
+    ROUND(MAX(toi_minutes)::numeric, 2)                                AS toi_max,
+    ROUND(AVG(toi_minutes)::numeric, 2)                                AS toi_avg,
+    ROUND(STDDEV_SAMP(toi_minutes)::numeric, 4)                        AS toi_sd
+    FROM s;
+    """
+        out2 = run_psql(db_url, window_sql)
+        if out2:
+            print("[sog_integrity] window_toi| " + out2)
 
+def _as_date(s: str) -> date:
+    # Accept "YYYY-MM-DD" (what your pipeline uses)
+    return datetime.fromisoformat(s).date()
+
+
+def report_slate_toi_feature_coverage(conn, slate_date: date):
+    """
+    Diagnoses TOI feature fill quality on the SOG pregame table for a given slate day.
+
+    Buckets missing d10_toi_min_avg into:
+    - no_history_before_slate: player has 0 prior games in skater_game_logs_raw for same season
+    - has_history_missing_any: player has prior games, but still no d10_toi_min_avg (unexpected)
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            WITH p AS (
+            SELECT %s::date AS slate_date
+            ),
+            slate AS (
+            SELECT
+                t.player_id::bigint AS player_id,
+                t.season::int       AS season,
+                t.d10_toi_min_avg   AS d10_toi_min_avg
+            FROM nhl.training_features_nhl_sog_enriched_pregame_v2 t
+            JOIN p ON TRUE
+            WHERE t.game_date = p.slate_date
+            ),
+            hist AS (
+            SELECT
+                l.player_id::bigint AS player_id,
+                g.season::int       AS season,
+                COUNT(*)::int       AS prior_games
+            FROM nhl.skater_game_logs_raw l
+            JOIN nhl.games g USING (game_id)
+            JOIN p ON TRUE
+            WHERE g.game_date < p.slate_date
+            GROUP BY 1,2
+            ),
+            joined AS (
+            SELECT
+                s.player_id,
+                s.season,
+                s.d10_toi_min_avg,
+                COALESCE(h.prior_games, 0) AS prior_games
+            FROM slate s
+            LEFT JOIN hist h
+                ON h.player_id = s.player_id
+            AND h.season    = s.season
+            )
+            SELECT
+            COUNT(*)::int                                              AS rows_slate,
+            COUNT(*) FILTER (WHERE d10_toi_min_avg IS NOT NULL)::int    AS nn_d10_toi,
+            COUNT(*) FILTER (WHERE d10_toi_min_avg IS NULL)::int        AS missing_d10_toi,
+            COUNT(*) FILTER (
+                WHERE d10_toi_min_avg IS NULL AND prior_games = 0
+            )::int                                                     AS missing_no_history_before_slate,
+            COUNT(*) FILTER (
+                WHERE d10_toi_min_avg IS NULL AND prior_games > 0
+            )::int                                                     AS missing_has_history_unexpected
+            FROM joined;
+            """,
+            (slate_date.isoformat(),),
+        )
+        row = cur.fetchone() or {}
+
+    print("\n=== SOG TOI Feature Coverage (slate-day) ===")
+    print(
+        f"slate_date={slate_date} | rows_slate={row.get('rows_slate', 0)} | "
+        f"nn_d10_toi={row.get('nn_d10_toi', 0)} | missing_d10_toi={row.get('missing_d10_toi', 0)}"
+    )
+    print(
+        f"missing buckets: no_history_before_slate={row.get('missing_no_history_before_slate', 0)} | "
+        f"has_history_unexpected={row.get('missing_has_history_unexpected', 0)}"
+    )
 
 # ---------- new: feature metadata / schema checks ----------
 def expected_features_from_metadata(meta: Any, key: str | None = None) -> list[str]:

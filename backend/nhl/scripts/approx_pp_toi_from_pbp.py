@@ -1,175 +1,245 @@
-#  scripts/approx_pp_toi_from_pbp.py
-
 #!/usr/bin/env python3
-import argparse, os, sys, time, json
+# backend/nhl/scripts/approx_pp_toi_from_pbp.py
+#
+# Purpose:
+#   Compute per-skater PP TOI minutes using SHIFTCHARTS (actual shifts),
+#   and PBP situationCode only to define team PP windows.
+#
+# DSN behavior:
+#   - Uses --db-url if provided
+#   - Else SUPABASE_DB_URL / DATABASE_URL from environment
+#   - Else falls back to {project}/db_url.txt (back-compat)
+
+import argparse, os, sys, time
 from typing import Dict, Any, List, Tuple, Optional
 import requests
 import psycopg2, psycopg2.extras
 
-API_BASE = "https://api-web.nhle.com/v1/gamecenter"
+API_WEB_BASE = "https://api-web.nhle.com/v1/gamecenter"
+API_STATS_BASE = "https://api.nhle.com/stats/rest/en"
+UA = {"User-Agent": "proppadia-nhl/1.0"}
+
+
+# ----------------------------- HTTP helpers -----------------------------
 
 def gj(url: str) -> Optional[Dict[str, Any]]:
     for _ in range(3):
         try:
-            r = requests.get(url, timeout=15)
+            r = requests.get(url, timeout=20, headers=UA)
             r.raise_for_status()
             return r.json()
         except Exception:
-            time.sleep(0.4)
+            time.sleep(0.5)
     return None
 
-def strength_tuple(ev: Dict[str, Any]) -> Tuple[int,int]:
-    """
-    Return (home_on_ice, away_on_ice). If missing, return (0,0).
-    """
-    st = ev.get("homeTeamDefendingStrength") or ev.get("homeTeamStrength")
-    # api-web PBP typically includes 'homeTeamDefendingStrength' like "5x5", "4x5" etc.
-    # If absent, try details.strength
-    s = (ev.get("details") or {}).get("strength")
-    def parse_pair(sv):
-        if not isinstance(sv, str) or "x" not in sv: return (0,0)
-        a,b = sv.split("x",1)
-        try: return (int(a), int(b))
-        except: return (0,0)
-    if s and isinstance(s, str) and "v" in s:
-        # sometimes "5v4" style
-        a,b = s.split("v",1)
-        try: return (int(a), int(b))
-        except: pass
-    if st and isinstance(st, str) and "x" in st:
-        return parse_pair(st)
-    # last resort: event has on-ice counts?
-    h = (ev.get("homeTeamOnIceCount") or 0) or 0
-    a = (ev.get("awayTeamOnIceCount") or 0) or 0
-    return (int(h or 0), int(a or 0))
 
-def event_team_abbr(ev: Dict[str, Any]) -> Optional[str]:
-    # team is often under 'team' or in 'details.eventOwnerTeamAbbrev'
-    t = ev.get("team")
-    if isinstance(t, dict):
-        ab = t.get("abbrev")
-        if ab: return ab
-    d = ev.get("details")
-    if isinstance(d, dict):
-        ab = d.get("eventOwnerTeamAbbrev")
-        if ab: return ab
-    ab = ev.get("eventOwnerTeamAbbrev")
-    return ab if isinstance(ab, str) else None
+def fetch_pbp(gid: int) -> Optional[List[Dict[str, Any]]]:
+    pbp = gj(f"{API_WEB_BASE}/{gid}/play-by-play")
+    if not isinstance(pbp, dict):
+        return None
+    plays = pbp.get("plays") or []
+    return list(plays) if isinstance(plays, list) else None
 
-def players_by_role(ev: Dict[str, Any]) -> Dict[str,int]:
-    out={}
-    for p in (ev.get("players") or []):
-        if not isinstance(p, dict): continue
-        pid = p.get("playerId") or p.get("id")
-        role= p.get("playerType") or p.get("role") or "Player"
-        if isinstance(pid, int): out[role]=pid
-    return out
 
-def clock_seconds(ev: Dict[str, Any]) -> int:
-    """
-    Convert game clock to absolute seconds since start (approx).
-    We’ll combine period + periodTimeRemaining or timeInPeriod if available.
-    """
-    # api-web tends to have 'period', 'timeInPeriod' like "12:34"
-    per = int(ev.get("period", 0) or 0)
-    t = ev.get("timeInPeriod")
-    sec = 0
-    if isinstance(t, str) and ":" in t:
-        m,s = t.split(":",1)
-        try:
-            # timeInPeriod is elapsed, not remaining (api-web), but some endpoints use remaining.
-            # If this ends up backwards on a few events, it only affects ordering within a small window.
-            sec = int(m)*60 + int(s)
-        except: pass
-    # 20-min periods baseline; OT not special-cased (OK for relative windows)
-    return (per-1)*20*60 + sec
+def fetch_shiftcharts(gid: int) -> Optional[List[Dict[str, Any]]]:
+    # NOTE: cayenneExp syntax is required by this endpoint
+    url = f"{API_STATS_BASE}/shiftcharts?cayenneExp=gameId={gid}"
+    js = gj(url)
+    if not isinstance(js, dict):
+        return None
+    data = js.get("data")
+    return list(data) if isinstance(data, list) else None
 
-def build_pp_intervals(plays: List[Dict[str,Any]], home_abbr: str, away_abbr: str) -> Dict[str,List[Tuple[int,int]]]:
+
+# ----------------------------- Time parsing -----------------------------
+
+def parse_mmss(v: Any) -> Optional[int]:
+    if not isinstance(v, str) or ":" not in v:
+        return None
+    try:
+        mm, ss = v.split(":", 1)
+        return int(mm) * 60 + int(ss)
+    except Exception:
+        return None
+
+
+def play_abs_seconds(ev: Dict[str, Any]) -> Optional[int]:
     """
-    Return { team_abbr: [(start_sec, end_sec), ...] } for offensive PP (they have more skaters).
-    We detect any interval where one side has skater advantage (e.g., 5v4, 5v3).
+    Absolute seconds since game start, using api-web play-by-play.
+    Uses periodDescriptor.number + timeInPeriod "MM:SS" (elapsed within period).
     """
-    pp = {home_abbr: [], away_abbr: []}
-    # Iterate chronologically
-    sp = sorted(plays, key=clock_seconds)
-    cur = {home_abbr: None, away_abbr: None}  # start time if in PP
-    for ev in sp:
-        h,a = strength_tuple(ev)
-        if not h or not a:
+    pd = ev.get("periodDescriptor") or {}
+    per = pd.get("number")
+    tip = ev.get("timeInPeriod")
+    if per is None:
+        return None
+    t = parse_mmss(tip)
+    if t is None:
+        return None
+    return (int(per) - 1) * 20 * 60 + t
+
+
+def shift_abs_interval(row: Dict[str, Any]) -> Optional[Tuple[int, int]]:
+    """
+    Build absolute [start,end) seconds for a shiftchart row.
+    Common fields in shiftcharts rows include:
+      period (int), startTime ("MM:SS"), endTime ("MM:SS")
+    """
+    per = row.get("period")
+    st = parse_mmss(row.get("startTime"))
+    en = parse_mmss(row.get("endTime"))
+    if per is None or st is None or en is None:
+        return None
+    try:
+        per_i = int(per)
+    except Exception:
+        return None
+
+    start = (per_i - 1) * 20 * 60 + st
+    end = (per_i - 1) * 20 * 60 + en
+    # Defensive: if end <= start, ignore
+    if end <= start:
+        return None
+    return (start, end)
+
+
+# ----------------------------- situationCode -> PP windows -----------------------------
+
+def parse_situation(code: str) -> Optional[Tuple[int, int, int, int]]:
+    """
+    situationCode is typically 4 digits: A B C D
+      A = away goalie present (0/1)
+      B = away skaters
+      C = home skaters
+      D = home goalie present (0/1)
+    Example: 1551 => 5v5, 1541 => away 5 vs home 4 (away advantage), 1451 => home advantage.
+    """
+    if not code or len(code) != 4 or not code.isdigit():
+        return None
+    return (int(code[0]), int(code[1]), int(code[2]), int(code[3]))
+
+
+def team_has_advantage(code: str) -> Optional[Tuple[bool, bool]]:
+    parsed = parse_situation(code)
+    if not parsed:
+        return None
+    _ag, away_skaters, home_skaters, _hg = parsed
+    return (home_skaters > away_skaters, away_skaters > home_skaters)
+
+
+def build_pp_intervals_from_situation(plays: List[Dict[str, Any]]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    """
+    Returns (home_pp_intervals, away_pp_intervals) as absolute seconds [start,end).
+    We treat any segment where one side has MORE skaters than the other as PP time for that side.
+    """
+    pts: List[Tuple[int, bool, bool]] = []
+    for ev in plays:
+        t = play_abs_seconds(ev)
+        adv = team_has_advantage(ev.get("situationCode") or "")
+        if t is None or adv is None:
             continue
-        if h > a:
-            # home on PP
-            if cur[home_abbr] is None: cur[home_abbr] = clock_seconds(ev)
-            if cur[away_abbr] is not None:
-                # away no longer PP
-                s = cur[away_abbr]; e = clock_seconds(ev)
-                if e>s: pp[away_abbr].append((s,e))
-                cur[away_abbr]=None
-        elif a > h:
-            # away on PP
-            if cur[away_abbr] is None: cur[away_abbr] = clock_seconds(ev)
-            if cur[home_abbr] is not None:
-                s = cur[home_abbr]; e = clock_seconds(ev)
-                if e>s: pp[home_abbr].append((s,e))
-                cur[home_abbr]=None
+        pts.append((t, adv[0], adv[1]))
+
+    if not pts:
+        return ([], [])
+
+    pts.sort(key=lambda x: x[0])
+
+    home_int: List[Tuple[int, int]] = []
+    away_int: List[Tuple[int, int]] = []
+
+    cur_home: Optional[int] = None
+    cur_away: Optional[int] = None
+
+    for i in range(len(pts) - 1):
+        t0, h_adv, a_adv = pts[i]
+        t1, _, _ = pts[i + 1]
+        if t1 <= t0:
+            continue
+
+        if h_adv:
+            if cur_home is None:
+                cur_home = t0
         else:
-            # even strength—close any open PP
-            for ab in (home_abbr, away_abbr):
-                if cur[ab] is not None:
-                    s = cur[ab]; e = clock_seconds(ev)
-                    if e>s: pp[ab].append((s,e))
-                    cur[ab]=None
-    # close any trailing intervals at last event time
-    if sp:
-        last_t = clock_seconds(sp[-1])
-        for ab in (home_abbr, away_abbr):
-            if cur[ab] is not None:
-                s = cur[ab]; e = last_t
-                if e>s: pp[ab].append((s,e))
-                cur[ab]=None
-    return pp
+            if cur_home is not None:
+                home_int.append((cur_home, t0))
+                cur_home = None
 
-def in_any_interval(t: int, intervals: List[Tuple[int,int]]) -> bool:
-    for s,e in intervals:
-        if s <= t <= e: return True
-    return False
+        if a_adv:
+            if cur_away is None:
+                cur_away = t0
+        else:
+            if cur_away is not None:
+                away_int.append((cur_away, t0))
+                cur_away = None
 
-def is_pp_attempt(ev: Dict[str,Any]) -> bool:
-    typ = (ev.get("typeDescKey") or ev.get("eventType") or "").upper()
-    return typ in ("SHOT", "GOAL", "MISSED_SHOT", "BLOCKED_SHOT")
+    # close at last timestamp we saw
+    last_t = pts[-1][0]
+    if cur_home is not None and last_t > cur_home:
+        home_int.append((cur_home, last_t))
+    if cur_away is not None and last_t > cur_away:
+        away_int.append((cur_away, last_t))
 
-def main():
+    # drop any degenerate
+    home_int = [(s, e) for (s, e) in home_int if e > s]
+    away_int = [(s, e) for (s, e) in away_int if e > s]
+    return (home_int, away_int)
+
+
+def intervals_total_seconds(ints: List[Tuple[int, int]]) -> int:
+    return sum(max(0, e - s) for (s, e) in ints)
+
+
+def overlap_seconds(a: Tuple[int, int], b: Tuple[int, int]) -> int:
+    s = max(a[0], b[0])
+    e = min(a[1], b[1])
+    return max(0, e - s)
+
+
+def interval_list_overlap_seconds(seg: Tuple[int, int], intervals: List[Tuple[int, int]]) -> int:
+    # intervals are few; simple scan is fine
+    return sum(overlap_seconds(seg, iv) for iv in intervals)
+
+
+# ----------------------------- Main -----------------------------
+
+def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db-url", help="Postgres DSN/URL (pooler OK). If omitted, reads ./db_url.txt", default=None)
+    ap.add_argument("--db-url", default=None, help="Postgres DSN/URL. If omitted, uses env then ./db_url.txt")
     ap.add_argument("--project", default=".", help="Project root for db_url.txt fallback")
     ap.add_argument("--limit-games", type=int, default=0, help="Optional limit of games to process")
-    ap.add_argument("--commit-every", type=int, default=200, help="Commit frequency")
+    ap.add_argument("--commit-every", type=int, default=50, help="Commit frequency")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
-    dsn = args.db_url
+    dsn = (args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL"))
     if not dsn:
-        with open(os.path.join(args.project, "db_url.txt"), "r") as f:
-            dsn = f.read().strip()
+        try:
+            with open(os.path.join(args.project, "db_url.txt"), "r") as f:
+                dsn = f.read().strip()
+        except Exception:
+            print("ERROR: provide --db-url or set SUPABASE_DB_URL / DATABASE_URL", file=sys.stderr)
+            sys.exit(2)
 
-    conn = psycopg2.connect(dsn); conn.autocommit = False
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = False
     cur = conn.cursor()
 
-    # 1) games where skater rows have NULL pp_toi_minutes
+    # Games with missing PP TOI (NULL or 0)
     cur.execute("""
       WITH g AS (
         SELECT game_id
         FROM nhl.skater_game_logs_raw
-        WHERE pp_toi_minutes IS NULL
+        WHERE pp_toi_minutes IS NULL OR pp_toi_minutes = 0
         GROUP BY game_id
       )
       SELECT g.game_id,
-             MAX(CASE WHEN s.is_home THEN t.abbr ELSE opp.abbr END) AS home_abbr,
-             MAX(CASE WHEN NOT s.is_home THEN t.abbr ELSE opp.abbr END) AS away_abbr
+             MAX(CASE WHEN gm.home_team_id = t.team_id THEN t.team ELSE opp.team END) AS home_abbr,
+             MAX(CASE WHEN gm.away_team_id = t.team_id THEN t.team ELSE opp.team END) AS away_abbr
       FROM g
-      JOIN nhl.skater_game_logs_raw s ON s.game_id = g.game_id
-      JOIN nhl.teams t  ON t.team_id  = s.team_id
-      JOIN nhl.teams opp ON opp.team_id = s.opponent_id
+      JOIN nhl.games gm ON gm.game_id = g.game_id
+      JOIN nhl.teams t  ON t.team_id  = gm.home_team_id
+      JOIN nhl.teams opp ON opp.team_id = gm.away_team_id
       GROUP BY g.game_id
       ORDER BY g.game_id
     """)
@@ -182,101 +252,102 @@ def main():
 
     for (gid, home_abbr, away_abbr) in games:
         processed += 1
-        pbp = gj(f"{API_BASE}/{gid}/play-by-play")
-        if not isinstance(pbp, dict):
-            if args.verbose: print(f"[{processed}/{len(games)}] {gid}: no PBP → skip", flush=True)
-            continue
-        plays = list(pbp.get("plays") or [])
+
+        plays = fetch_pbp(int(gid))
         if not plays:
-            if args.verbose: print(f"[{processed}/{len(games)}] {gid}: empty PBP → skip", flush=True)
+            if args.verbose:
+                print(f"[{processed}/{len(games)}] {gid}: no/empty PBP → skip", flush=True)
             continue
 
-        pp_windows = build_pp_intervals(plays, home_abbr, away_abbr)
-        # Count PP attempts per player per team
-        team_attempts: Dict[str, Dict[int,int]] = {home_abbr:{}, away_abbr:{}}
+        shifts = fetch_shiftcharts(int(gid))
+        if not shifts:
+            if args.verbose:
+                print(f"[{processed}/{len(games)}] {gid}: no shiftcharts → skip", flush=True)
+            continue
 
-        for ev in plays:
-            if not is_pp_attempt(ev): continue
-            t = clock_seconds(ev)
-            ab = event_team_abbr(ev)
-            if ab not in (home_abbr, away_abbr): continue
-            if not in_any_interval(t, pp_windows[ab]): continue
-            roles = players_by_role(ev)
-            shooter = roles.get("Shooter")
-            if isinstance(shooter, int):
-                team_attempts[ab][shooter] = team_attempts[ab].get(shooter, 0) + 1
+        home_pp_int, away_pp_int = build_pp_intervals_from_situation(plays)
+        home_pp_sec = intervals_total_seconds(home_pp_int)
+        away_pp_sec = intervals_total_seconds(away_pp_int)
 
-        # total PP seconds per team
-        pp_sec = {ab: sum(e-s for (s,e) in pp_windows[ab]) for ab in (home_abbr, away_abbr)}
-
-        # fetch all skater rows for gid (need team_id/opponent_id/is_home/player_id)
+        # Fetch skater rows needing update (NULL or 0)
         cur.execute("""
-          SELECT player_id, team_id, opponent_id, is_home
+          SELECT player_id, is_home, toi_minutes
           FROM nhl.skater_game_logs_raw
-          WHERE game_id = %s AND (pp_toi_minutes IS NULL)
+          WHERE game_id = %s AND (pp_toi_minutes IS NULL OR pp_toi_minutes = 0)
         """, (gid,))
         sk_rows = cur.fetchall()
         if not sk_rows:
-            if args.verbose: print(f"[{processed}/{len(games)}] {gid}: nothing to update", flush=True)
+            if args.verbose:
+                print(f"[{processed}/{len(games)}] {gid}: nothing to update", flush=True)
             continue
 
-        # Map team_id → abbr for convenience (we already have home/away, but be safe)
-        # Find which abbr matches each row
-        # Simple: if is_home = true → team_abbr = home_abbr else away_abbr
-        updates: List[Tuple[float,int,int]] = []  # (pp_minutes, pid, gid)
+        want_pids = set()
+        toi_by_pid: Dict[int, Optional[float]] = {}
+        home_flag_by_pid: Dict[int, bool] = {}
+        for (pid, is_home, toi_min) in sk_rows:
+            try:
+                pid_i = int(pid)
+            except Exception:
+                continue
+            want_pids.add(pid_i)
+            home_flag_by_pid[pid_i] = bool(is_home)
+            try:
+                toi_by_pid[pid_i] = float(toi_min) if toi_min is not None else None
+            except Exception:
+                toi_by_pid[pid_i] = None
 
-        # Precompute even-split fallback candidates: skaters who had ANY PP event as Player/Shooter etc.
-        pp_participants: Dict[str, set] = {home_abbr:set(), away_abbr:set()}
-        for ev in plays:
-            t = clock_seconds(ev)
-            ab = event_team_abbr(ev)
-            if ab not in (home_abbr, away_abbr): continue
-            if not in_any_interval(t, pp_windows[ab]): continue
-            for pid in players_by_role(ev).values():
-                if isinstance(pid, int):
-                    pp_participants[ab].add(pid)
+        # Sum PP overlap seconds per player from shiftcharts
+        pp_sec_by_pid: Dict[int, int] = {pid: 0 for pid in want_pids}
 
-        for (pid, team_id, opp_id, is_home) in sk_rows:
-            team_ab = home_abbr if is_home else away_abbr
-            team_pp = pp_sec.get(team_ab, 0)
-            if team_pp <= 0:
-                # no PP time for this team → zero
-                updates.append((0.0, pid, gid))
+        for row in shifts:
+            pid = row.get("playerId")
+            tab = row.get("teamAbbrev")
+            if not isinstance(pid, int):
+                continue
+            if pid not in want_pids:
+                continue
+            if tab not in (home_abbr, away_abbr):
                 continue
 
-            attempts = team_attempts[team_ab]
-            total_w = sum(attempts.values())
-            if total_w > 0:
-                w = attempts.get(pid, 0)
-                pp_secs_for_player = (team_pp * (w / total_w))
+            seg = shift_abs_interval(row)
+            if seg is None:
+                continue
+
+            if tab == home_abbr:
+                pp_sec_by_pid[pid] += interval_list_overlap_seconds(seg, home_pp_int)
             else:
-                # even split among participants; if none, skip
-                parts = pp_participants[team_ab]
-                if parts:
-                    share = 1.0/len(parts)
-                    pp_secs_for_player = team_pp * (share if pid in parts else 0.0)
-                else:
-                    # cannot infer any participant—skip this game
-                    pp_secs_for_player = None
+                pp_sec_by_pid[pid] += interval_list_overlap_seconds(seg, away_pp_int)
 
-            if pp_secs_for_player is None:
-                continue
-            updates.append((round(pp_secs_for_player/60.0, 2), pid, gid))
+        updates: List[Tuple[float, int, int]] = []
+        for pid in want_pids:
+            pp_min = round(pp_sec_by_pid.get(pid, 0) / 60.0, 2)
+            toi = toi_by_pid.get(pid)
+            if toi is not None:
+                pp_min = min(pp_min, float(toi))
+            updates.append((pp_min, pid, int(gid)))
 
-        if updates:
-            psycopg2.extras.execute_values(
-                cur,
-                """
-                UPDATE nhl.skater_game_logs_raw AS s SET
-                  pp_toi_minutes = data.pp_min
-                FROM (VALUES %s) AS data(pp_min, player_id, game_id)
-                WHERE s.player_id = data.player_id
-                  AND s.game_id   = data.game_id
-                  AND s.pp_toi_minutes IS NULL
-                """,
-                updates, page_size=100
+        psycopg2.extras.execute_values(
+            cur,
+            """
+            UPDATE nhl.skater_game_logs_raw AS s SET
+              pp_toi_minutes = data.pp_min
+            FROM (VALUES %s) AS data(pp_min, player_id, game_id)
+            WHERE s.player_id = data.player_id
+              AND s.game_id   = data.game_id
+              AND (s.pp_toi_minutes IS NULL OR s.pp_toi_minutes = 0)
+            """,
+            updates,
+            page_size=500,
+        )
+        updated_rows += cur.rowcount
+
+        if args.verbose:
+            print(
+                f"[{processed}/{len(games)}] {gid}: "
+                f"pp_home_sec={home_pp_sec} pp_away_sec={away_pp_sec} "
+                f"updates={len(updates)} rowcount={cur.rowcount}",
+                flush=True,
             )
-            updated_rows += cur.rowcount
 
         if processed % args.commit_every == 0:
             conn.commit()
@@ -285,6 +356,7 @@ def main():
 
     conn.commit()
     print(f"✅ Done. Games scanned: {processed}, rows updated: {updated_rows}")
+
 
 if __name__ == "__main__":
     main()
