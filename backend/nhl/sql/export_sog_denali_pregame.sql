@@ -38,28 +38,37 @@ COPY (
     b.b2b_flag,
     b.role_pp_share,
 
-    -- Denali extras (not yet populated here) → stubbed as 0.0
-    0.0::numeric AS opp_d10_sf_per60,
-    0.0::numeric AS team_d10_sa_per60,
-    0.0::numeric AS opp_d10_sa_per60,
+    -- shift teammate overlap (D10, prior-games only; NULL when missing)
+    ov.d10_top_mate_overlap_share_avg,
+    ov.d10_top_mate_overlap_share_std,
+    ov.d10_top3_mates_overlap_share_avg,
+    ov.d10_top3_mates_overlap_share_std,
+    ov.d10_shiftcharts_games,
+    ov.d10_shiftcharts_coverage_rate,
 
-    0.0::numeric AS szn_toi_per_game_5on5,
-    0.0::numeric AS szn_toi_per_game_pp,
-    0.0::numeric AS szn_toi_per_game_pk,
-    0.0::numeric AS szn_shifts_per_game_5on5,
-    0.0::numeric AS szn_shifts_per_game_pp,
-    0.0::numeric AS szn_shifts_per_game_pk,
 
-    0.0::numeric AS season_5on5_icetime_per_game,
-    0.0::numeric AS season_5on4_icetime_per_game,
-    0.0::numeric AS season_4on5_icetime_per_game,
-    0.0::numeric AS season_5on5_shifts_per_game,
-    0.0::numeric AS season_5on4_shifts_per_game,
-    0.0::numeric AS season_4on5_shifts_per_game,
+    -- Denali extras (not yet populated here) → NULL (missingness-aware)
+    tc.opp_d10_sf_per60        AS opp_d10_sf_per60,
+    tc.d10_sa_per60            AS team_d10_sa_per60,
+    tc.opp_d10_sa_per60        AS opp_d10_sa_per60,
 
-    0.0::numeric AS team_szn_5on5_top_line_xgf_share,
-    0.0::numeric AS team_5v5_top_line_icetime_share,
-    0.0::numeric AS team_5v5_top_line_shotattempts_share,
+    NULL::numeric AS szn_toi_per_game_5on5,
+    NULL::numeric AS szn_toi_per_game_pp,
+    NULL::numeric AS szn_toi_per_game_pk,
+    NULL::numeric AS szn_shifts_per_game_5on5,
+    NULL::numeric AS szn_shifts_per_game_pp,
+    NULL::numeric AS szn_shifts_per_game_pk,
+
+    NULL::numeric AS season_5on5_icetime_per_game,
+    NULL::numeric AS season_5on4_icetime_per_game,
+    NULL::numeric AS season_4on5_icetime_per_game,
+    NULL::numeric AS season_5on5_shifts_per_game,
+    NULL::numeric AS season_5on4_shifts_per_game,
+    NULL::numeric AS season_4on5_shifts_per_game,
+
+    NULL::numeric AS team_szn_5on5_top_line_xgf_share,
+    NULL::numeric AS team_5v5_top_line_icetime_share,
+    NULL::numeric AS team_5v5_top_line_shotattempts_share,
 
     -- team + streak context
     b.last10_team_sog_share,
@@ -112,5 +121,12 @@ COPY (
       CASE WHEN sums.toi_10 IS NULL OR sums.toi_10 <= 0 THEN NULL ELSE (sums.att_10 / sums.toi_10) * 60 END AS attempts_d10_per60
     FROM sums
   ) AS calc
+  LEFT JOIN nhl.shift_teammate_overlap_features_rolling_d10 ov
+    ON ov.player_id = b.player_id
+   AND ov.game_id   = b.game_id
   ORDER BY b.game_date, b.game_id, b.player_id
 ) TO STDOUT WITH (FORMAT csv, HEADER true);
+
+  LEFT JOIN nhl.team_context_rolling tc
+    ON tc.game_id = b.game_id
+   AND tc.team_id = b.team_id

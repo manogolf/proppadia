@@ -57,25 +57,31 @@ def _load_dotenv_multi():
 
 _load_dotenv_multi()
 
-ROOT        = Path(__file__).resolve().parents[2]  # repo root
-PY          = os.environ.get("PYTHON", sys.executable)
+ROOT = Path(__file__).resolve().parents[2]  # repo root
+PY   = os.environ.get("PYTHON", sys.executable)
+
+# Canonical NHL module root
+NHL_DIR = ROOT / "backend" / "nhl"
 
 SITE_DIR    = ROOT / "nhl" / "site" / "data"
-EXPORTS_DIR = ROOT / "exports"
-PROC_DIR    = ROOT / "backend" / "nhl" / "data" / "processed"
-SQL_DIR     = ROOT / "backend" / "nhl" / "sql"
-SCRIPTS_DIR = ROOT / "backend" / "nhl" / "scripts"
-MODELS_DIR  = ROOT / "backend" / "nhl" / "models"
+EXPORTS_DIR = NHL_DIR / "exports"
+PROC_DIR    = NHL_DIR / "data" / "processed"
+SQL_DIR     = NHL_DIR / "sql"
+SCRIPTS_DIR = NHL_DIR / "scripts"
+MODELS_DIR  = NHL_DIR / "models"
 
-for d in (SITE_DIR, EXPORTS_DIR, PROC_DIR):
+# Daily artifact organization
+EXPORTS_DAILY_NAMES_DIR = EXPORTS_DIR / "daily" / "names"
+EXPORTS_DAILY_SOG_DIR   = EXPORTS_DIR / "daily" / "sog_features"
+
+for d in (
+    SITE_DIR,
+    EXPORTS_DIR,
+    PROC_DIR,
+    EXPORTS_DAILY_NAMES_DIR,
+    EXPORTS_DAILY_SOG_DIR,
+):
     d.mkdir(parents=True, exist_ok=True)
-
-PY = sys.executable
-BASE_DIR = Path(__file__).resolve().parent
-SCRIPTS_DIR = BASE_DIR / "scripts"
-EXPORTS_DIR = BASE_DIR / "exports"
-MODELS_DIR = BASE_DIR / "models"
-PROC_DIR = BASE_DIR / "data" / "processed"
 
 # ---------- time helpers (ET) ----------
 
@@ -114,23 +120,40 @@ def require_db_url() -> str:
 
 def run_psql_file(sql_file: Path, *, vars: dict[str, str] | None = None):
     db = require_db_url()
-    cmd = ["psql", "--no-psqlrc", "-v", "ON_ERROR_STOP=1", db]
+    cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-v", "ON_ERROR_STOP=1", db]
+
     if vars:
         for k, v in vars.items():
             cmd += ["-v", f"{k}={v}"]
+
     cmd += ["-f", str(sql_file)]
-    run(cmd)
+
+    # Force schema resolution for all psql sessions spawned here.
+    # Keeps this change centralized (no manual terminal setup, no per-SQL edits).
+    env = dict(os.environ)
+    env["PGOPTIONS"] = "-c search_path=nhl,public"
+
+    run(cmd, env=env)
 
 def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     """Run psql on a file that COPY/SELECTs TO STDOUT and return stdout bytes."""
     db = require_db_url()
-    cmd = ["psql", "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1", db]
+    cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-q", "-v", "ON_ERROR_STOP=1", db]
     if vars:
         for k, v in vars.items():
             cmd += ["-v", f"{k}={v}"]
     cmd += ["-f", str(sql_file)]
-    res = sp.run(cmd, cwd=str(ROOT), env=os.environ, check=True, capture_output=True)
-    return res.stdout
+
+    res = sp.run(
+        cmd,
+        cwd=str(ROOT),
+        env=os.environ,
+        check=True,
+        capture_output=True,
+    )
+
+    # stdout is what COPY ... TO STDOUT emits; ensure bytes return type
+    return res.stdout or b""
 
 def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str) -> None:
     """
@@ -423,8 +446,9 @@ def fetch_odds(
 # ---------- builders (CSV for site) ----------
 
 def build_sog(slate: str):
-    export_names_csv(slate)
-    names_csv = EXPORTS_DIR / f"names_{slate}.csv"
+    # Always regenerate (or overwrite) names for this slate and use the returned path
+    names_csv = export_names_csv(slate)
+
     pred_path = PROC_DIR / "sog_predictions.csv"
     run(
         [
@@ -439,8 +463,11 @@ def build_sog(slate: str):
         env={"SLATE_DATE": slate},
     )
 
+
 def build_saves(slate: str):
-    names_csv = EXPORTS_DIR / f"names_{slate}.csv"
+    # Ensure names exist (build_saves can be called standalone)
+    names_csv = export_names_csv(slate)
+
     pred_path = PROC_DIR / "saves_predictions.csv"
     run(
         [
@@ -454,6 +481,7 @@ def build_saves(slate: str):
         ],
         env={"SLATE_DATE": slate},
     )
+
 
 def build_points(slate: str):
     args = [
@@ -469,7 +497,8 @@ def build_points(slate: str):
     if pred_path.exists():
         args += ["--pred", pred_path]
 
-    names_path = EXPORTS_DIR / f"names_{slate}.csv"
+    # Only include names if we actually have them (and don't assume location)
+    names_path = export_names_csv(slate)
     if names_path.exists():
         args += ["--names", names_path]
 
@@ -484,10 +513,8 @@ def cmd_daily(with_odds: bool):
     # Always honor explicit env; otherwise default to ET today/yesterday.
     slate = os.environ.get("SLATE_DATE") or et_today()
 
-    # CRITICAL FIX:
-    # If you manually run a historical slate with only SLATE_DATE set,
-    # do NOT let yday default to "real yesterday" (which drags the pipeline to Dec).
-    # Instead, default YDAY to the same day as SLATE_DATE unless explicitly provided.
+    # If SLATE_DATE is explicitly set (often for historical runs), default YDAY to SLATE_DATE
+    # unless YDAY is explicitly provided.
     yday = os.environ.get("YDAY")
     if not yday:
         yday = slate if os.environ.get("SLATE_DATE") else et_yesterday()
@@ -497,7 +524,14 @@ def cmd_daily(with_odds: bool):
 
     print(f"SLATE_DATE (ET): {slate}")
     print(f"YDAY       (ET): {yday}")
-    # --- end replacement ---
+
+    # --- Daily artifact dirs (your weekly cleanup automation) ---
+    # Keep these scoped here so we don't blow up unrelated exports yet.
+    DAILY_EXPORTS_DIR = ROOT / "backend" / "nhl" / "exports" / "daily"
+    DAILY_NAMES_DIR = DAILY_EXPORTS_DIR / "names"
+    DAILY_SOG_FEATURES_DIR = DAILY_EXPORTS_DIR / "sog_features"
+    for d in (DAILY_NAMES_DIR, DAILY_SOG_FEATURES_DIR):
+        d.mkdir(parents=True, exist_ok=True)
 
     # 0 DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
@@ -506,8 +540,6 @@ def cmd_daily(with_odds: bool):
     run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
 
     # --- EARLY EXIT: no NHL games on this slate date ---
-    # If the schedule importer found no games, everything downstream (exports/scoring)
-    # will produce empty CSVs and crash. Treat "no games" as a clean skip.
     no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
     res = sp.run(
         ["psql", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
@@ -528,53 +560,66 @@ def cmd_daily(with_odds: bool):
         env={"SLATE_DATE": slate},
     )
 
-    # 2 Seed features for today (SOG + Saves). Points features SQL can be added here when ready.
-    run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",   vars={"slate_date": slate})
+    # 2 Seed features for today (SOG + Saves).
+    run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",    vars={"slate_date": slate})
     run_psql_file(SQL_DIR / "seed_goalie_features_for_slate.sql", vars={"slate_date": slate})
 
-    # 2b) Refresh rolling SOG features (persist into the pregame table so exports can't be frozen)
-    # Default: rebuild a 260-day lookback window ending on SLATE_DATE.
-    # One-time full season rebuild: set ROLLUP_START_DATE=2025-10-07 in env (or hardcode below).
-    rollup_start = os.environ.get("ROLLUP_START_DATE") or (datetime.fromisoformat(slate) - timedelta(days=260)).strftime("%Y-%m-%d")
-    rollup_end   = slate
-    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=rollup_end)
+    # 2b) Refresh rolling SOG features into the pregame table
+    rollup_start = os.environ.get("ROLLUP_START_DATE") or (
+        datetime.fromisoformat(slate) - timedelta(days=260)
+    ).strftime("%Y-%m-%d")
+    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=slate)
 
-    # 2c) Fill TOI-derived exposure/stability/trend features for this slate (hands-off)
-    # Safe to run daily: ALTERs are IF NOT EXISTS; UPDATE targets only rows for slate_date.
-
-    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql", vars={"slate_date": slate})
+    # 2c) Fill TOI-derived features for this slate
+    run_psql_file(SQL_DIR / "fill_sog_pp_role_for_slate.sql",            vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql",       vars={"slate_date": slate})
     run_psql_file(SQL_DIR / "fill_sog_season_toi_features_for_slate.sql", vars={"slate_date": slate})
-    
-    # 3 Export names (used by all builders)
-    try:
-        export_names_csv(slate)
-    except Exception as e:
-        print(f"⚠️ names export failed; downstream builders will fall back if possible: {e}")
 
-    # 3.9) Ensure team_roll10_m + team_context_rolling are current for this slate
+    # 2d) Pairings (shiftcharts → pairings → fill into *today's* pregame table using latest history)
+    # Build pairings artifacts for YDAY (so rolling windows include yday data)
+    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"], env={"SLATE_DATE": yday})
+    run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})
+
+    # Fill pairings-derived columns for TODAY's slate (not yday)
+    run_psql_file(SQL_DIR / "fill_sog_pairings_for_slate.sql",           vars={"slate_date": slate})
+
+    # Fill rolling pairings features for TODAY's slate (not yday)
+    run_psql_file(SQL_DIR / "fill_sog_pairings_rolling_for_slate.sql",   vars={"slate_date": slate})
+
+
+    # 3 Export names (now written into backend/nhl/exports/daily/names/)
+    names_path = DAILY_NAMES_DIR / f"names_{slate}.csv"
+    try:
+        # If you haven't updated export_names_csv yet, it will write elsewhere.
+        # So we write into the daily location explicitly here (minimal blast radius).
+        csv_bytes = psql_stdout(SQL_DIR / "_export_names.sql", vars={"slate_date": slate})
+        names_path.write_bytes(csv_bytes)
+        print(f"[export_names_csv] wrote names CSV → {names_path}")
+    except Exception as e:
+        names_path = None
+        print(f"⚠️ names export failed; downstream builders may degrade: {e}")
+
+    # 3.9 Team context rollups for slate
     run_psql_file(SQL_DIR / "upsert_team_context_for_slate.sql", vars={"slate_date": slate})
 
     # 4 Export feature CSVs for this slate
 
-    # 4a) SOG (Denali view → slate-only features)
-    sog_feat_path = EXPORTS_DIR / f"sog_features_{slate}_denali.csv"
+    # 4a) SOG Denali features → backend/nhl/exports/daily/sog_features/
+    sog_feat_path = DAILY_SOG_FEATURES_DIR / f"sog_features_{slate}_denali.csv"
     export_sog_denali_features(db, slate, sog_feat_path)
 
-    # 4b) Saves / Points via existing SQL exporters
+    # 4b) Saves / Points exporters (leave as-is unless you also want these in daily/)
     saves_csv  = psql_stdout(SQL_DIR / "export_saves_from_denali.sql", vars={"slate_date": slate})
-    points_csv = psql_stdout(SQL_DIR / "export_points.sql",           vars={"slate_date": slate})
-
+    points_csv = psql_stdout(SQL_DIR / "export_points.sql",            vars={"slate_date": slate})
     (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
     (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
-
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
 
-    # 5) Score SOG (Denali LR+RF models under backend/nhl/models/latest/shots_on_goal/sog_player_denali)
+    # 5) Score SOG (Denali)
     sog_model_root = MODELS_DIR / "latest" / "shots_on_goal" / "sog_player_denali"
     if not sog_model_root.exists():
         raise SystemExit(f"Missing SOG models at {sog_model_root}; train sog_player_denali first.")
 
-    # Score each line separately, then merge into a single sog_predictions.csv
     line_list = [0.5, 1.5, 2.5, 3.5]
     per_line_paths: list[tuple[float, Path]] = []
 
@@ -594,31 +639,24 @@ def cmd_daily(with_odds: bool):
             ]
         )
 
-    # Merge per-line predictions into one sog_predictions.csv (uncalibrated blend)
+    # Merge per-line → one wide file
     base_df = None
     key_cols = ["player_id", "game_id", "team_id", "opponent_id", "is_home", "game_date"]
 
-    for ln, path in per_line_paths:
+    for _, path in per_line_paths:
         df_line = pd.read_csv(path)
-
-        # Keep keys + all prediction columns from this line (p_over_lr_*, p_over_rf_*, p_over_*)
         keep_cols = key_cols + [c for c in df_line.columns if c.startswith("p_over_")]
         df_line = df_line[keep_cols]
-
-        if base_df is None:
-            base_df = df_line
-        else:
-            base_df = base_df.merge(df_line, on=key_cols, how="left")
+        base_df = df_line if base_df is None else base_df.merge(df_line, on=key_cols, how="left")
 
     final_pred_path = PROC_DIR / "sog_predictions.csv"
     final_pred_path.parent.mkdir(parents=True, exist_ok=True)
     base_df.to_csv(final_pred_path, index=False)
     print(f"✅ Wrote merged SOG predictions → {final_pred_path}")
 
-    # 5b) Calibrate SOG probabilities (Denali-wide calibration)
+    # 5b) Calibrate SOG (wide)
     calib_train_path = PROC_DIR / "sog_calibration_training_denali.csv"
     calibrated_pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
-
     run(
         [
             PY,
@@ -629,7 +667,7 @@ def cmd_daily(with_odds: bool):
         ]
     )
 
-    # 5c) Load *calibrated* SOG predictions into nhl.predictions (Denali)
+    # 5c) Load calibrated SOG into nhl.predictions
     run(
         [
             PY,
@@ -641,23 +679,21 @@ def cmd_daily(with_odds: bool):
         ]
     )
 
-    # 6) Score Saves using generic scorer + latest goalie_saves models
+    # 6) Score + load Saves
     saves_model_dir = MODELS_DIR / "latest" / "goalie_saves"
     if saves_model_dir.exists():
         run(
             [
                 PY,
                 SCRIPTS_DIR / "score_nhl_props.py",
-                "--model-dir",   saves_model_dir,
-                "--csv",         EXPORTS_DIR / "train_goalie_saves_v2.csv",
-                "--feature-json","backend/nhl/features/feature_metadata_nhl.json",
-                "--feature-key", "goalie_saves",
-                "--line",        "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5",
-                "--out",         PROC_DIR / "saves_predictions.csv",
+                "--model-dir",    saves_model_dir,
+                "--csv",          EXPORTS_DIR / "train_goalie_saves_v2.csv",
+                "--feature-json", "backend/nhl/features/feature_metadata_nhl.json",
+                "--feature-key",  "goalie_saves",
+                "--line",         "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5",
+                "--out",          PROC_DIR / "saves_predictions.csv",
             ]
         )
-
-        # 6b) Load saves into nhl.predictions
         saves_pred_csv = PROC_DIR / "saves_predictions.csv"
         if saves_pred_csv.exists():
             run(
@@ -674,36 +710,18 @@ def cmd_daily(with_odds: bool):
     else:
         print(f"⚠️  No saves models at {saves_model_dir} — skipping saves scoring.")
 
-    # 7) Phoenix points scoring (raw model probabilities)
+    # 7) Score points (Phoenix) + load
     run(
         [
             PY,
             SCRIPTS_DIR / "score_points_phoenix.py",
-            "--features-csv",
-            EXPORTS_DIR / "train_nhl_points_v2.csv",
-            "--model-root",
-            MODELS_DIR / "latest" / "points",
-            "--out",
-            PROC_DIR / "points_predictions.csv",
+            "--features-csv", EXPORTS_DIR / "train_nhl_points_v2.csv",
+            "--model-root",   MODELS_DIR / "latest" / "points",
+            "--out",          PROC_DIR / "points_predictions.csv",
         ]
     )
 
-    # --- EARLY EXIT: no NHL games on this slate date ---
-    # If the schedule importer found no games, everything downstream (exports/scoring)
-    # will produce empty CSVs and crash. Treat "no games" as a clean skip.
-    no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
-    res = sp.run(["psql", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
-                 capture_output=True, text=True, check=True)
-    game_count = int((res.stdout or "").strip() or "0")
-    if game_count == 0:
-        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps.")
-        return
-    # --- end early exit ---
-
-
-    # 7c) Load points into nhl.predictions (calibrator overwrites points_predictions.csv in-place)
     points_pred_csv = PROC_DIR / "points_predictions.csv"
-
     if points_pred_csv.exists():
         run(
             [
@@ -721,36 +739,40 @@ def cmd_daily(with_odds: bool):
     if with_odds:
         fetch_odds()
 
-    # 9) Build site CSVs (points now see calibrated prob_over)
+    # 9) Build site CSVs
+    # IMPORTANT: builders should not guess names path; they should accept the path or regenerate consistently.
     build_sog(slate)
     build_saves(slate)
     build_points(slate)
 
-    # 9b) SOG integrity report (WARN-ONLY; never fail the pipeline)
+    # 9b) SOG integrity report (warn-only)
     try:
         run(
             [
                 PY,
                 SCRIPTS_DIR / "sog_integrity_report.py",
-                "--slate-date",
-                slate,
-                "--feature-key",
-                "shots_on_goal_denali",
+                "--slate-date", slate,
+                "--feature-key", "shots_on_goal_denali",
                 "--db-toi-check",
-                "--db-toi-source",
-                "nhl.skater_game_logs_raw",
-                "--db-toi-days-back",
-                "30",
+                "--db-toi-source", "nhl.skater_game_logs_raw",
+                "--db-toi-days-back", "30",
             ]
         )
     except Exception as e:
         print(f"⚠️ sog_integrity_report failed (continuing): {e}")
 
-    
     # 10) Yesterday logs → promote to raw
     run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
     run([PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env={"SLATE_DATE": yday})
     run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"],        env={"SLATE_DATE": yday})
+    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
+
+    # Pairings SQL takes :game_date (NOT slate_date) and must be run via psql wrapper (NOT PY)
+    run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})
+    
+    # Fill SQL takes :slate_date
+    run_psql_file(SQL_DIR / "fill_sog_pairings_for_slate.sql",    vars={"slate_date": yday})
+    run_psql_file(SQL_DIR / "fill_sog_pairings_missingness_for_slate.sql",    vars={"slate_date": yday})
 
     promote_sql = f"""
     WITH src AS (
@@ -761,13 +783,13 @@ def cmd_daily(with_odds: bool):
       WHERE s.game_date = DATE '{yday}'
     ),
     rs AS (
-    SELECT DISTINCT ON (game_id, player_id)
+      SELECT DISTINCT ON (game_id, player_id)
         game_id,
         team_id,
         player_id
-    FROM nhl.roster_status
-    WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '{yday}')
-    ORDER BY game_id, player_id, asof_ts DESC
+      FROM nhl.roster_status
+      WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '{yday}')
+      ORDER BY game_id, player_id, asof_ts DESC
     ),
     g AS (
       SELECT game_id, home_team_id, away_team_id
@@ -821,7 +843,6 @@ def cmd_daily(with_odds: bool):
     if refresh_sql.exists():
         run(["psql", db, "-v", "ON_ERROR_STOP=1", "-f", refresh_sql])
 
-    # ✅ Sanity: treat nhl.predictions as the source of truth (not *_stage)
     sanity = f"""
     WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '{slate}')
     SELECT 'games_today'            AS which, COUNT(*) FROM nhl.games         WHERE game_date = DATE '{slate}'

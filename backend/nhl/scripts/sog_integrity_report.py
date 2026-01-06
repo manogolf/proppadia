@@ -491,6 +491,108 @@ def join_explosion_guard(df: pd.DataFrame, key_cols: list[str]) -> dict[str, Any
         "dup_key_groups": int(len(sample)) if dup_rows > 0 else 0,
         "sample_offenders": sample,
     }
+def db_pp_role_coverage_check(db_url: str, slate: str) -> None:
+    """
+    Integrity-only: report PP role coverage for the slate in the pregame SOG table.
+    Uses the already-filled column: role_pp_share
+    """
+    print("\n=== DB PP role coverage (slate-day) ===")
+
+    sql = f"""
+WITH p AS (
+  SELECT
+    player_id, game_id, team_id, game_date,
+    role_pp_share
+  FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+  WHERE game_date = DATE '{slate}'
+),
+pl AS (
+  -- latest prior log per player (for reason-bucketing)
+  SELECT DISTINCT ON (l.player_id)
+    l.player_id,
+    g.game_date,
+    NULLIF(l.pp_toi_minutes, 0)::numeric AS pp_toi_min
+  FROM nhl.skater_game_logs_raw l
+  JOIN nhl.games g USING (game_id)
+  WHERE g.game_date < DATE '{slate}'
+  ORDER BY l.player_id, g.game_date DESC
+),
+team_pp AS (
+  -- team PP total for the same prior date chosen per player (keeps denominator consistent)
+  SELECT
+    pl.player_id,
+    SUM(COALESCE(l2.pp_toi_minutes,0))::numeric AS team_pp_toi_min
+  FROM pl
+  JOIN nhl.skater_game_logs_raw l2
+    ON l2.game_id IN (SELECT game_id FROM nhl.games WHERE game_date = pl.game_date)
+  GROUP BY pl.player_id
+),
+diag AS (
+  SELECT
+    p.*,
+    pl.player_id AS has_player_log,
+    team_pp.team_pp_toi_min
+  FROM p
+  LEFT JOIN pl      ON pl.player_id = p.player_id
+  LEFT JOIN team_pp ON team_pp.player_id = p.player_id
+)
+SELECT
+  COUNT(*)::int                                                AS rows_total,
+  COUNT(*) FILTER (WHERE role_pp_share IS NOT NULL)::int        AS rows_with_role_pp_share,
+  COUNT(*) FILTER (WHERE role_pp_share IS NULL)::int            AS rows_missing_role_pp_share,
+  ROUND(MIN(role_pp_share)::numeric, 6)                         AS min_share,
+  ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY role_pp_share)::numeric, 6) AS p50_share,
+  ROUND(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY role_pp_share)::numeric, 6) AS p90_share,
+  ROUND(MAX(role_pp_share)::numeric, 6)                         AS max_share
+FROM diag;
+"""
+    out = run_psql(db_url, sql)
+    if out:
+        print(f"[sog_integrity] pp_role_coverage({slate})| " + out)
+
+    sql2 = f"""
+WITH p AS (
+  SELECT player_id, game_id, team_id, game_date, role_pp_share
+  FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+  WHERE game_date = DATE '{slate}'
+),
+pl AS (
+  SELECT DISTINCT ON (l.player_id)
+    l.player_id,
+    g.game_date
+  FROM nhl.skater_game_logs_raw l
+  JOIN nhl.games g USING (game_id)
+  WHERE g.game_date < DATE '{slate}'
+  ORDER BY l.player_id, g.game_date DESC
+),
+team_pp AS (
+  SELECT
+    pl.player_id,
+    SUM(COALESCE(l2.pp_toi_minutes,0))::numeric AS team_pp_toi_min
+  FROM pl
+  JOIN nhl.skater_game_logs_raw l2
+    ON l2.game_id IN (SELECT game_id FROM nhl.games WHERE game_date = pl.game_date)
+  GROUP BY pl.player_id
+),
+diag AS (
+  SELECT
+    p.player_id,
+    p.role_pp_share,
+    pl.player_id AS has_player_log,
+    COALESCE(team_pp.team_pp_toi_min, 0) AS team_pp_toi_min
+  FROM p
+  LEFT JOIN pl      ON pl.player_id = p.player_id
+  LEFT JOIN team_pp ON team_pp.player_id = p.player_id
+)
+SELECT
+  COUNT(*) FILTER (WHERE role_pp_share IS NULL)::int                                           AS n_null,
+  COUNT(*) FILTER (WHERE role_pp_share IS NULL AND has_player_log IS NULL)::int                AS n_missing_player_log,
+  COUNT(*) FILTER (WHERE role_pp_share IS NULL AND has_player_log IS NOT NULL AND team_pp_toi_min = 0)::int AS n_team_total_zero
+FROM diag;
+"""
+    out2 = run_psql(db_url, sql2)
+    if out2:
+        print(f"[sog_integrity] pp_role_missing_reasons({slate})| " + out2)
 
 
 # ---------- existing DB checks (plus optional rolling DB check) ----------
@@ -661,8 +763,8 @@ def main() -> None:
     root = Path(args.repo_root).resolve()
 
     # expected artifacts (based on your pipeline logs)
-    names_csv = root / "backend/nhl/exports" / f"names_{slate}.csv"
-    feats_csv = root / "backend/nhl/exports" / f"sog_features_{slate}_denali.csv"
+    names_csv = root / "backend/nhl/exports/daily/names" / f"names_{slate}.csv"
+    feats_csv = root / "backend/nhl/exports/daily/sog_features" / f"sog_features_{slate}_denali.csv"
     pred_csv = root / "backend/nhl/data/processed/sog_predictions.csv"
     pred_cal_csv = root / "backend/nhl/data/processed/sog_predictions_wide_calibrated.csv"
     curves_json = root / "backend/nhl/data/processed/sog_denali_calibration_curves.json"
@@ -865,6 +967,7 @@ def main() -> None:
     db_url = args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
     if db_url:
         db_checks(db_url, slate)
+        db_pp_role_coverage_check(db_url, slate)
         if args.db_rolling_check:
             db_rolling_check(db_url, args.db_rolling_view, args.db_rolling_days_back)
         if getattr(args, "db_toi_check", False):

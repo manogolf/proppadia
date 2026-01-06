@@ -54,6 +54,75 @@
     "hot_last5_flag"
   ],
 
+  "shots_on_goal_denali_pairings_v1": [
+    "is_home",
+
+    "d5_sog_per60",
+    "d10_sog_per60",
+    "d20_sog_per60",
+    "attempts_d10_per60",
+
+    "rest_days",
+    "b2b_flag",
+
+    "pace_index",
+    "pace_matchup_index",
+
+    "team_d10_sf_per_game",
+    "opp_d10_sf_allowed_per_game",
+    "opp_d10_sf_per60",
+    "team_d10_sa_per60",
+    "opp_d10_sa_per60",
+
+    "role_pp_share",
+
+    "szn_toi_per_game_5on5",
+    "szn_toi_per_game_pp",
+    "szn_toi_per_game_pk",
+    "szn_shifts_per_game_5on5",
+    "szn_shifts_per_game_pp",
+    "szn_shifts_per_game_pk",
+
+    "season_5on5_icetime_per_game",
+    "season_5on4_icetime_per_game",
+    "season_4on5_icetime_per_game",
+    "season_5on5_shifts_per_game",
+    "season_5on4_shifts_per_game",
+    "season_4on5_shifts_per_game",
+
+    "team_szn_5on5_top_line_xgf_share",
+    "team_5v5_top_line_icetime_share",
+    "team_5v5_top_line_shotattempts_share",
+
+    "last10_team_sog_share",
+    "team_num_sog_last10",
+    "team_num_event_last10",
+
+    "num_sog_last5",
+    "num_sog_last10",
+    "num_sog_szn_to_date",
+
+    "num_event_last5",
+    "num_event_last10",
+    "num_event_szn_to_date",
+
+    "hot_last5_flag",
+
+    "d10_top_mate_overlap_share_avg",
+    "d10_top3_mates_overlap_share_avg",
+    "d20_top_mate_overlap_share_avg",
+    "d20_top3_mates_overlap_share_avg",
+
+    "d10_pairings_available",
+    "d20_pairings_available",
+    "d10_shiftcharts_coverage_rate",
+    "d20_shiftcharts_coverage_rate",
+    "d10_pairings_cov_bucket",
+    "d20_pairings_cov_bucket",
+
+    "d20_top_mate_repeat_rate"
+  ],
+
   "goalie_saves": [
     "is_home",
     "rest_days",

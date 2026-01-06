@@ -86,72 +86,104 @@ def pbp_event_abs_sec(ev: Dict[str, Any]) -> Optional[int]:
         return None
     return abs_sec(int(per), str(tip))
 
-def build_pp_segments_from_pbp(pbp_plays: List[Dict[str, Any]]) -> Tuple[List[Tuple[int,int]], List[Tuple[int,int]]]:
+def play_abs_sec(p: dict) -> int:
+    pd = p.get("periodDescriptor") or {}
+    period = int(pd.get("number") or 0)
+    tip = p.get("timeInPeriod") or "00:00"
+    return (period - 1) * 20 * 60 + mmss_to_sec(tip)
+
+from typing import Any, Dict, List, Optional, Tuple
+
+def _decode_situation(code: Optional[str]) -> Optional[Tuple[int, int, int, int]]:
     """
-    Returns (home_pp_segments, away_pp_segments) as lists of [start,end) in abs seconds.
-    Based on situationCode advantage transitions (goalies-present only).
+    api-web situationCode is 4 digits.
+    Empirically (matches your earlier print):
+      1551 => awayG=1 awayS=5 homeS=5 homeG=1
+      1451 => awayG=1 awayS=4 homeS=5 homeG=1  (HOME PP)
+      1541 => awayG=1 awayS=5 homeS=4 homeG=1  (AWAY PP)
+      0651 => awayG=0 awayS=6 homeS=5 homeG=1  (empty net; exclude)
+    Returns (away_goalie, away_skaters, home_skaters, home_goalie).
     """
-    pts: List[Tuple[int, bool, bool]] = []
-    for ev in pbp_plays:
-        t = pbp_event_abs_sec(ev)
-        adv = team_advantage_goalies_present(ev.get("situationCode") or "")
-        if t is None or adv is None:
+    if not code:
+        return None
+    s = str(code).strip()
+    if len(s) != 4 or not s.isdigit():
+        return None
+    aG = int(s[0])
+    aS = int(s[1])
+    hS = int(s[2])
+    hG = int(s[3])
+    return (aG, aS, hS, hG)
+
+def _play_sort_key(ev: Dict[str, Any]) -> Tuple[int, int, int, int]:
+    pd = ev.get("periodDescriptor") or {}
+    per = int(pd.get("number") or 0)
+
+    # abs seconds within game based on timeInPeriod (00:00..20:00)
+    tsec = pbp_event_abs_sec(ev)
+    if tsec is None:
+        tsec = 10**9  # shove unknown times to end
+
+    so = int(ev.get("sortOrder") or 0)
+    eid = int(ev.get("eventId") or 0)
+    return (per, tsec, so, eid)
+
+def _merge_segments(segs: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    if not segs:
+        return []
+    segs = sorted(segs)
+    out = [segs[0]]
+    for s, e in segs[1:]:
+        ps, pe = out[-1]
+        if s <= pe:  # overlap/adjacent
+            out[-1] = (ps, max(pe, e))
+        else:
+            out.append((s, e))
+    return out
+
+def build_pp_segments_from_pbp(plays: List[Dict[str, Any]]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    """
+    Build PP segments by attributing the *time between plays* to the situationCode
+    of the earlier play. This captures long stretches with few events.
+    Returns (home_pp_segs, away_pp_segs) as absolute-second intervals.
+    """
+    # keep only plays that have usable timing
+    pl = [ev for ev in plays if pbp_event_abs_sec(ev) is not None]
+    if not pl:
+        return [], []
+
+    pl.sort(key=_play_sort_key)
+
+    home_raw: List[Tuple[int, int]] = []
+    away_raw: List[Tuple[int, int]] = []
+
+    for i in range(len(pl) - 1):
+        cur = pl[i]
+        nxt = pl[i + 1]
+
+        t0 = pbp_event_abs_sec(cur)
+        t1 = pbp_event_abs_sec(nxt)
+        if t0 is None or t1 is None or t1 <= t0:
             continue
-        pts.append((t, adv[0], adv[1]))
 
-    if not pts:
-        return ([], [])
+        dec = _decode_situation(cur.get("situationCode"))
+        if not dec:
+            continue
 
-    pts.sort(key=lambda x: x[0])
+        awayG, awayS, homeS, homeG = dec
 
-    home_seg: List[Tuple[int,int]] = []
-    away_seg: List[Tuple[int,int]] = []
+        # PP time only when goalies present (exclude empty net / pulled goalie)
+        if awayG != 1 or homeG != 1:
+            continue
 
-    cur_home: Optional[int] = None
-    cur_away: Optional[int] = None
+        if homeS > awayS:
+            home_raw.append((t0, t1))
+        elif awayS > homeS:
+            away_raw.append((t0, t1))
+        else:
+            pass  # equal strength (includes 4v4)
 
-    for i in range(len(pts) - 1):
-        t0, h0, a0 = pts[i]
-        t1, _, _ = pts[i + 1]
-
-        # open/close home
-        if h0 and cur_home is None:
-            cur_home = t0
-        if (not h0) and cur_home is not None:
-            if t0 > cur_home:
-                home_seg.append((cur_home, t0))
-            cur_home = None
-
-        # open/close away
-        if a0 and cur_away is None:
-            cur_away = t0
-        if (not a0) and cur_away is not None:
-            if t0 > cur_away:
-                away_seg.append((cur_away, t0))
-            cur_away = None
-
-    # close any trailing at last timestamp we saw
-    last_t = pts[-1][0]
-    if cur_home is not None and last_t > cur_home:
-        home_seg.append((cur_home, last_t))
-    if cur_away is not None and last_t > cur_away:
-        away_seg.append((cur_away, last_t))
-
-    # merge any accidental adjacent/overlap
-    def merge(segs: List[Tuple[int,int]]) -> List[Tuple[int,int]]:
-        if not segs:
-            return []
-        segs = sorted(segs)
-        out = [segs[0]]
-        for s,e in segs[1:]:
-            ps,pe = out[-1]
-            if s <= pe:
-                out[-1] = (ps, max(pe,e))
-            else:
-                out.append((s,e))
-        return out
-
-    return (merge(home_seg), merge(away_seg))
+    return _merge_segments(home_raw), _merge_segments(away_raw)
 
 def sum_segments(segs: List[Tuple[int,int]]) -> int:
     return sum(max(0, e - s) for s,e in segs)
@@ -227,36 +259,89 @@ def normalize_shift_row(r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
     return out
 
-def upsert_shiftcharts_raw(cur, rows: List[Dict[str, Any]]) -> int:
-    if not rows:
-        return 0
+def upsert_shiftcharts_raw(cur, norm_rows):
+    """
+    norm_rows: list[dict] with keys matching shiftcharts_raw columns.
+      - Must include shift_id (bigint)
+      - raw_json must be dict/None; we wrap it for psycopg2
+    """
+    import psycopg2.extras
+
+    if not norm_rows:
+        return
+
+    # Keep column order stable and explicit
     cols = [
-        "shift_id","game_id","player_id","team_id","team_abbrev","team_name",
-        "first_name","last_name","period","shift_number","start_time","end_time","duration",
-        "start_sec","end_sec","duration_sec","type_code","detail_code","event_number",
-        "event_description","event_details","hex_value","raw_json"
+        "shift_id",
+        "game_id",
+        "player_id",
+        "team_id",
+        "team_abbrev",
+        "team_name",
+        "first_name",
+        "last_name",
+        "period",
+        "shift_number",
+        "start_time",
+        "end_time",
+        "duration",
+        "start_sec",
+        "end_sec",
+        "duration_sec",
+        "type_code",
+        "detail_code",
+        "event_number",
+        "event_description",
+        "event_details",
+        "hex_value",
+        "raw_json",
     ]
+
     values = []
-    for r in rows:
-        row_vals = []
-        for c in cols:
-            v = r.get(c)
-            if c == "raw_json":
-                row_vals.append(psycopg2.extras.Json(v) if v is not None else None)
-            else:
-                row_vals.append(v)
-        values.append(row_vals)
+    for r in norm_rows:
+        # Wrap dict -> jsonb safely for psycopg2
+        raw = r.get("raw_json")
+        raw_wrapped = psycopg2.extras.Json(raw) if isinstance(raw, (dict, list)) else None
+
+        values.append((
+            r.get("shift_id"),
+            r.get("game_id"),
+            r.get("player_id"),
+            r.get("team_id"),
+            r.get("team_abbrev"),
+            r.get("team_name"),
+            r.get("first_name"),
+            r.get("last_name"),
+            r.get("period"),
+            r.get("shift_number"),
+            r.get("start_time"),
+            r.get("end_time"),
+            r.get("duration"),
+            r.get("start_sec"),
+            r.get("end_sec"),
+            r.get("duration_sec"),
+            r.get("type_code"),
+            r.get("detail_code"),
+            r.get("event_number"),
+            r.get("event_description"),
+            r.get("event_details"),
+            r.get("hex_value"),
+            raw_wrapped,
+        ))
 
     sql = f"""
       INSERT INTO nhl.shiftcharts_raw ({",".join(cols)})
       VALUES %s
-      ON CONFLICT (game_id, player_id, period, shift_number) DO UPDATE SET
-        shift_id = EXCLUDED.shift_id,
+      ON CONFLICT (shift_id) DO UPDATE SET
+        game_id = EXCLUDED.game_id,
+        player_id = EXCLUDED.player_id,
         team_id = EXCLUDED.team_id,
         team_abbrev = EXCLUDED.team_abbrev,
         team_name = EXCLUDED.team_name,
         first_name = EXCLUDED.first_name,
         last_name = EXCLUDED.last_name,
+        period = EXCLUDED.period,
+        shift_number = EXCLUDED.shift_number,
         start_time = EXCLUDED.start_time,
         end_time = EXCLUDED.end_time,
         duration = EXCLUDED.duration,
@@ -271,8 +356,8 @@ def upsert_shiftcharts_raw(cur, rows: List[Dict[str, Any]]) -> int:
         hex_value = EXCLUDED.hex_value,
         raw_json = EXCLUDED.raw_json
     """
+
     psycopg2.extras.execute_values(cur, sql, values, page_size=1000)
-    return cur.rowcount
 
 # ----------------------------- Overlap math -----------------------------
 
@@ -374,6 +459,24 @@ def main():
         home_pp_sec = sum_segments(home_pp_segs)
         away_pp_sec = sum_segments(away_pp_segs)
 
+        if args.verbose:
+            from collections import Counter
+
+            def _fmt_seg(seg):
+                s, e = seg
+                return f"{s:4d}->{e:4d}  ({e-s:3d}s)"
+
+            sc = Counter((ev or {}).get("situationCode") for ev in plays)
+            print(f"  situationCode_top={sc.most_common(12)}", flush=True)
+
+            print(f"  home_pp_segs={len(home_pp_segs)} home_pp_sec={home_pp_sec}", flush=True)
+            for seg in home_pp_segs[:12]:
+                print("    H", _fmt_seg(seg), flush=True)
+
+    print(f"  away_pp_segs={len(away_pp_segs)} away_pp_sec={away_pp_sec}", flush=True)
+    for seg in away_pp_segs[:12]:
+        print("    A", _fmt_seg(seg), flush=True)
+
         # 3) Build per-player shift intervals and compute PP TOI by overlap
         by_player: Dict[int, List[Tuple[int,int]]] = {}
         team_abbrev_by_player: Dict[int, str] = {}
@@ -451,27 +554,32 @@ def main():
                 print(f"[{processed}/{len(games)}] {gid}: no skater rows → skip", flush=True)
             continue
 
-        psycopg2.extras.execute_values(
-            cur,
-            """
-            UPDATE nhl.skater_game_logs_raw AS s SET
-              pp_toi_minutes = data.pp_min
-            FROM (VALUES %s) AS data(pp_min, player_id, game_id)
-            WHERE s.player_id = data.player_id
-              AND s.game_id   = data.game_id
-            """,
-            updates,
-            page_size=1000,
-        )
-        updated_rows += cur.rowcount
+# Replace the existing execute_values(UPDATE ...) block with this:
 
-        if args.verbose:
-            print(
-                f"[{processed}/{len(games)}] {gid} {gdate}: "
-                f"home_pp_sec={home_pp_sec} away_pp_sec={away_pp_sec} "
-                f"players={len(updates)} rowcount={cur.rowcount}",
-                flush=True,
-            )
+    psycopg2.extras.execute_values(
+        cur,
+        """
+        UPDATE nhl.skater_game_logs_raw AS s SET
+        pp_toi_minutes = data.pp_min
+        FROM (VALUES %s) AS data(pp_min, player_id, game_id)
+        WHERE s.player_id = data.player_id::bigint
+        AND s.game_id   = data.game_id::bigint
+        RETURNING s.player_id
+        """,
+        updates,
+        page_size=1000,
+    )
+
+    matched = cur.fetchall()
+    updated_rows += len(matched)
+
+    if args.verbose:
+        print(
+            f"[{processed}/{len(games)}] {gid} {gdate}: "
+            f"home_pp_sec={home_pp_sec} away_pp_sec={away_pp_sec} "
+            f"players={len(updates)} matched={len(matched)}",
+            flush=True,
+        )
 
         if processed % args.commit_every == 0:
             conn.commit()

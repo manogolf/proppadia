@@ -51,7 +51,9 @@ under key "shots_on_goal_denali".
 
 BACKEND_NHL_DIR = Path(__file__).resolve().parents[1]
 FEATURE_REGISTRY_PATH = BACKEND_NHL_DIR / "features" / "feature_metadata_nhl.json"
-SOG_FEATURE_KEY = "shots_on_goal_denali"
+# Default feature key (can be overridden via --feature-key)
+DEFAULT_SOG_FEATURE_KEY = "shots_on_goal_denali"
+
 
 # Denali IDs (we do NOT treat is_home as an ID; it's a feature)
 ID_COLS = {
@@ -71,9 +73,9 @@ LEAK_COLS = {
     "y_over",  # label we construct
 }
 
-def load_feature_list() -> list[str]:
+def load_feature_list(feature_key: str) -> list[str]:
     """
-    Load the SOG feature list for Denali from the global feature registry JSON.
+    Load the SOG feature list from the global feature registry JSON for the given feature_key.
     """
     if not FEATURE_REGISTRY_PATH.exists():
         print(
@@ -98,15 +100,15 @@ def load_feature_list() -> list[str]:
         )
         sys.exit(2)
 
-    feats = fr.get(SOG_FEATURE_KEY)
+    feats = fr.get(feature_key)
     if not isinstance(feats, list) or not feats:
         print(
-            f"FATAL: key '{SOG_FEATURE_KEY}' missing or empty in {FEATURE_REGISTRY_PATH}",
+            f"FATAL: key '{feature_key}' missing or empty in {FEATURE_REGISTRY_PATH}",
             file=sys.stderr,
         )
         sys.exit(2)
 
-    print(f"Using feature set '{SOG_FEATURE_KEY}' with {len(feats)} columns.", file=sys.stderr)
+    print(f"Using feature set '{feature_key}' with {len(feats)} columns.", file=sys.stderr)
     return feats
 
 # Default training CSV for SOG Denali
@@ -203,8 +205,24 @@ def main():
     )
     ap.add_argument(
         "--outdir",
-        default="models_out/nhl/sog_player_denali",
-        help="Output directory base for models.",
+        default="models_out/nhl",
+        help="Output directory base for models (parent dir).",
+    )
+    ap.add_argument(
+        "--model-variant",
+        default="sog_player_denali",
+        help=(
+            "Model output subfolder name under --outdir "
+            "(default: sog_player_denali). Use sog_player_denali_pairings_v1 for sibling."
+        ),
+    )
+    ap.add_argument(
+        "--feature-key",
+        default="shots_on_goal_denali",
+        help=(
+            "Feature key inside backend/nhl/features/feature_metadata_nhl.json "
+            "(default: shots_on_goal_denali). Use shots_on_goal_denali_pairings_v1 for sibling."
+        ),
     )
     ap.add_argument(
         "--test-size",
@@ -226,12 +244,14 @@ def main():
 
     line = float(args.line)
 
+    feature_key = args.feature_key or DEFAULT_SOG_FEATURE_KEY
+
     # --- Label: Over(line) ---
     # Recommended: strict "over" (>) rather than >= with an epsilon.
     df["y_over"] = (df[TARGET_COL] > line).astype(int)
 
     # Load canonical feature list and ensure all are present
-    feats = load_feature_list()
+    feats = load_feature_list(feature_key)
 
     missing = [c for c in feats if c not in df.columns]
     if missing:
@@ -242,7 +262,32 @@ def main():
         sys.exit(2)
 
     # Normalize boolean-like features to 0/1 first
-    BOOL_FEATURES = {"is_home", "b2b_flag", "hot_last5_flag"}
+    BOOL_FEATURES = {
+        "is_home",
+        "b2b_flag",
+        "hot_last5_flag",
+        "d10_pairings_available",
+        "d20_pairings_available",
+    }
+
+    COV_BUCKET_MAP = {
+        # keep 0 reserved for missing/unknown
+        "missing": 0,
+        "none": 0,
+        "unknown": 0,
+        "low": 1,
+        "med": 2,
+        "medium": 2,
+        "high": 3,
+        # if you ever emit more granular buckets, extend here
+    }
+
+    for c in feats:
+        if c.endswith("_cov_bucket") and c in df.columns:
+            # normalize to lowercase strings, map to ordinal ints
+            s = df[c].fillna("").astype(str).str.strip().str.lower()
+            s = s.replace({"": "unknown", "nan": "unknown", "none": "unknown", "null": "unknown", "na": "unknown"})
+            df[c] = s.map(COV_BUCKET_MAP).fillna(0).astype(int)
 
     for c in feats:
         if c in df.columns and c in BOOL_FEATURES:
@@ -345,7 +390,7 @@ def main():
     )
 
     # Save models + metadata under line-specific dir
-    outdir = Path(args.outdir) / f"{str(line).replace('.', '_')}"
+    outdir = Path(args.outdir) / args.model_variant / f"{str(line).replace('.', '_')}"
     outdir.mkdir(parents=True, exist_ok=True)
 
     joblib.dump(lr, outdir / "lr.joblib")
@@ -354,7 +399,7 @@ def main():
     metadata = {
         "prop_type": "shots_on_goal",
         "line": line,
-        "feature_key": SOG_FEATURE_KEY,
+        "feature_key": feature_key,
         "features": feats,
         "trained_from": str(path),
         "metrics": {

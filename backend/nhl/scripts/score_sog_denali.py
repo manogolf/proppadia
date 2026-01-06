@@ -52,7 +52,7 @@ def line_dir_name(line: float) -> str:
     return str(line).replace(".", "_")
 
 
-def load_line_models(model_root: Path, line: float):
+def load_models_for_line(line: float, model_root: Path, feature_key: str):
     """
     Load LR + RF models and feature list for a given line from:
       <model_root>/<dir_name>/
@@ -91,7 +91,7 @@ def load_line_models(model_root: Path, line: float):
     # --- Canonical feature selection (Denali SOG) ---
     # Priority:
     #   1) model.feature_names_in_ (if present)
-    #   2) backend/nhl/features/feature_metadata_nhl.json -> shots_on_goal_denali
+    #   2) backend/nhl/features/feature_metadata_nhl.json -> feature_key
     # And we *loudly fail* if the per-line feature_metadata.json disagrees (prevents drift).
 
     # Load per-line model metadata features (kept for drift detection)
@@ -109,18 +109,18 @@ def load_line_models(model_root: Path, line: float):
         )
         sys.exit(2)
 
-    # Load repo-level canonical Denali feature list
+    # Load repo-level canonical Denali feature list (selectable via --feature-key)
     repo_meta_path = Path(__file__).resolve().parents[1] / "features" / "feature_metadata_nhl.json"
     try:
         repo_meta = json.loads(repo_meta_path.read_text())
-        canonical_feats = repo_meta.get("shots_on_goal_denali") or []
+        canonical_feats = repo_meta.get(feature_key) or []
     except Exception as e:
         print(f"FATAL: failed to read {repo_meta_path}: {e}", file=sys.stderr)
         sys.exit(2)
 
     if not isinstance(canonical_feats, list) or not canonical_feats:
         print(
-            f"FATAL: shots_on_goal_denali missing/empty in {repo_meta_path}",
+            f"FATAL: {feature_key} missing/empty in {repo_meta_path}",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -139,7 +139,9 @@ def load_line_models(model_root: Path, line: float):
         only_in_feats = sorted(set(feats) - set(canonical_feats))
         only_in_canon = sorted(set(canonical_feats) - set(feats))
         print(
-            "FATAL: feature set mismatch vs canonical shots_on_goal_denali.\n"
+            f"FATAL: feature set mismatch vs canonical {feature_key}.\n"
+            f"  model_root: {model_root}\n"
+            f"  feature_key: {feature_key}\n"
             f"  canonical: {repo_meta_path}\n"
             f"  line: {line} ({line_dir})\n"
             f"  only_in_feats({len(only_in_feats)}): {only_in_feats}\n"
@@ -152,7 +154,9 @@ def load_line_models(model_root: Path, line: float):
         only_in_line = sorted(set(line_feats) - set(canonical_feats))
         only_in_canon2 = sorted(set(canonical_feats) - set(line_feats))
         print(
-            "FATAL: per-line feature_metadata.json disagrees with canonical shots_on_goal_denali.\n"
+            f"FATAL: per-line feature_metadata.json disagrees with canonical {feature_key}.\n"
+            f"  model_root: {model_root}\n"
+            f"  feature_key: {feature_key}\n"
             f"  meta_path: {meta_path}\n"
             f"  canonical: {repo_meta_path}\n"
             f"  line: {line}\n"
@@ -161,7 +165,6 @@ def load_line_models(model_root: Path, line: float):
             file=sys.stderr,
         )
         sys.exit(2)
-    # --- end canonical feature selection ---
 
     return lr, rf, feats
 
@@ -282,6 +285,24 @@ def main():
         required=True,
         help="Output CSV path for SOG predictions.",
     )
+    ap.add_argument(
+    "--feature-key",
+    default="shots_on_goal_denali",
+    help=(
+        "Feature key inside backend/nhl/features/feature_metadata_nhl.json "
+        "(default: shots_on_goal_denali). "
+        "Use shots_on_goal_denali_pairings_v1 for sibling A/B."
+    ),
+)
+    ap.add_argument(
+    "--model-variant",
+    default="sog_player_denali",
+    help=(
+        "Model folder name under shots_on_goal (default: sog_player_denali). "
+        "Use sog_player_denali_pairings_v1 for sibling A/B."
+    ),
+)
+
     args = ap.parse_args()
 
     features_path = Path(args.features_csv)
@@ -293,6 +314,23 @@ def main():
     if not model_root.exists():
         print(f"FATAL: model_root does not exist: {model_root}", file=sys.stderr)
         sys.exit(2)
+
+    # --- A/B knobs (baseline default; sibling opt-in) ---
+    feature_key = args.feature_key
+    model_variant = args.model_variant
+
+    # Treat --model-root as the parent; append the variant folder
+    model_root = model_root / model_variant
+    if not model_root.exists():
+        print(
+            f"FATAL: model_root/variant does not exist: {model_root} "
+            f"(did you train this variant?)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    print(f"[SOG] feature_key={feature_key}", file=sys.stderr)
+    print(f"[SOG] model_root={model_root}", file=sys.stderr)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -329,7 +367,7 @@ def main():
 
     for line in SOG_LINES:
         print(f"[score_sog_denali] Loading models for line {line}", file=sys.stderr)
-        lr, rf, feats = load_line_models(model_root, line)
+        lr, rf, feats = load_models_for_line(line=line, model_root=model_root, feature_key=feature_key)
 
         # Ensure the CSV has all needed features
         missing_feats = [c for c in feats if c not in df.columns]
