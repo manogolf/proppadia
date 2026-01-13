@@ -1,3 +1,8 @@
+-- ==========================================================
+-- DEPRECATED. NOT USED BY cli.py.
+-- Canonical file is fill_sog_pp_role_for_slate.sql.
+-- ==========================================================
+
 -- Step 1b: compute + fill player PP role into
 -- nhl.training_features_nhl_sog_enriched_pregame_v2_denali_cols.role_pp_share
 -- backend/nhl/sql/fill_sog_role_pp_share_for_slate.sql

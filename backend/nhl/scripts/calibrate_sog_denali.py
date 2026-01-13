@@ -10,10 +10,12 @@ Workflow:
   2) Run this script to fit per-line calibration curves and
      apply them to sog_predictions.csv:
 
-       python backend/nhl/scripts/calibrate_sog_denali.py \
-         --train-csv backend/nhl/data/processed/sog_calibration_training_denali.csv \
-         --wide-in  backend/nhl/data/processed/sog_predictions.csv \
-         --wide-out backend/nhl/data/processed/sog_predictions_wide_calibrated.csv
+    python backend/nhl/scripts/calibrate_sog_denali.py \
+    --train-csv backend/nhl/data/processed/sog_calibration_training_denali.csv \
+    --wide-in  backend/nhl/data/processed/sog_predictions.csv \
+    --wide-out backend/nhl/data/processed/sog_predictions_wide_calibrated.csv \
+    --blend-alpha 0.175
+
 
   3) (Optional) Check calibration with debug_sog_raw_vs_calibrated.py.
 """

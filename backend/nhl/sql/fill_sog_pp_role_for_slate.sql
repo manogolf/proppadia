@@ -1,3 +1,7 @@
+-- ==========================================================
+-- This is the only PP role fill file called by cli.py.
+-- ==========================================================
+
 -- backend/nhl/sql/fill_sog_pp_role_for_slate.sql
 -- Usage:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v slate_date='2025-12-23' -f backend/nhl/sql/fill_sog_pp_role_for_slate.sql

@@ -120,15 +120,31 @@ def run_psql(db_url: str, sql: str) -> str | None:
     if not psql_available():
         print("[sog_integrity] ⚠️  psql not found on PATH; skipping DB checks.")
         return None
+
+    # Override the platform default (2min) for *this* session/call.
+    # Options:
+    #   '10min'  -> safe, bounded
+    #   '0'      -> no timeout (not recommended for integrity checks)
+    timeout_sql = "SET statement_timeout = '10min';\n"
+
     try:
-        cmd = ["psql", "--no-psqlrc", "-v", "ON_ERROR_STOP=1", db_url, "-At", "-c", sql]
+        cmd = [
+            "psql",
+            "--no-psqlrc",
+            "-v",
+            "ON_ERROR_STOP=1",
+            db_url,
+            "-At",
+            "-c",
+            timeout_sql + sql,
+        ]
         out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
-        return out.strip()
+        lines = [ln for ln in out.splitlines() if ln.strip() and ln.strip().upper() != "SET"]
+        return "\n".join(lines).strip()
     except subprocess.CalledProcessError as e:
         print("[sog_integrity] ⚠️  DB check failed:")
         print(e.output)
         return None
-
 
 def _coerce_num(s: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce")
@@ -494,105 +510,68 @@ def join_explosion_guard(df: pd.DataFrame, key_cols: list[str]) -> dict[str, Any
 def db_pp_role_coverage_check(db_url: str, slate: str) -> None:
     """
     Integrity-only: report PP role coverage for the slate in the pregame SOG table.
-    Uses the already-filled column: role_pp_share
+
+    OPTION 1 SEMANTICS (current pipeline):
+      - The model/export should use pp_role_share_final (mapped to feature name role_pp_share in the exporter).
+      - Therefore, integrity coverage is defined as: pp_role_share_final IS NOT NULL for all slate rows.
+      - role_pp_share is treated as debug/raw (may be NULL without being a pipeline failure).
     """
     print("\n=== DB PP role coverage (slate-day) ===")
 
+    # 1) Coverage + distribution for FINAL (source-of-truth under Option 1)
     sql = f"""
 WITH p AS (
   SELECT
     player_id, game_id, team_id, game_date,
-    role_pp_share
+    role_pp_share,
+    pp_role_share_final,
+    pp_role_source
   FROM nhl.training_features_nhl_sog_enriched_pregame_v2
   WHERE game_date = DATE '{slate}'
-),
-pl AS (
-  -- latest prior log per player (for reason-bucketing)
-  SELECT DISTINCT ON (l.player_id)
-    l.player_id,
-    g.game_date,
-    NULLIF(l.pp_toi_minutes, 0)::numeric AS pp_toi_min
-  FROM nhl.skater_game_logs_raw l
-  JOIN nhl.games g USING (game_id)
-  WHERE g.game_date < DATE '{slate}'
-  ORDER BY l.player_id, g.game_date DESC
-),
-team_pp AS (
-  -- team PP total for the same prior date chosen per player (keeps denominator consistent)
-  SELECT
-    pl.player_id,
-    SUM(COALESCE(l2.pp_toi_minutes,0))::numeric AS team_pp_toi_min
-  FROM pl
-  JOIN nhl.skater_game_logs_raw l2
-    ON l2.game_id IN (SELECT game_id FROM nhl.games WHERE game_date = pl.game_date)
-  GROUP BY pl.player_id
-),
-diag AS (
-  SELECT
-    p.*,
-    pl.player_id AS has_player_log,
-    team_pp.team_pp_toi_min
-  FROM p
-  LEFT JOIN pl      ON pl.player_id = p.player_id
-  LEFT JOIN team_pp ON team_pp.player_id = p.player_id
 )
 SELECT
-  COUNT(*)::int                                                AS rows_total,
-  COUNT(*) FILTER (WHERE role_pp_share IS NOT NULL)::int        AS rows_with_role_pp_share,
-  COUNT(*) FILTER (WHERE role_pp_share IS NULL)::int            AS rows_missing_role_pp_share,
-  ROUND(MIN(role_pp_share)::numeric, 6)                         AS min_share,
-  ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY role_pp_share)::numeric, 6) AS p50_share,
-  ROUND(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY role_pp_share)::numeric, 6) AS p90_share,
-  ROUND(MAX(role_pp_share)::numeric, 6)                         AS max_share
-FROM diag;
+  COUNT(*)::int AS rows_total,
+
+  -- Option 1 truth: final should never be NULL
+  COUNT(*) FILTER (WHERE pp_role_share_final IS NULL)::int     AS n_final_null,
+  COUNT(*) FILTER (WHERE pp_role_share_final IS NOT NULL)::int AS n_final_nonnull,
+  COUNT(*) FILTER (WHERE pp_role_share_final::numeric = 0)::int AS n_final_zero,
+
+  -- raw is debug-only (can be NULL without being a pipeline failure)
+  COUNT(*) FILTER (WHERE role_pp_share IS NULL)::int           AS n_raw_null,
+
+  -- distribution for final
+  ROUND(MIN(pp_role_share_final::numeric), 6) AS min_final,
+  ROUND((PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY pp_role_share_final::numeric))::numeric, 6) AS p50_final,
+  ROUND((PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY pp_role_share_final::numeric))::numeric, 6) AS p90_final,
+  ROUND((MAX(pp_role_share_final::numeric))::numeric, 6) AS max_final
+FROM p;
 """
     out = run_psql(db_url, sql)
     if out:
         print(f"[sog_integrity] pp_role_coverage({slate})| " + out)
 
+    # 2) Breakdown by pp_role_source (and confirm no NULL finals)
     sql2 = f"""
 WITH p AS (
-  SELECT player_id, game_id, team_id, game_date, role_pp_share
+  SELECT
+    pp_role_source,
+    pp_role_share_final
   FROM nhl.training_features_nhl_sog_enriched_pregame_v2
   WHERE game_date = DATE '{slate}'
-),
-pl AS (
-  SELECT DISTINCT ON (l.player_id)
-    l.player_id,
-    g.game_date
-  FROM nhl.skater_game_logs_raw l
-  JOIN nhl.games g USING (game_id)
-  WHERE g.game_date < DATE '{slate}'
-  ORDER BY l.player_id, g.game_date DESC
-),
-team_pp AS (
-  SELECT
-    pl.player_id,
-    SUM(COALESCE(l2.pp_toi_minutes,0))::numeric AS team_pp_toi_min
-  FROM pl
-  JOIN nhl.skater_game_logs_raw l2
-    ON l2.game_id IN (SELECT game_id FROM nhl.games WHERE game_date = pl.game_date)
-  GROUP BY pl.player_id
-),
-diag AS (
-  SELECT
-    p.player_id,
-    p.role_pp_share,
-    pl.player_id AS has_player_log,
-    COALESCE(team_pp.team_pp_toi_min, 0) AS team_pp_toi_min
-  FROM p
-  LEFT JOIN pl      ON pl.player_id = p.player_id
-  LEFT JOIN team_pp ON team_pp.player_id = p.player_id
 )
 SELECT
-  COUNT(*) FILTER (WHERE role_pp_share IS NULL)::int                                           AS n_null,
-  COUNT(*) FILTER (WHERE role_pp_share IS NULL AND has_player_log IS NULL)::int                AS n_missing_player_log,
-  COUNT(*) FILTER (WHERE role_pp_share IS NULL AND has_player_log IS NOT NULL AND team_pp_toi_min = 0)::int AS n_team_total_zero
-FROM diag;
+  COALESCE(pp_role_source, '(null)') AS pp_role_source,
+  COUNT(*)::int AS rows,
+  COUNT(*) FILTER (WHERE pp_role_share_final IS NULL)::int AS n_final_null
+FROM p
+GROUP BY 1
+ORDER BY rows DESC;
 """
     out2 = run_psql(db_url, sql2)
     if out2:
-        print(f"[sog_integrity] pp_role_missing_reasons({slate})| " + out2)
+        for line in out2.splitlines():
+            print(f"[sog_integrity] pp_role_sources({slate})| " + line)
 
 
 # ---------- existing DB checks (plus optional rolling DB check) ----------

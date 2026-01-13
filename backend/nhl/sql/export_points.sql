@@ -47,13 +47,32 @@ COPY (
     WHERE g.game_date = DATE :'slate_date'
   ),
 
+  -- =========================
+  -- PATCH (Option B): restrict history CTEs to slate players/teams + date window
+  --
+  -- Safe/conservative window: last ~120 days before slate_date (covers last-10 games
+  -- even with breaks; shrinks scans dramatically).
+  -- =========================
+
+  slate_players AS (
+    SELECT DISTINCT player_id
+    FROM base
+    WHERE player_id IS NOT NULL
+  ),
+
+  slate_teams AS (
+    SELECT DISTINCT team_id
+    FROM base
+    WHERE team_id IS NOT NULL
+  ),
+
   player_logs AS (
-    -- Historical skater logs used to derive rolling features
-    -- REGULAR SEASON ONLY: game_id segment '02', but spans all years.
+    -- Historical skater logs (regular season only) for ONLY slate players
+    -- Windowed to keep exports fast; features only need last 10 anyway.
     SELECT
       l.player_id,
       l.game_id,
-      l.game_date,
+      g2.game_date,
       l.team_id,
       COALESCE(l.shots_on_goal, 0)::float  AS shots_on_goal,
       COALESCE(l.shot_attempts, 0)::float  AS shot_attempts,
@@ -62,10 +81,14 @@ COPY (
     JOIN nhl.games g2
       ON g2.game_id = l.game_id
     WHERE substring(g2.game_id::text, 5, 2) = '02'  -- regular season
+      AND l.player_id IN (SELECT player_id FROM slate_players)
+      AND g2.game_date <  DATE :'slate_date'
+      AND g2.game_date >= (DATE :'slate_date' - INTERVAL '120 days')
   ),
 
   team_logs AS (
-    -- Team-level SOG / attempts per game (regular season only)
+    -- Team-level SOG / attempts per game (regular season only) for ONLY slate teams
+    -- Same conservative date window for speed.
     SELECT
       l.team_id,
       l.game_id,
@@ -76,6 +99,9 @@ COPY (
     JOIN nhl.games g
       ON g.game_id = l.game_id
     WHERE substring(g.game_id::text, 5, 2) = '02'  -- regular season
+      AND l.team_id IN (SELECT team_id FROM slate_teams)
+      AND g.game_date <  DATE :'slate_date'
+      AND g.game_date >= (DATE :'slate_date' - INTERVAL '120 days')
     GROUP BY l.team_id, l.game_id, g.game_date
   )
 

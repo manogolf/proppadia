@@ -224,10 +224,29 @@ def fetch_games(conn: psycopg.Connection, game_ids: List[int]) -> pd.DataFrame:
 
 
 def main() -> None:
+    # --- determine slate date (ET) ---
+    # Priority:
+    #  1) --slate-date CLI arg
+    #  2) SLATE_DATE env
+    #  3) ET today
+    import argparse
+    from datetime import datetime
+    import pytz
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--slate-date", default=None, help="YYYY-MM-DD (ET). Defaults to SLATE_DATE or ET today.")
+    ap.add_argument("--strict", action="store_true", help="Fail if predictions contain game_ids not on slate-date.")
+    args = ap.parse_args()
+
+    et = pytz.timezone("America/New_York")
+    et_today = datetime.now(et).strftime("%Y-%m-%d")
+    slate_date = args.slate_date or os.environ.get("SLATE_DATE") or et_today
+
+    print(f"[book_upload] slate_date (ET) = {slate_date}")
+
     df_wide = load_predictions(PRED_CSV)
     df_long = melt_to_long(df_wide)
 
-    # Collect needed game_ids
     unique_game_ids = sorted(df_long["game_id"].unique().tolist())
     print(f"Fetching game metadata for {len(unique_game_ids)} unique game_ids...")
 
@@ -235,32 +254,53 @@ def main() -> None:
         games = fetch_games(conn, unique_game_ids)
 
     if games.empty:
-        print(
-            "WARNING: No matching rows in nhl.games for these game_ids. "
-            "Output will be empty.",
-            file=sys.stderr,
-        )
+        print("WARNING: No matching rows in nhl.games for these game_ids. Output will be empty.", file=sys.stderr)
+        return
 
-    # Merge game info
     merged = df_long.merge(games, on="game_id", how="left")
-
-    # Drop rows missing basic game info
-    merged = merged.dropna(
-        subset=["game_date", "home_team_code", "away_team_code"]
-    )
+    merged = merged.dropna(subset=["game_date", "home_team_code", "away_team_code"])
 
     if merged.empty:
         print("No rows after joining with nhl.games; nothing to write.")
         return
 
-    # Build upload rows
+    # --- guardrail: filter to slate date ---
+    merged["game_date"] = pd.to_datetime(merged["game_date"]).dt.date
+    target = pd.to_datetime(slate_date).date()
+
+    dates_present = sorted({d.isoformat() for d in merged["game_date"].dropna().unique().tolist()})
+    print(f"[book_upload] dates present in predictions after join: {dates_present}")
+
+    before = len(merged)
+    merged = merged[merged["game_date"] == target]
+    after = len(merged)
+
+    if after == 0:
+        msg = (
+            f"ERROR: after filtering to slate_date={slate_date}, zero rows remain.\n"
+            f"Dates present were: {dates_present}\n"
+            f"This usually means {PRED_CSV} is stale or built for a different SLATE_DATE."
+        )
+        print(msg, file=sys.stderr)
+        sys.exit(1)
+
+    if after < before:
+        msg = (
+            f"[book_upload] WARNING: filtered out {before - after} rows not on slate_date={slate_date} "
+            f"(kept {after})."
+        )
+        if args.strict:
+            print("ERROR: " + msg, file=sys.stderr)
+            sys.exit(1)
+        print(msg)
+
+    # --- build upload rows ---
     rows = []
     for _, row in merged.iterrows():
         win_prob = prob_to_win_prob(row["prob_over"])
         if win_prob is None:
             continue
 
-        # Format date as YYYYMMDD
         date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
 
         rows.append(
@@ -275,16 +315,13 @@ def main() -> None:
                 "SELECTOR": int(row["player_id"]),
                 "POINT": row["line"],
                 "SIDE": "over",
-                # WIN % must be a decimal probability like 0.3206, not 32.06
                 "WIN %": round(win_prob, 4),
             }
         )
-        
-    out_df = pd.DataFrame(rows)
 
+    out_df = pd.DataFrame(rows)
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     out_df.to_csv(OUT_CSV, index=False)
-
     print(f"Wrote {len(out_df)} rows to {OUT_CSV}")
 
 

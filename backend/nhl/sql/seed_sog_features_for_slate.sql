@@ -61,7 +61,10 @@ enrich AS (
     r.player_id,
     r.game_id,
     r.team_id,
-    CASE WHEN r.team_id = g.home_team_id THEN g.away_team_id ELSE g.home_team_id END AS opponent_id,
+    CASE
+      WHEN r.team_id = g.home_team_id THEN g.away_team_id
+      ELSE g.home_team_id
+    END AS opponent_id,
     (r.team_id = g.home_team_id) AS is_home,
     g.game_date
   FROM r
@@ -95,19 +98,10 @@ last_game AS (
 ),
 
 -- latest per-player feature row (strictly before slate_date) from existing Denali table
+-- NOTE: Rolling per60 fields are intentionally NOT used for seeding to avoid stub contamination.
 last_feat AS (
   SELECT DISTINCT ON (t.player_id)
     t.player_id,
-
-    -- core rates / volume
-    t.d5_sog_per60,
-    t.d10_sog_per60,
-    t.d20_sog_per60,
-    t.attempts_d10_per60,
-
-    -- rest / schedule (NOTE: no longer trusted for prev_game_date)
-    t.rest_days,
-    t.b2b_flag,
 
     -- pace
     t.pace_index,
@@ -186,11 +180,12 @@ seed AS (
     -- label: unfilled at seed time
     NULL::numeric AS shots_on_goal,
 
-    -- core rates from Denali features
-    lf.d5_sog_per60,
-    lf.d10_sog_per60,
-    lf.d20_sog_per60,
-    lf.attempts_d10_per60,
+    -- IMPORTANT POLICY: do NOT seed rolling per60 from prior feature tables.
+    -- These are filled by the later "Refresh SOG rollups" step from raw logs.
+    NULL::numeric AS d5_sog_per60,
+    NULL::numeric AS d10_sog_per60,
+    NULL::numeric AS d20_sog_per60,
+    NULL::numeric AS attempts_d10_per60,
 
     -- ✅ rest / schedule (computed from last_game.prev_game_date)
     CASE
@@ -205,45 +200,21 @@ seed AS (
     END AS b2b_flag,
 
     -- pace
-    lf.pace_index,
     lf.pace_matchup_index,
 
     -- team / opp environment (two refreshed from team_roll)
     COALESCE(tr.team_d10_sf_per_game,        lf.team_d10_sf_per_game)        AS team_d10_sf_per_game,
     COALESCE(tr.opp_d10_sf_allowed_per_game, lf.opp_d10_sf_allowed_per_game) AS opp_d10_sf_allowed_per_game,
-    lf.opp_d10_sf_per60,
-    lf.team_d10_sa_per60,
-    lf.opp_d10_sa_per60,
 
-    -- role
+    -- role (raw; pp_role_final computed later)
     lf.role_pp_share,
-
-    -- season / szn TOI & shifts
-    lf.szn_toi_per_game_5on5,
-    lf.szn_toi_per_game_pp,
-    lf.szn_toi_per_game_pk,
-    lf.szn_shifts_per_game_5on5,
-    lf.szn_shifts_per_game_pp,
-    lf.szn_shifts_per_game_pk,
-
-    lf.season_5on5_icetime_per_game,
-    lf.season_5on4_icetime_per_game,
-    lf.season_4on5_icetime_per_game,
-    lf.season_5on5_shifts_per_game,
-    lf.season_5on4_shifts_per_game,
-    lf.season_4on5_shifts_per_game,
-
-    -- team top-line shares
-    lf.team_szn_5on5_top_line_xgf_share,
-    lf.team_5v5_top_line_icetime_share,
-    lf.team_5v5_top_line_shotattempts_share,
 
     -- last-10 / last-5 team counts (from Denali)
     lf.last10_team_sog_share,
     lf.team_num_sog_last10,
     lf.team_num_event_last10,
 
-    -- player SOG/event rolling (from Denali)
+    -- player SOG/event rolling counts (from Denali)
     lf.num_sog_last5,
     lf.num_sog_last10,
     lf.num_sog_szn_to_date,
@@ -336,14 +307,14 @@ SELECT
 
   last10_team_sog_share,
   team_num_sog_last10           AS team_num_shotwasongoal_for_last10,
-  team_num_event_last10,
+  team_num_event_last10         AS team_num_event_shot_for_last10,
 
   num_sog_last5                 AS num_shotwasongoal_last5,
   num_sog_last10                AS num_shotwasongoal_last10,
   num_sog_szn_to_date           AS num_shotwasongoal_season_to_date,
 
-  num_event_last5,
-  num_event_last10,
+  num_event_last5               AS num_event_shot_last5,
+  num_event_last10              AS num_event_shot_last10,
   num_event_szn_to_date         AS num_event_shot_season_to_date,
 
   hot_last5_flag
@@ -352,13 +323,16 @@ ON CONFLICT (player_id, game_id) DO UPDATE
 SET team_id                           = EXCLUDED.team_id,
     opponent_id                       = EXCLUDED.opponent_id,
     is_home                           = EXCLUDED.is_home,
-    game_date                          = EXCLUDED.game_date,
+    game_date                         = EXCLUDED.game_date,
     season                            = EXCLUDED.season,
     shots_on_goal                     = EXCLUDED.shots_on_goal,
+
+    -- IMPORTANT: wipe any stubby rollups on conflict too; rollups are filled by the refresh step.
     d5_sog_per60                      = EXCLUDED.d5_sog_per60,
     d10_sog_per60                     = EXCLUDED.d10_sog_per60,
     d20_sog_per60                     = EXCLUDED.d20_sog_per60,
     attempts_d10_per60                = EXCLUDED.attempts_d10_per60,
+
     rest_days                         = EXCLUDED.rest_days,
     b2b_flag                          = EXCLUDED.b2b_flag,
     pace_matchup_index                = EXCLUDED.pace_matchup_index,

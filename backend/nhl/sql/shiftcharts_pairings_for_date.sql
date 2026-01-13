@@ -12,6 +12,17 @@
 
 \set ON_ERROR_STOP on
 
+-- Accept either -v game_date=YYYY-MM-DD or -v slate_date=YYYY-MM-DD
+\if :{?game_date}
+  \set run_date :'game_date'
+\elif :{?slate_date}
+  \set run_date :'slate_date'
+\else
+  \echo 'ERROR: must provide -v game_date=YYYY-MM-DD (or slate_date)'
+  \quit 1
+\endif
+
+
 -- ----------------------------
 -- 0) Tables + indexes (idempotent)
 -- ----------------------------
@@ -69,7 +80,8 @@ CREATE INDEX IF NOT EXISTS idx_shiftcharts_pairings_game_team
 WITH games AS (
   SELECT g.game_id::bigint AS game_id
   FROM nhl.games g
-  WHERE g.game_date = DATE :'game_date'
+  WHERE g.game_date::date = (:'run_date')::date
+
 ),
 raw_src AS (
   SELECT
@@ -152,13 +164,25 @@ SELECT
   ingested_at
 FROM parsed
 WHERE COALESCE(start_sec_raw, 0) >= 0
-  AND COALESCE(
-        end_sec_raw,
-        CASE
-          WHEN start_sec_raw IS NOT NULL AND dur_sec_raw IS NOT NULL THEN start_sec_raw + dur_sec_raw
-          ELSE 0
-        END
-      ) >= COALESCE(start_sec_raw, 0)
+  AND (
+    COALESCE(
+      end_sec_raw,
+      CASE
+        WHEN start_sec_raw IS NOT NULL AND dur_sec_raw IS NOT NULL THEN start_sec_raw + dur_sec_raw
+        ELSE 0
+      END
+    )
+  ) >= COALESCE(start_sec_raw, 0)
+  AND NOT (
+    COALESCE(start_sec_raw, 0) = 0
+    AND COALESCE(
+      end_sec_raw,
+      CASE
+        WHEN start_sec_raw IS NOT NULL AND dur_sec_raw IS NOT NULL THEN start_sec_raw + dur_sec_raw
+        ELSE 0
+      END
+    ) = 1200
+  )
 ON CONFLICT (game_id, shift_id) DO UPDATE SET
   player_id   = EXCLUDED.player_id,
   team_id     = EXCLUDED.team_id,
@@ -177,7 +201,8 @@ ON CONFLICT (game_id, shift_id) DO UPDATE SET
 WITH games AS (
   SELECT g.game_id::bigint AS game_id
   FROM nhl.games g
-  WHERE g.game_date = DATE :'game_date'
+  WHERE g.game_date::date = (:'run_date')::date
+
 ),
 shifts AS (
   SELECT
@@ -337,10 +362,12 @@ ON CONFLICT (game_id, player_id) DO UPDATE SET
 WITH games AS (
   SELECT g.game_id::bigint AS game_id
   FROM nhl.games g
-  WHERE g.game_date = DATE :'game_date'
+  WHERE g.game_date::date = (:'run_date')::date
+
 )
 SELECT
-  DATE :'game_date' AS game_date,
+  (:'run_date')::date
+ AS game_date,
   (SELECT COUNT(*) FROM games)                                                AS games,
   (SELECT COUNT(*) FROM nhl.shiftcharts_shifts s JOIN games g USING(game_id))  AS shifts_rows,
   (SELECT COUNT(*) FROM nhl.shiftcharts_pairings_game p JOIN games g USING(game_id)) AS pairings_players;

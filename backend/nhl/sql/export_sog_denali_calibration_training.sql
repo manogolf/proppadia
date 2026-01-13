@@ -35,8 +35,9 @@ COPY (
       ON l.player_id = p.player_id
      AND l.game_id   = p.game_id
     WHERE p.prop         = 'shots_on_goal'
-      AND p.model_family = 'sog_denali_lr_rf'
-      AND g.season IN (2024, 2025)
+      AND p.model_family = 'denali_blend'
+
+      AND g.season >= 2024
       AND p.line IN (0.5, 1.5, 2.5, 3.5)
   )
   SELECT

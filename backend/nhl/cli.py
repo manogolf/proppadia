@@ -100,8 +100,45 @@ def et_yesterday() -> str:
         return (datetime.now(et) - timedelta(days=1)).strftime("%Y-%m-%d")
     except Exception:
         return (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    
+def infer_nhl_season_from_date_yyyy_mm_dd(date_str: str) -> int:
+    # NHL season naming: season is the year the season starts (e.g., 2025-26 => 2025)
+    y, m, d = (int(x) for x in date_str.split("-"))
+    return y if m >= 9 else (y - 1)
+
 
 # ---------- shell helpers ----------
+
+def _psql_env() -> dict:
+    """
+    Build a safe environment for any psql subprocess spawned by cli.py.
+
+    Why:
+      - Supabase often enforces a low default statement_timeout (you saw 2min),
+        which kills long-running \COPY exports.
+      - We also want a consistent schema search_path for all sessions.
+
+    Behavior:
+      - Ensures search_path=nhl,public
+      - Ensures statement_timeout=0 (unlimited) so exports don't get canceled
+      - Keeps any existing PGOPTIONS flags (appends ours)
+    """
+    env = dict(os.environ)
+
+    # Our required session settings
+    required = [
+        "-c search_path=nhl,public",
+        "-c statement_timeout=0",
+        # Optional: fail fast on lock waits instead of "hanging"
+        "-c lock_timeout=5000",
+    ]
+    required_str = " ".join(required)
+
+    # Preserve any existing PGOPTIONS and append ours
+    existing = (env.get("PGOPTIONS") or "").strip()
+    env["PGOPTIONS"] = (existing + " " + required_str).strip() if existing else required_str
+
+    return env
 
 def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
     cmd = [str(c) for c in cmd]
@@ -126,34 +163,44 @@ def run_psql_file(sql_file: Path, *, vars: dict[str, str] | None = None):
         for k, v in vars.items():
             cmd += ["-v", f"{k}={v}"]
 
+    cmd += ["-c", "SET statement_timeout=0;"]
     cmd += ["-f", str(sql_file)]
 
-    # Force schema resolution for all psql sessions spawned here.
-    # Keeps this change centralized (no manual terminal setup, no per-SQL edits).
-    env = dict(os.environ)
-    env["PGOPTIONS"] = "-c search_path=nhl,public"
+    run(cmd, env=_psql_env())
 
-    run(cmd, env=env)
 
 def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     """Run psql on a file that COPY/SELECTs TO STDOUT and return stdout bytes."""
     db = require_db_url()
     cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-q", "-v", "ON_ERROR_STOP=1", db]
+
     if vars:
         for k, v in vars.items():
             cmd += ["-v", f"{k}={v}"]
+
+    cmd += ["-c", "SET statement_timeout=0;"]
     cmd += ["-f", str(sql_file)]
 
     res = sp.run(
         cmd,
         cwd=str(ROOT),
-        env=os.environ,
-        check=True,
+        env=_psql_env(),
+        check=False,
         capture_output=True,
+        text=True,
     )
 
-    # stdout is what COPY ... TO STDOUT emits; ensure bytes return type
-    return res.stdout or b""
+    if res.returncode != 0:
+        print("psql FAILED:", " ".join(cmd), file=sys.stderr)
+        if res.stderr:
+            print(res.stderr.strip(), file=sys.stderr)
+        # show tail of stdout too (COPY can emit partial output)
+        if res.stdout:
+            tail = "\n".join(res.stdout.splitlines()[-30:])
+            print("psql stdout tail:\n" + tail, file=sys.stderr)
+        raise sp.CalledProcessError(res.returncode, cmd, output=res.stdout, stderr=res.stderr)
+
+    return res.stdout.encode("utf-8")
 
 def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str) -> None:
     """
@@ -510,33 +557,138 @@ def build_points(slate: str):
 def cmd_daily(with_odds: bool):
     db = require_db_url()
 
-    # Always honor explicit env; otherwise default to ET today/yesterday.
-    slate = os.environ.get("SLATE_DATE") or et_today()
+    # DAILY SHOULD MEAN "TODAY" BY DEFAULT.
+    #
+    # We only honor SLATE_DATE / YDAY from env if you explicitly opt in by setting:
+    #   HONOR_ENV_DATES=1
+    #
+    # This prevents stale SLATE_DATE from old debugging sessions from silently
+    # forcing yesterday (or any prior date) into today's processed outputs.
+    honor_env = os.environ.get("HONOR_ENV_DATES") == "1"
 
-    # If SLATE_DATE is explicitly set (often for historical runs), default YDAY to SLATE_DATE
-    # unless YDAY is explicitly provided.
-    yday = os.environ.get("YDAY")
-    if not yday:
-        yday = slate if os.environ.get("SLATE_DATE") else et_yesterday()
+    if honor_env:
+        # Explicit opt-in behavior (historical/replay runs)
+        slate = os.environ.get("SLATE_DATE") or et_today()
+        yday = os.environ.get("YDAY")
+        if not yday:
+            yday = slate if os.environ.get("SLATE_DATE") else et_yesterday()
+    else:
+        # Default behavior for real daily runs: ignore any stale env values
+        os.environ.pop("SLATE_DATE", None)
+        os.environ.pop("YDAY", None)
+        slate = et_today()
+        yday = et_yesterday()
 
     os.environ["SLATE_DATE"] = slate
     os.environ["YDAY"] = yday
 
-    print(f"SLATE_DATE (ET): {slate}")
-    print(f"YDAY       (ET): {yday}")
+    season = infer_nhl_season_from_date_yyyy_mm_dd(yday)
+
+    print(f"SLATE_DATE (ET): {slate}" + (" (honor env)" if honor_env else ""))
+    print(f"YDAY       (ET): {yday}" + (" (honor env)" if honor_env else ""))
 
     # --- Daily artifact dirs (your weekly cleanup automation) ---
-    # Keep these scoped here so we don't blow up unrelated exports yet.
     DAILY_EXPORTS_DIR = ROOT / "backend" / "nhl" / "exports" / "daily"
     DAILY_NAMES_DIR = DAILY_EXPORTS_DIR / "names"
     DAILY_SOG_FEATURES_DIR = DAILY_EXPORTS_DIR / "sog_features"
     for d in (DAILY_NAMES_DIR, DAILY_SOG_FEATURES_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    # 0 DB sanity
+    # 0) DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
 
-    # 1 Today: schedule & roster
+    # ============================================================
+    # PHASE A: Finalize YDAY into raw/history FIRST (the guardrail)
+    # ============================================================
+
+    # A1) Pull yesterday logs + shiftcharts into stage (safe even if yday had no games)
+    run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
+    run([PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env={"SLATE_DATE": yday})
+    run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"],        env={"SLATE_DATE": yday})
+    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
+
+    # A2) Promote stage → raw for yday (idempotent upsert)
+    promote_sql = f"""
+    WITH src AS (
+      SELECT DISTINCT
+        s.player_id, s.game_id, s.game_date,
+        s.shots_on_goal, s.shot_attempts, s.toi_minutes, s.pp_toi_minutes
+      FROM nhl.import_skater_logs_stage s
+      WHERE s.game_date = DATE '{yday}'
+    ),
+    rs AS (
+      SELECT DISTINCT ON (game_id, player_id)
+        game_id,
+        team_id,
+        player_id
+      FROM nhl.roster_status
+      WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '{yday}')
+      ORDER BY game_id, player_id, asof_ts DESC
+    ),
+    g AS (
+      SELECT game_id, home_team_id, away_team_id
+      FROM nhl.games
+      WHERE game_date = DATE '{yday}'
+    ),
+    joined AS (
+      SELECT
+        src.player_id,
+        src.game_id,
+        rs.team_id,
+        CASE
+          WHEN rs.team_id = g.home_team_id THEN g.away_team_id
+          WHEN rs.team_id = g.away_team_id THEN g.home_team_id
+          ELSE NULL
+        END AS opponent_id,
+        (rs.team_id = g.home_team_id) AS is_home,
+        src.game_date,
+        src.shots_on_goal,
+        src.shot_attempts,
+        src.toi_minutes,
+        src.pp_toi_minutes
+      FROM src
+      JOIN rs ON rs.game_id = src.game_id AND rs.player_id = src.player_id
+      JOIN g  ON g.game_id  = src.game_id
+    )
+    INSERT INTO nhl.skater_game_logs_raw
+      (player_id, game_id, team_id, opponent_id, is_home, game_date,
+       shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+    SELECT
+      player_id, game_id, team_id, opponent_id, is_home, game_date,
+      shots_on_goal, shot_attempts, toi_minutes, NULLIF(pp_toi_minutes, 0) AS pp_toi_minutes
+    FROM joined
+    WHERE opponent_id IS NOT NULL
+    ON CONFLICT (player_id, game_id) DO UPDATE SET
+      team_id        = EXCLUDED.team_id,
+      opponent_id    = EXCLUDED.opponent_id,
+      is_home        = EXCLUDED.is_home,
+      game_date      = EXCLUDED.game_date,
+      shots_on_goal  = EXCLUDED.shots_on_goal,
+      shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
+      toi_minutes    = EXCLUDED.toi_minutes,
+      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes);
+    """
+    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
+
+    # A3a) Build manpower segments (PP/PK windows) for this slate date (required for PP TOI)
+    run([PY, SCRIPTS_DIR / "backfill_game_manpower_segments.py", "--start-date", yday, "--end-date", yday, "--season", str(season)])
+
+    # A3b) Fill PP TOI minutes (depends on manpower segments)
+    run([PY, SCRIPTS_DIR / "fill_pp_toi_minutes_for_date.py", "--date", yday, "--commit"])
+
+    # A4) Pairings artifacts for yday (built ONCE)
+    run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})
+
+    # A5) Refresh views/materializations now that yday raw/pp_toi/pairings are updated
+    refresh_sql = SCRIPTS_DIR / "refresh.sql"
+    if refresh_sql.exists():
+        run(["psql", db, "-v", "ON_ERROR_STOP=1", "-f", refresh_sql])
+
+    # ============================================================
+    # PHASE B: Build SLATE pregame features (history through yday)
+    # ============================================================
+
+    # 1) Today: schedule & roster
     run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
 
     # --- EARLY EXIT: no NHL games on this slate date ---
@@ -547,7 +699,7 @@ def cmd_daily(with_odds: bool):
     )
     game_count = int((res.stdout or "").strip() or "0")
     if game_count == 0:
-        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps.")
+        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps (yday finalization already done).")
         return
     # --- end early exit ---
 
@@ -560,38 +712,29 @@ def cmd_daily(with_odds: bool):
         env={"SLATE_DATE": slate},
     )
 
-    # 2 Seed features for today (SOG + Saves).
+    # 2) Seed features for today (SOG + Saves).
     run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",    vars={"slate_date": slate})
     run_psql_file(SQL_DIR / "seed_goalie_features_for_slate.sql", vars={"slate_date": slate})
 
     # 2b) Refresh rolling SOG features into the pregame table
+    # Guardrail: rollups may only use realized stats through YDAY.
     rollup_start = os.environ.get("ROLLUP_START_DATE") or (
         datetime.fromisoformat(slate) - timedelta(days=260)
     ).strftime("%Y-%m-%d")
-    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=slate)
+    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=yday)
 
-    # 2c) Fill TOI-derived features for this slate
-    run_psql_file(SQL_DIR / "fill_sog_pp_role_for_slate.sql",            vars={"slate_date": slate})
-    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql",       vars={"slate_date": slate})
-    run_psql_file(SQL_DIR / "fill_sog_season_toi_features_for_slate.sql", vars={"slate_date": slate})
+    # 2c) Fill PP role + TOI-derived features for THIS slate (computed from history < slate)
+    run_psql_file(SQL_DIR / "fill_sog_pp_role_for_slate.sql",              vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql",         vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_season_toi_features_for_slate.sql",  vars={"slate_date": slate})
 
-    # 2d) Pairings (shiftcharts → pairings → fill into *today's* pregame table using latest history)
-    # Build pairings artifacts for YDAY (so rolling windows include yday data)
-    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"], env={"SLATE_DATE": yday})
-    run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})
+    # 2d) Pairings fill into TODAY's pregame table using the yday-built pairings history
+    run_psql_file(SQL_DIR / "fill_sog_pairings_for_slate.sql",             vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_pairings_rolling_for_slate.sql",     vars={"slate_date": slate})
 
-    # Fill pairings-derived columns for TODAY's slate (not yday)
-    run_psql_file(SQL_DIR / "fill_sog_pairings_for_slate.sql",           vars={"slate_date": slate})
-
-    # Fill rolling pairings features for TODAY's slate (not yday)
-    run_psql_file(SQL_DIR / "fill_sog_pairings_rolling_for_slate.sql",   vars={"slate_date": slate})
-
-
-    # 3 Export names (now written into backend/nhl/exports/daily/names/)
+    # 3) Export names (now written into backend/nhl/exports/daily/names/)
     names_path = DAILY_NAMES_DIR / f"names_{slate}.csv"
     try:
-        # If you haven't updated export_names_csv yet, it will write elsewhere.
-        # So we write into the daily location explicitly here (minimal blast radius).
         csv_bytes = psql_stdout(SQL_DIR / "_export_names.sql", vars={"slate_date": slate})
         names_path.write_bytes(csv_bytes)
         print(f"[export_names_csv] wrote names CSV → {names_path}")
@@ -599,16 +742,20 @@ def cmd_daily(with_odds: bool):
         names_path = None
         print(f"⚠️ names export failed; downstream builders may degrade: {e}")
 
-    # 3.9 Team context rollups for slate
+    # 3.9) Team context rollups for slate
     run_psql_file(SQL_DIR / "upsert_team_context_for_slate.sql", vars={"slate_date": slate})
 
-    # 4 Export feature CSVs for this slate
+    # 4) Export feature CSVs for this slate
 
     # 4a) SOG Denali features → backend/nhl/exports/daily/sog_features/
     sog_feat_path = DAILY_SOG_FEATURES_DIR / f"sog_features_{slate}_denali.csv"
+    # --- ensure TOI/shift “season” features are populated before exporting Denali SOG slate features ---
+    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql", vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_season_toi_features_for_slate.sql", vars={"slate_date": slate})
+
     export_sog_denali_features(db, slate, sog_feat_path)
 
-    # 4b) Saves / Points exporters (leave as-is unless you also want these in daily/)
+    # 4b) Saves / Points exporters
     saves_csv  = psql_stdout(SQL_DIR / "export_saves_from_denali.sql", vars={"slate_date": slate})
     points_csv = psql_stdout(SQL_DIR / "export_points.sql",            vars={"slate_date": slate})
     (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
@@ -661,9 +808,10 @@ def cmd_daily(with_odds: bool):
         [
             PY,
             SCRIPTS_DIR / "calibrate_sog_denali.py",
-            "--train",    str(calib_train_path),
-            "--wide-in",  str(final_pred_path),
-            "--wide-out", str(calibrated_pred_path),
+            "--train-csv",       str(calib_train_path),
+            "--wide-in",     str(final_pred_path),
+            "--wide-out",    str(calibrated_pred_path),
+            "--blend-alpha", "0.175",
         ]
     )
 
@@ -740,12 +888,11 @@ def cmd_daily(with_odds: bool):
         fetch_odds()
 
     # 9) Build site CSVs
-    # IMPORTANT: builders should not guess names path; they should accept the path or regenerate consistently.
     build_sog(slate)
     build_saves(slate)
     build_points(slate)
 
-    # 9b) SOG integrity report (warn-only)
+    # 9b) SOG integrity report (warn-only) — now this runs AFTER yday raw/pp_toi is finalized
     try:
         run(
             [
@@ -761,88 +908,7 @@ def cmd_daily(with_odds: bool):
     except Exception as e:
         print(f"⚠️ sog_integrity_report failed (continuing): {e}")
 
-    # 10) Yesterday logs → promote to raw
-    run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
-    run([PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env={"SLATE_DATE": yday})
-    run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"],        env={"SLATE_DATE": yday})
-    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
-
-    # Pairings SQL takes :game_date (NOT slate_date) and must be run via psql wrapper (NOT PY)
-    run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})
-    
-    # Fill SQL takes :slate_date
-    run_psql_file(SQL_DIR / "fill_sog_pairings_for_slate.sql",    vars={"slate_date": yday})
-    run_psql_file(SQL_DIR / "fill_sog_pairings_missingness_for_slate.sql",    vars={"slate_date": yday})
-
-    promote_sql = f"""
-    WITH src AS (
-      SELECT DISTINCT
-        s.player_id, s.game_id, s.game_date,
-        s.shots_on_goal, s.shot_attempts, s.toi_minutes, s.pp_toi_minutes
-      FROM nhl.import_skater_logs_stage s
-      WHERE s.game_date = DATE '{yday}'
-    ),
-    rs AS (
-      SELECT DISTINCT ON (game_id, player_id)
-        game_id,
-        team_id,
-        player_id
-      FROM nhl.roster_status
-      WHERE game_id IN (SELECT game_id FROM nhl.games WHERE game_date = DATE '{yday}')
-      ORDER BY game_id, player_id, asof_ts DESC
-    ),
-    g AS (
-      SELECT game_id, home_team_id, away_team_id
-      FROM nhl.games
-      WHERE game_date = DATE '{yday}'
-    ),
-    joined AS (
-      SELECT
-        src.player_id,
-        src.game_id,
-        rs.team_id,
-        CASE
-          WHEN rs.team_id = g.home_team_id THEN g.away_team_id
-          WHEN rs.team_id = g.away_team_id THEN g.home_team_id
-          ELSE NULL
-        END AS opponent_id,
-        (rs.team_id = g.home_team_id) AS is_home,
-        src.game_date,
-        src.shots_on_goal,
-        src.shot_attempts,
-        src.toi_minutes,
-        src.pp_toi_minutes
-      FROM src
-      JOIN rs ON rs.game_id = src.game_id AND rs.player_id = src.player_id
-      JOIN g  ON g.game_id  = src.game_id
-    )
-    INSERT INTO nhl.skater_game_logs_raw
-      (player_id, game_id, team_id, opponent_id, is_home, game_date,
-       shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
-    SELECT
-      player_id, game_id, team_id, opponent_id, is_home, game_date,
-      shots_on_goal, shot_attempts, toi_minutes, NULLIF(pp_toi_minutes, 0) AS pp_toi_minutes
-    FROM joined
-    WHERE opponent_id IS NOT NULL
-    ON CONFLICT (player_id, game_id) DO UPDATE SET
-      team_id        = EXCLUDED.team_id,
-      opponent_id    = EXCLUDED.opponent_id,
-      is_home        = EXCLUDED.is_home,
-      game_date      = EXCLUDED.game_date,
-      shots_on_goal  = EXCLUDED.shots_on_goal,
-      shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
-      toi_minutes    = EXCLUDED.toi_minutes,
-      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes);
-    """
-    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
-
-    run([PY, SCRIPTS_DIR / "approx_pp_toi_from_pbp.py"], env={"SLATE_DATE": yday})
-
-    # 11) Refresh views/materializations + sanity counts
-    refresh_sql = SCRIPTS_DIR / "refresh.sql"
-    if refresh_sql.exists():
-        run(["psql", db, "-v", "ON_ERROR_STOP=1", "-f", refresh_sql])
-
+    # 11) Sanity counts (for slate games)
     sanity = f"""
     WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '{slate}')
     SELECT 'games_today'            AS which, COUNT(*) FROM nhl.games         WHERE game_date = DATE '{slate}'

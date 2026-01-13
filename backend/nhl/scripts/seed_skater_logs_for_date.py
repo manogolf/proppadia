@@ -405,24 +405,31 @@ def upsert_external_id(conn, player_id: int, nhl_id: int):
             print(f"[learn-extid] WARN: player_id={player_id} nhl_id={nhl_id} -> {e}", file=sys.stderr)
 
 def upsert_rows(conn, rows):
+    """
+    rows items must be:
+      (player_id, game_id, game_date, team_id, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+    """
     if not rows:
         return 0
+
     sql = """
     INSERT INTO nhl.import_skater_logs_stage
-      (player_id, game_id, game_date, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
-    VALUES (%s,%s,%s,%s,%s,%s,%s)
+      (player_id, game_id, game_date, team_id, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (player_id, game_id) DO UPDATE SET
+      -- keep date/team_id fresh (this was the bug causing old dates + NULL team_id to persist)
+      game_date       = EXCLUDED.game_date,
+      team_id         = COALESCE(EXCLUDED.team_id, nhl.import_skater_logs_stage.team_id),
+
       shots_on_goal   = EXCLUDED.shots_on_goal,
       shot_attempts   = COALESCE(EXCLUDED.shot_attempts, nhl.import_skater_logs_stage.shot_attempts),
       toi_minutes     = EXCLUDED.toi_minutes,
 
-      -- IMPORTANT:
-      -- Do NOT clobber existing PP TOI with NULL or 0 (often "unknown" in current history).
-      -- Only take the incoming value when it's present AND > 0.
+      -- IMPORTANT: do not clobber with NULL/0; only take incoming when >0
       pp_toi_minutes  = COALESCE(
                           NULLIF(EXCLUDED.pp_toi_minutes, 0),
                           nhl.import_skater_logs_stage.pp_toi_minutes
-                        )
+                        );
     """
     with conn.cursor() as cur:
         cur.executemany(sql, rows)
@@ -537,16 +544,22 @@ def refresh_roster_status_from_box(conn, gpk: int):
 def _iter_skaters_from_box(box: dict):
     """
     Parse skaters from api-web.nhle.com gamecenter/{gamePk}/boxscore.
-
-    NOTE:
-      - Boxscore payload often does NOT include PP TOI reliably.
-      - We attempt extract_pp_toi_minutes(p) first (your canonical extractor),
-        then fall back to legacy key guesses.
-      - We only coerce to 0.0 at the very end for training stability.
+    Yields dicts including team_id + full_name so downstream mapping/ensure_player_exists can work.
     """
     pstats = (box.get("playerByGameStats") or {})
+
+    home_tid = (box.get("homeTeam") or {}).get("id")
+    away_tid = (box.get("awayTeam") or {}).get("id")
+
+    side_to_tid = {
+        "homeTeam": int(home_tid) if home_tid is not None else None,
+        "awayTeam": int(away_tid) if away_tid is not None else None,
+    }
+
     for side_key in ("homeTeam", "awayTeam"):
+        team_id = side_to_tid.get(side_key)
         team = pstats.get(side_key) or {}
+
         for k in ("forwards", "defense"):  # goalies excluded
             arr = team.get(k) or []
             if not isinstance(arr, list):
@@ -562,11 +575,9 @@ def _iter_skaters_from_box(box: dict):
                 name_raw = _extract_box_name(p)
                 nm = _norm_name(name_raw)
 
-                # VERIFIED top-level fields in your sample
                 toi_s = p.get("toi")  # "MM:SS"
                 sog = p.get("sog")
 
-                # Attempts: prefer explicit attempts if present, else proxy
                 attempts = p.get("shotAttempts")
                 if attempts is None:
                     try:
@@ -576,11 +587,8 @@ def _iter_skaters_from_box(box: dict):
 
                 toi_min = toi_to_minutes(toi_s)
 
-                # --- PP TOI minutes ---
-                # 1) canonical extractor (this is what you asked about)
+                # PP TOI: your canonical extractor first, then fallback guesses
                 pp_min = extract_pp_toi_minutes(p)
-
-                # 2) fallback to older key guesses (if extractor returns None)
                 if pp_min is None:
                     pp_toi_s = (
                         p.get("ppToi")
@@ -592,21 +600,16 @@ def _iter_skaters_from_box(box: dict):
                     )
                     pp_min = toi_to_minutes(pp_toi_s)
 
-                # 3) final coercion to 0.0 for model/training stability
-                #    If you ever want “unknown” to remain NULL, delete this.
-                if pp_min is None:
-                    pp_min = None
-
                 yield {
                     "nhl_id": nhl_id,
                     "nm": nm,
+                    "full_name": name_raw.strip() if isinstance(name_raw, str) else None,
+                    "team_id": team_id,
                     "sog": int(sog) if sog is not None else None,
                     "attempts": int(attempts) if attempts is not None else None,
                     "toi_min": toi_min,
                     "pp_min": pp_min,
-                }
-
-                
+                }                
 # ---------------- Main ----------------
 def main():
     games = get_schedule(SLATE_DATE)
@@ -719,6 +722,7 @@ def main():
                             int(pid),
                             int(gpk),
                             SLATE_DATE,
+                            int(s["team_id"]) if s.get("team_id") is not None else None,
                             s["sog"],
                             s["attempts"],
                             float(s["toi_min"]) if s["toi_min"] is not None else None,
