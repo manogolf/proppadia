@@ -52,8 +52,9 @@ under key "shots_on_goal_denali".
 BACKEND_NHL_DIR = Path(__file__).resolve().parents[1]
 FEATURE_REGISTRY_PATH = BACKEND_NHL_DIR / "features" / "feature_metadata_nhl.json"
 # Default feature key (can be overridden via --feature-key)
-DEFAULT_SOG_FEATURE_KEY = "shots_on_goal_denali"
-
+TRAIN_SOG_DENALI_CSV = (
+    Path(__file__).resolve().parents[1] / "exports" / "train_nhl_sog_denali_pairings_v1.csv"
+)
 
 # Denali IDs (we do NOT treat is_home as an ID; it's a feature)
 ID_COLS = {

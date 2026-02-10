@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 
-SOG_FEATURE_KEY = "shots_on_goal_denali"
+SOG_FEATURE_KEY = "shots_on_goal_denali_pairings_v1"
 TARGET_COL = "shots_on_goal"  # present in training data, ignored for scoring
 
 # Must match the boolean features we normalized in train_sog_player.py
@@ -105,15 +105,6 @@ def prepare_features(df: pd.DataFrame, feats: list[str]) -> np.ndarray:
     """
     Coerce the Denali feature columns to numeric, replace inf/NaN, and return X.
     """
-    # Ensure all expected columns exist; if missing, create as 0.0 (defensive)
-    missing = [c for c in feats if c not in df.columns]
-    if missing:
-        print(
-            f"WARNING: features missing from input; filling with 0.0: {missing}",
-            file=sys.stderr,
-        )
-        for c in missing:
-            df[c] = 0.0
 
     # Only operate on the feature subset
     feat_df = df[feats].copy()

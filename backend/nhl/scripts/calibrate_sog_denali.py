@@ -30,6 +30,8 @@ from typing import Dict, Any, List, Tuple
 import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import log_loss
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,6 +63,30 @@ def parse_args() -> argparse.Namespace:
         help="Minimum rows per line to attempt calibration; otherwise identity.",
     )
     ap.add_argument(
+        "--asof-date",
+        default=None,
+        help="Calibration as-of date (YYYY-MM-DD). If set, restrict training to a trailing window ending on this date.",
+    )
+    ap.add_argument(
+        "--days-back",
+        type=int,
+        default=30,
+        help="Trailing window size in days when --asof-date is provided (default: 30).",
+    )
+
+    ap.add_argument(
+        "--guard-metric",
+        choices=["logloss", "brier"],
+        default="logloss",
+        help="Only keep a fitted calibrator if it improves this metric on the training window.",
+    )
+    ap.add_argument(
+        "--min-improve",
+        type=float,
+        default=0.0005,
+        help="Minimum improvement required to keep calibrator (default: 0.0005).",
+    )
+    ap.add_argument(
         "--blend-alpha",
         type=float,
         default=0.5,
@@ -74,7 +100,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fit_line_isotonic(
-    df: pd.DataFrame, line: float, blend_alpha: float
+    df: pd.DataFrame,
+    line: float,
+    blend_alpha: float,
+    guard_metric: str,
+    min_improve: float,
 ) -> Tuple[Dict[str, Any], callable]:
     """
     Fit an isotonic regression calibrator for a single line.
@@ -125,6 +155,46 @@ def _fit_line_isotonic(
         p_blend = (1.0 - alpha) * p_valid + alpha * p_iso
         out[mask] = p_blend
         return out
+    
+    # ---------------- Guardrail: keep only if it helps on the training window ----------------
+    p_raw = x.astype(float)
+    y_true = y.astype(int)
+
+    p_cal = calibrator(p_raw)
+
+    p_raw_clip = np.clip(p_raw, 1e-6, 1 - 1e-6)
+    p_cal_clip = np.clip(p_cal, 1e-6, 1 - 1e-6)
+
+    raw_ll = float(log_loss(y_true, p_raw_clip, labels=[0, 1]))
+    cal_ll = float(log_loss(y_true, p_cal_clip, labels=[0, 1]))
+
+    raw_brier = float(np.mean((p_raw - y_true) ** 2))
+    cal_brier = float(np.mean((p_cal - y_true) ** 2))
+
+    if guard_metric == "logloss":
+        improve = raw_ll - cal_ll  # positive = better
+    else:
+        improve = raw_brier - cal_brier
+
+    if improve < float(min_improve):
+        def identity(p: np.ndarray) -> np.ndarray:
+            return p
+
+        meta = {
+            "status": "guard_rejected",
+            "rows": int(n),
+            "line": float(line),
+            "type": "identity",
+            "blend_alpha": 0.0,
+            "guard_metric": guard_metric,
+            "min_improve": float(min_improve),
+            "raw_logloss": raw_ll,
+            "cal_logloss": cal_ll,
+            "raw_brier": raw_brier,
+            "cal_brier": cal_brier,
+            "improve": float(improve),
+        }
+        return meta, identity
 
     meta = {
         "status": "ok",
@@ -132,6 +202,13 @@ def _fit_line_isotonic(
         "line": float(line),
         "type": "isotonic",
         "blend_alpha": alpha,
+        "guard_metric": guard_metric,
+        "min_improve": float(min_improve),
+        "raw_logloss": raw_ll,
+        "cal_logloss": cal_ll,
+        "raw_brier": raw_brier,
+        "cal_brier": cal_brier,
+        "improve": float(improve),
         "x_thresholds": x_t,
         "y_thresholds": y_t,
     }
@@ -166,6 +243,25 @@ def main() -> None:
 
     # Restrict to valid rows
     train_df = train_df.dropna(subset=["line", "prob_over", "y_over"])
+
+        # Optional: rolling window restriction (keeps isotonic from learning stale era base-rates)
+    train_df["game_date"] = pd.to_datetime(train_df["game_date"], errors="coerce").dt.date
+    train_df = train_df.dropna(subset=["game_date"])
+
+    if args.asof_date:
+        asof = pd.to_datetime(args.asof_date).date()
+        days_back = int(args.days_back)
+        if days_back <= 0:
+            raise SystemExit("--days-back must be > 0")
+        start = (pd.Timestamp(asof) - pd.Timedelta(days=days_back - 1)).date()
+
+        before_n = len(train_df)
+        train_df = train_df[(train_df["game_date"] >= start) & (train_df["game_date"] <= asof)]
+        after_n = len(train_df)
+
+        print(f"  → Restricting training window: [{start}, {asof}] (days_back={days_back})")
+        print(f"    rows: {before_n} -> {after_n}")
+
 
     print(f"  → Loaded {len(train_df)} training rows.")
 
@@ -210,7 +306,14 @@ def main() -> None:
             calibrators[line_tag] = identity
             continue
 
-        meta, cal_fn = _fit_line_isotonic(df_line, line, args.blend_alpha)
+        meta, cal_fn = _fit_line_isotonic(
+            df_line,
+            line,
+            args.blend_alpha,
+            args.guard_metric,
+            args.min_improve,
+        )
+
         curves_fitted[line_tag] = meta
         calibrators[line_tag] = cal_fn
         print(

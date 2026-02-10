@@ -421,7 +421,11 @@ def upsert_rows(conn, rows):
       game_date       = EXCLUDED.game_date,
       team_id         = COALESCE(EXCLUDED.team_id, nhl.import_skater_logs_stage.team_id),
 
-      shots_on_goal   = EXCLUDED.shots_on_goal,
+      shots_on_goal = CASE
+        WHEN EXCLUDED.toi_minutes > 0 THEN COALESCE(EXCLUDED.shots_on_goal, 0)
+        ELSE EXCLUDED.shots_on_goal
+        END,
+
       shot_attempts   = COALESCE(EXCLUDED.shot_attempts, nhl.import_skater_logs_stage.shot_attempts),
       toi_minutes     = EXCLUDED.toi_minutes,
 

@@ -1265,10 +1265,13 @@ def ingest_game(game_id: int) -> None:
                 (away_id, away_abbr, (away.get("commonName") or {}).get("default") or away_abbr),
             ):
                 cur.execute("""
-                    INSERT INTO nhl.teams (team_id, name, abbr, active)
-                    VALUES (%s, %s, %s, true)
+                    INSERT INTO nhl.teams (team_id, full_team_name, team, active)
+                    VALUES (%s, %s, %s, TRUE)
                     ON CONFLICT (team_id) DO UPDATE
-                      SET name = EXCLUDED.name, abbr = EXCLUDED.abbr, active = true;
+                    SET
+                    full_team_name = COALESCE(EXCLUDED.full_team_name, nhl.teams.full_team_name),
+                    team           = COALESCE(EXCLUDED.team, nhl.teams.team),
+                    active         = COALESCE(EXCLUDED.active, nhl.teams.active);
                 """, (tid, str(name), abbr))
 
             # Game

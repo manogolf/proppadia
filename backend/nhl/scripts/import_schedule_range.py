@@ -99,22 +99,26 @@ def main():
     while cur <= end:
         ds = cur.isoformat()
         games = fetch_games_for_date(ds)
+
         if not games:
             print(f"[schedule] {ds} no games")
         else:
             print(f"[schedule] {ds} {len(games)} game(s)")
-    for g in games:
-        gid = g["id"]
-        gtype = str(g.get("gameType") or "")
 
-        # Only regular season (2) and playoffs (3); skip preseason (1) and anything weird
-        if gtype not in ("2", "3"):
-            continue
+            for g in games:
+                gid = g["id"]
+                gtype = str(g.get("gameType") or "")
 
-        try:
-            ingest_game(gid)
-        except Exception as e:
-            print(f"[schedule] {ds} game {gid} FAILED: {e}", file=sys.stderr)
+                # Only regular season (2) and playoffs (3); skip preseason (1) and anything weird
+                if gtype not in ("2", "3"):
+                    continue
+
+                try:
+                    ingest_game(gid)
+                except Exception as e:
+                    print(f"[schedule] {ds} game {gid} FAILED: {e}", file=sys.stderr)
+
+        # ✅ advance one day per outer loop iteration (even if 0 games / failures)
         cur += dt.timedelta(days=1)
 
 

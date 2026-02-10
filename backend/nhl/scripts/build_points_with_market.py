@@ -180,7 +180,7 @@ def parse_points_odds(raw) -> pd.DataFrame | None:
 def main():
     ap = argparse.ArgumentParser(description="Build NHL Points site CSV with market (odds-only or predictions merge).")
     ap.add_argument("--pred", help="backend/nhl/data/processed/points_predictions.csv (optional)")
-    ap.add_argument("--names", help="exports/train_nhl_points_v2.csv or train_nhl_sog_v2.csv (optional)")
+    ap.add_argument("--names", help="backend/nhl/exports/names_<SLATE>.csv (optional; produced by cli.py export_names_csv)")
     ap.add_argument("--odds-json", default="nhl/site/data/odds_latest.json", help="odds json path")
     ap.add_argument("--events-json", default="", help="(ignored; compat flag)")
     ap.add_argument("--out", required=True, help="output CSV for site: nhl/site/data/points_with_market.csv")

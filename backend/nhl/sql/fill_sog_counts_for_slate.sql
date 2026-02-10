@@ -95,6 +95,7 @@ team_aggs AS (
 )
 UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 t
 SET
+  -- New column family (explicit num_sog_*)
   num_sog_last5          = pa.num_sog_last5,
   num_sog_last10         = pa.num_sog_last10,
   num_sog_szn_to_date    = pa.num_sog_szn_to_date,
@@ -106,7 +107,12 @@ SET
   last10_team_sog_share  = CASE
                              WHEN ta.team_num_sog_last10 IS NULL OR ta.team_num_sog_last10 = 0 THEN NULL
                              ELSE pa.num_sog_last10 / ta.team_num_sog_last10
-                           END
+                           END,
+
+  -- Legacy/export column family (what export_sog_denali_pregame.sql uses today)
+  num_shotwasongoal_last5           = pa.num_sog_last5,
+  num_shotwasongoal_last10          = pa.num_sog_last10,
+  team_num_shotwasongoal_for_last10 = ta.team_num_sog_last10
 FROM params p
 JOIN slate s       ON TRUE
 JOIN player_aggs pa ON pa.player_id = s.player_id AND pa.season = s.season

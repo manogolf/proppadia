@@ -248,6 +248,103 @@ def db_toi_integrity_check(
         if out2:
             print("[sog_integrity] window_toi| " + out2)
 
+def db_sog_contract_check(db_url: str, slate: str, min_shift_games: int = 3) -> None:
+    """
+    Contract check (SOG):
+      A) internal completeness: every eligible-to-score (player_id, game_id) must have >=1 nhl.predictions row with prop='shots_on_goal'
+      B) opportunity completeness: (optional) every publishable row should be present in your published artifact (site CSV) — keep warn-only here.
+    """
+    print("\n=== DB SOG contract ===")
+    print(f"[sog_integrity] slate={slate} min_shift_games={min_shift_games}")
+
+    sql = f"""
+WITH params AS (
+  SELECT {min_shift_games}::int AS min_shift_games
+),
+slate_pairs AS (
+  SELECT DISTINCT
+    v.player_id::bigint AS player_id,
+    v.game_id::bigint   AS game_id,
+    v.game_date::date   AS game_date
+  FROM nhl.training_features_nhl_sog_enriched_pregame_v2 v
+  WHERE v.game_date = DATE '{slate}'
+),
+prior_shift_games AS (
+  SELECT
+    sp.player_id,
+    COUNT(DISTINCT g.game_id)::int AS prior_shift_games
+  FROM slate_pairs sp
+  LEFT JOIN nhl.shiftcharts_shifts sh
+    ON sh.player_id::bigint = sp.player_id
+  LEFT JOIN nhl.games g
+    ON g.game_id = sh.game_id
+   AND g.game_date::date < DATE '{slate}'
+  GROUP BY 1
+),
+eligible AS (
+  SELECT sp.player_id, sp.game_id
+  FROM slate_pairs sp
+  JOIN prior_shift_games psg USING (player_id)
+  JOIN params p ON TRUE
+  WHERE COALESCE(psg.prior_shift_games, 0) >= p.min_shift_games
+),
+pred_sog_pairs AS (
+  SELECT DISTINCT
+    p.player_id::bigint AS player_id,
+    p.game_id::bigint   AS game_id
+  FROM nhl.predictions p
+  JOIN nhl.games g ON g.game_id = p.game_id
+  WHERE g.game_date = DATE '{slate}'
+    AND p.prop = 'shots_on_goal'
+),
+missing AS (
+  SELECT e.player_id, e.game_id
+  FROM eligible e
+  LEFT JOIN pred_sog_pairs pr
+    ON pr.player_id = e.player_id AND pr.game_id = e.game_id
+  WHERE pr.player_id IS NULL
+),
+counts AS (
+  SELECT
+    (SELECT COUNT(*) FROM slate_pairs)::int    AS slate_pairs,
+    (SELECT COUNT(*) FROM eligible)::int       AS eligible_pairs,
+    (SELECT COUNT(*) FROM pred_sog_pairs)::int AS pred_pairs,
+    (SELECT COUNT(*) FROM missing)::int        AS missing_pred_pairs
+)
+SELECT
+  slate_pairs,
+  eligible_pairs,
+  pred_pairs,
+  missing_pred_pairs,
+  (SELECT ARRAY_AGG(player_id::text || ':' || game_id::text ORDER BY game_id, player_id) FROM missing LIMIT 10) AS sample_missing_pairs
+FROM counts;
+"""
+
+    out = run_psql(db_url, sql)
+    if out is None:
+        die("DB SOG contract query failed", code=2)
+
+    # Expect: one row like "696|674|674|0|{...}"
+    line = out.strip().splitlines()[-1].strip()
+    parts = line.split("|")
+    if len(parts) < 4:
+        die(f"Unexpected contract output: {out!r}", code=2)
+
+    slate_pairs = int(parts[0] or 0)
+    eligible_pairs = int(parts[1] or 0)
+    pred_pairs = int(parts[2] or 0)
+    missing_pred_pairs = int(parts[3] or 0)
+    sample = parts[4] if len(parts) > 4 else ""
+
+    print(
+        f"[sog_integrity] contract_counts({slate}) "
+        f"slate_pairs={slate_pairs} eligible_pairs={eligible_pairs} pred_pairs={pred_pairs} missing_pred_pairs={missing_pred_pairs}"
+    )
+    if missing_pred_pairs > 0:
+        die(f"[SOG] CONTRACT FAIL: missing SOG predictions for eligible pairs: n={missing_pred_pairs} sample={sample}", code=2)
+
+    print("[sog_integrity] ✅ contract: OK (eligible → predictions complete)")
+
 def _as_date(s: str) -> date:
     # Accept "YYYY-MM-DD" (what your pipeline uses)
     return datetime.fromisoformat(s).date()
@@ -341,9 +438,25 @@ def expected_features_from_metadata(meta: Any, key: str | None = None) -> list[s
         if key and key in meta:
             v = meta[key]
             if isinstance(v, list):
+                # list[str] -> feature names
+                if all(isinstance(x, str) for x in v):
+                    return [str(x) for x in v]
+
+                # list[dict] -> extract common name keys
+                out: list[str] = []
+                for x in v:
+                    if isinstance(x, dict):
+                        for k in ("name", "feature", "feature_name", "column", "col"):
+                            vv = x.get(k)
+                            if isinstance(vv, str) and vv.strip():
+                                out.append(vv.strip())
+                                break
+                if out:
+                    return out
+
+                # fallback (keeps old behavior, but last resort)
                 return [str(x) for x in v]
-            if isinstance(v, dict) and isinstance(v.get("features"), list):
-                return [str(x) for x in v["features"]]
+
 
         # common wrapper
         fbm = meta.get("features_by_model")
@@ -556,18 +669,46 @@ FROM p;
 WITH p AS (
   SELECT
     pp_role_source,
-    pp_role_share_final
+    pp_role_share_final,
+    player_id,
+    game_id
   FROM nhl.training_features_nhl_sog_enriched_pregame_v2
   WHERE game_date = DATE '{slate}'
+),
+by_source AS (
+  SELECT
+    COALESCE(pp_role_source, '(null)') AS pp_role_source,
+    COUNT(*)::int AS rows,
+    COUNT(*) FILTER (WHERE pp_role_share_final IS NULL)::int AS n_final_null,
+    COUNT(*) FILTER (WHERE pp_role_share_final::numeric = 0)::int AS n_final_zero
+  FROM p
+  GROUP BY 1
+),
+zero_sample AS (
+  SELECT
+    STRING_AGG((player_id::text || ':' || game_id::text), ',' ORDER BY player_id, game_id) AS sample_keys
+  FROM (
+    SELECT player_id, game_id
+    FROM p
+    WHERE COALESCE(pp_role_source, '(null)') = 'zero'
+      AND pp_role_share_final::numeric = 0
+    ORDER BY player_id, game_id
+    LIMIT 12
+  ) s
 )
 SELECT
-  COALESCE(pp_role_source, '(null)') AS pp_role_source,
-  COUNT(*)::int AS rows,
-  COUNT(*) FILTER (WHERE pp_role_share_final IS NULL)::int AS n_final_null
-FROM p
-GROUP BY 1
-ORDER BY rows DESC;
+  bs.pp_role_source,
+  bs.rows,
+  bs.n_final_null,
+  bs.n_final_zero,
+  CASE
+    WHEN bs.pp_role_source = 'zero' THEN (SELECT sample_keys FROM zero_sample)
+    ELSE NULL
+  END AS sample_player_game
+FROM by_source bs
+ORDER BY bs.rows DESC;
 """
+
     out2 = run_psql(db_url, sql2)
     if out2:
         for line in out2.splitlines():
@@ -690,6 +831,39 @@ FROM v;
     else:
         print(out2)
 
+def csv_unique_game_dates(path: Path) -> list[str]:
+    """
+    Return sorted unique game_date strings found in a CSV.
+    Empty list if file missing / unreadable / column absent.
+    """
+    if not path.exists():
+        return []
+    try:
+        df = pd.read_csv(path, usecols=lambda c: c == "game_date", dtype={"game_date": "string"})
+        if "game_date" not in df.columns:
+            return []
+        vals = df["game_date"].dropna().astype(str).unique().tolist()
+        vals = sorted(set(v.strip() for v in vals if v and v.strip()))
+        return vals
+    except Exception:
+        return []
+    
+def _csv_game_date_set(path: Path) -> set[str]:
+    """
+    Return set of unique game_date strings found in a CSV.
+    Empty set if missing/unreadable/no game_date col.
+    """
+    if not path.exists():
+        return set()
+    try:
+        df = pd.read_csv(path, usecols=lambda c: c == "game_date", dtype={"game_date": "string"})
+        if "game_date" not in df.columns:
+            return set()
+        vals = df["game_date"].dropna().astype(str).map(str.strip)
+        return set(v for v in vals.tolist() if v)
+    except Exception:
+        return set()
+
 
 # ---------- main ----------
 def main() -> None:
@@ -749,13 +923,64 @@ def main() -> None:
     curves_json = root / "backend/nhl/data/processed/sog_denali_calibration_curves.json"
     site_with_market = root / "nhl/site/data/sog_with_market.csv"  # optional
 
+        # ---- stale artifact guards (critical) ------------------------------------
+    pred_dates = csv_unique_game_dates(pred_csv)
+    pred_cal_dates = csv_unique_game_dates(pred_cal_csv)
+
+    pred_csv_is_stale = bool(pred_dates) and slate not in pred_dates
+    pred_cal_is_stale = bool(pred_cal_dates) and slate not in pred_cal_dates
+
+    if pred_csv_is_stale:
+        print(
+            f"[sog_integrity] ⚠️  STALE legacy sog_predictions.csv: game_date={pred_dates} expected={slate}. "
+            "This file is not produced by the current daily Denali pipeline; ignoring pred_csv checks."
+        )
+
+    if pred_cal_is_stale:
+        # This one SHOULD NEVER be stale if the daily pipeline is correct.
+        print(
+            f"[sog_integrity] ❌ STALE sog_predictions_wide_calibrated.csv: game_date={pred_cal_dates} expected={slate}. "
+            "This indicates a broken daily run (wrong slate or stale output)."
+        )
+    # -------------------------------------------------------------------------
+
     feature_meta_path = (root / args.feature_metadata).resolve()
     ignore = set([c.strip() for c in str(args.schema_ignore).split(",") if c.strip()])
 
     print(f"[sog_integrity] slate={slate}")
     print("\n=== Artifacts ===")
-    for p in [names_csv, feats_csv, pred_csv, pred_cal_csv, curves_json, site_with_market, feature_meta_path]:
-        print(file_stat_line(p))
+
+    artifact_list = [names_csv, feats_csv, pred_csv, pred_cal_csv, curves_json, site_with_market, feature_meta_path]
+
+    for p in artifact_list:
+        line = file_stat_line(p)
+
+        # Annotate STALE when the CSV has a game_date that does not include this slate.
+        # (Only applies to CSVs that actually have a game_date column.)
+        if p.suffix.lower() == ".csv" and p.exists():
+            gd = _csv_game_date_set(p)
+            if gd and slate not in gd:
+                line = f"{line}  [STALE game_date={sorted(gd)[:3]} expected={slate}]"
+
+        print(line)
+
+    # ---- stale gating for prediction artifacts ---------------------------------
+    pred_gd = _csv_game_date_set(pred_csv)
+    pred_cal_gd = _csv_game_date_set(pred_cal_csv)
+
+    pred_csv_is_stale = bool(pred_gd) and slate not in pred_gd
+    pred_cal_is_stale = bool(pred_cal_gd) and slate not in pred_cal_gd
+
+    if pred_csv_is_stale:
+        print(
+            f"[sog_integrity] ⚠️  STALE legacy pred_csv ignored: {pred_csv} game_date={sorted(pred_gd)} expected={slate}"
+        )
+
+    if pred_cal_is_stale:
+        print(
+            f"[sog_integrity] ❌ STALE pred_cal_csv: {pred_cal_csv} game_date={sorted(pred_cal_gd)} expected={slate}"
+        )
+    # ---------------------------------------------------------------------------
 
     # ---- Names ----
     names = read_csv_if_exists(names_csv)
@@ -820,6 +1045,35 @@ def main() -> None:
         # NEW: schema / column mismatch (metadata vs export cols)
         meta = read_json_if_exists(feature_meta_path)
         expected = expected_features_from_metadata(meta, args.feature_key)
+
+        # If the requested key isn't present (e.g. default "shots_on_goal"),
+        # auto-pick a reasonable SOG key from the metadata so schema checks still run.
+        if (not expected) and isinstance(meta, dict):
+            # Prefer the exact Denali key used by the daily pipeline if present
+            fallback_order = [
+                "shots_on_goal_denali",
+                "shots_on_goal_denali_pairings_v1",
+            ]
+
+            picked = None
+            for k in fallback_order:
+                if k in meta:
+                    picked = k
+                    break
+
+            # Last resort: pick the first shots_on_goal* key that exists
+            if picked is None:
+                for k in meta.keys():
+                    if isinstance(k, str) and k.startswith("shots_on_goal"):
+                        picked = k
+                        break
+
+            if picked and picked != args.feature_key:
+                expected = expected_features_from_metadata(meta, picked)
+                if expected:
+                    print(f"[sog_integrity] ⚠️  feature-key '{args.feature_key}' not found; using '{picked}' for schema check.")
+                    args.feature_key = picked
+
         if expected:
             missing, extra = schema_mismatch_report(expected, list(feats.columns), ignore)
             print("\n=== schema mismatch (expected model features vs export columns) ===")
@@ -871,8 +1125,9 @@ def main() -> None:
                 print("\n[sog_integrity] ✅ d5/d10/d20 identical check: OK")
 
     # ---- Predictions (raw/merged) ----
-    pred = read_csv_if_exists(pred_csv)
+    pred = None if pred_csv_is_stale else read_csv_if_exists(pred_csv)
     if pred is not None:
+
         pcols = [c for c in pred.columns if c.startswith("p_over_")]
         if pcols:
             print_df_summary(
@@ -947,8 +1202,10 @@ def main() -> None:
     if db_url:
         db_checks(db_url, slate)
         db_pp_role_coverage_check(db_url, slate)
+
         if args.db_rolling_check:
             db_rolling_check(db_url, args.db_rolling_view, args.db_rolling_days_back)
+
         if getattr(args, "db_toi_check", False):
             db_toi_integrity_check(
                 db_url=db_url,
@@ -956,6 +1213,11 @@ def main() -> None:
                 days_back=args.db_toi_days_back,
                 source=args.db_toi_source,
             )
+
+        # CONTRACT (A): eligible-to-score pairs must have a SOG prediction row in nhl.predictions.
+        # This is the only "cycle detection" check we keep in this report.
+        db_sog_contract_check(db_url, slate, min_shift_games=3)
+
     else:
         print("\n[sog_integrity] (DB checks skipped) Set SUPABASE_DB_URL or pass --db-url to enable.")
 

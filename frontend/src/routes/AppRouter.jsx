@@ -6,8 +6,10 @@ import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.jsx";
 import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.jsx";
 import PlayerPropsPage from "../Pages/PlayerPropsPage.jsx";
 import Header from "../components/Header.jsx";
-import Home from "../Pages/Home.jsx"; // ← existing MLB dashboard (kept as-is, now lives at /mlb)
 import HomeGateway from "../Pages/HomeGateway.jsx"; // ← new multi-sport Home for "/"
+import MLBHome from "../Pages/mlb/MLBHome.jsx";
+import NHLHome from "../Pages/nhl/NHLHome.jsx";
+import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
 
 export default function AppRouter() {
   return (
@@ -60,8 +62,10 @@ export default function AppRouter() {
       <Routes>
         {/* New multi-sport gateway at "/" */}
         <Route path="/" element={<HomeGateway />} />
+        <Route path="/mlb" element={<MLBHome />} />
+        <Route path="/nhl" element={<NHLHome />} />
+        <Route path="/nhl/predictions" element={<NHLPredictions />} />
         {/* Existing MLB dashboard moved to "/mlb" */}
-        <Route path="/mlb" element={<Home />} />
         <Route path="/props" element={<PropsDashboard />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />

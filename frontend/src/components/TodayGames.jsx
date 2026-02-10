@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { todayET, toISODate } from "../shared/timeUtils.js";
 import { getStatusDisplay, getStatusColor } from "../shared/gameStatusUtils.js";
 
-const TodayGames = ({ games }) => {
+const TodayGames = ({ sport = "mlb", games }) => {
   const [standings, setStandings] = useState([]);
 
   useEffect(() => {
@@ -95,7 +95,7 @@ const TodayGames = ({ games }) => {
         🗓 Today’s Games
       </h2>
       <p className="text-sm text-gray-500 text-center mb-4">
-        Live from MLB • ET and Local Time Displayed
+        Live from {sport.toUpperCase()} • ET and Local Time Displayed
       </p>
 
       {sortedGames.length === 0 ? (

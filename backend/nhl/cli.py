@@ -33,11 +33,16 @@ import subprocess
 import subprocess as sp
 from pathlib import Path
 import pandas as pd
+from typing import Optional, Sequence, Union
 from datetime import datetime, timedelta, timezone
 import psycopg2  # or psycopg2-binary, whichever you're using
 import requests
+import re
+
 
 # ---------- bootstrap env ----------
+
+BASE = Path(__file__).resolve().parent
 
 def _load_dotenv_multi():
     try:
@@ -106,6 +111,70 @@ def infer_nhl_season_from_date_yyyy_mm_dd(date_str: str) -> int:
     y, m, d = (int(x) for x in date_str.split("-"))
     return y if m >= 9 else (y - 1)
 
+# ---------- guardrails: prevent repeating the same fix/step ----------
+def _guard_dir() -> Path:
+    d = PROC_DIR / "_guard"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def _guard_path(key: str, slate: str | None = None) -> Path:
+    safe_key = re.sub(r"[^a-zA-Z0-9_.-]+", "_", key).strip("_")
+    safe_slate = re.sub(r"[^0-9-]+", "_", (slate or "global"))
+    return _guard_dir() / f"{safe_key}__{safe_slate}.done"
+
+def guard_mark_done(key: str, slate: str | None = None, details: str = "") -> None:
+    p = _guard_path(key, slate)
+    payload = (details.strip() + "\n") if details else "done\n"
+    p.write_text(payload, encoding="utf-8")
+
+def guard_already_done(key: str, slate: str | None = None) -> bool:
+    return _guard_path(key, slate).exists()
+
+def guard_require_not_done(key: str, slate: str | None = None) -> None:
+    """
+    Hard stop if we try to repeat a step that was already marked done.
+    Use this for 'assistant-suggested edits' so we don't churn.
+    """
+    p = _guard_path(key, slate)
+    if p.exists():
+        msg = p.read_text(encoding="utf-8").strip()
+        raise AssertionError(f"[guard] step already done: {key} (slate={slate}). Notes: {msg}")
+
+def guard_clear(key: str, slate: str | None = None) -> None:
+    p = _guard_path(key, slate)
+    if p.exists():
+        p.unlink()
+
+def guard_list(slate: str | None = None) -> list[tuple[str, str, str]]:
+    """
+    Return [(key, slate, notes)] for .done files under PROC_DIR/_guard.
+    If slate is provided, filters to that slate (or 'global').
+    """
+    out = []
+    d = _guard_dir()
+    for p in sorted(d.glob("*.done")):
+        name = p.name  # key__slate.done
+        if "__" not in name:
+            continue
+        key, rest = name.split("__", 1)
+        slate_part = rest.replace(".done", "")
+        if slate is not None and slate_part not in {slate, "global"}:
+            continue
+        notes = p.read_text(encoding="utf-8").strip()
+        out.append((key, slate_part, notes))
+    return out
+
+def guard_print(slate: str | None = None) -> None:
+    rows = guard_list(slate)
+    if not rows:
+        print("[guard] no recorded steps.")
+        return
+    print("[guard] recorded steps:")
+    for key, sl, notes in rows:
+        msg = f"  - {key} (slate={sl})"
+        if notes and notes != "done":
+            msg += f": {notes}"
+        print(msg)
 
 # ---------- shell helpers ----------
 
@@ -140,13 +209,82 @@ def _psql_env() -> dict:
 
     return env
 
+def run_psql_bytes(db_url: str, sql: str, *, timeout: Optional[int] = None) -> bytes:
+    """
+    Runs a single SQL command via psql and returns stdout bytes.
+    Raises if psql exits non-zero.
+    """
+    return subprocess.check_output(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-c", sql],
+        stderr=subprocess.STDOUT,
+        timeout=timeout,
+    )
+
+def is_testing() -> bool:
+    return os.environ.get("TESTING") == "1"
+
+def guard_testing_only_slate(slate: str | None, *, cmd_name: str) -> None:
+    # Passing an explicit slate is considered "testing mode" behavior.
+    if slate and not is_testing():
+        raise AssertionError(
+            f"[guard] {cmd_name} with an explicit slate is only allowed when TESTING=1. "
+            f"Refusing slate={slate} in non-testing runs."
+        )
+
+def assert_sog_rollups_present(db_url: str, slate_date: str, *, min_ok_frac: float = 0.25) -> None:
+    sql = f"""
+    COPY (
+      SELECT
+        COUNT(*)::int AS n,
+        COUNT(*) FILTER (WHERE d10_sog_per60 IS NOT NULL)::int AS n_d10_ok,
+        COUNT(*) FILTER (WHERE attempts_d10_per60 IS NOT NULL)::int AS n_att_ok,
+        CASE WHEN COUNT(*) = 0 THEN 0
+             ELSE (COUNT(*) FILTER (WHERE d10_sog_per60 IS NOT NULL)::numeric / COUNT(*)::numeric)
+        END AS frac_ok
+      FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+      WHERE game_date = DATE '{slate_date}'
+    ) TO STDOUT WITH CSV HEADER;
+    """
+    csv_bytes = run_psql_bytes(db_url, sql)
+    lines = csv_bytes.decode("utf-8", errors="replace").splitlines()
+    if len(lines) < 2:
+        raise AssertionError(f"[sog_rollups_check] empty result for slate_date={slate_date}")
+
+    header = lines[0].split(",")
+    vals = lines[1].split(",")
+    row = dict(zip(header, vals))
+
+    n = int(row["n"])
+    n_d10_ok = int(row["n_d10_ok"])
+    frac_ok = float(row["frac_ok"])
+
+    print(f"[sog_rollups_check] slate={slate_date} n={n} n_d10_ok={n_d10_ok} frac_ok={frac_ok:.3f}")
+
+    if n == 0:
+        raise AssertionError(f"[sog_rollups_check] no rows for slate_date={slate_date}")
+    if frac_ok < min_ok_frac:
+        raise AssertionError(
+            f"[sog_rollups_check] rollups missing: slate_date={slate_date} "
+            f"frac_ok={frac_ok:.3f} (n={n}, n_d10_ok={n_d10_ok})"
+        )
+
 def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
     cmd = [str(c) for c in cmd]
     print("▶", " ".join(cmd))
     e = os.environ.copy()
     if env:
         e.update(env)
-    return sp.run(cmd, cwd=str(cwd), env=e, check=check)
+    try:
+        return sp.run(cmd, cwd=str(cwd), env=e, check=check, text=True, capture_output=True)
+    except sp.CalledProcessError as exc:
+        print(f"[run] COMMAND FAILED: {' '.join(map(str, cmd))}", file=sys.stderr)
+        if exc.stdout:
+            print("[run] --- stdout ---", file=sys.stderr)
+            print(exc.stdout, file=sys.stderr)
+        if exc.stderr:
+            print("[run] --- stderr ---", file=sys.stderr)
+            print(exc.stderr, file=sys.stderr)
+        raise
 
 def require_db_url() -> str:
     db = os.environ.get("SUPABASE_DB_URL")
@@ -168,6 +306,99 @@ def run_psql_file(sql_file: Path, *, vars: dict[str, str] | None = None):
 
     run(cmd, env=_psql_env())
 
+def run_psql_file_to_path(
+    sql_file: Path,
+    out_path: Path,
+    *,
+    vars: dict[str, str] | None = None,
+) -> None:
+    db = require_db_url()
+    cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-v", "ON_ERROR_STOP=1", db]
+
+    if vars:
+        for k, v in vars.items():
+            cmd += ["-v", f"{k}={v}"]
+
+    cmd += ["-c", "SET statement_timeout=0;"]
+    cmd += ["-f", str(sql_file)]
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        sp.run(cmd, env=_psql_env(), check=True, stdout=f)
+
+def run_psql(sql: str) -> str:
+    import os
+    import subprocess
+
+    db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("Missing SUPABASE_DB_URL (or DATABASE_URL)")
+
+    cmd = ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
+    p = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return p.stdout
+
+def psql_one_row(db_url: str, sql: str) -> dict:
+    wrapped = f"SELECT row_to_json(t) FROM ({sql}) t;"
+    res = sp.run(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", wrapped],
+        capture_output=True, text=True
+    )
+    if res.returncode != 0:
+        raise RuntimeError(
+            "psql_one_row failed.\n"
+            f"SQL:\n{wrapped}\n\n"
+            f"STDOUT:\n{res.stdout}\n\n"
+            f"STDERR:\n{res.stderr}\n"
+        )
+
+    out = (res.stdout or "").strip()
+    if not out:
+        raise RuntimeError(f"psql_one_row: expected 1 row, got 0.\nSQL:\n{wrapped}")
+
+    try:
+        return json.loads(out)
+    except Exception as e:
+        raise RuntimeError(f"psql_one_row: failed to parse JSON:\n{out}") from e
+
+def _pred_game_dates(pred_csv: Path) -> list[str]:
+    """Return sorted unique game_date strings found in sog_predictions.csv (if column exists)."""
+    if not pred_csv.exists():
+        return []
+    try:
+      
+        df = pd.read_csv(pred_csv, usecols=lambda c: c in {"game_date"}, dtype={"game_date": "string"})
+        if "game_date" not in df.columns:
+            return []
+        vals = df["game_date"].dropna().astype(str).unique().tolist()
+        vals = sorted(set(v.strip() for v in vals if v and v.strip()))
+        return vals
+    except Exception:
+        return []
+    
+def require_single_game_date_csv(path: Path, slate: str, *, col: str = "game_date", label: str = "") -> None:
+    """
+    Guardrail: ensure a CSV contains exactly one unique game_date and it matches slate.
+    Fails early so we don't chase downstream join errors.
+    """
+
+    if not path.exists() or path.stat().st_size == 0:
+        raise AssertionError(f"[guard] missing/empty CSV: {label or path}")
+
+    df = pd.read_csv(path, usecols=lambda c: c == col, dtype={col: "string"})
+    if col not in df.columns:
+        raise AssertionError(f"[guard] {label or path} missing required column: {col}")
+
+    vals = df[col].dropna().astype(str).map(lambda s: s.strip()).tolist()
+    uniq = sorted(set(v for v in vals if v))
+    if uniq != [slate]:
+        show = uniq[:5]
+        raise AssertionError(
+            f"[guard] {label or path} {col} mismatch: expected [{slate}] got {show}"
+        )
+
+def _run_sog_evaluator() -> None:
+    subprocess.check_call([sys.executable, "backend/nhl/scripts/evaluate_sog_predictions.py"])
 
 def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     """Run psql on a file that COPY/SELECTs TO STDOUT and return stdout bytes."""
@@ -187,20 +418,28 @@ def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
         env=_psql_env(),
         check=False,
         capture_output=True,
-        text=True,
+        text=False,  # IMPORTANT: keep stdout as bytes
     )
 
     if res.returncode != 0:
         print("psql FAILED:", " ".join(cmd), file=sys.stderr)
         if res.stderr:
-            print(res.stderr.strip(), file=sys.stderr)
+            try:
+                print(res.stderr.decode("utf-8", errors="replace").strip(), file=sys.stderr)
+            except Exception:
+                print(str(res.stderr)[:2000], file=sys.stderr)
+
         # show tail of stdout too (COPY can emit partial output)
         if res.stdout:
-            tail = "\n".join(res.stdout.splitlines()[-30:])
-            print("psql stdout tail:\n" + tail, file=sys.stderr)
+            try:
+                tail = b"\n".join(res.stdout.splitlines()[-30:]).decode("utf-8", errors="replace")
+                print("psql stdout tail:\n" + tail, file=sys.stderr)
+            except Exception:
+                pass
+
         raise sp.CalledProcessError(res.returncode, cmd, output=res.stdout, stderr=res.stderr)
 
-    return res.stdout.encode("utf-8")
+    return res.stdout
 
 def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str) -> None:
     """
@@ -210,8 +449,9 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
     This prevents 'frozen' rollups by making the daily runner actively refresh them.
 
     Window behavior:
-      - Only updates target rows where game_date in [start_date, end_date]
+      - Updates target rows where game_date in [start_date, end_date]
       - Computes rolling sums from nhl.skater_game_logs_raw joined to nhl.games
+      - STRICT: uses only realized games strictly BEFORE end_date (end_date - 1 day)
       - Converts to per60 using TOI minutes
     """
     sql = f"""
@@ -235,7 +475,8 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
       JOIN nhl.games g USING (game_id)
       JOIN params p ON TRUE
       -- include enough history before start_date so rolling windows at start_date aren't empty
-      WHERE g.game_date BETWEEN (p.start_date - INTERVAL '260 days') AND p.end_date
+      -- and exclude end_date itself to avoid any same-day leakage
+      WHERE g.game_date BETWEEN (p.start_date - INTERVAL '260 days') AND (p.end_date - INTERVAL '1 day')
     ),
     rolls AS (
       SELECT
@@ -251,8 +492,12 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
         SUM(r.toi_min)  OVER w10 AS toi_10,
 
         SUM(r.sog)      OVER w20 AS sog_20,
-        SUM(r.toi_min)  OVER w20 AS toi_20
+        SUM(r.toi_min)  OVER w20 AS toi_20,
 
+        ROW_NUMBER() OVER (
+          PARTITION BY r.player_id
+          ORDER BY r.game_date DESC, r.game_id DESC
+        ) AS rn
       FROM realized r
       WINDOW
         w5  AS (PARTITION BY r.player_id ORDER BY r.game_date, r.game_id ROWS BETWEEN 4  PRECEDING AND CURRENT ROW),
@@ -262,14 +507,12 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
     rollups AS (
       SELECT
         player_id,
-        game_id,
-        game_date,
-
         CASE WHEN toi_5  IS NULL OR toi_5  <= 0 THEN NULL ELSE (sog_5  / toi_5 ) * 60 END AS d5_sog_per60,
         CASE WHEN toi_10 IS NULL OR toi_10 <= 0 THEN NULL ELSE (sog_10 / toi_10) * 60 END AS d10_sog_per60,
         CASE WHEN toi_20 IS NULL OR toi_20 <= 0 THEN NULL ELSE (sog_20 / toi_20) * 60 END AS d20_sog_per60,
         CASE WHEN toi_10 IS NULL OR toi_10 <= 0 THEN NULL ELSE (att_10 / toi_10) * 60 END AS attempts_d10_per60
       FROM rolls
+      WHERE rn = 1
     )
     UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 t
     SET
@@ -280,8 +523,6 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
     FROM rollups r, params p
     WHERE
       t.player_id = r.player_id
-      AND t.game_id = r.game_id
-      AND t.game_date = r.game_date
       AND t.game_date BETWEEN p.start_date AND p.end_date;
 
     COMMIT;
@@ -298,34 +539,104 @@ def safe_json(obj, path: Path):
 
 def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
     """
-    Export Denali SOG features for a given slate_date into a CSV used by score_sog_denali.py.
+    Export Denali SOG features for a given slate_date into a CSV used by the SOG scorer.
 
-    New behavior (wired to SQL script):
+    Behavior:
+      - (Upstream guard) Fails early if pairings/coverage substrate is missing on the slate rows.
       - Runs backend/nhl/sql/export_sog_denali_pregame.sql via psql.
       - Passes slate_date as a psql variable: -v slate_date=YYYY-MM-DD
       - Script itself does COPY ... TO STDOUT WITH CSV HEADER.
+      - (Post guard) Ensures CSV is non-empty and has basic ID columns.
     """
-    # Resolve SQL file relative to this cli.py
-    BASE = Path(__file__).resolve().parent  # backend/nhl
     sql_path = BASE / "sql" / "export_sog_denali_pregame.sql"
-
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Let psql do COPY TO STDOUT → out_path
+    # ------------------------------------------------------------------
+    # UPSTREAM GUARD: fail export if pairings/coverage substrate is missing
+    # (This is intentionally BEFORE we write any CSV.)
+    # ------------------------------------------------------------------
+    guard_sql = f"""
+    WITH s AS (
+      SELECT COUNT(*)::int AS n_rows
+      FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+      WHERE game_date = DATE '{slate_date}'
+    ),
+    nn AS (
+      SELECT
+        COUNT(d10_shiftcharts_coverage_rate)::int AS nn_d10_cov,
+        COUNT(d20_shiftcharts_coverage_rate)::int AS nn_d20_cov,
+        COUNT(d10_pairings_available)::int        AS nn_d10_avail,
+        COUNT(d20_pairings_available)::int        AS nn_d20_avail
+      FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+      WHERE game_date = DATE '{slate_date}'
+    )
+    SELECT
+      s.n_rows,
+      nn.nn_d10_cov, nn.nn_d20_cov,
+      nn.nn_d10_avail, nn.nn_d20_avail
+    FROM s, nn;
+    """
+
+    proc = sp.run(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", guard_sql],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_psql_env(),
+    )
+
+    # output format: n_rows|nn_d10_cov|nn_d20_cov|nn_d10_avail|nn_d20_avail
+    parts = proc.stdout.strip().split("|")
+    if len(parts) != 5:
+        raise RuntimeError(f"[guard] unexpected guard output: {proc.stdout!r}")
+
+    n_rows, nn_d10_cov, nn_d20_cov, nn_d10_avail, nn_d20_avail = map(int, parts)
+
+    if n_rows == 0:
+        raise RuntimeError(
+            f"[guard] no rows in nhl.training_features_nhl_sog_enriched_pregame_v2 for slate_date={slate_date}"
+        )
+
+    if nn_d10_cov == 0 or nn_d20_cov == 0 or nn_d10_avail == 0 or nn_d20_avail == 0:
+        raise RuntimeError(
+            f"[guard] missing pairings/coverage substrate for slate_date={slate_date}: "
+            f"n_rows={n_rows} nn_d10_cov={nn_d10_cov} nn_d20_cov={nn_d20_cov} "
+            f"nn_d10_avail={nn_d10_avail} nn_d20_avail={nn_d20_avail}. "
+            "This should be fixed upstream (fill_sog_pairings_rolling_for_slate.sql / fill_sog_pairings_for_slate.sql)."
+        )
+
+    # ------------------------------------------------------------------
+    # EXPORT
+    # ------------------------------------------------------------------
     with out_path.open("w", encoding="utf-8", newline="") as f:
-        subprocess.run(
+        sp.run(
             [
                 "psql",
                 db_url,
-                "-v",
-                "ON_ERROR_STOP=1",
-                "-v",
-                f"slate_date={slate_date}",
-                "-f",
-                str(sql_path),
+                "-v", "ON_ERROR_STOP=1",
+                "-v", f"slate_date={slate_date}",
+                "-f", str(sql_path),
             ],
             check=True,
             stdout=f,
+            env=_psql_env(),
+        )
+
+    # ------------------------------------------------------------------
+    # POST-EXPORT GUARD: ensure artifact is real + has ID columns
+    # ------------------------------------------------------------------
+    if (not out_path.exists()) or out_path.stat().st_size < 200:
+        raise AssertionError(
+            f"[guard] export produced empty/small CSV: {out_path} (slate_date={slate_date})"
+        )
+
+    hdr = pd.read_csv(out_path, nrows=1)
+    required_cols = ["player_id", "game_id", "game_date"]
+    missing = [c for c in required_cols if c not in hdr.columns]
+    if missing:
+        raise AssertionError(
+            f"[guard] {out_path.name} missing columns {missing} (slate_date={slate_date}). "
+            f"got={list(hdr.columns)}"
         )
 
     print(f"✅ Exported SOG Denali features for {slate_date} → {out_path}")
@@ -340,7 +651,7 @@ def export_names_csv(slate: str) -> Path:
     Uses backend/nhl/sql/_export_names.sql, which expects:
       -v slate_date=YYYY-MM-DD
     """
-    out_path = EXPORTS_DIR / f"names_{slate}.csv"
+    out_path = EXPORTS_DAILY_NAMES_DIR / f"names_{slate}.csv"
 
     # Base directory for this NHL backend module (backend/nhl)
     nhl_base = Path(__file__).resolve().parent
@@ -348,7 +659,28 @@ def export_names_csv(slate: str) -> Path:
 
     # Run the static SQL with a bound slate_date variable and capture CSV bytes
     csv_bytes = psql_stdout(sql_path, vars={"slate_date": slate})
+    if not isinstance(csv_bytes, (bytes, bytearray)):
+        raise AssertionError(
+            f"[guard] psql_stdout must return bytes, got {type(csv_bytes).__name__}"
+        )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(csv_bytes)
+    require_single_game_date_csv(out_path, slate, label="names export")
+
+    # Guardrail: verify header/shape so we don't proceed with a broken names export
+    try:
+        df_head = pd.read_csv(out_path, nrows=5)
+        need = {"player_id", "game_id", "full_name", "team_id", "team_code", "game_date"}
+        miss = sorted(need - set(df_head.columns))
+        if miss:
+            raise AssertionError(
+                f"[export_names_csv] BAD CSV header (missing={miss}). "
+                f"got={list(df_head.columns)} file={out_path}"
+            )
+        if df_head.empty:
+            raise AssertionError(f"[export_names_csv] names CSV has no rows: {out_path}")
+    except Exception as e:
+        raise AssertionError(f"[export_names_csv] names CSV validation failed: {e}") from e
 
     print(f"[export_names_csv] wrote names CSV → {out_path}")
     return out_path
@@ -496,19 +828,48 @@ def build_sog(slate: str):
     # Always regenerate (or overwrite) names for this slate and use the returned path
     names_csv = export_names_csv(slate)
 
-    pred_path = PROC_DIR / "sog_predictions.csv"
+    pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
+
+    if not pred_path.exists() or pred_path.stat().st_size < 200:
+        raise AssertionError(f"[build-sog] missing/empty calibrated predictions: {pred_path}")
+
+    dates = _pred_game_dates(pred_path)
+    if not dates:
+        raise AssertionError(f"[build-sog] predictions CSV has no game_date values: {pred_path}")
+
+    if len(dates) != 1 or dates[0] != slate:
+        raise AssertionError(
+            f"[build-sog] slate mismatch: expected {slate}, got {dates} in {pred_path}. "
+            f"Run daily again; refusing to auto-regenerate."
+        )
+    
+    if not pred_path.exists() or pred_path.stat().st_size == 0:
+        raise AssertionError(f"[build-sog] expected artifact missing/empty: {pred_path}")
+
+    if not names_csv.exists() or names_csv.stat().st_size == 0:
+        raise AssertionError(f"[build-sog] expected artifact missing/empty: {names_csv}")
+
     run(
         [
             PY,
             SCRIPTS_DIR / "build_sog_with_market.py",
-            "--pred", pred_path,
-            "--names", names_csv,
-            "--odds-json", SITE_DIR / "odds_latest.json",
-            "--out", SITE_DIR / "sog_with_market.csv",
-            "--unmatched", SITE_DIR / "unmatched_sog.csv",
+            "--pred",       str(pred_path),
+            "--names",      str(names_csv),
+            "--odds-json",  "nhl/site/data/odds_latest.json",
+            "--out",        "nhl/site/data/sog_with_market.csv",
+            "--unmatched",  "nhl/site/data/unmatched_sog.csv",
+            "--slate-date", slate,
         ],
-        env={"SLATE_DATE": slate},
     )
+
+    # Postcondition: market merge must produce a non-empty output artifact
+    out_csv = SITE_DIR / "sog_with_market.csv"
+    if not out_csv.exists() or out_csv.stat().st_size == 0:
+        raise AssertionError(f"[build-sog] expected artifact missing/empty: {out_csv}")
+    
+    unmatched_csv = SITE_DIR / "unmatched_sog.csv"
+    if not unmatched_csv.exists() or unmatched_csv.stat().st_size == 0:
+        raise AssertionError(f"[build-sog] expected artifact missing/empty: {unmatched_csv}")
 
 
 def build_saves(slate: str):
@@ -684,6 +1045,18 @@ def cmd_daily(with_odds: bool):
     if refresh_sql.exists():
         run(["psql", db, "-v", "ON_ERROR_STOP=1", "-f", refresh_sql])
 
+    # A6) Evaluate SOG for YDAY (only if actuals exist)
+    try:
+        run(
+            [
+                PY,
+                SCRIPTS_DIR / "evaluate_sog_predictions.py",
+                "--game-date", yday,
+            ]
+        )
+    except Exception as e:
+        print(f"⚠️ evaluate_sog_predictions failed/skipped (continuing): {e}")
+
     # ============================================================
     # PHASE B: Build SLATE pregame features (history through yday)
     # ============================================================
@@ -714,6 +1087,7 @@ def cmd_daily(with_odds: bool):
 
     # 2) Seed features for today (SOG + Saves).
     run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",    vars={"slate_date": slate})
+    run_psql_file(SQL_DIR / "fill_sog_counts_for_slate.sql",      vars={"slate_date": slate})
     run_psql_file(SQL_DIR / "seed_goalie_features_for_slate.sql", vars={"slate_date": slate})
 
     # 2b) Refresh rolling SOG features into the pregame table
@@ -721,7 +1095,7 @@ def cmd_daily(with_odds: bool):
     rollup_start = os.environ.get("ROLLUP_START_DATE") or (
         datetime.fromisoformat(slate) - timedelta(days=260)
     ).strftime("%Y-%m-%d")
-    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=yday)
+    refresh_sog_denali_rollups_window(db, start_date=rollup_start, end_date=slate)
 
     # 2c) Fill PP role + TOI-derived features for THIS slate (computed from history < slate)
     run_psql_file(SQL_DIR / "fill_sog_pp_role_for_slate.sql",              vars={"slate_date": slate})
@@ -732,16 +1106,34 @@ def cmd_daily(with_odds: bool):
     run_psql_file(SQL_DIR / "fill_sog_pairings_for_slate.sql",             vars={"slate_date": slate})
     run_psql_file(SQL_DIR / "fill_sog_pairings_rolling_for_slate.sql",     vars={"slate_date": slate})
 
-    # 3) Export names (now written into backend/nhl/exports/daily/names/)
-    names_path = DAILY_NAMES_DIR / f"names_{slate}.csv"
+    row = psql_one_row(
+        db,
+        f"""
+        SELECT
+        COUNT(*)::int AS n,
+        COUNT(*) FILTER (WHERE szn_toi_per_game_5on5 IS NULL)::int AS null_5v5,
+        COUNT(*) FILTER (WHERE season_5on5_icetime_per_game IS NULL)::int AS null_season_5v5
+        FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+        WHERE game_date = DATE '{slate}'
+        """
+    )
+
+    n = int(row["n"])
+    null_5v5 = int(row["null_5v5"])
+    null_season_5v5 = int(row["null_season_5v5"])
+
+    # allow a couple misses (callups), but not systemic failure
+    if n > 0 and (null_5v5 > 0.20 * n or null_season_5v5 > 0.20 * n):
+        raise AssertionError(f"[SOG] season TOI features missing too often for {slate}: {row}")
+
+    # After seed_sog_features_for_slate + pairings fills
+
+    # 3) Export names (single source of truth)
     try:
-        csv_bytes = psql_stdout(SQL_DIR / "_export_names.sql", vars={"slate_date": slate})
-        names_path.write_bytes(csv_bytes)
-        print(f"[export_names_csv] wrote names CSV → {names_path}")
+        names_path = export_names_csv(slate)
     except Exception as e:
         names_path = None
         print(f"⚠️ names export failed; downstream builders may degrade: {e}")
-
     # 3.9) Team context rollups for slate
     run_psql_file(SQL_DIR / "upsert_team_context_for_slate.sql", vars={"slate_date": slate})
 
@@ -750,9 +1142,6 @@ def cmd_daily(with_odds: bool):
     # 4a) SOG Denali features → backend/nhl/exports/daily/sog_features/
     sog_feat_path = DAILY_SOG_FEATURES_DIR / f"sog_features_{slate}_denali.csv"
     # --- ensure TOI/shift “season” features are populated before exporting Denali SOG slate features ---
-    run_psql_file(SQL_DIR / "fill_sog_toi_features_for_slate.sql", vars={"slate_date": slate})
-    run_psql_file(SQL_DIR / "fill_sog_season_toi_features_for_slate.sql", vars={"slate_date": slate})
-
     export_sog_denali_features(db, slate, sog_feat_path)
 
     # 4b) Saves / Points exporters
@@ -762,60 +1151,48 @@ def cmd_daily(with_odds: bool):
     (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
 
-    # 5) Score SOG (Denali)
-    sog_model_root = MODELS_DIR / "latest" / "shots_on_goal" / "sog_player_denali"
-    if not sog_model_root.exists():
-        raise SystemExit(f"Missing SOG models at {sog_model_root}; train sog_player_denali first.")
+    # 5) Score SOG (ORDINAL LGBM) — single source of truth
+    ordinal_root = (
+        ROOT
+        / "backend" / "nhl" / "models" / "latest" / "shots_on_goal"
+        / "sog_player_denali_pairings_ordinal_v1__no_shiftcounts"
+    )
+    ordinal_meta = ordinal_root / "ge_2" / "metadata.json"  # canonical feature list lives here
 
-    line_list = [0.5, 1.5, 2.5, 3.5]
-    per_line_paths: list[tuple[float, Path]] = []
+    if not ordinal_root.exists():
+        raise SystemExit(f"Missing ORDINAL SOG models at {ordinal_root}")
 
-    for ln in line_list:
-        suffix = str(ln).replace(".", "_")
-        out_csv = PROC_DIR / f"sog_predictions_{suffix}.csv"
-        per_line_paths.append((ln, out_csv))
+    if not ordinal_meta.exists():
+        raise SystemExit(f"Missing ORDINAL feature metadata at {ordinal_meta}")
 
-        run(
-            [
-                PY,
-                SCRIPTS_DIR / "score_sog_player_denali.py",
-                "--features-csv", str(sog_feat_path),
-                "--line",         str(ln),
-                "--models-root",  str(sog_model_root),
-                "--out-csv",      str(out_csv),
-            ]
-        )
-
-    # Merge per-line → one wide file
-    base_df = None
-    key_cols = ["player_id", "game_id", "team_id", "opponent_id", "is_home", "game_date"]
-
-    for _, path in per_line_paths:
-        df_line = pd.read_csv(path)
-        keep_cols = key_cols + [c for c in df_line.columns if c.startswith("p_over_")]
-        df_line = df_line[keep_cols]
-        base_df = df_line if base_df is None else base_df.merge(df_line, on=key_cols, how="left")
-
-    final_pred_path = PROC_DIR / "sog_predictions.csv"
-    final_pred_path.parent.mkdir(parents=True, exist_ok=True)
-    base_df.to_csv(final_pred_path, index=False)
-    print(f"✅ Wrote merged SOG predictions → {final_pred_path}")
-
-    # 5b) Calibrate SOG (wide)
-    calib_train_path = PROC_DIR / "sog_calibration_training_denali.csv"
     calibrated_pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
     run(
         [
             PY,
-            SCRIPTS_DIR / "calibrate_sog_denali.py",
-            "--train-csv",       str(calib_train_path),
-            "--wide-in",     str(final_pred_path),
-            "--wide-out",    str(calibrated_pred_path),
-            "--blend-alpha", "0.175",
+            SCRIPTS_DIR / "score_sog_denali_pairings_ordinal_lgbm.py",
+            "--in",           str(sog_feat_path),
+            "--out",          str(calibrated_pred_path),
+            "--model-root",   str(ordinal_root),
+            "--feature-meta", str(ordinal_meta),
         ]
     )
 
-    # 5c) Load calibrated SOG into nhl.predictions
+    # ---- GUARD: ordinal predictions must exist + match slate ----
+    calib_path = calibrated_pred_path
+    if not calib_path.exists() or calib_path.stat().st_size < 200:
+        raise AssertionError(f"[daily] missing/empty ordinal predictions: {calib_path}")
+
+    dates = _pred_game_dates(calib_path)
+    if not dates:
+        raise AssertionError(f"[daily] ordinal CSV has no game_date column or no values: {calib_path}")
+
+    if len(dates) != 1 or dates[0] != slate:
+        raise AssertionError(
+            f"[daily] ordinal predictions slate mismatch: expected {slate}, got {dates}. "
+            f"Refusing to continue."
+        )
+
+    # 5b) Load ordinal SOG into nhl.predictions
     run(
         [
             PY,
@@ -826,7 +1203,6 @@ def cmd_daily(with_odds: bool):
             "--slate-date", slate,
         ]
     )
-
     # 6) Score + load Saves
     saves_model_dir = MODELS_DIR / "latest" / "goalie_saves"
     if saves_model_dir.exists():
@@ -845,14 +1221,18 @@ def cmd_daily(with_odds: bool):
         saves_pred_csv = PROC_DIR / "saves_predictions.csv"
         if saves_pred_csv.exists():
             run(
-                [
-                    PY,
-                    SCRIPTS_DIR / "load_nhl_predictions_generic.py",
-                    "--pred-csv", str(saves_pred_csv),
-                    "--project",  "nhl",
-                    "--prop",     "goalie_saves",
-                ]
-            )
+            [
+                PY,
+                SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                "--pred-csv", str(saves_pred_csv),
+                "--project",  "nhl",
+                "--prop",     "goalie_saves",
+                "--model-family", "phoenix",
+                "--model-version", "phoenix_v2",
+                "--feature-hash", "phoenix_v2",
+            ]
+        )
+
         else:
             print(f"⚠️ saves_predictions.csv not found at {saves_pred_csv} — skipping saves load.")
     else:
@@ -872,14 +1252,18 @@ def cmd_daily(with_odds: bool):
     points_pred_csv = PROC_DIR / "points_predictions.csv"
     if points_pred_csv.exists():
         run(
-            [
-                PY,
-                SCRIPTS_DIR / "load_nhl_predictions_generic.py",
-                "--pred-csv", str(points_pred_csv),
-                "--project",  "nhl",
-                "--prop",     "player_points",
-            ]
-        )
+        [
+            PY,
+            SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+            "--pred-csv", str(points_pred_csv),
+            "--project",  "nhl",
+            "--prop",     "player_points",
+            "--model-family", "phoenix",
+            "--model-version", "phoenix_v2",
+            "--feature-hash", "phoenix_v2",
+        ]
+    )
+
     else:
         print(f"⚠️ points predictions CSV not found at {points_pred_csv} — skipping points load.")
 
@@ -892,7 +1276,7 @@ def cmd_daily(with_odds: bool):
     build_saves(slate)
     build_points(slate)
 
-    # 9b) SOG integrity report (warn-only) — now this runs AFTER yday raw/pp_toi is finalized
+    # 9b) SOG integrity report (warn-only, except guard-fatal)
     try:
         run(
             [
@@ -905,7 +1289,13 @@ def cmd_daily(with_odds: bool):
                 "--db-toi-days-back", "30",
             ]
         )
+    except SystemExit as e:
+        # Preserve guard semantics: die(..., code=2) should stop the pipeline
+        if getattr(e, "code", None) == 2:
+            raise
+        print(f"⚠️ sog_integrity_report exited (continuing): {e}")
     except Exception as e:
+        # Non-guard failures remain warn-only
         print(f"⚠️ sog_integrity_report failed (continuing): {e}")
 
     # 11) Sanity counts (for slate games)
@@ -943,17 +1333,38 @@ def main():
     bpts = sub.add_parser("build-points", help="Build points_with_market.csv")
     bpts.add_argument("--slate", default=os.environ.get("SLATE_DATE") or et_today())
 
+    g = sub.add_parser("guard", help="List/clear one-off guardrail steps")
+    gsub = g.add_subparsers(dest="guard_cmd", required=True)
+
+    gl = gsub.add_parser("list", help="List recorded guard steps")
+    gl.add_argument("--slate", default=None, help="Optional slate YYYY-MM-DD; filters to slate + global")
+
+    gc = gsub.add_parser("clear", help="Clear a recorded guard step")
+    gc.add_argument("key", help="Guard key to clear (e.g., fix_psql_stdout_bytes_vs_str)")
+    gc.add_argument("--slate", default="global", help="Slate to clear (default: global)")
+
     args = ap.parse_args()
 
     if args.cmd == "daily":
         cmd_daily(with_odds=args.with_odds)
     elif args.cmd == "fetch-odds":
         fetch_odds(days_from=args.days_from)
+    elif args.cmd == "guard":
+        if args.guard_cmd == "list":
+            guard_print(args.slate)
+        elif args.guard_cmd == "clear":
+            guard_clear(args.key, args.slate)
+            print(f"[guard] cleared: {args.key} (slate={args.slate})")
+        else:
+            ap.print_help()
     elif args.cmd == "build-sog":
+        guard_testing_only_slate(args.slate, cmd_name="build-sog")
         build_sog(args.slate)
     elif args.cmd == "build-saves":
+        guard_testing_only_slate(args.slate, cmd_name="build-saves")
         build_saves(args.slate)
     elif args.cmd == "build-points":
+        guard_testing_only_slate(args.slate, cmd_name="build-points")
         build_points(args.slate)
     else:
         ap.print_help()

@@ -1,469 +1,192 @@
 /* ============================================================
-   FILE: backend/nhl/sql/fill_sog_pairings_for_slate.sql
+   FILE: backend/nhl/sql/fill_sog_season_toi_features_for_slate.sql
 
-   PURPOSE:
-     Fill pairings (teammate overlap) features for the SOG pregame base table
-     for a single slate date, using prior games in the same season.
+   PURPOSE (Option B):
+     Fill season-to-date TOI + shift features for SOG pregame rows
+     using ONLY primitives with stable historical coverage:
 
-     Sources:
-       - nhl.shift_teammate_overlap_features_game (per player+game features)
-       - nhl.shift_teammate_overlap_game_recent_v2 (mate-level rows for d0 mate_id)
-       - nhl.games (game_date + season)
+       - nhl.shiftcharts_shifts          (player shift intervals)
+       - nhl.game_manpower_segments      (PP/PK windows; pp_team_id/pk_team_id)
+       - nhl.skater_game_logs_raw        (player_team mapping per game)
 
-     Output columns filled on nhl.training_features_nhl_sog_enriched_pregame_v2:
-       - d0_top_mate_player_id, d0_top_mate_overlap_sec, d0_top_mate_overlap_share
-       - d0_top3_overlap_share_avg, d0_top3_overlap_share_std
-       - d10_* overlap share avg/std + coverage + stability fields
-       - d20_* overlap share avg/std + coverage + stability fields
-       - pairings_source, pairings_updated_at, mate_stability_source, mate_stability_updated_at
-       - d10_pairings_* flags/buckets, d20_pairings_* flags/buckets
+     Derivation:
+       total_shift_sec := sum(dur_sec)
+       pp_sec := sum(overlap_sec where team_id == pp_team_id)
+       pk_sec := sum(overlap_sec where team_id == pk_team_id)
+       ev_sec := max(total_shift_sec - pp_sec - pk_sec, 0)
+
+     Then season-to-date per-game averages (games < slate_date, same season):
+       season_5on5_icetime_per_game := avg(ev_sec)
+       season_5on4_icetime_per_game := avg(pp_sec)
+       season_4on5_icetime_per_game := avg(pk_sec)
+
+       szn_toi_per_game_5on5 := avg(ev_sec)/60
+       szn_toi_per_game_pp   := avg(pp_sec)/60
+       szn_toi_per_game_pk   := avg(pk_sec)/60
 
    USAGE:
-     psql ... -v slate_date=YYYY-MM-DD -f backend/nhl/sql/fill_sog_pairings_for_slate.sql
+     psql ... -v slate_date=YYYY-MM-DD -f backend/nhl/sql/fill_sog_season_toi_features_for_slate.sql
    ============================================================ */
 
-\set ON_ERROR_STOP on
-SET statement_timeout = 0;
+BEGIN;
 
--- ------------------------------------------------------------
--- 0) Ensure destination columns exist on the BASE TABLE
--- ------------------------------------------------------------
+-- (Columns should already exist, but keep idempotent adds if you want)
 ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top_mate_player_id bigint;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top_mate_overlap_sec integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top_mate_overlap_share numeric;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top3_overlap_share_avg numeric;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top3_overlap_share_std numeric;
+  ADD COLUMN IF NOT EXISTS szn_toi_per_game_5on5 numeric,
+  ADD COLUMN IF NOT EXISTS szn_toi_per_game_pp   numeric,
+  ADD COLUMN IF NOT EXISTS szn_toi_per_game_pk   numeric,
+  ADD COLUMN IF NOT EXISTS season_5on5_icetime_per_game numeric,
+  ADD COLUMN IF NOT EXISTS season_5on4_icetime_per_game numeric,
+  ADD COLUMN IF NOT EXISTS season_4on5_icetime_per_game numeric;
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS pairings_source text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS pairings_updated_at timestamptz;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top3_mates_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top3_mates_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_games_in_window integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_shiftcharts_games integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_shiftcharts_coverage_rate double precision;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top3_mates_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top3_mates_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_games_in_window integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_shiftcharts_games integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_shiftcharts_coverage_rate double precision;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_repeat_rate double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_distinct_count integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_games_with_shiftcharts integer;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_repeat_rate double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_distinct_count integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_games_with_shiftcharts integer;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS mate_stability_source text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS mate_stability_updated_at timestamptz;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_pairings_missing_flag integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_pairings_cov_bucket text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_pairings_available boolean;
-
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_pairings_missing_flag integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_pairings_cov_bucket text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_pairings_available boolean;
-
--- ------------------------------------------------------------
--- 1) Compute and write pairings for slate_date
--- ------------------------------------------------------------
-WITH
-params AS (
+WITH params AS (
   SELECT (:'slate_date')::date AS slate_date
 ),
 
+-- Slate rows (derive season from nhl.games, NOT from t.season)
 slate_rows AS (
   SELECT DISTINCT
     t.player_id::bigint AS player_id,
     t.game_id::bigint   AS game_id,
-    t.game_date::date   AS game_date,
     g.season::int       AS season
   FROM nhl.training_features_nhl_sog_enriched_pregame_v2 t
-  JOIN nhl.games g
-    ON g.game_id = t.game_id
-  JOIN params ON TRUE
-  WHERE t.game_date::date = params.slate_date
+  JOIN nhl.games g ON g.game_id = t.game_id
+  JOIN params p ON TRUE
+  WHERE t.game_date::date = p.slate_date
     AND t.player_id IS NOT NULL
 ),
 
 prior_games AS (
   SELECT
-    g.game_id::bigint   AS game_id,
-    g.game_date::date   AS game_date,
-    g.season::int       AS season
+    g.game_id::bigint AS game_id,
+    g.game_date::date AS game_date,
+    g.season::int     AS season
   FROM nhl.games g
-  JOIN params ON TRUE
-  JOIN (SELECT DISTINCT season FROM slate_rows) slate_seasons
-    ON slate_seasons.season = g.season
-  WHERE g.game_date::date < params.slate_date
+  JOIN params p ON TRUE
+  JOIN (SELECT DISTINCT season FROM slate_rows) ss ON ss.season = g.season
+  WHERE g.game_date::date < p.slate_date
 ),
 
--- Per player+game pairings features (already aggregated)
-pairings_features_per_game AS (
+-- Team mapping per player+game from skater_game_logs_raw (historical stable source)
+player_game_team AS (
   SELECT
-    f.game_id::bigint   AS game_id,
-    f.player_id::bigint AS player_id,
-    pg.game_date::date  AS game_date,
-    pg.season::int      AS season,
-
-    COALESCE(f.shiftcharts_available, false) AS shiftcharts_available,
-    COALESCE(t.toi_sec, 0)::int              AS toi_sec,
-
-    -- these exist on shift_teammate_overlap_features_game
-    -- these exist on shift_teammate_overlap_features_game
-    f.top_mate_overlap_share::double precision   AS top_mate_overlap_share,
-    f.top3_mates_overlap_share::double precision AS top3_mates_overlap_share
-
-  FROM nhl.shift_teammate_overlap_features_game f
-  JOIN prior_games pg
-    ON pg.game_id = f.game_id
-  LEFT JOIN (
-    SELECT
-      game_id::bigint,
-      player_id::bigint,
-      SUM(dur_sec)::int AS toi_sec
-    FROM nhl.shiftcharts_shifts
-    GROUP BY 1,2
-  ) t
-    ON t.game_id = f.game_id AND t.player_id = f.player_id
-  WHERE f.player_id IS NOT NULL
+    l.game_id::bigint   AS game_id,
+    l.player_id::bigint AS player_id,
+    l.team_id::int      AS team_id
+  FROM nhl.skater_game_logs_raw l
+  JOIN prior_games pg ON pg.game_id = l.game_id
+  WHERE l.player_id IS NOT NULL
+    AND l.team_id  IS NOT NULL
 ),
 
--- Rank games per player for d10/d20 windows
-ranked_games AS (
+-- Total shift time (sec) per player+game from shiftcharts
+player_game_total AS (
   SELECT
-    p.*,
-    ROW_NUMBER() OVER (PARTITION BY p.player_id ORDER BY p.game_date DESC, p.game_id DESC) AS rn
-  FROM pairings_features_per_game p
-),
-
-roll_d10 AS (
-  SELECT
-    player_id,
-    season,
-
-    COUNT(*)::int AS games_in_window,
-    COUNT(*) FILTER (WHERE shiftcharts_available)::int AS shiftcharts_games,
-
-    AVG(top_mate_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top_mate_overlap_share_avg,
-    STDDEV_POP(top_mate_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top_mate_overlap_share_std,
-
-    AVG(top3_mates_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top3_mates_overlap_share_avg,
-    STDDEV_POP(top3_mates_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top3_mates_overlap_share_std
-  FROM ranked_games
-  WHERE rn <= 10
+    s.game_id::bigint   AS game_id,
+    s.player_id::bigint AS player_id,
+    NULLIF(SUM(COALESCE(s.dur_sec, 0))::int, 0) AS total_shift_sec,
+    COUNT(*)::int AS total_shifts
+  FROM nhl.shiftcharts_shifts s
+  JOIN prior_games pg ON pg.game_id = s.game_id
+  WHERE s.player_id IS NOT NULL
   GROUP BY 1,2
 ),
 
-roll_d20 AS (
+-- Overlap seconds between a shift and a manpower segment (same period, overlapping interval)
+shift_seg_overlap AS (
   SELECT
-    player_id,
-    season,
+    sh.game_id::bigint   AS game_id,
+    sh.player_id::bigint AS player_id,
+    pg.season::int       AS season,
+    pgt.team_id::int     AS team_id,
 
-    COUNT(*)::int AS games_in_window,
-    COUNT(*) FILTER (WHERE shiftcharts_available)::int AS shiftcharts_games,
+    seg.pp_team_id::int  AS pp_team_id,
+    seg.pk_team_id::int  AS pk_team_id,
 
-    AVG(top_mate_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top_mate_overlap_share_avg,
-    STDDEV_POP(top_mate_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top_mate_overlap_share_std,
+    GREATEST(
+      LEAST(sh.end_sec,   seg.end_sec) - GREATEST(sh.start_sec, seg.start_sec),
+      0
+    )::int AS overlap_sec
 
-    AVG(top3_mates_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top3_mates_overlap_share_avg,
-    STDDEV_POP(top3_mates_overlap_share) FILTER (WHERE shiftcharts_available)::double precision AS top3_mates_overlap_share_std
-  FROM ranked_games
-  WHERE rn <= 20
-  GROUP BY 1,2
+  FROM nhl.shiftcharts_shifts sh
+  JOIN prior_games pg ON pg.game_id = sh.game_id
+  JOIN player_game_team pgt
+    ON pgt.game_id = sh.game_id AND pgt.player_id = sh.player_id
+  JOIN nhl.game_manpower_segments seg
+    ON seg.game_id = sh.game_id
+   AND seg.period  = sh.period
+   AND sh.end_sec  > seg.start_sec
+   AND sh.start_sec < seg.end_sec
+  WHERE sh.player_id IS NOT NULL
 ),
 
--- d0 top mate: pick the most recent prior game for the player, then the teammate with max overlap_share
-ranked_mates AS (
+player_game_pppk AS (
   SELECT
-    r.player_id::bigint AS player_id,
-    r.game_id::bigint   AS game_id,
-    g.game_date::date   AS game_date,
-    g.season::int       AS season,
-
-    r.teammate_id::bigint AS teammate_id,
-    r.overlap_sec::int    AS overlap_sec,
-    r.overlap_share::numeric AS overlap_share,
-
-    ROW_NUMBER() OVER (
-      PARTITION BY r.player_id, r.game_id
-      ORDER BY r.overlap_share DESC NULLS LAST, r.overlap_sec DESC NULLS LAST, r.teammate_id
-    ) AS mate_rank
-  FROM nhl.shift_teammate_overlap_game_recent_v2 r
-  JOIN prior_games pg
-    ON pg.game_id = r.game_id
-  JOIN nhl.games g
-    ON g.game_id = r.game_id
-),
-
-top_mate_per_game AS (
-  SELECT
-    player_id,
     game_id,
-    game_date,
+    player_id,
     season,
-    teammate_id,
-    overlap_sec,
-    overlap_share
-  FROM ranked_mates
-  WHERE mate_rank = 1
+    SUM(CASE WHEN overlap_sec > 0 AND team_id = pp_team_id THEN overlap_sec ELSE 0 END)::int AS pp_sec,
+    SUM(CASE WHEN overlap_sec > 0 AND team_id = pk_team_id THEN overlap_sec ELSE 0 END)::int AS pk_sec,
+    SUM(overlap_sec)::int AS any_seg_overlap_sec
+  FROM shift_seg_overlap
+  GROUP BY 1,2,3
 ),
 
-most_recent_game_with_mate AS (
+-- Combine totals + PP/PK, derive 5v5 remainder
+player_game_derived AS (
+  SELECT
+    gt.player_id,
+    pg.season,
+    gt.game_id,
+    gt.total_shift_sec,
+    gt.total_shifts,
+
+    COALESCE(pppk.pp_sec, 0)::int AS pp_sec,
+    COALESCE(pppk.pk_sec, 0)::int AS pk_sec,
+    GREATEST(gt.total_shift_sec - COALESCE(pppk.pp_sec,0) - COALESCE(pppk.pk_sec,0), 0)::int AS ev_sec
+
+  FROM player_game_total gt
+  JOIN prior_games pg ON pg.game_id = gt.game_id
+  JOIN slate_rows sr
+    ON sr.player_id = gt.player_id
+   AND sr.season    = pg.season
+  LEFT JOIN player_game_pppk pppk
+    ON pppk.game_id = gt.game_id
+   AND pppk.player_id = gt.player_id
+   AND pppk.season = pg.season
+  WHERE gt.total_shift_sec IS NOT NULL
+),
+
+-- Season-to-date per-game averages (only games where player had shifts)
+season_aggs AS (
   SELECT
     player_id,
     season,
-    game_id,
-    game_date,
-    teammate_id,
-    overlap_sec,
-    overlap_share,
-    ROW_NUMBER() OVER (
-      PARTITION BY player_id, season
-      ORDER BY game_date DESC, game_id DESC
-    ) AS recency_rank
-  FROM top_mate_per_game
-),
+    AVG(ev_sec)::numeric AS season_5on5_icetime_per_game,
+    AVG(pp_sec)::numeric AS season_5on4_icetime_per_game,
+    AVG(pk_sec)::numeric AS season_4on5_icetime_per_game,
 
-d0_values AS (
-  SELECT
-    player_id,
-    season,
-    teammate_id AS d0_top_mate_player_id,
-    overlap_sec AS d0_top_mate_overlap_sec,
-    overlap_share AS d0_top_mate_overlap_share
-  FROM most_recent_game_with_mate
-  WHERE recency_rank = 1
-),
-
--- Basic stability: how often the top mate repeats in last 10/20 games (only games with shiftcharts)
-top_mate_history AS (
-  SELECT
-    player_id,
-    season,
-    game_date,
-    rn,
-    -- For stability, use teammate_id from mate-level table (may be NULL for some games)
-    (SELECT tm.teammate_id
-     FROM top_mate_per_game tm
-     WHERE tm.player_id = ranked_games.player_id
-       AND tm.game_id   = ranked_games.game_id
-     LIMIT 1) AS top_mate_id
-  FROM ranked_games
-  WHERE shiftcharts_available
-),
-
-stability_d10 AS (
-  SELECT
-    player_id,
-    season,
-    COUNT(*)::int AS games_with_shiftcharts,
-    COUNT(DISTINCT top_mate_id)::int AS distinct_top_mates,
-    (COUNT(*)::double precision - COUNT(DISTINCT top_mate_id)::double precision) / NULLIF(COUNT(*)::double precision, 0) AS repeat_rate
-  FROM top_mate_history
-  WHERE rn <= 10
+    (AVG(ev_sec)::numeric / 60.0) AS szn_toi_per_game_5on5,
+    (AVG(pp_sec)::numeric / 60.0) AS szn_toi_per_game_pp,
+    (AVG(pk_sec)::numeric / 60.0) AS szn_toi_per_game_pk
+  FROM player_game_derived
   GROUP BY 1,2
-),
-
-stability_d20 AS (
-  SELECT
-    player_id,
-    season,
-    COUNT(*)::int AS games_with_shiftcharts,
-    COUNT(DISTINCT top_mate_id)::int AS distinct_top_mates,
-    (COUNT(*)::double precision - COUNT(DISTINCT top_mate_id)::double precision) / NULLIF(COUNT(*)::double precision, 0) AS repeat_rate
-  FROM top_mate_history
-  WHERE rn <= 20
-  GROUP BY 1,2
-),
-
-final_values AS (
-  SELECT
-    s.player_id,
-    s.game_id,
-    s.game_date,
-    s.season,
-
-    -- d0 (may be null if no mate history)
-    d0.d0_top_mate_player_id,
-    d0.d0_top_mate_overlap_sec,
-    d0.d0_top_mate_overlap_share,
-
-    -- d0 top3 stats: use d20 roll’s mean/std as a reasonable proxy if you want;
-    -- but we can set d0_top3_* from roll_d20 later. Keep as NULL if you prefer strict meaning.
-    NULL::numeric AS d0_top3_overlap_share_avg,
-    NULL::numeric AS d0_top3_overlap_share_std,
-
-    -- d10
-    r10.top_mate_overlap_share_avg        AS d10_top_mate_overlap_share_avg,
-    r10.top_mate_overlap_share_std        AS d10_top_mate_overlap_share_std,
-    r10.top3_mates_overlap_share_avg      AS d10_top3_mates_overlap_share_avg,
-    r10.top3_mates_overlap_share_std      AS d10_top3_mates_overlap_share_std,
-    r10.games_in_window                   AS d10_games_in_window,
-    r10.shiftcharts_games                 AS d10_shiftcharts_games,
-    (r10.shiftcharts_games::double precision / NULLIF(r10.games_in_window::double precision, 0)) AS d10_shiftcharts_coverage_rate,
-
-    -- d20
-    r20.top_mate_overlap_share_avg        AS d20_top_mate_overlap_share_avg,
-    r20.top_mate_overlap_share_std        AS d20_top_mate_overlap_share_std,
-    r20.top3_mates_overlap_share_avg      AS d20_top3_mates_overlap_share_avg,
-    r20.top3_mates_overlap_share_std      AS d20_top3_mates_overlap_share_std,
-    r20.games_in_window                   AS d20_games_in_window,
-    r20.shiftcharts_games                 AS d20_shiftcharts_games,
-    (r20.shiftcharts_games::double precision / NULLIF(r20.games_in_window::double precision, 0)) AS d20_shiftcharts_coverage_rate,
-
-    -- stability
-    st10.repeat_rate                      AS d10_top_mate_repeat_rate,
-    st10.distinct_top_mates               AS d10_top_mate_distinct_count,
-    st10.games_with_shiftcharts           AS d10_top_mate_games_with_shiftcharts,
-
-    st20.repeat_rate                      AS d20_top_mate_repeat_rate,
-    st20.distinct_top_mates               AS d20_top_mate_distinct_count,
-    st20.games_with_shiftcharts           AS d20_top_mate_games_with_shiftcharts,
-
-    -- availability / flags / buckets
-    CASE WHEN COALESCE(r10.shiftcharts_games, 0) > 0 THEN true ELSE false END AS d10_pairings_available,
-    CASE WHEN COALESCE(r20.shiftcharts_games, 0) > 0 THEN true ELSE false END AS d20_pairings_available,
-
-    CASE WHEN COALESCE(r10.shiftcharts_games, 0) > 0 THEN 0 ELSE 1 END AS d10_pairings_missing_flag,
-    CASE WHEN COALESCE(r20.shiftcharts_games, 0) > 0 THEN 0 ELSE 1 END AS d20_pairings_missing_flag,
-
-    CASE
-      WHEN COALESCE(r10.games_in_window, 0) = 0 THEN 'none'
-      WHEN (r10.shiftcharts_games::double precision / NULLIF(r10.games_in_window::double precision, 0)) >= 0.80 THEN 'high'
-      WHEN (r10.shiftcharts_games::double precision / NULLIF(r10.games_in_window::double precision, 0)) >= 0.50 THEN 'med'
-      WHEN (r10.shiftcharts_games::double precision / NULLIF(r10.games_in_window::double precision, 0)) >  0.00 THEN 'low'
-      ELSE 'none'
-    END AS d10_pairings_cov_bucket,
-
-    CASE
-      WHEN COALESCE(r20.games_in_window, 0) = 0 THEN 'none'
-      WHEN (r20.shiftcharts_games::double precision / NULLIF(r20.games_in_window::double precision, 0)) >= 0.80 THEN 'high'
-      WHEN (r20.shiftcharts_games::double precision / NULLIF(r20.games_in_window::double precision, 0)) >= 0.50 THEN 'med'
-      WHEN (r20.shiftcharts_games::double precision / NULLIF(r20.games_in_window::double precision, 0)) >  0.00 THEN 'low'
-      ELSE 'none'
-    END AS d20_pairings_cov_bucket
-
-  FROM slate_rows s
-  LEFT JOIN d0_values d0
-    ON d0.player_id = s.player_id
-   AND d0.season    = s.season
-  LEFT JOIN roll_d10 r10
-    ON r10.player_id = s.player_id
-   AND r10.season    = s.season
-  LEFT JOIN roll_d20 r20
-    ON r20.player_id = s.player_id
-   AND r20.season    = s.season
-  LEFT JOIN stability_d10 st10
-    ON st10.player_id = s.player_id
-   AND st10.season    = s.season
-  LEFT JOIN stability_d20 st20
-    ON st20.player_id = s.player_id
-   AND st20.season    = s.season
 )
 
-UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 AS target
+UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 t
 SET
-  d0_top_mate_player_id            = fv.d0_top_mate_player_id,
-  d0_top_mate_overlap_sec          = fv.d0_top_mate_overlap_sec,
-  d0_top_mate_overlap_share        = fv.d0_top_mate_overlap_share,
-  d0_top3_overlap_share_avg        = fv.d0_top3_overlap_share_avg,
-  d0_top3_overlap_share_std        = fv.d0_top3_overlap_share_std,
+  szn_toi_per_game_5on5        = a.szn_toi_per_game_5on5,
+  szn_toi_per_game_pp          = a.szn_toi_per_game_pp,
+  szn_toi_per_game_pk          = a.szn_toi_per_game_pk,
+  season_5on5_icetime_per_game = a.season_5on5_icetime_per_game,
+  season_5on4_icetime_per_game = a.season_5on4_icetime_per_game,
+  season_4on5_icetime_per_game = a.season_4on5_icetime_per_game
+FROM params p
+JOIN nhl.games g ON TRUE
+JOIN season_aggs a ON TRUE
+WHERE t.game_date::date = p.slate_date
+  AND g.game_id = t.game_id
+  AND a.player_id = t.player_id::bigint
+  AND a.season    = g.season::int;
 
-  d10_top_mate_overlap_share_avg   = fv.d10_top_mate_overlap_share_avg,
-  d10_top_mate_overlap_share_std   = fv.d10_top_mate_overlap_share_std,
-  d10_top3_mates_overlap_share_avg = fv.d10_top3_mates_overlap_share_avg,
-  d10_top3_mates_overlap_share_std = fv.d10_top3_mates_overlap_share_std,
-  d10_games_in_window              = fv.d10_games_in_window,
-  d10_shiftcharts_games            = fv.d10_shiftcharts_games,
-  d10_shiftcharts_coverage_rate    = fv.d10_shiftcharts_coverage_rate,
-
-  d20_top_mate_overlap_share_avg   = fv.d20_top_mate_overlap_share_avg,
-  d20_top_mate_overlap_share_std   = fv.d20_top_mate_overlap_share_std,
-  d20_top3_mates_overlap_share_avg = fv.d20_top3_mates_overlap_share_avg,
-  d20_top3_mates_overlap_share_std = fv.d20_top3_mates_overlap_share_std,
-  d20_games_in_window              = fv.d20_games_in_window,
-  d20_shiftcharts_games            = fv.d20_shiftcharts_games,
-  d20_shiftcharts_coverage_rate    = fv.d20_shiftcharts_coverage_rate,
-
-  d10_top_mate_repeat_rate         = fv.d10_top_mate_repeat_rate,
-  d10_top_mate_distinct_count      = fv.d10_top_mate_distinct_count,
-  d10_top_mate_games_with_shiftcharts = fv.d10_top_mate_games_with_shiftcharts,
-
-  d20_top_mate_repeat_rate         = fv.d20_top_mate_repeat_rate,
-  d20_top_mate_distinct_count      = fv.d20_top_mate_distinct_count,
-  d20_top_mate_games_with_shiftcharts = fv.d20_top_mate_games_with_shiftcharts,
-
-  d10_pairings_available           = fv.d10_pairings_available,
-  d20_pairings_available           = fv.d20_pairings_available,
-  d10_pairings_missing_flag        = fv.d10_pairings_missing_flag,
-  d20_pairings_missing_flag        = fv.d20_pairings_missing_flag,
-  d10_pairings_cov_bucket          = fv.d10_pairings_cov_bucket,
-  d20_pairings_cov_bucket          = fv.d20_pairings_cov_bucket,
-
-  pairings_source                  = 'shift_teammate_overlap_features_game + shift_teammate_overlap_game_recent_v2',
-  pairings_updated_at              = NOW(),
-  mate_stability_source            = 'top_mate_id from recent_v2',
-  mate_stability_updated_at        = NOW()
-FROM final_values fv
-WHERE target.player_id::bigint = fv.player_id
-  AND target.game_id::bigint   = fv.game_id
-  AND target.game_date::date   = fv.game_date::date;
-
--- ------------------------------------------------------------
--- Optional: quick summary line for CLI logs
--- ------------------------------------------------------------
-WITH s AS (
-  SELECT
-    COUNT(*) AS n_rows,
-    COUNT(*) FILTER (WHERE d10_pairings_available) AS n_d10_available,
-    COUNT(*) FILTER (WHERE d20_pairings_available) AS n_d20_available,
-    COUNT(*) FILTER (WHERE d0_top_mate_player_id IS NOT NULL) AS n_d0_mate_id
-  FROM nhl.training_features_nhl_sog_enriched_pregame_v2
-  WHERE game_date::date = (:'slate_date')::date
-)
-SELECT (:'slate_date')::date AS slate_date, *
-FROM s;
+COMMIT;

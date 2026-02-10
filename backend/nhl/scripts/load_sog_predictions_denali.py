@@ -65,12 +65,13 @@ def main():
         #
         # We *only* use the blended p_over_* columns for loading, not the lr/rf
         # components. So we look for columns like p_over_0_5, p_over_1_5, etc.
+        # Only load sportsbook-relevant lines (no 0.5)
+        ALLOWED_WIDE_LINES = {"p_over_1_5", "p_over_2_5", "p_over_3_5"}
+
         wide_blend_cols = [
             c
             for c in df.columns
-            if c.startswith("p_over_")
-            and "_lr_" not in c
-            and "_rf_" not in c
+            if c in ALLOWED_WIDE_LINES
         ]
 
         if wide_blend_cols:

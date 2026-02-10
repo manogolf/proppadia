@@ -71,7 +71,7 @@ prior_games AS (
 
 per_game AS (
   SELECT
-    f.player_id::bigint AS player_id,
+    l.player_id::bigint AS player_id,
     pg.game_id::bigint  AS game_id,
     pg.game_date::date  AS game_date,
     pg.season::int      AS season,
@@ -79,10 +79,13 @@ per_game AS (
     COALESCE(f.shiftcharts_available, false) AS shiftcharts_available,
     f.top_mate_overlap_share::double precision   AS top_mate_overlap_share,
     f.top3_mates_overlap_share::double precision AS top3_mates_overlap_share
-  FROM nhl.shift_teammate_overlap_features_game f
-  JOIN prior_games pg
-    ON pg.game_id = f.game_id
-  WHERE f.player_id IS NOT NULL
+  FROM prior_games pg
+  JOIN nhl.skater_game_logs_raw l
+    ON l.game_id = pg.game_id
+  LEFT JOIN nhl.shift_teammate_overlap_features_game f
+    ON f.game_id = pg.game_id
+   AND f.player_id::bigint = l.player_id::bigint
+  WHERE l.player_id IS NOT NULL
 ),
 
 ranked AS (
@@ -174,19 +177,24 @@ SET
   d20_top3_mates_overlap_share_avg = f.d20_top3_mates_overlap_share_avg,
   d20_top3_mates_overlap_share_std = f.d20_top3_mates_overlap_share_std,
 
-  pairings_source                  = concat_ws(';', nullif(t.pairings_source,''), 'pairings_features_game_d10d20'),
+pairings_source = CASE
+  WHEN t.pairings_source IS NULL OR t.pairings_source = '' THEN 'pairings_features_game_d10d20'
+  WHEN t.pairings_source LIKE '%pairings_features_game_d10d20%' THEN t.pairings_source
+  ELSE t.pairings_source || ';pairings_features_game_d10d20'
+END,
   pairings_updated_at              = now()
 FROM final f
 WHERE t.game_date::date = (:'slate_date')::date
   AND t.game_id::bigint = f.game_id
   AND t.player_id::bigint = f.player_id;
 
--- Missingness-aware post-pass
+-- Missingness-aware post-pass (idempotent + source-stamped)
 UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 t
 SET
   d10_pairings_available = (t.d10_shiftcharts_games IS NOT NULL AND t.d10_shiftcharts_games > 0),
   d20_pairings_available = (t.d20_shiftcharts_games IS NOT NULL AND t.d20_shiftcharts_games > 0),
 
+  -- keep your numeric buckets 0..3
   d10_pairings_cov_bucket = CASE
     WHEN t.d10_shiftcharts_coverage_rate IS NULL THEN 0
     WHEN t.d10_shiftcharts_coverage_rate < 0.33 THEN 1
@@ -199,23 +207,13 @@ SET
     WHEN t.d20_shiftcharts_coverage_rate < 0.33 THEN 1
     WHEN t.d20_shiftcharts_coverage_rate < 0.66 THEN 2
     ELSE 3
-  END
-WHERE t.game_date::date = (:'slate_date')::date;
+  END,
 
--- Summary
-WITH base AS (
-  SELECT
-    COUNT(*) AS n_rows,
-    COUNT(*) FILTER (WHERE d10_shiftcharts_games IS NOT NULL AND d10_shiftcharts_games > 0) AS n_with_d10,
-    COUNT(*) FILTER (WHERE d20_shiftcharts_games IS NOT NULL AND d20_shiftcharts_games > 0) AS n_with_d20
-  FROM nhl.training_features_nhl_sog_enriched_pregame_v2
-  WHERE game_date::date = (:'slate_date')::date
-)
-SELECT
-  (:'slate_date')::date AS game_date,
-  n_rows,
-  n_with_d10,
-  (n_rows - n_with_d10) AS n_missing_d10,
-  n_with_d20,
-  (n_rows - n_with_d20) AS n_missing_d20
-FROM base;
+  -- IMPORTANT: idempotent suffix append (prevents repeated token spam)
+  pairings_source = CASE
+    WHEN COALESCE(t.pairings_source, '') = '' THEN 'pairings_features_game_d10d20'
+    WHEN t.pairings_source LIKE '%pairings_features_game_d10d20%' THEN t.pairings_source
+    ELSE t.pairings_source || ';' || 'pairings_features_game_d10d20'
+  END,
+  pairings_updated_at = NOW()
+WHERE t.game_date::date = (:'slate_date')::date;

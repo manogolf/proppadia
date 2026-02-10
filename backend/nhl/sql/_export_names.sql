@@ -29,9 +29,23 @@ COPY (
   )
   SELECT
     r.player_id,
+
+    -- Existing display name (kept for backwards compatibility)
     COALESCE(NULLIF(btrim(p.full_name), ''), 'Player ' || r.player_id::text) AS full_name,
+
+    -- New: canonical components
+    NULLIF(btrim(p.first_name), '') AS first_name,
+    NULLIF(btrim(p.last_name),  '') AS last_name,
+
+    -- New: canonical full name (First Last) when available
+    CASE
+      WHEN NULLIF(btrim(p.first_name), '') IS NOT NULL
+       AND NULLIF(btrim(p.last_name),  '') IS NOT NULL
+      THEN btrim(p.first_name) || ' ' || btrim(p.last_name)
+      ELSE NULL
+    END AS full_name_canonical,
+
     r.team_id,
-    -- NOTE: nhl.teams has column "team" (text); we alias it to team_code for the CSV
     COALESCE(t.team, '') AS team_code,
     r.game_id,
     g.game_date

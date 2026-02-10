@@ -337,8 +337,15 @@ def main():
             per_line_probs[L] = mat[:, j]
 
     # Assemble output
+    def pcol(L: float) -> str:
+        # Standardize column names to match downstream expectations:
+        # p_over_1_5, p_over_2_5, p_over_3_5
+        s = f"{L:.1f}".replace(".", "_")
+        return f"p_over_{s}"
+
+    # Assemble output
     for L in lines:
-        results[f"p_over_{L}"] = per_line_probs[L]
+        results[pcol(L)] = per_line_probs[L]
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     results.to_csv(args.out, index=False)

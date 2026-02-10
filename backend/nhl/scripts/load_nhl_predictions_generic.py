@@ -164,7 +164,18 @@ def main() -> None:
     ap.add_argument("--pred-csv", required=True, help="Path to predictions CSV")
     ap.add_argument("--project", required=True, help="e.g., nhl")
     ap.add_argument("--prop", required=True, help="e.g., goalie_saves, player_points, shots_on_goal")
+    ap.add_argument("--model-family", default=None, help="Override nhl.predictions.model_family")
+    ap.add_argument("--model-version", default=None, help="Override nhl.predictions.model_version")
+    ap.add_argument("--feature-hash",  default=None, help="Override nhl.predictions.feature_hash")
+
     args = ap.parse_args()
+
+    # Guardrail: SOG must be loaded by the Denali loader, not the generic loader.
+    if args.prop == "shots_on_goal":
+        raise SystemExit(
+            "[guard] load_nhl_predictions_generic.py may not be used for shots_on_goal. "
+            "Use load_sog_predictions_denali.py instead."
+        )
 
     csv_path = Path(args.pred_csv)
     if not csv_path.exists():
