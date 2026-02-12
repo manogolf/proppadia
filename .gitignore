@@ -37,16 +37,20 @@ db_url.txt
 # ── Python ─────────────────────────────────────────────────────────
 .venv/
 venv/
+**/.venv/
+**/venv/
 __pycache__/
 **/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache/
+**/.pytest_cache/
 .ipynb_checkpoints/
 
 # ── Data / exports / reports (keep templates) ──────────────────────
 exports/
+logs/
 reports/**
 nhl/data/raw/
 nhl/data/interim/
@@ -78,5 +82,9 @@ mlb/backend/node_modules/
 mlb/backend/build/
 mlb/frontend/node_modules/
 mlb/frontend/build/
-.DS_Store
-backend/nhl/models/
+
+# ── Repo-local runtime debris ───────────────────────────────────────
+backend/nhl/venv/
+backend/nhl/logs/
+backend/nhl/exports/
+backend/nhl/_debug_dumps/

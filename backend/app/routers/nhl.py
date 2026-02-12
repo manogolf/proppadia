@@ -200,15 +200,6 @@ def sog(
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-@router.get("/sog_stage", summary="(legacy) Skater SOG predictions (wide)")
-def sog_stage(
-    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    limit: int = Query(25, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    return sog(date=date, limit=limit, offset=offset)
-
-
 # --- Saves (wide) ---
 @router.get("/saves", summary="Goalie Saves predictions (wide)")
 def saves(
@@ -275,11 +266,3 @@ def saves(
             return cur.fetchall()
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-
-@router.get("/saves_stage", summary="(legacy) Goalie Saves predictions (wide)")
-def saves_stage(
-    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    limit: int = Query(25, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    return saves(date=date, limit=limit, offset=offset)

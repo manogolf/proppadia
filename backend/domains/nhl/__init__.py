@@ -1,0 +1,2 @@
+"""NHL domain package."""
+
