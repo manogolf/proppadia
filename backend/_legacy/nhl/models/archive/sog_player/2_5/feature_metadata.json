@@ -1,0 +1,23 @@
+{
+  "prop_type": "sog",
+  "line": 2.5,
+  "features": [
+    "shooterplayerid",
+    "shots_attempts_game",
+    "sog_game",
+    "num_event_shot_last5",
+    "num_event_shot_last10",
+    "num_shotwasongoal_last5",
+    "num_shotwasongoal_last10",
+    "num_event_shot_season_to_date",
+    "num_shotwasongoal_season_to_date",
+    "team_num_event_shot_for_last10",
+    "team_num_shotwasongoal_for_last10"
+  ],
+  "trained_from": "exports/train_nhl_sog_player_game_2023_2024.csv",
+  "metrics": {
+    "lr_auc": 1.0,
+    "rf_auc": 1.0
+  },
+  "phoenix_spine": true
+}

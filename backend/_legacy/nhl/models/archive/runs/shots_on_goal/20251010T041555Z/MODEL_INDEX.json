@@ -1,0 +1,41 @@
+{
+  "prop": "shots_on_goal",
+  "family": "poisson",
+  "params": {
+    "alpha": 0.0
+  },
+  "feature_hash": "495d5768c1be5f905639f7e931823ca9dc51555a6efd049de06eb181e4e36220",
+  "feature_key": "shots_on_goal",
+  "eval_lines": [
+    2.5,
+    3.5
+  ],
+  "holdout_days": 21,
+  "metrics_holdout": {
+    "2.5": {
+      "brier": 0.22915023531771822,
+      "log_loss": 0.6497564307567151,
+      "auc": 0.6063701923076923
+    },
+    "3.5": {
+      "brier": 0.16368773775767148,
+      "log_loss": 0.5065570712843677,
+      "auc": 0.6042231416749894
+    }
+  },
+  "metrics_holdout_calibrated": {
+    "2.5": {
+      "brier": 0.23841350677374523,
+      "log_loss": 0.6724489578631843,
+      "auc": 0.5997596153846154
+    },
+    "3.5": {
+      "brier": 0.1688224750747954,
+      "log_loss": 0.5293120255795246,
+      "auc": 0.6120701954629761
+    }
+  },
+  "artifact_files": [
+    "MODEL_ARTIFACT.json"
+  ]
+}

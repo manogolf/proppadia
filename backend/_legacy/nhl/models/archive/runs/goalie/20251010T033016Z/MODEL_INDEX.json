@@ -1,0 +1,36 @@
+{
+  "prop": "goalie_saves",
+  "family": "poisson",
+  "params": {
+    "alpha": 0.1
+  },
+  "feature_hash": "b75496b7b034abd61ccbd97d064284b38ab195d7c1e4ad6bd3f8d5b9572300f8",
+  "feature_key": "goalie_saves",
+  "eval_lines": [
+    24.5,
+    28.5
+  ],
+  "holdout_days": 21,
+  "metrics_holdout": {
+    "24.5": {
+      "brier": 0.25598633624048706,
+      "log_loss": 0.7048130664273381,
+      "auc": 0.4047619047619047
+    },
+    "28.5": {
+      "brier": 0.24485983533754116,
+      "log_loss": 0.7084822350440391,
+      "auc": 0.3333333333333333
+    }
+  },
+  "metrics_holdout_calibrated": {
+    "24.5": {
+      "brier": 0.22587719298250875,
+      "log_loss": 0.6345917720809134,
+      "auc": 0.5416666666666667
+    }
+  },
+  "artifact_files": [
+    "MODEL_ARTIFACT.json"
+  ]
+}
