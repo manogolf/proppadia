@@ -64,12 +64,6 @@ data/**
 
 # ── Models / artifacts (ignore bulk; keep minimal metadata) ────────
 backend/nhl/models/**
-!backend/nhl/models/
-!backend/nhl/models/latest/
-!backend/nhl/models/latest/**/
-!backend/nhl/models/latest/**/MODEL_INDEX.json
-!backend/nhl/models/latest/**/FEATURE_HASH.txt
-!backend/nhl/models/latest/**/MODEL_ARTIFACT.json
 backend/_legacy/nhl/models/**
 
 backend/mlb/models/archive/
