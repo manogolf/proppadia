@@ -1,0 +1,1986 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Proppadia Backend",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mlb/ping": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Ping Mlb",
+        "operationId": "ping_mlb_api_mlb_ping_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/players/resolve": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Resolve MLB player",
+        "operationId": "players_resolve_api_players_resolve_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Player name",
+              "title": "Name"
+            },
+            "description": "Player name"
+          },
+          {
+            "name": "player_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias for name",
+              "title": "Player Name"
+            },
+            "description": "Alias for name"
+          },
+          {
+            "name": "player_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Known player id",
+              "title": "Player Id"
+            },
+            "description": "Known player id"
+          },
+          {
+            "name": "team_abbr",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Team abbreviation",
+              "title": "Team Abbr"
+            },
+            "description": "Team abbreviation"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvePlayerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/context": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Resolve MLB game context by team/date",
+        "operationId": "games_context_api_games_context_get",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "MLB team id",
+              "title": "Team Id"
+            },
+            "description": "MLB team id"
+          },
+          {
+            "name": "for_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD (defaults to today ET)",
+              "title": "For Date"
+            },
+            "description": "YYYY-MM-DD (defaults to today ET)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GamesContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/players/lookup": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Lookup MLB player by id",
+        "operationId": "players_lookup_api_players_lookup_get",
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "MLB player id",
+              "title": "Player Id"
+            },
+            "description": "MLB player id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvePlayerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/players/search": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Search MLB players",
+        "operationId": "players_search_api_players_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Name search query",
+              "title": "Q"
+            },
+            "description": "Name search query"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayersSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/players": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "List MLB players",
+        "operationId": "players_list_api_players_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 2000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerListItem"
+                  },
+                  "title": "Response Players List Api Players Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/player-profile/{player_id}": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB player profile",
+        "operationId": "get_player_profile_api_player_profile__player_id__get",
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/prepareProp": {
+      "post": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Prepare MLB prop features",
+        "operationId": "prepare_prop_endpoint_api_prepareProp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreparePropRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparePropResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/predict": {
+      "post": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Predict MLB prop",
+        "operationId": "predict_prop_endpoint_api_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/props/add": {
+      "post": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Persist user-added MLB prop from commit token",
+        "operationId": "add_prop_endpoint_api_props_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPropRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddPropResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model-metrics": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Model accuracy by prop type",
+        "operationId": "model_metrics_api_model_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ModelMetricRow"
+                  },
+                  "type": "array",
+                  "title": "Response Model Metrics Api Model Metrics Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user-vs-model-accuracy": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "User vs model accuracy by prop type",
+        "operationId": "user_vs_model_metrics_api_user_vs_model_accuracy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserVsModelMetricRow"
+                  },
+                  "type": "array",
+                  "title": "Response User Vs Model Metrics Api User Vs Model Accuracy Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user-vs-model-accuracy-weekly": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Weekly user vs model accuracy",
+        "operationId": "user_vs_model_metrics_weekly_api_user_vs_model_accuracy_weekly_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserVsModelWeeklyMetricRow"
+                  },
+                  "type": "array",
+                  "title": "Response User Vs Model Metrics Weekly Api User Vs Model Accuracy Weekly Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model-accuracy-weekly": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "Weekly model accuracy by prop type",
+        "operationId": "model_metrics_weekly_api_model_accuracy_weekly_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ModelWeeklyMetricRow"
+                  },
+                  "type": "array",
+                  "title": "Response Model Metrics Weekly Api Model Accuracy Weekly Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/gamecenter/{game_id}/landing": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "NHL GameCenter landing (proxy)",
+        "operationId": "nhl_gamecenter_landing_api_nhl_gamecenter__game_id__landing_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/ping": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "Ping Nhl",
+        "operationId": "ping_nhl_api_nhl_ping_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/ping-db": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "Nhl Ping Db",
+        "operationId": "nhl_ping_db_api_nhl_ping_db_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/games/today": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "Nhl Games Today",
+        "description": "Return today's NHL games with team names/abbrs (schema: nhl.games + nhl.teams).",
+        "operationId": "nhl_games_today_api_nhl_games_today_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD (defaults to today in America/New_York)",
+              "title": "Date"
+            },
+            "description": "YYYY-MM-DD (defaults to today in America/New_York)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Nhl Games Today Api Nhl Games Today Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/props/today": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "Nhl Props Today",
+        "description": "Return a small page of predictions for today's games.",
+        "operationId": "nhl_props_today_api_nhl_props_today_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD (defaults to today in America/New_York)",
+              "title": "Date"
+            },
+            "description": "YYYY-MM-DD (defaults to today in America/New_York)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/sog": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "Skater SOG predictions (wide)",
+        "operationId": "sog_api_nhl_sog_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nhl/saves": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "Goalie Saves predictions (wide)",
+        "operationId": "saves_api_nhl_saves_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddPropRequest": {
+        "properties": {
+          "prop_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prop Source",
+            "default": "user_added"
+          },
+          "commit_token": {
+            "type": "string",
+            "title": "Commit Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "commit_token"
+        ],
+        "title": "AddPropRequest"
+      },
+      "AddPropResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "saved": {
+            "type": "boolean",
+            "title": "Saved"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "saved",
+          "duplicate"
+        ],
+        "title": "AddPropResponse"
+      },
+      "GamesContextResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "found": {
+            "type": "boolean",
+            "title": "Found"
+          },
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "team_abbr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Abbr"
+          },
+          "for_date": {
+            "type": "string",
+            "title": "For Date"
+          },
+          "game_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Id"
+          },
+          "game_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Time"
+          },
+          "is_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Home"
+          },
+          "opponent_team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opponent Team Id"
+          },
+          "opponent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opponent"
+          },
+          "opponent_encoded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opponent Encoded"
+          },
+          "game_day_of_week": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Day Of Week"
+          },
+          "time_of_day_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Of Day Bucket"
+          },
+          "starting_pitcher_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starting Pitcher Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "found",
+          "team_id",
+          "for_date"
+        ],
+        "title": "GamesContextResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ModelMetricRow": {
+        "properties": {
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "correct": {
+            "type": "integer",
+            "title": "Correct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "total",
+          "correct"
+        ],
+        "title": "ModelMetricRow"
+      },
+      "ModelWeeklyMetricRow": {
+        "properties": {
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "correct": {
+            "type": "integer",
+            "title": "Correct"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "accuracy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "total",
+          "correct",
+          "week_start"
+        ],
+        "title": "ModelWeeklyMetricRow"
+      },
+      "PingResponse": {
+        "properties": {
+          "sport": {
+            "type": "string",
+            "title": "Sport"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sport",
+          "ok"
+        ],
+        "title": "PingResponse"
+      },
+      "PlayerIdentity": {
+        "properties": {
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team_abbr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Abbr"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "matched_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched On"
+          }
+        },
+        "type": "object",
+        "title": "PlayerIdentity"
+      },
+      "PlayerListItem": {
+        "properties": {
+          "player_id": {
+            "type": "integer",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id"
+        ],
+        "title": "PlayerListItem"
+      },
+      "PlayerProfileInfo": {
+        "properties": {
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          }
+        },
+        "type": "object",
+        "title": "PlayerProfileInfo"
+      },
+      "PlayerProfileResponse": {
+        "properties": {
+          "player_info": {
+            "$ref": "#/components/schemas/PlayerProfileInfo"
+          },
+          "streaks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Streaks"
+          },
+          "recent_props": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Props"
+          },
+          "stat_derived": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Stat Derived"
+          },
+          "training_summary": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Training Summary"
+          },
+          "season_stats": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Season Stats"
+          },
+          "career_stats": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Career Stats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_info",
+          "streaks",
+          "recent_props",
+          "stat_derived",
+          "training_summary",
+          "season_stats",
+          "career_stats"
+        ],
+        "title": "PlayerProfileResponse"
+      },
+      "PlayersSearchResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerIdentity"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "count",
+          "rows"
+        ],
+        "title": "PlayersSearchResponse"
+      },
+      "PredictRequest": {
+        "properties": {
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "features": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "features"
+        ],
+        "title": "PredictRequest"
+      },
+      "PredictResponse": {
+        "properties": {
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "probability": {
+            "type": "number",
+            "title": "Probability"
+          },
+          "probability_over": {
+            "type": "number",
+            "title": "Probability Over"
+          },
+          "probability_under": {
+            "type": "number",
+            "title": "Probability Under"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation"
+          },
+          "predicted_outcome": {
+            "type": "string",
+            "title": "Predicted Outcome"
+          },
+          "commit_token": {
+            "type": "string",
+            "title": "Commit Token"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "model_meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "probability",
+          "probability_over",
+          "probability_under",
+          "recommendation",
+          "predicted_outcome",
+          "commit_token",
+          "model"
+        ],
+        "title": "PredictResponse"
+      },
+      "PreparePropRequest": {
+        "properties": {
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          },
+          "team_abbr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Abbr"
+          },
+          "game_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Date"
+          },
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "prop_value": {
+            "type": "number",
+            "title": "Prop Value"
+          },
+          "over_under": {
+            "type": "string",
+            "title": "Over Under"
+          },
+          "line_diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Diff"
+          },
+          "rolling_result_avg_7": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rolling Result Avg 7"
+          },
+          "hit_streak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Streak"
+          },
+          "win_streak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Streak"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "prop_value",
+          "over_under"
+        ],
+        "title": "PreparePropRequest"
+      },
+      "PreparePropResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "features": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Features"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "features"
+        ],
+        "title": "PreparePropResponse"
+      },
+      "ResolvePlayerResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "found": {
+            "type": "boolean",
+            "title": "Found"
+          },
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team_abbr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Abbr"
+          },
+          "team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "matched_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "found"
+        ],
+        "title": "ResolvePlayerResponse"
+      },
+      "UserVsModelMetricRow": {
+        "properties": {
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "user_total": {
+            "type": "integer",
+            "title": "User Total"
+          },
+          "user_correct": {
+            "type": "integer",
+            "title": "User Correct"
+          },
+          "model_total": {
+            "type": "integer",
+            "title": "Model Total"
+          },
+          "model_correct": {
+            "type": "integer",
+            "title": "Model Correct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "total",
+          "user_total",
+          "user_correct",
+          "model_total",
+          "model_correct"
+        ],
+        "title": "UserVsModelMetricRow"
+      },
+      "UserVsModelWeeklyMetricRow": {
+        "properties": {
+          "prop_type": {
+            "type": "string",
+            "title": "Prop Type"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "user_total": {
+            "type": "integer",
+            "title": "User Total"
+          },
+          "user_correct": {
+            "type": "integer",
+            "title": "User Correct"
+          },
+          "model_total": {
+            "type": "integer",
+            "title": "Model Total"
+          },
+          "model_correct": {
+            "type": "integer",
+            "title": "Model Correct"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prop_type",
+          "total",
+          "user_total",
+          "user_correct",
+          "model_total",
+          "model_correct",
+          "week_start"
+        ],
+        "title": "UserVsModelWeeklyMetricRow"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
