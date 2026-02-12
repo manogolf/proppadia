@@ -1,5 +1,5 @@
 // scripts/backfill/regeneratePlayerCaches.js
-import { supabase } from "../shared/supabaseBackend.js";
+import { supabase } from "../mlb/shared/supabaseBackend.js";
 import fetch from "node-fetch";
 import "dotenv/config";
 import { getBaseURL } from "../../../src/shared/archive/getBaseURL.js";
