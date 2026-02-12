@@ -12,7 +12,7 @@ export default function PlayerTeamBrowser() {
   useEffect(() => {
     async function fetchPlayers() {
       try {
-        const res = await fetch(`${getBaseURL()}/players`);
+        const res = await fetch(`${getBaseURL()}/api/players`);
         if (!res.ok) throw new Error("Failed to fetch player list");
         const data = await res.json();
         setPlayers(data);

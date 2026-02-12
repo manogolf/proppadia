@@ -55,11 +55,11 @@ export default function NHLPage() {
     [date]
   );
   const sogUrl = useMemo(
-    () => `${API_BASE}/api/nhl/sog_stage?date=${encodeURIComponent(date)}`,
+    () => `${API_BASE}/api/nhl/sog?date=${encodeURIComponent(date)}`,
     [date]
   );
   const savesUrl = useMemo(
-    () => `${API_BASE}/api/nhl/saves_stage?date=${encodeURIComponent(date)}`,
+    () => `${API_BASE}/api/nhl/saves?date=${encodeURIComponent(date)}`,
     [date]
   );
 

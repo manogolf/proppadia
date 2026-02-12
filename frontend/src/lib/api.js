@@ -1,15 +1,18 @@
-//  src/lib/api.js
+// src/lib/api.js
+import { getBaseURL } from "../shared/getBaseURL.js";
 
-export async function api(path, init) {
-  const res = await fetch(`/api${path}`, { credentials: "include", ...init });
-  if (!res.ok)
-    throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
-  return res.json(); // { ok, data }
+function toUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = getBaseURL();
+  if (path.startsWith("/api/")) return `${base}${path}`;
+  if (path.startsWith("/")) return `${base}/api${path}`;
+  return `${base}/api/${path}`;
 }
 
 export async function api(path, opts) {
-  const res = await fetch(path, { credentials: "include", ...(opts || {}) });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${path}`);
+  const url = toUrl(path);
+  const res = await fetch(url, { credentials: "include", ...(opts || {}) });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${url}`);
   return res.json();
 }
 
@@ -34,3 +37,4 @@ export const gamesAPI = {
     return api(`/api/games/context?${u.toString()}`);
   },
 };
+

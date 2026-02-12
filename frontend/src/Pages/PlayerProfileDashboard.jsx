@@ -14,7 +14,7 @@ export default function PlayerProfileDashboard() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const res = await fetch(`${getBaseURL()}/player-profile/${playerId}`);
+        const res = await fetch(`${getBaseURL()}/api/player-profile/${playerId}`);
         const data = await res.json();
         setProfileData(data);
         console.log("👀 Profile data:", data);
