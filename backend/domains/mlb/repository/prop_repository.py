@@ -4,39 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Sequence
 
-try:
-    import psycopg
-    import psycopg.rows
-except Exception:  # pragma: no cover - environment-dependent import
-    psycopg = None  # type: ignore
-
-from backend.supabase.supabase_utils import get_database_url
-
-
-def _db_url() -> str:
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return url
-
-
-def _fetchone(sql: str, params: Sequence[Any]) -> Optional[Dict[str, Any]]:
-    if psycopg is None:
-        raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            row = cur.fetchone()
-            return dict(row) if row else None
-
-
-def _execute(sql: str, params: Sequence[Any]) -> None:
-    if psycopg is None:
-        raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            conn.commit()
+from backend.shared.db import pg_execute, pg_fetchone
 
 
 def find_duplicate_prop_id(
@@ -59,7 +27,7 @@ def find_duplicate_prop_id(
           AND prop_source = %s
         LIMIT 1
     """
-    row = _fetchone(
+    row = pg_fetchone(
         sql,
         (
             str(player_id),
@@ -104,7 +72,7 @@ def insert_prop_row(
           NOW(), NOW()
         )
     """
-    _execute(
+    pg_execute(
         sql,
         (
             str(player_id),

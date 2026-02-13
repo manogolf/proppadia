@@ -2,31 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List
 
-try:
-    import psycopg
-    import psycopg.rows
-except Exception:  # pragma: no cover - environment-dependent import
-    psycopg = None  # type: ignore
-
-from backend.supabase.supabase_utils import get_database_url
-
-
-def _db_url() -> str:
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return url
-
-
-def _fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
-    if psycopg is None:
-        raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return list(cur.fetchall() or [])
+from backend.shared.db import pg_fetchall
 
 
 BASE_METRICS_CTE = """
@@ -91,7 +69,7 @@ FROM resolved
 GROUP BY prop_type
 ORDER BY prop_type;
 """
-    return _fetchall(sql)
+    return pg_fetchall(sql)
 
 
 def get_model_accuracy_rows() -> List[Dict[str, Any]]:
@@ -114,7 +92,7 @@ FROM resolved
 GROUP BY prop_type
 ORDER BY prop_type;
 """
-    return _fetchall(sql)
+    return pg_fetchall(sql)
 
 
 def get_user_vs_model_accuracy_weekly_rows() -> List[Dict[str, Any]]:
@@ -141,7 +119,7 @@ FROM resolved
 GROUP BY date_trunc('week', game_day)::date, prop_type
 ORDER BY week_start DESC, prop_type;
 """
-    return _fetchall(sql)
+    return pg_fetchall(sql)
 
 
 def get_model_accuracy_weekly_rows() -> List[Dict[str, Any]]:
@@ -165,7 +143,7 @@ FROM resolved
 GROUP BY date_trunc('week', game_day)::date, prop_type
 ORDER BY week_start DESC, prop_type;
 """
-    rows = _fetchall(sql)
+    rows = pg_fetchall(sql)
     for row in rows:
         total = row.get("total") or 0
         correct = row.get("correct") or 0

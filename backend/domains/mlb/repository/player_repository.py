@@ -2,36 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
-
-try:
-    import psycopg
-    import psycopg.rows
-except Exception:  # pragma: no cover - environment-dependent import
-    psycopg = None  # type: ignore
+from typing import Any, Dict, List, Optional
 
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
-from backend.supabase.supabase_utils import get_database_url
-
-
-def _db_url() -> str:
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return url
-
-
-def _fetchall(sql: str, params: Sequence[Any]) -> List[Dict[str, Any]]:
-    if psycopg is None:
-        raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return list(cur.fetchall() or [])
+from backend.shared.db import pg_fetchall
 
 
 def _normalize_team(team_abbr: Optional[str]) -> Optional[str]:
@@ -99,7 +77,7 @@ def lookup_player(player_id: int) -> Optional[Dict[str, Any]]:
     ]
     for sql, source in queries:
         try:
-            rows = _fetchall(sql, (str(player_id),))
+            rows = pg_fetchall(sql, (str(player_id),))
         except Exception:
             continue
         if not rows:
@@ -127,7 +105,7 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
         LIMIT %s
     """
     try:
-        rows = _fetchall(sql, (f"%{query}%", lim))
+        rows = pg_fetchall(sql, (f"%{query}%", lim))
     except Exception:
         return []
     out: List[Dict[str, Any]] = []
@@ -168,7 +146,7 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
         LIMIT %s
     """
     try:
-        rows = _fetchall(sql, (lim,))
+        rows = pg_fetchall(sql, (lim,))
     except Exception:
         return []
 
@@ -232,7 +210,7 @@ def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, A
 
     for sql, params, source, matched_on in search_steps:
         try:
-            rows = _fetchall(sql, params)
+            rows = pg_fetchall(sql, params)
         except Exception:
             continue
         for row in rows:
@@ -279,7 +257,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]
 
     def run_or_empty(sql: str) -> List[Dict[str, Any]]:
         try:
-            return _fetchall(sql, (pid_txt,))
+            return pg_fetchall(sql, (pid_txt,))
         except Exception:
             return []
 
