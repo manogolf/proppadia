@@ -13,6 +13,7 @@ from backend.domains.mlb.prop_workflow import normalize_prop_type
 
 ET = ZoneInfo("America/New_York")
 ODDS_BASE = "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds"
+EVENTS_BASE = "https://api.the-odds-api.com/v4/sports/baseball_mlb/events"
 SNAPSHOT_TTL_SECONDS = int(os.getenv("MLB_ODDS_CACHE_TTL_SECONDS", "21600"))
 
 PROP_TO_ODDS_MARKET = {
@@ -166,14 +167,70 @@ def _fetch_market_snapshot(*, game_date: str) -> List[Dict[str, Any]]:
         "oddsFormat": "american",
         "dateFormat": "iso",
     }
+
+    # Preferred one-call fetch for all events/markets on the sport endpoint.
+    # If OddsAPI rejects market keys at this endpoint (422), fallback to per-event odds.
     res = requests.get(ODDS_BASE, params=params, timeout=20)
+    if res.status_code == 422:
+        rows = _fetch_event_level_market_snapshot(api_key=api_key, game_date=game_date)
+        _snapshot_cache[cache_key] = (now, rows)
+        return rows
+
     res.raise_for_status()
     payload = res.json()
     if not isinstance(payload, list):
         raise RuntimeError("unexpected OddsAPI payload shape")
-
     rows = [ev for ev in payload if _event_date_et(ev) == game_date]
+
     _snapshot_cache[cache_key] = (now, rows)
+    return rows
+
+
+def _fetch_event_level_market_snapshot(*, api_key: str, game_date: str) -> List[Dict[str, Any]]:
+    events_res = requests.get(
+        EVENTS_BASE,
+        params={
+            "apiKey": api_key,
+            "dateFormat": "iso",
+        },
+        timeout=20,
+    )
+    events_res.raise_for_status()
+    events_payload = events_res.json()
+    if not isinstance(events_payload, list):
+        raise RuntimeError("unexpected OddsAPI events payload shape")
+
+    target_events = [ev for ev in events_payload if _event_date_et(ev) == game_date]
+    if not target_events:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for ev in target_events:
+        event_id = ev.get("id")
+        if not event_id:
+            continue
+
+        odds_res = requests.get(
+            f"{EVENTS_BASE}/{event_id}/odds",
+            params={
+                "apiKey": api_key,
+                "regions": "us",
+                "markets": _markets_query(),
+                "oddsFormat": "american",
+                "dateFormat": "iso",
+            },
+            timeout=20,
+        )
+
+        # Some events may not expose props yet; skip those gracefully.
+        if odds_res.status_code == 422:
+            continue
+
+        odds_res.raise_for_status()
+        payload = odds_res.json()
+        if isinstance(payload, dict):
+            rows.append(payload)
+
     return rows
 
 

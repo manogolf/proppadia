@@ -206,6 +206,79 @@ class TestMlbMarketOddsService(unittest.TestCase):
         self.assertIn("batter_hits", called_markets)
         self.assertIn("batter_home_runs", called_markets)
 
+    @patch.dict("os.environ", {"ODDS_API_KEY": "test-key"}, clear=False)
+    @patch("backend.app.services.mlb.market_odds_service.requests.get")
+    def test_fetch_market_odds_falls_back_to_event_endpoint_on_422(self, mock_get):
+        class _Sport422:
+            status_code = 422
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"message": "invalid markets for this endpoint"}
+
+        class _EventsResp:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return [
+                    {
+                        "id": "evt1",
+                        "commence_time": "2026-06-01T23:10:00Z",
+                    }
+                ]
+
+        class _EventOddsResp:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "id": "evt1",
+                    "commence_time": "2026-06-01T23:10:00Z",
+                    "home_team": "Los Angeles Dodgers",
+                    "away_team": "New York Yankees",
+                    "bookmakers": [
+                        {
+                            "key": "fanduel",
+                            "title": "FanDuel",
+                            "markets": [
+                                {
+                                    "key": "batter_hits",
+                                    "outcomes": [
+                                        {
+                                            "description": "Shohei Ohtani",
+                                            "name": "Over",
+                                            "point": 1.5,
+                                            "price": -120,
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+
+        mock_get.side_effect = [_Sport422(), _EventsResp(), _EventOddsResp()]
+
+        out = fetch_mlb_market_odds(
+            player_name="Shohei Ohtani",
+            prop_type="hits",
+            game_date="2026-06-01",
+            over_under="over",
+            line=1.5,
+        )
+        self.assertTrue(out["ok"])
+        self.assertTrue(out["found"])
+        self.assertEqual(out["market_key"], "batter_hits")
+        self.assertGreaterEqual(mock_get.call_count, 3)
+
 
 if __name__ == "__main__":
     unittest.main()
