@@ -171,6 +171,7 @@ Status: Phase closed on February 13, 2026.
   - NHL service test coverage: added `test_nhl_gamecenter_service.py` for GameCenter proxy success/failure behavior
   - MLB schema extraction: moved MLB request/response Pydantic models into `backend/app/schemas/mlb.py` and made router consume shared schemas
   - OpenAPI check dedupe: extracted shared contract-diff utilities to `backend/scripts/openapi_contract_utils.py` and simplified MLB/NHL contract scripts
+  - App/runtime DB helper alignment: `backend/app/deps.py` now delegates to shared DB helper (`backend/shared/db/pg.py`) for consistent connection behavior
 - In progress:
   - None
 - Next phase:

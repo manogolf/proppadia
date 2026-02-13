@@ -26,6 +26,10 @@ def _connect():
     return psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None)
 
 
+def pg_connect():
+    return _connect()
+
+
 def pg_fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
