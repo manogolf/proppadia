@@ -36,7 +36,7 @@ Meaning:
 - `mlb-checks-offline`: unit + offline smoke + OpenAPI contract drift
 - `mlb-checks-auto`: offline checks + metrics API-only when DB is reachable (otherwise warns and continues)
 - `mlb-checks`: above + metrics API shape validation (`--api-only`)
-- `mlb-checks-full`: above + full smoke + API-vs-DB metrics comparison
+- `mlb-checks-full`: above + full smoke + API-vs-DB metrics comparison + golden-path write check
 - `mlb-checks-golden`: write-aware golden-path (`prepareProp -> predict -> props/add -> duplicate replay`)
 - `runtime-boundaries`: blocks runtime imports from archive/legacy code paths
 

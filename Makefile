@@ -31,6 +31,7 @@ mlb-checks-auto: mlb-checks-offline
 mlb-checks-full: mlb-checks
 	$(VENV_PY) backend/scripts/smoke_mlb_api.py --mode full --date 2025-08-15
 	$(VENV_PY) backend/scripts/validate_mlb_metrics.py
+	$(MAKE) mlb-checks-golden
 
 # Golden-path write-aware smoke (prepare -> predict -> add -> duplicate replay).
 # Requires DB connectivity and a resolvable historical game context.
