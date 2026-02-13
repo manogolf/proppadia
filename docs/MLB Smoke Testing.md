@@ -28,6 +28,7 @@ make mlb-checks-offline
 make mlb-checks-auto
 make mlb-checks
 make mlb-checks-full
+make mlb-checks-golden
 make runtime-boundaries
 ```
 
@@ -36,6 +37,7 @@ Meaning:
 - `mlb-checks-auto`: offline checks + metrics API-only when DB is reachable (otherwise warns and continues)
 - `mlb-checks`: above + metrics API shape validation (`--api-only`)
 - `mlb-checks-full`: above + full smoke + API-vs-DB metrics comparison
+- `mlb-checks-golden`: write-aware golden-path (`prepareProp -> predict -> props/add -> duplicate replay`)
 - `runtime-boundaries`: blocks runtime imports from archive/legacy code paths
 
 If your virtualenv python is not `.venv/bin/python`, override:
@@ -56,6 +58,7 @@ Against a running backend:
 ```bash
 .venv/bin/python backend/scripts/smoke_mlb_api.py --mode offline --base-url http://127.0.0.1:8001
 .venv/bin/python backend/scripts/smoke_mlb_api.py --mode full --base-url http://127.0.0.1:8001 --date 2025-08-15
+.venv/bin/python backend/scripts/smoke_mlb_prop_flow.py --base-url http://127.0.0.1:8001 --date 2025-08-15 --team-id 119 --player-id 660271
 ```
 
 ## Useful Flags
@@ -64,6 +67,8 @@ Against a running backend:
 - `--team-id`: team ID for context checks (default `144`)
 - `--player-id`: player ID for lookup/profile checks (default `660271`)
 - `--search-q`: query for `/api/players/search` (default `Judge`)
+- Golden-path script also supports:
+  - `--prop-source` (default `smoke_test`)
 
 ## Pass/Fail Semantics
 
