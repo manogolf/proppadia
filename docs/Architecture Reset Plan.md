@@ -167,6 +167,7 @@ Status: Phase closed on February 13, 2026.
   - Shared DB helper: introduced `backend/shared/db/pg.py` and moved MLB repositories to use common psycopg fetch/execute helpers
   - NHL repository alignment: moved `backend/domains/nhl/repository/queries.py` to shared DB helpers (`backend/shared/db/pg.py`)
   - Duplicate race hardening: `props/add` now handles DB `unique_violation` races as idempotent duplicates via repository-level `DuplicatePropError`
+  - NHL unit-test baseline: added `test_nhl_repository_queries.py` and wired `nhl-checks-offline` to run `test_nhl_*.py`
 - In progress:
   - None
 - Next phase:

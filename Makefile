@@ -100,6 +100,7 @@ nhl-openapi-contract:
 # Fast local NHL verification (no external NHL API required).
 nhl-checks-offline:
 	$(MAKE) runtime-boundaries
+	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_nhl_*.py' -v
 	$(MAKE) nhl-openapi-contract
 
 # One-command NHL release confidence gate (offseason-safe strict deploy check).

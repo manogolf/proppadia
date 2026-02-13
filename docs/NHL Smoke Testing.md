@@ -42,7 +42,7 @@ make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com 
 ```
 
 Meaning:
-- `nhl-checks-offline`: runtime import boundary + NHL OpenAPI drift check
+- `nhl-checks-offline`: runtime import boundary + NHL unit tests + NHL OpenAPI drift check
 - `nhl-openapi-contract`: detects NHL OpenAPI schema drift vs `docs/openapi/openapi.snapshot.json`
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
 - `nhl-post-deploy-strict`: same checks, fails when probe date returns sparse data
