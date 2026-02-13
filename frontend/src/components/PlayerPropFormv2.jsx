@@ -319,11 +319,11 @@ export default function PlayerPropFormV2({ onSaved }) {
             ? `This prop was already saved (id: ${res.id}).`
             : "This prop was already saved."
         );
-        onSaved?.({ duplicate: true, id: res?.id ?? null });
+        onSaved?.({ duplicate: true, id: res?.id ?? null, gameDate });
       } else if (res?.saved) {
         setPrediction((p) => (p ? { ...p, saved: true, savedId: res.id ?? null } : p));
         setNotice(res?.id ? `Prop saved (id: ${res.id}).` : "Prop saved.");
-        onSaved?.({ duplicate: false, id: res?.id ?? null });
+        onSaved?.({ duplicate: false, id: res?.id ?? null, gameDate });
       }
       setCommitToken(null); // avoid repeat submits
     } catch (e) {

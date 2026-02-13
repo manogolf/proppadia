@@ -34,6 +34,7 @@ export default function PropsDashboard() {
         <LoginGate>
           <PlayerPropFormV2
             onSaved={(evt) => {
+              if (evt?.gameDate) setSelectedDate(evt.gameDate);
               setLastSaveEvent(evt || null);
               setTableRefreshNonce((n) => n + 1);
             }}
