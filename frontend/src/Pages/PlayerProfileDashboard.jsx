@@ -54,6 +54,12 @@ export default function PlayerProfileDashboard() {
       <div className="p-4 text-red-600">Failed to load player profile</div>
     );
 
+  const latestRecentPropDate =
+    profileData?.recent_props?.map((p) => p?.game_date).find((d) => d) || null;
+  const latestDerivedDate =
+    profileData?.stat_derived?.map((p) => p?.game_date).find((d) => d) || null;
+  const freshnessDate = latestRecentPropDate || latestDerivedDate;
+
   const renderStatGroup = (title, stats) => {
     if (!stats || Object.keys(stats).length === 0) return null;
 
@@ -81,10 +87,16 @@ export default function PlayerProfileDashboard() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">
-          Player Profile: {profileData?.player_info?.player_name || playerId}
-          {profileData?.player_info?.team ? ` (${profileData.player_info.team})` : ""}
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold">
+            Player Profile: {profileData?.player_info?.player_name || playerId}
+            {profileData?.player_info?.team ? ` (${profileData.player_info.team})` : ""}
+          </h1>
+          <div className="text-sm text-gray-600 mt-1">
+            Data freshness:{" "}
+            {freshnessDate ? `last prop date ${freshnessDate}` : "no recent prop history"}
+          </div>
+        </div>
         <Link to="/players" className="text-blue-600 hover:underline text-sm">
           ← Back to Player List
         </Link>
