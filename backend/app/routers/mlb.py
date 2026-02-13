@@ -5,9 +5,27 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
 
 from backend.app.deps import pg_fetchone
+from backend.app.schemas.mlb import (
+    AddPropRequest,
+    AddPropResponse,
+    GamesContextResponse,
+    ModelMetricRow,
+    ModelWeeklyMetricRow,
+    PingResponse,
+    PlayerListItem,
+    PlayerProfileResponse,
+    PlayersSearchResponse,
+    PredictRequest,
+    PredictResponse,
+    PreparePropRequest,
+    PreparePropResponse,
+    ResolvePlayerResponse,
+    UserVsModelMetricRow,
+    UserVsModelWeeklyMetricRow,
+    model_to_dict,
+)
 from backend.app.services.mlb.game_context_service import get_game_context
 from backend.app.services.mlb.metrics_service import (
     fetch_model_metrics,
@@ -30,158 +48,6 @@ from backend.app.services.mlb.player_service import (
 
 router = APIRouter(tags=["mlb"])
 ET = ZoneInfo("America/New_York")
-
-
-class PingResponse(BaseModel):
-    sport: str
-    ok: bool
-
-
-class PlayerIdentity(BaseModel):
-    player_id: Optional[int] = None
-    player_name: Optional[str] = None
-    team_abbr: Optional[str] = None
-    team_id: Optional[int] = None
-    source: Optional[str] = None
-    matched_on: Optional[str] = None
-
-
-class ResolvePlayerResponse(BaseModel):
-    ok: bool
-    found: bool
-    player_id: Optional[int] = None
-    player_name: Optional[str] = None
-    team_abbr: Optional[str] = None
-    team_id: Optional[int] = None
-    source: Optional[str] = None
-    matched_on: Optional[str] = None
-
-
-class GamesContextResponse(BaseModel):
-    ok: bool
-    found: bool
-    team_id: int
-    team_abbr: Optional[str] = None
-    for_date: str
-    game_id: Optional[int] = None
-    game_time: Optional[str] = None
-    is_home: Optional[bool] = None
-    opponent_team_id: Optional[int] = None
-    opponent: Optional[str] = None
-    opponent_encoded: Optional[int] = None
-    game_day_of_week: Optional[int] = None
-    time_of_day_bucket: Optional[str] = None
-    starting_pitcher_id: Optional[int] = None
-
-
-class PlayersSearchResponse(BaseModel):
-    ok: bool
-    count: int
-    rows: List[PlayerIdentity]
-
-
-class PlayerListItem(BaseModel):
-    player_id: int
-    player_name: Optional[str] = None
-    team: Optional[str] = None
-    last_prop_date: Optional[date] = None
-
-
-class PlayerProfileInfo(BaseModel):
-    player_id: Optional[int] = None
-    player_name: Optional[str] = None
-    team: Optional[str] = None
-    team_id: Optional[int] = None
-
-
-class PlayerProfileResponse(BaseModel):
-    player_info: PlayerProfileInfo
-    streaks: List[Dict[str, Any]]
-    recent_props: List[Dict[str, Any]]
-    stat_derived: List[Dict[str, Any]]
-    training_summary: List[Dict[str, Any]]
-    season_stats: Dict[str, Any]
-    career_stats: Dict[str, Any]
-
-
-class PreparePropRequest(BaseModel):
-    player_id: Optional[int] = None
-    player_name: Optional[str] = None
-    team_id: Optional[int] = None
-    team_abbr: Optional[str] = None
-    game_date: Optional[str] = None
-    prop_type: str
-    prop_value: float
-    over_under: str
-    line_diff: Optional[float] = None
-    rolling_result_avg_7: Optional[float] = None
-    hit_streak: Optional[float] = None
-    win_streak: Optional[float] = None
-
-
-class PredictRequest(BaseModel):
-    prop_type: str
-    features: Dict[str, Any]
-
-
-class AddPropRequest(BaseModel):
-    prop_source: Optional[str] = "user_added"
-    commit_token: str
-
-
-class PreparePropResponse(BaseModel):
-    ok: bool
-    features: Dict[str, Any]
-    warnings: Optional[List[str]] = None
-
-
-class PredictResponse(BaseModel):
-    prop_type: str
-    probability: float
-    probability_over: float
-    probability_under: float
-    recommendation: str
-    predicted_outcome: str
-    commit_token: str
-    model: str
-    model_meta: Optional[Dict[str, Any]] = None
-
-
-class AddPropResponse(BaseModel):
-    ok: bool
-    saved: bool
-    duplicate: bool
-    id: Optional[str] = None
-
-
-class ModelMetricRow(BaseModel):
-    prop_type: str
-    total: int
-    correct: int
-
-
-class UserVsModelMetricRow(BaseModel):
-    prop_type: str
-    total: int
-    user_total: int
-    user_correct: int
-    model_total: int
-    model_correct: int
-
-
-class UserVsModelWeeklyMetricRow(UserVsModelMetricRow):
-    week_start: date
-
-
-class ModelWeeklyMetricRow(ModelMetricRow):
-    week_start: date
-    accuracy: Optional[float] = None
-
-
-def _model_to_dict(body: BaseModel) -> Dict[str, Any]:
-    if hasattr(body, "model_dump"):
-        return body.model_dump(exclude_none=True)  # pydantic v2
-    return body.dict(exclude_none=True)  # pydantic v1
 
 
 @router.get("/mlb/ping", response_model=PingResponse)
@@ -352,7 +218,7 @@ def get_player_profile(player_id: int):
 )
 def prepare_prop_endpoint(body: PreparePropRequest):
     try:
-        return prepare_prop_submission(_model_to_dict(body))
+        return prepare_prop_submission(model_to_dict(body))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
@@ -369,7 +235,7 @@ def prepare_prop_endpoint(body: PreparePropRequest):
 )
 def predict_prop_endpoint(body: PredictRequest):
     try:
-        return predict_prepared_prop(_model_to_dict(body))
+        return predict_prepared_prop(model_to_dict(body))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
@@ -386,7 +252,7 @@ def predict_prop_endpoint(body: PredictRequest):
 )
 def add_prop_endpoint(body: AddPropRequest):
     try:
-        return add_prop(_model_to_dict(body))
+        return add_prop(model_to_dict(body))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:

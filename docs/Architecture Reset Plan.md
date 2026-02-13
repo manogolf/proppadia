@@ -169,6 +169,7 @@ Status: Phase closed on February 13, 2026.
   - Duplicate race hardening: `props/add` now handles DB `unique_violation` races as idempotent duplicates via repository-level `DuplicatePropError`
   - NHL unit-test baseline: added `test_nhl_repository_queries.py` and wired `nhl-checks-offline` to run `test_nhl_*.py`
   - NHL service test coverage: added `test_nhl_gamecenter_service.py` for GameCenter proxy success/failure behavior
+  - MLB schema extraction: moved MLB request/response Pydantic models into `backend/app/schemas/mlb.py` and made router consume shared schemas
 - In progress:
   - None
 - Next phase:
