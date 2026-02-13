@@ -21,7 +21,7 @@ def pg_connect():
     url = get_database_url()
     if not url:
         raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return psycopg.connect(url, prepare_threshold=0)
+    return psycopg.connect(url, prepare_threshold=None)
 
 
 def pg_fetchone(sql: str, params: tuple = ()) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
@@ -35,7 +35,7 @@ def pg_fetchone(sql: str, params: tuple = ()) -> Tuple[bool, Optional[Dict[str, 
     if not url:
         return False, None, "DATABASE_URL/SUPABASE_DB_URL not set"
     try:
-        with psycopg.connect(url, prepare_threshold=0) as conn, conn.cursor() as cur:
+        with psycopg.connect(url, prepare_threshold=None) as conn, conn.cursor() as cur:
             cur.execute(sql, params)
             row = cur.fetchone()
             if row is None:

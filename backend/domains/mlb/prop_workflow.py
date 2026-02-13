@@ -36,7 +36,7 @@ def _db_url() -> str:
 def _fetchone(sql: str, params: Sequence[Any]) -> Optional[Dict[str, Any]]:
     if psycopg is None:
         raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=0) as conn:
+    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             row = cur.fetchone()
@@ -46,7 +46,7 @@ def _fetchone(sql: str, params: Sequence[Any]) -> Optional[Dict[str, Any]]:
 def _execute(sql: str, params: Sequence[Any]) -> None:
     if psycopg is None:
         raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=0) as conn:
+    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             conn.commit()

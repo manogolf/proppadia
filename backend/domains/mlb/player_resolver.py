@@ -28,7 +28,7 @@ def _db_url() -> str:
 def _fetchall(sql: str, params: Sequence[Any]) -> List[Dict[str, Any]]:
     if psycopg is None:
         raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=0) as conn:
+    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return list(cur.fetchall() or [])

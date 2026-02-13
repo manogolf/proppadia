@@ -42,7 +42,7 @@ def _fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
     import psycopg
     import psycopg.rows
 
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=0) as conn:
+    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return list(cur.fetchall() or [])
