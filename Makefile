@@ -1,4 +1,4 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason runtime-boundaries
+.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason nhl-checks-offline nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -76,3 +76,8 @@ nhl-post-deploy-strict-offseason:
 # NHL OpenAPI contract drift check.
 nhl-openapi-contract:
 	$(VENV_PY) backend/scripts/check_nhl_openapi_contract.py
+
+# Fast local NHL verification (no external NHL API required).
+nhl-checks-offline:
+	$(MAKE) runtime-boundaries
+	$(MAKE) nhl-openapi-contract

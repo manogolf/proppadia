@@ -12,6 +12,7 @@ Script:
 Before NHL deploy:
 
 ```bash
+make nhl-checks-offline
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 ```
 
@@ -32,6 +33,7 @@ make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onr
 From repo root:
 
 ```bash
+make nhl-checks-offline
 make nhl-openapi-contract
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -39,6 +41,7 @@ make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onr
 ```
 
 Meaning:
+- `nhl-checks-offline`: runtime import boundary + NHL OpenAPI drift check
 - `nhl-openapi-contract`: detects NHL OpenAPI schema drift vs `docs/openapi/openapi.snapshot.json`
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
 - `nhl-post-deploy-strict`: same checks, fails when probe date returns sparse data
