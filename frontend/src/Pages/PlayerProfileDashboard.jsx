@@ -10,16 +10,22 @@ export default function PlayerProfileDashboard() {
   const { playerId } = useParams();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function fetchProfile() {
       try {
+        setError("");
         const res = await fetch(`${getBaseURL()}/api/player-profile/${playerId}`);
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`${res.status}: ${txt}`);
+        }
         const data = await res.json();
         setProfileData(data);
-        console.log("👀 Profile data:", data);
       } catch (err) {
-        console.error("Error fetching player profile:", err);
+        setProfileData(null);
+        setError(err?.message || "Failed to load player profile.");
       } finally {
         setLoading(false);
       }
@@ -36,51 +42,17 @@ export default function PlayerProfileDashboard() {
     );
   }
 
+  if (error)
+    return (
+      <div className="p-4 text-red-600">
+        Failed to load player profile: {error}
+      </div>
+    );
+
   if (!profileData)
     return (
       <div className="p-4 text-red-600">Failed to load player profile</div>
     );
-
-  const groupedStatFields = {
-    "Batting Summary": [
-      "avg",
-      "obp",
-      "slg",
-      "ops",
-      "babip",
-      "atBats",
-      "hits",
-      "doubles",
-      "triples",
-      "homeRuns",
-    ],
-    "Run Production": [
-      "rbi",
-      "runs",
-      "totalBases",
-      "plateAppearances",
-      "baseOnBalls",
-      "intentionalWalks",
-      "hitByPitch",
-    ],
-    Situational: [
-      "sacBunts",
-      "sacFlies",
-      "groundIntoDoublePlay",
-      "leftOnBase",
-      "catchersInterference",
-    ],
-    "Strikeouts & Outs": [
-      "strikeOuts",
-      "groundOuts",
-      "airOuts",
-      "groundOutsToAirouts",
-      "numberOfPitches",
-      "atBatsPerHomeRun",
-    ],
-    Speed: ["stolenBases", "caughtStealing", "stolenBasePercentage"],
-    "Games Played": ["gamesPlayed"],
-  };
 
   const renderStatGroup = (title, stats) => {
     if (!stats || Object.keys(stats).length === 0) return null;
@@ -110,9 +82,8 @@ export default function PlayerProfileDashboard() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">
-          Player Profile: {profileData?.player_info?.player_name || playerId} (
-          {profileData?.player_info?.team || ""})
-          <span className="text-sm font-normal text-gray-500"></span>
+          Player Profile: {profileData?.player_info?.player_name || playerId}
+          {profileData?.player_info?.team ? ` (${profileData.player_info.team})` : ""}
         </h1>
         <Link to="/players" className="text-blue-600 hover:underline text-sm">
           ← Back to Player List
@@ -151,10 +122,11 @@ export default function PlayerProfileDashboard() {
                     <span className="font-semibold text-blue-800">
                       {prop.game_date}
                     </span>
-                    : {getPropDisplayLabel(prop.prop_type)} → {prop.outcome}
+                    : {getPropDisplayLabel(prop.prop_type)} → {prop.outcome || "pending"}
                   </div>
                   <div className="text-sm text-gray-600">
-                    {prop.over_under.toLowerCase()} {prop.prop_value}
+                    {String(prop.over_under || "").toLowerCase() || "—"}{" "}
+                    {prop.prop_value ?? "—"}
                     {"\u00A0\u00A0"}
                     {prop.confidence_score && (
                       <span className="ml-2 text-blue-600">
