@@ -149,6 +149,7 @@ docs/
   - Frontend `archive/*` imports removed from active components
   - Unused frontend MLB components removed (legacy weekly widgets + old `PlayerPropForm` v1)
   - Release-prep docs added (`docs/README.md`, `docs/MLB Cutover Checklist.md`)
+  - Removed unused frontend legacy API shim files (`src/Pages/api/*`, old feature-vector helpers)
 - In progress:
   - Contract hardening + metrics validation against historical Supabase slices
 - Remaining:

@@ -21,8 +21,6 @@ Status legend:
 | `GET /api/model-accuracy-weekly` | `frontend/src/Pages/ModelMetricsDashboard.jsx` | Active | Implemented in `backend/app/routers/mlb.py` via domain metrics queries. |
 | `GET /api/player-profile/{player_id}` | `frontend/src/Pages/PlayerProfileDashboard.jsx` | Active | Implemented in `backend/app/routers/mlb.py`. |
 | `GET /api/players` | `frontend/src/Pages/PlayerTeamBrowser.jsx` | Active | Implemented in `backend/app/routers/mlb.py`. |
-| `POST /api/getGamePk` | `frontend/src/utils/buildFeatureVector.js` | Legacy/Unclear | Related Express route exists at `backend/services/mlb/getGamePkRoute.mjs` (`/getGamePk`), not mounted in active FastAPI app. |
-
 ## Recommended next action
 
-Continue migrating remaining legacy logic into Python domain/service modules and reduce temporary compatibility routes once frontend callers are fully `/api/*`.
+Keep feature work on canonical FastAPI routes and avoid adding frontend-local API handlers.
