@@ -1,5 +1,5 @@
 // /src/components/PlayerPropsTable.js
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isValid } from "date-fns";
 import { supabase } from "../utils/supabaseFrontend.js";
 import { todayET } from "../shared/timeUtils.js";
@@ -18,9 +18,15 @@ const statusColor = {
   expired: "bg-gray-300 text-gray-500 italic",
 };
 
-export default function PlayerPropsTable({ selectedDate, onlyMine = false }) {
+export default function PlayerPropsTable({
+  selectedDate,
+  onlyMine = false,
+  refreshNonce = 0,
+}) {
   const [rows, setRows] = useState([]);
   const [sort, setSort] = useState({ key: "game_date", dir: "asc" });
+  const [loading, setLoading] = useState(false);
+  const [lastError, setLastError] = useState("");
   // const { user } = useAuth();
 
   const day = useMemo(() => {
@@ -31,7 +37,9 @@ export default function PlayerPropsTable({ selectedDate, onlyMine = false }) {
       : todayET();
   }, [selectedDate]);
 
-  useEffect(() => {
+  const fetchRows = useCallback(async () => {
+    setLoading(true);
+    setLastError("");
     let q = supabase
       .from("player_props")
       .select("*")
@@ -42,14 +50,19 @@ export default function PlayerPropsTable({ selectedDate, onlyMine = false }) {
     // If you want to show only the current user’s props, uncomment this:
     // if (onlyMine && user?.id) q = q.eq("user_id", user.id);
 
-    q.then(({ data, error }) => {
-      if (error) {
-        console.error("❌ fetch player_props:", error);
-        setRows([]);
-      } else {
-        setRows(data || []);
-      }
-    });
+    const { data, error } = await q;
+    if (error) {
+      console.error("❌ fetch player_props:", error);
+      setRows([]);
+      setLastError("Failed to refresh props table.");
+    } else {
+      setRows(data || []);
+    }
+    setLoading(false);
+  }, [day]);
+
+  useEffect(() => {
+    fetchRows();
 
     // Realtime (optional; v2 syntax). Requires Realtime enabled on the table.
     const channel = supabase
@@ -62,14 +75,19 @@ export default function PlayerPropsTable({ selectedDate, onlyMine = false }) {
           table: "player_props",
           filter: `game_date=eq.${day}`,
         },
-        (payload) => setRows((prev) => [payload.new, ...prev])
+        () => fetchRows()
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [day /*, onlyMine, user?.id */]);
+  }, [day, fetchRows /*, onlyMine, user?.id */]);
+
+  useEffect(() => {
+    if (!refreshNonce) return;
+    fetchRows();
+  }, [refreshNonce, fetchRows]);
 
   const sorted = useMemo(() => {
     const arr = [...rows];
@@ -94,7 +112,22 @@ export default function PlayerPropsTable({ selectedDate, onlyMine = false }) {
 
   return (
     <div className="bg-blue-100 p-4 rounded-xl shadow-md overflow-x-auto">
-      <h2 className="text-lg font-semibold mb-4">Player Props for {day}</h2>
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <h2 className="text-lg font-semibold">Player Props for {day}</h2>
+        <button
+          type="button"
+          onClick={fetchRows}
+          disabled={loading}
+          className="px-3 py-1 text-sm bg-white border border-blue-500 rounded-md hover:bg-blue-100 disabled:opacity-50"
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
+      {lastError && (
+        <div className="mb-3 text-sm text-red-700 bg-red-100 rounded-md p-2">
+          {lastError}
+        </div>
+      )}
 
       <table className="min-w-full text-sm text-gray-800">
         <thead className="bg-gray-100">

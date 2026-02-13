@@ -45,6 +45,7 @@ Use this checklist when promoting the restored MLB surface as the primary site p
   - success (`saved=true`) with confirmation message
   - duplicate (`duplicate=true`) with clear "already saved" message
 - API error messages shown to users are actionable (status + backend detail text).
+- Saved/duplicate action triggers table refresh without relying on realtime timing.
 
 ## Docs and Contracts
 

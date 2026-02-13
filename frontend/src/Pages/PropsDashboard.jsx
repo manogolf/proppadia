@@ -10,6 +10,7 @@ import { todayET } from "../shared/timeUtils.js";
 export default function PropsDashboard() {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(todayET()); // single source of truth
+  const [tableRefreshNonce, setTableRefreshNonce] = useState(0);
 
   const LoginGate = ({ children }) =>
     user ? (
@@ -30,13 +31,18 @@ export default function PropsDashboard() {
       <section className="bg-blue-100 p-4 rounded-xl shadow-md overflow-x-auto">
         <h2 className="text-xl font-semibold mb-3">Add Player Props</h2>
         <LoginGate>
-          <PlayerPropFormV2 />
+          <PlayerPropFormV2
+            onSaved={() => setTableRefreshNonce((n) => n + 1)}
+          />
         </LoginGate>
       </section>
 
       {/* Today’s (or selected) table */}
       <section className="bg-white p-4 rounded-xl shadow">
-        <PlayerPropsTable selectedDate={selectedDate} />
+        <PlayerPropsTable
+          selectedDate={selectedDate}
+          refreshNonce={tableRefreshNonce}
+        />
       </section>
 
       {/* Calendar + “props for selected date” */}

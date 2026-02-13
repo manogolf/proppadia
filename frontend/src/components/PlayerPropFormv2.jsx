@@ -147,7 +147,7 @@ const prettyProp = (key) => {
 const todayInET = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
-export default function PlayerPropFormV2() {
+export default function PlayerPropFormV2({ onSaved }) {
   // user inputs
   const [playerName, setPlayerName] = useState("");
   const [teamAbbr, setTeamAbbr] = useState("");
@@ -319,9 +319,11 @@ export default function PlayerPropFormV2() {
             ? `This prop was already saved (id: ${res.id}).`
             : "This prop was already saved."
         );
+        onSaved?.({ duplicate: true, id: res?.id ?? null });
       } else if (res?.saved) {
         setPrediction((p) => (p ? { ...p, saved: true, savedId: res.id ?? null } : p));
         setNotice(res?.id ? `Prop saved (id: ${res.id}).` : "Prop saved.");
+        onSaved?.({ duplicate: false, id: res?.id ?? null });
       }
       setCommitToken(null); // avoid repeat submits
     } catch (e) {
