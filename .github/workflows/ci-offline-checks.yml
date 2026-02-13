@@ -1,0 +1,41 @@
+name: CI Offline Checks
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [mlb, nhl]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r backend/requirements.txt
+
+      - name: Run MLB offline checks
+        if: matrix.target == 'mlb'
+        run: make mlb-checks-offline
+
+      - name: Run NHL offline checks
+        if: matrix.target == 'nhl'
+        run: make nhl-checks-offline

@@ -160,6 +160,7 @@ Status: Phase closed on February 13, 2026.
   - NHL GameCenter extraction: moved `/api/nhl/gamecenter/{game_id}/landing` proxy call from router into `backend/app/services/nhl/gamecenter_service.py`
   - NHL schema hardening: added `backend/app/schemas/nhl.py` and wired NHL router `response_model` contracts
   - NHL OpenAPI drift gate: added `backend/scripts/check_nhl_openapi_contract.py` and `make nhl-openapi-contract`
+  - PR CI gate: added `.github/workflows/ci-offline-checks.yml` to run `mlb-checks-offline` and `nhl-checks-offline` on pull requests
 - In progress:
   - None
 - Next phase:
