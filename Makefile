@@ -1,6 +1,7 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract runtime-boundaries
+.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
+BASE_URL ?= http://127.0.0.1:8001
 
 runtime-boundaries:
 	$(VENV_PY) backend/scripts/check_runtime_import_boundaries.py
@@ -47,3 +48,7 @@ mlb-checks-props-contract:
 # API contract check for /api/player-profile payload consumed by frontend.
 mlb-checks-profile-contract:
 	$(VENV_PY) backend/scripts/validate_mlb_profile_contract.py
+
+# Fast deployed-environment health check (safe, no write operations).
+mlb-post-deploy:
+	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL)
