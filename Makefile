@@ -1,4 +1,4 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden runtime-boundaries
+.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 
@@ -31,9 +31,14 @@ mlb-checks-auto: mlb-checks-offline
 mlb-checks-full: mlb-checks
 	$(VENV_PY) backend/scripts/smoke_mlb_api.py --mode full --date 2025-08-15
 	$(VENV_PY) backend/scripts/validate_mlb_metrics.py
+	$(MAKE) mlb-checks-props-contract
 	$(MAKE) mlb-checks-golden
 
 # Golden-path write-aware smoke (prepare -> predict -> add -> duplicate replay).
 # Requires DB connectivity and a resolvable historical game context.
 mlb-checks-golden:
 	$(VENV_PY) backend/scripts/smoke_mlb_prop_flow.py --date 2025-08-15 --team-id 119 --player-id 660271
+
+# DB contract check for fields consumed by frontend PlayerPropsTable.
+mlb-checks-props-contract:
+	$(VENV_PY) backend/scripts/validate_mlb_props_contract.py
