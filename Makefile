@@ -80,7 +80,7 @@ mlb-checks-props-contract:
 
 # Warm MLB OddsAPI cache snapshot for ET date window (cron-friendly).
 mlb-market-cache-refresh:
-	$(VENV_PY) backend/scripts/refresh_mlb_market_cache.py --days $(MLB_MARKET_DAYS)
+	$(VENV_PY) -m backend.scripts.refresh_mlb_market_cache --days $(MLB_MARKET_DAYS)
 
 # API contract check for /api/player-profile payload consumed by frontend.
 mlb-checks-profile-contract:
