@@ -4,6 +4,7 @@ from unittest.mock import patch
 from backend.app.services.mlb.commit_tokens import sign_commit_payload
 from backend.app.services.mlb.prop_submission_service import prepare_prop_submission
 from backend.domains.mlb.prop_workflow import add_prop_from_commit
+from backend.domains.mlb.repository.prop_repository import DuplicatePropError
 
 
 class TestMlbPropWorkflow(unittest.TestCase):
@@ -71,6 +72,36 @@ class TestMlbPropWorkflow(unittest.TestCase):
         self.assertIn("warnings", out)
         warning_text = " ".join(out["warnings"])
         self.assertIn("mismatched resolved player team", warning_text)
+
+    @patch(
+        "backend.domains.mlb.prop_workflow.insert_prop_row",
+        side_effect=DuplicatePropError("duplicate key value violates unique constraint"),
+    )
+    @patch("backend.domains.mlb.prop_workflow.find_duplicate_prop_id", side_effect=["", "dup-123"])
+    def test_add_prop_handles_db_unique_violation_as_duplicate(self, _dup, _insert):
+        token = sign_commit_payload(
+            {
+                "flow": "mlb_prop_v1",
+                "prop_type": "hits",
+                "probability": 0.6,
+                "recommendation": "over",
+                "features": {
+                    "player_id": 660271,
+                    "player_name": "Shohei Ohtani",
+                    "team": "LAD",
+                    "team_id": 119,
+                    "game_date": "2026-02-10",
+                    "game_id": 12345,
+                    "prop_value": 1.5,
+                    "over_under": "over",
+                },
+            }
+        )
+        out = add_prop_from_commit(commit_token=token, prop_source="user_added")
+        self.assertTrue(out["ok"])
+        self.assertFalse(out["saved"])
+        self.assertTrue(out["duplicate"])
+        self.assertEqual(out["id"], "dup-123")
 
 
 if __name__ == "__main__":
