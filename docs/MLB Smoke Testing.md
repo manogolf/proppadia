@@ -30,16 +30,18 @@ make mlb-checks
 make mlb-checks-full
 make mlb-checks-golden
 make mlb-checks-props-contract
+make mlb-checks-profile-contract
 make runtime-boundaries
 ```
 
 Meaning:
-- `mlb-checks-offline`: unit + offline smoke + OpenAPI contract drift
+- `mlb-checks-offline`: unit + offline smoke + OpenAPI drift + player-profile contract check
 - `mlb-checks-auto`: offline checks + metrics API-only when DB is reachable (otherwise warns and continues)
 - `mlb-checks`: above + metrics API shape validation (`--api-only`)
 - `mlb-checks-full`: above + full smoke + API-vs-DB metrics comparison + props-table DB contract + golden-path write check
 - `mlb-checks-golden`: write-aware golden-path (`prepareProp -> predict -> props/add -> duplicate replay`)
 - `mlb-checks-props-contract`: validates DB fields used by frontend `PlayerPropsTable`
+- `mlb-checks-profile-contract`: validates `/api/player-profile/{player_id}` response schema used by frontend
 - `runtime-boundaries`: blocks runtime imports from archive/legacy code paths
 
 If your virtualenv python is not `.venv/bin/python`, override:

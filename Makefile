@@ -1,4 +1,4 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract runtime-boundaries
+.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 
@@ -11,6 +11,7 @@ mlb-checks-offline:
 	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_mlb_*.py' -v
 	$(VENV_PY) backend/scripts/smoke_mlb_api.py --mode offline
 	$(VENV_PY) backend/scripts/check_mlb_openapi_contract.py
+	$(MAKE) mlb-checks-profile-contract
 
 # Default day-to-day MLB verification.
 # Includes metrics endpoint shape checks (requires DB connectivity from backend).
@@ -42,3 +43,7 @@ mlb-checks-golden:
 # DB contract check for fields consumed by frontend PlayerPropsTable.
 mlb-checks-props-contract:
 	$(VENV_PY) backend/scripts/validate_mlb_props_contract.py
+
+# API contract check for /api/player-profile payload consumed by frontend.
+mlb-checks-profile-contract:
+	$(VENV_PY) backend/scripts/validate_mlb_profile_contract.py
