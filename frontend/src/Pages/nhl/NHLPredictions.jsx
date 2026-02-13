@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { todayET } from "../../shared/timeUtils.js";
-import SogEvalCard from "../../Components/SogEvalCard.jsx";
+import SogEvalCard from "../../components/SogEvalCard.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8001";
 
