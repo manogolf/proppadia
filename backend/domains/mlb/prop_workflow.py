@@ -295,7 +295,8 @@ def add_prop_from_commit(*, commit_token: str, prop_source: str = "user_added") 
         ),
     )
     if dup:
-        return {"ok": True, "saved": False, "duplicate": True, "id": dup.get("id")}
+        dup_id = dup.get("id")
+        return {"ok": True, "saved": False, "duplicate": True, "id": str(dup_id) if dup_id is not None else None}
 
     insert_sql = """
         INSERT INTO player_props (

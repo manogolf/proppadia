@@ -149,7 +149,7 @@ class AddPropResponse(BaseModel):
     ok: bool
     saved: bool
     duplicate: bool
-    id: Optional[int] = None
+    id: Optional[str] = None
 
 
 class ModelMetricRow(BaseModel):

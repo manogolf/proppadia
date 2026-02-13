@@ -281,8 +281,11 @@ Response (saved):
 Response (duplicate):
 
 ```json
-{ "ok": true, "saved": false, "duplicate": true, "id": 12345 }
+{ "ok": true, "saved": false, "duplicate": true, "id": "a7b52abe-71cf-4f54-91bc-f8d6341eb16c" }
 ```
+
+Notes:
+- `id` is an opaque persisted row identifier and may be UUID text depending on DB schema.
 
 Validation examples:
 - invalid token -> `400` with `detail`
