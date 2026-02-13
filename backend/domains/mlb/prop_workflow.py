@@ -4,52 +4,23 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
-
-try:
-    import psycopg
-    import psycopg.rows
-except Exception:  # pragma: no cover - environment-dependent import
-    psycopg = None  # type: ignore
 
 from backend.app.services.mlb.commit_tokens import sign_commit_payload, verify_commit_token
 from backend.domains.mlb.game_context import build_game_context
+from backend.domains.mlb.repository.prop_repository import (
+    find_duplicate_prop_id,
+    insert_prop_row,
+)
 from backend.domains.mlb.player_resolver import resolve_player_candidate
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
-from backend.supabase.supabase_utils import get_database_url
 
 ET = ZoneInfo("America/New_York")
-
-
-def _db_url() -> str:
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return url
-
-
-def _fetchone(sql: str, params: Sequence[Any]) -> Optional[Dict[str, Any]]:
-    if psycopg is None:
-        raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            row = cur.fetchone()
-            return dict(row) if row else None
-
-
-def _execute(sql: str, params: Sequence[Any]) -> None:
-    if psycopg is None:
-        raise RuntimeError("psycopg not installed")
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            conn.commit()
 
 
 def normalize_prop_type(prop_type: str) -> str:
@@ -272,60 +243,29 @@ def add_prop_from_commit(*, commit_token: str, prop_source: str = "user_added") 
     team_id = features.get("team_id")
     player_name = features.get("player_name")
 
-    duplicate_sql = """
-        SELECT id
-        FROM player_props
-        WHERE CAST(player_id AS TEXT) = %s
-          AND CAST(game_id AS TEXT) = %s
-          AND prop_type = %s
-          AND over_under = %s
-          AND prop_value = %s
-          AND prop_source = %s
-        LIMIT 1
-    """
-    dup = _fetchone(
-        duplicate_sql,
-        (
-            str(player_id),
-            str(game_id),
-            prop_type,
-            over_under,
-            prop_value,
-            prop_source,
-        ),
+    dup_id = find_duplicate_prop_id(
+        player_id=player_id,
+        game_id=game_id,
+        prop_type=prop_type,
+        over_under=over_under,
+        prop_value=prop_value,
+        prop_source=prop_source,
     )
-    if dup:
-        dup_id = dup.get("id")
-        return {"ok": True, "saved": False, "duplicate": True, "id": str(dup_id) if dup_id is not None else None}
+    if dup_id:
+        return {"ok": True, "saved": False, "duplicate": True, "id": dup_id}
 
-    insert_sql = """
-        INSERT INTO player_props (
-          player_id, player_name, team, team_id,
-          game_id, game_date, prop_type, prop_value, over_under,
-          status, prop_source, predicted_outcome, confidence_score,
-          created_at, prediction_timestamp
-        ) VALUES (
-          %s, %s, %s, %s,
-          %s, %s, %s, %s, %s,
-          'pending', %s, %s, %s,
-          NOW(), NOW()
-        )
-    """
-    _execute(
-        insert_sql,
-        (
-            str(player_id),
-            player_name,
-            team,
-            int(team_id) if team_id is not None else None,
-            str(game_id),
-            game_date,
-            prop_type,
-            prop_value,
-            over_under,
-            prop_source,
-            recommendation,
-            probability,
-        ),
+    insert_prop_row(
+        player_id=player_id,
+        player_name=player_name,
+        team=team,
+        team_id=int(team_id) if team_id is not None else None,
+        game_id=game_id,
+        game_date=game_date,
+        prop_type=prop_type,
+        prop_value=prop_value,
+        over_under=over_under,
+        prop_source=prop_source,
+        recommendation=recommendation,
+        probability=probability,
     )
     return {"ok": True, "saved": True, "duplicate": False}

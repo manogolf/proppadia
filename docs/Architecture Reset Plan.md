@@ -162,6 +162,7 @@ Status: Phase closed on February 13, 2026.
   - NHL OpenAPI drift gate: added `backend/scripts/check_nhl_openapi_contract.py` and `make nhl-openapi-contract`
   - PR CI gate: added `.github/workflows/ci-offline-checks.yml` to run `mlb-checks-offline` and `nhl-checks-offline` on pull requests
   - MLB repository extraction (player path): consolidated player lookup/search/list/profile and resolver DB queries into `backend/domains/mlb/repository/player_repository.py`
+  - MLB repository extraction (prop path): moved duplicate detection and insert persistence for `props/add` into `backend/domains/mlb/repository/prop_repository.py`
 - In progress:
   - None
 - Next phase:
