@@ -7,6 +7,7 @@ from backend.app.services.mlb.market_odds_service import (
     _extract_candidate_outcomes,
     fetch_mlb_market_odds,
     get_market_cache_status,
+    refresh_market_cache_for_date,
     get_supported_market_map,
 )
 
@@ -117,6 +118,30 @@ class TestMlbMarketOddsService(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertFalse(out["found"])
         self.assertIn("unsupported prop_type", out["reason"])
+
+    @patch("backend.app.services.mlb.market_odds_service._fetch_market_snapshot")
+    def test_refresh_market_cache_for_date_success(self, mock_fetch):
+        mock_fetch.return_value = [{"id": "evt1"}]
+        out = refresh_market_cache_for_date(game_date="2026-06-01")
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["game_date"], "2026-06-01")
+        self.assertEqual(out["rows_cached"], 1)
+        self.assertIn("cache_hit", out)
+
+    @patch("backend.app.services.mlb.market_odds_service._fetch_market_snapshot")
+    def test_refresh_market_cache_for_date_failure_shape(self, mock_fetch):
+        mock_fetch.side_effect = RuntimeError(
+            "request failed: ...apiKey=super-secret-token&regions=us"
+        )
+        out = refresh_market_cache_for_date(game_date="2026-06-01")
+        self.assertFalse(out["ok"])
+        self.assertIn("reason", out)
+        self.assertIn("apiKey=[REDACTED]", out["reason"])
+        self.assertNotIn("super-secret-token", out["reason"])
+
+    def test_refresh_market_cache_for_date_rejects_bad_date(self):
+        with self.assertRaises(ValueError):
+            refresh_market_cache_for_date(game_date="06-01-2026")
 
     @patch.dict("os.environ", {"ODDS_API_KEY": "test-key"}, clear=False)
     @patch("backend.app.services.mlb.market_odds_service.requests.get")

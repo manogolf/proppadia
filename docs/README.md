@@ -20,6 +20,7 @@ Start here for architecture and operations context.
 - `docs/MLB Endpoint Matrix.md`: frontend caller -> MLB endpoint mapping.
 - `docs/MLB API Contracts.md`: canonical MLB request/response contracts.
 - `docs/MLB Smoke Testing.md`: runbooks for `make mlb-checks-*`.
+- Includes scheduled market-cache warm command: `make mlb-market-cache-refresh`.
 - `docs/MLB Metrics Validation.md`: metrics API-vs-DB validation details.
 - `docs/MLB OpenAPI Review.md`: OpenAPI snapshot and drift process.
 - `docs/openapi/openapi.snapshot.json`: OpenAPI contract snapshot.

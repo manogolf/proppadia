@@ -54,6 +54,7 @@ make mlb-checks-full
 make mlb-checks-golden
 make mlb-checks-props-contract
 make mlb-checks-profile-contract
+make mlb-market-cache-refresh
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -71,6 +72,7 @@ Meaning:
 - `mlb-checks-golden`: write-aware golden-path (`prepareProp -> predict -> props/add -> duplicate replay`)
 - `mlb-checks-props-contract`: validates DB fields used by frontend `PlayerPropsTable`
 - `mlb-checks-profile-contract`: validates `/api/player-profile/{player_id}` response schema used by frontend
+- `mlb-market-cache-refresh`: warms in-process OddsAPI snapshot cache for ET date window (`MLB_MARKET_DAYS`, default `1`)
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
   - `GET /api/mlb/market-supported-props`
@@ -84,6 +86,22 @@ If your virtualenv python is not `.venv/bin/python`, override:
 
 ```bash
 make mlb-checks-offline VENV_PY=venv/bin/python
+```
+
+## Scheduled OddsAPI Cache Warm (Render Cron)
+
+Recommended (credit-conservative): run 3-4 times/day during MLB season.
+
+Render cron command:
+
+```bash
+make mlb-market-cache-refresh MLB_MARKET_DAYS=1
+```
+
+Optional (warm today + tomorrow):
+
+```bash
+make mlb-market-cache-refresh MLB_MARKET_DAYS=2
 ```
 
 In-process (imports FastAPI app directly):

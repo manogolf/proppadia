@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -42,6 +43,7 @@ PROP_TO_ODDS_MARKET = {
 }
 
 _snapshot_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+_API_KEY_RE = re.compile(r"(apiKey=)([^&\s]+)")
 
 
 def _markets_query() -> str:
@@ -77,8 +79,48 @@ def get_market_cache_status() -> Dict[str, Any]:
     }
 
 
+def refresh_market_cache_for_date(*, game_date: str) -> Dict[str, Any]:
+    """Warm/refresh one game-date snapshot in process cache.
+
+    Returns a status payload and never raises for upstream/API errors.
+    Validation errors (bad date format) raise ValueError.
+    """
+    try:
+        datetime.fromisoformat(game_date)
+    except Exception as e:
+        raise ValueError("game_date must be YYYY-MM-DD") from e
+
+    now = time.time()
+    cached = _snapshot_cache.get(game_date)
+    was_fresh = bool(cached and (now - cached[0]) < SNAPSHOT_TTL_SECONDS)
+
+    try:
+        rows = _fetch_market_snapshot(game_date=game_date)
+    except Exception as e:
+        return {
+            "ok": False,
+            "game_date": game_date,
+            "reason": f"{type(e).__name__}: {_sanitize_error_message(e)}",
+        }
+
+    latest = _snapshot_cache.get(game_date)
+    age_seconds = max(0, int(time.time() - latest[0])) if latest else None
+    return {
+        "ok": True,
+        "game_date": game_date,
+        "rows_cached": len(rows),
+        "cache_hit": was_fresh,
+        "age_seconds": age_seconds,
+        "ttl_seconds": SNAPSHOT_TTL_SECONDS,
+    }
+
+
 def _normalize_name(name: str) -> str:
     return "".join(ch.lower() for ch in str(name or "") if ch.isalnum() or ch.isspace()).strip()
+
+
+def _sanitize_error_message(msg: Any) -> str:
+    return _API_KEY_RE.sub(r"\1[REDACTED]", str(msg or ""))
 
 
 def _american_to_implied_probability(price: Optional[float]) -> Optional[float]:
@@ -245,7 +287,7 @@ def fetch_mlb_market_odds(
         return {
             "ok": False,
             "found": False,
-            "reason": f"{type(e).__name__}: {e}",
+            "reason": f"{type(e).__name__}: {_sanitize_error_message(e)}",
             "market_key": market_key,
         }
 

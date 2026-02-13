@@ -1,9 +1,10 @@
-.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
+.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
 MLB_DATE ?= 2025-08-15
 NHL_DATE ?= 2025-11-20
+MLB_MARKET_DAYS ?= 1
 
 help:
 	@echo "Proppadia checks"
@@ -13,6 +14,7 @@ help:
 	@echo "  make mlb-release-check BASE_URL=<url> [MLB_DATE=YYYY-MM-DD]"
 	@echo "  make nhl-release-check BASE_URL=<url> [NHL_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-checks-full"
+	@echo "  make mlb-market-cache-refresh [MLB_MARKET_DAYS=1]"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
 
@@ -75,6 +77,10 @@ mlb-checks-golden:
 # DB contract check for fields consumed by frontend PlayerPropsTable.
 mlb-checks-props-contract:
 	$(VENV_PY) backend/scripts/validate_mlb_props_contract.py
+
+# Warm MLB OddsAPI cache snapshot for ET date window (cron-friendly).
+mlb-market-cache-refresh:
+	$(VENV_PY) backend/scripts/refresh_mlb_market_cache.py --days $(MLB_MARKET_DAYS)
 
 # API contract check for /api/player-profile payload consumed by frontend.
 mlb-checks-profile-contract:
