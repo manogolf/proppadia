@@ -33,7 +33,9 @@ make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onr
 From repo root:
 
 ```bash
+make diagnose
 make nhl-checks-offline
+make shared-checks-offline
 make nhl-openapi-contract
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -42,7 +44,9 @@ make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com 
 ```
 
 Meaning:
-- `nhl-checks-offline`: runtime import boundary + NHL unit tests + NHL OpenAPI drift check
+- `diagnose`: optimized baseline run (`runtime-boundaries` + shared checks once + MLB core + NHL core)
+- `shared-checks-offline`: shared cross-sport unit tests (service/helpers used by both MLB and NHL)
+- `nhl-checks-offline`: runtime boundaries + shared checks + NHL unit tests + NHL OpenAPI drift check
 - `nhl-openapi-contract`: detects NHL OpenAPI schema drift vs `docs/openapi/openapi.snapshot.json`
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
 - `nhl-post-deploy-strict`: same checks, fails when probe date returns sparse data
@@ -57,6 +61,7 @@ Direct script usage:
 .venv/bin/python backend/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com
 .venv/bin/python backend/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com --date 2025-11-20 --require-data
 .venv/bin/python backend/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com --date 2025-11-20 --require-data --allow-sparse
+.venv/bin/python -m unittest discover -s backend/tests -p 'test_shared_*.py' -v
 ```
 
 Flags:

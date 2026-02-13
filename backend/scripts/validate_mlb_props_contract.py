@@ -13,6 +13,8 @@ import argparse
 from datetime import date
 from typing import Any, Dict, List, Sequence
 
+from backend.shared.db import pg_fetchall
+
 
 REQUIRED_COLUMNS = {
     "id",
@@ -29,23 +31,8 @@ REQUIRED_COLUMNS = {
 }
 
 
-def _db_url() -> str:
-    from backend.supabase.supabase_utils import get_database_url
-
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return url
-
-
 def _fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
-    import psycopg
-    import psycopg.rows
-
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return list(cur.fetchall() or [])
+    return pg_fetchall(sql, params)
 
 
 def _columns() -> List[str]:

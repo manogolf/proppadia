@@ -9,43 +9,7 @@ import argparse
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-
-class ClientAdapter:
-    def get_json(self, path: str) -> Tuple[int, Any]:
-        raise NotImplementedError
-
-
-class InProcessClient(ClientAdapter):
-    def __init__(self):
-        from fastapi.testclient import TestClient
-        from backend.app.api_server import app
-
-        self._client = TestClient(app)
-
-    def get_json(self, path: str) -> Tuple[int, Any]:
-        r = self._client.get(path)
-        try:
-            body = r.json()
-        except Exception:
-            body = r.text
-        return r.status_code, body
-
-
-class HttpClient(ClientAdapter):
-    def __init__(self, base_url: str):
-        import requests
-
-        self._requests = requests
-        self._base = base_url.rstrip("/")
-
-    def get_json(self, path: str) -> Tuple[int, Any]:
-        r = self._requests.get(f"{self._base}{path}", timeout=25)
-        try:
-            body = r.json()
-        except Exception:
-            body = r.text
-        return r.status_code, body
-
+from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
 
 def _is_intish(v: Any) -> bool:
     if isinstance(v, bool):
@@ -176,7 +140,7 @@ def main() -> int:
     ap.add_argument("--player-id", type=int, default=660271)
     args = ap.parse_args()
 
-    client: ClientAdapter = HttpClient(args.base_url) if args.base_url else InProcessClient()
+    client: ClientAdapter = HttpClient(args.base_url, timeout=25) if args.base_url else InProcessClient()
     path = f"/api/player-profile/{args.player_id}"
     status, body = client.get_json(path)
     if status != 200:

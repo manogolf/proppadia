@@ -91,6 +91,8 @@ class PreparePropRequest(BaseModel):
     rolling_result_avg_7: Optional[float] = None
     hit_streak: Optional[float] = None
     win_streak: Optional[float] = None
+    market_odds_american: Optional[float] = None
+    market_implied_probability: Optional[float] = None
 
 
 class PredictRequest(BaseModel):

@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Query
 
-from backend.app.deps import pg_fetchone
 from backend.app.schemas.nhl import (
     NhlDateRowsResponse,
     NhlDbPingResponse,
@@ -14,6 +13,7 @@ from backend.app.schemas.nhl import (
     NhlPingResponse,
 )
 from backend.app.services.nhl import fetch_gamecenter_landing
+from backend.app.services.shared import ping_db, sport_ping
 from backend.domains.nhl.repository import (
     fetch_games_today,
     fetch_props_today,
@@ -31,13 +31,12 @@ async def nhl_gamecenter_landing(game_id: int) -> NhlGamecenterLandingResponse:
 
 @router.get("/ping", summary="Ping Nhl", response_model=NhlPingResponse)
 def ping_nhl():
-    return {"sport": "nhl", "ok": True}
+    return sport_ping("nhl")
 
 
 @router.get("/ping-db", summary="Nhl Ping Db", response_model=NhlDbPingResponse)
 def nhl_ping_db():
-    ok, row, err = pg_fetchone("SELECT 1 AS ok")
-    return {"ok": bool(row), "err": err}
+    return ping_db()
 
 
 @router.get(

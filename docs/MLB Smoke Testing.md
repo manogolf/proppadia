@@ -45,7 +45,9 @@ make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onr
 One-command checks (from repo root):
 
 ```bash
+make diagnose
 make mlb-checks-offline
+make shared-checks-offline
 make mlb-checks-auto
 make mlb-checks
 make mlb-checks-full
@@ -60,7 +62,9 @@ make runtime-boundaries
 ```
 
 Meaning:
-- `mlb-checks-offline`: unit + offline smoke + OpenAPI drift + player-profile contract check
+- `diagnose`: optimized baseline run (`runtime-boundaries` + shared checks once + MLB core + NHL core)
+- `shared-checks-offline`: shared cross-sport unit tests (service/helpers used by both MLB and NHL)
+- `mlb-checks-offline`: runtime boundaries + shared checks + MLB unit + offline smoke + OpenAPI drift + player-profile contract check
 - `mlb-checks-auto`: offline checks + metrics API-only when DB is reachable (otherwise warns and continues)
 - `mlb-checks`: above + metrics API shape validation (`--api-only`)
 - `mlb-checks-full`: above + full smoke + API-vs-DB metrics comparison + props-table DB contract + golden-path write check
@@ -68,6 +72,9 @@ Meaning:
 - `mlb-checks-props-contract`: validates DB fields used by frontend `PlayerPropsTable`
 - `mlb-checks-profile-contract`: validates `/api/player-profile/{player_id}` response schema used by frontend
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
+- Includes no-credit market metadata checks:
+  - `GET /api/mlb/market-supported-props`
+  - `GET /api/mlb/market-cache-status`
 - `mlb-post-deploy-strict`: same as above, but fails when probe player/search/profile data is sparse
 - `mlb-post-deploy-strict-offseason`: strict transport/DB checks but tolerates sparse probe data
 - MLB make targets accept `MLB_DATE` to control probe date (default `2025-08-15`)
@@ -116,6 +123,7 @@ These run without `pytest` and validate key MLB hardening logic:
 
 ```bash
 .venv/bin/python -m unittest discover -s backend/tests -p 'test_mlb_*.py' -v
+.venv/bin/python -m unittest discover -s backend/tests -p 'test_shared_*.py' -v
 ```
 
 Covered currently:

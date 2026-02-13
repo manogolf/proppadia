@@ -8,10 +8,6 @@ on:
 jobs:
   offline-checks:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [mlb, nhl]
 
     steps:
       - name: Checkout
@@ -32,10 +28,5 @@ jobs:
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -r backend/requirements.txt
 
-      - name: Run MLB offline checks
-        if: matrix.target == 'mlb'
-        run: make mlb-checks-offline
-
-      - name: Run NHL offline checks
-        if: matrix.target == 'nhl'
-        run: make nhl-checks-offline
+      - name: Run offline checks
+        run: make ci-offline-checks

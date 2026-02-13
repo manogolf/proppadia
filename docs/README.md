@@ -8,6 +8,13 @@ Start here for architecture and operations context.
 - `docs/Runtime Surface.md`: currently served FastAPI routes and entrypoint.
 - `docs/Legacy Quarantine Map.md`: backend archive/legacy move map to `backend/_legacy/*`.
 
+## Shared Validation Lane
+
+- `make shared-checks-offline`: cross-sport shared unit checks (`backend/tests/test_shared_*.py`).
+- Included automatically by `make mlb-checks-offline` and `make nhl-checks-offline`.
+- `make diagnose`: optimized local baseline (`runtime-boundaries` + `shared-checks-offline` + MLB core + NHL core) without rerunning shared checks twice.
+- `make ci-offline-checks`: CI/offline baseline (same composition as `diagnose`).
+
 ## MLB API and Validation
 
 - `docs/MLB Endpoint Matrix.md`: frontend caller -> MLB endpoint mapping.
@@ -21,3 +28,4 @@ Start here for architecture and operations context.
 
 - `docs/Project Map.md`: broad project inventory notes.
 - `docs/MLB Cutover Checklist.md`: final checklist to restore MLB site functionality.
+- `docs/Prediction UX Unification Draft.md`: draft plan to unify MLB/NHL prediction UX into a shared research workspace model.

@@ -15,65 +15,13 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
-
-@dataclass
-class CheckResult:
-    name: str
-    method: str
-    path: str
-    status: int
-    ok: bool
-    detail: str
-
-
-class ClientAdapter:
-    def request(self, method: str, path: str, **kwargs):
-        raise NotImplementedError
-
-
-class InProcessClient(ClientAdapter):
-    def __init__(self):
-        from fastapi.testclient import TestClient
-        from backend.app.api_server import app
-
-        self._client = TestClient(app)
-
-    def request(self, method: str, path: str, **kwargs):
-        return self._client.request(method, path, **kwargs)
-
-
-class HttpClient(ClientAdapter):
-    def __init__(self, base_url: str):
-        import requests
-
-        self._requests = requests
-        self._base = base_url.rstrip("/")
-
-    def request(self, method: str, path: str, **kwargs):
-        return self._requests.request(method, f"{self._base}{path}", timeout=20, **kwargs)
-
-
-def _safe_json(resp) -> Any:
-    try:
-        return resp.json()
-    except Exception:
-        txt = getattr(resp, "text", "")
-        return txt[:400]
-
-
-def _first_keys(payload: Any) -> str:
-    if isinstance(payload, dict):
-        keys = list(payload.keys())[:8]
-        mini = {k: payload.get(k) for k in keys}
-        return json.dumps(mini, default=str)
-    if isinstance(payload, list):
-        return f"list(len={len(payload)})"
-    return str(payload)
+from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, first_keys, safe_json
+from backend.scripts.check_output_utils import print_check_rows, print_summary
+from backend.scripts.check_validators import expect_predict_probability_and_token
+from backend.scripts.http_check_utils import CheckResult
 
 
 def _run_check(
@@ -87,9 +35,9 @@ def _run_check(
     **kwargs,
 ) -> CheckResult:
     resp = client.request(method, path, **kwargs)
-    body = _safe_json(resp)
+    body = safe_json(resp)
     ok = resp.status_code in set(expected_status)
-    detail = _first_keys(body)
+    detail = first_keys(body)
     if ok and validate is not None:
         try:
             ok, extra = validate(body)
@@ -99,14 +47,6 @@ def _run_check(
             ok = False
             detail = f"{detail} | validator error: {type(e).__name__}: {e}"
     return CheckResult(name, method, path, resp.status_code, ok, detail)
-
-
-def _validate_predict(body: Any):
-    if not isinstance(body, dict):
-        return False, "predict body is not object"
-    has_prob = isinstance(body.get("probability"), (int, float))
-    has_token = isinstance(body.get("commit_token"), str) and "." in body.get("commit_token", "")
-    return bool(has_prob and has_token), "expects probability + commit_token"
 
 
 def build_predict_payload(player_id: int, game_date: str) -> Dict[str, Any]:
@@ -145,6 +85,21 @@ def build_prepare_payload(player_id: int, team_id: int, game_date: str) -> Dict[
     }
 
 
+def _expect_ok_and_nonempty_rows(body: Any):
+    ok = bool(isinstance(body, dict) and body.get("ok") is True and int(body.get("count") or 0) > 0)
+    return ok, "expects ok=true,count>0"
+
+
+def _expect_ok_cache_shape(body: Any):
+    ok = bool(
+        isinstance(body, dict)
+        and body.get("ok") is True
+        and isinstance(body.get("entries"), list)
+        and body.get("ttl_seconds") is not None
+    )
+    return ok, "expects ok=true,entries[],ttl_seconds"
+
+
 def run(mode: str, client: ClientAdapter, args) -> int:
     results: List[CheckResult] = []
 
@@ -154,6 +109,26 @@ def run(mode: str, client: ClientAdapter, args) -> int:
     )
     results.append(
         _run_check(client, name="mlb_ping", method="GET", path="/api/mlb/ping", expected_status=[200])
+    )
+    results.append(
+        _run_check(
+            client,
+            name="market_supported",
+            method="GET",
+            path="/api/mlb/market-supported-props",
+            expected_status=[200],
+            validate=_expect_ok_and_nonempty_rows,
+        )
+    )
+    results.append(
+        _run_check(
+            client,
+            name="market_cache_status",
+            method="GET",
+            path="/api/mlb/market-cache-status",
+            expected_status=[200],
+            validate=_expect_ok_cache_shape,
+        )
     )
     results.append(
         _run_check(
@@ -212,7 +187,7 @@ def run(mode: str, client: ClientAdapter, args) -> int:
         path="/api/predict",
         json=predict_payload,
         expected_status=[200],
-        validate=_validate_predict,
+        validate=expect_predict_probability_and_token,
     )
     results.append(pred)
 
@@ -287,17 +262,8 @@ def run(mode: str, client: ClientAdapter, args) -> int:
         )
 
     print(f"MLB smoke mode={mode}")
-    failed = 0
-    for r in results:
-        mark = "PASS" if r.ok else "FAIL"
-        if not r.ok:
-            failed += 1
-        print(
-            f"{mark:4} {r.name:24} {r.method:4} {r.path:34} "
-            f"status={r.status:<3} detail={r.detail[:180]}"
-        )
-
-    print(f"\nSummary: {len(results) - failed}/{len(results)} passed")
+    total, failed = print_check_rows(results, name_width=24, path_width=34, detail_limit=180)
+    print_summary(passed=total - failed, total=total)
     return 1 if failed else 0
 
 

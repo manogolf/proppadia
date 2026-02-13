@@ -1,4 +1,4 @@
-.PHONY: help diagnose mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
+.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -8,6 +8,8 @@ NHL_DATE ?= 2025-11-20
 help:
 	@echo "Proppadia checks"
 	@echo "  make diagnose"
+	@echo "  make ci-offline-checks"
+	@echo "  make shared-checks-offline"
 	@echo "  make mlb-release-check BASE_URL=<url> [MLB_DATE=YYYY-MM-DD]"
 	@echo "  make nhl-release-check BASE_URL=<url> [NHL_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-checks-full"
@@ -16,15 +18,28 @@ help:
 
 # One-command local diagnostic baseline for support/debug sessions.
 diagnose:
-	$(MAKE) mlb-checks-offline
-	$(MAKE) nhl-checks-offline
+	$(MAKE) runtime-boundaries
+	$(MAKE) shared-checks-offline
+	$(MAKE) mlb-checks-offline-core
+	$(MAKE) nhl-checks-offline-core
+
+# One-command offline CI baseline (same composition as diagnose).
+ci-offline-checks: diagnose
 
 runtime-boundaries:
 	$(VENV_PY) backend/scripts/check_runtime_import_boundaries.py
 
+# Shared backend checks not tied to one sport.
+shared-checks-offline:
+	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_shared_*.py' -v
+
 # Fast local verification (no external MLB API required).
 mlb-checks-offline:
 	$(MAKE) runtime-boundaries
+	$(MAKE) shared-checks-offline
+	$(MAKE) mlb-checks-offline-core
+
+mlb-checks-offline-core:
 	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_mlb_*.py' -v
 	$(VENV_PY) backend/scripts/smoke_mlb_api.py --mode offline
 	$(VENV_PY) backend/scripts/check_mlb_openapi_contract.py
@@ -100,6 +115,10 @@ nhl-openapi-contract:
 # Fast local NHL verification (no external NHL API required).
 nhl-checks-offline:
 	$(MAKE) runtime-boundaries
+	$(MAKE) shared-checks-offline
+	$(MAKE) nhl-checks-offline-core
+
+nhl-checks-offline-core:
 	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_nhl_*.py' -v
 	$(MAKE) nhl-openapi-contract
 

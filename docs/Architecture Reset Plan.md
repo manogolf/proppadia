@@ -172,6 +172,11 @@ Status: Phase closed on February 13, 2026.
   - MLB schema extraction: moved MLB request/response Pydantic models into `backend/app/schemas/mlb.py` and made router consume shared schemas
   - OpenAPI check dedupe: extracted shared contract-diff utilities to `backend/scripts/openapi_contract_utils.py` and simplified MLB/NHL contract scripts
   - App/runtime DB helper alignment: `backend/app/deps.py` now delegates to shared DB helper (`backend/shared/db/pg.py`) for consistent connection behavior
+  - Diagnostic/script consolidation: shared script utilities now cover API clients, HTTP check runners, output formatting, validators, strict-data gating, and sparse-warning extraction (`backend/scripts/*_utils.py`)
+  - Shared app service extraction: MLB/NHL `ping` and `ping-db` router behavior now use shared services under `backend/app/services/shared/*`
+  - Shared validation lane: added `make shared-checks-offline` and `backend/tests/test_shared_*.py` coverage, now included in both MLB/NHL offline suites
+  - Check-flow optimization: `make diagnose` now runs shared/runtime checks once, then executes per-sport core offline checks to reduce duplicate work
+  - CI optimization: `.github/workflows/ci-offline-checks.yml` now runs `make ci-offline-checks` (single job, no duplicate shared/runtime execution across matrix lanes)
 - In progress:
   - None
 - Next phase:

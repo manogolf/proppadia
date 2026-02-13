@@ -61,6 +61,194 @@
         }
       }
     },
+    "/api/mlb/market-odds": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB market odds lookup (OddsAPI)",
+        "operationId": "mlb_market_odds_api_mlb_market_odds_get",
+        "parameters": [
+          {
+            "name": "player_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Player full name",
+              "title": "Player Name"
+            },
+            "description": "Player full name"
+          },
+          {
+            "name": "prop_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "MLB prop type key",
+              "title": "Prop Type"
+            },
+            "description": "MLB prop type key"
+          },
+          {
+            "name": "game_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD (defaults to today ET)",
+              "title": "Game Date"
+            },
+            "description": "YYYY-MM-DD (defaults to today ET)"
+          },
+          {
+            "name": "over_under",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "over|under",
+              "default": "over",
+              "title": "Over Under"
+            },
+            "description": "over|under"
+          },
+          {
+            "name": "line",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Prop line value",
+              "title": "Line"
+            },
+            "description": "Prop line value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mlb/market-supported-props": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB prop types with OddsAPI market coverage",
+        "operationId": "mlb_market_supported_props_api_mlb_market_supported_props_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mlb/market-cache-status": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB OddsAPI cache status (no upstream call)",
+        "operationId": "mlb_market_cache_status_api_mlb_market_cache_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mlb/schedule": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB schedule proxy (backend-owned)",
+        "operationId": "mlb_schedule_api_mlb_schedule_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD (defaults to today ET)",
+              "title": "Date"
+            },
+            "description": "YYYY-MM-DD (defaults to today ET)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/players/resolve": {
       "get": {
         "tags": [
@@ -1963,6 +2151,28 @@
               }
             ],
             "title": "Win Streak"
+          },
+          "market_odds_american": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Odds American"
+          },
+          "market_implied_probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Implied Probability"
           }
         },
         "type": "object",

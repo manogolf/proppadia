@@ -14,45 +14,14 @@ import json
 import sys
 from typing import Any, Dict, Optional
 
-
-class ClientAdapter:
-    def request(self, method: str, path: str, **kwargs):
-        raise NotImplementedError
-
-
-class InProcessClient(ClientAdapter):
-    def __init__(self):
-        from fastapi.testclient import TestClient
-        from backend.app.api_server import app
-
-        self._client = TestClient(app)
-
-    def request(self, method: str, path: str, **kwargs):
-        return self._client.request(method, path, **kwargs)
+from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
+from backend.scripts.check_output_utils import print_check_rows, print_summary
+from backend.scripts.http_check_utils import CheckResult
 
 
-class HttpClient(ClientAdapter):
-    def __init__(self, base_url: str):
-        import requests
-
-        self._requests = requests
-        self._base = base_url.rstrip("/")
-
-    def request(self, method: str, path: str, **kwargs):
-        return self._requests.request(method, f"{self._base}{path}", timeout=20, **kwargs)
-
-
-def _safe_json(resp) -> Any:
-    try:
-        return resp.json()
-    except Exception:
-        txt = getattr(resp, "text", "")
-        return {"_raw": txt[:400]}
-
-
-def _print_step(name: str, ok: bool, detail: str) -> None:
-    state = "PASS" if ok else "FAIL"
-    print(f"{state} {name:20s} {detail}")
+def _json_obj(resp) -> Dict[str, Any]:
+    body = safe_json(resp)
+    return body if isinstance(body, dict) else {"_raw": str(body)}
 
 
 def _post(client: ClientAdapter, path: str, payload: Dict[str, Any]):
@@ -60,6 +29,12 @@ def _post(client: ClientAdapter, path: str, payload: Dict[str, Any]):
 
 
 def run(client: ClientAdapter, *, player_id: int, team_id: int, game_date: str, prop_source: str) -> int:
+    steps: list[CheckResult] = []
+
+    def _record(name: str, path: str, status: int, ok: bool, detail: str) -> int:
+        steps.append(CheckResult(name=name, method="POST", path=path, status=status, ok=ok, detail=detail))
+        return 1 if not ok else 0
+
     # 1) prepare
     prep_req = {
         "player_id": int(player_id),
@@ -70,57 +45,83 @@ def run(client: ClientAdapter, *, player_id: int, team_id: int, game_date: str, 
         "over_under": "over",
     }
     prep_resp = _post(client, "/api/prepareProp", prep_req)
-    prep_body = _safe_json(prep_resp)
+    prep_body = _json_obj(prep_resp)
     if prep_resp.status_code != 200 or not isinstance(prep_body, dict) or not prep_body.get("ok"):
-        _print_step("prepareProp", False, f"status={prep_resp.status_code} body={json.dumps(prep_body, default=str)}")
+        _record(
+            "prepareProp",
+            "/api/prepareProp",
+            prep_resp.status_code,
+            False,
+            f"status={prep_resp.status_code} body={json.dumps(prep_body, default=str)}",
+        )
+        total, failed = print_check_rows(steps, name_width=20, path_width=24)
+        print_summary(passed=total - failed, total=total)
         return 1
 
     features: Dict[str, Any] = prep_body.get("features") or {}
     game_id = features.get("game_id")
     if game_id in (None, "", 0):
-        _print_step(
+        _record(
             "prepareProp",
+            "/api/prepareProp",
+            prep_resp.status_code,
             False,
             "missing features.game_id (no writable golden-path add possible in this environment)",
         )
+        total, failed = print_check_rows(steps, name_width=20, path_width=24)
+        print_summary(passed=total - failed, total=total)
         return 1
-    _print_step("prepareProp", True, f"game_id={game_id} team={features.get('team')} player_id={features.get('player_id')}")
+    _record(
+        "prepareProp",
+        "/api/prepareProp",
+        prep_resp.status_code,
+        True,
+        f"game_id={game_id} team={features.get('team')} player_id={features.get('player_id')}",
+    )
 
     # 2) predict
     pred_req = {"prop_type": "hits", "features": features}
     pred_resp = _post(client, "/api/predict", pred_req)
-    pred_body = _safe_json(pred_resp)
-    token: Optional[str] = pred_body.get("commit_token") if isinstance(pred_body, dict) else None
+    pred_body = _json_obj(pred_resp)
+    token: Optional[str] = pred_body.get("commit_token")
     if pred_resp.status_code != 200 or not token or "." not in token:
-        _print_step("predict", False, f"status={pred_resp.status_code} body={json.dumps(pred_body, default=str)}")
+        _record("predict", "/api/predict", pred_resp.status_code, False, f"status={pred_resp.status_code} body={json.dumps(pred_body, default=str)}")
+        total, failed = print_check_rows(steps, name_width=20, path_width=24)
+        print_summary(passed=total - failed, total=total)
         return 1
-    _print_step("predict", True, f"model={pred_body.get('model')} probability={pred_body.get('probability')}")
+    _record("predict", "/api/predict", pred_resp.status_code, True, f"model={pred_body.get('model')} probability={pred_body.get('probability')}")
 
     # 3) add
     add_req = {"prop_source": prop_source, "commit_token": token}
     add_resp = _post(client, "/api/props/add", add_req)
-    add_body = _safe_json(add_resp)
-    if add_resp.status_code != 200 or not isinstance(add_body, dict) or not add_body.get("ok"):
-        _print_step("props/add", False, f"status={add_resp.status_code} body={json.dumps(add_body, default=str)}")
+    add_body = _json_obj(add_resp)
+    if add_resp.status_code != 200 or not add_body.get("ok"):
+        _record("props/add", "/api/props/add", add_resp.status_code, False, f"status={add_resp.status_code} body={json.dumps(add_body, default=str)}")
+        total, failed = print_check_rows(steps, name_width=20, path_width=24)
+        print_summary(passed=total - failed, total=total)
         return 1
 
     saved = bool(add_body.get("saved"))
     duplicate = bool(add_body.get("duplicate"))
     if not (saved or duplicate):
-        _print_step("props/add", False, f"unexpected save state body={json.dumps(add_body, default=str)}")
+        _record("props/add", "/api/props/add", add_resp.status_code, False, f"unexpected save state body={json.dumps(add_body, default=str)}")
+        total, failed = print_check_rows(steps, name_width=20, path_width=24)
+        print_summary(passed=total - failed, total=total)
         return 1
-    _print_step("props/add", True, f"saved={saved} duplicate={duplicate}")
+    _record("props/add", "/api/props/add", add_resp.status_code, True, f"saved={saved} duplicate={duplicate}")
 
     # 4) duplicate behavior on immediate replay
     add2_resp = _post(client, "/api/props/add", add_req)
-    add2_body = _safe_json(add2_resp)
-    add2_dup = bool(add2_body.get("duplicate")) if isinstance(add2_body, dict) else False
+    add2_body = _json_obj(add2_resp)
+    add2_dup = bool(add2_body.get("duplicate"))
     if add2_resp.status_code != 200 or not add2_dup:
-        _print_step("props/add replay", False, f"status={add2_resp.status_code} body={json.dumps(add2_body, default=str)}")
+        _record("props/add replay", "/api/props/add", add2_resp.status_code, False, f"status={add2_resp.status_code} body={json.dumps(add2_body, default=str)}")
+        total, failed = print_check_rows(steps, name_width=20, path_width=24)
+        print_summary(passed=total - failed, total=total)
         return 1
-    _print_step("props/add replay", True, "duplicate=true")
-
-    print("PASS mlb golden-path prop flow")
+    _record("props/add replay", "/api/props/add", add2_resp.status_code, True, "duplicate=true")
+    total, failed = print_check_rows(steps, name_width=20, path_width=24)
+    print_summary(passed=total - failed, total=total)
     return 0
 
 

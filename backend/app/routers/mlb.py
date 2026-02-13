@@ -6,7 +6,6 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.app.deps import pg_fetchone
 from backend.app.schemas.mlb import (
     AddPropRequest,
     AddPropResponse,
@@ -33,11 +32,17 @@ from backend.app.services.mlb.metrics_service import (
     fetch_user_vs_model_metrics,
     fetch_user_vs_model_metrics_weekly,
 )
+from backend.app.services.mlb.market_odds_service import (
+    fetch_mlb_market_odds,
+    get_market_cache_status,
+    get_supported_market_map,
+)
 from backend.app.services.mlb.prop_submission_service import (
     add_prop,
     predict_prepared_prop,
     prepare_prop_submission,
 )
+from backend.app.services.mlb.schedule_service import fetch_schedule
 from backend.app.services.mlb.player_service import (
     list_players,
     lookup_player,
@@ -45,6 +50,7 @@ from backend.app.services.mlb.player_service import (
     resolve_player,
     search_players,
 )
+from backend.app.services.shared import ping_db, sport_ping
 
 router = APIRouter(tags=["mlb"])
 ET = ZoneInfo("America/New_York")
@@ -52,13 +58,67 @@ ET = ZoneInfo("America/New_York")
 
 @router.get("/mlb/ping", response_model=PingResponse)
 def ping_mlb():
-    return {"sport": "mlb", "ok": True}
+    return sport_ping("mlb")
 
 
 @router.get("/mlb/ping-db", summary="MLB DB connectivity check")
 def ping_mlb_db():
-    ok, row, err = pg_fetchone("SELECT 1 AS ok")
-    return {"ok": bool(row), "err": err}
+    return ping_db()
+
+
+@router.get("/mlb/market-odds", summary="MLB market odds lookup (OddsAPI)")
+def mlb_market_odds(
+    player_name: str = Query(..., description="Player full name"),
+    prop_type: str = Query(..., description="MLB prop type key"),
+    game_date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today ET)"),
+    over_under: str = Query("over", description="over|under"),
+    line: Optional[float] = Query(None, description="Prop line value"),
+):
+    target_date = game_date or datetime.now(ET).date().isoformat()
+    try:
+        return fetch_mlb_market_odds(
+            player_name=player_name,
+            prop_type=prop_type,
+            game_date=target_date,
+            over_under=over_under,
+            line=line,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/market-supported-props", summary="MLB prop types with OddsAPI market coverage")
+def mlb_market_supported_props():
+    mapping = get_supported_market_map()
+    rows = [{"prop_type": k, "market_key": v} for k, v in sorted(mapping.items())]
+    return {"ok": True, "count": len(rows), "rows": rows}
+
+
+@router.get("/mlb/market-cache-status", summary="MLB OddsAPI cache status (no upstream call)")
+def mlb_market_cache_status():
+    return get_market_cache_status()
+
+
+@router.get("/mlb/schedule", summary="MLB schedule proxy (backend-owned)")
+def mlb_schedule(
+    date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD (defaults to today ET)"),
+):
+    target_date = date_str
+    if target_date:
+        try:
+            date.fromisoformat(target_date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from e
+    else:
+        target_date = datetime.now(ET).date().isoformat()
+
+    try:
+        payload = fetch_schedule(game_date=target_date)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
+    return payload
 
 
 @router.get(

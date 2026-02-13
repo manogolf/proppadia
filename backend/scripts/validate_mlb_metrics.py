@@ -18,6 +18,9 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
+from backend.shared.db import pg_fetchall
+
 
 def _k_prop(row: Dict[str, Any]) -> str:
     return str(row.get("prop_type") or "")
@@ -49,43 +52,6 @@ class Diff:
     db_value: Any
 
 
-class ClientAdapter:
-    def get_json(self, path: str) -> Tuple[int, Any]:
-        raise NotImplementedError
-
-
-class InProcessClient(ClientAdapter):
-    def __init__(self):
-        from fastapi.testclient import TestClient
-        from backend.app.api_server import app
-
-        self._client = TestClient(app)
-
-    def get_json(self, path: str) -> Tuple[int, Any]:
-        r = self._client.get(path)
-        try:
-            body = r.json()
-        except Exception:
-            body = r.text
-        return r.status_code, body
-
-
-class HttpClient(ClientAdapter):
-    def __init__(self, base_url: str):
-        import requests
-
-        self._requests = requests
-        self._base = base_url.rstrip("/")
-
-    def get_json(self, path: str) -> Tuple[int, Any]:
-        r = self._requests.get(f"{self._base}{path}", timeout=25)
-        try:
-            body = r.json()
-        except Exception:
-            body = r.text
-        return r.status_code, body
-
-
 def _fetch_api_rows(client: ClientAdapter, path: str) -> List[Dict[str, Any]]:
     status, body = client.get_json(path)
     if status != 200:
@@ -95,23 +61,8 @@ def _fetch_api_rows(client: ClientAdapter, path: str) -> List[Dict[str, Any]]:
     return body
 
 
-def _db_url() -> str:
-    from backend.supabase.supabase_utils import get_database_url
-
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL/SUPABASE_DB_URL not configured")
-    return url
-
-
 def _fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
-    import psycopg
-    import psycopg.rows
-
-    with psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return list(cur.fetchall() or [])
+    return pg_fetchall(sql, params)
 
 
 # Independent SQL for validation (deliberately not importing backend/domains/mlb/metrics.py)
@@ -282,7 +233,7 @@ def main():
     ap.add_argument("--max-diff-rows", type=int, default=30)
     args = ap.parse_args()
 
-    client: ClientAdapter = HttpClient(args.base_url) if args.base_url else InProcessClient()
+    client: ClientAdapter = HttpClient(args.base_url, timeout=25) if args.base_url else InProcessClient()
 
     try:
         api_user_vs = _fetch_api_rows(client, "/api/user-vs-model-accuracy")

@@ -133,6 +133,14 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     rolling_result_avg_7 = _to_float(payload.get("rolling_result_avg_7"), 0.0)
     line_diff = _to_float(payload.get("line_diff"), rolling_result_avg_7 - prop_value)
+    market_odds_american = payload.get("market_odds_american")
+    market_implied_probability = payload.get("market_implied_probability")
+    market_odds_american = _to_float(market_odds_american, None) if market_odds_american not in (None, "") else None
+    market_implied_probability = (
+        _to_float(market_implied_probability, None)
+        if market_implied_probability not in (None, "")
+        else None
+    )
 
     features = {
         "player_id": int(player_id),
@@ -147,6 +155,8 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
         "hit_streak": _to_float(payload.get("hit_streak"), 0.0),
         "win_streak": _to_float(payload.get("win_streak"), 0.0),
         "line_diff": line_diff,
+        "market_odds_american": market_odds_american,
+        "market_implied_probability": market_implied_probability,
         **context,
     }
     if warnings:
