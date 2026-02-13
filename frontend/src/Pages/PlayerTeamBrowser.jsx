@@ -39,19 +39,32 @@ export default function PlayerTeamBrowser() {
     return `last prop ${d}`;
   };
 
-  if (loading) return <div className="p-4">Loading player list...</div>;
-  if (error) return <div className="p-4 text-red-600">{error}</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen pp-page p-6">
+        <div className="max-w-5xl mx-auto pp-card p-4 text-slate-600">
+          Loading player list...
+        </div>
+      </div>
+    );
+  if (error)
+    return (
+      <div className="min-h-screen pp-page p-6">
+        <div className="max-w-5xl mx-auto pp-card p-4 text-rose-600">{error}</div>
+      </div>
+    );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Players by Team</h1>
+    <div className="min-h-screen pp-page p-6">
+      <div className="max-w-5xl mx-auto">
+      <h1 className="text-2xl font-bold text-slate-900 mb-6">Players by Team</h1>
       {Object.keys(groupedByTeam)
         .sort()
         .map((team) => (
-          <div key={team} className="mb-6">
-            <h2 className="text-xl font-semibold mb-2">
+          <div key={team} className="mb-6 pp-card p-4">
+            <h2 className="text-xl font-semibold mb-2 text-slate-900">
               {team}{" "}
-              <span className="text-sm text-gray-500 font-normal">
+              <span className="text-sm text-slate-500 font-normal">
                 ({groupedByTeam[team].length})
               </span>
             </h2>
@@ -65,19 +78,20 @@ export default function PlayerTeamBrowser() {
                   return String(a.player_name || "").localeCompare(String(b.player_name || ""));
                 })
                 .map((p) => (
-                <li key={p.player_id} className="flex items-center justify-between gap-3">
+                <li key={p.player_id} className="flex items-center justify-between gap-3 pp-chip px-2 py-1">
                   <Link
                     to={`/player/${p.player_id}`}
-                    className="text-blue-600 hover:underline"
+                    className="text-slate-700 hover:underline"
                   >
                     {p.player_name || p.player_id}
                   </Link>
-                  <span className="text-xs text-gray-500">{freshnessLabel(p.last_prop_date)}</span>
+                  <span className="text-xs text-slate-500">{freshnessLabel(p.last_prop_date)}</span>
                 </li>
               ))}
             </ul>
           </div>
         ))}
+      </div>
     </div>
   );
 }

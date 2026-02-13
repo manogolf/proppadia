@@ -90,16 +90,16 @@ const TodayGames = ({ sport = "mlb", games }) => {
   });
 
   return (
-    <div className="w-full bg-gray-200 shadow rounded-xl p-4">
-      <h2 className="text-xl font-bold text-indigo-900 text-center mb-1">
+    <section className="w-full pp-card p-4">
+      <h2 className="text-xl font-bold text-slate-900 text-center mb-1">
         🗓 Today’s Games
       </h2>
-      <p className="text-sm text-gray-500 text-center mb-4">
+      <p className="text-sm text-slate-500 text-center mb-4">
         Live from {sport.toUpperCase()} • ET and Local Time Displayed
       </p>
 
       {sortedGames.length === 0 ? (
-        <p className="text-center text-gray-500">No games scheduled.</p>
+        <p className="text-center text-slate-500">No games scheduled.</p>
       ) : (
         <ul className="space-y-4">
           {sortedGames.map((game) => {
@@ -124,7 +124,7 @@ const TodayGames = ({ sport = "mlb", games }) => {
             return (
               <li
                 key={game.gamePk}
-                className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 p-4 rounded-lg border border border-blue-200 bg-blue-50 max-w-5xl mx-auto"
+                className="pp-chip grid grid-cols-[1fr_auto_1fr] items-center gap-4 p-4 rounded-lg max-w-5xl mx-auto"
               >
                 {/* Away Team */}
                 <div className="flex flex-col items-start gap-2 max-w-[140px]">
@@ -134,14 +134,14 @@ const TodayGames = ({ sport = "mlb", games }) => {
                       alt={awayTeam.name}
                       className="w-10 h-10 object-contain shrink-0"
                     />
-                    <span className="text-sm font-medium text-gray-800 break-words">
+                    <span className="text-sm font-medium text-slate-800 break-words">
                       {awayTeam.name}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-500">
                     {getTeamRecordFromStandings(awayTeam.name)}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-500">
                     SP: {getStartingPitcher("away", game)}
                   </div>
                 </div>
@@ -149,7 +149,7 @@ const TodayGames = ({ sport = "mlb", games }) => {
                 {/* Game Info */}
                 <div className="flex flex-col items-center text-center gap-1">
                   {gameLabel && (
-                    <span className="text-xs text-gray-500">{gameLabel}</span>
+                    <span className="text-xs text-slate-500">{gameLabel}</span>
                   )}
                   <span className="text-lg font-semibold">{score}</span>
                   <span className={`text-sm ${statusColor}`}>{statusText}</span>
@@ -158,7 +158,7 @@ const TodayGames = ({ sport = "mlb", games }) => {
                 {/* Home Team */}
                 <div className="flex flex-col items-end gap-2 text-right ml-auto">
                   <div className="flex items-center gap-2 justify-end">
-                    <span className="text-sm font-medium text-gray-800 break-words">
+                    <span className="text-sm font-medium text-slate-800 break-words">
                       {homeTeam.name}
                     </span>
                     <img
@@ -167,10 +167,10 @@ const TodayGames = ({ sport = "mlb", games }) => {
                       className="w-10 h-10 object-contain shrink-0"
                     />
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-500">
                     {getTeamRecordFromStandings(homeTeam.name)}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-500">
                     SP: {getStartingPitcher("home", game)}
                   </div>
                 </div>
@@ -179,7 +179,7 @@ const TodayGames = ({ sport = "mlb", games }) => {
           })}
         </ul>
       )}
-    </div>
+    </section>
   );
 };
 

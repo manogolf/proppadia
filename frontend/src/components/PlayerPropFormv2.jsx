@@ -82,6 +82,8 @@ async function prepareThenPredict({
   prop_type, // e.g. "hits"
   prop_value, // number or numeric string
   over_under, // "over" | "under"
+  market_odds_american, // optional sportsbook price, e.g. -115
+  market_implied_probability, // optional implied probability, e.g. 0.535
 }) {
   const prepareBody = {
     player_id: Number(player_id),
@@ -95,6 +97,12 @@ async function prepareThenPredict({
     prepareBody.team_id = Number(team_id);
   } else if (team_abbr) {
     prepareBody.team_abbr = String(team_abbr).toUpperCase();
+  }
+  if (market_odds_american != null && market_odds_american !== "") {
+    prepareBody.market_odds_american = Number(market_odds_american);
+  }
+  if (market_implied_probability != null && market_implied_probability !== "") {
+    prepareBody.market_implied_probability = Number(market_implied_probability);
   }
 
   // 1) prepare
@@ -147,7 +155,14 @@ const prettyProp = (key) => {
 const todayInET = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
-export default function PlayerPropFormV2({ onSaved }) {
+function americanOddsToImplied(odds) {
+  const o = Number(odds);
+  if (!Number.isFinite(o) || o === 0) return null;
+  if (o > 0) return 100 / (o + 100);
+  return Math.abs(o) / (Math.abs(o) + 100);
+}
+
+export default function PlayerPropFormV2({ onSaved, onPredicted }) {
   // user inputs
   const [playerName, setPlayerName] = useState("");
   const [teamAbbr, setTeamAbbr] = useState("");
@@ -155,6 +170,8 @@ export default function PlayerPropFormV2({ onSaved }) {
   const [propType, setPropType] = useState("hits");
   const [overUnder, setOverUnder] = useState("under");
   const [propValue, setPropValue] = useState("0.5");
+  const [marketOddsAmerican, setMarketOddsAmerican] = useState("");
+  const [marketImpliedProbability, setMarketImpliedProbability] = useState("");
 
   // resolved/flow
   const [playerId, setPlayerId] = useState("");
@@ -169,6 +186,10 @@ export default function PlayerPropFormV2({ onSaved }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [loadingMarket, setLoadingMarket] = useState(false);
+  const [marketSourceLabel, setMarketSourceLabel] = useState("");
+  const [supportedMarketMap, setSupportedMarketMap] = useState({});
+  const [loadingMarketSupport, setLoadingMarketSupport] = useState(true);
 
   // resolver stale-guard + team handling
   const lastReqId = useRef(0);
@@ -183,10 +204,33 @@ export default function PlayerPropFormV2({ onSaved }) {
     setPrepWarnings([]);
     setNotice("");
     setError("");
-  }, [playerId, teamAbbr, gameDate, propType, propValue, overUnder]);
+    setMarketSourceLabel("");
+  }, [playerId, teamAbbr, gameDate, propType, propValue, overUnder, marketOddsAmerican, marketImpliedProbability]);
 
   useEffect(() => {
-    console.info("[Props V2] mounted");
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingMarketSupport(true);
+        const data = await getApi("/api/mlb/market-supported-props");
+        if (cancelled) return;
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        const map = {};
+        for (const row of rows) {
+          if (!row?.prop_type || !row?.market_key) continue;
+          map[String(row.prop_type)] = String(row.market_key);
+        }
+        setSupportedMarketMap(map);
+      } catch {
+        if (cancelled) return;
+        setSupportedMarketMap({});
+      } finally {
+        if (!cancelled) setLoadingMarketSupport(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const PROP_OPTIONS = React.useMemo(
@@ -196,6 +240,11 @@ export default function PlayerPropFormV2({ onSaved }) {
       ),
     []
   );
+
+  const isMarketSupported = React.useMemo(() => {
+    if (loadingMarketSupport) return true; // avoid blocking while metadata loads
+    return Boolean(supportedMarketMap[propType]);
+  }, [loadingMarketSupport, propType, supportedMarketMap]);
 
   // ----- name → (player_id) resolver -----
   async function resolvePlayerByNameNow() {
@@ -261,6 +310,14 @@ export default function PlayerPropFormV2({ onSaved }) {
 
     setLoading(true);
     try {
+      const oddsBasedImplied = americanOddsToImplied(marketOddsAmerican);
+      const explicitImplied =
+        marketImpliedProbability !== "" ? Number(marketImpliedProbability) : null;
+      const finalMarketImplied =
+        explicitImplied != null && Number.isFinite(explicitImplied)
+          ? explicitImplied
+          : oddsBasedImplied;
+
       const { features, warnings, probability, recommendation, commit_token, model } =
         await prepareThenPredict({
         player_id: Number(playerId),
@@ -270,6 +327,8 @@ export default function PlayerPropFormV2({ onSaved }) {
         prop_type: propType,
         prop_value: Number(propValue),
         over_under: overUnder,
+        market_odds_american: marketOddsAmerican,
+        market_implied_probability: finalMarketImplied,
       });
 
       // reflect canonicalizations from backend (optional niceties)
@@ -287,11 +346,82 @@ export default function PlayerPropFormV2({ onSaved }) {
       setPrediction({ probability, recommendation, model });
       setCommitToken(commit_token || null);
       setNotice("Prediction ready. Review and click Add Prop to save.");
+      onPredicted?.({
+        probability,
+        marketProbability:
+          features?.market_implied_probability != null
+            ? Number(features.market_implied_probability)
+            : finalMarketImplied,
+        marketOddsAmerican:
+          features?.market_odds_american != null
+            ? Number(features.market_odds_american)
+            : (marketOddsAmerican !== "" ? Number(marketOddsAmerican) : null),
+        recommendation,
+        model,
+        features,
+        updatedAt: new Date().toISOString(),
+        marketSource: marketSourceLabel || null,
+      });
     } catch (err) {
       console.error("[Props V2] predict error:", err);
       setError(err.message || "Unknown error");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleFetchMarketOdds() {
+    setError("");
+    setNotice("");
+    const name = (playerName || "").trim();
+    if (!name) {
+      setError("Enter player name before fetching market odds.");
+      return;
+    }
+    if (!propType) {
+      setError("Pick a prop type before fetching market odds.");
+      return;
+    }
+    if (!isMarketSupported) {
+      setNotice("Market odds not available for this prop type in current OddsAPI mapping.");
+      return;
+    }
+    setLoadingMarket(true);
+    try {
+      const data = await getApi("/api/mlb/market-odds", {
+        player_name: name,
+        prop_type: propType,
+        game_date: gameDate,
+        over_under: overUnder || "over",
+        line: propValue,
+      });
+
+      if (!data?.ok) {
+        const reason = data?.reason || "lookup failed";
+        setError(`Market odds lookup failed: ${reason}`);
+        return;
+      }
+      if (!data?.found) {
+        const reason = data?.reason || "no match found";
+        setNotice(`No market odds match found: ${reason}`);
+        return;
+      }
+
+      if (data.price_american != null) {
+        setMarketOddsAmerican(String(data.price_american));
+      }
+      if (data.implied_probability != null) {
+        setMarketImpliedProbability(String(Number(data.implied_probability).toFixed(4)));
+      }
+      const source = data.bookmaker
+        ? `${data.bookmaker} (${data.market_key || "market"})`
+        : (data.market_key || "OddsAPI");
+      setMarketSourceLabel(source);
+      setNotice(`Market odds loaded from ${source}.`);
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setLoadingMarket(false);
     }
   }
 
@@ -361,25 +491,25 @@ export default function PlayerPropFormV2({ onSaved }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 p-4 bg-blue-100 rounded-xl shadow-md overflow-x-auto w-full max-w-5xl mx-auto"
+      className="pp-card space-y-4 p-4 overflow-x-auto w-full max-w-5xl mx-auto"
     >
       <h2 className="text-2xl font-bold text-center">📋 Add Player Prop</h2>
-      <p className="text-gray-500 text-center text-sm">
+      <p className="text-slate-500 text-center text-sm">
         You must make a prediction before adding a prop.
       </p>
 
       {error && (
-        <div className="bg-red-100 text-red-700 p-2 rounded-md text-center">
+        <div className="pp-chip bg-rose-50 text-rose-700 p-2 rounded-md text-center">
           {error}
         </div>
       )}
       {!error && notice && (
-        <div className="bg-green-100 text-green-800 p-2 rounded-md text-center">
+        <div className="pp-chip bg-emerald-50 text-emerald-800 p-2 rounded-md text-center">
           {notice}
         </div>
       )}
       {prepWarnings.length > 0 && (
-        <div className="bg-amber-100 text-amber-800 p-2 rounded-md text-sm">
+        <div className="pp-chip bg-amber-100 text-amber-800 p-2 rounded-md text-sm">
           {prepWarnings.join(" ")}
         </div>
       )}
@@ -394,22 +524,22 @@ export default function PlayerPropFormV2({ onSaved }) {
               onChange={(e) => setPlayerName(e.target.value)}
               onBlur={resolvePlayerByNameNow}
               placeholder="e.g., Aaron Judge"
-              className="w-full p-2 bg-gray-50 border border-gray-300 rounded-md"
+              className="w-full p-2 pp-chip rounded-md"
             />
             <button
               type="button"
               onClick={resolvePlayerByNameNow}
               disabled={!playerName.trim()}
-              className="px-3 py-2 bg-white border border-blue-500 text-black rounded-md hover:bg-blue-100 disabled:opacity-50"
+              className="pp-btn pp-btn-secondary pp-btn-md"
             >
               Resolve
             </button>
           </div>
           <div className="min-h-[1.25rem] mt-1 text-xs">
             {resolving ? (
-              <span className="text-gray-500">Resolving…</span>
+              <span className="text-slate-500">Resolving…</span>
             ) : playerId ? (
-              <span className="text-green-700">
+              <span className="text-emerald-700">
                 Resolved: #{playerId}
                 {teamAbbr ? ` • ${teamAbbr}` : ""}
               </span>
@@ -426,7 +556,7 @@ export default function PlayerPropFormV2({ onSaved }) {
               setTeamTouched(true);
               setTeamAbbr(e.target.value.toUpperCase());
             }}
-            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-md"
+            className="w-full p-2 pp-chip rounded-md"
           >
             <option value="">Select Team</option>
             {[
@@ -474,7 +604,7 @@ export default function PlayerPropFormV2({ onSaved }) {
           <select
             value={propType}
             onChange={(e) => setPropType(e.target.value)}
-            className="border rounded p-2"
+            className="pp-chip rounded p-2"
           >
             {PROP_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -482,6 +612,13 @@ export default function PlayerPropFormV2({ onSaved }) {
               </option>
             ))}
           </select>
+          <div className="min-h-[1.1rem] mt-1 text-xs text-slate-600">
+            {loadingMarketSupport
+              ? "Checking market coverage..."
+              : isMarketSupported
+                ? `Market key: ${supportedMarketMap[propType]}`
+                : "No market odds mapping for this prop type"}
+          </div>
         </div>
 
         {/* Prop Value */}
@@ -492,7 +629,7 @@ export default function PlayerPropFormV2({ onSaved }) {
             value={propValue}
             onChange={(e) => setPropValue(e.target.value)}
             placeholder="e.g., 0.5"
-            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-md"
+            className="w-full p-2 pp-chip rounded-md"
             inputMode="decimal"
             step="any"
           />
@@ -504,12 +641,42 @@ export default function PlayerPropFormV2({ onSaved }) {
           <select
             value={overUnder}
             onChange={(e) => setOverUnder(e.target.value)}
-            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-md"
+            className="w-full p-2 pp-chip rounded-md"
           >
             <option value="">Select Over/Under</option>
             <option value="over">Over</option>
             <option value="under">Under</option>
           </select>
+        </div>
+
+        {/* Market Odds (American) */}
+        <div className="flex flex-col">
+          <span className="text-sm font-medium mb-1">Market Odds (American)</span>
+          <input
+            type="number"
+            value={marketOddsAmerican}
+            onChange={(e) => setMarketOddsAmerican(e.target.value)}
+            placeholder="e.g., -115 or +135"
+            className="w-full p-2 pp-chip rounded-md"
+            inputMode="numeric"
+            step="1"
+          />
+        </div>
+
+        {/* Market Implied Probability */}
+        <div className="flex flex-col">
+          <span className="text-sm font-medium mb-1">Market Implied Prob (0-1)</span>
+          <input
+            type="number"
+            value={marketImpliedProbability}
+            onChange={(e) => setMarketImpliedProbability(e.target.value)}
+            placeholder="optional; overrides odds conversion"
+            className="w-full p-2 pp-chip rounded-md"
+            inputMode="decimal"
+            step="0.001"
+            min="0"
+            max="1"
+          />
         </div>
 
         {/* Game Date */}
@@ -519,7 +686,7 @@ export default function PlayerPropFormV2({ onSaved }) {
             type="date"
             value={gameDate}
             onChange={(e) => setGameDate(e.target.value)}
-            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-md"
+            className="w-full p-2 pp-chip rounded-md"
           />
         </div>
       </div>
@@ -528,9 +695,18 @@ export default function PlayerPropFormV2({ onSaved }) {
       <div className="flex space-x-2 justify-center mt-4">
         <button
           type="button"
+          onClick={handleFetchMarketOdds}
+          disabled={loadingMarket || !playerName.trim() || !propType || !isMarketSupported}
+          className="pp-btn pp-btn-secondary pp-btn-md flex-1 md:flex-none"
+        >
+          {loadingMarket ? "Loading Market…" : "📈 Fetch Market Odds"}
+        </button>
+
+        <button
+          type="button"
           onClick={handlePredict}
           disabled={loading}
-          className="flex-1 md:flex-none px-4 py-2 bg-white border border-blue-500 text-black rounded-md hover:bg-blue-100 disabled:opacity-50"
+          className="pp-btn pp-btn-secondary pp-btn-md flex-1 md:flex-none"
         >
           {loading ? "Working…" : "🧠 Predict Outcome"}
         </button>
@@ -540,7 +716,7 @@ export default function PlayerPropFormV2({ onSaved }) {
           onClick={handleSaveProp}
           disabled={addDisabled}
           title={addTitle}
-          className="flex-1 md:flex-none px-4 py-2 bg-white border border-green-500 text-black rounded-md hover:bg-green-100 disabled:opacity-50"
+          className="pp-btn pp-btn-primary pp-btn-md flex-1 md:flex-none"
         >
           {addLabel}
         </button>
@@ -548,13 +724,14 @@ export default function PlayerPropFormV2({ onSaved }) {
 
       {/* Prediction summary (no second Add button) */}
       {prediction && (
-        <div className="p-3 rounded border space-y-2">
+        <div className="p-3 rounded pp-chip space-y-2">
           <div className="font-medium">
             🎯 Model (Probability of Over): {pctClamped(prediction.probability)}
           </div>
-          <div className="text-xs text-gray-700">
+          <div className="text-xs text-slate-700">
             Recommendation: {(prediction.recommendation || "over").toUpperCase()}
             {prediction.model ? ` • Model: ${prediction.model}` : ""}
+            {marketSourceLabel ? ` • Market: ${marketSourceLabel}` : ""}
           </div>
 
           {prediction.duplicate ? (
@@ -562,11 +739,11 @@ export default function PlayerPropFormV2({ onSaved }) {
               Already saved{prediction.savedId ? ` (id: ${prediction.savedId})` : ""}.
             </div>
           ) : prediction.saved ? (
-            <div className="text-xs text-green-700">
+            <div className="text-xs text-emerald-700">
               Saved ✓{prediction.savedId ? ` (id: ${prediction.savedId})` : ""}
             </div>
           ) : (
-            <div className="text-xs text-gray-600">
+            <div className="text-xs text-slate-600">
               Not saved yet. Click “Add Prop”.
             </div>
           )}

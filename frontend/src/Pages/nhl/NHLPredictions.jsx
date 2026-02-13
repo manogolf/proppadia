@@ -1,10 +1,24 @@
-// frontend/src/Pages/nhl/NHLPredictions.jsx
-
 import { useEffect, useMemo, useState } from "react";
-import { todayET } from "../../shared/timeUtils.js";
-import SogEvalCard from "../../components/SogEvalCard.jsx";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8001";
+import SogEvalCard from "../../components/SogEvalCard.jsx";
+import ModelVsMarketCard from "../../components/predictions/ModelVsMarketCard.jsx";
+import PredictionWorkspace from "../../components/predictions/PredictionWorkspace.jsx";
+import WorkspaceStatePanel from "../../components/predictions/WorkspaceStatePanel.jsx";
+import { getBaseURL } from "../../shared/getBaseURL.js";
+import { todayET } from "../../shared/timeUtils.js";
+
+const MODES = [
+  {
+    id: "research",
+    label: "Player Research",
+    hint: "Evaluate leaders and model confidence",
+  },
+  {
+    id: "board",
+    label: "Market Board",
+    hint: "Search and sort the full slate",
+  },
+];
 
 function num(x) {
   const v = Number(x);
@@ -14,46 +28,71 @@ function num(x) {
 function fmtProb(x) {
   const v = num(x);
   if (v == null) return "";
-  return `${Math.round(v * 1000) / 10}%`; // 1 decimal percent
+  return `${Math.round(v * 1000) / 10}%`;
 }
 
-function bestLineSog(r) {
-  const candidates = [
-    { line: 0.5, p: num(r.p_over_0_5) },
-    { line: 1.5, p: num(r.p_over_1_5) },
-    { line: 2.5, p: num(r.p_over_2_5) },
-    { line: 3.5, p: num(r.p_over_3_5) },
-  ].filter((x) => x.p != null);
-
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.p - a.p);
-  return candidates[0];
+function extractOverLines(row) {
+  const out = [];
+  for (const [key, value] of Object.entries(row || {})) {
+    if (!key.startsWith("p_over_")) continue;
+    const p = num(value);
+    if (p == null) continue;
+    const line = Number(key.replace("p_over_", "").replace(/_/g, "."));
+    if (!Number.isFinite(line)) continue;
+    out.push({ line, p });
+  }
+  out.sort((a, b) => a.line - b.line);
+  return out;
 }
 
-function bestLineSaves(r) {
-  const candidates = [
-    { line: 24.5, p: num(r.p_over_24_5) },
-    { line: 28.5, p: num(r.p_over_28_5) },
-  ].filter((x) => x.p != null);
+function bestLineFromRow(row) {
+  const lines = extractOverLines(row);
+  if (lines.length === 0) return null;
+  return [...lines].sort((a, b) => b.p - a.p)[0];
+}
 
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.p - a.p);
-  return candidates[0];
+function probForLine(row, line) {
+  const found = extractOverLines(row).find((x) => x.line === line);
+  return found?.p ?? null;
+}
+
+function parseCsvRows(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const values = line.split(",");
+    const row = {};
+    headers.forEach((h, i) => {
+      row[h] = values[i] ?? "";
+    });
+    return row;
+  });
+}
+
+function marketKey(playerId, gameId, line) {
+  return `${String(playerId ?? "")}|${String(gameId ?? "")}|${String(line ?? "")}`;
 }
 
 export default function NHLPredictions() {
   const slateDate = useMemo(() => todayET(), []);
+  const [mode, setMode] = useState("research");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedAt, setLoadedAt] = useState(null);
+  const [marketLoadedAt, setMarketLoadedAt] = useState(null);
+  const [marketMaps, setMarketMaps] = useState({ sog: new Map(), saves: new Map() });
 
   const [sogRows, setSogRows] = useState([]);
   const [savesRows, setSavesRows] = useState([]);
 
-  // UI controls
   const [q, setQ] = useState("");
-  const [sogSort, setSogSort] = useState("best"); // best | 0.5 | 1.5 | 2.5 | 3.5
-  const [savesSort, setSavesSort] = useState("best"); // best | 24.5 | 28.5
+  const [sogSort, setSogSort] = useState("best");
+  const [savesSort, setSavesSort] = useState("best");
 
   useEffect(() => {
     let cancelled = false;
@@ -64,38 +103,25 @@ export default function NHLPredictions() {
         setLoading(true);
 
         const [sogRes, savesRes] = await Promise.all([
-          fetch(
-            `${API_BASE}/api/nhl/sog?date=${encodeURIComponent(
-              slateDate
-            )}&limit=200&offset=0`
-          ),
-          fetch(
-            `${API_BASE}/api/nhl/saves?date=${encodeURIComponent(
-              slateDate
-            )}&limit=200&offset=0`
-          ),
+          fetch(`${getBaseURL()}/api/nhl/sog?date=${encodeURIComponent(slateDate)}&limit=200&offset=0`),
+          fetch(`${getBaseURL()}/api/nhl/saves?date=${encodeURIComponent(slateDate)}&limit=200&offset=0`),
         ]);
 
         const sogJson = await sogRes.json();
         const savesJson = await savesRes.json();
 
         if (!sogRes.ok || sogJson?.ok === false) {
-          throw new Error(
-            sogJson?.error || `SOG endpoint failed (${sogRes.status})`
-          );
+          throw new Error(sogJson?.error || `SOG endpoint failed (${sogRes.status})`);
         }
         if (!savesRes.ok || savesJson?.ok === false) {
-          throw new Error(
-            savesJson?.error || `Saves endpoint failed (${savesRes.status})`
-          );
+          throw new Error(savesJson?.error || `Saves endpoint failed (${savesRes.status})`);
         }
 
         if (cancelled) return;
 
         setSogRows(Array.isArray(sogJson) ? sogJson : sogJson?.rows || []);
-        setSavesRows(
-          Array.isArray(savesJson) ? savesJson : savesJson?.rows || []
-        );
+        setSavesRows(Array.isArray(savesJson) ? savesJson : savesJson?.rows || []);
+        setLoadedAt(new Date().toISOString());
         setLoading(false);
       } catch (e) {
         if (cancelled) return;
@@ -109,6 +135,58 @@ export default function NHLPredictions() {
       cancelled = true;
     };
   }, [slateDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMarketContext() {
+      try {
+        const [sogRes, savesRes] = await Promise.all([
+          fetch(`${getBaseURL()}/nhl/site/data/sog_with_market.csv`, { cache: "no-store" }),
+          fetch(`${getBaseURL()}/nhl/site/data/saves_with_market.csv`, { cache: "no-store" }),
+        ]);
+
+        const [sogText, savesText] = await Promise.all([
+          sogRes.ok ? sogRes.text() : Promise.resolve(""),
+          savesRes.ok ? savesRes.text() : Promise.resolve(""),
+        ]);
+
+        if (cancelled) return;
+
+        const sogRowsCsv = parseCsvRows(sogText);
+        const savesRowsCsv = parseCsvRows(savesText);
+
+        const sogMap = new Map();
+        for (const row of sogRowsCsv) {
+          const key = marketKey(row.player_id, row.game_id, row.line);
+          sogMap.set(key, {
+            marketProbability: num(row.p_over_mkt),
+            priceOver: row.price_over,
+          });
+        }
+
+        const savesMap = new Map();
+        for (const row of savesRowsCsv) {
+          const key = marketKey(row.player_id, row.game_id, row.line);
+          savesMap.set(key, {
+            marketProbability: num(row.p_over_mkt),
+            priceOver: row.price_over,
+          });
+        }
+
+        setMarketMaps({ sog: sogMap, saves: savesMap });
+        setMarketLoadedAt(new Date().toISOString());
+      } catch {
+        if (cancelled) return;
+        setMarketMaps({ sog: new Map(), saves: new Map() });
+      }
+    }
+
+    loadMarketContext();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const query = useMemo(() => q.trim().toLowerCase(), [q]);
 
@@ -130,229 +208,376 @@ export default function NHLPredictions() {
     });
   }, [savesRows, query]);
 
+  const sogLines = useMemo(() => {
+    const set = new Set();
+    for (const row of filteredSog) {
+      for (const x of extractOverLines(row)) set.add(x.line);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [filteredSog]);
+
+  const savesLines = useMemo(() => {
+    const set = new Set();
+    for (const row of filteredSaves) {
+      for (const x of extractOverLines(row)) set.add(x.line);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [filteredSaves]);
+
   const sortedSog = useMemo(() => {
     const arr = [...(filteredSog || [])];
-
     const getKey = (r) => {
-      if (sogSort === "0.5") return num(r.p_over_0_5) ?? -1;
-      if (sogSort === "1.5") return num(r.p_over_1_5) ?? -1;
-      if (sogSort === "2.5") return num(r.p_over_2_5) ?? -1;
-      if (sogSort === "3.5") return num(r.p_over_3_5) ?? -1;
-
-      // best
-      const best = bestLineSog(r);
+      if (sogSort !== "best") return probForLine(r, Number(sogSort)) ?? -1;
+      const best = bestLineFromRow(r);
       return best?.p ?? -1;
     };
-
     arr.sort((a, b) => getKey(b) - getKey(a));
     return arr;
   }, [filteredSog, sogSort]);
 
   const sortedSaves = useMemo(() => {
     const arr = [...(filteredSaves || [])];
-
     const getKey = (r) => {
-      if (savesSort === "24.5") return num(r.p_over_24_5) ?? -1;
-      if (savesSort === "28.5") return num(r.p_over_28_5) ?? -1;
-
-      // best
-      const best = bestLineSaves(r);
+      if (savesSort !== "best") return probForLine(r, Number(savesSort)) ?? -1;
+      const best = bestLineFromRow(r);
       return best?.p ?? -1;
     };
-
     arr.sort((a, b) => getKey(b) - getKey(a));
     return arr;
   }, [filteredSaves, savesSort]);
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-6xl mx-auto px-4 py-4">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-2xl font-bold text-indigo-900">
-            NHL Predictions
-          </h2>
-          <div className="text-sm text-gray-500">Slate (ET): {slateDate}</div>
-        </div>
+  const subtitle = useMemo(() => {
+    return mode === "research"
+      ? "Review strongest model probabilities before scanning the full board."
+      : "Search and rank shots-on-goal and saves lines for the active slate.";
+  }, [mode]);
 
-        {/* Controls */}
-        <div className="bg-white shadow rounded-xl p-4 border border-gray-200 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Search</div>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Filter by player_id or game_id…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
+  const topSogRows = useMemo(() => sortedSog.slice(0, 8), [sortedSog]);
+  const topSavesRows = useMemo(() => sortedSaves.slice(0, 8), [sortedSaves]);
 
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Sort SOG by</div>
-              <select
-                value={sogSort}
-                onChange={(e) => setSogSort(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="best">Best line</option>
-                <option value="0.5">P(over 0.5)</option>
-                <option value="1.5">P(over 1.5)</option>
-                <option value="2.5">P(over 2.5)</option>
-                <option value="3.5">P(over 3.5)</option>
-              </select>
-            </div>
+  const topSog = topSogRows[0] || null;
+  const topSogBest = topSog ? bestLineFromRow(topSog) : null;
+  const topSaves = topSavesRows[0] || null;
+  const topSavesBest = topSaves ? bestLineFromRow(topSaves) : null;
 
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Sort Saves by</div>
-              <select
-                value={savesSort}
-                onChange={(e) => setSavesSort(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="best">Best line</option>
-                <option value="24.5">P(over 24.5)</option>
-                <option value="28.5">P(over 28.5)</option>
-              </select>
-            </div>
-          </div>
-        </div>
+  const topSogMarket = useMemo(() => {
+    if (!topSog || !topSogBest) return null;
+    return marketMaps.sog.get(marketKey(topSog.player_id, topSog.game_id, topSogBest.line)) || null;
+  }, [marketMaps.sog, topSog, topSogBest]);
 
-        {loading ? (
-          <div className="w-full bg-gray-200 shadow rounded-xl p-6 text-center text-gray-500">
-            Loading predictions…
-          </div>
-        ) : error ? (
-          <div className="w-full bg-gray-200 shadow rounded-xl p-6 text-center text-red-600">
-            {error}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <SogEvalCard />
+  const topSavesMarket = useMemo(() => {
+    if (!topSaves || !topSavesBest) return null;
+    return marketMaps.saves.get(marketKey(topSaves.player_id, topSaves.game_id, topSavesBest.line)) || null;
+  }, [marketMaps.saves, topSaves, topSavesBest]);
 
-            {/* ---------------- SOG TABLE ---------------- */}
-            <div className="bg-white shadow rounded-xl p-4 border border-gray-200">
-              <div className="flex items-baseline justify-between mb-3">
-                <h3 className="text-lg font-semibold text-indigo-900">
-                  Shots on Goal (SOG)
-                </h3>
-                <div className="text-sm text-gray-500">
-                  Rows: {sortedSog.length}
-                </div>
-              </div>
+  const dataConfidence = useMemo(() => {
+    const total = sortedSog.length + sortedSaves.length;
+    if (total >= 120) return "High";
+    if (total >= 40) return "Medium";
+    return "Low";
+  }, [sortedSog.length, sortedSaves.length]);
 
-              {sortedSog.length === 0 ? (
-                <div className="text-gray-500 text-sm">
-                  No SOG predictions found.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-gray-600 border-b">
-                        <th className="py-2 pr-3">game_id</th>
-                        <th className="py-2 pr-3">team</th>
-                        <th className="py-2 pr-3">player</th>
-                        <th className="py-2 pr-3">player_id</th>
-                        <th className="py-2 pr-3">P(over 1.5)</th>
-                        <th className="py-2 pr-3">P(over 2.5)</th>
-                        <th className="py-2 pr-3">P(over 3.5)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedSog.map((r) => (
-                        <tr
-                          key={`${r.game_id}-${r.player_id}`}
-                          className="border-b"
-                        >
-                          <td className="py-2 pr-3 font-mono">{r.game_id}</td>
+  const sparseData = useMemo(() => {
+    return sortedSog.length + sortedSaves.length < 25;
+  }, [sortedSog.length, sortedSaves.length]);
 
-                          <td className="py-2 pr-3">
-                            <span className="font-semibold">
-                              {r.team_abbr || ""}
-                            </span>
-                          </td>
+  const boardControls = (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+      <div>
+        <div className="text-xs text-slate-500 mb-1">Search</div>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter by player_id or game_id..."
+          className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
+        />
+      </div>
 
-                          <td className="py-2 pr-3">{r.player_name || ""}</td>
+      <div>
+        <div className="text-xs text-slate-500 mb-1">Sort SOG by</div>
+        <select
+          value={sogSort}
+          onChange={(e) => setSogSort(e.target.value)}
+          className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
+        >
+          <option value="best">Best line</option>
+          {sogLines.map((line) => (
+            <option key={`sog-sort-${line}`} value={String(line)}>
+              {`P(over ${line})`}
+            </option>
+          ))}
+        </select>
+      </div>
 
-                          <td className="py-2 pr-3 font-mono">{r.player_id}</td>
-
-                          <td className="py-2 pr-3">{fmtProb(r.p_over_1_5)}</td>
-                          <td className="py-2 pr-3">{fmtProb(r.p_over_2_5)}</td>
-                          <td className="py-2 pr-3">{fmtProb(r.p_over_3_5)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            {/* ---------------- SAVES TABLE ---------------- */}
-            <div className="bg-white shadow rounded-xl p-4 border border-gray-200">
-              <div className="flex items-baseline justify-between mb-3">
-                <h3 className="text-lg font-semibold text-indigo-900">
-                  Goalie Saves
-                </h3>
-                <div className="text-sm text-gray-500">
-                  Rows: {sortedSaves.length}
-                </div>
-              </div>
-
-              {sortedSaves.length === 0 ? (
-                <div className="text-gray-500 text-sm">
-                  No saves predictions found.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-gray-600 border-b">
-                        <th className="py-2 pr-3">game_id</th>
-                        <th className="py-2 pr-3">team</th>
-                        <th className="py-2 pr-3">player</th>
-                        <th className="py-2 pr-3">player_id</th>
-                        <th className="py-2 pr-3">P(over 24.5)</th>
-                        <th className="py-2 pr-3">P(over 28.5)</th>
-                      </tr>{" "}
-                    </thead>
-                    <tbody>
-                      {sortedSaves.map((r) => {
-                        const best = bestLineSaves(r);
-                        return (
-                          <tr
-                            key={`${r.game_id}-${r.player_id}`}
-                            className="border-b"
-                          >
-                            <td className="py-2 pr-3 font-mono">{r.game_id}</td>
-
-                            <td className="py-2 pr-3">
-                              <span className="font-semibold">
-                                {r.team_abbr || ""}
-                              </span>
-                            </td>
-
-                            <td className="py-2 pr-3">{r.player_name || ""}</td>
-
-                            <td className="py-2 pr-3 font-mono">
-                              {r.player_id}
-                            </td>
-
-                            <td className="py-2 pr-3">
-                              {fmtProb(r.p_over_24_5)}
-                            </td>
-                            <td className="py-2 pr-3">
-                              {fmtProb(r.p_over_28_5)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      <div>
+        <div className="text-xs text-slate-500 mb-1">Sort Saves by</div>
+        <select
+          value={savesSort}
+          onChange={(e) => setSavesSort(e.target.value)}
+          className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
+        >
+          <option value="best">Best line</option>
+          {savesLines.map((line) => (
+            <option key={`saves-sort-${line}`} value={String(line)}>
+              {`P(over ${line})`}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
+  );
+
+  return (
+    <PredictionWorkspace
+      sportLabel="NHL"
+      title="Prediction Workspace"
+      subtitle={subtitle}
+      dateLabel={`Slate (ET): ${slateDate}`}
+      modes={MODES}
+      activeMode={mode}
+      onModeChange={setMode}
+      controls={mode === "board" ? boardControls : null}
+    >
+      {loading ? (
+        <WorkspaceStatePanel
+          kind="loading"
+          title="Loading NHL predictions"
+          detail="Fetching shots-on-goal and saves models for the current slate."
+        />
+      ) : error ? (
+        <WorkspaceStatePanel kind="error" title="Could not load NHL predictions" detail={error} />
+      ) : sortedSog.length === 0 && sortedSaves.length === 0 ? (
+        <WorkspaceStatePanel
+          kind="empty"
+          title="No predictions available"
+          detail="No rows returned for this slate date."
+        />
+      ) : mode === "research" ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ModelVsMarketCard
+              title="Top SOG Model Edge"
+              lineLabel={
+                topSog && topSogBest
+                  ? `${topSog.player_name || topSog.player_id} • Over ${topSogBest.line}`
+                  : "No SOG edge available"
+              }
+              modelProbability={topSogBest?.p ?? null}
+              marketProbability={topSogMarket?.marketProbability ?? null}
+              sourceLabel={topSogMarket?.marketProbability != null ? "OddsAPI market median" : "NHL SOG model"}
+              updatedLabel={
+                marketLoadedAt
+                  ? new Date(marketLoadedAt).toLocaleString()
+                  : loadedAt
+                    ? new Date(loadedAt).toLocaleString()
+                    : "-"
+              }
+              confidenceLabel={dataConfidence}
+            />
+            <ModelVsMarketCard
+              title="Top Saves Model Edge"
+              lineLabel={
+                topSaves && topSavesBest
+                  ? `${topSaves.player_name || topSaves.player_id} • Over ${topSavesBest.line}`
+                  : "No saves edge available"
+              }
+              modelProbability={topSavesBest?.p ?? null}
+              marketProbability={topSavesMarket?.marketProbability ?? null}
+              sourceLabel={topSavesMarket?.marketProbability != null ? "OddsAPI market median" : "NHL saves model"}
+              updatedLabel={
+                marketLoadedAt
+                  ? new Date(marketLoadedAt).toLocaleString()
+                  : loadedAt
+                    ? new Date(loadedAt).toLocaleString()
+                    : "-"
+              }
+              confidenceLabel={dataConfidence}
+            />
+          </div>
+
+          {sparseData ? (
+            <WorkspaceStatePanel
+              kind="sparse"
+              title="Sparse data on this slate"
+              detail="Model output is available, but row volume is low. Interpret rankings with caution."
+            />
+          ) : null}
+
+          <SogEvalCard />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <section className="pp-card p-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <h3 className="text-lg font-semibold text-slate-900">Top SOG Edges</h3>
+                <div className="text-sm text-slate-500">Top {topSogRows.length}</div>
+              </div>
+              <div className="space-y-2">
+                {topSogRows.map((r) => {
+                  const best = bestLineFromRow(r);
+                  return (
+                    <div
+                      key={`top-sog-${r.game_id}-${r.player_id}`}
+                      className="pp-chip px-3 py-2 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-medium text-slate-900">{r.player_name || r.player_id}</div>
+                        <div className="text-xs text-slate-500">{r.team_abbr || ""} - game {r.game_id}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-700">
+                        {best ? `Over ${best.line}: ${fmtProb(best.p)}` : "-"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="pp-card p-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <h3 className="text-lg font-semibold text-slate-900">Top Saves Edges</h3>
+                <div className="text-sm text-slate-500">Top {topSavesRows.length}</div>
+              </div>
+              <div className="space-y-2">
+                {topSavesRows.map((r) => {
+                  const best = bestLineFromRow(r);
+                  return (
+                    <div
+                      key={`top-saves-${r.game_id}-${r.player_id}`}
+                      className="pp-chip px-3 py-2 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-medium text-slate-900">{r.player_name || r.player_id}</div>
+                        <div className="text-xs text-slate-500">{r.team_abbr || ""} - game {r.game_id}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-700">
+                        {best ? `Over ${best.line}: ${fmtProb(best.p)}` : "-"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <ModelVsMarketCard
+            title="Board Snapshot"
+            lineLabel={
+              topSog && topSogBest
+                ? `${topSog.player_name || topSog.player_id} • Over ${topSogBest.line}`
+                : "Top line snapshot"
+            }
+            modelProbability={topSogBest?.p ?? null}
+            marketProbability={topSogMarket?.marketProbability ?? null}
+            sourceLabel={topSogMarket?.marketProbability != null ? "OddsAPI market median" : "NHL board"}
+            updatedLabel={
+              marketLoadedAt
+                ? new Date(marketLoadedAt).toLocaleString()
+                : loadedAt
+                  ? new Date(loadedAt).toLocaleString()
+                  : "-"
+            }
+            confidenceLabel={dataConfidence}
+          />
+
+          {sparseData ? (
+            <WorkspaceStatePanel
+              kind="sparse"
+              title="Sparse board for this date"
+              detail="Some sort/filter views may look thin because the slate is small or off-season."
+            />
+          ) : null}
+
+          <section className="pp-card p-4">
+            <div className="flex items-baseline justify-between mb-3">
+              <h3 className="text-lg font-semibold text-slate-900">Shots on Goal (SOG)</h3>
+              <div className="text-sm text-slate-500">Rows: {sortedSog.length}</div>
+            </div>
+
+            {sortedSog.length === 0 ? (
+              <div className="text-slate-500 text-sm">No SOG predictions found.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-600 border-b border-slate-200">
+                      <th className="py-2 pr-3">game_id</th>
+                      <th className="py-2 pr-3">team</th>
+                      <th className="py-2 pr-3">player</th>
+                      <th className="py-2 pr-3">player_id</th>
+                      {sogLines.map((line) => (
+                        <th key={`sog-col-${line}`} className="py-2 pr-3">{`P(over ${line})`}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedSog.map((r) => (
+                      <tr key={`${r.game_id}-${r.player_id}`} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-mono">{r.game_id}</td>
+                        <td className="py-2 pr-3">
+                          <span className="font-semibold">{r.team_abbr || ""}</span>
+                        </td>
+                        <td className="py-2 pr-3">{r.player_name || ""}</td>
+                        <td className="py-2 pr-3 font-mono">{r.player_id}</td>
+                        {sogLines.map((line) => (
+                          <td key={`sog-cell-${r.game_id}-${r.player_id}-${line}`} className="py-2 pr-3">
+                            {fmtProb(probForLine(r, line))}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="pp-card p-4">
+            <div className="flex items-baseline justify-between mb-3">
+              <h3 className="text-lg font-semibold text-slate-900">Goalie Saves</h3>
+              <div className="text-sm text-slate-500">Rows: {sortedSaves.length}</div>
+            </div>
+
+            {sortedSaves.length === 0 ? (
+              <div className="text-slate-500 text-sm">No saves predictions found.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-600 border-b border-slate-200">
+                      <th className="py-2 pr-3">game_id</th>
+                      <th className="py-2 pr-3">team</th>
+                      <th className="py-2 pr-3">player</th>
+                      <th className="py-2 pr-3">player_id</th>
+                      {savesLines.map((line) => (
+                        <th key={`saves-col-${line}`} className="py-2 pr-3">{`P(over ${line})`}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedSaves.map((r) => (
+                      <tr key={`${r.game_id}-${r.player_id}`} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-mono">{r.game_id}</td>
+                        <td className="py-2 pr-3">
+                          <span className="font-semibold">{r.team_abbr || ""}</span>
+                        </td>
+                        <td className="py-2 pr-3">{r.player_name || ""}</td>
+                        <td className="py-2 pr-3 font-mono">{r.player_id}</td>
+                        {savesLines.map((line) => (
+                          <td key={`saves-cell-${r.game_id}-${r.player_id}-${line}`} className="py-2 pr-3">
+                            {fmtProb(probForLine(r, line))}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </PredictionWorkspace>
   );
 }

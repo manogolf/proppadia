@@ -44,14 +44,14 @@ export default function PlayerProfileDashboard() {
 
   if (error)
     return (
-      <div className="p-4 text-red-600">
+      <div className="p-4 text-rose-600">
         Failed to load player profile: {error}
       </div>
     );
 
   if (!profileData)
     return (
-      <div className="p-4 text-red-600">Failed to load player profile</div>
+      <div className="p-4 text-rose-600">Failed to load player profile</div>
     );
 
   const latestRecentPropDate =
@@ -65,8 +65,8 @@ export default function PlayerProfileDashboard() {
 
     return (
       <div className="mb-4">
-        <h4 className="font-semibold text-gray-800 mb-2">{title}</h4>
-        <div className="space-y-1 text-sm font-mono text-gray-800 bg-yellow-50 border border-gray-100 rounded px-4 py-2">
+        <h4 className="font-semibold text-slate-800 mb-2">{title}</h4>
+        <div className="space-y-1 text-sm font-mono text-slate-800 bg-slate-50 border border-slate-200 rounded px-4 py-2">
           {Object.entries(stats).map(([key, value]) => {
             const label = key
               .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -74,7 +74,7 @@ export default function PlayerProfileDashboard() {
 
             return (
               <div key={key} className="flex justify-between">
-                <span className="text-gray-600">{label}:</span>
+                <span className="text-slate-600">{label}:</span>
                 <span className="text-right">{String(value)}</span>
               </div>
             );
@@ -85,29 +85,29 @@ export default function PlayerProfileDashboard() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="min-h-screen pp-page p-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold text-slate-900">
             Player Profile: {profileData?.player_info?.player_name || playerId}
             {profileData?.player_info?.team ? ` (${profileData.player_info.team})` : ""}
           </h1>
-          <div className="text-sm text-gray-600 mt-1">
+          <div className="text-sm text-slate-600 mt-1">
             Data freshness:{" "}
             {freshnessDate ? `last prop date ${freshnessDate}` : "no recent prop history"}
           </div>
         </div>
-        <Link to="/players" className="text-blue-600 hover:underline text-sm">
+        <Link to="/players" className="text-slate-700 hover:underline text-sm">
           ← Back to Player List
         </Link>
       </div>
       <section className="mb-6">
-        <div className="p-2 border border-gray-200 rounded bg-red-100 shadow-sm">
-          <h2 className="text-xl font-semibold mb-2">Current Streaks</h2>
+        <div className="pp-card p-3">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Current Streaks</h2>
           {profileData.streaks?.length > 0 ? (
             <ul className="space-y-2">
               {profileData.streaks.map((s, i) => (
-                <li key={i} className="p-2 bg-yellow-100 rounded shadow">
+                <li key={i} className="pp-chip p-2">
                   <span className="font-semibold">
                     {getPropDisplayLabel(s.prop_type)}
                   </span>
@@ -121,27 +121,24 @@ export default function PlayerProfileDashboard() {
         </div>
       </section>
       <section className="mb-6">
-        <div className="p-2 border border-gray-200 rounded bg-blue-50 shadow-sm">
-          <h2 className="text-xl font-semibold mb-2">Recent Props</h2>
+        <div className="pp-card p-3">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Recent Props</h2>
           {profileData.recent_props?.length > 0 ? (
             <ul className="space-y-1">
               {profileData.recent_props.map((prop, i) => (
-                <li
-                  key={i}
-                  className="p-2 bg-blue-100 rounded shadow-sm text-sm"
-                >
+                <li key={i} className="pp-chip p-2 text-sm">
                   <div>
-                    <span className="font-semibold text-blue-800">
+                    <span className="font-semibold text-slate-800">
                       {prop.game_date}
                     </span>
                     : {getPropDisplayLabel(prop.prop_type)} → {prop.outcome || "pending"}
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-slate-600">
                     {String(prop.over_under || "").toLowerCase() || "—"}{" "}
                     {prop.prop_value ?? "—"}
                     {"\u00A0\u00A0"}
                     {prop.confidence_score && (
-                      <span className="ml-2 text-blue-600">
+                      <span className="ml-2 text-slate-700">
                         {Math.round(prop.confidence_score * 100)}% confident
                       </span>
                     )}
@@ -155,17 +152,17 @@ export default function PlayerProfileDashboard() {
         </div>
       </section>
       <section className="mb-6">
-        <div className="p-2 border border-gray-200 rounded bg-green-50 shadow-sm">
-          <h2 className="text-xl font-semibold mb-2">Stat-Derived Props</h2>
+        <div className="pp-card p-3">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Stat-Derived Props</h2>
           {profileData.stat_derived?.length > 0 ? (
             <ul className="space-y-2">
               {profileData.stat_derived.map((prop, i) => (
-                <li key={i} className="p-2 bg-green-100 rounded shadow">
+                <li key={i} className="pp-chip p-2">
                   <div>
                     <span className="font-semibold">{prop.game_date}</span>:{" "}
                     {getPropDisplayLabel(prop.prop_type)} → {prop.result}
                     {prop.outcome && (
-                      <span className="ml-2 text-sm text-gray-600">
+                      <span className="ml-2 text-sm text-slate-600">
                         ({prop.outcome})
                       </span>
                     )}
@@ -179,15 +176,12 @@ export default function PlayerProfileDashboard() {
         </div>
       </section>
       <section className="mb-6">
-        <div className="p-2 border border-gray-200 rounded bg-gray-100 shadow-sm">
-          <h2 className="text-xl font-semibold mb-2">Training Summary</h2>
+        <div className="pp-card p-3">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Training Summary</h2>
           {profileData.training_summary?.length > 0 ? (
             <ul className="space-y-1">
               {profileData.training_summary.map((entry, i) => (
-                <li
-                  key={i}
-                  className="px-2 py-1 bg-gray-50 rounded shadow-sm text-sm"
-                >
+                <li key={i} className="pp-chip px-2 py-1 text-sm">
                   {getPropDisplayLabel(entry.prop_type)}: {entry.count} props
                   used in training
                 </li>
@@ -204,8 +198,8 @@ export default function PlayerProfileDashboard() {
             const s = profileData.season_stats.hitting;
             return (
               <div className="flex-1 flex flex-col">
-                <div className="flex flex-col flex-grow p-4 border border-gray-200 rounded bg-blue-50 shadow-sm">
-                  <h3 className="text-xl font-semibold text-blue-700 mb-2">
+                <div className="flex flex-col flex-grow p-4 pp-card">
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">
                     Season Stats
                   </h3>
                   {renderStatGroup("Batting Summary", {
@@ -253,8 +247,8 @@ export default function PlayerProfileDashboard() {
             const c = profileData.career_stats.hitting;
             return (
               <div className="flex-1 flex flex-col">
-                <div className="flex flex-col flex-grow p-4 border border-gray-200 rounded bg-green-50 shadow-sm">
-                  <h3 className="text-xl font-semibold text-green-700 mb-2">
+                <div className="flex flex-col flex-grow p-4 pp-card">
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">
                     Career Stats
                   </h3>
                   {renderStatGroup("Batting Summary", {

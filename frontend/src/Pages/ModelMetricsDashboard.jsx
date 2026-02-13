@@ -93,8 +93,6 @@ export default function ModelMetricsDashboard() {
           `${getBaseURL()}/api/model-accuracy-weekly`
         );
         const weeklyModelData = await weeklyModelRes.json();
-        // ✅ Move console.log here, after the data is loaded
-        console.log("📦 Weekly Model Metrics:", weeklyModelData);
         setWeeklyModelMetrics(weeklyModelData);
       } catch (error) {
         console.error("❌ Failed to load accuracy metrics:", error);
@@ -106,7 +104,12 @@ export default function ModelMetricsDashboard() {
     fetchMetrics();
   }, []);
 
-  if (loading) return <div className="p-4">Loading metrics...</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen pp-page p-4">
+        <div className="pp-card p-4 text-slate-600">Loading metrics...</div>
+      </div>
+    );
 
   const weeklyUserMetricsGrouped = weeklyUserMetrics.reduce((acc, row) => {
     const week = row.week_start;
@@ -130,11 +133,12 @@ export default function ModelMetricsDashboard() {
   }));
 
   return (
-    <div className="space-y-8">
+    <div className="min-h-screen pp-page">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
       {/* ✅ Cumulative User vs Model */}
       <Card>
         <CardContent>
-          <h2 className="text-xl font-semibold mb-2">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">
             User vs Model Accuracy by Prop Type
           </h2>
           <MetricsTable metrics={metrics} />
@@ -145,7 +149,7 @@ export default function ModelMetricsDashboard() {
       {/* ✅ Cumulative Model Only */}
       <Card>
         <CardContent>
-          <h2 className="text-xl font-semibold mb-2">Overall Model Accuracy</h2>
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Overall Model Accuracy</h2>
           <ModelAccuracyTable data={modelAccuracy} />
           <div className="mt-6 h-[320px]">
             <ModelAccuracyBarChart data={modelAccuracy} />
@@ -163,13 +167,13 @@ export default function ModelMetricsDashboard() {
         .map(([week, rows]) => (
           <Card key={week}>
             <CardContent>
-              <h2 className="text-lg font-semibold mb-2">
+              <h2 className="text-lg font-semibold mb-2 text-slate-900">
                 Week of {formatDateET(week)} — User vs Model Accuracy
               </h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="border-b">
+                    <tr className="border-b border-slate-200 text-slate-700">
                       <th className="text-left p-2">Prop Type</th>
                       <th className="text-left p-2">User Accuracy %</th>
                       <th className="text-left p-2">Model Accuracy %</th>
@@ -178,7 +182,7 @@ export default function ModelMetricsDashboard() {
                   </thead>
                   <tbody>
                     {rows.map((row, i) => (
-                      <tr key={i} className="border-b">
+                      <tr key={i} className="border-b border-slate-100 text-slate-800">
                         <td className="p-2">
                           {getPropDisplayLabel(row.prop_type)}
                         </td>
@@ -208,7 +212,7 @@ export default function ModelMetricsDashboard() {
       {/* ✅ Weekly Model Accuracy */}
       <Card>
         <CardContent>
-          <h2 className="text-xl font-semibold mb-2">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">
             Rolling 6-Week Model Accuracy
           </h2>
           <WeeklyModelAccuracyTable data={formattedWeeklyModelMetrics} />
@@ -218,6 +222,7 @@ export default function ModelMetricsDashboard() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

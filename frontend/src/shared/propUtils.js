@@ -127,14 +127,10 @@ export async function getRollingAverage(
     .order("game_date", { ascending: false });
 
   if (error) {
-    console.warn(`❌ Supabase error in getRollingAverage: ${error.message}`);
     return null;
   }
 
   if (!data || data.length === 0) {
-    console.log(
-      `🟡 No prior games for ${playerId} | ${propType} before ${gameDate}`
-    );
     return null;
   }
 
@@ -145,7 +141,6 @@ export async function getRollingAverage(
     .filter((v) => !isNaN(v));
 
   if (filtered.length === 0) {
-    console.log(`🟡 No valid numeric results for ${playerId} | ${propType}`);
     return null;
   }
 

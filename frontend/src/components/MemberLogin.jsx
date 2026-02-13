@@ -1,8 +1,8 @@
-// src/pages/OwnerLogin.js (Supabase JS v2)
+// src/components/MemberLogin.jsx (Supabase JS v2)
 import React, { useState } from "react";
 import { supabase } from "../utils/supabaseFrontend.js";
 
-export default function OwnerLogin() {
+export default function MemberLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,10 +18,8 @@ export default function OwnerLogin() {
     });
     setLoading(false);
     if (error) return setErr(error.message);
-
-    // onAuthStateChange in AuthContext will update the app;
-    // optionally navigate now:
-    window.location.assign("/");
+    // Let AuthContext + LoginPage route-state redirect handle post-login navigation.
+    if (!data?.session) return setErr("Sign in did not return a session.");
   };
 
   const handleMagicLink = async (e) => {
@@ -48,11 +46,9 @@ export default function OwnerLogin() {
   };
 
   return (
-    <div className="max-w-sm mx-auto p-6 bg-white rounded-xl shadow">
-      <h1 className="text-xl font-semibold mb-4">Owner Login</h1>
-
+    <>
       {err && (
-        <div className="mb-3 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+        <div className="mb-3 rounded border border-rose-200 bg-rose-50 p-2 text-sm text-rose-700">
           {err}
         </div>
       )}
@@ -61,7 +57,7 @@ export default function OwnerLogin() {
         <input
           type="email"
           placeholder="Email"
-          className="w-full border rounded p-2"
+          className="w-full pp-chip rounded p-2"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
@@ -70,7 +66,7 @@ export default function OwnerLogin() {
         <input
           type="password"
           placeholder="Password"
-          className="w-full border rounded p-2"
+          className="w-full pp-chip rounded p-2"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
@@ -79,7 +75,7 @@ export default function OwnerLogin() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+          className="pp-btn pp-btn-primary pp-btn-md pp-btn-block"
         >
           {loading ? "Signing in…" : "Sign in"}
         </button>
@@ -89,17 +85,17 @@ export default function OwnerLogin() {
         <button
           onClick={handleMagicLink}
           disabled={loading || !email}
-          className="flex-1 px-3 py-2 rounded border"
+          className="pp-btn pp-btn-secondary pp-btn-md flex-1"
         >
           Email magic link
         </button>
         <button
           onClick={() => handleOAuth("github")}
-          className="flex-1 px-3 py-2 rounded border"
+          className="pp-btn pp-btn-secondary pp-btn-md flex-1"
         >
           GitHub
         </button>
       </div>
-    </div>
+    </>
   );
 }

@@ -152,26 +152,26 @@ export default function PlayerPropsTable({
     sort.key === key ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
 
   return (
-    <div className="bg-blue-100 p-4 rounded-xl shadow-md overflow-x-auto">
+    <div className="pp-card p-4 overflow-x-auto">
       <div className="flex items-center justify-between mb-4 gap-2">
-        <h2 className="text-lg font-semibold">Player Props for {day}</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Player Props for {day}</h2>
         <button
           type="button"
           onClick={fetchRows}
           disabled={loading}
-          className="px-3 py-1 text-sm bg-white border border-blue-500 rounded-md hover:bg-blue-100 disabled:opacity-50"
+          className="pp-btn pp-btn-secondary pp-btn-sm"
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
       {lastError && (
-        <div className="mb-3 text-sm text-red-700 bg-red-100 rounded-md p-2">
+        <div className="mb-3 text-sm text-rose-700 bg-rose-100 rounded-md p-2">
           {lastError}
         </div>
       )}
 
-      <table className="min-w-full text-sm text-gray-800">
-        <thead className="bg-gray-100">
+      <table className="min-w-full text-sm text-slate-800">
+        <thead className="bg-slate-100">
           <tr>
             <th
               onClick={() => setSortKey("player_name")}
@@ -231,11 +231,11 @@ export default function PlayerPropsTable({
                 : "bg-green-50 ring-1 ring-green-300"
               : "";
             return (
-              <tr key={p.id} className={`border-t hover:bg-gray-50 ${highlightStyle}`}>
+              <tr key={p.id} className={`border-t border-slate-200 hover:bg-slate-50 ${highlightStyle}`}>
                 <td className="px-3 py-2">
                   {p.player_name}
                   {p.position && (
-                    <span className="ml-1 text-xs text-gray-500">
+                    <span className="ml-1 text-xs text-slate-500">
                       ({p.position})
                     </span>
                   )}
@@ -256,14 +256,14 @@ export default function PlayerPropsTable({
                   </span>
                 </td>
                 <td className="px-3 py-2 capitalize">{formatSource(p)}</td>
-                <td className="px-3 py-2 text-gray-600">{formatUpdated(p)}</td>
+                <td className="px-3 py-2 text-slate-600">{formatUpdated(p)}</td>
                 <td className="px-3 py-2">{p.game_date}</td>
               </tr>
             );
           })}
           {sorted.length === 0 && (
             <tr>
-              <td colSpan="9" className="px-3 py-6 text-center text-gray-500">
+              <td colSpan="9" className="px-3 py-6 text-center text-slate-500">
                 No props for {day}
               </td>
             </tr>

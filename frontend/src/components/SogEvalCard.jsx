@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { getBaseURL } from "../shared/getBaseURL.js";
 
 function fmt(x, digits = 3) {
   if (x === null || x === undefined) return "—";
@@ -14,7 +15,7 @@ function InfoTip({ text }) {
         tabIndex={0}
         className="inline-flex items-center justify-center w-5 h-5 rounded-full
                      text-slate-500 font-bold cursor-help select-none
-                     focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                     focus:outline-none focus:ring-2 focus:ring-slate-300"
         aria-label={text}
       >
         ⓘ
@@ -23,7 +24,7 @@ function InfoTip({ text }) {
       <div
         className="pointer-events-none absolute z-50 left-1/2 -translate-x-1/2 mt-2
                      min-w-[220px] max-w-[360px] whitespace-normal break-words
-                     rounded-lg bg-white border border-gray-200 shadow-lg p-3 text-xs text-gray-700
+                     rounded-lg bg-white border border-slate-200 shadow-lg p-3 text-xs text-slate-700
                      opacity-0 translate-y-1
                      transition-opacity transition-transform duration-150
                      group-hover:opacity-100 group-hover:translate-y-0
@@ -39,18 +40,15 @@ export default function SogEvalCard() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
 
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8001";
-
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`${API_BASE}/nhl/site/data/sog_eval.json`, { cache: "no-store" })
+    fetch(`${getBaseURL()}/nhl/site/data/sog_eval.json`, { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((j) => {
-        console.log("[sog_eval] payload", j);
         if (!cancelled) setData(j);
       })
       .catch((e) => {
@@ -61,14 +59,14 @@ export default function SogEvalCard() {
     return () => {
       cancelled = true;
     };
-  }, [API_BASE]);
+  }, []);
 
   // non-blocking: if it errors, show a small warning card (doesn't break page)
   if (err) {
     return (
-      <div className="bg-red-100 p-4 rounded-xl shadow-md text-red-700">
-        <div className="font-semibold mb-1">Model Quality (SOG)</div>
-        <div className="text-sm">SogEvalCard error: {String(err)}</div>
+      <div className="pp-card p-4 text-rose-700">
+        <div className="font-semibold mb-1 text-slate-900">Model Quality (SOG)</div>
+        <div className="text-sm">SOG eval fetch error: {String(err)}</div>
       </div>
     );
   }
@@ -76,8 +74,8 @@ export default function SogEvalCard() {
   // non-blocking: show a small placeholder so you *know* it mounted
   if (!data?.rows?.length) {
     return (
-      <div className="bg-gray-100 p-4 rounded-xl shadow-md text-gray-700">
-        <div className="font-semibold mb-1">Model Quality (SOG)</div>
+      <div className="pp-card p-4 text-slate-700">
+        <div className="font-semibold mb-1 text-slate-900">Model Quality (SOG)</div>
         <div className="text-sm">Loading evaluation…</div>
       </div>
     );
@@ -121,13 +119,13 @@ export default function SogEvalCard() {
   ];
 
   return (
-    <div className="bg-blue-100 p-4 rounded-xl shadow-md overflow-x-auto">
+    <section className="pp-card p-4 overflow-x-auto">
       <div className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold text-slate-900">
           Model Quality (SOG)
         </h2>
 
-        <div className="text-xs text-gray-600 text-right">
+        <div className="text-xs text-slate-600 text-right">
           <div>
             Updated: <span className="font-mono">{publishedAt ?? "—"}</span>
           </div>
@@ -138,8 +136,8 @@ export default function SogEvalCard() {
         </div>
       </div>
 
-      <table className="min-w-full text-sm text-gray-800">
-        <thead className="bg-gray-100">
+      <table className="min-w-full text-sm text-slate-800">
+        <thead className="bg-slate-100">
           <tr>
             {headers.map((h) => (
               <th key={h.key} className="px-3 py-2 text-left whitespace-nowrap">
@@ -154,7 +152,7 @@ export default function SogEvalCard() {
           {rows.map((r) => (
             <tr
               key={`${r.latest_eval_date}-${r.line}`}
-              className="border-t hover:bg-gray-50"
+              className="border-t border-slate-200 hover:bg-slate-50"
             >
               <td className="px-3 py-2 font-mono">{fmt(r.line, 1)}</td>
               <td className="px-3 py-2">{fmt(r.brier, 4)}</td>
@@ -180,7 +178,7 @@ export default function SogEvalCard() {
       </table>
 
       {/* optional: 7-day rollup */}
-      <div className="mt-3 text-xs text-gray-700">
+      <div className="mt-3 text-xs text-slate-700">
         <span className="font-semibold">7d (weighted):</span>{" "}
         {rows.map((r) => (
           <span key={`7d-${r.line}`} className="mr-3 whitespace-nowrap">
@@ -189,6 +187,6 @@ export default function SogEvalCard() {
           </span>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

@@ -45,26 +45,26 @@ export default function PropTracker({ selectedDate, setSelectedDate }) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-row gap-8">
         <div>
-          <h2 className="text-lg font-semibold">Select a Date</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Select a Date</h2>
           <Calendar
             mode="single"
             selected={selectedDateObj}
             onSelect={(d) =>
               setSelectedDate?.(format(d ?? new Date(), "yyyy-MM-dd"))
             }
-            className="rounded-md border"
+            className="rounded-md border border-slate-200"
           />
           <AccuracyByPropType selectedDate={selectedDateObj} />
         </div>
 
         <div className="flex-1">
-          <h2 className="text-lg font-semibold mb-2">
+          <h2 className="text-lg font-semibold mb-2 text-slate-900">
             Player Props for {format(selectedDateObj, "PPP")}
           </h2>
 
-          <div className="bg-blue-50 shadow-md rounded-lg overflow-hidden border">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50">
+          <div className="pp-card overflow-hidden">
+            <table className="w-full text-sm text-left text-slate-800">
+              <thead className="bg-slate-100">
                 <tr>
                   <th className="px-4 py-2">Player</th>
                   <th className="px-4 py-2">Team</th>
@@ -77,11 +77,11 @@ export default function PropTracker({ selectedDate, setSelectedDate }) {
               <tbody>
                 {props.length > 0 ? (
                   props.map((p) => (
-                    <tr key={p.id} className="border-t">
+                    <tr key={p.id} className="border-t border-slate-200">
                       <td className="px-4 py-2">
                         {p.player_name}
                         {p.position && (
-                          <span className="ml-1 text-xs text-gray-500">
+                          <span className="ml-1 text-xs text-slate-500">
                             ({p.position})
                           </span>
                         )}
@@ -93,7 +93,7 @@ export default function PropTracker({ selectedDate, setSelectedDate }) {
                       <td className="px-4 py-2">{p.over_under}</td>
                       <td className="px-4 py-2">{p.prop_value}</td>
                       <td className="px-4 py-2">
-                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
                           {(p.outcome || p.status || "pending")
                             .toString()
                             .replace(/^\w/, (c) => c.toUpperCase())}
@@ -105,7 +105,7 @@ export default function PropTracker({ selectedDate, setSelectedDate }) {
                   <tr>
                     <td
                       colSpan="6"
-                      className="px-4 py-4 text-center text-gray-500"
+                      className="px-4 py-4 text-center text-slate-500"
                     >
                       No props for {day}
                     </td>

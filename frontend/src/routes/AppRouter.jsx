@@ -1,78 +1,198 @@
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
-import PropsDashboard from "../Pages/PropsDashboard.jsx";
-import LoginPage from "../Pages/Login.jsx";
-import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.jsx"; // adjust path if needed
-import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.jsx";
-import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.jsx";
-import PlayerPropsPage from "../Pages/PlayerPropsPage.jsx";
+import { Suspense, lazy } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import Header from "../components/Header.jsx";
-import HomeGateway from "../Pages/HomeGateway.jsx"; // ← new multi-sport Home for "/"
-import MLBHome from "../Pages/mlb/MLBHome.jsx";
-import NHLHome from "../Pages/nhl/NHLHome.jsx";
-import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
+import { PrefetchNavLink } from "../components/navigation/PrefetchLink.jsx";
+import RouteErrorBoundary from "../components/RouteErrorBoundary.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import {
+  loadAccessRequiredPage,
+  loadHomeGateway,
+  loadLoginPage,
+  loadMLBHome,
+  loadModelMetricsDashboard,
+  loadNHLHome,
+  loadNHLPredictions,
+  loadOpsPage,
+  loadPlayerProfileDashboard,
+  loadPlayerPropsPage,
+  loadPlayerTeamBrowser,
+  loadPropsDashboard,
+} from "./prefetchRoute.js";
+
+const HomeGateway = lazy(loadHomeGateway);
+const MLBHome = lazy(loadMLBHome);
+const NHLHome = lazy(loadNHLHome);
+const NHLPredictions = lazy(loadNHLPredictions);
+const PropsDashboard = lazy(loadPropsDashboard);
+const LoginPage = lazy(loadLoginPage);
+const PlayerProfileDashboard = lazy(loadPlayerProfileDashboard);
+const ModelMetricsDashboard = lazy(loadModelMetricsDashboard);
+const PlayerTeamBrowser = lazy(loadPlayerTeamBrowser);
+const PlayerPropsPage = lazy(loadPlayerPropsPage);
+const OpsPage = lazy(loadOpsPage);
+const AccessRequiredPage = lazy(loadAccessRequiredPage);
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen pp-page flex items-center justify-center text-slate-600">
+      Loading page...
+    </div>
+  );
+}
+
+function navClassName({ isActive }) {
+  return [
+    "text-xs sm:text-sm font-medium transition",
+    isActive ? "text-slate-900" : "text-slate-700 hover:text-slate-900",
+  ].join(" ");
+}
+
+function RequireSignedIn({ children, requiredPath, requiredLabel }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen pp-page flex items-center justify-center text-slate-600">
+        Checking authentication...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AccessRequiredPage
+        requiredPath={requiredPath || location.pathname}
+        requiredLabel={requiredLabel || "member-only features"}
+      />
+    );
+  }
+  return children;
+}
 
 export default function AppRouter() {
+  const { user } = useAuth();
+
   return (
     <BrowserRouter>
       <Header />
 
       {/* ✅ This nav bar is global, shown on every page */}
-      <nav className="bg-gray-100 border-b border-gray-300 py-2 mb-0">
-        <div className="max-w-4xl mx-auto flex justify-end gap-6 px-4">
-          <Link
+      <nav className="px-4 py-2 mb-0">
+        <div className="max-w-4xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
+          <PrefetchNavLink
             to="/"
-            className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
+            className={navClassName}
+            end
           >
             Home
-          </Link>
-          <Link
-            to="/props"
-            className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
-          >
-            Props
-          </Link>
-          <Link
+          </PrefetchNavLink>
+          {user ? (
+            <PrefetchNavLink
+              to="/props"
+              className={navClassName}
+            >
+              Props
+            </PrefetchNavLink>
+          ) : (
+            <PrefetchNavLink
+              to="/login"
+              state={{ from: { pathname: "/props" } }}
+              prefetchTo="/login"
+              className={navClassName}
+            >
+              Predictions
+            </PrefetchNavLink>
+          )}
+          <PrefetchNavLink
             to="/players"
-            className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
+            className={navClassName}
           >
             Players By Team
-          </Link>
-          {/* <Link
-            to="/player/665019" // Example player profile route
-            className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
-          >
-            Player Profile
-          </Link>
-          <Link
-            to="/metrics"
-            className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
-          >
-            Metrics
-          </Link>*/}
-          <Link
-            to="/login"
-            className="text-sm text-gray-700 hover:text-indigo-700 font-medium"
-          >
-            Login
-          </Link>
+          </PrefetchNavLink>
+          {!user ? (
+            <PrefetchNavLink
+              to="/login"
+              className={navClassName}
+            >
+              Login
+            </PrefetchNavLink>
+          ) : null}
+          {user ? (
+            <PrefetchNavLink
+              to="/ops"
+              className={navClassName}
+            >
+              Ops
+            </PrefetchNavLink>
+          ) : null}
         </div>
       </nav>
 
       {/* Render route-based pages */}
-      <Routes>
-        {/* New multi-sport gateway at "/" */}
-        <Route path="/" element={<HomeGateway />} />
-        <Route path="/mlb" element={<MLBHome />} />
-        <Route path="/nhl" element={<NHLHome />} />
-        <Route path="/nhl/predictions" element={<NHLPredictions />} />
-        {/* Existing MLB dashboard moved to "/mlb" */}
-        <Route path="/props" element={<PropsDashboard />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />
-        <Route path="/metrics" element={<ModelMetricsDashboard />} />
-        <Route path="/players" element={<PlayerTeamBrowser />} />
-        <Route path="/props/v2" element={<PlayerPropsPage />} />
-      </Routes>
+      <RouteErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            {/* New multi-sport gateway at "/" */}
+            <Route path="/" element={<HomeGateway />} />
+            <Route path="/mlb" element={<MLBHome />} />
+            <Route path="/nhl" element={<NHLHome />} />
+            <Route
+              path="/nhl/predictions"
+              element={
+                <RequireSignedIn
+                  requiredPath="/nhl/predictions"
+                  requiredLabel="NHL predictions"
+                >
+                  <NHLPredictions />
+                </RequireSignedIn>
+              }
+            />
+            {/* Existing MLB dashboard moved to "/mlb" */}
+            <Route
+              path="/props"
+              element={
+                <RequireSignedIn requiredPath="/props" requiredLabel="MLB predictions">
+                  <PropsDashboard />
+                </RequireSignedIn>
+              }
+            />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />
+            <Route path="/metrics" element={<ModelMetricsDashboard />} />
+            <Route path="/players" element={<PlayerTeamBrowser />} />
+            <Route
+              path="/props/v2"
+              element={
+                <RequireSignedIn
+                  requiredPath="/props/v2"
+                  requiredLabel="MLB predictions"
+                >
+                  <PlayerPropsPage />
+                </RequireSignedIn>
+              }
+            />
+            <Route
+              path="/ops"
+              element={
+                <RequireSignedIn
+                  requiredPath="/ops"
+                  requiredLabel="operations dashboard"
+                >
+                  <OpsPage />
+                </RequireSignedIn>
+              }
+            />
+            <Route path="/owner" element={<Navigate to="/ops" replace />} />
+          </Routes>
+        </Suspense>
+      </RouteErrorBoundary>
     </BrowserRouter>
   );
 }

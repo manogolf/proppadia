@@ -1,8 +1,7 @@
 // frontend/src/components/TodayGamesNHL.jsx  (or wherever you keep it)
 import { useEffect, useMemo, useState } from "react";
+import { getBaseURL } from "../shared/getBaseURL.js";
 import { todayET } from "../shared/timeUtils.js";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8001";
 
 function nhlLogoUrl(teamId) {
   if (!teamId) return null;
@@ -119,7 +118,7 @@ export default function TodayGamesNHL({ games = [] }) {
         const pairs = await Promise.all(
           ids.map(async (id) => {
             const res = await fetch(
-              `${API_BASE}/api/nhl/gamecenter/${id}/landing`
+              `${getBaseURL()}/api/nhl/gamecenter/${id}/landing`
             );
             const j = await res.json().catch(() => ({}));
             return [id, j];
@@ -155,16 +154,16 @@ export default function TodayGamesNHL({ games = [] }) {
   }, []);
 
   return (
-    <div className="w-full bg-gray-200 shadow rounded-xl p-4">
-      <h2 className="text-xl font-bold text-indigo-900 text-center mb-1">
+    <section className="w-full pp-card p-4">
+      <h2 className="text-xl font-bold text-slate-900 text-center mb-1">
         🗓 Today’s Games
       </h2>
-      <p className="text-sm text-gray-500 text-center mb-4">
+      <p className="text-sm text-slate-500 text-center mb-4">
         Live from NHL • ET Displayed
       </p>
 
       {sorted.length === 0 ? (
-        <p className="text-center text-gray-500">No games scheduled.</p>
+        <p className="text-center text-slate-500">No games scheduled.</p>
       ) : (
         <ul className="space-y-4">
           {sorted.map((g) => {
@@ -199,7 +198,7 @@ export default function TodayGamesNHL({ games = [] }) {
             return (
               <li
                 key={g.game_id}
-                className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 p-4 rounded-lg border border-blue-200 bg-blue-50 max-w-5xl mx-auto"
+                className="pp-chip grid grid-cols-[1fr_auto_1fr] items-center gap-4 p-4 rounded-lg max-w-5xl mx-auto"
               >
                 {/* Away */}
                 <div className="flex flex-col items-start gap-2 max-w-[160px]">
@@ -211,7 +210,7 @@ export default function TodayGamesNHL({ games = [] }) {
                         className="w-10 h-10 object-contain shrink-0"
                       />
                     ) : null}
-                    <span className="text-sm font-medium text-gray-800 break-words">
+                    <span className="text-sm font-medium text-slate-800 break-words">
                       {away}
                     </span>
                   </div>
@@ -224,18 +223,18 @@ export default function TodayGamesNHL({ games = [] }) {
                       <span className="text-lg font-semibold">
                         {scoreline ?? "-"}
                       </span>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-slate-600">
                         {clockLabel ?? (isLive ? "LIVE" : "FINAL")}
                       </span>
                     </>
                   ) : (
                     <>
                       <span className="text-lg font-semibold">{timeEt}</span>
-                      <span className="text-sm text-gray-600">{cd}</span>
+                      <span className="text-sm text-slate-600">{cd}</span>
                     </>
                   )}
 
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-slate-700">
                     {isLive ? "LIVE" : isFinal ? "FINAL" : status}
                   </span>
                 </div>
@@ -243,7 +242,7 @@ export default function TodayGamesNHL({ games = [] }) {
                 {/* Home */}
                 <div className="flex flex-col items-end gap-2 text-right ml-auto max-w-[160px]">
                   <div className="flex items-center gap-2 justify-end">
-                    <span className="text-sm font-medium text-gray-800 break-words">
+                    <span className="text-sm font-medium text-slate-800 break-words">
                       {home}
                     </span>
                     {homeLogoSrc ? (
@@ -260,6 +259,6 @@ export default function TodayGamesNHL({ games = [] }) {
           })}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

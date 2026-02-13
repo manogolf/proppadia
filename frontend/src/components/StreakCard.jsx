@@ -74,72 +74,76 @@ const StreaksCard = () => {
   }, []);
 
   return (
-    <div className="bg-gray-200 p-6 rounded-xl shadow space-y-6">
-      <div className="flex items-center justify-center gap-4 text-4xl font-semibold text-gray-800 mb-4">
+    <section className="pp-card p-6 space-y-6">
+      <div className="flex items-center justify-center gap-4 text-4xl font-semibold text-slate-800 mb-4">
         <span className="flex items-center gap-2">🔥 Streaks Dashboard</span>
         <span className="text-4xl">❄️</span>
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400">Loading streaks...</div>
+        <div className="text-center text-slate-400">Loading streaks...</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Hot Streaks */}
           <div>
-            <h3 className="text-lg font-semibold text-green-700 mb-2">
+            <h3 className="text-lg font-semibold text-emerald-700 mb-2">
               Hot Streaks 🔥
             </h3>
-            <ul className="space-y-2">
-              {hotStreaks.map((player) => (
-                <li
-                  key={`${player.player_name}-${player.prop_type}`}
-                  className="p-3 rounded bg-green-50 border border-green-200 grid grid-cols-[1fr_auto] items-center"
-                >
-                  <div>
-                    <div className="font-medium truncate">
-                      {player.player_name} ({player.team})
+            {hotStreaks.length === 0 ? (
+              <div className="pp-chip p-3 text-sm text-slate-500">No hot streaks.</div>
+            ) : (
+              <ul className="space-y-2">
+                {hotStreaks.map((player) => (
+                  <li
+                    key={`${player.player_name}-${player.prop_type}`}
+                    className="pp-chip p-3 grid grid-cols-[1fr_auto] items-center"
+                  >
+                    <div>
+                      <div className="font-medium truncate">
+                        {player.player_name} ({player.team})
+                      </div>
+                      <div className="text-sm text-slate-600">{player.prop_type}</div>
                     </div>
-                    <div className="text-sm text-gray-600">
-                      {player.prop_type}
+                    <div className="text-emerald-600 font-bold pl-4">
+                      W{player.streak}
                     </div>
-                  </div>
-                  <div className="text-green-600 font-bold pl-4">
-                    W{player.streak}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Cold Streaks */}
           <div>
-            <h3 className="text-lg font-semibold text-blue-700 mb-2">
+            <h3 className="text-lg font-semibold text-sky-700 mb-2">
               Cold Streaks ❄️
             </h3>
-            <ul className="space-y-2">
-              {coldStreaks.map((player) => (
-                <li
-                  key={`${player.player_name}-${player.prop_type}`}
-                  className="p-3 rounded bg-blue-50 border border-blue-200 grid grid-cols-[1fr_auto] items-center"
-                >
-                  <div>
-                    <div className="font-medium truncate">
-                      {player.player_name} ({player.team})
+            {coldStreaks.length === 0 ? (
+              <div className="pp-chip p-3 text-sm text-slate-500">No cold streaks.</div>
+            ) : (
+              <ul className="space-y-2">
+                {coldStreaks.map((player) => (
+                  <li
+                    key={`${player.player_name}-${player.prop_type}`}
+                    className="pp-chip p-3 grid grid-cols-[1fr_auto] items-center"
+                  >
+                    <div>
+                      <div className="font-medium truncate">
+                        {player.player_name} ({player.team})
+                      </div>
+                      <div className="text-sm text-slate-600">{player.prop_type}</div>
                     </div>
-                    <div className="text-sm text-gray-600">
-                      {player.prop_type}
+                    <div className="text-sky-600 font-bold pl-4">
+                      L{player.streak}
                     </div>
-                  </div>
-                  <div className="text-blue-600 font-bold pl-4">
-                    L{player.streak}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 };
 

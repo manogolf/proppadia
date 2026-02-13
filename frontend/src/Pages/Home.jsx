@@ -3,6 +3,8 @@ import React, { useState, useEffect } from "react";
 import TodayGames from "../components/TodayGames.jsx";
 import StreakCard from "../components/StreakCard.jsx";
 import { todayET } from "../shared/timeUtils.js";
+import { getBaseURL } from "../shared/getBaseURL.js";
+import MemberAccessCard from "../components/predictions/MemberAccessCard.jsx";
 
 export default function Home() {
   const [games, setGames] = useState([]);
@@ -15,9 +17,10 @@ export default function Home() {
           typeof todayET === "function"
             ? todayET()
             : new Date().toISOString().slice(0, 10);
+        const base = getBaseURL();
 
         const res = await fetch(
-          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=team,linescore,probablePitcher,decisions,game(content(summary),live),boxscore`
+          `${base}/api/mlb/schedule?date=${encodeURIComponent(today)}`
         );
         const data = await res.json();
         const gameList = Array.isArray(data?.dates)
@@ -35,9 +38,10 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-6">
+    <div className="min-h-screen pp-page px-4 py-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <TodayGames games={games} />
+        <MemberAccessCard openTo="/props" loginFrom="/props" />
         <StreakCard />
       </div>
     </div>

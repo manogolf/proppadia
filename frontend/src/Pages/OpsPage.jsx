@@ -1,0 +1,540 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getBaseURL } from "../shared/getBaseURL.js";
+
+const OPS_PREFS_KEY = "proppadia_ops_prefs_v1";
+const OPS_LAST_SUCCESS_KEY = "proppadia_ops_last_success_v1";
+const SLOW_CHECK_MS = 1000;
+const STALE_SUCCESS_HOURS = 24;
+
+function statusTone(ok) {
+  if (ok === true) return "text-emerald-700 bg-emerald-50 border-emerald-200";
+  if (ok === false) return "text-rose-700 bg-rose-50 border-rose-200";
+  return "text-slate-700 bg-slate-50 border-slate-200";
+}
+
+function statusLabel(ok) {
+  if (ok === true) return "PASS";
+  if (ok === false) return "FAIL";
+  return "UNKNOWN";
+}
+
+function latencyTone(ms) {
+  if (typeof ms !== "number") return "text-slate-500";
+  if (ms >= SLOW_CHECK_MS) return "text-rose-700";
+  if (ms >= 500) return "text-amber-700";
+  return "text-emerald-700";
+}
+
+function timeAgoLabel(isoTs) {
+  if (!isoTs) return "never";
+  const ts = new Date(isoTs).getTime();
+  if (!Number.isFinite(ts)) return "unknown";
+  const diffMs = Date.now() - ts;
+  if (diffMs < 60_000) return "just now";
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 48) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
+function successAgeTone(isoTs) {
+  if (!isoTs) return "text-slate-500";
+  const ts = new Date(isoTs).getTime();
+  if (!Number.isFinite(ts)) return "text-slate-500";
+  const ageHr = (Date.now() - ts) / 3_600_000;
+  if (ageHr >= STALE_SUCCESS_HOURS) return "text-rose-700";
+  if (ageHr >= 8) return "text-amber-700";
+  return "text-emerald-700";
+}
+
+async function fetchJson(path) {
+  const base = getBaseURL();
+  const url = `${base}${path.startsWith("/api/") ? path : `/api${path}`}`;
+  const res = await fetch(url, { credentials: "include" });
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  return { ok: res.ok, status: res.status, body };
+}
+
+async function fetchJsonTimed(path) {
+  const started = performance.now();
+  const result = await fetchJson(path);
+  const durationMs = Math.round(performance.now() - started);
+  return { ...result, durationMs };
+}
+
+export default function OpsPage() {
+  const baseUrl = getBaseURL();
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [refreshSeconds, setRefreshSeconds] = useState(0);
+  const [copiedKey, setCopiedKey] = useState("");
+  const [copiedSnapshot, setCopiedSnapshot] = useState(false);
+  const [failuresOnly, setFailuresOnly] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState({});
+  const [lastSuccessByKey, setLastSuccessByKey] = useState({});
+  const [checks, setChecks] = useState([]);
+  const [marketCoverage, setMarketCoverage] = useState({ count: 0, rows: [] });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(OPS_PREFS_KEY);
+      if (!raw) return;
+      const prefs = JSON.parse(raw);
+      const refresh = Number(prefs?.refreshSeconds || 0);
+      setRefreshSeconds([0, 30, 60].includes(refresh) ? refresh : 0);
+      setFailuresOnly(Boolean(prefs?.failuresOnly));
+    } catch {
+      // ignore malformed local preferences
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        OPS_PREFS_KEY,
+        JSON.stringify({ refreshSeconds, failuresOnly })
+      );
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [refreshSeconds, failuresOnly]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(OPS_LAST_SUCCESS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") setLastSuccessByKey(parsed);
+    } catch {
+      // ignore malformed success timestamps
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        OPS_LAST_SUCCESS_KEY,
+        JSON.stringify(lastSuccessByKey)
+      );
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [lastSuccessByKey]);
+
+  const runChecks = useCallback(async () => {
+    setRunning(true);
+    setError("");
+    try {
+      const [
+        health,
+        mlbPing,
+        mlbDb,
+        nhlPing,
+        nhlDb,
+        marketCache,
+        marketSupported,
+      ] = await Promise.all([
+        fetchJsonTimed("/api/health"),
+        fetchJsonTimed("/api/mlb/ping"),
+        fetchJsonTimed("/api/mlb/ping-db"),
+        fetchJsonTimed("/api/nhl/ping"),
+        fetchJsonTimed("/api/nhl/ping-db"),
+        fetchJsonTimed("/api/mlb/market-cache-status"),
+        fetchJsonTimed("/api/mlb/market-supported-props"),
+      ]);
+
+      const nextChecks = [
+        {
+          key: "health",
+          label: "API Health",
+          path: "/api/health",
+          ok: health.ok && health.body?.ok === true,
+          durationMs: health.durationMs,
+          detail: health.body || { status: health.status },
+        },
+        {
+          key: "mlb_ping",
+          label: "MLB Ping",
+          path: "/api/mlb/ping",
+          ok: mlbPing.ok && mlbPing.body?.ok === true,
+          durationMs: mlbPing.durationMs,
+          detail: mlbPing.body || { status: mlbPing.status },
+        },
+        {
+          key: "mlb_db",
+          label: "MLB DB Ping",
+          path: "/api/mlb/ping-db",
+          ok: mlbDb.ok && mlbDb.body?.ok === true,
+          durationMs: mlbDb.durationMs,
+          detail: mlbDb.body || { status: mlbDb.status },
+        },
+        {
+          key: "nhl_ping",
+          label: "NHL Ping",
+          path: "/api/nhl/ping",
+          ok: nhlPing.ok && nhlPing.body?.ok === true,
+          durationMs: nhlPing.durationMs,
+          detail: nhlPing.body || { status: nhlPing.status },
+        },
+        {
+          key: "nhl_db",
+          label: "NHL DB Ping",
+          path: "/api/nhl/ping-db",
+          ok: nhlDb.ok && nhlDb.body?.ok === true,
+          durationMs: nhlDb.durationMs,
+          detail: nhlDb.body || { status: nhlDb.status },
+        },
+        {
+          key: "mlb_market_cache",
+          label: "MLB Market Cache",
+          path: "/api/mlb/market-cache-status",
+          ok: marketCache.ok && marketCache.body?.ok === true,
+          durationMs: marketCache.durationMs,
+          detail: marketCache.body || { status: marketCache.status },
+        },
+      ];
+
+      const snapshotTs = new Date().toISOString();
+      setLastSuccessByKey((prev) => {
+        const next = { ...prev };
+        for (const check of nextChecks) {
+          if (check.ok) next[check.key] = snapshotTs;
+        }
+        return next;
+      });
+
+      setChecks(nextChecks);
+      if (marketSupported.ok && marketSupported.body?.ok === true) {
+        setMarketCoverage({
+          count: Number(marketSupported.body?.count || 0),
+          rows: Array.isArray(marketSupported.body?.rows)
+            ? marketSupported.body.rows
+            : [],
+        });
+      } else {
+        setMarketCoverage({ count: 0, rows: [] });
+      }
+      setLastUpdated(new Date().toISOString());
+    } catch (e) {
+      setError(e?.message || "Failed to run operations checks.");
+    } finally {
+      setLoading(false);
+      setRunning(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    runChecks();
+  }, [runChecks]);
+
+  useEffect(() => {
+    if (!refreshSeconds) return;
+    const timer = window.setInterval(() => {
+      runChecks();
+    }, refreshSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [refreshSeconds, runChecks]);
+
+  const summary = useMemo(() => {
+    const total = checks.length;
+    const passed = checks.filter((c) => c.ok).length;
+    const failed = checks.filter((c) => c.ok === false).length;
+    const timings = checks
+      .map((c) => c.durationMs)
+      .filter((v) => typeof v === "number");
+    const avgMs = timings.length
+      ? Math.round(timings.reduce((a, b) => a + b, 0) / timings.length)
+      : 0;
+    const maxMs = timings.length ? Math.max(...timings) : 0;
+    const slow = timings.filter((ms) => ms >= SLOW_CHECK_MS).length;
+    return { passed, failed, total, avgMs, maxMs, slow };
+  }, [checks]);
+
+  const visibleChecks = useMemo(() => {
+    const sorted = [...checks].sort((a, b) => {
+      const aFail = a.ok === false ? 0 : 1;
+      const bFail = b.ok === false ? 0 : 1;
+      return aFail - bFail;
+    });
+    if (!failuresOnly) return sorted;
+    return sorted.filter((c) => c.ok === false);
+  }, [checks, failuresOnly]);
+
+  const runbook = useMemo(
+    () => [
+      {
+        key: "mlb_post_deploy",
+        label: "MLB Post-Deploy",
+        cmd: `make mlb-post-deploy BASE_URL=${baseUrl}`,
+      },
+      {
+        key: "mlb_post_deploy_strict",
+        label: "MLB Post-Deploy (Strict)",
+        cmd: `make mlb-post-deploy-strict BASE_URL=${baseUrl}`,
+      },
+      {
+        key: "nhl_post_deploy",
+        label: "NHL Post-Deploy",
+        cmd: `make nhl-post-deploy BASE_URL=${baseUrl}`,
+      },
+    ],
+    [baseUrl]
+  );
+
+  const handleCopy = useCallback(async (key, cmd) => {
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(""), 1200);
+    } catch {
+      setCopiedKey("");
+    }
+  }, []);
+
+  const toggleExpanded = useCallback((key) => {
+    setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const expandAll = useCallback(() => {
+    setExpandedKeys(
+      checks.reduce((acc, check) => {
+        acc[check.key] = true;
+        return acc;
+      }, {})
+    );
+  }, [checks]);
+
+  const collapseAll = useCallback(() => {
+    setExpandedKeys({});
+  }, []);
+
+  const copySnapshot = useCallback(async () => {
+    const payload = {
+      captured_at: new Date().toISOString(),
+      base_url: baseUrl,
+      last_updated: lastUpdated,
+      summary,
+      checks,
+      market_coverage_count: marketCoverage.count,
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setCopiedSnapshot(true);
+      window.setTimeout(() => setCopiedSnapshot(false), 1200);
+    } catch {
+      setCopiedSnapshot(false);
+    }
+  }, [baseUrl, checks, lastUpdated, marketCoverage.count, summary]);
+
+  return (
+    <div className="min-h-screen pp-page">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="pp-card">
+          <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-xs tracking-wide uppercase text-slate-500 mb-1">
+                Admin
+              </div>
+              <h1 className="text-2xl font-semibold text-slate-900">Operations Dashboard</h1>
+              <p className="text-sm text-slate-600 mt-1">
+                Live checks for backend health, sport services, and MLB market coverage.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center justify-end gap-2">
+                <select
+                  value={refreshSeconds}
+                  onChange={(e) => setRefreshSeconds(Number(e.target.value))}
+                  className="pp-btn pp-btn-secondary pp-btn-md"
+                >
+                  <option value={0}>Auto Refresh: Off</option>
+                  <option value={30}>Auto Refresh: 30s</option>
+                  <option value={60}>Auto Refresh: 60s</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={runChecks}
+                  disabled={running}
+                  className="pp-btn pp-btn-secondary pp-btn-md"
+                >
+                  {running ? "Refreshing..." : "Refresh Checks"}
+                </button>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">
+                {lastUpdated ? `Last updated: ${new Date(lastUpdated).toLocaleString()}` : "Not run yet"}
+              </div>
+              <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={failuresOnly}
+                  onChange={(e) => setFailuresOnly(e.target.checked)}
+                />
+                Failures only
+              </label>
+            </div>
+          </div>
+
+          <div className="px-5 py-4 border-b border-slate-200">
+            <div className="text-sm text-slate-700">
+              Summary:{" "}
+              <span className="font-semibold">
+                {loading
+                  ? "..."
+                  : `${summary.passed}/${summary.total} passing (${summary.failed} failing)`}
+              </span>
+            </div>
+            {!loading ? (
+              <div className="text-xs text-slate-600 mt-1">
+                Latency: avg {summary.avgMs}ms, max {summary.maxMs}ms, slow{" "}
+                ({SLOW_CHECK_MS}ms+) {summary.slow}
+              </div>
+            ) : null}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={expandAll}
+                className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
+              >
+                Expand all
+              </button>
+              <button
+                type="button"
+                onClick={collapseAll}
+                className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
+              >
+                Collapse all
+              </button>
+              <button
+                type="button"
+                onClick={copySnapshot}
+                className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
+              >
+                {copiedSnapshot ? "Snapshot copied" : "Copy Snapshot JSON"}
+              </button>
+            </div>
+            {error ? <div className="text-sm text-rose-700 mt-2">{error}</div> : null}
+          </div>
+
+          <div className="px-5 py-4 border-b border-slate-200">
+            <div className="text-sm font-semibold text-slate-900">Runbook</div>
+            <div className="text-xs text-slate-600 mt-1 break-all">
+              Active BASE_URL: {baseUrl}
+            </div>
+            <div className="mt-3 space-y-2">
+              {runbook.map((item) => (
+                <div
+                  key={item.key}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-2 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-slate-700">{item.label}</div>
+                    <div className="text-xs text-slate-600 break-all">{item.cmd}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(item.key, item.cmd)}
+                    className="pp-btn pp-btn-secondary pp-btn-sm text-xs shrink-0"
+                  >
+                    {copiedKey === item.key ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-5 py-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {visibleChecks.map((check) => (
+              <div
+                key={check.key}
+                className={`rounded-xl border px-3 py-3 ${statusTone(check.ok)}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-medium">{check.label}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs opacity-80">
+                      <span className={latencyTone(check.durationMs)}>
+                        {typeof check.durationMs === "number"
+                          ? `${check.durationMs}ms`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold tracking-wide">
+                      {statusLabel(check.ok)}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs opacity-80 mt-1">
+                  Last success:{" "}
+                  <span className={successAgeTone(lastSuccessByKey[check.key])}>
+                    {lastSuccessByKey[check.key]
+                      ? `${new Date(lastSuccessByKey[check.key]).toLocaleString()} (${timeAgoLabel(lastSuccessByKey[check.key])})`
+                      : "never"}
+                  </span>
+                </div>
+                {check.path ? (
+                  <div className="mt-1">
+                    <a
+                      href={`${baseUrl}${check.path}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs underline"
+                    >
+                      Open endpoint
+                    </a>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(check.key)}
+                  className="mt-2 pp-btn pp-btn-ghost pp-btn-sm text-xs"
+                >
+                  {expandedKeys[check.key] ? "Hide details" : "Show details"}
+                </button>
+                {expandedKeys[check.key] ? (
+                  <pre className="mt-2 text-xs whitespace-pre-wrap break-words">
+                    {JSON.stringify(check.detail, null, 2)}
+                  </pre>
+                ) : null}
+              </div>
+            ))}
+            {visibleChecks.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                No failing checks in current snapshot.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="px-5 pb-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h2 className="text-sm font-semibold text-slate-900">MLB Market Coverage</h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Supported prop types from backend mapping: {marketCoverage.count}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {marketCoverage.rows.map((row) => (
+                  <span
+                    key={row.prop_type}
+                    className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                  >
+                    <span className="font-medium">{row.prop_type}</span>
+                    <span className="text-slate-400">→</span>
+                    <span>{row.market_key}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

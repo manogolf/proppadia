@@ -17,9 +17,9 @@ export default function PropsDashboard() {
     user ? (
       children
     ) : (
-      <div className="text-center text-gray-600">
+      <div className="text-center text-slate-600">
         🔒 You must{" "}
-        <Link to="/login" className="underline text-blue-600">
+        <Link to="/login" className="underline text-slate-700">
           log in
         </Link>{" "}
         to add props.
@@ -27,10 +27,10 @@ export default function PropsDashboard() {
     );
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-6 space-y-6">
+    <div className="min-h-screen pp-page px-4 py-6 space-y-6">
       {/* V2: Add Props */}
-      <section className="bg-blue-100 p-4 rounded-xl shadow-md overflow-x-auto">
-        <h2 className="text-xl font-semibold mb-3">Add Player Props</h2>
+      <section className="pp-card p-4 overflow-x-auto">
+        <h2 className="text-xl font-semibold mb-3 text-slate-900">Add Player Props</h2>
         <LoginGate>
           <PlayerPropFormV2
             onSaved={(evt) => {
@@ -43,7 +43,7 @@ export default function PropsDashboard() {
       </section>
 
       {/* Today’s (or selected) table */}
-      <section className="bg-white p-4 rounded-xl shadow">
+      <section className="pp-card p-4">
         <PlayerPropsTable
           selectedDate={selectedDate}
           refreshNonce={tableRefreshNonce}
@@ -52,7 +52,7 @@ export default function PropsDashboard() {
       </section>
 
       {/* Calendar + “props for selected date” */}
-      <section className="bg-white p-4 rounded-xl shadow">
+      <section className="pp-card p-4">
         <PropTracker
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}

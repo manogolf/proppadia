@@ -29,9 +29,9 @@ export default function AccuracyByPropType({ selectedDate }) {
   }, [selectedDate]);
 
   const renderTable = () => (
-    <table className="w-full text-sm border-collapse">
+    <table className="w-full text-sm border-collapse text-slate-800">
       <thead>
-        <tr className="border-b">
+        <tr className="border-b border-slate-200">
           <th className="text-left py-1">Prop Type</th>
           <th className="text-right py-1">Total</th>
           <th className="text-right py-1">Correct</th>
@@ -40,7 +40,7 @@ export default function AccuracyByPropType({ selectedDate }) {
       </thead>
       <tbody>
         {accuracyData.map((row) => (
-          <tr key={row.prop_type} className="border-b">
+          <tr key={row.prop_type} className="border-b border-slate-200">
             <td className="py-1">{getPropDisplayLabel(row.prop_type)}</td>
             <td className="text-right py-1">{row.total}</td>
             <td className="text-right py-1">{row.correct}</td>
@@ -48,7 +48,7 @@ export default function AccuracyByPropType({ selectedDate }) {
           </tr>
         ))}
         {accuracyData.length > 1 && (
-          <tr className="border-t font-semibold">
+          <tr className="border-t border-slate-300 font-semibold">
             <td className="py-1">Total</td>
             <td className="text-right py-1">
               {accuracyData.reduce((sum, row) => sum + row.total, 0)}
@@ -70,12 +70,12 @@ export default function AccuracyByPropType({ selectedDate }) {
   );
 
   return (
-    <div className="mt-12 border rounded-md p-3 shadow-sm bg-blue-50 w-full max-w-sm">
-      <h3 className="text-lg font-semibold mb-2">Prediction Accuracy</h3>
+    <div className="mt-12 pp-card p-3 w-full max-w-sm">
+      <h3 className="text-lg font-semibold mb-2 text-slate-900">Prediction Accuracy</h3>
       {loading ? (
-        <p className="text-sm text-gray-500">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : accuracyData.length === 0 ? (
-        <p className="text-sm text-gray-500">No predictions for this day.</p>
+        <p className="text-sm text-slate-500">No predictions for this day.</p>
       ) : (
         renderTable()
       )}
