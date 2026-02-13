@@ -2,6 +2,7 @@
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
+MLB_DATE ?= 2025-08-15
 NHL_DATE ?= 2025-11-20
 
 runtime-boundaries:
@@ -52,15 +53,15 @@ mlb-checks-profile-contract:
 
 # Fast deployed-environment health check (safe, no write operations).
 mlb-post-deploy:
-	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL)
+	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE)
 
 # Post-deploy check that also requires non-sparse probe data.
 mlb-post-deploy-strict:
-	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --require-data
+	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data
 
 # Post-deploy strict transport/DB checks, but tolerate sparse probe data (offseason-safe).
 mlb-post-deploy-strict-offseason:
-	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --require-data --allow-sparse
+	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data --allow-sparse
 
 # Fast NHL deployed-environment health check (safe, no write operations).
 nhl-post-deploy:

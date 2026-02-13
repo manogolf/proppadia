@@ -55,6 +55,7 @@ make mlb-checks-profile-contract
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
+make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15
 make runtime-boundaries
 ```
 
@@ -69,6 +70,7 @@ Meaning:
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - `mlb-post-deploy-strict`: same as above, but fails when probe player/search/profile data is sparse
 - `mlb-post-deploy-strict-offseason`: strict transport/DB checks but tolerates sparse probe data
+- MLB make targets accept `MLB_DATE` to control probe date (default `2025-08-15`)
 - `runtime-boundaries`: blocks runtime imports from archive/legacy code paths
 
 If your virtualenv python is not `.venv/bin/python`, override:
