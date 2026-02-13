@@ -11,7 +11,7 @@ Restore a single, intentional architecture where Python/FastAPI is the productio
 - Active backend app: `backend/app/api_server.py`
 - Active routers:
   - `backend/app/routers/health.py`
-  - `backend/app/routers/mlb.py` (currently only `/api/mlb/ping`)
+  - `backend/app/routers/mlb.py` (multiple live endpoints under `/api/mlb/*` and related `/api/*` MLB routes)
   - `backend/app/routers/nhl.py` (multiple live endpoints under `/api/nhl/*`)
 - Frontend API base logic: `frontend/src/shared/getBaseURL.js`
   - Defaults to `http://localhost:8001` locally
@@ -138,6 +138,8 @@ docs/
 
 ## Progress Snapshot
 
+Status: Phase closed on February 13, 2026.
+
 - Completed:
   - Move #2 scaffolding (`backend/app/services`, `backend/domains/{mlb,nhl}`)
   - Move #4 initial MLB FastAPI surface (resolve/context/prepare/predict/add/metrics)
@@ -150,10 +152,16 @@ docs/
   - Unused frontend MLB components removed (legacy weekly widgets + old `PlayerPropForm` v1)
   - Release-prep docs added (`docs/README.md`, `docs/MLB Cutover Checklist.md`)
   - Removed unused frontend legacy API shim files (`src/Pages/api/*`, old feature-vector helpers)
-- In progress:
   - Contract hardening + metrics validation against historical Supabase slices
-- Remaining:
-  - Continue moving non-archived historical scripts into domain/service modules where still needed
+  - MLB post-deploy gates (`mlb-post-deploy`, `mlb-post-deploy-strict`, `mlb-post-deploy-strict-offseason`)
+  - NHL post-deploy gates (`nhl-post-deploy`, `nhl-post-deploy-strict`, `nhl-post-deploy-strict-offseason`)
+  - Per-sport release checklists (`docs/MLB Smoke Testing.md`, `docs/NHL Smoke Testing.md`)
+- In progress:
+  - None
+- Next phase:
+  - Continue moving any remaining non-archived historical scripts into domain/service modules where still needed
+  - Reduce SQL-in-router for NHL by moving query logic behind domain/service boundaries
+  - Keep API contracts and smoke gates current as endpoint payloads evolve
 
 ## Definition of Done for Re-Platforming Phase
 
