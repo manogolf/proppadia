@@ -4,21 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
-import psycopg
-import psycopg.rows
-
-from backend.supabase.supabase_utils import get_database_url
-
-
-def _conn():
-    url = get_database_url()
-    if not url:
-        raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(
-        url,
-        row_factory=psycopg.rows.dict_row,
-        prepare_threshold=None,
-    )
+from backend.shared.db import pg_fetchall
 
 
 def _resolve_target_date(date: Optional[str]):
@@ -53,9 +39,7 @@ def fetch_games_today(date: Optional[str], limit: int, offset: int) -> Dict[str,
         LIMIT %s OFFSET %s
     """
     try:
-        with _conn() as conn, conn.cursor() as cur:
-            cur.execute(sql, (target_date, limit, offset))
-            rows = cur.fetchall()
+        rows = pg_fetchall(sql, (target_date, limit, offset))
         return {"ok": True, "date": str(target_date), "count": len(rows), "rows": rows}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
@@ -77,9 +61,7 @@ def fetch_props_today(date: Optional[str], limit: int, offset: int) -> Dict[str,
         LIMIT %s OFFSET %s
     """
     try:
-        with _conn() as conn, conn.cursor() as cur:
-            cur.execute(sql, (target_date, limit, offset))
-            rows = cur.fetchall()
+        rows = pg_fetchall(sql, (target_date, limit, offset))
         return {"ok": True, "date": str(target_date), "count": len(rows), "rows": rows}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
@@ -139,9 +121,7 @@ def fetch_sog(date: Optional[str], limit: int, offset: int):
     LIMIT %s OFFSET %s;
     """
     try:
-        with _conn() as conn, conn.cursor() as cur:
-            cur.execute(sql, (date, date, limit, offset))
-            return cur.fetchall()
+        return pg_fetchall(sql, (date, date, limit, offset))
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
@@ -201,8 +181,6 @@ def fetch_saves(date: Optional[str], limit: int, offset: int):
     LIMIT %s OFFSET %s;
     """
     try:
-        with _conn() as conn, conn.cursor() as cur:
-            cur.execute(sql, (date, date, limit, offset))
-            return cur.fetchall()
+        return pg_fetchall(sql, (date, date, limit, offset))
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
