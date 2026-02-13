@@ -158,6 +158,7 @@ Status: Phase closed on February 13, 2026.
   - Per-sport release checklists (`docs/MLB Smoke Testing.md`, `docs/NHL Smoke Testing.md`)
   - NHL query extraction: moved `/api/nhl/games/today`, `/api/nhl/props/today`, `/api/nhl/sog`, `/api/nhl/saves` SQL out of router into `backend/domains/nhl/repository/queries.py`
   - NHL GameCenter extraction: moved `/api/nhl/gamecenter/{game_id}/landing` proxy call from router into `backend/app/services/nhl/gamecenter_service.py`
+  - NHL schema hardening: added `backend/app/schemas/nhl.py` and wired NHL router `response_model` contracts
 - In progress:
   - None
 - Next phase:
