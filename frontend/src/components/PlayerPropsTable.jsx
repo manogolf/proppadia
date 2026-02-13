@@ -18,6 +18,36 @@ const statusColor = {
   expired: "bg-gray-300 text-gray-500 italic",
 };
 
+function normalizeState(row) {
+  const status = String(row?.status || "").toLowerCase();
+  const outcome = String(row?.outcome || "").toLowerCase();
+
+  if (["win", "loss", "push"].includes(outcome)) return outcome;
+  if (["resolved", "live", "pending", "expired", "dnp"].includes(status)) return status;
+  if (["win", "loss", "push"].includes(status)) return status;
+  return "pending";
+}
+
+function formatSource(row) {
+  const source = String(row?.prop_source || "").trim();
+  if (!source) return "unknown";
+  return source.replace(/_/g, " ");
+}
+
+function formatUpdated(row) {
+  const raw = row?.updated_at || row?.prediction_timestamp || row?.created_at;
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 export default function PlayerPropsTable({
   selectedDate,
   onlyMine = false,
@@ -175,6 +205,13 @@ export default function PlayerPropsTable({
             </th>
             <th className="px-3 py-2 text-left">Status</th>
             <th
+              onClick={() => setSortKey("prop_source")}
+              className="px-3 py-2 text-left cursor-pointer"
+            >
+              Source{arrow("prop_source")}
+            </th>
+            <th className="px-3 py-2 text-left">Updated</th>
+            <th
               onClick={() => setSortKey("game_date")}
               className="px-3 py-2 text-left cursor-pointer"
             >
@@ -185,7 +222,7 @@ export default function PlayerPropsTable({
 
         <tbody>
           {sorted.map((p) => {
-            const key = (p.outcome || p.status || "pending").toLowerCase();
+            const key = normalizeState(p);
             const label = key[0]?.toUpperCase() + key.slice(1);
             const isHighlighted = highlightedId != null && String(p.id) === highlightedId;
             const highlightStyle = isHighlighted
@@ -218,13 +255,15 @@ export default function PlayerPropsTable({
                     {label}
                   </span>
                 </td>
+                <td className="px-3 py-2 capitalize">{formatSource(p)}</td>
+                <td className="px-3 py-2 text-gray-600">{formatUpdated(p)}</td>
                 <td className="px-3 py-2">{p.game_date}</td>
               </tr>
             );
           })}
           {sorted.length === 0 && (
             <tr>
-              <td colSpan="7" className="px-3 py-6 text-center text-gray-500">
+              <td colSpan="9" className="px-3 py-6 text-center text-gray-500">
                 No props for {day}
               </td>
             </tr>
