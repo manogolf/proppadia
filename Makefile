@@ -1,4 +1,4 @@
-.PHONY: help mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
+.PHONY: help diagnose mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -7,11 +7,17 @@ NHL_DATE ?= 2025-11-20
 
 help:
 	@echo "Proppadia checks"
+	@echo "  make diagnose"
 	@echo "  make mlb-release-check BASE_URL=<url> [MLB_DATE=YYYY-MM-DD]"
 	@echo "  make nhl-release-check BASE_URL=<url> [NHL_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-checks-full"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
+
+# One-command local diagnostic baseline for support/debug sessions.
+diagnose:
+	$(MAKE) mlb-checks-offline
+	$(MAKE) nhl-checks-offline
 
 runtime-boundaries:
 	$(VENV_PY) backend/scripts/check_runtime_import_boundaries.py
