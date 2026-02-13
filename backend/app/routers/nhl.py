@@ -4,9 +4,9 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Query
-import httpx
 
 from backend.app.deps import pg_fetchone
+from backend.app.services.nhl import fetch_gamecenter_landing
 from backend.domains.nhl.repository import (
     fetch_games_today,
     fetch_props_today,
@@ -19,14 +19,7 @@ router = APIRouter(prefix="/api/nhl", tags=["nhl"])
 
 @router.get("/gamecenter/{game_id}/landing", summary="NHL GameCenter landing (proxy)")
 async def nhl_gamecenter_landing(game_id: int):
-    url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/landing"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(url, headers={"User-Agent": "proppadia/1.0"})
-        r.raise_for_status()
-        return {"ok": True, "game_id": game_id, "data": r.json()}
-    except Exception as e:
-        return {"ok": False, "game_id": game_id, "error": str(e)}
+    return await fetch_gamecenter_landing(game_id)
 
 
 @router.get("/ping", summary="Ping Nhl")
