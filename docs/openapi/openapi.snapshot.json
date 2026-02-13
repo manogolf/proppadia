@@ -665,7 +665,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NhlGamecenterLandingResponse"
+                }
               }
             }
           },
@@ -694,7 +696,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NhlPingResponse"
+                }
               }
             }
           }
@@ -713,7 +717,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NhlDbPingResponse"
+                }
               }
             }
           }
@@ -777,9 +783,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Nhl Games Today Api Nhl Games Today Get"
+                  "$ref": "#/components/schemas/NhlDateRowsResponse"
                 }
               }
             }
@@ -853,7 +857,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NhlDateRowsResponse"
+                }
               }
             }
           },
@@ -925,7 +931,21 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/NhlErrorResponse"
+                    }
+                  ],
+                  "title": "Response Sog Api Nhl Sog Get"
+                }
               }
             }
           },
@@ -997,7 +1017,21 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/NhlErrorResponse"
+                    }
+                  ],
+                  "title": "Response Saves Api Nhl Saves Get"
+                }
               }
             }
           },
@@ -1305,6 +1339,165 @@
           "week_start"
         ],
         "title": "ModelWeeklyMetricRow"
+      },
+      "NhlDateRowsResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "NhlDateRowsResponse"
+      },
+      "NhlDbPingResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "err": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Err"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "NhlDbPingResponse"
+      },
+      "NhlErrorResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "title": "NhlErrorResponse"
+      },
+      "NhlGamecenterLandingResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "game_id": {
+            "type": "integer",
+            "title": "Game Id"
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "game_id"
+        ],
+        "title": "NhlGamecenterLandingResponse"
+      },
+      "NhlPingResponse": {
+        "properties": {
+          "sport": {
+            "type": "string",
+            "title": "Sport"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sport",
+          "ok"
+        ],
+        "title": "NhlPingResponse"
       },
       "PingResponse": {
         "properties": {
