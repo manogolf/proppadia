@@ -156,11 +156,12 @@ Status: Phase closed on February 13, 2026.
   - MLB post-deploy gates (`mlb-post-deploy`, `mlb-post-deploy-strict`, `mlb-post-deploy-strict-offseason`)
   - NHL post-deploy gates (`nhl-post-deploy`, `nhl-post-deploy-strict`, `nhl-post-deploy-strict-offseason`)
   - Per-sport release checklists (`docs/MLB Smoke Testing.md`, `docs/NHL Smoke Testing.md`)
+  - NHL query extraction: moved `/api/nhl/games/today`, `/api/nhl/props/today`, `/api/nhl/sog`, `/api/nhl/saves` SQL out of router into `backend/domains/nhl/repository/queries.py`
 - In progress:
   - None
 - Next phase:
   - Continue moving any remaining non-archived historical scripts into domain/service modules where still needed
-  - Reduce SQL-in-router for NHL by moving query logic behind domain/service boundaries
+  - Continue reducing SQL-in-router for NHL by moving remaining query logic behind domain/service boundaries
   - Keep API contracts and smoke gates current as endpoint payloads evolve
 
 ## Definition of Done for Re-Platforming Phase
