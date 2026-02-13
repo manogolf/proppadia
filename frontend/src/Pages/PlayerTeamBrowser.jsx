@@ -34,6 +34,11 @@ export default function PlayerTeamBrowser() {
     return acc;
   }, {});
 
+  const freshnessLabel = (d) => {
+    if (!d) return "no recent props";
+    return `last prop ${d}`;
+  };
+
   if (loading) return <div className="p-4">Loading player list...</div>;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
 
@@ -44,16 +49,30 @@ export default function PlayerTeamBrowser() {
         .sort()
         .map((team) => (
           <div key={team} className="mb-6">
-            <h2 className="text-xl font-semibold mb-2">{team}</h2>
+            <h2 className="text-xl font-semibold mb-2">
+              {team}{" "}
+              <span className="text-sm text-gray-500 font-normal">
+                ({groupedByTeam[team].length})
+              </span>
+            </h2>
             <ul className="space-y-1">
-              {groupedByTeam[team].map((p) => (
-                <li key={p.player_id}>
+              {groupedByTeam[team]
+                .slice()
+                .sort((a, b) => {
+                  const ad = a.last_prop_date || "";
+                  const bd = b.last_prop_date || "";
+                  if (ad !== bd) return bd.localeCompare(ad);
+                  return String(a.player_name || "").localeCompare(String(b.player_name || ""));
+                })
+                .map((p) => (
+                <li key={p.player_id} className="flex items-center justify-between gap-3">
                   <Link
                     to={`/player/${p.player_id}`}
                     className="text-blue-600 hover:underline"
                   >
                     {p.player_name || p.player_id}
                   </Link>
+                  <span className="text-xs text-gray-500">{freshnessLabel(p.last_prop_date)}</span>
                 </li>
               ))}
             </ul>

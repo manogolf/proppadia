@@ -135,13 +135,30 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
 def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
     lim = max(1, min(int(limit), 5000))
     sql = """
+        WITH players AS (
+          SELECT
+            CAST(player_id AS TEXT) AS player_id,
+            MIN(player_name) AS player_name,
+            MIN(team) AS team
+          FROM player_ids
+          GROUP BY CAST(player_id AS TEXT)
+        ),
+        recent AS (
+          SELECT
+            CAST(player_id AS TEXT) AS player_id,
+            MAX(game_date)::date AS last_prop_date
+          FROM player_props
+          GROUP BY CAST(player_id AS TEXT)
+        )
         SELECT
-          CAST(player_id AS TEXT) AS player_id,
-          MIN(player_name) AS player_name,
-          MIN(team) AS team
-        FROM player_ids
-        GROUP BY CAST(player_id AS TEXT)
-        ORDER BY MIN(team) ASC NULLS LAST, MIN(player_name) ASC
+          p.player_id,
+          p.player_name,
+          p.team,
+          r.last_prop_date
+        FROM players p
+        LEFT JOIN recent r
+          ON r.player_id = p.player_id
+        ORDER BY p.team ASC NULLS LAST, p.player_name ASC
         LIMIT %s
     """
     try:
@@ -159,6 +176,11 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
                 "player_id": pid,
                 "player_name": row.get("player_name"),
                 "team": _normalize_team(row.get("team")),
+                "last_prop_date": (
+                    row.get("last_prop_date").isoformat()
+                    if hasattr(row.get("last_prop_date"), "isoformat")
+                    else (str(row.get("last_prop_date")) if row.get("last_prop_date") else None)
+                ),
             }
         )
     return out

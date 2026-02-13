@@ -83,6 +83,7 @@ class PlayerListItem(BaseModel):
     player_id: int
     player_name: Optional[str] = None
     team: Optional[str] = None
+    last_prop_date: Optional[date] = None
 
 
 class PlayerProfileInfo(BaseModel):

@@ -120,7 +120,12 @@ Response:
 
 ```json
 [
-  { "player_id": 660271, "player_name": "Shohei Ohtani", "team": "LAD" }
+  {
+    "player_id": 660271,
+    "player_name": "Shohei Ohtani",
+    "team": "LAD",
+    "last_prop_date": "2025-08-15"
+  }
 ]
 ```
 

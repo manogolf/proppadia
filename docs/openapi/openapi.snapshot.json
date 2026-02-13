@@ -1404,6 +1404,18 @@
               }
             ],
             "title": "Team"
+          },
+          "last_prop_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Prop Date"
           }
         },
         "type": "object",
