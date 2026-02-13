@@ -60,16 +60,35 @@ def _columns() -> List[str]:
     return [str(r.get("column_name")) for r in rows]
 
 
-def _sample_rows(limit: int) -> List[Dict[str, Any]]:
-    return _fetchall(
-        """
-        SELECT
-          id, player_name, team, prop_type, over_under, prop_value, game_date,
-          status, outcome, prop_source, created_at, updated_at, prediction_timestamp
+def _sample_rows(limit: int, cols: Sequence[str]) -> List[Dict[str, Any]]:
+    select_fields = [
+        "id",
+        "player_name",
+        "team",
+        "prop_type",
+        "over_under",
+        "prop_value",
+        "game_date",
+        "status",
+        "outcome",
+        "prop_source",
+        "created_at",
+    ]
+    # Optional timestamp fields are included only when present in DB schema.
+    if "updated_at" in cols:
+        select_fields.append("updated_at")
+    if "prediction_timestamp" in cols:
+        select_fields.append("prediction_timestamp")
+
+    sql = f"""
+        SELECT {", ".join(select_fields)}
         FROM player_props
         ORDER BY created_at DESC NULLS LAST
         LIMIT %s
-        """,
+    """
+
+    return _fetchall(
+        sql,
         (int(limit),),
     )
 
@@ -105,7 +124,7 @@ def main() -> int:
     print("PASS required columns present")
 
     try:
-        rows = _sample_rows(args.sample_limit)
+        rows = _sample_rows(args.sample_limit, list(cols))
     except Exception as e:
         print(f"FAIL sample rows query: {type(e).__name__}: {e}")
         return 1
