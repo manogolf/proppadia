@@ -90,6 +90,12 @@ def _validate_ping(body: Any):
     return body.get("ok") is True and body.get("sport") == "mlb", "expects ok=true,sport=mlb"
 
 
+def _validate_ping_db(body: Any):
+    if not isinstance(body, dict):
+        return False, "ping-db body is not object"
+    return body.get("ok") is True, "expects ok=true"
+
+
 def _validate_predict(body: Any):
     if not isinstance(body, dict):
         return False, "predict body is not object"
@@ -123,7 +129,7 @@ def build_predict_payload(player_id: int, game_date: str) -> Dict[str, Any]:
     }
 
 
-def run(base_url: str, *, date: str, player_id: int, search_q: str) -> int:
+def run(base_url: str, *, date: str, player_id: int, search_q: str, require_data: bool) -> int:
     client = HttpClient(base_url)
     checks: List[CheckResult] = []
 
@@ -140,6 +146,16 @@ def run(base_url: str, *, date: str, player_id: int, search_q: str) -> int:
             path="/api/mlb/ping",
             expected_status=[200],
             validate=_validate_ping,
+        )
+    )
+    checks.append(
+        _run_check(
+            client,
+            name="mlb_ping_db",
+            method="GET",
+            path="/api/mlb/ping-db",
+            expected_status=[200],
+            validate=_validate_ping_db,
         )
     )
     checks.append(
@@ -194,11 +210,29 @@ def run(base_url: str, *, date: str, player_id: int, search_q: str) -> int:
     )
 
     passes = sum(1 for c in checks if c.ok)
+    warns: List[str] = []
+    if require_data:
+        lookup = next((c for c in checks if c.name == "players_lookup"), None)
+        search = next((c for c in checks if c.name == "players_search"), None)
+        profile = next((c for c in checks if c.name == "player_profile"), None)
+        if lookup and '"found": true' not in lookup.detail:
+            warns.append("players_lookup returned found=false")
+        if search and '"count": 0' in search.detail:
+            warns.append("players_search returned count=0")
+        if profile and '"player_name": null' in profile.detail:
+            warns.append("player_profile returned sparse player_info")
+
     for c in checks:
         state = "PASS" if c.ok else "FAIL"
         print(f"{state} {c.name:24s} {c.method:4s} {c.path:30s} status={c.status} detail={c.detail}")
+    for w in warns:
+        print(f"WARN data-richness            {w}")
     print(f"\nSummary: {passes}/{len(checks)} passed")
-    return 0 if passes == len(checks) else 1
+    if passes != len(checks):
+        return 1
+    if require_data and warns:
+        return 1
+    return 0
 
 
 def main() -> int:
@@ -207,8 +241,19 @@ def main() -> int:
     ap.add_argument("--date", default="2025-08-15")
     ap.add_argument("--player-id", type=int, default=660271)
     ap.add_argument("--search-q", default="Judge")
+    ap.add_argument(
+        "--require-data",
+        action="store_true",
+        help="Fail if player lookup/search/profile are sparse for the probe player/query",
+    )
     args = ap.parse_args()
-    return run(args.base_url, date=args.date, player_id=args.player_id, search_q=args.search_q)
+    return run(
+        args.base_url,
+        date=args.date,
+        player_id=args.player_id,
+        search_q=args.search_q,
+        require_data=args.require_data,
+    )
 
 
 if __name__ == "__main__":

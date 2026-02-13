@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from backend.app.deps import pg_fetchone
 from backend.app.services.mlb.game_context_service import get_game_context
 from backend.app.services.mlb.metrics_service import (
     fetch_model_metrics,
@@ -186,6 +187,12 @@ def _model_to_dict(body: BaseModel) -> Dict[str, Any]:
 @router.get("/mlb/ping", response_model=PingResponse)
 def ping_mlb():
     return {"sport": "mlb", "ok": True}
+
+
+@router.get("/mlb/ping-db", summary="MLB DB connectivity check")
+def ping_mlb_db():
+    ok, row, err = pg_fetchone("SELECT 1 AS ok")
+    return {"ok": bool(row), "err": err}
 
 
 @router.get(

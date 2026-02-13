@@ -24,6 +24,7 @@ This document captures the currently active HTTP surface from the FastAPI entryp
 ### MLB
 
 - `GET /api/mlb/ping`
+- `GET /api/mlb/ping-db`
 - `GET /api/players/resolve`
 - `GET /api/games/context`
 - `GET /api/players/lookup`

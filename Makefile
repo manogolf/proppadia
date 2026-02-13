@@ -1,4 +1,4 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy runtime-boundaries
+.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -52,3 +52,7 @@ mlb-checks-profile-contract:
 # Fast deployed-environment health check (safe, no write operations).
 mlb-post-deploy:
 	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL)
+
+# Post-deploy check that also requires non-sparse probe data.
+mlb-post-deploy-strict:
+	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --require-data

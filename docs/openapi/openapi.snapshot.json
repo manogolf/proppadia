@@ -42,6 +42,25 @@
         }
       }
     },
+    "/api/mlb/ping-db": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB DB connectivity check",
+        "operationId": "ping_mlb_db_api_mlb_ping_db_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/players/resolve": {
       "get": {
         "tags": [
