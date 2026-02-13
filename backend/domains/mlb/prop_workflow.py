@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from backend.app.services.mlb.commit_tokens import sign_commit_payload, verify_commit_token
 from backend.domains.mlb.game_context import build_game_context
 from backend.domains.mlb.repository.prop_repository import (
+    DuplicatePropError,
     find_duplicate_prop_id,
     insert_prop_row,
 )
@@ -254,18 +255,29 @@ def add_prop_from_commit(*, commit_token: str, prop_source: str = "user_added") 
     if dup_id:
         return {"ok": True, "saved": False, "duplicate": True, "id": dup_id}
 
-    insert_prop_row(
-        player_id=player_id,
-        player_name=player_name,
-        team=team,
-        team_id=int(team_id) if team_id is not None else None,
-        game_id=game_id,
-        game_date=game_date,
-        prop_type=prop_type,
-        prop_value=prop_value,
-        over_under=over_under,
-        prop_source=prop_source,
-        recommendation=recommendation,
-        probability=probability,
-    )
+    try:
+        insert_prop_row(
+            player_id=player_id,
+            player_name=player_name,
+            team=team,
+            team_id=int(team_id) if team_id is not None else None,
+            game_id=game_id,
+            game_date=game_date,
+            prop_type=prop_type,
+            prop_value=prop_value,
+            over_under=over_under,
+            prop_source=prop_source,
+            recommendation=recommendation,
+            probability=probability,
+        )
+    except DuplicatePropError:
+        dup_id = find_duplicate_prop_id(
+            player_id=player_id,
+            game_id=game_id,
+            prop_type=prop_type,
+            over_under=over_under,
+            prop_value=prop_value,
+            prop_source=prop_source,
+        )
+        return {"ok": True, "saved": False, "duplicate": True, "id": dup_id}
     return {"ok": True, "saved": True, "duplicate": False}

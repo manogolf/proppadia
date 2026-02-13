@@ -7,6 +7,10 @@ from typing import Any, Dict, Optional, Sequence
 from backend.shared.db import pg_execute, pg_fetchone
 
 
+class DuplicatePropError(Exception):
+    """Raised when DB unique constraints indicate a duplicate prop insert."""
+
+
 def find_duplicate_prop_id(
     *,
     player_id: int,
@@ -72,20 +76,26 @@ def insert_prop_row(
           NOW(), NOW()
         )
     """
-    pg_execute(
-        sql,
-        (
-            str(player_id),
-            player_name,
-            team,
-            int(team_id) if team_id is not None else None,
-            str(game_id),
-            game_date,
-            prop_type,
-            prop_value,
-            over_under,
-            prop_source,
-            recommendation,
-            probability,
-        ),
-    )
+    try:
+        pg_execute(
+            sql,
+            (
+                str(player_id),
+                player_name,
+                team,
+                int(team_id) if team_id is not None else None,
+                str(game_id),
+                game_date,
+                prop_type,
+                prop_value,
+                over_under,
+                prop_source,
+                recommendation,
+                probability,
+            ),
+        )
+    except Exception as e:
+        # SQLSTATE 23505 = unique_violation (race-safe duplicate handling).
+        if getattr(e, "sqlstate", None) == "23505":
+            raise DuplicatePropError(str(e)) from e
+        raise
