@@ -5,6 +5,20 @@ import { getBaseURL } from "../shared/getBaseURL.js";
 const BASE_API = getBaseURL();
 
 // ----- simple fetch helpers -----
+function formatApiError(status, payload) {
+  if (payload && typeof payload === "object") {
+    const detail = payload.detail ?? payload.error ?? payload.message;
+    if (typeof detail === "string" && detail.trim()) return `${status}: ${detail}`;
+    try {
+      return `${status}: ${JSON.stringify(payload)}`;
+    } catch {
+      return `${status}: request failed`;
+    }
+  }
+  if (typeof payload === "string" && payload.trim()) return `${status}: ${payload}`;
+  return `${status}: request failed`;
+}
+
 async function getApi(path, params = {}) {
   const url = new URL(BASE_API + path);
   Object.entries(params).forEach(([k, v]) => {
@@ -14,7 +28,16 @@ async function getApi(path, params = {}) {
     mode: "cors",
     credentials: "omit",
   });
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    let payload;
+    const ct = res.headers.get("content-type") || "";
+    try {
+      payload = ct.includes("application/json") ? await res.json() : await res.text();
+    } catch {
+      payload = null;
+    }
+    throw new Error(formatApiError(res.status, payload));
+  }
   return res.json();
 }
 
@@ -26,7 +49,16 @@ async function postApi(path, body) {
     credentials: "omit",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    let payload;
+    const ct = res.headers.get("content-type") || "";
+    try {
+      payload = ct.includes("application/json") ? await res.json() : await res.text();
+    } catch {
+      payload = null;
+    }
+    throw new Error(formatApiError(res.status, payload));
+  }
   return res.json();
 }
 
@@ -77,7 +109,9 @@ async function prepareThenPredict({
 
   return {
     features,
+    warnings: prep.warnings || [],
     probability: pred.probability, // probability of OVER
+    recommendation: pred.recommendation,
     commit_token: pred.commit_token,
     model: pred.model,
   };
@@ -127,6 +161,8 @@ export default function PlayerPropFormV2() {
   const [commitToken, setCommitToken] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [prepPreview, setPrepPreview] = useState(null);
+  const [prepWarnings, setPrepWarnings] = useState([]);
+  const [notice, setNotice] = useState("");
 
   // ui state
   const [error, setError] = useState("");
@@ -144,6 +180,8 @@ export default function PlayerPropFormV2() {
     setPrediction(null);
     setCommitToken(null);
     setPrepPreview(null);
+    setPrepWarnings([]);
+    setNotice("");
     setError("");
   }, [playerId, teamAbbr, gameDate, propType, propValue, overUnder]);
 
@@ -203,9 +241,11 @@ export default function PlayerPropFormV2() {
   // ----- predict flow (fast path with on-demand fallback) -----
   async function handlePredict() {
     setError("");
+    setNotice("");
     setPrediction(null);
     setCommitToken(null);
     setPrepPreview(null);
+    setPrepWarnings([]);
 
     // validation (player id OR name+team)
     if (!playerId && (!playerName.trim() || !teamAbbr.trim())) {
@@ -221,7 +261,8 @@ export default function PlayerPropFormV2() {
 
     setLoading(true);
     try {
-      const { features, probability, commit_token } = await prepareThenPredict({
+      const { features, warnings, probability, recommendation, commit_token, model } =
+        await prepareThenPredict({
         player_id: Number(playerId),
         player_name: playerName || undefined,
         team_abbr: (teamAbbr || "").toUpperCase(),
@@ -241,9 +282,11 @@ export default function PlayerPropFormV2() {
       setPrepPreview({
         sample: Object.fromEntries(Object.entries(features).slice(0, 12)),
       });
+      setPrepWarnings(Array.isArray(warnings) ? warnings : []);
 
-      setPrediction({ probability });
+      setPrediction({ probability, recommendation, model });
       setCommitToken(commit_token || null);
+      setNotice("Prediction ready. Review and click Add Prop to save.");
     } catch (err) {
       console.error("[Props V2] predict error:", err);
       setError(err.message || "Unknown error");
@@ -261,6 +304,7 @@ export default function PlayerPropFormV2() {
   // ----- save prop (after predict) -----
   async function handleSaveProp() {
     setError("");
+    setNotice("");
     if (!commitToken) return;
     setSaving(true);
     try {
@@ -269,9 +313,15 @@ export default function PlayerPropFormV2() {
         commit_token: commitToken,
       });
       if (res?.duplicate) {
-        setPrediction((p) => (p ? { ...p, duplicate: true } : p));
+        setPrediction((p) => (p ? { ...p, duplicate: true, savedId: res.id ?? null } : p));
+        setNotice(
+          res?.id
+            ? `This prop was already saved (id: ${res.id}).`
+            : "This prop was already saved."
+        );
       } else if (res?.saved) {
-        setPrediction((p) => (p ? { ...p, saved: true } : p));
+        setPrediction((p) => (p ? { ...p, saved: true, savedId: res.id ?? null } : p));
+        setNotice(res?.id ? `Prop saved (id: ${res.id}).` : "Prop saved.");
       }
       setCommitToken(null); // avoid repeat submits
     } catch (e) {
@@ -319,6 +369,16 @@ export default function PlayerPropFormV2() {
       {error && (
         <div className="bg-red-100 text-red-700 p-2 rounded-md text-center">
           {error}
+        </div>
+      )}
+      {!error && notice && (
+        <div className="bg-green-100 text-green-800 p-2 rounded-md text-center">
+          {notice}
+        </div>
+      )}
+      {prepWarnings.length > 0 && (
+        <div className="bg-amber-100 text-amber-800 p-2 rounded-md text-sm">
+          {prepWarnings.join(" ")}
         </div>
       )}
 
@@ -490,11 +550,19 @@ export default function PlayerPropFormV2() {
           <div className="font-medium">
             🎯 Model (Probability of Over): {pctClamped(prediction.probability)}
           </div>
+          <div className="text-xs text-gray-700">
+            Recommendation: {(prediction.recommendation || "over").toUpperCase()}
+            {prediction.model ? ` • Model: ${prediction.model}` : ""}
+          </div>
 
           {prediction.duplicate ? (
-            <div className="text-xs text-amber-700">Already saved.</div>
+            <div className="text-xs text-amber-700">
+              Already saved{prediction.savedId ? ` (id: ${prediction.savedId})` : ""}.
+            </div>
           ) : prediction.saved ? (
-            <div className="text-xs text-green-700">Saved ✓</div>
+            <div className="text-xs text-green-700">
+              Saved ✓{prediction.savedId ? ` (id: ${prediction.savedId})` : ""}
+            </div>
           ) : (
             <div className="text-xs text-gray-600">
               Not saved yet. Click “Add Prop”.

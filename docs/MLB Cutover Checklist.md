@@ -34,6 +34,18 @@ Use this checklist when promoting the restored MLB surface as the primary site p
   - Model metrics dashboard
 - Confirm no frontend imports from `archive/*`.
 
+### Props Flow Acceptance
+
+- In `Props` page, user can resolve player and run prediction without console/runtime errors.
+- Predict step shows:
+  - probability
+  - recommendation
+  - any backend warnings (for example fallback context)
+- Add step shows explicit outcome:
+  - success (`saved=true`) with confirmation message
+  - duplicate (`duplicate=true`) with clear "already saved" message
+- API error messages shown to users are actionable (status + backend detail text).
+
 ## Docs and Contracts
 
 - If API schema changed intentionally:
