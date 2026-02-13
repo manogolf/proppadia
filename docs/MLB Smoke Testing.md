@@ -7,6 +7,27 @@ Quickly validate MLB API wiring and critical endpoint behavior after refactors.
 Script:
 - `backend/scripts/smoke_mlb_api.py`
 
+## Release Checklist
+
+Before MLB deploy:
+
+```bash
+make mlb-checks-full
+make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
+When you want probe-data enforcement (in season or after seeding):
+
+```bash
+make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
+Offseason-safe strict transport/DB check:
+
+```bash
+make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
 ## Modes
 
 - `offline`

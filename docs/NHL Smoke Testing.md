@@ -7,6 +7,26 @@ Quickly validate deployed NHL API wiring and core read endpoints after backend c
 Script:
 - `backend/scripts/post_deploy_nhl_check.py`
 
+## Release Checklist
+
+Before NHL deploy:
+
+```bash
+make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
+When you want probe-data enforcement (in season or after seeding):
+
+```bash
+make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
+Offseason-safe strict transport/DB check:
+
+```bash
+make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
 ## Run Commands
 
 From repo root:
