@@ -1,9 +1,17 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason nhl-checks-offline nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason runtime-boundaries
+.PHONY: help mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
 MLB_DATE ?= 2025-08-15
 NHL_DATE ?= 2025-11-20
+
+help:
+	@echo "Proppadia checks"
+	@echo "  make mlb-release-check BASE_URL=<url> [MLB_DATE=YYYY-MM-DD]"
+	@echo "  make nhl-release-check BASE_URL=<url> [NHL_DATE=YYYY-MM-DD]"
+	@echo "  make mlb-checks-full"
+	@echo "  make mlb-post-deploy BASE_URL=<url>"
+	@echo "  make nhl-post-deploy BASE_URL=<url>"
 
 runtime-boundaries:
 	$(VENV_PY) backend/scripts/check_runtime_import_boundaries.py
@@ -63,6 +71,10 @@ mlb-post-deploy-strict:
 mlb-post-deploy-strict-offseason:
 	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data --allow-sparse
 
+# One-command MLB release confidence gate (offseason-safe strict deploy check).
+mlb-release-check: mlb-checks-offline
+	$(MAKE) mlb-post-deploy-strict-offseason BASE_URL=$(BASE_URL) MLB_DATE=$(MLB_DATE)
+
 # Fast NHL deployed-environment health check (safe, no write operations).
 nhl-post-deploy:
 	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE)
@@ -83,3 +95,7 @@ nhl-openapi-contract:
 nhl-checks-offline:
 	$(MAKE) runtime-boundaries
 	$(MAKE) nhl-openapi-contract
+
+# One-command NHL release confidence gate (offseason-safe strict deploy check).
+nhl-release-check: nhl-checks-offline
+	$(MAKE) nhl-post-deploy-strict-offseason BASE_URL=$(BASE_URL) NHL_DATE=$(NHL_DATE)
