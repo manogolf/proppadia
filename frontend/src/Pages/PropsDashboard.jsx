@@ -11,6 +11,7 @@ export default function PropsDashboard() {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(todayET()); // single source of truth
   const [tableRefreshNonce, setTableRefreshNonce] = useState(0);
+  const [lastSaveEvent, setLastSaveEvent] = useState(null);
 
   const LoginGate = ({ children }) =>
     user ? (
@@ -32,7 +33,10 @@ export default function PropsDashboard() {
         <h2 className="text-xl font-semibold mb-3">Add Player Props</h2>
         <LoginGate>
           <PlayerPropFormV2
-            onSaved={() => setTableRefreshNonce((n) => n + 1)}
+            onSaved={(evt) => {
+              setLastSaveEvent(evt || null);
+              setTableRefreshNonce((n) => n + 1);
+            }}
           />
         </LoginGate>
       </section>
@@ -42,6 +46,7 @@ export default function PropsDashboard() {
         <PlayerPropsTable
           selectedDate={selectedDate}
           refreshNonce={tableRefreshNonce}
+          lastSaveEvent={lastSaveEvent}
         />
       </section>
 

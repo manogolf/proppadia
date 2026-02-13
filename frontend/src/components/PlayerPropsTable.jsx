@@ -22,11 +22,13 @@ export default function PlayerPropsTable({
   selectedDate,
   onlyMine = false,
   refreshNonce = 0,
+  lastSaveEvent = null,
 }) {
   const [rows, setRows] = useState([]);
   const [sort, setSort] = useState({ key: "game_date", dir: "asc" });
   const [loading, setLoading] = useState(false);
   const [lastError, setLastError] = useState("");
+  const [highlightedId, setHighlightedId] = useState(null);
   // const { user } = useAuth();
 
   const day = useMemo(() => {
@@ -88,6 +90,15 @@ export default function PlayerPropsTable({
     if (!refreshNonce) return;
     fetchRows();
   }, [refreshNonce, fetchRows]);
+
+  useEffect(() => {
+    const id = lastSaveEvent?.id;
+    if (!id) return;
+    const marker = String(id);
+    setHighlightedId(marker);
+    const t = setTimeout(() => setHighlightedId(null), 6000);
+    return () => clearTimeout(t);
+  }, [lastSaveEvent]);
 
   const sorted = useMemo(() => {
     const arr = [...rows];
@@ -176,8 +187,14 @@ export default function PlayerPropsTable({
           {sorted.map((p) => {
             const key = (p.outcome || p.status || "pending").toLowerCase();
             const label = key[0]?.toUpperCase() + key.slice(1);
+            const isHighlighted = highlightedId != null && String(p.id) === highlightedId;
+            const highlightStyle = isHighlighted
+              ? lastSaveEvent?.duplicate
+                ? "bg-amber-50 ring-1 ring-amber-300"
+                : "bg-green-50 ring-1 ring-green-300"
+              : "";
             return (
-              <tr key={p.id} className="border-t hover:bg-gray-50">
+              <tr key={p.id} className={`border-t hover:bg-gray-50 ${highlightStyle}`}>
                 <td className="px-3 py-2">
                   {p.player_name}
                   {p.position && (
