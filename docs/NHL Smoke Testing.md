@@ -38,6 +38,7 @@ make nhl-openapi-contract
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
+make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com NHL_DATE=2025-11-20
 ```
 
 Meaning:
@@ -46,6 +47,7 @@ Meaning:
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
 - `nhl-post-deploy-strict`: same checks, fails when probe date returns sparse data
 - `nhl-post-deploy-strict-offseason`: strict checks but allows sparse probe data
+- NHL make targets accept `NHL_DATE` to control probe date (default `2025-11-20`)
 
 ## Useful Flags
 

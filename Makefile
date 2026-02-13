@@ -2,6 +2,7 @@
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
+NHL_DATE ?= 2025-11-20
 
 runtime-boundaries:
 	$(VENV_PY) backend/scripts/check_runtime_import_boundaries.py
@@ -63,15 +64,15 @@ mlb-post-deploy-strict-offseason:
 
 # Fast NHL deployed-environment health check (safe, no write operations).
 nhl-post-deploy:
-	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL)
+	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE)
 
 # NHL post-deploy check requiring non-sparse probe data.
 nhl-post-deploy-strict:
-	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --require-data
+	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE) --require-data
 
 # NHL post-deploy strict transport/DB checks, but tolerate sparse probe data.
 nhl-post-deploy-strict-offseason:
-	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --require-data --allow-sparse
+	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE) --require-data --allow-sparse
 
 # NHL OpenAPI contract drift check.
 nhl-openapi-contract:
