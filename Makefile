@@ -1,4 +1,4 @@
-.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict runtime-boundaries
+.PHONY: mlb-checks-offline mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -56,3 +56,7 @@ mlb-post-deploy:
 # Post-deploy check that also requires non-sparse probe data.
 mlb-post-deploy-strict:
 	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --require-data
+
+# Post-deploy strict transport/DB checks, but tolerate sparse probe data (offseason-safe).
+mlb-post-deploy-strict-offseason:
+	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --require-data --allow-sparse

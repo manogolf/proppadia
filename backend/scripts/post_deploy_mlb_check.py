@@ -129,7 +129,15 @@ def build_predict_payload(player_id: int, game_date: str) -> Dict[str, Any]:
     }
 
 
-def run(base_url: str, *, date: str, player_id: int, search_q: str, require_data: bool) -> int:
+def run(
+    base_url: str,
+    *,
+    date: str,
+    player_id: int,
+    search_q: str,
+    require_data: bool,
+    allow_sparse: bool,
+) -> int:
     client = HttpClient(base_url)
     checks: List[CheckResult] = []
 
@@ -231,6 +239,10 @@ def run(base_url: str, *, date: str, player_id: int, search_q: str, require_data
     if passes != len(checks):
         return 1
     if require_data and warns:
+        if allow_sparse:
+            print("PASS strict-data gate         allow-sparse enabled; warnings tolerated")
+            return 0
+        print("FAIL strict-data gate         sparse probe data; run without --require-data or use --allow-sparse")
         return 1
     return 0
 
@@ -246,6 +258,11 @@ def main() -> int:
         action="store_true",
         help="Fail if player lookup/search/profile are sparse for the probe player/query",
     )
+    ap.add_argument(
+        "--allow-sparse",
+        action="store_true",
+        help="When used with --require-data, keep warnings but do not fail on sparse probe data",
+    )
     args = ap.parse_args()
     return run(
         args.base_url,
@@ -253,6 +270,7 @@ def main() -> int:
         player_id=args.player_id,
         search_q=args.search_q,
         require_data=args.require_data,
+        allow_sparse=args.allow_sparse,
     )
 
 
