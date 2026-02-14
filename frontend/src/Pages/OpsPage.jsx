@@ -4,6 +4,7 @@ import { getBaseURL } from "../shared/getBaseURL.js";
 const OPS_PREFS_KEY = "proppadia_ops_prefs_v1";
 const OPS_LAST_SUCCESS_KEY = "proppadia_ops_last_success_v1";
 const OPS_TOKEN_KEY = "proppadia_ops_token_v1";
+const OPS_INCIDENT_HISTORY_KEY = "proppadia_ops_incident_history_v1";
 const SLOW_CHECK_MS = 1000;
 const STALE_SUCCESS_HOURS = 24;
 
@@ -125,6 +126,7 @@ export default function OpsPage() {
   const [copiedKey, setCopiedKey] = useState("");
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
   const [copiedIncidentSnapshot, setCopiedIncidentSnapshot] = useState(false);
+  const [incidentHistory, setIncidentHistory] = useState([]);
   const [failuresOnly, setFailuresOnly] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState({});
@@ -205,6 +207,17 @@ export default function OpsPage() {
 
   useEffect(() => {
     try {
+      const raw = window.localStorage.getItem(OPS_INCIDENT_HISTORY_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setIncidentHistory(parsed.slice(0, 10));
+    } catch {
+      // ignore malformed incident history
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       window.localStorage.setItem(
         OPS_LAST_SUCCESS_KEY,
         JSON.stringify(lastSuccessByKey)
@@ -213,6 +226,17 @@ export default function OpsPage() {
       // ignore local storage write errors
     }
   }, [lastSuccessByKey]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        OPS_INCIDENT_HISTORY_KEY,
+        JSON.stringify(incidentHistory.slice(0, 10))
+      );
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [incidentHistory]);
 
   const runChecks = useCallback(async () => {
     setRunning(true);
@@ -623,6 +647,17 @@ export default function OpsPage() {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setCopiedIncidentSnapshot(true);
       window.setTimeout(() => setCopiedIncidentSnapshot(false), 1200);
+      setIncidentHistory((prev) => {
+        const item = {
+          captured_at: payload.captured_at,
+          failing_count: Array.isArray(payload.failing_checks) ? payload.failing_checks.length : 0,
+          deploy_status: payload.deploy?.status || "unknown",
+          deploy_id: payload.deploy?.id || null,
+          mlb_source: payload.data_freshness?.mlb_standings?.source || null,
+          nhl_source: payload.data_freshness?.nhl_slate_meta?.source || null,
+        };
+        return [item, ...prev].slice(0, 10);
+      });
     } catch {
       setCopiedIncidentSnapshot(false);
     }
@@ -1026,6 +1061,46 @@ export default function OpsPage() {
           </div>
 
           <div className="px-5 pb-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 mb-4">
+              <h2 className="text-sm font-semibold text-slate-900">Incident History (local)</h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Last 10 copied incident snapshots saved in this browser.
+              </p>
+              {incidentHistory.length === 0 ? (
+                <div className="text-xs text-slate-500 mt-2">No incident snapshots yet.</div>
+              ) : (
+                <div className="mt-3 overflow-auto">
+                  <table className="min-w-full text-xs text-slate-700">
+                    <thead>
+                      <tr className="text-left border-b border-slate-200">
+                        <th className="py-1 pr-3">Captured</th>
+                        <th className="py-1 pr-3">Failures</th>
+                        <th className="py-1 pr-3">Deploy</th>
+                        <th className="py-1 pr-3">MLB source</th>
+                        <th className="py-1 pr-3">NHL source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {incidentHistory.map((row, idx) => (
+                        <tr key={`${row.captured_at}-${idx}`} className="border-b border-slate-100">
+                          <td className="py-1 pr-3">
+                            {row.captured_at ? new Date(row.captured_at).toLocaleString() : "-"}
+                          </td>
+                          <td className="py-1 pr-3">{row.failing_count ?? "-"}</td>
+                          <td className="py-1 pr-3">
+                            {row.deploy_status || "unknown"}
+                            {row.deploy_id ? ` (${row.deploy_id})` : ""}
+                          </td>
+                          <td className="py-1 pr-3">{row.mlb_source || "-"}</td>
+                          <td className="py-1 pr-3">{row.nhl_source || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 mb-4">
               <h2 className="text-sm font-semibold text-slate-900">Data Freshness</h2>
               <p className="text-xs text-slate-600 mt-1">
