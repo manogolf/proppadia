@@ -271,6 +271,15 @@ export default function OpsPage() {
   const runChecks = useCallback(async () => {
     setRunning(true);
     setError("");
+    const currentDeployFetchState = deployLoading
+      ? "loading"
+      : deployError
+        ? "error"
+        : deployStatus?.deploy
+          ? "loaded"
+          : deployStatus && !deployStatus?.deploy
+            ? "loaded-empty"
+            : "idle";
     try {
       const [
         health,
@@ -403,7 +412,7 @@ export default function OpsPage() {
             base_url: baseUrl,
             last_updated: snapshotTs,
             deploy: deployStatus?.deploy || null,
-            deploy_fetch_state: deployFetchState,
+            deploy_fetch_state: currentDeployFetchState,
             data_freshness: {
               mlb_standings:
                 mlbStandings.ok && mlbStandings.body?.ok
@@ -475,8 +484,10 @@ export default function OpsPage() {
   }, [
     autoCaptureFailures,
     baseUrl,
-    deployFetchState,
+    deployError,
+    deployLoading,
     deployStatus?.deploy,
+    deployStatus,
     lastSuccessByKey,
   ]);
 
