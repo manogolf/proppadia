@@ -68,14 +68,27 @@ def _normalize_deploy(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_latest_deploy(payload: Any) -> Optional[Dict[str, Any]]:
+    def _unwrap_deploy_obj(row: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(row, dict):
+            return None
+        nested = row.get("deploy")
+        if isinstance(nested, dict):
+            return nested
+        return row
+
     if isinstance(payload, list):
-        return payload[0] if payload else None
+        if not payload:
+            return None
+        return _unwrap_deploy_obj(payload[0])
     if isinstance(payload, dict):
         for key in ("deploys", "data", "items", "results"):
             rows = payload.get(key)
             if isinstance(rows, list) and rows:
-                first = rows[0]
-                return first if isinstance(first, dict) else None
+                return _unwrap_deploy_obj(rows[0])
+        # Some APIs may return {"deploy": {...}} directly.
+        nested = payload.get("deploy")
+        if isinstance(nested, dict):
+            return nested
         # Some APIs may return a single deploy object directly.
         if "id" in payload and "status" in payload:
             return payload
