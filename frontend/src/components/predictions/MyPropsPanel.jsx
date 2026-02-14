@@ -52,6 +52,18 @@ const CSV_COLUMNS = [
   "updated_at",
 ];
 
+function watchlistStorageKey(userId, apiPath) {
+  return `proppadia_watchlist_v1:${String(userId || "anon")}:${String(apiPath || "default")}`;
+}
+
+function toWatchlistId(row) {
+  const pid = row?.player_id;
+  if (pid !== undefined && pid !== null && String(pid).trim() !== "") return String(pid);
+  const name = String(row?.player_name || "").trim().toLowerCase();
+  const team = String(row?.team || "").trim().toLowerCase();
+  return `${name}:${team}`;
+}
+
 function escapeCsv(value) {
   const s = value == null ? "" : String(value);
   if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
@@ -89,12 +101,43 @@ export default function MyPropsPanel({
   const [copiedRowJson, setCopiedRowJson] = useState(false);
   const [copiedRowId, setCopiedRowId] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [watchlist, setWatchlist] = useState([]);
 
   useEffect(() => {
     if (!selectedDate) return;
     setFromDate((prev) => prev || selectedDate);
     setToDate((prev) => prev || selectedDate);
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setWatchlist([]);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(watchlistStorageKey(user.id, apiPath));
+      if (!raw) {
+        setWatchlist([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setWatchlist(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setWatchlist([]);
+    }
+  }, [apiPath, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      window.localStorage.setItem(
+        watchlistStorageKey(user.id, apiPath),
+        JSON.stringify(watchlist.slice(0, 100))
+      );
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [apiPath, user?.id, watchlist]);
 
   const fetchRows = useCallback(async () => {
     if (!user?.id) {
@@ -396,6 +439,43 @@ export default function MyPropsPanel({
     }
   }, [selectedRow?.id]);
 
+  const selectedWatchId = useMemo(() => (selectedRow ? toWatchlistId(selectedRow) : ""), [selectedRow]);
+  const isSelectedInWatchlist = useMemo(
+    () => Boolean(selectedWatchId && watchlist.some((w) => String(w.id) === selectedWatchId)),
+    [selectedWatchId, watchlist]
+  );
+
+  const addSelectedToWatchlist = useCallback(() => {
+    if (!selectedRow) return;
+    const id = toWatchlistId(selectedRow);
+    if (!id) return;
+    setWatchlist((prev) => {
+      if (prev.some((w) => String(w.id) === id)) return prev;
+      const item = {
+        id,
+        player_id: selectedRow.player_id ?? null,
+        player_name: selectedRow.player_name || null,
+        team: selectedRow.team || null,
+        added_at: new Date().toISOString(),
+      };
+      return [item, ...prev].slice(0, 100);
+    });
+    setNotice("Player added to watchlist.");
+    setError("");
+  }, [selectedRow]);
+
+  const removeSelectedFromWatchlist = useCallback(() => {
+    if (!selectedRow) return;
+    const id = toWatchlistId(selectedRow);
+    setWatchlist((prev) => prev.filter((w) => String(w.id) !== id));
+    setNotice("Player removed from watchlist.");
+    setError("");
+  }, [selectedRow]);
+
+  const removeWatchItem = useCallback((id) => {
+    setWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
+  }, []);
+
   const applyDatePreset = useCallback(
     (preset) => {
       const today = todayET();
@@ -625,6 +705,41 @@ export default function MyPropsPanel({
           </div>
         )}
       </div>
+      <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="text-xs font-semibold text-slate-700 mb-1">
+          Watchlist ({watchlist.length})
+        </div>
+        {watchlist.length === 0 ? (
+          <div className="text-xs text-slate-500">Save a player from Row Details to build your watchlist.</div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {watchlist.map((w) => (
+              <span
+                key={w.id}
+                className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-300 px-2 py-1 text-xs text-slate-700"
+              >
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => setSearchTerm(String(w.player_name || w.player_id || ""))}
+                  title="Filter table by this player"
+                >
+                  {w.player_name || w.player_id || "Unknown"}
+                </button>
+                {w.team ? <span className="text-slate-500">({w.team})</span> : null}
+                <button
+                  type="button"
+                  className="text-rose-700"
+                  onClick={() => removeWatchItem(w.id)}
+                  title="Remove from watchlist"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       {error ? (
         <div className="text-sm text-rose-700 bg-rose-50 rounded-md px-3 py-2 mb-3">{error}</div>
       ) : null}
@@ -720,6 +835,23 @@ export default function MyPropsPanel({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {isSelectedInWatchlist ? (
+                    <button
+                      type="button"
+                      className="pp-btn pp-btn-secondary pp-btn-sm"
+                      onClick={removeSelectedFromWatchlist}
+                    >
+                      Remove Watch
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="pp-btn pp-btn-secondary pp-btn-sm"
+                      onClick={addSelectedToWatchlist}
+                    >
+                      Add Watch
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="pp-btn pp-btn-secondary pp-btn-sm"
