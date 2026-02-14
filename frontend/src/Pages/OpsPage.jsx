@@ -129,6 +129,8 @@ export default function OpsPage() {
   const [lastSuccessByKey, setLastSuccessByKey] = useState({});
   const [checks, setChecks] = useState([]);
   const [marketCoverage, setMarketCoverage] = useState({ count: 0, rows: [] });
+  const [mlbStandingsMeta, setMlbStandingsMeta] = useState(null);
+  const [nhlSlateMeta, setNhlSlateMeta] = useState(null);
   const [error, setError] = useState("");
   const [opsToken, setOpsToken] = useState("");
   const [deployStatus, setDeployStatus] = useState(null);
@@ -222,6 +224,8 @@ export default function OpsPage() {
         nhlDb,
         marketCache,
         marketSupported,
+        mlbStandings,
+        nhlSlate,
       ] = await Promise.all([
         fetchJsonTimed("/api/health"),
         fetchJsonTimed("/api/mlb/ping"),
@@ -230,6 +234,8 @@ export default function OpsPage() {
         fetchJsonTimed("/api/nhl/ping-db"),
         fetchJsonTimed("/api/mlb/market-cache-status"),
         fetchJsonTimed("/api/mlb/market-supported-props"),
+        fetchJsonTimed("/api/mlb/standings"),
+        fetchJsonTimed("/api/nhl/slate/meta"),
       ]);
 
       const nextChecks = [
@@ -281,6 +287,28 @@ export default function OpsPage() {
           durationMs: marketCache.durationMs,
           detail: marketCache.body || { status: marketCache.status },
         },
+        {
+          key: "mlb_standings",
+          label: "MLB Standings Cache",
+          path: "/api/mlb/standings",
+          ok:
+            mlbStandings.ok &&
+            mlbStandings.body?.ok === true &&
+            Array.isArray(mlbStandings.body?.records),
+          durationMs: mlbStandings.durationMs,
+          detail: mlbStandings.body || { status: mlbStandings.status },
+        },
+        {
+          key: "nhl_slate_meta",
+          label: "NHL Slate Meta",
+          path: "/api/nhl/slate/meta",
+          ok:
+            nhlSlate.ok &&
+            nhlSlate.body?.ok === true &&
+            typeof nhlSlate.body?.components === "object",
+          durationMs: nhlSlate.durationMs,
+          detail: nhlSlate.body || { status: nhlSlate.status },
+        },
       ];
 
       const snapshotTs = new Date().toISOString();
@@ -293,6 +321,12 @@ export default function OpsPage() {
       });
 
       setChecks(nextChecks);
+      setMlbStandingsMeta(
+        mlbStandings.ok && mlbStandings.body?.ok ? mlbStandings.body : null
+      );
+      setNhlSlateMeta(
+        nhlSlate.ok && nhlSlate.body?.ok ? nhlSlate.body : null
+      );
       if (marketSupported.ok && marketSupported.body?.ok === true) {
         setMarketCoverage({
           count: Number(marketSupported.body?.count || 0),
@@ -899,6 +933,44 @@ export default function OpsPage() {
           </div>
 
           <div className="px-5 pb-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 mb-4">
+              <h2 className="text-sm font-semibold text-slate-900">Data Freshness</h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Cache/source status for backend-owned MLB and NHL slate context feeds.
+              </p>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-700">
+                <div className="rounded border border-slate-200 bg-white px-3 py-2">
+                  <div className="font-semibold text-slate-800">MLB Standings</div>
+                  <div>source: {mlbStandingsMeta?.source || "-"}</div>
+                  <div>stale: {String(Boolean(mlbStandingsMeta?.stale))}</div>
+                  <div>
+                    cached_at:{" "}
+                    {mlbStandingsMeta?.cached_at
+                      ? new Date(mlbStandingsMeta.cached_at).toLocaleString()
+                      : "-"}
+                  </div>
+                  <div>records: {Array.isArray(mlbStandingsMeta?.records) ? mlbStandingsMeta.records.length : "-"}</div>
+                </div>
+                <div className="rounded border border-slate-200 bg-white px-3 py-2">
+                  <div className="font-semibold text-slate-800">NHL Slate Meta</div>
+                  <div>source: {nhlSlateMeta?.source || "-"}</div>
+                  <div>stale: {String(Boolean(nhlSlateMeta?.stale))}</div>
+                  <div>
+                    cached_at:{" "}
+                    {nhlSlateMeta?.cached_at
+                      ? new Date(nhlSlateMeta.cached_at).toLocaleString()
+                      : "-"}
+                  </div>
+                  <div>
+                    components ok:{" "}
+                    {nhlSlateMeta?.components
+                      ? Object.values(nhlSlateMeta.components).filter((c) => c?.ok === true).length
+                      : "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <h2 className="text-sm font-semibold text-slate-900">MLB Market Coverage</h2>
               <p className="text-xs text-slate-600 mt-1">
