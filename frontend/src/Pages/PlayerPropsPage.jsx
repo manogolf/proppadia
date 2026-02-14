@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
+import TodayGames from "../components/TodayGames.jsx";
 import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx";
 import PlayerPropsTable from "../components/PlayerPropsTable.jsx";
 import PropTracker from "../components/PropTracker.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
+import { getBaseURL } from "../shared/getBaseURL.js";
 import { buildMarketContext } from "../shared/marketContext.js";
 import { todayET } from "../shared/timeUtils.js";
 
@@ -28,6 +30,9 @@ export default function PlayerPropsPage() {
   const [tableRefreshNonce, setTableRefreshNonce] = useState(0);
   const [lastSaveEvent, setLastSaveEvent] = useState(null);
   const [latestPrediction, setLatestPrediction] = useState(null);
+  const [games, setGames] = useState([]);
+  const [gamesLoading, setGamesLoading] = useState(true);
+  const [gamesError, setGamesError] = useState("");
 
   const subtitle = useMemo(() => {
     return mode === "research"
@@ -47,6 +52,34 @@ export default function PlayerPropsPage() {
     [latestPrediction]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGames() {
+      try {
+        setGamesLoading(true);
+        setGamesError("");
+        const base = getBaseURL();
+        const res = await fetch(
+          `${base}/api/mlb/schedule?date=${encodeURIComponent(selectedDate)}`
+        );
+        const data = await res.json();
+        const gameList = Array.isArray(data?.dates) ? data.dates[0]?.games || [] : [];
+        if (!cancelled) setGames(Array.isArray(gameList) ? gameList : []);
+      } catch (e) {
+        if (!cancelled) {
+          setGamesError(e?.message || "Failed to load MLB games.");
+          setGames([]);
+        }
+      } finally {
+        if (!cancelled) setGamesLoading(false);
+      }
+    }
+    loadGames();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
   return (
     <PredictionWorkspace
       sportLabel="MLB"
@@ -59,6 +92,14 @@ export default function PlayerPropsPage() {
     >
       {mode === "research" ? (
         <div className="space-y-4">
+          {gamesLoading ? (
+            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading MLB slate...</div>
+          ) : gamesError ? (
+            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
+          ) : (
+            <TodayGames games={games} />
+          )}
+
           <ModelVsMarketCard
             title="Model vs Market (MLB)"
             lineLabel={
@@ -86,6 +127,14 @@ export default function PlayerPropsPage() {
         </div>
       ) : (
         <div className="space-y-5">
+          {gamesLoading ? (
+            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading MLB slate...</div>
+          ) : gamesError ? (
+            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
+          ) : (
+            <TodayGames games={games} />
+          )}
+
           <MyPropsPanel
             refreshNonce={tableRefreshNonce}
             selectedDate={selectedDate}
