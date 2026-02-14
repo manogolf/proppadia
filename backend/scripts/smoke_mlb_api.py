@@ -101,8 +101,15 @@ def _expect_ok_cache_shape(body: Any):
 
 
 def _expect_standings_shape(body: Any):
-    ok = bool(isinstance(body, dict) and isinstance(body.get("records"), list))
-    return ok, "expects records[]"
+    ok = bool(
+        isinstance(body, dict)
+        and body.get("ok") is True
+        and isinstance(body.get("records"), list)
+        and body.get("source") in {"upstream", "cache", "stale_cache"}
+        and isinstance(body.get("cached_at"), str)
+        and isinstance(body.get("stale"), bool)
+    )
+    return ok, "expects ok=true,records[],source,cached_at,stale"
 
 
 def run(mode: str, client: ClientAdapter, args) -> int:

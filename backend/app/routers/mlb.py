@@ -45,7 +45,7 @@ from backend.app.services.mlb.prop_submission_service import (
     prepare_prop_submission,
 )
 from backend.app.services.mlb.schedule_service import fetch_schedule
-from backend.app.services.mlb.standings_service import fetch_standings
+from backend.app.services.mlb.standings_service import get_standings
 from backend.app.services.mlb.player_service import (
     list_players,
     lookup_player,
@@ -131,7 +131,7 @@ def mlb_standings(
 ):
     target_season = int(season) if season else datetime.now(ET).year
     try:
-        payload = fetch_standings(season=target_season, league_ids=league_id)
+        payload = get_standings(season=target_season, league_ids=league_id, allow_stale_on_error=True)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
     return payload

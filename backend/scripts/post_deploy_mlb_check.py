@@ -79,8 +79,15 @@ def run(
             params={"season": 2025},
             expected_status=[200],
             validate=lambda body: (
-                bool(isinstance(body, dict) and isinstance(body.get("records"), list)),
-                "expects records[]",
+                bool(
+                    isinstance(body, dict)
+                    and body.get("ok") is True
+                    and isinstance(body.get("records"), list)
+                    and body.get("source") in {"upstream", "cache", "stale_cache"}
+                    and isinstance(body.get("cached_at"), str)
+                    and isinstance(body.get("stale"), bool)
+                ),
+                "expects ok=true,records[],source,cached_at,stale",
             ),
         )
     )
