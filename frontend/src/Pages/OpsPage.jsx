@@ -125,6 +125,7 @@ export default function OpsPage() {
   const [copiedKey, setCopiedKey] = useState("");
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
   const [failuresOnly, setFailuresOnly] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState({});
   const [lastSuccessByKey, setLastSuccessByKey] = useState({});
   const [checks, setChecks] = useState([]);
@@ -624,6 +625,14 @@ export default function OpsPage() {
                 />
                 Failures only
               </label>
+              <label className="mt-2 ml-3 inline-flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={showDebug}
+                  onChange={(e) => setShowDebug(e.target.checked)}
+                />
+                Show debug details
+              </label>
             </div>
           </div>
 
@@ -721,9 +730,11 @@ export default function OpsPage() {
             </label>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <div className="font-medium text-slate-800">Latest deploy</div>
-              <div className="text-[11px] text-slate-500 mt-1">
-                Fetch state: {deployFetchState}
-              </div>
+              {showDebug ? (
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Fetch state: {deployFetchState}
+                </div>
+              ) : null}
               <div className="text-xs text-slate-600 mt-1">
                 Status:{" "}
                 <span className={isDeployInProgress(deployStatus?.deploy?.status) ? "text-amber-700 font-semibold" : "text-slate-700 font-semibold"}>
