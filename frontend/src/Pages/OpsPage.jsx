@@ -362,7 +362,11 @@ export default function OpsPage() {
       if (!res.ok || !res.body?.ok) {
         throw new Error(res.body?.detail || `deploy-status failed (${res.status})`);
       }
-      setDeployStatus(res.body);
+      setDeployStatus((prev) => {
+        if (res.body?.deploy) return res.body;
+        if (prev?.deploy) return { ...res.body, deploy: prev.deploy };
+        return res.body;
+      });
     } catch (e) {
       setDeployError(e?.message || "Failed to load deploy status.");
     } finally {
@@ -382,7 +386,11 @@ export default function OpsPage() {
       if (!res.ok || !res.body?.ok) {
         throw new Error(res.body?.detail || `redeploy failed (${res.status})`);
       }
-      setDeployStatus(res.body);
+      setDeployStatus((prev) => {
+        if (res.body?.deploy) return res.body;
+        if (prev?.deploy) return { ...res.body, deploy: prev.deploy };
+        return res.body;
+      });
       await loadDeployStatus();
     } catch (e) {
       setDeployError(e?.message || "Failed to trigger redeploy.");
