@@ -228,6 +228,9 @@ export default function HomeGateway() {
               <div className="text-slate-600 mt-1">
                 Components healthy: {nhlSnapshot?.components ? Object.values(nhlSnapshot.components).filter((c) => c?.ok === true).length : "-"}
               </div>
+              <div className="text-slate-600">
+                Counts: games {nhlSnapshot?.components?.games_today?.count ?? "-"}, props {nhlSnapshot?.components?.props_today?.count ?? "-"}, sog {nhlSnapshot?.components?.sog?.count ?? "-"}, saves {nhlSnapshot?.components?.saves?.count ?? "-"}
+              </div>
               <div className={`text-xs font-medium mt-1 ${nhlState.tone}`}>{nhlState.label}</div>
               <div className="text-slate-600">
                 Source: {nhlSnapshot?.source || "-"}{nhlSnapshot?.stale ? " (stale)" : ""}
