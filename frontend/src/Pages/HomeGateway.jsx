@@ -21,6 +21,20 @@ function snapshotChip(snapshot) {
   return { label: "Live", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
 }
 
+function agoLabel(isoTs) {
+  if (!isoTs) return "-";
+  const ts = new Date(isoTs).getTime();
+  if (!Number.isFinite(ts)) return "-";
+  const delta = Date.now() - ts;
+  if (delta < 60_000) return "just now";
+  const mins = Math.floor(delta / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 48) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 function mlbSlateState(snapshot) {
   const teamsTracked = Array.isArray(snapshot?.records) ? snapshot.records.length : 0;
   if (!snapshot) return { label: "Unavailable", tone: "text-rose-700" };
@@ -161,6 +175,9 @@ export default function HomeGateway() {
               <div className="text-slate-600">
                 As of: {mlbSnapshot?.cached_at ? new Date(mlbSnapshot.cached_at).toLocaleString() : "-"}
               </div>
+              <div className="text-slate-500 text-xs">
+                Cache age: {agoLabel(mlbSnapshot?.cached_at)}
+              </div>
               <div className="mt-2">
                 <PrefetchLink
                   to="/mlb"
@@ -188,6 +205,9 @@ export default function HomeGateway() {
               </div>
               <div className="text-slate-600">
                 As of: {nhlSnapshot?.cached_at ? new Date(nhlSnapshot.cached_at).toLocaleString() : "-"}
+              </div>
+              <div className="text-slate-500 text-xs">
+                Cache age: {agoLabel(nhlSnapshot?.cached_at)}
               </div>
               <div className="mt-2">
                 <PrefetchLink
