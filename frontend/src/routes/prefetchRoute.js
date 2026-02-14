@@ -14,6 +14,7 @@ export const loadPlayerProfileDashboard = () =>
   import("../Pages/PlayerProfileDashboard.jsx");
 export const loadAccessRequiredPage = () =>
   import("../Pages/AccessRequiredPage.jsx");
+export const loadWatchlistPage = () => import("../Pages/WatchlistPage.jsx");
 
 const routeLoaders = {
   "/": loadHomeGateway,
@@ -27,6 +28,7 @@ const routeLoaders = {
   "/owner": loadOpsPage,
   "/players": loadPlayerTeamBrowser,
   "/metrics": loadModelMetricsDashboard,
+  "/watchlist": loadWatchlistPage,
 };
 
 const prefetched = new Set();

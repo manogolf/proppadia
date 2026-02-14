@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { PrefetchLink } from "../navigation/PrefetchLink.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import { getPropDisplayLabel } from "../../shared/propUtils.js";
 import { nowET, todayET } from "../../shared/timeUtils.js";
+import { toWatchlistId, watchlistStorageKey } from "../../shared/watchlistStorage.js";
 
 const BASE_API = getBaseURL();
 
@@ -52,18 +55,6 @@ const CSV_COLUMNS = [
   "updated_at",
 ];
 
-function watchlistStorageKey(userId, apiPath) {
-  return `proppadia_watchlist_v1:${String(userId || "anon")}:${String(apiPath || "default")}`;
-}
-
-function toWatchlistId(row) {
-  const pid = row?.player_id;
-  if (pid !== undefined && pid !== null && String(pid).trim() !== "") return String(pid);
-  const name = String(row?.player_name || "").trim().toLowerCase();
-  const team = String(row?.team || "").trim().toLowerCase();
-  return `${name}:${team}`;
-}
-
 function escapeCsv(value) {
   const s = value == null ? "" : String(value);
   if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
@@ -81,6 +72,7 @@ export default function MyPropsPanel({
   title = "My Saved Props",
   exportPrefix = "my_mlb_props",
 }) {
+  const location = useLocation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -102,12 +94,26 @@ export default function MyPropsPanel({
   const [copiedRowId, setCopiedRowId] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [watchlist, setWatchlist] = useState([]);
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
+  const importWatchInputRef = useRef(null);
+  const rowRefs = useRef(new Map());
+  const queryAutoSelectRef = useRef("");
 
   useEffect(() => {
     if (!selectedDate) return;
     setFromDate((prev) => prev || selectedDate);
     setToDate((prev) => prev || selectedDate);
   }, [selectedDate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    const playerFromUrl = String(params.get("player") || "").trim();
+    if (playerFromUrl) {
+      setSearchTerm(playerFromUrl);
+      setPage(0);
+      queryAutoSelectRef.current = playerFromUrl.toLowerCase();
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -138,6 +144,11 @@ export default function MyPropsPanel({
       // ignore local storage write errors
     }
   }, [apiPath, user?.id, watchlist]);
+
+  const watchIdSet = useMemo(
+    () => new Set(watchlist.map((w) => String(w.id))),
+    [watchlist]
+  );
 
   const fetchRows = useCallback(async () => {
     if (!user?.id) {
@@ -199,8 +210,11 @@ export default function MyPropsPanel({
 
   const visibleRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => {
+    const baseRows = watchlistOnly
+      ? rows.filter((row) => watchIdSet.has(toWatchlistId(row)))
+      : rows;
+    if (!q) return baseRows;
+    return baseRows.filter((row) => {
       const haystack = [
         row?.player_name,
         row?.player_id,
@@ -213,7 +227,7 @@ export default function MyPropsPanel({
         .join(" ");
       return haystack.includes(q);
     });
-  }, [rows, searchTerm]);
+  }, [rows, searchTerm, watchIdSet, watchlistOnly]);
   const sortedRows = useMemo(() => {
     const out = [...visibleRows];
     const keyFn = (row) => {
@@ -233,6 +247,23 @@ export default function MyPropsPanel({
     });
     return out;
   }, [sortDir, sortKey, visibleRows]);
+
+  useEffect(() => {
+    const q = queryAutoSelectRef.current;
+    if (!q || sortedRows.length === 0) return;
+    const match = sortedRows.find((row) => {
+      const name = String(row?.player_name || "").toLowerCase();
+      const pid = String(row?.player_id || "").toLowerCase();
+      return name.includes(q) || pid === q;
+    });
+    if (!match) return;
+    setSelectedRow(match);
+    const rowEl = rowRefs.current.get(String(match.id));
+    if (rowEl && typeof rowEl.scrollIntoView === "function") {
+      rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    queryAutoSelectRef.current = "";
+  }, [sortedRows]);
   const statusSummary = useMemo(() => {
     const out = { pending: 0, win: 0, loss: 0, push: 0 };
     for (const row of sortedRows) {
@@ -246,9 +277,10 @@ export default function MyPropsPanel({
     if (fromDate || toDate) parts.push(`Date: ${fromDate || "start"} to ${toDate || "today"}`);
     if (statusFilter !== "all") parts.push(`Status: ${statusFilter}`);
     if (searchTerm.trim()) parts.push(`Search: "${searchTerm.trim()}"`);
+    if (watchlistOnly) parts.push("Watchlist only");
     if (!parts.length) return "No active filters";
     return parts.join(" • ");
-  }, [fromDate, searchTerm, statusFilter, toDate]);
+  }, [fromDate, searchTerm, statusFilter, toDate, watchlistOnly]);
   const topPlayers = useMemo(() => {
     const counts = new Map();
     for (const row of sortedRows) {
@@ -269,6 +301,24 @@ export default function MyPropsPanel({
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 5);
+  }, [sortedRows]);
+  const playerActivityMap = useMemo(() => {
+    const out = new Map();
+    const todayIso = todayET();
+    for (const row of sortedRows) {
+      const key = String(toWatchlistId(row));
+      if (!key) continue;
+      const status = String(formatStatus(row)).toLowerCase();
+      const gameDate = String(row?.game_date || "");
+      const isLive = status === "live";
+      const isTodayPending = status === "pending" && gameDate === todayIso;
+      const prev = out.get(key) || { activeNow: false, liveNow: false };
+      out.set(key, {
+        activeNow: prev.activeNow || isLive || isTodayPending,
+        liveNow: prev.liveNow || isLive,
+      });
+    }
+    return out;
   }, [sortedRows]);
   const totalPages = Math.max(1, Math.ceil(totalRows / limit));
   const hasMore = (page + 1) * limit < totalRows;
@@ -411,6 +461,7 @@ export default function MyPropsPanel({
     setToDate(selectedDate || "");
     setStatusFilter("all");
     setSearchTerm("");
+    setWatchlistOnly(false);
     setPage(0);
     setNotice("");
     setError("");
@@ -441,8 +492,8 @@ export default function MyPropsPanel({
 
   const selectedWatchId = useMemo(() => (selectedRow ? toWatchlistId(selectedRow) : ""), [selectedRow]);
   const isSelectedInWatchlist = useMemo(
-    () => Boolean(selectedWatchId && watchlist.some((w) => String(w.id) === selectedWatchId)),
-    [selectedWatchId, watchlist]
+    () => Boolean(selectedWatchId && watchIdSet.has(selectedWatchId)),
+    [selectedWatchId, watchIdSet]
   );
 
   const addSelectedToWatchlist = useCallback(() => {
@@ -474,6 +525,106 @@ export default function MyPropsPanel({
 
   const removeWatchItem = useCallback((id) => {
     setWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
+  }, []);
+
+  const toggleTopPlayerWatch = useCallback(
+    (playerName) => {
+      const targetName = String(playerName || "").trim();
+      if (!targetName) return;
+      const match = sortedRows.find(
+        (row) => String(row?.player_name || row?.player_id || "Unknown").trim() === targetName
+      );
+      if (!match) {
+        setError(`Could not find ${targetName} in current rows.`);
+        return;
+      }
+      const id = toWatchlistId(match);
+      if (!id) return;
+      const exists = watchIdSet.has(id);
+      setWatchlist((prev) => {
+        if (exists) {
+          return prev.filter((w) => String(w.id) !== id);
+        }
+        const item = {
+          id,
+          player_id: match.player_id ?? null,
+          player_name: match.player_name || null,
+          team: match.team || null,
+          added_at: new Date().toISOString(),
+        };
+        return [item, ...prev].slice(0, 100);
+      });
+      setNotice(exists ? "Player removed from watchlist." : "Player added to watchlist.");
+      setError("");
+    },
+    [sortedRows, watchIdSet]
+  );
+
+  const topPlayerWatchState = useMemo(() => {
+    const state = new Map();
+    for (const [name] of topPlayers) {
+      const match = sortedRows.find(
+        (row) => String(row?.player_name || row?.player_id || "Unknown").trim() === name
+      );
+      const id = match ? toWatchlistId(match) : "";
+      state.set(name, Boolean(id && watchIdSet.has(id)));
+    }
+    return state;
+  }, [sortedRows, topPlayers, watchIdSet]);
+
+  const handleExportWatchlist = useCallback(() => {
+    if (!watchlist.length) return;
+    try {
+      const blob = new Blob([JSON.stringify(watchlist, null, 2)], {
+        type: "application/json;charset=utf-8;",
+      });
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `watchlist_${String(user?.id || "member")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(href);
+      setNotice(`Exported ${watchlist.length} watchlist rows.`);
+      setError("");
+    } catch {
+      setError("Failed to export watchlist.");
+    }
+  }, [user?.id, watchlist]);
+
+  const handleImportWatchlistClick = useCallback(() => {
+    importWatchInputRef.current?.click();
+  }, []);
+
+  const handleImportWatchlist = useCallback(async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error("Watchlist file must be an array.");
+      const normalized = parsed
+        .map((w) => ({
+          id: String(w?.id || "").trim(),
+          player_id: w?.player_id ?? null,
+          player_name: w?.player_name || null,
+          team: w?.team || null,
+          added_at: w?.added_at || new Date().toISOString(),
+        }))
+        .filter((w) => w.id);
+      setWatchlist((prev) => {
+        const byId = new Map(prev.map((w) => [String(w.id), w]));
+        for (const row of normalized) byId.set(String(row.id), row);
+        return Array.from(byId.values()).slice(0, 100);
+      });
+      setNotice(`Imported ${normalized.length} watchlist rows.`);
+      setError("");
+    } catch (err) {
+      setError(err?.message || "Failed to import watchlist.");
+    } finally {
+      if (e?.target) e.target.value = "";
+    }
   }, []);
 
   const applyDatePreset = useCallback(
@@ -587,6 +738,14 @@ export default function MyPropsPanel({
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </label>
+        <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={watchlistOnly}
+            onChange={(e) => setWatchlistOnly(e.target.checked)}
+          />
+          Watchlist only
+        </label>
       </div>
       <div className="mb-3 grid grid-cols-1 md:grid-cols-4 gap-2">
         <label className="text-sm text-slate-700">
@@ -680,8 +839,53 @@ export default function MyPropsPanel({
                 key={name}
                 className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-300 px-2 py-1 text-xs text-slate-700"
               >
-                {name}
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => setSearchTerm(String(name || ""))}
+                  title="Filter table by this player"
+                >
+                  {name}
+                </button>
                 <strong>{count}</strong>
+                {(() => {
+                  const row = sortedRows.find(
+                    (r) => String(r?.player_name || r?.player_id || "Unknown").trim() === String(name)
+                  );
+                  const activity = row ? playerActivityMap.get(toWatchlistId(row)) : null;
+                  if (!activity?.activeNow) return null;
+                  return (
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        activity.liveNow
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                      title={activity.liveNow ? "Live now" : "Active today"}
+                    >
+                      {activity.liveNow ? "LIVE" : "ACTIVE"}
+                    </span>
+                  );
+                })()}
+                <PrefetchLink
+                  to="/watchlist"
+                  className="text-slate-500 underline"
+                  title="Open watchlist page"
+                >
+                  WL
+                </PrefetchLink>
+                <button
+                  type="button"
+                  className="text-slate-500 underline"
+                  onClick={() => toggleTopPlayerWatch(name)}
+                  title={
+                    topPlayerWatchState.get(name)
+                      ? "Remove player from watchlist"
+                      : "Add player to watchlist"
+                  }
+                >
+                  {topPlayerWatchState.get(name) ? "Unwatch" : "Watch"}
+                </button>
               </span>
             ))}
           </div>
@@ -709,6 +913,30 @@ export default function MyPropsPanel({
         <div className="text-xs font-semibold text-slate-700 mb-1">
           Watchlist ({watchlist.length})
         </div>
+        <div className="mb-2 flex items-center gap-2">
+          <button
+            type="button"
+            className="pp-btn pp-btn-secondary pp-btn-sm"
+            onClick={handleExportWatchlist}
+            disabled={watchlist.length === 0}
+          >
+            Export Watchlist
+          </button>
+          <button
+            type="button"
+            className="pp-btn pp-btn-secondary pp-btn-sm"
+            onClick={handleImportWatchlistClick}
+          >
+            Import Watchlist
+          </button>
+          <input
+            ref={importWatchInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleImportWatchlist}
+          />
+        </div>
         {watchlist.length === 0 ? (
           <div className="text-xs text-slate-500">Save a player from Row Details to build your watchlist.</div>
         ) : (
@@ -727,6 +955,22 @@ export default function MyPropsPanel({
                   {w.player_name || w.player_id || "Unknown"}
                 </button>
                 {w.team ? <span className="text-slate-500">({w.team})</span> : null}
+                {(() => {
+                  const activity = playerActivityMap.get(String(w.id));
+                  if (!activity?.activeNow) return null;
+                  return (
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        activity.liveNow
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                      title={activity.liveNow ? "Live now" : "Active today"}
+                    >
+                      {activity.liveNow ? "LIVE" : "ACTIVE"}
+                    </span>
+                  );
+                })()}
                 <button
                   type="button"
                   className="text-rose-700"
@@ -790,6 +1034,11 @@ export default function MyPropsPanel({
                 return (
                   <tr
                     key={String(row.id)}
+                    ref={(el) => {
+                      const key = String(row.id);
+                      if (el) rowRefs.current.set(key, el);
+                      else rowRefs.current.delete(key);
+                    }}
                     className={`border-t border-slate-200 cursor-pointer ${isActive ? "bg-slate-50" : "hover:bg-slate-50"}`}
                     onClick={() => setSelectedRow(row)}
                     onKeyDown={(e) => {
@@ -873,6 +1122,12 @@ export default function MyPropsPanel({
                   >
                     Close
                   </button>
+                  <PrefetchLink
+                    to="/watchlist"
+                    className="pp-btn pp-btn-secondary pp-btn-sm"
+                  >
+                    Open Watchlist
+                  </PrefetchLink>
                 </div>
               </div>
               <pre className="mt-2 text-xs whitespace-pre-wrap break-words">

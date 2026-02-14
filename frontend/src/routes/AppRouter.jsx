@@ -24,6 +24,7 @@ import {
   loadPlayerPropsPage,
   loadPlayerTeamBrowser,
   loadPropsDashboard,
+  loadWatchlistPage,
 } from "./prefetchRoute.js";
 
 const HomeGateway = lazy(loadHomeGateway);
@@ -38,6 +39,7 @@ const PlayerTeamBrowser = lazy(loadPlayerTeamBrowser);
 const PlayerPropsPage = lazy(loadPlayerPropsPage);
 const OpsPage = lazy(loadOpsPage);
 const AccessRequiredPage = lazy(loadAccessRequiredPage);
+const WatchlistPage = lazy(loadWatchlistPage);
 
 function RouteFallback() {
   return (
@@ -112,6 +114,14 @@ export default function AppRouter() {
               Predictions
             </PrefetchNavLink>
           )}
+          {user ? (
+            <PrefetchNavLink
+              to="/watchlist"
+              className={navClassName}
+            >
+              Watchlist
+            </PrefetchNavLink>
+          ) : null}
           <PrefetchNavLink
             to="/players"
             className={navClassName}
@@ -169,6 +179,14 @@ export default function AppRouter() {
             <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />
             <Route path="/metrics" element={<ModelMetricsDashboard />} />
             <Route path="/players" element={<PlayerTeamBrowser />} />
+            <Route
+              path="/watchlist"
+              element={
+                <RequireSignedIn requiredPath="/watchlist" requiredLabel="watchlist">
+                  <WatchlistPage />
+                </RequireSignedIn>
+              }
+            />
             <Route
               path="/props/v2"
               element={
