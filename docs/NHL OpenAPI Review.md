@@ -40,6 +40,7 @@ Confirmed NHL endpoints in schema:
 - `GET /api/nhl/ping-db`
 - `GET /api/nhl/gamecenter/{game_id}/landing`
 - `GET /api/nhl/games/today`
+- `GET /api/nhl/slate/meta`
 - `GET /api/nhl/props/today`
 - `GET /api/nhl/props/history`
 - `POST /api/nhl/props/add`

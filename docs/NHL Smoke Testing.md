@@ -49,6 +49,7 @@ Meaning:
 - `nhl-checks-offline`: runtime boundaries + shared checks + NHL unit tests + NHL OpenAPI drift check
 - `nhl-openapi-contract`: detects NHL OpenAPI schema drift vs `docs/openapi/openapi.snapshot.json`
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
+- includes backend-owned slate metadata check: `GET /api/nhl/slate/meta`
 - includes NHL history read contract check: `GET /api/nhl/props/history`
 - includes safe NHL add-path validation check: invalid `POST /api/nhl/props/add` must return `400`
 - NHL lifecycle resolver endpoint is ops-only: `POST /api/ops/nhl/resolve-props` (`dry_run=true` recommended first)
@@ -68,6 +69,6 @@ Direct script usage:
 ```
 
 Flags:
-- `--date`: probe date for `/api/nhl/games/today`, `/api/nhl/props/today`, `/api/nhl/sog`, `/api/nhl/saves`
+- `--date`: probe date for `/api/nhl/slate/meta`, `/api/nhl/games/today`, `/api/nhl/props/today`, `/api/nhl/sog`, `/api/nhl/saves`
 - `--require-data`: fail when probe date is sparse
 - `--allow-sparse`: keep warnings but do not fail strict gate

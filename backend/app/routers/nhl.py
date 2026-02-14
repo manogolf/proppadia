@@ -17,6 +17,7 @@ from backend.app.schemas.nhl import (
     NhlPropHistoryResponse,
 )
 from backend.app.services.nhl import fetch_gamecenter_landing
+from backend.app.services.nhl.slate_meta_service import get_nhl_slate_meta
 from backend.app.services.nhl.prop_submission_service import add_prop, get_prop_history
 from backend.app.services.shared import ping_db, sport_ping
 from backend.domains.nhl.repository import (
@@ -64,6 +65,23 @@ def nhl_games_today(
     offset: int = Query(0, ge=0),
 ) -> Dict[str, Any]:
     return fetch_games_today(date, limit, offset)
+
+
+@router.get(
+    "/slate/meta",
+    summary="NHL slate metadata",
+    description="Backend-owned NHL slate health metadata for games/props/sog/saves.",
+)
+def nhl_slate_meta(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today in America/New_York)"),
+    limit: int = Query(100, ge=1, le=500),
+) -> Dict[str, Any]:
+    try:
+        return get_nhl_slate_meta(date=date, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.get(

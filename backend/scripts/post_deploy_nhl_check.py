@@ -50,6 +50,27 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
     checks.append(
         run_check(
             client,
+            name="slate_meta",
+            method="GET",
+            path="/api/nhl/slate/meta",
+            params={"date": date, "limit": 100},
+            expected_status=[200],
+            validate=lambda body: (
+                bool(
+                    isinstance(body, dict)
+                    and body.get("ok") is True
+                    and isinstance(body.get("components"), dict)
+                    and body.get("source") in {"upstream", "cache", "stale_cache"}
+                    and isinstance(body.get("cached_at"), str)
+                    and isinstance(body.get("stale"), bool)
+                ),
+                "expects ok=true,components{},source,cached_at,stale",
+            ),
+        )
+    )
+    checks.append(
+        run_check(
+            client,
             name="games_today",
             method="GET",
             path="/api/nhl/games/today",

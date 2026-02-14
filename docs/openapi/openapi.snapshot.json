@@ -249,6 +249,67 @@
         }
       }
     },
+    "/api/mlb/standings": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB standings proxy (backend-owned)",
+        "operationId": "mlb_standings_api_mlb_standings_get",
+        "parameters": [
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Season year (defaults to today ET year)",
+              "title": "Season"
+            },
+            "description": "Season year (defaults to today ET year)"
+          },
+          {
+            "name": "league_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated MLB league ids",
+              "default": "103,104",
+              "title": "League Id"
+            },
+            "description": "Comma-separated MLB league ids"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/players/resolve": {
       "get": {
         "tags": [
@@ -1131,6 +1192,72 @@
         }
       }
     },
+    "/api/nhl/slate/meta": {
+      "get": {
+        "tags": [
+          "nhl"
+        ],
+        "summary": "NHL slate metadata",
+        "description": "Backend-owned NHL slate health metadata for games/props/sog/saves.",
+        "operationId": "nhl_slate_meta_api_nhl_slate_meta_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD (defaults to today in America/New_York)",
+              "title": "Date"
+            },
+            "description": "YYYY-MM-DD (defaults to today in America/New_York)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Nhl Slate Meta Api Nhl Slate Meta Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/nhl/props/today": {
       "get": {
         "tags": [
@@ -1545,6 +1672,234 @@
                 "schema": {
                   "$ref": "#/components/schemas/NhlPropHistoryResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ops/render/deploy-status": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Ops: latest Render deploy status",
+        "operationId": "render_deploy_status_api_ops_render_deploy_status_get",
+        "parameters": [
+          {
+            "name": "X-Ops-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ops-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ops/render/redeploy": {
+      "post": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Ops: trigger Render redeploy",
+        "operationId": "render_redeploy_api_ops_render_redeploy_post",
+        "parameters": [
+          {
+            "name": "X-Ops-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ops-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeployRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ops/render/metrics": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Ops: Render CPU/memory metrics",
+        "operationId": "render_metrics_api_ops_render_metrics_get",
+        "parameters": [
+          {
+            "name": "window_minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 360,
+              "title": "Window Minutes"
+            }
+          },
+          {
+            "name": "resolution_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 60,
+              "title": "Resolution Seconds"
+            }
+          },
+          {
+            "name": "X-Ops-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ops-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ops/nhl/resolve-props": {
+      "post": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Ops: resolve NHL pending props in player_props",
+        "operationId": "resolve_nhl_props_api_ops_nhl_resolve_props_post",
+        "parameters": [
+          {
+            "name": "X-Ops-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ops-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NhlResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -2428,6 +2783,49 @@
         ],
         "title": "NhlPropHistoryRow"
       },
+      "NhlResolveRequest": {
+        "properties": {
+          "from_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Date"
+          },
+          "to_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Date"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": true
+          },
+          "only_past_games": {
+            "type": "boolean",
+            "title": "Only Past Games",
+            "default": true
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome",
+            "default": "dnp"
+          }
+        },
+        "type": "object",
+        "title": "NhlResolveRequest"
+      },
       "PingResponse": {
         "properties": {
           "sport": {
@@ -3208,6 +3606,17 @@
           "id"
         ],
         "title": "PropHistoryRow"
+      },
+      "RedeployRequest": {
+        "properties": {
+          "clear_cache": {
+            "type": "boolean",
+            "title": "Clear Cache",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "RedeployRequest"
       },
       "ResolvePlayerResponse": {
         "properties": {
