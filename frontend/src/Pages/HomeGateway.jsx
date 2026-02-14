@@ -15,6 +15,12 @@ async function fetchJson(path) {
   return { ok: res.ok, status: res.status, body };
 }
 
+function snapshotChip(snapshot) {
+  if (!snapshot) return { label: "Unavailable", tone: "bg-rose-50 text-rose-700 border-rose-200" };
+  if (snapshot.stale) return { label: "Stale", tone: "bg-amber-50 text-amber-700 border-amber-200" };
+  return { label: "Live", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+}
+
 export default function HomeGateway() {
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
@@ -119,7 +125,14 @@ export default function HomeGateway() {
           ) : null}
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="font-semibold text-slate-900">MLB</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold text-slate-900">MLB</div>
+                <span
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${snapshotChip(mlbSnapshot).tone}`}
+                >
+                  {snapshotChip(mlbSnapshot).label}
+                </span>
+              </div>
               <div className="text-slate-600 mt-1">
                 Teams tracked: {Array.isArray(mlbSnapshot?.records) ? mlbSnapshot.records.length : "-"}
               </div>
@@ -128,7 +141,14 @@ export default function HomeGateway() {
               </div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="font-semibold text-slate-900">NHL</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold text-slate-900">NHL</div>
+                <span
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${snapshotChip(nhlSnapshot).tone}`}
+                >
+                  {snapshotChip(nhlSnapshot).label}
+                </span>
+              </div>
               <div className="text-slate-600 mt-1">
                 Components healthy: {nhlSnapshot?.components ? Object.values(nhlSnapshot.components).filter((c) => c?.ok === true).length : "-"}
               </div>
