@@ -76,6 +76,16 @@ function isDeployInProgress(status) {
   return !["live", "failed", "canceled", "cancelled", "deactivated"].includes(s);
 }
 
+function formatMetricValue(value, unit) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  if (String(unit || "").toLowerCase() === "bytes") {
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return n.toFixed(3).replace(/\.?0+$/, "");
+}
+
 export default function OpsPage() {
   const baseUrl = getBaseURL();
   const [loading, setLoading] = useState(true);
@@ -96,6 +106,8 @@ export default function OpsPage() {
   const [deployError, setDeployError] = useState("");
   const [redeployRunning, setRedeployRunning] = useState(false);
   const [clearCache, setClearCache] = useState(false);
+  const [metricsData, setMetricsData] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -308,6 +320,24 @@ export default function OpsPage() {
     }
   }, [clearCache, deployHeaders, loadDeployStatus]);
 
+  const loadMetrics = useCallback(async () => {
+    setMetricsLoading(true);
+    setDeployError("");
+    try {
+      const res = await fetchJsonTimed("/api/ops/render/metrics?window_minutes=360&resolution_seconds=60", {
+        headers: deployHeaders,
+      });
+      if (!res.ok || !res.body?.ok) {
+        throw new Error(res.body?.detail || `metrics failed (${res.status})`);
+      }
+      setMetricsData(res.body);
+    } catch (e) {
+      setDeployError(e?.message || "Failed to load Render metrics.");
+    } finally {
+      setMetricsLoading(false);
+    }
+  }, [deployHeaders]);
+
   useEffect(() => {
     runChecks();
   }, [runChecks]);
@@ -315,7 +345,8 @@ export default function OpsPage() {
   useEffect(() => {
     if (!opsToken) return;
     loadDeployStatus();
-  }, [opsToken, loadDeployStatus]);
+    loadMetrics();
+  }, [opsToken, loadDeployStatus, loadMetrics]);
 
   useEffect(() => {
     if (!refreshSeconds) return;
@@ -541,6 +572,14 @@ export default function OpsPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={loadMetrics}
+                  disabled={metricsLoading || !opsToken}
+                  className="pp-btn pp-btn-secondary pp-btn-md"
+                >
+                  {metricsLoading ? "Refreshing..." : "Refresh Metrics"}
+                </button>
+                <button
+                  type="button"
                   onClick={runRedeploy}
                   disabled={redeployRunning || !opsToken}
                   className="pp-btn pp-btn-secondary pp-btn-md"
@@ -572,6 +611,28 @@ export default function OpsPage() {
               </div>
               <div className="text-xs text-slate-600">
                 Finished: {deployStatus?.deploy?.finished_at ? new Date(deployStatus.deploy.finished_at).toLocaleString() : "-"}
+              </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="font-medium text-slate-800">Application metrics (Render)</div>
+              <div className="text-xs text-slate-600 mt-1">
+                Window: {metricsData?.window?.minutes || 0}m @ {metricsData?.window?.resolution_seconds || 0}s
+              </div>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-700">
+                <div className="rounded border border-slate-200 bg-white px-2 py-2">
+                  <div className="font-semibold text-slate-800">CPU</div>
+                  <div>Latest: {formatMetricValue(metricsData?.cpu?.latest_value, metricsData?.cpu?.unit)}</div>
+                  <div>Avg: {formatMetricValue(metricsData?.cpu?.avg, metricsData?.cpu?.unit)}</div>
+                  <div>Max: {formatMetricValue(metricsData?.cpu?.max, metricsData?.cpu?.unit)}</div>
+                  <div>Points: {metricsData?.cpu?.points ?? "-"}</div>
+                </div>
+                <div className="rounded border border-slate-200 bg-white px-2 py-2">
+                  <div className="font-semibold text-slate-800">Memory</div>
+                  <div>Latest: {formatMetricValue(metricsData?.memory?.latest_value, metricsData?.memory?.unit)}</div>
+                  <div>Avg: {formatMetricValue(metricsData?.memory?.avg, metricsData?.memory?.unit)}</div>
+                  <div>Max: {formatMetricValue(metricsData?.memory?.max, metricsData?.memory?.unit)}</div>
+                  <div>Points: {metricsData?.memory?.points ?? "-"}</div>
+                </div>
               </div>
             </div>
             {deployError ? <div className="text-sm text-rose-700 mt-2">{deployError}</div> : null}

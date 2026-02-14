@@ -42,6 +42,19 @@ class TestOpsRouter(unittest.TestCase):
         self.assertEqual(resp.json().get("ok"), True)
         self.assertEqual(mock_redeploy.call_args.kwargs.get("clear_cache"), True)
 
+    @patch("backend.app.routers.ops.fetch_service_metrics")
+    def test_metrics_ok(self, mock_metrics):
+        mock_metrics.return_value = {"ok": True, "cpu": {"latest_value": 0.1}, "memory": {"latest_value": 123}}
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.get(
+                "/api/ops/render/metrics?window_minutes=180&resolution_seconds=120",
+                headers={"X-Ops-Token": "secret"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("ok"), True)
+        self.assertEqual(mock_metrics.call_args.kwargs.get("window_minutes"), 180)
+        self.assertEqual(mock_metrics.call_args.kwargs.get("resolution_seconds"), 120)
+
 
 if __name__ == "__main__":
     unittest.main()

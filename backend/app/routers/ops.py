@@ -7,7 +7,11 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from backend.app.services.shared.render_deploy_service import fetch_latest_deploy, trigger_redeploy
+from backend.app.services.shared.render_deploy_service import (
+    fetch_latest_deploy,
+    fetch_service_metrics,
+    trigger_redeploy,
+)
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -46,6 +50,24 @@ def render_redeploy(
     _require_ops_token(x_ops_token)
     try:
         return trigger_redeploy(clear_cache=bool(body.clear_cache))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/render/metrics", summary="Ops: Render CPU/memory metrics")
+def render_metrics(
+    window_minutes: int = 360,
+    resolution_seconds: int = 60,
+    x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
+):
+    _require_ops_token(x_ops_token)
+    try:
+        return fetch_service_metrics(
+            window_minutes=int(window_minutes),
+            resolution_seconds=int(resolution_seconds),
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
