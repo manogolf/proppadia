@@ -8,6 +8,7 @@ const OPS_INCIDENT_HISTORY_KEY = "proppadia_ops_incident_history_v1";
 const SLOW_CHECK_MS = 1000;
 const STALE_SUCCESS_HOURS = 24;
 const STALE_DEPLOY_HOURS = 168;
+const AUTO_INCIDENT_DEDUPE_WINDOW_MS = 10 * 60 * 1000;
 
 function statusTone(ok) {
   if (ok === true) return "text-emerald-700 bg-emerald-50 border-emerald-200";
@@ -59,6 +60,14 @@ function deployAgeTone(isoTs) {
   const ageHr = (Date.now() - ts) / 3_600_000;
   if (ageHr >= STALE_DEPLOY_HOURS) return "text-amber-700";
   return "text-emerald-700";
+}
+
+function failureSignature(failingChecks) {
+  if (!Array.isArray(failingChecks) || failingChecks.length === 0) return "";
+  return [...failingChecks]
+    .map((c) => `${c?.key || "unknown"}:${c?.status_code || c?.statusCode || "-"}`)
+    .sort()
+    .join("|");
 }
 
 async function fetchJson(path, options = {}) {
@@ -427,9 +436,24 @@ export default function OpsPage() {
               last_success: lastSuccessByKey[c.key] || null,
             })),
           };
+          const sig = failureSignature(payload.failing_checks);
           setIncidentHistory((prev) => {
+            const latest = Array.isArray(prev) && prev.length > 0 ? prev[0] : null;
+            const latestTs = latest?.captured_at ? new Date(latest.captured_at).getTime() : NaN;
+            const nowTs = new Date(payload.captured_at).getTime();
+            const inWindow =
+              Number.isFinite(latestTs) &&
+              Number.isFinite(nowTs) &&
+              nowTs - latestTs <= AUTO_INCIDENT_DEDUPE_WINDOW_MS;
+            const sameSignature =
+              Boolean(sig) &&
+              (latest?.fail_signature === sig ||
+                failureSignature(latest?.payload?.failing_checks || []) === sig);
+            if (latest?.source === "auto" && inWindow && sameSignature) return prev;
+
             const item = {
               source: "auto",
+              fail_signature: sig,
               captured_at: payload.captured_at,
               failing_count: payload.failing_checks.length,
               deploy_status: payload.deploy?.status || "unknown",
@@ -741,8 +765,10 @@ export default function OpsPage() {
       setCopiedIncidentSnapshot(true);
       window.setTimeout(() => setCopiedIncidentSnapshot(false), 1200);
       setIncidentHistory((prev) => {
+        const sig = failureSignature(payload.failing_checks);
         const item = {
           source: "manual",
+          fail_signature: sig,
           captured_at: payload.captured_at,
           failing_count: Array.isArray(payload.failing_checks) ? payload.failing_checks.length : 0,
           deploy_status: payload.deploy?.status || "unknown",
