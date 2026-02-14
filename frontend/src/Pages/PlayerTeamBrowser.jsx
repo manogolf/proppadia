@@ -40,6 +40,7 @@ export default function PlayerTeamBrowser() {
   const [openTeams, setOpenTeams] = useState({});
   const [teamSort, setTeamSort] = useState("alpha");
   const [rowSort, setRowSort] = useState("recent");
+  const [showUnknownTeam, setShowUnknownTeam] = useState(false);
   const [notice, setNotice] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
@@ -282,8 +283,14 @@ export default function PlayerTeamBrowser() {
     return filtered;
   }, [filteredPlayers, watchedTeamsOnly, watchIdSet]);
 
+  const UNKNOWN_TEAM = "Unknown";
+  const unknownTeamRows = groupedByTeam[UNKNOWN_TEAM] || [];
+  const unknownTeamCount = unknownTeamRows.length;
+
   const teamNames = useMemo(() => {
-    const names = Object.keys(groupedByTeam);
+    const names = Object.keys(groupedByTeam).filter((name) =>
+      showUnknownTeam ? true : name !== UNKNOWN_TEAM
+    );
     if (teamSort === "players") {
       return names.sort(
         (a, b) =>
@@ -307,7 +314,7 @@ export default function PlayerTeamBrowser() {
       });
     }
     return names.sort();
-  }, [groupedByTeam, teamSort, watchIdSet]);
+  }, [UNKNOWN_TEAM, groupedByTeam, showUnknownTeam, teamSort, watchIdSet]);
   const visiblePlayerCount = filteredPlayers.length;
   const totalPlayerCount = normalizedPlayers.length;
   const visibleTeamCount = teamNames.length;
@@ -561,7 +568,7 @@ export default function PlayerTeamBrowser() {
                 ))}
               </select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="md:col-span-3 flex flex-wrap items-center gap-2 md:justify-end">
               <button
                 type="button"
                 className="pp-btn pp-btn-secondary pp-btn-sm"
@@ -630,6 +637,16 @@ export default function PlayerTeamBrowser() {
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-xs">
               Watching <strong>{watchlist.length}</strong>
             </span>
+            {unknownTeamCount > 0 ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs hover:bg-slate-200"
+                onClick={() => setShowUnknownTeam((prev) => !prev)}
+                title={showUnknownTeam ? "Hide Unknown team bucket" : "Show Unknown team bucket"}
+              >
+                Unknown <strong>{unknownTeamCount}</strong> {showUnknownTeam ? "hide" : "show"}
+              </button>
+            ) : null}
             {watchlistOnly ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-1 text-xs">
                 Filter <strong>Watchlist only</strong>
@@ -740,7 +757,7 @@ export default function PlayerTeamBrowser() {
                   if (el) teamRefs.current.set(team, el);
                   else teamRefs.current.delete(team);
                 }}
-                className="mb-4 pp-card p-4"
+                className="mb-2 pp-card p-4"
               >
                 <button
                   type="button"
