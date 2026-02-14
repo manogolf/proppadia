@@ -14,6 +14,7 @@ Start here for architecture and operations context.
 - Included automatically by `make mlb-checks-offline` and `make nhl-checks-offline`.
 - `make diagnose`: optimized local baseline (`runtime-boundaries` + `shared-checks-offline` + MLB core + NHL core) without rerunning shared checks twice.
 - `make ci-offline-checks`: CI/offline baseline (same composition as `diagnose`).
+- `make cross-sport-post-deploy BASE_URL=<url>`: one-command offseason-safe strict post-deploy checks for MLB + NHL.
 
 ## MLB API and Validation
 
