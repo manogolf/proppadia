@@ -49,6 +49,27 @@ function nhlSlateState(snapshot) {
   return { label: "No slate today", tone: "text-slate-600" };
 }
 
+function overallSnapshotStatus(mlbSnapshot, nhlSnapshot) {
+  const mlbOk = Boolean(mlbSnapshot);
+  const nhlOk = Boolean(nhlSnapshot);
+  if (mlbOk && nhlOk) {
+    return {
+      label: "Overall status: Healthy",
+      tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+  if (mlbOk || nhlOk) {
+    return {
+      label: "Overall status: Partial",
+      tone: "bg-amber-50 text-amber-700 border-amber-200",
+    };
+  }
+  return {
+    label: "Overall status: Unavailable",
+    tone: "bg-rose-50 text-rose-700 border-rose-200",
+  };
+}
+
 export default function HomeGateway() {
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
@@ -59,6 +80,7 @@ export default function HomeGateway() {
   const nhlChip = snapshotChip(nhlSnapshot);
   const mlbState = mlbSlateState(mlbSnapshot);
   const nhlState = nhlSlateState(nhlSnapshot);
+  const overallStatus = overallSnapshotStatus(mlbSnapshot, nhlSnapshot);
 
   const loadSnapshot = async () => {
     setSnapshotLoading(true);
@@ -155,6 +177,13 @@ export default function HomeGateway() {
           {snapshotError ? (
             <div className="mt-2 text-xs text-amber-700">{snapshotError}</div>
           ) : null}
+          <div className="mt-3">
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${overallStatus.tone}`}
+            >
+              {overallStatus.label}
+            </span>
+          </div>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="flex items-center justify-between gap-2">
