@@ -1,5 +1,6 @@
 // src/components/PlayerPropFormv2.js
 import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 
 const BASE_API = getBaseURL();
@@ -163,6 +164,7 @@ function americanOddsToImplied(odds) {
 }
 
 export default function PlayerPropFormV2({ onSaved, onPredicted }) {
+  const { user } = useAuth();
   // user inputs
   const [playerName, setPlayerName] = useState("");
   const [teamAbbr, setTeamAbbr] = useState("");
@@ -441,6 +443,7 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
       const res = await postApi("/api/props/add", {
         prop_source: "user_added",
         commit_token: commitToken,
+        user_id: user?.id || undefined,
       });
       if (res?.duplicate) {
         setPrediction((p) => (p ? { ...p, duplicate: true, savedId: res.id ?? null } : p));

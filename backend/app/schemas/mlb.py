@@ -103,6 +103,7 @@ class PredictRequest(BaseModel):
 class AddPropRequest(BaseModel):
     prop_source: Optional[str] = "user_added"
     commit_token: str
+    user_id: Optional[str] = None
 
 
 class PreparePropResponse(BaseModel):
@@ -128,6 +129,37 @@ class AddPropResponse(BaseModel):
     saved: bool
     duplicate: bool
     id: Optional[str] = None
+
+
+class PropHistoryRow(BaseModel):
+    id: str
+    player_id: Optional[int] = None
+    player_name: Optional[str] = None
+    team: Optional[str] = None
+    team_id: Optional[int] = None
+    game_id: Optional[int] = None
+    game_date: Optional[str] = None
+    prop_type: Optional[str] = None
+    prop_value: Optional[float] = None
+    over_under: Optional[str] = None
+    status: Optional[str] = None
+    outcome: Optional[str] = None
+    prop_source: Optional[str] = None
+    confidence_score: Optional[float] = None
+    predicted_outcome: Optional[str] = None
+    prediction_timestamp: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class PropHistoryResponse(BaseModel):
+    ok: bool
+    count: int
+    total: int
+    limit: int
+    offset: int
+    rows: List[PropHistoryRow]
 
 
 class ModelMetricRow(BaseModel):

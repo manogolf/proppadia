@@ -18,6 +18,7 @@ from backend.app.schemas.mlb import (
     PlayersSearchResponse,
     PredictRequest,
     PredictResponse,
+    PropHistoryResponse,
     PreparePropRequest,
     PreparePropResponse,
     ResolvePlayerResponse,
@@ -39,6 +40,7 @@ from backend.app.services.mlb.market_odds_service import (
 )
 from backend.app.services.mlb.prop_submission_service import (
     add_prop,
+    get_prop_history,
     predict_prepared_prop,
     prepare_prop_submission,
 )
@@ -313,6 +315,49 @@ def predict_prop_endpoint(body: PredictRequest):
 def add_prop_endpoint(body: AddPropRequest):
     try:
         return add_prop(model_to_dict(body))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get(
+    "/props/history",
+    summary="Read MLB prop history rows",
+    response_model=PropHistoryResponse,
+    response_model_exclude_none=True,
+)
+def props_history_endpoint(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user_id: Optional[str] = Query(None),
+    from_date: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    to_date: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    prop_source: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, description="pending|win|loss|push|resolved|dnp"),
+):
+    for label, raw in (("from_date", from_date), ("to_date", to_date)):
+        if not raw:
+            continue
+        try:
+            date.fromisoformat(raw)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"{label} must be YYYY-MM-DD") from e
+
+    try:
+        return get_prop_history(
+            {
+                "limit": limit,
+                "offset": offset,
+                "user_id": user_id,
+                "from_date": from_date,
+                "to_date": to_date,
+                "prop_source": prop_source,
+                "status": status,
+            }
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:

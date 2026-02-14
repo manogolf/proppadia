@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from datetime import date, datetime
+from typing import Any, Dict, List
 
 from backend.domains.mlb.prop_workflow import add_prop_from_commit, predict_prop, prepare_prop
+from backend.domains.mlb.repository.prop_repository import count_prop_history_rows, fetch_prop_history_rows
 
 
 def prepare_prop_submission(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,4 +31,56 @@ def add_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not commit_token:
         raise ValueError("commit_token is required")
     prop_source = str(payload.get("prop_source") or "user_added").strip() or "user_added"
-    return add_prop_from_commit(commit_token=commit_token, prop_source=prop_source)
+    user_id = str(payload.get("user_id") or "").strip() or None
+    return add_prop_from_commit(commit_token=commit_token, prop_source=prop_source, user_id=user_id)
+
+
+def _to_json_scalar(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
+def get_prop_history(payload: Dict[str, Any]) -> Dict[str, Any]:
+    limit = int(payload.get("limit") or 50)
+    offset = int(payload.get("offset") or 0)
+    user_id = str(payload.get("user_id") or "").strip() or None
+    from_date = str(payload.get("from_date") or "").strip() or None
+    to_date = str(payload.get("to_date") or "").strip() or None
+    prop_source = str(payload.get("prop_source") or "").strip() or None
+    status = str(payload.get("status") or "").strip() or None
+
+    rows = fetch_prop_history_rows(
+        limit=limit,
+        offset=offset,
+        user_id=user_id,
+        from_date=from_date,
+        to_date=to_date,
+        prop_source=prop_source,
+        status=status,
+    )
+    total = count_prop_history_rows(
+        user_id=user_id,
+        from_date=from_date,
+        to_date=to_date,
+        prop_source=prop_source,
+        status=status,
+    )
+    out_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized = {k: _to_json_scalar(v) for k, v in row.items()}
+        if normalized.get("id") is not None:
+            normalized["id"] = str(normalized["id"])
+        if normalized.get("user_id") is not None:
+            normalized["user_id"] = str(normalized["user_id"])
+        out_rows.append(normalized)
+    return {
+        "ok": True,
+        "count": len(out_rows),
+        "total": int(total),
+        "limit": int(limit),
+        "offset": int(offset),
+        "rows": out_rows,
+    }

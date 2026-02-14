@@ -4,6 +4,7 @@ import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx";
 import PlayerPropsTable from "../components/PlayerPropsTable.jsx";
 import PropTracker from "../components/PropTracker.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
+import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
 import { todayET } from "../shared/timeUtils.js";
 
@@ -78,6 +79,10 @@ export default function PlayerPropsPage() {
         </div>
       ) : (
         <div className="space-y-5">
+          <MyPropsPanel
+            refreshNonce={tableRefreshNonce}
+            selectedDate={selectedDate}
+          />
           <section className="pp-card p-4">
             <PlayerPropsTable
               selectedDate={selectedDate}

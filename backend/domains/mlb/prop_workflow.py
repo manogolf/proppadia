@@ -231,7 +231,12 @@ def predict_prop(prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def add_prop_from_commit(*, commit_token: str, prop_source: str = "user_added") -> Dict[str, Any]:
+def add_prop_from_commit(
+    *,
+    commit_token: str,
+    prop_source: str = "user_added",
+    user_id: Optional[str] = None,
+) -> Dict[str, Any]:
     payload = verify_commit_token(commit_token)
     features = payload.get("features") or {}
     prop_type = normalize_prop_type(payload.get("prop_type") or "")
@@ -279,6 +284,7 @@ def add_prop_from_commit(*, commit_token: str, prop_source: str = "user_added") 
             prop_source=prop_source,
             recommendation=recommendation,
             probability=probability,
+            user_id=user_id,
         )
     except DuplicatePropError:
         dup_id = find_duplicate_prop_id(
