@@ -7,6 +7,7 @@ const OPS_TOKEN_KEY = "proppadia_ops_token_v1";
 const OPS_INCIDENT_HISTORY_KEY = "proppadia_ops_incident_history_v1";
 const SLOW_CHECK_MS = 1000;
 const STALE_SUCCESS_HOURS = 24;
+const STALE_DEPLOY_HOURS = 168;
 
 function statusTone(ok) {
   if (ok === true) return "text-emerald-700 bg-emerald-50 border-emerald-200";
@@ -48,6 +49,15 @@ function successAgeTone(isoTs) {
   const ageHr = (Date.now() - ts) / 3_600_000;
   if (ageHr >= STALE_SUCCESS_HOURS) return "text-rose-700";
   if (ageHr >= 8) return "text-amber-700";
+  return "text-emerald-700";
+}
+
+function deployAgeTone(isoTs) {
+  if (!isoTs) return "text-slate-500";
+  const ts = new Date(isoTs).getTime();
+  if (!Number.isFinite(ts)) return "text-slate-500";
+  const ageHr = (Date.now() - ts) / 3_600_000;
+  if (ageHr >= STALE_DEPLOY_HOURS) return "text-amber-700";
   return "text-emerald-700";
 }
 
@@ -862,6 +872,9 @@ export default function OpsPage() {
               </div>
               <div className="text-xs text-slate-600">
                 Finished: {deployStatus?.deploy?.finished_at ? new Date(deployStatus.deploy.finished_at).toLocaleString() : "-"}
+              </div>
+              <div className={`text-xs ${deployAgeTone(deployStatus?.deploy?.finished_at || deployStatus?.deploy?.created_at)}`}>
+                Deploy age: {timeAgoLabel(deployStatus?.deploy?.finished_at || deployStatus?.deploy?.created_at)}
               </div>
             </div>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
