@@ -100,6 +100,11 @@ def _expect_ok_cache_shape(body: Any):
     return ok, "expects ok=true,entries[],ttl_seconds"
 
 
+def _expect_standings_shape(body: Any):
+    ok = bool(isinstance(body, dict) and isinstance(body.get("records"), list))
+    return ok, "expects records[]"
+
+
 def run(mode: str, client: ClientAdapter, args) -> int:
     results: List[CheckResult] = []
 
@@ -204,6 +209,17 @@ def run(mode: str, client: ClientAdapter, args) -> int:
     )
 
     if mode == "full":
+        results.append(
+            _run_check(
+                client,
+                name="mlb_standings",
+                method="GET",
+                path="/api/mlb/standings",
+                params={"season": 2025},
+                expected_status=[200],
+                validate=_expect_standings_shape,
+            )
+        )
         results.append(
             _run_check(
                 client,

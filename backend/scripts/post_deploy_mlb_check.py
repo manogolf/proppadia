@@ -73,6 +73,20 @@ def run(
     checks.append(
         run_check(
             client,
+            name="mlb_standings",
+            method="GET",
+            path="/api/mlb/standings",
+            params={"season": 2025},
+            expected_status=[200],
+            validate=lambda body: (
+                bool(isinstance(body, dict) and isinstance(body.get("records"), list)),
+                "expects records[]",
+            ),
+        )
+    )
+    checks.append(
+        run_check(
+            client,
             name="market_supported",
             method="GET",
             path="/api/mlb/market-supported-props",

@@ -77,6 +77,8 @@ Meaning:
 - Includes no-credit market metadata checks:
   - `GET /api/mlb/market-supported-props`
   - `GET /api/mlb/market-cache-status`
+- Includes backend-owned standings check:
+  - `GET /api/mlb/standings`
 - `mlb-post-deploy-strict`: same as above, but fails when probe player/search/profile data is sparse
 - `mlb-post-deploy-strict-offseason`: strict transport/DB checks but tolerates sparse probe data
 - MLB make targets accept `MLB_DATE` to control probe date (default `2025-08-15`)
