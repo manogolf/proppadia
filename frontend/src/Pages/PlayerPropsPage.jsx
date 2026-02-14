@@ -1,14 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import TodayGames from "../components/TodayGames.jsx";
+import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx";
 import PlayerPropsTable from "../components/PlayerPropsTable.jsx";
 import PropTracker from "../components/PropTracker.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 import { buildMarketContext } from "../shared/marketContext.js";
+import {
+  WATCHLIST_SCOPE_MLB,
+  WATCHLIST_UPDATED_EVENT,
+  readWatchlistScope,
+  toWatchlistId,
+  writeWatchlistScope,
+} from "../shared/watchlistStorage.js";
 import { todayET } from "../shared/timeUtils.js";
 
 const MODES = [
@@ -25,11 +34,13 @@ const MODES = [
 ];
 
 export default function PlayerPropsPage() {
+  const { user } = useAuth();
   const [mode, setMode] = useState("research");
   const [selectedDate, setSelectedDate] = useState(todayET());
   const [tableRefreshNonce, setTableRefreshNonce] = useState(0);
   const [lastSaveEvent, setLastSaveEvent] = useState(null);
   const [latestPrediction, setLatestPrediction] = useState(null);
+  const [watchlist, setWatchlist] = useState([]);
   const [games, setGames] = useState([]);
   const [gamesLoading, setGamesLoading] = useState(true);
   const [gamesError, setGamesError] = useState("");
@@ -51,6 +62,86 @@ export default function PlayerPropsPage() {
       }),
     [latestPrediction]
   );
+
+  useEffect(() => {
+    if (!user?.id) {
+      setWatchlist([]);
+      return;
+    }
+    setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    writeWatchlistScope(user.id, WATCHLIST_SCOPE_MLB, watchlist);
+  }, [user?.id, watchlist]);
+
+  useEffect(() => {
+    function refreshWatchlistFromStorage() {
+      if (!user?.id) {
+        setWatchlist([]);
+        return;
+      }
+      setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB));
+    }
+    function onStorage(e) {
+      if (e?.key && String(e.key).startsWith("proppadia_watchlist_v1:")) {
+        refreshWatchlistFromStorage();
+      }
+    }
+    function onWatchlistUpdated() {
+      refreshWatchlistFromStorage();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    };
+  }, [user?.id]);
+
+  const currentPlayerWatchId = useMemo(() => {
+    const features = latestPrediction?.features || {};
+    return toWatchlistId({
+      player_id: features.player_id || null,
+      player_name: features.player_name || null,
+      team: features.team || null,
+    });
+  }, [latestPrediction]);
+
+  const currentPlayerWatched = useMemo(() => {
+    if (!currentPlayerWatchId) return false;
+    return watchlist.some((w) => String(w.id) === String(currentPlayerWatchId));
+  }, [currentPlayerWatchId, watchlist]);
+  const currentPlayerLastPropDate = useMemo(
+    () => String(latestPrediction?.features?.last_prop_date || "").trim(),
+    [latestPrediction]
+  );
+
+  function toggleCurrentPredictionWatch() {
+    if (!user?.id || !latestPrediction?.features) return;
+    const features = latestPrediction.features;
+    const id = toWatchlistId({
+      player_id: features.player_id || null,
+      player_name: features.player_name || null,
+      team: features.team || null,
+    });
+    if (!id) return;
+    setWatchlist((prev) => {
+      const exists = prev.some((w) => String(w.id) === String(id));
+      if (exists) return prev.filter((w) => String(w.id) !== String(id));
+      return [
+        {
+          id: String(id),
+          player_id: features.player_id || null,
+          player_name: features.player_name || null,
+          team: features.team || null,
+          added_at: new Date().toISOString(),
+        },
+        ...prev,
+      ].slice(0, 100);
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +203,36 @@ export default function PlayerPropsPage() {
             sourceLabel={marketCtx.sourceLabel}
             updatedLabel={marketCtx.updatedLabel}
             confidenceLabel={latestPrediction ? "Model" : "Pending"}
+            badges={
+              latestPrediction?.features?.player_id
+                ? [{ label: currentPlayerWatched ? "Watched" : "Not watched", tone: currentPlayerWatched ? "success" : "muted" }]
+                : []
+            }
+            actions={
+              latestPrediction?.features?.player_id ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="pp-btn pp-btn-secondary pp-btn-sm"
+                    onClick={toggleCurrentPredictionWatch}
+                  >
+                    {currentPlayerWatched ? "Watching" : "+ Watch"}
+                  </button>
+                  <PrefetchLink
+                    to={`/player/${encodeURIComponent(String(latestPrediction.features.player_id))}`}
+                    className="text-xs text-slate-500 underline"
+                  >
+                    Open Player
+                  </PrefetchLink>
+                  <PrefetchLink to="/watchlist" className="text-xs text-slate-500 underline">
+                    Open Watchlist
+                  </PrefetchLink>
+                  <span className="text-xs text-slate-500">
+                    {currentPlayerLastPropDate ? `last prop ${currentPlayerLastPropDate}` : "last prop unavailable"}
+                  </span>
+                </div>
+              ) : null
+            }
           />
 
           <div className="pp-chip p-4">

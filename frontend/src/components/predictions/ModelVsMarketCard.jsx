@@ -20,13 +20,36 @@ export default function ModelVsMarketCard({
   sourceLabel,
   updatedLabel,
   confidenceLabel,
+  actions = null,
+  badges = [],
 }) {
+  const badgeToneClass = (tone) => {
+    if (tone === "success") return "bg-emerald-100 text-emerald-700";
+    if (tone === "muted") return "bg-slate-100 text-slate-600";
+    if (tone === "warn") return "bg-amber-100 text-amber-700";
+    return "bg-blue-100 text-blue-700";
+  };
+
   return (
     <section className="pp-card p-4">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
           {lineLabel ? <p className="text-xs text-slate-500 mt-1">{lineLabel}</p> : null}
+          {badges.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {badges.map((badge) => (
+                <span
+                  key={`${badge.label}-${badge.tone || "default"}`}
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeToneClass(
+                    badge.tone
+                  )}`}
+                >
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         {confidenceLabel ? (
           <span className="pp-chip text-xs text-slate-700 px-2 py-1 rounded-full">
@@ -34,6 +57,7 @@ export default function ModelVsMarketCard({
           </span>
         ) : null}
       </div>
+      {actions ? <div className="mb-3">{actions}</div> : null}
 
       <div className="grid grid-cols-3 gap-3 text-sm mb-3">
         <div className="pp-chip p-2">

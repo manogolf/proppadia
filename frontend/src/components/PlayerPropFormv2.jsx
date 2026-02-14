@@ -2,6 +2,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
+import {
+  WATCHLIST_SCOPE_MLB,
+  WATCHLIST_UPDATED_EVENT,
+  readWatchlistScope,
+  toWatchlistId,
+  writeWatchlistScope,
+} from "../shared/watchlistStorage.js";
 
 const BASE_API = getBaseURL();
 
@@ -183,6 +190,7 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
   const [prepPreview, setPrepPreview] = useState(null);
   const [prepWarnings, setPrepWarnings] = useState([]);
   const [notice, setNotice] = useState("");
+  const [watchlist, setWatchlist] = useState([]);
 
   // ui state
   const [error, setError] = useState("");
@@ -199,6 +207,43 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
   const lastReqId = useRef(0);
   const [teamTouched, setTeamTouched] = useState(false);
   const [lastResolvedPlayerId, setLastResolvedPlayerId] = useState("");
+
+  useEffect(() => {
+    if (!user?.id) {
+      setWatchlist([]);
+      return;
+    }
+    setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    writeWatchlistScope(user.id, WATCHLIST_SCOPE_MLB, watchlist);
+  }, [user?.id, watchlist]);
+
+  useEffect(() => {
+    function refreshWatchlistFromStorage() {
+      if (!user?.id) {
+        setWatchlist([]);
+        return;
+      }
+      setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB));
+    }
+    function onStorage(e) {
+      if (e?.key && String(e.key).startsWith("proppadia_watchlist_v1:")) {
+        refreshWatchlistFromStorage();
+      }
+    }
+    function onWatchlistUpdated() {
+      refreshWatchlistFromStorage();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    };
+  }, [user?.id]);
 
   // Invalidate stale prediction/token whenever inputs that affect the model change
   useEffect(() => {
@@ -531,6 +576,35 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
     ? "Run Predict to generate a commit token"
     : undefined;
 
+  const currentWatchId = toWatchlistId({
+    player_id: playerId || null,
+    player_name: playerName || null,
+    team: teamAbbr || null,
+  });
+  const isInWatchlist = watchlist.some((w) => String(w.id) === String(currentWatchId));
+
+  function handleToggleWatchlist() {
+    if (!user?.id) {
+      setError("Sign in required to use watchlist.");
+      return;
+    }
+    if (!prediction) return;
+    const row = {
+      id: String(currentWatchId),
+      player_id: playerId ? Number(playerId) : null,
+      player_name: playerName || null,
+      team: teamAbbr || null,
+      added_at: new Date().toISOString(),
+    };
+    setWatchlist((prev) => {
+      const exists = prev.some((w) => String(w.id) === String(row.id));
+      if (exists) return prev.filter((w) => String(w.id) !== String(row.id));
+      return [row, ...prev].slice(0, 100);
+    });
+    setNotice(isInWatchlist ? "Player removed from watchlist." : "Player added to watchlist.");
+    setError("");
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -805,6 +879,17 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
               Not saved yet. Click “Add Prop”.
             </div>
           )}
+          <div className="pt-1">
+            <button
+              type="button"
+              className="pp-btn pp-btn-secondary pp-btn-sm"
+              onClick={handleToggleWatchlist}
+              disabled={!prediction}
+              title={isInWatchlist ? "Remove player from watchlist" : "Add player to watchlist"}
+            >
+              {isInWatchlist ? "Watching" : "+ Watch"}
+            </button>
+          </div>
         </div>
       )}
     </form>

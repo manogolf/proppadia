@@ -525,6 +525,37 @@ export default function NHLPredictions() {
     setSaveNotice(exists ? "Player removed from NHL watchlist." : "Player added to NHL watchlist.");
   }
 
+  function toggleWatchByRow(row) {
+    if (!user?.id) {
+      setSaveError("Sign in required to manage NHL watchlist.");
+      return;
+    }
+    if (!row) return;
+    const id = toWatchlistId({
+      player_id: row.player_id,
+      player_name: row.player_name,
+      team: row.team_abbr || row.team || "",
+    });
+    if (!id) return;
+    const exists = watchIdSet.has(String(id));
+    setWatchlist((prev) => {
+      if (exists) return prev.filter((w) => String(w.id) !== String(id));
+      const next = [
+        {
+          id: String(id),
+          player_id: row.player_id ?? null,
+          player_name: row.player_name || null,
+          team: row.team_abbr || row.team || null,
+          added_at: new Date().toISOString(),
+        },
+        ...prev,
+      ];
+      return next.slice(0, 100);
+    });
+    setSaveError("");
+    setSaveNotice(exists ? "Player removed from NHL watchlist." : "Player added to NHL watchlist.");
+  }
+
   function removeWatchById(id) {
     setWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
     setSaveError("");
@@ -578,6 +609,25 @@ export default function NHLPredictions() {
       }),
     [loadedAt, marketLoadedAt, topSogMarket?.marketProbability]
   );
+
+  const topSogWatchId = topSog
+    ? toWatchlistId({
+        player_id: topSog.player_id,
+        player_name: topSog.player_name,
+        team: topSog.team_abbr || topSog.team || "",
+      })
+    : "";
+  const topSavesWatchId = topSaves
+    ? toWatchlistId({
+        player_id: topSaves.player_id,
+        player_name: topSaves.player_name,
+        team: topSaves.team_abbr || topSaves.team || "",
+      })
+    : "";
+  const isTopSogWatched = Boolean(topSogWatchId && watchIdSet.has(String(topSogWatchId)));
+  const isTopSavesWatched = Boolean(topSavesWatchId && watchIdSet.has(String(topSavesWatchId)));
+  const topSogLastPropDate = String(topSog?.last_prop_date || "").trim();
+  const topSavesLastPropDate = String(topSaves?.last_prop_date || "").trim();
 
   const boardControls = (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
@@ -751,6 +801,30 @@ export default function NHLPredictions() {
               sourceLabel={sogMarketContext.sourceLabel}
               updatedLabel={sogMarketContext.updatedLabel}
               confidenceLabel={dataConfidence}
+              badges={[{ label: isTopSogWatched ? "Watched" : "Not watched", tone: isTopSogWatched ? "success" : "muted" }]}
+              actions={
+                topSog ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="pp-btn pp-btn-secondary pp-btn-sm"
+                      onClick={() => toggleWatchByRow(topSog)}
+                      title={isTopSogWatched ? "Remove player from watchlist" : "Add player to watchlist"}
+                    >
+                      {isTopSogWatched ? "Watching" : "+ Watch"}
+                    </button>
+                    <PrefetchLink
+                      to={`/player/${encodeURIComponent(String(topSog.player_id))}`}
+                      className="text-xs text-slate-500 underline"
+                    >
+                      Open Player
+                    </PrefetchLink>
+                    <span className="text-xs text-slate-500">
+                      {topSogLastPropDate ? `last prop ${topSogLastPropDate}` : "last prop unavailable"}
+                    </span>
+                  </div>
+                ) : null
+              }
             />
             <ModelVsMarketCard
               title="Top Saves Model Edge"
@@ -764,6 +838,30 @@ export default function NHLPredictions() {
               sourceLabel={savesMarketContext.sourceLabel}
               updatedLabel={savesMarketContext.updatedLabel}
               confidenceLabel={dataConfidence}
+              badges={[{ label: isTopSavesWatched ? "Watched" : "Not watched", tone: isTopSavesWatched ? "success" : "muted" }]}
+              actions={
+                topSaves ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="pp-btn pp-btn-secondary pp-btn-sm"
+                      onClick={() => toggleWatchByRow(topSaves)}
+                      title={isTopSavesWatched ? "Remove player from watchlist" : "Add player to watchlist"}
+                    >
+                      {isTopSavesWatched ? "Watching" : "+ Watch"}
+                    </button>
+                    <PrefetchLink
+                      to={`/player/${encodeURIComponent(String(topSaves.player_id))}`}
+                      className="text-xs text-slate-500 underline"
+                    >
+                      Open Player
+                    </PrefetchLink>
+                    <span className="text-xs text-slate-500">
+                      {topSavesLastPropDate ? `last prop ${topSavesLastPropDate}` : "last prop unavailable"}
+                    </span>
+                  </div>
+                ) : null
+              }
             />
           </div>
 
