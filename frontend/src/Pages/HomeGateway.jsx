@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import MemberAccessCard from "../components/predictions/MemberAccessCard.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
@@ -78,6 +78,7 @@ export default function HomeGateway() {
   const [snapshotErrorDetail, setSnapshotErrorDetail] = useState(null);
   const [showSnapshotErrorDetail, setShowSnapshotErrorDetail] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const snapshotReqRef = useRef(0);
   const mlbChip = snapshotChip(mlbSnapshot);
   const nhlChip = snapshotChip(nhlSnapshot);
   const mlbState = mlbSlateState(mlbSnapshot);
@@ -85,6 +86,8 @@ export default function HomeGateway() {
   const overallStatus = overallSnapshotStatus(mlbSnapshot, nhlSnapshot);
 
   const loadSnapshot = async () => {
+    const reqId = snapshotReqRef.current + 1;
+    snapshotReqRef.current = reqId;
     setSnapshotLoading(true);
     setSnapshotError("");
     setShowSnapshotErrorDetail(false);
@@ -92,6 +95,7 @@ export default function HomeGateway() {
       fetchJson("/api/mlb/standings"),
       fetchJson("/api/nhl/slate/meta"),
     ]);
+    if (snapshotReqRef.current !== reqId) return;
     setMlbSnapshot(mlb.ok && mlb.body?.ok ? mlb.body : null);
     setNhlSnapshot(nhl.ok && nhl.body?.ok ? nhl.body : null);
     if ((!mlb.ok || !mlb.body?.ok) && (!nhl.ok || !nhl.body?.ok)) {
