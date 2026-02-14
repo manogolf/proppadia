@@ -5,7 +5,11 @@ import { PrefetchLink } from "../navigation/PrefetchLink.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import { getPropDisplayLabel } from "../../shared/propUtils.js";
 import { nowET, todayET } from "../../shared/timeUtils.js";
-import { toWatchlistId, watchlistStorageKey } from "../../shared/watchlistStorage.js";
+import {
+  readWatchlistScope,
+  toWatchlistId,
+  writeWatchlistScope,
+} from "../../shared/watchlistStorage.js";
 
 const BASE_API = getBaseURL();
 
@@ -120,29 +124,12 @@ export default function MyPropsPanel({
       setWatchlist([]);
       return;
     }
-    try {
-      const raw = window.localStorage.getItem(watchlistStorageKey(user.id, apiPath));
-      if (!raw) {
-        setWatchlist([]);
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      setWatchlist(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setWatchlist([]);
-    }
+    setWatchlist(readWatchlistScope(user.id, apiPath));
   }, [apiPath, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
-    try {
-      window.localStorage.setItem(
-        watchlistStorageKey(user.id, apiPath),
-        JSON.stringify(watchlist.slice(0, 100))
-      );
-    } catch {
-      // ignore local storage write errors
-    }
+    writeWatchlistScope(user.id, apiPath, watchlist);
   }, [apiPath, user?.id, watchlist]);
 
   const watchIdSet = useMemo(

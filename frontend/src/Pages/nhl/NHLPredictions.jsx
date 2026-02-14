@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import SogEvalCard from "../../components/SogEvalCard.jsx";
+import { PrefetchLink } from "../../components/navigation/PrefetchLink.jsx";
 import TodayGamesNHL from "../../components/TodayGamesNHL.jsx";
 import ModelVsMarketCard from "../../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../../components/predictions/MyPropsPanel.jsx";
@@ -10,6 +12,13 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import { buildMarketContext } from "../../shared/marketContext.js";
 import { todayET } from "../../shared/timeUtils.js";
+import {
+  WATCHLIST_UPDATED_EVENT,
+  WATCHLIST_SCOPE_NHL,
+  readWatchlistScope,
+  toWatchlistId,
+  writeWatchlistScope,
+} from "../../shared/watchlistStorage.js";
 
 const MODES = [
   {
@@ -82,6 +91,7 @@ function marketKey(playerId, gameId, line) {
 }
 
 export default function NHLPredictions() {
+  const location = useLocation();
   const { user } = useAuth();
   const slateDate = useMemo(() => todayET(), []);
   const [mode, setMode] = useState("research");
@@ -99,11 +109,62 @@ export default function NHLPredictions() {
   const [savesRows, setSavesRows] = useState([]);
 
   const [q, setQ] = useState("");
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [sogSort, setSogSort] = useState("best");
   const [savesSort, setSavesSort] = useState("best");
   const [saveError, setSaveError] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
   const [savingKeys, setSavingKeys] = useState({});
+  const [watchlist, setWatchlist] = useState([]);
+  const queryAutoSelectRef = useRef("");
+  const rowRefs = useRef(new Map());
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    const playerFromUrl = String(params.get("player") || "").trim();
+    if (!playerFromUrl) return;
+    setQ(playerFromUrl);
+    setMode("board");
+    queryAutoSelectRef.current = playerFromUrl.toLowerCase();
+  }, [location.search]);
+
+  function refreshWatchlistRows() {
+    if (!user?.id) {
+      setWatchlist([]);
+      return;
+    }
+    setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_NHL));
+  }
+
+  useEffect(() => {
+    if (!user?.id) {
+      setWatchlist([]);
+      return;
+    }
+    refreshWatchlistRows();
+  }, [user?.id]);
+
+  useEffect(() => {
+    function onStorage(e) {
+      if (e?.key && String(e.key).startsWith("proppadia_watchlist_v1:")) {
+        refreshWatchlistRows();
+      }
+    }
+    function onWatchlistUpdated() {
+      refreshWatchlistRows();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    writeWatchlistScope(user.id, WATCHLIST_SCOPE_NHL, watchlist);
+  }, [user?.id, watchlist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,10 +288,25 @@ export default function NHLPredictions() {
   }, []);
 
   const query = useMemo(() => q.trim().toLowerCase(), [q]);
+  const watchIdSet = useMemo(
+    () => new Set(watchlist.map((w) => String(w.id))),
+    [watchlist]
+  );
 
   const filteredSog = useMemo(() => {
-    if (!query) return sogRows;
-    return (sogRows || []).filter((r) => {
+    const baseRows = watchlistOnly
+      ? (sogRows || []).filter((r) =>
+          watchIdSet.has(
+            toWatchlistId({
+              player_id: r.player_id,
+              player_name: r.player_name,
+              team: r.team_abbr || r.team || "",
+            })
+          )
+        )
+      : sogRows || [];
+    if (!query) return baseRows;
+    return baseRows.filter((r) => {
       const haystack = [
         r.player_id,
         r.game_id,
@@ -241,11 +317,22 @@ export default function NHLPredictions() {
         .join(" ");
       return haystack.includes(query);
     });
-  }, [sogRows, query]);
+  }, [sogRows, query, watchIdSet, watchlistOnly]);
 
   const filteredSaves = useMemo(() => {
-    if (!query) return savesRows;
-    return (savesRows || []).filter((r) => {
+    const baseRows = watchlistOnly
+      ? (savesRows || []).filter((r) =>
+          watchIdSet.has(
+            toWatchlistId({
+              player_id: r.player_id,
+              player_name: r.player_name,
+              team: r.team_abbr || r.team || "",
+            })
+          )
+        )
+      : savesRows || [];
+    if (!query) return baseRows;
+    return baseRows.filter((r) => {
       const haystack = [
         r.player_id,
         r.game_id,
@@ -256,7 +343,7 @@ export default function NHLPredictions() {
         .join(" ");
       return haystack.includes(query);
     });
-  }, [savesRows, query]);
+  }, [savesRows, query, watchIdSet, watchlistOnly]);
 
   const sogLines = useMemo(() => {
     const set = new Set();
@@ -295,6 +382,28 @@ export default function NHLPredictions() {
     arr.sort((a, b) => getKey(b) - getKey(a));
     return arr;
   }, [filteredSaves, savesSort]);
+
+  useEffect(() => {
+    const qLower = queryAutoSelectRef.current;
+    if (!qLower) return;
+    const findMatch = (rows, propType) => {
+      for (const row of rows) {
+        const name = String(row?.player_name || "").toLowerCase();
+        const pid = String(row?.player_id || "").toLowerCase();
+        if (name.includes(qLower) || pid === qLower) {
+          return `${propType}:${String(row.game_id)}:${String(row.player_id)}`;
+        }
+      }
+      return "";
+    };
+    const key = findMatch(sortedSog, "sog") || findMatch(sortedSaves, "saves");
+    if (!key) return;
+    const rowEl = rowRefs.current.get(key);
+    if (rowEl && typeof rowEl.scrollIntoView === "function") {
+      rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    queryAutoSelectRef.current = "";
+  }, [sortedSaves, sortedSog]);
 
   const subtitle = useMemo(() => {
     return mode === "research"
@@ -357,14 +466,79 @@ export default function NHLPredictions() {
       topTags: Array.from(topPropCounts.entries()).sort((a, b) => b[1] - a[1]),
     };
   }, [sortedSaves, sortedSog]);
+  const watchlistCoverage = useMemo(() => {
+    const inViewIds = new Set();
+    for (const row of [...sortedSog, ...sortedSaves]) {
+      const id = toWatchlistId({
+        player_id: row.player_id,
+        player_name: row.player_name,
+        team: row.team_abbr || row.team || "",
+      });
+      if (id && watchIdSet.has(String(id))) inViewIds.add(String(id));
+    }
+    return { inView: inViewIds.size, total: watchlist.length };
+  }, [sortedSog, sortedSaves, watchIdSet, watchlist.length]);
+
+  const sortedWatchlist = useMemo(() => {
+    return [...watchlist].sort(
+      (a, b) =>
+        new Date(b?.added_at || 0).getTime() - new Date(a?.added_at || 0).getTime()
+    );
+  }, [watchlist]);
+
+  function toggleTopPlayerWatch(playerName) {
+    if (!user?.id) {
+      setSaveError("Sign in required to manage NHL watchlist.");
+      return;
+    }
+    const targetName = String(playerName || "").trim();
+    if (!targetName) return;
+    const match =
+      sortedSog.find((row) => String(row?.player_name || row?.player_id || "").trim() === targetName) ||
+      sortedSaves.find((row) => String(row?.player_name || row?.player_id || "").trim() === targetName);
+    if (!match) {
+      setSaveError(`Could not find ${targetName} in current board rows.`);
+      return;
+    }
+    const id = toWatchlistId({
+      player_id: match.player_id,
+      player_name: match.player_name,
+      team: match.team_abbr || match.team || "",
+    });
+    if (!id) return;
+    const exists = watchIdSet.has(String(id));
+    setWatchlist((prev) => {
+      if (exists) return prev.filter((w) => String(w.id) !== String(id));
+      const next = [
+        {
+          id: String(id),
+          player_id: match.player_id ?? null,
+          player_name: match.player_name || null,
+          team: match.team_abbr || match.team || null,
+          added_at: new Date().toISOString(),
+        },
+        ...prev,
+      ];
+      return next.slice(0, 100);
+    });
+    setSaveError("");
+    setSaveNotice(exists ? "Player removed from NHL watchlist." : "Player added to NHL watchlist.");
+  }
+
+  function removeWatchById(id) {
+    setWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
+    setSaveError("");
+    setSaveNotice("Player removed from NHL watchlist.");
+  }
 
   const activeFilterLabel = useMemo(() => {
     const parts = [];
     if (query) parts.push(`Search: "${query}"`);
+    if (watchlistOnly) parts.push("Watchlist only");
     if (sogSort !== "best") parts.push(`SOG sort: over ${sogSort}`);
     if (savesSort !== "best") parts.push(`Saves sort: over ${savesSort}`);
     return parts.length ? parts.join(" • ") : "No active board filters";
-  }, [query, savesSort, sogSort]);
+  }, [query, savesSort, sogSort, watchlistOnly]);
 
   const sogMarketContext = useMemo(
     () =>
@@ -406,7 +580,7 @@ export default function NHLPredictions() {
   );
 
   const boardControls = (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
       <div>
         <div className="text-xs text-slate-500 mb-1">Search</div>
         <input
@@ -415,6 +589,16 @@ export default function NHLPredictions() {
           placeholder="Filter by player, team, player_id, or game_id..."
           className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
         />
+      </div>
+      <div>
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={watchlistOnly}
+            onChange={(e) => setWatchlistOnly(e.target.checked)}
+          />
+          Watchlist only
+        </label>
       </div>
 
       <div>
@@ -447,6 +631,20 @@ export default function NHLPredictions() {
             </option>
           ))}
         </select>
+      </div>
+      <div className="md:col-span-4">
+        <button
+          type="button"
+          className="pp-btn pp-btn-secondary pp-btn-sm"
+          onClick={() => {
+            setQ("");
+            setWatchlistOnly(false);
+            setSogSort("best");
+            setSavesSort("best");
+          }}
+        >
+          Reset Board Filters
+        </button>
       </div>
     </div>
   );
@@ -665,6 +863,9 @@ export default function NHLPredictions() {
             <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-700 px-2 py-1 text-xs">
               Saves <strong>{boardSummary.savesRows}</strong>
             </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-xs">
+              Watchlist in view <strong>{watchlistCoverage.inView}/{watchlistCoverage.total}</strong>
+            </span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -675,10 +876,43 @@ export default function NHLPredictions() {
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {boardSummary.topPlayers.map(([name, count]) => (
-                    <span key={name} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                      {name}
-                      <strong>{count}</strong>
-                    </span>
+                    (() => {
+                      const match =
+                        sortedSog.find((row) => String(row?.player_name || row?.player_id || "").trim() === String(name)) ||
+                        sortedSaves.find((row) => String(row?.player_name || row?.player_id || "").trim() === String(name));
+                      const watchId = match
+                        ? toWatchlistId({
+                            player_id: match.player_id,
+                            player_name: match.player_name,
+                            team: match.team_abbr || match.team || "",
+                          })
+                        : "";
+                      const isWatched = Boolean(watchId && watchIdSet.has(String(watchId)));
+                      return (
+                        <span key={name} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                          <button
+                            type="button"
+                            className="underline"
+                            onClick={() => setQ(String(name || ""))}
+                            title="Filter board by this player"
+                          >
+                            {name}
+                          </button>
+                          <strong>{count}</strong>
+                          <button
+                            type="button"
+                            className="text-slate-500 underline"
+                            onClick={() => toggleTopPlayerWatch(name)}
+                            title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+                          >
+                            {isWatched ? "Unwatch" : "Watch"}
+                          </button>
+                          <PrefetchLink to="/watchlist" className="text-slate-500 underline" title="Open watchlist page">
+                            WL
+                          </PrefetchLink>
+                        </span>
+                      );
+                    })()
                   ))}
                 </div>
               )}
@@ -695,6 +929,50 @@ export default function NHLPredictions() {
               </div>
             </section>
           </div>
+
+          <section className="pp-card p-4">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-slate-900">
+                NHL Watchlist ({watchlist.length})
+              </h3>
+              <PrefetchLink to="/watchlist" className="text-xs text-slate-500 underline">
+                Open Watchlist
+              </PrefetchLink>
+            </div>
+            {sortedWatchlist.length === 0 ? (
+              <div className="text-xs text-slate-500">No NHL players saved yet.</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {sortedWatchlist.map((w) => (
+                  <span
+                    key={String(w.id)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700"
+                  >
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => {
+                        setQ(String(w.player_name || w.player_id || ""));
+                        setWatchlistOnly(true);
+                      }}
+                      title="Filter board by this player"
+                    >
+                      {w.player_name || w.player_id || "Unknown"}
+                    </button>
+                    {w.team ? <span className="text-slate-500">({w.team})</span> : null}
+                    <button
+                      type="button"
+                      className="text-rose-700"
+                      onClick={() => removeWatchById(w.id)}
+                      title="Remove from watchlist"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
 
           <ModelVsMarketCard
             title="Board Snapshot"
@@ -743,7 +1021,15 @@ export default function NHLPredictions() {
                   </thead>
                   <tbody>
                     {sortedSog.map((r) => (
-                      <tr key={`${r.game_id}-${r.player_id}`} className="border-b border-slate-100">
+                      <tr
+                        key={`${r.game_id}-${r.player_id}`}
+                        ref={(el) => {
+                          const k = `sog:${String(r.game_id)}:${String(r.player_id)}`;
+                          if (el) rowRefs.current.set(k, el);
+                          else rowRefs.current.delete(k);
+                        }}
+                        className="border-b border-slate-100"
+                      >
                         <td className="py-2 pr-3 font-mono">{r.game_id}</td>
                         <td className="py-2 pr-3">
                           <span className="font-semibold">{r.team_abbr || ""}</span>
@@ -798,7 +1084,15 @@ export default function NHLPredictions() {
                   </thead>
                   <tbody>
                     {sortedSaves.map((r) => (
-                      <tr key={`${r.game_id}-${r.player_id}`} className="border-b border-slate-100">
+                      <tr
+                        key={`${r.game_id}-${r.player_id}`}
+                        ref={(el) => {
+                          const k = `saves:${String(r.game_id)}:${String(r.player_id)}`;
+                          if (el) rowRefs.current.set(k, el);
+                          else rowRefs.current.delete(k);
+                        }}
+                        className="border-b border-slate-100"
+                      >
                         <td className="py-2 pr-3 font-mono">{r.game_id}</td>
                         <td className="py-2 pr-3">
                           <span className="font-semibold">{r.team_abbr || ""}</span>

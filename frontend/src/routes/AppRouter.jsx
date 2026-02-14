@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -11,6 +11,10 @@ import { PrefetchNavLink } from "../components/navigation/PrefetchLink.jsx";
 import RouteErrorBoundary from "../components/RouteErrorBoundary.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { isOpsUser } from "../shared/opsAccess.js";
+import {
+  getWatchlistTotal,
+  WATCHLIST_UPDATED_EVENT,
+} from "../shared/watchlistStorage.js";
 import {
   loadAccessRequiredPage,
   loadHomeGateway,
@@ -82,6 +86,32 @@ function RequireSignedIn({ children, requiredPath, requiredLabel }) {
 export default function AppRouter() {
   const { user } = useAuth();
   const hasOpsAccess = isOpsUser(user);
+  const [watchlistTotal, setWatchlistTotal] = useState(0);
+
+  const refreshWatchlistTotal = useCallback(() => {
+    setWatchlistTotal(getWatchlistTotal(user?.id));
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshWatchlistTotal();
+  }, [refreshWatchlistTotal]);
+
+  useEffect(() => {
+    function onStorage(e) {
+      if (e?.key && String(e.key).startsWith("proppadia_watchlist_v1:")) {
+        refreshWatchlistTotal();
+      }
+    }
+    function onWatchlistUpdated() {
+      refreshWatchlistTotal();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    };
+  }, [refreshWatchlistTotal]);
 
   return (
     <BrowserRouter>
@@ -119,7 +149,7 @@ export default function AppRouter() {
               to="/watchlist"
               className={navClassName}
             >
-              Watchlist
+              {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
             </PrefetchNavLink>
           ) : null}
           <PrefetchNavLink
