@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { todayET, toISODate } from "../shared/timeUtils.js";
 import { getStatusDisplay, getStatusColor } from "../shared/gameStatusUtils.js";
+import { getBaseURL } from "../shared/getBaseURL.js";
 
 const TodayGames = ({ sport = "mlb", games }) => {
   const [standings, setStandings] = useState([]);
@@ -9,8 +10,12 @@ const TodayGames = ({ sport = "mlb", games }) => {
   useEffect(() => {
     const fetchStandings = async () => {
       try {
+        const season = new Date().toLocaleDateString("en-CA", {
+          timeZone: "America/New_York",
+          year: "numeric",
+        });
         const response = await fetch(
-          "https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2025&standingsTypes=regularSeason"
+          `${getBaseURL()}/api/mlb/standings?season=${encodeURIComponent(season)}`
         );
         const data = await response.json();
         const teams = data.records.flatMap((record) =>
@@ -27,11 +32,11 @@ const TodayGames = ({ sport = "mlb", games }) => {
       }
     };
 
-    fetchStandings();
-  }, []);
+    if (String(sport).toLowerCase() === "mlb") fetchStandings();
+  }, [sport]);
 
-  const getTeamRecordFromStandings = (teamName) => {
-    const team = standings.find((t) => t.name === teamName);
+  const getTeamRecordFromStandings = (teamId) => {
+    const team = standings.find((t) => Number(t.id) === Number(teamId));
     if (team) {
       return `🗒 Record: ${team.wins}-${team.losses}`;
     }
@@ -139,7 +144,7 @@ const TodayGames = ({ sport = "mlb", games }) => {
                     </span>
                   </div>
                   <div className="text-xs text-slate-500">
-                    {getTeamRecordFromStandings(awayTeam.name)}
+                    {getTeamRecordFromStandings(awayTeam.id)}
                   </div>
                   <div className="text-xs text-slate-500">
                     SP: {getStartingPitcher("away", game)}
@@ -168,7 +173,7 @@ const TodayGames = ({ sport = "mlb", games }) => {
                     />
                   </div>
                   <div className="text-xs text-slate-500">
-                    {getTeamRecordFromStandings(homeTeam.name)}
+                    {getTeamRecordFromStandings(homeTeam.id)}
                   </div>
                   <div className="text-xs text-slate-500">
                     SP: {getStartingPitcher("home", game)}

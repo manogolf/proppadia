@@ -45,6 +45,7 @@ from backend.app.services.mlb.prop_submission_service import (
     prepare_prop_submission,
 )
 from backend.app.services.mlb.schedule_service import fetch_schedule
+from backend.app.services.mlb.standings_service import fetch_standings
 from backend.app.services.mlb.player_service import (
     list_players,
     lookup_player,
@@ -118,6 +119,19 @@ def mlb_schedule(
 
     try:
         payload = fetch_schedule(game_date=target_date)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
+    return payload
+
+
+@router.get("/mlb/standings", summary="MLB standings proxy (backend-owned)")
+def mlb_standings(
+    season: Optional[int] = Query(None, description="Season year (defaults to today ET year)"),
+    league_id: str = Query("103,104", description="Comma-separated MLB league ids"),
+):
+    target_season = int(season) if season else datetime.now(ET).year
+    try:
+        payload = fetch_standings(season=target_season, league_ids=league_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
     return payload
