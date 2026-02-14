@@ -55,6 +55,29 @@ class TestOpsRouter(unittest.TestCase):
         self.assertEqual(mock_metrics.call_args.kwargs.get("window_minutes"), 180)
         self.assertEqual(mock_metrics.call_args.kwargs.get("resolution_seconds"), 120)
 
+    @patch("backend.app.routers.ops.resolve_nhl_pending_props")
+    def test_resolve_nhl_props_dry_run_ok(self, mock_resolve):
+        mock_resolve.return_value = {"ok": True, "dry_run": True, "matched": 12, "updated": 0}
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.post(
+                "/api/ops/nhl/resolve-props",
+                headers={"X-Ops-Token": "secret"},
+                json={"from_date": "2026-01-01", "to_date": "2026-01-31", "dry_run": True},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get("ok"))
+        self.assertTrue(resp.json().get("dry_run"))
+        self.assertEqual(mock_resolve.call_args.kwargs.get("from_date"), "2026-01-01")
+
+    def test_resolve_nhl_props_rejects_bad_date(self):
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.post(
+                "/api/ops/nhl/resolve-props",
+                headers={"X-Ops-Token": "secret"},
+                json={"from_date": "2026-99-99"},
+            )
+        self.assertEqual(resp.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

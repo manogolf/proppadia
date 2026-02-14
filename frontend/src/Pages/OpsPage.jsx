@@ -138,6 +138,13 @@ export default function OpsPage() {
   const [clearCache, setClearCache] = useState(false);
   const [metricsData, setMetricsData] = useState(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [resolveFromDate, setResolveFromDate] = useState("");
+  const [resolveToDate, setResolveToDate] = useState("");
+  const [resolveOnlyPast, setResolveOnlyPast] = useState(true);
+  const [resolveDryRun, setResolveDryRun] = useState(true);
+  const [resolveOutcome, setResolveOutcome] = useState("dnp");
+  const [resolveLoading, setResolveLoading] = useState(false);
+  const [resolveResult, setResolveResult] = useState(null);
 
   useEffect(() => {
     try {
@@ -367,6 +374,41 @@ export default function OpsPage() {
       setMetricsLoading(false);
     }
   }, [deployHeaders]);
+
+  const runResolve = useCallback(async () => {
+    setResolveLoading(true);
+    setDeployError("");
+    setResolveResult(null);
+    try {
+      const payload = {
+        from_date: resolveFromDate || null,
+        to_date: resolveToDate || null,
+        dry_run: resolveDryRun,
+        only_past_games: resolveOnlyPast,
+        outcome: resolveOutcome,
+      };
+      const res = await fetchJson("/api/ops/nhl/resolve-props", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...deployHeaders },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok || !res.body?.ok) {
+        throw new Error(res.body?.detail || `resolve failed (${res.status})`);
+      }
+      setResolveResult(res.body);
+    } catch (e) {
+      setDeployError(e?.message || "Failed to resolve NHL props.");
+    } finally {
+      setResolveLoading(false);
+    }
+  }, [
+    deployHeaders,
+    resolveDryRun,
+    resolveFromDate,
+    resolveOnlyPast,
+    resolveOutcome,
+    resolveToDate,
+  ]);
 
   useEffect(() => {
     runChecks();
@@ -687,6 +729,82 @@ export default function OpsPage() {
                   <div>Points: {metricsData?.memory?.points ?? "-"}</div>
                 </div>
               </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="font-medium text-slate-800">NHL Lifecycle Resolver (Ops)</div>
+              <div className="text-xs text-slate-600 mt-1">
+                Resolve pending NHL props in `player_props` for a date window. Use dry-run first.
+              </div>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label className="text-xs text-slate-700">
+                  <span className="block mb-1">From date</span>
+                  <input
+                    type="date"
+                    className="w-full pp-chip px-2 py-1 text-sm text-slate-800"
+                    value={resolveFromDate}
+                    onChange={(e) => setResolveFromDate(e.target.value)}
+                  />
+                </label>
+                <label className="text-xs text-slate-700">
+                  <span className="block mb-1">To date</span>
+                  <input
+                    type="date"
+                    className="w-full pp-chip px-2 py-1 text-sm text-slate-800"
+                    value={resolveToDate}
+                    onChange={(e) => setResolveToDate(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3 items-center">
+                <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={resolveOnlyPast}
+                    onChange={(e) => setResolveOnlyPast(e.target.checked)}
+                  />
+                  only past games
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={resolveDryRun}
+                    onChange={(e) => setResolveDryRun(e.target.checked)}
+                  />
+                  dry run
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                  outcome
+                  <select
+                    className="pp-chip px-2 py-1 text-sm text-slate-800"
+                    value={resolveOutcome}
+                    onChange={(e) => setResolveOutcome(e.target.value)}
+                  >
+                    <option value="dnp">dnp</option>
+                    <option value="push">push</option>
+                    <option value="win">win</option>
+                    <option value="loss">loss</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="pp-btn pp-btn-secondary pp-btn-sm"
+                  onClick={runResolve}
+                  disabled={resolveLoading || !opsToken}
+                >
+                  {resolveLoading ? "Running..." : resolveDryRun ? "Preview Resolve" : "Apply Resolve"}
+                </button>
+              </div>
+              {resolveResult ? (
+                <div className="mt-2 text-xs text-slate-700 rounded border border-slate-200 bg-white px-2 py-2">
+                  matched={resolveResult.matched ?? "-"} updated={resolveResult.updated ?? "-"} dry_run=
+                  {String(resolveResult.dry_run)}
+                  {resolveResult?.range?.min_game_date || resolveResult?.range?.max_game_date ? (
+                    <span>
+                      {" "}range={resolveResult?.range?.min_game_date || "-"}..{resolveResult?.range?.max_game_date || "-"}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             {deployError ? <div className="text-sm text-rose-700 mt-2">{deployError}</div> : null}
           </div>

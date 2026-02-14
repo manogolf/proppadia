@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
+from backend.app.services.nhl.prop_resolution_service import resolve_nhl_pending_props
 from backend.app.services.shared.render_deploy_service import (
     fetch_latest_deploy,
     fetch_service_metrics,
@@ -18,6 +19,14 @@ router = APIRouter(prefix="/ops", tags=["ops"])
 
 class RedeployRequest(BaseModel):
     clear_cache: bool = False
+
+
+class NhlResolveRequest(BaseModel):
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    dry_run: bool = True
+    only_past_games: bool = True
+    outcome: str = "dnp"
 
 
 def _require_ops_token(header_value: Optional[str]) -> None:
@@ -68,6 +77,28 @@ def render_metrics(
             window_minutes=int(window_minutes),
             resolution_seconds=int(resolution_seconds),
         )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.post("/nhl/resolve-props", summary="Ops: resolve NHL pending props in player_props")
+def resolve_nhl_props(
+    body: NhlResolveRequest,
+    x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
+):
+    _require_ops_token(x_ops_token)
+    try:
+        return resolve_nhl_pending_props(
+            from_date=body.from_date,
+            to_date=body.to_date,
+            dry_run=bool(body.dry_run),
+            only_past_games=bool(body.only_past_games),
+            outcome=body.outcome,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:

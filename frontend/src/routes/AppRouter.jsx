@@ -10,6 +10,7 @@ import Header from "../components/Header.jsx";
 import { PrefetchNavLink } from "../components/navigation/PrefetchLink.jsx";
 import RouteErrorBoundary from "../components/RouteErrorBoundary.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { isOpsUser } from "../shared/opsAccess.js";
 import {
   loadAccessRequiredPage,
   loadHomeGateway,
@@ -78,6 +79,7 @@ function RequireSignedIn({ children, requiredPath, requiredLabel }) {
 
 export default function AppRouter() {
   const { user } = useAuth();
+  const hasOpsAccess = isOpsUser(user);
 
   return (
     <BrowserRouter>
@@ -124,7 +126,7 @@ export default function AppRouter() {
               Login
             </PrefetchNavLink>
           ) : null}
-          {user ? (
+          {user && hasOpsAccess ? (
             <PrefetchNavLink
               to="/ops"
               className={navClassName}
@@ -181,11 +183,19 @@ export default function AppRouter() {
             <Route
               path="/ops"
               element={
-                <RequireSignedIn
-                  requiredPath="/ops"
-                  requiredLabel="operations dashboard"
-                >
-                  <OpsPage />
+                <RequireSignedIn requiredPath="/ops" requiredLabel="operations dashboard">
+                  {hasOpsAccess ? (
+                    <OpsPage />
+                  ) : (
+                    <div className="min-h-screen pp-page px-4 py-10">
+                      <div className="max-w-2xl mx-auto pp-card p-6">
+                        <h2 className="text-2xl font-semibold text-slate-900">Ops Access Restricted</h2>
+                        <p className="text-slate-700 mt-2">
+                          This page is restricted to authorized operations users.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </RequireSignedIn>
               }
             />
