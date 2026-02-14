@@ -85,7 +85,7 @@ export default function AppRouter() {
 
       {/* ✅ This nav bar is global, shown on every page */}
       <nav className="px-4 py-2 mb-0">
-        <div className="max-w-4xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
+        <div className="max-w-6xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
           <PrefetchNavLink
             to="/"
             className={navClassName}

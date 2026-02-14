@@ -22,7 +22,7 @@ export default function Header() {
 
   return (
     <header className="px-4 pt-4 mb-3">
-      <div className="max-w-4xl mx-auto pp-card pp-reveal px-4 sm:px-5 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto pp-card pp-reveal px-4 sm:px-5 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-4">
         {/* LEFT: Logo */}
         <Link to="/" className="flex items-baseline">
           <h1 className="text-5xl sm:text-6xl font-bold text-slate-900 flex items-start leading-none">
