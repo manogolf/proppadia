@@ -83,6 +83,23 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
     checks.append(
         run_check(
             client,
+            name="props_add_invalid",
+            method="POST",
+            path="/api/nhl/props/add",
+            json={
+                "player_id": 1,
+                "game_id": 1,
+                "prop_type": "sog",
+                "prop_value": 2.5,
+                "over_under": "sideways",
+                "prop_source": "nhl_post_deploy",
+            },
+            expected_status=[400],
+        )
+    )
+    checks.append(
+        run_check(
+            client,
             name="sog",
             method="GET",
             path="/api/nhl/sog",

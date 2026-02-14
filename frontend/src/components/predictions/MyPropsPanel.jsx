@@ -60,7 +60,15 @@ function escapeCsv(value) {
   return s;
 }
 
-export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDate = null }) {
+export default function MyPropsPanel({
+  refreshNonce = 0,
+  limit = 20,
+  selectedDate = null,
+  apiPath = "/api/props/history",
+  propSource = "user_added",
+  title = "My Saved Props",
+  exportPrefix = "my_mlb_props",
+}) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -97,11 +105,11 @@ export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDat
     setLoading(true);
     setError("");
     try {
-      const url = new URL(`${BASE_API}/api/props/history`);
+      const url = new URL(`${BASE_API}${apiPath}`);
       url.searchParams.set("limit", String(limit));
       url.searchParams.set("offset", String(page * limit));
       url.searchParams.set("user_id", String(user.id));
-      url.searchParams.set("prop_source", "user_added");
+      if (propSource) url.searchParams.set("prop_source", propSource);
       if (fromDate) url.searchParams.set("from_date", fromDate);
       if (toDate) url.searchParams.set("to_date", toDate);
       if (statusFilter !== "all") url.searchParams.set("status", statusFilter);
@@ -124,7 +132,7 @@ export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDat
     } finally {
       setLoading(false);
     }
-  }, [fromDate, limit, page, statusFilter, toDate, user?.id]);
+  }, [apiPath, fromDate, limit, page, propSource, statusFilter, toDate, user?.id]);
 
   useEffect(() => {
     fetchRows();
@@ -236,13 +244,13 @@ export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDat
       url.searchParams.set("limit", String(reqLimit));
       url.searchParams.set("offset", String(reqOffset));
       url.searchParams.set("user_id", currentUserId);
-      url.searchParams.set("prop_source", "user_added");
+      if (propSource) url.searchParams.set("prop_source", propSource);
       if (fromDate) url.searchParams.set("from_date", fromDate);
       if (toDate) url.searchParams.set("to_date", toDate);
       if (statusFilter !== "all") url.searchParams.set("status", statusFilter);
       return url;
     },
-    [fromDate, statusFilter, toDate, user?.id]
+    [apiPath, fromDate, propSource, statusFilter, toDate, user?.id]
   );
 
   const handleExportCsv = useCallback(async () => {
@@ -292,7 +300,7 @@ export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDat
         fromDate || toDate ? `${fromDate || "start"}_${toDate || "today"}` : "all_dates";
       const statusLabel = statusFilter || "all";
       a.href = href;
-      a.download = `my_mlb_props_${rangeLabel}_${statusLabel}.csv`;
+      a.download = `${exportPrefix}_${rangeLabel}_${statusLabel}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -305,7 +313,7 @@ export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDat
     } finally {
       setExporting(false);
     }
-  }, [buildHistoryUrl, exporting, fromDate, statusFilter, toDate, user?.id]);
+  }, [buildHistoryUrl, exportPrefix, exporting, fromDate, statusFilter, toDate, user?.id]);
 
   const handleCopyApiUrl = useCallback(async () => {
     if (!user?.id) return;
@@ -439,7 +447,7 @@ export default function MyPropsPanel({ refreshNonce = 0, limit = 20, selectedDat
   return (
     <section className="pp-card p-4">
       <div className="flex items-center justify-between mb-3 gap-2 relative">
-        <h3 className="text-lg font-semibold text-slate-900">My Saved Props</h3>
+        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
         <button
           type="button"
           className="pp-btn pp-btn-secondary pp-btn-sm"

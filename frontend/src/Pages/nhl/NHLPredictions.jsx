@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import SogEvalCard from "../../components/SogEvalCard.jsx";
 import ModelVsMarketCard from "../../components/predictions/ModelVsMarketCard.jsx";
+import MyPropsPanel from "../../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../../components/predictions/PredictionWorkspace.jsx";
 import WorkspaceStatePanel from "../../components/predictions/WorkspaceStatePanel.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import { todayET } from "../../shared/timeUtils.js";
 
@@ -78,6 +80,7 @@ function marketKey(playerId, gameId, line) {
 }
 
 export default function NHLPredictions() {
+  const { user } = useAuth();
   const slateDate = useMemo(() => todayET(), []);
   const [mode, setMode] = useState("research");
 
@@ -93,6 +96,9 @@ export default function NHLPredictions() {
   const [q, setQ] = useState("");
   const [sogSort, setSogSort] = useState("best");
   const [savesSort, setSavesSort] = useState("best");
+  const [saveError, setSaveError] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
+  const [savingKeys, setSavingKeys] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -374,6 +380,60 @@ export default function NHLPredictions() {
     </div>
   );
 
+  async function saveBestLine(row, propTypeKey) {
+    setSaveError("");
+    setSaveNotice("");
+    if (!user?.id) {
+      setSaveError("Sign in required to save NHL props.");
+      return;
+    }
+    const best = bestLineFromRow(row);
+    if (!best) {
+      setSaveError("No available line to save for this row.");
+      return;
+    }
+    const saveKey = `${propTypeKey}:${row.game_id}:${row.player_id}:${best.line}`;
+    setSavingKeys((prev) => ({ ...prev, [saveKey]: true }));
+    try {
+      const payload = {
+        player_id: Number(row.player_id),
+        player_name: row.player_name || null,
+        team: row.team_abbr || null,
+        team_id: row.team_id != null ? Number(row.team_id) : null,
+        game_id: Number(row.game_id),
+        game_date: row.game_date || slateDate,
+        prop_type: propTypeKey,
+        prop_value: Number(best.line),
+        over_under: "over",
+        probability: Number(best.p),
+        prop_source: "nhl_user_added",
+        user_id: String(user.id),
+      };
+      const res = await fetch(`${getBaseURL()}/api/nhl/props/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.ok === false) {
+        throw new Error(body?.detail || body?.error || `Save failed (${res.status})`);
+      }
+      if (body?.duplicate) {
+        setSaveNotice(`Already saved: ${row.player_name || row.player_id} over ${best.line}`);
+      } else {
+        setSaveNotice(`Saved: ${row.player_name || row.player_id} over ${best.line}`);
+      }
+    } catch (e) {
+      setSaveError(e?.message || "Failed to save NHL prop.");
+    } finally {
+      setSavingKeys((prev) => {
+        const next = { ...prev };
+        delete next[saveKey];
+        return next;
+      });
+    }
+  }
+
   return (
     <PredictionWorkspace
       sportLabel="NHL"
@@ -508,6 +568,16 @@ export default function NHLPredictions() {
         </div>
       ) : (
         <div className="space-y-6">
+          {saveError ? (
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {saveError}
+            </div>
+          ) : null}
+          {!saveError && saveNotice ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {saveNotice}
+            </div>
+          ) : null}
           <div className="pp-chip px-3 py-2 text-xs text-slate-600">{activeFilterLabel}</div>
 
           <div className="flex flex-wrap gap-2">
@@ -599,6 +669,7 @@ export default function NHLPredictions() {
                       {sogLines.map((line) => (
                         <th key={`sog-col-${line}`} className="py-2 pr-3">{`P(over ${line})`}</th>
                       ))}
+                      <th className="py-2 pr-3">action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -615,6 +686,16 @@ export default function NHLPredictions() {
                             {fmtProb(probForLine(r, line))}
                           </td>
                         ))}
+                        <td className="py-2 pr-3">
+                          <button
+                            type="button"
+                            className="pp-btn pp-btn-secondary pp-btn-sm"
+                            onClick={() => saveBestLine(r, "sog")}
+                            disabled={Boolean(savingKeys[`sog:${r.game_id}:${r.player_id}:${bestLineFromRow(r)?.line}`])}
+                          >
+                            Save best
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -643,6 +724,7 @@ export default function NHLPredictions() {
                       {savesLines.map((line) => (
                         <th key={`saves-col-${line}`} className="py-2 pr-3">{`P(over ${line})`}</th>
                       ))}
+                      <th className="py-2 pr-3">action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -659,6 +741,16 @@ export default function NHLPredictions() {
                             {fmtProb(probForLine(r, line))}
                           </td>
                         ))}
+                        <td className="py-2 pr-3">
+                          <button
+                            type="button"
+                            className="pp-btn pp-btn-secondary pp-btn-sm"
+                            onClick={() => saveBestLine(r, "saves")}
+                            disabled={Boolean(savingKeys[`saves:${r.game_id}:${r.player_id}:${bestLineFromRow(r)?.line}`])}
+                          >
+                            Save best
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -666,6 +758,13 @@ export default function NHLPredictions() {
               </div>
             )}
           </section>
+
+          <MyPropsPanel
+            apiPath="/api/nhl/props/history"
+            propSource="nhl_user_added"
+            title="My Saved NHL Props"
+            exportPrefix="my_nhl_props"
+          />
         </div>
       )}
     </PredictionWorkspace>
