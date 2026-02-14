@@ -21,6 +21,20 @@ function snapshotChip(snapshot) {
   return { label: "Live", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
 }
 
+function mlbSlateState(snapshot) {
+  const teamsTracked = Array.isArray(snapshot?.records) ? snapshot.records.length : 0;
+  if (!snapshot) return { label: "Unavailable", tone: "text-rose-700" };
+  if (teamsTracked > 0) return { label: "Active today", tone: "text-emerald-700" };
+  return { label: "No slate today", tone: "text-slate-600" };
+}
+
+function nhlSlateState(snapshot) {
+  const gamesToday = Number(snapshot?.components?.games_today?.count || 0);
+  if (!snapshot) return { label: "Unavailable", tone: "text-rose-700" };
+  if (gamesToday > 0) return { label: "Active today", tone: "text-emerald-700" };
+  return { label: "No slate today", tone: "text-slate-600" };
+}
+
 export default function HomeGateway() {
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
@@ -29,6 +43,8 @@ export default function HomeGateway() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const mlbChip = snapshotChip(mlbSnapshot);
   const nhlChip = snapshotChip(nhlSnapshot);
+  const mlbState = mlbSlateState(mlbSnapshot);
+  const nhlState = nhlSlateState(nhlSnapshot);
 
   const loadSnapshot = async () => {
     setSnapshotLoading(true);
@@ -138,6 +154,7 @@ export default function HomeGateway() {
               <div className="text-slate-600 mt-1">
                 Teams tracked: {Array.isArray(mlbSnapshot?.records) ? mlbSnapshot.records.length : "-"}
               </div>
+              <div className={`text-xs font-medium mt-1 ${mlbState.tone}`}>{mlbState.label}</div>
               <div className="text-slate-600">
                 Source: {mlbSnapshot?.source || "-"}{mlbSnapshot?.stale ? " (stale)" : ""}
               </div>
@@ -165,6 +182,7 @@ export default function HomeGateway() {
               <div className="text-slate-600 mt-1">
                 Components healthy: {nhlSnapshot?.components ? Object.values(nhlSnapshot.components).filter((c) => c?.ok === true).length : "-"}
               </div>
+              <div className={`text-xs font-medium mt-1 ${nhlState.tone}`}>{nhlState.label}</div>
               <div className="text-slate-600">
                 Source: {nhlSnapshot?.source || "-"}{nhlSnapshot?.stale ? " (stale)" : ""}
               </div>
