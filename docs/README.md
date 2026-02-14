@@ -25,6 +25,12 @@ Start here for architecture and operations context.
 - `docs/MLB OpenAPI Review.md`: OpenAPI snapshot and drift process.
 - `docs/openapi/openapi.snapshot.json`: OpenAPI contract snapshot.
 
+## NHL UX and Validation
+
+- `docs/NHL UX Contract.md`: canonical NHL v1 front-facing UX contract (research + board modes).
+- `docs/NHL Smoke Testing.md`: runbooks for `make nhl-checks-*`.
+- `docs/NHL OpenAPI Review.md`: NHL OpenAPI snapshot and drift process.
+
 ## Other
 
 - `docs/Project Map.md`: broad project inventory notes.

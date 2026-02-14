@@ -193,18 +193,30 @@ export default function NHLPredictions() {
   const filteredSog = useMemo(() => {
     if (!query) return sogRows;
     return (sogRows || []).filter((r) => {
-      const pid = String(r.player_id ?? "").toLowerCase();
-      const gid = String(r.game_id ?? "").toLowerCase();
-      return pid.includes(query) || gid.includes(query);
+      const haystack = [
+        r.player_id,
+        r.game_id,
+        r.player_name,
+        r.team_abbr,
+      ]
+        .map((v) => String(v ?? "").toLowerCase())
+        .join(" ");
+      return haystack.includes(query);
     });
   }, [sogRows, query]);
 
   const filteredSaves = useMemo(() => {
     if (!query) return savesRows;
     return (savesRows || []).filter((r) => {
-      const pid = String(r.player_id ?? "").toLowerCase();
-      const gid = String(r.game_id ?? "").toLowerCase();
-      return pid.includes(query) || gid.includes(query);
+      const haystack = [
+        r.player_id,
+        r.game_id,
+        r.player_name,
+        r.team_abbr,
+      ]
+        .map((v) => String(v ?? "").toLowerCase())
+        .join(" ");
+      return haystack.includes(query);
     });
   }, [savesRows, query]);
 
@@ -281,6 +293,41 @@ export default function NHLPredictions() {
     return sortedSog.length + sortedSaves.length < 25;
   }, [sortedSog.length, sortedSaves.length]);
 
+  const boardSummary = useMemo(() => {
+    const sogTop = sortedSog.slice(0, 25);
+    const savesTop = sortedSaves.slice(0, 25);
+    const topPlayerCounts = new Map();
+    const topPropCounts = new Map();
+    for (const row of sogTop) {
+      const name = String(row.player_name || row.player_id || "Unknown");
+      topPlayerCounts.set(name, (topPlayerCounts.get(name) || 0) + 1);
+      topPropCounts.set("SOG", (topPropCounts.get("SOG") || 0) + 1);
+    }
+    for (const row of savesTop) {
+      const name = String(row.player_name || row.player_id || "Unknown");
+      topPlayerCounts.set(name, (topPlayerCounts.get(name) || 0) + 1);
+      topPropCounts.set("Saves", (topPropCounts.get("Saves") || 0) + 1);
+    }
+    const topPlayers = Array.from(topPlayerCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 5);
+    return {
+      totalRows: sortedSog.length + sortedSaves.length,
+      sogRows: sortedSog.length,
+      savesRows: sortedSaves.length,
+      topPlayers,
+      topTags: Array.from(topPropCounts.entries()).sort((a, b) => b[1] - a[1]),
+    };
+  }, [sortedSaves, sortedSog]);
+
+  const activeFilterLabel = useMemo(() => {
+    const parts = [];
+    if (query) parts.push(`Search: "${query}"`);
+    if (sogSort !== "best") parts.push(`SOG sort: over ${sogSort}`);
+    if (savesSort !== "best") parts.push(`Saves sort: over ${savesSort}`);
+    return parts.length ? parts.join(" • ") : "No active board filters";
+  }, [query, savesSort, sogSort]);
+
   const boardControls = (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
       <div>
@@ -288,7 +335,7 @@ export default function NHLPredictions() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Filter by player_id or game_id..."
+          placeholder="Filter by player, team, player_id, or game_id..."
           className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
         />
       </div>
@@ -461,6 +508,49 @@ export default function NHLPredictions() {
         </div>
       ) : (
         <div className="space-y-6">
+          <div className="pp-chip px-3 py-2 text-xs text-slate-600">{activeFilterLabel}</div>
+
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs">
+              Total <strong>{boardSummary.totalRows}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-700 px-2 py-1 text-xs">
+              SOG <strong>{boardSummary.sogRows}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-700 px-2 py-1 text-xs">
+              Saves <strong>{boardSummary.savesRows}</strong>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <section className="pp-card p-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">Top Players in View</h3>
+              {boardSummary.topPlayers.length === 0 ? (
+                <div className="text-xs text-slate-500">No rows in current filter.</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {boardSummary.topPlayers.map(([name, count]) => (
+                    <span key={name} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                      {name}
+                      <strong>{count}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section className="pp-card p-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">Top Prop Groups</h3>
+              <div className="flex flex-wrap gap-2">
+                {boardSummary.topTags.map(([name, count]) => (
+                  <span key={name} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                    {name}
+                    <strong>{count}</strong>
+                  </span>
+                ))}
+              </div>
+            </section>
+          </div>
+
           <ModelVsMarketCard
             title="Board Snapshot"
             lineLabel={
@@ -498,9 +588,9 @@ export default function NHLPredictions() {
             {sortedSog.length === 0 ? (
               <div className="text-slate-500 text-sm">No SOG predictions found.</div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[30rem] rounded-md border border-slate-200">
                 <table className="min-w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-white">
                     <tr className="text-left text-slate-600 border-b border-slate-200">
                       <th className="py-2 pr-3">game_id</th>
                       <th className="py-2 pr-3">team</th>
@@ -542,9 +632,9 @@ export default function NHLPredictions() {
             {sortedSaves.length === 0 ? (
               <div className="text-slate-500 text-sm">No saves predictions found.</div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[30rem] rounded-md border border-slate-200">
                 <table className="min-w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-white">
                     <tr className="text-left text-slate-600 border-b border-slate-200">
                       <th className="py-2 pr-3">game_id</th>
                       <th className="py-2 pr-3">team</th>
