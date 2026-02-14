@@ -134,6 +134,7 @@ export default function OpsPage() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshSeconds, setRefreshSeconds] = useState(0);
   const [opsAutoRefresh, setOpsAutoRefresh] = useState(false);
+  const [autoCaptureFailures, setAutoCaptureFailures] = useState(true);
   const [copiedKey, setCopiedKey] = useState("");
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
   const [copiedIncidentSnapshot, setCopiedIncidentSnapshot] = useState(false);
@@ -174,6 +175,7 @@ export default function OpsPage() {
       setRefreshSeconds([0, 30, 60].includes(refresh) ? refresh : 0);
       setFailuresOnly(Boolean(prefs?.failuresOnly));
       setOpsAutoRefresh(Boolean(prefs?.opsAutoRefresh));
+      setAutoCaptureFailures(prefs?.autoCaptureFailures !== false);
     } catch {
       // ignore malformed local preferences
     }
@@ -201,12 +203,17 @@ export default function OpsPage() {
     try {
       window.localStorage.setItem(
         OPS_PREFS_KEY,
-        JSON.stringify({ refreshSeconds, failuresOnly, opsAutoRefresh })
+        JSON.stringify({
+          refreshSeconds,
+          failuresOnly,
+          opsAutoRefresh,
+          autoCaptureFailures,
+        })
       );
     } catch {
       // ignore local storage write errors
     }
-  }, [refreshSeconds, failuresOnly, opsAutoRefresh]);
+  }, [refreshSeconds, failuresOnly, opsAutoRefresh, autoCaptureFailures]);
 
   useEffect(() => {
     try {
@@ -377,14 +384,77 @@ export default function OpsPage() {
       } else {
         setMarketCoverage({ count: 0, rows: [] });
       }
-      setLastUpdated(new Date().toISOString());
+      setLastUpdated(snapshotTs);
+
+      if (autoCaptureFailures) {
+        const failingChecks = nextChecks.filter((c) => c.ok === false);
+        if (failingChecks.length > 0) {
+          const payload = {
+            captured_at: snapshotTs,
+            base_url: baseUrl,
+            last_updated: snapshotTs,
+            deploy: deployStatus?.deploy || null,
+            deploy_fetch_state: deployFetchState,
+            data_freshness: {
+              mlb_standings:
+                mlbStandings.ok && mlbStandings.body?.ok
+                  ? {
+                      source: mlbStandings.body?.source,
+                      stale: mlbStandings.body?.stale,
+                      cached_at: mlbStandings.body?.cached_at,
+                      records_count: Array.isArray(mlbStandings.body?.records)
+                        ? mlbStandings.body.records.length
+                        : null,
+                    }
+                  : null,
+              nhl_slate_meta:
+                nhlSlate.ok && nhlSlate.body?.ok
+                  ? {
+                      source: nhlSlate.body?.source,
+                      stale: nhlSlate.body?.stale,
+                      cached_at: nhlSlate.body?.cached_at,
+                      components: nhlSlate.body?.components || null,
+                    }
+                  : null,
+            },
+            failing_checks: failingChecks.map((c) => ({
+              key: c.key,
+              label: c.label,
+              path: c.path,
+              status_code: c.statusCode,
+              duration_ms: c.durationMs,
+              detail: c.detail,
+              last_success: lastSuccessByKey[c.key] || null,
+            })),
+          };
+          setIncidentHistory((prev) => {
+            const item = {
+              source: "auto",
+              captured_at: payload.captured_at,
+              failing_count: payload.failing_checks.length,
+              deploy_status: payload.deploy?.status || "unknown",
+              deploy_id: payload.deploy?.id || null,
+              mlb_source: payload.data_freshness?.mlb_standings?.source || null,
+              nhl_source: payload.data_freshness?.nhl_slate_meta?.source || null,
+              payload,
+            };
+            return [item, ...prev].slice(0, 10);
+          });
+        }
+      }
     } catch (e) {
       setError(e?.message || "Failed to run operations checks.");
     } finally {
       setLoading(false);
       setRunning(false);
     }
-  }, []);
+  }, [
+    autoCaptureFailures,
+    baseUrl,
+    deployFetchState,
+    deployStatus?.deploy,
+    lastSuccessByKey,
+  ]);
 
   const deployHeaders = useMemo(() => {
     const headers = {};
@@ -672,6 +742,7 @@ export default function OpsPage() {
       window.setTimeout(() => setCopiedIncidentSnapshot(false), 1200);
       setIncidentHistory((prev) => {
         const item = {
+          source: "manual",
           captured_at: payload.captured_at,
           failing_count: Array.isArray(payload.failing_checks) ? payload.failing_checks.length : 0,
           deploy_status: payload.deploy?.status || "unknown",
@@ -884,6 +955,14 @@ export default function OpsPage() {
                 onChange={(e) => setOpsAutoRefresh(e.target.checked)}
               />
               Auto refresh deploy + metrics (60s)
+            </label>
+            <label className="mt-2 ml-3 inline-flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={autoCaptureFailures}
+                onChange={(e) => setAutoCaptureFailures(e.target.checked)}
+              />
+              Auto-capture failing checks to history
             </label>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <div className="font-medium text-slate-800">Latest deploy</div>
@@ -1155,6 +1234,7 @@ export default function OpsPage() {
                     <thead>
                       <tr className="text-left border-b border-slate-200">
                         <th className="py-1 pr-3">Captured</th>
+                        <th className="py-1 pr-3">Source</th>
                         <th className="py-1 pr-3">Failures</th>
                         <th className="py-1 pr-3">Deploy</th>
                         <th className="py-1 pr-3">MLB source</th>
@@ -1168,6 +1248,7 @@ export default function OpsPage() {
                           <td className="py-1 pr-3">
                             {row.captured_at ? new Date(row.captured_at).toLocaleString() : "-"}
                           </td>
+                          <td className="py-1 pr-3">{row.source || "-"}</td>
                           <td className="py-1 pr-3">{row.failing_count ?? "-"}</td>
                           <td className="py-1 pr-3">
                             {row.deploy_status || "unknown"}
