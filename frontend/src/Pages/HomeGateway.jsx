@@ -87,7 +87,6 @@ export default function HomeGateway() {
   const [showSnapshotErrorDetail, setShowSnapshotErrorDetail] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [lastFetchMs, setLastFetchMs] = useState(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const snapshotReqRef = useRef(0);
   const mlbChip = snapshotChip(mlbSnapshot);
   const nhlChip = snapshotChip(nhlSnapshot);
@@ -136,9 +135,6 @@ export default function HomeGateway() {
         setLastFetchMs(
           Number.isFinite(Number(cached.lastFetchMs)) ? Number(cached.lastFetchMs) : null
         );
-        if (typeof cached.autoRefreshEnabled === "boolean") {
-          setAutoRefreshEnabled(cached.autoRefreshEnabled);
-        }
       }
     } catch {
       // ignore malformed cache
@@ -158,12 +154,11 @@ export default function HomeGateway() {
   }, []);
 
   useEffect(() => {
-    if (!autoRefreshEnabled) return;
     const timer = window.setInterval(() => {
       loadSnapshot();
     }, 300000);
     return () => window.clearInterval(timer);
-  }, [autoRefreshEnabled]);
+  }, []);
 
   useEffect(() => {
     try {
@@ -174,13 +169,12 @@ export default function HomeGateway() {
           nhlSnapshot,
           lastUpdated,
           lastFetchMs,
-          autoRefreshEnabled,
         })
       );
     } catch {
       // ignore local storage write errors
     }
-  }, [autoRefreshEnabled, lastFetchMs, lastUpdated, mlbSnapshot, nhlSnapshot]);
+  }, [lastFetchMs, lastUpdated, mlbSnapshot, nhlSnapshot]);
 
   return (
     <div className="min-h-screen pp-page px-4 py-10">
@@ -239,14 +233,7 @@ export default function HomeGateway() {
               {lastFetchMs !== null ? (
                 <span className="text-[11px] text-slate-400">Fetch {lastFetchMs}ms</span>
               ) : null}
-              <label className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                <input
-                  type="checkbox"
-                  checked={autoRefreshEnabled}
-                  onChange={(e) => setAutoRefreshEnabled(e.target.checked)}
-                />
-                Auto refresh 5m
-              </label>
+              <span className="text-[11px] text-slate-400">Auto refresh 5m</span>
               <button
                 type="button"
                 onClick={loadSnapshot}
