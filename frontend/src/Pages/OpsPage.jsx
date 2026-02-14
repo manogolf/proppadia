@@ -495,6 +495,13 @@ export default function OpsPage() {
   }, [checks]);
 
   const metricAlerts = useMemo(() => buildMetricAlerts(metricsData), [metricsData]);
+  const deployFetchState = useMemo(() => {
+    if (deployLoading) return "loading";
+    if (deployError) return "error";
+    if (deployStatus?.deploy) return "loaded";
+    if (deployStatus && !deployStatus?.deploy) return "loaded-empty";
+    return "idle";
+  }, [deployError, deployLoading, deployStatus]);
 
   const visibleChecks = useMemo(() => {
     const sorted = [...checks].sort((a, b) => {
@@ -714,6 +721,9 @@ export default function OpsPage() {
             </label>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <div className="font-medium text-slate-800">Latest deploy</div>
+              <div className="text-[11px] text-slate-500 mt-1">
+                Fetch state: {deployFetchState}
+              </div>
               <div className="text-xs text-slate-600 mt-1">
                 Status:{" "}
                 <span className={isDeployInProgress(deployStatus?.deploy?.status) ? "text-amber-700 font-semibold" : "text-slate-700 font-semibold"}>
