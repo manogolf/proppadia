@@ -86,6 +86,36 @@ function formatMetricValue(value, unit) {
   return n.toFixed(3).replace(/\.?0+$/, "");
 }
 
+function buildMetricAlerts(metricsData) {
+  const alerts = [];
+  const cpuLatest = Number(metricsData?.cpu?.latest_value);
+  if (Number.isFinite(cpuLatest)) {
+    if (cpuLatest >= 95) {
+      alerts.push({ level: "critical", text: `CPU critical at ${cpuLatest.toFixed(1)}%.` });
+    } else if (cpuLatest >= 80) {
+      alerts.push({ level: "warn", text: `CPU elevated at ${cpuLatest.toFixed(1)}%.` });
+    }
+  }
+
+  const memLatest = Number(metricsData?.memory?.latest_value);
+  const memUnit = String(metricsData?.memory?.unit || "").toLowerCase();
+  if (Number.isFinite(memLatest)) {
+    if (memUnit === "bytes") {
+      const memMb = memLatest / (1024 * 1024);
+      if (memMb >= 1900) {
+        alerts.push({ level: "critical", text: `Memory critical at ${memMb.toFixed(0)} MB.` });
+      } else if (memMb >= 1600) {
+        alerts.push({ level: "warn", text: `Memory elevated at ${memMb.toFixed(0)} MB.` });
+      }
+    } else if (memLatest >= 95) {
+      alerts.push({ level: "critical", text: `Memory critical at ${memLatest.toFixed(1)}%.` });
+    } else if (memLatest >= 80) {
+      alerts.push({ level: "warn", text: `Memory elevated at ${memLatest.toFixed(1)}%.` });
+    }
+  }
+  return alerts;
+}
+
 export default function OpsPage() {
   const baseUrl = getBaseURL();
   const [loading, setLoading] = useState(true);
@@ -380,6 +410,8 @@ export default function OpsPage() {
     return { passed, failed, total, avgMs, maxMs, slow };
   }, [checks]);
 
+  const metricAlerts = useMemo(() => buildMetricAlerts(metricsData), [metricsData]);
+
   const visibleChecks = useMemo(() => {
     const sorted = [...checks].sort((a, b) => {
       const aFail = a.ok === false ? 0 : 1;
@@ -612,6 +644,27 @@ export default function OpsPage() {
               <div className="text-xs text-slate-600">
                 Finished: {deployStatus?.deploy?.finished_at ? new Date(deployStatus.deploy.finished_at).toLocaleString() : "-"}
               </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="font-medium text-slate-800">Alert strip</div>
+              {metricAlerts.length === 0 ? (
+                <div className="text-xs text-emerald-700 mt-1">No active CPU/Memory alerts.</div>
+              ) : (
+                <div className="mt-2 space-y-1">
+                  {metricAlerts.map((alert, idx) => (
+                    <div
+                      key={`${alert.level}-${idx}`}
+                      className={
+                        alert.level === "critical"
+                          ? "rounded border border-rose-200 bg-rose-50 text-rose-700 px-2 py-1 text-xs"
+                          : "rounded border border-amber-200 bg-amber-50 text-amber-700 px-2 py-1 text-xs"
+                      }
+                    >
+                      {alert.text}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <div className="font-medium text-slate-800">Application metrics (Render)</div>
