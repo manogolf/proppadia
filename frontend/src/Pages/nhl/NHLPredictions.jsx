@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import SogEvalCard from "../../components/SogEvalCard.jsx";
+import TodayGamesNHL from "../../components/TodayGamesNHL.jsx";
 import ModelVsMarketCard from "../../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../../components/predictions/PredictionWorkspace.jsx";
@@ -90,6 +91,9 @@ export default function NHLPredictions() {
   const [loadedAt, setLoadedAt] = useState(null);
   const [marketLoadedAt, setMarketLoadedAt] = useState(null);
   const [marketMaps, setMarketMaps] = useState({ sog: new Map(), saves: new Map() });
+  const [games, setGames] = useState([]);
+  const [gamesLoading, setGamesLoading] = useState(true);
+  const [gamesError, setGamesError] = useState("");
 
   const [sogRows, setSogRows] = useState([]);
   const [savesRows, setSavesRows] = useState([]);
@@ -138,6 +142,33 @@ export default function NHLPredictions() {
     }
 
     run();
+    return () => {
+      cancelled = true;
+    };
+  }, [slateDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGames() {
+      try {
+        setGamesLoading(true);
+        setGamesError("");
+        const url = `${getBaseURL()}/api/nhl/games/today?date=${encodeURIComponent(slateDate)}`;
+        const res = await fetch(url);
+        const j = await res.json();
+        if (!res.ok || j?.ok === false) {
+          throw new Error(j?.error || `NHL games endpoint failed (${res.status})`);
+        }
+        if (!cancelled) {
+          setGames(Array.isArray(j?.rows) ? j.rows : []);
+        }
+      } catch (e) {
+        if (!cancelled) setGamesError(e?.message || "Failed to load NHL games.");
+      } finally {
+        if (!cancelled) setGamesLoading(false);
+      }
+    }
+    loadGames();
     return () => {
       cancelled = true;
     };
@@ -501,6 +532,14 @@ export default function NHLPredictions() {
         />
       ) : mode === "research" ? (
         <div className="space-y-6">
+          {gamesLoading ? (
+            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading NHL slate...</div>
+          ) : gamesError ? (
+            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
+          ) : (
+            <TodayGamesNHL games={games} />
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ModelVsMarketCard
               title="Top SOG Model Edge"
@@ -596,6 +635,14 @@ export default function NHLPredictions() {
         </div>
       ) : (
         <div className="space-y-6">
+          {gamesLoading ? (
+            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading NHL slate...</div>
+          ) : gamesError ? (
+            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
+          ) : (
+            <TodayGamesNHL games={games} />
+          )}
+
           {saveError ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {saveError}
