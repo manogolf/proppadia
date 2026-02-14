@@ -3,6 +3,8 @@ import MemberAccessCard from "../components/predictions/MemberAccessCard.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 
+const HOME_SNAPSHOT_CACHE_KEY = "proppadia_home_snapshot_v1";
+
 async function fetchJson(path) {
   const base = getBaseURL();
   const res = await fetch(`${base}${path}`, { credentials: "include" });
@@ -114,6 +116,21 @@ export default function HomeGateway() {
   };
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HOME_SNAPSHOT_CACHE_KEY);
+      if (!raw) return;
+      const cached = JSON.parse(raw);
+      if (cached && typeof cached === "object") {
+        setMlbSnapshot(cached.mlbSnapshot || null);
+        setNhlSnapshot(cached.nhlSnapshot || null);
+        setLastUpdated(cached.lastUpdated || null);
+      }
+    } catch {
+      // ignore malformed cache
+    }
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     const run = async () => {
       if (!mounted) return;
@@ -131,6 +148,17 @@ export default function HomeGateway() {
     }, 300000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        HOME_SNAPSHOT_CACHE_KEY,
+        JSON.stringify({ mlbSnapshot, nhlSnapshot, lastUpdated })
+      );
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [lastUpdated, mlbSnapshot, nhlSnapshot]);
 
   return (
     <div className="min-h-screen pp-page px-4 py-10">
