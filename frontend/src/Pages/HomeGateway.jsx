@@ -19,21 +19,32 @@ export default function HomeGateway() {
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
   const [nhlSnapshot, setNhlSnapshot] = useState(null);
+  const [snapshotError, setSnapshotError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const loadSnapshot = async () => {
+    setSnapshotLoading(true);
+    setSnapshotError("");
+    const [mlb, nhl] = await Promise.all([
+      fetchJson("/api/mlb/standings"),
+      fetchJson("/api/nhl/slate/meta"),
+    ]);
+    setMlbSnapshot(mlb.ok && mlb.body?.ok ? mlb.body : null);
+    setNhlSnapshot(nhl.ok && nhl.body?.ok ? nhl.body : null);
+    if ((!mlb.ok || !mlb.body?.ok) && (!nhl.ok || !nhl.body?.ok)) {
+      setSnapshotError("Snapshot data unavailable right now.");
+    }
+    setLastUpdated(new Date().toISOString());
+    setSnapshotLoading(false);
+  };
 
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
-      setSnapshotLoading(true);
-      const [mlb, nhl] = await Promise.all([
-        fetchJson("/api/mlb/standings"),
-        fetchJson("/api/nhl/slate/meta"),
-      ]);
+    const run = async () => {
       if (!mounted) return;
-      setMlbSnapshot(mlb.ok && mlb.body?.ok ? mlb.body : null);
-      setNhlSnapshot(nhl.ok && nhl.body?.ok ? nhl.body : null);
-      setSnapshotLoading(false);
+      await loadSnapshot();
     };
-    load();
+    run();
     return () => {
       mounted = false;
     };
@@ -85,10 +96,27 @@ export default function HomeGateway() {
         <div className="mt-6 pp-card p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-slate-900">Today Snapshot</h2>
-            <span className="text-xs text-slate-500">
-              {snapshotLoading ? "Loading..." : "Backend-owned status"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">
+                {snapshotLoading
+                  ? "Loading..."
+                  : lastUpdated
+                    ? `Updated ${new Date(lastUpdated).toLocaleTimeString()}`
+                    : "Backend-owned status"}
+              </span>
+              <button
+                type="button"
+                onClick={loadSnapshot}
+                disabled={snapshotLoading}
+                className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
+              >
+                {snapshotLoading ? "Refreshing..." : "Refresh snapshot"}
+              </button>
+            </div>
           </div>
+          {snapshotError ? (
+            <div className="mt-2 text-xs text-amber-700">{snapshotError}</div>
+          ) : null}
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="font-semibold text-slate-900">MLB</div>
