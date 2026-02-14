@@ -138,6 +138,7 @@ export default function OpsPage() {
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
   const [copiedIncidentSnapshot, setCopiedIncidentSnapshot] = useState(false);
   const [copiedIncidentHistory, setCopiedIncidentHistory] = useState(false);
+  const [copiedIncidentRowKey, setCopiedIncidentRowKey] = useState("");
   const [incidentHistory, setIncidentHistory] = useState([]);
   const [failuresOnly, setFailuresOnly] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -677,6 +678,7 @@ export default function OpsPage() {
           deploy_id: payload.deploy?.id || null,
           mlb_source: payload.data_freshness?.mlb_standings?.source || null,
           nhl_source: payload.data_freshness?.nhl_slate_meta?.source || null,
+          payload,
         };
         return [item, ...prev].slice(0, 10);
       });
@@ -706,6 +708,18 @@ export default function OpsPage() {
 
   const clearIncidentHistory = useCallback(() => {
     setIncidentHistory([]);
+  }, []);
+
+  const copyIncidentHistoryRow = useCallback(async (row, idx) => {
+    const blob = row?.payload || row;
+    const key = `${row?.captured_at || "row"}-${idx}`;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(blob, null, 2));
+      setCopiedIncidentRowKey(key);
+      window.setTimeout(() => setCopiedIncidentRowKey(""), 1200);
+    } catch {
+      setCopiedIncidentRowKey("");
+    }
   }, []);
 
   return (
@@ -1145,6 +1159,7 @@ export default function OpsPage() {
                         <th className="py-1 pr-3">Deploy</th>
                         <th className="py-1 pr-3">MLB source</th>
                         <th className="py-1 pr-3">NHL source</th>
+                        <th className="py-1 pr-3">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1160,6 +1175,15 @@ export default function OpsPage() {
                           </td>
                           <td className="py-1 pr-3">{row.mlb_source || "-"}</td>
                           <td className="py-1 pr-3">{row.nhl_source || "-"}</td>
+                          <td className="py-1 pr-3">
+                            <button
+                              type="button"
+                              onClick={() => copyIncidentHistoryRow(row, idx)}
+                              className="pp-btn pp-btn-ghost pp-btn-sm text-[11px]"
+                            >
+                              {copiedIncidentRowKey === `${row.captured_at}-${idx}` ? "Copied" : "Copy"}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
