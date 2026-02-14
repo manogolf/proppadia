@@ -126,6 +126,7 @@ export default function OpsPage() {
   const [copiedKey, setCopiedKey] = useState("");
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
   const [copiedIncidentSnapshot, setCopiedIncidentSnapshot] = useState(false);
+  const [copiedIncidentHistory, setCopiedIncidentHistory] = useState(false);
   const [incidentHistory, setIncidentHistory] = useState([]);
   const [failuresOnly, setFailuresOnly] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -672,6 +673,20 @@ export default function OpsPage() {
     nhlSlateMeta,
   ]);
 
+  const copyIncidentHistory = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(incidentHistory, null, 2));
+      setCopiedIncidentHistory(true);
+      window.setTimeout(() => setCopiedIncidentHistory(false), 1200);
+    } catch {
+      setCopiedIncidentHistory(false);
+    }
+  }, [incidentHistory]);
+
+  const clearIncidentHistory = useCallback(() => {
+    setIncidentHistory([]);
+  }, []);
+
   return (
     <div className="min-h-screen pp-page">
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -1062,7 +1077,27 @@ export default function OpsPage() {
 
           <div className="px-5 pb-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 mb-4">
-              <h2 className="text-sm font-semibold text-slate-900">Incident History (local)</h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">Incident History (local)</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={copyIncidentHistory}
+                    disabled={incidentHistory.length === 0}
+                    className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
+                  >
+                    {copiedIncidentHistory ? "History copied" : "Copy history"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearIncidentHistory}
+                    disabled={incidentHistory.length === 0}
+                    className="pp-btn pp-btn-ghost pp-btn-sm text-xs"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
               <p className="text-xs text-slate-600 mt-1">
                 Last 10 copied incident snapshots saved in this browser.
               </p>
