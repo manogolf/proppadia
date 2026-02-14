@@ -27,6 +27,8 @@ export default function HomeGateway() {
   const [nhlSnapshot, setNhlSnapshot] = useState(null);
   const [snapshotError, setSnapshotError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const mlbChip = snapshotChip(mlbSnapshot);
+  const nhlChip = snapshotChip(nhlSnapshot);
 
   const loadSnapshot = async () => {
     setSnapshotLoading(true);
@@ -128,9 +130,9 @@ export default function HomeGateway() {
               <div className="flex items-center justify-between gap-2">
                 <div className="font-semibold text-slate-900">MLB</div>
                 <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${snapshotChip(mlbSnapshot).tone}`}
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${mlbChip.tone}`}
                 >
-                  {snapshotChip(mlbSnapshot).label}
+                  {mlbChip.label}
                 </span>
               </div>
               <div className="text-slate-600 mt-1">
@@ -139,14 +141,25 @@ export default function HomeGateway() {
               <div className="text-slate-600">
                 Source: {mlbSnapshot?.source || "-"}{mlbSnapshot?.stale ? " (stale)" : ""}
               </div>
+              <div className="text-slate-600">
+                As of: {mlbSnapshot?.cached_at ? new Date(mlbSnapshot.cached_at).toLocaleString() : "-"}
+              </div>
+              <div className="mt-2">
+                <PrefetchLink
+                  to="/mlb"
+                  className="pp-btn pp-btn-ghost pp-btn-sm text-xs"
+                >
+                  Open MLB
+                </PrefetchLink>
+              </div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="font-semibold text-slate-900">NHL</div>
                 <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${snapshotChip(nhlSnapshot).tone}`}
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${nhlChip.tone}`}
                 >
-                  {snapshotChip(nhlSnapshot).label}
+                  {nhlChip.label}
                 </span>
               </div>
               <div className="text-slate-600 mt-1">
@@ -154,6 +167,17 @@ export default function HomeGateway() {
               </div>
               <div className="text-slate-600">
                 Source: {nhlSnapshot?.source || "-"}{nhlSnapshot?.stale ? " (stale)" : ""}
+              </div>
+              <div className="text-slate-600">
+                As of: {nhlSnapshot?.cached_at ? new Date(nhlSnapshot.cached_at).toLocaleString() : "-"}
+              </div>
+              <div className="mt-2">
+                <PrefetchLink
+                  to="/nhl"
+                  className="pp-btn pp-btn-ghost pp-btn-sm text-xs"
+                >
+                  Open NHL
+                </PrefetchLink>
               </div>
             </div>
           </div>
