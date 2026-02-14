@@ -106,7 +106,7 @@ Status:
 
 - Phase 1: completed
 - Phase 2: completed
-- Phase 3: in progress (initial slice landed)
+- Phase 3: completed
 
 Phase 1: Canonicalization (no UX redesign yet)
 
@@ -131,7 +131,7 @@ Phase 3: UX + Odds Context
 2. Add `Model vs Market` card backed by OddsAPI-fed values
 3. Add per-section `Last Updated` and data-confidence labeling
 
-Phase 3 initial slice (implemented):
+Phase 3 delivered:
 
 - Added shared workspace state panel component and wired it into NHL workspace flows
 - Added reusable `Model vs Market` card and wired model-only context for MLB/NHL
@@ -139,11 +139,8 @@ Phase 3 initial slice (implemented):
 - Wired NHL `Model vs Market` cards to live market probabilities from `nhl/site/data/*_with_market.csv` when available
 - Fixed NHL saves display/sort to use dynamic returned `p_over_*` lines (no hardcoded saves lines)
 - Wired MLB `Model vs Market` card to actual market inputs (American odds and/or implied probability) captured in the research form
-
-Remaining for Phase 3 completion:
-
-- Normalize source/timestamp labels across sports using one backend contract
-- Add backend-owned MLB market feed (OddsAPI-backed) to replace manual market entry
+- Normalized source/timestamp labels across MLB and NHL using shared market context helpers
+- Switched MLB market context to backend-owned OddsAPI fetch by default (manual market entry now optional override)
 
 ## Success Criteria
 
