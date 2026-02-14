@@ -75,6 +75,8 @@ export default function HomeGateway() {
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
   const [nhlSnapshot, setNhlSnapshot] = useState(null);
   const [snapshotError, setSnapshotError] = useState("");
+  const [snapshotErrorDetail, setSnapshotErrorDetail] = useState(null);
+  const [showSnapshotErrorDetail, setShowSnapshotErrorDetail] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const mlbChip = snapshotChip(mlbSnapshot);
   const nhlChip = snapshotChip(nhlSnapshot);
@@ -85,6 +87,7 @@ export default function HomeGateway() {
   const loadSnapshot = async () => {
     setSnapshotLoading(true);
     setSnapshotError("");
+    setShowSnapshotErrorDetail(false);
     const [mlb, nhl] = await Promise.all([
       fetchJson("/api/mlb/standings"),
       fetchJson("/api/nhl/slate/meta"),
@@ -93,6 +96,14 @@ export default function HomeGateway() {
     setNhlSnapshot(nhl.ok && nhl.body?.ok ? nhl.body : null);
     if ((!mlb.ok || !mlb.body?.ok) && (!nhl.ok || !nhl.body?.ok)) {
       setSnapshotError("Snapshot data unavailable right now.");
+      setSnapshotErrorDetail({
+        mlb_status: mlb.status,
+        mlb_ok: Boolean(mlb.body?.ok),
+        nhl_status: nhl.status,
+        nhl_ok: Boolean(nhl.body?.ok),
+      });
+    } else {
+      setSnapshotErrorDetail(null);
     }
     setLastUpdated(new Date().toISOString());
     setSnapshotLoading(false);
@@ -183,7 +194,25 @@ export default function HomeGateway() {
             </div>
           </div>
           {snapshotError ? (
-            <div className="mt-2 text-xs text-amber-700">{snapshotError}</div>
+            <div className="mt-2 text-xs text-amber-700">
+              {snapshotError}
+              {snapshotErrorDetail ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowSnapshotErrorDetail((v) => !v)}
+                    className="ml-2 underline"
+                  >
+                    {showSnapshotErrorDetail ? "Hide detail" : "Show detail"}
+                  </button>
+                  {showSnapshotErrorDetail ? (
+                    <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] text-amber-800">
+                      {JSON.stringify(snapshotErrorDetail, null, 2)}
+                    </pre>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           ) : null}
           <div className="mt-3">
             <span
