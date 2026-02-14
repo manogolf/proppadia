@@ -17,6 +17,12 @@ async function fetchJson(path) {
   return { ok: res.ok, status: res.status, body };
 }
 
+async function fetchJsonTimed(path) {
+  const started = performance.now();
+  const res = await fetchJson(path);
+  return { ...res, durationMs: Math.round(performance.now() - started) };
+}
+
 function snapshotChip(snapshot) {
   if (!snapshot) return { label: "Unavailable", tone: "bg-rose-50 text-rose-700 border-rose-200" };
   if (snapshot.stale) return { label: "Stale", tone: "bg-amber-50 text-amber-700 border-amber-200" };
@@ -80,6 +86,7 @@ export default function HomeGateway() {
   const [snapshotErrorDetail, setSnapshotErrorDetail] = useState(null);
   const [showSnapshotErrorDetail, setShowSnapshotErrorDetail] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [lastFetchMs, setLastFetchMs] = useState(null);
   const snapshotReqRef = useRef(0);
   const mlbChip = snapshotChip(mlbSnapshot);
   const nhlChip = snapshotChip(nhlSnapshot);
@@ -94,10 +101,11 @@ export default function HomeGateway() {
     setSnapshotError("");
     setShowSnapshotErrorDetail(false);
     const [mlb, nhl] = await Promise.all([
-      fetchJson("/api/mlb/standings"),
-      fetchJson("/api/nhl/slate/meta"),
+      fetchJsonTimed("/api/mlb/standings"),
+      fetchJsonTimed("/api/nhl/slate/meta"),
     ]);
     if (snapshotReqRef.current !== reqId) return;
+    setLastFetchMs((mlb.durationMs || 0) + (nhl.durationMs || 0));
     setMlbSnapshot(mlb.ok && mlb.body?.ok ? mlb.body : null);
     setNhlSnapshot(nhl.ok && nhl.body?.ok ? nhl.body : null);
     if ((!mlb.ok || !mlb.body?.ok) && (!nhl.ok || !nhl.body?.ok)) {
@@ -124,6 +132,9 @@ export default function HomeGateway() {
         setMlbSnapshot(cached.mlbSnapshot || null);
         setNhlSnapshot(cached.nhlSnapshot || null);
         setLastUpdated(cached.lastUpdated || null);
+        setLastFetchMs(
+          Number.isFinite(Number(cached.lastFetchMs)) ? Number(cached.lastFetchMs) : null
+        );
       }
     } catch {
       // ignore malformed cache
@@ -153,12 +164,12 @@ export default function HomeGateway() {
     try {
       window.localStorage.setItem(
         HOME_SNAPSHOT_CACHE_KEY,
-        JSON.stringify({ mlbSnapshot, nhlSnapshot, lastUpdated })
+        JSON.stringify({ mlbSnapshot, nhlSnapshot, lastUpdated, lastFetchMs })
       );
     } catch {
       // ignore local storage write errors
     }
-  }, [lastUpdated, mlbSnapshot, nhlSnapshot]);
+  }, [lastFetchMs, lastUpdated, mlbSnapshot, nhlSnapshot]);
 
   return (
     <div className="min-h-screen pp-page px-4 py-10">
@@ -214,6 +225,9 @@ export default function HomeGateway() {
                     ? `Updated ${new Date(lastUpdated).toLocaleTimeString()}`
                     : "Backend-owned status"}
               </span>
+              {lastFetchMs !== null ? (
+                <span className="text-[11px] text-slate-400">Fetch {lastFetchMs}ms</span>
+              ) : null}
               <span className="text-[11px] text-slate-400">Auto refresh 5m</span>
               <button
                 type="button"
