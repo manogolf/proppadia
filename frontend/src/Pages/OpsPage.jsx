@@ -133,6 +133,7 @@ export default function OpsPage() {
   const [running, setRunning] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshSeconds, setRefreshSeconds] = useState(0);
+  const [opsAutoRefresh, setOpsAutoRefresh] = useState(false);
   const [copiedKey, setCopiedKey] = useState("");
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
   const [copiedIncidentSnapshot, setCopiedIncidentSnapshot] = useState(false);
@@ -171,6 +172,7 @@ export default function OpsPage() {
       const refresh = Number(prefs?.refreshSeconds || 0);
       setRefreshSeconds([0, 30, 60].includes(refresh) ? refresh : 0);
       setFailuresOnly(Boolean(prefs?.failuresOnly));
+      setOpsAutoRefresh(Boolean(prefs?.opsAutoRefresh));
     } catch {
       // ignore malformed local preferences
     }
@@ -198,12 +200,12 @@ export default function OpsPage() {
     try {
       window.localStorage.setItem(
         OPS_PREFS_KEY,
-        JSON.stringify({ refreshSeconds, failuresOnly })
+        JSON.stringify({ refreshSeconds, failuresOnly, opsAutoRefresh })
       );
     } catch {
       // ignore local storage write errors
     }
-  }, [refreshSeconds, failuresOnly]);
+  }, [refreshSeconds, failuresOnly, opsAutoRefresh]);
 
   useEffect(() => {
     try {
@@ -515,6 +517,15 @@ export default function OpsPage() {
     }, 10_000);
     return () => window.clearInterval(timer);
   }, [deployStatus?.deploy?.status, loadDeployStatus, opsToken]);
+
+  useEffect(() => {
+    if (!opsToken || !opsAutoRefresh) return;
+    const timer = window.setInterval(() => {
+      loadDeployStatus();
+      loadMetrics();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadDeployStatus, loadMetrics, opsAutoRefresh, opsToken]);
 
   const summary = useMemo(() => {
     const total = checks.length;
@@ -851,6 +862,14 @@ export default function OpsPage() {
                 onChange={(e) => setClearCache(e.target.checked)}
               />
               Clear build cache on redeploy
+            </label>
+            <label className="mt-2 ml-3 inline-flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={opsAutoRefresh}
+                onChange={(e) => setOpsAutoRefresh(e.target.checked)}
+              />
+              Auto refresh deploy + metrics (60s)
             </label>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <div className="font-medium text-slate-800">Latest deploy</div>
