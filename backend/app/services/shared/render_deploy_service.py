@@ -67,6 +67,21 @@ def _normalize_deploy(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _extract_latest_deploy(payload: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(payload, list):
+        return payload[0] if payload else None
+    if isinstance(payload, dict):
+        for key in ("deploys", "data", "items", "results"):
+            rows = payload.get(key)
+            if isinstance(rows, list) and rows:
+                first = rows[0]
+                return first if isinstance(first, dict) else None
+        # Some APIs may return a single deploy object directly.
+        if "id" in payload and "status" in payload:
+            return payload
+    return None
+
+
 def fetch_latest_deploy() -> Dict[str, Any]:
     api_key, service_id = _render_env()
     payload = _request(
@@ -75,8 +90,7 @@ def fetch_latest_deploy() -> Dict[str, Any]:
         api_key=api_key,
         params={"limit": 1},
     )
-    rows = payload if isinstance(payload, list) else []
-    latest = rows[0] if rows else {}
+    latest = _extract_latest_deploy(payload) or {}
     return {
         "ok": True,
         "service_id": service_id,
