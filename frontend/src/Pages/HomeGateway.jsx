@@ -197,6 +197,11 @@ export default function HomeGateway() {
               <div className="text-slate-600 mt-1">
                 Teams tracked: {Array.isArray(mlbSnapshot?.records) ? mlbSnapshot.records.length : "-"}
               </div>
+              {!mlbSnapshot ? (
+                <div className="text-xs text-amber-700 mt-1">
+                  MLB snapshot unavailable right now.
+                </div>
+              ) : null}
               <div className={`text-xs font-medium mt-1 ${mlbState.tone}`}>{mlbState.label}</div>
               <div className="text-slate-600">
                 Source: {mlbSnapshot?.source || "-"}{mlbSnapshot?.stale ? " (stale)" : ""}
@@ -228,6 +233,11 @@ export default function HomeGateway() {
               <div className="text-slate-600 mt-1">
                 Components healthy: {nhlSnapshot?.components ? Object.values(nhlSnapshot.components).filter((c) => c?.ok === true).length : "-"}
               </div>
+              {!nhlSnapshot ? (
+                <div className="text-xs text-amber-700 mt-1">
+                  NHL snapshot unavailable right now.
+                </div>
+              ) : null}
               <div className="text-slate-600">
                 Counts: games {nhlSnapshot?.components?.games_today?.count ?? "-"}, props {nhlSnapshot?.components?.props_today?.count ?? "-"}, sog {nhlSnapshot?.components?.sog?.count ?? "-"}, saves {nhlSnapshot?.components?.saves?.count ?? "-"}
               </div>
