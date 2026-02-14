@@ -3,6 +3,7 @@ import { getBaseURL } from "../shared/getBaseURL.js";
 
 const OPS_PREFS_KEY = "proppadia_ops_prefs_v1";
 const OPS_LAST_SUCCESS_KEY = "proppadia_ops_last_success_v1";
+const OPS_TOKEN_KEY = "proppadia_ops_token_v1";
 const SLOW_CHECK_MS = 1000;
 const STALE_SUCCESS_HOURS = 24;
 
@@ -49,10 +50,10 @@ function successAgeTone(isoTs) {
   return "text-emerald-700";
 }
 
-async function fetchJson(path) {
+async function fetchJson(path, options = {}) {
   const base = getBaseURL();
   const url = `${base}${path.startsWith("/api/") ? path : `/api${path}`}`;
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { credentials: "include", ...options });
   let body = null;
   try {
     body = await res.json();
@@ -62,11 +63,17 @@ async function fetchJson(path) {
   return { ok: res.ok, status: res.status, body };
 }
 
-async function fetchJsonTimed(path) {
+async function fetchJsonTimed(path, options = {}) {
   const started = performance.now();
-  const result = await fetchJson(path);
+  const result = await fetchJson(path, options);
   const durationMs = Math.round(performance.now() - started);
   return { ...result, durationMs };
+}
+
+function isDeployInProgress(status) {
+  const s = String(status || "").toLowerCase();
+  if (!s) return false;
+  return !["live", "failed", "canceled", "cancelled", "deactivated"].includes(s);
 }
 
 export default function OpsPage() {
@@ -83,6 +90,12 @@ export default function OpsPage() {
   const [checks, setChecks] = useState([]);
   const [marketCoverage, setMarketCoverage] = useState({ count: 0, rows: [] });
   const [error, setError] = useState("");
+  const [opsToken, setOpsToken] = useState("");
+  const [deployStatus, setDeployStatus] = useState(null);
+  const [deployLoading, setDeployLoading] = useState(false);
+  const [deployError, setDeployError] = useState("");
+  const [redeployRunning, setRedeployRunning] = useState(false);
+  const [clearCache, setClearCache] = useState(false);
 
   useEffect(() => {
     try {
@@ -96,6 +109,24 @@ export default function OpsPage() {
       // ignore malformed local preferences
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(OPS_TOKEN_KEY);
+      if (raw) setOpsToken(raw);
+    } catch {
+      // ignore local storage read errors
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (opsToken) window.localStorage.setItem(OPS_TOKEN_KEY, opsToken);
+      else window.localStorage.removeItem(OPS_TOKEN_KEY);
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [opsToken]);
 
   useEffect(() => {
     try {
@@ -232,9 +263,59 @@ export default function OpsPage() {
     }
   }, []);
 
+  const deployHeaders = useMemo(() => {
+    const headers = {};
+    if (opsToken) headers["X-Ops-Token"] = opsToken;
+    return headers;
+  }, [opsToken]);
+
+  const loadDeployStatus = useCallback(async () => {
+    setDeployLoading(true);
+    setDeployError("");
+    try {
+      const res = await fetchJsonTimed("/api/ops/render/deploy-status", {
+        headers: deployHeaders,
+      });
+      if (!res.ok || !res.body?.ok) {
+        throw new Error(res.body?.detail || `deploy-status failed (${res.status})`);
+      }
+      setDeployStatus(res.body);
+    } catch (e) {
+      setDeployError(e?.message || "Failed to load deploy status.");
+    } finally {
+      setDeployLoading(false);
+    }
+  }, [deployHeaders]);
+
+  const runRedeploy = useCallback(async () => {
+    setRedeployRunning(true);
+    setDeployError("");
+    try {
+      const res = await fetchJson("/api/ops/render/redeploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...deployHeaders },
+        body: JSON.stringify({ clear_cache: clearCache }),
+      });
+      if (!res.ok || !res.body?.ok) {
+        throw new Error(res.body?.detail || `redeploy failed (${res.status})`);
+      }
+      setDeployStatus(res.body);
+      await loadDeployStatus();
+    } catch (e) {
+      setDeployError(e?.message || "Failed to trigger redeploy.");
+    } finally {
+      setRedeployRunning(false);
+    }
+  }, [clearCache, deployHeaders, loadDeployStatus]);
+
   useEffect(() => {
     runChecks();
   }, [runChecks]);
+
+  useEffect(() => {
+    if (!opsToken) return;
+    loadDeployStatus();
+  }, [opsToken, loadDeployStatus]);
 
   useEffect(() => {
     if (!refreshSeconds) return;
@@ -243,6 +324,15 @@ export default function OpsPage() {
     }, refreshSeconds * 1000);
     return () => window.clearInterval(timer);
   }, [refreshSeconds, runChecks]);
+
+  useEffect(() => {
+    if (!opsToken) return;
+    if (!isDeployInProgress(deployStatus?.deploy?.status)) return;
+    const timer = window.setInterval(() => {
+      loadDeployStatus();
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [deployStatus?.deploy?.status, loadDeployStatus, opsToken]);
 
   const summary = useMemo(() => {
     const total = checks.length;
@@ -422,6 +512,69 @@ export default function OpsPage() {
               </button>
             </div>
             {error ? <div className="text-sm text-rose-700 mt-2">{error}</div> : null}
+          </div>
+
+          <div className="px-5 py-4 border-b border-slate-200">
+            <div className="text-sm font-semibold text-slate-900">Render Controls</div>
+            <p className="text-xs text-slate-600 mt-1">
+              Ops-only redeploy trigger and latest deploy status. No raw logs shown.
+            </p>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div className="md:col-span-2">
+                <div className="text-xs text-slate-500 mb-1">Ops token</div>
+                <input
+                  type="password"
+                  value={opsToken}
+                  onChange={(e) => setOpsToken(e.target.value)}
+                  placeholder="X-Ops-Token value"
+                  className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
+                />
+              </div>
+              <div className="flex gap-2 justify-start md:justify-end">
+                <button
+                  type="button"
+                  onClick={loadDeployStatus}
+                  disabled={deployLoading || !opsToken}
+                  className="pp-btn pp-btn-secondary pp-btn-md"
+                >
+                  {deployLoading ? "Refreshing..." : "Refresh Deploy"}
+                </button>
+                <button
+                  type="button"
+                  onClick={runRedeploy}
+                  disabled={redeployRunning || !opsToken}
+                  className="pp-btn pp-btn-secondary pp-btn-md"
+                >
+                  {redeployRunning ? "Triggering..." : "Redeploy"}
+                </button>
+              </div>
+            </div>
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={clearCache}
+                onChange={(e) => setClearCache(e.target.checked)}
+              />
+              Clear build cache on redeploy
+            </label>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="font-medium text-slate-800">Latest deploy</div>
+              <div className="text-xs text-slate-600 mt-1">
+                Status:{" "}
+                <span className={isDeployInProgress(deployStatus?.deploy?.status) ? "text-amber-700 font-semibold" : "text-slate-700 font-semibold"}>
+                  {deployStatus?.deploy?.status || "unknown"}
+                </span>
+              </div>
+              <div className="text-xs text-slate-600">Deploy ID: {deployStatus?.deploy?.id || "-"}</div>
+              <div className="text-xs text-slate-600">Commit: {deployStatus?.deploy?.commit_id || "-"}</div>
+              <div className="text-xs text-slate-600">
+                Created: {deployStatus?.deploy?.created_at ? new Date(deployStatus.deploy.created_at).toLocaleString() : "-"}
+              </div>
+              <div className="text-xs text-slate-600">
+                Finished: {deployStatus?.deploy?.finished_at ? new Date(deployStatus.deploy.finished_at).toLocaleString() : "-"}
+              </div>
+            </div>
+            {deployError ? <div className="text-sm text-rose-700 mt-2">{deployError}</div> : null}
           </div>
 
           <div className="px-5 py-4 border-b border-slate-200">

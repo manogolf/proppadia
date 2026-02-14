@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=False)  # load repo-root .env if present
 
-from .routers import health, mlb, nhl
+from .routers import health, mlb, nhl, ops
 
 app = FastAPI(title="Proppadia Backend", version="0.1.0")
 
@@ -40,6 +40,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(mlb.router, prefix="/api")
 app.include_router(nhl.router)
+app.include_router(ops.router, prefix="/api")
 
 @app.get("/")
 def root():
