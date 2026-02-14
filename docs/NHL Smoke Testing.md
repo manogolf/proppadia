@@ -49,6 +49,7 @@ Meaning:
 - `nhl-checks-offline`: runtime boundaries + shared checks + NHL unit tests + NHL OpenAPI drift check
 - `nhl-openapi-contract`: detects NHL OpenAPI schema drift vs `docs/openapi/openapi.snapshot.json`
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
+- includes NHL history read contract check: `GET /api/nhl/props/history`
 - `nhl-post-deploy-strict`: same checks, fails when probe date returns sparse data
 - `nhl-post-deploy-strict-offseason`: strict checks but allows sparse probe data
 - NHL make targets accept `NHL_DATE` to control probe date (default `2025-11-20`)

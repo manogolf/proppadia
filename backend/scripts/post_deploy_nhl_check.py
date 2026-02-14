@@ -72,6 +72,17 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
     checks.append(
         run_check(
             client,
+            name="props_history",
+            method="GET",
+            path="/api/nhl/props/history",
+            params={"limit": 5, "offset": 0},
+            expected_status=[200],
+            validate=expect_ok_count_rows,
+        )
+    )
+    checks.append(
+        run_check(
+            client,
             name="sog",
             method="GET",
             path="/api/nhl/sog",
