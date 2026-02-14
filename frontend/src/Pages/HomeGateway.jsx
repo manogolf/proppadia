@@ -110,6 +110,13 @@ export default function HomeGateway() {
     };
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      loadSnapshot();
+    }, 300000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div className="min-h-screen pp-page px-4 py-10">
       <div className="max-w-4xl mx-auto">
@@ -164,6 +171,7 @@ export default function HomeGateway() {
                     ? `Updated ${new Date(lastUpdated).toLocaleTimeString()}`
                     : "Backend-owned status"}
               </span>
+              <span className="text-[11px] text-slate-400">Auto refresh 5m</span>
               <button
                 type="button"
                 onClick={loadSnapshot}
