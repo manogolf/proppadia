@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBaseURL } from "../shared/getBaseURL.js";
 
 const OPS_PREFS_KEY = "proppadia_ops_prefs_v1";
@@ -174,6 +174,10 @@ export default function OpsPage() {
   const [resolveOutcome, setResolveOutcome] = useState("dnp");
   const [resolveLoading, setResolveLoading] = useState(false);
   const [resolveResult, setResolveResult] = useState(null);
+  const lastSuccessByKeyRef = useRef(lastSuccessByKey);
+  const deployStatusRef = useRef(deployStatus);
+  const deployLoadingRef = useRef(deployLoading);
+  const deployErrorRef = useRef(deployError);
 
   useEffect(() => {
     try {
@@ -258,6 +262,22 @@ export default function OpsPage() {
   }, [lastSuccessByKey]);
 
   useEffect(() => {
+    lastSuccessByKeyRef.current = lastSuccessByKey;
+  }, [lastSuccessByKey]);
+
+  useEffect(() => {
+    deployStatusRef.current = deployStatus;
+  }, [deployStatus]);
+
+  useEffect(() => {
+    deployLoadingRef.current = deployLoading;
+  }, [deployLoading]);
+
+  useEffect(() => {
+    deployErrorRef.current = deployError;
+  }, [deployError]);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(
         OPS_INCIDENT_HISTORY_KEY,
@@ -271,13 +291,13 @@ export default function OpsPage() {
   const runChecks = useCallback(async () => {
     setRunning(true);
     setError("");
-    const currentDeployFetchState = deployLoading
+    const currentDeployFetchState = deployLoadingRef.current
       ? "loading"
-      : deployError
+      : deployErrorRef.current
         ? "error"
-        : deployStatus?.deploy
+        : deployStatusRef.current?.deploy
           ? "loaded"
-          : deployStatus && !deployStatus?.deploy
+          : deployStatusRef.current && !deployStatusRef.current?.deploy
             ? "loaded-empty"
             : "idle";
     try {
@@ -411,7 +431,7 @@ export default function OpsPage() {
             captured_at: snapshotTs,
             base_url: baseUrl,
             last_updated: snapshotTs,
-            deploy: deployStatus?.deploy || null,
+            deploy: deployStatusRef.current?.deploy || null,
             deploy_fetch_state: currentDeployFetchState,
             data_freshness: {
               mlb_standings:
@@ -442,7 +462,7 @@ export default function OpsPage() {
               status_code: c.statusCode,
               duration_ms: c.durationMs,
               detail: c.detail,
-              last_success: lastSuccessByKey[c.key] || null,
+              last_success: lastSuccessByKeyRef.current[c.key] || null,
             })),
           };
           const sig = failureSignature(payload.failing_checks);
@@ -484,11 +504,6 @@ export default function OpsPage() {
   }, [
     autoCaptureFailures,
     baseUrl,
-    deployError,
-    deployLoading,
-    deployStatus?.deploy,
-    deployStatus,
-    lastSuccessByKey,
   ]);
 
   const deployHeaders = useMemo(() => {
