@@ -7,6 +7,7 @@ import PredictionWorkspace from "../../components/predictions/PredictionWorkspac
 import WorkspaceStatePanel from "../../components/predictions/WorkspaceStatePanel.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
+import { buildMarketContext } from "../../shared/marketContext.js";
 import { todayET } from "../../shared/timeUtils.js";
 
 const MODES = [
@@ -334,6 +335,45 @@ export default function NHLPredictions() {
     return parts.length ? parts.join(" • ") : "No active board filters";
   }, [query, savesSort, sogSort]);
 
+  const sogMarketContext = useMemo(
+    () =>
+      buildMarketContext({
+        marketProbability: topSogMarket?.marketProbability ?? null,
+        marketSource: "OddsAPI market median",
+        marketUpdatedAt: marketLoadedAt || null,
+        modelUpdatedAt: loadedAt || null,
+        marketSourceFallback: "OddsAPI market median",
+        modelSourceFallback: "NHL SOG model",
+      }),
+    [loadedAt, marketLoadedAt, topSogMarket?.marketProbability]
+  );
+
+  const savesMarketContext = useMemo(
+    () =>
+      buildMarketContext({
+        marketProbability: topSavesMarket?.marketProbability ?? null,
+        marketSource: "OddsAPI market median",
+        marketUpdatedAt: marketLoadedAt || null,
+        modelUpdatedAt: loadedAt || null,
+        marketSourceFallback: "OddsAPI market median",
+        modelSourceFallback: "NHL saves model",
+      }),
+    [loadedAt, marketLoadedAt, topSavesMarket?.marketProbability]
+  );
+
+  const boardMarketContext = useMemo(
+    () =>
+      buildMarketContext({
+        marketProbability: topSogMarket?.marketProbability ?? null,
+        marketSource: "OddsAPI market median",
+        marketUpdatedAt: marketLoadedAt || null,
+        modelUpdatedAt: loadedAt || null,
+        marketSourceFallback: "OddsAPI market median",
+        modelSourceFallback: "NHL board",
+      }),
+    [loadedAt, marketLoadedAt, topSogMarket?.marketProbability]
+  );
+
   const boardControls = (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
       <div>
@@ -471,14 +511,8 @@ export default function NHLPredictions() {
               }
               modelProbability={topSogBest?.p ?? null}
               marketProbability={topSogMarket?.marketProbability ?? null}
-              sourceLabel={topSogMarket?.marketProbability != null ? "OddsAPI market median" : "NHL SOG model"}
-              updatedLabel={
-                marketLoadedAt
-                  ? new Date(marketLoadedAt).toLocaleString()
-                  : loadedAt
-                    ? new Date(loadedAt).toLocaleString()
-                    : "-"
-              }
+              sourceLabel={sogMarketContext.sourceLabel}
+              updatedLabel={sogMarketContext.updatedLabel}
               confidenceLabel={dataConfidence}
             />
             <ModelVsMarketCard
@@ -490,14 +524,8 @@ export default function NHLPredictions() {
               }
               modelProbability={topSavesBest?.p ?? null}
               marketProbability={topSavesMarket?.marketProbability ?? null}
-              sourceLabel={topSavesMarket?.marketProbability != null ? "OddsAPI market median" : "NHL saves model"}
-              updatedLabel={
-                marketLoadedAt
-                  ? new Date(marketLoadedAt).toLocaleString()
-                  : loadedAt
-                    ? new Date(loadedAt).toLocaleString()
-                    : "-"
-              }
+              sourceLabel={savesMarketContext.sourceLabel}
+              updatedLabel={savesMarketContext.updatedLabel}
               confidenceLabel={dataConfidence}
             />
           </div>
@@ -630,14 +658,8 @@ export default function NHLPredictions() {
             }
             modelProbability={topSogBest?.p ?? null}
             marketProbability={topSogMarket?.marketProbability ?? null}
-            sourceLabel={topSogMarket?.marketProbability != null ? "OddsAPI market median" : "NHL board"}
-            updatedLabel={
-              marketLoadedAt
-                ? new Date(marketLoadedAt).toLocaleString()
-                : loadedAt
-                  ? new Date(loadedAt).toLocaleString()
-                  : "-"
-            }
+            sourceLabel={boardMarketContext.sourceLabel}
+            updatedLabel={boardMarketContext.updatedLabel}
             confidenceLabel={dataConfidence}
           />
 

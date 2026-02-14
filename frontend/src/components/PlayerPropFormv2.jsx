@@ -174,6 +174,7 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
   const [propValue, setPropValue] = useState("0.5");
   const [marketOddsAmerican, setMarketOddsAmerican] = useState("");
   const [marketImpliedProbability, setMarketImpliedProbability] = useState("");
+  const [manualMarketOverride, setManualMarketOverride] = useState(false);
 
   // resolved/flow
   const [playerId, setPlayerId] = useState("");
@@ -190,6 +191,7 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
   const [resolving, setResolving] = useState(false);
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [marketSourceLabel, setMarketSourceLabel] = useState("");
+  const [marketSourceUpdatedAt, setMarketSourceUpdatedAt] = useState("");
   const [supportedMarketMap, setSupportedMarketMap] = useState({});
   const [loadingMarketSupport, setLoadingMarketSupport] = useState(true);
 
@@ -207,7 +209,8 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
     setNotice("");
     setError("");
     setMarketSourceLabel("");
-  }, [playerId, teamAbbr, gameDate, propType, propValue, overUnder, marketOddsAmerican, marketImpliedProbability]);
+    setMarketSourceUpdatedAt("");
+  }, [playerId, teamAbbr, gameDate, propType, propValue, overUnder, marketOddsAmerican, marketImpliedProbability, manualMarketOverride]);
 
   useEffect(() => {
     let cancelled = false;
@@ -312,9 +315,36 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
 
     setLoading(true);
     try {
-      const oddsBasedImplied = americanOddsToImplied(marketOddsAmerican);
+      let effectiveMarketOddsAmerican = marketOddsAmerican;
+      let effectiveMarketImpliedProbability = marketImpliedProbability;
+      let effectiveMarketSourceLabel = marketSourceLabel;
+      let effectiveMarketUpdatedAt = marketSourceUpdatedAt;
+
+      if (isMarketSupported && !manualMarketOverride) {
+        const marketLookup = await fetchMarketOddsLookup({ silent: true });
+        if (marketLookup?.price_american != null) {
+          effectiveMarketOddsAmerican = String(marketLookup.price_american);
+        }
+        if (marketLookup?.implied_probability != null) {
+          effectiveMarketImpliedProbability = String(
+            Number(marketLookup.implied_probability).toFixed(4)
+          );
+        }
+        if (marketLookup?.bookmaker || marketLookup?.market_key) {
+          effectiveMarketSourceLabel = marketLookup.bookmaker
+            ? `${marketLookup.bookmaker} (${marketLookup.market_key || "market"})`
+            : (marketLookup.market_key || "OddsAPI");
+        }
+        if (marketLookup?.snapshot_cached_at) {
+          effectiveMarketUpdatedAt = marketLookup.snapshot_cached_at;
+        }
+      }
+
+      const oddsBasedImplied = americanOddsToImplied(effectiveMarketOddsAmerican);
       const explicitImplied =
-        marketImpliedProbability !== "" ? Number(marketImpliedProbability) : null;
+        effectiveMarketImpliedProbability !== ""
+          ? Number(effectiveMarketImpliedProbability)
+          : null;
       const finalMarketImplied =
         explicitImplied != null && Number.isFinite(explicitImplied)
           ? explicitImplied
@@ -329,7 +359,7 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
         prop_type: propType,
         prop_value: Number(propValue),
         over_under: overUnder,
-        market_odds_american: marketOddsAmerican,
+        market_odds_american: effectiveMarketOddsAmerican,
         market_implied_probability: finalMarketImplied,
       });
 
@@ -357,12 +387,13 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
         marketOddsAmerican:
           features?.market_odds_american != null
             ? Number(features.market_odds_american)
-            : (marketOddsAmerican !== "" ? Number(marketOddsAmerican) : null),
+            : (effectiveMarketOddsAmerican !== "" ? Number(effectiveMarketOddsAmerican) : null),
         recommendation,
         model,
         features,
         updatedAt: new Date().toISOString(),
-        marketSource: marketSourceLabel || null,
+        marketSource: effectiveMarketSourceLabel || null,
+        marketUpdatedAt: effectiveMarketUpdatedAt || null,
       });
     } catch (err) {
       console.error("[Props V2] predict error:", err);
@@ -372,21 +403,23 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
     }
   }
 
-  async function handleFetchMarketOdds() {
-    setError("");
-    setNotice("");
+  async function fetchMarketOddsLookup({ silent = false } = {}) {
+    if (!silent) {
+      setError("");
+      setNotice("");
+    }
     const name = (playerName || "").trim();
     if (!name) {
-      setError("Enter player name before fetching market odds.");
-      return;
+      if (!silent) setError("Enter player name before fetching market odds.");
+      return null;
     }
     if (!propType) {
-      setError("Pick a prop type before fetching market odds.");
-      return;
+      if (!silent) setError("Pick a prop type before fetching market odds.");
+      return null;
     }
     if (!isMarketSupported) {
-      setNotice("Market odds not available for this prop type in current OddsAPI mapping.");
-      return;
+      if (!silent) setNotice("Market odds not available for this prop type in current OddsAPI mapping.");
+      return null;
     }
     setLoadingMarket(true);
     try {
@@ -400,13 +433,13 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
 
       if (!data?.ok) {
         const reason = data?.reason || "lookup failed";
-        setError(`Market odds lookup failed: ${reason}`);
-        return;
+        if (!silent) setError(`Market odds lookup failed: ${reason}`);
+        return null;
       }
       if (!data?.found) {
         const reason = data?.reason || "no match found";
-        setNotice(`No market odds match found: ${reason}`);
-        return;
+        if (!silent) setNotice(`No market odds match found: ${reason}`);
+        return null;
       }
 
       if (data.price_american != null) {
@@ -419,12 +452,19 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
         ? `${data.bookmaker} (${data.market_key || "market"})`
         : (data.market_key || "OddsAPI");
       setMarketSourceLabel(source);
-      setNotice(`Market odds loaded from ${source}.`);
+      setMarketSourceUpdatedAt(data.snapshot_cached_at || new Date().toISOString());
+      if (!silent) setNotice(`Market odds loaded from ${source}.`);
+      return data;
     } catch (e) {
-      setError(e.message || String(e));
+      if (!silent) setError(e.message || String(e));
+      return null;
     } finally {
       setLoadingMarket(false);
     }
+  }
+
+  async function handleFetchMarketOdds() {
+    await fetchMarketOddsLookup({ silent: false });
   }
 
   // Keep onSubmit working (v1 wiring)
@@ -652,35 +692,50 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
           </select>
         </div>
 
-        {/* Market Odds (American) */}
-        <div className="flex flex-col">
-          <span className="text-sm font-medium mb-1">Market Odds (American)</span>
+        <div className="flex items-center gap-2 md:col-span-2">
           <input
-            type="number"
-            value={marketOddsAmerican}
-            onChange={(e) => setMarketOddsAmerican(e.target.value)}
-            placeholder="e.g., -115 or +135"
-            className="w-full p-2 pp-chip rounded-md"
-            inputMode="numeric"
-            step="1"
+            id="manualMarketOverride"
+            type="checkbox"
+            checked={manualMarketOverride}
+            onChange={(e) => setManualMarketOverride(e.target.checked)}
+            className="h-4 w-4"
           />
+          <label htmlFor="manualMarketOverride" className="text-sm text-slate-700">
+            Manual market override (advanced)
+          </label>
         </div>
 
-        {/* Market Implied Probability */}
-        <div className="flex flex-col">
-          <span className="text-sm font-medium mb-1">Market Implied Prob (0-1)</span>
-          <input
-            type="number"
-            value={marketImpliedProbability}
-            onChange={(e) => setMarketImpliedProbability(e.target.value)}
-            placeholder="optional; overrides odds conversion"
-            className="w-full p-2 pp-chip rounded-md"
-            inputMode="decimal"
-            step="0.001"
-            min="0"
-            max="1"
-          />
-        </div>
+        {manualMarketOverride ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium mb-1">Market Odds (American)</span>
+            <input
+              type="number"
+              value={marketOddsAmerican}
+              onChange={(e) => setMarketOddsAmerican(e.target.value)}
+              placeholder="e.g., -115 or +135"
+              className="w-full p-2 pp-chip rounded-md"
+              inputMode="numeric"
+              step="1"
+            />
+          </div>
+        ) : null}
+
+        {manualMarketOverride ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium mb-1">Market Implied Prob (0-1)</span>
+            <input
+              type="number"
+              value={marketImpliedProbability}
+              onChange={(e) => setMarketImpliedProbability(e.target.value)}
+              placeholder="optional; overrides odds conversion"
+              className="w-full p-2 pp-chip rounded-md"
+              inputMode="decimal"
+              step="0.001"
+              min="0"
+              max="1"
+            />
+          </div>
+        ) : null}
 
         {/* Game Date */}
         <div className="flex flex-col">
@@ -702,7 +757,7 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
           disabled={loadingMarket || !playerName.trim() || !propType || !isMarketSupported}
           className="pp-btn pp-btn-secondary pp-btn-md flex-1 md:flex-none"
         >
-          {loadingMarket ? "Loading Market…" : "📈 Fetch Market Odds"}
+          {loadingMarket ? "Loading Market…" : "📈 Refresh Market Odds"}
         </button>
 
         <button

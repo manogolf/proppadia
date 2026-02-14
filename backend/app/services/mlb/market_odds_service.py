@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -348,6 +348,18 @@ def fetch_mlb_market_odds(
             "market_key": market_key,
         }
 
+    snapshot = _snapshot_cache.get(game_date)
+    snapshot_cached_at = (
+        datetime.fromtimestamp(snapshot[0], tz=timezone.utc).isoformat()
+        if snapshot
+        else None
+    )
+    snapshot_age_seconds = (
+        max(0, int(time.time() - snapshot[0]))
+        if snapshot
+        else None
+    )
+
     candidates = _extract_candidate_outcomes(
         events=events,
         market_key=market_key,
@@ -362,6 +374,8 @@ def fetch_mlb_market_odds(
             "reason": "no matching market outcome",
             "market_key": market_key,
             "events_considered": len(events),
+            "snapshot_cached_at": snapshot_cached_at,
+            "snapshot_age_seconds": snapshot_age_seconds,
         }
 
     best = candidates[0]
@@ -380,4 +394,6 @@ def fetch_mlb_market_odds(
         "line": best.get("line"),
         "price_american": best.get("price_american"),
         "implied_probability": best.get("implied_probability"),
+        "snapshot_cached_at": snapshot_cached_at,
+        "snapshot_age_seconds": snapshot_age_seconds,
     }

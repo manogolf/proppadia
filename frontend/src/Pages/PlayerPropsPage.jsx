@@ -6,6 +6,7 @@ import PropTracker from "../components/PropTracker.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
+import { buildMarketContext } from "../shared/marketContext.js";
 import { todayET } from "../shared/timeUtils.js";
 
 const MODES = [
@@ -33,6 +34,18 @@ export default function PlayerPropsPage() {
       ? "Resolve player and context, then generate model output."
       : "Review saved props by date and inspect tracking history.";
   }, [mode]);
+  const marketCtx = useMemo(
+    () =>
+      buildMarketContext({
+        marketProbability: latestPrediction?.marketProbability ?? null,
+        marketSource: latestPrediction?.marketSource || null,
+        marketUpdatedAt: latestPrediction?.marketUpdatedAt || null,
+        modelUpdatedAt: latestPrediction?.updatedAt || null,
+        marketSourceFallback: "OddsAPI market",
+        modelSourceFallback: latestPrediction ? "Model output" : "Awaiting prediction",
+      }),
+    [latestPrediction]
+  );
 
   return (
     <PredictionWorkspace
@@ -55,14 +68,8 @@ export default function PlayerPropsPage() {
             }
             modelProbability={latestPrediction?.probability ?? null}
             marketProbability={latestPrediction?.marketProbability ?? null}
-            sourceLabel={
-              latestPrediction?.marketProbability != null
-                ? (latestPrediction?.marketSource || "Market odds")
-                : latestPrediction
-                  ? "Model output"
-                  : "Awaiting prediction"
-            }
-            updatedLabel={latestPrediction?.updatedAt ? new Date(latestPrediction.updatedAt).toLocaleString() : "-"}
+            sourceLabel={marketCtx.sourceLabel}
+            updatedLabel={marketCtx.updatedLabel}
             confidenceLabel={latestPrediction ? "Model" : "Pending"}
           />
 

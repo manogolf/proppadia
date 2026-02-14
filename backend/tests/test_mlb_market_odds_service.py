@@ -106,6 +106,8 @@ class TestMlbMarketOddsService(unittest.TestCase):
         self.assertEqual(out["bookmaker"], "FanDuel")
         self.assertEqual(out["price_american"], -120)
         self.assertIn("implied_probability", out)
+        self.assertIn("snapshot_cached_at", out)
+        self.assertIn("snapshot_age_seconds", out)
 
     def test_fetch_market_odds_unsupported_prop(self):
         out = fetch_mlb_market_odds(
