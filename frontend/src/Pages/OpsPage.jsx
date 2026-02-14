@@ -124,6 +124,7 @@ export default function OpsPage() {
   const [refreshSeconds, setRefreshSeconds] = useState(0);
   const [copiedKey, setCopiedKey] = useState("");
   const [copiedSnapshot, setCopiedSnapshot] = useState(false);
+  const [copiedIncidentSnapshot, setCopiedIncidentSnapshot] = useState(false);
   const [failuresOnly, setFailuresOnly] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState({});
@@ -580,6 +581,62 @@ export default function OpsPage() {
     }
   }, [baseUrl, checks, lastUpdated, marketCoverage.count, summary]);
 
+  const copyIncidentSnapshot = useCallback(async () => {
+    const failingChecks = checks.filter((c) => c.ok === false);
+    const payload = {
+      captured_at: new Date().toISOString(),
+      base_url: baseUrl,
+      last_updated: lastUpdated,
+      deploy: deployStatus?.deploy || null,
+      deploy_fetch_state: deployFetchState,
+      data_freshness: {
+        mlb_standings: mlbStandingsMeta
+          ? {
+              source: mlbStandingsMeta.source,
+              stale: mlbStandingsMeta.stale,
+              cached_at: mlbStandingsMeta.cached_at,
+              records_count: Array.isArray(mlbStandingsMeta.records)
+                ? mlbStandingsMeta.records.length
+                : null,
+            }
+          : null,
+        nhl_slate_meta: nhlSlateMeta
+          ? {
+              source: nhlSlateMeta.source,
+              stale: nhlSlateMeta.stale,
+              cached_at: nhlSlateMeta.cached_at,
+              components: nhlSlateMeta.components || null,
+            }
+          : null,
+      },
+      failing_checks: failingChecks.map((c) => ({
+        key: c.key,
+        label: c.label,
+        path: c.path,
+        status_code: c.statusCode,
+        duration_ms: c.durationMs,
+        detail: c.detail,
+        last_success: lastSuccessByKey[c.key] || null,
+      })),
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setCopiedIncidentSnapshot(true);
+      window.setTimeout(() => setCopiedIncidentSnapshot(false), 1200);
+    } catch {
+      setCopiedIncidentSnapshot(false);
+    }
+  }, [
+    baseUrl,
+    checks,
+    deployFetchState,
+    deployStatus?.deploy,
+    lastSuccessByKey,
+    lastUpdated,
+    mlbStandingsMeta,
+    nhlSlateMeta,
+  ]);
+
   return (
     <div className="min-h-screen pp-page">
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -672,6 +729,13 @@ export default function OpsPage() {
                 className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
               >
                 {copiedSnapshot ? "Snapshot copied" : "Copy Snapshot JSON"}
+              </button>
+              <button
+                type="button"
+                onClick={copyIncidentSnapshot}
+                className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
+              >
+                {copiedIncidentSnapshot ? "Incident copied" : "Copy Incident Snapshot"}
               </button>
             </div>
             {error ? <div className="text-sm text-rose-700 mt-2">{error}</div> : null}
