@@ -66,6 +66,28 @@ on:
         self.assertIn("SCHEDULED scheduled.yml", printed)
         self.assertNotIn("manual-only manual.yml", printed)
 
+    def test_main_quiet_prints_summary_only(self):
+        with TemporaryDirectory() as tmp:
+            wf_dir = Path(tmp)
+            (wf_dir / "scheduled.yml").write_text(
+                'on:\n  schedule:\n    - cron: "15 6 * * *"\n',
+                encoding="utf-8",
+            )
+            (wf_dir / "manual.yml").write_text(
+                "on:\n  workflow_dispatch: {}\n",
+                encoding="utf-8",
+            )
+            out = StringIO()
+            with patch.object(schedule_inventory, "WORKFLOWS_DIR", wf_dir):
+                with patch.object(schedule_inventory, "EXPECTED_SCHEDULED", {"scheduled.yml"}):
+                    with redirect_stdout(out):
+                        rc = schedule_inventory.main(["--quiet", "--strict"])
+        self.assertEqual(rc, 0)
+        printed = out.getvalue()
+        self.assertIn("Summary:", printed)
+        self.assertNotIn("SCHEDULED scheduled.yml", printed)
+        self.assertNotIn("manual-only manual.yml", printed)
+
 
 class TestWorkflowCommandPathAudit(unittest.TestCase):
     def test_module_to_candidate_paths_shape(self):
