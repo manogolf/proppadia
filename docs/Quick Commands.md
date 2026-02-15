@@ -31,6 +31,7 @@ make mlb-stat-derived-smoke MLB_STAT_FROM_DATE=2025-08-15 MLB_STAT_TO_DATE=2025-
 ## Post-Deploy Checks
 
 ```bash
+make nhl-help
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 ```
