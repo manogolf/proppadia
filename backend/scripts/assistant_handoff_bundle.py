@@ -16,6 +16,7 @@ from backend.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
 from backend.scripts import phase_status_snapshot
+from backend.scripts import season_activation_report
 from backend.scripts.mlb_readiness_last import _load_history, _regressions
 from backend.scripts.mlb_readiness_snapshot import collect_snapshot
 
@@ -110,6 +111,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     nhl_rc, nhl_compat = _run_json_check(check_nhl_workflow_compat.main, ["--json"])
     phase_rc, phase_status = _run_json_check(phase_status_snapshot.main, [])
+    report_rc, season_report = _run_json_check(season_activation_report.main, [])
 
     readiness = collect_snapshot(
         stat_days=args.stat_days,
@@ -120,7 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     history = _history_tail(args.history_input, args.history_limit)
     season_activation_history = _season_activation_tail(args.season_activation_input, args.history_limit)
 
-    governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0
+    governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0 and report_rc == 0
     readiness_ok = bool(readiness.get("ok"))
     ok = governance_ok and readiness_ok
 
@@ -135,6 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "workflow_path_audit": path_audit,
                 "nhl_workflow_compat": nhl_compat,
                 "phase_status": phase_status,
+                "season_activation_report": season_report,
             },
         },
         "mlb_readiness": readiness,

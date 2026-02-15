@@ -22,6 +22,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_mk_check("pass")), patch.object(
             bundle.phase_status_snapshot, "main", side_effect=_mk_check("pass")
         ), patch.object(
+            bundle.season_activation_report, "main", side_effect=_mk_check("pass")
+        ), patch.object(
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 0, "returned": 0, "rows": []}
@@ -40,6 +42,7 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("mlb_readiness_history", payload)
         self.assertIn("season_activation_history", payload)
         self.assertIn("phase_status", payload["governance"]["checks"])
+        self.assertIn("season_activation_report", payload["governance"]["checks"])
 
     def test_main_fail_when_readiness_fails(self):
         def _ok(_args):
@@ -51,6 +54,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle.check_workflow_command_paths, "main", side_effect=_ok
         ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_ok), patch.object(
             bundle.phase_status_snapshot, "main", side_effect=_ok
+        ), patch.object(
+            bundle.season_activation_report, "main", side_effect=_ok
         ), patch.object(
             bundle, "collect_snapshot", return_value={"ok": False, "status": "fail", "checks": {}, "errors": {}}
         ), patch.object(
@@ -79,6 +84,38 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle.check_workflow_command_paths, "main", side_effect=_ok
         ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_ok), patch.object(
             bundle.phase_status_snapshot, "main", side_effect=_bad
+        ), patch.object(
+            bundle.season_activation_report, "main", side_effect=_ok
+        ), patch.object(
+            bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
+        ), patch.object(
+            bundle, "_history_tail", return_value={"input": "x", "history_count": 1, "returned": 1, "rows": []}
+        ), patch.object(
+            bundle, "_season_activation_tail", return_value={"input": "y", "history_count": 1, "returned": 1, "rows": []}
+        ), redirect_stdout(out):
+            rc = bundle.main([])
+
+        self.assertEqual(rc, 1)
+        payload = json.loads(out.getvalue())
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "fail")
+
+    def test_main_fail_when_season_report_fails(self):
+        def _ok(_args):
+            print(json.dumps({"status": "pass"}))
+            return 0
+
+        def _bad(_args):
+            print(json.dumps({"status": "fail"}))
+            return 1
+
+        out = StringIO()
+        with patch.object(bundle.check_workflow_schedule_inventory, "main", side_effect=_ok), patch.object(
+            bundle.check_workflow_command_paths, "main", side_effect=_ok
+        ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_ok), patch.object(
+            bundle.phase_status_snapshot, "main", side_effect=_ok
+        ), patch.object(
+            bundle.season_activation_report, "main", side_effect=_bad
         ), patch.object(
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
         ), patch.object(
