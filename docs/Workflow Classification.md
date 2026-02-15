@@ -19,6 +19,8 @@ Snapshot date: February 15, 2026
 ### Keep Active
 
 - `.github/workflows/ci-offline-checks.yml`
+- `.github/workflows/mlb-refresh-player-ids.yml`
+- `.github/workflows/nhl-daily-refresh.yml`
 - `Makefile` MLB operational targets:
   - `mlb-daily-refresh` / `mlb-daily-refresh-strict` / `mlb-daily-refresh-smoke`
   - `mlb-help` / `mlb-runbook` / `mlb-cron-preview`
@@ -36,8 +38,6 @@ Snapshot date: February 15, 2026
 
 ### Suspended Valid
 
-- `.github/workflows/mlb-refresh-player-ids.yml`
-- `.github/workflows/nhl-daily-refresh.yml`
 - `.github/workflows/nhl-refresh-rosters.yml`
 
 ### Suspended Needs Path Fix
@@ -91,7 +91,7 @@ Current operator stance:
 
 ## MLB Cron Baseline (Current)
 
-Quick runnable command list: `docs/Quick Commands.md`
+Quick runnable command list: `docs/Operations Command Matrix.md`
 Workflow schedule inventory commands:
 - `make cron-governance-check` (one-command strict governance gate)
 - `make workflow-inventory` (report only)
