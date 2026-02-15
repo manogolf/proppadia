@@ -310,6 +310,64 @@
         }
       }
     },
+    "/api/mlb/roster-freshness": {
+      "get": {
+        "tags": [
+          "mlb"
+        ],
+        "summary": "MLB roster freshness status from player_ids",
+        "operationId": "mlb_roster_freshness_api_mlb_roster_freshness_get",
+        "parameters": [
+          {
+            "name": "stale_after_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 336,
+              "minimum": 1,
+              "description": "Stale threshold in hours",
+              "default": 30,
+              "title": "Stale After Hours"
+            },
+            "description": "Stale threshold in hours"
+          },
+          {
+            "name": "require_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minimum player_ids row count required",
+              "default": 1,
+              "title": "Require Min"
+            },
+            "description": "Minimum player_ids row count required"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/players/resolve": {
       "get": {
         "tags": [
