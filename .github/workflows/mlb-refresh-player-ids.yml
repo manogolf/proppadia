@@ -1,5 +1,5 @@
-# .github/workflows/refresh-player-ids.yml
-name: refresh-player-ids
+# .github/workflows/mlb-refresh-player-ids.yml
+name: mlb-refresh-player-ids
 on:
   schedule:
     - cron: "15 6 * * *"
@@ -26,10 +26,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Run refresher
+      - name: Validate DB secret
         env:
-          PYTHONPATH: backend/sports
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          PYTHONPATH="$GITHUB_WORKSPACE" python backend/app/jobs/refresh_player_ids.py
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "Missing required secret: SUPABASE_DB_URL"
+            exit 1
+          fi
+
+      - name: Run full MLB roster refresh
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          MLB_ROSTER_DATE: ""
+        run: |
+          if [ -n "$MLB_ROSTER_DATE" ]; then
+            make mlb-roster-refresh-all MLB_ROSTER_DATE="$MLB_ROSTER_DATE"
+          else
+            make mlb-roster-refresh-all
+          fi

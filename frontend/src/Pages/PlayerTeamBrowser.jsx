@@ -165,7 +165,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       else setRefreshing(true);
       setError(null);
       if (sport === "mlb") {
-        const res = await fetch(`${getBaseURL()}/api/players`);
+        const res = await fetch(`${getBaseURL()}/api/mlb/players?limit=5000`);
         if (!res.ok) throw new Error("Failed to fetch MLB player list");
         const data = await res.json();
         setPlayers(Array.isArray(data) ? data : []);

@@ -47,6 +47,7 @@ from backend.app.services.mlb.prop_submission_service import (
 from backend.app.services.mlb.schedule_service import fetch_schedule
 from backend.app.services.mlb.standings_service import get_standings
 from backend.app.services.mlb.player_service import (
+    list_players_mlb,
     list_players,
     lookup_player,
     player_profile,
@@ -250,6 +251,24 @@ def players_search(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
     return {"ok": True, "count": len(rows), "rows": rows}
+
+
+@router.get(
+    "/mlb/players",
+    summary="List MLB players (MLB-scoped cumulative directory)",
+    response_model=List[PlayerListItem],
+    response_model_exclude_none=True,
+)
+def mlb_players_list(
+    limit: int = Query(2000, ge=1, le=5000),
+):
+    try:
+        rows = list_players_mlb(limit=limit)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+    return rows
 
 
 @router.get(

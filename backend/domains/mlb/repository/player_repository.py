@@ -170,6 +170,67 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
     return out
 
 
+def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
+    """
+    MLB-scoped cumulative players directory.
+
+    Keeps compatibility with list_players output shape, but computes recency from
+    non-NHL rows to avoid cross-sport date bleed when player ids overlap.
+    """
+    lim = max(1, min(int(limit), 5000))
+    sql = """
+        WITH players AS (
+          SELECT
+            CAST(player_id AS TEXT) AS player_id,
+            MIN(player_name) AS player_name,
+            MIN(team) AS team
+          FROM player_ids
+          GROUP BY CAST(player_id AS TEXT)
+        ),
+        recent AS (
+          SELECT
+            CAST(player_id AS TEXT) AS player_id,
+            MAX(game_date)::date AS last_prop_date
+          FROM player_props
+          WHERE prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%'
+          GROUP BY CAST(player_id AS TEXT)
+        )
+        SELECT
+          p.player_id,
+          p.player_name,
+          p.team,
+          r.last_prop_date
+        FROM players p
+        LEFT JOIN recent r
+          ON r.player_id = p.player_id
+        ORDER BY p.team ASC NULLS LAST, p.player_name ASC
+        LIMIT %s
+    """
+    try:
+        rows = pg_fetchall(sql, (lim,))
+    except Exception:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        pid = _to_int(row.get("player_id"))
+        if pid is None:
+            continue
+        out.append(
+            {
+                "player_id": pid,
+                "player_name": row.get("player_name"),
+                "team": _normalize_team(row.get("team")),
+                "last_prop_date": (
+                    row.get("last_prop_date").isoformat()
+                    if hasattr(row.get("last_prop_date"), "isoformat")
+                    else (str(row.get("last_prop_date")) if row.get("last_prop_date") else None)
+                ),
+            }
+        )
+    return out
+
+
 def resolve_by_player_id(player_id: int) -> Optional[Dict[str, Any]]:
     resolved = lookup_player(player_id)
     if resolved:

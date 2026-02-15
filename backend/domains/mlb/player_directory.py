@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from backend.domains.mlb.repository.player_repository import (
     _decorate as repo_decorate,
     fetch_player_profile_rows,
+    list_players_mlb as repo_list_players_mlb,
     list_players as repo_list_players,
     lookup_player as repo_lookup_player,
     search_players as repo_search_players,
@@ -28,6 +29,10 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
 
 def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
     return repo_list_players(limit=limit)
+
+
+def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
+    return repo_list_players_mlb(limit=limit)
 
 
 def player_profile(player_id: int) -> Dict[str, Any]:
