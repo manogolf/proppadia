@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -9,6 +9,8 @@ MLB_ROSTER_DATE ?= $(shell date +%F)
 NHL_ROSTER_DATE ?= $(shell date +%F)
 MLB_STAT_DERIVED_DAYS ?= 7
 MLB_STAT_DERIVED_MIN ?= 0
+MLB_PREDICT_SAMPLE ?= 10
+MLB_PREDICT_MIN_SUCCESS ?= 1
 MLB_STAT_FROM_DATE ?=
 MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
@@ -48,6 +50,7 @@ help:
 	@echo "  make mlb-readiness-snapshot [json readiness for stat-derived + roster freshness]"
 	@echo "  make mlb-readiness-log [append readiness snapshot to artifacts history jsonl]"
 	@echo "  make mlb-readiness-last [show latest readiness history rows]"
+	@echo "  make mlb-prediction-readiness [prepare->predict readiness sample for MLB_DATE]"
 	@echo "  make mlb-daily-refresh [daily baseline; cache+roster+stat-derived]"
 	@echo "  make mlb-daily-refresh-strict [daily baseline + require stat-derived min=1]"
 	@echo "  make mlb-daily-refresh-smoke [daily baseline smoke; forces MLB_STAT_MAX_GAMES=1]"
@@ -247,6 +250,8 @@ mlb-show-config:
 	@echo "MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES)"
 	@echo "MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS)"
 	@echo "MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)"
+	@echo "MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE)"
+	@echo "MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
 
 # JSON snapshot for MLB readiness signals (stat-derived + roster freshness).
 mlb-readiness-snapshot:
@@ -257,6 +262,9 @@ mlb-readiness-log:
 
 mlb-readiness-last:
 	$(VENV_PY) backend/scripts/mlb_readiness_last.py --limit 10
+
+mlb-prediction-readiness:
+	$(VENV_PY) backend/scripts/probe_mlb_prediction_readiness.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS)
 
 # Generate historical stat-derived MLB rows (legacy workhorse script).
 mlb-insert-stat-derived:
