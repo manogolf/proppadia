@@ -7,24 +7,16 @@ import argparse
 import json
 import os
 import sys
-from contextlib import redirect_stdout
-from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Sequence
 
 from backend.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
+from backend.scripts import json_check_runner
 from backend.scripts import season_activation_report
 from backend.scripts.mlb_readiness_last import _load_history, _regressions
 from backend.scripts.mlb_readiness_snapshot import collect_snapshot
-
-
-def _run_json_check(fn: Callable[[list[str]], int], args: list[str]) -> tuple[int, dict[str, Any]]:
-    out = StringIO()
-    with redirect_stdout(out):
-        rc = fn(args)
-    return rc, json.loads(out.getvalue())
 
 
 def _default_ops_vars() -> dict[str, Any]:
@@ -74,14 +66,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--roster-stale-hours", type=int, default=30)
     args = ap.parse_args(list(argv) if argv is not None else [])
 
-    inv_rc, inventory = _run_json_check(
+    inv_rc, inventory = json_check_runner.run_json_check(
         check_workflow_schedule_inventory.main, ["--strict", "--json"]
     )
-    path_rc, path_audit = _run_json_check(
+    path_rc, path_audit = json_check_runner.run_json_check(
         check_workflow_command_paths.main, ["--strict", "--json"]
     )
-    nhl_rc, nhl_compat = _run_json_check(check_nhl_workflow_compat.main, ["--json"])
-    report_rc, season_report = _run_json_check(
+    nhl_rc, nhl_compat = json_check_runner.run_json_check(check_nhl_workflow_compat.main, ["--json"])
+    report_rc, season_report = json_check_runner.run_json_check(
         season_activation_report.main,
         [
             "--strict",

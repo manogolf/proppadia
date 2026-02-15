@@ -4,34 +4,25 @@
 from __future__ import annotations
 
 import json
-import sys
-from contextlib import redirect_stdout
-from io import StringIO
-from typing import Callable
 
 from backend.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
+from backend.scripts import json_check_runner
 from backend.scripts import season_activation_report
 
 
-def _run_json_check(fn: Callable[[list[str]], int], args: list[str]) -> tuple[int, dict]:
-    out = StringIO()
-    with redirect_stdout(out):
-        rc = fn(args)
-    payload = json.loads(out.getvalue())
-    return rc, payload
-
-
 def main() -> int:
-    inv_rc, inventory = _run_json_check(
+    inv_rc, inventory = json_check_runner.run_json_check(
         check_workflow_schedule_inventory.main, ["--strict", "--json"]
     )
-    path_rc, path_audit = _run_json_check(
+    path_rc, path_audit = json_check_runner.run_json_check(
         check_workflow_command_paths.main, ["--strict", "--json"]
     )
-    nhl_rc, nhl_compat = _run_json_check(check_nhl_workflow_compat.main, ["--json"])
-    activation_rc, activation_report = _run_json_check(season_activation_report.main, ["--strict"])
+    nhl_rc, nhl_compat = json_check_runner.run_json_check(check_nhl_workflow_compat.main, ["--json"])
+    activation_rc, activation_report = json_check_runner.run_json_check(
+        season_activation_report.main, ["--strict"]
+    )
 
     governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0
     activation_ok = activation_rc == 0 and bool(activation_report.get("ok", False))
