@@ -42,6 +42,7 @@ def collect_incident_snapshot(
     rows: list[dict[str, Any]] = []
     for idx, item in enumerate(tail):
         prev = tail[idx - 1] if idx > 0 else None
+        regressions = ops_operator_last._regressions(prev, item) if prev else []
         rows.append(
             {
                 "captured_at": item.get("captured_at"),
@@ -54,14 +55,20 @@ def collect_incident_snapshot(
                 "roster_stale": (((item.get("mlb_readiness") or {}).get("roster_stale"))),
                 "blocker_count": (((item.get("season_activation") or {}).get("blocker_count"))),
                 "top_blocker": (((item.get("season_activation") or {}).get("top_blocker"))),
-                "regressions": ops_operator_last._regressions(prev, item) if prev else [],
+                "regressions": regressions,
             }
         )
 
+    latest_row = rows[-1] if rows else {}
+    latest_regressions = latest_row.get("regressions") or []
+    regressed = len(latest_regressions) > 0
     return {
         "captured_at": summary.get("captured_at"),
         "ok": bool(summary.get("ok")),
         "status": summary.get("status"),
+        "history_available": len(history) > 0,
+        "latest_regressions": latest_regressions,
+        "regressed": regressed,
         "summary": summary,
         "history_tail": {
             "input": str(ops_history_input),
