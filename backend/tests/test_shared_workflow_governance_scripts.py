@@ -1,3 +1,4 @@
+import sys
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -5,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import backend.scripts.check_workflow_command_paths as command_audit
 import backend.scripts.check_workflow_schedule_inventory as schedule_inventory
 from backend.scripts.check_workflow_command_paths import (
     collect_missing_references,
@@ -115,6 +117,57 @@ python -m backend.scripts.not_a_real_module
         missing = collect_missing_references(text)
         self.assertIn("path:backend/scripts/not_real_script.py", missing)
         self.assertIn("module:backend.scripts.not_a_real_module", missing)
+
+    def test_main_quiet_summary_only_pass(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf_dir = root / ".github" / "workflows"
+            wf_dir.mkdir(parents=True)
+            (root / "backend" / "scripts").mkdir(parents=True)
+            (root / "backend" / "scripts" / "existing.py").write_text(
+                "print('ok')\n", encoding="utf-8"
+            )
+            (wf_dir / "scheduled.yml").write_text(
+                'on:\n  schedule:\n    - cron: "15 6 * * *"\njobs:\n  x:\n    steps:\n      - run: python backend/scripts/existing.py\n',
+                encoding="utf-8",
+            )
+            out = StringIO()
+            with patch.object(command_audit, "ROOT", root):
+                    with patch.object(command_audit, "WORKFLOWS_DIR", wf_dir):
+                        with redirect_stdout(out):
+                            with patch.object(
+                                sys,
+                                "argv",
+                                ["check_workflow_command_paths.py", "--quiet", "--strict"],
+                            ):
+                                rc = command_audit.main()
+        self.assertEqual(rc, 0)
+        printed = out.getvalue()
+        self.assertIn("Summary:", printed)
+        self.assertNotIn("- OK scheduled.yml", printed)
+        self.assertNotIn("- SKIP", printed)
+
+    def test_main_strict_fails_for_missing_refs(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf_dir = root / ".github" / "workflows"
+            wf_dir.mkdir(parents=True)
+            (wf_dir / "scheduled.yml").write_text(
+                'on:\n  schedule:\n    - cron: "15 6 * * *"\njobs:\n  x:\n    steps:\n      - run: python backend/scripts/missing.py\n',
+                encoding="utf-8",
+            )
+            out = StringIO()
+            with patch.object(command_audit, "ROOT", root):
+                    with patch.object(command_audit, "WORKFLOWS_DIR", wf_dir):
+                        with redirect_stdout(out):
+                            with patch.object(
+                                sys, "argv", ["check_workflow_command_paths.py", "--strict"]
+                            ):
+                                rc = command_audit.main()
+        self.assertEqual(rc, 1)
+        printed = out.getvalue()
+        self.assertIn("MISSING scheduled.yml", printed)
+        self.assertIn("missing references: 1", printed)
 
 
 if __name__ == "__main__":
