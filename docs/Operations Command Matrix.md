@@ -104,6 +104,7 @@ Season activation status snapshot:
 
 ```bash
 make season-activation-status
+make season-activation-status-strict
 ```
 
 ## Data Refresh Lanes

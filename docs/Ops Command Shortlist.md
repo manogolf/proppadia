@@ -18,6 +18,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - full phase 6 bundle (kickoff readiness + baseline artifact capture)
 - `make season-activation-status`
   - phase 6 tracker + baseline artifact presence in one status payload
+- `make season-activation-status-strict`
+  - same status payload, but exits non-zero until phase 6 readiness is complete
 - `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`
   - NHL fixed-window quality baseline
 - `make mlb-prediction-flow-audit`

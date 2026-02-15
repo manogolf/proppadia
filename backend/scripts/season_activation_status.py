@@ -59,17 +59,35 @@ def _next_steps(phase6: List[str], baselines: Dict[str, List[str]]) -> List[str]
     return steps
 
 
+def _readiness_state(phase6: List[str], baselines: Dict[str, List[str]]) -> Dict[str, object]:
+    lines = " ".join(phase6).lower()
+    has_mlb = len(baselines.get("mlb") or []) > 0
+    has_nhl = len(baselines.get("nhl") or []) > 0
+    needs_dry_run = "6.1 preseason dry run: complete" not in lines
+    needs_cutover = "6.2 in-season cadence cutover: complete" not in lines
+    needs_baseline = not (has_mlb and has_nhl)
+    blockers: List[str] = []
+    if needs_dry_run:
+        blockers.append("phase_6_1_incomplete")
+    if needs_cutover:
+        blockers.append("phase_6_2_incomplete")
+    if needs_baseline:
+        blockers.append("baseline_artifacts_missing")
+    return {"ready": len(blockers) == 0, "blockers": blockers}
+
+
 def build_status(plan_path: Path = PLAN_PATH, baseline_dir: Path = BASELINE_DIR) -> Dict[str, object]:
     plan_text = _read_text(plan_path)
     phase6 = _phase6_status_lines(plan_text)
     baselines = _list_baselines(baseline_dir)
+    readiness = _readiness_state(phase6, baselines)
     try:
         baseline_dir_label = str(baseline_dir.relative_to(ROOT)) if baseline_dir.is_absolute() else str(baseline_dir)
     except ValueError:
         baseline_dir_label = str(baseline_dir)
     payload: Dict[str, object] = {
-        "ok": True,
-        "status": "pass",
+        "ok": bool(readiness["ready"]),
+        "status": "pass" if readiness["ready"] else "fail",
         "phase6_tracker": phase6,
         "baseline_artifacts": {
             "dir": baseline_dir_label,
@@ -78,6 +96,7 @@ def build_status(plan_path: Path = PLAN_PATH, baseline_dir: Path = BASELINE_DIR)
             "has_mlb": len(baselines.get("mlb") or []) > 0,
             "has_nhl": len(baselines.get("nhl") or []) > 0,
         },
+        "readiness": readiness,
         "next_steps": _next_steps(phase6, baselines),
     }
     return payload
@@ -86,10 +105,13 @@ def build_status(plan_path: Path = PLAN_PATH, baseline_dir: Path = BASELINE_DIR)
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Report season activation readiness status.")
     ap.add_argument("--json", action="store_true", help="Print JSON (default true behavior).")
-    _ = ap.parse_args(argv if argv is not None else sys.argv[1:])
+    ap.add_argument("--strict", action="store_true", help="Exit non-zero when readiness is not complete.")
+    args = ap.parse_args(argv if argv is not None else sys.argv[1:])
 
     payload = build_status()
     print(json.dumps(payload, indent=2))
+    if args.strict and not payload.get("ok", False):
+        return 2
     return 0
 
 

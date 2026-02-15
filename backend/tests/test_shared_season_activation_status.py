@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from backend.scripts import season_activation_status as sas
 
@@ -23,10 +24,14 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = sas.build_status(plan, baselines)
-            self.assertTrue(payload["ok"])
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["status"], "fail")
             self.assertFalse(payload["baseline_artifacts"]["has_mlb"])
             self.assertFalse(payload["baseline_artifacts"]["has_nhl"])
             self.assertGreater(len(payload["next_steps"]), 0)
+            self.assertIn("phase_6_1_incomplete", payload["readiness"]["blockers"])
+            self.assertIn("phase_6_2_incomplete", payload["readiness"]["blockers"])
+            self.assertIn("baseline_artifacts_missing", payload["readiness"]["blockers"])
 
     def test_build_status_with_baselines_present(self):
         with tempfile.TemporaryDirectory() as td:
@@ -48,11 +53,18 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = sas.build_status(plan, baselines)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["status"], "pass")
             self.assertTrue(payload["baseline_artifacts"]["has_mlb"])
             self.assertTrue(payload["baseline_artifacts"]["has_nhl"])
             self.assertIn("complete", payload["next_steps"][0].lower())
+            self.assertEqual(payload["readiness"]["blockers"], [])
+
+    def test_main_strict_returns_nonzero_when_not_ready(self):
+        with mock.patch.object(sas, "build_status", return_value={"ok": False, "status": "fail"}):
+            rc = sas.main(["--strict"])
+        self.assertEqual(rc, 2)
 
 
 if __name__ == "__main__":
     unittest.main()
-
