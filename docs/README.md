@@ -20,6 +20,7 @@ If the question is “what is the active runtime path right now?”:
   - `make ops-operator-summary-json-compact`
   - `make ops-operator-log`
   - `make ops-operator-last`
+  - `make ops-operator-incident`
   - `make docs-make-target-audit`
 
 ## Architecture

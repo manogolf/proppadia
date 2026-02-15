@@ -98,6 +98,7 @@ make ops-operator-summary-json
 make ops-operator-summary-json-compact
 make ops-operator-log
 make ops-operator-last
+make ops-operator-incident
 ```
 
 Phase tracker snapshot (json):
