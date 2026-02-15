@@ -25,6 +25,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/Quick Commands.md`: one-screen operator cheat sheet for daily/backfill/post-deploy commands.
 - `docs/Operations Command Matrix.md`: single purpose-based command matrix (local dev, pre-push, pre-release, post-deploy).
 - `docs/Ops Command Shortlist.md`: minimal high-signal commands suitable for eventual Ops-page controls.
+- `docs/Season Activation Runbook.md`: preseason dry run, in-season cutover, and day-0 baseline checklist.
 - `docs/Runtime Surface.md`: currently served FastAPI routes and entrypoint.
 - `docs/Legacy Quarantine Map.md`: backend archive/legacy move map to `backend/_legacy/*`.
 - `docs/Workflow Classification.md`: current keep/suspend/archive workflow status map.

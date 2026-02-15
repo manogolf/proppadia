@@ -223,6 +223,40 @@ Acceptance criteria:
 - Single runbook page for standard operations.
 - Command ambiguity removed.
 
+## Phase 6: Season Activation (Now)
+
+Target: move from offseason-safe readiness to controlled in-season operation.
+
+### 6.1 Preseason dry run
+
+- Execute `make mlb-season-kickoff-check` against deployed backend.
+- Confirm governance + smoke + flow audit + deployed strict-offseason checks.
+
+Acceptance criteria:
+
+- Kickoff command passes end-to-end with deployed `BASE_URL`.
+- No failing governance or contract drift checks.
+
+### 6.2 In-season cadence cutover
+
+- Apply intended MLB in-season schedule windows.
+- Keep governance and post-deploy checks as non-optional gates.
+
+Acceptance criteria:
+
+- Active schedule set matches documented intent.
+- `make cron-governance-check` remains green after cutover.
+
+### 6.3 Baseline lock
+
+- Capture day-0 quality reports for MLB and NHL.
+- Preserve outputs for next retrain comparison.
+
+Acceptance criteria:
+
+- Repeatable baseline commands and windows documented.
+- Baseline artifacts available for next model-tuning cycle.
+
 ## Execution Order (Recommended)
 
 1. Phase 1.1, 1.2, 1.3  
