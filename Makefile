@@ -136,7 +136,7 @@ nhl-workflow-compat-summary:
 diagnose:
 	$(MAKE) runtime-boundaries
 	$(MAKE) frontend-route-smoke
-	$(MAKE) cron-governance-check
+	$(MAKE) cron-fast-check
 	$(MAKE) shared-checks-offline
 	$(MAKE) mlb-checks-offline-core
 	$(MAKE) nhl-checks-offline-core
