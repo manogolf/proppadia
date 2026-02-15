@@ -8,6 +8,21 @@ from backend.scripts import cron_governance_snapshot as snapshot
 
 
 class TestSharedCronGovernanceSnapshot(unittest.TestCase):
+    @staticmethod
+    def _season_report_pass(_args):
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "status": "pass",
+                    "phase_status": {"status": "pass"},
+                    "season_activation": {"ok": True, "status": "pass"},
+                    "baseline_check": {"status": "pass"},
+                }
+            )
+        )
+        return 0
+
     def test_main_passes_with_all_green_checks(self):
         def _mk_side_effect(payload: dict):
             def _fn(_args):
@@ -30,13 +45,9 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
             "main",
             side_effect=_mk_side_effect({"status": "pass"}),
         ), patch.object(
-            snapshot.phase_status_snapshot,
+            snapshot.season_activation_report,
             "main",
-            side_effect=_mk_side_effect({"status": "pass"}),
-        ), patch.object(
-            snapshot.season_activation_status,
-            "main",
-            side_effect=_mk_side_effect({"ok": True, "status": "pass"}),
+            side_effect=self._season_report_pass,
         ), redirect_stdout(out):
             rc = snapshot.main()
 
@@ -75,11 +86,7 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
             "main",
             side_effect=_ok,
         ), patch.object(
-            snapshot.phase_status_snapshot,
-            "main",
-            side_effect=_ok,
-        ), patch.object(
-            snapshot.season_activation_status,
+            snapshot.season_activation_report,
             "main",
             side_effect=_ok,
         ), redirect_stdout(out):
@@ -97,15 +104,25 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
             return 0
 
         def _activation_fail(_args):
-            print(json.dumps({"ok": False, "status": "fail"}))
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "status": "fail",
+                        "phase_status": {"status": "pass"},
+                        "season_activation": {"ok": False, "status": "fail"},
+                        "baseline_check": {"status": "pass"},
+                    }
+                )
+            )
             return 0
 
         out = StringIO()
         with patch.object(snapshot.check_workflow_schedule_inventory, "main", side_effect=_ok), patch.object(
             snapshot.check_workflow_command_paths, "main", side_effect=_ok
         ), patch.object(snapshot.check_nhl_workflow_compat, "main", side_effect=_ok), patch.object(
-            snapshot.phase_status_snapshot, "main", side_effect=_ok
-        ), patch.object(snapshot.season_activation_status, "main", side_effect=_activation_fail), redirect_stdout(out):
+            snapshot.season_activation_report, "main", side_effect=_activation_fail
+        ), redirect_stdout(out):
             rc = snapshot.main()
 
         self.assertEqual(rc, 1)
