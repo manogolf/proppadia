@@ -64,7 +64,7 @@ Snapshot date: February 15, 2026
 - Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
 - Archive-candidate MLB workflows now have `schedule` removed in-repo and are manual-only (`workflow_dispatch`).
 - There are currently no unexpected scheduled MLB workflow files in-repo (`make workflow-inventory-strict` baseline clean).
-- The remaining scheduled/live path-fix queue is currently NHL-only (`nhl-daily-refresh.yml`), tracked by `make workflow-path-audit`.
+- Scheduled workflow path audit is currently clean (`make workflow-path-audit-strict` pass).
 
 ## Cron Replacement Plan (GitHub Suspended → Stable Ops)
 
