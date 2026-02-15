@@ -2,6 +2,15 @@
 
 Snapshot date: February 15, 2026
 
+Daily:
+- `make mlb-daily-refresh-strict ...`
+- `make mlb-ops-check ...` (when you want confidence loop)
+
+On-demand:
+- `make mlb-stat-derived-backfill ...`
+- `make mlb-stat-derived-smoke ...`
+- `make cross-sport-post-deploy ...`
+
 ## MLB Daily
 
 ```bash
