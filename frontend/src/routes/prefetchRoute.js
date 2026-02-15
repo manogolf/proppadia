@@ -1,31 +1,29 @@
-import { loadWithRetry } from "./lazyRetry.js";
-
 export const loadHomeGateway = () =>
-  loadWithRetry(() => import("../Pages/HomeGateway.jsx"), "home-gateway");
+  import("../Pages/HomeGateway.jsx");
 export const loadMLBHome = () =>
-  loadWithRetry(() => import("../Pages/mlb/MLBHome.jsx"), "mlb-home");
+  import("../Pages/mlb/MLBHome.jsx");
 export const loadNHLHome = () =>
-  loadWithRetry(() => import("../Pages/nhl/NHLHome.jsx"), "nhl-home");
+  import("../Pages/nhl/NHLHome.jsx");
 export const loadPlayerPropsPage = () =>
-  loadWithRetry(() => import("../Pages/PlayerPropsPage.jsx"), "player-props-page");
+  import("../Pages/PlayerPropsPage.jsx");
 export const loadNHLPredictions = () =>
-  loadWithRetry(() => import("../Pages/nhl/NHLPredictions.jsx"), "nhl-predictions");
+  import("../Pages/nhl/NHLPredictions.jsx");
 export const loadLoginPage = () =>
-  loadWithRetry(() => import("../Pages/Login.jsx"), "login-page");
+  import("../Pages/Login.jsx");
 export const loadOpsPage = () =>
-  loadWithRetry(() => import("../Pages/OpsPage.jsx"), "ops-page");
+  import("../Pages/OpsPage.jsx");
 export const loadPlayerTeamBrowser = () =>
-  loadWithRetry(() => import("../Pages/PlayerTeamBrowser.jsx"), "player-team-browser");
+  import("../Pages/PlayerTeamBrowser.jsx");
 export const loadPlayerTeamChooser = () =>
-  loadWithRetry(() => import("../Pages/PlayerTeamChooser.jsx"), "player-team-chooser");
+  import("../Pages/PlayerTeamChooser.jsx");
 export const loadModelMetricsDashboard = () =>
-  loadWithRetry(() => import("../Pages/ModelMetricsDashboard.jsx"), "model-metrics-dashboard");
+  import("../Pages/ModelMetricsDashboard.jsx");
 export const loadPlayerProfileDashboard = () =>
-  loadWithRetry(() => import("../Pages/PlayerProfileDashboard.jsx"), "player-profile-dashboard");
+  import("../Pages/PlayerProfileDashboard.jsx");
 export const loadAccessRequiredPage = () =>
-  loadWithRetry(() => import("../Pages/AccessRequiredPage.jsx"), "access-required-page");
+  import("../Pages/AccessRequiredPage.jsx");
 export const loadWatchlistPage = () =>
-  loadWithRetry(() => import("../Pages/WatchlistPage.jsx"), "watchlist-page");
+  import("../Pages/WatchlistPage.jsx");
 
 const routeLoaders = {
   "/": loadHomeGateway,
