@@ -63,10 +63,39 @@ def _history_tail(input_path: str, limit: int) -> dict[str, Any]:
     }
 
 
+def _season_activation_tail(input_path: str, limit: int) -> dict[str, Any]:
+    path = Path(input_path)
+    history = _load_history(path)
+    tail = history[-max(1, int(limit)) :]
+    rows: list[dict[str, Any]] = []
+    for idx, item in enumerate(tail):
+        prev = tail[idx - 1] if idx > 0 else None
+        prev_blockers = set((((prev.get("readiness") or {}).get("blockers")) or [])) if prev else set()
+        cur_blockers = set((((item.get("readiness") or {}).get("blockers")) or []))
+        rows.append(
+            {
+                "status": item.get("status"),
+                "ok": item.get("ok"),
+                "phase6_count": len(item.get("phase6_tracker") or []),
+                "has_mlb_baseline": (((item.get("baseline_artifacts") or {}).get("has_mlb"))),
+                "has_nhl_baseline": (((item.get("baseline_artifacts") or {}).get("has_nhl"))),
+                "blockers": sorted(list(cur_blockers)),
+                "new_blockers": sorted(list(cur_blockers - prev_blockers)),
+            }
+        )
+    return {
+        "input": str(path),
+        "history_count": len(history),
+        "returned": len(rows),
+        "rows": rows,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Emit assistant-ready support handoff bundle (JSON).")
     ap.add_argument("--history-input", default="artifacts/mlb_readiness_history.jsonl")
     ap.add_argument("--history-limit", type=int, default=5)
+    ap.add_argument("--season-activation-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--stat-days", type=int, default=30)
     ap.add_argument("--stat-require-min", type=int, default=0)
     ap.add_argument("--roster-require-min", type=int, default=1)
@@ -89,6 +118,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         roster_stale_hours=args.roster_stale_hours,
     )
     history = _history_tail(args.history_input, args.history_limit)
+    season_activation_history = _season_activation_tail(args.season_activation_input, args.history_limit)
 
     governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0
     readiness_ok = bool(readiness.get("ok"))
@@ -109,6 +139,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "mlb_readiness": readiness,
         "mlb_readiness_history": history,
+        "season_activation_history": season_activation_history,
     }
     print(json.dumps(bundle, indent=2))
     return 0 if ok else 1

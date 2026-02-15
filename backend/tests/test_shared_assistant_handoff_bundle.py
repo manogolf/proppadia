@@ -25,6 +25,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 0, "returned": 0, "rows": []}
+        ), patch.object(
+            bundle, "_season_activation_tail", return_value={"input": "y", "history_count": 0, "returned": 0, "rows": []}
         ), redirect_stdout(out):
             rc = bundle.main([])
 
@@ -36,6 +38,7 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("governance", payload)
         self.assertIn("mlb_readiness", payload)
         self.assertIn("mlb_readiness_history", payload)
+        self.assertIn("season_activation_history", payload)
         self.assertIn("phase_status", payload["governance"]["checks"])
 
     def test_main_fail_when_readiness_fails(self):
@@ -52,6 +55,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle, "collect_snapshot", return_value={"ok": False, "status": "fail", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 1, "returned": 1, "rows": []}
+        ), patch.object(
+            bundle, "_season_activation_tail", return_value={"input": "y", "history_count": 0, "returned": 0, "rows": []}
         ), redirect_stdout(out):
             rc = bundle.main([])
 
@@ -78,6 +83,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 1, "returned": 1, "rows": []}
+        ), patch.object(
+            bundle, "_season_activation_tail", return_value={"input": "y", "history_count": 1, "returned": 1, "rows": []}
         ), redirect_stdout(out):
             rc = bundle.main([])
 
@@ -85,6 +92,20 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         payload = json.loads(out.getvalue())
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "fail")
+
+    def test_season_activation_tail_reports_new_blockers(self):
+        with patch.object(
+            bundle,
+            "_load_history",
+            return_value=[
+                {"readiness": {"blockers": ["a"]}},
+                {"readiness": {"blockers": ["a", "b"]}},
+            ],
+        ):
+            payload = bundle._season_activation_tail("artifacts/season_activation_history.jsonl", 2)
+        self.assertEqual(payload["history_count"], 2)
+        self.assertEqual(payload["returned"], 2)
+        self.assertEqual(payload["rows"][1]["new_blockers"], ["b"])
 
 
 if __name__ == "__main__":
