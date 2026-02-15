@@ -10,6 +10,7 @@ import PredictionWorkspace from "../../components/predictions/PredictionWorkspac
 import WorkspaceStatePanel from "../../components/predictions/WorkspaceStatePanel.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
+import { normalizeHttpErrorMessage } from "../../shared/httpErrorMessage.js";
 import { buildMarketContext } from "../../shared/marketContext.js";
 import { todayET } from "../../shared/timeUtils.js";
 import {
@@ -204,7 +205,7 @@ export default function NHLPredictions() {
         setLoading(false);
       } catch (e) {
         if (cancelled) return;
-        setError(e?.message || "Failed to load NHL predictions.");
+        setError(normalizeHttpErrorMessage(e, "Failed to load NHL predictions."));
         setLoading(false);
       }
     }
@@ -231,7 +232,7 @@ export default function NHLPredictions() {
           setGames(Array.isArray(j?.rows) ? j.rows : []);
         }
       } catch (e) {
-        if (!cancelled) setGamesError(e?.message || "Failed to load NHL games.");
+        if (!cancelled) setGamesError(normalizeHttpErrorMessage(e, "Failed to load NHL games."));
       } finally {
         if (!cancelled) setGamesLoading(false);
       }

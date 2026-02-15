@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { PrefetchLink } from "../navigation/PrefetchLink.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
+import { normalizeHttpErrorMessage } from "../../shared/httpErrorMessage.js";
 import { getPropDisplayLabel } from "../../shared/propUtils.js";
 import { nowET, todayET } from "../../shared/timeUtils.js";
 import {
@@ -171,7 +172,7 @@ export default function MyPropsPanel({
     } catch (e) {
       setRows([]);
       setTotalRows(0);
-      setError(e?.message || "Failed to load member prop history.");
+      setError(normalizeHttpErrorMessage(e, "Failed to load member prop history."));
     } finally {
       setLoading(false);
     }
@@ -391,7 +392,7 @@ export default function MyPropsPanel({
         `Exported ${allRows.length} rows at ${new Date().toLocaleTimeString()}.`
       );
     } catch (e) {
-      setError(e?.message || "Failed to export member prop history.");
+      setError(normalizeHttpErrorMessage(e, "Failed to export member prop history."));
     } finally {
       setExporting(false);
     }

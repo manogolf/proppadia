@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
+import { normalizeHttpErrorMessage } from "../shared/httpErrorMessage.js";
 import {
   WATCHLIST_UPDATED_EVENT,
   WATCHLIST_SCOPE_MLB,
@@ -230,7 +231,8 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       }
     } catch (err) {
       console.error("❌ Error fetching players:", err);
-      setError(`Unable to load ${sport.toUpperCase()} players.`);
+      const msg = normalizeHttpErrorMessage(err, `Unable to load ${sport.toUpperCase()} players.`);
+      setError(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
