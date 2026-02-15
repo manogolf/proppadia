@@ -18,6 +18,15 @@ Expected:
 - MLB prediction flow audit passes
 - deployed strict-offseason check passes
 
+Quick decision table:
+
+- Validate full readiness before cutover:
+  - `make mlb-season-kickoff-check BASE_URL=<url> MLB_DATE=<date>`
+- Capture day-0 model quality baselines:
+  - `make season-baseline-capture ...`
+- Verify only governance/doc/workflow consistency:
+  - `make cron-governance-check`
+
 ## Step 2: In-Season Cadence Cutover
 
 When ready to move from offseason conservative cadence:
