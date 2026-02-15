@@ -2,6 +2,21 @@
 
 Start here for architecture and operations context.
 
+## Live Path Quick Answer
+
+If the question is “what is the active runtime path right now?”:
+
+- API runtime: `backend/app/*` + `backend/domains/*` (entrypoint in `backend/app/api_server.py`)
+- Shared DB/runtime helpers: `backend/shared/*`
+- MLB command surface: `make mlb-*` targets in `Makefile`
+- NHL command surface: `backend/nhl/cli.py` and `make nhl-*` targets
+- Scheduled workflows expected active:
+  - `.github/workflows/mlb-refresh-player-ids.yml`
+  - `.github/workflows/nhl-daily-refresh.yml`
+- Governance checks:
+  - `make cron-governance-check`
+  - `make docs-make-target-audit`
+
 ## Architecture
 
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.
