@@ -128,73 +128,75 @@ export default function AppRouter() {
 
   return (
     <BrowserRouter>
-      <Header />
+      <div className="relative z-50 pointer-events-auto">
+        <Header />
 
-      {/* ✅ This nav bar is global, shown on every page */}
-      <nav className="px-4 py-2 mb-0">
-        <div className="max-w-6xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
-          <PrefetchNavLink
-            to="/"
-            className={navClassName}
-            end
-          >
-            Home
-          </PrefetchNavLink>
-          {user ? (
+        {/* ✅ This nav bar is global, shown on every page */}
+        <nav className="px-4 py-2 mb-0">
+          <div className="max-w-6xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
             <PrefetchNavLink
-              to="/props"
+              to="/"
+              className={navClassName}
+              end
+            >
+              Home
+            </PrefetchNavLink>
+            {user ? (
+              <PrefetchNavLink
+                to="/props"
+                className={navClassName}
+              >
+                Props
+              </PrefetchNavLink>
+            ) : (
+              <PrefetchNavLink
+                to="/login"
+                state={{ from: { pathname: "/props" } }}
+                prefetchTo="/login"
+                className={navClassName}
+              >
+                Predictions
+              </PrefetchNavLink>
+            )}
+            {user ? (
+              <PrefetchNavLink
+                to="/watchlist"
+                className={navClassName}
+              >
+                {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
+              </PrefetchNavLink>
+            ) : null}
+            <PrefetchNavLink
+              to="/players/mlb"
               className={navClassName}
             >
-              Props
+              MLB Players
             </PrefetchNavLink>
-          ) : (
             <PrefetchNavLink
-              to="/login"
-              state={{ from: { pathname: "/props" } }}
-              prefetchTo="/login"
+              to="/players/nhl"
               className={navClassName}
             >
-              Predictions
+              NHL Players
             </PrefetchNavLink>
-          )}
-          {user ? (
-            <PrefetchNavLink
-              to="/watchlist"
-              className={navClassName}
-            >
-              {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
-            </PrefetchNavLink>
-          ) : null}
-          <PrefetchNavLink
-            to="/players/mlb"
-            className={navClassName}
-          >
-            MLB Players
-          </PrefetchNavLink>
-          <PrefetchNavLink
-            to="/players/nhl"
-            className={navClassName}
-          >
-            NHL Players
-          </PrefetchNavLink>
-          {!user ? (
-            <PrefetchNavLink
-              to="/login"
-              className={navClassName}
-            >
-              Login
-            </PrefetchNavLink>
-          ) : null}
-          {user && hasOpsAccess ? (
-            <PrefetchNavLink
-              to="/ops"
-              className={navClassName}
-            >
-              Ops
-            </PrefetchNavLink>
-          ) : null}
-        </div>
-      </nav>
+            {!user ? (
+              <PrefetchNavLink
+                to="/login"
+                className={navClassName}
+              >
+                Login
+              </PrefetchNavLink>
+            ) : null}
+            {user && hasOpsAccess ? (
+              <PrefetchNavLink
+                to="/ops"
+                className={navClassName}
+              >
+                Ops
+              </PrefetchNavLink>
+            ) : null}
+          </div>
+        </nav>
+      </div>
 
       {/* Render route-based pages */}
       <RouteErrorBoundary>
