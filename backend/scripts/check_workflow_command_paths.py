@@ -62,7 +62,9 @@ def main() -> int:
         print(f"FAIL workflows directory not found: {WORKFLOWS_DIR}")
         return 2
 
-    workflow_files = sorted(WORKFLOWS_DIR.glob("*.yml"))
+    workflow_files = sorted(
+        list(WORKFLOWS_DIR.glob("*.yml")) + list(WORKFLOWS_DIR.glob("*.yaml"))
+    )
     print("Workflow command path audit:")
 
     missing_total = 0
