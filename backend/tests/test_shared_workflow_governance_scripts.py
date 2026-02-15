@@ -90,6 +90,25 @@ on:
         self.assertNotIn("SCHEDULED scheduled.yml", printed)
         self.assertNotIn("manual-only manual.yml", printed)
 
+    def test_main_json_outputs_machine_readable_summary(self):
+        with TemporaryDirectory() as tmp:
+            wf_dir = Path(tmp)
+            (wf_dir / "scheduled.yml").write_text(
+                'on:\n  schedule:\n    - cron: "15 6 * * *"\n',
+                encoding="utf-8",
+            )
+            out = StringIO()
+            with patch.object(schedule_inventory, "WORKFLOWS_DIR", wf_dir):
+                with patch.object(schedule_inventory, "EXPECTED_SCHEDULED", {"scheduled.yml"}):
+                    with redirect_stdout(out):
+                        rc = schedule_inventory.main(["--json", "--strict"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["scheduled_files_in_repo"], 1)
+        self.assertEqual(payload["unexpected_scheduled"], [])
+        self.assertEqual(payload["missing_expected_schedule"], [])
+
 
 class TestWorkflowCommandPathAudit(unittest.TestCase):
     def test_module_to_candidate_paths_shape(self):

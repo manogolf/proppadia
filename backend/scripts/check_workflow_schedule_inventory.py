@@ -8,6 +8,7 @@ scheduled workflow files differ from the expected allowlist.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from pathlib import Path
 from typing import List, Sequence, Tuple
@@ -55,6 +56,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Suppress per-file rows; print summary only.",
     )
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON summary instead of text output.",
+    )
     args = ap.parse_args(argv)
 
     files = _find_workflows()
@@ -63,7 +69,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     scheduled_files: List[str] = []
-    if not args.quiet:
+    if not args.quiet and not args.json:
         print("Workflow schedule inventory:")
     for wf in files:
         text = wf.read_text(encoding="utf-8", errors="replace")
@@ -71,32 +77,58 @@ def main(argv: Sequence[str] | None = None) -> int:
         if has_schedule:
             scheduled_files.append(wf.name)
             cron_txt = ", ".join(crons) if crons else "(schedule block, no cron lines parsed)"
-            if not args.quiet:
+            if not args.quiet and not args.json:
                 print(f"- SCHEDULED {wf.name}: {cron_txt}")
-        elif not args.scheduled_only and not args.quiet:
+        elif not args.scheduled_only and not args.quiet and not args.json:
             print(f"- manual-only {wf.name}")
 
     scheduled_set = set(scheduled_files)
     unexpected = sorted(scheduled_set - EXPECTED_SCHEDULED)
     missing = sorted(EXPECTED_SCHEDULED - scheduled_set)
 
-    print("\nSummary:")
-    print(f"- scheduled files in repo: {len(scheduled_files)}")
-    print(f"- expected scheduled files: {len(EXPECTED_SCHEDULED)}")
-    if unexpected:
-        print(f"- unexpected scheduled: {', '.join(unexpected)}")
-    else:
-        print("- unexpected scheduled: none")
-    if missing:
-        print(f"- missing expected schedule: {', '.join(missing)}")
-    else:
-        print("- missing expected schedule: none")
+    result = {
+        "scheduled_files_in_repo": len(scheduled_files),
+        "expected_scheduled_files": len(EXPECTED_SCHEDULED),
+        "unexpected_scheduled": unexpected,
+        "missing_expected_schedule": missing,
+        "strict": bool(args.strict),
+        "status": "pass",
+    }
 
     if args.strict and (unexpected or missing):
-        print("FAIL workflow schedule inventory (strict mode)")
+        result["status"] = "fail"
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("\nSummary:")
+            print(f"- scheduled files in repo: {len(scheduled_files)}")
+            print(f"- expected scheduled files: {len(EXPECTED_SCHEDULED)}")
+            if unexpected:
+                print(f"- unexpected scheduled: {', '.join(unexpected)}")
+            else:
+                print("- unexpected scheduled: none")
+            if missing:
+                print(f"- missing expected schedule: {', '.join(missing)}")
+            else:
+                print("- missing expected schedule: none")
+            print("FAIL workflow schedule inventory (strict mode)")
         return 1
 
-    print("PASS workflow schedule inventory")
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("\nSummary:")
+        print(f"- scheduled files in repo: {len(scheduled_files)}")
+        print(f"- expected scheduled files: {len(EXPECTED_SCHEDULED)}")
+        if unexpected:
+            print(f"- unexpected scheduled: {', '.join(unexpected)}")
+        else:
+            print("- unexpected scheduled: none")
+        if missing:
+            print(f"- missing expected schedule: {', '.join(missing)}")
+        else:
+            print("- missing expected schedule: none")
+        print("PASS workflow schedule inventory")
     return 0
 
 
