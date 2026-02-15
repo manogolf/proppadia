@@ -66,6 +66,8 @@ Snapshot date: February 15, 2026
 
 ## MLB Cron Baseline (Current)
 
+Quick runnable command list: `docs/Quick Commands.md`
+
 Recommended low-risk cadence while season is inactive:
 
 1. `mlb-market-cache-refresh` every 8 hours (already conservative).
