@@ -12,6 +12,8 @@ from typing import Callable
 from backend.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
+from backend.scripts import phase_status_snapshot
+from backend.scripts import season_activation_status
 
 
 def _run_json_check(fn: Callable[[list[str]], int], args: list[str]) -> tuple[int, dict]:
@@ -30,8 +32,10 @@ def main() -> int:
         check_workflow_command_paths.main, ["--strict", "--json"]
     )
     nhl_rc, nhl_compat = _run_json_check(check_nhl_workflow_compat.main, ["--json"])
+    phase_rc, phase_status = _run_json_check(phase_status_snapshot.main, [])
+    activation_rc, activation_status = _run_json_check(season_activation_status.main, [])
 
-    ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0
+    ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0 and activation_rc == 0
     snapshot = {
         "ok": ok,
         "status": "pass" if ok else "fail",
@@ -39,6 +43,8 @@ def main() -> int:
             "workflow_inventory": inventory,
             "workflow_path_audit": path_audit,
             "nhl_workflow_compat": nhl_compat,
+            "phase_status": phase_status,
+            "season_activation": activation_status,
         },
     }
     print(json.dumps(snapshot, indent=2))

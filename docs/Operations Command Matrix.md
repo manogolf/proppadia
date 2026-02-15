@@ -88,6 +88,7 @@ Notes:
 - NHL quality is skipped unless both NHL date vars are provided.
 - Cross-sport post-deploy is skipped unless `BASE_URL` is set to a non-local URL.
 - Bundle now prints current phase tracker summary first (`make phase-status-json`).
+- `make cron-governance-snapshot` now includes workflow checks + phase status + season activation readiness.
 
 Phase tracker snapshot (json):
 

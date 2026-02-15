@@ -18,7 +18,7 @@ Daily:
 On-demand:
 - `make phase-status-json`
 - `make cron-governance-check`
-- `make cron-governance-snapshot`
+- `make cron-governance-snapshot` (includes phase status + season activation readiness)
 - `make assistant-handoff-bundle`
 - `make mlb-readiness-snapshot`
 - `make mlb-readiness-log`
