@@ -62,7 +62,6 @@ Snapshot date: February 15, 2026
   several workflows still call old `backend/scripts/...` paths while equivalent code now lives under `backend/mlb/...` or `mlb/scripts/...`.
 - No workflow should be re-enabled on schedule without one successful manual run and post-deploy verification.
 - Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
-- Operator quick-run command set lives in `docs/Quick Commands.md`.
 
 ## MLB Cron Baseline (Current)
 
