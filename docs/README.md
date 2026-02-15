@@ -42,6 +42,7 @@ Start here for architecture and operations context.
 
 - `docs/NHL UX Contract.md`: canonical NHL v1 front-facing UX contract (research + board modes).
 - `docs/NHL Smoke Testing.md`: runbooks for `make nhl-checks-*`.
+- `docs/NHL Prediction Quality Baseline.md`: fixed-window NHL backtest report command and output contract.
 - `docs/NHL OpenAPI Review.md`: NHL OpenAPI snapshot and drift process.
 
 ## Other

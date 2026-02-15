@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-gate mlb-prop-coverage mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-gate mlb-prop-coverage mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -22,6 +22,9 @@ MLB_PROP_COVERAGE_WINDOW_MODE ?= days
 MLB_PROP_COVERAGE_GAMES_BACK ?= 30
 MLB_PROP_COVERAGE_REQUIRED ?=
 MLB_PROP_COVERAGE_MIN_GRADED ?= 0
+NHL_QUALITY_FROM_DATE ?=
+NHL_QUALITY_TO_DATE ?=
+NHL_QUALITY_MIN_TOTAL ?= 1
 MLB_STAT_FROM_DATE ?=
 MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
@@ -79,6 +82,7 @@ help:
 	@echo "  make roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD] [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
+	@echo "  make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD [NHL_QUALITY_MIN_TOTAL=1]"
 	@echo "  make nhl-roster-refresh-all [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make cross-sport-post-deploy BASE_URL=<url> [MLB_DATE=YYYY-MM-DD] [NHL_DATE=YYYY-MM-DD]"
 
@@ -391,6 +395,13 @@ nhl-post-deploy-strict-offseason:
 # NHL OpenAPI contract drift check.
 nhl-openapi-contract:
 	$(VENV_PY) backend/scripts/check_nhl_openapi_contract.py
+
+nhl-prediction-quality:
+	@if [ -z "$(NHL_QUALITY_FROM_DATE)" ] || [ -z "$(NHL_QUALITY_TO_DATE)" ]; then \
+		echo "nhl-prediction-quality requires NHL_QUALITY_FROM_DATE and NHL_QUALITY_TO_DATE"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/scripts/analyze_nhl_prediction_quality.py --from-date $(NHL_QUALITY_FROM_DATE) --to-date $(NHL_QUALITY_TO_DATE) --min-total $(NHL_QUALITY_MIN_TOTAL)
 
 # Fast local NHL verification (no external NHL API required).
 nhl-checks-offline:
