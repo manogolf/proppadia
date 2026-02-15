@@ -1,21 +1,31 @@
-export const loadHomeGateway = () => import("../Pages/HomeGateway.jsx");
-export const loadMLBHome = () => import("../Pages/mlb/MLBHome.jsx");
-export const loadNHLHome = () => import("../Pages/nhl/NHLHome.jsx");
-export const loadPlayerPropsPage = () => import("../Pages/PlayerPropsPage.jsx");
-export const loadNHLPredictions = () => import("../Pages/nhl/NHLPredictions.jsx");
-export const loadLoginPage = () => import("../Pages/Login.jsx");
-export const loadOpsPage = () => import("../Pages/OpsPage.jsx");
+import { loadWithRetry } from "./lazyRetry.js";
+
+export const loadHomeGateway = () =>
+  loadWithRetry(() => import("../Pages/HomeGateway.jsx"), "home-gateway");
+export const loadMLBHome = () =>
+  loadWithRetry(() => import("../Pages/mlb/MLBHome.jsx"), "mlb-home");
+export const loadNHLHome = () =>
+  loadWithRetry(() => import("../Pages/nhl/NHLHome.jsx"), "nhl-home");
+export const loadPlayerPropsPage = () =>
+  loadWithRetry(() => import("../Pages/PlayerPropsPage.jsx"), "player-props-page");
+export const loadNHLPredictions = () =>
+  loadWithRetry(() => import("../Pages/nhl/NHLPredictions.jsx"), "nhl-predictions");
+export const loadLoginPage = () =>
+  loadWithRetry(() => import("../Pages/Login.jsx"), "login-page");
+export const loadOpsPage = () =>
+  loadWithRetry(() => import("../Pages/OpsPage.jsx"), "ops-page");
 export const loadPlayerTeamBrowser = () =>
-  import("../Pages/PlayerTeamBrowser.jsx");
+  loadWithRetry(() => import("../Pages/PlayerTeamBrowser.jsx"), "player-team-browser");
 export const loadPlayerTeamChooser = () =>
-  import("../Pages/PlayerTeamChooser.jsx");
+  loadWithRetry(() => import("../Pages/PlayerTeamChooser.jsx"), "player-team-chooser");
 export const loadModelMetricsDashboard = () =>
-  import("../Pages/ModelMetricsDashboard.jsx");
+  loadWithRetry(() => import("../Pages/ModelMetricsDashboard.jsx"), "model-metrics-dashboard");
 export const loadPlayerProfileDashboard = () =>
-  import("../Pages/PlayerProfileDashboard.jsx");
+  loadWithRetry(() => import("../Pages/PlayerProfileDashboard.jsx"), "player-profile-dashboard");
 export const loadAccessRequiredPage = () =>
-  import("../Pages/AccessRequiredPage.jsx");
-export const loadWatchlistPage = () => import("../Pages/WatchlistPage.jsx");
+  loadWithRetry(() => import("../Pages/AccessRequiredPage.jsx"), "access-required-page");
+export const loadWatchlistPage = () =>
+  loadWithRetry(() => import("../Pages/WatchlistPage.jsx"), "watchlist-page");
 
 const routeLoaders = {
   "/": loadHomeGateway,
