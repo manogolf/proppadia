@@ -987,7 +987,7 @@ export default function MyPropsPanel({
         <div>
           <div className="overflow-auto max-h-[34rem] rounded-md border border-slate-200">
             <table className="min-w-full text-sm">
-            <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10 shadow-sm">
+            <thead className="bg-slate-100 text-slate-700 shadow-sm">
               <tr>
                 <th className="px-3 py-2 text-left">
                   <button type="button" className="font-medium" onClick={() => setSort("player")}>
