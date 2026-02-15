@@ -101,3 +101,13 @@ make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 4. Post-deploy check succeeds for that lane.
 
 If any gate fails, keep schedule disabled and repair paths first.
+
+## Operator Handoff Checklist
+
+Before handing cron ownership from local automator to hosted scheduler:
+
+1. Record current command, cadence, and timezone.
+2. Confirm `make cron-governance-check` passes.
+3. Run one hosted manual trigger and capture result.
+4. Verify site/API health with post-deploy checks.
+5. Keep previous local schedule paused, not deleted, until two consecutive hosted runs pass.
