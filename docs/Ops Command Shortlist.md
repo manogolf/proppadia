@@ -20,6 +20,10 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - phase 6 tracker + baseline artifact presence in one status payload
 - `make season-activation-status-strict`
   - same status payload, but exits non-zero until phase 6 readiness is complete
+- `make season-activation-log`
+  - append season activation status snapshots to local JSONL history
+- `make season-activation-last`
+  - read recent season activation snapshots and show blocker changes
 - `make season-cutover-ready`
   - strict phase-6 readiness plus governance gate in one command
 - `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`

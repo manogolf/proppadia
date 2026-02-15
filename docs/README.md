@@ -61,6 +61,7 @@ If the question is “what is the active runtime path right now?”:
 - Season activation quick path:
   - `make season-activation-status` (phase 6 status + baseline artifact presence)
   - `make season-activation-status-strict` (gate: fails until phase 6 readiness is complete)
+  - `make season-activation-log` / `make season-activation-last` (local history tracking)
   - `make season-cutover-ready` (strict readiness + governance gate)
   - `make mlb-season-kickoff-check BASE_URL=<url> MLB_DATE=YYYY-MM-DD`
   - `make season-baseline-capture ...` (writes day-0 baseline artifacts)

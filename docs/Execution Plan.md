@@ -29,6 +29,7 @@ Completed slices:
   - day-0 baseline capture command added (`make season-baseline-capture`)
   - status snapshot command added (`make season-activation-status`)
   - machine-readable phase tracker command added (`make phase-status-json`)
+  - season activation history commands added (`make season-activation-log`, `make season-activation-last`)
 
 Current governance status:
 

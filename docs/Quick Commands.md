@@ -11,6 +11,8 @@ Daily:
 - `make mlb-season-kickoff-check ...` (preseason/opening-day readiness)
 - `make season-activation-status` (phase 6 status snapshot)
 - `make season-activation-status-strict` (phase 6 readiness gate)
+- `make season-activation-log` (append season activation snapshot to JSONL)
+- `make season-activation-last` (show recent season activation history)
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:

@@ -112,6 +112,8 @@ Season activation status snapshot:
 ```bash
 make season-activation-status
 make season-activation-status-strict
+make season-activation-log
+make season-activation-last
 make season-cutover-ready
 ```
 
