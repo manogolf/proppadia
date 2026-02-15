@@ -16,6 +16,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - opening-day readiness bundle for governance + smoke + flow + optional deployed verification
 - `make season-activation-check [BASE_URL=<url>] [MLB_DATE=YYYY-MM-DD] [NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD]`
   - full phase 6 bundle (kickoff readiness + baseline artifact capture)
+- `make season-activation-status`
+  - phase 6 tracker + baseline artifact presence in one status payload
 - `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`
   - NHL fixed-window quality baseline
 - `make mlb-prediction-flow-audit`

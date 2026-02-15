@@ -14,6 +14,12 @@ make season-activation-check \
   NHL_QUALITY_TO_DATE=2025-12-31
 ```
 
+Status view (before/after running fast path):
+
+```bash
+make season-activation-status
+```
+
 ## Step 1: Preseason Dry Run
 
 Run the kickoff bundle against deployed backend:

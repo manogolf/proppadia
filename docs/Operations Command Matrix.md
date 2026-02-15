@@ -100,6 +100,12 @@ make season-activation-check \
   NHL_QUALITY_TO_DATE=2025-12-31
 ```
 
+Season activation status snapshot:
+
+```bash
+make season-activation-status
+```
+
 ## Data Refresh Lanes
 
 Daily MLB baseline:

@@ -58,6 +58,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/MLB OpenAPI Review.md`: OpenAPI snapshot and drift process.
 - `docs/openapi/openapi.snapshot.json`: OpenAPI contract snapshot.
 - Season activation quick path:
+  - `make season-activation-status` (phase 6 status + baseline artifact presence)
   - `make mlb-season-kickoff-check BASE_URL=<url> MLB_DATE=YYYY-MM-DD`
   - `make season-baseline-capture ...` (writes day-0 baseline artifacts)
 

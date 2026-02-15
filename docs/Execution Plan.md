@@ -27,6 +27,7 @@ Completed slices:
   - season activation runbook added (`docs/Season Activation Runbook.md`)
   - kickoff readiness bundle added (`make mlb-season-kickoff-check`)
   - day-0 baseline capture command added (`make season-baseline-capture`)
+  - status snapshot command added (`make season-activation-status`)
 
 Current governance status:
 
