@@ -22,6 +22,7 @@ Completed slices:
   - workflow classification corrected to active scheduled/manual reality
   - docs-target drift guard added (`make docs-make-target-audit`)
   - governance lane includes docs target audit
+  - lean operator wrapper added (`make ops-shortlist-check`)
 
 Current governance status:
 
