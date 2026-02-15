@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+import sys
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 from backend.shared.db.pg import pg_fetchone
 
@@ -17,7 +19,7 @@ def _valid_date(s: Optional[str]) -> Optional[str]:
     return s
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Validate recent MLB stat-derived row volume.")
     ap.add_argument(
         "--days",
@@ -41,7 +43,12 @@ def main() -> int:
         default=0,
         help="Fail when count is below this value.",
     )
-    args = ap.parse_args()
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON output.",
+    )
+    args = ap.parse_args(argv)
 
     from_date = _valid_date(args.from_date)
     to_date = _valid_date(args.to_date)
@@ -49,7 +56,7 @@ def main() -> int:
 
     if from_date and to_date:
         sql = """
-            SELECT COUNT(*)::int AS n
+            SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
             WHERE prop_source = 'stat_derived'
               AND game_date >= %s::date
@@ -59,7 +66,7 @@ def main() -> int:
         label = f"{from_date}..{to_date}"
     elif from_date:
         sql = """
-            SELECT COUNT(*)::int AS n
+            SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
             WHERE prop_source = 'stat_derived'
               AND game_date >= %s::date
@@ -68,7 +75,7 @@ def main() -> int:
         label = f"{from_date}..now"
     elif to_date:
         sql = """
-            SELECT COUNT(*)::int AS n
+            SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
             WHERE prop_source = 'stat_derived'
               AND game_date <= %s::date
@@ -77,7 +84,7 @@ def main() -> int:
         label = f"start..{to_date}"
     else:
         sql = """
-            SELECT COUNT(*)::int AS n
+            SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
             WHERE prop_source = 'stat_derived'
               AND game_date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
@@ -86,9 +93,29 @@ def main() -> int:
         label = f"last_{days}_days"
 
     n = int(row.get("n") or 0)
-    print(f"MLB stat_derived rows ({label}): {n}")
+    latest_game_date = row.get("latest_game_date")
 
     require_min = max(0, int(args.require_min))
+    status = "pass" if n >= require_min else "fail"
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "status": status,
+                    "window": label,
+                    "count": n,
+                    "latest_game_date": latest_game_date,
+                    "require_min": require_min,
+                },
+                indent=2,
+            )
+        )
+        return 0 if status == "pass" else 1
+
+    print(f"MLB stat_derived rows ({label}): {n}")
+    if latest_game_date:
+        print(f"Latest stat_derived game_date: {latest_game_date}")
     if n < require_min:
         print(f"FAIL stat_derived row count {n} < required minimum {require_min}")
         return 1
@@ -97,5 +124,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
-
+    raise SystemExit(main(sys.argv[1:]))
