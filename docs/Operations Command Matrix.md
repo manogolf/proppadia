@@ -73,6 +73,21 @@ make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onr
 make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
 ```
 
+## Ops Bundle (Lean)
+
+Single high-signal operator bundle:
+
+```bash
+make ops-shortlist-check \
+  BASE_URL=https://baseball-streaks-sq44.onrender.com \
+  NHL_QUALITY_FROM_DATE=2025-12-01 \
+  NHL_QUALITY_TO_DATE=2025-12-31
+```
+
+Notes:
+- NHL quality is skipped unless both NHL date vars are provided.
+- Cross-sport post-deploy is skipped unless `BASE_URL` is set to a non-local URL.
+
 ## Data Refresh Lanes
 
 Daily MLB baseline:
