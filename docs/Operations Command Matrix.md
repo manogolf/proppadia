@@ -88,6 +88,18 @@ Notes:
 - NHL quality is skipped unless both NHL date vars are provided.
 - Cross-sport post-deploy is skipped unless `BASE_URL` is set to a non-local URL.
 
+Season activation bundle (Phase 6.1 + 6.3):
+
+```bash
+make season-activation-check \
+  BASE_URL=https://baseball-streaks-sq44.onrender.com \
+  MLB_DATE=2025-08-15 \
+  MLB_QUALITY_WINDOW_MODE=games \
+  MLB_QUALITY_GAMES_BACK=30 \
+  NHL_QUALITY_FROM_DATE=2025-12-01 \
+  NHL_QUALITY_TO_DATE=2025-12-31
+```
+
 ## Data Refresh Lanes
 
 Daily MLB baseline:
