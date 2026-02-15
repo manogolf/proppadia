@@ -8,6 +8,7 @@ Snapshot date: February 15, 2026
 Daily:
 - `make mlb-daily-refresh-strict ...`
 - `make mlb-ops-check ...` (when you want confidence loop)
+- `make mlb-season-kickoff-check ...` (preseason/opening-day readiness)
 
 On-demand:
 - `make cron-governance-check`
@@ -29,6 +30,7 @@ On-demand:
 - `make mlb-stat-derived-backfill ...`
 - `make mlb-stat-derived-smoke ...`
 - `make cross-sport-post-deploy ...`
+- `make season-baseline-capture ...`
 
 ## MLB Daily
 
