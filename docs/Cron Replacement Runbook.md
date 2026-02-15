@@ -57,6 +57,15 @@ This enforces:
 2. MLB schedules remain conservative.
 3. NHL remains primarily local automator-driven until hosted migration is explicitly approved.
 
+## Current State Snapshot
+
+Scheduled workflows in repo:
+
+1. `.github/workflows/mlb-refresh-player-ids.yml`
+2. `.github/workflows/nhl-daily-refresh.yml`
+
+Manual-only workflows include legacy MLB cron jobs and NHL roster refresh helper.
+
 ## Operator Commands
 
 Daily MLB conservative loop:
