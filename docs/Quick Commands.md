@@ -9,6 +9,7 @@ Daily:
 On-demand:
 - `make cron-governance-check`
 - `make cron-governance-snapshot`
+- `make assistant-handoff-bundle`
 - `make mlb-readiness-snapshot`
 - `make mlb-readiness-log`
 - `make mlb-readiness-last`
@@ -40,6 +41,7 @@ make mlb-ops-check BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-readiness-snapshot MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 make mlb-readiness-log MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 make mlb-readiness-last
+make assistant-handoff-bundle MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 ```
 
 ## MLB Stat-Derived Backfill (Historical Window)
