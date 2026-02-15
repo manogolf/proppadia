@@ -40,7 +40,6 @@ Start here for architecture and operations context.
 
 ## Other
 
-- `docs/Quick Commands.md`: one-screen operator cheat sheet for daily/backfill/post-deploy commands.
 - `docs/Project Map.md`: broad project inventory notes.
 - `docs/MLB Cutover Checklist.md`: final checklist to restore MLB site functionality.
 - `docs/Prediction UX Unification Draft.md`: draft plan to unify MLB/NHL prediction UX into a shared research workspace model.
