@@ -1,5 +1,8 @@
 # Quick Commands
 
+Primary command source is `docs/Operations Command Matrix.md`.
+Use this page as a compact shortcut list only.
+
 Snapshot date: February 15, 2026
 
 Daily:
