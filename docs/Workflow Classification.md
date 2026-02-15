@@ -65,12 +65,12 @@ Recommended low-risk cadence while season is inactive:
 2. `mlb-roster-refresh-all` daily.
 3. `mlb-insert-stat-derived` daily during active season; optional/suspended in offseason.
 4. `mlb-check-stat-derived` after insert (or at least daily) as volume guard.
+   - use `mlb-stat-derived-refresh` to execute both in one run.
 
 Canonical commands:
 
 ```bash
 make mlb-market-cache-refresh MLB_MARKET_DAYS=1
 make mlb-roster-refresh-all MLB_ROSTER_DATE=$(date +%F)
-make mlb-insert-stat-derived MLB_STAT_DAYS_AGO=2
-make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
+make mlb-stat-derived-refresh MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
 ```

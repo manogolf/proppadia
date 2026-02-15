@@ -58,6 +58,7 @@ make mlb-market-cache-refresh
 make mlb-roster-refresh-all
 make mlb-insert-stat-derived
 make mlb-check-stat-derived
+make mlb-stat-derived-refresh
 make roster-refresh-all
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -82,6 +83,7 @@ Meaning:
   - default window: yesterday back through `MLB_STAT_DAYS_AGO`
   - explicit historical window: `MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD`
 - `mlb-check-stat-derived`: validates recent `model_training_props` stat-derived volume (`MLB_STAT_DERIVED_DAYS`, `MLB_STAT_DERIVED_MIN`)
+- `mlb-stat-derived-refresh`: one-command insert + volume guard (recommended for cron)
 - `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
@@ -130,7 +132,13 @@ make mlb-market-cache-refresh MLB_MARKET_DAYS=2
 
 ## Scheduled Stat-Derived Insert + Guard
 
-When season is active, schedule these as a pair:
+When season is active, schedule this one command:
+
+```bash
+make mlb-stat-derived-refresh MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
+```
+
+Equivalent two-step form:
 
 1. Insert stat-derived rows
 ```bash
