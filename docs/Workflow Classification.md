@@ -97,6 +97,7 @@ Workflow schedule inventory commands:
 - `make workflow-inventory-strict` (fails on unexpected scheduled files)
 - `make workflow-path-audit` (report missing workflow python refs for scheduled files)
 - `make workflow-path-audit-strict` (fails on missing workflow python refs for scheduled files)
+- `make nhl-workflow-compat-check` (ensures NHL compatibility wrappers exist and compile)
 - Full/manual audit mode:
   - `make workflow-path-audit` default = scheduled workflows only
   - `.venv/bin/python backend/scripts/check_workflow_command_paths.py --all-workflows`

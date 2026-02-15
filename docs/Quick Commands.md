@@ -11,6 +11,7 @@ On-demand:
 - `make workflow-inventory-strict`
 - `make workflow-path-audit`
 - `make workflow-path-audit-strict`
+- `make nhl-workflow-compat-check`
 - `make mlb-stat-derived-backfill ...`
 - `make mlb-stat-derived-smoke ...`
 - `make cross-sport-post-deploy ...`
