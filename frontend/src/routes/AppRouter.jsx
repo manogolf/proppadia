@@ -4,7 +4,6 @@ import {
   Routes,
   Route,
   Navigate,
-  NavLink,
   useLocation,
 } from "react-router-dom";
 import Header from "../components/Header.jsx";
@@ -28,13 +27,6 @@ import WatchlistPage from "../Pages/WatchlistPage.jsx";
 import MLBHome from "../Pages/mlb/MLBHome.jsx";
 import NHLHome from "../Pages/nhl/NHLHome.jsx";
 import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
-
-function navClassName({ isActive }) {
-  return [
-    "text-xs sm:text-sm font-medium transition",
-    isActive ? "text-slate-900" : "text-slate-700 hover:text-slate-900",
-  ].join(" ");
-}
 
 function RequireSignedIn({ children, requiredPath, requiredLabel }) {
   const { user, loading } = useAuth();
@@ -110,64 +102,38 @@ export default function AppRouter() {
         {/* ✅ This nav bar is global, shown on every page */}
         <nav className="px-4 py-2 mb-0">
           <div className="max-w-6xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
-            <NavLink
-              to="/"
-              className={navClassName}
-              end
-            >
+            <a href="/" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
               Home
-            </NavLink>
+            </a>
             {user ? (
-              <NavLink
-                to="/props"
-                className={navClassName}
-              >
+              <a href="/props" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 Props
-              </NavLink>
+              </a>
             ) : (
-              <NavLink
-                to="/login"
-                state={{ from: { pathname: "/props" } }}
-                className={navClassName}
-              >
+              <a href="/login" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 Predictions
-              </NavLink>
+              </a>
             )}
             {user ? (
-              <NavLink
-                to="/watchlist"
-                className={navClassName}
-              >
+              <a href="/watchlist" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
-              </NavLink>
+              </a>
             ) : null}
-            <NavLink
-              to="/players/mlb"
-              className={navClassName}
-            >
+            <a href="/players/mlb" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
               MLB Players
-            </NavLink>
-            <NavLink
-              to="/players/nhl"
-              className={navClassName}
-            >
+            </a>
+            <a href="/players/nhl" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
               NHL Players
-            </NavLink>
+            </a>
             {!user ? (
-              <NavLink
-                to="/login"
-                className={navClassName}
-              >
+              <a href="/login" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 Login
-              </NavLink>
+              </a>
             ) : null}
             {user && hasOpsAccess ? (
-              <NavLink
-                to="/ops"
-                className={navClassName}
-              >
+              <a href="/ops" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 Ops
-              </NavLink>
+              </a>
             ) : null}
           </div>
         </nav>

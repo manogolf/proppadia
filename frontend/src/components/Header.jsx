@@ -1,14 +1,7 @@
 // frontend/src/components/Header.jsx
 import React from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-
-function sportNavClass({ isActive }) {
-  return [
-    "text-sm font-medium transition",
-    isActive ? "text-slate-900" : "text-slate-700 hover:text-slate-900",
-  ].join(" ");
-}
 
 export default function Header() {
   const { user, signOut } = useAuth();
@@ -36,18 +29,12 @@ export default function Header() {
         {/* CENTER: Brand + sport quick links */}
         <div className="flex items-center gap-4 sm:gap-6">
           <nav className="flex items-center gap-3 sm:gap-4">
-            <NavLink
-              to="/mlb"
-              className={sportNavClass}
-            >
+            <a href="/mlb" className="text-sm font-medium transition text-slate-700 hover:text-slate-900">
               MLB
-            </NavLink>
-            <NavLink
-              to="/nhl"
-              className={sportNavClass}
-            >
+            </a>
+            <a href="/nhl" className="text-sm font-medium transition text-slate-700 hover:text-slate-900">
               NHL
-            </NavLink>
+            </a>
           </nav>
         </div>
 
@@ -76,12 +63,9 @@ export default function Header() {
               Logout
             </button>
           ) : (
-            <NavLink
-              to="/login"
-              className="text-xs text-slate-700 hover:underline"
-            >
+            <a href="/login" className="text-xs text-slate-700 hover:underline">
               Login
-            </NavLink>
+            </a>
           )}
         </div>
       </div>
