@@ -59,7 +59,50 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
             rc = ops.main(["--strict"])
         self.assertEqual(rc, 1)
 
+    def test_compact_summary_shape(self):
+        payload = {
+            "ok": True,
+            "status": "pass",
+            "governance": {"ok": True, "status": "pass", "governance_ok": True, "season_activation_ok": True},
+            "mlb_readiness": {
+                "ok": True,
+                "status": "pass",
+                "checks": {
+                    "stat_derived": {"count": 123, "latest_game_date": "2025-08-15"},
+                    "roster": {"total_players": 1197, "stale": False},
+                },
+            },
+            "season_activation_report": {
+                "ok": True,
+                "status": "pass",
+                "season_activation": {"blockers": ["none"]},
+            },
+        }
+        compact = ops.compact_summary(payload)
+        self.assertTrue(compact["ok"])
+        self.assertEqual(compact["mlb_readiness"]["stat_count"], 123)
+        self.assertEqual(compact["season_activation"]["blocker_count"], 1)
+
+    def test_main_compact_outputs_compact_json(self):
+        with patch.object(
+            ops,
+            "collect_summary",
+            return_value={
+                "ok": True,
+                "status": "pass",
+                "governance": {"ok": True, "status": "pass", "governance_ok": True, "season_activation_ok": True},
+                "mlb_readiness": {"ok": True, "status": "pass", "checks": {}},
+                "season_activation_report": {"ok": True, "status": "pass", "season_activation": {"blockers": []}},
+            },
+        ):
+            out = StringIO()
+            with redirect_stdout(out):
+                rc = ops.main(["--compact"])
+        self.assertEqual(rc, 0)
+        compact = json.loads(out.getvalue())
+        self.assertIn("season_activation", compact)
+        self.assertNotIn("season_activation_report", compact)
+
 
 if __name__ == "__main__":
     unittest.main()
-

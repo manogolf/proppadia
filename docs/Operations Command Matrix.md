@@ -95,6 +95,7 @@ Compact daily operator view:
 ```bash
 make ops-operator-summary
 make ops-operator-summary-json
+make ops-operator-summary-json-compact
 ```
 
 Phase tracker snapshot (json):

@@ -17,6 +17,7 @@ If the question is “what is the active runtime path right now?”:
   - `make cron-governance-check`
   - `make ops-operator-summary`
   - `make ops-operator-summary-json`
+  - `make ops-operator-summary-json-compact`
   - `make docs-make-target-audit`
 
 ## Architecture

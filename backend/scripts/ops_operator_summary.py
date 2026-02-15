@@ -79,6 +79,39 @@ def _print_text(summary: dict[str, Any]) -> None:
     )
 
 
+def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    governance = summary.get("governance") or {}
+    readiness = summary.get("mlb_readiness") or {}
+    season = summary.get("season_activation_report") or {}
+    stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
+    roster = ((readiness.get("checks") or {}).get("roster")) or {}
+    blockers = (((season.get("season_activation") or {}).get("blockers")) or [])
+    return {
+        "ok": bool(summary.get("ok")),
+        "status": summary.get("status"),
+        "governance": {
+            "ok": bool(governance.get("ok")),
+            "status": governance.get("status"),
+            "core_ok": bool(governance.get("governance_ok")),
+            "season_ok": bool(governance.get("season_activation_ok")),
+        },
+        "mlb_readiness": {
+            "ok": bool(readiness.get("ok")),
+            "status": readiness.get("status"),
+            "stat_count": int(stat.get("count") or 0),
+            "latest_game_date": stat.get("latest_game_date"),
+            "roster_players": int(roster.get("total_players") or 0),
+            "roster_stale": bool(roster.get("stale")),
+        },
+        "season_activation": {
+            "ok": bool(season.get("ok")),
+            "status": season.get("status"),
+            "blocker_count": len(blockers),
+            "top_blocker": blockers[0] if blockers else None,
+        },
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Emit compact operator summary.")
     ap.add_argument("--stat-days", type=int, default=30)
@@ -89,6 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--season-history-limit", type=int, default=10)
     ap.add_argument("--season-max-age-hours", type=int, default=0)
     ap.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    ap.add_argument("--compact", action="store_true", help="Emit compact JSON shape")
     ap.add_argument("--strict", action="store_true", help="Exit non-zero when overall status is fail")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
@@ -101,7 +135,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         season_history_limit=args.season_history_limit,
         season_max_age_hours=args.season_max_age_hours,
     )
-    if args.json:
+    if args.compact:
+        print(json.dumps(compact_summary(summary), indent=2))
+    elif args.json:
         print(json.dumps(summary, indent=2))
     else:
         _print_text(summary)
@@ -112,4 +148,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
