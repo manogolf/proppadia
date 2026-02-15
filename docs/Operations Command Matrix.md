@@ -100,6 +100,7 @@ make ops-operator-log
 make ops-operator-last
 make ops-operator-incident
 make ops-operator-incident-strict
+make ops-daily-check
 ```
 
 Phase tracker snapshot (json):

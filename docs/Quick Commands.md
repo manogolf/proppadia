@@ -26,6 +26,7 @@ On-demand:
 - `make ops-operator-last`
 - `make ops-operator-incident`
 - `make ops-operator-incident-strict`
+- `make ops-daily-check`
 - `make phase-status-json`
 - `make cron-governance-check`
 - `make cron-governance-snapshot` (includes phase status + season activation readiness)
@@ -61,6 +62,7 @@ make ops-operator-log
 make ops-operator-last
 make ops-operator-incident
 make ops-operator-incident-strict
+make ops-daily-check
 make mlb-runbook
 make mlb-cron-preview
 make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
