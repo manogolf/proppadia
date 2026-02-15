@@ -44,5 +44,8 @@ export function toWatchlistId(row) {
   if (pid !== undefined && pid !== null && String(pid).trim() !== "") return String(pid);
   const name = String(row?.player_name || "").trim().toLowerCase();
   const team = String(row?.team || "").trim().toLowerCase();
+  if (!name && !team) return "";
+  if (!name) return `team:${team}`;
+  if (!team) return `name:${name}`;
   return `${name}:${team}`;
 }

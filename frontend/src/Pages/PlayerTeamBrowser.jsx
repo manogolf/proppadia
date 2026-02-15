@@ -813,24 +813,18 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
               .slice()
               .sort((a, b) => {
                 if (rowSort === "watched") {
-                  const aw = watchIdSet.has(
-                    String(
-                      toWatchlistId({
-                        player_id: a.player_id,
-                        player_name: a.player_name,
-                        team: a.teamLabel,
-                      })
-                    )
-                  );
-                  const bw = watchIdSet.has(
-                    String(
-                      toWatchlistId({
-                        player_id: b.player_id,
-                        player_name: b.player_name,
-                        team: b.teamLabel,
-                      })
-                    )
-                  );
+                  const aId = toWatchlistId({
+                    player_id: a.player_id,
+                    player_name: a.player_name,
+                    team: a.teamLabel,
+                  });
+                  const bId = toWatchlistId({
+                    player_id: b.player_id,
+                    player_name: b.player_name,
+                    team: b.teamLabel,
+                  });
+                  const aw = Boolean(aId && watchIdSet.has(String(aId)));
+                  const bw = Boolean(bId && watchIdSet.has(String(bId)));
                   if (aw !== bw) return bw ? 1 : -1;
                 }
                 if (rowSort === "name") {

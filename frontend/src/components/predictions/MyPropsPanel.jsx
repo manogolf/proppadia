@@ -201,7 +201,10 @@ export default function MyPropsPanel({
   const visibleRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     const baseRows = watchlistOnly
-      ? rows.filter((row) => watchIdSet.has(toWatchlistId(row)))
+      ? rows.filter((row) => {
+          const id = toWatchlistId(row);
+          return Boolean(id && watchIdSet.has(id));
+        })
       : rows;
     if (!q) return baseRows;
     return baseRows.filter((row) => {
@@ -296,7 +299,7 @@ export default function MyPropsPanel({
     const out = new Map();
     const todayIso = todayET();
     for (const row of sortedRows) {
-      const key = String(toWatchlistId(row));
+      const key = toWatchlistId(row);
       if (!key) continue;
       const status = String(formatStatus(row)).toLowerCase();
       const gameDate = String(row?.game_date || "");

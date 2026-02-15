@@ -303,15 +303,14 @@ export default function NHLPredictions() {
 
   const filteredSog = useMemo(() => {
     const baseRows = watchlistOnly
-      ? (sogRows || []).filter((r) =>
-          watchIdSet.has(
-            toWatchlistId({
-              player_id: r.player_id,
-              player_name: r.player_name,
-              team: r.team_abbr || r.team || "",
-            })
-          )
-        )
+      ? (sogRows || []).filter((r) => {
+          const id = toWatchlistId({
+            player_id: r.player_id,
+            player_name: r.player_name,
+            team: r.team_abbr || r.team || "",
+          });
+          return Boolean(id && watchIdSet.has(id));
+        })
       : sogRows || [];
     if (!query) return baseRows;
     return baseRows.filter((r) => {
@@ -329,15 +328,14 @@ export default function NHLPredictions() {
 
   const filteredSaves = useMemo(() => {
     const baseRows = watchlistOnly
-      ? (savesRows || []).filter((r) =>
-          watchIdSet.has(
-            toWatchlistId({
-              player_id: r.player_id,
-              player_name: r.player_name,
-              team: r.team_abbr || r.team || "",
-            })
-          )
-        )
+      ? (savesRows || []).filter((r) => {
+          const id = toWatchlistId({
+            player_id: r.player_id,
+            player_name: r.player_name,
+            team: r.team_abbr || r.team || "",
+          });
+          return Boolean(id && watchIdSet.has(id));
+        })
       : savesRows || [];
     if (!query) return baseRows;
     return baseRows.filter((r) => {
