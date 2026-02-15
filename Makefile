@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status cron-governance-check cron-current-state cron-scheduled-state cron-summary cron-path-summary workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-insert-stat-derived mlb-check-stat-derived mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status cron-governance-check cron-fast-check cron-current-state cron-scheduled-state cron-summary cron-path-summary workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-insert-stat-derived mlb-check-stat-derived mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -32,6 +32,7 @@ help:
 	@echo "  make workflow-path-audit-strict [fail on missing python refs in scheduled workflows]"
 	@echo "  make nhl-workflow-compat-check [verify NHL workflow compatibility scripts]"
 	@echo "  make cron-governance-check [inventory + path audit + NHL workflow compat]"
+	@echo "  make cron-fast-check [quiet inventory/path summaries + NHL workflow compat]"
 	@echo "  make cron-current-state [print current scheduled/manual workflow state]"
 	@echo "  make cron-scheduled-state [print only currently scheduled workflows]"
 	@echo "  make cron-summary [quiet strict cron inventory summary]"
@@ -108,6 +109,11 @@ workflow-path-audit-strict:
 cron-governance-check:
 	$(MAKE) workflow-inventory-strict
 	$(MAKE) workflow-path-audit-strict
+	$(MAKE) nhl-workflow-compat-check
+
+cron-fast-check:
+	$(MAKE) cron-summary
+	$(MAKE) cron-path-summary
 	$(MAKE) nhl-workflow-compat-check
 
 cron-current-state:
