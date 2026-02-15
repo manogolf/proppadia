@@ -4,10 +4,10 @@ import {
   Routes,
   Route,
   Navigate,
+  NavLink,
   useLocation,
 } from "react-router-dom";
 import Header from "../components/Header.jsx";
-import { PrefetchNavLink } from "../components/navigation/PrefetchLink.jsx";
 import RouteErrorBoundary from "../components/RouteErrorBoundary.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { isOpsUser } from "../shared/opsAccess.js";
@@ -134,65 +134,64 @@ export default function AppRouter() {
         {/* ✅ This nav bar is global, shown on every page */}
         <nav className="px-4 py-2 mb-0">
           <div className="max-w-6xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
-            <PrefetchNavLink
+            <NavLink
               to="/"
               className={navClassName}
               end
             >
               Home
-            </PrefetchNavLink>
+            </NavLink>
             {user ? (
-              <PrefetchNavLink
+              <NavLink
                 to="/props"
                 className={navClassName}
               >
                 Props
-              </PrefetchNavLink>
+              </NavLink>
             ) : (
-              <PrefetchNavLink
+              <NavLink
                 to="/login"
                 state={{ from: { pathname: "/props" } }}
-                prefetchTo="/login"
                 className={navClassName}
               >
                 Predictions
-              </PrefetchNavLink>
+              </NavLink>
             )}
             {user ? (
-              <PrefetchNavLink
+              <NavLink
                 to="/watchlist"
                 className={navClassName}
               >
                 {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
-              </PrefetchNavLink>
+              </NavLink>
             ) : null}
-            <PrefetchNavLink
+            <NavLink
               to="/players/mlb"
               className={navClassName}
             >
               MLB Players
-            </PrefetchNavLink>
-            <PrefetchNavLink
+            </NavLink>
+            <NavLink
               to="/players/nhl"
               className={navClassName}
             >
               NHL Players
-            </PrefetchNavLink>
+            </NavLink>
             {!user ? (
-              <PrefetchNavLink
+              <NavLink
                 to="/login"
                 className={navClassName}
               >
                 Login
-              </PrefetchNavLink>
+              </NavLink>
             ) : null}
             {user && hasOpsAccess ? (
-              <PrefetchNavLink
+              <NavLink
                 to="/ops"
                 className={navClassName}
               >
                 Ops
-              </PrefetchNavLink>
+              </NavLink>
             ) : null}
           </div>
         </nav>

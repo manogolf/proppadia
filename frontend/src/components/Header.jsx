@@ -1,8 +1,7 @@
 // frontend/src/components/Header.jsx
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import { PrefetchNavLink } from "./navigation/PrefetchLink.jsx";
 
 function sportNavClass({ isActive }) {
   return [
@@ -37,18 +36,18 @@ export default function Header() {
         {/* CENTER: Brand + sport quick links */}
         <div className="flex items-center gap-4 sm:gap-6">
           <nav className="flex items-center gap-3 sm:gap-4">
-            <PrefetchNavLink
+            <NavLink
               to="/mlb"
               className={sportNavClass}
             >
               MLB
-            </PrefetchNavLink>
-            <PrefetchNavLink
+            </NavLink>
+            <NavLink
               to="/nhl"
               className={sportNavClass}
             >
               NHL
-            </PrefetchNavLink>
+            </NavLink>
           </nav>
         </div>
 
@@ -77,12 +76,12 @@ export default function Header() {
               Logout
             </button>
           ) : (
-            <PrefetchNavLink
+            <NavLink
               to="/login"
               className="text-xs text-slate-700 hover:underline"
             >
               Login
-            </PrefetchNavLink>
+            </NavLink>
           )}
         </div>
       </div>
