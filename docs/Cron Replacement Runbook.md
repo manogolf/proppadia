@@ -6,6 +6,11 @@ Snapshot date: February 15, 2026
 
 This runbook defines how to replace legacy/suspended GitHub cron workflows with stable command-based operations, while preserving meaningful project behavior.
 
+Related docs:
+
+- `docs/Workflow Classification.md`
+- `docs/Quick Commands.md`
+
 ## Principles
 
 1. Keep data-producing and user-visible jobs.
