@@ -47,6 +47,72 @@ class TestMlbPropWorkflow(unittest.TestCase):
             add_prop_from_commit(commit_token=token, prop_source="user_added")
         self.assertIn("game_id missing", str(ctx.exception))
 
+    def test_add_prop_requires_game_date(self):
+        token = sign_commit_payload(
+            {
+                "flow": "mlb_prop_v1",
+                "prop_type": "hits",
+                "probability": 0.6,
+                "recommendation": "over",
+                "features": {
+                    "player_id": 660271,
+                    "team": "ATL",
+                    "team_id": 144,
+                    "game_id": 12345,
+                    "prop_value": 1.5,
+                    "over_under": "over",
+                },
+            }
+        )
+        with self.assertRaises(ValueError) as ctx:
+            add_prop_from_commit(commit_token=token, prop_source="user_added")
+        self.assertIn("game_date missing", str(ctx.exception))
+
+    def test_add_prop_rejects_bad_game_date(self):
+        token = sign_commit_payload(
+            {
+                "flow": "mlb_prop_v1",
+                "prop_type": "hits",
+                "probability": 0.6,
+                "recommendation": "over",
+                "features": {
+                    "player_id": 660271,
+                    "team": "ATL",
+                    "team_id": 144,
+                    "game_id": 12345,
+                    "game_date": "08/15/2025",
+                    "prop_value": 1.5,
+                    "over_under": "over",
+                },
+            }
+        )
+        with self.assertRaises(ValueError) as ctx:
+            add_prop_from_commit(commit_token=token, prop_source="user_added")
+        self.assertIn("game_date must be YYYY-MM-DD", str(ctx.exception))
+
+    def test_add_prop_rejects_game_date_context_mismatch(self):
+        token = sign_commit_payload(
+            {
+                "flow": "mlb_prop_v1",
+                "prop_type": "hits",
+                "probability": 0.6,
+                "recommendation": "over",
+                "features": {
+                    "player_id": 660271,
+                    "team": "ATL",
+                    "team_id": 144,
+                    "game_id": 12345,
+                    "game_date": "2025-08-15",
+                    "for_date": "2025-08-14",
+                    "prop_value": 1.5,
+                    "over_under": "over",
+                },
+            }
+        )
+        with self.assertRaises(ValueError) as ctx:
+            add_prop_from_commit(commit_token=token, prop_source="user_added")
+        self.assertIn("game_date mismatch", str(ctx.exception))
+
     @patch(
         "backend.domains.mlb.prop_workflow.build_game_context",
         return_value={"team_id": 119, "team_abbr": "LAD", "for_date": "2026-02-10", "game_id": 12345},

@@ -247,6 +247,16 @@ def add_prop_from_commit(
         raise ValueError("player_id missing in committed features")
     if features.get("game_id") is None:
         raise ValueError("game_id missing in committed features")
+    game_date_raw = str(features.get("game_date") or "").strip()
+    if not game_date_raw:
+        raise ValueError("game_date missing in committed features")
+    try:
+        date.fromisoformat(game_date_raw)
+    except ValueError as e:
+        raise ValueError("game_date must be YYYY-MM-DD") from e
+    context_date = str(features.get("for_date") or "").strip()
+    if context_date and context_date != game_date_raw:
+        raise ValueError("game_date mismatch with context for_date")
 
     player_id = int(features.get("player_id"))
     game_id = int(features.get("game_id"))
@@ -254,7 +264,7 @@ def add_prop_from_commit(
         raise ValueError("game_id must be a positive integer")
     over_under = str(features.get("over_under") or "over").lower()
     prop_value = _to_float(features.get("prop_value"), 0.0)
-    game_date = str(features.get("game_date") or "")
+    game_date = game_date_raw
     team = normalizeTeamAbbreviation(features.get("team") or features.get("team_abbr"))
     team_id = features.get("team_id")
     player_name = features.get("player_name")
