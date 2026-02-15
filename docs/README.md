@@ -21,6 +21,7 @@ If the question is “what is the active runtime path right now?”:
   - `make ops-operator-log`
   - `make ops-operator-last`
   - `make ops-operator-incident`
+  - `make ops-operator-incident-strict`
   - `make docs-make-target-audit`
 
 ## Architecture
