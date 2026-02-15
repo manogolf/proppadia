@@ -21,6 +21,7 @@ Snapshot date: February 15, 2026
 - `.github/workflows/ci-offline-checks.yml`
 - `Makefile` MLB operational targets:
   - `mlb-daily-refresh` / `mlb-daily-refresh-strict` / `mlb-daily-refresh-smoke`
+  - `mlb-help` / `mlb-runbook` / `mlb-cron-preview`
   - `mlb-stat-derived-refresh`
   - `mlb-stat-derived-backfill`
   - `mlb-stat-derived-smoke`
@@ -29,6 +30,7 @@ Snapshot date: February 15, 2026
   - `mlb-roster-refresh-all`
   - `mlb-market-cache-refresh`
   - `mlb-post-deploy` / `mlb-post-deploy-strict-offseason`
+  - `ops-status` / `ops-help`
 - `backend/scripts/insert_mlb_stat_derived.py`
 - `backend/scripts/validate_mlb_stat_derived_recent.py`
 
