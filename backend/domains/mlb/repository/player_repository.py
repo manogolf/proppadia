@@ -207,6 +207,16 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
             AND BTRIM(CAST(team AS TEXT)) <> ''
           ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
         ),
+        latest_prop_team AS (
+          SELECT DISTINCT ON (CAST(player_id AS TEXT))
+            CAST(player_id AS TEXT) AS player_id,
+            team
+          FROM player_props
+          WHERE team IS NOT NULL
+            AND BTRIM(CAST(team AS TEXT)) <> ''
+            AND (prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%')
+          ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
+        ),
         recent AS (
           SELECT
             CAST(player_id AS TEXT) AS player_id,
@@ -218,14 +228,16 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
         SELECT
           p.player_id,
           p.player_name,
-          COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team) AS team,
+          COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team, lpt.team) AS team,
           r.last_prop_date
         FROM players p
         LEFT JOIN latest_team lt
           ON lt.player_id = p.player_id
+        LEFT JOIN latest_prop_team lpt
+          ON lpt.player_id = p.player_id
         LEFT JOIN recent r
           ON r.player_id = p.player_id
-        ORDER BY COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team) ASC NULLS LAST, p.player_name ASC
+        ORDER BY COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team, lpt.team) ASC NULLS LAST, p.player_name ASC
         LIMIT %s
     """
     try:
