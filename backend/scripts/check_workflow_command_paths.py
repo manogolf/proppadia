@@ -51,6 +51,11 @@ def main() -> int:
         action="store_true",
         help="Fail if any missing command references are detected.",
     )
+    parser.add_argument(
+        "--all-workflows",
+        action="store_true",
+        help="Audit all workflow files (default audits only scheduled workflow files).",
+    )
     args = parser.parse_args()
 
     if not WORKFLOWS_DIR.exists():
@@ -63,6 +68,10 @@ def main() -> int:
     missing_total = 0
     for workflow_file in workflow_files:
         text = workflow_file.read_text(encoding="utf-8")
+        has_schedule = bool(re.search(r"(?m)^\s*schedule\s*:", text))
+        if not args.all_workflows and not has_schedule:
+            print(f"- SKIP {workflow_file.name} (manual-only)")
+            continue
         missing = collect_missing_references(text)
         if missing:
             missing_total += len(missing)

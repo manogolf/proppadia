@@ -71,8 +71,8 @@ Quick runnable command list: `docs/Quick Commands.md`
 Workflow schedule inventory commands:
 - `make workflow-inventory` (report only)
 - `make workflow-inventory-strict` (fails on unexpected scheduled files)
-- `make workflow-path-audit` (report missing workflow python path/module refs)
-- `make workflow-path-audit-strict` (fails when workflow python refs are missing)
+- `make workflow-path-audit` (report missing workflow python refs for scheduled files)
+- `make workflow-path-audit-strict` (fails on missing workflow python refs for scheduled files)
 
 Recommended low-risk cadence while season is inactive:
 
