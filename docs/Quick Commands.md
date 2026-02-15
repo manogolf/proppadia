@@ -1,0 +1,40 @@
+# Quick Commands
+
+Snapshot date: February 15, 2026
+
+## MLB Daily
+
+```bash
+make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
+```
+
+## MLB Ops Confidence Loop
+
+```bash
+make mlb-ops-check BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
+## MLB Stat-Derived Backfill (Historical Window)
+
+```bash
+make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=2025-08-15 MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1
+```
+
+## MLB Stat-Derived Smoke
+
+```bash
+make mlb-stat-derived-smoke MLB_STAT_FROM_DATE=2025-08-15 MLB_STAT_TO_DATE=2025-08-15
+```
+
+## Post-Deploy Checks
+
+```bash
+make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
+make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
+```
+
+## Cross-Sport Confidence
+
+```bash
+make cross-sport-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15 NHL_DATE=2025-11-20
+```
