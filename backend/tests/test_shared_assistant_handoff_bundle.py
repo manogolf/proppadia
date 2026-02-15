@@ -44,7 +44,6 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("mlb_readiness", payload)
         self.assertIn("mlb_readiness_history", payload)
         self.assertIn("season_activation_history", payload)
-        self.assertIn("phase_status", payload["governance"]["checks"])
         self.assertIn("season_activation_report", payload["governance"]["checks"])
 
     def test_main_fail_when_readiness_fails(self):

@@ -36,9 +36,7 @@ def main() -> int:
             "workflow_inventory": inventory,
             "workflow_path_audit": path_audit,
             "nhl_workflow_compat": nhl_compat,
-            "phase_status": activation_report.get("phase_status"),
-            "season_activation": activation_report.get("season_activation"),
-            "season_baseline": activation_report.get("baseline_check"),
+            "season_activation_report": activation_report,
         },
     }
     print(json.dumps(snapshot, indent=2))

@@ -107,7 +107,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "workflow_inventory": inventory,
                 "workflow_path_audit": path_audit,
                 "nhl_workflow_compat": nhl_compat,
-                "phase_status": season_report.get("phase_status"),
                 "season_activation_report": season_report,
             },
         },

@@ -60,8 +60,7 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
         self.assertIn("workflow_inventory", payload["checks"])
         self.assertIn("workflow_path_audit", payload["checks"])
         self.assertIn("nhl_workflow_compat", payload["checks"])
-        self.assertIn("phase_status", payload["checks"])
-        self.assertIn("season_activation", payload["checks"])
+        self.assertIn("season_activation_report", payload["checks"])
 
     def test_main_fails_when_any_check_fails(self):
         def _ok(_args):
