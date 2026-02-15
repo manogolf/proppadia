@@ -115,7 +115,7 @@ cron-governance-check:
 cron-fast-check:
 	$(MAKE) cron-summary
 	$(MAKE) cron-path-summary
-	$(MAKE) nhl-workflow-compat-check
+	$(MAKE) nhl-workflow-compat-summary
 
 cron-current-state:
 	$(MAKE) workflow-inventory
