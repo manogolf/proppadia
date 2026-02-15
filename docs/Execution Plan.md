@@ -18,6 +18,10 @@ Completed slices:
 - Phase 5.2:
   - single purpose-based operations matrix added (`docs/Operations Command Matrix.md`)
   - docs index and quick commands linked to consolidated matrix
+- Phase 5.1:
+  - workflow classification corrected to active scheduled/manual reality
+  - docs-target drift guard added (`make docs-make-target-audit`)
+  - governance lane includes docs target audit
 
 Current governance status:
 
@@ -38,7 +42,7 @@ Current governance status:
 - Phase 3.3 Watchlist utility polish: complete
 - Phase 4.1 MLB prediction flow audit: complete
 - Phase 4.2 NHL model outcome review: complete
-- Phase 5.1 Archive culling: in progress
+- Phase 5.1 Archive culling: complete
 - Phase 5.2 Runbook consolidation: complete
 
 ## Planning Goal
