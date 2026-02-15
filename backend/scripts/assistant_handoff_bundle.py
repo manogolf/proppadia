@@ -15,6 +15,7 @@ from typing import Any, Callable, Sequence
 from backend.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
+from backend.scripts import phase_status_snapshot
 from backend.scripts.mlb_readiness_last import _load_history, _regressions
 from backend.scripts.mlb_readiness_snapshot import collect_snapshot
 
@@ -79,6 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         check_workflow_command_paths.main, ["--strict", "--json"]
     )
     nhl_rc, nhl_compat = _run_json_check(check_nhl_workflow_compat.main, ["--json"])
+    phase_rc, phase_status = _run_json_check(phase_status_snapshot.main, [])
 
     readiness = collect_snapshot(
         stat_days=args.stat_days,
@@ -88,7 +90,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     history = _history_tail(args.history_input, args.history_limit)
 
-    governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0
+    governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0
     readiness_ok = bool(readiness.get("ok"))
     ok = governance_ok and readiness_ok
 
@@ -102,6 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "workflow_inventory": inventory,
                 "workflow_path_audit": path_audit,
                 "nhl_workflow_compat": nhl_compat,
+                "phase_status": phase_status,
             },
         },
         "mlb_readiness": readiness,
