@@ -9,8 +9,10 @@ import PropTracker from "../components/PropTracker.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
+import WorkspaceStatePanel from "../components/predictions/WorkspaceStatePanel.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
+import { normalizeHttpErrorMessage } from "../shared/httpErrorMessage.js";
 import { buildMarketContext } from "../shared/marketContext.js";
 import {
   WATCHLIST_SCOPE_MLB,
@@ -184,7 +186,7 @@ export default function PlayerPropsPage() {
         if (!cancelled) setGames(Array.isArray(gameList) ? gameList : []);
       } catch (e) {
         if (!cancelled) {
-          setGamesError(e?.message || "Failed to load MLB games.");
+          setGamesError(normalizeHttpErrorMessage(e, "Failed to load MLB games."));
           setGames([]);
         }
       } finally {
@@ -210,9 +212,13 @@ export default function PlayerPropsPage() {
       {mode === "research" ? (
         <div className="space-y-4">
           {gamesLoading ? (
-            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading MLB slate...</div>
+            <WorkspaceStatePanel
+              kind="loading"
+              title="Loading MLB slate"
+              detail={`Checking schedule context for ${selectedDate}.`}
+            />
           ) : gamesError ? (
-            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
+            <WorkspaceStatePanel kind="error" title="Could not load MLB slate" detail={gamesError} />
           ) : (
             <TodayGames games={games} />
           )}
@@ -277,9 +283,13 @@ export default function PlayerPropsPage() {
       ) : (
         <div className="space-y-5">
           {gamesLoading ? (
-            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading MLB slate...</div>
+            <WorkspaceStatePanel
+              kind="loading"
+              title="Loading MLB slate"
+              detail={`Checking schedule context for ${selectedDate}.`}
+            />
           ) : gamesError ? (
-            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
+            <WorkspaceStatePanel kind="error" title="Could not load MLB slate" detail={gamesError} />
           ) : (
             <TodayGames games={games} />
           )}
