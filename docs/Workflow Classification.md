@@ -63,11 +63,7 @@ Snapshot date: February 15, 2026
 - No workflow should be re-enabled on schedule without one successful manual run and post-deploy verification.
 - Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
 - Archive-candidate MLB workflows now have `schedule` removed in-repo and are manual-only (`workflow_dispatch`).
-- Remaining unexpected scheduled MLB files are the current `suspended-needs-path-fix` set:
-  - `.github/workflows/mlb-precompute.yml`
-  - `.github/workflows/mlb-retrain.yml`
-  - `.github/workflows/mlb-retrain_models.yml`
-  - `.github/workflows/mlb-train_recent_models.yml`
+- There are currently no unexpected scheduled MLB workflow files in-repo (`make workflow-inventory-strict` baseline clean).
 
 ## MLB Cron Baseline (Current)
 

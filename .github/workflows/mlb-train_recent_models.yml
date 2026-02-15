@@ -1,8 +1,6 @@
 name: Train Recent Models (Random Forest)
 
 on:
-  schedule:
-    - cron: "0 2 * * *" # Runs daily at 2:00 AM UTC
   workflow_dispatch: # Allows manual triggering
 
 jobs:

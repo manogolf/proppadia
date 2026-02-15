@@ -1,7 +1,6 @@
 name: Retrain ML models
 
 on:
-  schedule: [{ cron: "0 7 * * *" }] # Daily 07:00 UTC 12:00 AM PST
   workflow_dispatch:
 
 jobs:

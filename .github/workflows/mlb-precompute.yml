@@ -1,8 +1,6 @@
 name: Precompute MLB Props
 
 on:
-  schedule:
-    - cron: "10 10-23 * * *" # hourly :10 (10:00–23:00 UTC)
   workflow_dispatch: {}
 
 jobs:
