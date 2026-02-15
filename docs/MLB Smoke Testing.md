@@ -60,6 +60,7 @@ make mlb-insert-stat-derived
 make mlb-check-stat-derived
 make mlb-stat-derived-refresh
 make mlb-stat-derived-smoke
+make mlb-stat-derived-backfill
 make mlb-daily-refresh
 make roster-refresh-all
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -87,6 +88,7 @@ Meaning:
 - `mlb-check-stat-derived`: validates recent `model_training_props` stat-derived volume (`MLB_STAT_DERIVED_DAYS`, `MLB_STAT_DERIVED_MIN`)
 - `mlb-stat-derived-refresh`: one-command insert + volume guard (recommended for cron)
 - `mlb-stat-derived-smoke`: fast wiring check (forces `MLB_STAT_MAX_GAMES=1`)
+- `mlb-stat-derived-backfill`: historical date-window backfill + volume guard
 - `mlb-daily-refresh`: one-command daily MLB baseline (market cache + roster refresh + stat-derived refresh + guard)
 - `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
@@ -166,8 +168,7 @@ Notes:
 - `mlb-insert-stat-derived` is idempotent on rerun: attempted rows may be high while applied updates can be zero.
 - For historical backfill windows:
 ```bash
-make mlb-insert-stat-derived MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=2025-08-15
-make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1
+make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=2025-08-15 MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1
 ```
 
 In-process (imports FastAPI app directly):
