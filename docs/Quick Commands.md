@@ -14,6 +14,7 @@ Daily:
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
+- `make phase-status-json`
 - `make cron-governance-check`
 - `make cron-governance-snapshot`
 - `make assistant-handoff-bundle`

@@ -88,6 +88,12 @@ Notes:
 - NHL quality is skipped unless both NHL date vars are provided.
 - Cross-sport post-deploy is skipped unless `BASE_URL` is set to a non-local URL.
 
+Phase tracker snapshot (json):
+
+```bash
+make phase-status-json
+```
+
 Season activation bundle (Phase 6.1 + 6.3):
 
 ```bash
