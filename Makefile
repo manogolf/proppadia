@@ -177,6 +177,7 @@ docs-make-target-audit:
 	$(VENV_PY) backend/scripts/check_docs_make_targets.py
 
 ops-shortlist-check:
+	$(MAKE) phase-status-json
 	$(MAKE) cron-governance-check
 	$(MAKE) mlb-prediction-flow-audit
 	@if [ -n "$(NHL_QUALITY_FROM_DATE)" ] && [ -n "$(NHL_QUALITY_TO_DATE)" ]; then \
