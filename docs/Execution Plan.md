@@ -25,6 +25,22 @@ Current governance status:
 - `make workflow-path-audit-strict`: pass
 - `make nhl-workflow-compat-check`: pass
 
+## Phase Status Tracker
+
+- Phase 1.1 Workflow decommission pass: complete
+- Phase 1.2 Runtime path lock: complete
+- Phase 1.3 Frontend route hardening regression pack: complete
+- Phase 2.1 MLB roster refresh SLO: complete
+- Phase 2.2 NHL roster/slate cohesion: complete
+- Phase 2.3 Offseason-safe behavior contracts: complete
+- Phase 3.1 Players by Team completion: complete
+- Phase 3.2 Prediction workspace parity: complete
+- Phase 3.3 Watchlist utility polish: complete
+- Phase 4.1 MLB prediction flow audit: complete
+- Phase 4.2 NHL model outcome review: complete
+- Phase 5.1 Archive culling: in progress
+- Phase 5.2 Runbook consolidation: complete
+
 ## Planning Goal
 
 Ship a stable in-season platform with:
