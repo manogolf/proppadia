@@ -70,7 +70,5 @@ Recommended low-risk cadence while season is inactive:
 Canonical commands:
 
 ```bash
-make mlb-market-cache-refresh MLB_MARKET_DAYS=1
-make mlb-roster-refresh-all MLB_ROSTER_DATE=$(date +%F)
-make mlb-stat-derived-refresh MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
+make mlb-daily-refresh MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
 ```
