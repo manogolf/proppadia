@@ -1,10 +1,68 @@
 // File: backend/scripts/shared/supabaseBackend.js
 
-import dotenv from "dotenv";
-import { createClient } from "@supabase/supabase-js";
 import { nowET, todayET } from "./timeUtilsBackend.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-dotenv.config();
+// Optional dotenv load for local runs; render/github envs can rely on process env only.
+try {
+  const dotenv = await import("dotenv");
+  if (dotenv?.default?.config) dotenv.default.config();
+} catch {
+  // no-op: dotenv is optional in this monorepo layout
+}
+
+function _stripQuotes(v) {
+  const s = String(v ?? "").trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function _loadEnvFileIfPresent(envPath) {
+  try {
+    if (!fs.existsSync(envPath)) return;
+    const raw = fs.readFileSync(envPath, "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const i = t.indexOf("=");
+      if (i <= 0) continue;
+      const k = t.slice(0, i).trim();
+      if (!k || process.env[k] != null) continue;
+      const v = _stripQuotes(t.slice(i + 1));
+      process.env[k] = v;
+    }
+  } catch {
+    // no-op
+  }
+}
+
+// Fallback loader when dotenv package is unavailable.
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const thisFile = fileURLToPath(import.meta.url);
+  const repoRoot = path.resolve(path.dirname(thisFile), "../../..");
+  const candidates = [
+    path.join(repoRoot, ".env.local"),
+    path.join(repoRoot, ".env"),
+    path.join(repoRoot, "backend", ".env"),
+    path.join(repoRoot, "mlb", ".env"),
+  ];
+  for (const p of candidates) _loadEnvFileIfPresent(p);
+}
+
+let createClient;
+try {
+  ({ createClient } = await import("@supabase/supabase-js"));
+} catch {
+  // Fallback for this repo where node deps are installed under frontend/.
+  ({ createClient } = await import("../../../frontend/node_modules/@supabase/supabase-js/dist/module/index.js"));
+}
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

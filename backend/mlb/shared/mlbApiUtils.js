@@ -1,9 +1,8 @@
 // backend/scripts/shared/mlbApiUtils.js
-import fetch from "node-fetch";
 import {
   getTeamInfoByAbbr,
   normalizeTeamAbbreviation,
-} from "../../../shared/teamNameMap.js";
+} from "../../../mlb/shared/teamNameMap.js";
 import {
   getGameStartTimeET,
   todayET,
@@ -48,7 +47,9 @@ export async function getGameContextFields(gameId, teamAbbr) {
   const opponentAbbr = is_home ? awayTeam : homeTeam;
 
   if (!opponentAbbr) {
-    console.warn(`⚠️ Missing opponentAbbr for game ${gameId} and team ${team}`);
+    console.warn(
+      `⚠️ Missing opponentAbbr for game ${gameId} and team ${teamAbbr}`
+    );
     return {};
   }
 

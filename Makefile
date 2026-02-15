@@ -1,4 +1,4 @@
-.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-insert-stat-derived mlb-check-stat-derived mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -7,6 +7,12 @@ NHL_DATE ?= 2025-11-20
 MLB_MARKET_DAYS ?= 1
 MLB_ROSTER_DATE ?= $(MLB_DATE)
 NHL_ROSTER_DATE ?= $(NHL_DATE)
+MLB_STAT_DERIVED_DAYS ?= 7
+MLB_STAT_DERIVED_MIN ?= 0
+MLB_STAT_FROM_DATE ?=
+MLB_STAT_TO_DATE ?=
+MLB_STAT_DAYS_AGO ?= 2
+MLB_STAT_MAX_GAMES ?= 0
 
 help:
 	@echo "Proppadia checks"
@@ -18,6 +24,8 @@ help:
 	@echo "  make mlb-checks-full"
 	@echo "  make mlb-market-cache-refresh [MLB_MARKET_DAYS=1]"
 	@echo "  make mlb-roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD]"
+	@echo "  make mlb-insert-stat-derived [MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_MAX_GAMES=0]"
+	@echo "  make mlb-check-stat-derived [MLB_STAT_DERIVED_DAYS=7] [MLB_STAT_DERIVED_MIN=0]"
 	@echo "  make roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD] [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
@@ -91,6 +99,14 @@ mlb-market-cache-refresh:
 # Full-team MLB player/roster refresh (all teams; not slate-limited).
 mlb-roster-refresh-all:
 	$(VENV_PY) -m backend.scripts.refresh_mlb_players_rosters --date $(MLB_ROSTER_DATE)
+
+# Generate historical stat-derived MLB rows (legacy workhorse script).
+mlb-insert-stat-derived:
+	$(VENV_PY) backend/scripts/insert_mlb_stat_derived.py --quiet --days-ago $(MLB_STAT_DAYS_AGO) --max-games-per-date $(MLB_STAT_MAX_GAMES) $(if $(MLB_STAT_FROM_DATE),--from-date $(MLB_STAT_FROM_DATE),) $(if $(MLB_STAT_TO_DATE),--to-date $(MLB_STAT_TO_DATE),)
+
+# Validate recent stat-derived row volume in model_training_props.
+mlb-check-stat-derived:
+	$(VENV_PY) backend/scripts/validate_mlb_stat_derived_recent.py --days $(MLB_STAT_DERIVED_DAYS) --require-min $(MLB_STAT_DERIVED_MIN)
 
 # API contract check for /api/player-profile payload consumed by frontend.
 mlb-checks-profile-contract:

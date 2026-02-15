@@ -1,12 +1,10 @@
 // ✅ File: backend/scripts/shared/playerUtilsBackend.js (backend-only functions)
-
-import fetch from "node-fetch";
 import { getGamePkForTeamOnDate } from "./fetchGameID.js";
 import { getLiveFeedFromGameID } from "./mlbApiUtils.js";
 import {
   getFullTeamAbbreviationFromID,
   getTeamInfoByAbbr,
-} from "../../../shared/teamNameMap.js";
+} from "../../../mlb/shared/teamNameMap.js";
 import { normalizePropType } from "./propUtilsBackend.js";
 import { toISODate } from "./timeUtilsBackend.js";
 import { supabase } from "./supabaseBackend.js";
@@ -183,6 +181,11 @@ export function flattenPlayerBoxscore(boxscore, gameData) {
 // 🔁 Utility: Get position map from recent player_stats
 // Maps player_id => position string (e.g., "P", "C", "1B", etc.)
 export async function getPlayerPositionMap(dateStr = null) {
+  if (!supabase) {
+    console.error("❌ Supabase client not configured for getPlayerPositionMap");
+    return new Map();
+  }
+
   const query = supabase.from("player_stats").select("player_id, position");
   if (dateStr) query.eq("game_date", dateStr);
 
@@ -190,7 +193,7 @@ export async function getPlayerPositionMap(dateStr = null) {
 
   if (error) {
     console.error("❌ Failed to fetch player positions:", error.message);
-    return {};
+    return new Map();
   }
 
   const map = new Map();

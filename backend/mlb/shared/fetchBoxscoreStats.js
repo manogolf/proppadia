@@ -1,6 +1,5 @@
 // backend/scripts/shared/fetchBoxscoreStats.js
 
-import fetch from "node-fetch";
 import { flattenPlayerBoxscore } from "./playerUtilsBackend.js";
 
 // 🔍 Fetch entire boxscore and flatten all players

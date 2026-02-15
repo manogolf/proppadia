@@ -12,7 +12,7 @@ import {
   PITCHER_PROP_TYPES,
   isBatterProp,
   determineOutcome,
-} from "../../shared/propUtils.js";
+} from "../../mlb/shared/propUtils.js";
 import {
   getStreaksForPlayer,
   getPlayerPositionMap,
@@ -24,7 +24,7 @@ import {
   getGameContextFields,
   getLiveFeedFromGameID,
 } from "./shared/mlbApiUtils.js";
-import { getTeamIdFromAbbr } from "../../shared/teamNameMap.js";
+import { getTeamIdFromAbbr } from "../../mlb/shared/teamNameMap.js";
 import { extractStatForPropType } from "./shared/propUtilsBackend.js";
 import crypto from "node:crypto";
 
@@ -34,6 +34,12 @@ const QUIET = ARGS.includes("--quiet") || process.env.QUIET === "1"; // cron-fri
 const VERBOSE =
   !QUIET && (ARGS.includes("--verbose") || process.env.VERBOSE === "1");
 const DEBUG = !QUIET && (ARGS.includes("--debug") || process.env.DEBUG === "1");
+
+function argValue(flag) {
+  const i = ARGS.indexOf(flag);
+  if (i < 0 || i + 1 >= ARGS.length) return null;
+  return ARGS[i + 1];
+}
 
 // chatty (only with --verbose and not --quiet)
 const log = (...a) => {
@@ -52,24 +58,64 @@ const forceLog = (...a) => console.log(...a);
 // always errors
 const error = (...a) => console.error(...a);
 
-console.log(
+dbg(
   "BATTER_PROP_TYPES:",
   BATTER_PROP_TYPES.map((p) => typeof p)
 );
-console.log(
+dbg(
   "PITCHER_PROP_TYPES:",
   PITCHER_PROP_TYPES.map((p) => typeof p)
 );
 
-const DAYS_AGO = 2;
-const today = new Date();
-const endDate = new Date(today);
-endDate.setDate(endDate.getDate() - 1);
-const startDate = new Date(today);
-startDate.setDate(startDate.getDate() - DAYS_AGO);
-const datesToProcess = [];
-for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-  datesToProcess.push(toISODate(new Date(d)));
+function parseDateOnly(value, label) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!m) throw new Error(`${label} must be YYYY-MM-DD`);
+  const d = new Date(`${raw}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) throw new Error(`${label} invalid date: ${raw}`);
+  return d;
+}
+
+function buildDatesToProcess() {
+  const fromArg = argValue("--from-date") || process.env.MLB_STAT_FROM_DATE;
+  const toArg = argValue("--to-date") || process.env.MLB_STAT_TO_DATE;
+  const daysAgoRaw =
+    argValue("--days-ago") || process.env.MLB_STAT_DAYS_AGO || "2";
+  const daysAgo = Math.max(1, Number.parseInt(String(daysAgoRaw), 10) || 2);
+
+  let startDate;
+  let endDate;
+  if (fromArg || toArg) {
+    if (!fromArg || !toArg) {
+      throw new Error("both --from-date and --to-date are required when date override is used");
+    }
+    startDate = parseDateOnly(fromArg, "--from-date");
+    endDate = parseDateOnly(toArg, "--to-date");
+  } else {
+    const today = new Date();
+    endDate = new Date(today);
+    endDate.setDate(endDate.getDate() - 1);
+    startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - daysAgo);
+  }
+  if (startDate > endDate) {
+    throw new Error(`from-date must be <= to-date (${toISODate(startDate)} > ${toISODate(endDate)})`);
+  }
+
+  const out = [];
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    out.push(toISODate(new Date(d)));
+  }
+  return out;
+}
+
+const datesToProcess = buildDatesToProcess();
+
+if (!supabase) {
+  throw new Error(
+    "Supabase client is not configured (missing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY)"
+  );
 }
 
 const LOG_EVERY = 150;
@@ -188,7 +234,8 @@ async function processDate(gameDate) {
         const hasPitch = Object.keys(pitching).length > 0;
         const position = positionMap.get(Number(p.id));
         const isPitch = isPitcher(position) || hasPitch;
-        const isStarter = isStarterPitcher(position, stats); // NEW        return hasBat || isPitch;
+        // Include batters and pitchers in pool; starter gating is applied per prop below.
+        return hasBat || isPitch;
       });
 
       log(`✅ Final player pool after filtering: ${players.length}`);
@@ -230,6 +277,7 @@ async function processDate(gameDate) {
           stats?.pitching && Object.keys(stats.pitching).length > 0
         );
         const isPitch = isPitcher(position) || hasPitch;
+        const isStarter = isStarterPitcher(position, stats);
         const isBatterOnly = hasBat && !isPitch;
         const isPitcherOnly = isPitch && !hasBat;
         const isTwoWayPlayer = hasBat && isPitch;
@@ -409,7 +457,7 @@ async function processDate(gameDate) {
             continue;
           }
           if (!contextFields) {
-            dbg(`⚠️ contextFields missing for ${team} in game ${gameId}`);
+            dbg(`⚠️ contextFields missing for ${teamAbbr} in game ${gameId}`);
           }
 
           const now = new Date().toISOString();
@@ -492,10 +540,12 @@ async function processDate(gameDate) {
 }
 
 (async () => {
+  let dateFailures = 0;
   for (const d of datesToProcess) {
     try {
       await processDate(d);
     } catch (err) {
+      dateFailures += 1;
       console.error(`❌ Crash during processDate(${d}):`, err);
     }
   }
@@ -531,6 +581,12 @@ async function processDate(gameDate) {
           w
         ).padStart(3)}W / ${String(l).padStart(3)}L`
       );
+    }
+
+    if (dateFailures > 0) {
+      forceLog(`\n⚠️ Script finished with ${dateFailures} date failure(s).`);
+      process.exitCode = 1;
+      return;
     }
 
     forceLog("\n🏁 Script finished successfully.");

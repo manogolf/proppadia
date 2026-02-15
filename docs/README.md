@@ -5,8 +5,12 @@ Start here for architecture and operations context.
 ## Architecture
 
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.
+- `docs/Execution Plan.md`: forward execution plan derived from as-built baseline.
+- `docs/As Built Snapshot.md`: current deployed/runtime as-built summary.
 - `docs/Runtime Surface.md`: currently served FastAPI routes and entrypoint.
 - `docs/Legacy Quarantine Map.md`: backend archive/legacy move map to `backend/_legacy/*`.
+- `docs/Workflow Classification.md`: current keep/suspend/archive workflow status map.
+- `docs/MLB Data-First Retention Plan.md`: MLB data-preservation-first operating policy.
 
 ## Shared Validation Lane
 
