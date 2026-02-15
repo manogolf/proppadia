@@ -54,6 +54,7 @@ make mlb-checks-full
 make mlb-checks-golden
 make mlb-checks-props-contract
 make mlb-checks-profile-contract
+make mlb-show-config
 make mlb-market-cache-refresh
 make mlb-roster-refresh-all
 make mlb-insert-stat-derived
@@ -83,6 +84,7 @@ Meaning:
 - `mlb-checks-profile-contract`: validates `/api/player-profile/{player_id}` response schema used by frontend
 - `mlb-market-cache-refresh`: warms in-process OddsAPI snapshot cache for ET date window (`MLB_MARKET_DAYS`, default `1`)
 - `mlb-roster-refresh-all`: refreshes all MLB team active rosters into `player_ids` (schema-aware active/inactive sync)
+- `mlb-show-config`: prints effective MLB make/runtime values (preflight sanity check)
 - `mlb-insert-stat-derived`: runs DB-URL-native stat-derived insertion (`backend/scripts/insert_mlb_stat_derived.py`) in quiet mode
   - default window: yesterday back through `MLB_STAT_DAYS_AGO`
   - explicit historical window: `MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD`
