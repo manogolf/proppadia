@@ -165,6 +165,17 @@ def run(
     checks.append(
         run_check(
             client,
+            name="mlb_players_list",
+            method="GET",
+            path="/api/mlb/players",
+            params={"limit": 5},
+            expected_status=[200],
+            validate=lambda body: (isinstance(body, list), "expects list payload"),
+        )
+    )
+    checks.append(
+        run_check(
+            client,
             name="player_profile",
             method="GET",
             path=f"/api/player-profile/{player_id}",
@@ -202,6 +213,7 @@ def run(
                 ("players_lookup", "missing", '"found": true', "players_lookup returned found=false"),
                 ("players_search", "contains", '"count": 0', "players_search returned count=0"),
                 ("players_list", "contains", "list(len=0)", "players_list returned list(len=0)"),
+                ("mlb_players_list", "contains", "list(len=0)", "mlb_players_list returned list(len=0)"),
                 ("player_profile", "contains", '"player_name": null', "player_profile returned sparse player_info"),
             ],
         )

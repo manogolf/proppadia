@@ -104,6 +104,17 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
     checks.append(
         run_check(
             client,
+            name="nhl_players_list",
+            method="GET",
+            path="/api/nhl/players",
+            params={"limit": 25},
+            expected_status=[200],
+            validate=expect_list_or_error_object,
+        )
+    )
+    checks.append(
+        run_check(
+            client,
             name="props_add_invalid",
             method="POST",
             path="/api/nhl/props/add",
@@ -149,6 +160,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
             [
                 ("games_today", "contains", '"count": 0', "games_today returned count=0"),
                 ("props_today", "contains", '"count": 0', "props_today returned count=0"),
+                ("nhl_players_list", "contains", "list(len=0)", "nhl_players_list returned list(len=0)"),
                 ("sog", "contains", "list(len=0)", "sog returned list(len=0)"),
                 ("saves", "contains", "list(len=0)", "saves returned list(len=0)"),
             ],
