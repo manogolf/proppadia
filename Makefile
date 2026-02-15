@@ -42,7 +42,11 @@ help:
 	@echo "  make cross-sport-post-deploy BASE_URL=<url> [MLB_DATE=YYYY-MM-DD] [NHL_DATE=YYYY-MM-DD]"
 
 mlb-help:
-	@$(MAKE) help | rg "mlb-|MLB_"
+	@if command -v rg >/dev/null 2>&1; then \
+		$(MAKE) help | rg "mlb-|MLB_"; \
+	else \
+		$(MAKE) help | grep -E "mlb-|MLB_"; \
+	fi
 
 # One-command local diagnostic baseline for support/debug sessions.
 diagnose:
