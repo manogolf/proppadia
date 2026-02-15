@@ -126,6 +126,47 @@ export default function AppRouter() {
     };
   }, [refreshWatchlistTotal]);
 
+  useEffect(() => {
+    function onDocClickCapture(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const navAnchor = target.closest("a[href]");
+      if (!navAnchor) return;
+      const navShell = navAnchor.closest("header, nav");
+      if (!navShell) return;
+
+      const beforePath = window.location.pathname + window.location.search;
+      const hrefAttr = navAnchor.getAttribute("href") || "";
+      const rect = navAnchor.getBoundingClientRect();
+      const cx = Math.max(0, Math.floor(rect.left + rect.width / 2));
+      const cy = Math.max(0, Math.floor(rect.top + rect.height / 2));
+      const topEl = document.elementFromPoint(cx, cy);
+      const topTag = topEl ? `${topEl.tagName.toLowerCase()}${topEl.id ? `#${topEl.id}` : ""}` : "null";
+      console.debug("[NAV_PROBE] click", {
+        beforePath,
+        href: hrefAttr,
+        defaultPrevented: event.defaultPrevented,
+        targetTag: `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ""}`,
+        navTag: `${navAnchor.tagName.toLowerCase()}${navAnchor.id ? `#${navAnchor.id}` : ""}`,
+        pointerAt: { x: cx, y: cy },
+        topElementAtPointer: topTag,
+      });
+
+      window.setTimeout(() => {
+        const afterPath = window.location.pathname + window.location.search;
+        console.debug("[NAV_PROBE] after", {
+          href: hrefAttr,
+          changed: afterPath !== beforePath,
+          beforePath,
+          afterPath,
+        });
+      }, 180);
+    }
+
+    document.addEventListener("click", onDocClickCapture, true);
+    return () => document.removeEventListener("click", onDocClickCapture, true);
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="sticky top-0 z-[1000] pointer-events-auto bg-[#f6f8fb]/95 backdrop-blur supports-[backdrop-filter]:bg-[#f6f8fb]/85">
