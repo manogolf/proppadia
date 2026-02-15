@@ -24,6 +24,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - append season activation status snapshots to local JSONL history
 - `make season-activation-last`
   - read recent season activation snapshots and show blocker changes
+- `make season-activation-report`
+  - one combined JSON payload for phase status + activation + baseline + recent history
 - `make season-baseline-check`
   - validates MLB/NHL day-0 baseline artifacts exist before cutover
 - `make season-cutover-ready`
