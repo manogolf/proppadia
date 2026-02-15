@@ -93,6 +93,7 @@ Current operator stance:
 
 Quick runnable command list: `docs/Quick Commands.md`
 Workflow schedule inventory commands:
+- `make cron-governance-check` (one-command strict governance gate)
 - `make workflow-inventory` (report only)
 - `make workflow-inventory-strict` (fails on unexpected scheduled files)
 - `make workflow-path-audit` (report missing workflow python refs for scheduled files)

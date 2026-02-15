@@ -7,6 +7,7 @@ Daily:
 - `make mlb-ops-check ...` (when you want confidence loop)
 
 On-demand:
+- `make cron-governance-check`
 - `make workflow-inventory`
 - `make workflow-inventory-strict`
 - `make workflow-path-audit`
@@ -56,6 +57,7 @@ make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 ## Cron Replacement Governance
 
 ```bash
+make cron-governance-check
 make workflow-inventory-strict
 make workflow-path-audit
 make workflow-path-audit-strict
