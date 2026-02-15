@@ -19,6 +19,7 @@ Daily:
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
+- `make ops-operator-summary`
 - `make phase-status-json`
 - `make cron-governance-check`
 - `make cron-governance-snapshot` (includes phase status + season activation readiness)
@@ -47,6 +48,7 @@ On-demand:
 make mlb-help
 make ops-help
 make ops-status
+make ops-operator-summary
 make mlb-runbook
 make mlb-cron-preview
 make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7

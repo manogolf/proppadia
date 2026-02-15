@@ -90,6 +90,12 @@ Notes:
 - Bundle now prints current phase tracker summary first (`make phase-status-json`).
 - `make cron-governance-snapshot` now includes workflow checks + phase status + season activation readiness, and only passes when both governance and season activation are green.
 
+Compact daily operator view:
+
+```bash
+make ops-operator-summary
+```
+
 Phase tracker snapshot (json):
 
 ```bash

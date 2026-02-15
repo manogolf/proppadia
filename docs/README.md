@@ -15,6 +15,7 @@ If the question is “what is the active runtime path right now?”:
   - `.github/workflows/nhl-daily-refresh.yml`
 - Governance checks:
   - `make cron-governance-check`
+  - `make ops-operator-summary`
   - `make docs-make-target-audit`
 
 ## Architecture
