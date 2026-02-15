@@ -112,6 +112,8 @@ Recommended low-risk cadence while season is inactive:
    - use `mlb-stat-derived-refresh` to execute both in one run.
 5. `mlb-stat-derived-backfill` for explicit historical windows (manual/on-demand).
 
+Governance cadence and handoff procedure: `docs/Cron Replacement Runbook.md`
+
 Canonical commands:
 
 ```bash
