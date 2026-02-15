@@ -111,3 +111,10 @@ Before handing cron ownership from local automator to hosted scheduler:
 3. Run one hosted manual trigger and capture result.
 4. Verify site/API health with post-deploy checks.
 5. Keep previous local schedule paused, not deleted, until two consecutive hosted runs pass.
+
+## Weekly Governance Cadence
+
+1. Run `make cron-current-state`.
+2. Run `make cron-governance-check`.
+3. Review any workflow file changes since last check.
+4. Confirm suspended workflows remain intentionally manual-only.
