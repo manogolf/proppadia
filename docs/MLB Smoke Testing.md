@@ -59,6 +59,7 @@ make mlb-roster-refresh-all
 make mlb-insert-stat-derived
 make mlb-check-stat-derived
 make mlb-stat-derived-refresh
+make mlb-stat-derived-smoke
 make roster-refresh-all
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -84,6 +85,7 @@ Meaning:
   - explicit historical window: `MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD`
 - `mlb-check-stat-derived`: validates recent `model_training_props` stat-derived volume (`MLB_STAT_DERIVED_DAYS`, `MLB_STAT_DERIVED_MIN`)
 - `mlb-stat-derived-refresh`: one-command insert + volume guard (recommended for cron)
+- `mlb-stat-derived-smoke`: fast wiring check (forces `MLB_STAT_MAX_GAMES=1`)
 - `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
