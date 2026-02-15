@@ -6,6 +6,7 @@ from __future__ import annotations
 import py_compile
 import sys
 from pathlib import Path
+from typing import Sequence
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,20 +20,24 @@ REQUIRED = [
 ]
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
+    quiet = "--quiet" in (argv or sys.argv[1:])
     missing: list[Path] = []
     compile_fail: list[tuple[Path, str]] = []
     checked = 0
 
-    print("NHL workflow compatibility check:")
+    if not quiet:
+        print("NHL workflow compatibility check:")
     for rel in REQUIRED:
         checked += 1
         path = ROOT / rel
         if not path.exists():
             missing.append(rel)
-            print(f"- MISSING {rel}")
+            if not quiet:
+                print(f"- MISSING {rel}")
             continue
-        print(f"- OK {rel}")
+        if not quiet:
+            print(f"- OK {rel}")
         try:
             py_compile.compile(str(path), doraise=True)
         except Exception as exc:  # pragma: no cover
@@ -59,4 +64,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
