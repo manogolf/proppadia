@@ -2,6 +2,18 @@
 
 Purpose: execute preseason-to-in-season cutover with one clear checklist.
 
+Fast path:
+
+```bash
+make season-activation-check \
+  BASE_URL=https://baseball-streaks-sq44.onrender.com \
+  MLB_DATE=2025-08-15 \
+  MLB_QUALITY_WINDOW_MODE=games \
+  MLB_QUALITY_GAMES_BACK=30 \
+  NHL_QUALITY_FROM_DATE=2025-12-01 \
+  NHL_QUALITY_TO_DATE=2025-12-31
+```
+
 ## Step 1: Preseason Dry Run
 
 Run the kickoff bundle against deployed backend:
