@@ -16,14 +16,14 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
                     "REQUIRED",
                     [Path("backend/scripts/check_nhl_workflow_compat.py")],
                 ):
-                    rc = compat.main()
+                    rc = compat.main([])
         self.assertEqual(rc, 0)
 
     def test_main_fails_when_required_file_missing(self):
         with patch("builtins.print"):
             with patch.object(compat, "ROOT", Path(".")):
                 with patch.object(compat, "REQUIRED", [Path("missing/nope.py")]):
-                    rc = compat.main()
+                    rc = compat.main([])
         self.assertEqual(rc, 1)
 
     def test_main_fails_when_compile_fails(self):
@@ -37,7 +37,7 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
                     with patch.object(
                         compat.py_compile, "compile", side_effect=Exception("compile boom")
                     ):
-                        rc = compat.main()
+                        rc = compat.main([])
         self.assertEqual(rc, 1)
 
     def test_main_quiet_prints_summary_only(self):

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import py_compile
 import sys
 from pathlib import Path
@@ -21,22 +22,31 @@ REQUIRED = [
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    quiet = "--quiet" in (argv or sys.argv[1:])
+    parser = argparse.ArgumentParser(
+        description="Check required NHL workflow compatibility scripts."
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-file rows; print summary only.",
+    )
+    args = parser.parse_args(argv)
+
     missing: list[Path] = []
     compile_fail: list[tuple[Path, str]] = []
     checked = 0
 
-    if not quiet:
+    if not args.quiet:
         print("NHL workflow compatibility check:")
     for rel in REQUIRED:
         checked += 1
         path = ROOT / rel
         if not path.exists():
             missing.append(rel)
-            if not quiet:
+            if not args.quiet:
                 print(f"- MISSING {rel}")
             continue
-        if not quiet:
+        if not args.quiet:
             print(f"- OK {rel}")
         try:
             py_compile.compile(str(path), doraise=True)
