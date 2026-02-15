@@ -22,6 +22,7 @@ make season-activation-status-strict
 make season-activation-log
 make season-activation-last
 make season-activation-report
+make season-activation-report-strict
 make season-baseline-check
 make season-cutover-ready
 ```

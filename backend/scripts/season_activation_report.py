@@ -61,6 +61,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--history-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--history-limit", type=int, default=10)
     ap.add_argument("--max-age-hours", type=int, default=0)
+    ap.add_argument("--strict", action="store_true", help="Exit non-zero when report status is fail.")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
     payload = build_report(
         history_input=Path(args.history_input),
@@ -68,9 +69,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_age_hours=args.max_age_hours,
     )
     print(json.dumps(payload, indent=2))
-    return 0 if payload["ok"] else 1
+    if args.strict and not payload["ok"]:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
