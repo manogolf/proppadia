@@ -13,6 +13,7 @@ Daily:
 - `make season-activation-status-strict` (phase 6 readiness gate)
 - `make season-activation-log` (append season activation snapshot to JSONL)
 - `make season-activation-last` (show recent season activation history)
+- `make season-baseline-check` (validate baseline artifacts exist)
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:

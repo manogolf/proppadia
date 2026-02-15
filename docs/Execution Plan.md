@@ -30,6 +30,7 @@ Completed slices:
   - status snapshot command added (`make season-activation-status`)
   - machine-readable phase tracker command added (`make phase-status-json`)
   - season activation history commands added (`make season-activation-log`, `make season-activation-last`)
+  - baseline artifact check command added (`make season-baseline-check`)
 
 Current governance status:
 

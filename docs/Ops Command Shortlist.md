@@ -24,6 +24,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - append season activation status snapshots to local JSONL history
 - `make season-activation-last`
   - read recent season activation snapshots and show blocker changes
+- `make season-baseline-check`
+  - validates MLB/NHL day-0 baseline artifacts exist before cutover
 - `make season-cutover-ready`
   - strict phase-6 readiness plus governance gate in one command
 - `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`
