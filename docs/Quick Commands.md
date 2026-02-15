@@ -9,6 +9,7 @@ Daily:
 On-demand:
 - `make cron-governance-check`
 - `make cron-governance-snapshot`
+- `make mlb-readiness-snapshot`
 - `make cron-current-state`
 - `make workflow-inventory`
 - `make workflow-inventory-strict`
@@ -34,6 +35,7 @@ make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_
 
 ```bash
 make mlb-ops-check BASE_URL=https://baseball-streaks-sq44.onrender.com
+make mlb-readiness-snapshot MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 ```
 
 ## MLB Stat-Derived Backfill (Historical Window)
