@@ -41,6 +41,8 @@ make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com NHL_DATE=2025-11-20
+make nhl-roster-refresh-all NHL_ROSTER_DATE=2025-11-20
+make roster-refresh-all MLB_ROSTER_DATE=2025-08-15 NHL_ROSTER_DATE=2025-11-20
 ```
 
 Meaning:
@@ -51,11 +53,15 @@ Meaning:
 - `nhl-post-deploy`: transport + DB ping + key NHL read endpoints
 - includes backend-owned slate metadata check: `GET /api/nhl/slate/meta`
 - includes NHL history read contract check: `GET /api/nhl/props/history`
+- includes cumulative players directory check: `GET /api/nhl/players`
 - includes safe NHL add-path validation check: invalid `POST /api/nhl/props/add` must return `400`
 - NHL lifecycle resolver endpoint is ops-only: `POST /api/ops/nhl/resolve-props` (`dry_run=true` recommended first)
 - `nhl-post-deploy-strict`: same checks, fails when probe date returns sparse data
 - `nhl-post-deploy-strict-offseason`: strict checks but allows sparse probe data
+- `nhl-roster-refresh-all`: full-team NHL roster refresh (all teams; not slate-limited)
+- `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh
 - NHL make targets accept `NHL_DATE` to control probe date (default `2025-11-20`)
+- NHL roster refresh accepts `NHL_ROSTER_DATE` (default `NHL_DATE`)
 
 ## Useful Flags
 
@@ -72,3 +78,10 @@ Flags:
 - `--date`: probe date for `/api/nhl/slate/meta`, `/api/nhl/games/today`, `/api/nhl/props/today`, `/api/nhl/sog`, `/api/nhl/saves`
 - `--require-data`: fail when probe date is sparse
 - `--allow-sparse`: keep warnings but do not fail strict gate
+
+## Manual Roster Refresh Workflow
+
+GitHub Actions:
+- Workflow: `.github/workflows/nhl-refresh-rosters.yml`
+- Required secret: `SUPABASE_DB_URL`
+- Manual dispatch input: `nhl_roster_date` (optional `YYYY-MM-DD`)

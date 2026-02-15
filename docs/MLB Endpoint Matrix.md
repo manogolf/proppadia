@@ -20,7 +20,8 @@ Status legend:
 | `GET /api/user-vs-model-accuracy-weekly` | `frontend/src/Pages/ModelMetricsDashboard.jsx` | Active | Implemented in `backend/app/routers/mlb.py` via domain metrics queries. |
 | `GET /api/model-accuracy-weekly` | `frontend/src/Pages/ModelMetricsDashboard.jsx` | Active | Implemented in `backend/app/routers/mlb.py` via domain metrics queries. |
 | `GET /api/player-profile/{player_id}` | `frontend/src/Pages/PlayerProfileDashboard.jsx` | Active | Implemented in `backend/app/routers/mlb.py`. |
-| `GET /api/players` | `frontend/src/Pages/PlayerTeamBrowser.jsx` | Active | Implemented in `backend/app/routers/mlb.py`. |
+| `GET /api/mlb/players` | `frontend/src/Pages/PlayerTeamBrowser.jsx` | Active | Canonical MLB cumulative players directory route in `backend/app/routers/mlb.py`. |
+| `GET /api/players` | legacy callers only | Active | Compatibility alias; prefer `GET /api/mlb/players` for new callers. |
 ## Recommended next action
 
 Keep feature work on canonical FastAPI routes and avoid adding frontend-local API handlers.

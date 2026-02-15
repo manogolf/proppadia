@@ -1,4 +1,4 @@
-.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -18,6 +18,7 @@ help:
 	@echo "  make mlb-checks-full"
 	@echo "  make mlb-market-cache-refresh [MLB_MARKET_DAYS=1]"
 	@echo "  make mlb-roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD]"
+	@echo "  make roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD] [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-roster-refresh-all [NHL_ROSTER_DATE=YYYY-MM-DD]"
@@ -138,8 +139,14 @@ nhl-checks-offline-core:
 	$(MAKE) nhl-openapi-contract
 
 # Full-team NHL player/roster refresh (all teams; not slate-limited).
+# Override date with NHL_ROSTER_DATE=YYYY-MM-DD when needed.
 nhl-roster-refresh-all:
 	$(VENV_PY) -m backend.nhl.cli refresh-rosters-all --date $(NHL_ROSTER_DATE)
+
+# Convenience umbrella target for both sports.
+roster-refresh-all:
+	$(MAKE) mlb-roster-refresh-all MLB_ROSTER_DATE=$(MLB_ROSTER_DATE)
+	$(MAKE) nhl-roster-refresh-all NHL_ROSTER_DATE=$(NHL_ROSTER_DATE)
 
 # One-command NHL release confidence gate (offseason-safe strict deploy check).
 nhl-release-check: nhl-checks-offline

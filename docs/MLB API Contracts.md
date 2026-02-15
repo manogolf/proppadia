@@ -110,7 +110,7 @@ Response:
 }
 ```
 
-### `GET /api/players`
+### `GET /api/mlb/players`
 
 Query params:
 - `limit` (optional int, default `2000`, range `1..5000`)
@@ -128,6 +128,17 @@ Response:
   }
 ]
 ```
+
+### `GET /api/players` (legacy compatibility alias)
+
+Query params:
+- `limit` (optional int, default `2000`, range `1..5000`)
+
+Response:
+- Array of player objects (same shape as `/api/mlb/players`).
+
+Notes:
+- Use `/api/mlb/players` for new callers.
 
 ### `GET /api/player-profile/{player_id}`
 

@@ -56,6 +56,7 @@ make mlb-checks-props-contract
 make mlb-checks-profile-contract
 make mlb-market-cache-refresh
 make mlb-roster-refresh-all
+make roster-refresh-all
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -75,6 +76,7 @@ Meaning:
 - `mlb-checks-profile-contract`: validates `/api/player-profile/{player_id}` response schema used by frontend
 - `mlb-market-cache-refresh`: warms in-process OddsAPI snapshot cache for ET date window (`MLB_MARKET_DAYS`, default `1`)
 - `mlb-roster-refresh-all`: refreshes all MLB team active rosters into `player_ids` (schema-aware active/inactive sync)
+- `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
   - `GET /api/mlb/market-supported-props`
@@ -111,6 +113,8 @@ make mlb-roster-refresh-all MLB_ROSTER_DATE=2025-08-15
 GitHub Actions automation:
 - Workflow: `.github/workflows/mlb-refresh-player-ids.yml`
 - Required secret: `SUPABASE_DB_URL`
+- Manual dispatch input: `mlb_roster_date` (optional `YYYY-MM-DD`)
+- Recommended use: manual backfill reruns and offseason spot-refresh checks.
 
 Optional (warm today + tomorrow):
 

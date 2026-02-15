@@ -2,14 +2,18 @@
 
 ## Top-level layout
 
-- `backend/sports/` — shared Python backend helpers
-  - `backend/sports/__init__.py`
-  - `backend/sports/nhl/__init__.py`
-- `nhl/scripts/` — NHL ingestion & utilities
-  - `ingest_boxscore.py` (PBP, shifts fallback, DB ingest)
-  - other helpers (list them here)
+- `backend/app/` — FastAPI runtime (routers/services/schemas)
+  - `backend/app/api_server.py`
+  - `backend/app/routers/{health,mlb,nhl,ops}.py`
+- `backend/domains/` — domain repositories and logic
+  - `backend/domains/mlb/*`
+  - `backend/domains/nhl/*`
+- `backend/nhl/` — NHL pipeline scripts/sql/models/data
+- `backend/scripts/` — smoke checks, post-deploy checks, ops helpers
 - `.github/workflows/` — CI/CD & crons
-  - `nhl-daily.yml` (daily ingest ↔ refresh ↔ export)
+  - `nhl-daily-refresh.yml` (scheduled NHL refresh pipeline)
+  - `mlb-refresh-player-ids.yml` (scheduled + manual MLB full-team roster refresh)
+  - `nhl-refresh-rosters.yml` (manual NHL full-team roster refresh)
 - `frontend/` — Vite + JS/JSX frontend
 
 ## Environments / Secrets
@@ -27,11 +31,11 @@
 ## Pipelines (NHL)
 
 - Data sources: `api-web.nhle.com` (boxscore, pbp, shiftcharts), `api.nhle.com` (shiftcharts backup)
-- Ingest: `nhl/scripts/ingest_boxscore.py`
+- Ingest: `backend/nhl/scripts/ingest_boxscore.py`
   - SOG/strength from PBP
   - PP TOI from box; fallback to shiftcharts
 - Storage: `nhl.*` tables (skater/goalie logs, etc.)
-- Cron: `.github/workflows/nhl-daily.yml`
+- Cron: `.github/workflows/nhl-daily-refresh.yml`
 
 ## Frontend
 

@@ -1,11 +1,9 @@
-# .github/workflows/mlb-refresh-player-ids.yml
-name: mlb-refresh-player-ids
+name: nhl-refresh-rosters
+
 on:
-  schedule:
-    - cron: "15 6 * * *"
   workflow_dispatch:
     inputs:
-      mlb_roster_date:
+      nhl_roster_date:
         description: "Optional YYYY-MM-DD roster date override"
         required: false
         default: ""
@@ -15,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -40,13 +39,13 @@ jobs:
             exit 1
           fi
 
-      - name: Run full MLB roster refresh
+      - name: Run full NHL roster refresh
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          MLB_ROSTER_DATE: ${{ github.event.inputs.mlb_roster_date || '' }}
+          NHL_ROSTER_DATE: ${{ github.event.inputs.nhl_roster_date || '' }}
         run: |
-          if [ -n "$MLB_ROSTER_DATE" ]; then
-            make mlb-roster-refresh-all MLB_ROSTER_DATE="$MLB_ROSTER_DATE"
+          if [ -n "$NHL_ROSTER_DATE" ]; then
+            make nhl-roster-refresh-all NHL_ROSTER_DATE="$NHL_ROSTER_DATE"
           else
-            make mlb-roster-refresh-all
+            make nhl-roster-refresh-all
           fi
