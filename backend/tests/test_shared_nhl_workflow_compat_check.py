@@ -1,6 +1,7 @@
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -55,6 +56,23 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
         self.assertIn("Summary:", printed)
         self.assertNotIn("NHL workflow compatibility check:", printed)
         self.assertNotIn("- OK backend/scripts/check_nhl_workflow_compat.py", printed)
+
+    def test_main_json_outputs_machine_readable_summary(self):
+        out = StringIO()
+        with patch.object(compat, "ROOT", Path(".")):
+            with patch.object(
+                compat,
+                "REQUIRED",
+                [Path("backend/scripts/check_nhl_workflow_compat.py")],
+            ):
+                with redirect_stdout(out):
+                    rc = compat.main(["--json"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["required_files"], 1)
+        self.assertEqual(payload["missing_files"], 0)
+        self.assertEqual(payload["compile_failures"], 0)
 
 
 if __name__ == "__main__":
