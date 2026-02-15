@@ -14,6 +14,7 @@ On-demand:
 - `make mlb-readiness-log`
 - `make mlb-readiness-last`
 - `make mlb-prediction-readiness`
+- `make mlb-prediction-quality`
 - `make cron-current-state`
 - `make workflow-inventory`
 - `make workflow-inventory-strict`
@@ -43,6 +44,7 @@ make mlb-readiness-snapshot MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 make mlb-readiness-log MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 make mlb-readiness-last
 make mlb-prediction-readiness MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=1 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting
+make mlb-prediction-quality MLB_QUALITY_WINDOW_DAYS=120 MLB_QUALITY_MIN_TOTAL=1
 make assistant-handoff-bundle MLB_STAT_DERIVED_DAYS=30 MLB_STAT_DERIVED_MIN=1
 ```
 
