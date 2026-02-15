@@ -5,7 +5,7 @@ Snapshot date: February 15, 2026
 ## Operating Model
 
 - NHL control plane: `backend/nhl/cli.py` (CLI-driven)
-- MLB control plane: GitHub workflow-driven (currently suspended by ops policy)
+- MLB control plane: Makefile + Python script-driven (`make mlb-*`), run manually or via Render cron.
 
 ## Status Labels
 
@@ -19,6 +19,14 @@ Snapshot date: February 15, 2026
 ### Keep Active
 
 - `.github/workflows/ci-offline-checks.yml`
+- `Makefile` MLB operational targets:
+  - `mlb-insert-stat-derived`
+  - `mlb-check-stat-derived`
+  - `mlb-roster-refresh-all`
+  - `mlb-market-cache-refresh`
+  - `mlb-post-deploy` / `mlb-post-deploy-strict-offseason`
+- `backend/scripts/insert_mlb_stat_derived.py`
+- `backend/scripts/validate_mlb_stat_derived_recent.py`
 
 ### Suspended Valid
 
@@ -47,4 +55,22 @@ Snapshot date: February 15, 2026
 - “Needs path fix” and “archive candidate” are based on current repo path drift:
   several workflows still call old `backend/scripts/...` paths while equivalent code now lives under `backend/mlb/...` or `mlb/scripts/...`.
 - No workflow should be re-enabled on schedule without one successful manual run and post-deploy verification.
+- Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
 
+## MLB Cron Baseline (Current)
+
+Recommended low-risk cadence while season is inactive:
+
+1. `mlb-market-cache-refresh` every 8 hours (already conservative).
+2. `mlb-roster-refresh-all` daily.
+3. `mlb-insert-stat-derived` daily during active season; optional/suspended in offseason.
+4. `mlb-check-stat-derived` after insert (or at least daily) as volume guard.
+
+Canonical commands:
+
+```bash
+make mlb-market-cache-refresh MLB_MARKET_DAYS=1
+make mlb-roster-refresh-all MLB_ROSTER_DATE=$(date +%F)
+make mlb-insert-stat-derived MLB_STAT_DAYS_AGO=2
+make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
+```

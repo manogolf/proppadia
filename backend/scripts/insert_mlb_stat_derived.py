@@ -223,6 +223,21 @@ def _get_streak(conn, player_id: int, prop_type: str) -> Tuple[Optional[str], Op
         return (str(st) if st is not None else None, int(cnt) if cnt is not None else None)
 
 
+def _date_has_stat_derived(conn, game_date: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM model_training_props
+            WHERE game_date = %s::date
+              AND prop_source = 'stat_derived'
+            LIMIT 1
+            """,
+            (game_date,),
+        )
+        return cur.fetchone() is not None
+
+
 def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -303,6 +318,7 @@ def run(
     batter_sample_ratio: float = 0.2,
     quiet: bool = False,
     max_games_per_date: int = 0,
+    skip_existing_dates: bool = False,
 ) -> int:
     start = _parse_date(from_date)
     end = _parse_date(to_date)
@@ -312,6 +328,7 @@ def run(
     attempted_upserts = 0
     applied_upserts = 0
     failed_dates = 0
+    skipped_dates = 0
     over_count = 0
     under_count = 0
 
@@ -320,6 +337,11 @@ def run(
             d_iso = d.isoformat()
             print(f"\n📅 Processing {d_iso} ...")
             try:
+                if skip_existing_dates and _date_has_stat_derived(conn, d_iso):
+                    skipped_dates += 1
+                    print(f"⏭️  {d_iso} skipped | stat_derived rows already present")
+                    continue
+
                 schedule = _fetch_schedule(d_iso)
                 final_games = [
                     int(g["gamePk"])
@@ -475,6 +497,8 @@ def run(
     print(f"   ➖ Under: {under_count}")
     print(f"\n📥 Upserts attempted: {attempted_upserts}")
     print(f"🧩 Upserts applied:   {applied_upserts}")
+    if skipped_dates:
+        print(f"⏭️  Dates skipped:      {skipped_dates}")
     if failed_dates:
         print(f"⚠️ Script finished with {failed_dates} date failure(s).")
         return 1
@@ -495,6 +519,11 @@ def main() -> int:
         default=0,
         help="Optional cap for quick smoke runs (0 = no cap).",
     )
+    ap.add_argument(
+        "--skip-existing-dates",
+        action="store_true",
+        help="Skip any date that already has stat_derived rows.",
+    )
     args = ap.parse_args()
 
     if args.from_date or args.to_date:
@@ -513,6 +542,7 @@ def main() -> int:
         batter_sample_ratio=max(0.0, min(float(args.batter_sample_ratio), 1.0)),
         quiet=bool(args.quiet),
         max_games_per_date=max(0, int(args.max_games_per_date)),
+        skip_existing_dates=bool(args.skip_existing_dates),
     )
 
 

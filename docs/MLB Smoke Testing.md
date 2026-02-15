@@ -128,6 +128,28 @@ Optional (warm today + tomorrow):
 make mlb-market-cache-refresh MLB_MARKET_DAYS=2
 ```
 
+## Scheduled Stat-Derived Insert + Guard
+
+When season is active, schedule these as a pair:
+
+1. Insert stat-derived rows
+```bash
+make mlb-insert-stat-derived MLB_STAT_DAYS_AGO=2
+```
+
+2. Validate recent stat-derived volume
+```bash
+make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
+```
+
+Notes:
+- `mlb-insert-stat-derived` is idempotent on rerun: attempted rows may be high while applied updates can be zero.
+- For historical backfill windows:
+```bash
+make mlb-insert-stat-derived MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=2025-08-15
+make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1
+```
+
 In-process (imports FastAPI app directly):
 
 ```bash

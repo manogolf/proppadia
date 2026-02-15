@@ -13,6 +13,7 @@ MLB_STAT_FROM_DATE ?=
 MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
 MLB_STAT_MAX_GAMES ?= 0
+MLB_STAT_SKIP_EXISTING_DATES ?= 0
 
 help:
 	@echo "Proppadia checks"
@@ -24,7 +25,7 @@ help:
 	@echo "  make mlb-checks-full"
 	@echo "  make mlb-market-cache-refresh [MLB_MARKET_DAYS=1]"
 	@echo "  make mlb-roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD]"
-	@echo "  make mlb-insert-stat-derived [MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_MAX_GAMES=0]"
+	@echo "  make mlb-insert-stat-derived [MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_MAX_GAMES=0 MLB_STAT_SKIP_EXISTING_DATES=0]"
 	@echo "  make mlb-check-stat-derived [MLB_STAT_DERIVED_DAYS=7] [MLB_STAT_DERIVED_MIN=0]"
 	@echo "  make roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD] [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
@@ -102,7 +103,7 @@ mlb-roster-refresh-all:
 
 # Generate historical stat-derived MLB rows (legacy workhorse script).
 mlb-insert-stat-derived:
-	$(VENV_PY) backend/scripts/insert_mlb_stat_derived.py --quiet --days-ago $(MLB_STAT_DAYS_AGO) --max-games-per-date $(MLB_STAT_MAX_GAMES) $(if $(MLB_STAT_FROM_DATE),--from-date $(MLB_STAT_FROM_DATE),) $(if $(MLB_STAT_TO_DATE),--to-date $(MLB_STAT_TO_DATE),)
+	$(VENV_PY) backend/scripts/insert_mlb_stat_derived.py --quiet --days-ago $(MLB_STAT_DAYS_AGO) --max-games-per-date $(MLB_STAT_MAX_GAMES) $(if $(filter 1,$(MLB_STAT_SKIP_EXISTING_DATES)),--skip-existing-dates,) $(if $(MLB_STAT_FROM_DATE),--from-date $(MLB_STAT_FROM_DATE),) $(if $(MLB_STAT_TO_DATE),--to-date $(MLB_STAT_TO_DATE),)
 
 # Validate recent stat-derived row volume in model_training_props.
 mlb-check-stat-derived:
