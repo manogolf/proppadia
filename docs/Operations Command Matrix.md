@@ -96,6 +96,8 @@ Compact daily operator view:
 make ops-operator-summary
 make ops-operator-summary-json
 make ops-operator-summary-json-compact
+make ops-operator-log
+make ops-operator-last
 ```
 
 Phase tracker snapshot (json):
