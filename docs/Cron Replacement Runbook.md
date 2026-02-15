@@ -26,6 +26,7 @@ Run:
 
 ```bash
 make cron-governance-check
+make cron-current-state
 ```
 
 This enforces:

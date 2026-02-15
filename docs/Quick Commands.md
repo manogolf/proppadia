@@ -8,6 +8,7 @@ Daily:
 
 On-demand:
 - `make cron-governance-check`
+- `make cron-current-state`
 - `make workflow-inventory`
 - `make workflow-inventory-strict`
 - `make workflow-path-audit`
