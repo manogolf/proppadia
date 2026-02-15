@@ -147,6 +147,7 @@ cron-governance-check:
 	$(MAKE) workflow-inventory-strict
 	$(MAKE) workflow-path-audit-strict
 	$(MAKE) nhl-workflow-compat-check
+	$(MAKE) docs-make-target-audit
 
 cron-governance-snapshot:
 	$(VENV_PY) backend/scripts/cron_governance_snapshot.py
