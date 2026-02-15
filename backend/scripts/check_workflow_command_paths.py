@@ -68,12 +68,16 @@ def main() -> int:
     print("Workflow command path audit:")
 
     missing_total = 0
+    scanned_files = 0
+    skipped_files = 0
     for workflow_file in workflow_files:
         text = workflow_file.read_text(encoding="utf-8")
         has_schedule = bool(re.search(r"(?m)^\s*schedule\s*:", text))
         if not args.all_workflows and not has_schedule:
             print(f"- SKIP {workflow_file.name} (manual-only)")
+            skipped_files += 1
             continue
+        scanned_files += 1
         missing = collect_missing_references(text)
         if missing:
             missing_total += len(missing)
@@ -82,6 +86,12 @@ def main() -> int:
                 print(f"  - {item}")
         else:
             print(f"- OK {workflow_file.name}")
+
+    print("\nSummary:")
+    print(f"- workflow files discovered: {len(workflow_files)}")
+    print(f"- workflow files scanned: {scanned_files}")
+    print(f"- workflow files skipped: {skipped_files}")
+    print(f"- missing references: {missing_total}")
 
     if missing_total == 0:
         print("PASS workflow command path audit")
