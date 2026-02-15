@@ -21,6 +21,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--require-min-success", type=int, default=1)
     ap.add_argument("--prop-types", default="hits")
     ap.add_argument("--quality-window-days", type=int, default=120)
+    ap.add_argument("--quality-window-mode", choices=["days", "games"], default="days")
+    ap.add_argument("--quality-games-back", type=int, default=30)
     ap.add_argument("--quality-min-total", type=int, default=1)
     ap.add_argument("--quality-min-accuracy", type=float, default=0.0)
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
@@ -35,7 +37,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         require_min_success=int(args.require_min_success),
         prop_types=prop_types,
     )
-    quality = collect_quality(int(args.quality_window_days))
+    quality_window_value = (
+        int(args.quality_games_back)
+        if str(args.quality_window_mode) == "games"
+        else int(args.quality_window_days)
+    )
+    quality = collect_quality(str(args.quality_window_mode), quality_window_value)
     overall = quality.get("overall") or {}
     q_total = int(overall.get("total") or 0)
     q_acc = overall.get("accuracy_pct")

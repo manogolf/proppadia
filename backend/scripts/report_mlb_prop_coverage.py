@@ -11,7 +11,21 @@ from typing import Any, Dict, Sequence
 from backend.shared.db.pg import pg_fetchall
 
 
-def _player_props(window_days: int) -> list[Dict[str, Any]]:
+def _date_filter(date_column: str, source_table: str, window_mode: str) -> str:
+    if window_mode == "games":
+        return f"""
+WHERE {date_column} IN (
+  SELECT DISTINCT game_date
+  FROM {source_table}
+  WHERE game_date IS NOT NULL
+  ORDER BY game_date DESC
+  LIMIT %s::int
+)
+"""
+    return f"WHERE {date_column} >= (CURRENT_DATE - (%s::int || ' days')::interval)::date"
+
+
+def _player_props(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
     rows = pg_fetchall(
         """
         SELECT
@@ -24,16 +38,18 @@ def _player_props(window_days: int) -> list[Dict[str, Any]]:
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'push')::int AS pushes,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'dnp')::int AS dnps
         FROM player_props
-        WHERE game_date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
+        """
+        + _date_filter("game_date", "player_props", window_mode)
+        + """
         GROUP BY prop_type
         ORDER BY total_predictions DESC, prop_type
         """,
-        (int(window_days),),
+        (int(window_value),),
     )
     return list(rows or [])
 
 
-def _stat_derived(window_days: int) -> dict[str, int]:
+def _stat_derived(window_value: int, window_mode: str) -> dict[str, int]:
     rows = pg_fetchall(
         """
         SELECT
@@ -41,10 +57,12 @@ def _stat_derived(window_days: int) -> dict[str, int]:
           COUNT(*)::int AS stat_derived_count
         FROM model_training_props
         WHERE prop_source = 'stat_derived'
-          AND game_date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
+        """
+        + _date_filter("game_date", "model_training_props", window_mode).replace("WHERE", "AND", 1)
+        + """
         GROUP BY prop_type
         """,
-        (int(window_days),),
+        (int(window_value),),
     )
     out: dict[str, int] = {}
     for row in rows or []:
@@ -57,7 +75,9 @@ def _stat_derived(window_days: int) -> dict[str, int]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Report recent MLB prop coverage.")
+    ap.add_argument("--window-mode", choices=["days", "games"], default="days")
     ap.add_argument("--window-days", type=int, default=30)
+    ap.add_argument("--games-back", type=int, default=30)
     ap.add_argument(
         "--required-props",
         default="",
@@ -71,12 +91,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
-    window_days = max(1, int(args.window_days))
+    window_mode = "games" if str(args.window_mode).lower() == "games" else "days"
+    window_value = max(1, int(args.games_back if window_mode == "games" else args.window_days))
     required_props = [p.strip() for p in str(args.required_props).split(",") if p.strip()]
     min_graded = max(0, int(args.min_graded_per_prop))
 
-    pred_rows = _player_props(window_days)
-    stat_counts = _stat_derived(window_days)
+    pred_rows = _player_props(window_value, window_mode)
+    stat_counts = _stat_derived(window_value, window_mode)
 
     by_prop: dict[str, Dict[str, Any]] = {}
     for row in pred_rows:
@@ -131,7 +152,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload = {
         "ok": ok,
         "status": "pass" if ok else "fail",
-        "window_days": window_days,
+        "window_mode": window_mode,
+        "window_value": window_value,
         "required_props": required_props,
         "min_graded_per_prop": min_graded,
         "missing_required_props": missing_required,

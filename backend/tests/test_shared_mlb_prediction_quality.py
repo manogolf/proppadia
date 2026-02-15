@@ -42,6 +42,21 @@ class TestSharedMlbPredictionQuality(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["overall"]["total"], 0)
 
+    def test_main_games_mode_uses_games_back_window(self):
+        side_effects = [
+            [{"total": 20, "correct": 12}],  # overall
+            [{"prop_type": "hits", "total": 20, "correct": 12}],  # by_prop
+            [{"confidence_bucket": "mid", "total": 20, "correct": 12}],  # by_bucket
+            [],  # drift
+        ]
+        out = StringIO()
+        with patch.object(quality, "pg_fetchall", side_effect=side_effects), redirect_stdout(out):
+            rc = quality.main(["--window-mode", "games", "--games-back", "30", "--min-total", "1"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["overall"]["window_mode"], "games")
+        self.assertEqual(payload["overall"]["window_value"], 30)
+
 
 if __name__ == "__main__":
     unittest.main()

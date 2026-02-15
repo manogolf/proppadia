@@ -13,9 +13,13 @@ MLB_PREDICT_SAMPLE ?= 10
 MLB_PREDICT_MIN_SUCCESS ?= 1
 MLB_PREDICT_PROP_TYPES ?= hits
 MLB_QUALITY_WINDOW_DAYS ?= 120
+MLB_QUALITY_WINDOW_MODE ?= days
+MLB_QUALITY_GAMES_BACK ?= 30
 MLB_QUALITY_MIN_TOTAL ?= 1
 MLB_QUALITY_MIN_ACCURACY ?= 0
 MLB_PROP_COVERAGE_WINDOW_DAYS ?= 30
+MLB_PROP_COVERAGE_WINDOW_MODE ?= days
+MLB_PROP_COVERAGE_GAMES_BACK ?= 30
 MLB_PROP_COVERAGE_REQUIRED ?=
 MLB_PROP_COVERAGE_MIN_GRADED ?= 0
 MLB_STAT_FROM_DATE ?=
@@ -264,9 +268,13 @@ mlb-show-config:
 	@echo "MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
 	@echo "MLB_PREDICT_PROP_TYPES=$(MLB_PREDICT_PROP_TYPES)"
 	@echo "MLB_QUALITY_WINDOW_DAYS=$(MLB_QUALITY_WINDOW_DAYS)"
+	@echo "MLB_QUALITY_WINDOW_MODE=$(MLB_QUALITY_WINDOW_MODE)"
+	@echo "MLB_QUALITY_GAMES_BACK=$(MLB_QUALITY_GAMES_BACK)"
 	@echo "MLB_QUALITY_MIN_TOTAL=$(MLB_QUALITY_MIN_TOTAL)"
 	@echo "MLB_QUALITY_MIN_ACCURACY=$(MLB_QUALITY_MIN_ACCURACY)"
 	@echo "MLB_PROP_COVERAGE_WINDOW_DAYS=$(MLB_PROP_COVERAGE_WINDOW_DAYS)"
+	@echo "MLB_PROP_COVERAGE_WINDOW_MODE=$(MLB_PROP_COVERAGE_WINDOW_MODE)"
+	@echo "MLB_PROP_COVERAGE_GAMES_BACK=$(MLB_PROP_COVERAGE_GAMES_BACK)"
 	@echo "MLB_PROP_COVERAGE_REQUIRED=$(MLB_PROP_COVERAGE_REQUIRED)"
 	@echo "MLB_PROP_COVERAGE_MIN_GRADED=$(MLB_PROP_COVERAGE_MIN_GRADED)"
 
@@ -284,13 +292,13 @@ mlb-prediction-readiness:
 	$(VENV_PY) backend/scripts/probe_mlb_prediction_readiness.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)"
 
 mlb-prediction-quality:
-	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-days $(MLB_QUALITY_WINDOW_DAYS) --min-total $(MLB_QUALITY_MIN_TOTAL)
+	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-prediction-gate:
-	$(VENV_PY) backend/scripts/mlb_prediction_gate.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --quality-window-days $(MLB_QUALITY_WINDOW_DAYS) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY)
+	$(VENV_PY) backend/scripts/mlb_prediction_gate.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --quality-window-mode $(MLB_QUALITY_WINDOW_MODE) --quality-window-days $(MLB_QUALITY_WINDOW_DAYS) --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY)
 
 mlb-prop-coverage:
-	$(VENV_PY) backend/scripts/report_mlb_prop_coverage.py --window-days $(MLB_PROP_COVERAGE_WINDOW_DAYS) --required-props "$(MLB_PROP_COVERAGE_REQUIRED)" --min-graded-per-prop $(MLB_PROP_COVERAGE_MIN_GRADED)
+	$(VENV_PY) backend/scripts/report_mlb_prop_coverage.py --window-mode $(MLB_PROP_COVERAGE_WINDOW_MODE) --window-days $(MLB_PROP_COVERAGE_WINDOW_DAYS) --games-back $(MLB_PROP_COVERAGE_GAMES_BACK) --required-props "$(MLB_PROP_COVERAGE_REQUIRED)" --min-graded-per-prop $(MLB_PROP_COVERAGE_MIN_GRADED)
 
 # Generate historical stat-derived MLB rows (legacy workhorse script).
 mlb-insert-stat-derived:

@@ -69,7 +69,21 @@ labeled AS (
 """
 
 
-def _overall(window_days: int) -> Dict[str, Any]:
+def _window_clause(window_mode: str) -> str:
+    if window_mode == "games":
+        return """
+WHERE game_day IN (
+  SELECT DISTINCT game_day
+  FROM labeled
+  WHERE model_correct_i IS NOT NULL
+  ORDER BY game_day DESC
+  LIMIT %s::int
+)
+"""
+    return "WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date"
+
+
+def _overall(window_value: int, window_mode: str) -> Dict[str, Any]:
     rows = pg_fetchall(
         COMMON_CTE
         + """
@@ -77,22 +91,23 @@ SELECT
   COUNT(*) FILTER (WHERE model_correct_i IS NOT NULL)::int AS total,
   COALESCE(SUM(model_correct_i), 0)::int AS correct
 FROM labeled
-WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
-""",
-        (int(window_days),),
+"""
+        + _window_clause(window_mode),
+        (int(window_value),),
     )
     row = (rows or [{}])[0]
     total = int(row.get("total") or 0)
     correct = int(row.get("correct") or 0)
     return {
-        "window_days": int(window_days),
+        "window_mode": window_mode,
+        "window_value": int(window_value),
         "total": total,
         "correct": correct,
         "accuracy_pct": round((100.0 * correct / total), 2) if total > 0 else None,
     }
 
 
-def _by_prop(window_days: int) -> list[Dict[str, Any]]:
+def _by_prop(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
     rows = pg_fetchall(
         COMMON_CTE
         + """
@@ -101,11 +116,13 @@ SELECT
   COUNT(*) FILTER (WHERE model_correct_i IS NOT NULL)::int AS total,
   COALESCE(SUM(model_correct_i), 0)::int AS correct
 FROM labeled
-WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
+"""
+        + _window_clause(window_mode)
+        + """
 GROUP BY prop_type
 ORDER BY total DESC, prop_type
 """,
-        (int(window_days),),
+        (int(window_value),),
     )
     out = []
     for row in rows:
@@ -122,7 +139,7 @@ ORDER BY total DESC, prop_type
     return out
 
 
-def _by_confidence_bucket(window_days: int) -> list[Dict[str, Any]]:
+def _by_confidence_bucket(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
     rows = pg_fetchall(
         COMMON_CTE
         + """
@@ -131,7 +148,9 @@ SELECT
   COUNT(*) FILTER (WHERE model_correct_i IS NOT NULL)::int AS total,
   COALESCE(SUM(model_correct_i), 0)::int AS correct
 FROM labeled
-WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
+"""
+        + _window_clause(window_mode)
+        + """
 GROUP BY confidence_bucket
 ORDER BY
   CASE confidence_bucket
@@ -141,7 +160,7 @@ ORDER BY
     ELSE 4
   END
 """,
-        (int(window_days),),
+        (int(window_value),),
     )
     out = []
     for row in rows:
@@ -198,13 +217,16 @@ GROUP BY 1
     return {"last_14d": by_bucket["last_14d"], "prev_14d": by_bucket["prev_14d"], "delta_pct": delta}
 
 
-def collect_quality(window_days: int) -> Dict[str, Any]:
-    window_days = max(1, int(window_days))
-    overall = _overall(window_days)
-    by_prop = _by_prop(window_days)
-    by_bucket = _by_confidence_bucket(window_days)
+def collect_quality(window_mode: str, window_value: int) -> Dict[str, Any]:
+    normalized_mode = "games" if str(window_mode).lower() == "games" else "days"
+    window_value = max(1, int(window_value))
+    overall = _overall(window_value, normalized_mode)
+    by_prop = _by_prop(window_value, normalized_mode)
+    by_bucket = _by_confidence_bucket(window_value, normalized_mode)
     drift = _drift()
     return {
+        "window_mode": normalized_mode,
+        "window_value": window_value,
         "overall": overall,
         "by_prop": by_prop,
         "by_confidence_bucket": by_bucket,
@@ -214,11 +236,14 @@ def collect_quality(window_days: int) -> Dict[str, Any]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Analyze MLB prediction quality (JSON).")
+    ap.add_argument("--window-mode", choices=["days", "games"], default="days")
     ap.add_argument("--window-days", type=int, default=120)
+    ap.add_argument("--games-back", type=int, default=30)
     ap.add_argument("--min-total", type=int, default=1, help="Fail when overall total is below this threshold.")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
-    quality = collect_quality(int(args.window_days))
+    window_value = int(args.games_back) if args.window_mode == "games" else int(args.window_days)
+    quality = collect_quality(args.window_mode, window_value)
     overall = quality["overall"]
 
     min_total = max(0, int(args.min_total))

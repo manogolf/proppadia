@@ -68,6 +68,36 @@ class TestSharedMlbPredictionGate(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertFalse(payload["quality"]["ok"])
 
+    def test_gate_passes_games_mode_window_to_quality(self):
+        out = StringIO()
+        with patch.object(
+            gate,
+            "collect_probe",
+            return_value={"ok": True, "predict_success": 5},
+        ), patch.object(
+            gate,
+            "collect_quality",
+            return_value={"overall": {"total": 100, "accuracy_pct": 55.0}},
+        ) as quality_mock, patch.object(
+            gate,
+            "InProcessClient",
+            return_value=object(),
+        ), redirect_stdout(out):
+            rc = gate.main(
+                [
+                    "--quality-window-mode",
+                    "games",
+                    "--quality-games-back",
+                    "45",
+                    "--quality-min-total",
+                    "1",
+                    "--quality-min-accuracy",
+                    "50",
+                ]
+            )
+        self.assertEqual(rc, 0)
+        quality_mock.assert_called_once_with("games", 45)
+
 
 if __name__ == "__main__":
     unittest.main()
