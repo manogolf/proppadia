@@ -16,6 +16,7 @@ class TestSharedOpsOperatorIncident(unittest.TestCase):
             history_path.write_text(
                 json.dumps(
                     {
+                        "captured_at": "2026-02-15T09:00:00+00:00",
                         "ok": True,
                         "status": "pass",
                         "governance": {"ok": True},
@@ -49,9 +50,11 @@ class TestSharedOpsOperatorIncident(unittest.TestCase):
                     ops_history_limit=5,
                 )
         self.assertTrue(payload["ok"])
+        self.assertIn("captured_at", payload)
         self.assertIn("summary", payload)
         self.assertIn("history_tail", payload)
         self.assertEqual(payload["history_tail"]["returned"], 1)
+        self.assertEqual(payload["history_tail"]["rows"][0]["captured_at"], "2026-02-15T09:00:00+00:00")
 
     def test_main_strict_returns_nonzero_on_fail(self):
         with patch.object(
@@ -78,4 +81,3 @@ class TestSharedOpsOperatorIncident(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

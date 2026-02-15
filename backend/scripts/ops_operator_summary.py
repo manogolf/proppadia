@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -86,7 +87,9 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
     roster = ((readiness.get("checks") or {}).get("roster")) or {}
     blockers = (((season.get("season_activation") or {}).get("blockers")) or [])
+    captured_at = readiness.get("captured_at") or datetime.now(timezone.utc).isoformat()
     return {
+        "captured_at": captured_at,
         "ok": bool(summary.get("ok")),
         "status": summary.get("status"),
         "governance": {

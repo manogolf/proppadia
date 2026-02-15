@@ -44,6 +44,7 @@ def collect_incident_snapshot(
         prev = tail[idx - 1] if idx > 0 else None
         rows.append(
             {
+                "captured_at": item.get("captured_at"),
                 "status": item.get("status"),
                 "ok": item.get("ok"),
                 "governance_ok": (((item.get("governance") or {}).get("ok"))),
@@ -58,6 +59,7 @@ def collect_incident_snapshot(
         )
 
     return {
+        "captured_at": summary.get("captured_at"),
         "ok": bool(summary.get("ok")),
         "status": summary.get("status"),
         "summary": summary,
@@ -103,4 +105,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

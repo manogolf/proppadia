@@ -67,6 +67,7 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
             "mlb_readiness": {
                 "ok": True,
                 "status": "pass",
+                "captured_at": "2026-02-15T08:00:00+00:00",
                 "checks": {
                     "stat_derived": {"count": 123, "latest_game_date": "2025-08-15"},
                     "roster": {"total_players": 1197, "stale": False},
@@ -79,6 +80,7 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
             },
         }
         compact = ops.compact_summary(payload)
+        self.assertEqual(compact["captured_at"], "2026-02-15T08:00:00+00:00")
         self.assertTrue(compact["ok"])
         self.assertEqual(compact["mlb_readiness"]["stat_count"], 123)
         self.assertEqual(compact["season_activation"]["blocker_count"], 1)

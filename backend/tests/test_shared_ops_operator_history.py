@@ -38,6 +38,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
             inp = Path(td) / "ops.jsonl"
             rows = [
                 {
+                    "captured_at": "2026-02-15T08:00:00+00:00",
                     "ok": True,
                     "status": "pass",
                     "governance": {"ok": True},
@@ -45,6 +46,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
                     "season_activation": {"ok": True, "blocker_count": 0, "top_blocker": None},
                 },
                 {
+                    "captured_at": "2026-02-15T09:00:00+00:00",
                     "ok": False,
                     "status": "fail",
                     "governance": {"ok": False},
@@ -59,6 +61,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
             self.assertEqual(rc, 0)
             payload = json.loads(out.getvalue())
             self.assertEqual(payload["history_count"], 2)
+            self.assertEqual(payload["rows"][0]["captured_at"], "2026-02-15T08:00:00+00:00")
             self.assertIn("overall_became_fail", payload["rows"][1]["regressions"])
 
 

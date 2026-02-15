@@ -52,6 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         prev = tail[idx - 1] if idx > 0 else None
         rows.append(
             {
+                "captured_at": item.get("captured_at"),
                 "status": item.get("status"),
                 "ok": item.get("ok"),
                 "governance_ok": (((item.get("governance") or {}).get("ok"))),
@@ -79,7 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for row in rows:
             reg = ",".join(row["regressions"]) if row["regressions"] else "none"
             print(
-                f"- {row['status']} ok={row['ok']} gov={row['governance_ok']} "
+                f"- {row['captured_at'] or '-'} | {row['status']} ok={row['ok']} gov={row['governance_ok']} "
                 f"readiness={row['readiness_ok']} season={row['season_ok']} "
                 f"stat={row['stat_count']} stale={row['roster_stale']} blockers={row['blocker_count']} "
                 f"top={row['top_blocker'] or '-'} regressions={reg}"

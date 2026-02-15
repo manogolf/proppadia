@@ -43,6 +43,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         json.dumps(
             {
+                "captured_at": payload.get("captured_at"),
                 "status": payload.get("status"),
                 "ok": payload.get("ok"),
                 "output": str(out_path),
@@ -57,4 +58,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
