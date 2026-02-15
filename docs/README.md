@@ -13,6 +13,7 @@ Start here for architecture and operations context.
 - `docs/Workflow Classification.md`: current keep/suspend/archive workflow status map.
 - `docs/Cron Replacement Runbook.md`: replacement mapping for suspended cron workflows and schedule re-enable gates.
 - `docs/MLB Data-First Retention Plan.md`: MLB data-preservation-first operating policy.
+- `docs/Offseason Behavior Contract.md`: expected MLB/NHL empty-state behavior and strict-offseason gate policy.
 
 ## Shared Validation Lane
 
