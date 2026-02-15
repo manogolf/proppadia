@@ -5,8 +5,8 @@ BASE_URL ?= http://127.0.0.1:8001
 MLB_DATE ?= 2025-08-15
 NHL_DATE ?= 2025-11-20
 MLB_MARKET_DAYS ?= 1
-MLB_ROSTER_DATE ?= $(MLB_DATE)
-NHL_ROSTER_DATE ?= $(NHL_DATE)
+MLB_ROSTER_DATE ?= $(shell date +%F)
+NHL_ROSTER_DATE ?= $(shell date +%F)
 MLB_STAT_DERIVED_DAYS ?= 7
 MLB_STAT_DERIVED_MIN ?= 0
 MLB_STAT_FROM_DATE ?=
@@ -25,7 +25,7 @@ help:
 	@echo "  make mlb-checks-full"
 	@echo "  make mlb-market-cache-refresh [MLB_MARKET_DAYS=1]"
 	@echo "  make mlb-roster-refresh-all [MLB_ROSTER_DATE=YYYY-MM-DD]"
-	@echo "  make mlb-insert-stat-derived [MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_MAX_GAMES=0 MLB_STAT_SKIP_EXISTING_DATES=0]"
+	@echo "  make mlb-insert-stat-derived [MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_MAX_GAMES=0 MLB_STAT_SKIP_EXISTING_DATES=1]"
 	@echo "  make mlb-check-stat-derived [MLB_STAT_DERIVED_DAYS=7] [MLB_STAT_DERIVED_MIN=0]"
 	@echo "  make mlb-stat-derived-refresh [MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1]"
 	@echo "  make mlb-stat-derived-smoke [MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_MAX_GAMES=1]"

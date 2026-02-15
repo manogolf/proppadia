@@ -121,7 +121,7 @@ make mlb-market-cache-refresh MLB_MARKET_DAYS=1
 Optional daily full-team MLB roster refresh:
 
 ```bash
-make mlb-roster-refresh-all MLB_ROSTER_DATE=2025-08-15
+make mlb-roster-refresh-all
 ```
 
 GitHub Actions automation:
