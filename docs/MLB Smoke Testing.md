@@ -62,6 +62,7 @@ make mlb-stat-derived-refresh
 make mlb-stat-derived-smoke
 make mlb-stat-derived-backfill
 make mlb-daily-refresh
+make mlb-daily-refresh-strict
 make roster-refresh-all
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -90,6 +91,7 @@ Meaning:
 - `mlb-stat-derived-smoke`: fast wiring check (forces `MLB_STAT_MAX_GAMES=1`)
 - `mlb-stat-derived-backfill`: historical date-window backfill + volume guard
 - `mlb-daily-refresh`: one-command daily MLB baseline (market cache + roster refresh + stat-derived refresh + guard)
+- `mlb-daily-refresh-strict`: same as above, but forces `MLB_STAT_DERIVED_MIN=1`
 - `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
@@ -141,7 +143,7 @@ make mlb-market-cache-refresh MLB_MARKET_DAYS=2
 Use this as the default single command for MLB daily maintenance:
 
 ```bash
-make mlb-daily-refresh MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
+make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
 ```
 
 ## Scheduled Stat-Derived Insert + Guard
