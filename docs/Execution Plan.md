@@ -3,6 +3,28 @@
 Plan date: February 15, 2026  
 Source baseline: `docs/As Built Snapshot.md`
 
+## Progress Snapshot
+
+Completed slices:
+
+- Phase 4.1:
+  - MLB flow audit command added (`make mlb-prediction-flow-audit`)
+  - date/context binding guards added in commit add path
+  - repro tests for late-season date mismatch mode added
+  - audit note documented (`docs/MLB Prediction Flow Audit.md`)
+- Phase 4.2:
+  - repeatable NHL fixed-window quality report added (`make nhl-prediction-quality`)
+  - baseline doc added (`docs/NHL Prediction Quality Baseline.md`)
+- Phase 5.2:
+  - single purpose-based operations matrix added (`docs/Operations Command Matrix.md`)
+  - docs index and quick commands linked to consolidated matrix
+
+Current governance status:
+
+- `make workflow-inventory-strict`: pass
+- `make workflow-path-audit-strict`: pass
+- `make nhl-workflow-compat-check`: pass
+
 ## Planning Goal
 
 Ship a stable in-season platform with:
@@ -195,4 +217,3 @@ Acceptance criteria:
 - MLB and NHL players/workspaces/watchlist flows are stable for signed-in users.
 - Ops dashboard accurately reports deploy, metrics, and data freshness.
 - No known nav regressions or blocking UI interaction bugs.
-
