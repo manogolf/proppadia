@@ -166,6 +166,8 @@ make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1
 
 Notes:
 - `mlb-insert-stat-derived` is idempotent on rerun: attempted rows may be high while applied updates can be zero.
+- Default Make behavior now uses `MLB_STAT_SKIP_EXISTING_DATES=1` to reduce unnecessary rerun work.
+- To force recompute for already-populated dates, override with `MLB_STAT_SKIP_EXISTING_DATES=0`.
 - For historical backfill windows:
 ```bash
 make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=2025-08-15 MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1

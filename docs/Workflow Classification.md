@@ -20,6 +20,10 @@ Snapshot date: February 15, 2026
 
 - `.github/workflows/ci-offline-checks.yml`
 - `Makefile` MLB operational targets:
+  - `mlb-daily-refresh`
+  - `mlb-stat-derived-refresh`
+  - `mlb-stat-derived-backfill`
+  - `mlb-stat-derived-smoke`
   - `mlb-insert-stat-derived`
   - `mlb-check-stat-derived`
   - `mlb-roster-refresh-all`
@@ -66,6 +70,7 @@ Recommended low-risk cadence while season is inactive:
 3. `mlb-insert-stat-derived` daily during active season; optional/suspended in offseason.
 4. `mlb-check-stat-derived` after insert (or at least daily) as volume guard.
    - use `mlb-stat-derived-refresh` to execute both in one run.
+5. `mlb-stat-derived-backfill` for explicit historical windows (manual/on-demand).
 
 Canonical commands:
 
