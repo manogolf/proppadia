@@ -8,6 +8,7 @@ Daily:
 
 On-demand:
 - `make cron-governance-check`
+- `make cron-governance-snapshot`
 - `make cron-current-state`
 - `make workflow-inventory`
 - `make workflow-inventory-strict`
@@ -59,6 +60,7 @@ make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 
 ```bash
 make cron-governance-check
+make cron-governance-snapshot
 make workflow-inventory-strict
 make workflow-path-audit
 make workflow-path-audit-strict
