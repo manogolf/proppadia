@@ -12,7 +12,7 @@ from backend.scripts import json_check_runner
 from backend.scripts import season_activation_report
 
 
-def main() -> int:
+def build_snapshot() -> dict:
     inv_rc, inventory = json_check_runner.run_json_check(
         check_workflow_schedule_inventory.main, ["--strict", "--json"]
     )
@@ -39,8 +39,13 @@ def main() -> int:
             "season_activation_report": activation_report,
         },
     }
+    return snapshot
+
+
+def main() -> int:
+    snapshot = build_snapshot()
     print(json.dumps(snapshot, indent=2))
-    return 0 if ok else 1
+    return 0 if snapshot.get("ok") else 1
 
 
 if __name__ == "__main__":
