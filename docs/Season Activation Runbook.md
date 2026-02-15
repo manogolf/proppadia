@@ -31,11 +31,21 @@ When ready to move from offseason conservative cadence:
 Capture reference quality reports for tuning comparisons:
 
 ```bash
-make mlb-prediction-quality MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1
-make nhl-prediction-quality NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_MIN_TOTAL=1
+make season-baseline-capture \
+  MLB_QUALITY_WINDOW_MODE=games \
+  MLB_QUALITY_GAMES_BACK=30 \
+  MLB_QUALITY_MIN_TOTAL=1 \
+  NHL_QUALITY_FROM_DATE=2025-12-01 \
+  NHL_QUALITY_TO_DATE=2025-12-31 \
+  NHL_QUALITY_MIN_TOTAL=1
 ```
 
-Record outputs as the “day 0” baseline for next retrain cycle.
+Outputs are written to:
+
+- `artifacts/season_baselines/mlb_quality_*.json`
+- `artifacts/season_baselines/nhl_quality_*.json`
+
+Treat these as “day 0” baseline artifacts for next retrain cycle.
 
 ## Rollback Rule
 
