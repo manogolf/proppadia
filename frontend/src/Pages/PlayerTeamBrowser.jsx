@@ -167,12 +167,22 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       if (sport === "mlb") {
         const res = await fetch(`${getBaseURL()}/api/mlb/players?limit=5000`);
         if (!res.ok) throw new Error("Failed to fetch MLB player list");
-        const data = await res.json();
-        setPlayers(Array.isArray(data) ? data : []);
+        const payload = await res.json().catch(() => []);
+        const data = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.rows)
+            ? payload.rows
+            : [];
+        setPlayers(data);
       } else {
         const res = await fetch(`${getBaseURL()}/api/nhl/players?limit=5000&offset=0`);
-        const rows = await res.json().catch(() => []);
+        const payload = await res.json().catch(() => []);
         if (!res.ok) throw new Error("Failed to fetch NHL player list");
+        const rows = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.rows)
+            ? payload.rows
+            : [];
         const dedup = new Map();
         for (const row of rows) {
           const pid = row?.player_id != null ? String(row.player_id) : "";
