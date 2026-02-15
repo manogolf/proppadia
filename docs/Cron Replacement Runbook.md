@@ -20,6 +20,19 @@ Related docs:
    - NHL: `backend/nhl/cli.py` (local automator source of truth until migration)
 4. Require verification before and after any schedule change.
 
+## Preflight (Before Any Cron Change)
+
+Run:
+
+```bash
+make cron-governance-check
+```
+
+This enforces:
+1. scheduled workflow inventory matches allowlist,
+2. scheduled workflow command paths/modules resolve,
+3. NHL workflow compatibility wrappers are present.
+
 ## Replacement Table
 
 1. `mlb-insert_stat_derived_props.yml`
