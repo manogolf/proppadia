@@ -157,6 +157,7 @@ export default function OpsPage() {
   const [checks, setChecks] = useState([]);
   const [marketCoverage, setMarketCoverage] = useState({ count: 0, rows: [] });
   const [mlbStandingsMeta, setMlbStandingsMeta] = useState(null);
+  const [mlbRosterMeta, setMlbRosterMeta] = useState(null);
   const [nhlSlateMeta, setNhlSlateMeta] = useState(null);
   const [error, setError] = useState("");
   const [opsToken, setOpsToken] = useState("");
@@ -310,6 +311,7 @@ export default function OpsPage() {
         marketCache,
         marketSupported,
         mlbStandings,
+        mlbRoster,
         nhlSlate,
       ] = await Promise.all([
         fetchJsonTimed("/api/health"),
@@ -320,6 +322,7 @@ export default function OpsPage() {
         fetchJsonTimed("/api/mlb/market-cache-status"),
         fetchJsonTimed("/api/mlb/market-supported-props"),
         fetchJsonTimed("/api/mlb/standings"),
+        fetchJsonTimed("/api/mlb/roster-freshness"),
         fetchJsonTimed("/api/nhl/slate/meta"),
       ]);
 
@@ -384,6 +387,14 @@ export default function OpsPage() {
           detail: mlbStandings.body || { status: mlbStandings.status },
         },
         {
+          key: "mlb_roster",
+          label: "MLB Roster Freshness",
+          path: "/api/mlb/roster-freshness",
+          ok: mlbRoster.ok && mlbRoster.body?.ok === true,
+          durationMs: mlbRoster.durationMs,
+          detail: mlbRoster.body || { status: mlbRoster.status },
+        },
+        {
           key: "nhl_slate_meta",
           label: "NHL Slate Meta",
           path: "/api/nhl/slate/meta",
@@ -408,6 +419,9 @@ export default function OpsPage() {
       setChecks(nextChecks);
       setMlbStandingsMeta(
         mlbStandings.ok && mlbStandings.body?.ok ? mlbStandings.body : null
+      );
+      setMlbRosterMeta(
+        mlbRoster.ok && typeof mlbRoster.body?.ok === "boolean" ? mlbRoster.body : null
       );
       setNhlSlateMeta(
         nhlSlate.ok && nhlSlate.body?.ok ? nhlSlate.body : null
@@ -443,6 +457,17 @@ export default function OpsPage() {
                       records_count: Array.isArray(mlbStandings.body?.records)
                         ? mlbStandings.body.records.length
                         : null,
+                    }
+                  : null,
+              mlb_roster:
+                mlbRoster.ok && typeof mlbRoster.body?.ok === "boolean"
+                  ? {
+                      status: mlbRoster.body?.status,
+                      stale: mlbRoster.body?.stale,
+                      latest_updated_at: mlbRoster.body?.latest_updated_at,
+                      age_hours: mlbRoster.body?.age_hours,
+                      total_players: mlbRoster.body?.total_players,
+                      active_players: mlbRoster.body?.active_players,
                     }
                   : null,
               nhl_slate_meta:
@@ -488,6 +513,7 @@ export default function OpsPage() {
               deploy_status: payload.deploy?.status || "unknown",
               deploy_id: payload.deploy?.id || null,
               mlb_source: payload.data_freshness?.mlb_standings?.source || null,
+              mlb_roster_status: payload.data_freshness?.mlb_roster?.status || null,
               nhl_source: payload.data_freshness?.nhl_slate_meta?.source || null,
               payload,
             };
@@ -767,6 +793,16 @@ export default function OpsPage() {
                 : null,
             }
           : null,
+        mlb_roster: mlbRosterMeta
+          ? {
+              status: mlbRosterMeta.status,
+              stale: mlbRosterMeta.stale,
+              latest_updated_at: mlbRosterMeta.latest_updated_at,
+              age_hours: mlbRosterMeta.age_hours,
+              total_players: mlbRosterMeta.total_players,
+              active_players: mlbRosterMeta.active_players,
+            }
+          : null,
         nhl_slate_meta: nhlSlateMeta
           ? {
               source: nhlSlateMeta.source,
@@ -800,6 +836,7 @@ export default function OpsPage() {
           deploy_status: payload.deploy?.status || "unknown",
           deploy_id: payload.deploy?.id || null,
           mlb_source: payload.data_freshness?.mlb_standings?.source || null,
+          mlb_roster_status: payload.data_freshness?.mlb_roster?.status || null,
           nhl_source: payload.data_freshness?.nhl_slate_meta?.source || null,
           payload,
         };
@@ -816,6 +853,7 @@ export default function OpsPage() {
     lastSuccessByKey,
     lastUpdated,
     mlbStandingsMeta,
+    mlbRosterMeta,
     nhlSlateMeta,
   ]);
 
@@ -1290,6 +1328,7 @@ export default function OpsPage() {
                         <th className="py-1 pr-3">Failures</th>
                         <th className="py-1 pr-3">Deploy</th>
                         <th className="py-1 pr-3">MLB source</th>
+                        <th className="py-1 pr-3">MLB roster</th>
                         <th className="py-1 pr-3">NHL source</th>
                         <th className="py-1 pr-3">Action</th>
                       </tr>
@@ -1307,6 +1346,7 @@ export default function OpsPage() {
                             {row.deploy_id ? ` (${row.deploy_id})` : ""}
                           </td>
                           <td className="py-1 pr-3">{row.mlb_source || "-"}</td>
+                          <td className="py-1 pr-3">{row.mlb_roster_status || "-"}</td>
                           <td className="py-1 pr-3">{row.nhl_source || "-"}</td>
                           <td className="py-1 pr-3">
                             <button
@@ -1330,7 +1370,7 @@ export default function OpsPage() {
               <p className="text-xs text-slate-600 mt-1">
                 Cache/source status for backend-owned MLB and NHL slate context feeds.
               </p>
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-700">
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-slate-700">
                 <div className="rounded border border-slate-200 bg-white px-3 py-2">
                   <div className="font-semibold text-slate-800">MLB Standings</div>
                   <div>source: {mlbStandingsMeta?.source || "-"}</div>
@@ -1342,6 +1382,20 @@ export default function OpsPage() {
                       : "-"}
                   </div>
                   <div>records: {Array.isArray(mlbStandingsMeta?.records) ? mlbStandingsMeta.records.length : "-"}</div>
+                </div>
+                <div className="rounded border border-slate-200 bg-white px-3 py-2">
+                  <div className="font-semibold text-slate-800">MLB Roster</div>
+                  <div>status: {mlbRosterMeta?.status || "-"}</div>
+                  <div>stale: {String(Boolean(mlbRosterMeta?.stale))}</div>
+                  <div>total players: {Number.isFinite(Number(mlbRosterMeta?.total_players)) ? Number(mlbRosterMeta.total_players) : "-"}</div>
+                  <div>active players: {Number.isFinite(Number(mlbRosterMeta?.active_players)) ? Number(mlbRosterMeta.active_players) : "-"}</div>
+                  <div>
+                    latest_updated_at:{" "}
+                    {mlbRosterMeta?.latest_updated_at
+                      ? new Date(mlbRosterMeta.latest_updated_at).toLocaleString()
+                      : "-"}
+                  </div>
+                  <div>age_hours: {Number.isFinite(Number(mlbRosterMeta?.age_hours)) ? Number(mlbRosterMeta.age_hours).toFixed(2) : "-"}</div>
                 </div>
                 <div className="rounded border border-slate-200 bg-white px-3 py-2">
                   <div className="font-semibold text-slate-800">NHL Slate Meta</div>

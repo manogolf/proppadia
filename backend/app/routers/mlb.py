@@ -54,6 +54,7 @@ from backend.app.services.mlb.player_service import (
     resolve_player,
     search_players,
 )
+from backend.app.services.mlb.roster_freshness_service import get_roster_freshness
 from backend.app.services.shared import ping_db, sport_ping
 
 router = APIRouter(tags=["mlb"])
@@ -136,6 +137,17 @@ def mlb_standings(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}") from e
     return payload
+
+
+@router.get("/mlb/roster-freshness", summary="MLB roster freshness status from player_ids")
+def mlb_roster_freshness(
+    stale_after_hours: int = Query(30, ge=1, le=336, description="Stale threshold in hours"),
+    require_min: int = Query(1, ge=0, description="Minimum player_ids row count required"),
+):
+    try:
+        return get_roster_freshness(require_min=require_min, stale_after_hours=stale_after_hours)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.get(
