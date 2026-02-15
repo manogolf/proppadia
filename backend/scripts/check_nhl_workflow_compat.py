@@ -22,9 +22,11 @@ REQUIRED = [
 def main() -> int:
     missing: list[Path] = []
     compile_fail: list[tuple[Path, str]] = []
+    checked = 0
 
     print("NHL workflow compatibility check:")
     for rel in REQUIRED:
+        checked += 1
         path = ROOT / rel
         if not path.exists():
             missing.append(rel)
@@ -35,6 +37,12 @@ def main() -> int:
             py_compile.compile(str(path), doraise=True)
         except Exception as exc:  # pragma: no cover
             compile_fail.append((rel, str(exc)))
+
+    print("\nSummary:")
+    print(f"- required files: {len(REQUIRED)}")
+    print(f"- files checked: {checked}")
+    print(f"- missing files: {len(missing)}")
+    print(f"- compile failures: {len(compile_fail)}")
 
     if missing:
         print(f"FAIL missing required files: {len(missing)}")
