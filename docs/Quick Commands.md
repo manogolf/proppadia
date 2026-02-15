@@ -11,6 +11,7 @@ Daily:
 - `make mlb-season-kickoff-check ...` (preseason/opening-day readiness)
 - `make season-activation-status` (phase 6 status snapshot)
 - `make season-activation-status-strict` (phase 6 readiness gate)
+- `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
 - `make cron-governance-check`

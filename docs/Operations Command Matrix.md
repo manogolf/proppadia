@@ -105,6 +105,7 @@ Season activation status snapshot:
 ```bash
 make season-activation-status
 make season-activation-status-strict
+make season-cutover-ready
 ```
 
 ## Data Refresh Lanes

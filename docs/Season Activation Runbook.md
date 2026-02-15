@@ -19,6 +19,7 @@ Status view (before/after running fast path):
 ```bash
 make season-activation-status
 make season-activation-status-strict
+make season-cutover-ready
 ```
 
 ## Step 1: Preseason Dry Run
