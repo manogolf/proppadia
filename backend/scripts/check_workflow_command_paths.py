@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
+from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
@@ -42,7 +44,7 @@ def collect_missing_references(text: str) -> list[str]:
     return sorted(set(missing))
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Audit workflow python command/module references."
     )
@@ -61,7 +63,12 @@ def main() -> int:
         action="store_true",
         help="Suppress per-file rows; print summary only.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON summary instead of text output.",
+    )
+    args = parser.parse_args(argv)
 
     if not WORKFLOWS_DIR.exists():
         print(f"FAIL workflows directory not found: {WORKFLOWS_DIR}")
@@ -70,7 +77,7 @@ def main() -> int:
     workflow_files = sorted(
         list(WORKFLOWS_DIR.glob("*.yml")) + list(WORKFLOWS_DIR.glob("*.yaml"))
     )
-    if not args.quiet:
+    if not args.quiet and not args.json:
         print("Workflow command path audit:")
 
     missing_total = 0
@@ -80,7 +87,7 @@ def main() -> int:
         text = workflow_file.read_text(encoding="utf-8")
         has_schedule = bool(re.search(r"(?m)^\s*schedule\s*:", text))
         if not args.all_workflows and not has_schedule:
-            if not args.quiet:
+            if not args.quiet and not args.json:
                 print(f"- SKIP {workflow_file.name} (manual-only)")
             skipped_files += 1
             continue
@@ -88,30 +95,59 @@ def main() -> int:
         missing = collect_missing_references(text)
         if missing:
             missing_total += len(missing)
-            if not args.quiet:
+            if not args.quiet and not args.json:
                 print(f"- MISSING {workflow_file.name}")
                 for item in missing:
                     print(f"  - {item}")
-        elif not args.quiet:
+        elif not args.quiet and not args.json:
             print(f"- OK {workflow_file.name}")
 
-    print("\nSummary:")
-    print(f"- workflow files discovered: {len(workflow_files)}")
-    print(f"- workflow files scanned: {scanned_files}")
-    print(f"- workflow files skipped: {skipped_files}")
-    print(f"- missing references: {missing_total}")
+    result = {
+        "workflow_files_discovered": len(workflow_files),
+        "workflow_files_scanned": scanned_files,
+        "workflow_files_skipped": skipped_files,
+        "missing_references": missing_total,
+        "strict": bool(args.strict),
+        "status": "pass",
+    }
 
     if missing_total == 0:
-        print("PASS workflow command path audit")
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("\nSummary:")
+            print(f"- workflow files discovered: {len(workflow_files)}")
+            print(f"- workflow files scanned: {scanned_files}")
+            print(f"- workflow files skipped: {skipped_files}")
+            print(f"- missing references: {missing_total}")
+            print("PASS workflow command path audit")
         return 0
 
-    print(f"Found {missing_total} missing workflow command reference(s).")
+    result["status"] = "fail" if args.strict else "warn"
     if args.strict:
-        print("FAIL workflow command path audit (strict)")
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("\nSummary:")
+            print(f"- workflow files discovered: {len(workflow_files)}")
+            print(f"- workflow files scanned: {scanned_files}")
+            print(f"- workflow files skipped: {skipped_files}")
+            print(f"- missing references: {missing_total}")
+            print(f"Found {missing_total} missing workflow command reference(s).")
+            print("FAIL workflow command path audit (strict)")
         return 1
-    print("WARN workflow command path audit")
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("\nSummary:")
+        print(f"- workflow files discovered: {len(workflow_files)}")
+        print(f"- workflow files scanned: {scanned_files}")
+        print(f"- workflow files skipped: {skipped_files}")
+        print(f"- missing references: {missing_total}")
+        print(f"Found {missing_total} missing workflow command reference(s).")
+        print("WARN workflow command path audit")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

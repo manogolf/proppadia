@@ -1,7 +1,7 @@
-import sys
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -135,12 +135,7 @@ python -m backend.scripts.not_a_real_module
             with patch.object(command_audit, "ROOT", root):
                     with patch.object(command_audit, "WORKFLOWS_DIR", wf_dir):
                         with redirect_stdout(out):
-                            with patch.object(
-                                sys,
-                                "argv",
-                                ["check_workflow_command_paths.py", "--quiet", "--strict"],
-                            ):
-                                rc = command_audit.main()
+                            rc = command_audit.main(["--quiet", "--strict"])
         self.assertEqual(rc, 0)
         printed = out.getvalue()
         self.assertIn("Summary:", printed)
@@ -160,14 +155,35 @@ python -m backend.scripts.not_a_real_module
             with patch.object(command_audit, "ROOT", root):
                     with patch.object(command_audit, "WORKFLOWS_DIR", wf_dir):
                         with redirect_stdout(out):
-                            with patch.object(
-                                sys, "argv", ["check_workflow_command_paths.py", "--strict"]
-                            ):
-                                rc = command_audit.main()
+                            rc = command_audit.main(["--strict"])
         self.assertEqual(rc, 1)
         printed = out.getvalue()
         self.assertIn("MISSING scheduled.yml", printed)
         self.assertIn("missing references: 1", printed)
+
+    def test_main_json_outputs_machine_readable_summary(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf_dir = root / ".github" / "workflows"
+            wf_dir.mkdir(parents=True)
+            (root / "backend" / "scripts").mkdir(parents=True)
+            (root / "backend" / "scripts" / "existing.py").write_text(
+                "print('ok')\n", encoding="utf-8"
+            )
+            (wf_dir / "scheduled.yml").write_text(
+                'on:\n  schedule:\n    - cron: "15 6 * * *"\njobs:\n  x:\n    steps:\n      - run: python backend/scripts/existing.py\n',
+                encoding="utf-8",
+            )
+            out = StringIO()
+            with patch.object(command_audit, "ROOT", root):
+                    with patch.object(command_audit, "WORKFLOWS_DIR", wf_dir):
+                        with redirect_stdout(out):
+                            rc = command_audit.main(["--json"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["missing_references"], 0)
+        self.assertEqual(payload["workflow_files_scanned"], 1)
 
 
 if __name__ == "__main__":
