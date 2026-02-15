@@ -1,5 +1,11 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+import backend.scripts.check_workflow_schedule_inventory as schedule_inventory
 from backend.scripts.check_workflow_command_paths import (
     collect_missing_references,
     module_to_candidate_paths,
@@ -28,6 +34,37 @@ on:
         has_schedule, crons = _extract_schedule_info(text)
         self.assertFalse(has_schedule)
         self.assertEqual(crons, [])
+
+    def test_find_workflows_includes_yaml_suffix(self):
+        with TemporaryDirectory() as tmp:
+            wf_dir = Path(tmp)
+            (wf_dir / "a.yml").write_text("on:\n  workflow_dispatch: {}\n", encoding="utf-8")
+            (wf_dir / "b.yaml").write_text("on:\n  workflow_dispatch: {}\n", encoding="utf-8")
+            (wf_dir / "ignore.txt").write_text("x", encoding="utf-8")
+            with patch.object(schedule_inventory, "WORKFLOWS_DIR", wf_dir):
+                names = [p.name for p in schedule_inventory._find_workflows()]
+        self.assertEqual(names, ["a.yml", "b.yaml"])
+
+    def test_main_scheduled_only_omits_manual_rows(self):
+        with TemporaryDirectory() as tmp:
+            wf_dir = Path(tmp)
+            (wf_dir / "scheduled.yml").write_text(
+                'on:\n  schedule:\n    - cron: "15 6 * * *"\n',
+                encoding="utf-8",
+            )
+            (wf_dir / "manual.yml").write_text(
+                "on:\n  workflow_dispatch: {}\n",
+                encoding="utf-8",
+            )
+            out = StringIO()
+            with patch.object(schedule_inventory, "WORKFLOWS_DIR", wf_dir):
+                with patch.object(schedule_inventory, "EXPECTED_SCHEDULED", {"scheduled.yml"}):
+                    with redirect_stdout(out):
+                        rc = schedule_inventory.main(["--scheduled-only", "--strict"])
+        self.assertEqual(rc, 0)
+        printed = out.getvalue()
+        self.assertIn("SCHEDULED scheduled.yml", printed)
+        self.assertNotIn("manual-only manual.yml", printed)
 
 
 class TestWorkflowCommandPathAudit(unittest.TestCase):
