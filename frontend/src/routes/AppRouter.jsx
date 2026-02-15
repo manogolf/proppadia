@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -15,43 +15,19 @@ import {
   getWatchlistTotal,
   WATCHLIST_UPDATED_EVENT,
 } from "../shared/watchlistStorage.js";
-import {
-  loadAccessRequiredPage,
-  loadHomeGateway,
-  loadLoginPage,
-  loadMLBHome,
-  loadModelMetricsDashboard,
-  loadNHLHome,
-  loadNHLPredictions,
-  loadOpsPage,
-  loadPlayerProfileDashboard,
-  loadPlayerPropsPage,
-  loadPlayerTeamChooser,
-  loadPlayerTeamBrowser,
-  loadWatchlistPage,
-} from "./prefetchRoute.js";
-
-const HomeGateway = lazy(loadHomeGateway);
-const MLBHome = lazy(loadMLBHome);
-const NHLHome = lazy(loadNHLHome);
-const NHLPredictions = lazy(loadNHLPredictions);
-const LoginPage = lazy(loadLoginPage);
-const PlayerProfileDashboard = lazy(loadPlayerProfileDashboard);
-const ModelMetricsDashboard = lazy(loadModelMetricsDashboard);
-const PlayerTeamBrowser = lazy(loadPlayerTeamBrowser);
-const PlayerTeamChooser = lazy(loadPlayerTeamChooser);
-const PlayerPropsPage = lazy(loadPlayerPropsPage);
-const OpsPage = lazy(loadOpsPage);
-const AccessRequiredPage = lazy(loadAccessRequiredPage);
-const WatchlistPage = lazy(loadWatchlistPage);
-
-function RouteFallback() {
-  return (
-    <div className="min-h-screen pp-page flex items-center justify-center text-slate-600">
-      Loading page...
-    </div>
-  );
-}
+import AccessRequiredPage from "../Pages/AccessRequiredPage.jsx";
+import HomeGateway from "../Pages/HomeGateway.jsx";
+import LoginPage from "../Pages/Login.jsx";
+import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.jsx";
+import OpsPage from "../Pages/OpsPage.jsx";
+import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.jsx";
+import PlayerPropsPage from "../Pages/PlayerPropsPage.jsx";
+import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.jsx";
+import PlayerTeamChooser from "../Pages/PlayerTeamChooser.jsx";
+import WatchlistPage from "../Pages/WatchlistPage.jsx";
+import MLBHome from "../Pages/mlb/MLBHome.jsx";
+import NHLHome from "../Pages/nhl/NHLHome.jsx";
+import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
 
 function navClassName({ isActive }) {
   return [
@@ -126,50 +102,9 @@ export default function AppRouter() {
     };
   }, [refreshWatchlistTotal]);
 
-  useEffect(() => {
-    function onDocClickCapture(event) {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const navAnchor = target.closest("a[href]");
-      if (!navAnchor) return;
-      const navShell = navAnchor.closest("header, nav");
-      if (!navShell) return;
-
-      const beforePath = window.location.pathname + window.location.search;
-      const hrefAttr = navAnchor.getAttribute("href") || "";
-      const rect = navAnchor.getBoundingClientRect();
-      const cx = Math.max(0, Math.floor(rect.left + rect.width / 2));
-      const cy = Math.max(0, Math.floor(rect.top + rect.height / 2));
-      const topEl = document.elementFromPoint(cx, cy);
-      const topTag = topEl ? `${topEl.tagName.toLowerCase()}${topEl.id ? `#${topEl.id}` : ""}` : "null";
-      console.debug("[NAV_PROBE] click", {
-        beforePath,
-        href: hrefAttr,
-        defaultPrevented: event.defaultPrevented,
-        targetTag: `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ""}`,
-        navTag: `${navAnchor.tagName.toLowerCase()}${navAnchor.id ? `#${navAnchor.id}` : ""}`,
-        pointerAt: { x: cx, y: cy },
-        topElementAtPointer: topTag,
-      });
-
-      window.setTimeout(() => {
-        const afterPath = window.location.pathname + window.location.search;
-        console.debug("[NAV_PROBE] after", {
-          href: hrefAttr,
-          changed: afterPath !== beforePath,
-          beforePath,
-          afterPath,
-        });
-      }, 180);
-    }
-
-    document.addEventListener("click", onDocClickCapture, true);
-    return () => document.removeEventListener("click", onDocClickCapture, true);
-  }, []);
-
   return (
     <BrowserRouter>
-      <div className="sticky top-0 z-[1000] pointer-events-auto bg-[#f6f8fb]/95 backdrop-blur supports-[backdrop-filter]:bg-[#f6f8fb]/85">
+      <div>
         <Header />
 
         {/* ✅ This nav bar is global, shown on every page */}
@@ -240,79 +175,77 @@ export default function AppRouter() {
 
       {/* Render route-based pages */}
       <RouteErrorBoundary>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            {/* New multi-sport gateway at "/" */}
-            <Route path="/" element={<HomeGateway />} />
-            <Route path="/mlb" element={<MLBHome />} />
-            <Route path="/nhl" element={<NHLHome />} />
-            <Route
-              path="/nhl/predictions"
-              element={
-                <RequireSignedIn
-                  requiredPath="/nhl/predictions"
-                  requiredLabel="NHL predictions"
-                >
-                  <NHLPredictions />
-                </RequireSignedIn>
-              }
-            />
-            {/* Existing MLB dashboard moved to "/mlb" */}
-            <Route
-              path="/props"
-              element={
-                <RequireSignedIn requiredPath="/props" requiredLabel="MLB predictions">
-                  <PlayerPropsPage />
-                </RequireSignedIn>
-              }
-            />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />
-            <Route path="/metrics" element={<ModelMetricsDashboard />} />
-            <Route path="/players" element={<PlayerTeamChooser />} />
-            <Route path="/players/mlb" element={<PlayerTeamBrowser forcedSport="mlb" />} />
-            <Route path="/players/nhl" element={<PlayerTeamBrowser forcedSport="nhl" />} />
-            <Route
-              path="/watchlist"
-              element={
-                <RequireSignedIn requiredPath="/watchlist" requiredLabel="watchlist">
-                  <WatchlistPage />
-                </RequireSignedIn>
-              }
-            />
-            <Route
-              path="/props/v2"
-              element={
-                <RequireSignedIn
-                  requiredPath="/props/v2"
-                  requiredLabel="MLB predictions"
-                >
-                  <RedirectLegacyPropsRoute />
-                </RequireSignedIn>
-              }
-            />
-            <Route
-              path="/ops"
-              element={
-                <RequireSignedIn requiredPath="/ops" requiredLabel="operations dashboard">
-                  {hasOpsAccess ? (
-                    <OpsPage />
-                  ) : (
-                    <div className="min-h-screen pp-page px-4 py-10">
-                      <div className="max-w-2xl mx-auto pp-card p-6">
-                        <h2 className="text-2xl font-semibold text-slate-900">Ops Access Restricted</h2>
-                        <p className="text-slate-700 mt-2">
-                          This page is restricted to authorized operations users.
-                        </p>
-                      </div>
+        <Routes>
+          {/* New multi-sport gateway at "/" */}
+          <Route path="/" element={<HomeGateway />} />
+          <Route path="/mlb" element={<MLBHome />} />
+          <Route path="/nhl" element={<NHLHome />} />
+          <Route
+            path="/nhl/predictions"
+            element={
+              <RequireSignedIn
+                requiredPath="/nhl/predictions"
+                requiredLabel="NHL predictions"
+              >
+                <NHLPredictions />
+              </RequireSignedIn>
+            }
+          />
+          {/* Existing MLB dashboard moved to "/mlb" */}
+          <Route
+            path="/props"
+            element={
+              <RequireSignedIn requiredPath="/props" requiredLabel="MLB predictions">
+                <PlayerPropsPage />
+              </RequireSignedIn>
+            }
+          />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />
+          <Route path="/metrics" element={<ModelMetricsDashboard />} />
+          <Route path="/players" element={<PlayerTeamChooser />} />
+          <Route path="/players/mlb" element={<PlayerTeamBrowser forcedSport="mlb" />} />
+          <Route path="/players/nhl" element={<PlayerTeamBrowser forcedSport="nhl" />} />
+          <Route
+            path="/watchlist"
+            element={
+              <RequireSignedIn requiredPath="/watchlist" requiredLabel="watchlist">
+                <WatchlistPage />
+              </RequireSignedIn>
+            }
+          />
+          <Route
+            path="/props/v2"
+            element={
+              <RequireSignedIn
+                requiredPath="/props/v2"
+                requiredLabel="MLB predictions"
+              >
+                <RedirectLegacyPropsRoute />
+              </RequireSignedIn>
+            }
+          />
+          <Route
+            path="/ops"
+            element={
+              <RequireSignedIn requiredPath="/ops" requiredLabel="operations dashboard">
+                {hasOpsAccess ? (
+                  <OpsPage />
+                ) : (
+                  <div className="min-h-screen pp-page px-4 py-10">
+                    <div className="max-w-2xl mx-auto pp-card p-6">
+                      <h2 className="text-2xl font-semibold text-slate-900">Ops Access Restricted</h2>
+                      <p className="text-slate-700 mt-2">
+                        This page is restricted to authorized operations users.
+                      </p>
                     </div>
-                  )}
-                </RequireSignedIn>
-              }
-            />
-            <Route path="/owner" element={<Navigate to="/ops" replace />} />
-          </Routes>
-        </Suspense>
+                  </div>
+                )}
+              </RequireSignedIn>
+            }
+          />
+          <Route path="/owner" element={<Navigate to="/ops" replace />} />
+        </Routes>
       </RouteErrorBoundary>
     </BrowserRouter>
   );
