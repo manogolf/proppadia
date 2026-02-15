@@ -1,4 +1,4 @@
-.PHONY: help mlb-help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-insert-stat-derived mlb-check-stat-derived mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-insert-stat-derived mlb-check-stat-derived mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -47,6 +47,12 @@ mlb-help:
 	else \
 		$(MAKE) help | grep -E "mlb-|MLB_"; \
 	fi
+
+mlb-runbook:
+	@echo "1) make mlb-show-config"
+	@echo "2) make mlb-daily-refresh-strict MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS)"
+	@echo "3) make mlb-post-deploy BASE_URL=$(BASE_URL) MLB_DATE=$(MLB_DATE)"
+	@echo "4) make mlb-ops-check BASE_URL=$(BASE_URL)"
 
 # One-command local diagnostic baseline for support/debug sessions.
 diagnose:
