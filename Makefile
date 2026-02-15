@@ -114,7 +114,7 @@ cron-current-state:
 diagnose:
 	$(MAKE) runtime-boundaries
 	$(MAKE) frontend-route-smoke
-	$(MAKE) workflow-path-audit
+	$(MAKE) cron-governance-check
 	$(MAKE) shared-checks-offline
 	$(MAKE) mlb-checks-offline-core
 	$(MAKE) nhl-checks-offline-core
