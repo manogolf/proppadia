@@ -148,6 +148,8 @@ Use this as the default single command for MLB daily maintenance:
 make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
 ```
 
+This target prints `mlb-show-config` automatically before running refresh steps.
+
 ## Scheduled Stat-Derived Insert + Guard
 
 When season is active, schedule this one command:
