@@ -128,3 +128,15 @@ NHL fixed-window quality baseline:
 ```bash
 make nhl-prediction-quality NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_MIN_TOTAL=1
 ```
+
+Season day-0 baseline artifact capture:
+
+```bash
+make season-baseline-capture \
+  MLB_QUALITY_WINDOW_MODE=games \
+  MLB_QUALITY_GAMES_BACK=30 \
+  MLB_QUALITY_MIN_TOTAL=1 \
+  NHL_QUALITY_FROM_DATE=2025-12-01 \
+  NHL_QUALITY_TO_DATE=2025-12-31 \
+  NHL_QUALITY_MIN_TOTAL=1
+```
