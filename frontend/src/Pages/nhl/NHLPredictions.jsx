@@ -1112,7 +1112,7 @@ export default function NHLPredictions() {
             ) : (
               <div className="overflow-auto max-h-[30rem] rounded-md border border-slate-200">
                 <table className="min-w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-white">
+                  <thead className="bg-white">
                     <tr className="text-left text-slate-600 border-b border-slate-200">
                       <th className="py-2 pr-3">game_id</th>
                       <th className="py-2 pr-3">team</th>
@@ -1175,7 +1175,7 @@ export default function NHLPredictions() {
             ) : (
               <div className="overflow-auto max-h-[30rem] rounded-md border border-slate-200">
                 <table className="min-w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-white">
+                  <thead className="bg-white">
                     <tr className="text-left text-slate-600 border-b border-slate-200">
                       <th className="py-2 pr-3">game_id</th>
                       <th className="py-2 pr-3">team</th>
