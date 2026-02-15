@@ -10,6 +10,10 @@ Forbidden import markers:
 - archive
 - legacy
 - _legacy
+
+Additionally forbidden for runtime modules:
+- top-level mlb.*
+- top-level nhl.*
 """
 
 from __future__ import annotations
@@ -21,11 +25,17 @@ from typing import List, Sequence, Tuple
 
 RUNTIME_ROOTS: Sequence[Path] = (Path("backend/app"), Path("backend/domains"))
 FORBIDDEN_MARKERS = {"archive", "legacy", "_legacy"}
+FORBIDDEN_TOP_LEVEL_PACKAGES = {"mlb", "nhl"}
 
 
 def _contains_forbidden_marker(module_path: str) -> bool:
     parts = [part.strip() for part in module_path.split(".") if part.strip()]
     return any(part in FORBIDDEN_MARKERS for part in parts)
+
+
+def _is_forbidden_top_level_package(module_path: str) -> bool:
+    first = (module_path.split(".", 1)[0] or "").strip()
+    return first in FORBIDDEN_TOP_LEVEL_PACKAGES
 
 
 def _candidate_module_paths(
@@ -66,7 +76,10 @@ def _scan_file(path: Path) -> List[Tuple[int, str]]:
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for module_path in _candidate_module_paths(node, package_parts):
-            if module_path and _contains_forbidden_marker(module_path):
+            if module_path and (
+                _contains_forbidden_marker(module_path)
+                or _is_forbidden_top_level_package(module_path)
+            ):
                 violations.append((getattr(node, "lineno", 1), module_path))
     return violations
 
@@ -88,7 +101,8 @@ def main() -> int:
 
     if violations:
         print("FAIL runtime import boundary check:")
-        print("Active runtime modules must not import archive/legacy paths.")
+        print("Active runtime modules must not import archive/legacy paths")
+        print("or top-level mlb/nhl packages.")
         for path, lineno, module_path in violations:
             print(f"- {path}:{lineno} imports {module_path}")
         return 1
