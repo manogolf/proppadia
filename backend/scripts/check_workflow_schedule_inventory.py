@@ -45,6 +45,11 @@ def _extract_schedule_info(text: str) -> Tuple[bool, List[str]]:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Inventory scheduled workflow files.")
     ap.add_argument("--strict", action="store_true", help="Fail when scheduled set differs from expected.")
+    ap.add_argument(
+        "--scheduled-only",
+        action="store_true",
+        help="Print only workflows with schedule blocks.",
+    )
     args = ap.parse_args(argv)
 
     files = _find_workflows()
@@ -61,7 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             scheduled_files.append(wf.name)
             cron_txt = ", ".join(crons) if crons else "(schedule block, no cron lines parsed)"
             print(f"- SCHEDULED {wf.name}: {cron_txt}")
-        else:
+        elif not args.scheduled_only:
             print(f"- manual-only {wf.name}")
 
     scheduled_set = set(scheduled_files)
