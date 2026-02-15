@@ -50,6 +50,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Print only workflows with schedule blocks.",
     )
+    ap.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-file rows; print summary only.",
+    )
     args = ap.parse_args(argv)
 
     files = _find_workflows()
@@ -58,15 +63,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     scheduled_files: List[str] = []
-    print("Workflow schedule inventory:")
+    if not args.quiet:
+        print("Workflow schedule inventory:")
     for wf in files:
         text = wf.read_text(encoding="utf-8", errors="replace")
         has_schedule, crons = _extract_schedule_info(text)
         if has_schedule:
             scheduled_files.append(wf.name)
             cron_txt = ", ".join(crons) if crons else "(schedule block, no cron lines parsed)"
-            print(f"- SCHEDULED {wf.name}: {cron_txt}")
-        elif not args.scheduled_only:
+            if not args.quiet:
+                print(f"- SCHEDULED {wf.name}: {cron_txt}")
+        elif not args.scheduled_only and not args.quiet:
             print(f"- manual-only {wf.name}")
 
     scheduled_set = set(scheduled_files)
