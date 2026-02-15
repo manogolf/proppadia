@@ -121,11 +121,18 @@ export default function NHLPredictions() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || "");
+    const modeFromUrl = String(params.get("mode") || "").trim().toLowerCase();
     const playerFromUrl = String(params.get("player") || "").trim();
-    if (!playerFromUrl) return;
-    setQ(playerFromUrl);
-    setMode("board");
-    queryAutoSelectRef.current = playerFromUrl.toLowerCase();
+    const teamFromUrl = String(params.get("team") || "").trim();
+    const seed = playerFromUrl || teamFromUrl;
+    if (modeFromUrl === "research" || modeFromUrl === "board") {
+      setMode(modeFromUrl);
+    } else if (seed) {
+      setMode("board");
+    }
+    if (!seed) return;
+    setQ(seed);
+    queryAutoSelectRef.current = seed.toLowerCase();
   }, [location.search]);
 
   function refreshWatchlistRows() {

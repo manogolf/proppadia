@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import TodayGames from "../components/TodayGames.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
@@ -34,6 +35,7 @@ const MODES = [
 ];
 
 export default function PlayerPropsPage() {
+  const location = useLocation();
   const { user } = useAuth();
   const [mode, setMode] = useState("research");
   const [selectedDate, setSelectedDate] = useState(todayET());
@@ -44,6 +46,30 @@ export default function PlayerPropsPage() {
   const [games, setGames] = useState([]);
   const [gamesLoading, setGamesLoading] = useState(true);
   const [gamesError, setGamesError] = useState("");
+  const [seedPlayerName, setSeedPlayerName] = useState("");
+  const [seedTeamAbbr, setSeedTeamAbbr] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    const modeFromUrl = String(params.get("mode") || "").trim().toLowerCase();
+    const playerFromUrl = String(params.get("player") || "").trim();
+    const teamFromUrl = String(params.get("team") || "").trim();
+    const dateFromUrl = String(params.get("date") || "").trim();
+
+    if (modeFromUrl === "research" || modeFromUrl === "board") {
+      setMode(modeFromUrl);
+    } else if (playerFromUrl || teamFromUrl) {
+      // Deep links from Players-by-Team should open directly into board view.
+      setMode("board");
+    }
+
+    setSeedPlayerName(playerFromUrl);
+    setSeedTeamAbbr(teamFromUrl);
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateFromUrl)) {
+      setSelectedDate(dateFromUrl);
+    }
+  }, [location.search]);
 
   const subtitle = useMemo(() => {
     return mode === "research"
@@ -237,6 +263,8 @@ export default function PlayerPropsPage() {
 
           <div className="pp-chip p-4">
             <PlayerPropFormV2
+              initialPlayerName={seedPlayerName}
+              initialTeamAbbr={seedTeamAbbr}
               onPredicted={(evt) => setLatestPrediction(evt || null)}
               onSaved={(evt) => {
                 if (evt?.gameDate) setSelectedDate(evt.gameDate);

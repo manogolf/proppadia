@@ -28,7 +28,6 @@ import {
   loadPlayerPropsPage,
   loadPlayerTeamChooser,
   loadPlayerTeamBrowser,
-  loadPropsDashboard,
   loadWatchlistPage,
 } from "./prefetchRoute.js";
 
@@ -36,7 +35,6 @@ const HomeGateway = lazy(loadHomeGateway);
 const MLBHome = lazy(loadMLBHome);
 const NHLHome = lazy(loadNHLHome);
 const NHLPredictions = lazy(loadNHLPredictions);
-const PropsDashboard = lazy(loadPropsDashboard);
 const LoginPage = lazy(loadLoginPage);
 const PlayerProfileDashboard = lazy(loadPlayerProfileDashboard);
 const ModelMetricsDashboard = lazy(loadModelMetricsDashboard);
@@ -83,6 +81,19 @@ function RequireSignedIn({ children, requiredPath, requiredLabel }) {
     );
   }
   return children;
+}
+
+function RedirectLegacyPropsRoute() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{
+        pathname: "/props",
+        search: location.search || "",
+      }}
+      replace
+    />
+  );
 }
 
 export default function AppRouter() {
@@ -209,7 +220,7 @@ export default function AppRouter() {
               path="/props"
               element={
                 <RequireSignedIn requiredPath="/props" requiredLabel="MLB predictions">
-                  <PropsDashboard />
+                  <PlayerPropsPage />
                 </RequireSignedIn>
               }
             />
@@ -234,7 +245,7 @@ export default function AppRouter() {
                   requiredPath="/props/v2"
                   requiredLabel="MLB predictions"
                 >
-                  <PlayerPropsPage />
+                  <RedirectLegacyPropsRoute />
                 </RequireSignedIn>
               }
             />

@@ -822,8 +822,8 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                   <Link
                     to={
                       sport === "mlb"
-                        ? `/props?player=${playerQuery(team)}`
-                        : `/nhl/predictions?player=${playerQuery(team)}`
+                        ? `/props?mode=board&team=${playerQuery(team)}`
+                        : `/nhl/predictions?mode=board&team=${playerQuery(team)}`
                     }
                     className="text-xs text-slate-500 hover:underline"
                   >
@@ -873,8 +873,12 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                               <Link
                                 to={
                                   sport === "mlb"
-                                    ? `/props?player=${playerQuery(p.player_name || p.player_id)}`
-                                    : `/nhl/predictions?player=${playerQuery(p.player_name || p.player_id)}`
+                                    ? `/props?mode=research&player=${playerQuery(
+                                        p.player_name || p.player_id
+                                      )}&team=${playerQuery(p.teamLabel || "")}`
+                                    : `/nhl/predictions?mode=board&player=${playerQuery(
+                                        p.player_name || p.player_id
+                                      )}`
                                 }
                                 className="text-xs text-slate-500 hover:underline"
                               >

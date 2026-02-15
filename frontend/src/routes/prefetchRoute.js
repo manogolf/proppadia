@@ -1,7 +1,6 @@
 export const loadHomeGateway = () => import("../Pages/HomeGateway.jsx");
 export const loadMLBHome = () => import("../Pages/mlb/MLBHome.jsx");
 export const loadNHLHome = () => import("../Pages/nhl/NHLHome.jsx");
-export const loadPropsDashboard = () => import("../Pages/PropsDashboard.jsx");
 export const loadPlayerPropsPage = () => import("../Pages/PlayerPropsPage.jsx");
 export const loadNHLPredictions = () => import("../Pages/nhl/NHLPredictions.jsx");
 export const loadLoginPage = () => import("../Pages/Login.jsx");
@@ -22,7 +21,7 @@ const routeLoaders = {
   "/": loadHomeGateway,
   "/mlb": loadMLBHome,
   "/nhl": loadNHLHome,
-  "/props": loadPropsDashboard,
+  "/props": loadPlayerPropsPage,
   "/props/v2": loadPlayerPropsPage,
   "/nhl/predictions": loadNHLPredictions,
   "/login": loadLoginPage,

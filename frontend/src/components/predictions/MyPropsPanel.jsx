@@ -112,10 +112,12 @@ export default function MyPropsPanel({
   useEffect(() => {
     const params = new URLSearchParams(location.search || "");
     const playerFromUrl = String(params.get("player") || "").trim();
-    if (playerFromUrl) {
-      setSearchTerm(playerFromUrl);
+    const teamFromUrl = String(params.get("team") || "").trim();
+    const seed = playerFromUrl || teamFromUrl;
+    if (seed) {
+      setSearchTerm(seed);
       setPage(0);
-      queryAutoSelectRef.current = playerFromUrl.toLowerCase();
+      queryAutoSelectRef.current = seed.toLowerCase();
     }
   }, [location.search]);
 

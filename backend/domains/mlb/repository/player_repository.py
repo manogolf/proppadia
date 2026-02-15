@@ -127,6 +127,15 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
           FROM player_ids
           GROUP BY CAST(player_id AS TEXT)
         ),
+        latest_team AS (
+          SELECT DISTINCT ON (CAST(player_id AS TEXT))
+            CAST(player_id AS TEXT) AS player_id,
+            team
+          FROM model_training_props
+          WHERE team IS NOT NULL
+            AND BTRIM(CAST(team AS TEXT)) <> ''
+          ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
+        ),
         recent AS (
           SELECT
             CAST(player_id AS TEXT) AS player_id,
@@ -137,12 +146,14 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
         SELECT
           p.player_id,
           p.player_name,
-          p.team,
+          COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team) AS team,
           r.last_prop_date
         FROM players p
+        LEFT JOIN latest_team lt
+          ON lt.player_id = p.player_id
         LEFT JOIN recent r
           ON r.player_id = p.player_id
-        ORDER BY p.team ASC NULLS LAST, p.player_name ASC
+        ORDER BY COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team) ASC NULLS LAST, p.player_name ASC
         LIMIT %s
     """
     try:
@@ -187,6 +198,15 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
           FROM player_ids
           GROUP BY CAST(player_id AS TEXT)
         ),
+        latest_team AS (
+          SELECT DISTINCT ON (CAST(player_id AS TEXT))
+            CAST(player_id AS TEXT) AS player_id,
+            team
+          FROM model_training_props
+          WHERE team IS NOT NULL
+            AND BTRIM(CAST(team AS TEXT)) <> ''
+          ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
+        ),
         recent AS (
           SELECT
             CAST(player_id AS TEXT) AS player_id,
@@ -198,12 +218,14 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
         SELECT
           p.player_id,
           p.player_name,
-          p.team,
+          COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team) AS team,
           r.last_prop_date
         FROM players p
+        LEFT JOIN latest_team lt
+          ON lt.player_id = p.player_id
         LEFT JOIN recent r
           ON r.player_id = p.player_id
-        ORDER BY p.team ASC NULLS LAST, p.player_name ASC
+        ORDER BY COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team) ASC NULLS LAST, p.player_name ASC
         LIMIT %s
     """
     try:

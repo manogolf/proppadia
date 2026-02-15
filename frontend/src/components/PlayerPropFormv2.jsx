@@ -170,7 +170,12 @@ function americanOddsToImplied(odds) {
   return Math.abs(o) / (Math.abs(o) + 100);
 }
 
-export default function PlayerPropFormV2({ onSaved, onPredicted }) {
+export default function PlayerPropFormV2({
+  onSaved,
+  onPredicted,
+  initialPlayerName = "",
+  initialTeamAbbr = "",
+}) {
   const { user } = useAuth();
   // user inputs
   const [playerName, setPlayerName] = useState("");
@@ -207,6 +212,22 @@ export default function PlayerPropFormV2({ onSaved, onPredicted }) {
   const lastReqId = useRef(0);
   const [teamTouched, setTeamTouched] = useState(false);
   const [lastResolvedPlayerId, setLastResolvedPlayerId] = useState("");
+
+  useEffect(() => {
+    const seedPlayer = String(initialPlayerName || "").trim();
+    const seedTeam = String(initialTeamAbbr || "")
+      .trim()
+      .toUpperCase();
+
+    if (seedPlayer) {
+      setPlayerName(seedPlayer);
+      setPlayerId("");
+      setLastResolvedPlayerId("");
+    }
+    if (seedTeam && !teamTouched) {
+      setTeamAbbr(seedTeam);
+    }
+  }, [initialPlayerName, initialTeamAbbr, teamTouched]);
 
   useEffect(() => {
     if (!user?.id) {
