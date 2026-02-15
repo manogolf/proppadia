@@ -97,7 +97,7 @@ Meaning:
 - `mlb-daily-refresh`: one-command daily MLB baseline (market cache + roster refresh + stat-derived refresh + guard)
 - `mlb-daily-refresh-strict`: same as above, but forces `MLB_STAT_DERIVED_MIN=1`
 - `mlb-daily-refresh-smoke`: quick end-to-end daily baseline check (`MLB_STAT_MAX_GAMES=1`)
-- `mlb-ops-check`: operator confidence loop (`mlb-show-config` + `mlb-daily-refresh-smoke` + `mlb-post-deploy`)
+- `mlb-ops-check`: operator confidence loop (`mlb-show-config` + market cache refresh + roster refresh + `mlb-stat-derived-smoke` + `mlb-post-deploy`)
 - `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
