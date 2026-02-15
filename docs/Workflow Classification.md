@@ -20,7 +20,7 @@ Snapshot date: February 15, 2026
 
 - `.github/workflows/ci-offline-checks.yml`
 - `Makefile` MLB operational targets:
-  - `mlb-daily-refresh` / `mlb-daily-refresh-strict`
+  - `mlb-daily-refresh` / `mlb-daily-refresh-strict` / `mlb-daily-refresh-smoke`
   - `mlb-stat-derived-refresh`
   - `mlb-stat-derived-backfill`
   - `mlb-stat-derived-smoke`
