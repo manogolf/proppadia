@@ -32,7 +32,7 @@ Snapshot date: February 15, 2026
   - `mlb-roster-refresh-all`
   - `mlb-market-cache-refresh`
   - `mlb-post-deploy` / `mlb-post-deploy-strict-offseason`
-  - `ops-status` / `ops-help` / `ops-operator-summary`
+  - `ops-status` / `ops-help` / `ops-operator-summary` / `ops-operator-summary-json`
 - `backend/scripts/insert_mlb_stat_derived.py`
 - `backend/scripts/validate_mlb_stat_derived_recent.py`
 
