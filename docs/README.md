@@ -11,6 +11,7 @@ Start here for architecture and operations context.
 - `docs/Runtime Surface.md`: currently served FastAPI routes and entrypoint.
 - `docs/Legacy Quarantine Map.md`: backend archive/legacy move map to `backend/_legacy/*`.
 - `docs/Workflow Classification.md`: current keep/suspend/archive workflow status map.
+- `docs/Cron Replacement Runbook.md`: replacement mapping for suspended cron workflows and schedule re-enable gates.
 - `docs/MLB Data-First Retention Plan.md`: MLB data-preservation-first operating policy.
 
 ## Shared Validation Lane

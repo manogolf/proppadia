@@ -9,6 +9,8 @@ Daily:
 On-demand:
 - `make workflow-inventory`
 - `make workflow-inventory-strict`
+- `make workflow-path-audit`
+- `make workflow-path-audit-strict`
 - `make mlb-stat-derived-backfill ...`
 - `make mlb-stat-derived-smoke ...`
 - `make cross-sport-post-deploy ...`
@@ -49,6 +51,16 @@ make nhl-help
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 ```
+
+## Cron Replacement Governance
+
+```bash
+make workflow-inventory-strict
+make workflow-path-audit
+make workflow-path-audit-strict
+```
+
+See: `docs/Cron Replacement Runbook.md`
 
 ## Cross-Sport Confidence
 

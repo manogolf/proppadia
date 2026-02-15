@@ -11,7 +11,7 @@ Snapshot date: February 15, 2026
 
 - `keep-active`: should stay active now.
 - `suspended-valid`: intentionally suspended; paths appear valid.
-- `suspended-needs-path-fix`: intentionally suspended; workflow references stale paths.
+- `suspended-needs-path-fix`: intentionally suspended/manual-only; workflow references stale paths.
 - `archive-candidate`: obsolete or high-confusion legacy wiring.
 
 ## Current Classification
@@ -64,6 +64,30 @@ Snapshot date: February 15, 2026
 - Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
 - Archive-candidate MLB workflows now have `schedule` removed in-repo and are manual-only (`workflow_dispatch`).
 - There are currently no unexpected scheduled MLB workflow files in-repo (`make workflow-inventory-strict` baseline clean).
+- The remaining scheduled/live path-fix queue is currently NHL-only (`nhl-daily-refresh.yml`), tracked by `make workflow-path-audit`.
+
+## Cron Replacement Plan (GitHub Suspended → Stable Ops)
+
+Primary policy:
+
+1. Preserve meaningful jobs, but move them to stable command surfaces first (`make mlb-*`, `backend/nhl/cli.py`).
+2. Keep legacy GitHub workflows manual-only until command paths and verification are clean.
+3. Re-enable any schedule only after one successful manual run + smoke verification.
+
+Replacement map:
+
+1. `mlb-insert_stat_derived_props.yml` → `make mlb-stat-derived-refresh`
+2. `mlb-backfill_predictions.yml` → `make mlb-stat-derived-backfill ...` (manual window)
+3. `mlb-cache-player-profiles.yml` → fold into daily refresh runbook/manual warm pass
+4. `mlb-generate_streak_profiles.yml` → fold into post-refresh validation lane
+5. `mlb-cron.yml` / `mlb-sync_user_added_props.yml` → covered by current API/runtime behavior; manual-only unless a concrete gap is found
+6. `mlb-precompute.yml` / `mlb-retrain*.yml` / `mlb-train_recent_models.yml` → manual-only training lane until path-fix + model policy signoff
+
+Current operator stance:
+
+1. NHL production remains local automator + `backend/nhl/cli.py` while cron migration stabilizes.
+2. MLB hosted scheduling uses conservative cadence (Render/manual) and strict checks.
+3. Cost control over convenience: no automatic expansion of hosted cron frequency.
 
 ## MLB Cron Baseline (Current)
 
@@ -73,6 +97,9 @@ Workflow schedule inventory commands:
 - `make workflow-inventory-strict` (fails on unexpected scheduled files)
 - `make workflow-path-audit` (report missing workflow python refs for scheduled files)
 - `make workflow-path-audit-strict` (fails on missing workflow python refs for scheduled files)
+- Full/manual audit mode:
+  - `make workflow-path-audit` default = scheduled workflows only
+  - `.venv/bin/python backend/scripts/check_workflow_command_paths.py --all-workflows`
 
 Recommended low-risk cadence while season is inactive:
 
