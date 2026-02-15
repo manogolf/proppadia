@@ -102,6 +102,38 @@ def _roster_check(require_min: int, stale_after_hours: int) -> Dict[str, Any]:
     }
 
 
+def collect_snapshot(
+    *,
+    stat_days: int,
+    stat_require_min: int,
+    roster_require_min: int,
+    roster_stale_hours: int,
+) -> Dict[str, Any]:
+    checks: Dict[str, Dict[str, Any]] = {}
+    errors: Dict[str, str] = {}
+
+    try:
+        checks["stat_derived"] = _stat_derived_check(stat_days, stat_require_min)
+    except Exception as exc:
+        errors["stat_derived"] = f"{type(exc).__name__}: {exc}"
+        checks["stat_derived"] = {"status": "fail"}
+
+    try:
+        checks["roster"] = _roster_check(roster_require_min, roster_stale_hours)
+    except Exception as exc:
+        errors["roster"] = f"{type(exc).__name__}: {exc}"
+        checks["roster"] = {"status": "fail"}
+
+    ok = all((c.get("status") == "pass") for c in checks.values()) and not errors
+    return {
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "status": "pass" if ok else "fail",
+        "ok": ok,
+        "checks": checks,
+        "errors": errors,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Emit MLB readiness snapshot (JSON).")
     ap.add_argument("--stat-days", type=int, default=30)
@@ -110,31 +142,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--roster-stale-hours", type=int, default=30)
     args = ap.parse_args(list(argv) if argv is not None else [])
 
-    checks: Dict[str, Dict[str, Any]] = {}
-    errors: Dict[str, str] = {}
-
-    try:
-        checks["stat_derived"] = _stat_derived_check(args.stat_days, args.stat_require_min)
-    except Exception as exc:
-        errors["stat_derived"] = f"{type(exc).__name__}: {exc}"
-        checks["stat_derived"] = {"status": "fail"}
-
-    try:
-        checks["roster"] = _roster_check(args.roster_require_min, args.roster_stale_hours)
-    except Exception as exc:
-        errors["roster"] = f"{type(exc).__name__}: {exc}"
-        checks["roster"] = {"status": "fail"}
-
-    ok = all((c.get("status") == "pass") for c in checks.values()) and not errors
-    payload = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "status": "pass" if ok else "fail",
-        "ok": ok,
-        "checks": checks,
-        "errors": errors,
-    }
+    payload = collect_snapshot(
+        stat_days=args.stat_days,
+        stat_require_min=args.stat_require_min,
+        roster_require_min=args.roster_require_min,
+        roster_stale_hours=args.roster_stale_hours,
+    )
     print(json.dumps(payload, indent=2))
-    return 0 if ok else 1
+    return 0 if payload.get("ok") else 1
 
 
 if __name__ == "__main__":
