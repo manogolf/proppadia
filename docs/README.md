@@ -16,6 +16,7 @@ Start here for architecture and operations context.
 
 ## Shared Validation Lane
 
+- `make cron-governance-check`: one-command strict governance gate for scheduled workflow inventory + path audit + NHL compat.
 - `make shared-checks-offline`: cross-sport shared unit checks (`backend/tests/test_shared_*.py`).
 - Included automatically by `make mlb-checks-offline` and `make nhl-checks-offline`.
 - `make diagnose`: optimized local baseline (`runtime-boundaries` + `shared-checks-offline` + MLB core + NHL core) without rerunning shared checks twice.
