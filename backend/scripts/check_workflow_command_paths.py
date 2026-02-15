@@ -56,6 +56,11 @@ def main() -> int:
         action="store_true",
         help="Audit all workflow files (default audits only scheduled workflow files).",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-file rows; print summary only.",
+    )
     args = parser.parse_args()
 
     if not WORKFLOWS_DIR.exists():
@@ -65,7 +70,8 @@ def main() -> int:
     workflow_files = sorted(
         list(WORKFLOWS_DIR.glob("*.yml")) + list(WORKFLOWS_DIR.glob("*.yaml"))
     )
-    print("Workflow command path audit:")
+    if not args.quiet:
+        print("Workflow command path audit:")
 
     missing_total = 0
     scanned_files = 0
@@ -74,17 +80,19 @@ def main() -> int:
         text = workflow_file.read_text(encoding="utf-8")
         has_schedule = bool(re.search(r"(?m)^\s*schedule\s*:", text))
         if not args.all_workflows and not has_schedule:
-            print(f"- SKIP {workflow_file.name} (manual-only)")
+            if not args.quiet:
+                print(f"- SKIP {workflow_file.name} (manual-only)")
             skipped_files += 1
             continue
         scanned_files += 1
         missing = collect_missing_references(text)
         if missing:
             missing_total += len(missing)
-            print(f"- MISSING {workflow_file.name}")
-            for item in missing:
-                print(f"  - {item}")
-        else:
+            if not args.quiet:
+                print(f"- MISSING {workflow_file.name}")
+                for item in missing:
+                    print(f"  - {item}")
+        elif not args.quiet:
             print(f"- OK {workflow_file.name}")
 
     print("\nSummary:")
