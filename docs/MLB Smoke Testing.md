@@ -64,6 +64,7 @@ make mlb-stat-derived-smoke
 make mlb-stat-derived-backfill
 make mlb-daily-refresh
 make mlb-daily-refresh-strict
+make mlb-daily-refresh-smoke
 make roster-refresh-all
 make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make mlb-post-deploy-strict BASE_URL=https://baseball-streaks-sq44.onrender.com
@@ -94,6 +95,7 @@ Meaning:
 - `mlb-stat-derived-backfill`: historical date-window backfill + volume guard
 - `mlb-daily-refresh`: one-command daily MLB baseline (market cache + roster refresh + stat-derived refresh + guard)
 - `mlb-daily-refresh-strict`: same as above, but forces `MLB_STAT_DERIVED_MIN=1`
+- `mlb-daily-refresh-smoke`: quick end-to-end daily baseline check (`MLB_STAT_MAX_GAMES=1`)
 - `roster-refresh-all`: convenience target to run MLB + NHL full-team roster refresh in one command
 - `mlb-post-deploy`: fast deployed-environment smoke (health/ping/player/predict/invalid-token)
 - Includes no-credit market metadata checks:
