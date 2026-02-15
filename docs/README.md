@@ -24,6 +24,7 @@ Start here for architecture and operations context.
 - `make diagnose`: optimized local baseline (`runtime-boundaries` + `shared-checks-offline` + MLB core + NHL core) without rerunning shared checks twice.
 - `make ci-offline-checks`: CI/offline baseline (same composition as `diagnose`).
 - `make nhl-workflow-compat-check`: verifies NHL workflow compatibility wrappers required by scheduled workflow steps.
+- `make docs-make-target-audit`: fails when docs reference a non-existent Make target.
 - `make cross-sport-post-deploy BASE_URL=<url>`: one-command offseason-safe strict post-deploy checks for MLB + NHL.
 - `docs/Roster Refresh Operations.md`: local + automation runbook for MLB/NHL full-team roster refresh.
 - `docs/Cron Replacement Runbook.md`: migration map and safety gates for suspended legacy cron workflows.
