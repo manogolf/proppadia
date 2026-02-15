@@ -23,12 +23,17 @@ Completed slices:
   - docs-target drift guard added (`make docs-make-target-audit`)
   - governance lane includes docs target audit
   - lean operator wrapper added (`make ops-shortlist-check`)
+- Phase 6 (started):
+  - season activation runbook added (`docs/Season Activation Runbook.md`)
+  - kickoff readiness bundle added (`make mlb-season-kickoff-check`)
+  - day-0 baseline capture command added (`make season-baseline-capture`)
 
 Current governance status:
 
 - `make workflow-inventory-strict`: pass
 - `make workflow-path-audit-strict`: pass
 - `make nhl-workflow-compat-check`: pass
+- `make diagnose`: pass (after OpenAPI snapshot refresh)
 
 ## Phase Status Tracker
 
