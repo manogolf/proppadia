@@ -44,6 +44,8 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
         payload = json.loads(out.getvalue())
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "pass")
+        self.assertTrue(payload["governance_ok"])
+        self.assertTrue(payload["season_activation_ok"])
         self.assertIn("workflow_inventory", payload["checks"])
         self.assertIn("workflow_path_audit", payload["checks"])
         self.assertIn("nhl_workflow_compat", payload["checks"])
@@ -87,6 +89,7 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
         payload = json.loads(out.getvalue())
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "fail")
+        self.assertFalse(payload["governance_ok"])
 
     def test_main_fails_when_season_activation_not_ready(self):
         def _ok(_args):
@@ -95,7 +98,7 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
 
         def _activation_fail(_args):
             print(json.dumps({"ok": False, "status": "fail"}))
-            return 1
+            return 0
 
         out = StringIO()
         with patch.object(snapshot.check_workflow_schedule_inventory, "main", side_effect=_ok), patch.object(
@@ -109,6 +112,8 @@ class TestSharedCronGovernanceSnapshot(unittest.TestCase):
         payload = json.loads(out.getvalue())
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "fail")
+        self.assertTrue(payload["governance_ok"])
+        self.assertFalse(payload["season_activation_ok"])
 
 
 if __name__ == "__main__":

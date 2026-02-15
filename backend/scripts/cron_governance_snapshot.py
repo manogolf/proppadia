@@ -35,10 +35,14 @@ def main() -> int:
     phase_rc, phase_status = _run_json_check(phase_status_snapshot.main, [])
     activation_rc, activation_status = _run_json_check(season_activation_status.main, [])
 
-    ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0 and activation_rc == 0
+    governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and phase_rc == 0
+    activation_ok = activation_rc == 0 and bool(activation_status.get("ok", False))
+    ok = governance_ok and activation_ok
     snapshot = {
         "ok": ok,
         "status": "pass" if ok else "fail",
+        "governance_ok": governance_ok,
+        "season_activation_ok": activation_ok,
         "checks": {
             "workflow_inventory": inventory,
             "workflow_path_audit": path_audit,
