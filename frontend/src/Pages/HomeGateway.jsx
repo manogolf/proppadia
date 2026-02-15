@@ -44,10 +44,10 @@ function agoLabel(isoTs) {
 }
 
 function mlbSlateState(snapshot) {
-  const teamsTracked = Array.isArray(snapshot?.records) ? snapshot.records.length : 0;
-  if (!snapshot) return { label: "Unavailable", tone: "text-rose-700" };
-  if (teamsTracked > 0) return { label: "Active today", tone: "text-emerald-700" };
-  return { label: "No slate today", tone: "text-slate-600" };
+  const gamesToday = Number(snapshot?.totalGames || 0);
+  if (!snapshot) return { label: "Schedule unavailable", tone: "text-amber-700" };
+  if (gamesToday > 0) return { label: "Active today", tone: "text-emerald-700" };
+  return { label: "No games today", tone: "text-slate-600" };
 }
 
 function nhlSlateState(snapshot) {
@@ -81,6 +81,7 @@ function overallSnapshotStatus(mlbSnapshot, nhlSnapshot) {
 export default function HomeGateway() {
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
+  const [mlbScheduleSnapshot, setMlbScheduleSnapshot] = useState(null);
   const [nhlSnapshot, setNhlSnapshot] = useState(null);
   const [snapshotError, setSnapshotError] = useState("");
   const [snapshotErrorDetail, setSnapshotErrorDetail] = useState(null);
@@ -90,7 +91,7 @@ export default function HomeGateway() {
   const snapshotReqRef = useRef(0);
   const mlbChip = snapshotChip(mlbSnapshot);
   const nhlChip = snapshotChip(nhlSnapshot);
-  const mlbState = mlbSlateState(mlbSnapshot);
+  const mlbState = mlbSlateState(mlbScheduleSnapshot);
   const nhlState = nhlSlateState(nhlSnapshot);
   const overallStatus = overallSnapshotStatus(mlbSnapshot, nhlSnapshot);
 
@@ -100,19 +101,23 @@ export default function HomeGateway() {
     setSnapshotLoading(true);
     setSnapshotError("");
     setShowSnapshotErrorDetail(false);
-    const [mlb, nhl] = await Promise.all([
+    const [mlb, mlbSchedule, nhl] = await Promise.all([
       fetchJsonTimed("/api/mlb/standings"),
+      fetchJsonTimed("/api/mlb/schedule"),
       fetchJsonTimed("/api/nhl/slate/meta"),
     ]);
     if (snapshotReqRef.current !== reqId) return;
-    setLastFetchMs((mlb.durationMs || 0) + (nhl.durationMs || 0));
+    setLastFetchMs((mlb.durationMs || 0) + (mlbSchedule.durationMs || 0) + (nhl.durationMs || 0));
     setMlbSnapshot(mlb.ok && mlb.body?.ok ? mlb.body : null);
+    setMlbScheduleSnapshot(mlbSchedule.ok && mlbSchedule.body ? mlbSchedule.body : null);
     setNhlSnapshot(nhl.ok && nhl.body?.ok ? nhl.body : null);
     if ((!mlb.ok || !mlb.body?.ok) && (!nhl.ok || !nhl.body?.ok)) {
       setSnapshotError("Snapshot data unavailable right now.");
       setSnapshotErrorDetail({
         mlb_status: mlb.status,
         mlb_ok: Boolean(mlb.body?.ok),
+        mlb_schedule_status: mlbSchedule.status,
+        mlb_schedule_ok: Boolean(mlbSchedule.body),
         nhl_status: nhl.status,
         nhl_ok: Boolean(nhl.body?.ok),
       });
@@ -130,6 +135,7 @@ export default function HomeGateway() {
       const cached = JSON.parse(raw);
       if (cached && typeof cached === "object") {
         setMlbSnapshot(cached.mlbSnapshot || null);
+        setMlbScheduleSnapshot(cached.mlbScheduleSnapshot || null);
         setNhlSnapshot(cached.nhlSnapshot || null);
         setLastUpdated(cached.lastUpdated || null);
         setLastFetchMs(
@@ -166,6 +172,7 @@ export default function HomeGateway() {
         HOME_SNAPSHOT_CACHE_KEY,
         JSON.stringify({
           mlbSnapshot,
+          mlbScheduleSnapshot,
           nhlSnapshot,
           lastUpdated,
           lastFetchMs,
@@ -174,7 +181,7 @@ export default function HomeGateway() {
     } catch {
       // ignore local storage write errors
     }
-  }, [lastFetchMs, lastUpdated, mlbSnapshot, nhlSnapshot]);
+  }, [lastFetchMs, lastUpdated, mlbScheduleSnapshot, mlbSnapshot, nhlSnapshot]);
 
   return (
     <div className="min-h-screen pp-page px-4 py-10">
@@ -283,7 +290,7 @@ export default function HomeGateway() {
                 </span>
               </div>
               <div className="text-slate-600 mt-1">
-                Teams tracked: {Array.isArray(mlbSnapshot?.records) ? mlbSnapshot.records.length : "-"}
+                Games today: {Number.isFinite(Number(mlbScheduleSnapshot?.totalGames)) ? Number(mlbScheduleSnapshot.totalGames) : "-"}
               </div>
               {!mlbSnapshot ? (
                 <div className="text-xs text-amber-700 mt-1">

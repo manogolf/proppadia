@@ -36,6 +36,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   const [sport, setSport] = useState(forcedSport === "nhl" ? "nhl" : "mlb");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [watchedTeamsOnly, setWatchedTeamsOnly] = useState(false);
+  const [nhlSlateOnly, setNhlSlateOnly] = useState(false);
   const [recentOnly, setRecentOnly] = useState(false);
   const [recentDays, setRecentDays] = useState("any");
   const [watchlist, setWatchlist] = useState([]);
@@ -46,6 +47,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   const [notice, setNotice] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
+  const [nhlSlatePlayerIds, setNhlSlatePlayerIds] = useState(new Set());
   const teamRefs = useRef(new Map());
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       if (typeof parsed?.query === "string") setQuery(parsed.query);
       if (typeof parsed?.watchlistOnly === "boolean") setWatchlistOnly(parsed.watchlistOnly);
       if (typeof parsed?.watchedTeamsOnly === "boolean") setWatchedTeamsOnly(parsed.watchedTeamsOnly);
+      if (typeof parsed?.nhlSlateOnly === "boolean") setNhlSlateOnly(parsed.nhlSlateOnly);
       if (typeof parsed?.recentOnly === "boolean") setRecentOnly(parsed.recentOnly);
       if (parsed?.recentDays === "any" || parsed?.recentDays === "7" || parsed?.recentDays === "30" || parsed?.recentDays === "90") {
         setRecentDays(parsed.recentDays);
@@ -81,6 +84,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     const sportParam = String(params.get("sport") || "").toLowerCase();
     const wl = String(params.get("watchlist") || "").toLowerCase() === "1";
     const wt = String(params.get("watched_teams") || "").toLowerCase() === "1";
+    const slateOnly = String(params.get("slate_only") || "").toLowerCase() === "1";
     const recent = String(params.get("recent") || "").toLowerCase() === "1";
     const rdays = String(params.get("recent_days") || "");
     const sort = String(params.get("sort") || "");
@@ -89,6 +93,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     if (q) setQuery(q);
     if (wl) setWatchlistOnly(true);
     if (wt) setWatchedTeamsOnly(true);
+    if (slateOnly) setNhlSlateOnly(true);
     if (recent) setRecentOnly(true);
     if (rdays === "any" || rdays === "7" || rdays === "30" || rdays === "90") {
       setRecentDays(rdays);
@@ -111,6 +116,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           query,
           watchlistOnly,
           watchedTeamsOnly,
+          nhlSlateOnly,
           recentOnly,
           recentDays,
           openTeams,
@@ -121,7 +127,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     } catch {
       // ignore local pref write errors
     }
-  }, [forcedSport, openTeams, query, recentDays, recentOnly, rowSort, sport, teamSort, watchedTeamsOnly, watchlistOnly]);
+  }, [forcedSport, nhlSlateOnly, openTeams, query, recentDays, recentOnly, rowSort, sport, teamSort, watchedTeamsOnly, watchlistOnly]);
 
   useEffect(() => {
     if (forcedSport) return;
@@ -130,6 +136,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     if (query.trim()) params.set("q", query.trim());
     if (watchlistOnly) params.set("watchlist", "1");
     if (watchedTeamsOnly) params.set("watched_teams", "1");
+    if (sport === "nhl" && nhlSlateOnly) params.set("slate_only", "1");
     if (recentOnly) params.set("recent", "1");
     if (recentDays !== "any") params.set("recent_days", recentDays);
     if (teamSort !== "alpha") params.set("sort", teamSort);
@@ -150,6 +157,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     sport,
     teamSort,
     watchedTeamsOnly,
+    nhlSlateOnly,
     watchlistOnly,
   ]);
 
@@ -174,6 +182,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
             ? payload.rows
             : [];
         setPlayers(data);
+        setNhlSlatePlayerIds(new Set());
       } else {
         const res = await fetch(`${getBaseURL()}/api/nhl/players?limit=5000&offset=0`);
         const payload = await res.json().catch(() => []);
@@ -201,6 +210,18 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           }
         }
         setPlayers(Array.from(dedup.values()));
+        const slateRes = await fetch(`${getBaseURL()}/api/nhl/props/today?limit=5000&offset=0`);
+        const slatePayload = await slateRes.json().catch(() => ({}));
+        if (slateRes.ok && Array.isArray(slatePayload?.rows)) {
+          const ids = new Set(
+            slatePayload.rows
+              .map((r) => (r?.player_id != null ? String(r.player_id) : ""))
+              .filter(Boolean)
+          );
+          setNhlSlatePlayerIds(ids);
+        } else {
+          setNhlSlatePlayerIds(new Set());
+        }
       }
       setLoadedAt(new Date().toISOString());
       if (silent) {
@@ -287,8 +308,12 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           return Boolean(id && watchIdSet.has(String(id)));
         })
       : normalizedPlayers;
+    const slateRows =
+      sport === "nhl" && nhlSlateOnly
+        ? baseRows.filter((p) => p?.player_id != null && nhlSlatePlayerIds.has(String(p.player_id)))
+        : baseRows;
     const recencyRows = recentOnly
-      ? baseRows.filter((p) => {
+      ? slateRows.filter((p) => {
           const d = toUtcDay(p.last_prop_date);
           if (!d) return false;
           if (recentDays === "any") return true;
@@ -299,7 +324,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           cutoff.setUTCDate(cutoff.getUTCDate() - days);
           return d >= cutoff;
         })
-      : baseRows;
+      : slateRows;
     if (!q) return recencyRows;
     return recencyRows.filter((p) => {
       const haystack = [
@@ -311,7 +336,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
         .join(" ");
       return haystack.includes(q);
     });
-  }, [normalizedPlayers, query, recentDays, recentOnly, watchIdSet, watchlistOnly]);
+  }, [nhlSlateOnly, nhlSlatePlayerIds, normalizedPlayers, query, recentDays, recentOnly, sport, watchIdSet, watchlistOnly]);
 
   const groupedByTeam = useMemo(() => {
     const grouped = filteredPlayers.reduce((acc, player) => {
@@ -557,6 +582,16 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                 />
                 Watched teams only
               </label>
+              {sport === "nhl" ? (
+                <label className="mt-2 ml-4 inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={nhlSlateOnly}
+                    onChange={(e) => setNhlSlateOnly(e.target.checked)}
+                  />
+                  In today&apos;s slate
+                </label>
+              ) : null}
               <label className="mt-2 ml-4 inline-flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
@@ -639,6 +674,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                   setQuery("");
                   setWatchlistOnly(false);
                   setWatchedTeamsOnly(false);
+                  setNhlSlateOnly(false);
                   setRecentOnly(false);
                   setRecentDays("any");
                   setOpenTeams({});
@@ -712,6 +748,11 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                 Filter <strong>Watched teams only</strong>
               </span>
             ) : null}
+            {sport === "nhl" && nhlSlateOnly ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-xs">
+                Filter <strong>In today&apos;s slate</strong>
+              </span>
+            ) : null}
             {recentOnly ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 text-cyan-700 px-2 py-1 text-xs">
                 Filter <strong>{recentDays === "any" ? "Recent only" : `Recent ${recentDays}d`}</strong>
@@ -733,6 +774,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                 query.trim() ? "search" : null,
                 watchlistOnly ? "watchlist only" : null,
                 watchedTeamsOnly ? "watched teams only" : null,
+                sport === "nhl" && nhlSlateOnly ? "in today's slate" : null,
                 recentOnly ? "recent only" : null,
               ].filter(Boolean).join(", ") || "none active"}).
             </div>
@@ -752,6 +794,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                   setQuery("");
                   setWatchlistOnly(false);
                   setWatchedTeamsOnly(false);
+                  setNhlSlateOnly(false);
                   setRecentOnly(false);
                   setOpenTeams({});
                   setTeamSort("alpha");
