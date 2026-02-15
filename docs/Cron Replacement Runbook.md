@@ -58,6 +58,11 @@ This enforces:
 2. MLB schedules remain conservative.
 3. NHL remains primarily local automator-driven until hosted migration is explicitly approved.
 
+Decision rule:
+
+1. Use local automator for NHL daily production while pipeline behavior is still evolving.
+2. Use hosted cron only for stable, path-audited commands with clear post-run verification.
+
 ## Current State Snapshot
 
 Scheduled workflows in repo:
