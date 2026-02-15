@@ -128,7 +128,7 @@ export default function AppRouter() {
 
   return (
     <BrowserRouter>
-      <div className="relative z-50 pointer-events-auto">
+      <div className="sticky top-0 z-[1000] pointer-events-auto bg-[#f6f8fb]/95 backdrop-blur supports-[backdrop-filter]:bg-[#f6f8fb]/85">
         <Header />
 
         {/* ✅ This nav bar is global, shown on every page */}
