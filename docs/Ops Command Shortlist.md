@@ -12,6 +12,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - deployed API confidence across MLB + NHL
 - `make mlb-daily-refresh-strict ...`
   - primary MLB daily baseline lane
+- `make mlb-season-kickoff-check [BASE_URL=<url>] [MLB_DATE=YYYY-MM-DD]`
+  - opening-day readiness bundle for governance + smoke + flow + optional deployed verification
 - `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`
   - NHL fixed-window quality baseline
 - `make mlb-prediction-flow-audit`
