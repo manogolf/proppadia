@@ -59,6 +59,25 @@ def run(
     require_min_success: int,
     prop_types: Sequence[str],
 ) -> int:
+    payload = collect_probe(
+        client,
+        game_date=game_date,
+        sample_size=sample_size,
+        require_min_success=require_min_success,
+        prop_types=prop_types,
+    )
+    print(json.dumps(payload, indent=2, default=str))
+    return 0 if payload.get("ok") else 1
+
+
+def collect_probe(
+    client: ClientAdapter,
+    *,
+    game_date: str,
+    sample_size: int,
+    require_min_success: int,
+    prop_types: Sequence[str],
+) -> Dict[str, Any]:
     selected_prop_types = [str(p).strip() for p in prop_types if str(p).strip()]
     if not selected_prop_types:
         selected_prop_types = ["hits"]
@@ -139,8 +158,7 @@ def run(
         "failure_count": len(failures),
         "failures": failures[:10],
     }
-    print(json.dumps(payload, indent=2, default=str))
-    return 0 if ok else 1
+    return payload
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -198,27 +198,38 @@ GROUP BY 1
     return {"last_14d": by_bucket["last_14d"], "prev_14d": by_bucket["prev_14d"], "delta_pct": delta}
 
 
+def collect_quality(window_days: int) -> Dict[str, Any]:
+    window_days = max(1, int(window_days))
+    overall = _overall(window_days)
+    by_prop = _by_prop(window_days)
+    by_bucket = _by_confidence_bucket(window_days)
+    drift = _drift()
+    return {
+        "overall": overall,
+        "by_prop": by_prop,
+        "by_confidence_bucket": by_bucket,
+        "drift_14d": drift,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Analyze MLB prediction quality (JSON).")
     ap.add_argument("--window-days", type=int, default=120)
     ap.add_argument("--min-total", type=int, default=1, help="Fail when overall total is below this threshold.")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
-    window_days = max(1, int(args.window_days))
-    overall = _overall(window_days)
-    by_prop = _by_prop(window_days)
-    by_bucket = _by_confidence_bucket(window_days)
-    drift = _drift()
+    quality = collect_quality(int(args.window_days))
+    overall = quality["overall"]
 
     min_total = max(0, int(args.min_total))
     ok = int(overall.get("total") or 0) >= min_total
     payload = {
         "ok": ok,
         "status": "pass" if ok else "fail",
-        "overall": overall,
-        "by_prop": by_prop,
-        "by_confidence_bucket": by_bucket,
-        "drift_14d": drift,
+        "overall": quality["overall"],
+        "by_prop": quality["by_prop"],
+        "by_confidence_bucket": quality["by_confidence_bucket"],
+        "drift_14d": quality["drift_14d"],
         "min_total": min_total,
     }
     print(json.dumps(payload, indent=2, default=str))
