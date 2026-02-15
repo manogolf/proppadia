@@ -22,6 +22,7 @@ from backend.app.services.nhl.prop_submission_service import add_prop, get_prop_
 from backend.app.services.shared import ping_db, sport_ping
 from backend.domains.nhl.repository import (
     fetch_games_today,
+    fetch_players_directory,
     fetch_props_today,
     fetch_saves,
     fetch_sog,
@@ -98,6 +99,19 @@ def nhl_props_today(
     offset: int = Query(0, ge=0),
 ):
     return fetch_props_today(date, limit, offset)
+
+
+@router.get(
+    "/players",
+    summary="NHL players directory",
+    description="Cumulative NHL players grouped by team context (not limited to today's slate).",
+)
+def nhl_players_directory(
+    limit: int = Query(5000, ge=1, le=20000),
+    offset: int = Query(0, ge=0),
+    include_inactive: bool = Query(False),
+):
+    return fetch_players_directory(limit, offset, include_inactive)
 
 
 # --- SOG (wide) ---

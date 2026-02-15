@@ -958,6 +958,13 @@ def cmd_daily(with_odds: bool):
     # 0) DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
 
+    # 0b) Full-league roster/player refresh (all teams, not slate-limited)
+    # Non-fatal: if upstream NHL API is flaky, keep daily slate pipeline running.
+    try:
+        run([PY, SCRIPTS_DIR / "refresh_all_team_rosters.py"], env={"SLATE_DATE": slate})
+    except Exception as e:
+        print(f"⚠️ full-team roster refresh failed/skipped (continuing): {e}")
+
     # ============================================================
     # PHASE A: Finalize YDAY into raw/history FIRST (the guardrail)
     # ============================================================
@@ -1324,6 +1331,9 @@ def main():
     fo = sub.add_parser("fetch-odds", help="Fetch odds JSON into nhl/site/data")
     fo.add_argument("--days-from", type=int, default=1)
 
+    rr = sub.add_parser("refresh-rosters-all", help="Refresh NHL players/rosters for all teams")
+    rr.add_argument("--date", default=os.environ.get("SLATE_DATE") or et_today(), help="YYYY-MM-DD ET context date")
+
     bsog = sub.add_parser("build-sog", help="Build sog_with_market.csv")
     bsog.add_argument("--slate", default=os.environ.get("SLATE_DATE") or et_today())
 
@@ -1349,6 +1359,8 @@ def main():
         cmd_daily(with_odds=args.with_odds)
     elif args.cmd == "fetch-odds":
         fetch_odds(days_from=args.days_from)
+    elif args.cmd == "refresh-rosters-all":
+        run([PY, SCRIPTS_DIR / "refresh_all_team_rosters.py"], env={"SLATE_DATE": args.date})
     elif args.cmd == "guard":
         if args.guard_cmd == "list":
             guard_print(args.slate)

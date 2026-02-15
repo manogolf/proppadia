@@ -5,12 +5,13 @@ import { getBaseURL } from "../shared/getBaseURL.js";
 import {
   WATCHLIST_UPDATED_EVENT,
   WATCHLIST_SCOPE_MLB,
+  WATCHLIST_SCOPE_NHL,
   readWatchlistScope,
   toWatchlistId,
   writeWatchlistScope,
 } from "../shared/watchlistStorage.js";
 
-const PLAYER_BROWSER_PREFS_KEY = "proppadia_player_browser_prefs_v1";
+const PLAYER_BROWSER_PREFS_KEY = "proppadia_player_browser_prefs_v2";
 
 function playerQuery(value) {
   return encodeURIComponent(String(value || "").trim());
@@ -24,7 +25,7 @@ function toUtcDay(value) {
   return d;
 }
 
-export default function PlayerTeamBrowser() {
+export default function PlayerTeamBrowser({ forcedSport = null }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -32,6 +33,7 @@ export default function PlayerTeamBrowser() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
+  const [sport, setSport] = useState(forcedSport === "nhl" ? "nhl" : "mlb");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [watchedTeamsOnly, setWatchedTeamsOnly] = useState(false);
   const [recentOnly, setRecentOnly] = useState(false);
@@ -47,10 +49,12 @@ export default function PlayerTeamBrowser() {
   const teamRefs = useRef(new Map());
 
   useEffect(() => {
+    if (forcedSport) return;
     try {
       const raw = window.localStorage.getItem(PLAYER_BROWSER_PREFS_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
+      if (parsed?.sport === "mlb" || parsed?.sport === "nhl") setSport(parsed.sport);
       if (typeof parsed?.query === "string") setQuery(parsed.query);
       if (typeof parsed?.watchlistOnly === "boolean") setWatchlistOnly(parsed.watchlistOnly);
       if (typeof parsed?.watchedTeamsOnly === "boolean") setWatchedTeamsOnly(parsed.watchedTeamsOnly);
@@ -68,17 +72,20 @@ export default function PlayerTeamBrowser() {
     } catch {
       // ignore malformed local prefs
     }
-  }, []);
+  }, [forcedSport]);
 
   useEffect(() => {
+    if (forcedSport) return;
     const params = new URLSearchParams(location.search || "");
     const q = String(params.get("q") || "");
+    const sportParam = String(params.get("sport") || "").toLowerCase();
     const wl = String(params.get("watchlist") || "").toLowerCase() === "1";
     const wt = String(params.get("watched_teams") || "").toLowerCase() === "1";
     const recent = String(params.get("recent") || "").toLowerCase() === "1";
     const rdays = String(params.get("recent_days") || "");
     const sort = String(params.get("sort") || "");
     const rowSortParam = String(params.get("row_sort") || "");
+    if (sportParam === "mlb" || sportParam === "nhl") setSport(sportParam);
     if (q) setQuery(q);
     if (wl) setWatchlistOnly(true);
     if (wt) setWatchedTeamsOnly(true);
@@ -92,13 +99,15 @@ export default function PlayerTeamBrowser() {
     if (rowSortParam === "recent" || rowSortParam === "name" || rowSortParam === "watched") {
       setRowSort(rowSortParam);
     }
-  }, [location.search]);
+  }, [forcedSport, location.search]);
 
   useEffect(() => {
+    if (forcedSport) return;
     try {
       window.localStorage.setItem(
         PLAYER_BROWSER_PREFS_KEY,
         JSON.stringify({
+          sport,
           query,
           watchlistOnly,
           watchedTeamsOnly,
@@ -112,10 +121,12 @@ export default function PlayerTeamBrowser() {
     } catch {
       // ignore local pref write errors
     }
-  }, [openTeams, query, recentDays, recentOnly, rowSort, teamSort, watchedTeamsOnly, watchlistOnly]);
+  }, [forcedSport, openTeams, query, recentDays, recentOnly, rowSort, sport, teamSort, watchedTeamsOnly, watchlistOnly]);
 
   useEffect(() => {
+    if (forcedSport) return;
     const params = new URLSearchParams();
+    if (sport !== "mlb") params.set("sport", sport);
     if (query.trim()) params.set("q", query.trim());
     if (watchlistOnly) params.set("watchlist", "1");
     if (watchedTeamsOnly) params.set("watched_teams", "1");
@@ -128,6 +139,7 @@ export default function PlayerTeamBrowser() {
     if (next === current) return;
     navigate({ pathname: location.pathname, search: next ? `?${next}` : "" }, { replace: true });
   }, [
+    forcedSport,
     location.pathname,
     location.search,
     navigate,
@@ -135,33 +147,64 @@ export default function PlayerTeamBrowser() {
     recentDays,
     recentOnly,
     rowSort,
+    sport,
     teamSort,
     watchedTeamsOnly,
     watchlistOnly,
   ]);
+
+  useEffect(() => {
+    if (forcedSport === "mlb" || forcedSport === "nhl") setSport(forcedSport);
+  }, [forcedSport]);
+
+  const watchlistScope = sport === "nhl" ? WATCHLIST_SCOPE_NHL : WATCHLIST_SCOPE_MLB;
 
   const fetchPlayers = useCallback(async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
       else setRefreshing(true);
       setError(null);
-      const res = await fetch(`${getBaseURL()}/api/players`);
-      if (!res.ok) throw new Error("Failed to fetch player list");
-      const data = await res.json();
-      setPlayers(data);
+      if (sport === "mlb") {
+        const res = await fetch(`${getBaseURL()}/api/players`);
+        if (!res.ok) throw new Error("Failed to fetch MLB player list");
+        const data = await res.json();
+        setPlayers(Array.isArray(data) ? data : []);
+      } else {
+        const res = await fetch(`${getBaseURL()}/api/nhl/players?limit=5000&offset=0`);
+        const rows = await res.json().catch(() => []);
+        if (!res.ok) throw new Error("Failed to fetch NHL player list");
+        const dedup = new Map();
+        for (const row of rows) {
+          const pid = row?.player_id != null ? String(row.player_id) : "";
+          const name = String(row?.player_name || "").trim();
+          const team = String(row?.team_abbr || row?.team || "").trim();
+          const key = pid || `${name.toLowerCase()}:${team.toLowerCase()}`;
+          if (!key) continue;
+          if (!dedup.has(key)) {
+            dedup.set(key, {
+              player_id: row?.player_id ?? null,
+              player_name: name || row?.player_id,
+              team: team || null,
+              team_abbr: team || null,
+              last_prop_date: row?.last_prop_date || null,
+            });
+          }
+        }
+        setPlayers(Array.from(dedup.values()));
+      }
       setLoadedAt(new Date().toISOString());
       if (silent) {
-        setNotice("Player list refreshed.");
+        setNotice(`${sport.toUpperCase()} player list refreshed.`);
         window.setTimeout(() => setNotice(""), 1400);
       }
     } catch (err) {
       console.error("❌ Error fetching players:", err);
-      setError("Unable to load players.");
+      setError(`Unable to load ${sport.toUpperCase()} players.`);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [sport]);
 
   useEffect(() => {
     fetchPlayers();
@@ -172,8 +215,8 @@ export default function PlayerTeamBrowser() {
       setWatchlist([]);
       return;
     }
-    setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB));
-  }, [user?.id]);
+    setWatchlist(readWatchlistScope(user.id, watchlistScope));
+  }, [user?.id, watchlistScope]);
 
   useEffect(() => {
     function refreshWatchlistFromStorage() {
@@ -181,7 +224,7 @@ export default function PlayerTeamBrowser() {
         setWatchlist([]);
         return;
       }
-      const next = readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB);
+      const next = readWatchlistScope(user.id, watchlistScope);
       setWatchlist((prev) => {
         if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
         return next;
@@ -201,12 +244,12 @@ export default function PlayerTeamBrowser() {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
     };
-  }, [user?.id]);
+  }, [user?.id, watchlistScope]);
 
   useEffect(() => {
     if (!user?.id) return;
-    writeWatchlistScope(user.id, WATCHLIST_SCOPE_MLB, watchlist);
-  }, [user?.id, watchlist]);
+    writeWatchlistScope(user.id, watchlistScope, watchlist);
+  }, [user?.id, watchlist, watchlistScope]);
 
   const watchIdSet = useMemo(
     () => new Set(watchlist.map((w) => String(w.id))),
@@ -475,7 +518,9 @@ export default function PlayerTeamBrowser() {
   return (
     <div className="min-h-screen pp-page p-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-900 mb-4">Players by Team</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-4">
+          {sport === "nhl" ? "NHL Players by Team" : "MLB Players by Team"}
+        </h1>
         <div className="pp-card p-4 mb-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div className="md:col-span-2">
@@ -775,10 +820,14 @@ export default function PlayerTeamBrowser() {
                 </button>
                 <div className="mt-1 flex items-center gap-2">
                   <Link
-                    to={`/props?player=${playerQuery(team)}`}
+                    to={
+                      sport === "mlb"
+                        ? `/props?player=${playerQuery(team)}`
+                        : `/nhl/predictions?player=${playerQuery(team)}`
+                    }
                     className="text-xs text-slate-500 hover:underline"
                   >
-                    Open Team Props
+                    {sport === "mlb" ? "Open Team Props" : "Open Team Predictions"}
                   </Link>
                 </div>
                 {isOpen ? (
@@ -822,10 +871,14 @@ export default function PlayerTeamBrowser() {
                             </Link>
                             <div className="mt-0.5">
                               <Link
-                                to={`/props?player=${playerQuery(p.player_name || p.player_id)}`}
+                                to={
+                                  sport === "mlb"
+                                    ? `/props?player=${playerQuery(p.player_name || p.player_id)}`
+                                    : `/nhl/predictions?player=${playerQuery(p.player_name || p.player_id)}`
+                                }
                                 className="text-xs text-slate-500 hover:underline"
                               >
-                                Open Props
+                                {sport === "mlb" ? "Open Props" : "Open Predictions"}
                               </Link>
                             </div>
                           </div>

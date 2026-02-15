@@ -1,10 +1,11 @@
-.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check cross-sport-post-deploy runtime-boundaries
+.PHONY: help diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
 MLB_DATE ?= 2025-08-15
 NHL_DATE ?= 2025-11-20
 MLB_MARKET_DAYS ?= 1
+NHL_ROSTER_DATE ?= $(NHL_DATE)
 
 help:
 	@echo "Proppadia checks"
@@ -17,6 +18,7 @@ help:
 	@echo "  make mlb-market-cache-refresh [MLB_MARKET_DAYS=1]"
 	@echo "  make mlb-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
+	@echo "  make nhl-roster-refresh-all [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make cross-sport-post-deploy BASE_URL=<url> [MLB_DATE=YYYY-MM-DD] [NHL_DATE=YYYY-MM-DD]"
 
 # One-command local diagnostic baseline for support/debug sessions.
@@ -128,6 +130,10 @@ nhl-checks-offline:
 nhl-checks-offline-core:
 	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_nhl_*.py' -v
 	$(MAKE) nhl-openapi-contract
+
+# Full-team NHL player/roster refresh (all teams; not slate-limited).
+nhl-roster-refresh-all:
+	$(VENV_PY) -m backend.nhl.cli refresh-rosters-all --date $(NHL_ROSTER_DATE)
 
 # One-command NHL release confidence gate (offseason-safe strict deploy check).
 nhl-release-check: nhl-checks-offline

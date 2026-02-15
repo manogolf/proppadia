@@ -184,3 +184,48 @@ def fetch_saves(date: Optional[str], limit: int, offset: int):
         return pg_fetchall(sql, (date, date, limit, offset))
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def fetch_players_directory(limit: int, offset: int, include_inactive: bool = False):
+    sql = """
+    WITH latest_team AS (
+      SELECT DISTINCT ON (rs.player_id)
+        rs.player_id,
+        rs.team_id
+      FROM nhl.roster_status rs
+      ORDER BY rs.player_id, rs.asof_ts DESC
+    ),
+    last_prop AS (
+      SELECT
+        pp.player_id,
+        MAX(pp.game_date)::date AS last_prop_date
+      FROM public.player_props pp
+      WHERE pp.prop_source LIKE 'nhl_%'
+      GROUP BY pp.player_id
+    )
+    SELECT
+      p.player_id,
+      p.full_name AS player_name,
+      COALESCE(t.team, 'Unknown') AS team_abbr,
+      COALESCE(t.team, 'Unknown') AS team,
+      p.position,
+      p.status,
+      lp.last_prop_date
+    FROM nhl.players p
+    LEFT JOIN latest_team lt
+      ON lt.player_id = p.player_id
+    LEFT JOIN nhl.teams t
+      ON t.team_id = COALESCE(p.current_team_id, lt.team_id)
+    LEFT JOIN last_prop lp
+      ON lp.player_id = p.player_id
+    WHERE (%s::boolean OR COALESCE(LOWER(p.status), 'active') = 'active')
+    ORDER BY
+      COALESCE(t.team, 'Unknown') ASC,
+      p.full_name ASC NULLS LAST,
+      p.player_id ASC
+    LIMIT %s OFFSET %s
+    """
+    try:
+        return pg_fetchall(sql, (include_inactive, limit, offset))
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}

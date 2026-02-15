@@ -8,6 +8,8 @@ export const loadLoginPage = () => import("../Pages/Login.jsx");
 export const loadOpsPage = () => import("../Pages/OpsPage.jsx");
 export const loadPlayerTeamBrowser = () =>
   import("../Pages/PlayerTeamBrowser.jsx");
+export const loadPlayerTeamChooser = () =>
+  import("../Pages/PlayerTeamChooser.jsx");
 export const loadModelMetricsDashboard = () =>
   import("../Pages/ModelMetricsDashboard.jsx");
 export const loadPlayerProfileDashboard = () =>
@@ -26,7 +28,9 @@ const routeLoaders = {
   "/login": loadLoginPage,
   "/ops": loadOpsPage,
   "/owner": loadOpsPage,
-  "/players": loadPlayerTeamBrowser,
+  "/players": loadPlayerTeamChooser,
+  "/players/mlb": loadPlayerTeamBrowser,
+  "/players/nhl": loadPlayerTeamBrowser,
   "/metrics": loadModelMetricsDashboard,
   "/watchlist": loadWatchlistPage,
 };

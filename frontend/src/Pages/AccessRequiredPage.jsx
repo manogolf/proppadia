@@ -65,10 +65,16 @@ export default function AccessRequiredPage({ requiredPath, requiredLabel }) {
               NHL Home
             </PrefetchLink>
             <PrefetchLink
-              to="/players"
+              to="/players/mlb"
               className="pp-btn pp-btn-secondary pp-btn-md"
             >
-              Players By Team
+              MLB Players
+            </PrefetchLink>
+            <PrefetchLink
+              to="/players/nhl"
+              className="pp-btn pp-btn-secondary pp-btn-md"
+            >
+              NHL Players
             </PrefetchLink>
           </div>
         </div>

@@ -26,6 +26,7 @@ import {
   loadOpsPage,
   loadPlayerProfileDashboard,
   loadPlayerPropsPage,
+  loadPlayerTeamChooser,
   loadPlayerTeamBrowser,
   loadPropsDashboard,
   loadWatchlistPage,
@@ -40,6 +41,7 @@ const LoginPage = lazy(loadLoginPage);
 const PlayerProfileDashboard = lazy(loadPlayerProfileDashboard);
 const ModelMetricsDashboard = lazy(loadModelMetricsDashboard);
 const PlayerTeamBrowser = lazy(loadPlayerTeamBrowser);
+const PlayerTeamChooser = lazy(loadPlayerTeamChooser);
 const PlayerPropsPage = lazy(loadPlayerPropsPage);
 const OpsPage = lazy(loadOpsPage);
 const AccessRequiredPage = lazy(loadAccessRequiredPage);
@@ -153,10 +155,16 @@ export default function AppRouter() {
             </PrefetchNavLink>
           ) : null}
           <PrefetchNavLink
-            to="/players"
+            to="/players/mlb"
             className={navClassName}
           >
-            Players By Team
+            MLB Players
+          </PrefetchNavLink>
+          <PrefetchNavLink
+            to="/players/nhl"
+            className={navClassName}
+          >
+            NHL Players
           </PrefetchNavLink>
           {!user ? (
             <PrefetchNavLink
@@ -208,7 +216,9 @@ export default function AppRouter() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/player/:playerId" element={<PlayerProfileDashboard />} />
             <Route path="/metrics" element={<ModelMetricsDashboard />} />
-            <Route path="/players" element={<PlayerTeamBrowser />} />
+            <Route path="/players" element={<PlayerTeamChooser />} />
+            <Route path="/players/mlb" element={<PlayerTeamBrowser forcedSport="mlb" />} />
+            <Route path="/players/nhl" element={<PlayerTeamBrowser forcedSport="nhl" />} />
             <Route
               path="/watchlist"
               element={
