@@ -1,0 +1,31 @@
+# Ops Command Shortlist
+
+Purpose: keep a minimal set of high-signal commands for operator use.
+
+## Keep (High Signal)
+
+- `make cron-governance-check`
+  - one-command workflow/path/docs governance status
+- `make cross-sport-post-deploy BASE_URL=<url>`
+  - deployed API confidence across MLB + NHL
+- `make mlb-daily-refresh-strict ...`
+  - primary MLB daily baseline lane
+- `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`
+  - NHL fixed-window quality baseline
+- `make mlb-prediction-flow-audit`
+  - MLB date/game binding + duplicate/idempotency integrity check
+
+## Keep Off Ops Page (Still Useful In Terminal)
+
+- Deep/manual backfill commands (`mlb-stat-derived-backfill`, raw script flags)
+- One-off troubleshooting probes and dev-only checks
+- Duplicate variants that don’t add unique operator signal
+
+## Selection Rule
+
+Add to Ops-facing controls only when command is:
+
+1. safe to run in production context,
+2. high signal for health/readiness,
+3. bounded in runtime/cost,
+4. actionable when red.
