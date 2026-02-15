@@ -11,6 +11,7 @@ MLB_STAT_DERIVED_DAYS ?= 7
 MLB_STAT_DERIVED_MIN ?= 0
 MLB_PREDICT_SAMPLE ?= 10
 MLB_PREDICT_MIN_SUCCESS ?= 1
+MLB_PREDICT_PROP_TYPES ?= hits
 MLB_STAT_FROM_DATE ?=
 MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
@@ -252,6 +253,7 @@ mlb-show-config:
 	@echo "MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)"
 	@echo "MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE)"
 	@echo "MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
+	@echo "MLB_PREDICT_PROP_TYPES=$(MLB_PREDICT_PROP_TYPES)"
 
 # JSON snapshot for MLB readiness signals (stat-derived + roster freshness).
 mlb-readiness-snapshot:
@@ -264,7 +266,7 @@ mlb-readiness-last:
 	$(VENV_PY) backend/scripts/mlb_readiness_last.py --limit 10
 
 mlb-prediction-readiness:
-	$(VENV_PY) backend/scripts/probe_mlb_prediction_readiness.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS)
+	$(VENV_PY) backend/scripts/probe_mlb_prediction_readiness.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)"
 
 # Generate historical stat-derived MLB rows (legacy workhorse script).
 mlb-insert-stat-derived:

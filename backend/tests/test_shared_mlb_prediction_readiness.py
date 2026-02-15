@@ -38,11 +38,18 @@ class TestSharedMlbPredictionReadiness(unittest.TestCase):
 
         out = io.StringIO()
         with redirect_stdout(out):
-            rc = run(client, game_date="2025-08-15", sample_size=1, require_min_success=1)
+            rc = run(
+                client,
+                game_date="2025-08-15",
+                sample_size=1,
+                require_min_success=1,
+                prop_types=["hits"],
+            )
         self.assertEqual(rc, 0)
         body = json.loads(out.getvalue())
         self.assertTrue(body["ok"])
         self.assertEqual(body["predict_success"], 1)
+        self.assertEqual(body["per_prop"]["hits"]["predict_success"], 1)
 
     def test_run_fails_when_prepare_and_predict_fail(self):
         responses = [
@@ -55,13 +62,20 @@ class TestSharedMlbPredictionReadiness(unittest.TestCase):
 
         out = io.StringIO()
         with redirect_stdout(out):
-            rc = run(client, game_date="2025-08-15", sample_size=1, require_min_success=1)
+            rc = run(
+                client,
+                game_date="2025-08-15",
+                sample_size=1,
+                require_min_success=1,
+                prop_types=["hits"],
+            )
         self.assertEqual(rc, 1)
         body = json.loads(out.getvalue())
         self.assertFalse(body["ok"])
         self.assertEqual(body["prepare_success"], 0)
         self.assertEqual(body["predict_success"], 0)
         self.assertEqual(body["failure_count"], 1)
+        self.assertEqual(body["per_prop"]["hits"]["failure_count"], 1)
 
 
 if __name__ == "__main__":
