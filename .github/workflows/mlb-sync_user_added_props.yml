@@ -2,8 +2,6 @@
 name: Sync User-Added Props & Derived Stats
 
 on:
-  schedule:
-    - cron: "0 11 * * *" # Runs daily at 11:00 AM UTC
   workflow_dispatch:
 
 jobs:

@@ -7,6 +7,8 @@ Daily:
 - `make mlb-ops-check ...` (when you want confidence loop)
 
 On-demand:
+- `make workflow-inventory`
+- `make workflow-inventory-strict`
 - `make mlb-stat-derived-backfill ...`
 - `make mlb-stat-derived-smoke ...`
 - `make cross-sport-post-deploy ...`

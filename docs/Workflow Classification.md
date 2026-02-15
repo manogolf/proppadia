@@ -62,10 +62,19 @@ Snapshot date: February 15, 2026
   several workflows still call old `backend/scripts/...` paths while equivalent code now lives under `backend/mlb/...` or `mlb/scripts/...`.
 - No workflow should be re-enabled on schedule without one successful manual run and post-deploy verification.
 - Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
+- Archive-candidate MLB workflows now have `schedule` removed in-repo and are manual-only (`workflow_dispatch`).
+- Remaining unexpected scheduled MLB files are the current `suspended-needs-path-fix` set:
+  - `.github/workflows/mlb-precompute.yml`
+  - `.github/workflows/mlb-retrain.yml`
+  - `.github/workflows/mlb-retrain_models.yml`
+  - `.github/workflows/mlb-train_recent_models.yml`
 
 ## MLB Cron Baseline (Current)
 
 Quick runnable command list: `docs/Quick Commands.md`
+Workflow schedule inventory commands:
+- `make workflow-inventory` (report only)
+- `make workflow-inventory-strict` (fails on unexpected scheduled files)
 
 Recommended low-risk cadence while season is inactive:
 
