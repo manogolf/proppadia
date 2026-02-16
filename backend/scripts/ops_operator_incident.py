@@ -11,6 +11,7 @@ from typing import Any, Sequence
 
 from backend.scripts import ops_operator_last
 from backend.scripts import ops_operator_summary
+from backend.scripts import mlb_pipeline_last
 from backend.scripts.mlb_readiness_last import _load_history
 
 
@@ -25,6 +26,8 @@ def collect_incident_snapshot(
     season_max_age_hours: int,
     ops_history_input: str,
     ops_history_limit: int,
+    pipeline_history_input: str,
+    pipeline_history_limit: int,
 ) -> dict[str, Any]:
     summary_full = ops_operator_summary.collect_summary(
         stat_days=stat_days,
@@ -62,19 +65,44 @@ def collect_incident_snapshot(
     latest_row = rows[-1] if rows else {}
     latest_regressions = latest_row.get("regressions") or []
     regressed = len(latest_regressions) > 0
+    pipeline_history = mlb_pipeline_last._load_history(Path(pipeline_history_input))
+    pipeline_tail = pipeline_history[-max(1, int(pipeline_history_limit)) :]
+    pipeline_rows: list[dict[str, Any]] = []
+    for idx, item in enumerate(pipeline_tail):
+        prev = pipeline_tail[idx - 1] if idx > 0 else None
+        pipeline_rows.append(
+            {
+                "captured_at": item.get("captured_at"),
+                "status": item.get("status"),
+                "ok": item.get("ok"),
+                "failures": item.get("failures") or [],
+                "regressions": mlb_pipeline_last._regressions(prev, item),
+            }
+        )
+    latest_pipeline = pipeline_rows[-1] if pipeline_rows else {}
+    latest_pipeline_regressions = latest_pipeline.get("regressions") or []
     return {
         "captured_at": summary.get("captured_at"),
         "ok": bool(summary.get("ok")),
         "status": summary.get("status"),
         "history_available": len(history) > 0,
+        "pipeline_history_available": len(pipeline_history) > 0,
         "latest_regressions": latest_regressions,
         "regressed": regressed,
+        "latest_pipeline_regressions": latest_pipeline_regressions,
+        "pipeline_regressed": len(latest_pipeline_regressions) > 0,
         "summary": summary,
         "history_tail": {
             "input": str(ops_history_input),
             "history_count": len(history),
             "returned": len(rows),
             "rows": rows,
+        },
+        "pipeline_history_tail": {
+            "input": str(pipeline_history_input),
+            "history_count": len(pipeline_history),
+            "returned": len(pipeline_rows),
+            "rows": pipeline_rows,
         },
     }
 
@@ -90,6 +118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--season-max-age-hours", type=int, default=0)
     ap.add_argument("--ops-history-input", default="artifacts/ops_operator_history.jsonl")
     ap.add_argument("--ops-history-limit", type=int, default=10)
+    ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
+    ap.add_argument("--pipeline-history-limit", type=int, default=10)
     ap.add_argument("--strict", action="store_true", help="Exit non-zero when snapshot status is fail")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
@@ -103,6 +133,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         season_max_age_hours=args.season_max_age_hours,
         ops_history_input=args.ops_history_input,
         ops_history_limit=args.ops_history_limit,
+        pipeline_history_input=args.pipeline_history_input,
+        pipeline_history_limit=args.pipeline_history_limit,
     )
     print(json.dumps(payload, indent=2))
     if args.strict and not payload.get("ok"):

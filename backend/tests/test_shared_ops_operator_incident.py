@@ -48,12 +48,16 @@ class TestSharedOpsOperatorIncident(unittest.TestCase):
                     season_max_age_hours=0,
                     ops_history_input=str(history_path),
                     ops_history_limit=5,
+                    pipeline_history_input="artifacts/mlb_pipeline_history.jsonl",
+                    pipeline_history_limit=5,
                 )
         self.assertTrue(payload["ok"])
         self.assertIn("captured_at", payload)
         self.assertIn("summary", payload)
         self.assertIn("history_tail", payload)
         self.assertTrue(payload["history_available"])
+        self.assertIn("pipeline_history_available", payload)
+        self.assertIn("pipeline_history_tail", payload)
         self.assertEqual(payload["latest_regressions"], [])
         self.assertFalse(payload["regressed"])
         self.assertEqual(payload["history_tail"]["returned"], 1)
@@ -140,6 +144,8 @@ class TestSharedOpsOperatorIncident(unittest.TestCase):
                     season_max_age_hours=0,
                     ops_history_input=str(history_path),
                     ops_history_limit=5,
+                    pipeline_history_input="artifacts/mlb_pipeline_history.jsonl",
+                    pipeline_history_limit=5,
                 )
         self.assertTrue(payload["history_available"])
         self.assertTrue(payload["regressed"])
