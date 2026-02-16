@@ -27,6 +27,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--quality-games-back", type=int, default=30)
     ap.add_argument("--quality-min-total", type=int, default=1)
     ap.add_argument("--quality-min-accuracy", type=float, default=0.0)
+    ap.add_argument("--quality-prop-sources", default="mlb_api")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     prop_types = [p.strip() for p in str(args.prop_types).split(",") if p.strip()]
@@ -44,7 +45,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if str(args.quality_window_mode) == "games"
         else int(args.quality_window_days)
     )
-    quality = collect_quality(str(args.quality_window_mode), quality_window_value, prop_types=prop_types)
+    quality_prop_sources = [s.strip().lower() for s in str(args.quality_prop_sources).split(",") if s.strip()]
+    quality = collect_quality(
+        str(args.quality_window_mode),
+        quality_window_value,
+        prop_types=prop_types,
+        prop_sources=quality_prop_sources,
+    )
     overall = quality.get("overall") or {}
     q_total = int(overall.get("total") or 0)
     q_acc = overall.get("accuracy_pct")

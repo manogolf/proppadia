@@ -21,14 +21,23 @@ def _normalize_source_table(source_table: str) -> str:
     return table
 
 
-def _common_cte(source_table: str, prop_types: Sequence[str] | None = None) -> Tuple[str, Tuple[Any, ...]]:
+def _common_cte(
+    source_table: str,
+    prop_types: Sequence[str] | None = None,
+    prop_sources: Sequence[str] | None = None,
+) -> Tuple[str, Tuple[Any, ...]]:
     prop_types = [str(p).strip() for p in (prop_types or []) if str(p).strip()]
+    prop_sources = [str(s).strip().lower() for s in (prop_sources or []) if str(s).strip()]
     filter_sql = ""
     params: Tuple[Any, ...] = ()
     if prop_types:
         placeholders = ", ".join(["%s"] * len(prop_types))
         filter_sql = f" AND prop_type IN ({placeholders})"
         params = tuple(prop_types)
+    if prop_sources:
+        placeholders = ", ".join(["%s"] * len(prop_sources))
+        filter_sql += f" AND lower(trim(coalesce(prop_source, ''))) IN ({placeholders})"
+        params = params + tuple(prop_sources)
     sql = (
         """
 WITH src AS (
@@ -109,8 +118,14 @@ WHERE game_day IN (
     return "WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date"
 
 
-def _overall(window_value: int, window_mode: str, source_table: str, prop_types: Sequence[str]) -> Dict[str, Any]:
-    common_cte, cte_params = _common_cte(source_table, prop_types)
+def _overall(
+    window_value: int,
+    window_mode: str,
+    source_table: str,
+    prop_types: Sequence[str],
+    prop_sources: Sequence[str],
+) -> Dict[str, Any]:
+    common_cte, cte_params = _common_cte(source_table, prop_types, prop_sources)
     rows = pg_fetchall(
         common_cte
         + """
@@ -134,8 +149,14 @@ FROM labeled
     }
 
 
-def _by_prop(window_value: int, window_mode: str, source_table: str, prop_types: Sequence[str]) -> list[Dict[str, Any]]:
-    common_cte, cte_params = _common_cte(source_table, prop_types)
+def _by_prop(
+    window_value: int,
+    window_mode: str,
+    source_table: str,
+    prop_types: Sequence[str],
+    prop_sources: Sequence[str],
+) -> list[Dict[str, Any]]:
+    common_cte, cte_params = _common_cte(source_table, prop_types, prop_sources)
     rows = pg_fetchall(
         common_cte
         + """
@@ -168,9 +189,13 @@ ORDER BY total DESC, prop_type
 
 
 def _by_confidence_bucket(
-    window_value: int, window_mode: str, source_table: str, prop_types: Sequence[str]
+    window_value: int,
+    window_mode: str,
+    source_table: str,
+    prop_types: Sequence[str],
+    prop_sources: Sequence[str],
 ) -> list[Dict[str, Any]]:
-    common_cte, cte_params = _common_cte(source_table, prop_types)
+    common_cte, cte_params = _common_cte(source_table, prop_types, prop_sources)
     rows = pg_fetchall(
         common_cte
         + """
@@ -208,8 +233,8 @@ ORDER BY
     return out
 
 
-def _drift(source_table: str, prop_types: Sequence[str]) -> Dict[str, Any]:
-    common_cte, cte_params = _common_cte(source_table, prop_types)
+def _drift(source_table: str, prop_types: Sequence[str], prop_sources: Sequence[str]) -> Dict[str, Any]:
+    common_cte, cte_params = _common_cte(source_table, prop_types, prop_sources)
     rows = pg_fetchall(
         common_cte
         + """
@@ -254,21 +279,26 @@ def collect_quality(
     window_mode: str,
     window_value: int,
     prop_types: Sequence[str] | None = None,
+    prop_sources: Sequence[str] | None = None,
     source_table: str = _DEFAULT_SOURCE_TABLE,
 ) -> Dict[str, Any]:
     normalized_mode = "games" if str(window_mode).lower() == "games" else "days"
     normalized_source = _normalize_source_table(source_table)
     window_value = max(1, int(window_value))
     filtered_prop_types = [str(p).strip() for p in (prop_types or []) if str(p).strip()]
-    overall = _overall(window_value, normalized_mode, normalized_source, filtered_prop_types)
-    by_prop = _by_prop(window_value, normalized_mode, normalized_source, filtered_prop_types)
-    by_bucket = _by_confidence_bucket(window_value, normalized_mode, normalized_source, filtered_prop_types)
-    drift = _drift(normalized_source, filtered_prop_types)
+    filtered_prop_sources = [str(s).strip().lower() for s in (prop_sources or []) if str(s).strip()]
+    overall = _overall(window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources)
+    by_prop = _by_prop(window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources)
+    by_bucket = _by_confidence_bucket(
+        window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources
+    )
+    drift = _drift(normalized_source, filtered_prop_types, filtered_prop_sources)
     return {
         "source_table": normalized_source,
         "window_mode": normalized_mode,
         "window_value": window_value,
         "prop_types": filtered_prop_types,
+        "prop_sources": filtered_prop_sources,
         "overall": overall,
         "by_prop": by_prop,
         "by_confidence_bucket": by_bucket,
@@ -283,6 +313,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--games-back", type=int, default=30)
     ap.add_argument("--min-total", type=int, default=1, help="Fail when overall total is below this threshold.")
     ap.add_argument("--prop-types", default="", help="Optional comma-separated prop types to filter quality scope.")
+    ap.add_argument("--prop-sources", default="", help="Optional comma-separated prop sources to filter quality scope.")
     ap.add_argument(
         "--source-table",
         choices=sorted(_ALLOWED_SOURCE_TABLES),
@@ -293,7 +324,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     window_value = int(args.games_back) if args.window_mode == "games" else int(args.window_days)
     prop_types = [p.strip() for p in str(args.prop_types).split(",") if p.strip()]
-    quality = collect_quality(args.window_mode, window_value, prop_types=prop_types, source_table=args.source_table)
+    prop_sources = [s.strip().lower() for s in str(args.prop_sources).split(",") if s.strip()]
+    quality = collect_quality(
+        args.window_mode,
+        window_value,
+        prop_types=prop_types,
+        prop_sources=prop_sources,
+        source_table=args.source_table,
+    )
     overall = quality["overall"]
 
     min_total = max(0, int(args.min_total))

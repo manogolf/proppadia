@@ -71,6 +71,7 @@ def collect_pipeline_check(
     quality_games_back: int,
     quality_min_total: int,
     quality_min_accuracy: float,
+    quality_prop_sources: str,
     coverage_window_mode: str,
     coverage_window_days: int,
     coverage_games_back: int,
@@ -98,6 +99,8 @@ def collect_pipeline_check(
         str(int(quality_min_total)),
         "--quality-min-accuracy",
         str(float(quality_min_accuracy)),
+        "--quality-prop-sources",
+        str(quality_prop_sources),
     ]
     if base_url:
         gate_args.extend(["--base-url", str(base_url)])
@@ -198,6 +201,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--quality-games-back", type=int, default=30)
     ap.add_argument("--quality-min-total", type=int, default=1)
     ap.add_argument("--quality-min-accuracy", type=float, default=0.0)
+    ap.add_argument("--quality-prop-sources", default="mlb_api")
     ap.add_argument("--coverage-window-mode", choices=["days", "games"], default="days")
     ap.add_argument("--coverage-window-days", type=int, default=30)
     ap.add_argument("--coverage-games-back", type=int, default=30)
@@ -222,6 +226,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         quality_games_back=args.quality_games_back,
         quality_min_total=args.quality_min_total,
         quality_min_accuracy=args.quality_min_accuracy,
+        quality_prop_sources=args.quality_prop_sources,
         coverage_window_mode=args.coverage_window_mode,
         coverage_window_days=args.coverage_window_days,
         coverage_games_back=args.coverage_games_back,
