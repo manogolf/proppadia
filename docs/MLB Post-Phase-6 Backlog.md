@@ -167,11 +167,12 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Operator ergonomics: add one-command MLB player-surface regression bundle.
+Execution hold until preseason cutover window.
 
-Status: complete (February 16, 2026). Added `make mlb-player-surface-checks` to run
-focused repository/domain/service/endpoint tests for player lookup/search/profile paths.
+Status: active (February 16, 2026). Player-surface stabilization is complete; no further
+proactive long-tail edge-case expansion is planned unless incident-driven.
 
 Proposed deliverable:
-- Add one operator-facing make target to execute the player-surface regression suite.
-- Document command in operations matrix and quick commands.
+- Resume Phase 6.2 execution near preseason/opening-day window.
+- Keep current player-surface regression bundle as maintenance baseline:
+  `make mlb-player-surface-checks`.
