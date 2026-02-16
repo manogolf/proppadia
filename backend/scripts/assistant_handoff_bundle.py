@@ -14,6 +14,7 @@ from backend.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
 from backend.scripts import json_check_runner
+from backend.scripts import mlb_pipeline_check
 from backend.scripts import season_activation_report
 from backend.scripts.mlb_readiness_last import _load_history, _regressions
 from backend.scripts.mlb_readiness_snapshot import collect_snapshot
@@ -73,6 +74,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         check_workflow_command_paths.main, ["--strict", "--json"]
     )
     nhl_rc, nhl_compat = json_check_runner.run_json_check(check_nhl_workflow_compat.main, ["--json"])
+    mlb_pipeline_rc, mlb_pipeline = json_check_runner.run_json_check(
+        mlb_pipeline_check.main,
+        [
+            "--date",
+            os.getenv("MLB_DATE", "2025-08-15"),
+            "--sample-size",
+            os.getenv("MLB_PREDICT_SAMPLE", "10"),
+            "--require-min-success",
+            os.getenv("MLB_PREDICT_MIN_SUCCESS", "1"),
+            "--prop-types",
+            os.getenv("MLB_PREDICT_PROP_TYPES", "hits"),
+            "--quality-window-mode",
+            os.getenv("MLB_QUALITY_WINDOW_MODE", "days"),
+            "--quality-window-days",
+            os.getenv("MLB_QUALITY_WINDOW_DAYS", "120"),
+            "--quality-games-back",
+            os.getenv("MLB_QUALITY_GAMES_BACK", "30"),
+            "--quality-min-total",
+            os.getenv("MLB_QUALITY_MIN_TOTAL", "1"),
+            "--quality-min-accuracy",
+            os.getenv("MLB_QUALITY_MIN_ACCURACY", "0"),
+            "--coverage-window-mode",
+            os.getenv("MLB_PROP_COVERAGE_WINDOW_MODE", "days"),
+            "--coverage-window-days",
+            os.getenv("MLB_PROP_COVERAGE_WINDOW_DAYS", "30"),
+            "--coverage-games-back",
+            os.getenv("MLB_PROP_COVERAGE_GAMES_BACK", "30"),
+            "--coverage-required-props",
+            os.getenv("MLB_PROP_COVERAGE_REQUIRED", ""),
+            "--coverage-min-graded-per-prop",
+            os.getenv("MLB_PROP_COVERAGE_MIN_GRADED", "0"),
+        ],
+    )
     report_rc, season_report = json_check_runner.run_json_check(
         season_activation_report.main,
         [
@@ -93,7 +127,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     history = _history_tail(args.history_input, args.history_limit)
     season_activation_history = (season_report.get("season_activation_history") or {})
 
-    governance_ok = inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and report_rc == 0
+    governance_ok = (
+        inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and mlb_pipeline_rc == 0 and report_rc == 0
+    )
     readiness_ok = bool(readiness.get("ok"))
     ok = governance_ok and readiness_ok
 
@@ -107,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "workflow_inventory": inventory,
                 "workflow_path_audit": path_audit,
                 "nhl_workflow_compat": nhl_compat,
+                "mlb_pipeline_check": mlb_pipeline,
                 "season_activation_report": season_report,
             },
         },

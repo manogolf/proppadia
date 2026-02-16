@@ -25,6 +25,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         with patch.object(bundle.check_workflow_schedule_inventory, "main", side_effect=_mk_check("pass")), patch.object(
             bundle.check_workflow_command_paths, "main", side_effect=_mk_check("pass")
         ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_mk_check("pass")), patch.object(
+            bundle.mlb_pipeline_check, "main", side_effect=_mk_check("pass")
+        ), patch.object(
             bundle.season_activation_report,
             "main",
             side_effect=self._season_report_pass,
@@ -44,6 +46,7 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("mlb_readiness", payload)
         self.assertIn("mlb_readiness_history", payload)
         self.assertIn("season_activation_history", payload)
+        self.assertIn("mlb_pipeline_check", payload["governance"]["checks"])
         self.assertIn("season_activation_report", payload["governance"]["checks"])
 
     def test_main_fail_when_readiness_fails(self):
@@ -55,6 +58,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         with patch.object(bundle.check_workflow_schedule_inventory, "main", side_effect=_ok), patch.object(
             bundle.check_workflow_command_paths, "main", side_effect=_ok
         ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_ok), patch.object(
+            bundle.mlb_pipeline_check, "main", side_effect=_ok
+        ), patch.object(
             bundle.season_activation_report,
             "main",
             side_effect=self._season_report_pass,
@@ -83,6 +88,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         with patch.object(bundle.check_workflow_schedule_inventory, "main", side_effect=_ok), patch.object(
             bundle.check_workflow_command_paths, "main", side_effect=_ok
         ), patch.object(bundle.check_nhl_workflow_compat, "main", side_effect=_ok), patch.object(
+            bundle.mlb_pipeline_check, "main", side_effect=_ok
+        ), patch.object(
             bundle.season_activation_report, "main", side_effect=_bad
         ), patch.object(
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}

@@ -5,7 +5,7 @@ Purpose: keep a minimal set of high-signal commands for operator use.
 ## Keep (High Signal)
 
 - `make ops-shortlist-check [BASE_URL=<url>] [NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD]`
-  - wrapper for phase snapshot + governance + MLB flow audit + optional NHL quality/post-deploy
+  - wrapper for phase snapshot + governance + MLB pipeline JSON check + optional NHL quality/post-deploy
 - `make cron-governance-check`
   - one-command workflow/path/docs governance status
 - `make cross-sport-post-deploy BASE_URL=<url>`
