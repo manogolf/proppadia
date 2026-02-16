@@ -12,6 +12,8 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             root = Path(td)
             plan = root / "Execution Plan.md"
             baselines = root / "season_baselines"
+            activation_history = root / "season_activation_history.jsonl"
+            cutover = root / "season_cutover_history.jsonl"
             plan.write_text(
                 "\n".join(
                     [
@@ -23,11 +25,12 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            payload = sas.build_status(plan, baselines)
+            payload = sas.build_status(plan, baselines, cutover, activation_history)
             self.assertFalse(payload["ok"])
             self.assertEqual(payload["status"], "fail")
             self.assertFalse(payload["baseline_artifacts"]["has_mlb"])
             self.assertFalse(payload["baseline_artifacts"]["has_nhl"])
+            self.assertEqual(payload["season_activation_history"]["history_count"], 0)
             self.assertGreater(len(payload["next_steps"]), 0)
             self.assertTrue(payload["next_steps"][0].startswith("Run: make season-activation-check"))
             self.assertIn("phase_6_1_incomplete", payload["readiness"]["blockers"])
@@ -43,10 +46,12 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             plan = root / "Execution Plan.md"
             baselines = root / "season_baselines"
             baselines.mkdir(parents=True, exist_ok=True)
+            activation_history = root / "season_activation_history.jsonl"
             cutover = root / "season_cutover_history.jsonl"
             (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
             (baselines / "nhl_quality_2025-12-01_2025-12-31.json").write_text("{}", encoding="utf-8")
             cutover.write_text('{"status":"ok"}\n', encoding="utf-8")
+            activation_history.write_text('{"captured_at":"2026-02-16T00:00:00+00:00"}\n', encoding="utf-8")
             plan.write_text(
                 "\n".join(
                     [
@@ -58,12 +63,14 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            payload = sas.build_status(plan, baselines, cutover)
+            payload = sas.build_status(plan, baselines, cutover, activation_history)
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["status"], "pass")
             self.assertTrue(payload["baseline_artifacts"]["has_mlb"])
             self.assertTrue(payload["baseline_artifacts"]["has_nhl"])
             self.assertTrue(payload["season_cutover"]["has_history"])
+            self.assertEqual(payload["season_activation_history"]["history_count"], 1)
+            self.assertEqual(payload["season_activation_history"]["latest_captured_at"], "2026-02-16T00:00:00+00:00")
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])
             self.assertEqual(payload["readiness"]["blockers"], [])
 
@@ -72,6 +79,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             root = Path(td)
             plan = root / "Execution Plan.md"
             baselines = root / "season_baselines"
+            activation_history = root / "season_activation_history.jsonl"
             cutover = root / "season_cutover_history.jsonl"
             baselines.mkdir(parents=True, exist_ok=True)
             (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
@@ -88,7 +96,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            payload = sas.build_status(plan, baselines, cutover)
+            payload = sas.build_status(plan, baselines, cutover, activation_history)
             self.assertFalse(payload["ok"])
             self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])

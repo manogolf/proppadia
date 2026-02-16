@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PLAN_PATH = ROOT / "docs" / "Execution Plan.md"
 BASELINE_DIR = ROOT / "artifacts" / "season_baselines"
 SEASON_CUTOVER_HISTORY_PATH = ROOT / "artifacts" / "season_cutover_history.jsonl"
+SEASON_ACTIVATION_HISTORY_PATH = ROOT / "artifacts" / "season_activation_history.jsonl"
 
 
 def _read_text(path: Path) -> str:
@@ -84,6 +85,31 @@ def _has_cutover_history(path: Path) -> bool:
     return False
 
 
+def _activation_history_meta(path: Path) -> Dict[str, object]:
+    if not path.exists():
+        return {"input": str(path), "history_count": 0, "latest_captured_at": None}
+    rows: List[dict] = []
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(item, dict):
+                rows.append(item)
+    except Exception:
+        return {"input": str(path), "history_count": 0, "latest_captured_at": None}
+    latest = rows[-1] if rows else {}
+    return {
+        "input": str(path),
+        "history_count": len(rows),
+        "latest_captured_at": latest.get("captured_at"),
+    }
+
+
 def _readiness_state(
     phase6: List[str], baselines: Dict[str, List[str]], *, has_cutover_history: bool
 ) -> Dict[str, object]:
@@ -112,10 +138,12 @@ def build_status(
     plan_path: Path = PLAN_PATH,
     baseline_dir: Path = BASELINE_DIR,
     season_cutover_history_path: Path = SEASON_CUTOVER_HISTORY_PATH,
+    season_activation_history_path: Path = SEASON_ACTIVATION_HISTORY_PATH,
 ) -> Dict[str, object]:
     plan_text = _read_text(plan_path)
     phase6 = _phase6_status_lines(plan_text)
     baselines = _list_baselines(baseline_dir)
+    activation_history = _activation_history_meta(season_activation_history_path)
     has_cutover_history = _has_cutover_history(season_cutover_history_path)
     readiness = _readiness_state(phase6, baselines, has_cutover_history=has_cutover_history)
     try:
@@ -137,6 +165,7 @@ def build_status(
             "history_path": str(season_cutover_history_path),
             "has_history": has_cutover_history,
         },
+        "season_activation_history": activation_history,
         "readiness": readiness,
         "next_steps": _next_steps(phase6, baselines),
     }
