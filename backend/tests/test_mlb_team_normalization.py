@@ -33,7 +33,20 @@ class TestMlbTeamNormalization(unittest.TestCase):
         self.assertEqual(out["team_abbr"], "NYY")
         self.assertEqual(out["team_id"], 147)
 
+    def test_resolver_decorate_alias_abbr_normalization(self):
+        row = {"player_id": "111111", "player_name": "Test Player", "team": "AZ"}
+        out = resolver_decorate(row, source="player_ids")
+        self.assertIsNotNone(out)
+        self.assertEqual(out["team_abbr"], "ARI")
+        self.assertEqual(out["team_id"], 109)
+
+    def test_directory_decorate_athletics_alias_normalization(self):
+        row = {"player_id": "222222", "player_name": "Test Player", "team": "ATH"}
+        out = dir_decorate(row, source="player_ids")
+        self.assertIsNotNone(out)
+        self.assertEqual(out["team_abbr"], "OAK")
+        self.assertEqual(out["team_id"], 133)
+
 
 if __name__ == "__main__":
     unittest.main()
-
