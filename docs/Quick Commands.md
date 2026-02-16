@@ -18,6 +18,7 @@ Daily:
 - `make season-baseline-check` (validate baseline artifacts exist)
 - `make season-baseline-last` (show latest baseline totals/age)
 - `make season-baseline-lock ...` (capture+validate+log day-0 baseline)
+- `make mlb-prod8-baseline-capture MLB_QUALITY_GAMES_BACK=30` (production-8 baseline artifacts)
 - `make season-activation-check ...` (kickoff + baseline lock + cadence plan)
 - `make season-cutover-cadence` (show intended in-season cron + commands)
 - `make season-cutover-log` (append cadence snapshot to cutover history)

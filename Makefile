@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-retrain-prereq-check mlb-candidate-eval mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-retrain-prereq-check mlb-candidate-eval mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -41,6 +41,7 @@ MLB_RETRAIN_GRADING_MIN_TOTAL ?= 1000
 MLB_RETRAIN_BASELINE_MAX_AGE_HOURS ?= 0
 MLB_CANDIDATE_BASELINE_PATH ?=
 MLB_CANDIDATE_BASELINE_DIR ?= artifacts/season_baselines
+MLB_PROD8_BASELINE_DIR ?= artifacts/season_baselines
 MLB_CANDIDATE_SOURCE_TABLE ?= model_training_props
 MLB_CANDIDATE_WINDOW_MODE ?=
 MLB_CANDIDATE_WINDOW_DAYS ?= 120
@@ -120,6 +121,7 @@ help:
 	@echo "  make ops-shortlist-check [high-signal ops bundle; optional NHL quality + post-deploy]"
 	@echo "  make mlb-season-kickoff-check [opening-day readiness bundle; optional deployed check]"
 	@echo "  make season-baseline-capture [write MLB/NHL day-0 quality JSON to artifacts]"
+	@echo "  make mlb-prod8-baseline-capture [write production-8 quality and pipeline JSON artifacts]"
 	@echo "  make nhl-workflow-compat-check [verify NHL workflow compatibility scripts]"
 	@echo "  make cron-governance-check [inventory + path audit + NHL workflow compat]"
 	@echo "  make cron-governance-snapshot [single combined JSON governance payload]"
@@ -418,6 +420,29 @@ season-baseline-capture:
 	mv "$$nhl_tmp" "$$nhl_out"; \
 	echo "Wrote $$mlb_out"; \
 	echo "Wrote $$nhl_out"
+
+mlb-prod8-baseline-capture:
+	@set -e; \
+	mkdir -p "$(MLB_PROD8_BASELINE_DIR)"; \
+	quality_out="$(MLB_PROD8_BASELINE_DIR)/mlb_prod8_quality_games_$(MLB_QUALITY_GAMES_BACK).json"; \
+	pipeline_out="$(MLB_PROD8_BASELINE_DIR)/mlb_prod8_pipeline_games_$(MLB_QUALITY_GAMES_BACK).json"; \
+	quality_tmp="$$quality_out.tmp"; \
+	pipeline_tmp="$$pipeline_out.tmp"; \
+	rm -f "$$quality_tmp" "$$pipeline_tmp"; \
+	if ! $(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD8_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$quality_tmp"; then \
+		echo "mlb-prod8-baseline-capture: quality generation failed"; \
+		if [ -s "$$quality_tmp" ]; then cat "$$quality_tmp"; fi; \
+		exit 1; \
+	fi; \
+	if ! $(VENV_PY) backend/scripts/mlb_pipeline_check.py $(if $(MLB_BASE_URL),--base-url $(MLB_BASE_URL),) --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PROD8_PROP_TYPES)" --quality-window-mode games --quality-window-days $(MLB_QUALITY_WINDOW_DAYS) --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY) --quality-prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --coverage-window-mode games --coverage-window-days $(MLB_PROP_COVERAGE_WINDOW_DAYS) --coverage-games-back $(MLB_PROP_COVERAGE_GAMES_BACK) --coverage-required-props "$(MLB_PROD8_PROP_TYPES)" --coverage-min-graded-per-prop $(MLB_CORE_MIN_GRADED) --coverage-gate-metric training_source --coverage-training-prop-sources "$(MLB_CORE_TRAINING_SOURCES)" > "$$pipeline_tmp"; then \
+		echo "mlb-prod8-baseline-capture: pipeline generation failed"; \
+		if [ -s "$$pipeline_tmp" ]; then cat "$$pipeline_tmp"; fi; \
+		exit 1; \
+	fi; \
+	mv "$$quality_tmp" "$$quality_out"; \
+	mv "$$pipeline_tmp" "$$pipeline_out"; \
+	echo "Wrote $$quality_out"; \
+	echo "Wrote $$pipeline_out"
 
 cron-governance-check:
 	$(MAKE) workflow-inventory-strict

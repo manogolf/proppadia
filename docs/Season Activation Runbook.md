@@ -139,6 +139,16 @@ Outputs are written to:
 - `artifacts/season_baselines/mlb_quality_*.json`
 - `artifacts/season_baselines/nhl_quality_*.json`
 
+Production-8 baseline capture:
+
+```bash
+make mlb-prod8-baseline-capture MLB_QUALITY_GAMES_BACK=30
+```
+
+Outputs:
+- `artifacts/season_baselines/mlb_prod8_quality_games_<N>.json`
+- `artifacts/season_baselines/mlb_prod8_pipeline_games_<N>.json`
+
 Treat these as “day 0” baseline artifacts for next retrain cycle.
 
 Pre-retrain prerequisite gate:
