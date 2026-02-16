@@ -24,6 +24,7 @@ FALLBACK_PLAYER_IDS: tuple[int, ...] = (
     592450,  # Aaron Judge
     545361,  # Mike Trout
 )
+DEFAULT_PROP_TYPES = "hits,total_bases,strikeouts_batting"
 
 
 def _obj(resp) -> Dict[str, Any]:
@@ -113,7 +114,7 @@ def collect_probe(
 ) -> Dict[str, Any]:
     selected_prop_types = [str(p).strip() for p in prop_types if str(p).strip()]
     if not selected_prop_types:
-        selected_prop_types = ["hits"]
+        selected_prop_types = [p.strip() for p in DEFAULT_PROP_TYPES.split(",") if p.strip()]
 
     players = _load_players(client, sample_size)
     attempts = 0
@@ -202,8 +203,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--require-min-success", type=int, default=1)
     ap.add_argument(
         "--prop-types",
-        default="hits",
-        help="Comma-separated prop types to probe (default: hits).",
+        default=DEFAULT_PROP_TYPES,
+        help="Comma-separated prop types to probe (default: hits,total_bases,strikeouts_batting).",
     )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
     prop_types = [p.strip() for p in str(args.prop_types).split(",") if p.strip()]

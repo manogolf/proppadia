@@ -14,6 +14,49 @@ from backend.scripts import mlb_prediction_gate
 from backend.scripts import report_mlb_prop_coverage
 from backend.scripts.json_check_runner import run_json_check
 
+DEFAULT_PROP_TYPES = "hits,total_bases,strikeouts_batting"
+
+
+def _degraded_prop_lanes(
+    gate_payload: dict[str, Any], coverage_payload: dict[str, Any]
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in gate_payload.get("degraded_prop_lanes") or []:
+        if not isinstance(item, dict):
+            continue
+        prop = str(item.get("prop_type") or "").strip()
+        reason = str(item.get("reason") or "").strip() or "unknown"
+        if not prop:
+            continue
+        key = (prop, reason)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+
+    for prop in coverage_payload.get("missing_required_props") or []:
+        p = str(prop).strip()
+        if not p:
+            continue
+        key = (p, "coverage_missing_required")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"prop_type": p, "reason": "coverage_missing_required"})
+
+    for prop in coverage_payload.get("under_min_required_props") or []:
+        p = str(prop).strip()
+        if not p:
+            continue
+        key = (p, "coverage_under_min_threshold")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"prop_type": p, "reason": "coverage_under_min_threshold"})
+
+    return out
+
 
 def collect_pipeline_check(
     *,
@@ -32,6 +75,8 @@ def collect_pipeline_check(
     coverage_games_back: int,
     coverage_required_props: str,
     coverage_min_graded_per_prop: int,
+    coverage_gate_metric: str,
+    coverage_training_prop_sources: str,
 ) -> dict[str, Any]:
     gate_args: list[str] = [
         "--date",
@@ -76,6 +121,10 @@ def collect_pipeline_check(
         str(coverage_required_props),
         "--min-graded-per-prop",
         str(int(coverage_min_graded_per_prop)),
+        "--gate-metric",
+        str(coverage_gate_metric),
+        "--training-prop-sources",
+        str(coverage_training_prop_sources),
     ]
 
     gate_rc, gate_payload = run_json_check(mlb_prediction_gate.main, gate_args)
@@ -106,12 +155,14 @@ def collect_pipeline_check(
         },
     ]
     failures = [item["name"] for item in checks if (item["exit_code"] != 0) or (not item["ok"])]
+    degraded_prop_lanes = _degraded_prop_lanes(gate_payload, coverage_payload)
     ok = len(failures) == 0
     return {
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "ok": ok,
         "status": "pass" if ok else "fail",
         "failures": failures,
+        "degraded_prop_lanes": degraded_prop_lanes,
         "checks": checks,
     }
 
@@ -122,7 +173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--date", default="2025-08-15")
     ap.add_argument("--sample-size", type=int, default=10)
     ap.add_argument("--require-min-success", type=int, default=1)
-    ap.add_argument("--prop-types", default="hits")
+    ap.add_argument("--prop-types", default=DEFAULT_PROP_TYPES)
     ap.add_argument("--quality-window-mode", choices=["days", "games"], default="days")
     ap.add_argument("--quality-window-days", type=int, default=120)
     ap.add_argument("--quality-games-back", type=int, default=30)
@@ -133,6 +184,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--coverage-games-back", type=int, default=30)
     ap.add_argument("--coverage-required-props", default="")
     ap.add_argument("--coverage-min-graded-per-prop", type=int, default=0)
+    ap.add_argument(
+        "--coverage-gate-metric",
+        choices=["graded", "training_source", "stat_derived"],
+        default="graded",
+    )
+    ap.add_argument("--coverage-training-prop-sources", default="mlb_api")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     payload = collect_pipeline_check(
@@ -151,6 +208,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         coverage_games_back=args.coverage_games_back,
         coverage_required_props=args.coverage_required_props,
         coverage_min_graded_per_prop=args.coverage_min_graded_per_prop,
+        coverage_gate_metric=args.coverage_gate_metric,
+        coverage_training_prop_sources=args.coverage_training_prop_sources,
     )
     print(json.dumps(payload, indent=2))
     return 0 if payload.get("ok") else 1

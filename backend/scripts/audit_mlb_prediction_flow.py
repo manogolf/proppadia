@@ -95,6 +95,8 @@ def _integrity_checks(window_value: int, window_mode: str, max_drift_days: int) 
           )::int AS resolved_rows_with_invalid_outcome,
           COUNT(*) FILTER (
             WHERE prop_source = 'user_added'
+              AND lower(trim(coalesce(status, ''))) IN ('win','loss')
+              AND lower(trim(coalesce(outcome, ''))) IN ('win','loss')
               AND game_id IS NOT NULL
               AND trim(cast(game_id as text)) ~ '^[0-9]+$'
               AND cast(game_id as bigint) > 0
@@ -216,6 +218,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "grade_fields": ["status", "outcome", "result"],
             "join_keys": ["player_id", "game_id", "prop_type"],
             "user_scope_key": "user_id" if include_user_id else None,
+            "user_added_sync_scope": "status/outcome win|loss only",
         },
         "summary": summary,
         "checks": checks,

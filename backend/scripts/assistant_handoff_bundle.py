@@ -113,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "--require-min-success",
             os.getenv("MLB_PREDICT_MIN_SUCCESS", "1"),
             "--prop-types",
-            os.getenv("MLB_PREDICT_PROP_TYPES", "hits"),
+            os.getenv("MLB_PREDICT_PROP_TYPES", "hits,total_bases,strikeouts_batting"),
             "--quality-window-mode",
             os.getenv("MLB_QUALITY_WINDOW_MODE", "days"),
             "--quality-window-days",
@@ -134,6 +134,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             os.getenv("MLB_PROP_COVERAGE_REQUIRED", ""),
             "--coverage-min-graded-per-prop",
             os.getenv("MLB_PROP_COVERAGE_MIN_GRADED", "0"),
+            "--coverage-gate-metric",
+            os.getenv("MLB_PROP_COVERAGE_GATE_METRIC", "graded"),
+            "--coverage-training-prop-sources",
+            os.getenv("MLB_PROP_COVERAGE_TRAINING_SOURCES", "mlb_api"),
         ],
     )
     report_rc, season_report = json_check_runner.run_json_check(

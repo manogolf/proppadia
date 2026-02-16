@@ -57,6 +57,9 @@ Acceptance:
 
 Define and enforce minimum graded volume for key prop types in rolling windows.
 
+Status: complete (February 16, 2026). Core strict commands are now available via
+`make mlb-prop-coverage-core` and `make mlb-pipeline-check-core`.
+
 Initial core set (12):
 - `hits`
 - `total_bases`
@@ -78,6 +81,9 @@ Acceptance:
 ### P2.2 Prediction gate representativeness
 
 Expand gate from single-prop probe (`hits`) to a small diversified probe set (e.g. `hits,total_bases,strikeouts_batting`).
+
+Status: complete (February 16, 2026). Multi-prop defaults are now used in pipeline/gate
+scripts and failures expose degraded prop lanes in output payloads.
 
 Acceptance:
 - `make mlb-pipeline-check-json` uses multi-prop probe in operator profile
@@ -144,8 +150,8 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Implement P2.1: define core prop coverage thresholds and wire a strict profile command.
+Implement P2.3: preseason vs regular-season segmentation report.
 
 Proposed deliverable:
-- `make mlb-prop-coverage-core` with explicit required props + min graded counts.
-- doc section in `docs/Operations Command Matrix.md` showing expected use and thresholds.
+- Add one repeatable command that emits split quality metrics for preseason vs regular season windows.
+- Add runbook usage example and expected output interpretation.

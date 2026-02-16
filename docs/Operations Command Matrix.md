@@ -203,6 +203,17 @@ MLB pipeline gate bundle (single JSON payload):
 make mlb-pipeline-check-json MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting MLB_PROP_COVERAGE_MIN_GRADED=20
 ```
 
+When failing, inspect top-level `degraded_prop_lanes` to see which prop lanes degraded
+(operability, quality threshold misses, or coverage misses).
+
+MLB pipeline gate bundle (core 12 strict coverage profile):
+
+```bash
+make mlb-pipeline-check-core MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_CORE_MIN_GRADED=20
+```
+
+Note: `mlb-pipeline-check-core` applies `MLB_CORE_PROP_TYPES` and thresholds coverage on `training_source_count` via `MLB_CORE_TRAINING_SOURCES`.
+
 MLB pipeline history log + last snapshot:
 
 ```bash

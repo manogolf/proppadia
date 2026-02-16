@@ -19,7 +19,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--date", default="2025-08-15")
     ap.add_argument("--sample-size", type=int, default=10)
     ap.add_argument("--require-min-success", type=int, default=1)
-    ap.add_argument("--prop-types", default="hits")
+    ap.add_argument("--prop-types", default=mlb_pipeline_check.DEFAULT_PROP_TYPES)
     ap.add_argument("--quality-window-mode", choices=["days", "games"], default="days")
     ap.add_argument("--quality-window-days", type=int, default=120)
     ap.add_argument("--quality-games-back", type=int, default=30)
@@ -30,6 +30,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--coverage-games-back", type=int, default=30)
     ap.add_argument("--coverage-required-props", default="")
     ap.add_argument("--coverage-min-graded-per-prop", type=int, default=0)
+    ap.add_argument(
+        "--coverage-gate-metric",
+        choices=["graded", "training_source", "stat_derived"],
+        default="graded",
+    )
+    ap.add_argument("--coverage-training-prop-sources", default="mlb_api")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     payload = mlb_pipeline_check.collect_pipeline_check(
@@ -48,6 +54,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         coverage_games_back=args.coverage_games_back,
         coverage_required_props=args.coverage_required_props,
         coverage_min_graded_per_prop=args.coverage_min_graded_per_prop,
+        coverage_gate_metric=args.coverage_gate_metric,
+        coverage_training_prop_sources=args.coverage_training_prop_sources,
     )
 
     out_path = Path(args.output)
