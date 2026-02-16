@@ -65,8 +65,20 @@ Quick decision table:
 
 When ready to move from offseason conservative cadence:
 
-1. Enable intended in-season schedule windows for MLB refresh lane(s).
-2. Generate the lane plan:
+1. Preseason data cleanup decision (recommended before enabling full in-season cadence):
+
+```bash
+make mlb-preseason-cleanup \
+  MLB_PRESEASON_FROM_DATE=YYYY-MM-DD \
+  MLB_PRESEASON_TO_DATE=YYYY-MM-DD
+```
+
+- This runs in dry-run mode and shows counts only.
+- If you want cleanup applied, run the printed `--apply` command.
+- Do not run cleanup now unless you intentionally want preseason-window rows removed now.
+
+2. Enable intended in-season schedule windows for MLB refresh lane(s).
+3. Generate the lane plan:
 
 ```bash
 make season-cutover-cadence
@@ -74,8 +86,14 @@ make season-cutover-log
 make season-cutover-last
 ```
 
-3. Keep `make cron-governance-check` as required guard.
-4. Keep post-deploy strict-offseason/strict checks in release flow.
+4. Enable regular-season-only stat-derived lock before Opening Day cadence:
+
+```bash
+make mlb-season-mode-lock
+```
+
+5. Keep `make cron-governance-check` as required guard.
+6. Keep post-deploy strict-offseason/strict checks in release flow.
 
 ## Step 3: Baseline Lock (Day 0)
 
@@ -88,7 +106,7 @@ make season-baseline-capture \
   MLB_QUALITY_MIN_TOTAL=1 \
   NHL_QUALITY_FROM_DATE=2025-12-01 \
   NHL_QUALITY_TO_DATE=2025-12-31 \
-  NHL_QUALITY_MIN_TOTAL=1
+  NHL_QUALITY_MIN_TOTAL=0
 ```
 
 One-command baseline lock flow:
@@ -100,7 +118,7 @@ make season-baseline-lock \
   MLB_QUALITY_MIN_TOTAL=1 \
   NHL_QUALITY_FROM_DATE=2025-12-01 \
   NHL_QUALITY_TO_DATE=2025-12-31 \
-  NHL_QUALITY_MIN_TOTAL=1
+  NHL_QUALITY_MIN_TOTAL=0
 ```
 
 Outputs are written to:

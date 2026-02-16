@@ -315,6 +315,24 @@ def _is_starter(position: Optional[str], stats: Dict[str, Any]) -> bool:
     return gs > 0 or p == "SP"
 
 
+def _final_game_ids(
+    schedule: List[Dict[str, Any]],
+    *,
+    require_regular_season: bool,
+) -> List[int]:
+    out: List[int] = []
+    for g in schedule:
+        if (g.get("status", {}) or {}).get("detailedState") != "Final":
+            continue
+        if require_regular_season and str((g.get("gameType") or "")).upper() != "R":
+            continue
+        try:
+            out.append(int(g["gamePk"]))
+        except Exception:
+            continue
+    return out
+
+
 def run(
     from_date: str,
     to_date: str,
@@ -322,6 +340,7 @@ def run(
     quiet: bool = False,
     max_games_per_date: int = 0,
     skip_existing_dates: bool = False,
+    require_regular_season: bool = False,
 ) -> int:
     start = _parse_date(from_date)
     end = _parse_date(to_date)
@@ -346,11 +365,10 @@ def run(
                     continue
 
                 schedule = _fetch_schedule(d_iso)
-                final_games = [
-                    int(g["gamePk"])
-                    for g in schedule
-                    if (g.get("status", {}) or {}).get("detailedState") == "Final"
-                ]
+                final_games = _final_game_ids(
+                    schedule,
+                    require_regular_season=require_regular_season,
+                )
                 if max_games_per_date > 0:
                     final_games = final_games[:max_games_per_date]
                 if not quiet:
@@ -527,6 +545,11 @@ def main() -> int:
         action="store_true",
         help="Skip any date that already has stat_derived rows.",
     )
+    ap.add_argument(
+        "--require-regular-season",
+        action="store_true",
+        help="Only process final games where gameType is regular season (R).",
+    )
     args = ap.parse_args()
 
     if args.from_date or args.to_date:
@@ -546,6 +569,7 @@ def main() -> int:
         quiet=bool(args.quiet),
         max_games_per_date=max(0, int(args.max_games_per_date)),
         skip_existing_dates=bool(args.skip_existing_dates),
+        require_regular_season=bool(args.require_regular_season),
     )
 
 
