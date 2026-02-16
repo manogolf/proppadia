@@ -84,6 +84,9 @@ def _print_text(summary: dict[str, Any]) -> None:
     season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
     mlb_baseline = season_baseline_latest.get("mlb") or {}
     nhl_baseline = season_baseline_latest.get("nhl") or {}
+    season_history = season.get("season_activation_history") or {}
+    season_history_rows = season_history.get("rows") or []
+    season_history_latest = season_history_rows[-1] if season_history_rows else {}
     season_cutover_history = season.get("season_cutover_history") or {}
     cutover_rows = season_cutover_history.get("rows") or []
     cutover_latest = cutover_rows[-1] if cutover_rows else {}
@@ -117,6 +120,11 @@ def _print_text(summary: dict[str, Any]) -> None:
         + ")"
     )
     print(
+        "season_history: "
+        f"rows={season_history.get('history_count', 0)} "
+        f"latest={season_history_latest.get('captured_at') or '-'}"
+    )
+    print(
         "season_baseline: "
         f"mlb_age_h={mlb_baseline.get('age_hours')} nhl_age_h={nhl_baseline.get('age_hours')}"
     )
@@ -144,6 +152,9 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
     season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
     mlb_baseline = season_baseline_latest.get("mlb") or {}
     nhl_baseline = season_baseline_latest.get("nhl") or {}
+    season_history = season.get("season_activation_history") or {}
+    season_history_rows = season_history.get("rows") or []
+    season_history_latest = season_history_rows[-1] if season_history_rows else {}
     season_cutover_history = season.get("season_cutover_history") or {}
     cutover_rows = season_cutover_history.get("rows") or []
     cutover_latest = cutover_rows[-1] if cutover_rows else {}
@@ -176,6 +187,8 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "status": season.get("status"),
             "blocker_count": len(blockers),
             "top_blocker": blockers[0] if blockers else None,
+            "history_count": int(season_history.get("history_count") or 0),
+            "history_latest_captured_at": season_history_latest.get("captured_at"),
             "mlb_baseline_age_hours": mlb_baseline.get("age_hours"),
             "nhl_baseline_age_hours": nhl_baseline.get("age_hours"),
             "cutover_history_count": int(season_cutover_history.get("history_count") or 0),

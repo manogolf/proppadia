@@ -86,6 +86,13 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                 "ok": True,
                 "status": "pass",
                 "season_activation": {"blockers": ["none"]},
+                "season_activation_history": {
+                    "history_count": 2,
+                    "rows": [
+                        {"captured_at": "2026-02-15T07:00:00+00:00"},
+                        {"captured_at": "2026-02-15T08:00:00+00:00"},
+                    ],
+                },
                 "baseline_latest": {
                     "latest": {
                         "mlb": {"age_hours": 1.25},
@@ -105,6 +112,8 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
         self.assertTrue(compact["ok"])
         self.assertEqual(compact["mlb_readiness"]["stat_count"], 123)
         self.assertEqual(compact["season_activation"]["blocker_count"], 1)
+        self.assertEqual(compact["season_activation"]["history_count"], 2)
+        self.assertEqual(compact["season_activation"]["history_latest_captured_at"], "2026-02-15T08:00:00+00:00")
         self.assertEqual(compact["season_activation"]["mlb_baseline_age_hours"], 1.25)
         self.assertEqual(compact["season_activation"]["nhl_baseline_age_hours"], 2.5)
         self.assertEqual(compact["season_activation"]["cutover_history_count"], 3)
