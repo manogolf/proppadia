@@ -28,6 +28,8 @@ make season-baseline-last
 make season-cutover-ready
 ```
 
+`season-cutover-ready` now runs `season-activation-report-strict` and `cron-governance-check` as the canonical cutover gate.
+
 ## Step 1: Preseason Dry Run
 
 Run the kickoff bundle against deployed backend:

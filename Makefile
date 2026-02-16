@@ -237,8 +237,7 @@ season-baseline-last:
 	$(VENV_PY) backend/scripts/season_baseline_last.py
 
 season-cutover-ready:
-	$(MAKE) season-activation-status-strict
-	$(MAKE) season-baseline-check
+	$(MAKE) season-activation-report-strict
 	$(MAKE) cron-governance-check
 
 season-activation-check:
