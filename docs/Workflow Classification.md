@@ -28,6 +28,7 @@ Snapshot date: February 15, 2026
   - `mlb-stat-derived-backfill`
   - `mlb-stat-derived-smoke`
   - `mlb-pipeline-check`
+  - `mlb-pipeline-check-json`
   - `mlb-insert-stat-derived`
   - `mlb-check-stat-derived`
   - `mlb-roster-refresh-all`
