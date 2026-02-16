@@ -10,17 +10,22 @@ class TestSharedSeasonActivationReport(unittest.TestCase):
         with patch.object(sar.phase_status_snapshot, "build_snapshot", return_value={"ok": True}), patch.object(
             sar.season_activation_status, "build_status", return_value={"ok": True}
         ), patch.object(sar.check_season_baseline_artifacts, "build_payload", return_value={"ok": True}), patch.object(
+            sar.season_baseline_last, "build_payload", return_value={"ok": True, "latest": {}}
+        ), patch.object(
             sar, "_history_tail", return_value={"history_count": 0, "returned": 0, "rows": []}
         ):
             payload = sar.build_report(Path("x"), 5, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "pass")
         self.assertIn("season_activation_history", payload)
+        self.assertIn("baseline_latest", payload)
 
     def test_build_report_fails_when_any_check_fails(self):
         with patch.object(sar.phase_status_snapshot, "build_snapshot", return_value={"ok": True}), patch.object(
             sar.season_activation_status, "build_status", return_value={"ok": False}
         ), patch.object(sar.check_season_baseline_artifacts, "build_payload", return_value={"ok": True}), patch.object(
+            sar.season_baseline_last, "build_payload", return_value={"ok": True, "latest": {}}
+        ), patch.object(
             sar, "_history_tail", return_value={"history_count": 0, "returned": 0, "rows": []}
         ):
             payload = sar.build_report(Path("x"), 5, 0)
@@ -50,6 +55,7 @@ class TestSharedSeasonActivationReport(unittest.TestCase):
                 "phase_status": {},
                 "season_activation": {},
                 "baseline_check": {},
+                "baseline_latest": {},
                 "season_activation_history": {},
             },
         ):
@@ -66,6 +72,7 @@ class TestSharedSeasonActivationReport(unittest.TestCase):
                 "phase_status": {},
                 "season_activation": {},
                 "baseline_check": {},
+                "baseline_latest": {},
                 "season_activation_history": {},
             },
         ):

@@ -11,6 +11,7 @@ from typing import Any, Dict, Sequence
 
 from backend.scripts import check_season_baseline_artifacts
 from backend.scripts import phase_status_snapshot
+from backend.scripts import season_baseline_last
 from backend.scripts import season_activation_last
 from backend.scripts import season_activation_status
 
@@ -44,6 +45,7 @@ def build_report(history_input: Path, history_limit: int, max_age_hours: int) ->
     phase = phase_status_snapshot.build_snapshot()
     activation = season_activation_status.build_status()
     baseline = check_season_baseline_artifacts.build_payload(max_age_hours=max_age_hours)
+    baseline_latest = season_baseline_last.build_payload()
     history = _history_tail(history_input, history_limit)
     ok = bool(phase.get("ok")) and bool(activation.get("ok")) and bool(baseline.get("ok"))
     return {
@@ -52,6 +54,7 @@ def build_report(history_input: Path, history_limit: int, max_age_hours: int) ->
         "phase_status": phase,
         "season_activation": activation,
         "baseline_check": baseline,
+        "baseline_latest": baseline_latest,
         "season_activation_history": history,
     }
 

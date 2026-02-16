@@ -77,6 +77,9 @@ def _print_text(summary: dict[str, Any]) -> None:
     governance = summary.get("governance") or {}
     readiness = summary.get("mlb_readiness") or {}
     season = summary.get("season_activation_report") or {}
+    season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
+    mlb_baseline = season_baseline_latest.get("mlb") or {}
+    nhl_baseline = season_baseline_latest.get("nhl") or {}
     pipeline = summary.get("mlb_pipeline") or {}
     pipeline_latest = pipeline.get("latest") or {}
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
@@ -107,6 +110,10 @@ def _print_text(summary: dict[str, Any]) -> None:
         + ")"
     )
     print(
+        "season_baseline: "
+        f"mlb_age_h={mlb_baseline.get('age_hours')} nhl_age_h={nhl_baseline.get('age_hours')}"
+    )
+    print(
         "mlb_pipeline: "
         + (
             f"{pipeline_latest.get('status')} "
@@ -122,6 +129,9 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
     governance = summary.get("governance") or {}
     readiness = summary.get("mlb_readiness") or {}
     season = summary.get("season_activation_report") or {}
+    season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
+    mlb_baseline = season_baseline_latest.get("mlb") or {}
+    nhl_baseline = season_baseline_latest.get("nhl") or {}
     pipeline = summary.get("mlb_pipeline") or {}
     pipeline_latest = pipeline.get("latest") or {}
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
@@ -151,6 +161,8 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "status": season.get("status"),
             "blocker_count": len(blockers),
             "top_blocker": blockers[0] if blockers else None,
+            "mlb_baseline_age_hours": mlb_baseline.get("age_hours"),
+            "nhl_baseline_age_hours": nhl_baseline.get("age_hours"),
         },
         "mlb_pipeline": {
             "history_available": bool(pipeline.get("history_available")),
