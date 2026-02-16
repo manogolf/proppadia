@@ -65,6 +65,59 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertEqual(body.get("rows", [{}])[0].get("player_id"), 660271)
         mock_search.assert_called_once_with(q="Ohtani", limit=5)
 
+    @patch("backend.app.routers.mlb.lookup_player")
+    def test_players_lookup_found(self, mock_lookup):
+        mock_lookup.return_value = {
+            "player_id": 660271,
+            "player_name": "Shohei Ohtani",
+            "team_abbr": "LAD",
+            "team_id": 119,
+            "source": "player_ids",
+        }
+        resp = self.client.get("/api/players/lookup?player_id=660271")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertTrue(body.get("found"))
+        self.assertEqual(body.get("player_id"), 660271)
+        self.assertEqual(body.get("team_abbr"), "LAD")
+        mock_lookup.assert_called_once_with(player_id=660271)
+
+    @patch("backend.app.routers.mlb.lookup_player")
+    def test_players_lookup_not_found(self, mock_lookup):
+        mock_lookup.return_value = None
+        resp = self.client.get("/api/players/lookup?player_id=999999")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertFalse(body.get("found"))
+        self.assertEqual(body.get("player_id"), 999999)
+        mock_lookup.assert_called_once_with(player_id=999999)
+
+    @patch("backend.app.routers.mlb.player_profile")
+    def test_player_profile_ok(self, mock_profile):
+        mock_profile.return_value = {
+            "player_info": {
+                "player_id": 660271,
+                "player_name": "Shohei Ohtani",
+                "team": "LAD",
+                "team_id": 119,
+            },
+            "streaks": [],
+            "recent_props": [],
+            "stat_derived": [],
+            "training_summary": [],
+            "season_stats": {},
+            "career_stats": {},
+        }
+        resp = self.client.get("/api/player-profile/660271")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual((body.get("player_info") or {}).get("player_name"), "Shohei Ohtani")
+        self.assertIn("recent_props", body)
+        self.assertIn("training_summary", body)
+        mock_profile.assert_called_once_with(player_id=660271)
+
 
 if __name__ == "__main__":
     unittest.main()
