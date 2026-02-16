@@ -27,6 +27,7 @@ Completed slices:
   - season activation runbook added (`docs/Season Activation Runbook.md`)
   - kickoff readiness bundle added (`make mlb-season-kickoff-check`)
   - day-0 baseline capture command added (`make season-baseline-capture`)
+  - day-0 baseline lock bundle command added (`make season-baseline-lock`)
   - status snapshot command added (`make season-activation-status`)
   - latest baseline summary command added (`make season-baseline-last`)
   - in-season cadence planner command added (`make season-cutover-cadence`)

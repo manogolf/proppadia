@@ -84,6 +84,18 @@ make season-baseline-capture \
   NHL_QUALITY_MIN_TOTAL=1
 ```
 
+One-command baseline lock flow:
+
+```bash
+make season-baseline-lock \
+  MLB_QUALITY_WINDOW_MODE=games \
+  MLB_QUALITY_GAMES_BACK=30 \
+  MLB_QUALITY_MIN_TOTAL=1 \
+  NHL_QUALITY_FROM_DATE=2025-12-01 \
+  NHL_QUALITY_TO_DATE=2025-12-31 \
+  NHL_QUALITY_MIN_TOTAL=1
+```
+
 Outputs are written to:
 
 - `artifacts/season_baselines/mlb_quality_*.json`
