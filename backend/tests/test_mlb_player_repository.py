@@ -5,6 +5,54 @@ from backend.domains.mlb.repository import player_repository as repo
 
 
 class TestMlbPlayerRepository(unittest.TestCase):
+    def test_lookup_player_prefers_player_ids_source(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "LAD"}]
+            if "FROM model_training_props" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            out = repo.lookup_player(660271)
+
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "player_ids")
+        self.assertEqual(out["team_abbr"], "LAD")
+        self.assertEqual(out["team_id"], 119)
+
+    def test_lookup_player_falls_back_to_training_source(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                return []
+            if "FROM model_training_props" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            out = repo.lookup_player(660271)
+
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "model_training_props")
+        self.assertEqual(out["team_abbr"], "LAD")
+        self.assertEqual(out["team_id"], 119)
+
+    def test_lookup_player_falls_back_when_player_ids_query_errors(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                raise RuntimeError("player_ids unavailable")
+            if "FROM model_training_props" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            out = repo.lookup_player(660271)
+
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "model_training_props")
+        self.assertEqual(out["team_abbr"], "LAD")
+        self.assertEqual(out["team_id"], 119)
+
     def test_list_players_mlb_query_includes_latest_prop_team_fallback(self):
         captured = {}
 
