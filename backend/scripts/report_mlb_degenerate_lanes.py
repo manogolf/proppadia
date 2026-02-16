@@ -78,6 +78,8 @@ def _scan_prop(
     window_mode: str,
     window_value: int,
     balance_floor_pct: float,
+    min_balanced_accuracy_pct: float,
+    max_balance_penalty_pct: float,
     default_expectation: float,
 ) -> Dict[str, Any]:
     line_expr = _line_expr(prop_type)
@@ -152,14 +154,29 @@ ORDER BY accuracy_pct DESC, candidate
         if over_pct >= float(balance_floor_pct):
             best_balanced = row
             break
+    best_any = rows[0] if rows else None
+    recommendation = "hold"
+    recommendation_reason = "no_balanced_candidate"
+    if best_balanced is not None:
+        best_any_acc = float((best_any or {}).get("accuracy_pct") or 0.0)
+        best_bal_acc = float(best_balanced.get("accuracy_pct") or 0.0)
+        penalty = max(0.0, best_any_acc - best_bal_acc)
+        if best_bal_acc >= float(min_balanced_accuracy_pct) and penalty <= float(max_balance_penalty_pct):
+            recommendation = "promote"
+            recommendation_reason = "balanced_candidate_meets_accuracy_and_penalty"
+        else:
+            recommendation = "monitor"
+            recommendation_reason = "balanced_candidate_exists_but_tradeoff_is_high"
     return _json_safe(
         {
         "prop_type": prop_type,
         "window_mode": window_mode,
         "window_value": int(window_value),
         "balance_floor_pct": float(balance_floor_pct),
-        "best_candidate_any": rows[0] if rows else None,
+        "best_candidate_any": best_any,
         "best_candidate_balanced": best_balanced,
+        "recommendation": recommendation,
+        "recommendation_reason": recommendation_reason,
         "candidates": rows,
         "status": "pass" if best_balanced is not None else "degenerate",
         }
@@ -182,6 +199,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=20.0,
         help="Minimum over-side percent required to treat a candidate as balanced.",
     )
+    ap.add_argument(
+        "--min-balanced-accuracy-pct",
+        type=float,
+        default=48.0,
+        help="Minimum accuracy required for a balanced candidate to be promotion-eligible.",
+    )
+    ap.add_argument(
+        "--max-balance-penalty-pct",
+        type=float,
+        default=12.0,
+        help="Maximum allowed drop from best-any accuracy to best-balanced accuracy for promotion.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     window_mode = "games" if str(args.window_mode).lower() == "games" else "days"
@@ -203,6 +232,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 window_mode=window_mode,
                 window_value=max(1, int(window_value)),
                 balance_floor_pct=float(args.balance_floor_pct),
+                min_balanced_accuracy_pct=float(args.min_balanced_accuracy_pct),
+                max_balance_penalty_pct=float(args.max_balance_penalty_pct),
                 default_expectation=float(defaults.get(prop, 1.0)),
             )
         )
