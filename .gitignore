@@ -63,6 +63,9 @@ data/**
 !data/README.md
 
 # ── Models / artifacts (ignore bulk; keep minimal metadata) ────────
+artifacts/**
+!artifacts/.gitkeep
+!artifacts/README.md
 backend/nhl/models/**
 backend/_legacy/nhl/models/**
 
