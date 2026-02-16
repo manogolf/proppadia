@@ -169,6 +169,10 @@ Acceptance:
 
 Stabilization pass: expand regression coverage around player lookup/search/profile endpoints.
 
+Status: complete (February 16, 2026). Added focused repository/domain/service/endpoint
+regression coverage across player resolve/lookup/search/profile paths, including negative
+error mapping and team alias normalization edge cases.
+
 Proposed deliverable:
 - Add focused endpoint/service tests for lookup/search/profile edge cases.
 - Keep ops/noise posture unchanged while reducing mapping regressions.
