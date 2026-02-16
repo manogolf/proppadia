@@ -143,6 +143,24 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         mock_resolve.assert_called_once_with(player_id=660271, name=None, team_abbr=None)
 
     @patch("backend.app.routers.mlb.resolve_player")
+    def test_players_resolve_accepts_player_name_alias(self, mock_resolve):
+        mock_resolve.return_value = {
+            "player_id": 660271,
+            "player_name": "Shohei Ohtani",
+            "team_abbr": "LAD",
+            "team_id": 119,
+            "source": "player_ids",
+            "matched_on": "fuzzy_name",
+        }
+        resp = self.client.get("/api/players/resolve?player_name=Shohei+Ohtani&team_abbr=LAD")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertTrue(body.get("found"))
+        self.assertEqual(body.get("player_id"), 660271)
+        mock_resolve.assert_called_once_with(player_id=None, name="Shohei Ohtani", team_abbr="LAD")
+
+    @patch("backend.app.routers.mlb.resolve_player")
     def test_players_resolve_not_found(self, mock_resolve):
         mock_resolve.return_value = None
         resp = self.client.get("/api/players/resolve?name=Unknown+Player&team_abbr=LAD")
@@ -188,6 +206,12 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         resp = self.client.get("/api/players/lookup?player_id=660271")
         self.assertEqual(resp.status_code, 500)
         self.assertIn("Exception: boom", str(resp.json().get("detail")))
+
+    @patch("backend.app.routers.mlb.lookup_player", side_effect=RuntimeError("lookup unavailable"))
+    def test_players_lookup_runtime_error_maps_503(self, _mock_lookup):
+        resp = self.client.get("/api/players/lookup?player_id=660271")
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("lookup unavailable", str(resp.json().get("detail")))
 
     @patch("backend.app.routers.mlb.player_profile", side_effect=RuntimeError("profile cache down"))
     def test_player_profile_runtime_error_maps_503(self, _mock_profile):
