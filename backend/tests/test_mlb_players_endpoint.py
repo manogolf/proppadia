@@ -154,6 +154,17 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertEqual(body.get("team_abbr"), "LAD")
         mock_resolve.assert_called_once_with(player_id=None, name="Unknown Player", team_abbr="LAD")
 
+    @patch("backend.app.routers.mlb.resolve_player")
+    def test_players_resolve_not_found_normalizes_team_alias(self, mock_resolve):
+        mock_resolve.return_value = None
+        resp = self.client.get("/api/players/resolve?name=Unknown+Player&team_abbr=az")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertFalse(body.get("found"))
+        self.assertEqual(body.get("team_abbr"), "ARI")
+        mock_resolve.assert_called_once_with(player_id=None, name="Unknown Player", team_abbr="az")
+
     @patch("backend.app.routers.mlb.resolve_player", side_effect=RuntimeError("resolver unavailable"))
     def test_players_resolve_runtime_error_maps_503(self, _mock_resolve):
         resp = self.client.get("/api/players/resolve?name=Shohei+Ohtani")

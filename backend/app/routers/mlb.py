@@ -56,6 +56,7 @@ from backend.app.services.mlb.player_service import (
 )
 from backend.app.services.mlb.roster_freshness_service import get_roster_freshness
 from backend.app.services.shared import ping_db, sport_ping
+from backend.mlb.shared.team_name_map import normalizeTeamAbbreviation
 
 router = APIRouter(tags=["mlb"])
 ET = ZoneInfo("America/New_York")
@@ -178,12 +179,13 @@ def players_resolve(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
     if not result:
+        normalized_team_abbr = normalizeTeamAbbreviation(team_abbr) if team_abbr else None
         return {
             "ok": True,
             "found": False,
             "player_id": None,
             "player_name": query_name,
-            "team_abbr": (team_abbr or "").upper() or None,
+            "team_abbr": normalized_team_abbr,
         }
 
     return {"ok": True, "found": True, **result}
