@@ -183,6 +183,25 @@ class TestMlbPlayerRepository(unittest.TestCase):
         self.assertEqual(rows[0]["team_abbr"], "LAD")
         self.assertEqual(rows[0]["source"], "model_training_props")
 
+    def test_search_players_respects_limit_with_mixed_sources(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "LAD"}]
+            if "FROM model_training_props" in sql:
+                return [
+                    {"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"},
+                    {"player_id": "592450", "player_name": "Aaron Judge", "team": "NYY"},
+                    {"player_id": "605141", "player_name": "Mookie Betts", "team": "LAD"},
+                ]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            rows = repo.search_players(q="a", limit=2)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["player_id"], 660271)
+        self.assertEqual(rows[1]["player_id"], 592450)
+
 
 if __name__ == "__main__":
     unittest.main()
