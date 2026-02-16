@@ -31,6 +31,7 @@ Snapshot date: February 15, 2026
   - `mlb-pipeline-check-json`
   - `mlb-pipeline-log`
   - `mlb-pipeline-last`
+  - `mlb-pipeline-daily-check`
   - `mlb-insert-stat-derived`
   - `mlb-check-stat-derived`
   - `mlb-roster-refresh-all`
