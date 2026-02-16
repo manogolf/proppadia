@@ -123,6 +123,49 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Provide player_id or name/player_name", str(resp.json().get("detail")))
 
+    @patch("backend.app.routers.mlb.resolve_player")
+    def test_players_resolve_found(self, mock_resolve):
+        mock_resolve.return_value = {
+            "player_id": 660271,
+            "player_name": "Shohei Ohtani",
+            "team_abbr": "LAD",
+            "team_id": 119,
+            "source": "player_ids",
+            "matched_on": "player_id",
+        }
+        resp = self.client.get("/api/players/resolve?player_id=660271")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertTrue(body.get("found"))
+        self.assertEqual(body.get("player_id"), 660271)
+        self.assertEqual(body.get("team_abbr"), "LAD")
+        mock_resolve.assert_called_once_with(player_id=660271, name=None, team_abbr=None)
+
+    @patch("backend.app.routers.mlb.resolve_player")
+    def test_players_resolve_not_found(self, mock_resolve):
+        mock_resolve.return_value = None
+        resp = self.client.get("/api/players/resolve?name=Unknown+Player&team_abbr=LAD")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertFalse(body.get("found"))
+        self.assertEqual(body.get("player_name"), "Unknown Player")
+        self.assertEqual(body.get("team_abbr"), "LAD")
+        mock_resolve.assert_called_once_with(player_id=None, name="Unknown Player", team_abbr="LAD")
+
+    @patch("backend.app.routers.mlb.resolve_player", side_effect=RuntimeError("resolver unavailable"))
+    def test_players_resolve_runtime_error_maps_503(self, _mock_resolve):
+        resp = self.client.get("/api/players/resolve?name=Shohei+Ohtani")
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("resolver unavailable", str(resp.json().get("detail")))
+
+    @patch("backend.app.routers.mlb.resolve_player", side_effect=Exception("boom"))
+    def test_players_resolve_unexpected_error_maps_500(self, _mock_resolve):
+        resp = self.client.get("/api/players/resolve?name=Shohei+Ohtani")
+        self.assertEqual(resp.status_code, 500)
+        self.assertIn("Exception: boom", str(resp.json().get("detail")))
+
     @patch("backend.app.routers.mlb.search_players", side_effect=RuntimeError("db unavailable"))
     def test_players_search_runtime_error_maps_503(self, _mock_search):
         resp = self.client.get("/api/players/search?q=Ohtani&limit=5")
