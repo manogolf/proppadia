@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from backend.scripts import audit_mlb_prediction_flow
+from backend.scripts import check_mlb_hits_expectation_sources
 from backend.scripts import mlb_prediction_gate
 from backend.scripts import report_mlb_prop_coverage
 from backend.scripts.json_check_runner import run_json_check
@@ -126,10 +127,21 @@ def collect_pipeline_check(
         "--training-prop-sources",
         str(coverage_training_prop_sources),
     ]
+    hits_expectation_guard_args = [
+        "--window-mode",
+        str(quality_window_mode),
+        "--window-days",
+        str(int(quality_window_days)),
+        "--games-back",
+        str(int(quality_games_back)),
+    ]
 
     gate_rc, gate_payload = run_json_check(mlb_prediction_gate.main, gate_args)
     flow_rc, flow_payload = run_json_check(audit_mlb_prediction_flow.main, flow_args)
     coverage_rc, coverage_payload = run_json_check(report_mlb_prop_coverage.main, coverage_args)
+    hits_expectation_guard_rc, hits_expectation_guard_payload = run_json_check(
+        check_mlb_hits_expectation_sources.main, hits_expectation_guard_args
+    )
 
     checks = [
         {
@@ -152,6 +164,13 @@ def collect_pipeline_check(
             "status": coverage_payload.get("status"),
             "exit_code": int(coverage_rc),
             "payload": coverage_payload,
+        },
+        {
+            "name": "hits_expectation_sources",
+            "ok": bool(hits_expectation_guard_payload.get("ok")),
+            "status": hits_expectation_guard_payload.get("status"),
+            "exit_code": int(hits_expectation_guard_rc),
+            "payload": hits_expectation_guard_payload,
         },
     ]
     failures = [item["name"] for item in checks if (item["exit_code"] != 0) or (not item["ok"])]

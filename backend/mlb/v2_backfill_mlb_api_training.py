@@ -368,6 +368,18 @@ def _deterministic_side(seed: str) -> str:
     return "over" if _stable_hash01(seed) < 0.5 else "under"
 
 
+def _expected_hits_from_player(p: dict) -> float:
+    batting = (p.get("stats") or {}).get("batting") or {}
+    avg_raw = batting.get("avg")
+    try:
+        avg = float(str(avg_raw).strip())
+        if not (0.0 <= avg <= 1.0):
+            raise ValueError
+        return max(0.0, min(4.0, avg * 4.0))
+    except Exception:
+        return 1.0
+
+
 def half_step_line_from_actual(actual: float) -> float:
     if actual <= 0:
         return 0.5
@@ -455,8 +467,9 @@ def process_game(game_pk: int, date_str: str) -> int:
                 continue
 
             if ptype == "hits":
-                line = _hits_line_from_anchor(float(actual))
-                over_under = _deterministic_side(f"{player_id}:{game_pk}:{ptype}:{line}")
+                expected_hits = _expected_hits_from_player(pdata)
+                line = _hits_line_from_anchor(expected_hits)
+                over_under = "over" if expected_hits > line else "under"
             else:
                 line = half_step_line_from_actual(float(actual))
                 # deterministic side for repeatable labels across runs

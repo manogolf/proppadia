@@ -43,7 +43,7 @@ Typical cron
 
 from __future__ import annotations
 
-import os, sys, time, random, requests, hashlib
+import os, sys, time, random, requests
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from zoneinfo import ZoneInfo
@@ -181,12 +181,6 @@ def _grade(ou: str, line: float, actual: float) -> str:
     return "win" if actual > line else "loss"
 
 
-def _stable_hash01(seed: str) -> float:
-    digest = hashlib.sha256(seed.encode("utf-8")).digest()
-    n = int.from_bytes(digest[:8], "big")
-    return n / float(2**64 - 1)
-
-
 def _hits_line_from_anchor(anchor: float) -> float:
     x = max(0.0, float(anchor))
     if x < 1.0:
@@ -198,8 +192,16 @@ def _hits_line_from_anchor(anchor: float) -> float:
     return 3.5
 
 
-def _deterministic_side(seed: str) -> str:
-    return "over" if _stable_hash01(seed) < 0.5 else "under"
+def _expected_hits_from_bat(bat: Dict[str, Any]) -> float:
+    """Estimate expected hits from season batting average when present."""
+    avg_raw = bat.get("avg")
+    try:
+        avg = float(str(avg_raw).strip())
+        if not (0.0 <= avg <= 1.0):
+            raise ValueError
+        return max(0.0, min(4.0, avg * 4.0))
+    except Exception:
+        return 1.0
 
 # ---- MLB fetchers -----------------------------------------------------------
 def _schedule(date_yyyy_mm_dd: str) -> Dict[str, Any]:
@@ -319,10 +321,11 @@ def upsert_labels_for_date(date_yyyy_mm_dd: str) -> Dict[str, Any]:
 
                     # Deterministic hits policy:
                     # - bucketed line
-                    # - stable-hash side (no runtime randomness)
+                    # - side from expected_hits vs line
                     if ptype == "hits":
-                        line = _hits_line_from_anchor(float(actual))
-                        over_under = _deterministic_side(f"{pid}:{game_id}:{ptype}:{line}")
+                        expected_hits = _expected_hits_from_bat(bat)
+                        line = _hits_line_from_anchor(expected_hits)
+                        over_under = "over" if expected_hits > line else "under"
                     else:
                         # construct a half-step training label around actual
                         if actual == 0:

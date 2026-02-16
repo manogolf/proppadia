@@ -44,7 +44,7 @@ Typical cron
 
 from __future__ import annotations
 
-import os, sys, json, argparse, hashlib
+import os, sys, json, argparse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 import requests
@@ -186,12 +186,6 @@ def _player_box_nodes(box: Dict[str, Any], pid: int) -> Tuple[Optional[Dict[str,
     return None, None
 
 
-def _stable_hash01(seed: str) -> float:
-    digest = hashlib.sha256(seed.encode("utf-8")).digest()
-    n = int.from_bytes(digest[:8], "big")
-    return n / float(2**64 - 1)
-
-
 def _hits_line_from_anchor(anchor: float) -> float:
     x = max(0.0, float(anchor))
     if x < 1.0:
@@ -201,10 +195,6 @@ def _hits_line_from_anchor(anchor: float) -> float:
     if x < 3.0:
         return 2.5
     return 3.5
-
-
-def _deterministic_side(seed: str) -> str:
-    return "over" if _stable_hash01(seed) < 0.5 else "under"
 
 
 def _decide_line(actual: float) -> float:
@@ -311,16 +301,16 @@ def main():
             # derive line & OU
             if ptype == "hits":
                 expected_hits = None
-                rr7 = (r.get("features") or {}).get("rolling_result_avg_7")
+                d7_hits = (r.get("features") or {}).get("d7_hits")
                 try:
-                    expected_hits = float(rr7)
+                    expected_hits = float(d7_hits)
                     if not (expected_hits >= 0):
                         expected_hits = None
                 except Exception:
                     expected_hits = None
-                anchor = expected_hits if expected_hits is not None else float(actual)
+                anchor = expected_hits if expected_hits is not None else 1.0
                 line = _hits_line_from_anchor(anchor)
-                over_under = _deterministic_side(f"{pid}:{gid}:{ptype}:{line}")
+                over_under = "over" if anchor > line else "under"
             else:
                 line = _decide_line(actual)
                 over_under = "over"  # arbitrary; we only need a consistent label target
