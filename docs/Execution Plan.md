@@ -37,6 +37,10 @@ Completed slices:
   - season activation history commands added (`make season-activation-log`, `make season-activation-last`)
   - combined season activation report commands added (`make season-activation-report`, `make season-activation-report-strict`)
   - baseline artifact check command added (`make season-baseline-check`)
+  - season cutover history integrated into activation/operator/handoff reports
+  - season activation readiness now requires cutover-history artifact presence
+  - season activation bundle now enforces final cutover-ready gate
+  - cutover-ready now emits immediate failure diagnostics and auto-logs activation history
 
 Current governance status:
 
