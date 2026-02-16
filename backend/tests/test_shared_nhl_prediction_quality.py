@@ -8,6 +8,9 @@ from backend.scripts import analyze_nhl_prediction_quality as quality
 
 
 class TestSharedNhlPredictionQuality(unittest.TestCase):
+    def test_common_cte_escapes_like_percent(self):
+        self.assertIn("LIKE 'nhl_%%'", quality.COMMON_CTE)
+
     def test_pass_with_sufficient_total(self):
         side_effects = [
             [{"total": 20, "correct": 12}],

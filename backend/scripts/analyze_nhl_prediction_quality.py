@@ -24,7 +24,7 @@ WITH src AS (
     was_correct,
     confidence_score
   FROM player_props
-  WHERE prop_source LIKE 'nhl_%'
+  WHERE prop_source LIKE 'nhl_%%'
     AND game_date IS NOT NULL
     AND game_date::date BETWEEN %s::date AND %s::date
 ),

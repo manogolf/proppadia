@@ -64,9 +64,9 @@ Current governance status:
 - Phase 4.2 NHL model outcome review: complete
 - Phase 5.1 Archive culling: complete
 - Phase 5.2 Runbook consolidation: complete
-- Phase 6.1 Preseason dry run: in progress
+- Phase 6.1 Preseason dry run: complete
 - Phase 6.2 In-season cadence cutover: pending
-- Phase 6.3 Baseline lock: in progress
+- Phase 6.3 Baseline lock: complete
 
 ## Planning Goal
 

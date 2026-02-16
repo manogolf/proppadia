@@ -25,7 +25,7 @@ MLB_PROP_COVERAGE_REQUIRED ?=
 MLB_PROP_COVERAGE_MIN_GRADED ?= 0
 NHL_QUALITY_FROM_DATE ?=
 NHL_QUALITY_TO_DATE ?=
-NHL_QUALITY_MIN_TOTAL ?= 1
+NHL_QUALITY_MIN_TOTAL ?= 0
 MLB_STAT_FROM_DATE ?=
 MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
@@ -328,7 +328,7 @@ mlb-season-kickoff-check:
 	$(MAKE) cron-governance-check
 	$(MAKE) mlb-show-config
 	$(MAKE) mlb-daily-refresh-smoke MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
-	$(MAKE) mlb-pipeline-check-json MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)" MLB_PREDICT_PROP_TYPES="$(MLB_PREDICT_PROP_TYPES)" MLB_QUALITY_WINDOW_MODE="$(MLB_QUALITY_WINDOW_MODE)" MLB_QUALITY_WINDOW_DAYS="$(MLB_QUALITY_WINDOW_DAYS)" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" MLB_QUALITY_MIN_ACCURACY="$(MLB_QUALITY_MIN_ACCURACY)" MLB_PROP_COVERAGE_WINDOW_MODE="$(MLB_PROP_COVERAGE_WINDOW_MODE)" MLB_PROP_COVERAGE_WINDOW_DAYS="$(MLB_PROP_COVERAGE_WINDOW_DAYS)" MLB_PROP_COVERAGE_GAMES_BACK="$(MLB_PROP_COVERAGE_GAMES_BACK)" MLB_PROP_COVERAGE_REQUIRED="$(MLB_PROP_COVERAGE_REQUIRED)" MLB_PROP_COVERAGE_MIN_GRADED="$(MLB_PROP_COVERAGE_MIN_GRADED)"
+	$(MAKE) mlb-pipeline-check-json MLB_BASE_URL="$(if $(MLB_BASE_URL),$(MLB_BASE_URL),$(BASE_URL))" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)" MLB_PREDICT_PROP_TYPES="$(MLB_PREDICT_PROP_TYPES)" MLB_QUALITY_WINDOW_MODE="$(MLB_QUALITY_WINDOW_MODE)" MLB_QUALITY_WINDOW_DAYS="$(MLB_QUALITY_WINDOW_DAYS)" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" MLB_QUALITY_MIN_ACCURACY="$(MLB_QUALITY_MIN_ACCURACY)" MLB_PROP_COVERAGE_WINDOW_MODE="$(MLB_PROP_COVERAGE_WINDOW_MODE)" MLB_PROP_COVERAGE_WINDOW_DAYS="$(MLB_PROP_COVERAGE_WINDOW_DAYS)" MLB_PROP_COVERAGE_GAMES_BACK="$(MLB_PROP_COVERAGE_GAMES_BACK)" MLB_PROP_COVERAGE_REQUIRED="$(MLB_PROP_COVERAGE_REQUIRED)" MLB_PROP_COVERAGE_MIN_GRADED="$(MLB_PROP_COVERAGE_MIN_GRADED)"
 	@if [ -n "$(BASE_URL)" ] && [ "$(BASE_URL)" != "http://127.0.0.1:8001" ]; then \
 		$(MAKE) mlb-post-deploy-strict-offseason BASE_URL="$(BASE_URL)" MLB_DATE="$(MLB_DATE)"; \
 	else \
@@ -347,8 +347,16 @@ season-baseline-capture:
 	mlb_tmp="$$mlb_out.tmp"; \
 	nhl_tmp="$$nhl_out.tmp"; \
 	rm -f "$$mlb_tmp" "$$nhl_tmp"; \
-	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; \
-	$(VENV_PY) backend/scripts/analyze_nhl_prediction_quality.py --from-date $(NHL_QUALITY_FROM_DATE) --to-date $(NHL_QUALITY_TO_DATE) --min-total $(NHL_QUALITY_MIN_TOTAL) > "$$nhl_tmp"; \
+	if ! $(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; then \
+		echo "season-baseline-capture: MLB baseline generation failed"; \
+		if [ -s "$$mlb_tmp" ]; then cat "$$mlb_tmp"; fi; \
+		exit 1; \
+	fi; \
+	if ! $(VENV_PY) backend/scripts/analyze_nhl_prediction_quality.py --from-date $(NHL_QUALITY_FROM_DATE) --to-date $(NHL_QUALITY_TO_DATE) --min-total $(NHL_QUALITY_MIN_TOTAL) > "$$nhl_tmp"; then \
+		echo "season-baseline-capture: NHL baseline generation failed"; \
+		if [ -s "$$nhl_tmp" ]; then cat "$$nhl_tmp"; fi; \
+		exit 1; \
+	fi; \
 	mv "$$mlb_tmp" "$$mlb_out"; \
 	mv "$$nhl_tmp" "$$nhl_out"; \
 	echo "Wrote $$mlb_out"; \

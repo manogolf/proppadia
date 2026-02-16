@@ -19,6 +19,12 @@ PROP_PROFILES: dict[str, dict[str, Any]] = {
     "rbis": {"prop_value": 0.5, "over_under": "over"},
 }
 
+FALLBACK_PLAYER_IDS: tuple[int, ...] = (
+    660271,  # Shohei Ohtani
+    592450,  # Aaron Judge
+    545361,  # Mike Trout
+)
+
 
 def _obj(resp) -> Dict[str, Any]:
     body = safe_json(resp)
@@ -44,6 +50,33 @@ def _load_players(client: ClientAdapter, limit: int) -> list[Dict[str, Any]]:
                     "player_id": int(pid),
                     "team_id": int(tid),
                     "player_name": row.get("player_name"),
+                }
+            )
+        except Exception:
+            continue
+    if out:
+        return out
+    # Fallback for environments where /api/players can be empty (offseason seed lag).
+    # We still validate end-to-end prediction by resolving known IDs via lookup.
+    for pid in FALLBACK_PLAYER_IDS:
+        if len(out) >= int(limit):
+            break
+        resp = client.request("GET", "/api/players/lookup", params={"player_id": int(pid)})
+        lookup = safe_json(resp)
+        if resp.status_code != 200 or not isinstance(lookup, dict):
+            continue
+        if not lookup.get("ok") or not lookup.get("found"):
+            continue
+        team_id = lookup.get("team_id")
+        player_id = lookup.get("player_id")
+        if team_id is None or player_id is None:
+            continue
+        try:
+            out.append(
+                {
+                    "player_id": int(player_id),
+                    "team_id": int(team_id),
+                    "player_name": lookup.get("player_name"),
                 }
             )
         except Exception:

@@ -167,7 +167,10 @@ def _fetch_json(url: str) -> Dict[str, Any]:
 def _fetch_schedule(date_iso: str) -> List[Dict[str, Any]]:
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_iso}"
     js = _fetch_json(url)
-    return js.get("dates", [{}])[0].get("games", []) or []
+    dates = js.get("dates") or []
+    if not dates:
+        return []
+    return (dates[0] or {}).get("games", []) or []
 
 
 def _fetch_live_feed(game_id: int) -> Dict[str, Any]:
