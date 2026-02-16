@@ -161,6 +161,25 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         mock_resolve.assert_called_once_with(player_id=None, name="Shohei Ohtani", team_abbr="LAD")
 
     @patch("backend.app.routers.mlb.resolve_player")
+    def test_players_resolve_prefers_name_over_player_name_alias(self, mock_resolve):
+        mock_resolve.return_value = {
+            "player_id": 660271,
+            "player_name": "Shohei Ohtani",
+            "team_abbr": "LAD",
+            "team_id": 119,
+            "source": "player_ids",
+            "matched_on": "fuzzy_name",
+        }
+        resp = self.client.get(
+            "/api/players/resolve?name=Primary+Name&player_name=Alias+Name&team_abbr=LAD"
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertTrue(body.get("found"))
+        mock_resolve.assert_called_once_with(player_id=None, name="Primary Name", team_abbr="LAD")
+
+    @patch("backend.app.routers.mlb.resolve_player")
     def test_players_resolve_not_found(self, mock_resolve):
         mock_resolve.return_value = None
         resp = self.client.get("/api/players/resolve?name=Unknown+Player&team_abbr=LAD")
@@ -182,6 +201,17 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertFalse(body.get("found"))
         self.assertEqual(body.get("team_abbr"), "ARI")
         mock_resolve.assert_called_once_with(player_id=None, name="Unknown Player", team_abbr="az")
+
+    @patch("backend.app.routers.mlb.resolve_player")
+    def test_players_resolve_not_found_normalizes_ath_alias(self, mock_resolve):
+        mock_resolve.return_value = None
+        resp = self.client.get("/api/players/resolve?name=Unknown+Player&team_abbr=ATH")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get("ok"))
+        self.assertFalse(body.get("found"))
+        self.assertEqual(body.get("team_abbr"), "OAK")
+        mock_resolve.assert_called_once_with(player_id=None, name="Unknown Player", team_abbr="ATH")
 
     @patch("backend.app.routers.mlb.resolve_player", side_effect=RuntimeError("resolver unavailable"))
     def test_players_resolve_runtime_error_maps_503(self, _mock_resolve):
