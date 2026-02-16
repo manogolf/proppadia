@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -23,6 +23,9 @@ MLB_PROP_COVERAGE_WINDOW_MODE ?= days
 MLB_PROP_COVERAGE_GAMES_BACK ?= 30
 MLB_PROP_COVERAGE_REQUIRED ?=
 MLB_PROP_COVERAGE_MIN_GRADED ?= 0
+MLB_CORE_PROP_TYPES ?= hits,total_bases,hits_runs_rbis,runs_rbis,rbis,runs_scored,strikeouts_batting,walks,singles,doubles,strikeouts_pitching,outs_recorded
+MLB_CORE_MIN_GRADED ?= 20
+MLB_CORE_TRAINING_SOURCES ?= mlb_api
 NHL_QUALITY_FROM_DATE ?=
 NHL_QUALITY_TO_DATE ?=
 NHL_QUALITY_MIN_TOTAL ?= 0
@@ -118,6 +121,7 @@ help:
 	@echo "  make mlb-pipeline-daily-check [append latest pipeline snapshot, then show history tail]"
 	@echo "  make mlb-prediction-flow-audit [date/game binding + duplicate/idempotency checks]"
 	@echo "  make mlb-prop-coverage [recent prop-type coverage and graded volume]"
+	@echo "  make mlb-prop-coverage-core [core 12 prop coverage guard]"
 	@echo "  make mlb-daily-refresh [daily baseline; cache+roster+stat-derived]"
 	@echo "  make mlb-daily-refresh-strict [daily baseline + require stat-derived min=1]"
 	@echo "  make mlb-daily-refresh-smoke [daily baseline smoke; forces MLB_STAT_MAX_GAMES=1]"
@@ -516,6 +520,9 @@ mlb-show-config:
 	@echo "MLB_PROP_COVERAGE_GAMES_BACK=$(MLB_PROP_COVERAGE_GAMES_BACK)"
 	@echo "MLB_PROP_COVERAGE_REQUIRED=$(MLB_PROP_COVERAGE_REQUIRED)"
 	@echo "MLB_PROP_COVERAGE_MIN_GRADED=$(MLB_PROP_COVERAGE_MIN_GRADED)"
+	@echo "MLB_CORE_PROP_TYPES=$(MLB_CORE_PROP_TYPES)"
+	@echo "MLB_CORE_MIN_GRADED=$(MLB_CORE_MIN_GRADED)"
+	@echo "MLB_CORE_TRAINING_SOURCES=$(MLB_CORE_TRAINING_SOURCES)"
 
 # JSON snapshot for MLB readiness signals (stat-derived + roster freshness).
 mlb-readiness-snapshot:
@@ -556,6 +563,9 @@ mlb-pipeline-daily-check:
 
 mlb-prop-coverage:
 	$(VENV_PY) backend/scripts/report_mlb_prop_coverage.py --window-mode $(MLB_PROP_COVERAGE_WINDOW_MODE) --window-days $(MLB_PROP_COVERAGE_WINDOW_DAYS) --games-back $(MLB_PROP_COVERAGE_GAMES_BACK) --required-props "$(MLB_PROP_COVERAGE_REQUIRED)" --min-graded-per-prop $(MLB_PROP_COVERAGE_MIN_GRADED)
+
+mlb-prop-coverage-core:
+	$(VENV_PY) backend/scripts/report_mlb_prop_coverage.py --window-mode games --games-back $(MLB_PROP_COVERAGE_GAMES_BACK) --required-props "$(MLB_CORE_PROP_TYPES)" --min-graded-per-prop $(MLB_CORE_MIN_GRADED) --gate-metric training_source --training-prop-sources "$(MLB_CORE_TRAINING_SOURCES)"
 
 mlb-prediction-flow-audit:
 	$(VENV_PY) backend/scripts/audit_mlb_prediction_flow.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK)

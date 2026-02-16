@@ -40,6 +40,7 @@ If the question is “what is the active runtime path right now?”:
 - `make phase-status-json`: machine-readable summary of the phase tracker in `docs/Execution Plan.md`.
 - `docs/Cron Replacement Runbook.md`: replacement mapping for suspended cron workflows and schedule re-enable gates.
 - `docs/MLB Data-First Retention Plan.md`: MLB data-preservation-first operating policy.
+- `docs/MLB Post-Phase-6 Backlog.md`: prioritized MLB work plan after Phase 6 readiness.
 - `docs/Offseason Behavior Contract.md`: expected MLB/NHL empty-state behavior and strict-offseason gate policy.
 
 ## Shared Validation Lane

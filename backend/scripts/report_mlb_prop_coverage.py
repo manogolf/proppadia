@@ -49,27 +49,31 @@ def _player_props(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
     return list(rows or [])
 
 
-def _stat_derived(window_value: int, window_mode: str) -> dict[str, int]:
+def _training_source_counts(window_value: int, window_mode: str, prop_sources: Sequence[str]) -> dict[str, int]:
+    sources = [s.strip() for s in prop_sources if str(s).strip()]
+    if not sources:
+        return {}
+    source_placeholders = ", ".join(["%s"] * len(sources))
     rows = pg_fetchall(
-        """
+        f"""
         SELECT
           prop_type,
-          COUNT(*)::int AS stat_derived_count
+          COUNT(*)::int AS training_source_count
         FROM model_training_props
-        WHERE prop_source = 'stat_derived'
+        WHERE prop_source IN ({source_placeholders})
         """
         + _date_filter("game_date", "model_training_props", window_mode).replace("WHERE", "AND", 1)
         + """
         GROUP BY prop_type
         """,
-        (int(window_value),),
+        tuple(sources) + (int(window_value),),
     )
     out: dict[str, int] = {}
     for row in rows or []:
         prop = str(row.get("prop_type") or "").strip()
         if not prop:
             continue
-        out[prop] = int(row.get("stat_derived_count") or 0)
+        out[prop] = int(row.get("training_source_count") or 0)
     return out
 
 
@@ -89,15 +93,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=0,
         help="Fail when a required prop has fewer graded rows than this threshold.",
     )
+    ap.add_argument(
+        "--gate-metric",
+        choices=["graded", "training_source", "stat_derived"],
+        default="graded",
+        help="Metric used for required-prop threshold checks.",
+    )
+    ap.add_argument(
+        "--training-prop-sources",
+        default="mlb_api",
+        help="Comma-separated model_training_props.prop_source values used for training-depth counts.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     window_mode = "games" if str(args.window_mode).lower() == "games" else "days"
     window_value = max(1, int(args.games_back if window_mode == "games" else args.window_days))
     required_props = [p.strip() for p in str(args.required_props).split(",") if p.strip()]
     min_graded = max(0, int(args.min_graded_per_prop))
+    gate_metric_raw = str(args.gate_metric).strip().lower()
+    gate_metric = "training_source" if gate_metric_raw == "stat_derived" else gate_metric_raw
+    training_prop_sources = [s.strip() for s in str(args.training_prop_sources).split(",") if s.strip()]
 
     pred_rows = _player_props(window_value, window_mode)
-    stat_counts = _stat_derived(window_value, window_mode)
+    stat_counts = _training_source_counts(window_value, window_mode, training_prop_sources)
 
     by_prop: dict[str, Dict[str, Any]] = {}
     for row in pred_rows:
@@ -113,10 +131,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "losses": int(row.get("losses") or 0),
             "pushes": int(row.get("pushes") or 0),
             "dnps": int(row.get("dnps") or 0),
-            "stat_derived_count": int(stat_counts.get(prop, 0)),
+            "training_source_count": int(stat_counts.get(prop, 0)),
         }
 
-    # Include stat-derived-only props that might not yet be in player_props window.
+    # Include training-source-only props that might not yet be in player_props window.
     for prop, n in stat_counts.items():
         by_prop.setdefault(
             prop,
@@ -129,7 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "losses": 0,
                 "pushes": 0,
                 "dnps": 0,
-                "stat_derived_count": int(n),
+                "training_source_count": int(n),
             },
         )
 
@@ -140,13 +158,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     missing_required = [p for p in required_props if p not in by_prop]
-    under_min_required = [
-        p for p in required_props if p in by_prop and int(by_prop[p].get("graded_count") or 0) < min_graded
-    ]
+    under_min_required = []
+    for p in required_props:
+        if p not in by_prop:
+            continue
+        row = by_prop[p]
+        threshold_value = int(row.get("graded_count") or 0)
+        if gate_metric == "training_source":
+            threshold_value = int(row.get("training_source_count") or 0)
+        if threshold_value < min_graded:
+            under_min_required.append(p)
 
     total_predictions = sum(int(r["total_predictions"]) for r in rows)
     total_graded = sum(int(r["graded_count"]) for r in rows)
-    total_stat_derived = sum(int(r["stat_derived_count"]) for r in rows)
+    total_training_source = sum(int(r["training_source_count"]) for r in rows)
 
     ok = not missing_required and not under_min_required
     payload = {
@@ -156,13 +181,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "window_value": window_value,
         "required_props": required_props,
         "min_graded_per_prop": min_graded,
+        "gate_metric": gate_metric,
+        "training_prop_sources": training_prop_sources,
         "missing_required_props": missing_required,
         "under_min_required_props": under_min_required,
         "summary": {
             "prop_types": len(rows),
             "total_predictions": total_predictions,
             "total_graded": total_graded,
-            "total_stat_derived": total_stat_derived,
+            "total_training_source": total_training_source,
         },
         "rows": rows,
     }

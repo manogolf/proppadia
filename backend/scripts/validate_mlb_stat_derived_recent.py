@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report recent MLB stat-derived row volume in model_training_props."""
+"""Report recent MLB mlb_api row volume in model_training_props."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _valid_date(s: Optional[str]) -> Optional[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Validate recent MLB stat-derived row volume.")
+    ap = argparse.ArgumentParser(description="Validate recent MLB mlb_api row volume.")
     ap.add_argument(
         "--days",
         type=int,
@@ -58,7 +58,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
-            WHERE prop_source = 'stat_derived'
+            WHERE prop_source = 'mlb_api'
               AND game_date >= %s::date
               AND game_date <= %s::date
         """
@@ -68,7 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
-            WHERE prop_source = 'stat_derived'
+            WHERE prop_source = 'mlb_api'
               AND game_date >= %s::date
         """
         row = pg_fetchone(sql, (from_date,)) or {}
@@ -77,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
-            WHERE prop_source = 'stat_derived'
+            WHERE prop_source = 'mlb_api'
               AND game_date <= %s::date
         """
         row = pg_fetchone(sql, (to_date,)) or {}
@@ -86,7 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
             FROM model_training_props
-            WHERE prop_source = 'stat_derived'
+            WHERE prop_source = 'mlb_api'
               AND game_date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
         """
         row = pg_fetchone(sql, (days,)) or {}
@@ -113,13 +113,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0 if status == "pass" else 1
 
-    print(f"MLB stat_derived rows ({label}): {n}")
+    print(f"MLB mlb_api rows ({label}): {n}")
     if latest_game_date:
-        print(f"Latest stat_derived game_date: {latest_game_date}")
+        print(f"Latest mlb_api game_date: {latest_game_date}")
     if n < require_min:
-        print(f"FAIL stat_derived row count {n} < required minimum {require_min}")
+        print(f"FAIL mlb_api row count {n} < required minimum {require_min}")
         return 1
-    print("PASS stat_derived volume check")
+    print("PASS mlb_api volume check")
     return 0
 
 

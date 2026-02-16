@@ -45,7 +45,7 @@ def _flow_summary(window_value: int, window_mode: str) -> Dict[str, int]:
         SELECT
           COUNT(*)::int AS total_rows,
           COUNT(*) FILTER (WHERE prop_source = 'user_added')::int AS user_added_rows,
-          COUNT(*) FILTER (WHERE prop_source = 'stat_derived')::int AS stat_derived_rows,
+          COUNT(*) FILTER (WHERE prop_source = 'mlb_api')::int AS mlb_api_rows,
           COUNT(*) FILTER (WHERE lower(trim(coalesce(outcome, ''))) IN ('win','loss','push','dnp'))::int AS resolved_rows,
           COUNT(*) FILTER (WHERE lower(trim(coalesce(outcome, ''))) IN ('win','loss'))::int AS graded_rows
         FROM player_props
@@ -57,7 +57,7 @@ def _flow_summary(window_value: int, window_mode: str) -> Dict[str, int]:
     return {
         "total_rows": int(row.get("total_rows") or 0),
         "user_added_rows": int(row.get("user_added_rows") or 0),
-        "stat_derived_rows": int(row.get("stat_derived_rows") or 0),
+        "mlb_api_rows": int(row.get("mlb_api_rows") or 0),
         "resolved_rows": int(row.get("resolved_rows") or 0),
         "graded_rows": int(row.get("graded_rows") or 0),
     }
@@ -134,7 +134,7 @@ def _duplicate_rows(window_value: int, window_mode: str, include_user_id: bool) 
         FROM (
           SELECT COUNT(*)::int AS dup_count
           FROM model_training_props
-          WHERE prop_source = 'stat_derived'
+          WHERE prop_source = 'mlb_api'
         """
         + _date_filter("game_date", "model_training_props", window_mode).replace("WHERE", "AND ", 1)
         + """
@@ -215,7 +215,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "summary:",
             f"total={summary['total_rows']}",
             f"user_added={summary['user_added_rows']}",
-            f"stat_derived={summary['stat_derived_rows']}",
+            f"mlb_api={summary['mlb_api_rows']}",
             f"graded={summary['graded_rows']}",
         )
         print("checks:", json.dumps(checks, sort_keys=True))

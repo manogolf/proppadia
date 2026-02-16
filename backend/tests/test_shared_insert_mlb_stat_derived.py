@@ -28,6 +28,11 @@ class TestSharedInsertMlbStatDerived(unittest.TestCase):
         out = script._final_game_ids(schedule, require_regular_season=True)
         self.assertEqual(out, [1])
 
+    def test_extract_stat_for_runs_rbis(self):
+        stats = {"batting": {"runs": 2, "rbi": 3}}
+        out = script._extract_stat_for_prop(stats, "runs_rbis")
+        self.assertEqual(out, 5.0)
+
 
 if __name__ == "__main__":
     unittest.main()

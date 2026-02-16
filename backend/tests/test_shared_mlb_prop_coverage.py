@@ -33,8 +33,8 @@ class TestSharedMlbPropCoverage(unittest.TestCase):
                 },
             ],
             [  # stat_derived aggregate
-                {"prop_type": "hits", "stat_derived_count": 250},
-                {"prop_type": "total_bases", "stat_derived_count": 240},
+                {"prop_type": "hits", "training_source_count": 250},
+                {"prop_type": "total_bases", "training_source_count": 240},
             ],
         ]
         out = StringIO()
@@ -62,7 +62,7 @@ class TestSharedMlbPropCoverage(unittest.TestCase):
                     "dnps": 0,
                 }
             ],
-            [{"prop_type": "hits", "stat_derived_count": 30}],
+            [{"prop_type": "hits", "training_source_count": 30}],
         ]
         out = StringIO()
         with patch.object(coverage, "pg_fetchall", side_effect=side_effects), redirect_stdout(out):
@@ -74,6 +74,68 @@ class TestSharedMlbPropCoverage(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("total_bases", payload["missing_required_props"])
         self.assertIn("hits", payload["under_min_required_props"])
+
+    def test_pass_when_gate_metric_training_source_meets_min(self):
+        side_effects = [
+            [
+                {
+                    "prop_type": "hits",
+                    "total_predictions": 5,
+                    "resolved_count": 5,
+                    "graded_count": 1,
+                    "wins": 1,
+                    "losses": 0,
+                    "pushes": 0,
+                    "dnps": 0,
+                },
+                {
+                    "prop_type": "total_bases",
+                    "total_predictions": 3,
+                    "resolved_count": 3,
+                    "graded_count": 1,
+                    "wins": 1,
+                    "losses": 0,
+                    "pushes": 0,
+                    "dnps": 0,
+                },
+            ],
+            [
+                {"prop_type": "hits", "training_source_count": 40},
+                {"prop_type": "total_bases", "training_source_count": 35},
+            ],
+        ]
+        out = StringIO()
+        with patch.object(coverage, "pg_fetchall", side_effect=side_effects), redirect_stdout(out):
+            rc = coverage.main(
+                [
+                    "--required-props",
+                    "hits,total_bases",
+                    "--min-graded-per-prop",
+                    "20",
+                    "--gate-metric",
+                    "training_source",
+                ]
+            )
+        self.assertEqual(rc, 0)
+        payload = json.loads(out.getvalue())
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["gate_metric"], "training_source")
+
+    def test_training_prop_sources_are_applied_to_training_query(self):
+        side_effects = [
+            [],
+            [],
+        ]
+        out = StringIO()
+        with patch.object(coverage, "pg_fetchall", side_effect=side_effects) as mock_fetch, redirect_stdout(out):
+            rc = coverage.main(["--training-prop-sources", "mlb_api,stat_derived"])
+        self.assertEqual(rc, 0)
+        calls = mock_fetch.call_args_list
+        self.assertEqual(len(calls), 2)
+        training_query, training_params = calls[1].args
+        self.assertIn("prop_source IN (%s, %s)", training_query)
+        self.assertEqual(training_params[0], "mlb_api")
+        self.assertEqual(training_params[1], "stat_derived")
 
 
 if __name__ == "__main__":

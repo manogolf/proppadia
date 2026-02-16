@@ -41,7 +41,7 @@ def _count_rows(
             SELECT COUNT(*)::int AS n
             FROM model_training_props
             WHERE game_date BETWEEN %s::date AND %s::date
-              AND prop_source = 'stat_derived'
+              AND prop_source = 'mlb_api'
             """,
             (from_date, to_date),
         )
@@ -53,7 +53,7 @@ def _count_rows(
                 SELECT COUNT(*)::int AS n
                 FROM player_props
                 WHERE game_date BETWEEN %s::date AND %s::date
-                  AND prop_source IN ('stat_derived', 'user_added')
+                  AND prop_source IN ('mlb_api', 'user_added')
                 """,
                 (from_date, to_date),
             )
@@ -63,7 +63,7 @@ def _count_rows(
                 SELECT COUNT(*)::int AS n
                 FROM player_props
                 WHERE game_date BETWEEN %s::date AND %s::date
-                  AND prop_source = 'stat_derived'
+                  AND prop_source = 'mlb_api'
                 """,
                 (from_date, to_date),
             )
@@ -85,7 +85,7 @@ def _delete_rows(
             """
             DELETE FROM model_training_props
             WHERE game_date BETWEEN %s::date AND %s::date
-              AND prop_source = 'stat_derived'
+              AND prop_source = 'mlb_api'
             """,
             (from_date, to_date),
         )
@@ -96,7 +96,7 @@ def _delete_rows(
                 """
                 DELETE FROM player_props
                 WHERE game_date BETWEEN %s::date AND %s::date
-                  AND prop_source IN ('stat_derived', 'user_added')
+                  AND prop_source IN ('mlb_api', 'user_added')
                 """,
                 (from_date, to_date),
             )
@@ -105,7 +105,7 @@ def _delete_rows(
                 """
                 DELETE FROM player_props
                 WHERE game_date BETWEEN %s::date AND %s::date
-                  AND prop_source = 'stat_derived'
+                  AND prop_source = 'mlb_api'
                 """,
                 (from_date, to_date),
             )

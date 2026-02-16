@@ -20,7 +20,7 @@ def _stat_derived_check(days: int, require_min: int) -> Dict[str, Any]:
           COUNT(*)::int AS n,
           MAX(game_date)::text AS latest_game_date
         FROM model_training_props
-        WHERE prop_source = 'stat_derived'
+        WHERE prop_source = 'mlb_api'
           AND game_date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
         """,
         (int(days),),

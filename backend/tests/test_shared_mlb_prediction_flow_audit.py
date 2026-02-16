@@ -15,7 +15,7 @@ class TestSharedMlbPredictionFlowAudit(unittest.TestCase):
                 {
                     "total_rows": 100,
                     "user_added_rows": 40,
-                    "stat_derived_rows": 60,
+                    "mlb_api_rows": 60,
                     "resolved_rows": 90,
                     "graded_rows": 70,
                 }
@@ -46,7 +46,7 @@ class TestSharedMlbPredictionFlowAudit(unittest.TestCase):
                 {
                     "total_rows": 10,
                     "user_added_rows": 10,
-                    "stat_derived_rows": 0,
+                    "mlb_api_rows": 0,
                     "resolved_rows": 10,
                     "graded_rows": 8,
                 }

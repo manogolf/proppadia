@@ -28,6 +28,7 @@ BATTER_PROP_TYPES = [
     "strikeouts_batting",
     "home_runs",
     "rbis",
+    "runs_rbis",
     "runs_scored",
     "total_bases",
     "walks",
@@ -123,6 +124,10 @@ def _extract_stat_for_prop(stats: Dict[str, Any], prop_type: str) -> Optional[fl
         return _num(b.get("rbi") or b.get("rbis"))
     if prop_type == "runs_scored":
         return _num(b.get("runs"))
+    if prop_type == "runs_rbis":
+        r = _num(b.get("runs")) or 0.0
+        i = _num(b.get("rbi") or b.get("rbis")) or 0.0
+        return r + i
     if prop_type == "walks":
         return _num(b.get("baseOnBalls") or b.get("walks"))
     if prop_type == "stolen_bases":
@@ -226,14 +231,14 @@ def _get_streak(conn, player_id: int, prop_type: str) -> Tuple[Optional[str], Op
         return (str(st) if st is not None else None, int(cnt) if cnt is not None else None)
 
 
-def _date_has_stat_derived(conn, game_date: str) -> bool:
+def _date_has_mlb_api_rows(conn, game_date: str) -> bool:
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT 1
             FROM model_training_props
             WHERE game_date = %s::date
-              AND prop_source = 'stat_derived'
+              AND prop_source = 'mlb_api'
             LIMIT 1
             """,
             (game_date,),
@@ -359,9 +364,9 @@ def run(
             d_iso = d.isoformat()
             print(f"\n📅 Processing {d_iso} ...")
             try:
-                if skip_existing_dates and _date_has_stat_derived(conn, d_iso):
+                if skip_existing_dates and _date_has_mlb_api_rows(conn, d_iso):
                     skipped_dates += 1
-                    print(f"⏭️  {d_iso} skipped | stat_derived rows already present")
+                    print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
                     continue
 
                 schedule = _fetch_schedule(d_iso)
@@ -491,7 +496,7 @@ def run(
                                     "status": "resolved",
                                     "created_at": now_iso,
                                     "updated_at": now_iso,
-                                    "prop_source": "stat_derived",
+                                    "prop_source": "mlb_api",
                                     "was_correct": outcome == "win",
                                     "game_date": d_iso,
                                     "game_time": game_time,
@@ -543,7 +548,7 @@ def main() -> int:
     ap.add_argument(
         "--skip-existing-dates",
         action="store_true",
-        help="Skip any date that already has stat_derived rows.",
+        help="Skip any date that already has mlb_api rows from this loader.",
     )
     ap.add_argument(
         "--require-regular-season",

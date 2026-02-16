@@ -337,7 +337,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]
         SELECT game_date, prop_type, result, outcome
         FROM model_training_props
         WHERE CAST(player_id AS TEXT) = %s
-          AND prop_source = 'stat_derived'
+          AND prop_source = 'mlb_api'
         ORDER BY game_date DESC NULLS LAST
         LIMIT 20
     """
