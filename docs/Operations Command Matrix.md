@@ -231,6 +231,16 @@ Notes:
 - Candidate is computed from current `model_training_props` quality on matching holdout window/profile.
 - Output includes `recommendation` (`promote` or `hold`) plus failing checks.
 
+MLB player-surface regression bundle:
+
+```bash
+make mlb-player-surface-checks
+```
+
+Notes:
+- Focused suite for player lookup/search/profile paths across repository/domain/service/router layers.
+- Includes regression checks for player-id precedence, error mapping, and team alias normalization.
+
 MLB core prop coverage guard (core 12):
 
 ```bash

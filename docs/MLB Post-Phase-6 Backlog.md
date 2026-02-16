@@ -167,12 +167,11 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Stabilization pass: expand regression coverage around player lookup/search/profile endpoints.
+Operator ergonomics: add one-command MLB player-surface regression bundle.
 
-Status: complete (February 16, 2026). Added focused repository/domain/service/endpoint
-regression coverage across player resolve/lookup/search/profile paths, including negative
-error mapping and team alias normalization edge cases.
+Status: complete (February 16, 2026). Added `make mlb-player-surface-checks` to run
+focused repository/domain/service/endpoint tests for player lookup/search/profile paths.
 
 Proposed deliverable:
-- Add focused endpoint/service tests for lookup/search/profile edge cases.
-- Keep ops/noise posture unchanged while reducing mapping regressions.
+- Add one operator-facing make target to execute the player-surface regression suite.
+- Document command in operations matrix and quick commands.
