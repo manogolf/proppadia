@@ -185,3 +185,24 @@ If any step fails:
   - `mtp_team_text_numeric` blocked updates on legacy text team/opponent rows.
   - Resolved in-window by normalizing `team`/`opponent` to numeric text via `team_id`/`opponent_team_id` before relabel updates.
   - Recommendation: run planned normalization pass for remaining calibration lanes before future DB-side relabel operations.
+
+### Production-8 lane policy (active)
+
+- Active production lane set:
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks`
+- Use these operational targets:
+  - `make mlb-prediction-quality-prod8`
+  - `make mlb-pipeline-check-prod8`
+
+### Degenerate lane remediation plan (separate track)
+
+- Current degenerate lane set:
+  - `runs_scored,walks_allowed,outs_recorded,home_runs,runs_rbis`
+- Working rule:
+  - Do not promote threshold-only relabel updates that collapse to one-sided predictions.
+- Required remediation sequence:
+  1. Add lane-specific expectation quality diagnostics (`source_mix`, `over_pct`, and balanced-accuracy ranking).
+  2. Normalize blocked legacy rows (`mtp_team_text_numeric`) before any lane test updates.
+  3. Add richer expectation inputs (team-run environment, pitcher context, and usage context) where available.
+  4. Re-run candidate scans with dual gate: minimum balance floor and minimum accuracy floor.
+  5. Promote lane only after passing both gates in 30-game window, then validate in expanded 18-prop snapshot.

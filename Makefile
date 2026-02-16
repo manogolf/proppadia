@@ -58,6 +58,8 @@ MLB_PROP_COVERAGE_MIN_GRADED ?= 0
 MLB_PROP_COVERAGE_GATE_METRIC ?= graded
 MLB_PROP_COVERAGE_TRAINING_SOURCES ?= mlb_api
 MLB_CORE_PROP_TYPES ?= hits,total_bases,hits_runs_rbis,runs_rbis,rbis,runs_scored,strikeouts_batting,walks,singles,doubles,strikeouts_pitching,outs_recorded
+MLB_PROD8_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks
+MLB_DEGENERATE_PROP_TYPES ?= runs_scored,walks_allowed,outs_recorded,home_runs,runs_rbis
 MLB_CORE_MIN_GRADED ?= 20
 MLB_CORE_TRAINING_SOURCES ?= mlb_api
 NHL_QUALITY_FROM_DATE ?=
@@ -148,6 +150,7 @@ help:
 	@echo "  make mlb-prediction-readiness [prepare->predict readiness sample for MLB_DATE]"
 	@echo "  make mlb-prediction-quality [historical model quality summary json]"
 	@echo "  make mlb-prediction-quality-core [core 12 quality summary over games window]"
+	@echo "  make mlb-prediction-quality-prod8 [production-8 quality summary over games window]"
 	@echo "  make mlb-prediction-quality-user-added [user_added-only quality summary json]"
 	@echo "  make mlb-prediction-quality-segmented [preseason vs regular-season date-window quality report]"
 	@echo "  make mlb-retrain-prereq-check [freshness+coverage+grading+baseline checklist json]"
@@ -156,6 +159,7 @@ help:
 	@echo "  make mlb-pipeline-check [prediction gate + flow audit + prop coverage]"
 	@echo "  make mlb-pipeline-check-json [single JSON payload for gate + flow + coverage]"
 	@echo "  make mlb-pipeline-check-core [JSON pipeline bundle with core-12 coverage thresholds]"
+	@echo "  make mlb-pipeline-check-prod8 [JSON pipeline bundle scoped to production-8 prop lanes]"
 	@echo "  make mlb-hits-expectation-sources [guard forbidden expectation source + report source mix]"
 	@echo "  make mlb-pipeline-log [append pipeline check JSON snapshot to history]"
 	@echo "  make mlb-pipeline-last [show recent pipeline history snapshots]"
@@ -570,6 +574,8 @@ mlb-show-config:
 	@echo "MLB_PROP_COVERAGE_GATE_METRIC=$(MLB_PROP_COVERAGE_GATE_METRIC)"
 	@echo "MLB_PROP_COVERAGE_TRAINING_SOURCES=$(MLB_PROP_COVERAGE_TRAINING_SOURCES)"
 	@echo "MLB_CORE_PROP_TYPES=$(MLB_CORE_PROP_TYPES)"
+	@echo "MLB_PROD8_PROP_TYPES=$(MLB_PROD8_PROP_TYPES)"
+	@echo "MLB_DEGENERATE_PROP_TYPES=$(MLB_DEGENERATE_PROP_TYPES)"
 	@echo "MLB_CORE_MIN_GRADED=$(MLB_CORE_MIN_GRADED)"
 	@echo "MLB_CORE_TRAINING_SOURCES=$(MLB_CORE_TRAINING_SOURCES)"
 
@@ -591,6 +597,9 @@ mlb-prediction-quality:
 
 mlb-prediction-quality-core:
 	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_CORE_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+
+mlb-prediction-quality-prod8:
+	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD8_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-prediction-quality-user-added:
 	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --prop-sources "user_added" --min-total 1
@@ -622,6 +631,9 @@ mlb-pipeline-check-json:
 
 mlb-pipeline-check-core:
 	$(MAKE) mlb-pipeline-check-json MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)" MLB_PREDICT_PROP_TYPES="$(MLB_PREDICT_PROP_TYPES)" MLB_QUALITY_WINDOW_MODE="games" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" MLB_QUALITY_MIN_ACCURACY="$(MLB_QUALITY_MIN_ACCURACY)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_PROP_COVERAGE_WINDOW_MODE="games" MLB_PROP_COVERAGE_GAMES_BACK="$(MLB_PROP_COVERAGE_GAMES_BACK)" MLB_PROP_COVERAGE_REQUIRED="$(MLB_CORE_PROP_TYPES)" MLB_PROP_COVERAGE_MIN_GRADED="$(MLB_CORE_MIN_GRADED)" MLB_PROP_COVERAGE_GATE_METRIC="training_source" MLB_PROP_COVERAGE_TRAINING_SOURCES="$(MLB_CORE_TRAINING_SOURCES)"
+
+mlb-pipeline-check-prod8:
+	$(MAKE) mlb-pipeline-check-json MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)" MLB_PREDICT_PROP_TYPES="$(MLB_PROD8_PROP_TYPES)" MLB_QUALITY_WINDOW_MODE="games" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" MLB_QUALITY_MIN_ACCURACY="$(MLB_QUALITY_MIN_ACCURACY)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_PROP_COVERAGE_WINDOW_MODE="games" MLB_PROP_COVERAGE_GAMES_BACK="$(MLB_PROP_COVERAGE_GAMES_BACK)" MLB_PROP_COVERAGE_REQUIRED="$(MLB_PROD8_PROP_TYPES)" MLB_PROP_COVERAGE_MIN_GRADED="$(MLB_CORE_MIN_GRADED)" MLB_PROP_COVERAGE_GATE_METRIC="training_source" MLB_PROP_COVERAGE_TRAINING_SOURCES="$(MLB_CORE_TRAINING_SOURCES)"
 
 mlb-pipeline-log:
 	$(VENV_PY) backend/scripts/mlb_pipeline_log.py --output artifacts/mlb_pipeline_history.jsonl $(if $(MLB_BASE_URL),--base-url $(MLB_BASE_URL),) --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --quality-window-mode $(MLB_QUALITY_WINDOW_MODE) --quality-window-days $(MLB_QUALITY_WINDOW_DAYS) --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY) --quality-prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --coverage-window-mode $(MLB_PROP_COVERAGE_WINDOW_MODE) --coverage-window-days $(MLB_PROP_COVERAGE_WINDOW_DAYS) --coverage-games-back $(MLB_PROP_COVERAGE_GAMES_BACK) --coverage-required-props "$(MLB_PROP_COVERAGE_REQUIRED)" --coverage-min-graded-per-prop $(MLB_PROP_COVERAGE_MIN_GRADED) --coverage-gate-metric $(MLB_PROP_COVERAGE_GATE_METRIC) --coverage-training-prop-sources "$(MLB_PROP_COVERAGE_TRAINING_SOURCES)"
