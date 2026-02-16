@@ -25,6 +25,7 @@ make season-activation-report
 make season-activation-report-strict
 make season-baseline-check
 make season-baseline-last
+make season-cutover-cadence
 make season-cutover-ready
 ```
 
@@ -60,8 +61,14 @@ Quick decision table:
 When ready to move from offseason conservative cadence:
 
 1. Enable intended in-season schedule windows for MLB refresh lane(s).
-2. Keep `make cron-governance-check` as required guard.
-3. Keep post-deploy strict-offseason/strict checks in release flow.
+2. Generate the lane plan:
+
+```bash
+make season-cutover-cadence
+```
+
+3. Keep `make cron-governance-check` as required guard.
+4. Keep post-deploy strict-offseason/strict checks in release flow.
 
 ## Step 3: Baseline Lock (Day 0)
 

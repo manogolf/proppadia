@@ -29,6 +29,7 @@ Completed slices:
   - day-0 baseline capture command added (`make season-baseline-capture`)
   - status snapshot command added (`make season-activation-status`)
   - latest baseline summary command added (`make season-baseline-last`)
+  - in-season cadence planner command added (`make season-cutover-cadence`)
   - machine-readable phase tracker command added (`make phase-status-json`)
   - season activation history commands added (`make season-activation-log`, `make season-activation-last`)
   - combined season activation report commands added (`make season-activation-report`, `make season-activation-report-strict`)

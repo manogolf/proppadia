@@ -17,6 +17,7 @@ Daily:
 - `make season-activation-report-strict` (same report as a gate)
 - `make season-baseline-check` (validate baseline artifacts exist)
 - `make season-baseline-last` (show latest baseline totals/age)
+- `make season-cutover-cadence` (show intended in-season cron + commands)
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
