@@ -31,6 +31,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertGreater(len(payload["next_steps"]), 0)
             self.assertIn("phase_6_1_incomplete", payload["readiness"]["blockers"])
             self.assertIn("phase_6_2_incomplete", payload["readiness"]["blockers"])
+            self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("baseline_artifacts_missing", payload["readiness"]["blockers"])
 
     def test_build_status_with_baselines_present(self):
@@ -57,8 +58,32 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertEqual(payload["status"], "pass")
             self.assertTrue(payload["baseline_artifacts"]["has_mlb"])
             self.assertTrue(payload["baseline_artifacts"]["has_nhl"])
-            self.assertIn("complete", payload["next_steps"][0].lower())
+            self.assertIn("Review: make season-baseline-last", payload["next_steps"])
             self.assertEqual(payload["readiness"]["blockers"], [])
+
+    def test_build_status_requires_phase_6_3_complete_even_with_baselines(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            plan = root / "Execution Plan.md"
+            baselines = root / "season_baselines"
+            baselines.mkdir(parents=True, exist_ok=True)
+            (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
+            (baselines / "nhl_quality_2025-12-01_2025-12-31.json").write_text("{}", encoding="utf-8")
+            plan.write_text(
+                "\n".join(
+                    [
+                        "## Phase Status Tracker",
+                        "- Phase 6.1 Preseason dry run: complete",
+                        "- Phase 6.2 In-season cadence cutover: complete",
+                        "- Phase 6.3 Baseline lock: in progress",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            payload = sas.build_status(plan, baselines)
+            self.assertFalse(payload["ok"])
+            self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
+            self.assertIn("Review: make season-baseline-last", payload["next_steps"])
 
     def test_main_strict_returns_nonzero_when_not_ready(self):
         with mock.patch.object(sas, "build_status", return_value={"ok": False, "status": "fail"}):

@@ -44,6 +44,7 @@ def _next_steps(phase6: List[str], baselines: Dict[str, List[str]]) -> List[str]
     lines = " ".join(phase6).lower()
     needs_dry_run = "6.1 preseason dry run: complete" not in lines
     needs_cutover = "6.2 in-season cadence cutover: complete" not in lines
+    needs_baseline_lock = "6.3 baseline lock: complete" not in lines
     steps: List[str] = []
     if needs_dry_run:
         steps.append("Run: make mlb-season-kickoff-check BASE_URL=<url> MLB_DATE=YYYY-MM-DD")
@@ -54,6 +55,10 @@ def _next_steps(phase6: List[str], baselines: Dict[str, List[str]]) -> List[str]
         )
     if needs_cutover:
         steps.append("Apply intended in-season schedule windows and keep cron-governance-check green.")
+    if has_mlb and has_nhl:
+        steps.append("Review: make season-baseline-last")
+    if needs_baseline_lock and has_mlb and has_nhl:
+        steps.append("Update docs/Execution Plan.md phase tracker: mark Phase 6.3 complete after baseline review.")
     if not steps:
         steps.append("Phase 6 appears complete from local status + baseline artifacts.")
     return steps
@@ -65,12 +70,15 @@ def _readiness_state(phase6: List[str], baselines: Dict[str, List[str]]) -> Dict
     has_nhl = len(baselines.get("nhl") or []) > 0
     needs_dry_run = "6.1 preseason dry run: complete" not in lines
     needs_cutover = "6.2 in-season cadence cutover: complete" not in lines
+    needs_baseline_lock = "6.3 baseline lock: complete" not in lines
     needs_baseline = not (has_mlb and has_nhl)
     blockers: List[str] = []
     if needs_dry_run:
         blockers.append("phase_6_1_incomplete")
     if needs_cutover:
         blockers.append("phase_6_2_incomplete")
+    if needs_baseline_lock:
+        blockers.append("phase_6_3_incomplete")
     if needs_baseline:
         blockers.append("baseline_artifacts_missing")
     return {"ready": len(blockers) == 0, "blockers": blockers}
