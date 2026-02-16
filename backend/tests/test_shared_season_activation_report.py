@@ -33,6 +33,22 @@ class TestSharedSeasonActivationReport(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "fail")
 
+    def test_build_report_forwards_history_max_age_to_status(self):
+        with patch.object(sar.phase_status_snapshot, "build_snapshot", return_value={"ok": True}), patch.object(
+            sar.season_activation_status, "build_status", return_value={"ok": True}
+        ) as status_mock, patch.object(
+            sar.check_season_baseline_artifacts, "build_payload", return_value={"ok": True}
+        ), patch.object(
+            sar.season_baseline_last, "build_payload", return_value={"ok": True, "latest": {}}
+        ), patch.object(
+            sar, "_history_tail", return_value={"history_count": 0, "returned": 0, "rows": []}
+        ):
+            payload = sar.build_report(Path("h"), 5, 0, history_max_age_hours=6, cutover_history_input=Path("c"), cutover_history_limit=2)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(status_mock.called)
+        called = status_mock.call_args.kwargs
+        self.assertEqual(called.get("season_activation_history_max_age_hours"), 6)
+
     def test_history_tail_reports_new_blockers(self):
         with patch.object(
             sar.season_activation_last,

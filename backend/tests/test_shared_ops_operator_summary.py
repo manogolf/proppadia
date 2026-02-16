@@ -33,6 +33,7 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                 roster_stale_hours=30,
                 season_history_input="artifacts/season_activation_history.jsonl",
                 season_history_limit=10,
+                season_history_max_age_hours=0,
                 season_max_age_hours=0,
                 season_cutover_history_input="artifacts/season_cutover_history.jsonl",
                 season_cutover_history_limit=10,

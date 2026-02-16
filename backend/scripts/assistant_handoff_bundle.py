@@ -87,6 +87,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
     ap.add_argument("--pipeline-history-limit", type=int, default=5)
     ap.add_argument("--season-activation-input", default="artifacts/season_activation_history.jsonl")
+    ap.add_argument("--season-history-max-age-hours", type=int, default=0)
     ap.add_argument("--season-cutover-input", default="artifacts/season_cutover_history.jsonl")
     ap.add_argument("--season-cutover-limit", type=int, default=5)
     ap.add_argument("--stat-days", type=int, default=30)
@@ -143,6 +144,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.season_activation_input,
             "--history-limit",
             str(args.history_limit),
+            "--history-max-age-hours",
+            str(args.season_history_max_age_hours),
             "--cutover-history-input",
             args.season_cutover_input,
             "--cutover-history-limit",

@@ -24,6 +24,7 @@ def collect_summary(
     roster_stale_hours: int,
     season_history_input: str,
     season_history_limit: int,
+    season_history_max_age_hours: int,
     season_max_age_hours: int,
     season_cutover_history_input: str,
     season_cutover_history_limit: int,
@@ -41,6 +42,7 @@ def collect_summary(
         history_input=Path(season_history_input),
         history_limit=season_history_limit,
         max_age_hours=season_max_age_hours,
+        history_max_age_hours=season_history_max_age_hours,
         cutover_history_input=Path(season_cutover_history_input),
         cutover_history_limit=season_cutover_history_limit,
     )
@@ -215,6 +217,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--roster-stale-hours", type=int, default=30)
     ap.add_argument("--season-history-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--season-history-limit", type=int, default=10)
+    ap.add_argument("--season-history-max-age-hours", type=int, default=0)
     ap.add_argument("--season-max-age-hours", type=int, default=0)
     ap.add_argument("--season-cutover-history-input", default="artifacts/season_cutover_history.jsonl")
     ap.add_argument("--season-cutover-history-limit", type=int, default=10)
@@ -232,6 +235,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         roster_stale_hours=args.roster_stale_hours,
         season_history_input=args.season_history_input,
         season_history_limit=args.season_history_limit,
+        season_history_max_age_hours=args.season_history_max_age_hours,
         season_max_age_hours=args.season_max_age_hours,
         season_cutover_history_input=args.season_cutover_history_input,
         season_cutover_history_limit=args.season_cutover_history_limit,

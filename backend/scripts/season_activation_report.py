@@ -47,11 +47,18 @@ def build_report(
     history_input: Path,
     history_limit: int,
     max_age_hours: int,
+    history_max_age_hours: int = 0,
     cutover_history_input: Path | None = None,
     cutover_history_limit: int = 10,
 ) -> Dict[str, Any]:
     phase = phase_status_snapshot.build_snapshot()
-    activation = season_activation_status.build_status()
+    activation = season_activation_status.build_status(
+        season_activation_history_path=history_input,
+        season_cutover_history_path=(
+            cutover_history_input if cutover_history_input is not None else Path("artifacts/season_cutover_history.jsonl")
+        ),
+        season_activation_history_max_age_hours=history_max_age_hours,
+    )
     baseline = check_season_baseline_artifacts.build_payload(max_age_hours=max_age_hours)
     baseline_latest = season_baseline_last.build_payload()
     history = _history_tail(history_input, history_limit)
@@ -98,6 +105,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Combined season activation report.")
     ap.add_argument("--history-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--history-limit", type=int, default=10)
+    ap.add_argument("--history-max-age-hours", type=int, default=0)
     ap.add_argument("--max-age-hours", type=int, default=0)
     ap.add_argument("--cutover-history-input", default="artifacts/season_cutover_history.jsonl")
     ap.add_argument("--cutover-history-limit", type=int, default=10)
@@ -107,6 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         history_input=Path(args.history_input),
         history_limit=args.history_limit,
         max_age_hours=args.max_age_hours,
+        history_max_age_hours=args.history_max_age_hours,
         cutover_history_input=Path(args.cutover_history_input),
         cutover_history_limit=args.cutover_history_limit,
     )
