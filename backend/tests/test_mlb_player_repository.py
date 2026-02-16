@@ -101,6 +101,40 @@ class TestMlbPlayerRepository(unittest.TestCase):
         self.assertEqual(out["stat_derived"], [{"prop_type": "hits", "outcome": "win"}])
         self.assertEqual(out["training_summary"], [])
 
+    def test_resolve_by_name_handles_team_alias_input(self):
+        captured = {}
+
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql and "lower(player_name) = lower(%s)" in sql:
+                captured["params"] = params
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "ARI"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            out = repo.resolve_by_name(name="Shohei Ohtani", team_abbr="az")
+
+        self.assertIsNotNone(out)
+        self.assertEqual(out["player_id"], 660271)
+        self.assertEqual(out["team_abbr"], "ARI")
+        self.assertEqual(out["team_id"], 109)
+        self.assertEqual(captured.get("params"), ("Shohei Ohtani", "ARI", "ARI", "109"))
+
+    def test_search_players_uses_training_fallback_when_player_ids_query_fails(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                raise RuntimeError("player_ids unavailable")
+            if "FROM model_training_props" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            rows = repo.search_players(q="Ohtani", limit=5)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["player_id"], 660271)
+        self.assertEqual(rows[0]["team_abbr"], "LAD")
+        self.assertEqual(rows[0]["source"], "model_training_props")
+
 
 if __name__ == "__main__":
     unittest.main()
