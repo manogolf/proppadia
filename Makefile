@@ -68,7 +68,7 @@ help:
 	@echo "  make season-baseline-lock [capture+validate+log day-0 baseline artifacts]"
 	@echo "  make season-cutover-cadence [show intended in-season cron cadence/commands]"
 	@echo "  make season-cutover-ready [strict phase 6 readiness + governance gate]"
-	@echo "  make season-activation-check [run phase 6.1 + 6.3 bundle]"
+	@echo "  make season-activation-check [run kickoff + baseline lock + cadence plan]"
 	@echo "  make ops-shortlist-check [high-signal ops bundle; optional NHL quality + post-deploy]"
 	@echo "  make mlb-season-kickoff-check [opening-day readiness bundle; optional deployed check]"
 	@echo "  make season-baseline-capture [write MLB/NHL day-0 quality JSON to artifacts]"
@@ -255,10 +255,11 @@ season-cutover-ready:
 season-activation-check:
 	$(MAKE) mlb-season-kickoff-check BASE_URL="$(BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_MARKET_DAYS="$(MLB_MARKET_DAYS)" MLB_ROSTER_DATE="$(MLB_ROSTER_DATE)" MLB_STAT_DAYS_AGO="$(MLB_STAT_DAYS_AGO)" MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_DERIVED_DAYS="$(MLB_STAT_DERIVED_DAYS)" MLB_STAT_DERIVED_MIN="$(MLB_STAT_DERIVED_MIN)"
 	@if [ -z "$(NHL_QUALITY_FROM_DATE)" ] || [ -z "$(NHL_QUALITY_TO_DATE)" ]; then \
-		echo "season-activation-check requires NHL_QUALITY_FROM_DATE and NHL_QUALITY_TO_DATE for baseline capture"; \
+		echo "season-activation-check requires NHL_QUALITY_FROM_DATE and NHL_QUALITY_TO_DATE for baseline lock"; \
 		exit 2; \
 	fi
-	$(MAKE) season-baseline-capture MLB_QUALITY_WINDOW_MODE="$(MLB_QUALITY_WINDOW_MODE)" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_WINDOW_DAYS="$(MLB_QUALITY_WINDOW_DAYS)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" NHL_QUALITY_FROM_DATE="$(NHL_QUALITY_FROM_DATE)" NHL_QUALITY_TO_DATE="$(NHL_QUALITY_TO_DATE)" NHL_QUALITY_MIN_TOTAL="$(NHL_QUALITY_MIN_TOTAL)"
+	$(MAKE) season-baseline-lock MLB_QUALITY_WINDOW_MODE="$(MLB_QUALITY_WINDOW_MODE)" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_WINDOW_DAYS="$(MLB_QUALITY_WINDOW_DAYS)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" NHL_QUALITY_FROM_DATE="$(NHL_QUALITY_FROM_DATE)" NHL_QUALITY_TO_DATE="$(NHL_QUALITY_TO_DATE)" NHL_QUALITY_MIN_TOTAL="$(NHL_QUALITY_MIN_TOTAL)"
+	$(MAKE) season-cutover-cadence
 
 workflow-inventory:
 	$(VENV_PY) backend/scripts/check_workflow_schedule_inventory.py

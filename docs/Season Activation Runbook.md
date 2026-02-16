@@ -52,7 +52,7 @@ Quick decision table:
 - Validate full readiness before cutover:
   - `make mlb-season-kickoff-check BASE_URL=<url> MLB_DATE=<date>`
 - Capture day-0 model quality baselines:
-  - `make season-baseline-capture ...`
+  - `make season-baseline-lock ...`
 - Verify only governance/doc/workflow consistency:
   - `make cron-governance-check`
 

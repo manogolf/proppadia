@@ -110,7 +110,7 @@ Phase tracker snapshot (json):
 make phase-status-json
 ```
 
-Season activation bundle (Phase 6.1 + 6.3):
+Season activation bundle (kickoff + baseline lock + cadence plan):
 
 ```bash
 make season-activation-check \
