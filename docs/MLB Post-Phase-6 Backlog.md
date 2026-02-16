@@ -120,6 +120,9 @@ Acceptance:
 
 Run candidate-vs-baseline comparison on fixed holdout windows.
 
+Status: complete (February 16, 2026). Added command and documented promotion rule:
+`make mlb-candidate-eval`.
+
 Acceptance:
 - pass/fail metric thresholds agreed
 - promotion rule documented
@@ -156,8 +159,8 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Implement P3.2: candidate-vs-baseline model evaluation lane.
+Implement P4.1: minimal ops signal additions (high signal only).
 
 Proposed deliverable:
-- Add one repeatable command that evaluates candidate model metrics against locked baseline windows.
-- Define pass/fail promotion thresholds and emit promotion recommendation in payload.
+- Add concise operator output for latest pipeline status, baseline age, freshness flags, and runbook pointers.
+- Keep panel noise low by avoiding raw-log surface expansion.

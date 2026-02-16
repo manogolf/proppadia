@@ -212,6 +212,21 @@ Notes:
 - Uses `model_training_props` for coverage and grading checks.
 - Baseline check is MLB-only (latest MLB baseline artifact), with optional staleness gate via `MLB_RETRAIN_BASELINE_MAX_AGE_HOURS`.
 
+MLB candidate-vs-baseline evaluation lane:
+
+```bash
+make mlb-candidate-eval \
+  MLB_CANDIDATE_BASELINE_PATH=artifacts/season_baselines/mlb_quality_games_30_120.json \
+  MLB_CANDIDATE_MIN_TOTAL=3000 \
+  MLB_CANDIDATE_MIN_LIFT_PCT=0.50 \
+  MLB_CANDIDATE_MAX_PROP_DROP_PCT=0.25
+```
+
+Notes:
+- Baseline is loaded from explicit file or latest `artifacts/season_baselines/mlb_quality_*.json`.
+- Candidate is computed from current `model_training_props` quality on matching holdout window/profile.
+- Output includes `recommendation` (`promote` or `hold`) plus failing checks.
+
 MLB core prop coverage guard (core 12):
 
 ```bash

@@ -151,6 +151,16 @@ make mlb-retrain-prereq-check \
   MLB_RETRAIN_GRADING_MIN_TOTAL=1000
 ```
 
+Candidate promotion gate:
+
+```bash
+make mlb-candidate-eval \
+  MLB_CANDIDATE_BASELINE_PATH=artifacts/season_baselines/mlb_quality_games_30_120.json \
+  MLB_CANDIDATE_MIN_TOTAL=3000 \
+  MLB_CANDIDATE_MIN_LIFT_PCT=0.50 \
+  MLB_CANDIDATE_MAX_PROP_DROP_PCT=0.25
+```
+
 ## Rollback Rule
 
 If any step fails:
