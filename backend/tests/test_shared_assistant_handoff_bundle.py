@@ -59,6 +59,7 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("mlb_pipeline_history", payload)
         self.assertIn("season_activation_history", payload)
         self.assertIn("season_baseline_latest", payload)
+        self.assertIn("season_cutover_history", payload)
         self.assertIn("mlb_pipeline_check", payload["governance"]["checks"])
         self.assertIn("season_activation_report", payload["governance"]["checks"])
 

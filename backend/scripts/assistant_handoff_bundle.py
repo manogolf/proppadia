@@ -87,6 +87,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
     ap.add_argument("--pipeline-history-limit", type=int, default=5)
     ap.add_argument("--season-activation-input", default="artifacts/season_activation_history.jsonl")
+    ap.add_argument("--season-cutover-input", default="artifacts/season_cutover_history.jsonl")
+    ap.add_argument("--season-cutover-limit", type=int, default=5)
     ap.add_argument("--stat-days", type=int, default=30)
     ap.add_argument("--stat-require-min", type=int, default=0)
     ap.add_argument("--roster-require-min", type=int, default=1)
@@ -141,6 +143,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.season_activation_input,
             "--history-limit",
             str(args.history_limit),
+            "--cutover-history-input",
+            args.season_cutover_input,
+            "--cutover-history-limit",
+            str(args.season_cutover_limit),
         ],
     )
 
@@ -154,6 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pipeline_history = _pipeline_history_tail(args.pipeline_history_input, args.pipeline_history_limit)
     season_activation_history = (season_report.get("season_activation_history") or {})
     season_baseline_latest = (season_report.get("baseline_latest") or {})
+    season_cutover_history = (season_report.get("season_cutover_history") or {})
 
     governance_ok = (
         inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and mlb_pipeline_rc == 0 and report_rc == 0
@@ -180,6 +187,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "mlb_pipeline_history": pipeline_history,
         "season_activation_history": season_activation_history,
         "season_baseline_latest": season_baseline_latest,
+        "season_cutover_history": season_cutover_history,
     }
     print(json.dumps(bundle, indent=2))
     return 0 if ok else 1

@@ -25,6 +25,8 @@ def collect_summary(
     season_history_input: str,
     season_history_limit: int,
     season_max_age_hours: int,
+    season_cutover_history_input: str,
+    season_cutover_history_limit: int,
     pipeline_history_input: str,
     pipeline_history_limit: int,
 ) -> dict[str, Any]:
@@ -39,6 +41,8 @@ def collect_summary(
         history_input=Path(season_history_input),
         history_limit=season_history_limit,
         max_age_hours=season_max_age_hours,
+        cutover_history_input=Path(season_cutover_history_input),
+        cutover_history_limit=season_cutover_history_limit,
     )
     pipeline_history = mlb_pipeline_last._load_history(Path(pipeline_history_input))
     pipeline_tail = pipeline_history[-max(1, int(pipeline_history_limit)) :]
@@ -80,6 +84,9 @@ def _print_text(summary: dict[str, Any]) -> None:
     season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
     mlb_baseline = season_baseline_latest.get("mlb") or {}
     nhl_baseline = season_baseline_latest.get("nhl") or {}
+    season_cutover_history = season.get("season_cutover_history") or {}
+    cutover_rows = season_cutover_history.get("rows") or []
+    cutover_latest = cutover_rows[-1] if cutover_rows else {}
     pipeline = summary.get("mlb_pipeline") or {}
     pipeline_latest = pipeline.get("latest") or {}
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
@@ -114,6 +121,11 @@ def _print_text(summary: dict[str, Any]) -> None:
         f"mlb_age_h={mlb_baseline.get('age_hours')} nhl_age_h={nhl_baseline.get('age_hours')}"
     )
     print(
+        "season_cutover: "
+        f"history={season_cutover_history.get('history_count', 0)} "
+        f"latest_regressions={len(cutover_latest.get('regressions') or [])}"
+    )
+    print(
         "mlb_pipeline: "
         + (
             f"{pipeline_latest.get('status')} "
@@ -132,6 +144,9 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
     season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
     mlb_baseline = season_baseline_latest.get("mlb") or {}
     nhl_baseline = season_baseline_latest.get("nhl") or {}
+    season_cutover_history = season.get("season_cutover_history") or {}
+    cutover_rows = season_cutover_history.get("rows") or []
+    cutover_latest = cutover_rows[-1] if cutover_rows else {}
     pipeline = summary.get("mlb_pipeline") or {}
     pipeline_latest = pipeline.get("latest") or {}
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
@@ -163,6 +178,8 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "top_blocker": blockers[0] if blockers else None,
             "mlb_baseline_age_hours": mlb_baseline.get("age_hours"),
             "nhl_baseline_age_hours": nhl_baseline.get("age_hours"),
+            "cutover_history_count": int(season_cutover_history.get("history_count") or 0),
+            "cutover_latest_regression_count": len(cutover_latest.get("regressions") or []),
         },
         "mlb_pipeline": {
             "history_available": bool(pipeline.get("history_available")),
@@ -186,6 +203,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--season-history-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--season-history-limit", type=int, default=10)
     ap.add_argument("--season-max-age-hours", type=int, default=0)
+    ap.add_argument("--season-cutover-history-input", default="artifacts/season_cutover_history.jsonl")
+    ap.add_argument("--season-cutover-history-limit", type=int, default=10)
     ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
     ap.add_argument("--pipeline-history-limit", type=int, default=10)
     ap.add_argument("--json", action="store_true", help="Emit JSON instead of text")
@@ -201,6 +220,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         season_history_input=args.season_history_input,
         season_history_limit=args.season_history_limit,
         season_max_age_hours=args.season_max_age_hours,
+        season_cutover_history_input=args.season_cutover_history_input,
+        season_cutover_history_limit=args.season_cutover_history_limit,
         pipeline_history_input=args.pipeline_history_input,
         pipeline_history_limit=args.pipeline_history_limit,
     )

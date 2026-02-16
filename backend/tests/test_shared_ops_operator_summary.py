@@ -34,6 +34,8 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                 season_history_input="artifacts/season_activation_history.jsonl",
                 season_history_limit=10,
                 season_max_age_hours=0,
+                season_cutover_history_input="artifacts/season_cutover_history.jsonl",
+                season_cutover_history_limit=10,
                 pipeline_history_input="artifacts/mlb_pipeline_history.jsonl",
                 pipeline_history_limit=10,
             )
@@ -90,6 +92,7 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                         "nhl": {"age_hours": 2.5},
                     }
                 },
+                "season_cutover_history": {"history_count": 3, "rows": [{"regressions": ["cron_changed:x"]}]},
             },
             "mlb_pipeline": {
                 "history_available": True,
@@ -104,6 +107,8 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
         self.assertEqual(compact["season_activation"]["blocker_count"], 1)
         self.assertEqual(compact["season_activation"]["mlb_baseline_age_hours"], 1.25)
         self.assertEqual(compact["season_activation"]["nhl_baseline_age_hours"], 2.5)
+        self.assertEqual(compact["season_activation"]["cutover_history_count"], 3)
+        self.assertEqual(compact["season_activation"]["cutover_latest_regression_count"], 1)
         self.assertTrue(compact["mlb_pipeline"]["history_available"])
         self.assertEqual(compact["mlb_pipeline"]["latest_failure_count"], 0)
 

@@ -19,6 +19,7 @@ class TestSharedSeasonActivationReport(unittest.TestCase):
         self.assertEqual(payload["status"], "pass")
         self.assertIn("season_activation_history", payload)
         self.assertIn("baseline_latest", payload)
+        self.assertIn("season_cutover_history", payload)
 
     def test_build_report_fails_when_any_check_fails(self):
         with patch.object(sar.phase_status_snapshot, "build_snapshot", return_value={"ok": True}), patch.object(

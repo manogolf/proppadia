@@ -36,6 +36,7 @@ OPS_HISTORY_LIMIT ?= 10
 SEASON_HISTORY_INPUT ?= artifacts/season_activation_history.jsonl
 SEASON_HISTORY_LIMIT ?= 10
 SEASON_MAX_AGE_HOURS ?= 0
+SEASON_CUTOVER_HISTORY_LIMIT ?= 10
 MLB_PIPELINE_HISTORY_INPUT ?= artifacts/mlb_pipeline_history.jsonl
 MLB_PIPELINE_HISTORY_LIMIT ?= 10
 SEASON_CUTOVER_HISTORY_INPUT ?= artifacts/season_cutover_history.jsonl
@@ -172,6 +173,8 @@ ops-status:
 	@echo "SEASON_HISTORY_INPUT=$(SEASON_HISTORY_INPUT)"
 	@echo "SEASON_HISTORY_LIMIT=$(SEASON_HISTORY_LIMIT)"
 	@echo "SEASON_MAX_AGE_HOURS=$(SEASON_MAX_AGE_HOURS)"
+	@echo "SEASON_CUTOVER_HISTORY_INPUT=$(SEASON_CUTOVER_HISTORY_INPUT)"
+	@echo "SEASON_CUTOVER_HISTORY_LIMIT=$(SEASON_CUTOVER_HISTORY_LIMIT)"
 	@echo "MLB_PIPELINE_HISTORY_INPUT=$(MLB_PIPELINE_HISTORY_INPUT)"
 	@echo "MLB_PIPELINE_HISTORY_LIMIT=$(MLB_PIPELINE_HISTORY_LIMIT)"
 	@echo ""
@@ -183,17 +186,19 @@ ops-show-config:
 	@echo "SEASON_HISTORY_INPUT=$(SEASON_HISTORY_INPUT)"
 	@echo "SEASON_HISTORY_LIMIT=$(SEASON_HISTORY_LIMIT)"
 	@echo "SEASON_MAX_AGE_HOURS=$(SEASON_MAX_AGE_HOURS)"
+	@echo "SEASON_CUTOVER_HISTORY_INPUT=$(SEASON_CUTOVER_HISTORY_INPUT)"
+	@echo "SEASON_CUTOVER_HISTORY_LIMIT=$(SEASON_CUTOVER_HISTORY_LIMIT)"
 	@echo "MLB_PIPELINE_HISTORY_INPUT=$(MLB_PIPELINE_HISTORY_INPUT)"
 	@echo "MLB_PIPELINE_HISTORY_LIMIT=$(MLB_PIPELINE_HISTORY_LIMIT)"
 
 ops-operator-summary:
-	$(VENV_PY) backend/scripts/ops_operator_summary.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
+	$(VENV_PY) backend/scripts/ops_operator_summary.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --season-cutover-history-input $(SEASON_CUTOVER_HISTORY_INPUT) --season-cutover-history-limit $(SEASON_CUTOVER_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-summary-json:
-	$(VENV_PY) backend/scripts/ops_operator_summary.py --json --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
+	$(VENV_PY) backend/scripts/ops_operator_summary.py --json --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --season-cutover-history-input $(SEASON_CUTOVER_HISTORY_INPUT) --season-cutover-history-limit $(SEASON_CUTOVER_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-summary-json-compact:
-	$(VENV_PY) backend/scripts/ops_operator_summary.py --compact --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
+	$(VENV_PY) backend/scripts/ops_operator_summary.py --compact --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --season-cutover-history-input $(SEASON_CUTOVER_HISTORY_INPUT) --season-cutover-history-limit $(SEASON_CUTOVER_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-log:
 	$(VENV_PY) backend/scripts/ops_operator_log.py --output $(OPS_HISTORY_INPUT) --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
@@ -230,10 +235,10 @@ season-activation-last:
 	$(VENV_PY) backend/scripts/season_activation_last.py --json --limit 10
 
 season-activation-report:
-	$(VENV_PY) backend/scripts/season_activation_report.py
+	$(VENV_PY) backend/scripts/season_activation_report.py --history-input $(SEASON_HISTORY_INPUT) --history-limit $(SEASON_HISTORY_LIMIT) --max-age-hours $(SEASON_MAX_AGE_HOURS) --cutover-history-input $(SEASON_CUTOVER_HISTORY_INPUT) --cutover-history-limit $(SEASON_CUTOVER_HISTORY_LIMIT)
 
 season-activation-report-strict:
-	$(VENV_PY) backend/scripts/season_activation_report.py --strict
+	$(VENV_PY) backend/scripts/season_activation_report.py --strict --history-input $(SEASON_HISTORY_INPUT) --history-limit $(SEASON_HISTORY_LIMIT) --max-age-hours $(SEASON_MAX_AGE_HOURS) --cutover-history-input $(SEASON_CUTOVER_HISTORY_INPUT) --cutover-history-limit $(SEASON_CUTOVER_HISTORY_LIMIT)
 
 season-baseline-check:
 	$(VENV_PY) backend/scripts/check_season_baseline_artifacts.py
@@ -333,7 +338,7 @@ cron-governance-snapshot:
 	$(VENV_PY) backend/scripts/cron_governance_snapshot.py
 
 assistant-handoff-bundle:
-	$(VENV_PY) backend/scripts/assistant_handoff_bundle.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --history-input $(OPS_HISTORY_INPUT) --history-limit $(OPS_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT) --season-activation-input $(SEASON_HISTORY_INPUT)
+	$(VENV_PY) backend/scripts/assistant_handoff_bundle.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --history-input $(OPS_HISTORY_INPUT) --history-limit $(OPS_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT) --season-activation-input $(SEASON_HISTORY_INPUT) --season-cutover-input $(SEASON_CUTOVER_HISTORY_INPUT) --season-cutover-limit $(SEASON_CUTOVER_HISTORY_LIMIT)
 
 cron-fast-check:
 	$(MAKE) cron-summary
