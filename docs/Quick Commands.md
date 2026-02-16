@@ -20,6 +20,7 @@ Daily:
 
 On-demand:
 - `make ops-operator-summary`
+- `make ops-show-config`
 - `make ops-operator-summary-json`
 - `make ops-operator-summary-json-compact`
 - `make ops-operator-log`
@@ -61,6 +62,7 @@ make mlb-help
 make ops-help
 make ops-status
 make ops-operator-summary
+make ops-show-config
 make ops-operator-summary-json
 make ops-operator-summary-json-compact
 make ops-operator-log

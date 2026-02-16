@@ -33,6 +33,16 @@ def _regressions(prev: dict[str, Any], cur: dict[str, Any]) -> list[str]:
     cur_blockers = int((((cur.get("season_activation") or {}).get("blocker_count")) or 0))
     if cur_blockers > prev_blockers:
         out.append(f"blockers_increase:{prev_blockers}->{cur_blockers}")
+
+    prev_pipeline_ok = (prev.get("mlb_pipeline") or {}).get("latest_ok")
+    cur_pipeline_ok = (cur.get("mlb_pipeline") or {}).get("latest_ok")
+    if prev_pipeline_ok is True and cur_pipeline_ok is False:
+        out.append("pipeline_became_fail")
+
+    prev_pipeline_failures = int((((prev.get("mlb_pipeline") or {}).get("latest_failure_count")) or 0))
+    cur_pipeline_failures = int((((cur.get("mlb_pipeline") or {}).get("latest_failure_count")) or 0))
+    if cur_pipeline_failures > prev_pipeline_failures:
+        out.append(f"pipeline_failures_increase:{prev_pipeline_failures}->{cur_pipeline_failures}")
     return out
 
 
@@ -62,6 +72,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "roster_stale": (((item.get("mlb_readiness") or {}).get("roster_stale"))),
                 "blocker_count": (((item.get("season_activation") or {}).get("blocker_count"))),
                 "top_blocker": (((item.get("season_activation") or {}).get("top_blocker"))),
+                "pipeline_latest_ok": (((item.get("mlb_pipeline") or {}).get("latest_ok"))),
+                "pipeline_latest_failure_count": (((item.get("mlb_pipeline") or {}).get("latest_failure_count"))),
                 "regressions": _regressions(prev, item) if prev else [],
             }
         )
@@ -83,6 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"- {row['captured_at'] or '-'} | {row['status']} ok={row['ok']} gov={row['governance_ok']} "
                 f"readiness={row['readiness_ok']} season={row['season_ok']} "
                 f"stat={row['stat_count']} stale={row['roster_stale']} blockers={row['blocker_count']} "
+                f"pipeline_ok={row['pipeline_latest_ok']} pipeline_failures={row['pipeline_latest_failure_count']} "
                 f"top={row['top_blocker'] or '-'} regressions={reg}"
             )
     return 0

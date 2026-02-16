@@ -22,6 +22,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--season-history-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--season-history-limit", type=int, default=10)
     ap.add_argument("--season-max-age-hours", type=int, default=0)
+    ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
+    ap.add_argument("--pipeline-history-limit", type=int, default=10)
     args = ap.parse_args(list(argv) if argv is not None else [])
 
     summary = collect_summary(
@@ -32,6 +34,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         season_history_input=args.season_history_input,
         season_history_limit=args.season_history_limit,
         season_max_age_hours=args.season_max_age_hours,
+        pipeline_history_input=args.pipeline_history_input,
+        pipeline_history_limit=args.pipeline_history_limit,
     )
     payload = compact_summary(summary)
 
@@ -49,6 +53,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "output": str(out_path),
                 "governance_ok": (((payload.get("governance") or {}).get("ok"))),
                 "season_ok": (((payload.get("season_activation") or {}).get("ok"))),
+                "pipeline_history_available": (((payload.get("mlb_pipeline") or {}).get("history_available"))),
+                "pipeline_latest_ok": (((payload.get("mlb_pipeline") or {}).get("latest_ok"))),
+                "pipeline_latest_failure_count": (
+                    ((payload.get("mlb_pipeline") or {}).get("latest_failure_count"))
+                ),
             },
             indent=2,
         )

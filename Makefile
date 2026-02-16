@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -31,6 +31,13 @@ MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
 MLB_STAT_MAX_GAMES ?= 0
 MLB_STAT_SKIP_EXISTING_DATES ?= 1
+OPS_HISTORY_INPUT ?= artifacts/ops_operator_history.jsonl
+OPS_HISTORY_LIMIT ?= 10
+SEASON_HISTORY_INPUT ?= artifacts/season_activation_history.jsonl
+SEASON_HISTORY_LIMIT ?= 10
+SEASON_MAX_AGE_HOURS ?= 0
+MLB_PIPELINE_HISTORY_INPUT ?= artifacts/mlb_pipeline_history.jsonl
+MLB_PIPELINE_HISTORY_LIMIT ?= 10
 
 help:
 	@echo "Proppadia checks"
@@ -66,6 +73,7 @@ help:
 	@echo "  make cron-governance-check [inventory + path audit + NHL workflow compat]"
 	@echo "  make cron-governance-snapshot [single combined JSON governance payload]"
 	@echo "  make ops-operator-summary [compact daily ops summary]"
+	@echo "  make ops-show-config [print effective ops history/pipeline/season inputs]"
 	@echo "  make ops-operator-summary-json [machine-readable daily ops summary]"
 	@echo "  make ops-operator-summary-json-compact [machine-readable minimal ops summary]"
 	@echo "  make ops-operator-log [append compact ops summary to history jsonl]"
@@ -153,29 +161,45 @@ ops-status:
 	@echo "NHL_DATE=$(NHL_DATE)"
 	@echo "MLB_ROSTER_DATE=$(MLB_ROSTER_DATE)"
 	@echo "NHL_ROSTER_DATE=$(NHL_ROSTER_DATE)"
+	@echo "OPS_HISTORY_INPUT=$(OPS_HISTORY_INPUT)"
+	@echo "OPS_HISTORY_LIMIT=$(OPS_HISTORY_LIMIT)"
+	@echo "SEASON_HISTORY_INPUT=$(SEASON_HISTORY_INPUT)"
+	@echo "SEASON_HISTORY_LIMIT=$(SEASON_HISTORY_LIMIT)"
+	@echo "SEASON_MAX_AGE_HOURS=$(SEASON_MAX_AGE_HOURS)"
+	@echo "MLB_PIPELINE_HISTORY_INPUT=$(MLB_PIPELINE_HISTORY_INPUT)"
+	@echo "MLB_PIPELINE_HISTORY_LIMIT=$(MLB_PIPELINE_HISTORY_LIMIT)"
 	@echo ""
 	@$(MAKE) ops-operator-summary
 
+ops-show-config:
+	@echo "OPS_HISTORY_INPUT=$(OPS_HISTORY_INPUT)"
+	@echo "OPS_HISTORY_LIMIT=$(OPS_HISTORY_LIMIT)"
+	@echo "SEASON_HISTORY_INPUT=$(SEASON_HISTORY_INPUT)"
+	@echo "SEASON_HISTORY_LIMIT=$(SEASON_HISTORY_LIMIT)"
+	@echo "SEASON_MAX_AGE_HOURS=$(SEASON_MAX_AGE_HOURS)"
+	@echo "MLB_PIPELINE_HISTORY_INPUT=$(MLB_PIPELINE_HISTORY_INPUT)"
+	@echo "MLB_PIPELINE_HISTORY_LIMIT=$(MLB_PIPELINE_HISTORY_LIMIT)"
+
 ops-operator-summary:
-	$(VENV_PY) backend/scripts/ops_operator_summary.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/ops_operator_summary.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-summary-json:
-	$(VENV_PY) backend/scripts/ops_operator_summary.py --json --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/ops_operator_summary.py --json --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-summary-json-compact:
-	$(VENV_PY) backend/scripts/ops_operator_summary.py --compact --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/ops_operator_summary.py --compact --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-log:
-	$(VENV_PY) backend/scripts/ops_operator_log.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/ops_operator_log.py --output $(OPS_HISTORY_INPUT) --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-last:
-	$(VENV_PY) backend/scripts/ops_operator_last.py --json --limit 10
+	$(VENV_PY) backend/scripts/ops_operator_last.py --json --input $(OPS_HISTORY_INPUT) --limit $(OPS_HISTORY_LIMIT)
 
 ops-operator-incident:
-	$(VENV_PY) backend/scripts/ops_operator_incident.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/ops_operator_incident.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --ops-history-input $(OPS_HISTORY_INPUT) --ops-history-limit $(OPS_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-operator-incident-strict:
-	$(VENV_PY) backend/scripts/ops_operator_incident.py --strict --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/ops_operator_incident.py --strict --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --season-history-input $(SEASON_HISTORY_INPUT) --season-history-limit $(SEASON_HISTORY_LIMIT) --season-max-age-hours $(SEASON_MAX_AGE_HOURS) --ops-history-input $(OPS_HISTORY_INPUT) --ops-history-limit $(OPS_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT)
 
 ops-daily-check:
 	$(MAKE) ops-operator-log
@@ -283,7 +307,7 @@ cron-governance-snapshot:
 	$(VENV_PY) backend/scripts/cron_governance_snapshot.py
 
 assistant-handoff-bundle:
-	$(VENV_PY) backend/scripts/assistant_handoff_bundle.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN)
+	$(VENV_PY) backend/scripts/assistant_handoff_bundle.py --stat-days $(MLB_STAT_DERIVED_DAYS) --stat-require-min $(MLB_STAT_DERIVED_MIN) --history-input $(OPS_HISTORY_INPUT) --history-limit $(OPS_HISTORY_LIMIT) --pipeline-history-input $(MLB_PIPELINE_HISTORY_INPUT) --pipeline-history-limit $(MLB_PIPELINE_HISTORY_LIMIT) --season-activation-input $(SEASON_HISTORY_INPUT)
 
 cron-fast-check:
 	$(MAKE) cron-summary

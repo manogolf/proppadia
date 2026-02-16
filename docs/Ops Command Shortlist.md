@@ -8,6 +8,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - wrapper for phase snapshot + governance + MLB pipeline daily check/log + optional NHL quality/post-deploy
 - `make cron-governance-check`
   - one-command workflow/path/docs governance status
+- `make ops-show-config`
+  - print effective ops history and pipeline/season input settings
 - `make cross-sport-post-deploy BASE_URL=<url>`
   - deployed API confidence across MLB + NHL
 - `make mlb-daily-refresh-strict ...`

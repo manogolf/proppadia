@@ -18,6 +18,10 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
             "collect_snapshot",
             return_value={"ok": True, "status": "pass", "checks": {}},
         ), patch.object(
+            ops.mlb_pipeline_last,
+            "_load_history",
+            return_value=[],
+        ), patch.object(
             ops.season_activation_report,
             "build_report",
             return_value={"ok": True, "status": "pass"},
@@ -30,12 +34,15 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                 season_history_input="artifacts/season_activation_history.jsonl",
                 season_history_limit=10,
                 season_max_age_hours=0,
+                pipeline_history_input="artifacts/mlb_pipeline_history.jsonl",
+                pipeline_history_limit=10,
             )
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "pass")
         self.assertIn("governance", payload)
         self.assertIn("mlb_readiness", payload)
         self.assertIn("season_activation_report", payload)
+        self.assertIn("mlb_pipeline", payload)
 
     def test_main_non_strict_returns_zero_on_fail(self):
         with patch.object(
@@ -78,12 +85,19 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                 "status": "pass",
                 "season_activation": {"blockers": ["none"]},
             },
+            "mlb_pipeline": {
+                "history_available": True,
+                "history_count": 2,
+                "latest": {"ok": True, "status": "pass", "failures": [], "regressions": []},
+            },
         }
         compact = ops.compact_summary(payload)
         self.assertEqual(compact["captured_at"], "2026-02-15T08:00:00+00:00")
         self.assertTrue(compact["ok"])
         self.assertEqual(compact["mlb_readiness"]["stat_count"], 123)
         self.assertEqual(compact["season_activation"]["blocker_count"], 1)
+        self.assertTrue(compact["mlb_pipeline"]["history_available"])
+        self.assertEqual(compact["mlb_pipeline"]["latest_failure_count"], 0)
 
     def test_main_compact_outputs_compact_json(self):
         with patch.object(
@@ -95,6 +109,11 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
                 "governance": {"ok": True, "status": "pass", "governance_ok": True, "season_activation_ok": True},
                 "mlb_readiness": {"ok": True, "status": "pass", "checks": {}},
                 "season_activation_report": {"ok": True, "status": "pass", "season_activation": {"blockers": []}},
+                "mlb_pipeline": {
+                    "history_available": False,
+                    "history_count": 0,
+                    "latest": {"ok": None, "status": None, "failures": [], "regressions": []},
+                },
             },
         ):
             out = StringIO()

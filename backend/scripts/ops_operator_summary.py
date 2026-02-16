@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from backend.scripts import cron_governance_snapshot
+from backend.scripts import mlb_pipeline_last
 from backend.scripts import mlb_readiness_snapshot
 from backend.scripts import season_activation_report
 
@@ -24,6 +25,8 @@ def collect_summary(
     season_history_input: str,
     season_history_limit: int,
     season_max_age_hours: int,
+    pipeline_history_input: str,
+    pipeline_history_limit: int,
 ) -> dict[str, Any]:
     governance = cron_governance_snapshot.build_snapshot()
     readiness = mlb_readiness_snapshot.collect_snapshot(
@@ -37,13 +40,36 @@ def collect_summary(
         history_limit=season_history_limit,
         max_age_hours=season_max_age_hours,
     )
-    overall_ok = bool(governance.get("ok")) and bool(readiness.get("ok")) and bool(season.get("ok"))
+    pipeline_history = mlb_pipeline_last._load_history(Path(pipeline_history_input))
+    pipeline_tail = pipeline_history[-max(1, int(pipeline_history_limit)) :]
+    pipeline_latest = pipeline_tail[-1] if pipeline_tail else {}
+    pipeline_prev = pipeline_tail[-2] if len(pipeline_tail) >= 2 else None
+    pipeline_regressions = mlb_pipeline_last._regressions(pipeline_prev, pipeline_latest) if pipeline_tail else []
+    pipeline = {
+        "history_available": bool(pipeline_history),
+        "history_count": len(pipeline_history),
+        "latest": {
+            "captured_at": pipeline_latest.get("captured_at"),
+            "status": pipeline_latest.get("status"),
+            "ok": pipeline_latest.get("ok"),
+            "failures": pipeline_latest.get("failures") or [],
+            "regressions": pipeline_regressions,
+        },
+    }
+    pipeline_ok = bool(pipeline_latest.get("ok")) if pipeline_history else True
+    overall_ok = (
+        bool(governance.get("ok"))
+        and bool(readiness.get("ok"))
+        and bool(season.get("ok"))
+        and pipeline_ok
+    )
     return {
         "ok": overall_ok,
         "status": "pass" if overall_ok else "fail",
         "governance": governance,
         "mlb_readiness": readiness,
         "season_activation_report": season,
+        "mlb_pipeline": pipeline,
     }
 
 
@@ -51,6 +77,8 @@ def _print_text(summary: dict[str, Any]) -> None:
     governance = summary.get("governance") or {}
     readiness = summary.get("mlb_readiness") or {}
     season = summary.get("season_activation_report") or {}
+    pipeline = summary.get("mlb_pipeline") or {}
+    pipeline_latest = pipeline.get("latest") or {}
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
     roster = ((readiness.get("checks") or {}).get("roster")) or {}
     blockers = (((season.get("season_activation") or {}).get("blockers")) or [])
@@ -78,12 +106,24 @@ def _print_text(summary: dict[str, Any]) -> None:
         + (f" top={blockers[0]}" if blockers else "")
         + ")"
     )
+    print(
+        "mlb_pipeline: "
+        + (
+            f"{pipeline_latest.get('status')} "
+            f"(failures={len(pipeline_latest.get('failures') or [])}"
+            f" history={pipeline.get('history_count', 0)})"
+            if pipeline.get("history_available")
+            else "unknown (no history)"
+        )
+    )
 
 
 def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
     governance = summary.get("governance") or {}
     readiness = summary.get("mlb_readiness") or {}
     season = summary.get("season_activation_report") or {}
+    pipeline = summary.get("mlb_pipeline") or {}
+    pipeline_latest = pipeline.get("latest") or {}
     stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
     roster = ((readiness.get("checks") or {}).get("roster")) or {}
     blockers = (((season.get("season_activation") or {}).get("blockers")) or [])
@@ -112,6 +152,16 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "blocker_count": len(blockers),
             "top_blocker": blockers[0] if blockers else None,
         },
+        "mlb_pipeline": {
+            "history_available": bool(pipeline.get("history_available")),
+            "history_count": int(pipeline.get("history_count") or 0),
+            "latest_ok": bool(pipeline_latest.get("ok"))
+            if pipeline.get("history_available")
+            else None,
+            "latest_status": pipeline_latest.get("status") if pipeline.get("history_available") else None,
+            "latest_failure_count": len(pipeline_latest.get("failures") or []),
+            "latest_regressions": pipeline_latest.get("regressions") or [],
+        },
     }
 
 
@@ -124,6 +174,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--season-history-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--season-history-limit", type=int, default=10)
     ap.add_argument("--season-max-age-hours", type=int, default=0)
+    ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
+    ap.add_argument("--pipeline-history-limit", type=int, default=10)
     ap.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     ap.add_argument("--compact", action="store_true", help="Emit compact JSON shape")
     ap.add_argument("--strict", action="store_true", help="Exit non-zero when overall status is fail")
@@ -137,6 +189,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         season_history_input=args.season_history_input,
         season_history_limit=args.season_history_limit,
         season_max_age_hours=args.season_max_age_hours,
+        pipeline_history_input=args.pipeline_history_input,
+        pipeline_history_limit=args.pipeline_history_limit,
     )
     if args.compact:
         print(json.dumps(compact_summary(summary), indent=2))

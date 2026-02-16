@@ -14,6 +14,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
     def test_log_appends_compact_row(self):
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "ops.jsonl"
+            stdout = StringIO()
             with patch.object(
                 oplog,
                 "collect_summary",
@@ -23,8 +24,13 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
                     "governance": {"ok": True, "status": "pass", "governance_ok": True, "season_activation_ok": True},
                     "mlb_readiness": {"ok": True, "status": "pass", "checks": {}},
                     "season_activation_report": {"ok": True, "status": "pass", "season_activation": {"blockers": []}},
+                    "mlb_pipeline": {
+                        "history_available": True,
+                        "history_count": 3,
+                        "latest": {"ok": True, "status": "pass", "failures": [], "regressions": []},
+                    },
                 },
-            ):
+            ), redirect_stdout(stdout):
                 rc = oplog.main(["--output", str(out)])
             self.assertEqual(rc, 0)
             rows = out.read_text(encoding="utf-8").strip().splitlines()
@@ -32,6 +38,9 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
             payload = json.loads(rows[0])
             self.assertTrue(payload["ok"])
             self.assertIn("mlb_readiness", payload)
+            printed = json.loads(stdout.getvalue())
+            self.assertTrue(printed["pipeline_history_available"])
+            self.assertEqual(printed["pipeline_latest_failure_count"], 0)
 
     def test_last_json_reports_regressions(self):
         with tempfile.TemporaryDirectory() as td:
@@ -44,6 +53,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
                     "governance": {"ok": True},
                     "mlb_readiness": {"ok": True, "stat_count": 100, "roster_stale": False},
                     "season_activation": {"ok": True, "blocker_count": 0, "top_blocker": None},
+                    "mlb_pipeline": {"latest_ok": True, "latest_failure_count": 0},
                 },
                 {
                     "captured_at": "2026-02-15T09:00:00+00:00",
@@ -52,6 +62,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
                     "governance": {"ok": False},
                     "mlb_readiness": {"ok": False, "stat_count": 80, "roster_stale": True},
                     "season_activation": {"ok": False, "blocker_count": 2, "top_blocker": "missing"},
+                    "mlb_pipeline": {"latest_ok": False, "latest_failure_count": 2},
                 },
             ]
             inp.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -63,6 +74,7 @@ class TestSharedOpsOperatorHistory(unittest.TestCase):
             self.assertEqual(payload["history_count"], 2)
             self.assertEqual(payload["rows"][0]["captured_at"], "2026-02-15T08:00:00+00:00")
             self.assertIn("overall_became_fail", payload["rows"][1]["regressions"])
+            self.assertIn("pipeline_became_fail", payload["rows"][1]["regressions"])
 
 
 if __name__ == "__main__":
