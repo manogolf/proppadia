@@ -266,15 +266,18 @@ season-cutover-ready:
 	@set -e; \
 	if ! $(MAKE) season-activation-report-strict; then \
 		echo "season-cutover-ready: season activation strict check failed; latest snapshots:"; \
+		$(MAKE) season-activation-log || true; \
 		$(MAKE) season-activation-last || true; \
 		$(MAKE) season-cutover-last || true; \
 		exit 2; \
 	fi; \
 	if ! $(MAKE) cron-governance-check; then \
 		echo "season-cutover-ready: cron governance failed; current summary:"; \
+		$(MAKE) season-activation-log || true; \
 		$(MAKE) cron-summary-json || true; \
 		exit 2; \
 	fi; \
+	$(MAKE) season-activation-log || true; \
 	echo "season-cutover-ready: pass"
 
 season-activation-check:
