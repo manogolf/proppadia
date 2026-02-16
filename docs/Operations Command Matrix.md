@@ -180,10 +180,10 @@ MLB quality summary:
 make mlb-prediction-quality MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000
 ```
 
-MLB core-12 quality summary:
+MLB production-8 quality summary (recommended default):
 
 ```bash
-make mlb-prediction-quality-core MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000
+make mlb-prediction-quality-prod8 MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000
 ```
 
 MLB preseason vs regular-season segmented quality report:
@@ -194,7 +194,7 @@ make mlb-prediction-quality-segmented \
   MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE=2025-03-27 \
   MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE=2025-03-28 \
   MLB_QUALITY_SEGMENT_REGULAR_TO_DATE=2025-08-15 \
-  MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting
+  MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks
 ```
 
 Notes:
@@ -241,7 +241,7 @@ Notes:
 - Focused suite for player lookup/search/profile paths across repository/domain/service/router layers.
 - Includes regression checks for player-id precedence, error mapping, and team alias normalization.
 
-MLB core prop coverage guard (core 12):
+MLB core prop coverage guard (core 12, extended diagnostics):
 
 ```bash
 make mlb-prop-coverage-core MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_CORE_MIN_GRADED=20
@@ -250,22 +250,22 @@ make mlb-prop-coverage-core MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_CORE_MIN_GRADED=
 Note: this core guard thresholds on `training_source_count` (pipeline depth), not `user_added` graded rows.
 By default it uses `model_training_props.prop_source=mlb_api` (`MLB_CORE_TRAINING_SOURCES`).
 
-MLB pipeline gate bundle:
+MLB pipeline gate bundle (recommended default profile):
 
 ```bash
-make mlb-pipeline-check MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting MLB_PROP_COVERAGE_MIN_GRADED=20
+make mlb-pipeline-check-prod8 MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_CORE_MIN_GRADED=20
 ```
 
-MLB pipeline gate bundle (single JSON payload):
+MLB pipeline gate bundle (single JSON payload, production-8 scope):
 
 ```bash
-make mlb-pipeline-check-json MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting MLB_PROP_COVERAGE_MIN_GRADED=20
+make mlb-pipeline-check-json MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_QUALITY_PROP_SOURCES=mlb_api MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks MLB_PROP_COVERAGE_MIN_GRADED=20
 ```
 
 When failing, inspect top-level `degraded_prop_lanes` to see which prop lanes degraded
 (operability, quality threshold misses, or coverage misses).
 
-MLB pipeline gate bundle (core 12 strict coverage profile):
+MLB pipeline gate bundle (core 12 strict coverage profile, extended diagnostics):
 
 ```bash
 make mlb-pipeline-check-core MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_CORE_MIN_GRADED=20
@@ -273,12 +273,20 @@ make mlb-pipeline-check-core MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDI
 
 Note: `mlb-pipeline-check-core` applies `MLB_CORE_PROP_TYPES` and thresholds coverage on `training_source_count` via `MLB_CORE_TRAINING_SOURCES`.
 
+MLB degenerate-lane diagnostics:
+
+```bash
+make mlb-degenerate-lane-report MLB_QUALITY_GAMES_BACK=30
+```
+
+Note: use this report for `runs_scored,walks_allowed,outs_recorded,home_runs,runs_rbis` triage; do not auto-promote one-sided candidates.
+
 MLB pipeline history log + last snapshot:
 
 ```bash
-make mlb-pipeline-log MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting MLB_PROP_COVERAGE_MIN_GRADED=20
+make mlb-pipeline-log MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_QUALITY_PROP_SOURCES=mlb_api MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks MLB_PROP_COVERAGE_MIN_GRADED=20
 make mlb-pipeline-last
-make mlb-pipeline-daily-check MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting MLB_PROP_COVERAGE_MIN_GRADED=20
+make mlb-pipeline-daily-check MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3 MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000 MLB_QUALITY_MIN_ACCURACY=48 MLB_QUALITY_PROP_SOURCES=mlb_api MLB_PROP_COVERAGE_WINDOW_MODE=games MLB_PROP_COVERAGE_GAMES_BACK=30 MLB_PROP_COVERAGE_REQUIRED=hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks MLB_PROP_COVERAGE_MIN_GRADED=20
 ```
 
 NHL fixed-window quality baseline:
