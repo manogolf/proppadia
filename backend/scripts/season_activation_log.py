@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 from typing import Sequence
 
@@ -18,6 +20,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = ap.parse_args(list(argv) if argv is not None else [])
 
     payload = build_status()
+    payload = {
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        **payload,
+    }
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -31,6 +37,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "ok": payload.get("ok"),
                 "output": str(out_path),
                 "phase6_count": len(payload.get("phase6_tracker") or []),
+                "captured_at": payload.get("captured_at"),
             },
             indent=2,
         )
@@ -40,4 +47,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

@@ -18,6 +18,7 @@ class TestSharedSeasonActivationHistory(unittest.TestCase):
                 season_activation_log,
                 "build_status",
                 return_value={
+                    "captured_at": "2026-02-16T00:00:00+00:00",
                     "ok": False,
                     "status": "fail",
                     "phase6_tracker": [],
@@ -33,12 +34,14 @@ class TestSharedSeasonActivationHistory(unittest.TestCase):
             self.assertEqual(len(lines), 1)
             payload = json.loads(lines[0])
             self.assertEqual(payload["status"], "fail")
+            self.assertEqual(payload["captured_at"], "2026-02-16T00:00:00+00:00")
 
     def test_last_json_reports_new_blockers(self):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "season_activation_history.jsonl"
             rows = [
                 {
+                    "captured_at": "2026-02-16T00:00:00+00:00",
                     "ok": False,
                     "status": "fail",
                     "phase6_tracker": [],
@@ -46,6 +49,7 @@ class TestSharedSeasonActivationHistory(unittest.TestCase):
                     "readiness": {"ready": False, "blockers": ["phase_6_1_incomplete"]},
                 },
                 {
+                    "captured_at": "2026-02-16T00:05:00+00:00",
                     "ok": False,
                     "status": "fail",
                     "phase6_tracker": [],
@@ -67,9 +71,9 @@ class TestSharedSeasonActivationHistory(unittest.TestCase):
             payload = json.loads(out.getvalue())
             self.assertEqual(payload["history_count"], 2)
             self.assertEqual(payload["returned"], 2)
+            self.assertEqual(payload["rows"][1]["captured_at"], "2026-02-16T00:05:00+00:00")
             self.assertEqual(payload["rows"][1]["new_blockers"], ["phase_6_2_incomplete"])
 
 
 if __name__ == "__main__":
     unittest.main()
-

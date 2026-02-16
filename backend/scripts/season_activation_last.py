@@ -49,6 +49,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         prev = tail[idx - 1] if idx > 0 else None
         rows.append(
             {
+                "captured_at": item.get("captured_at"),
                 "status": item.get("status"),
                 "ok": item.get("ok"),
                 "phase6_count": len(item.get("phase6_tracker") or []),
@@ -74,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             new_blockers = ",".join(row["new_blockers"]) if row["new_blockers"] else "none"
             blockers = ",".join(row["blockers"]) if row["blockers"] else "none"
             print(
-                f"- {row['status']} ok={row['ok']} phase6={row['phase6_count']} "
+                f"- {row['captured_at'] or '-'} {row['status']} ok={row['ok']} phase6={row['phase6_count']} "
                 f"mlb={row['has_mlb_baseline']} nhl={row['has_nhl_baseline']} "
                 f"blockers={blockers} new_blockers={new_blockers}"
             )
@@ -83,4 +84,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
