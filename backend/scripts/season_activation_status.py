@@ -12,6 +12,7 @@ from typing import Dict, List
 ROOT = Path(__file__).resolve().parents[2]
 PLAN_PATH = ROOT / "docs" / "Execution Plan.md"
 BASELINE_DIR = ROOT / "artifacts" / "season_baselines"
+SEASON_CUTOVER_HISTORY_PATH = ROOT / "artifacts" / "season_cutover_history.jsonl"
 
 
 def _read_text(path: Path) -> str:
@@ -64,7 +65,22 @@ def _next_steps(phase6: List[str], baselines: Dict[str, List[str]]) -> List[str]
     return steps
 
 
-def _readiness_state(phase6: List[str], baselines: Dict[str, List[str]]) -> Dict[str, object]:
+def _has_cutover_history(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for raw in f:
+                if raw.strip():
+                    return True
+    except Exception:
+        return False
+    return False
+
+
+def _readiness_state(
+    phase6: List[str], baselines: Dict[str, List[str]], *, has_cutover_history: bool
+) -> Dict[str, object]:
     lines = " ".join(phase6).lower()
     has_mlb = len(baselines.get("mlb") or []) > 0
     has_nhl = len(baselines.get("nhl") or []) > 0
@@ -77,6 +93,8 @@ def _readiness_state(phase6: List[str], baselines: Dict[str, List[str]]) -> Dict
         blockers.append("phase_6_1_incomplete")
     if needs_cutover:
         blockers.append("phase_6_2_incomplete")
+    if not has_cutover_history:
+        blockers.append("season_cutover_history_missing")
     if needs_baseline_lock:
         blockers.append("phase_6_3_incomplete")
     if needs_baseline:
@@ -84,11 +102,16 @@ def _readiness_state(phase6: List[str], baselines: Dict[str, List[str]]) -> Dict
     return {"ready": len(blockers) == 0, "blockers": blockers}
 
 
-def build_status(plan_path: Path = PLAN_PATH, baseline_dir: Path = BASELINE_DIR) -> Dict[str, object]:
+def build_status(
+    plan_path: Path = PLAN_PATH,
+    baseline_dir: Path = BASELINE_DIR,
+    season_cutover_history_path: Path = SEASON_CUTOVER_HISTORY_PATH,
+) -> Dict[str, object]:
     plan_text = _read_text(plan_path)
     phase6 = _phase6_status_lines(plan_text)
     baselines = _list_baselines(baseline_dir)
-    readiness = _readiness_state(phase6, baselines)
+    has_cutover_history = _has_cutover_history(season_cutover_history_path)
+    readiness = _readiness_state(phase6, baselines, has_cutover_history=has_cutover_history)
     try:
         baseline_dir_label = str(baseline_dir.relative_to(ROOT)) if baseline_dir.is_absolute() else str(baseline_dir)
     except ValueError:
@@ -104,9 +127,15 @@ def build_status(plan_path: Path = PLAN_PATH, baseline_dir: Path = BASELINE_DIR)
             "has_mlb": len(baselines.get("mlb") or []) > 0,
             "has_nhl": len(baselines.get("nhl") or []) > 0,
         },
+        "season_cutover": {
+            "history_path": str(season_cutover_history_path),
+            "has_history": has_cutover_history,
+        },
         "readiness": readiness,
         "next_steps": _next_steps(phase6, baselines),
     }
+    if not has_cutover_history:
+        payload["next_steps"].append("Run: make season-cutover-log")
     return payload
 
 

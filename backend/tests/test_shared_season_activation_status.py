@@ -33,6 +33,8 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertIn("phase_6_2_incomplete", payload["readiness"]["blockers"])
             self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("baseline_artifacts_missing", payload["readiness"]["blockers"])
+            self.assertIn("season_cutover_history_missing", payload["readiness"]["blockers"])
+            self.assertIn("Run: make season-cutover-log", payload["next_steps"])
 
     def test_build_status_with_baselines_present(self):
         with tempfile.TemporaryDirectory() as td:
@@ -40,8 +42,10 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             plan = root / "Execution Plan.md"
             baselines = root / "season_baselines"
             baselines.mkdir(parents=True, exist_ok=True)
+            cutover = root / "season_cutover_history.jsonl"
             (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
             (baselines / "nhl_quality_2025-12-01_2025-12-31.json").write_text("{}", encoding="utf-8")
+            cutover.write_text('{"status":"ok"}\n', encoding="utf-8")
             plan.write_text(
                 "\n".join(
                     [
@@ -53,11 +57,12 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            payload = sas.build_status(plan, baselines)
+            payload = sas.build_status(plan, baselines, cutover)
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["status"], "pass")
             self.assertTrue(payload["baseline_artifacts"]["has_mlb"])
             self.assertTrue(payload["baseline_artifacts"]["has_nhl"])
+            self.assertTrue(payload["season_cutover"]["has_history"])
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])
             self.assertEqual(payload["readiness"]["blockers"], [])
 
@@ -66,9 +71,11 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             root = Path(td)
             plan = root / "Execution Plan.md"
             baselines = root / "season_baselines"
+            cutover = root / "season_cutover_history.jsonl"
             baselines.mkdir(parents=True, exist_ok=True)
             (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
             (baselines / "nhl_quality_2025-12-01_2025-12-31.json").write_text("{}", encoding="utf-8")
+            cutover.write_text('{"status":"ok"}\n', encoding="utf-8")
             plan.write_text(
                 "\n".join(
                     [
@@ -80,7 +87,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            payload = sas.build_status(plan, baselines)
+            payload = sas.build_status(plan, baselines, cutover)
             self.assertFalse(payload["ok"])
             self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])
