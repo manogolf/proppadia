@@ -148,9 +148,10 @@ Acceptance:
 
 Continue incremental UX polish where it affects watchlist and prediction workflows.
 
-Status: in progress (February 16, 2026). Fixed one resolver edge case where name+team
-lookups could miss players when team is stored as numeric id text (e.g., `119`) while
-input uses abbreviation (e.g., `LAD`).
+Status: complete (February 16, 2026). Delivered targeted mapping/surface hardening:
+- fixed resolver edge case where name+team lookups could miss players when team was stored as numeric id text (e.g., `119`) while input used abbreviation (e.g., `LAD`)
+- added player search fallback from `model_training_props` with dedupe against `player_ids`
+- aligned legacy `/api/players` alias to MLB-scoped directory path to avoid cross-sport bleed
 
 Acceptance:
 - no regressions on core navigation/actions
@@ -166,8 +167,8 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Implement P4.2: MLB players surface refinements.
+Stabilization pass: expand regression coverage around player lookup/search/profile endpoints.
 
 Proposed deliverable:
-- Continue incremental players/watchlist UX refinements without navigation/action regressions.
-- Track and reduce known team/player mapping edge cases.
+- Add focused endpoint/service tests for lookup/search/profile edge cases.
+- Keep ops/noise posture unchanged while reducing mapping regressions.

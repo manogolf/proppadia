@@ -293,7 +293,7 @@ def players_list(
     limit: int = Query(2000, ge=1, le=5000),
 ):
     try:
-        rows = list_players(limit=limit)
+        rows = list_players_mlb(limit=limit)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:

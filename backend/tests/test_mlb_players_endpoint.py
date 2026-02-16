@@ -27,6 +27,25 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertEqual(body[0].get("player_name"), "Shohei Ohtani")
         mock_list.assert_called_once_with(limit=5)
 
+    @patch("backend.app.routers.mlb.list_players")
+    @patch("backend.app.routers.mlb.list_players_mlb")
+    def test_players_alias_uses_mlb_scoped_list(self, mock_list_mlb, mock_list_legacy):
+        mock_list_mlb.return_value = [
+            {
+                "player_id": 660271,
+                "player_name": "Shohei Ohtani",
+                "team": "LAD",
+                "last_prop_date": "2025-08-15",
+            }
+        ]
+        resp = self.client.get("/api/players?limit=5")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(len(body), 1)
+        self.assertEqual(body[0].get("player_name"), "Shohei Ohtani")
+        mock_list_mlb.assert_called_once_with(limit=5)
+        mock_list_legacy.assert_not_called()
+
     @patch("backend.app.routers.mlb.search_players")
     def test_players_search_ok(self, mock_search):
         mock_search.return_value = [
