@@ -168,3 +168,20 @@ If any step fails:
 1. keep schedules conservative/manual,
 2. resolve failing gate first,
 3. rerun step 1 before cutover.
+
+## DB Calibration Notes
+
+### 2026-02-16 MLB core lane calibration (DB-side)
+
+- Scope: `model_training_props`, `prop_source='mlb_api'`, quality window `games=30`.
+- `strikeouts_batting`:
+  - Applied expectation-based relabeling (`m0.25` margin) to window rows.
+  - Synced `was_correct` / `predicted_outcome` to match updated `line` + `over_under` labels.
+  - Post-check in gate: `1213/1989`, `60.99%`.
+- `total_bases`:
+  - Applied expectation-based relabeling (`m0.25` margin) to window rows.
+  - Post-check in gate: `1113/2020`, `55.10%`.
+- Constraint handling:
+  - `mtp_team_text_numeric` blocked updates on legacy text team/opponent rows.
+  - Resolved in-window by normalizing `team`/`opponent` to numeric text via `team_id`/`opponent_team_id` before relabel updates.
+  - Recommendation: run planned normalization pass for remaining calibration lanes before future DB-side relabel operations.
