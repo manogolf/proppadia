@@ -93,7 +93,7 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
     if not query:
         return []
     lim = max(1, min(int(limit), 100))
-    sql = """
+    player_ids_sql = """
         SELECT
           CAST(player_id AS TEXT) AS player_id,
           MIN(player_name) AS player_name,
@@ -104,15 +104,47 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
         ORDER BY MIN(player_name) ASC
         LIMIT %s
     """
+    mtp_sql = """
+        SELECT DISTINCT ON (CAST(player_id AS TEXT))
+          CAST(player_id AS TEXT) AS player_id,
+          player_name,
+          team
+        FROM model_training_props
+        WHERE player_name ILIKE %s
+        ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
+        LIMIT %s
+    """
     try:
-        rows = pg_fetchall(sql, (f"%{query}%", lim))
+        player_rows = pg_fetchall(player_ids_sql, (f"%{query}%", lim))
     except Exception:
-        return []
+        player_rows = []
+
     out: List[Dict[str, Any]] = []
-    for row in rows:
+    seen: set[int] = set()
+    for row in player_rows:
         d = _decorate(row, "player_ids")
         if d:
+            seen.add(int(d["player_id"]))
             out.append(d)
+
+    if len(out) >= lim:
+        return out[:lim]
+
+    try:
+        mtp_rows = pg_fetchall(mtp_sql, (f"%{query}%", lim * 3))
+    except Exception:
+        return out[:lim]
+    for row in mtp_rows:
+        d = _decorate(row, "model_training_props")
+        if not d:
+            continue
+        pid = int(d["player_id"])
+        if pid in seen:
+            continue
+        seen.add(pid)
+        out.append(d)
+        if len(out) >= lim:
+            break
     return out
 
 

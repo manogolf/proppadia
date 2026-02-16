@@ -43,6 +43,40 @@ class TestMlbPlayerRepository(unittest.TestCase):
         params = captured.get("params")
         self.assertEqual(params, ("Shohei Ohtani", "LAD", "LAD", "119"))
 
+    def test_search_players_falls_back_to_training_rows(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                return []
+            if "FROM model_training_props" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            rows = repo.search_players(q="Ohtani", limit=5)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["player_id"], 660271)
+        self.assertEqual(rows[0]["team_abbr"], "LAD")
+        self.assertEqual(rows[0]["source"], "model_training_props")
+
+    def test_search_players_dedupes_player_ids_against_training_rows(self):
+        def _fetchall(sql, params=()):
+            if "FROM player_ids" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "LAD"}]
+            if "FROM model_training_props" in sql:
+                return [
+                    {"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"},
+                    {"player_id": "592450", "player_name": "Aaron Judge", "team": "NYY"},
+                ]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            rows = repo.search_players(q="a", limit=5)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["player_id"], 660271)
+        self.assertEqual(rows[1]["player_id"], 592450)
+
 
 if __name__ == "__main__":
     unittest.main()
