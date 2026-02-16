@@ -118,6 +118,29 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertIn("training_summary", body)
         mock_profile.assert_called_once_with(player_id=660271)
 
+    def test_players_resolve_requires_identifier(self):
+        resp = self.client.get("/api/players/resolve")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Provide player_id or name/player_name", str(resp.json().get("detail")))
+
+    @patch("backend.app.routers.mlb.search_players", side_effect=RuntimeError("db unavailable"))
+    def test_players_search_runtime_error_maps_503(self, _mock_search):
+        resp = self.client.get("/api/players/search?q=Ohtani&limit=5")
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("db unavailable", str(resp.json().get("detail")))
+
+    @patch("backend.app.routers.mlb.lookup_player", side_effect=Exception("boom"))
+    def test_players_lookup_unexpected_error_maps_500(self, _mock_lookup):
+        resp = self.client.get("/api/players/lookup?player_id=660271")
+        self.assertEqual(resp.status_code, 500)
+        self.assertIn("Exception: boom", str(resp.json().get("detail")))
+
+    @patch("backend.app.routers.mlb.player_profile", side_effect=RuntimeError("profile cache down"))
+    def test_player_profile_runtime_error_maps_503(self, _mock_profile):
+        resp = self.client.get("/api/player-profile/660271")
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("profile cache down", str(resp.json().get("detail")))
+
 
 if __name__ == "__main__":
     unittest.main()
