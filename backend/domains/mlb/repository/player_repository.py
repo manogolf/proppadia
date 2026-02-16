@@ -274,33 +274,47 @@ def resolve_by_player_id(player_id: int) -> Optional[Dict[str, Any]]:
 
 def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, Any]]:
     team = _normalize_team(team_abbr)
+    team_id = team_abbr_to_team_id(team) if team else None
+    team_id_txt = str(team_id) if team_id is not None else None
     exact_name_sql = """
         SELECT player_id, player_name, team
         FROM player_ids
         WHERE lower(player_name) = lower(%s)
-          AND (%s IS NULL OR upper(team) = upper(%s))
+          AND (
+            %s IS NULL
+            OR upper(CAST(team AS TEXT)) = upper(%s)
+            OR CAST(team AS TEXT) = %s
+          )
         LIMIT 1
     """
     fuzzy_name_sql = """
         SELECT player_id, player_name, team
         FROM player_ids
         WHERE player_name ILIKE %s
-          AND (%s IS NULL OR upper(team) = upper(%s))
+          AND (
+            %s IS NULL
+            OR upper(CAST(team AS TEXT)) = upper(%s)
+            OR CAST(team AS TEXT) = %s
+          )
         LIMIT 5
     """
     mtp_fallback_sql = """
         SELECT player_id, player_name, team
         FROM model_training_props
         WHERE player_name ILIKE %s
-          AND (%s IS NULL OR upper(team) = upper(%s))
+          AND (
+            %s IS NULL
+            OR upper(CAST(team AS TEXT)) = upper(%s)
+            OR CAST(team AS TEXT) = %s
+          )
         ORDER BY game_date DESC NULLS LAST
         LIMIT 5
     """
 
     search_steps = [
-        (exact_name_sql, (name, team, team), "player_ids", "exact_name"),
-        (fuzzy_name_sql, (f"%{name}%", team, team), "player_ids", "fuzzy_name"),
-        (mtp_fallback_sql, (f"%{name}%", team, team), "model_training_props", "fuzzy_name"),
+        (exact_name_sql, (name, team, team, team_id_txt), "player_ids", "exact_name"),
+        (fuzzy_name_sql, (f"%{name}%", team, team, team_id_txt), "player_ids", "fuzzy_name"),
+        (mtp_fallback_sql, (f"%{name}%", team, team, team_id_txt), "model_training_props", "fuzzy_name"),
     ]
 
     for sql, params, source, matched_on in search_steps:

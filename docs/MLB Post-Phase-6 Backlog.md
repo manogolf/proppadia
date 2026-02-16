@@ -148,6 +148,10 @@ Acceptance:
 
 Continue incremental UX polish where it affects watchlist and prediction workflows.
 
+Status: in progress (February 16, 2026). Fixed one resolver edge case where name+team
+lookups could miss players when team is stored as numeric id text (e.g., `119`) while
+input uses abbreviation (e.g., `LAD`).
+
 Acceptance:
 - no regressions on core navigation/actions
 - known team/player mapping edge cases tracked and reduced

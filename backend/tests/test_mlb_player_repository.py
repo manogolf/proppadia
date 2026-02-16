@@ -23,7 +23,26 @@ class TestMlbPlayerRepository(unittest.TestCase):
         self.assertIn("prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%'", sql)
         self.assertEqual(captured.get("params"), (5,))
 
+    def test_resolve_by_name_matches_numeric_team_storage(self):
+        captured = {}
+
+        def _fetchall(sql, params=()):
+            captured["sql"] = sql
+            captured["params"] = params
+            if "FROM player_ids" in sql and "lower(player_name) = lower(%s)" in sql:
+                return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            out = repo.resolve_by_name(name="Shohei Ohtani", team_abbr="LAD")
+
+        self.assertIsNotNone(out)
+        self.assertEqual(out["player_id"], 660271)
+        self.assertEqual(out["team_abbr"], "LAD")
+        self.assertEqual(out["team_id"], 119)
+        params = captured.get("params")
+        self.assertEqual(params, ("Shohei Ohtani", "LAD", "LAD", "119"))
+
 
 if __name__ == "__main__":
     unittest.main()
-
