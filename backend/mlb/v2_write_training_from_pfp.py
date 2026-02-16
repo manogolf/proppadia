@@ -48,6 +48,8 @@ import os, sys, json, argparse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 import requests
+_DOUBLES_OVER_THRESHOLD = 0.15
+_HITS_ALLOWED_OVER_MARGIN = 1.0
 
 try:
     from backend.mlb.shared.supabase_utils import supabase
@@ -197,6 +199,26 @@ def _hits_line_from_anchor(anchor: float) -> float:
     return 3.5
 
 
+def _doubles_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    return 1.5
+
+
+def _hits_allowed_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 4.0:
+        return 3.5
+    if x < 5.0:
+        return 4.5
+    if x < 6.0:
+        return 5.5
+    if x < 7.0:
+        return 6.5
+    return 7.5
+
+
 def _decide_line(actual: float) -> float:
     # half-step around actual to avoid pushes, jitter slightly for realism
     if actual <= 0:
@@ -311,6 +333,30 @@ def main():
                 anchor = expected_hits if expected_hits is not None else 1.0
                 line = _hits_line_from_anchor(anchor)
                 over_under = "over" if anchor > line else "under"
+            elif ptype == "doubles":
+                expected_doubles = None
+                d7_doubles = (r.get("features") or {}).get("d7_doubles")
+                try:
+                    expected_doubles = float(d7_doubles)
+                    if not (expected_doubles >= 0):
+                        expected_doubles = None
+                except Exception:
+                    expected_doubles = None
+                anchor = expected_doubles if expected_doubles is not None else 0.35
+                line = _doubles_line_from_anchor(anchor)
+                over_under = "over" if anchor >= _DOUBLES_OVER_THRESHOLD else "under"
+            elif ptype == "hits_allowed":
+                expected_ha = None
+                d7_hits_allowed = (r.get("features") or {}).get("d7_hits_allowed")
+                try:
+                    expected_ha = float(d7_hits_allowed)
+                    if not (expected_ha >= 0):
+                        expected_ha = None
+                except Exception:
+                    expected_ha = None
+                anchor = expected_ha if expected_ha is not None else 4.5
+                line = _hits_allowed_line_from_anchor(anchor)
+                over_under = "over" if anchor >= (line + _HITS_ALLOWED_OVER_MARGIN) else "under"
             else:
                 line = _decide_line(actual)
                 over_under = "over"  # arbitrary; we only need a consistent label target

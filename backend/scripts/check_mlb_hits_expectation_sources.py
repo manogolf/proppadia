@@ -18,7 +18,7 @@ _TARGET_FILES = [
 _FORBIDDEN_TOKEN = "rolling_result_avg_7"
 
 
-def _window_clause(window_mode: str) -> str:
+def _window_clause(window_mode: str, window_value: int) -> str:
     if window_mode == "games":
         return """
 WHERE game_day IN (
@@ -26,10 +26,14 @@ WHERE game_day IN (
   FROM mt
   WHERE lower(trim(outcome)) IN ('win','loss')
   ORDER BY game_day DESC
-  LIMIT %s::int
+  LIMIT """ + str(int(window_value)) + """
 )
 """
-    return "WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date"
+    return (
+        "WHERE game_day >= (CURRENT_DATE - ("
+        + str(int(window_value))
+        + " || ' days')::interval)::date"
+    )
 
 
 def _scan_forbidden_token(root: Path) -> dict[str, Any]:
@@ -54,7 +58,7 @@ def _scan_forbidden_token(root: Path) -> dict[str, Any]:
     }
 
 
-def _source_mix(window_mode: str, window_value: int) -> dict[str, Any]:
+def _source_mix_for_prop(window_mode: str, window_value: int, prop_type: str) -> dict[str, Any]:
     row = pg_fetchone(
         """
 WITH mt AS (
@@ -65,30 +69,47 @@ WITH mt AS (
     outcome
   FROM model_training_props
   WHERE prop_source='mlb_api'
-    AND prop_type='hits'
+    AND prop_type=%s
     AND game_date IS NOT NULL
 ),
 win AS (
   SELECT *
   FROM mt
 """
-        + _window_clause(window_mode)
+        + _window_clause(window_mode, int(window_value))
         + """
 ),
 pf AS (
   SELECT
     player_id,
     game_id,
-    MAX(NULLIF(features->>'d7_hits','')::numeric) AS pf_d7_hits
+    MAX(
+      NULLIF(
+        CASE
+          WHEN %s::text='hits' THEN features->>'d7_hits'
+          WHEN %s::text='doubles' THEN features->>'d7_doubles'
+          WHEN %s::text='hits_allowed' THEN features->>'d7_hits_allowed'
+          ELSE NULL
+        END,
+        ''
+      )::numeric
+    ) AS pf_d7_stat
   FROM prop_features_precomputed
-  WHERE prop_type='hits'
+  WHERE prop_type=%s
   GROUP BY player_id, game_id
 ),
 pds AS (
   SELECT
     player_id,
     game_id,
-    MAX(d7_hits)::numeric AS pds_d7_hits
+    MAX(
+      CASE
+        WHEN %s::text='hits' THEN d7_hits
+        WHEN %s::text='doubles' THEN d7_doubles
+        WHEN %s::text='hits_allowed' THEN d7_hits_allowed
+        ELSE NULL
+      END
+    )::numeric AS pds_d7_stat
   FROM player_derived_stats
   GROUP BY player_id, game_id
 ),
@@ -97,8 +118,8 @@ labeled AS (
     w.player_id,
     w.game_id,
     CASE
-      WHEN pf.pf_d7_hits IS NOT NULL THEN 'pf_d7_hits'
-      WHEN pds.pds_d7_hits IS NOT NULL THEN 'pds_d7_hits'
+      WHEN pf.pf_d7_stat IS NOT NULL THEN 'pf_d7_stat'
+      WHEN pds.pds_d7_stat IS NOT NULL THEN 'pds_d7_stat'
       ELSE 'default_1_0'
     END AS expectation_source
   FROM win w
@@ -108,34 +129,44 @@ labeled AS (
 agg AS (
   SELECT
     COUNT(*)::int AS total_rows,
-    COUNT(*) FILTER (WHERE expectation_source='pf_d7_hits')::int AS pf_d7_hits_rows,
-    COUNT(*) FILTER (WHERE expectation_source='pds_d7_hits')::int AS pds_d7_hits_rows,
+    COUNT(*) FILTER (WHERE expectation_source='pf_d7_stat')::int AS pf_d7_stat_rows,
+    COUNT(*) FILTER (WHERE expectation_source='pds_d7_stat')::int AS pds_d7_stat_rows,
     COUNT(*) FILTER (WHERE expectation_source='default_1_0')::int AS default_rows
   FROM labeled
 )
 SELECT
   total_rows,
-  pf_d7_hits_rows,
-  pds_d7_hits_rows,
+  pf_d7_stat_rows,
+  pds_d7_stat_rows,
   default_rows,
-  ROUND(100.0 * pf_d7_hits_rows::numeric / NULLIF(total_rows,0), 2) AS pf_d7_hits_pct,
-  ROUND(100.0 * pds_d7_hits_rows::numeric / NULLIF(total_rows,0), 2) AS pds_d7_hits_pct,
+  ROUND(100.0 * pf_d7_stat_rows::numeric / NULLIF(total_rows,0), 2) AS pf_d7_stat_pct,
+  ROUND(100.0 * pds_d7_stat_rows::numeric / NULLIF(total_rows,0), 2) AS pds_d7_stat_pct,
   ROUND(100.0 * default_rows::numeric / NULLIF(total_rows,0), 2) AS default_pct
 FROM agg
 """,
-        (int(window_value),),
+        (
+            str(prop_type),
+            str(prop_type),
+            str(prop_type),
+            str(prop_type),
+            str(prop_type),
+            str(prop_type),
+            str(prop_type),
+            str(prop_type),
+        ),
     ) or {}
 
     total = int(row.get("total_rows") or 0)
     return {
+        "prop_type": str(prop_type),
         "window_mode": window_mode,
         "window_value": int(window_value),
         "total_rows": total,
-        "pf_d7_hits_rows": int(row.get("pf_d7_hits_rows") or 0),
-        "pds_d7_hits_rows": int(row.get("pds_d7_hits_rows") or 0),
+        "pf_d7_stat_rows": int(row.get("pf_d7_stat_rows") or 0),
+        "pds_d7_stat_rows": int(row.get("pds_d7_stat_rows") or 0),
         "default_rows": int(row.get("default_rows") or 0),
-        "pf_d7_hits_pct": float(row.get("pf_d7_hits_pct")) if row.get("pf_d7_hits_pct") is not None else None,
-        "pds_d7_hits_pct": float(row.get("pds_d7_hits_pct")) if row.get("pds_d7_hits_pct") is not None else None,
+        "pf_d7_stat_pct": float(row.get("pf_d7_stat_pct")) if row.get("pf_d7_stat_pct") is not None else None,
+        "pds_d7_stat_pct": float(row.get("pds_d7_stat_pct")) if row.get("pds_d7_stat_pct") is not None else None,
         "default_pct": float(row.get("default_pct")) if row.get("default_pct") is not None else None,
     }
 
@@ -143,17 +174,27 @@ FROM agg
 def collect(window_mode: str, window_value: int) -> dict[str, Any]:
     root = Path(__file__).resolve().parents[2]
     forbidden = _scan_forbidden_token(root)
-    source_mix = _source_mix(window_mode, window_value)
+    source_mix_hits = _source_mix_for_prop(window_mode, window_value, "hits")
+    source_mix_doubles = _source_mix_for_prop(window_mode, window_value, "doubles")
+    source_mix_hits_allowed = _source_mix_for_prop(window_mode, window_value, "hits_allowed")
     warnings: list[str] = []
-    if int(source_mix.get("total_rows") or 0) == 0:
+    if int(source_mix_hits.get("total_rows") or 0) == 0:
         warnings.append("no_hits_rows_in_window")
+    if int(source_mix_doubles.get("total_rows") or 0) == 0:
+        warnings.append("no_doubles_rows_in_window")
+    if int(source_mix_hits_allowed.get("total_rows") or 0) == 0:
+        warnings.append("no_hits_allowed_rows_in_window")
 
     ok = bool(forbidden.get("ok"))
     return {
         "ok": ok,
         "status": "pass" if ok else "fail",
         "policy": forbidden,
-        "source_mix": source_mix,
+        "source_mix": {
+            "hits": source_mix_hits,
+            "doubles": source_mix_doubles,
+            "hits_allowed": source_mix_hits_allowed,
+        },
         "warnings": warnings,
     }
 
@@ -174,4 +215,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

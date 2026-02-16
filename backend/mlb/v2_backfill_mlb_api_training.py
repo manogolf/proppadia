@@ -59,6 +59,8 @@ SLEEP_MS = int(os.getenv("API_SLEEP_MS", "20"))  # throttle MLB API calls a bit
 FEATURE_SET_TAG = os.getenv("FEATURE_SET_TAG", "v1")  # tag for prop_features_precomputed
 
 MLB_BASE = "https://statsapi.mlb.com/api/v1"
+_DOUBLES_OVER_THRESHOLD = 0.15
+_HITS_ALLOWED_OVER_MARGIN = 1.0
 
 # Focus props (add/remove as needed)
 BATTER_PROPS = [
@@ -364,6 +366,26 @@ def _hits_line_from_anchor(anchor: float) -> float:
     return 3.5
 
 
+def _doubles_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    return 1.5
+
+
+def _hits_allowed_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 4.0:
+        return 3.5
+    if x < 5.0:
+        return 4.5
+    if x < 6.0:
+        return 5.5
+    if x < 7.0:
+        return 6.5
+    return 7.5
+
+
 def _deterministic_side(seed: str) -> str:
     return "over" if _stable_hash01(seed) < 0.5 else "under"
 
@@ -378,6 +400,16 @@ def _expected_hits_from_player(p: dict) -> float:
         return max(0.0, min(4.0, avg * 4.0))
     except Exception:
         return 1.0
+
+
+def _expected_doubles_from_player(_p: dict) -> float:
+    # Use a stable prior here; this writer does not have feature-layer d7_doubles context.
+    return 0.35
+
+
+def _expected_hits_allowed_from_player(_p: dict) -> float:
+    # Use a stable prior here; this writer does not have feature-layer d7_hits_allowed context.
+    return 4.5
 
 
 def half_step_line_from_actual(actual: float) -> float:
@@ -470,6 +502,14 @@ def process_game(game_pk: int, date_str: str) -> int:
                 expected_hits = _expected_hits_from_player(pdata)
                 line = _hits_line_from_anchor(expected_hits)
                 over_under = "over" if expected_hits > line else "under"
+            elif ptype == "doubles":
+                expected_doubles = _expected_doubles_from_player(pdata)
+                line = _doubles_line_from_anchor(expected_doubles)
+                over_under = "over" if expected_doubles >= _DOUBLES_OVER_THRESHOLD else "under"
+            elif ptype == "hits_allowed":
+                expected_ha = _expected_hits_allowed_from_player(pdata)
+                line = _hits_allowed_line_from_anchor(expected_ha)
+                over_under = "over" if expected_ha >= (line + _HITS_ALLOWED_OVER_MARGIN) else "under"
             else:
                 line = half_step_line_from_actual(float(actual))
                 # deterministic side for repeatable labels across runs

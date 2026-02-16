@@ -58,6 +58,8 @@ except Exception:
         supabase = None
 
 MLB = "https://statsapi.mlb.com/api/v1"
+_DOUBLES_OVER_THRESHOLD = 0.15
+_HITS_ALLOWED_OVER_MARGIN = 1.0
 
 # ---- props we’ll emit -------------------------------------------------------
 BATTER_PROPS = [
@@ -192,6 +194,26 @@ def _hits_line_from_anchor(anchor: float) -> float:
     return 3.5
 
 
+def _doubles_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    return 1.5
+
+
+def _hits_allowed_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 4.0:
+        return 3.5
+    if x < 5.0:
+        return 4.5
+    if x < 6.0:
+        return 5.5
+    if x < 7.0:
+        return 6.5
+    return 7.5
+
+
 def _expected_hits_from_bat(bat: Dict[str, Any]) -> float:
     """Estimate expected hits from season batting average when present."""
     avg_raw = bat.get("avg")
@@ -202,6 +224,18 @@ def _expected_hits_from_bat(bat: Dict[str, Any]) -> float:
         return max(0.0, min(4.0, avg * 4.0))
     except Exception:
         return 1.0
+
+
+def _expected_doubles_from_bat(_bat: Dict[str, Any]) -> float:
+    # Boxscore game-stat rows do not provide a reliable pregame doubles expectation.
+    # Use a stable prior fallback to avoid leakage from per-game outcomes.
+    return 0.35
+
+
+def _expected_hits_allowed_from_pitch(_pit: Dict[str, Any]) -> float:
+    # Boxscore game-stat rows do not provide a reliable pregame hits-allowed expectation.
+    # Use a stable prior fallback to avoid leakage from per-game outcomes.
+    return 4.5
 
 # ---- MLB fetchers -----------------------------------------------------------
 def _schedule(date_yyyy_mm_dd: str) -> Dict[str, Any]:
@@ -326,6 +360,14 @@ def upsert_labels_for_date(date_yyyy_mm_dd: str) -> Dict[str, Any]:
                         expected_hits = _expected_hits_from_bat(bat)
                         line = _hits_line_from_anchor(expected_hits)
                         over_under = "over" if expected_hits > line else "under"
+                    elif ptype == "doubles":
+                        expected_doubles = _expected_doubles_from_bat(bat)
+                        line = _doubles_line_from_anchor(expected_doubles)
+                        over_under = "over" if expected_doubles >= _DOUBLES_OVER_THRESHOLD else "under"
+                    elif ptype == "hits_allowed":
+                        expected_ha = _expected_hits_allowed_from_pitch(pit)
+                        line = _hits_allowed_line_from_anchor(expected_ha)
+                        over_under = "over" if expected_ha >= (line + _HITS_ALLOWED_OVER_MARGIN) else "under"
                     else:
                         # construct a half-step training label around actual
                         if actual == 0:
