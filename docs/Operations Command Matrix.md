@@ -135,6 +135,7 @@ make season-baseline-check
 make season-baseline-last
 make season-baseline-lock NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30
 make season-cutover-cadence
+make season-cutover-log
 make season-cutover-ready
 ```
 
