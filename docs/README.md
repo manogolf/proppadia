@@ -60,6 +60,8 @@ If the question is “what is the active runtime path right now?”:
 
 - `docs/MLB Endpoint Matrix.md`: frontend caller -> MLB endpoint mapping.
 - `docs/MLB API Contracts.md`: canonical MLB request/response contracts.
+- Backend identity rule for MLB: keep `player_id` as source of truth in internals; names remain boundary/input UX.
+- `make mlb-player-surface-checks`: focused regression lane for MLB player lookup/search/profile paths.
 - `docs/MLB Smoke Testing.md`: runbooks for `make mlb-checks-*`.
 - Includes scheduled market-cache warm command: `make mlb-market-cache-refresh`.
 - `docs/MLB Prediction Flow Audit.md`: prepare->predict->add->grade integrity checks and source-of-truth joins.

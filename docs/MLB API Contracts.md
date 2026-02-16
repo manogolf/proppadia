@@ -2,6 +2,18 @@
 
 This document defines the current expected request/response shape for MLB endpoints in `backend/app/routers/mlb.py`.
 
+## Identity Handling Rule
+
+- User/API boundary: names are primary for UX; `player_id` can be included where useful.
+- Backend internals (repository/domain/training/pipeline): `player_id` is the source of truth for matching, joins, dedupe, and writes.
+- Name matching is intake fallback only when `player_id` is missing.
+
+Regression lane:
+
+```bash
+make mlb-player-surface-checks
+```
+
 ## Error Shape
 
 All validation/runtime errors are returned as FastAPI HTTP errors:
