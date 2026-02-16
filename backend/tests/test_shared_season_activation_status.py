@@ -33,9 +33,6 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertEqual(payload["season_activation_history"]["history_count"], 0)
             self.assertGreater(len(payload["next_steps"]), 0)
             self.assertTrue(payload["next_steps"][0].startswith("Run: make season-activation-check"))
-            self.assertIn("phase_6_1_incomplete", payload["readiness"]["blockers"])
-            self.assertIn("phase_6_2_incomplete", payload["readiness"]["blockers"])
-            self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("baseline_artifacts_missing", payload["readiness"]["blockers"])
             self.assertIn("season_cutover_history_missing", payload["readiness"]["blockers"])
             self.assertIn("season_activation_history_missing", payload["readiness"]["blockers"])
@@ -76,7 +73,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])
             self.assertEqual(payload["readiness"]["blockers"], [])
 
-    def test_build_status_requires_phase_6_3_complete_even_with_baselines(self):
+    def test_build_status_allows_ready_with_artifacts_even_if_tracker_text_is_incomplete(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             plan = root / "Execution Plan.md"
@@ -87,6 +84,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
             (baselines / "nhl_quality_2025-12-01_2025-12-31.json").write_text("{}", encoding="utf-8")
             cutover.write_text('{"status":"ok"}\n', encoding="utf-8")
+            activation_history.write_text('{"captured_at":"2026-02-16T00:00:00+00:00"}\n', encoding="utf-8")
             plan.write_text(
                 "\n".join(
                     [
@@ -99,8 +97,8 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = sas.build_status(plan, baselines, cutover, activation_history)
-            self.assertFalse(payload["ok"])
-            self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["readiness"]["blockers"], [])
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])
 
     def test_build_status_can_fail_on_stale_activation_history(self):

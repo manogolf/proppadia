@@ -131,18 +131,10 @@ def _readiness_state(
     activation_history: Dict[str, object],
     activation_history_max_age_hours: int,
 ) -> Dict[str, object]:
-    lines = " ".join(phase6).lower()
     has_mlb = len(baselines.get("mlb") or []) > 0
     has_nhl = len(baselines.get("nhl") or []) > 0
-    needs_dry_run = "6.1 preseason dry run: complete" not in lines
-    needs_cutover = "6.2 in-season cadence cutover: complete" not in lines
-    needs_baseline_lock = "6.3 baseline lock: complete" not in lines
     needs_baseline = not (has_mlb and has_nhl)
     blockers: List[str] = []
-    if needs_dry_run:
-        blockers.append("phase_6_1_incomplete")
-    if needs_cutover:
-        blockers.append("phase_6_2_incomplete")
     if not has_cutover_history:
         blockers.append("season_cutover_history_missing")
     if int(activation_history.get("history_count") or 0) == 0:
@@ -154,8 +146,6 @@ def _readiness_state(
         and float(latest_age) > float(activation_history_max_age_hours)
     ):
         blockers.append("season_activation_history_stale")
-    if needs_baseline_lock:
-        blockers.append("phase_6_3_incomplete")
     if needs_baseline:
         blockers.append("baseline_artifacts_missing")
     return {"ready": len(blockers) == 0, "blockers": blockers}
