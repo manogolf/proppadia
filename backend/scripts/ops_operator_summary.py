@@ -16,6 +16,38 @@ from backend.scripts import mlb_readiness_snapshot
 from backend.scripts import season_activation_report
 
 
+def _runbook_links() -> list[dict[str, str]]:
+    return [
+        {"label": "Operations Matrix", "path": "docs/Operations Command Matrix.md"},
+        {"label": "Season Activation", "path": "docs/Season Activation Runbook.md"},
+        {"label": "MLB Retrain Prerequisites", "path": "docs/MLB Retrain Prerequisites Checklist.md"},
+        {"label": "MLB Candidate Evaluation", "path": "docs/MLB Candidate Evaluation Lane.md"},
+    ]
+
+
+def _signal_block(summary: dict[str, Any]) -> dict[str, Any]:
+    readiness = summary.get("mlb_readiness") or {}
+    season = summary.get("season_activation_report") or {}
+    season_baseline_latest = (season.get("baseline_latest") or {}).get("latest") or {}
+    mlb_baseline = season_baseline_latest.get("mlb") or {}
+    pipeline = summary.get("mlb_pipeline") or {}
+    pipeline_latest = pipeline.get("latest") or {}
+    stat = ((readiness.get("checks") or {}).get("stat_derived")) or {}
+    roster = ((readiness.get("checks") or {}).get("roster")) or {}
+    freshness_flags = {
+        "stat_derived_ok": str(stat.get("status")).lower() == "pass",
+        "roster_ok": str(roster.get("status")).lower() == "pass",
+        "mlb_baseline_ok": bool(mlb_baseline.get("exists")),
+    }
+    return {
+        "pipeline_status": pipeline_latest.get("status") if pipeline.get("history_available") else None,
+        "pipeline_ok": pipeline_latest.get("ok") if pipeline.get("history_available") else None,
+        "pipeline_failure_count": len(pipeline_latest.get("failures") or []),
+        "mlb_baseline_age_hours": mlb_baseline.get("age_hours"),
+        "freshness_flags": freshness_flags,
+    }
+
+
 def collect_summary(
     *,
     stat_days: int,
@@ -72,6 +104,14 @@ def collect_summary(
     return {
         "ok": overall_ok,
         "status": "pass" if overall_ok else "fail",
+        "signals": _signal_block(
+            {
+                "mlb_readiness": readiness,
+                "season_activation_report": season,
+                "mlb_pipeline": pipeline,
+            }
+        ),
+        "runbook_links": _runbook_links(),
         "governance": governance,
         "mlb_readiness": readiness,
         "season_activation_report": season,
@@ -145,6 +185,20 @@ def _print_text(summary: dict[str, Any]) -> None:
             else "unknown (no history)"
         )
     )
+    signals = summary.get("signals") or {}
+    freshness = signals.get("freshness_flags") or {}
+    print(
+        "ops_signals: "
+        f"pipeline={signals.get('pipeline_status')} "
+        f"baseline_age_h={signals.get('mlb_baseline_age_hours')} "
+        f"freshness(stat={freshness.get('stat_derived_ok')},roster={freshness.get('roster_ok')},baseline={freshness.get('mlb_baseline_ok')})"
+    )
+    links = summary.get("runbook_links") or []
+    if links:
+        print(
+            "runbooks: "
+            + " | ".join(f"{item.get('label')}: {item.get('path')}" for item in links if item.get("path"))
+        )
 
 
 def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
@@ -170,6 +224,8 @@ def compact_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "captured_at": captured_at,
         "ok": bool(summary.get("ok")),
         "status": summary.get("status"),
+        "signals": summary.get("signals") or {},
+        "runbook_links": summary.get("runbook_links") or [],
         "governance": {
             "ok": bool(governance.get("ok")),
             "status": governance.get("status"),

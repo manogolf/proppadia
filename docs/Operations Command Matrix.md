@@ -104,6 +104,10 @@ make ops-operator-incident-strict
 make ops-daily-check
 ```
 
+Notes:
+- `ops-operator-summary` now surfaces a minimal `ops_signals` line (pipeline status, MLB baseline age, freshness flags).
+- `ops-operator-summary-json-compact` now includes `signals` and `runbook_links` for quick operator routing.
+
 Phase tracker snapshot (json):
 
 ```bash

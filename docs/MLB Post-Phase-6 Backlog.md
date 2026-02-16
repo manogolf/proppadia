@@ -137,6 +137,9 @@ Surface only:
 - freshness flags
 - one-click runbook links
 
+Status: complete (February 16, 2026). `ops-operator-summary` and compact JSON now
+include minimal signal block plus runbook links without expanding log noise.
+
 Acceptance:
 - no noisy raw logs added
 - operator panel remains concise
@@ -159,8 +162,8 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Implement P4.1: minimal ops signal additions (high signal only).
+Implement P4.2: MLB players surface refinements.
 
 Proposed deliverable:
-- Add concise operator output for latest pipeline status, baseline age, freshness flags, and runbook pointers.
-- Keep panel noise low by avoiding raw-log surface expansion.
+- Continue incremental players/watchlist UX refinements without navigation/action regressions.
+- Track and reduce known team/player mapping edge cases.

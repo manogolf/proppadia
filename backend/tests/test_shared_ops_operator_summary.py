@@ -46,6 +46,8 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
         self.assertIn("mlb_readiness", payload)
         self.assertIn("season_activation_report", payload)
         self.assertIn("mlb_pipeline", payload)
+        self.assertIn("signals", payload)
+        self.assertIn("runbook_links", payload)
 
     def test_main_non_strict_returns_zero_on_fail(self):
         with patch.object(
@@ -111,6 +113,8 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
         compact = ops.compact_summary(payload)
         self.assertEqual(compact["captured_at"], "2026-02-15T08:00:00+00:00")
         self.assertTrue(compact["ok"])
+        self.assertIn("signals", compact)
+        self.assertIn("runbook_links", compact)
         self.assertEqual(compact["mlb_readiness"]["stat_count"], 123)
         self.assertEqual(compact["season_activation"]["blocker_count"], 1)
         self.assertEqual(compact["season_activation"]["history_count"], 2)
@@ -129,6 +133,8 @@ class TestSharedOpsOperatorSummary(unittest.TestCase):
             return_value={
                 "ok": True,
                 "status": "pass",
+                "signals": {},
+                "runbook_links": [],
                 "governance": {"ok": True, "status": "pass", "governance_ok": True, "season_activation_ok": True},
                 "mlb_readiness": {"ok": True, "status": "pass", "checks": {}},
                 "season_activation_report": {"ok": True, "status": "pass", "season_activation": {"blockers": []}},
