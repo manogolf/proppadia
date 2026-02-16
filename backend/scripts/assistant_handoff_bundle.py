@@ -15,6 +15,7 @@ from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
 from backend.scripts import json_check_runner
 from backend.scripts import mlb_pipeline_check
+from backend.scripts import mlb_pipeline_last
 from backend.scripts import season_activation_report
 from backend.scripts.mlb_readiness_last import _load_history, _regressions
 from backend.scripts.mlb_readiness_snapshot import collect_snapshot
@@ -56,10 +57,35 @@ def _history_tail(input_path: str, limit: int) -> dict[str, Any]:
     }
 
 
+def _pipeline_history_tail(input_path: str, limit: int) -> dict[str, Any]:
+    history = mlb_pipeline_last._load_history(Path(input_path))
+    tail = history[-max(1, int(limit)) :]
+    rows: list[dict[str, Any]] = []
+    for idx, item in enumerate(tail):
+        prev = tail[idx - 1] if idx > 0 else None
+        rows.append(
+            {
+                "captured_at": item.get("captured_at"),
+                "status": item.get("status"),
+                "ok": item.get("ok"),
+                "failures": item.get("failures") or [],
+                "regressions": mlb_pipeline_last._regressions(prev, item),
+            }
+        )
+    return {
+        "input": str(input_path),
+        "history_count": len(history),
+        "returned": len(rows),
+        "rows": rows,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Emit assistant-ready support handoff bundle (JSON).")
     ap.add_argument("--history-input", default="artifacts/mlb_readiness_history.jsonl")
     ap.add_argument("--history-limit", type=int, default=5)
+    ap.add_argument("--pipeline-history-input", default="artifacts/mlb_pipeline_history.jsonl")
+    ap.add_argument("--pipeline-history-limit", type=int, default=5)
     ap.add_argument("--season-activation-input", default="artifacts/season_activation_history.jsonl")
     ap.add_argument("--stat-days", type=int, default=30)
     ap.add_argument("--stat-require-min", type=int, default=0)
@@ -125,6 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         roster_stale_hours=args.roster_stale_hours,
     )
     history = _history_tail(args.history_input, args.history_limit)
+    pipeline_history = _pipeline_history_tail(args.pipeline_history_input, args.pipeline_history_limit)
     season_activation_history = (season_report.get("season_activation_history") or {})
 
     governance_ok = (
@@ -149,6 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "mlb_readiness": readiness,
         "mlb_readiness_history": history,
+        "mlb_pipeline_history": pipeline_history,
         "season_activation_history": season_activation_history,
     }
     print(json.dumps(bundle, indent=2))

@@ -34,6 +34,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 0, "returned": 0, "rows": []}
+        ), patch.object(
+            bundle, "_pipeline_history_tail", return_value={"input": "p", "history_count": 0, "returned": 0, "rows": []}
         ), redirect_stdout(out):
             rc = bundle.main([])
 
@@ -45,6 +47,7 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("governance", payload)
         self.assertIn("mlb_readiness", payload)
         self.assertIn("mlb_readiness_history", payload)
+        self.assertIn("mlb_pipeline_history", payload)
         self.assertIn("season_activation_history", payload)
         self.assertIn("mlb_pipeline_check", payload["governance"]["checks"])
         self.assertIn("season_activation_report", payload["governance"]["checks"])
@@ -67,6 +70,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle, "collect_snapshot", return_value={"ok": False, "status": "fail", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 1, "returned": 1, "rows": []}
+        ), patch.object(
+            bundle, "_pipeline_history_tail", return_value={"input": "p", "history_count": 1, "returned": 1, "rows": []}
         ), redirect_stdout(out):
             rc = bundle.main([])
 
@@ -95,6 +100,8 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
             bundle, "collect_snapshot", return_value={"ok": True, "status": "pass", "checks": {}, "errors": {}}
         ), patch.object(
             bundle, "_history_tail", return_value={"input": "x", "history_count": 1, "returned": 1, "rows": []}
+        ), patch.object(
+            bundle, "_pipeline_history_tail", return_value={"input": "p", "history_count": 1, "returned": 1, "rows": []}
         ), redirect_stdout(out):
             rc = bundle.main([])
 
