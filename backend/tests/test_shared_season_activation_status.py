@@ -29,6 +29,7 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertFalse(payload["baseline_artifacts"]["has_mlb"])
             self.assertFalse(payload["baseline_artifacts"]["has_nhl"])
             self.assertGreater(len(payload["next_steps"]), 0)
+            self.assertTrue(payload["next_steps"][0].startswith("Run: make season-activation-check"))
             self.assertIn("phase_6_1_incomplete", payload["readiness"]["blockers"])
             self.assertIn("phase_6_2_incomplete", payload["readiness"]["blockers"])
             self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])

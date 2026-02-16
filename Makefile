@@ -286,6 +286,7 @@ season-activation-check:
 	$(MAKE) season-baseline-lock MLB_QUALITY_WINDOW_MODE="$(MLB_QUALITY_WINDOW_MODE)" MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_WINDOW_DAYS="$(MLB_QUALITY_WINDOW_DAYS)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)" NHL_QUALITY_FROM_DATE="$(NHL_QUALITY_FROM_DATE)" NHL_QUALITY_TO_DATE="$(NHL_QUALITY_TO_DATE)" NHL_QUALITY_MIN_TOTAL="$(NHL_QUALITY_MIN_TOTAL)"
 	$(MAKE) season-cutover-cadence
 	$(MAKE) season-cutover-log
+	$(MAKE) season-cutover-ready
 
 workflow-inventory:
 	$(VENV_PY) backend/scripts/check_workflow_schedule_inventory.py

@@ -42,11 +42,17 @@ def _list_baselines(root: Path) -> Dict[str, List[str]]:
 def _next_steps(phase6: List[str], baselines: Dict[str, List[str]]) -> List[str]:
     has_mlb = len(baselines.get("mlb") or []) > 0
     has_nhl = len(baselines.get("nhl") or []) > 0
+    needs_baseline = not (has_mlb and has_nhl)
     lines = " ".join(phase6).lower()
     needs_dry_run = "6.1 preseason dry run: complete" not in lines
     needs_cutover = "6.2 in-season cadence cutover: complete" not in lines
     needs_baseline_lock = "6.3 baseline lock: complete" not in lines
     steps: List[str] = []
+    if needs_dry_run or needs_cutover or needs_baseline_lock or needs_baseline:
+        steps.append(
+            "Run: make season-activation-check BASE_URL=<url> MLB_DATE=YYYY-MM-DD "
+            "NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD"
+        )
     if needs_dry_run:
         steps.append("Run: make mlb-season-kickoff-check BASE_URL=<url> MLB_DATE=YYYY-MM-DD")
     if not (has_mlb and has_nhl):

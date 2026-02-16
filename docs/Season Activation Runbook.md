@@ -14,6 +14,8 @@ make season-activation-check \
   NHL_QUALITY_TO_DATE=2025-12-31
 ```
 
+The command now ends by running `make season-cutover-ready`, so it behaves as a full strict bundle gate (not just step execution).
+
 Status view (before/after running fast path):
 
 ```bash
