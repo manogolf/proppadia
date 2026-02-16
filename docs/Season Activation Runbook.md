@@ -27,6 +27,7 @@ make season-baseline-check
 make season-baseline-last
 make season-cutover-cadence
 make season-cutover-log
+make season-cutover-last
 make season-cutover-ready
 ```
 
@@ -67,6 +68,7 @@ When ready to move from offseason conservative cadence:
 ```bash
 make season-cutover-cadence
 make season-cutover-log
+make season-cutover-last
 ```
 
 3. Keep `make cron-governance-check` as required guard.

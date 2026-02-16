@@ -21,6 +21,7 @@ Daily:
 - `make season-activation-check ...` (kickoff + baseline lock + cadence plan)
 - `make season-cutover-cadence` (show intended in-season cron + commands)
 - `make season-cutover-log` (append cadence snapshot to cutover history)
+- `make season-cutover-last` (show recent cadence snapshots + regressions)
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
