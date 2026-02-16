@@ -161,6 +161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     season_activation_history = (season_report.get("season_activation_history") or {})
     season_baseline_latest = (season_report.get("baseline_latest") or {})
     season_cutover_history = (season_report.get("season_cutover_history") or {})
+    season_activation_history_rows = season_activation_history.get("rows") or []
+    season_activation_latest = season_activation_history_rows[-1] if season_activation_history_rows else {}
 
     governance_ok = (
         inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and mlb_pipeline_rc == 0 and report_rc == 0
@@ -186,6 +188,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "mlb_readiness_history": history,
         "mlb_pipeline_history": pipeline_history,
         "season_activation_history": season_activation_history,
+        "season_activation_latest": {
+            "captured_at": season_activation_latest.get("captured_at"),
+            "status": season_activation_latest.get("status"),
+            "ok": season_activation_latest.get("ok"),
+            "blocker_count": len(season_activation_latest.get("blockers") or []),
+            "new_blockers": season_activation_latest.get("new_blockers") or [],
+        },
         "season_baseline_latest": season_baseline_latest,
         "season_cutover_history": season_cutover_history,
     }

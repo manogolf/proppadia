@@ -15,7 +15,20 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
                 {
                     "status": "pass",
                     "phase_status": {},
-                    "season_activation_history": {},
+                    "season_activation_history": {
+                        "history_count": 2,
+                        "returned": 2,
+                        "rows": [
+                            {"captured_at": "2026-02-16T00:00:00+00:00", "status": "fail", "ok": False, "blockers": ["a"]},
+                            {
+                                "captured_at": "2026-02-16T00:05:00+00:00",
+                                "status": "fail",
+                                "ok": False,
+                                "blockers": ["a", "b"],
+                                "new_blockers": ["b"],
+                            },
+                        ],
+                    },
                     "baseline_latest": {"latest": {"mlb": {"age_hours": 1.0}, "nhl": {"age_hours": 2.0}}},
                 }
             )
@@ -58,8 +71,12 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("mlb_readiness_history", payload)
         self.assertIn("mlb_pipeline_history", payload)
         self.assertIn("season_activation_history", payload)
+        self.assertIn("season_activation_latest", payload)
         self.assertIn("season_baseline_latest", payload)
         self.assertIn("season_cutover_history", payload)
+        self.assertEqual(payload["season_activation_latest"]["captured_at"], "2026-02-16T00:05:00+00:00")
+        self.assertEqual(payload["season_activation_latest"]["blocker_count"], 2)
+        self.assertEqual(payload["season_activation_latest"]["new_blockers"], ["b"])
         self.assertIn("mlb_pipeline_check", payload["governance"]["checks"])
         self.assertIn("season_activation_report", payload["governance"]["checks"])
 
