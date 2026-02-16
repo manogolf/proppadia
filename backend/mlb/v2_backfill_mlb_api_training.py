@@ -41,16 +41,16 @@ Typical cron
 
 from __future__ import annotations
 
-import os, time, json, math, requests
+import os, time, json, math, requests, hashlib
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional, Tuple
 
 # Supabase helper (python version used elsewhere in backend)
 try:
-    from backend.scripts.shared.supabase_utils import supabase
+    from backend.mlb.shared.supabase_utils import supabase
 except Exception:
-    from scripts.shared.supabase_utils import supabase  # fallback
+    from backend.supabase.supabase_utils import supabase  # fallback
 
 # --- config ------------------------------------------------------------------
 
@@ -346,6 +346,28 @@ def grade(over_under: str, line: float, actual: float) -> str:
     else:
         return "win" if actual < line else "loss"
 
+
+def _stable_hash01(seed: str) -> float:
+    digest = hashlib.sha256(seed.encode("utf-8")).digest()
+    n = int.from_bytes(digest[:8], "big")
+    return n / float(2**64 - 1)
+
+
+def _hits_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    if x < 2.0:
+        return 1.5
+    if x < 3.0:
+        return 2.5
+    return 3.5
+
+
+def _deterministic_side(seed: str) -> str:
+    return "over" if _stable_hash01(seed) < 0.5 else "under"
+
+
 def half_step_line_from_actual(actual: float) -> float:
     if actual <= 0:
         return 0.5
@@ -432,9 +454,13 @@ def process_game(game_pk: int, date_str: str) -> int:
             if actual is None or not (isinstance(actual, (int, float)) and math.isfinite(actual)):
                 continue
 
-            line = half_step_line_from_actual(float(actual))
-            # random OU for balance (deterministic-ish via hash)
-            over_under = "over" if (hash((player_id, ptype, line)) % 2 == 0) else "under"
+            if ptype == "hits":
+                line = _hits_line_from_anchor(float(actual))
+                over_under = _deterministic_side(f"{player_id}:{game_pk}:{ptype}:{line}")
+            else:
+                line = half_step_line_from_actual(float(actual))
+                # deterministic side for repeatable labels across runs
+                over_under = _deterministic_side(f"{player_id}:{game_pk}:{ptype}:{line}")
             outcome = grade(over_under, line, float(actual))
             if outcome == "push":
                 # should be rare with .5; skip

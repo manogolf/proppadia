@@ -44,19 +44,15 @@ Typical cron
 
 from __future__ import annotations
 
-import os, sys, json, argparse
+import os, sys, json, argparse, hashlib
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 try:
-    # repo-style import
-    from scripts.shared.supabase_utils import supabase
-    from scripts.shared.team_name_map import get_team_info_by_id
+    from backend.mlb.shared.supabase_utils import supabase
 except Exception:
-    # backend-style import
-    from backend.scripts.shared.supabase_utils import supabase   # type: ignore
-    from backend.scripts.shared.team_name_map import get_team_info_by_id  # type: ignore
+    from backend.supabase.supabase_utils import supabase  # type: ignore
 
 
 # ------------- helpers ---------------
@@ -189,6 +185,28 @@ def _player_box_nodes(box: Dict[str, Any], pid: int) -> Tuple[Optional[Dict[str,
                 return node.get("stats", {}).get("batting") or {}, node.get("stats", {}).get("pitching") or {}
     return None, None
 
+
+def _stable_hash01(seed: str) -> float:
+    digest = hashlib.sha256(seed.encode("utf-8")).digest()
+    n = int.from_bytes(digest[:8], "big")
+    return n / float(2**64 - 1)
+
+
+def _hits_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    if x < 2.0:
+        return 1.5
+    if x < 3.0:
+        return 2.5
+    return 3.5
+
+
+def _deterministic_side(seed: str) -> str:
+    return "over" if _stable_hash01(seed) < 0.5 else "under"
+
+
 def _decide_line(actual: float) -> float:
     # half-step around actual to avoid pushes, jitter slightly for realism
     if actual <= 0:
@@ -291,8 +309,21 @@ def main():
                 continue
 
             # derive line & OU
-            line = _decide_line(actual)
-            over_under = "over"  # arbitrary; we only need a consistent label target
+            if ptype == "hits":
+                expected_hits = None
+                rr7 = (r.get("features") or {}).get("rolling_result_avg_7")
+                try:
+                    expected_hits = float(rr7)
+                    if not (expected_hits >= 0):
+                        expected_hits = None
+                except Exception:
+                    expected_hits = None
+                anchor = expected_hits if expected_hits is not None else float(actual)
+                line = _hits_line_from_anchor(anchor)
+                over_under = _deterministic_side(f"{pid}:{gid}:{ptype}:{line}")
+            else:
+                line = _decide_line(actual)
+                over_under = "over"  # arbitrary; we only need a consistent label target
             outcome = _determine_outcome(actual, line, over_under)
 
             # enrich from features (ids/abbrs if present)

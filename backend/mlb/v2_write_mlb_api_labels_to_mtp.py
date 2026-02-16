@@ -43,17 +43,17 @@ Typical cron
 
 from __future__ import annotations
 
-import os, sys, time, random, requests
+import os, sys, time, random, requests, hashlib
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from zoneinfo import ZoneInfo
 
 # --- Supabase handle (same pattern you’ve used elsewhere) --------------------
 try:
-    from backend.scripts.shared.supabase_utils import supabase
+    from backend.mlb.shared.supabase_utils import supabase
 except Exception:
     try:
-        from scripts.shared.supabase_utils import supabase  # fallback
+        from backend.supabase.supabase_utils import supabase  # fallback
     except Exception:
         supabase = None
 
@@ -180,6 +180,27 @@ def _grade(ou: str, line: float, actual: float) -> str:
         return "win" if actual < line else "loss"
     return "win" if actual > line else "loss"
 
+
+def _stable_hash01(seed: str) -> float:
+    digest = hashlib.sha256(seed.encode("utf-8")).digest()
+    n = int.from_bytes(digest[:8], "big")
+    return n / float(2**64 - 1)
+
+
+def _hits_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    if x < 2.0:
+        return 1.5
+    if x < 3.0:
+        return 2.5
+    return 3.5
+
+
+def _deterministic_side(seed: str) -> str:
+    return "over" if _stable_hash01(seed) < 0.5 else "under"
+
 # ---- MLB fetchers -----------------------------------------------------------
 def _schedule(date_yyyy_mm_dd: str) -> Dict[str, Any]:
     r = requests.get(f"{MLB}/schedule?sportId=1&date={date_yyyy_mm_dd}", timeout=12)
@@ -296,14 +317,21 @@ def upsert_labels_for_date(date_yyyy_mm_dd: str) -> Dict[str, Any]:
                     if actual is None:
                         continue
 
-                    # construct a half-step training label around actual
-                    if actual == 0:
-                        line = 0.5
+                    # Deterministic hits policy:
+                    # - bucketed line
+                    # - stable-hash side (no runtime randomness)
+                    if ptype == "hits":
+                        line = _hits_line_from_anchor(float(actual))
+                        over_under = _deterministic_side(f"{pid}:{game_id}:{ptype}:{line}")
                     else:
-                        line = actual + (0.5 if random.random() < 0.5 else -0.5)
-                    # round to .0 or .5 only
-                    line = round(line * 2) / 2
-                    over_under = "over" if random.random() < 0.5 else "under"
+                        # construct a half-step training label around actual
+                        if actual == 0:
+                            line = 0.5
+                        else:
+                            line = actual + (0.5 if random.random() < 0.5 else -0.5)
+                        # round to .0 or .5 only
+                        line = round(line * 2) / 2
+                        over_under = "over" if random.random() < 0.5 else "under"
 
                     outcome = _grade(over_under, line, actual)
                     label_num = 1.0 if outcome == "win" else 0.0
