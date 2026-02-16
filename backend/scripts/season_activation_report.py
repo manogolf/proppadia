@@ -25,6 +25,7 @@ def _history_tail(path: Path, limit: int) -> Dict[str, Any]:
         prev = tail[idx - 1] if idx > 0 else None
         rows.append(
             {
+                "captured_at": item.get("captured_at"),
                 "status": item.get("status"),
                 "ok": item.get("ok"),
                 "phase6_count": len(item.get("phase6_tracker") or []),

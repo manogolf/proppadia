@@ -38,12 +38,13 @@ class TestSharedSeasonActivationReport(unittest.TestCase):
             sar.season_activation_last,
             "_load_history",
             return_value=[
-                {"readiness": {"blockers": ["a"]}},
-                {"readiness": {"blockers": ["a", "b"]}},
+                {"captured_at": "2026-02-16T00:00:00+00:00", "readiness": {"blockers": ["a"]}},
+                {"captured_at": "2026-02-16T00:05:00+00:00", "readiness": {"blockers": ["a", "b"]}},
             ],
         ):
             payload = sar._history_tail(Path("x"), 2)
         self.assertEqual(payload["history_count"], 2)
+        self.assertEqual(payload["rows"][1]["captured_at"], "2026-02-16T00:05:00+00:00")
         self.assertEqual(payload["rows"][1]["new_blockers"], ["b"])
 
     def test_main_non_strict_returns_zero_on_fail_payload(self):
