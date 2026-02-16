@@ -77,6 +77,30 @@ class TestMlbPlayerRepository(unittest.TestCase):
         self.assertEqual(rows[0]["player_id"], 660271)
         self.assertEqual(rows[1]["player_id"], 592450)
 
+    def test_fetch_player_profile_rows_tolerates_partial_query_failures(self):
+        calls = {"n": 0}
+
+        def _fetchall(sql, params=()):
+            calls["n"] += 1
+            if "FROM player_props" in sql:
+                return [{"prop_type": "hits"}]
+            if "FROM player_streak_profiles" in sql:
+                raise RuntimeError("streaks unavailable")
+            if "AND prop_source = 'mlb_api'" in sql:
+                return [{"prop_type": "hits", "outcome": "win"}]
+            if "GROUP BY prop_type" in sql:
+                raise RuntimeError("summary unavailable")
+            return []
+
+        with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
+            out = repo.fetch_player_profile_rows(player_id=660271)
+
+        self.assertEqual(calls["n"], 4)
+        self.assertEqual(out["recent_props"], [{"prop_type": "hits"}])
+        self.assertEqual(out["streaks"], [])
+        self.assertEqual(out["stat_derived"], [{"prop_type": "hits", "outcome": "win"}])
+        self.assertEqual(out["training_summary"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
