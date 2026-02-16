@@ -6,12 +6,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Sequence, Tuple
 
 from backend.shared.db.pg import pg_fetchall
 
 
-COMMON_CTE = """
+def _common_cte(prop_types: Sequence[str] | None = None) -> Tuple[str, Tuple[Any, ...]]:
+    prop_types = [str(p).strip() for p in (prop_types or []) if str(p).strip()]
+    filter_sql = ""
+    params: Tuple[Any, ...] = ()
+    if prop_types:
+        placeholders = ", ".join(["%s"] * len(prop_types))
+        filter_sql = f" AND prop_type IN ({placeholders})"
+        params = tuple(prop_types)
+    sql = (
+        """
 WITH src AS (
   SELECT
     prop_type,
@@ -23,6 +32,9 @@ WITH src AS (
     confidence_score
   FROM player_props
   WHERE game_date IS NOT NULL
+"""
+        + filter_sql
+        + """
 ),
 norm AS (
   SELECT
@@ -67,6 +79,8 @@ labeled AS (
   FROM norm
 )
 """
+    )
+    return sql, params
 
 
 def _window_clause(window_mode: str) -> str:
@@ -83,9 +97,10 @@ WHERE game_day IN (
     return "WHERE game_day >= (CURRENT_DATE - (%s::int || ' days')::interval)::date"
 
 
-def _overall(window_value: int, window_mode: str) -> Dict[str, Any]:
+def _overall(window_value: int, window_mode: str, prop_types: Sequence[str]) -> Dict[str, Any]:
+    common_cte, cte_params = _common_cte(prop_types)
     rows = pg_fetchall(
-        COMMON_CTE
+        common_cte
         + """
 SELECT
   COUNT(*) FILTER (WHERE model_correct_i IS NOT NULL)::int AS total,
@@ -93,7 +108,7 @@ SELECT
 FROM labeled
 """
         + _window_clause(window_mode),
-        (int(window_value),),
+        cte_params + (int(window_value),),
     )
     row = (rows or [{}])[0]
     total = int(row.get("total") or 0)
@@ -107,9 +122,10 @@ FROM labeled
     }
 
 
-def _by_prop(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
+def _by_prop(window_value: int, window_mode: str, prop_types: Sequence[str]) -> list[Dict[str, Any]]:
+    common_cte, cte_params = _common_cte(prop_types)
     rows = pg_fetchall(
-        COMMON_CTE
+        common_cte
         + """
 SELECT
   prop_type,
@@ -122,7 +138,7 @@ FROM labeled
 GROUP BY prop_type
 ORDER BY total DESC, prop_type
 """,
-        (int(window_value),),
+        cte_params + (int(window_value),),
     )
     out = []
     for row in rows:
@@ -139,9 +155,10 @@ ORDER BY total DESC, prop_type
     return out
 
 
-def _by_confidence_bucket(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
+def _by_confidence_bucket(window_value: int, window_mode: str, prop_types: Sequence[str]) -> list[Dict[str, Any]]:
+    common_cte, cte_params = _common_cte(prop_types)
     rows = pg_fetchall(
-        COMMON_CTE
+        common_cte
         + """
 SELECT
   confidence_bucket,
@@ -160,7 +177,7 @@ ORDER BY
     ELSE 4
   END
 """,
-        (int(window_value),),
+        cte_params + (int(window_value),),
     )
     out = []
     for row in rows:
@@ -177,9 +194,10 @@ ORDER BY
     return out
 
 
-def _drift() -> Dict[str, Any]:
+def _drift(prop_types: Sequence[str]) -> Dict[str, Any]:
+    common_cte, cte_params = _common_cte(prop_types)
     rows = pg_fetchall(
-        COMMON_CTE
+        common_cte
         + """
 SELECT
   CASE
@@ -193,6 +211,7 @@ FROM labeled
 WHERE game_day >= (CURRENT_DATE - interval '28 days')::date
 GROUP BY 1
 """,
+        cte_params,
     )
     by_bucket: Dict[str, Dict[str, Any]] = {
         "last_14d": {"total": 0, "correct": 0, "accuracy_pct": None},
@@ -217,16 +236,18 @@ GROUP BY 1
     return {"last_14d": by_bucket["last_14d"], "prev_14d": by_bucket["prev_14d"], "delta_pct": delta}
 
 
-def collect_quality(window_mode: str, window_value: int) -> Dict[str, Any]:
+def collect_quality(window_mode: str, window_value: int, prop_types: Sequence[str] | None = None) -> Dict[str, Any]:
     normalized_mode = "games" if str(window_mode).lower() == "games" else "days"
     window_value = max(1, int(window_value))
-    overall = _overall(window_value, normalized_mode)
-    by_prop = _by_prop(window_value, normalized_mode)
-    by_bucket = _by_confidence_bucket(window_value, normalized_mode)
-    drift = _drift()
+    filtered_prop_types = [str(p).strip() for p in (prop_types or []) if str(p).strip()]
+    overall = _overall(window_value, normalized_mode, filtered_prop_types)
+    by_prop = _by_prop(window_value, normalized_mode, filtered_prop_types)
+    by_bucket = _by_confidence_bucket(window_value, normalized_mode, filtered_prop_types)
+    drift = _drift(filtered_prop_types)
     return {
         "window_mode": normalized_mode,
         "window_value": window_value,
+        "prop_types": filtered_prop_types,
         "overall": overall,
         "by_prop": by_prop,
         "by_confidence_bucket": by_bucket,
@@ -240,10 +261,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window-days", type=int, default=120)
     ap.add_argument("--games-back", type=int, default=30)
     ap.add_argument("--min-total", type=int, default=1, help="Fail when overall total is below this threshold.")
+    ap.add_argument("--prop-types", default="", help="Optional comma-separated prop types to filter quality scope.")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     window_value = int(args.games_back) if args.window_mode == "games" else int(args.window_days)
-    quality = collect_quality(args.window_mode, window_value)
+    prop_types = [p.strip() for p in str(args.prop_types).split(",") if p.strip()]
+    quality = collect_quality(args.window_mode, window_value, prop_types=prop_types)
     overall = quality["overall"]
 
     min_total = max(0, int(args.min_total))

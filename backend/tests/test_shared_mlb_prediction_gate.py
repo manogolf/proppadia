@@ -96,7 +96,7 @@ class TestSharedMlbPredictionGate(unittest.TestCase):
                 ]
             )
         self.assertEqual(rc, 0)
-        quality_mock.assert_called_once_with("games", 45)
+        quality_mock.assert_called_once_with("games", 45, prop_types=["hits"])
 
 
 if __name__ == "__main__":

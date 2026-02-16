@@ -42,7 +42,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if str(args.quality_window_mode) == "games"
         else int(args.quality_window_days)
     )
-    quality = collect_quality(str(args.quality_window_mode), quality_window_value)
+    quality = collect_quality(str(args.quality_window_mode), quality_window_value, prop_types=prop_types)
     overall = quality.get("overall") or {}
     q_total = int(overall.get("total") or 0)
     q_acc = overall.get("accuracy_pct")

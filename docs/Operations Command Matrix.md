@@ -176,6 +176,12 @@ MLB quality summary:
 make mlb-prediction-quality MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1
 ```
 
+MLB core-12 quality summary:
+
+```bash
+make mlb-prediction-quality-core MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1
+```
+
 MLB core prop coverage guard (core 12):
 
 ```bash

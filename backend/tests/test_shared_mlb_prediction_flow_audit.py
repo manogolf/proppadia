@@ -26,6 +26,7 @@ class TestSharedMlbPredictionFlowAudit(unittest.TestCase):
                     "user_added_invalid_game_date": 0,
                     "user_added_created_game_date_drift": 0,
                     "resolved_rows_with_invalid_outcome": 0,
+                    "user_added_missing_in_training": 0,
                 }
             ],
             [{"duplicate_groups": 0, "duplicate_extra_rows": 0}],  # player_props dupes
@@ -57,6 +58,7 @@ class TestSharedMlbPredictionFlowAudit(unittest.TestCase):
                     "user_added_invalid_game_date": 0,
                     "user_added_created_game_date_drift": 0,
                     "resolved_rows_with_invalid_outcome": 0,
+                    "user_added_missing_in_training": 0,
                 }
             ],
             [{"duplicate_groups": 1, "duplicate_extra_rows": 1}],  # player_props dupes
@@ -70,6 +72,38 @@ class TestSharedMlbPredictionFlowAudit(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("user_added_missing_game_id", payload["failures"])
         self.assertIn("player_props_duplicate_groups", payload["failures"])
+
+    def test_fail_when_user_added_missing_in_training(self):
+        side_effects = [
+            [],  # no user_id column
+            [  # flow summary
+                {
+                    "total_rows": 12,
+                    "user_added_rows": 12,
+                    "mlb_api_rows": 0,
+                    "resolved_rows": 10,
+                    "graded_rows": 8,
+                }
+            ],
+            [  # integrity checks
+                {
+                    "user_added_missing_game_id": 0,
+                    "user_added_invalid_game_date": 0,
+                    "user_added_created_game_date_drift": 0,
+                    "resolved_rows_with_invalid_outcome": 0,
+                    "user_added_missing_in_training": 3,
+                }
+            ],
+            [{"duplicate_groups": 0, "duplicate_extra_rows": 0}],  # player_props dupes
+            [{"duplicate_groups": 0, "duplicate_extra_rows": 0}],  # model_training dupes
+        ]
+        out = StringIO()
+        with patch.object(audit, "pg_fetchall", side_effect=side_effects), redirect_stdout(out):
+            rc = audit.main(["--window-mode", "games", "--games-back", "30", "--json"])
+        self.assertEqual(rc, 1)
+        payload = json.loads(out.getvalue())
+        self.assertFalse(payload["ok"])
+        self.assertIn("user_added_missing_in_training", payload["failures"])
 
 
 if __name__ == "__main__":

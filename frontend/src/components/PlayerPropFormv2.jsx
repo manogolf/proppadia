@@ -154,6 +154,21 @@ const PROP_TYPES = [
   "walks_allowed",
 ];
 
+const CORE_PROP_TYPES = new Set([
+  "hits",
+  "total_bases",
+  "hits_runs_rbis",
+  "runs_rbis",
+  "rbis",
+  "runs_scored",
+  "strikeouts_batting",
+  "walks",
+  "singles",
+  "doubles",
+  "strikeouts_pitching",
+  "outs_recorded",
+]);
+
 const prettyProp = (key) => {
   let label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   label = label.replace(/\bRbis\b/i, "RBIs").replace(/\bRbi\b/i, "RBI");
@@ -306,9 +321,12 @@ export default function PlayerPropFormV2({
 
   const PROP_OPTIONS = React.useMemo(
     () =>
-      PROP_TYPES.map((value) => ({ value, label: prettyProp(value) })).sort(
-        (a, b) => a.label.localeCompare(b.label)
-      ),
+      PROP_TYPES.map((value) => ({ value, label: prettyProp(value) })).sort((a, b) => {
+        const aCore = CORE_PROP_TYPES.has(a.value) ? 0 : 1;
+        const bCore = CORE_PROP_TYPES.has(b.value) ? 0 : 1;
+        if (aCore !== bCore) return aCore - bCore;
+        return a.label.localeCompare(b.label);
+      }),
     []
   );
 

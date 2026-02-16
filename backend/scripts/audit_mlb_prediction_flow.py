@@ -92,7 +92,21 @@ def _integrity_checks(window_value: int, window_mode: str, max_drift_days: int) 
           COUNT(*) FILTER (
             WHERE lower(trim(coalesce(status, ''))) = 'resolved'
               AND lower(trim(coalesce(outcome, ''))) NOT IN ('win','loss','push','dnp')
-          )::int AS resolved_rows_with_invalid_outcome
+          )::int AS resolved_rows_with_invalid_outcome,
+          COUNT(*) FILTER (
+            WHERE prop_source = 'user_added'
+              AND game_id IS NOT NULL
+              AND trim(cast(game_id as text)) ~ '^[0-9]+$'
+              AND cast(game_id as bigint) > 0
+              AND NOT EXISTS (
+                SELECT 1
+                FROM model_training_props mt
+                WHERE mt.prop_source = 'user_added'
+                  AND CAST(mt.player_id AS TEXT) = CAST(player_props.player_id AS TEXT)
+                  AND CAST(mt.game_id AS TEXT) = CAST(player_props.game_id AS TEXT)
+                  AND mt.prop_type = player_props.prop_type
+              )
+          )::int AS user_added_missing_in_training
         FROM player_props
         """
         + _date_filter("game_date", "player_props", window_mode),
@@ -104,6 +118,7 @@ def _integrity_checks(window_value: int, window_mode: str, max_drift_days: int) 
         "user_added_invalid_game_date": int(row.get("user_added_invalid_game_date") or 0),
         "user_added_created_game_date_drift": int(row.get("user_added_created_game_date_drift") or 0),
         "resolved_rows_with_invalid_outcome": int(row.get("resolved_rows_with_invalid_outcome") or 0),
+        "user_added_missing_in_training": int(row.get("user_added_missing_in_training") or 0),
     }
 
 
@@ -181,6 +196,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         failures.append("user_added_created_game_date_drift")
     if checks["resolved_rows_with_invalid_outcome"] > 0:
         failures.append("resolved_rows_with_invalid_outcome")
+    if checks["user_added_missing_in_training"] > 0:
+        failures.append("user_added_missing_in_training")
     if dupes["player_props_duplicate_groups"] > 0:
         failures.append("player_props_duplicate_groups")
     if dupes["model_training_duplicate_groups"] > 0:
