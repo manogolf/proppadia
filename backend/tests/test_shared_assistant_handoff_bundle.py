@@ -10,7 +10,16 @@ from backend.scripts import assistant_handoff_bundle as bundle
 class TestSharedAssistantHandoffBundle(unittest.TestCase):
     @staticmethod
     def _season_report_pass(_args):
-        print(json.dumps({"status": "pass", "phase_status": {}, "season_activation_history": {}}))
+        print(
+            json.dumps(
+                {
+                    "status": "pass",
+                    "phase_status": {},
+                    "season_activation_history": {},
+                    "baseline_latest": {"latest": {"mlb": {"age_hours": 1.0}, "nhl": {"age_hours": 2.0}}},
+                }
+            )
+        )
         return 0
 
     def test_main_pass_payload_shape(self):
@@ -49,6 +58,7 @@ class TestSharedAssistantHandoffBundle(unittest.TestCase):
         self.assertIn("mlb_readiness_history", payload)
         self.assertIn("mlb_pipeline_history", payload)
         self.assertIn("season_activation_history", payload)
+        self.assertIn("season_baseline_latest", payload)
         self.assertIn("mlb_pipeline_check", payload["governance"]["checks"])
         self.assertIn("season_activation_report", payload["governance"]["checks"])
 

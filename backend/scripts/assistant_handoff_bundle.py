@@ -153,6 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     history = _history_tail(args.history_input, args.history_limit)
     pipeline_history = _pipeline_history_tail(args.pipeline_history_input, args.pipeline_history_limit)
     season_activation_history = (season_report.get("season_activation_history") or {})
+    season_baseline_latest = (season_report.get("baseline_latest") or {})
 
     governance_ok = (
         inv_rc == 0 and path_rc == 0 and nhl_rc == 0 and mlb_pipeline_rc == 0 and report_rc == 0
@@ -178,6 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "mlb_readiness_history": history,
         "mlb_pipeline_history": pipeline_history,
         "season_activation_history": season_activation_history,
+        "season_baseline_latest": season_baseline_latest,
     }
     print(json.dumps(bundle, indent=2))
     return 0 if ok else 1
