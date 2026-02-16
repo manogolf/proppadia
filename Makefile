@@ -336,15 +336,23 @@ mlb-season-kickoff-check:
 	fi
 
 season-baseline-capture:
-	@mkdir -p artifacts/season_baselines
-	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --min-total $(MLB_QUALITY_MIN_TOTAL) > artifacts/season_baselines/mlb_quality_$(MLB_QUALITY_WINDOW_MODE)_$(MLB_QUALITY_GAMES_BACK)_$(MLB_QUALITY_WINDOW_DAYS).json
-	@if [ -z "$(NHL_QUALITY_FROM_DATE)" ] || [ -z "$(NHL_QUALITY_TO_DATE)" ]; then \
+	@set -e; \
+	mkdir -p artifacts/season_baselines; \
+	if [ -z "$(NHL_QUALITY_FROM_DATE)" ] || [ -z "$(NHL_QUALITY_TO_DATE)" ]; then \
 		echo "season-baseline-capture requires NHL_QUALITY_FROM_DATE and NHL_QUALITY_TO_DATE"; \
 		exit 2; \
-	fi
-	$(VENV_PY) backend/scripts/analyze_nhl_prediction_quality.py --from-date $(NHL_QUALITY_FROM_DATE) --to-date $(NHL_QUALITY_TO_DATE) --min-total $(NHL_QUALITY_MIN_TOTAL) > artifacts/season_baselines/nhl_quality_$(NHL_QUALITY_FROM_DATE)_$(NHL_QUALITY_TO_DATE).json
-	@echo "Wrote artifacts/season_baselines/mlb_quality_$(MLB_QUALITY_WINDOW_MODE)_$(MLB_QUALITY_GAMES_BACK)_$(MLB_QUALITY_WINDOW_DAYS).json"
-	@echo "Wrote artifacts/season_baselines/nhl_quality_$(NHL_QUALITY_FROM_DATE)_$(NHL_QUALITY_TO_DATE).json"
+	fi; \
+	mlb_out="artifacts/season_baselines/mlb_quality_$(MLB_QUALITY_WINDOW_MODE)_$(MLB_QUALITY_GAMES_BACK)_$(MLB_QUALITY_WINDOW_DAYS).json"; \
+	nhl_out="artifacts/season_baselines/nhl_quality_$(NHL_QUALITY_FROM_DATE)_$(NHL_QUALITY_TO_DATE).json"; \
+	mlb_tmp="$$mlb_out.tmp"; \
+	nhl_tmp="$$nhl_out.tmp"; \
+	rm -f "$$mlb_tmp" "$$nhl_tmp"; \
+	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; \
+	$(VENV_PY) backend/scripts/analyze_nhl_prediction_quality.py --from-date $(NHL_QUALITY_FROM_DATE) --to-date $(NHL_QUALITY_TO_DATE) --min-total $(NHL_QUALITY_MIN_TOTAL) > "$$nhl_tmp"; \
+	mv "$$mlb_tmp" "$$mlb_out"; \
+	mv "$$nhl_tmp" "$$nhl_out"; \
+	echo "Wrote $$mlb_out"; \
+	echo "Wrote $$nhl_out"
 
 cron-governance-check:
 	$(MAKE) workflow-inventory-strict
