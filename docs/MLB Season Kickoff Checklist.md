@@ -15,7 +15,7 @@ make mlb-season-kickoff-check \
 1. `make cron-governance-check`
 2. `make mlb-show-config`
 3. `make mlb-daily-refresh-smoke ...`
-4. `make mlb-prediction-flow-audit`
+4. `make mlb-pipeline-check-json`
 5. optional deployed check:
    - `make mlb-post-deploy-strict-offseason BASE_URL=<url> MLB_DATE=<date>`
 

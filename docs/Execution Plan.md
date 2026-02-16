@@ -243,7 +243,7 @@ Target: move from offseason-safe readiness to controlled in-season operation.
 ### 6.1 Preseason dry run
 
 - Execute `make mlb-season-kickoff-check` against deployed backend.
-- Confirm governance + smoke + flow audit + deployed strict-offseason checks.
+- Confirm governance + smoke + pipeline bundle check + deployed strict-offseason checks.
 
 Acceptance criteria:
 
