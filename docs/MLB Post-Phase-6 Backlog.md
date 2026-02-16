@@ -93,6 +93,9 @@ Acceptance:
 
 Report separated quality metrics by game type/window to prevent conflating preseason behavior with regular season.
 
+Status: complete (February 16, 2026). Added repeatable segmented report command:
+`make mlb-prediction-quality-segmented`.
+
 Acceptance:
 - one repeatable report command
 - output included in runbook for preseason monitoring
@@ -106,6 +109,9 @@ Lock prerequisites before any retrain:
 - prop coverage
 - grading completeness
 - baseline comparison availability
+
+Status: complete (February 16, 2026). Added checklist doc plus bundled command:
+`make mlb-retrain-prereq-check`.
 
 Acceptance:
 - one checklist document + one command bundle
@@ -150,8 +156,8 @@ Acceptance:
 
 ## Next Slice (Immediate)
 
-Implement P2.3: preseason vs regular-season segmentation report.
+Implement P3.2: candidate-vs-baseline model evaluation lane.
 
 Proposed deliverable:
-- Add one repeatable command that emits split quality metrics for preseason vs regular season windows.
-- Add runbook usage example and expected output interpretation.
+- Add one repeatable command that evaluates candidate model metrics against locked baseline windows.
+- Define pass/fail promotion thresholds and emit promotion recommendation in payload.

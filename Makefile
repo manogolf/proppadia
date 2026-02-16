@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-segmented mlb-retrain-prereq-check mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-log mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -18,6 +18,26 @@ MLB_QUALITY_WINDOW_MODE ?= days
 MLB_QUALITY_GAMES_BACK ?= 30
 MLB_QUALITY_MIN_TOTAL ?= 1000
 MLB_QUALITY_MIN_ACCURACY ?= 48
+MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE ?=
+MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE ?=
+MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE ?=
+MLB_QUALITY_SEGMENT_REGULAR_TO_DATE ?=
+MLB_QUALITY_SEGMENT_MIN_PRESEASON_TOTAL ?= 1
+MLB_QUALITY_SEGMENT_MIN_REGULAR_TOTAL ?= 1
+MLB_RETRAIN_FRESHNESS_DAYS ?= 7
+MLB_RETRAIN_FRESHNESS_MIN_ROWS ?= 1
+MLB_RETRAIN_COVERAGE_WINDOW_MODE ?= games
+MLB_RETRAIN_COVERAGE_WINDOW_DAYS ?= 30
+MLB_RETRAIN_COVERAGE_GAMES_BACK ?= 30
+MLB_RETRAIN_REQUIRED_PROPS ?= $(MLB_CORE_PROP_TYPES)
+MLB_RETRAIN_MIN_TRAINING_SOURCE_PER_PROP ?= $(MLB_CORE_MIN_GRADED)
+MLB_RETRAIN_TRAINING_PROP_SOURCES ?= mlb_api,user_added
+MLB_RETRAIN_GRADING_WINDOW_MODE ?= games
+MLB_RETRAIN_GRADING_WINDOW_DAYS ?= 30
+MLB_RETRAIN_GRADING_GAMES_BACK ?= 30
+MLB_RETRAIN_GRADING_PROP_TYPES ?= $(MLB_CORE_PROP_TYPES)
+MLB_RETRAIN_GRADING_MIN_TOTAL ?= 1000
+MLB_RETRAIN_BASELINE_MAX_AGE_HOURS ?= 0
 MLB_PROP_COVERAGE_WINDOW_DAYS ?= 30
 MLB_PROP_COVERAGE_WINDOW_MODE ?= days
 MLB_PROP_COVERAGE_GAMES_BACK ?= 30
@@ -116,6 +136,8 @@ help:
 	@echo "  make mlb-prediction-readiness [prepare->predict readiness sample for MLB_DATE]"
 	@echo "  make mlb-prediction-quality [historical model quality summary json]"
 	@echo "  make mlb-prediction-quality-core [core 12 quality summary over games window]"
+	@echo "  make mlb-prediction-quality-segmented [preseason vs regular-season date-window quality report]"
+	@echo "  make mlb-retrain-prereq-check [freshness+coverage+grading+baseline checklist json]"
 	@echo "  make mlb-prediction-gate [combined operability + quality pass/fail]"
 	@echo "  make mlb-pipeline-check [prediction gate + flow audit + prop coverage]"
 	@echo "  make mlb-pipeline-check-json [single JSON payload for gate + flow + coverage]"
@@ -548,6 +570,16 @@ mlb-prediction-quality:
 
 mlb-prediction-quality-core:
 	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_CORE_PROP_TYPES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+
+mlb-prediction-quality-segmented:
+	@if [ -z "$(MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE)" ] || [ -z "$(MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE)" ] || [ -z "$(MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE)" ] || [ -z "$(MLB_QUALITY_SEGMENT_REGULAR_TO_DATE)" ]; then \
+		echo "mlb-prediction-quality-segmented requires MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE, MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE, MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE, MLB_QUALITY_SEGMENT_REGULAR_TO_DATE"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality_segmented.py --preseason-from-date $(MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE) --preseason-to-date $(MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE) --regular-from-date $(MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE) --regular-to-date $(MLB_QUALITY_SEGMENT_REGULAR_TO_DATE) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --min-preseason-total $(MLB_QUALITY_SEGMENT_MIN_PRESEASON_TOTAL) --min-regular-total $(MLB_QUALITY_SEGMENT_MIN_REGULAR_TOTAL)
+
+mlb-retrain-prereq-check:
+	$(VENV_PY) backend/scripts/mlb_retrain_prereq_check.py --freshness-days $(MLB_RETRAIN_FRESHNESS_DAYS) --freshness-min-rows $(MLB_RETRAIN_FRESHNESS_MIN_ROWS) --coverage-window-mode $(MLB_RETRAIN_COVERAGE_WINDOW_MODE) --coverage-window-days $(MLB_RETRAIN_COVERAGE_WINDOW_DAYS) --coverage-games-back $(MLB_RETRAIN_COVERAGE_GAMES_BACK) --coverage-required-props "$(MLB_RETRAIN_REQUIRED_PROPS)" --coverage-min-training-source-per-prop $(MLB_RETRAIN_MIN_TRAINING_SOURCE_PER_PROP) --coverage-training-prop-sources "$(MLB_RETRAIN_TRAINING_PROP_SOURCES)" --grading-window-mode $(MLB_RETRAIN_GRADING_WINDOW_MODE) --grading-window-days $(MLB_RETRAIN_GRADING_WINDOW_DAYS) --grading-games-back $(MLB_RETRAIN_GRADING_GAMES_BACK) --grading-prop-types "$(MLB_RETRAIN_GRADING_PROP_TYPES)" --grading-min-total $(MLB_RETRAIN_GRADING_MIN_TOTAL) --baseline-max-age-hours $(MLB_RETRAIN_BASELINE_MAX_AGE_HOURS)
 
 mlb-prediction-gate:
 	$(VENV_PY) backend/scripts/mlb_prediction_gate.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --quality-window-mode $(MLB_QUALITY_WINDOW_MODE) --quality-window-days $(MLB_QUALITY_WINDOW_DAYS) --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY)

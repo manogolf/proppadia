@@ -182,6 +182,36 @@ MLB core-12 quality summary:
 make mlb-prediction-quality-core MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000
 ```
 
+MLB preseason vs regular-season segmented quality report:
+
+```bash
+make mlb-prediction-quality-segmented \
+  MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE=2025-03-01 \
+  MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE=2025-03-27 \
+  MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE=2025-03-28 \
+  MLB_QUALITY_SEGMENT_REGULAR_TO_DATE=2025-08-15 \
+  MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting
+```
+
+Notes:
+- Segmenting is date-window based because MLB `game_type` is not currently stored in `model_training_props`.
+- Use top-level `comparison` to track regular-minus-preseason drift by overall and prop lane.
+
+MLB retrain prerequisites checklist bundle:
+
+```bash
+make mlb-retrain-prereq-check \
+  MLB_RETRAIN_COVERAGE_GAMES_BACK=30 \
+  MLB_RETRAIN_MIN_TRAINING_SOURCE_PER_PROP=20 \
+  MLB_RETRAIN_GRADING_GAMES_BACK=30 \
+  MLB_RETRAIN_GRADING_MIN_TOTAL=1000
+```
+
+Notes:
+- Emits one JSON payload with freshness, coverage, grading completeness, and baseline availability checks.
+- Uses `model_training_props` for coverage and grading checks.
+- Baseline check is MLB-only (latest MLB baseline artifact), with optional staleness gate via `MLB_RETRAIN_BASELINE_MAX_AGE_HOURS`.
+
 MLB core prop coverage guard (core 12):
 
 ```bash

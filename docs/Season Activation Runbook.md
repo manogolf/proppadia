@@ -95,6 +95,19 @@ make mlb-season-mode-lock
 5. Keep `make cron-governance-check` as required guard.
 6. Keep post-deploy strict-offseason/strict checks in release flow.
 
+Preseason monitoring aid (quality segmentation):
+
+```bash
+make mlb-prediction-quality-segmented \
+  MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE=YYYY-MM-DD \
+  MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE=YYYY-MM-DD \
+  MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE=YYYY-MM-DD \
+  MLB_QUALITY_SEGMENT_REGULAR_TO_DATE=YYYY-MM-DD \
+  MLB_PREDICT_PROP_TYPES=hits,total_bases,strikeouts_batting
+```
+
+Use the top-level `comparison` block to confirm preseason behavior is not masking regular-season lane regressions.
+
 ## Step 3: Baseline Lock (Day 0)
 
 Capture reference quality reports for tuning comparisons:
@@ -127,6 +140,16 @@ Outputs are written to:
 - `artifacts/season_baselines/nhl_quality_*.json`
 
 Treat these as “day 0” baseline artifacts for next retrain cycle.
+
+Pre-retrain prerequisite gate:
+
+```bash
+make mlb-retrain-prereq-check \
+  MLB_RETRAIN_COVERAGE_GAMES_BACK=30 \
+  MLB_RETRAIN_MIN_TRAINING_SOURCE_PER_PROP=20 \
+  MLB_RETRAIN_GRADING_GAMES_BACK=30 \
+  MLB_RETRAIN_GRADING_MIN_TOTAL=1000
+```
 
 ## Rollback Rule
 
