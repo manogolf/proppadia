@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -87,7 +89,7 @@ def _has_cutover_history(path: Path) -> bool:
 
 def _activation_history_meta(path: Path) -> Dict[str, object]:
     if not path.exists():
-        return {"input": str(path), "history_count": 0, "latest_captured_at": None}
+        return {"input": str(path), "history_count": 0, "latest_captured_at": None, "latest_age_hours": None}
     rows: List[dict] = []
     try:
         for raw in path.read_text(encoding="utf-8").splitlines():
@@ -101,17 +103,33 @@ def _activation_history_meta(path: Path) -> Dict[str, object]:
             if isinstance(item, dict):
                 rows.append(item)
     except Exception:
-        return {"input": str(path), "history_count": 0, "latest_captured_at": None}
+        return {"input": str(path), "history_count": 0, "latest_captured_at": None, "latest_age_hours": None}
     latest = rows[-1] if rows else {}
+    latest_captured_at = latest.get("captured_at")
+    latest_age_hours = None
+    if isinstance(latest_captured_at, str):
+        try:
+            dt = datetime.fromisoformat(latest_captured_at.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            latest_age_hours = round((datetime.now(timezone.utc) - dt).total_seconds() / 3600.0, 3)
+        except Exception:
+            latest_age_hours = None
     return {
         "input": str(path),
         "history_count": len(rows),
-        "latest_captured_at": latest.get("captured_at"),
+        "latest_captured_at": latest_captured_at,
+        "latest_age_hours": latest_age_hours,
     }
 
 
 def _readiness_state(
-    phase6: List[str], baselines: Dict[str, List[str]], *, has_cutover_history: bool
+    phase6: List[str],
+    baselines: Dict[str, List[str]],
+    *,
+    has_cutover_history: bool,
+    activation_history: Dict[str, object],
+    activation_history_max_age_hours: int,
 ) -> Dict[str, object]:
     lines = " ".join(phase6).lower()
     has_mlb = len(baselines.get("mlb") or []) > 0
@@ -127,6 +145,15 @@ def _readiness_state(
         blockers.append("phase_6_2_incomplete")
     if not has_cutover_history:
         blockers.append("season_cutover_history_missing")
+    if int(activation_history.get("history_count") or 0) == 0:
+        blockers.append("season_activation_history_missing")
+    latest_age = activation_history.get("latest_age_hours")
+    if (
+        int(activation_history_max_age_hours) > 0
+        and isinstance(latest_age, (int, float))
+        and float(latest_age) > float(activation_history_max_age_hours)
+    ):
+        blockers.append("season_activation_history_stale")
     if needs_baseline_lock:
         blockers.append("phase_6_3_incomplete")
     if needs_baseline:
@@ -139,13 +166,20 @@ def build_status(
     baseline_dir: Path = BASELINE_DIR,
     season_cutover_history_path: Path = SEASON_CUTOVER_HISTORY_PATH,
     season_activation_history_path: Path = SEASON_ACTIVATION_HISTORY_PATH,
+    season_activation_history_max_age_hours: int = 0,
 ) -> Dict[str, object]:
     plan_text = _read_text(plan_path)
     phase6 = _phase6_status_lines(plan_text)
     baselines = _list_baselines(baseline_dir)
     activation_history = _activation_history_meta(season_activation_history_path)
     has_cutover_history = _has_cutover_history(season_cutover_history_path)
-    readiness = _readiness_state(phase6, baselines, has_cutover_history=has_cutover_history)
+    readiness = _readiness_state(
+        phase6,
+        baselines,
+        has_cutover_history=has_cutover_history,
+        activation_history=activation_history,
+        activation_history_max_age_hours=season_activation_history_max_age_hours,
+    )
     try:
         baseline_dir_label = str(baseline_dir.relative_to(ROOT)) if baseline_dir.is_absolute() else str(baseline_dir)
     except ValueError:
@@ -171,6 +205,8 @@ def build_status(
     }
     if not has_cutover_history:
         payload["next_steps"].append("Run: make season-cutover-log")
+    if int(activation_history.get("history_count") or 0) == 0:
+        payload["next_steps"].append("Run: make season-activation-log")
     return payload
 
 
@@ -178,9 +214,15 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Report season activation readiness status.")
     ap.add_argument("--json", action="store_true", help="Print JSON (default true behavior).")
     ap.add_argument("--strict", action="store_true", help="Exit non-zero when readiness is not complete.")
+    ap.add_argument(
+        "--history-max-age-hours",
+        type=int,
+        default=0,
+        help="When >0, fail readiness if latest season activation history snapshot is older than this many hours.",
+    )
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
 
-    payload = build_status()
+    payload = build_status(season_activation_history_max_age_hours=args.history_max_age_hours)
     print(json.dumps(payload, indent=2))
     if args.strict and not payload.get("ok", False):
         return 2

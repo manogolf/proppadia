@@ -35,6 +35,7 @@ OPS_HISTORY_INPUT ?= artifacts/ops_operator_history.jsonl
 OPS_HISTORY_LIMIT ?= 10
 SEASON_HISTORY_INPUT ?= artifacts/season_activation_history.jsonl
 SEASON_HISTORY_LIMIT ?= 10
+SEASON_HISTORY_MAX_AGE_HOURS ?= 0
 SEASON_MAX_AGE_HOURS ?= 0
 SEASON_CUTOVER_HISTORY_LIMIT ?= 10
 MLB_PIPELINE_HISTORY_INPUT ?= artifacts/mlb_pipeline_history.jsonl
@@ -172,6 +173,7 @@ ops-status:
 	@echo "OPS_HISTORY_LIMIT=$(OPS_HISTORY_LIMIT)"
 	@echo "SEASON_HISTORY_INPUT=$(SEASON_HISTORY_INPUT)"
 	@echo "SEASON_HISTORY_LIMIT=$(SEASON_HISTORY_LIMIT)"
+	@echo "SEASON_HISTORY_MAX_AGE_HOURS=$(SEASON_HISTORY_MAX_AGE_HOURS)"
 	@echo "SEASON_MAX_AGE_HOURS=$(SEASON_MAX_AGE_HOURS)"
 	@echo "SEASON_CUTOVER_HISTORY_INPUT=$(SEASON_CUTOVER_HISTORY_INPUT)"
 	@echo "SEASON_CUTOVER_HISTORY_LIMIT=$(SEASON_CUTOVER_HISTORY_LIMIT)"
@@ -185,6 +187,7 @@ ops-show-config:
 	@echo "OPS_HISTORY_LIMIT=$(OPS_HISTORY_LIMIT)"
 	@echo "SEASON_HISTORY_INPUT=$(SEASON_HISTORY_INPUT)"
 	@echo "SEASON_HISTORY_LIMIT=$(SEASON_HISTORY_LIMIT)"
+	@echo "SEASON_HISTORY_MAX_AGE_HOURS=$(SEASON_HISTORY_MAX_AGE_HOURS)"
 	@echo "SEASON_MAX_AGE_HOURS=$(SEASON_MAX_AGE_HOURS)"
 	@echo "SEASON_CUTOVER_HISTORY_INPUT=$(SEASON_CUTOVER_HISTORY_INPUT)"
 	@echo "SEASON_CUTOVER_HISTORY_LIMIT=$(SEASON_CUTOVER_HISTORY_LIMIT)"
@@ -223,10 +226,10 @@ phase-status-json:
 	$(VENV_PY) backend/scripts/phase_status_snapshot.py
 
 season-activation-status:
-	$(VENV_PY) backend/scripts/season_activation_status.py
+	$(VENV_PY) backend/scripts/season_activation_status.py --history-max-age-hours $(SEASON_HISTORY_MAX_AGE_HOURS)
 
 season-activation-status-strict:
-	$(VENV_PY) backend/scripts/season_activation_status.py --strict
+	$(VENV_PY) backend/scripts/season_activation_status.py --strict --history-max-age-hours $(SEASON_HISTORY_MAX_AGE_HOURS)
 
 season-activation-log:
 	$(VENV_PY) backend/scripts/season_activation_log.py

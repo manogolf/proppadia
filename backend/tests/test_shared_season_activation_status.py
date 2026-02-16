@@ -38,7 +38,9 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("baseline_artifacts_missing", payload["readiness"]["blockers"])
             self.assertIn("season_cutover_history_missing", payload["readiness"]["blockers"])
+            self.assertIn("season_activation_history_missing", payload["readiness"]["blockers"])
             self.assertIn("Run: make season-cutover-log", payload["next_steps"])
+            self.assertIn("Run: make season-activation-log", payload["next_steps"])
 
     def test_build_status_with_baselines_present(self):
         with tempfile.TemporaryDirectory() as td:
@@ -100,6 +102,39 @@ class TestSharedSeasonActivationStatus(unittest.TestCase):
             self.assertFalse(payload["ok"])
             self.assertIn("phase_6_3_incomplete", payload["readiness"]["blockers"])
             self.assertIn("Review: make season-baseline-last", payload["next_steps"])
+
+    def test_build_status_can_fail_on_stale_activation_history(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            plan = root / "Execution Plan.md"
+            baselines = root / "season_baselines"
+            activation_history = root / "season_activation_history.jsonl"
+            cutover = root / "season_cutover_history.jsonl"
+            baselines.mkdir(parents=True, exist_ok=True)
+            (baselines / "mlb_quality_games_30_120.json").write_text("{}", encoding="utf-8")
+            (baselines / "nhl_quality_2025-12-01_2025-12-31.json").write_text("{}", encoding="utf-8")
+            cutover.write_text('{"status":"ok"}\n', encoding="utf-8")
+            activation_history.write_text('{"captured_at":"2000-01-01T00:00:00+00:00"}\n', encoding="utf-8")
+            plan.write_text(
+                "\n".join(
+                    [
+                        "## Phase Status Tracker",
+                        "- Phase 6.1 Preseason dry run: complete",
+                        "- Phase 6.2 In-season cadence cutover: complete",
+                        "- Phase 6.3 Baseline lock: complete",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            payload = sas.build_status(
+                plan,
+                baselines,
+                cutover,
+                activation_history,
+                season_activation_history_max_age_hours=1,
+            )
+            self.assertFalse(payload["ok"])
+            self.assertIn("season_activation_history_stale", payload["readiness"]["blockers"])
 
     def test_main_strict_returns_nonzero_when_not_ready(self):
         with mock.patch.object(sas, "build_status", return_value={"ok": False, "status": "fail"}):
