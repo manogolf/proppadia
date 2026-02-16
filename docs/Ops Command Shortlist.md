@@ -21,7 +21,7 @@ Purpose: keep a minimal set of high-signal commands for operator use.
 - `make season-activation-status`
   - phase 6 tracker + baseline artifact presence in one status payload
 - `make season-activation-status-strict`
-  - same status payload, but exits non-zero until phase 6 readiness is complete
+  - same status payload, but exits non-zero until phase 6 readiness is complete (optional `SEASON_HISTORY_MAX_AGE_HOURS` for recency gating)
 - `make season-activation-log`
   - append season activation status snapshots to local JSONL history
 - `make season-activation-last`
@@ -29,7 +29,7 @@ Purpose: keep a minimal set of high-signal commands for operator use.
 - `make season-activation-report`
   - one combined JSON payload for phase status + activation + baseline + recent history
 - `make season-activation-report-strict`
-  - same combined report, but exits non-zero until activation is fully ready
+  - same combined report, but exits non-zero until activation is fully ready (optional `SEASON_HISTORY_MAX_AGE_HOURS` for recency gating)
 - `make season-baseline-check`
   - validates MLB/NHL day-0 baseline artifacts exist before cutover
 - `make season-cutover-ready`

@@ -10,11 +10,11 @@ Daily:
 - `make mlb-ops-check ...` (when you want confidence loop)
 - `make mlb-season-kickoff-check ...` (preseason/opening-day readiness)
 - `make season-activation-status` (phase 6 status snapshot)
-- `make season-activation-status-strict` (phase 6 readiness gate)
+- `make season-activation-status-strict` (phase 6 readiness gate; optional `SEASON_HISTORY_MAX_AGE_HOURS=<hours>`)
 - `make season-activation-log` (append season activation snapshot to JSONL)
 - `make season-activation-last` (show recent season activation history)
 - `make season-activation-report` (combined activation report)
-- `make season-activation-report-strict` (same report as a gate)
+- `make season-activation-report-strict` (same report as a gate; optional `SEASON_HISTORY_MAX_AGE_HOURS=<hours>`)
 - `make season-baseline-check` (validate baseline artifacts exist)
 - `make season-baseline-last` (show latest baseline totals/age)
 - `make season-baseline-lock ...` (capture+validate+log day-0 baseline)
@@ -26,6 +26,7 @@ Daily:
 
 On-demand:
 - `make ops-operator-summary`
+- `make ops-operator-summary SEASON_HISTORY_MAX_AGE_HOURS=<hours>` (optional history recency enforcement)
 - `make ops-show-config`
 - `make ops-operator-summary-json`
 - `make ops-operator-summary-json-compact`

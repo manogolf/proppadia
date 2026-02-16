@@ -8,6 +8,7 @@ Fast path:
 make season-activation-check \
   BASE_URL=https://baseball-streaks-sq44.onrender.com \
   MLB_DATE=2025-08-15 \
+  SEASON_HISTORY_MAX_AGE_HOURS=12 \
   MLB_QUALITY_WINDOW_MODE=games \
   MLB_QUALITY_GAMES_BACK=30 \
   NHL_QUALITY_FROM_DATE=2025-12-01 \
@@ -20,11 +21,11 @@ Status view (before/after running fast path):
 
 ```bash
 make season-activation-status
-make season-activation-status-strict
+make season-activation-status-strict SEASON_HISTORY_MAX_AGE_HOURS=12
 make season-activation-log
 make season-activation-last
 make season-activation-report
-make season-activation-report-strict
+make season-activation-report-strict SEASON_HISTORY_MAX_AGE_HOURS=12
 make season-baseline-check
 make season-baseline-last
 make season-cutover-cadence
