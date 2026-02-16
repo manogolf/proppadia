@@ -6,15 +6,26 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from decimal import Decimal
 from typing import Any, Dict, Sequence
 
 from backend.shared.db.pg import pg_fetchall
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def _window_clause(window_mode: str) -> str:
     if window_mode == "games":
         return """
-  AND game_date::date IN (
+  AND mt.game_date::date IN (
     SELECT DISTINCT game_date::date
     FROM model_training_props
     WHERE game_date IS NOT NULL
@@ -23,7 +34,7 @@ def _window_clause(window_mode: str) -> str:
     LIMIT %s::int
   )
 """
-    return "  AND game_date::date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date\n"
+    return "  AND mt.game_date::date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date\n"
 
 
 def _candidate_grid(prop_type: str, default_expectation: float) -> list[Dict[str, Any]]:
@@ -141,7 +152,8 @@ ORDER BY accuracy_pct DESC, candidate
         if over_pct >= float(balance_floor_pct):
             best_balanced = row
             break
-    return {
+    return _json_safe(
+        {
         "prop_type": prop_type,
         "window_mode": window_mode,
         "window_value": int(window_value),
@@ -150,7 +162,8 @@ ORDER BY accuracy_pct DESC, candidate
         "best_candidate_balanced": best_balanced,
         "candidates": rows,
         "status": "pass" if best_balanced is not None else "degenerate",
-    }
+        }
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -194,7 +207,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
     degenerate_props = [r["prop_type"] for r in rows if r.get("status") != "pass"]
-    payload = {
+    payload = _json_safe(
+        {
         "ok": len(degenerate_props) == 0,
         "status": "pass" if len(degenerate_props) == 0 else "degraded",
         "window_mode": window_mode,
@@ -202,7 +216,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "balance_floor_pct": float(args.balance_floor_pct),
         "degenerate_props": degenerate_props,
         "rows": rows,
-    }
+        }
+    )
     print(json.dumps(payload, indent=2))
     return 0
 
