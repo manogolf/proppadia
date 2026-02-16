@@ -263,8 +263,19 @@ season-cutover-last:
 	$(VENV_PY) backend/scripts/season_cutover_last.py --input $(SEASON_CUTOVER_HISTORY_INPUT) --json --limit 10
 
 season-cutover-ready:
-	$(MAKE) season-activation-report-strict
-	$(MAKE) cron-governance-check
+	@set -e; \
+	if ! $(MAKE) season-activation-report-strict; then \
+		echo "season-cutover-ready: season activation strict check failed; latest snapshots:"; \
+		$(MAKE) season-activation-last || true; \
+		$(MAKE) season-cutover-last || true; \
+		exit 2; \
+	fi; \
+	if ! $(MAKE) cron-governance-check; then \
+		echo "season-cutover-ready: cron governance failed; current summary:"; \
+		$(MAKE) cron-summary-json || true; \
+		exit 2; \
+	fi; \
+	echo "season-cutover-ready: pass"
 
 season-activation-check:
 	$(MAKE) mlb-season-kickoff-check BASE_URL="$(BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_MARKET_DAYS="$(MLB_MARKET_DAYS)" MLB_ROSTER_DATE="$(MLB_ROSTER_DATE)" MLB_STAT_DAYS_AGO="$(MLB_STAT_DAYS_AGO)" MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_DERIVED_DAYS="$(MLB_STAT_DERIVED_DAYS)" MLB_STAT_DERIVED_MIN="$(MLB_STAT_DERIVED_MIN)"

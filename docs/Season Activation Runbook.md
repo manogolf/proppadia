@@ -31,7 +31,7 @@ make season-cutover-last
 make season-cutover-ready
 ```
 
-`season-cutover-ready` now runs `season-activation-report-strict` and `cron-governance-check` as the canonical cutover gate.
+`season-cutover-ready` runs `season-activation-report-strict` and `cron-governance-check` as the canonical cutover gate; on failure it also prints latest activation/cutover snapshots (or cron summary) for immediate triage.
 
 ## Step 1: Preseason Dry Run
 
