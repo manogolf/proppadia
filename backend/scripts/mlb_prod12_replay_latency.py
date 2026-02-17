@@ -102,6 +102,8 @@ def collect_latency(
     prop_types: list[str],
     max_predict_p95_ms: float,
     allow_sparse: bool,
+    retry_attempts: int,
+    retry_backoff_ms: int,
 ) -> dict[str, Any]:
     players = _load_players(client, max(1, int(sample_size)))
     chosen_props = prop_types or _split_csv(DEFAULT_PROP_TYPES)
@@ -121,8 +123,35 @@ def collect_latency(
         for prop in chosen_props
     }
     failures: list[dict[str, Any]] = []
+    transport_retry_count = 0
+    transport_error_count = 0
     predict_success = 0
     prepare_success = 0
+
+    def _request_with_retry(method: str, path: str, *, json_payload: dict[str, Any]) -> tuple[Any | None, int]:
+        nonlocal transport_retry_count, transport_error_count
+        attempts = max(1, int(retry_attempts))
+        last_resp = None
+        tries = 0
+        while tries < attempts:
+            tries += 1
+            try:
+                resp = client.request(method, path, json=json_payload)
+            except Exception:
+                transport_error_count += 1
+                if tries < attempts:
+                    transport_retry_count += 1
+                    time.sleep(max(0, int(retry_backoff_ms)) / 1000.0)
+                    continue
+                return None, tries
+
+            last_resp = resp
+            if int(getattr(resp, "status_code", 0)) >= 500 and tries < attempts:
+                transport_retry_count += 1
+                time.sleep(max(0, int(retry_backoff_ms)) / 1000.0)
+                continue
+            return resp, tries
+        return last_resp, tries
 
     for row in players:
         for prop_type in chosen_props:
@@ -138,10 +167,22 @@ def collect_latency(
             }
 
             t0 = time.perf_counter()
-            prep_resp = client.request("POST", "/api/prepareProp", json=prep_req)
+            prep_resp, _ = _request_with_retry("POST", "/api/prepareProp", json_payload=prep_req)
             prep_t = (time.perf_counter() - t0) * 1000.0
             prepare_ms.append(prep_t)
             lane["prepare_ms"].append(prep_t)
+            if prep_resp is None:
+                lane["failure_count"] += 1
+                failures.append(
+                    {
+                        "player_id": row["player_id"],
+                        "prop_type": prop_type,
+                        "stage": "prepareProp",
+                        "status": 0,
+                        "detail": {"error": "transport_failure"},
+                    }
+                )
+                continue
             prep_body = _obj(prep_resp)
             if prep_resp.status_code != 200 or not prep_body.get("ok"):
                 lane["failure_count"] += 1
@@ -162,8 +203,20 @@ def collect_latency(
             pred_req = {"prop_type": prop_type, "features": features}
 
             t1 = time.perf_counter()
-            pred_resp = client.request("POST", "/api/predict", json=pred_req)
+            pred_resp, _ = _request_with_retry("POST", "/api/predict", json_payload=pred_req)
             pred_t = (time.perf_counter() - t1) * 1000.0
+            if pred_resp is None:
+                lane["failure_count"] += 1
+                failures.append(
+                    {
+                        "player_id": row["player_id"],
+                        "prop_type": prop_type,
+                        "stage": "predict",
+                        "status": 0,
+                        "detail": {"error": "transport_failure"},
+                    }
+                )
+                continue
             predict_ms.append(pred_t)
             lane["predict_ms"].append(pred_t)
             pred_body = _obj(pred_resp)
@@ -229,6 +282,12 @@ def collect_latency(
             "prepare": _stats(prepare_ms),
             "predict": _stats(predict_ms),
         },
+        "transport": {
+            "retry_attempts": int(retry_attempts),
+            "retry_backoff_ms": int(retry_backoff_ms),
+            "retry_count": int(transport_retry_count),
+            "error_count": int(transport_error_count),
+        },
         "allow_sparse": bool(allow_sparse),
         "per_prop": per_prop_summary,
         "failure_count": len(failures),
@@ -246,6 +305,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prop-types", default=DEFAULT_PROP_TYPES)
     ap.add_argument("--max-predict-p95-ms", type=float, default=4000.0)
     ap.add_argument("--allow-sparse", action="store_true", help="Allow pass when no players/attempts are available.")
+    ap.add_argument("--retry-attempts", type=int, default=2, help="Transient transport/5xx retry attempts per request.")
+    ap.add_argument("--retry-backoff-ms", type=int, default=350, help="Backoff between retry attempts.")
     ap.add_argument("--output", default="")
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -259,6 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         prop_types=prop_types,
         max_predict_p95_ms=float(args.max_predict_p95_ms),
         allow_sparse=bool(args.allow_sparse),
+        retry_attempts=int(args.retry_attempts),
+        retry_backoff_ms=int(args.retry_backoff_ms),
     )
 
     if str(args.output).strip():

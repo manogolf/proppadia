@@ -69,6 +69,8 @@ MLB_REPLAY_SAMPLE ?= $(MLB_PREDICT_SAMPLE)
 MLB_REPLAY_MIN_SUCCESS ?= $(MLB_PREDICT_MIN_SUCCESS)
 MLB_REPLAY_MAX_PREDICT_P95_MS ?= 4000
 MLB_REPLAY_ALLOW_SPARSE ?= 1
+MLB_REPLAY_RETRY_ATTEMPTS ?= 2
+MLB_REPLAY_RETRY_BACKOFF_MS ?= 350
 MLB_PROP_COVERAGE_WINDOW_DAYS ?= 30
 MLB_PROP_COVERAGE_WINDOW_MODE ?= days
 MLB_PROP_COVERAGE_GAMES_BACK ?= 30
@@ -726,7 +728,7 @@ mlb-prod12-release-manifest:
 	$(VENV_PY) backend/scripts/mlb_prod12_release_manifest.py --output "$(MLB_PROD12_RELEASE_OUTPUT)" --artifact-dirs "$(MLB_PROD12_ARTIFACT_DIRS)" --artifact-patterns "$(MLB_PROD12_ARTIFACT_PATTERNS)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --prop-types "$(MLB_PROD12_PROP_TYPES)" --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY) --max-prop-drop-pct $(MLB_PROD12_MAX_PROP_DROP_PCT)
 
 mlb-prod12-replay-latency:
-	$(VENV_PY) backend/scripts/mlb_prod12_replay_latency.py $(if $(MLB_BASE_URL),--base-url $(MLB_BASE_URL),) --date $(MLB_DATE) --sample-size $(MLB_REPLAY_SAMPLE) --require-min-success $(MLB_REPLAY_MIN_SUCCESS) --prop-types "$(MLB_PROD12_PROP_TYPES)" --max-predict-p95-ms $(MLB_REPLAY_MAX_PREDICT_P95_MS) $(if $(filter 1,$(MLB_REPLAY_ALLOW_SPARSE)),--allow-sparse,) --output "$(MLB_PROD12_REPLAY_OUTPUT)"
+	$(VENV_PY) backend/scripts/mlb_prod12_replay_latency.py $(if $(MLB_BASE_URL),--base-url $(MLB_BASE_URL),) --date $(MLB_DATE) --sample-size $(MLB_REPLAY_SAMPLE) --require-min-success $(MLB_REPLAY_MIN_SUCCESS) --prop-types "$(MLB_PROD12_PROP_TYPES)" --max-predict-p95-ms $(MLB_REPLAY_MAX_PREDICT_P95_MS) --retry-attempts $(MLB_REPLAY_RETRY_ATTEMPTS) --retry-backoff-ms $(MLB_REPLAY_RETRY_BACKOFF_MS) $(if $(filter 1,$(MLB_REPLAY_ALLOW_SPARSE)),--allow-sparse,) --output "$(MLB_PROD12_REPLAY_OUTPUT)"
 
 mlb-prod12-phase2-log:
 	$(VENV_PY) backend/scripts/mlb_prod12_phase2_log.py --output "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --manifest-path "$(MLB_PROD12_RELEASE_OUTPUT)" --replay-path "$(MLB_PROD12_REPLAY_OUTPUT)" --baseline-path "$(MLB_CANDIDATE_BASELINE_PATH)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --source-table "$(MLB_CANDIDATE_SOURCE_TABLE)" $(if $(MLB_CANDIDATE_WINDOW_MODE),--window-mode $(MLB_CANDIDATE_WINDOW_MODE),) --window-days $(MLB_CANDIDATE_WINDOW_DAYS) --games-back $(MLB_CANDIDATE_GAMES_BACK) --prop-types "$(MLB_PROD12_PROP_TYPES)" --required-props "$(MLB_PROD12_PROP_TYPES)" --min-candidate-total $(MLB_CANDIDATE_MIN_TOTAL) --min-overall-lift-pct $(MLB_CANDIDATE_MIN_LIFT_PCT) --max-prop-drop-pct $(MLB_PROD12_MAX_PROP_DROP_PCT)
