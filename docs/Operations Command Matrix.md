@@ -73,6 +73,38 @@ make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onr
 make nhl-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com
 ```
 
+## MLB Prod12 Automation
+
+Daily prod12 tracking:
+
+```bash
+make mlb-prod12-track-daily \
+  MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com \
+  MLB_DATE=$(date -u +%F) \
+  MLB_PREDICT_SAMPLE=10 \
+  MLB_PREDICT_MIN_SUCCESS=3
+```
+
+Weekly prod12 phase-2 readiness:
+
+```bash
+make mlb-prod12-phase2-readiness \
+  MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com \
+  MLB_DATE=2025-08-15 \
+  MLB_REPLAY_SAMPLE=10 \
+  MLB_REPLAY_MIN_SUCCESS=3 \
+  MLB_REPLAY_MAX_PREDICT_P95_MS=4000
+```
+
+Preview copy/paste scheduler commands:
+
+```bash
+make mlb-prod12-cron-preview
+```
+
+Reference:
+- `docs/Prod12 Automation Runbook.md`
+
 ## Ops Bundle (Lean)
 
 Single high-signal operator bundle:
