@@ -10,7 +10,7 @@ Date reference: this runbook was aligned on February 17, 2026.
   - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
 - Gate posture:
   - Daily health + logging (`mlb-prod12-track-daily`)
-  - Weekly promotion/readiness bundle (`mlb-prod12-phase2-readiness`)
+  - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
 
 ## Daily Schedule
 
@@ -38,18 +38,21 @@ Primary artifact updated:
 Run once per week:
 
 ```bash
-make mlb-prod12-phase2-readiness \
+make mlb-prod12-phase2-weekly-gate \
   MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" \
   MLB_DATE="2025-08-15" \
   MLB_REPLAY_SAMPLE=10 \
   MLB_REPLAY_MIN_SUCCESS=3 \
-  MLB_REPLAY_MAX_PREDICT_P95_MS=4000
+  MLB_REPLAY_MAX_PREDICT_P95_MS=4000 \
+  MLB_REPLAY_RETRY_ATTEMPTS=2 \
+  MLB_REPLAY_RETRY_BACKOFF_MS=350
 ```
 
 What this includes:
 1. `mlb-prod12-release-manifest`
 2. `mlb-prod12-replay-latency`
 3. `mlb-prod12-track-weekly` (candidate eval, max drop `3.5`)
+4. `mlb-prod12-phase2-log` and strict latest-status check (`mlb-prod12-phase2-last-strict`)
 
 Expected pass conditions:
 - release manifest: `ok=true`
@@ -59,6 +62,7 @@ Expected pass conditions:
 Primary artifacts updated:
 - `artifacts/releases/mlb_prod12_release_manifest.json`
 - `artifacts/releases/mlb_prod12_replay_latency.json`
+- `artifacts/mlb_prod12_phase2_history.jsonl`
 
 ## Operator Actions On Fail
 

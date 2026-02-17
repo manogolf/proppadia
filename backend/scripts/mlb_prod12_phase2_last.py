@@ -46,6 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--input", default="artifacts/mlb_prod12_phase2_history.jsonl")
     ap.add_argument("--limit", type=int, default=10)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--strict", action="store_true", help="Exit non-zero when latest snapshot is missing or failed.")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     history = _load_history(Path(args.input))
@@ -75,7 +76,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "rows": rows,
     }
     print(json.dumps(payload, indent=2))
-    return 0
+
+    if not args.strict:
+        return 0
+
+    if not rows:
+        return 2
+    latest = rows[-1]
+    return 0 if bool(latest.get("ok")) else 1
 
 
 if __name__ == "__main__":
