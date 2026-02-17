@@ -289,13 +289,15 @@ mlb-cron-preview:
 
 mlb-prod12-cron-preview:
 	@echo "Recommended prod12 automation commands:"
-	@echo "1) Daily: make mlb-prod12-daily-cycle MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=\$$(date -u +%F) MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE) MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
-	@echo "2) Weekly: make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS) MLB_REPLAY_RETRY_ATTEMPTS=$(MLB_REPLAY_RETRY_ATTEMPTS) MLB_REPLAY_RETRY_BACKOFF_MS=$(MLB_REPLAY_RETRY_BACKOFF_MS)"
+	@echo "1) One-time bootstrap after redeploy: make mlb-prod12-bootstrap MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE) MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS) MLB_REPLAY_RETRY_ATTEMPTS=$(MLB_REPLAY_RETRY_ATTEMPTS) MLB_REPLAY_RETRY_BACKOFF_MS=$(MLB_REPLAY_RETRY_BACKOFF_MS)"
+	@echo "2) Daily: make mlb-prod12-daily-cycle MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=\$$(date -u +%F) MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE) MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
+	@echo "3) Weekly: make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS) MLB_REPLAY_RETRY_ATTEMPTS=$(MLB_REPLAY_RETRY_ATTEMPTS) MLB_REPLAY_RETRY_BACKOFF_MS=$(MLB_REPLAY_RETRY_BACKOFF_MS)"
 
 mlb-prod12-script-preview:
 	@echo "Recommended prod12 scheduler script commands:"
-	@echo "1) Daily: bin/mlb_prod12_daily_cycle.sh"
-	@echo "2) Weekly: bin/mlb_prod12_weekly_cycle.sh"
+	@echo "1) One-time bootstrap after redeploy: make mlb-prod12-bootstrap MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE)"
+	@echo "2) Daily: bin/mlb_prod12_daily_cycle.sh"
+	@echo "3) Weekly: bin/mlb_prod12_weekly_cycle.sh"
 
 mlb-prod12-scheduler-smoke:
 	@set -e; \
