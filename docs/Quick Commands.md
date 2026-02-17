@@ -6,7 +6,7 @@ Use this page as a compact shortcut list only.
 Snapshot date: February 17, 2026
 
 Daily:
-- `make mlb-prod12-daily-gate-incident ...` (production-12 daily strict gate + incident summary on failure)
+- `make mlb-prod12-daily-cycle ...` (production-12 daily strict gate + incident-on-fail + ops snapshot log)
 - `make mlb-daily-refresh-strict ...`
 - `make mlb-ops-check ...` (when you want confidence loop)
 - `make mlb-season-kickoff-check ...` (preseason/opening-day readiness)
@@ -27,7 +27,7 @@ Daily:
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
-- `make mlb-prod12-phase2-weekly-gate-incident ...` (production-12 weekly strict gate + incident summary on failure)
+- `make mlb-prod12-phase2-weekly-cycle ...` (production-12 weekly strict gate + incident-on-fail + ops snapshot log)
 - `make mlb-prod12-cron-preview` (prints copy/paste-ready daily + weekly prod12 scheduler commands)
 - `make mlb-prod12-incident` (compact latest failure summary + suggested next actions)
 - `make mlb-prod12-ops-check` (strict status + trend report; incident summary on failure)
@@ -94,8 +94,8 @@ make ops-daily-check
 make mlb-runbook
 make mlb-cron-preview
 make mlb-prod12-cron-preview
-make mlb-prod12-daily-gate-incident MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=$(date -u +%F) MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3
-make mlb-prod12-phase2-weekly-gate-incident MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15 MLB_REPLAY_SAMPLE=10 MLB_REPLAY_MIN_SUCCESS=3 MLB_REPLAY_MAX_PREDICT_P95_MS=4000 MLB_REPLAY_RETRY_ATTEMPTS=2 MLB_REPLAY_RETRY_BACKOFF_MS=350
+make mlb-prod12-daily-cycle MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=$(date -u +%F) MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3
+make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15 MLB_REPLAY_SAMPLE=10 MLB_REPLAY_MIN_SUCCESS=3 MLB_REPLAY_MAX_PREDICT_P95_MS=4000 MLB_REPLAY_RETRY_ATTEMPTS=2 MLB_REPLAY_RETRY_BACKOFF_MS=350
 make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
 ```
 

@@ -17,7 +17,7 @@ Date reference: this runbook was aligned on February 17, 2026.
 Run once per day (UTC date is acceptable):
 
 ```bash
-make mlb-prod12-daily-gate-incident \
+make mlb-prod12-daily-cycle \
   MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" \
   MLB_DATE="$(date -u +%F)" \
   MLB_PREDICT_SAMPLE=10 \
@@ -38,7 +38,7 @@ Primary artifact updated:
 Run once per week:
 
 ```bash
-make mlb-prod12-phase2-weekly-gate-incident \
+make mlb-prod12-phase2-weekly-cycle \
   MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" \
   MLB_DATE="2025-08-15" \
   MLB_REPLAY_SAMPLE=10 \
@@ -54,6 +54,7 @@ What this includes:
 3. `mlb-prod12-track-weekly` (candidate eval, max drop `3.5`)
 4. `mlb-prod12-phase2-log` and strict latest-status check (`mlb-prod12-phase2-last-strict`)
 5. on failure, prints compact incident triage (`mlb-prod12-incident`)
+6. always appends operator snapshot history (`mlb-prod12-ops-log`)
 
 Expected pass conditions:
 - release manifest: `ok=true`
