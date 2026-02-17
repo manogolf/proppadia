@@ -85,15 +85,17 @@ make mlb-prod12-track-daily \
   MLB_PREDICT_MIN_SUCCESS=3
 ```
 
-Weekly prod12 phase-2 readiness:
+Weekly prod12 phase-2 strict gate:
 
 ```bash
-make mlb-prod12-phase2-readiness \
+make mlb-prod12-phase2-weekly-gate \
   MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com \
   MLB_DATE=2025-08-15 \
   MLB_REPLAY_SAMPLE=10 \
   MLB_REPLAY_MIN_SUCCESS=3 \
-  MLB_REPLAY_MAX_PREDICT_P95_MS=4000
+  MLB_REPLAY_MAX_PREDICT_P95_MS=4000 \
+  MLB_REPLAY_RETRY_ATTEMPTS=2 \
+  MLB_REPLAY_RETRY_BACKOFF_MS=350
 ```
 
 Preview copy/paste scheduler commands:

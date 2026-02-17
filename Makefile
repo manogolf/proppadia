@@ -263,7 +263,7 @@ mlb-cron-preview:
 mlb-prod12-cron-preview:
 	@echo "Recommended prod12 automation commands:"
 	@echo "1) Daily: make mlb-prod12-track-daily MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=\$$(date -u +%F) MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE) MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
-	@echo "2) Weekly: make mlb-prod12-phase2-readiness MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS)"
+	@echo "2) Weekly: make mlb-prod12-phase2-weekly-gate MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS) MLB_REPLAY_RETRY_ATTEMPTS=$(MLB_REPLAY_RETRY_ATTEMPTS) MLB_REPLAY_RETRY_BACKOFF_MS=$(MLB_REPLAY_RETRY_BACKOFF_MS)"
 
 nhl-help:
 	@if command -v rg >/dev/null 2>&1; then \

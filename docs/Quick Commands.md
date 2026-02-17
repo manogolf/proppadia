@@ -27,7 +27,7 @@ Daily:
 - `make season-cutover-ready` (strict readiness + governance gate)
 
 On-demand:
-- `make mlb-prod12-phase2-readiness ...` (production-12 weekly readiness bundle)
+- `make mlb-prod12-phase2-weekly-gate ...` (production-12 weekly strict gate)
 - `make mlb-prod12-cron-preview` (prints copy/paste-ready daily + weekly prod12 scheduler commands)
 - `make ops-operator-summary`
 - `make ops-operator-summary SEASON_HISTORY_MAX_AGE_HOURS=<hours>` (optional history recency enforcement)
@@ -91,7 +91,7 @@ make mlb-runbook
 make mlb-cron-preview
 make mlb-prod12-cron-preview
 make mlb-prod12-track-daily MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=$(date -u +%F) MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3
-make mlb-prod12-phase2-readiness MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15 MLB_REPLAY_SAMPLE=10 MLB_REPLAY_MIN_SUCCESS=3 MLB_REPLAY_MAX_PREDICT_P95_MS=4000
+make mlb-prod12-phase2-weekly-gate MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15 MLB_REPLAY_SAMPLE=10 MLB_REPLAY_MIN_SUCCESS=3 MLB_REPLAY_MAX_PREDICT_P95_MS=4000 MLB_REPLAY_RETRY_ATTEMPTS=2 MLB_REPLAY_RETRY_BACKOFF_MS=350
 make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
 ```
 
