@@ -17,11 +17,7 @@ Date reference: this runbook was aligned on February 17, 2026.
 Run once per day (UTC date is acceptable):
 
 ```bash
-make mlb-prod12-daily-cycle \
-  MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" \
-  MLB_DATE="$(date -u +%F)" \
-  MLB_PREDICT_SAMPLE=10 \
-  MLB_PREDICT_MIN_SUCCESS=3
+bin/mlb_prod12_daily_cycle.sh
 ```
 
 Expected pass conditions:
@@ -38,14 +34,7 @@ Primary artifact updated:
 Run once per week:
 
 ```bash
-make mlb-prod12-phase2-weekly-cycle \
-  MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" \
-  MLB_DATE="2025-08-15" \
-  MLB_REPLAY_SAMPLE=10 \
-  MLB_REPLAY_MIN_SUCCESS=3 \
-  MLB_REPLAY_MAX_PREDICT_P95_MS=4000 \
-  MLB_REPLAY_RETRY_ATTEMPTS=2 \
-  MLB_REPLAY_RETRY_BACKOFF_MS=350
+bin/mlb_prod12_weekly_cycle.sh
 ```
 
 What this includes:
@@ -101,6 +90,12 @@ Optional history tracking:
 ```bash
 make mlb-prod12-ops-log
 make mlb-prod12-ops-last
+```
+
+Wrapper script preview:
+
+```bash
+make mlb-prod12-script-preview
 ```
 
 ## Notes

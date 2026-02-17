@@ -29,6 +29,7 @@ Daily:
 On-demand:
 - `make mlb-prod12-phase2-weekly-cycle ...` (production-12 weekly strict gate + incident-on-fail + ops snapshot log)
 - `make mlb-prod12-cron-preview` (prints copy/paste-ready daily + weekly prod12 scheduler commands)
+- `make mlb-prod12-script-preview` (prints scheduler-ready wrapper script commands)
 - `make mlb-prod12-incident` (compact latest failure summary + suggested next actions)
 - `make mlb-prod12-ops-check` (strict status + trend report; incident summary on failure)
 - `make mlb-prod12-ops-log` (append operator snapshot history row)
@@ -94,8 +95,8 @@ make ops-daily-check
 make mlb-runbook
 make mlb-cron-preview
 make mlb-prod12-cron-preview
-make mlb-prod12-daily-cycle MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=$(date -u +%F) MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3
-make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2025-08-15 MLB_REPLAY_SAMPLE=10 MLB_REPLAY_MIN_SUCCESS=3 MLB_REPLAY_MAX_PREDICT_P95_MS=4000 MLB_REPLAY_RETRY_ATTEMPTS=2 MLB_REPLAY_RETRY_BACKOFF_MS=350
+bin/mlb_prod12_daily_cycle.sh
+bin/mlb_prod12_weekly_cycle.sh
 make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
 ```
 
