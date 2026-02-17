@@ -69,6 +69,7 @@ Primary artifacts updated:
 1. Daily lane failure:
 - Re-run the same daily command once.
 - If still failing, run:
+  - `make mlb-prod12-incident`
   - `make mlb-pipeline-check-prod12 MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" MLB_DATE="<same-date>" MLB_PREDICT_SAMPLE=10 MLB_PREDICT_MIN_SUCCESS=3`
   - `make mlb-pipeline-last`
 - Hold production changes until lane returns to pass.
@@ -81,6 +82,7 @@ Primary artifacts updated:
 3. Weekly candidate eval failure:
 - Keep current prod12 lane (no additional promotion).
 - Run:
+  - `make mlb-prod12-incident`
   - `make mlb-candidate-eval-prod12 MLB_CANDIDATE_MAX_PROP_DROP_PCT=3.5`
 - Review degraded props and continue tracking only.
 

@@ -29,6 +29,7 @@ Daily:
 On-demand:
 - `make mlb-prod12-phase2-weekly-gate ...` (production-12 weekly strict gate)
 - `make mlb-prod12-cron-preview` (prints copy/paste-ready daily + weekly prod12 scheduler commands)
+- `make mlb-prod12-incident` (compact latest failure summary + suggested next actions)
 - `make ops-operator-summary`
 - `make ops-operator-summary SEASON_HISTORY_MAX_AGE_HOURS=<hours>` (optional history recency enforcement)
 - `make ops-show-config`
