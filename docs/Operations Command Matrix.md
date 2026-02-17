@@ -279,7 +279,7 @@ MLB degenerate-lane diagnostics:
 make mlb-degenerate-lane-report MLB_QUALITY_GAMES_BACK=30
 ```
 
-Note: use this report for `runs_scored,walks_allowed,outs_recorded,home_runs,runs_rbis` triage; do not auto-promote one-sided candidates.
+Note: use this report for watchlist triage (`outs_recorded,home_runs`) and promoted-lane verification (`runs_scored,walks_allowed,runs_rbis`); do not auto-promote one-sided candidates.
 
 MLB pipeline history log + last snapshot:
 

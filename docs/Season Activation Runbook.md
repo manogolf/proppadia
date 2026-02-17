@@ -206,8 +206,10 @@ If any step fails:
 
 ### Degenerate lane remediation plan (separate track)
 
-- Current degenerate lane set:
-  - `runs_scored,walks_allowed,outs_recorded,home_runs,runs_rbis`
+- Current watchlist lane set (as of 2026-02-17):
+  - `outs_recorded,home_runs`
+- Current promoted underserved set (as of 2026-02-17):
+  - `runs_scored,walks_allowed,runs_rbis`
 - Working rule:
   - Do not promote threshold-only relabel updates that collapse to one-sided predictions.
 - Required remediation sequence:
