@@ -139,17 +139,17 @@ const PROP_TYPES = [
   "hits",
   "hits_allowed",
   "hits_runs_rbis",
-  "home_runs",
-  "outs_recorded",
-  "rbis",
+  // "home_runs", // watchlist/research lane
+  // "outs_recorded", // watchlist/research lane
+  // "rbis", // not currently served for predictions
   "runs_rbis",
   "runs_scored",
-  "singles",
-  "stolen_bases",
+  // "singles", // not currently served for predictions
+  // "stolen_bases", // not currently served for predictions
   "strikeouts_batting",
   "strikeouts_pitching",
   "total_bases",
-  "triples",
+  // "triples", // not currently served for predictions
   "walks",
   "walks_allowed",
 ];
@@ -159,14 +159,14 @@ const CORE_PROP_TYPES = new Set([
   "total_bases",
   "hits_runs_rbis",
   "runs_rbis",
-  "rbis",
   "runs_scored",
   "strikeouts_batting",
   "walks",
-  "singles",
   "doubles",
+  "earned_runs",
+  "hits_allowed",
   "strikeouts_pitching",
-  "outs_recorded",
+  "walks_allowed",
 ]);
 
 const prettyProp = (key) => {

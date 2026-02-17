@@ -199,7 +199,7 @@ If any step fails:
 ### Production-11 lane policy (active)
 
 - Active production lane set:
-  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,runs_scored,walks_allowed,runs_rbis`
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
 - Use these operational targets:
   - `make mlb-prediction-quality-prod11`
   - `make mlb-pipeline-check-prod11`
