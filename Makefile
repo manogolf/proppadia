@@ -60,6 +60,7 @@ MLB_CANDIDATE_MIN_TOTAL ?= -1
 MLB_CANDIDATE_MIN_LIFT_PCT ?= 0.25
 MLB_CANDIDATE_MAX_PROP_DROP_PCT ?= 0.5
 MLB_PROD12_MAX_PROP_DROP_PCT ?= 3.5
+MLB_PROD12_MIN_LIFT_PCT ?= -0.25
 MLB_PROD12_RELEASE_OUTPUT ?= artifacts/releases/mlb_prod12_release_manifest.json
 MLB_PROD12_ARTIFACT_DIRS ?= models_out
 MLB_PROD12_ARTIFACT_PATTERNS ?= *.joblib,*.pkl,*.onnx,*.bin
@@ -809,7 +810,7 @@ mlb-prod12-daily-cycle:
 	exit $$rc
 
 mlb-prod12-track-weekly:
-	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
+	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_CANDIDATE_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 mlb-prod12-release-manifest:
 	$(VENV_PY) backend/scripts/mlb_prod12_release_manifest.py --output "$(MLB_PROD12_RELEASE_OUTPUT)" --artifact-dirs "$(MLB_PROD12_ARTIFACT_DIRS)" --artifact-patterns "$(MLB_PROD12_ARTIFACT_PATTERNS)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --prop-types "$(MLB_PROD12_PROP_TYPES)" --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY) --max-prop-drop-pct $(MLB_PROD12_MAX_PROP_DROP_PCT)
