@@ -9,7 +9,7 @@ Date reference: this runbook was aligned on February 17, 2026.
 - Prop lane set (`prod12`):
   - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
 - Gate posture:
-  - Daily health + logging (`mlb-prod12-track-daily`)
+  - Daily health + logging strict gate (`mlb-prod12-daily-gate`)
   - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
 
 ## Daily Schedule
@@ -17,7 +17,7 @@ Date reference: this runbook was aligned on February 17, 2026.
 Run once per day (UTC date is acceptable):
 
 ```bash
-make mlb-prod12-track-daily \
+make mlb-prod12-daily-gate \
   MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" \
   MLB_DATE="$(date -u +%F)" \
   MLB_PREDICT_SAMPLE=10 \
