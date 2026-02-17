@@ -31,6 +31,8 @@ On-demand:
 - `make mlb-prod12-cron-preview` (prints copy/paste-ready daily + weekly prod12 scheduler commands)
 - `make mlb-prod12-incident` (compact latest failure summary + suggested next actions)
 - `make mlb-prod12-ops-check` (strict status + trend report; incident summary on failure)
+- `make mlb-prod12-ops-log` (append operator snapshot history row)
+- `make mlb-prod12-ops-last` (show recent operator snapshot history)
 - `make ops-operator-summary`
 - `make ops-operator-summary SEASON_HISTORY_MAX_AGE_HOURS=<hours>` (optional history recency enforcement)
 - `make ops-show-config`

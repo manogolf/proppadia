@@ -95,6 +95,13 @@ Use this command for a compact current-state check outside scheduler runs:
 make mlb-prod12-ops-check
 ```
 
+Optional history tracking:
+
+```bash
+make mlb-prod12-ops-log
+make mlb-prod12-ops-last
+```
+
 ## Notes
 
 - `MLB_REPLAY_ALLOW_SPARSE=1` is enabled by default in `Makefile` for sparse/offseason safety.
