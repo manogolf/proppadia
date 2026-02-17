@@ -87,6 +87,14 @@ Primary artifacts updated:
   - `make mlb-candidate-eval-prod12 MLB_CANDIDATE_MAX_PROP_DROP_PCT=3.5`
 - Review degraded props and continue tracking only.
 
+## Operator Snapshot
+
+Use this command for a compact current-state check outside scheduler runs:
+
+```bash
+make mlb-prod12-ops-check
+```
+
 ## Notes
 
 - `MLB_REPLAY_ALLOW_SPARSE=1` is enabled by default in `Makefile` for sparse/offseason safety.
