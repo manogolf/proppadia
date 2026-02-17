@@ -118,6 +118,10 @@ OPS_HISTORY_INPUT ?= artifacts/ops_operator_history.jsonl
 OPS_HISTORY_LIMIT ?= 10
 SEASON_HISTORY_INPUT ?= artifacts/season_activation_history.jsonl
 SEASON_HISTORY_LIMIT ?= 10
+
+# Ensure repo-root package imports (e.g., `from backend.scripts import ...`) work
+# in shells where the project is not installed as a package.
+export PYTHONPATH := $(CURDIR):$(PYTHONPATH)
 SEASON_HISTORY_MAX_AGE_HOURS ?= 0
 SEASON_MAX_AGE_HOURS ?= 0
 SEASON_CUTOVER_HISTORY_LIMIT ?= 10
