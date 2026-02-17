@@ -19,6 +19,14 @@ MLB_QUALITY_GAMES_BACK ?= 30
 MLB_QUALITY_MIN_TOTAL ?= 1000
 MLB_QUALITY_MIN_ACCURACY ?= 48
 MLB_QUALITY_PROP_SOURCES ?= mlb_api
+MLB_BALANCE_GUARD_PROP_TYPE ?= runs_scored
+MLB_BALANCE_GUARD_PROP_SOURCES ?= mlb_api
+MLB_BALANCE_GUARD_WINDOW_MODE ?= games
+MLB_BALANCE_GUARD_WINDOW_DAYS ?= 30
+MLB_BALANCE_GUARD_GAMES_BACK ?= 30
+MLB_BALANCE_GUARD_MIN_TOTAL ?= 1000
+MLB_BALANCE_GUARD_MIN_ACCURACY ?= 48
+MLB_BALANCE_GUARD_MIN_OVER_PCT ?= 10
 MLB_QUALITY_SEGMENT_PRESEASON_FROM_DATE ?=
 MLB_QUALITY_SEGMENT_PRESEASON_TO_DATE ?=
 MLB_QUALITY_SEGMENT_REGULAR_FROM_DATE ?=
@@ -168,6 +176,7 @@ help:
 	@echo "  make mlb-prediction-quality-core [core 12 quality summary over games window]"
 	@echo "  make mlb-prediction-quality-prod8 [production-8 quality summary over games window]"
 	@echo "  make mlb-prediction-quality-prod11 [production-11 quality summary over games window]"
+	@echo "  make mlb-balance-guard [single-prop one-sided drift guard (default runs_scored)]"
 	@echo "  make mlb-prediction-quality-user-added [user_added-only quality summary json]"
 	@echo "  make mlb-prediction-quality-segmented [preseason vs regular-season date-window quality report]"
 	@echo "  make mlb-degenerate-lane-report [balance-vs-accuracy diagnostics for degenerate lanes]"
@@ -649,6 +658,9 @@ mlb-prediction-quality-prod8:
 
 mlb-prediction-quality-prod11:
 	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD11_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+
+mlb-balance-guard:
+	$(VENV_PY) backend/scripts/check_mlb_prop_balance_guard.py --prop-type "$(MLB_BALANCE_GUARD_PROP_TYPE)" --prop-sources "$(MLB_BALANCE_GUARD_PROP_SOURCES)" --window-mode "$(MLB_BALANCE_GUARD_WINDOW_MODE)" --window-days $(MLB_BALANCE_GUARD_WINDOW_DAYS) --games-back $(MLB_BALANCE_GUARD_GAMES_BACK) --min-total $(MLB_BALANCE_GUARD_MIN_TOTAL) --min-accuracy-pct $(MLB_BALANCE_GUARD_MIN_ACCURACY) --min-over-pct $(MLB_BALANCE_GUARD_MIN_OVER_PCT)
 
 mlb-prediction-quality-user-added:
 	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --prop-sources "user_added" --min-total 1

@@ -186,6 +186,12 @@ MLB production-11 quality summary (recommended default):
 make mlb-prediction-quality-prod11 MLB_QUALITY_GAMES_BACK=30 MLB_QUALITY_MIN_TOTAL=1000
 ```
 
+MLB single-prop balance guard (default `runs_scored`):
+
+```bash
+make mlb-balance-guard MLB_BALANCE_GUARD_GAMES_BACK=30 MLB_BALANCE_GUARD_MIN_TOTAL=1000 MLB_BALANCE_GUARD_MIN_ACCURACY=48 MLB_BALANCE_GUARD_MIN_OVER_PCT=10
+```
+
 MLB preseason vs regular-season segmented quality report:
 
 ```bash
