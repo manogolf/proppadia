@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run MLB prediction gate + flow audit + prop coverage as one JSON check."""
+"""Run MLB prediction gate + flow audit as one JSON check (optional coverage)."""
 
 from __future__ import annotations
 
@@ -79,6 +79,7 @@ def collect_pipeline_check(
     coverage_min_graded_per_prop: int,
     coverage_gate_metric: str,
     coverage_training_prop_sources: str,
+    include_coverage: bool = False,
 ) -> dict[str, Any]:
     gate_args: list[str] = [
         "--date",
@@ -141,7 +142,10 @@ def collect_pipeline_check(
 
     gate_rc, gate_payload = run_json_check(mlb_prediction_gate.main, gate_args)
     flow_rc, flow_payload = run_json_check(audit_mlb_prediction_flow.main, flow_args)
-    coverage_rc, coverage_payload = run_json_check(report_mlb_prop_coverage.main, coverage_args)
+    coverage_rc = 0
+    coverage_payload: dict[str, Any] = {}
+    if include_coverage:
+        coverage_rc, coverage_payload = run_json_check(report_mlb_prop_coverage.main, coverage_args)
     hits_expectation_guard_rc, hits_expectation_guard_payload = run_json_check(
         check_mlb_hits_expectation_sources.main, hits_expectation_guard_args
     )
@@ -162,13 +166,6 @@ def collect_pipeline_check(
             "payload": flow_payload,
         },
         {
-            "name": "prop_coverage",
-            "ok": bool(coverage_payload.get("ok")),
-            "status": coverage_payload.get("status"),
-            "exit_code": int(coverage_rc),
-            "payload": coverage_payload,
-        },
-        {
             "name": "hits_expectation_sources",
             "ok": bool(hits_expectation_guard_payload.get("ok")),
             "status": hits_expectation_guard_payload.get("status"),
@@ -176,6 +173,16 @@ def collect_pipeline_check(
             "payload": hits_expectation_guard_payload,
         },
     ]
+    if include_coverage:
+        checks.append(
+            {
+                "name": "prop_coverage",
+                "ok": bool(coverage_payload.get("ok")),
+                "status": coverage_payload.get("status"),
+                "exit_code": int(coverage_rc),
+                "payload": coverage_payload,
+            }
+        )
     failures = [item["name"] for item in checks if (item["exit_code"] != 0) or (not item["ok"])]
     degraded_prop_lanes = _degraded_prop_lanes(gate_payload, coverage_payload)
     ok = len(failures) == 0
@@ -190,7 +197,7 @@ def collect_pipeline_check(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Run MLB gate + flow + coverage as one JSON check.")
+    ap = argparse.ArgumentParser(description="Run MLB gate + flow as one JSON check (optional coverage).")
     ap.add_argument("--base-url", default=None, help="Use running backend URL for prediction gate probe calls.")
     ap.add_argument("--date", default="2025-08-15")
     ap.add_argument("--sample-size", type=int, default=10)
@@ -209,10 +216,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--coverage-min-graded-per-prop", type=int, default=0)
     ap.add_argument(
         "--coverage-gate-metric",
-        choices=["graded", "training_source", "stat_derived"],
+        choices=["graded", "row_source", "training_source", "stat_derived", "mt_graded"],
         default="graded",
     )
     ap.add_argument("--coverage-training-prop-sources", default="mlb_api")
+    ap.add_argument(
+        "--include-coverage",
+        action="store_true",
+        help="Include prop_coverage diagnostic check (ops-only).",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     payload = collect_pipeline_check(
@@ -234,6 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         coverage_min_graded_per_prop=args.coverage_min_graded_per_prop,
         coverage_gate_metric=args.coverage_gate_metric,
         coverage_training_prop_sources=args.coverage_training_prop_sources,
+        include_coverage=bool(args.include_coverage),
     )
     print(json.dumps(payload, indent=2))
     return 0 if payload.get("ok") else 1

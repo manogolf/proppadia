@@ -33,10 +33,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--coverage-min-graded-per-prop", type=int, default=0)
     ap.add_argument(
         "--coverage-gate-metric",
-        choices=["graded", "training_source", "stat_derived"],
+        choices=["graded", "row_source", "training_source", "stat_derived", "mt_graded"],
         default="graded",
     )
     ap.add_argument("--coverage-training-prop-sources", default="mlb_api")
+    ap.add_argument(
+        "--include-coverage",
+        action="store_true",
+        help="Include prop_coverage diagnostic check (ops-only).",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     payload = mlb_pipeline_check.collect_pipeline_check(
@@ -58,6 +63,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         coverage_min_graded_per_prop=args.coverage_min_graded_per_prop,
         coverage_gate_metric=args.coverage_gate_metric,
         coverage_training_prop_sources=args.coverage_training_prop_sources,
+        include_coverage=bool(args.include_coverage),
     )
 
     out_path = Path(args.output)

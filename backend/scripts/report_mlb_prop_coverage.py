@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report recent MLB prop coverage across prediction and training tables."""
+"""Report recent MLB prop coverage from model_training_props."""
 
 from __future__ import annotations
 
@@ -25,32 +25,32 @@ WHERE {date_column} IN (
     return f"WHERE {date_column} >= (CURRENT_DATE - (%s::int || ' days')::interval)::date"
 
 
-def _player_props(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
+def _mtp_rows(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
     rows = pg_fetchall(
         """
         SELECT
           prop_type,
-          COUNT(*)::int AS total_predictions,
+          COUNT(*)::int AS total_rows,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) IN ('win','loss','push','dnp'))::int AS resolved_count,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) IN ('win','loss'))::int AS graded_count,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'win')::int AS wins,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'loss')::int AS losses,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'push')::int AS pushes,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'dnp')::int AS dnps
-        FROM player_props
+        FROM model_training_props
         """
-        + _date_filter("game_date", "player_props", window_mode)
+        + _date_filter("game_date", "model_training_props", window_mode)
         + """
         GROUP BY prop_type
-        ORDER BY total_predictions DESC, prop_type
+        ORDER BY total_rows DESC, prop_type
         """,
         (int(window_value),),
     )
     return list(rows or [])
 
 
-def _training_source_counts(window_value: int, window_mode: str, prop_sources: Sequence[str]) -> dict[str, int]:
-    sources = [s.strip() for s in prop_sources if str(s).strip()]
+def _row_source_counts(window_value: int, window_mode: str, row_sources: Sequence[str]) -> dict[str, int]:
+    sources = [s.strip() for s in row_sources if str(s).strip()]
     if not sources:
         return {}
     source_placeholders = ", ".join(["%s"] * len(sources))
@@ -58,7 +58,7 @@ def _training_source_counts(window_value: int, window_mode: str, prop_sources: S
         f"""
         SELECT
           prop_type,
-          COUNT(*)::int AS training_source_count
+          COUNT(*)::int AS row_source_count
         FROM model_training_props
         WHERE prop_source IN ({source_placeholders})
         """
@@ -73,7 +73,7 @@ def _training_source_counts(window_value: int, window_mode: str, prop_sources: S
         prop = str(row.get("prop_type") or "").strip()
         if not prop:
             continue
-        out[prop] = int(row.get("training_source_count") or 0)
+        out[prop] = int(row.get("row_source_count") or 0)
     return out
 
 
@@ -95,15 +95,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     ap.add_argument(
         "--gate-metric",
-        choices=["graded", "training_source", "stat_derived"],
+        choices=["graded", "row_source", "training_source", "stat_derived", "mt_graded"],
         default="graded",
         help="Metric used for required-prop threshold checks.",
     )
     ap.add_argument(
-        "--training-prop-sources",
+        "--row-sources",
+        dest="row_sources",
         default="mlb_api",
-        help="Comma-separated model_training_props.prop_source values used for training-depth counts.",
+        help="Comma-separated model_training_props.prop_source values used for row_source counts.",
     )
+    ap.add_argument("--training-prop-sources", dest="row_sources", help=argparse.SUPPRESS)
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     window_mode = "games" if str(args.window_mode).lower() == "games" else "days"
@@ -111,49 +113,54 @@ def main(argv: Sequence[str] | None = None) -> int:
     required_props = [p.strip() for p in str(args.required_props).split(",") if p.strip()]
     min_graded = max(0, int(args.min_graded_per_prop))
     gate_metric_raw = str(args.gate_metric).strip().lower()
-    gate_metric = "training_source" if gate_metric_raw == "stat_derived" else gate_metric_raw
-    training_prop_sources = [s.strip() for s in str(args.training_prop_sources).split(",") if s.strip()]
+    if gate_metric_raw in {"training_source", "stat_derived"}:
+        gate_metric = "row_source"
+    elif gate_metric_raw == "mt_graded":
+        gate_metric = "graded"
+    else:
+        gate_metric = gate_metric_raw
+    row_sources = [s.strip() for s in str(args.row_sources).split(",") if s.strip()]
 
-    pred_rows = _player_props(window_value, window_mode)
-    stat_counts = _training_source_counts(window_value, window_mode, training_prop_sources)
+    mt_rows = _mtp_rows(window_value, window_mode)
+    row_source_counts = _row_source_counts(window_value, window_mode, row_sources)
 
     by_prop: dict[str, Dict[str, Any]] = {}
-    for row in pred_rows:
+    for row in mt_rows:
         prop = str(row.get("prop_type") or "").strip()
         if not prop:
             continue
         by_prop[prop] = {
             "prop_type": prop,
-            "total_predictions": int(row.get("total_predictions") or 0),
+            "total_rows": int(row.get("total_rows") or 0),
             "resolved_count": int(row.get("resolved_count") or 0),
             "graded_count": int(row.get("graded_count") or 0),
             "wins": int(row.get("wins") or 0),
             "losses": int(row.get("losses") or 0),
             "pushes": int(row.get("pushes") or 0),
             "dnps": int(row.get("dnps") or 0),
-            "training_source_count": int(stat_counts.get(prop, 0)),
+            "row_source_count": int(row_source_counts.get(prop, 0)),
         }
 
-    # Include training-source-only props that might not yet be in player_props window.
-    for prop, n in stat_counts.items():
+    # Include row_source-only props that might not appear in the unfiltered MTP window.
+    for prop, n in row_source_counts.items():
         by_prop.setdefault(
             prop,
             {
                 "prop_type": prop,
-                "total_predictions": 0,
+                "total_rows": 0,
                 "resolved_count": 0,
                 "graded_count": 0,
                 "wins": 0,
                 "losses": 0,
                 "pushes": 0,
                 "dnps": 0,
-                "training_source_count": int(n),
+                "row_source_count": int(n),
             },
         )
 
     rows = sorted(
         by_prop.values(),
-        key=lambda r: (int(r["graded_count"]), int(r["total_predictions"]), r["prop_type"]),
+        key=lambda r: (int(r["graded_count"]), int(r["total_rows"]), r["prop_type"]),
         reverse=True,
     )
 
@@ -164,14 +171,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             continue
         row = by_prop[p]
         threshold_value = int(row.get("graded_count") or 0)
-        if gate_metric == "training_source":
-            threshold_value = int(row.get("training_source_count") or 0)
+        if gate_metric == "row_source":
+            threshold_value = int(row.get("row_source_count") or 0)
         if threshold_value < min_graded:
             under_min_required.append(p)
 
-    total_predictions = sum(int(r["total_predictions"]) for r in rows)
+    total_rows = sum(int(r["total_rows"]) for r in rows)
+    total_resolved = sum(int(r["resolved_count"]) for r in rows)
     total_graded = sum(int(r["graded_count"]) for r in rows)
-    total_training_source = sum(int(r["training_source_count"]) for r in rows)
+    total_row_source = sum(int(r["row_source_count"]) for r in rows)
 
     ok = not missing_required and not under_min_required
     payload = {
@@ -182,14 +190,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "required_props": required_props,
         "min_graded_per_prop": min_graded,
         "gate_metric": gate_metric,
-        "training_prop_sources": training_prop_sources,
+        "row_sources": row_sources,
         "missing_required_props": missing_required,
         "under_min_required_props": under_min_required,
         "summary": {
             "prop_types": len(rows),
-            "total_predictions": total_predictions,
+            "total_rows": total_rows,
+            "total_resolved": total_resolved,
             "total_graded": total_graded,
-            "total_training_source": total_training_source,
+            "total_row_source": total_row_source,
         },
         "rows": rows,
     }
