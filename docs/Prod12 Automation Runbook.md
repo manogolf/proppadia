@@ -12,6 +12,21 @@ Date reference: this runbook was aligned on February 17, 2026.
   - Daily health + logging strict gate (`mlb-prod12-daily-gate`)
   - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
 
+## Render Shell Quickstart
+
+Use this once after each deploy before relying on scheduler jobs:
+
+```bash
+cd /opt/render/project/src
+make mlb-prod12-bootstrap-strict MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" MLB_DATE="2025-08-15"
+```
+
+What it guarantees:
+- weekly and daily cycles both run
+- baseline auto-captures if missing
+- latest weekly phase2 snapshot is strict-pass
+- daily+weekly status is strict-pass with tight freshness checks
+
 ## Daily Schedule
 
 Run once per day (UTC date is acceptable):
@@ -102,3 +117,4 @@ make mlb-prod12-script-preview
 
 - `MLB_REPLAY_ALLOW_SPARSE=1` is enabled by default in `Makefile` for sparse/offseason safety.
 - The release manifest currently fingerprints artifacts from `models_out`; update `MLB_PROD12_ARTIFACT_DIRS` if MLB artifacts are moved to a dedicated path.
+- Wrapper scripts auto-select Python runtime: `.venv/bin/python` when present, otherwise `python3`.
