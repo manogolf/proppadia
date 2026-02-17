@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -204,6 +204,7 @@ help:
 	@echo "  make mlb-prod12-incident-strict [same incident summary, exits non-zero on fail]"
 	@echo "  make mlb-prod12-track-daily [run production-12 check+log pair]"
 	@echo "  make mlb-prod12-daily-gate [run daily prod12 track, then enforce strict status freshness]"
+	@echo "  make mlb-prod12-daily-gate-incident [daily strict gate; prints prod12 incident summary on failure]"
 	@echo "  make mlb-prod12-track-weekly [run production-12 candidate eval with tracking tolerance]"
 	@echo "  make mlb-prod12-cron-preview [print copy/paste-ready daily+weekly prod12 scheduler commands]"
 	@echo "  make mlb-prod12-release-manifest [write prod12 release manifest with artifact checksums]"
@@ -212,6 +213,7 @@ help:
 	@echo "  make mlb-prod12-phase2-last [show recent prod12 phase-2 history snapshots]"
 	@echo "  make mlb-prod12-phase2-last-strict [non-zero exit when latest prod12 phase-2 snapshot failed]"
 	@echo "  make mlb-prod12-phase2-weekly-gate [run phase-2 readiness, then enforce latest strict status]"
+	@echo "  make mlb-prod12-phase2-weekly-gate-incident [weekly strict gate; prints prod12 incident summary on failure]"
 	@echo "  make mlb-prod12-phase2-readiness [manifest + replay latency + weekly candidate eval]"
 	@echo "  make mlb-prediction-gate [combined operability + quality pass/fail]"
 	@echo "  make mlb-pipeline-check [prediction gate + flow audit + expectation-source guard]"
@@ -269,8 +271,8 @@ mlb-cron-preview:
 
 mlb-prod12-cron-preview:
 	@echo "Recommended prod12 automation commands:"
-	@echo "1) Daily: make mlb-prod12-daily-gate MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=\$$(date -u +%F) MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE) MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
-	@echo "2) Weekly: make mlb-prod12-phase2-weekly-gate MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS) MLB_REPLAY_RETRY_ATTEMPTS=$(MLB_REPLAY_RETRY_ATTEMPTS) MLB_REPLAY_RETRY_BACKOFF_MS=$(MLB_REPLAY_RETRY_BACKOFF_MS)"
+	@echo "1) Daily: make mlb-prod12-daily-gate-incident MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=\$$(date -u +%F) MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE) MLB_PREDICT_MIN_SUCCESS=$(MLB_PREDICT_MIN_SUCCESS)"
+	@echo "2) Weekly: make mlb-prod12-phase2-weekly-gate-incident MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE) MLB_REPLAY_SAMPLE=$(MLB_REPLAY_SAMPLE) MLB_REPLAY_MIN_SUCCESS=$(MLB_REPLAY_MIN_SUCCESS) MLB_REPLAY_MAX_PREDICT_P95_MS=$(MLB_REPLAY_MAX_PREDICT_P95_MS) MLB_REPLAY_RETRY_ATTEMPTS=$(MLB_REPLAY_RETRY_ATTEMPTS) MLB_REPLAY_RETRY_BACKOFF_MS=$(MLB_REPLAY_RETRY_BACKOFF_MS)"
 
 nhl-help:
 	@if command -v rg >/dev/null 2>&1; then \
@@ -746,6 +748,13 @@ mlb-prod12-daily-gate:
 	$(MAKE) mlb-prod12-track-daily MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)"
 	$(MAKE) mlb-prod12-status-strict
 
+mlb-prod12-daily-gate-incident:
+	@set -e; \
+	if ! $(MAKE) mlb-prod12-daily-gate MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)"; then \
+		$(MAKE) mlb-prod12-incident || true; \
+		exit 1; \
+	fi
+
 mlb-prod12-track-weekly:
 	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
@@ -767,6 +776,13 @@ mlb-prod12-phase2-last-strict:
 mlb-prod12-phase2-weekly-gate:
 	$(MAKE) mlb-prod12-phase2-readiness MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_REPLAY_SAMPLE="$(MLB_REPLAY_SAMPLE)" MLB_REPLAY_MIN_SUCCESS="$(MLB_REPLAY_MIN_SUCCESS)" MLB_REPLAY_MAX_PREDICT_P95_MS="$(MLB_REPLAY_MAX_PREDICT_P95_MS)" MLB_REPLAY_RETRY_ATTEMPTS="$(MLB_REPLAY_RETRY_ATTEMPTS)" MLB_REPLAY_RETRY_BACKOFF_MS="$(MLB_REPLAY_RETRY_BACKOFF_MS)"
 	$(MAKE) mlb-prod12-phase2-last-strict
+
+mlb-prod12-phase2-weekly-gate-incident:
+	@set -e; \
+	if ! $(MAKE) mlb-prod12-phase2-weekly-gate MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_REPLAY_SAMPLE="$(MLB_REPLAY_SAMPLE)" MLB_REPLAY_MIN_SUCCESS="$(MLB_REPLAY_MIN_SUCCESS)" MLB_REPLAY_MAX_PREDICT_P95_MS="$(MLB_REPLAY_MAX_PREDICT_P95_MS)" MLB_REPLAY_RETRY_ATTEMPTS="$(MLB_REPLAY_RETRY_ATTEMPTS)" MLB_REPLAY_RETRY_BACKOFF_MS="$(MLB_REPLAY_RETRY_BACKOFF_MS)"; then \
+		$(MAKE) mlb-prod12-incident || true; \
+		exit 1; \
+	fi
 
 mlb-prod12-phase2-readiness:
 	$(MAKE) mlb-prod12-release-manifest
