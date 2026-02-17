@@ -196,13 +196,13 @@ If any step fails:
   - Resolved in-window by normalizing `team`/`opponent` to numeric text via `team_id`/`opponent_team_id` before relabel updates.
   - Recommendation: run planned normalization pass for remaining calibration lanes before future DB-side relabel operations.
 
-### Production-8 lane policy (active)
+### Production-11 lane policy (active)
 
 - Active production lane set:
-  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks`
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,runs_scored,walks_allowed,runs_rbis`
 - Use these operational targets:
-  - `make mlb-prediction-quality-prod8`
-  - `make mlb-pipeline-check-prod8`
+  - `make mlb-prediction-quality-prod11`
+  - `make mlb-pipeline-check-prod11`
 
 ### Degenerate lane remediation plan (separate track)
 
