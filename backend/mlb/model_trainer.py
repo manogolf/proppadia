@@ -502,13 +502,45 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
     auc_lr = auc_lr_w
     auc_rf = auc_rf_w
 
+    def _w_from_auc(v: float) -> float:
+        try:
+            if np.isnan(v):
+                return 0.0
+            return max(float(v) - 0.5, 0.0)
+        except Exception:
+            return 0.0
+
+    w_lr = _w_from_auc(auc_lr)
+    w_rf = _w_from_auc(auc_rf)
+    if (w_lr + w_rf) > 0:
+        blend_val = ((proba_lr * w_lr) + (proba_rf * w_rf)) / (w_lr + w_rf)
+    else:
+        blend_val = (proba_lr + proba_rf) / 2.0
+
+    # Tune per-prop decision threshold on validation to avoid one-size 0.5 cutoff.
+    # Weighted accuracy is used to align with training-source weighting.
+    yv = y_v.to_numpy(dtype=int)
+    wv = np.asarray(w_v, dtype=float)
+    if wv.size != len(yv):
+        wv = np.ones(len(yv), dtype=float)
+    thresholds = [round(x, 2) for x in np.arange(0.35, 0.66, 0.01)]
+    best_thr = 0.5
+    best_score = -1.0
+    for thr in thresholds:
+        pred = (blend_val >= thr).astype(int)
+        denom = float(wv.sum()) if float(wv.sum()) > 0 else float(len(yv))
+        score = float(((pred == yv).astype(float) * wv).sum()) / max(1e-9, denom)
+        if score > best_score or (abs(score - best_score) < 1e-12 and abs(thr - 0.5) < abs(best_thr - 0.5)):
+            best_score = score
+            best_thr = thr
+
     if not quiet:
         fmt = lambda x: "NaN" if np.isnan(x) else f"{x:.3f}"
         print(
             f"📈 {prop_type}  AUC — "
             f"LR: {fmt(auc_lr_uw)} (uw) / {fmt(auc_lr_w)} (w);  "
             f"RF: {fmt(auc_rf_uw)} (uw) / {fmt(auc_rf_w)} (w);  "
-            f"pos_rate={pos_rate:.3f}, n_val={len(y_v)}"
+            f"pos_rate={pos_rate:.3f}, n_val={len(y_v)}, decision_threshold={best_thr:.2f}, val_wacc={best_score:.3f}"
         )
 
     best_model = pipe_rf if (auc_rf >= (auc_lr if not np.isnan(auc_lr) else -1)) else pipe_lr
@@ -525,6 +557,8 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
             "limit": limit,
             "auc_lr": float(auc_lr) if not np.isnan(auc_lr) else None,
             "auc_rf": float(auc_rf) if not np.isnan(auc_rf) else None,
+            "decision_threshold": float(best_thr),
+            "val_weighted_accuracy": float(best_score),
             "features_num": num_used,
             "features_cat": cat_used,
         },
@@ -556,6 +590,8 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         "file": latest_path.name,
         "auc_lr": None if np.isnan(auc_lr) else float(auc_lr),
         "auc_rf": None if np.isnan(auc_rf) else float(auc_rf),
+        "decision_threshold": float(best_thr),
+        "val_weighted_accuracy": float(best_score),
         "rows": int(len(df)),
         "features_num": num_used,
         "features_cat": cat_used,
