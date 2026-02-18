@@ -20,8 +20,25 @@ from backend.mlb.shared.team_name_map import (
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
+from backend.shared.db.pg import pg_fetchone
 
 ET = ZoneInfo("America/New_York")
+_HORIZONS = ("d7", "d15", "d30")
+_DERIVED_BASE_PROPS = {
+    "hits",
+    "total_bases",
+    "strikeouts_batting",
+    "earned_runs",
+    "doubles",
+    "hits_allowed",
+    "strikeouts_pitching",
+    "walks",
+    "hits_runs_rbis",
+    "runs_scored",
+    "walks_allowed",
+    "runs_rbis",
+    "rbis",
+}
 
 
 def normalize_prop_type(prop_type: str) -> str:
@@ -42,6 +59,86 @@ def _to_float(v: Any, default: float = 0.0) -> float:
         return float(v)
     except Exception:
         return default
+
+
+def _is_missing(v: Any) -> bool:
+    return v is None or v == ""
+
+
+def _n(v: Any) -> Optional[float]:
+    try:
+        if v is None or v == "":
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+
+def _load_latest_derived_stats(player_id: int, game_id: Optional[int], game_date: str) -> Dict[str, Any]:
+    row = pg_fetchone(
+        """
+SELECT row_to_json(pds)::jsonb AS stats
+FROM player_derived_stats pds
+WHERE pds.player_id = %s
+  AND (
+    (%s::int IS NOT NULL AND pds.game_id = %s::int)
+    OR pds.game_date::date <= %s::date
+  )
+ORDER BY
+  CASE WHEN %s::int IS NOT NULL AND pds.game_id = %s::int THEN 1 ELSE 0 END DESC,
+  pds.game_date DESC NULLS LAST
+LIMIT 1
+""",
+        (int(player_id), game_id, game_id, str(game_date), game_id, game_id),
+    ) or {}
+    stats = row.get("stats")
+    return stats if isinstance(stats, dict) else {}
+
+
+def _derive_combo_stat(stats: Dict[str, Any], horizon: str, target_prop: str) -> Optional[float]:
+    runs = _n(stats.get(f"{horizon}_runs_scored"))
+    rbis = _n(stats.get(f"{horizon}_rbis"))
+    hits = _n(stats.get(f"{horizon}_hits"))
+    if target_prop == "runs_rbis":
+        if runs is None or rbis is None:
+            return None
+        return runs + rbis
+    if target_prop == "hits_runs_rbis":
+        if hits is None or runs is None or rbis is None:
+            return None
+        return hits + runs + rbis
+    return None
+
+
+def _hydrate_derived_feature_snapshot(
+    *,
+    player_id: int,
+    game_id: Optional[int],
+    game_date: str,
+    prop_type: str,
+) -> Dict[str, Any]:
+    try:
+        stats = _load_latest_derived_stats(player_id, game_id, game_date)
+    except Exception:
+        return {}
+    if not stats:
+        return {}
+
+    wanted = set(_DERIVED_BASE_PROPS)
+    wanted.add(str(prop_type))
+    out: Dict[str, Any] = {}
+    for horizon in _HORIZONS:
+        for base in wanted:
+            key = f"{horizon}_{base}"
+            if key in stats and not _is_missing(stats.get(key)):
+                out[key] = _to_float(stats.get(key), 0.0)
+        for combo_prop in ("runs_rbis", "hits_runs_rbis"):
+            combo_key = f"{horizon}_{combo_prop}"
+            if _is_missing(out.get(combo_key)):
+                derived = _derive_combo_stat(stats, horizon, combo_prop)
+                if derived is not None:
+                    out[combo_key] = float(derived)
+    return out
 
 
 def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -159,6 +256,32 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
         "market_implied_probability": market_implied_probability,
         **context,
     }
+
+    # Hydrate derived rolling stats so prediction has signal even when caller omits them.
+    game_id_context = context.get("game_id")
+    try:
+        resolved_game_id = int(game_id_context) if game_id_context is not None else None
+    except Exception:
+        resolved_game_id = None
+    derived = _hydrate_derived_feature_snapshot(
+        player_id=int(player_id),
+        game_id=resolved_game_id,
+        game_date=game_date,
+        prop_type=prop_type,
+    )
+    for k, v in derived.items():
+        if _is_missing(features.get(k)):
+            features[k] = v
+
+    # If rolling/line fields were absent from input, derive them from d7_<prop>.
+    d7_prop = _n(features.get(f"d7_{prop_type}"))
+    if d7_prop is None and prop_type in {"runs_rbis", "hits_runs_rbis"}:
+        d7_prop = _n(features.get(f"d7_{prop_type}"))
+    if _is_missing(payload.get("rolling_result_avg_7")) and d7_prop is not None:
+        features["rolling_result_avg_7"] = float(d7_prop)
+    if _is_missing(payload.get("line_diff")) and d7_prop is not None:
+        features["line_diff"] = float(d7_prop) - prop_value
+
     if warnings:
         features["_warnings"] = warnings
     return features

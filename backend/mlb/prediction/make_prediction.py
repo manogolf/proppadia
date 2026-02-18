@@ -71,8 +71,8 @@ def _p_retry_missing(model, X: pd.DataFrame, features: Dict[str, Any]) -> Option
         if hasattr(model, "predict_proba"):
             return float(model.predict_proba(X)[0][1])
         if hasattr(model, "predict"):
-                y2 = model.predict(X2)
-                return float(np.ravel(y2)[0])    
+            y = model.predict(X)
+            return _to_probability_from_predict(float(np.ravel(y)[0]), features)
     except Exception as e:
         missing = _parse_missing_columns(str(e))
         if not missing:
@@ -83,7 +83,8 @@ def _p_retry_missing(model, X: pd.DataFrame, features: Dict[str, Any]) -> Option
             if hasattr(model, "predict_proba"):
                 return float(model.predict_proba(X2)[0][1])
             if hasattr(model, "predict"):
-                return float(np.ravel(model.predict(X2)[0]))
+                y2 = model.predict(X2)
+                return _to_probability_from_predict(float(np.ravel(y2)[0]), features)
         except Exception as e2:
             print(f"[predict] {type(model).__name__} retry failed: {e2}", file=sys.stderr, flush=True)
             return None
@@ -142,13 +143,40 @@ def _vectorize(features: Dict[str, Any], feature_list: List[str]) -> pd.DataFram
                 row[col] = 0.0
     return pd.DataFrame([row], columns=feature_list)
 
+
+def _to_probability_from_predict(raw: float, features: Dict[str, Any]) -> float:
+    """
+    Convert predict() output to over-probability.
+    - If model emits probability-like values in [0,1], use directly.
+    - If model emits stat projection, convert margin vs line into a smooth probability.
+    """
+    try:
+        y = float(raw)
+    except Exception:
+        return 0.5
+    if 0.0 <= y <= 1.0:
+        return max(0.0, min(1.0, y))
+    line_val = features.get("prop_value", features.get("line"))
+    try:
+        line = float(line_val)
+    except Exception:
+        # No line context: squash raw score conservatively.
+        return 1.0 / (1.0 + math.exp(-max(-8.0, min(8.0, y))))
+    margin = max(-8.0, min(8.0, y - line))
+    return 1.0 / (1.0 + math.exp(-margin))
+
+
+def _artifact_latest_dir() -> Path:
+    root = Path(os.getenv("MODEL_DIR", "/var/data/models"))
+    return root / "latest"
+
 def _input_columns_for(prop: str) -> list[str] | None:
     """
     Prefer the input column list stored in the model artifact's meta.
     This list matches what the pipeline expects (e.g., 'isna__*', raw categoricals).
     """
     try:
-        p = Path("/var/data/models/latest") / f"{prop}.joblib"
+        p = _artifact_latest_dir() / f"{prop}.joblib"
         if p.exists():
             obj = joblib.load(p)
             meta = obj.get("meta") if isinstance(obj, dict) else None
@@ -162,9 +190,21 @@ def _input_columns_for(prop: str) -> list[str] | None:
         pass
     try:
         # last resort (older artifacts). may not include isna__/categoricals
-        return get_expected_features(prop, prefer="random_forest")
+        cols = get_expected_features(prop, prefer="random_forest")
+        if cols:
+            return cols
     except Exception:
-        return None
+        pass
+    # final fallback: infer directly from model feature_names_in_
+    for algo in ("random_forest", "logistic_regression"):
+        try:
+            m = load_model(prop, algo)
+            names = getattr(m, "feature_names_in_", None)
+            if names is not None:
+                return [str(c) for c in list(names)]
+        except Exception:
+            continue
+    return None
 
 def _p(model, X) -> Optional[float]:
     if model is None:
@@ -175,7 +215,7 @@ def _p(model, X) -> Optional[float]:
             return float(proba[0][1])
         if hasattr(model, "predict"):
             y = model.predict(X)
-            return float(np.ravel(y)[0])
+            return _to_probability_from_predict(float(np.ravel(y)[0]), {})
     except Exception as e:  # <-- bind as e
         # helpful log so we see column/schema issues instead of silent 0.5s
         print(f"[predict] {type(model).__name__} failed: {e}", file=sys.stderr, flush=True)
@@ -190,7 +230,7 @@ def _blend(a: Optional[float], b: Optional[float]) -> float:
 def _load_artifact_meta(prop: str) -> dict:
     """Read /var/data/models/latest/{prop}.joblib and return its meta dict."""
     try:
-        p = Path("/var/data/models/latest") / f"{prop}.joblib"
+        p = _artifact_latest_dir() / f"{prop}.joblib"
         obj = joblib.load(p)
         if isinstance(obj, dict):
             return obj.get("meta") or {}
