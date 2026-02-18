@@ -47,7 +47,7 @@ def _heuristic_probability(features: Dict[str, Any]) -> float:
     return max(0.0, min(1.0, p))
 
 
-def _score_probability(prop_type: str, features: Dict[str, Any], allow_heuristic: bool) -> float:
+def _score_probability(prop_type: str, features: Dict[str, Any], allow_heuristic: bool) -> tuple[float, float]:
     try:
         from backend.mlb.prediction.make_prediction import predict as model_predict
 
@@ -55,13 +55,18 @@ def _score_probability(prop_type: str, features: Dict[str, Any], allow_heuristic
         p = _n(out.get("probability_over"))
         if p is None:
             p = _n(out.get("probability"))
+        threshold = _n(out.get("decision_threshold"))
+        if threshold is None:
+            threshold = 0.5
         if p is not None:
-            return max(0.0, min(1.0, float(p)))
+            p_norm = max(0.0, min(1.0, float(p)))
+            t_norm = max(0.0, min(1.0, float(threshold)))
+            return p_norm, t_norm
         raise RuntimeError("model returned no probability")
     except Exception as e:
         if not allow_heuristic:
             raise RuntimeError(f"model scoring unavailable for {prop_type}: {e}") from e
-    return _heuristic_probability(features)
+    return _heuristic_probability(features), 0.5
 
 
 def _window_dates(from_date: str | None, to_date: str | None, days_back: int) -> tuple[str, str]:
@@ -220,12 +225,12 @@ def recompute(
         gate_bucket["attempted"] += 1
         try:
             features = _build_features(row)
-            p_over = _score_probability(
+            p_over, decision_threshold = _score_probability(
                 prop_type=prop_type,
                 features=features,
                 allow_heuristic=allow_heuristic,
             )
-            predicted = "over" if p_over >= 0.5 else "under"
+            predicted = "over" if p_over >= decision_threshold else "under"
             actual = _actual_side(str(row.get("over_under") or ""), str(row.get("outcome") or ""))
             was_correct = (predicted == actual) if actual in {"over", "under"} else None
             gate_bucket["scored"] += 1
@@ -233,6 +238,7 @@ def recompute(
                 gate_bucket["correct"] += 1
             precomputed_scores[str(row.get("id"))] = {
                 "p_over": p_over,
+                "decision_threshold": decision_threshold,
                 "predicted": predicted,
                 "was_correct": was_correct,
             }

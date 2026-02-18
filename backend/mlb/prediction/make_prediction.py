@@ -302,6 +302,19 @@ def _blend_weighted(values: list[float], weights: list[float]) -> Optional[float
     return (num / den) if den > 0 else None
 
 
+def _decision_threshold_for(prop: str) -> float:
+    """Resolve per-prop decision threshold from artifact meta with safe fallback."""
+    meta = _load_artifact_meta(prop)
+    for key in ("decision_threshold", "threshold", "classify_threshold"):
+        try:
+            v = float(meta.get(key))
+            if 0.0 <= v <= 1.0:
+                return v
+        except Exception:
+            continue
+    return 0.5
+
+
 def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
     """Main entry for in-process import."""
     prop = canonicalize_prop_type(prop_type)
@@ -352,12 +365,16 @@ def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
 
     # clamp
     p_over = max(0.0, min(1.0, p_over))
+    decision_threshold = _decision_threshold_for(prop)
+    predicted_outcome = "over" if p_over >= decision_threshold else "under"
 
     return {
         "prop_type": prop,
         "probability_over": p_over,
         "probability": p_over,
         "probability_under": 1.0 - p_over,
+        "decision_threshold": decision_threshold,
+        "predicted_outcome": predicted_outcome,
         "components": {"lr": p_lr, "rf": p_rf},
         "blend": {
             "strategy": "auc_weighted",

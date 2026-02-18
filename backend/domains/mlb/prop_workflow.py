@@ -307,6 +307,7 @@ def predict_prop(prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("prop_type is required")
 
     probability: Optional[float] = None
+    decision_threshold = 0.5
     model_name = "heuristic_fallback_v1"
     model_meta: Dict[str, Any] = {"strategy": "heuristic"}
 
@@ -318,11 +319,14 @@ def predict_prop(prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
         probability = _to_float(result.get("probability"), None)  # type: ignore[arg-type]
         if probability is None:
             probability = _to_float(result.get("probability_over"), None)  # type: ignore[arg-type]
+        decision_threshold = _to_float(result.get("decision_threshold"), 0.5)
+        decision_threshold = max(0.0, min(1.0, float(decision_threshold)))
         model_name = str(result.get("blend", {}).get("strategy") or "model_pipeline")
         model_meta = {
             "strategy": "model_pipeline",
             "components": result.get("components"),
             "blend": result.get("blend"),
+            "decision_threshold": decision_threshold,
         }
     except Exception:
         probability = None
@@ -331,12 +335,13 @@ def predict_prop(prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
         probability = _heuristic_probability(features)
 
     probability = max(0.0, min(1.0, float(probability)))
-    recommendation = "over" if probability >= 0.5 else "under"
+    recommendation = "over" if probability >= decision_threshold else "under"
     commit_payload = {
         "flow": "mlb_prop_v1",
         "prop_type": normalized,
         "features": features,
         "probability": probability,
+        "decision_threshold": decision_threshold,
         "recommendation": recommendation,
     }
     commit_token = sign_commit_payload(commit_payload)
@@ -346,6 +351,7 @@ def predict_prop(prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
         "probability": probability,
         "probability_over": probability,
         "probability_under": 1.0 - probability,
+        "decision_threshold": decision_threshold,
         "recommendation": recommendation,
         "predicted_outcome": recommendation,
         "commit_token": commit_token,
@@ -364,7 +370,8 @@ def add_prop_from_commit(
     features = payload.get("features") or {}
     prop_type = normalize_prop_type(payload.get("prop_type") or "")
     probability = _to_float(payload.get("probability"), 0.5)
-    recommendation = str(payload.get("recommendation") or ("over" if probability >= 0.5 else "under"))
+    decision_threshold = max(0.0, min(1.0, float(_to_float(payload.get("decision_threshold"), 0.5))))
+    recommendation = str(payload.get("recommendation") or ("over" if probability >= decision_threshold else "under"))
 
     if features.get("player_id") is None:
         raise ValueError("player_id missing in committed features")
