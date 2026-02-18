@@ -97,15 +97,22 @@ def _debug_feature_paths():
 _debug_feature_paths()
 
 # Single source of truth for the training view (public schema via PostgREST)
-FEATURE_VIEW = os.environ.get("FEATURE_VIEW", "training_features_for_model_v2")
+# Training data source selection:
+# - base_merge (default): model_training_props + player_derived_stats join
+# - view: explicit FEATURE_VIEW relation via Supabase table API
+TRAIN_FEATURE_SOURCE = str(os.environ.get("TRAIN_FEATURE_SOURCE", "base_merge")).strip().lower()
+FEATURE_VIEW = os.environ.get("FEATURE_VIEW", "").strip()
 
 # ---- Training thresholds (class balance) -------------------------------------
 MIN_CLASS_COUNT = int(os.getenv("MIN_CLASS_COUNT", "100"))
+MIN_MINORITY_PCT = float(os.getenv("MIN_MINORITY_PCT", "0.10"))
 try:
     import json as _json
     MIN_CLASS_COUNT_BY_PROP = _json.loads(os.getenv("MIN_CLASS_COUNT_BY_PROP", "{}"))
+    MIN_MINORITY_PCT_BY_PROP = _json.loads(os.getenv("MIN_MINORITY_PCT_BY_PROP", "{}"))
 except Exception:
     MIN_CLASS_COUNT_BY_PROP = {}
+    MIN_MINORITY_PCT_BY_PROP = {}
 
 
 # ---- Utilities ---------------------------------------------------------------
@@ -152,6 +159,8 @@ def _pg_data(resp):
 # ---- Data access -------------------------------------------------------------
 def _fetch_from_view(sb: Client, prop_type: str, days_back: int, limit: int, cols: List[str]) -> Optional[pd.DataFrame]:
     """Use consolidated feature view/table (joined, de-duped, backfills applied)."""
+    if not FEATURE_VIEW:
+        return None
     since_date = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
     try:
         q = (
@@ -250,9 +259,10 @@ def _fetch_base_and_merge(sb: Client, prop_type: str, days_back: int, limit: int
 
 
 def fetch_training_rows(sb: Client, prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
-    df = _fetch_from_view(sb, prop_type, days_back, limit, feat_cols)
-    if df is not None:
-        return df
+    if TRAIN_FEATURE_SOURCE == "view":
+        df = _fetch_from_view(sb, prop_type, days_back, limit, feat_cols)
+        if df is not None:
+            return df
     return _fetch_base_and_merge(sb, prop_type, days_back, limit, feat_cols)
 
 
@@ -374,12 +384,23 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
 
     # ⬇️ Insert the class-balance guard here
     threshold = int(MIN_CLASS_COUNT_BY_PROP.get(prop_type, MIN_CLASS_COUNT))
+    minority_threshold = float(MIN_MINORITY_PCT_BY_PROP.get(prop_type, MIN_MINORITY_PCT))
     pos = int((df["y"] == 1).sum())
     neg = int((df["y"] == 0).sum())
+    total = max(1, pos + neg)
+    minority_rate = min(pos, neg) / float(total)
     if pos < threshold or neg < threshold:
         if not quiet:
             print(f"⏭️  {prop_type}: too few positives/negatives "
                 f"(pos={pos}, neg={neg}, threshold={threshold}); skipping.")
+        return None
+    if minority_rate < minority_threshold:
+        if not quiet:
+            print(
+                f"⏭️  {prop_type}: label imbalance too high "
+                f"(pos={pos}, neg={neg}, minority_rate={minority_rate:.3f}, "
+                f"min_minority_pct={minority_threshold:.3f}); skipping."
+            )
         return None
 
     # --- Feature availability policy + pitching-specific trim ---
