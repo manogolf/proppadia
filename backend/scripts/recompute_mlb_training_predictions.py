@@ -123,6 +123,8 @@ LEFT JOIN player_derived_stats pds
  AND pds.game_id = m.game_id
 WHERE m.prop_source = %s
   AND lower(trim(m.outcome)) IN ('win','loss')
+  -- Avoid touching legacy rows that violate mtp_team_text_numeric.
+  AND (m.team IS NULL OR m.team = '' OR m.team ~ '^[0-9]+$')
   AND m.game_date::date >= %s::date
   AND m.game_date::date <= %s::date
   AND m.prop_type IN ({placeholders})

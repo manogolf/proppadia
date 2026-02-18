@@ -315,6 +315,17 @@ def _decision_threshold_for(prop: str) -> float:
     return 0.5
 
 
+@lru_cache(maxsize=1)
+def _forced_invert_props() -> set[str]:
+    raw = str(os.getenv("MLB_FORCE_INVERT_PROPS", "") or "")
+    out: set[str] = set()
+    for token in raw.split(","):
+        t = token.strip().lower()
+        if t:
+            out.add(t)
+    return out
+
+
 def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
     """Main entry for in-process import."""
     prop = canonicalize_prop_type(prop_type)
@@ -367,6 +378,12 @@ def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
     p_over = max(0.0, min(1.0, p_over))
     decision_threshold = _decision_threshold_for(prop)
     predicted_outcome = "over" if p_over >= decision_threshold else "under"
+    forced_invert = prop in _forced_invert_props()
+    if forced_invert:
+        predicted_outcome = "under" if predicted_outcome == "over" else "over"
+        # Keep reported probability consistent with forced side inversion.
+        p_over = 1.0 - p_over
+        decision_threshold = 1.0 - decision_threshold
 
     return {
         "prop_type": prop,
@@ -380,6 +397,7 @@ def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
             "strategy": "auc_weighted",
             "weights": {"lr": w_lr, "rf": w_rf},
             "aucs": {"lr": auc_lr, "rf": auc_rf},
+            "forced_invert": forced_invert,
         },
         "feature_count": len(feat_cols),
         "used_features": feat_cols,
