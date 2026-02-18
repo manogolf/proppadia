@@ -5,7 +5,11 @@ import os
 from typing import Optional, Tuple, Dict, Any
 
 from pathlib import Path
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - runtime fallback for minimal envs
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 # Load the repo-root .env (…/backend/supabase -> …/.. -> repo root)
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -14,7 +18,6 @@ load_dotenv(ROOT_ENV, override=False)
 # Optional: load .env locally (ignored on CI)
 try:
     if not os.getenv("GITHUB_ACTIONS"):
-        from dotenv import load_dotenv  # type: ignore
         load_dotenv()
 except Exception:
     pass
