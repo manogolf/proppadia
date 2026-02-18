@@ -44,19 +44,32 @@ WHERE table_schema='public'
     return {str(r.get("column_name") or "") for r in rows}
 
 
+def _pf_candidate_keys(prop_type: str) -> list[str]:
+    direct = f"d7_{prop_type}"
+    fallback = {
+        "hits_runs_rbis": [direct, "d7_hits", "d7_rbis"],
+        "runs_rbis": [direct, "d7_rbis", "d7_hits"],
+        "runs_scored": [direct, "d7_hits", "d7_walks", "d7_home_runs"],
+    }
+    return fallback.get(prop_type, [direct])
+
+
 def _source_mix_for_prop(
     *,
     prop_type: str,
     window_mode: str,
     window_value: int,
     prop_sources: Sequence[str],
-    pds_has_column: bool,
+    pds_columns: set[str],
 ) -> Dict[str, Any]:
     placeholders = ", ".join(["%s"] * len(prop_sources))
+    pds_col = f"d7_{prop_type}"
+    pds_has_column = pds_col in pds_columns
     pds_expr = "NULL::numeric AS pds_d7_stat"
     if pds_has_column:
-        pds_col = f"d7_{prop_type}"
         pds_expr = f"MAX({pds_col})::numeric AS pds_d7_stat"
+    pf_keys = _pf_candidate_keys(prop_type)
+    pf_raw_expr = "COALESCE(" + ", ".join([f"NULLIF(features->>'{k}', '')" for k in pf_keys]) + ")"
 
     row = pg_fetchone(
         f"""
@@ -76,7 +89,7 @@ win AS (
   FROM mt
 """
         + _window_clause(window_mode, int(window_value))
-        + """
+        + f"""
 ),
 pf AS (
   SELECT
@@ -84,7 +97,7 @@ pf AS (
     game_id,
     MAX(
       CASE
-        WHEN NULLIF(features->>%s, '') ~ %s THEN (features->>%s)::numeric
+        WHEN {pf_raw_expr} ~ %s THEN ({pf_raw_expr})::numeric
         ELSE NULL
       END
     ) AS pf_d7_stat
@@ -141,9 +154,7 @@ FROM agg
         (
             str(prop_type),
             *prop_sources,
-            f"d7_{prop_type}",
             _NUMERIC_RE,
-            f"d7_{prop_type}",
             str(prop_type),
         ),
     ) or {}
@@ -153,6 +164,7 @@ FROM agg
         "window_mode": window_mode,
         "window_value": int(window_value),
         "pds_has_column": bool(pds_has_column),
+        "pf_candidate_keys": pf_keys,
         "total_rows": int(row.get("total_rows") or 0),
         "pf_rows": int(row.get("pf_rows") or 0),
         "pds_rows": int(row.get("pds_rows") or 0),
@@ -185,7 +197,7 @@ def collect(
             window_mode=window_mode,
             window_value=window_value,
             prop_sources=prop_sources,
-            pds_has_column=(f"d7_{prop_type}" in pds_cols),
+            pds_columns=pds_cols,
         )
         rows.append(mix)
         total_rows = int(mix.get("total_rows") or 0)

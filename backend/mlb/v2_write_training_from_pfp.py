@@ -219,6 +219,72 @@ def _hits_allowed_line_from_anchor(anchor: float) -> float:
     return 7.5
 
 
+def _runs_scored_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    if x < 2.0:
+        return 1.5
+    return 2.5
+
+
+def _runs_rbis_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 1.0:
+        return 0.5
+    if x < 2.0:
+        return 1.5
+    if x < 3.0:
+        return 2.5
+    return 3.5
+
+
+def _hits_runs_rbis_line_from_anchor(anchor: float) -> float:
+    x = max(0.0, float(anchor))
+    if x < 2.0:
+        return 1.5
+    if x < 3.0:
+        return 2.5
+    if x < 4.0:
+        return 3.5
+    if x < 5.0:
+        return 4.5
+    return 5.5
+
+
+def _feat_nonneg(features: Dict[str, Any], key: str) -> Optional[float]:
+    try:
+        v = float((features or {}).get(key))
+        if v >= 0:
+            return v
+    except Exception:
+        return None
+    return None
+
+
+def _expected_runs_scored_from_features(features: Dict[str, Any]) -> float:
+    d7_hits = _feat_nonneg(features, "d7_hits") or 0.0
+    d7_walks = _feat_nonneg(features, "d7_walks") or 0.0
+    d7_home_runs = _feat_nonneg(features, "d7_home_runs") or 0.0
+    # Proxy for runs_scored when explicit d7_runs_scored is unavailable in PFP.
+    return max(0.0, (0.45 * d7_hits) + (0.35 * d7_walks) + (0.20 * d7_home_runs))
+
+
+def _expected_runs_rbis_from_features(features: Dict[str, Any]) -> float:
+    d7_rbis = _feat_nonneg(features, "d7_rbis")
+    if d7_rbis is not None:
+        return d7_rbis
+    d7_hits = _feat_nonneg(features, "d7_hits") or 0.0
+    return max(0.0, 0.7 * d7_hits)
+
+
+def _expected_hits_runs_rbis_from_features(features: Dict[str, Any]) -> float:
+    d7_hits = _feat_nonneg(features, "d7_hits") or 0.0
+    d7_rbis = _feat_nonneg(features, "d7_rbis") or 0.0
+    d7_runs_scored = _expected_runs_scored_from_features(features)
+    return max(0.0, d7_hits + d7_rbis + d7_runs_scored)
+
+
 def _decide_line(actual: float) -> float:
     # half-step around actual to avoid pushes, jitter slightly for realism
     if actual <= 0:
@@ -357,6 +423,18 @@ def main():
                 anchor = expected_ha if expected_ha is not None else 4.5
                 line = _hits_allowed_line_from_anchor(anchor)
                 over_under = "over" if anchor >= (line + _HITS_ALLOWED_OVER_MARGIN) else "under"
+            elif ptype == "runs_scored":
+                anchor = _expected_runs_scored_from_features(r.get("features") or {})
+                line = _runs_scored_line_from_anchor(anchor)
+                over_under = "over" if anchor > line else "under"
+            elif ptype == "runs_rbis":
+                anchor = _expected_runs_rbis_from_features(r.get("features") or {})
+                line = _runs_rbis_line_from_anchor(anchor)
+                over_under = "over" if anchor > line else "under"
+            elif ptype == "hits_runs_rbis":
+                anchor = _expected_hits_runs_rbis_from_features(r.get("features") or {})
+                line = _hits_runs_rbis_line_from_anchor(anchor)
+                over_under = "over" if anchor > line else "under"
             else:
                 line = _decide_line(actual)
                 over_under = "over"  # arbitrary; we only need a consistent label target
