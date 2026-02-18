@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import math
 import re
+from functools import lru_cache
 
 from typing import Dict, Any, List, Optional
 from pathlib import Path
@@ -170,6 +171,7 @@ def _artifact_latest_dir() -> Path:
     root = Path(os.getenv("MODEL_DIR", "/var/data/models"))
     return root / "latest"
 
+@lru_cache(maxsize=128)
 def _input_columns_for(prop: str) -> list[str] | None:
     """
     Prefer the input column list stored in the model artifact's meta.
@@ -227,6 +229,7 @@ def _blend(a: Optional[float], b: Optional[float]) -> float:
     return sum(xs) / len(xs) if xs else 0.5
 
 
+@lru_cache(maxsize=128)
 def _load_artifact_meta(prop: str) -> dict:
     """Read /var/data/models/latest/{prop}.joblib and return its meta dict."""
     try:
@@ -237,6 +240,11 @@ def _load_artifact_meta(prop: str) -> dict:
     except Exception:
         pass
     return {}
+
+
+@lru_cache(maxsize=256)
+def _load_model_cached(prop: str, algo: str):
+    return load_model(prop, algo)
 
 def _auc_for(prop: str, algo: str) -> Optional[float]:
     """
@@ -309,11 +317,11 @@ def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
     # 3) load models (disk-first, supabase fallback if configured)
     lr = rf = None
     try:
-        lr = load_model(prop, "logistic_regression")
+        lr = _load_model_cached(prop, "logistic_regression")
     except Exception:
         pass
     try:
-        rf = load_model(prop, "random_forest")
+        rf = _load_model_cached(prop, "random_forest")
     except Exception:
         pass
     if not (lr or rf):

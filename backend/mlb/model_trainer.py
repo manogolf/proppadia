@@ -74,6 +74,8 @@ ARCHIVE_DIR = MODELS_DIR / "archive"
 # Feature spec JSON (same sources your registry uses)
 FEATURE_JSON_CANDIDATES = [
     Path(os.environ["FEATURE_JSON"]) if os.getenv("FEATURE_JSON") else None,
+    Path(__file__).resolve().parents[2] / "backend" / "mlb" / "modeling" / "feature_metadata.json",
+    Path(__file__).resolve().parents[2] / "backend" / "mlb" / "modeling" / "feature_metadata_backup.json",
     Path(__file__).resolve().parents[2] / "backend" / "scripts" / "modeling" / "feature_metadata.json",
     Path(__file__).resolve().parents[2] / "backend" / "scripts" / "modeling" / "feature_metadata_backup.json",
 ]
@@ -261,19 +263,29 @@ def _prep_frame(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     # --- choose label source (strict) ---
+    # Training target must be "actual over side" (1=over, 0=under), not generic win/loss.
     label_source = None
-    if "status" in df.columns and df["status"].notna().any():
-        df["y"] = (df["status"] == "win").astype(int)
-        label_source = "status"
-    elif "outcome" in df.columns and df["outcome"].notna().any():
-        df["y"] = (df["outcome"] == "win").astype(int)
-        label_source = "outcome"
+    if {"over_under", "outcome"}.issubset(df.columns):
+        ou = df["over_under"].astype(str).str.strip().str.lower()
+        oc = df["outcome"].astype(str).str.strip().str.lower()
+        y = pd.Series([pd.NA] * len(df), dtype="Int64")
+        # If the pick was OVER and it won, actual side was over.
+        y[(ou == "over") & (oc == "win")] = 1
+        y[(ou == "over") & (oc == "loss")] = 0
+        # If the pick was UNDER and it won, actual side was under.
+        y[(ou == "under") & (oc == "win")] = 0
+        y[(ou == "under") & (oc == "loss")] = 1
+        df["y"] = y
+        label_source = "derived(over_under+outcome)"
     elif {"result", "prop_value"}.issubset(df.columns):
         # derive: OVER wins if actual result > line
         r = pd.to_numeric(df["result"], errors="coerce")
         pv = pd.to_numeric(df["prop_value"], errors="coerce")
         df["y"] = (r > pv).astype("Int64")
         label_source = "derived(result>prop_value)"
+    elif "status" in df.columns and df["status"].isin(["win", "loss"]).any():
+        df["y"] = (df["status"] == "win").astype(int)
+        label_source = "status"
     else:
         df["y"] = pd.Series([pd.NA] * len(df), dtype="Int64")
         label_source = "none"

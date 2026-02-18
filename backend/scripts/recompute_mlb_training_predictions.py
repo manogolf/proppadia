@@ -80,8 +80,19 @@ def _window_dates(from_date: str | None, to_date: str | None, days_back: int) ->
     return start.isoformat(), end.isoformat()
 
 
-def _fetch_rows(from_date: str, to_date: str, prop_types: Sequence[str], prop_source: str) -> List[Dict[str, Any]]:
+def _fetch_rows(
+    from_date: str,
+    to_date: str,
+    prop_types: Sequence[str],
+    prop_source: str,
+    limit: int,
+) -> List[Dict[str, Any]]:
     placeholders = ", ".join(["%s"] * len(prop_types))
+    limit_sql = "LIMIT %s" if int(limit or 0) > 0 else ""
+    params: List[Any] = [str(prop_source), str(from_date), str(to_date), *[str(p) for p in prop_types]]
+    if int(limit or 0) > 0:
+        params.append(int(limit))
+
     rows = pg_fetchall(
         f"""
 SELECT
@@ -111,8 +122,9 @@ WHERE m.prop_source = %s
   AND m.game_date::date <= %s::date
   AND m.prop_type IN ({placeholders})
 ORDER BY m.game_date, m.id
+{limit_sql}
 """,
-        (str(prop_source), str(from_date), str(to_date), *[str(p) for p in prop_types]),
+        tuple(params),
     )
     return list(rows or [])
 
@@ -180,9 +192,7 @@ def recompute(
     limit: int,
     allow_heuristic: bool,
 ) -> Dict[str, Any]:
-    rows = _fetch_rows(from_date, to_date, prop_types, prop_source)
-    if limit > 0:
-        rows = rows[:limit]
+    rows = _fetch_rows(from_date, to_date, prop_types, prop_source, limit)
     attempted = len(rows)
     updated = 0
     failures = 0
