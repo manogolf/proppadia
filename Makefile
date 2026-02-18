@@ -29,6 +29,10 @@ MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP ?= 200
 MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT ?= 48
 MLB_RECOMPUTE_BATCH_PROP_TYPES ?= $(MLB_CORRECTED_PROP_TYPES)
 MLB_CORRECTED_PROP_TYPES ?= runs_scored,runs_rbis,hits_runs_rbis
+MLB_HYBRID_PROP_WINDOWS ?= hits_runs_rbis:540,runs_rbis:540,runs_scored:540,walks_allowed:730
+MLB_HYBRID_TRAIN_LIMIT ?= 150000
+MLB_HYBRID_RECOMPUTE_DAYS_BACK ?= 30
+MLB_HYBRID_RECOMPUTE_LIMIT ?= 8000
 MLB_FEATURE_WINDOW_MODE ?= games
 MLB_FEATURE_WINDOW_DAYS ?= 120
 MLB_FEATURE_GAMES_BACK ?= 30
@@ -171,6 +175,8 @@ MLB_PIPELINE_HISTORY_INPUT ?= artifacts/mlb_pipeline_history.jsonl
 MLB_PIPELINE_HISTORY_LIMIT ?= 10
 SEASON_CUTOVER_HISTORY_INPUT ?= artifacts/season_cutover_history.jsonl
 
+.PHONY: mlb-hybrid-window-refresh
+
 help:
 	@echo "Proppadia checks"
 	@echo "  make diagnose"
@@ -242,6 +248,7 @@ help:
 	@echo "  make mlb-prediction-quality-prod12 [production-12 quality summary over games window]"
 	@echo "  make mlb-recompute-training-predictions [re-score model_training_props rows with current feature/prediction logic]"
 	@echo "  make mlb-corrected-props-recompute [safe model-based recompute for corrected combo/runs props + quality snapshot]"
+	@echo "  make mlb-hybrid-window-refresh [hybrid per-prop retrain windows + gated recompute + quality/candidate snapshots]"
 	@echo "  make mlb-model-artifact-validate [validate MLB model artifacts are loadable, fitted, and schema-compatible]"
 	@echo "  make mlb-model-artifact-validate-prod12 [same validation scoped to prod12 props]"
 	@echo "  make mlb-model-snapshot [snapshot latest model dir to archive + manifest]"
@@ -865,6 +872,43 @@ mlb-corrected-props-recompute-gated-batched:
 	done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
+
+mlb-hybrid-window-refresh:
+	@set -e; \
+	if [ -z "$$DATABASE_URL" ] && [ -z "$$SUPABASE_DB_URL" ]; then \
+		echo "mlb-hybrid-window-refresh requires DATABASE_URL or SUPABASE_DB_URL"; \
+		exit 2; \
+	fi; \
+	if [ -z "$$MODEL_DIR" ]; then \
+		echo "mlb-hybrid-window-refresh requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
+		exit 2; \
+	fi; \
+	if [ -z "$$SUPABASE_URL" ]; then \
+		echo "mlb-hybrid-window-refresh requires SUPABASE_URL for model trainer"; \
+		exit 2; \
+	fi; \
+	if [ -z "$$SUPABASE_SERVICE_ROLE_KEY" ] && [ -z "$$SUPABASE_ANON_KEY" ]; then \
+		echo "mlb-hybrid-window-refresh requires SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) for model trainer"; \
+		exit 2; \
+	fi; \
+	OLD_IFS="$$IFS"; IFS=','; \
+	for pair in $(MLB_HYBRID_PROP_WINDOWS); do \
+		pair=$$(echo "$$pair" | xargs); \
+		if [ -z "$$pair" ]; then continue; fi; \
+		prop="$${pair%%:*}"; \
+		days_back="$${pair##*:}"; \
+		if [ "$$prop" = "$$days_back" ]; then \
+			echo "invalid MLB_HYBRID_PROP_WINDOWS item: $$pair (expected prop:days)"; \
+			exit 2; \
+		fi; \
+		echo "==> hybrid train prop=$$prop days_back=$$days_back"; \
+		$(VENV_PY) backend/mlb/model_trainer.py --prop "$$prop" --days-back "$$days_back" --limit "$(MLB_HYBRID_TRAIN_LIMIT)" || exit $$?; \
+		echo "==> hybrid recompute prop=$$prop"; \
+		$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" || exit $$?; \
+	done; \
+	IFS="$$OLD_IFS"; \
+	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
+	$(MAKE) mlb-candidate-eval-prod12 MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 mlb-model-artifact-validate:
 	$(VENV_PY) backend/scripts/validate_mlb_model_artifacts.py --prop-types "$(MLB_PREDICT_PROP_TYPES)" --min-feature-overlap-pct "$(MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT)"
