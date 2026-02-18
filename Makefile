@@ -863,8 +863,9 @@ mlb-corrected-props-recompute-gated-batched:
 		echo "mlb-corrected-props-recompute-gated-batched requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
 		exit 2; \
 	fi; \
+	batch_props="$(MLB_RECOMPUTE_BATCH_PROP_TYPES)"; \
 	OLD_IFS="$$IFS"; IFS=','; \
-	for prop in $(MLB_RECOMPUTE_BATCH_PROP_TYPES); do \
+	for prop in $$batch_props; do \
 		prop=$$(echo "$$prop" | xargs); \
 		if [ -z "$$prop" ]; then continue; fi; \
 		echo "==> recompute gated batch prop=$$prop"; \
@@ -891,8 +892,9 @@ mlb-hybrid-window-refresh:
 		echo "mlb-hybrid-window-refresh requires SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) for model trainer"; \
 		exit 2; \
 	fi; \
+	hybrid_pairs="$(MLB_HYBRID_PROP_WINDOWS)"; \
 	OLD_IFS="$$IFS"; IFS=','; \
-	for pair in $(MLB_HYBRID_PROP_WINDOWS); do \
+	for pair in $$hybrid_pairs; do \
 		pair=$$(echo "$$pair" | xargs); \
 		if [ -z "$$pair" ]; then continue; fi; \
 		prop="$${pair%%:*}"; \

@@ -110,6 +110,15 @@ def _num(x: Any) -> Optional[float]:
         return None
 
 
+def _to_int(x: Any) -> Optional[int]:
+    try:
+        if x is None:
+            return None
+        return int(x)
+    except Exception:
+        return None
+
+
 def _extract_stat_for_prop(stats: Dict[str, Any], prop_type: str) -> Optional[float]:
     b = stats.get("batting") or {}
     p = stats.get("pitching") or {}
@@ -246,6 +255,27 @@ def _date_has_mlb_api_rows(conn, game_date: str) -> bool:
         return cur.fetchone() is not None
 
 
+def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
+    ids = [int(g) for g in game_ids if _to_int(g) is not None]
+    if not ids:
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT game_id
+            FROM game_info
+            WHERE game_id = ANY(%s)
+            """,
+            (ids,),
+        )
+        out: set[int] = set()
+        for r in cur.fetchall():
+            v = (r or {}).get("game_id")
+            if v is not None:
+                out.add(int(v))
+        return out
+
+
 def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -265,6 +295,12 @@ def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
             )
             ON CONFLICT (player_id, game_id, prop_type, prop_source)
             DO UPDATE SET
+                team = EXCLUDED.team,
+                opponent = EXCLUDED.opponent,
+                team_id = EXCLUDED.team_id,
+                opponent_team_id = EXCLUDED.opponent_team_id,
+                opponent_encoded = EXCLUDED.opponent_encoded,
+                is_home = EXCLUDED.is_home,
                 prop_value = EXCLUDED.prop_value,
                 line = EXCLUDED.line,
                 over_under = EXCLUDED.over_under,
@@ -288,7 +324,13 @@ def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
                 model_training_props.game_day_of_week,
                 model_training_props.time_of_day_bucket,
                 model_training_props.streak_type,
-                model_training_props.streak_count
+                model_training_props.streak_count,
+                model_training_props.team,
+                model_training_props.opponent,
+                model_training_props.team_id,
+                model_training_props.opponent_team_id,
+                model_training_props.opponent_encoded,
+                model_training_props.is_home
             ) IS DISTINCT FROM (
                 EXCLUDED.prop_value,
                 EXCLUDED.line,
@@ -300,7 +342,13 @@ def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
                 EXCLUDED.game_day_of_week,
                 EXCLUDED.time_of_day_bucket,
                 EXCLUDED.streak_type,
-                EXCLUDED.streak_count
+                EXCLUDED.streak_count,
+                EXCLUDED.team,
+                EXCLUDED.opponent,
+                EXCLUDED.team_id,
+                EXCLUDED.opponent_team_id,
+                EXCLUDED.opponent_encoded,
+                EXCLUDED.is_home
             )
             """,
             row,
@@ -356,6 +404,7 @@ def run(
     applied_upserts = 0
     failed_dates = 0
     skipped_dates = 0
+    skipped_games_missing_info = 0
     over_count = 0
     under_count = 0
 
@@ -376,13 +425,21 @@ def run(
                 )
                 if max_games_per_date > 0:
                     final_games = final_games[:max_games_per_date]
+                existing_games = _existing_game_ids(conn, final_games)
+                missing_for_date = len(final_games) - len(existing_games)
+                if missing_for_date > 0:
+                    skipped_games_missing_info += missing_for_date
+                    if not quiet:
+                        print(f"   skipped games missing game_info: {missing_for_date}")
                 if not quiet:
-                    print(f"   final games: {len(final_games)}")
+                    print(f"   final games: {len(existing_games)}")
                 pos_map = _get_positions_by_date(conn, d_iso)
                 before_attempted = attempted_upserts
                 before_applied = applied_upserts
 
                 for game_id in final_games:
+                    if game_id not in existing_games:
+                        continue
                     live = _fetch_live_feed(game_id)
                     box = _fetch_boxscore(game_id)
 
@@ -415,8 +472,8 @@ def run(
                         is_home = side == "home"
                         team_abbr = normalizeTeamAbbreviation(home_abbr if is_home else away_abbr)
                         opp_abbr = normalizeTeamAbbreviation(away_abbr if is_home else home_abbr)
-                        team_id = int(home_id if is_home else away_id) if (home_id if is_home else away_id) else None
-                        opp_id = int(away_id if is_home else home_id) if (away_id if is_home else home_id) else None
+                        team_id = _to_int(home_id if is_home else away_id)
+                        opp_id = _to_int(away_id if is_home else home_id)
                         opp_encoded = str(opp_id) if opp_id is not None else str(getTeamIdFromAbbr(opp_abbr) or "")
 
                         for _, p in players_map.items():
@@ -525,6 +582,8 @@ def run(
     print(f"🧩 Upserts applied:   {applied_upserts}")
     if skipped_dates:
         print(f"⏭️  Dates skipped:      {skipped_dates}")
+    if skipped_games_missing_info:
+        print(f"⏭️  Games skipped (missing game_info): {skipped_games_missing_info}")
     if failed_dates:
         print(f"⚠️ Script finished with {failed_dates} date failure(s).")
         return 1
