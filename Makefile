@@ -1,4 +1,4 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview mlb-prod12-script-preview mlb-prod12-bootstrap-preview mlb-prod12-scheduler-smoke mlb-prod12-bootstrap mlb-prod12-bootstrap-strict nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-recompute-training-predictions mlb-corrected-props-recompute mlb-model-artifact-validate mlb-model-artifact-validate-prod12 mlb-feature-health mlb-feature-health-prod12 mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-health-report mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-ops-check mlb-prod12-ops-log mlb-prod12-ops-last mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-daily-cycle mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-weekly-cycle mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview mlb-prod12-script-preview mlb-prod12-bootstrap-preview mlb-prod12-scheduler-smoke mlb-prod12-bootstrap mlb-prod12-bootstrap-strict nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-recompute-training-predictions mlb-corrected-props-recompute mlb-model-artifact-validate mlb-model-artifact-validate-prod12 mlb-model-snapshot mlb-model-publish mlb-model-prune mlb-model-rollback mlb-feature-health mlb-feature-health-prod12 mlb-pfp-overlap-audit mlb-pfp-overlap-backfill mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-health-report mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-ops-check mlb-prod12-ops-log mlb-prod12-ops-last mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-daily-cycle mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-weekly-cycle mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
@@ -25,6 +25,8 @@ MLB_RECOMPUTE_DAYS_BACK ?= 35
 MLB_RECOMPUTE_FROM_DATE ?=
 MLB_RECOMPUTE_TO_DATE ?=
 MLB_RECOMPUTE_LIMIT ?= 0
+MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP ?= 200
+MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT ?= 48
 MLB_CORRECTED_PROP_TYPES ?= runs_scored,runs_rbis,hits_runs_rbis
 MLB_FEATURE_WINDOW_MODE ?= games
 MLB_FEATURE_WINDOW_DAYS ?= 120
@@ -34,7 +36,28 @@ MLB_FEATURE_PROP_SOURCES ?= mlb_api
 MLB_FEATURE_WARN_DEFAULT_PCT ?= 35
 MLB_FEATURE_WARN_MIN_ROWS ?= 200
 MLB_FEATURE_FAIL_ON_WARN ?= 0
+MLB_PFP_OVERLAP_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
+MLB_PFP_OVERLAP_PROP_SOURCE ?= mlb_api
+MLB_PFP_OVERLAP_FEATURE_SET_TAG ?= v1
+MLB_PFP_OVERLAP_MODEL_TAG ?= mtp_overlap_backfill_v1
+MLB_PFP_OVERLAP_WINDOW_MODE ?= games
+MLB_PFP_OVERLAP_GAMES_BACK ?= 30
+MLB_PFP_OVERLAP_WINDOW_DAYS ?= 120
+MLB_PFP_OVERLAP_FROM_DATE ?=
+MLB_PFP_OVERLAP_TO_DATE ?=
+MLB_PFP_OVERLAP_LIMIT ?= 0
+MLB_PFP_OVERLAP_BATCH_SIZE ?= 1000
 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT ?= 70
+MLB_MODEL_ROOT ?= $(if $(MODEL_DIR),$(MODEL_DIR),/var/data/models)
+MLB_MODEL_LATEST_DIR ?= $(MLB_MODEL_ROOT)/latest
+MLB_MODEL_ARCHIVE_DIR ?= $(MLB_MODEL_ROOT)/archive
+MLB_MODEL_SNAPSHOT_SOURCE ?= $(MLB_MODEL_LATEST_DIR)
+MLB_MODEL_SNAPSHOT_ID ?= $(shell date -u +%Y%m%dT%H%M%SZ)
+MLB_MODEL_MANIFEST_OUTPUT ?= artifacts/releases/mlb_model_snapshot_$(MLB_MODEL_SNAPSHOT_ID).json
+MLB_MODEL_PRUNE_KEEP ?= 3
+MLB_MODEL_PRUNE_DRY_RUN ?= 1
+MLB_MODEL_PUBLISH_SNAPSHOT ?=
+MLB_MODEL_ROLLBACK_SNAPSHOT ?=
 MLB_BALANCE_GUARD_PROP_TYPE ?= runs_scored
 MLB_BALANCE_GUARD_PROP_SOURCES ?= mlb_api
 MLB_BALANCE_GUARD_WINDOW_MODE ?= games
@@ -220,8 +243,14 @@ help:
 	@echo "  make mlb-corrected-props-recompute [safe model-based recompute for corrected combo/runs props + quality snapshot]"
 	@echo "  make mlb-model-artifact-validate [validate MLB model artifacts are loadable, fitted, and schema-compatible]"
 	@echo "  make mlb-model-artifact-validate-prod12 [same validation scoped to prod12 props]"
+	@echo "  make mlb-model-snapshot [snapshot latest model dir to archive + manifest]"
+	@echo "  make mlb-model-publish [promote archived snapshot to active latest]"
+	@echo "  make mlb-model-prune [prune old archive snapshots; dry-run by default]"
+	@echo "  make mlb-model-rollback [rollback latest to a prior snapshot id]"
 	@echo "  make mlb-feature-health [feature-source mix + fallback/default rates by prop lane]"
 	@echo "  make mlb-feature-health-prod12 [same feature-health report scoped to production-12 lanes]"
+	@echo "  make mlb-pfp-overlap-audit [report missing prop_features_precomputed overlap for selected props/window]"
+	@echo "  make mlb-pfp-overlap-backfill [upsert missing prop_features_precomputed rows from reconciled model_training_props]"
 	@echo "  make mlb-balance-guard [single-prop one-sided drift guard (default runs_scored)]"
 	@echo "  make mlb-prediction-quality-user-added [user_added-only quality summary json]"
 	@echo "  make mlb-prediction-quality-segmented [preseason vs regular-season date-window quality report]"
@@ -803,17 +832,56 @@ mlb-corrected-props-recompute:
 	$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
+mlb-corrected-props-recompute-gated:
+	@set -e; \
+	if [ -z "$$DATABASE_URL" ] && [ -z "$$SUPABASE_DB_URL" ]; then \
+		echo "mlb-corrected-props-recompute-gated requires DATABASE_URL or SUPABASE_DB_URL"; \
+		exit 2; \
+	fi; \
+	if [ -z "$$MODEL_DIR" ]; then \
+		echo "mlb-corrected-props-recompute-gated requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
+		exit 2; \
+	fi; \
+	$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
+
 mlb-model-artifact-validate:
 	$(VENV_PY) backend/scripts/validate_mlb_model_artifacts.py --prop-types "$(MLB_PREDICT_PROP_TYPES)" --min-feature-overlap-pct "$(MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT)"
 
 mlb-model-artifact-validate-prod12:
 	$(MAKE) mlb-model-artifact-validate MLB_PREDICT_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)"
 
+mlb-model-snapshot:
+	$(VENV_PY) backend/scripts/mlb_model_snapshot.py --source "$(MLB_MODEL_SNAPSHOT_SOURCE)" --archive-dir "$(MLB_MODEL_ARCHIVE_DIR)" --snapshot-id "$(MLB_MODEL_SNAPSHOT_ID)" --manifest-output "$(MLB_MODEL_MANIFEST_OUTPUT)" --copy
+
+mlb-model-publish:
+	@if [ -z "$(MLB_MODEL_PUBLISH_SNAPSHOT)" ]; then \
+		echo "mlb-model-publish requires MLB_MODEL_PUBLISH_SNAPSHOT=<snapshot_id>"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/scripts/mlb_model_publish.py --archive-dir "$(MLB_MODEL_ARCHIVE_DIR)" --snapshot-id "$(MLB_MODEL_PUBLISH_SNAPSHOT)" --latest-dir "$(MLB_MODEL_LATEST_DIR)"
+
+mlb-model-prune:
+	$(VENV_PY) backend/scripts/mlb_model_prune.py --archive-dir "$(MLB_MODEL_ARCHIVE_DIR)" --keep "$(MLB_MODEL_PRUNE_KEEP)" $(if $(filter 1,$(MLB_MODEL_PRUNE_DRY_RUN)),--dry-run,)
+
+mlb-model-rollback:
+	@if [ -z "$(MLB_MODEL_ROLLBACK_SNAPSHOT)" ]; then \
+		echo "mlb-model-rollback requires MLB_MODEL_ROLLBACK_SNAPSHOT=<snapshot_id>"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/scripts/mlb_model_rollback.py --archive-dir "$(MLB_MODEL_ARCHIVE_DIR)" --snapshot-id "$(MLB_MODEL_ROLLBACK_SNAPSHOT)" --latest-dir "$(MLB_MODEL_LATEST_DIR)"
+
 mlb-feature-health:
 	$(VENV_PY) backend/scripts/report_mlb_feature_health.py --window-mode $(MLB_FEATURE_WINDOW_MODE) --window-days $(MLB_FEATURE_WINDOW_DAYS) --games-back $(MLB_FEATURE_GAMES_BACK) --prop-types "$(MLB_FEATURE_PROP_TYPES)" --prop-sources "$(MLB_FEATURE_PROP_SOURCES)" --warn-default-pct $(MLB_FEATURE_WARN_DEFAULT_PCT) --warn-min-rows $(MLB_FEATURE_WARN_MIN_ROWS) $(if $(filter 1,$(MLB_FEATURE_FAIL_ON_WARN)),--fail-on-warn,)
 
 mlb-feature-health-prod12:
 	$(MAKE) mlb-feature-health MLB_FEATURE_WINDOW_MODE=games MLB_FEATURE_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_FEATURE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_FEATURE_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)"
+
+mlb-pfp-overlap-audit:
+	$(VENV_PY) backend/scripts/backfill_mlb_pfp_overlap_from_mtp.py --prop-types "$(MLB_PFP_OVERLAP_PROP_TYPES)" --prop-source "$(MLB_PFP_OVERLAP_PROP_SOURCE)" --feature-set-tag "$(MLB_PFP_OVERLAP_FEATURE_SET_TAG)" --model-tag "$(MLB_PFP_OVERLAP_MODEL_TAG)" --window-mode "$(MLB_PFP_OVERLAP_WINDOW_MODE)" --games-back "$(MLB_PFP_OVERLAP_GAMES_BACK)" --window-days "$(MLB_PFP_OVERLAP_WINDOW_DAYS)" --from-date "$(MLB_PFP_OVERLAP_FROM_DATE)" --to-date "$(MLB_PFP_OVERLAP_TO_DATE)" --limit "$(MLB_PFP_OVERLAP_LIMIT)" --batch-size "$(MLB_PFP_OVERLAP_BATCH_SIZE)"
+
+mlb-pfp-overlap-backfill:
+	$(VENV_PY) backend/scripts/backfill_mlb_pfp_overlap_from_mtp.py --apply --prop-types "$(MLB_PFP_OVERLAP_PROP_TYPES)" --prop-source "$(MLB_PFP_OVERLAP_PROP_SOURCE)" --feature-set-tag "$(MLB_PFP_OVERLAP_FEATURE_SET_TAG)" --model-tag "$(MLB_PFP_OVERLAP_MODEL_TAG)" --window-mode "$(MLB_PFP_OVERLAP_WINDOW_MODE)" --games-back "$(MLB_PFP_OVERLAP_GAMES_BACK)" --window-days "$(MLB_PFP_OVERLAP_WINDOW_DAYS)" --from-date "$(MLB_PFP_OVERLAP_FROM_DATE)" --to-date "$(MLB_PFP_OVERLAP_TO_DATE)" --limit "$(MLB_PFP_OVERLAP_LIMIT)" --batch-size "$(MLB_PFP_OVERLAP_BATCH_SIZE)"
 
 mlb-balance-guard:
 	$(VENV_PY) backend/scripts/check_mlb_prop_balance_guard.py --prop-type "$(MLB_BALANCE_GUARD_PROP_TYPE)" --prop-sources "$(MLB_BALANCE_GUARD_PROP_SOURCES)" --window-mode "$(MLB_BALANCE_GUARD_WINDOW_MODE)" --window-days $(MLB_BALANCE_GUARD_WINDOW_DAYS) --games-back $(MLB_BALANCE_GUARD_GAMES_BACK) --min-total $(MLB_BALANCE_GUARD_MIN_TOTAL) --min-accuracy-pct $(MLB_BALANCE_GUARD_MIN_ACCURACY) --min-over-pct $(MLB_BALANCE_GUARD_MIN_OVER_PCT)

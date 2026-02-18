@@ -191,21 +191,31 @@ def recompute(
     prop_source: str,
     limit: int,
     allow_heuristic: bool,
+    gate_min_total_per_prop: int,
+    gate_min_accuracy_pct: float,
 ) -> Dict[str, Any]:
     rows = _fetch_rows(from_date, to_date, prop_types, prop_source, limit)
     attempted = len(rows)
     updated = 0
+    skipped_by_gate = 0
     failures = 0
     by_prop: Dict[str, Dict[str, int]] = {}
     error_samples: List[Dict[str, Any]] = []
     max_error_samples = 12
     now_ts = datetime.now(timezone.utc).isoformat()
+    precomputed_scores: Dict[str, Dict[str, Any]] = {}
+    gate_enabled = float(gate_min_accuracy_pct) >= 0.0
+    gate_by_prop: Dict[str, Dict[str, Any]] = {}
+    blocked_props: List[str] = []
 
-    with pg_connect() as conn, conn.cursor() as cur:
+    if gate_enabled:
         for row in rows:
             prop_type = str(row.get("prop_type") or "")
-            bucket = by_prop.setdefault(prop_type, {"attempted": 0, "updated": 0, "failed": 0})
-            bucket["attempted"] += 1
+            gate_bucket = gate_by_prop.setdefault(
+                prop_type,
+                {"attempted": 0, "scored": 0, "correct": 0, "accuracy_pct": None, "blocked": False},
+            )
+            gate_bucket["attempted"] += 1
             try:
                 features = _build_features(row)
                 p_over = _score_probability(
@@ -216,6 +226,53 @@ def recompute(
                 predicted = "over" if p_over >= 0.5 else "under"
                 actual = _actual_side(str(row.get("over_under") or ""), str(row.get("outcome") or ""))
                 was_correct = (predicted == actual) if actual in {"over", "under"} else None
+                gate_bucket["scored"] += 1
+                if was_correct is True:
+                    gate_bucket["correct"] += 1
+                precomputed_scores[str(row.get("id"))] = {
+                    "p_over": p_over,
+                    "predicted": predicted,
+                    "was_correct": was_correct,
+                }
+            except Exception:
+                # let write phase surface detailed errors for sampled rows
+                continue
+
+        for prop_type, gate_bucket in gate_by_prop.items():
+            scored = int(gate_bucket.get("scored") or 0)
+            correct = int(gate_bucket.get("correct") or 0)
+            if scored > 0:
+                gate_bucket["accuracy_pct"] = round((100.0 * correct) / scored, 2)
+            if scored >= int(gate_min_total_per_prop) and gate_bucket.get("accuracy_pct") is not None:
+                if float(gate_bucket["accuracy_pct"]) < float(gate_min_accuracy_pct):
+                    gate_bucket["blocked"] = True
+                    blocked_props.append(prop_type)
+
+    with pg_connect() as conn, conn.cursor() as cur:
+        for row in rows:
+            prop_type = str(row.get("prop_type") or "")
+            bucket = by_prop.setdefault(prop_type, {"attempted": 0, "updated": 0, "failed": 0, "skipped_by_gate": 0})
+            bucket["attempted"] += 1
+            if prop_type in blocked_props:
+                skipped_by_gate += 1
+                bucket["skipped_by_gate"] += 1
+                continue
+            try:
+                score = precomputed_scores.get(str(row.get("id")))
+                if score is None:
+                    features = _build_features(row)
+                    p_over = _score_probability(
+                        prop_type=prop_type,
+                        features=features,
+                        allow_heuristic=allow_heuristic,
+                    )
+                    predicted = "over" if p_over >= 0.5 else "under"
+                    actual = _actual_side(str(row.get("over_under") or ""), str(row.get("outcome") or ""))
+                    was_correct = (predicted == actual) if actual in {"over", "under"} else None
+                else:
+                    p_over = float(score.get("p_over"))
+                    predicted = str(score.get("predicted") or "")
+                    was_correct = score.get("was_correct")
                 cur.execute(
                     """
 UPDATE model_training_props
@@ -257,17 +314,23 @@ WHERE id = %s
                     )
         conn.commit()
 
-    ok = failures == 0
+    ok = (failures == 0) and (not blocked_props)
     return {
         "ok": ok,
-        "status": "pass" if ok else "warn",
+        "status": "pass" if ok else "fail",
         "from_date": from_date,
         "to_date": to_date,
         "prop_source": prop_source,
         "allow_heuristic": bool(allow_heuristic),
+        "gate_enabled": gate_enabled,
+        "gate_min_total_per_prop": int(gate_min_total_per_prop),
+        "gate_min_accuracy_pct": float(gate_min_accuracy_pct),
+        "blocked_props": sorted(set(blocked_props)),
+        "gate_by_prop": gate_by_prop,
         "prop_types": [str(p) for p in prop_types],
         "attempted": attempted,
         "updated": updated,
+        "skipped_by_gate": skipped_by_gate,
         "failures": failures,
         "by_prop": by_prop,
         "error_samples": error_samples,
@@ -283,6 +346,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--prop-source", default="mlb_api")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--allow-heuristic", action="store_true")
+    ap.add_argument("--gate-min-total-per-prop", type=int, default=200)
+    ap.add_argument("--gate-min-accuracy-pct", type=float, default=-1.0)
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     prop_types = [p.strip() for p in str(args.prop_types).split(",") if p.strip()]
@@ -296,6 +361,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         prop_source=str(args.prop_source),
         limit=max(0, int(args.limit)),
         allow_heuristic=bool(args.allow_heuristic),
+        gate_min_total_per_prop=max(1, int(args.gate_min_total_per_prop)),
+        gate_min_accuracy_pct=float(args.gate_min_accuracy_pct),
     )
     print(json.dumps(payload, indent=2))
     return 0 if payload.get("ok") else 1
