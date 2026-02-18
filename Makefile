@@ -27,6 +27,7 @@ MLB_RECOMPUTE_TO_DATE ?=
 MLB_RECOMPUTE_LIMIT ?= 0
 MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP ?= 200
 MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT ?= 48
+MLB_RECOMPUTE_BATCH_PROP_TYPES ?= $(MLB_CORRECTED_PROP_TYPES)
 MLB_CORRECTED_PROP_TYPES ?= runs_scored,runs_rbis,hits_runs_rbis
 MLB_FEATURE_WINDOW_MODE ?= games
 MLB_FEATURE_WINDOW_DAYS ?= 120
@@ -843,6 +844,26 @@ mlb-corrected-props-recompute-gated:
 		exit 2; \
 	fi; \
 	$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
+
+mlb-corrected-props-recompute-gated-batched:
+	@set -e; \
+	if [ -z "$$DATABASE_URL" ] && [ -z "$$SUPABASE_DB_URL" ]; then \
+		echo "mlb-corrected-props-recompute-gated-batched requires DATABASE_URL or SUPABASE_DB_URL"; \
+		exit 2; \
+	fi; \
+	if [ -z "$$MODEL_DIR" ]; then \
+		echo "mlb-corrected-props-recompute-gated-batched requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
+		exit 2; \
+	fi; \
+	OLD_IFS="$$IFS"; IFS=','; \
+	for prop in $(MLB_RECOMPUTE_BATCH_PROP_TYPES); do \
+		prop=$$(echo "$$prop" | xargs); \
+		if [ -z "$$prop" ]; then continue; fi; \
+		echo "==> recompute gated batch prop=$$prop"; \
+		$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" || exit $$?; \
+	done; \
+	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
 mlb-model-artifact-validate:

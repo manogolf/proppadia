@@ -204,50 +204,76 @@ def recompute(
     max_error_samples = 12
     now_ts = datetime.now(timezone.utc).isoformat()
     precomputed_scores: Dict[str, Dict[str, Any]] = {}
+    scoring_failures_by_prop: Dict[str, int] = {}
     gate_enabled = float(gate_min_accuracy_pct) >= 0.0
     gate_by_prop: Dict[str, Dict[str, Any]] = {}
     blocked_props: List[str] = []
+    blocked_reasons: Dict[str, str] = {}
 
-    if gate_enabled:
-        for row in rows:
-            prop_type = str(row.get("prop_type") or "")
-            gate_bucket = gate_by_prop.setdefault(
-                prop_type,
-                {"attempted": 0, "scored": 0, "correct": 0, "accuracy_pct": None, "blocked": False},
+    # Phase 1: score all candidate rows first (no writes yet).
+    for row in rows:
+        prop_type = str(row.get("prop_type") or "")
+        gate_bucket = gate_by_prop.setdefault(
+            prop_type,
+            {"attempted": 0, "scored": 0, "correct": 0, "accuracy_pct": None, "blocked": False},
+        )
+        gate_bucket["attempted"] += 1
+        try:
+            features = _build_features(row)
+            p_over = _score_probability(
+                prop_type=prop_type,
+                features=features,
+                allow_heuristic=allow_heuristic,
             )
-            gate_bucket["attempted"] += 1
-            try:
-                features = _build_features(row)
-                p_over = _score_probability(
-                    prop_type=prop_type,
-                    features=features,
-                    allow_heuristic=allow_heuristic,
+            predicted = "over" if p_over >= 0.5 else "under"
+            actual = _actual_side(str(row.get("over_under") or ""), str(row.get("outcome") or ""))
+            was_correct = (predicted == actual) if actual in {"over", "under"} else None
+            gate_bucket["scored"] += 1
+            if was_correct is True:
+                gate_bucket["correct"] += 1
+            precomputed_scores[str(row.get("id"))] = {
+                "p_over": p_over,
+                "predicted": predicted,
+                "was_correct": was_correct,
+            }
+        except Exception:
+            failures += 1
+            scoring_failures_by_prop[prop_type] = int(scoring_failures_by_prop.get(prop_type, 0)) + 1
+            if len(error_samples) < max_error_samples:
+                try:
+                    import traceback
+
+                    err_msg = traceback.format_exc(limit=2).strip()
+                except Exception:
+                    err_msg = "unknown_error"
+                error_samples.append(
+                    {
+                        "id": str(row.get("id")) if row.get("id") is not None else None,
+                        "prop_type": prop_type,
+                        "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
+                        "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
+                        "error": err_msg,
+                    }
                 )
-                predicted = "over" if p_over >= 0.5 else "under"
-                actual = _actual_side(str(row.get("over_under") or ""), str(row.get("outcome") or ""))
-                was_correct = (predicted == actual) if actual in {"over", "under"} else None
-                gate_bucket["scored"] += 1
-                if was_correct is True:
-                    gate_bucket["correct"] += 1
-                precomputed_scores[str(row.get("id"))] = {
-                    "p_over": p_over,
-                    "predicted": predicted,
-                    "was_correct": was_correct,
-                }
-            except Exception:
-                # let write phase surface detailed errors for sampled rows
-                continue
 
-        for prop_type, gate_bucket in gate_by_prop.items():
-            scored = int(gate_bucket.get("scored") or 0)
-            correct = int(gate_bucket.get("correct") or 0)
-            if scored > 0:
-                gate_bucket["accuracy_pct"] = round((100.0 * correct) / scored, 2)
-            if scored >= int(gate_min_total_per_prop) and gate_bucket.get("accuracy_pct") is not None:
-                if float(gate_bucket["accuracy_pct"]) < float(gate_min_accuracy_pct):
-                    gate_bucket["blocked"] = True
-                    blocked_props.append(prop_type)
+    # Gate decisions: quality threshold + scoring errors.
+    for prop_type, gate_bucket in gate_by_prop.items():
+        scored = int(gate_bucket.get("scored") or 0)
+        correct = int(gate_bucket.get("correct") or 0)
+        if scored > 0:
+            gate_bucket["accuracy_pct"] = round((100.0 * correct) / scored, 2)
+        if gate_enabled and scored >= int(gate_min_total_per_prop) and gate_bucket.get("accuracy_pct") is not None:
+            if float(gate_bucket["accuracy_pct"]) < float(gate_min_accuracy_pct):
+                gate_bucket["blocked"] = True
+                blocked_props.append(prop_type)
+                blocked_reasons[prop_type] = "gate_accuracy"
+        if int(scoring_failures_by_prop.get(prop_type, 0)) > 0:
+            gate_bucket["blocked"] = True
+            if prop_type not in blocked_props:
+                blocked_props.append(prop_type)
+            blocked_reasons[prop_type] = "scoring_errors"
 
+    # Phase 2: apply updates only for non-blocked props.
     with pg_connect() as conn, conn.cursor() as cur:
         for row in rows:
             prop_type = str(row.get("prop_type") or "")
@@ -260,19 +286,10 @@ def recompute(
             try:
                 score = precomputed_scores.get(str(row.get("id")))
                 if score is None:
-                    features = _build_features(row)
-                    p_over = _score_probability(
-                        prop_type=prop_type,
-                        features=features,
-                        allow_heuristic=allow_heuristic,
-                    )
-                    predicted = "over" if p_over >= 0.5 else "under"
-                    actual = _actual_side(str(row.get("over_under") or ""), str(row.get("outcome") or ""))
-                    was_correct = (predicted == actual) if actual in {"over", "under"} else None
-                else:
-                    p_over = float(score.get("p_over"))
-                    predicted = str(score.get("predicted") or "")
-                    was_correct = score.get("was_correct")
+                    raise RuntimeError("missing precomputed score for row")
+                p_over = float(score.get("p_over"))
+                predicted = str(score.get("predicted") or "")
+                was_correct = score.get("was_correct")
                 cur.execute(
                     """
 UPDATE model_training_props
@@ -296,22 +313,6 @@ WHERE id = %s
             except Exception:
                 failures += 1
                 bucket["failed"] += 1
-                if len(error_samples) < max_error_samples:
-                    try:
-                        import traceback
-
-                        err_msg = traceback.format_exc(limit=2).strip()
-                    except Exception:
-                        err_msg = "unknown_error"
-                    error_samples.append(
-                        {
-                            "id": str(row.get("id")) if row.get("id") is not None else None,
-                            "prop_type": prop_type,
-                            "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
-                            "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
-                            "error": err_msg,
-                        }
-                    )
         conn.commit()
 
     ok = (failures == 0) and (not blocked_props)
@@ -326,6 +327,7 @@ WHERE id = %s
         "gate_min_total_per_prop": int(gate_min_total_per_prop),
         "gate_min_accuracy_pct": float(gate_min_accuracy_pct),
         "blocked_props": sorted(set(blocked_props)),
+        "blocked_reasons": {k: blocked_reasons[k] for k in sorted(blocked_reasons)},
         "gate_by_prop": gate_by_prop,
         "prop_types": [str(p) for p in prop_types],
         "attempted": attempted,
