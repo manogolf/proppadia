@@ -317,7 +317,8 @@ def _decision_threshold_for(prop: str) -> float:
 
 @lru_cache(maxsize=1)
 def _forced_invert_props() -> set[str]:
-    raw = str(os.getenv("MLB_FORCE_INVERT_PROPS", "") or "")
+    # Keep hits_runs_rbis inverted by default until feature/label parity is rebuilt.
+    raw = str(os.getenv("MLB_FORCE_INVERT_PROPS", "hits_runs_rbis") or "")
     out: set[str] = set()
     for token in raw.split(","):
         t = token.strip().lower()
