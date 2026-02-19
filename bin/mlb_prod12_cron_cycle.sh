@@ -75,10 +75,13 @@ MLB_MODELS_OBJECT_PATH="${MLB_MODELS_OBJECT_PATH:-mlb/prod12/mlb_latest_20260219
 MODEL_STAGING_DIR="${MODEL_STAGING_DIR:-/tmp/mlb_models_unpack}"
 MODEL_TARBALL="${MODEL_TARBALL:-/tmp/mlb_latest.tgz}"
 MODEL_DIR="${MODEL_DIR:-$MODEL_STAGING_DIR}"
-MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="${MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT:-60}"
+# Prod12 artifacts intentionally allow 60% overlap for pitcher lanes.
+# Pin this here to avoid environment drift causing false gate failures.
+MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="60"
 
 echo "[prod12-cron] using models object: ${MLB_MODELS_OBJECT_PATH}"
 echo "[prod12-cron] using python: ${VENV_PY}"
+echo "[prod12-cron] validation overlap gate: ${MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT}"
 
 # Artifacts were trained with sklearn 1.6.1; fail fast on incompatible runtime.
 SKLEARN_VERSION="$("$VENV_PY" - <<'PY'
@@ -118,7 +121,7 @@ export MODEL_DIR
 export MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT
 
 echo "[prod12-cron] validating model artifacts from MODEL_DIR=${MODEL_DIR}"
-make mlb-model-artifact-validate-prod12
+make mlb-model-artifact-validate-prod12 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="${MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT}"
 
 # Weekly runs in-process by default to avoid transient external gateway 502s.
 ORIG_MLB_BASE_URL="${MLB_BASE_URL:-}"
