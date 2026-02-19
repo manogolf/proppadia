@@ -101,8 +101,10 @@ MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS:-12000}"
 MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-3}"
 MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
+MODEL_DIR="${MODEL_DIR:-/var/data/proppadia/models}"
 MLB_CRON_RUN_MODE="${MLB_CRON_RUN_MODE:-daily}"
 MLB_CRON_WEEKLY_DAY_UTC="${MLB_CRON_WEEKLY_DAY_UTC:-1}" # 1=Mon ... 7=Sun
+MLB_WEEKLY_PHASE2_ENABLED="${MLB_WEEKLY_PHASE2_ENABLED:-1}"
 
 run_mode_normalized="$(echo "${MLB_CRON_RUN_MODE}" | tr '[:upper:]' '[:lower:]')"
 run_daily_now=0
@@ -137,43 +139,26 @@ MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="60"
 export MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT
 
 if [[ "${run_weekly_now}" == "1" ]]; then
-  : "${SUPABASE_URL:?mlb_prod12_cron_cycle requires SUPABASE_URL when weekly runs}"
-  : "${SUPABASE_SECRET_KEY:?mlb_prod12_cron_cycle requires SUPABASE_SECRET_KEY when weekly runs}"
-  MLB_MODELS_OBJECT_PATH="${MLB_MODELS_OBJECT_PATH:-mlb/prod12/mlb_latest_20260219T003302Z.tgz}"
-  MODEL_STAGING_DIR="${MODEL_STAGING_DIR:-/tmp/mlb_models_unpack}"
-  MODEL_TARBALL="${MODEL_TARBALL:-/tmp/mlb_latest.tgz}"
-  MODEL_DIR="${MODEL_DIR:-$MODEL_STAGING_DIR}"
-
-  echo "[prod12-cron] weekly mode: preparing models from object ${MLB_MODELS_OBJECT_PATH}"
-  rm -rf "$MODEL_STAGING_DIR" "$MODEL_TARBALL"
-  mkdir -p "$MODEL_STAGING_DIR"
-
-  curl -fsSL \
-    -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
-    -H "apikey: ${SUPABASE_SECRET_KEY}" \
-    "${SUPABASE_URL}/storage/v1/object/models/${MLB_MODELS_OBJECT_PATH}" \
-    -o "$MODEL_TARBALL"
-
-  tar -xzf "$MODEL_TARBALL" -C "$MODEL_STAGING_DIR"
-
-  if [[ ! -d "$MODEL_STAGING_DIR/latest" ]]; then
-    echo "[prod12-cron] ERROR: unpacked model bundle missing latest/ directory" >&2
-    find "$MODEL_STAGING_DIR" -maxdepth 3 -type f | sed "s#^#[prod12-cron] unpack file: #"
-    exit 3
-  fi
-
-  # Remove macOS sidecar metadata files if present.
-  find "$MODEL_STAGING_DIR/latest" -maxdepth 1 -type f -name '._*' -delete
-
-  mkdir -p models_out
-  rsync -a --delete "$MODEL_STAGING_DIR/latest/" models_out/latest/
+  echo "[prod12-cron] weekly mode: syncing model bundle to persistent MODEL_DIR=${MODEL_DIR}"
   export MODEL_DIR
+  bin/mlb_prod12_model_bundle_sync.sh
 else
-  # Ensure no stale model path leaks into daily-only runs.
-  unset MODEL_DIR || true
+  if [[ -d "${MODEL_DIR}/latest" ]]; then
+    echo "[prod12-cron] daily mode: using persisted MODEL_DIR=${MODEL_DIR}"
+    export MODEL_DIR
+  else
+    echo "[prod12-cron] WARN: MODEL_DIR latest/ not found at ${MODEL_DIR}/latest; daily predictions may fail" >&2
+    export MODEL_DIR
+  fi
 fi
 
 run_weekly() {
+  if [[ "${MLB_WEEKLY_PHASE2_ENABLED}" != "1" ]]; then
+    echo "[prod12-cron] weekly phase-2 disabled (MLB_WEEKLY_PHASE2_ENABLED=${MLB_WEEKLY_PHASE2_ENABLED}); running sync+validate only"
+    make mlb-model-artifact-validate-prod12
+    return
+  fi
+
   echo "[prod12-cron] running weekly phase-2 cycle"
   MLB_BASE_URL="${MLB_WEEKLY_BASE_URL}" \
   MLB_DATE="${MLB_DATE}" \

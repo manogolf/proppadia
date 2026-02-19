@@ -39,6 +39,7 @@ class Prod12TriggerRequest(BaseModel):
     mlb_base_url: Optional[str] = None
     mlb_weekly_base_url: Optional[str] = None
     mlb_daily_base_url: Optional[str] = None
+    mlb_weekly_phase2_enabled: Optional[int] = None
     mlb_date: Optional[str] = None
     mlb_predict_sample: Optional[int] = None
     mlb_predict_min_success: Optional[int] = None
@@ -141,6 +142,7 @@ def trigger_mlb_prod12_cycle(
         "MLB_BASE_URL": body.mlb_base_url,
         "MLB_WEEKLY_BASE_URL": body.mlb_weekly_base_url,
         "MLB_DAILY_BASE_URL": body.mlb_daily_base_url,
+        "MLB_WEEKLY_PHASE2_ENABLED": body.mlb_weekly_phase2_enabled,
         "MLB_DATE": body.mlb_date,
         "MLB_PREDICT_SAMPLE": body.mlb_predict_sample,
         "MLB_PREDICT_MIN_SUCCESS": body.mlb_predict_min_success,
