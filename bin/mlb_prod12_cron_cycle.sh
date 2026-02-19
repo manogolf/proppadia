@@ -78,6 +78,7 @@ MODEL_DIR="${MODEL_DIR:-$MODEL_STAGING_DIR}"
 # Prod12 artifacts intentionally allow 60% overlap for pitcher lanes.
 # Pin this here to avoid environment drift causing false gate failures.
 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="60"
+MLB_VALIDATE_PROP_TYPES="${MLB_VALIDATE_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
 
 echo "[prod12-cron] using models object: ${MLB_MODELS_OBJECT_PATH}"
 echo "[prod12-cron] using python: ${VENV_PY}"
@@ -121,7 +122,26 @@ export MODEL_DIR
 export MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT
 
 echo "[prod12-cron] validating model artifacts from MODEL_DIR=${MODEL_DIR}"
-make mlb-model-artifact-validate-prod12 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="${MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT}"
+echo "[prod12-cron] validating props sequentially to limit peak memory"
+IFS=',' read -r -a _validate_props <<< "${MLB_VALIDATE_PROP_TYPES}"
+_validate_failures=()
+for _raw_prop in "${_validate_props[@]}"; do
+  _prop="$(echo "${_raw_prop}" | xargs)"
+  if [[ -z "${_prop}" ]]; then
+    continue
+  fi
+  echo "[prod12-cron] validate prop=${_prop}"
+  if ! MODEL_DIR="${MODEL_DIR}" MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="${MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT}" \
+    "${VENV_PY}" backend/scripts/validate_mlb_model_artifacts.py \
+      --prop-types "${_prop}" \
+      --min-feature-overlap-pct "${MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT}"; then
+    _validate_failures+=("${_prop}")
+  fi
+done
+if [[ ${#_validate_failures[@]} -gt 0 ]]; then
+  echo "[prod12-cron] ERROR: model validation failed for props: ${_validate_failures[*]}" >&2
+  exit 2
+fi
 
 # Weekly runs in-process by default to avoid transient external gateway 502s.
 ORIG_MLB_BASE_URL="${MLB_BASE_URL:-}"
