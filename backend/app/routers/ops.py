@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -34,10 +34,16 @@ class NhlResolveRequest(BaseModel):
 
 
 class Prod12TriggerRequest(BaseModel):
+    run_mode: Literal["daily", "weekly", "full", "auto"] = "daily"
+    weekly_day_utc: Optional[int] = None
     mlb_base_url: Optional[str] = None
     mlb_weekly_base_url: Optional[str] = None
     mlb_daily_base_url: Optional[str] = None
     mlb_date: Optional[str] = None
+    mlb_predict_sample: Optional[int] = None
+    mlb_predict_min_success: Optional[int] = None
+    mlb_replay_sample: Optional[int] = None
+    mlb_replay_min_success: Optional[int] = None
     mlb_replay_retry_attempts: Optional[int] = None
     mlb_replay_retry_backoff_ms: Optional[int] = None
     mlb_replay_max_predict_p95_ms: Optional[int] = None
@@ -125,11 +131,20 @@ def trigger_mlb_prod12_cycle(
     x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
 ):
     _require_ops_token(x_ops_token)
+    weekly_day_utc = body.weekly_day_utc
+    if weekly_day_utc is not None and not (1 <= int(weekly_day_utc) <= 7):
+        raise HTTPException(status_code=400, detail="weekly_day_utc must be between 1 and 7")
     env_overrides = {
+        "MLB_CRON_RUN_MODE": body.run_mode,
+        "MLB_CRON_WEEKLY_DAY_UTC": weekly_day_utc,
         "MLB_BASE_URL": body.mlb_base_url,
         "MLB_WEEKLY_BASE_URL": body.mlb_weekly_base_url,
         "MLB_DAILY_BASE_URL": body.mlb_daily_base_url,
         "MLB_DATE": body.mlb_date,
+        "MLB_PREDICT_SAMPLE": body.mlb_predict_sample,
+        "MLB_PREDICT_MIN_SUCCESS": body.mlb_predict_min_success,
+        "MLB_REPLAY_SAMPLE": body.mlb_replay_sample,
+        "MLB_REPLAY_MIN_SUCCESS": body.mlb_replay_min_success,
         "MLB_REPLAY_RETRY_ATTEMPTS": body.mlb_replay_retry_attempts,
         "MLB_REPLAY_RETRY_BACKOFF_MS": body.mlb_replay_retry_backoff_ms,
         "MLB_REPLAY_MAX_PREDICT_P95_MS": body.mlb_replay_max_predict_p95_ms,

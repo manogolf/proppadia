@@ -6,10 +6,17 @@ set -euo pipefail
 # 1) Download latest model bundle from Supabase Storage.
 # 2) Unpack into /tmp and sync to models_out/latest for in-process checks.
 # 3) Validate model artifacts.
-# 4) Run weekly phase-2, then daily cycle.
+# 4) Run mode-selected workload (daily / weekly / full / auto).
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
+
+# Constrain native math thread pools to reduce CPU and memory spikes on small instances.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
+export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-1}"
 
 _py_has_runtime_deps() {
   local py="$1"
@@ -154,20 +161,57 @@ MLB_DATE="${MLB_DATE:-2025-08-15}"
 MLB_REPLAY_RETRY_ATTEMPTS="${MLB_REPLAY_RETRY_ATTEMPTS:-8}"
 MLB_REPLAY_RETRY_BACKOFF_MS="${MLB_REPLAY_RETRY_BACKOFF_MS:-1500}"
 MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS:-12000}"
+MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-6}"
+MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-3}"
+MLB_CRON_RUN_MODE="${MLB_CRON_RUN_MODE:-full}"
+MLB_CRON_WEEKLY_DAY_UTC="${MLB_CRON_WEEKLY_DAY_UTC:-1}" # 1=Mon ... 7=Sun
 
-echo "[prod12-cron] running weekly phase-2 cycle"
-MLB_BASE_URL="${MLB_WEEKLY_BASE_URL}" \
-MLB_DATE="${MLB_DATE}" \
-MLB_REPLAY_RETRY_ATTEMPTS="${MLB_REPLAY_RETRY_ATTEMPTS}" \
-MLB_REPLAY_RETRY_BACKOFF_MS="${MLB_REPLAY_RETRY_BACKOFF_MS}" \
-MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS}" \
-bin/mlb_prod12_weekly_cycle.sh
+run_weekly() {
+  echo "[prod12-cron] running weekly phase-2 cycle"
+  MLB_BASE_URL="${MLB_WEEKLY_BASE_URL}" \
+  MLB_DATE="${MLB_DATE}" \
+  MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE}" \
+  MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS}" \
+  MLB_REPLAY_RETRY_ATTEMPTS="${MLB_REPLAY_RETRY_ATTEMPTS}" \
+  MLB_REPLAY_RETRY_BACKOFF_MS="${MLB_REPLAY_RETRY_BACKOFF_MS}" \
+  MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS}" \
+  bin/mlb_prod12_weekly_cycle.sh
+}
 
-echo "[prod12-cron] running daily cycle"
-if [[ -n "${MLB_DAILY_BASE_URL}" ]]; then
-  MLB_BASE_URL="${MLB_DAILY_BASE_URL}" bin/mlb_prod12_daily_cycle.sh
-else
-  bin/mlb_prod12_daily_cycle.sh
-fi
+run_daily() {
+  echo "[prod12-cron] running daily cycle"
+  if [[ -n "${MLB_DAILY_BASE_URL}" ]]; then
+    MLB_BASE_URL="${MLB_DAILY_BASE_URL}" bin/mlb_prod12_daily_cycle.sh
+  else
+    bin/mlb_prod12_daily_cycle.sh
+  fi
+}
+
+case "$(echo "${MLB_CRON_RUN_MODE}" | tr '[:upper:]' '[:lower:]')" in
+  daily)
+    run_daily
+    ;;
+  weekly)
+    run_weekly
+    ;;
+  auto)
+    run_daily
+    current_dow="$(date -u +%u)"
+    if [[ "${current_dow}" == "${MLB_CRON_WEEKLY_DAY_UTC}" ]]; then
+      echo "[prod12-cron] auto mode: weekly day matched (${current_dow}), running weekly"
+      run_weekly
+    else
+      echo "[prod12-cron] auto mode: skipping weekly (today=${current_dow}, weekly_day=${MLB_CRON_WEEKLY_DAY_UTC})"
+    fi
+    ;;
+  full|"")
+    run_weekly
+    run_daily
+    ;;
+  *)
+    echo "[prod12-cron] ERROR: invalid MLB_CRON_RUN_MODE='${MLB_CRON_RUN_MODE}' (expected daily|weekly|full|auto)" >&2
+    exit 2
+    ;;
+esac
 
 echo "[prod12-cron] completed"

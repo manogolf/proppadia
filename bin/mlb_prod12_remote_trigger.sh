@@ -21,7 +21,7 @@ if [[ ! "${PROPPADIA_BACKEND_URL}" =~ ^https?://[^[:space:]]+$ ]]; then
   exit 2
 fi
 
-payload="${1:-{}}"
+payload="${1:-{\"run_mode\":\"daily\"}}"
 
 curl -fsS \
   -X POST \

@@ -41,6 +41,10 @@ Trigger command:
 bin/mlb_prod12_remote_trigger.sh
 ```
 
+Default behavior:
+- Trigger defaults to `run_mode=daily` (lighter resource profile).
+- Weekly phase-2 is triggered separately.
+
 Status command:
 
 ```bash
@@ -59,6 +63,18 @@ curl -fsS -X POST \
 curl -fsS \
   -H "X-Ops-Token: $OPS_API_TOKEN" \
   "$PROPPADIA_BACKEND_URL/api/ops/mlb/prod12/status?tail_lines=120"
+```
+
+Weekly trigger (explicit):
+
+```bash
+bin/mlb_prod12_remote_trigger.sh '{"run_mode":"weekly"}'
+```
+
+Auto trigger (daily always, weekly only on selected UTC weekday):
+
+```bash
+bin/mlb_prod12_remote_trigger.sh '{"run_mode":"auto","weekly_day_utc":1}'
 ```
 
 ## Daily Schedule

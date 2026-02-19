@@ -94,6 +94,7 @@ class TestOpsRouter(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json().get("ok"))
         env_overrides = mock_start.call_args.kwargs.get("env_overrides") or {}
+        self.assertEqual(env_overrides.get("MLB_CRON_RUN_MODE"), "daily")
         self.assertEqual(env_overrides.get("MLB_DATE"), "2025-08-15")
         self.assertEqual(env_overrides.get("MLB_REPLAY_RETRY_ATTEMPTS"), 8)
 
@@ -123,6 +124,15 @@ class TestOpsRouter(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json().get("ok"))
         self.assertEqual(mock_status.call_args.kwargs.get("tail_lines"), 25)
+
+    def test_trigger_mlb_prod12_cycle_rejects_bad_weekday(self):
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.post(
+                "/api/ops/mlb/prod12/trigger",
+                headers={"X-Ops-Token": "secret"},
+                json={"run_mode": "auto", "weekly_day_utc": 9},
+            )
+        self.assertEqual(resp.status_code, 400)
 
 
 if __name__ == "__main__":
