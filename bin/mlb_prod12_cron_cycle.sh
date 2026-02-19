@@ -18,20 +18,23 @@ import sklearn, psycopg, requests  # noqa: F401
 PY
 }
 
+if [[ -n "${VENV_PY:-}" ]] && ! _py_has_runtime_deps "$VENV_PY"; then
+  echo "[prod12-cron] WARN: VENV_PY=${VENV_PY} missing required deps; auto-resolving Python runtime." >&2
+  unset VENV_PY
+fi
+
 if [[ -z "${VENV_PY:-}" ]]; then
   for candidate in ".venv/bin/python3" ".venv/bin/python" "python3" "python"; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-      if _py_has_runtime_deps "$candidate"; then
-        VENV_PY="$candidate"
-        break
-      fi
+    if command -v "$candidate" >/dev/null 2>&1 && _py_has_runtime_deps "$candidate"; then
+      VENV_PY="$candidate"
+      break
     fi
   done
 fi
 
 if [[ -z "${VENV_PY:-}" ]]; then
   echo "[prod12-cron] ERROR: no Python interpreter with required deps (sklearn, psycopg, requests) found." >&2
-  echo "[prod12-cron] Hint: set VENV_PY=python3 or ensure build installs requirements to .venv." >&2
+  echo "[prod12-cron] Hint: install requirements during build; optional override VENV_PY only if that interpreter has deps." >&2
   exit 2
 fi
 
