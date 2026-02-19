@@ -21,7 +21,20 @@ if [[ ! "${PROPPADIA_BACKEND_URL}" =~ ^https?://[^[:space:]]+$ ]]; then
   exit 2
 fi
 
-payload="${1:-{\"run_mode\":\"daily\"}}"
+if [[ $# -gt 0 ]]; then
+  payload="$1"
+else
+  run_mode="$(_trim "${MLB_CRON_RUN_MODE:-daily}" | tr '[:upper:]' '[:lower:]')"
+  case "${run_mode}" in
+    daily|weekly|full|auto)
+      ;;
+    *)
+      echo "mlb_prod12_remote_trigger: invalid MLB_CRON_RUN_MODE='${run_mode}' (expected daily|weekly|full|auto)" >&2
+      exit 2
+      ;;
+  esac
+  payload="{\"run_mode\":\"${run_mode}\"}"
+fi
 
 curl -fsS \
   -X POST \
