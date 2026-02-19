@@ -18,6 +18,12 @@ import sklearn, psycopg, requests  # noqa: F401
 PY
 }
 
+_bootstrap_runtime_deps() {
+  local py="$1"
+  echo "[prod12-cron] bootstrapping runtime deps with ${py} -m pip install -r requirements.txt" >&2
+  "$py" -m pip install --no-cache-dir -r requirements.txt
+}
+
 if [[ -n "${VENV_PY:-}" ]] && ! _py_has_runtime_deps "$VENV_PY"; then
   echo "[prod12-cron] WARN: VENV_PY=${VENV_PY} missing required deps; auto-resolving Python runtime." >&2
   unset VENV_PY
@@ -33,8 +39,28 @@ if [[ -z "${VENV_PY:-}" ]]; then
 fi
 
 if [[ -z "${VENV_PY:-}" ]]; then
-  echo "[prod12-cron] ERROR: no Python interpreter with required deps (sklearn, psycopg, requests) found." >&2
-  echo "[prod12-cron] Hint: install requirements during build; optional override VENV_PY only if that interpreter has deps." >&2
+  if [[ "${MLB_CRON_RUNTIME_PIP_BOOTSTRAP:-1}" == "1" ]]; then
+    for bootstrap_py in "python3" "python"; do
+      if command -v "$bootstrap_py" >/dev/null 2>&1; then
+        if _bootstrap_runtime_deps "$bootstrap_py"; then
+          for candidate in ".venv/bin/python3" ".venv/bin/python" "python3" "python"; do
+            if command -v "$candidate" >/dev/null 2>&1 && _py_has_runtime_deps "$candidate"; then
+              VENV_PY="$candidate"
+              break
+            fi
+          done
+        fi
+      fi
+      if [[ -n "${VENV_PY:-}" ]]; then
+        break
+      fi
+    done
+  fi
+fi
+
+if [[ -z "${VENV_PY:-}" ]]; then
+  echo "[prod12-cron] ERROR: no Python interpreter with required deps (sklearn, psycopg, requests) found after bootstrap attempt." >&2
+  echo "[prod12-cron] Hint: fix Build Command to install requirements.txt into runtime image." >&2
   exit 2
 fi
 
