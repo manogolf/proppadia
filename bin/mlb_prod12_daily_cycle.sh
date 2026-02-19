@@ -6,8 +6,8 @@ set -euo pipefail
 
 MLB_BASE_URL="${MLB_BASE_URL:-https://baseball-streaks-sq44.onrender.com}"
 MLB_DATE="${MLB_DATE:-$(date -u +%F)}"
-MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE:-10}"
-MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS:-3}"
+MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE:-4}"
+MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS:-1}"
 if [[ -z "${VENV_PY:-}" ]]; then
   if [[ -x ".venv/bin/python" ]]; then
     VENV_PY=".venv/bin/python"

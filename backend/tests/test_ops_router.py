@@ -87,6 +87,7 @@ class TestOpsRouter(unittest.TestCase):
                 headers={"X-Ops-Token": "secret"},
                 json={
                     "mlb_date": "2025-08-15",
+                    "mlb_prod12_daily_prop_types": "hits,total_bases,strikeouts_batting",
                     "mlb_replay_retry_attempts": 8,
                     "mlb_replay_retry_backoff_ms": 1500,
                 },
@@ -96,6 +97,10 @@ class TestOpsRouter(unittest.TestCase):
         env_overrides = mock_start.call_args.kwargs.get("env_overrides") or {}
         self.assertEqual(env_overrides.get("MLB_CRON_RUN_MODE"), "daily")
         self.assertEqual(env_overrides.get("MLB_DATE"), "2025-08-15")
+        self.assertEqual(
+            env_overrides.get("MLB_PROD12_DAILY_PROP_TYPES"),
+            "hits,total_bases,strikeouts_batting",
+        )
         self.assertEqual(env_overrides.get("MLB_REPLAY_RETRY_ATTEMPTS"), 8)
 
     @patch("backend.app.routers.ops.start_prod12_cycle")

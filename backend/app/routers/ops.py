@@ -42,6 +42,7 @@ class Prod12TriggerRequest(BaseModel):
     mlb_date: Optional[str] = None
     mlb_predict_sample: Optional[int] = None
     mlb_predict_min_success: Optional[int] = None
+    mlb_prod12_daily_prop_types: Optional[str] = None
     mlb_replay_sample: Optional[int] = None
     mlb_replay_min_success: Optional[int] = None
     mlb_replay_retry_attempts: Optional[int] = None
@@ -143,6 +144,7 @@ def trigger_mlb_prod12_cycle(
         "MLB_DATE": body.mlb_date,
         "MLB_PREDICT_SAMPLE": body.mlb_predict_sample,
         "MLB_PREDICT_MIN_SUCCESS": body.mlb_predict_min_success,
+        "MLB_PROD12_DAILY_PROP_TYPES": body.mlb_prod12_daily_prop_types,
         "MLB_REPLAY_SAMPLE": body.mlb_replay_sample,
         "MLB_REPLAY_MIN_SUCCESS": body.mlb_replay_min_success,
         "MLB_REPLAY_RETRY_ATTEMPTS": body.mlb_replay_retry_attempts,
