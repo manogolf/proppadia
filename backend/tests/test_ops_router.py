@@ -78,6 +78,52 @@ class TestOpsRouter(unittest.TestCase):
             )
         self.assertEqual(resp.status_code, 400)
 
+    @patch("backend.app.routers.ops.start_prod12_cycle")
+    def test_trigger_mlb_prod12_cycle_ok(self, mock_start):
+        mock_start.return_value = {"ok": True, "status": "running", "running": True, "run_id": "abc123"}
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.post(
+                "/api/ops/mlb/prod12/trigger",
+                headers={"X-Ops-Token": "secret"},
+                json={
+                    "mlb_date": "2025-08-15",
+                    "mlb_replay_retry_attempts": 8,
+                    "mlb_replay_retry_backoff_ms": 1500,
+                },
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get("ok"))
+        env_overrides = mock_start.call_args.kwargs.get("env_overrides") or {}
+        self.assertEqual(env_overrides.get("MLB_DATE"), "2025-08-15")
+        self.assertEqual(env_overrides.get("MLB_REPLAY_RETRY_ATTEMPTS"), 8)
+
+    @patch("backend.app.routers.ops.start_prod12_cycle")
+    def test_trigger_mlb_prod12_cycle_conflict(self, mock_start):
+        mock_start.return_value = {
+            "ok": False,
+            "status": "already_running",
+            "running": True,
+            "run_id": "abc123",
+            "pid": 999,
+        }
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.post(
+                "/api/ops/mlb/prod12/trigger",
+                headers={"X-Ops-Token": "secret"},
+                json={},
+            )
+        self.assertEqual(resp.status_code, 409)
+        self.assertIn("already_running", str(resp.json()))
+
+    @patch("backend.app.routers.ops.get_prod12_cycle_status")
+    def test_mlb_prod12_status_ok(self, mock_status):
+        mock_status.return_value = {"ok": True, "status": "running", "running": True, "log_tail": []}
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.get("/api/ops/mlb/prod12/status?tail_lines=25", headers={"X-Ops-Token": "secret"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get("ok"))
+        self.assertEqual(mock_status.call_args.kwargs.get("tail_lines"), 25)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,40 @@ What it guarantees:
 - latest weekly phase2 snapshot is strict-pass
 - daily+weekly status is strict-pass with tight freshness checks
 
+## Preferred Scheduler Mode (Thin Trigger)
+
+Use scheduler jobs to call backend ops endpoints only. This keeps dependency/model runtime in one place (backend service) and avoids cron runtime drift.
+
+Required env vars on the scheduler service:
+- `PROPPADIA_BACKEND_URL` (example: `https://baseball-streaks-sq44.onrender.com`)
+- `OPS_API_TOKEN` (must match backend `OPS_API_TOKEN`)
+
+Trigger command:
+
+```bash
+bin/mlb_prod12_remote_trigger.sh
+```
+
+Status command:
+
+```bash
+bin/mlb_prod12_remote_status.sh 120
+```
+
+Direct curl equivalents:
+
+```bash
+curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-Ops-Token: $OPS_API_TOKEN" \
+  "$PROPPADIA_BACKEND_URL/api/ops/mlb/prod12/trigger" \
+  -d '{}'
+
+curl -fsS \
+  -H "X-Ops-Token: $OPS_API_TOKEN" \
+  "$PROPPADIA_BACKEND_URL/api/ops/mlb/prod12/status?tail_lines=120"
+```
+
 ## Daily Schedule
 
 Run once per day (UTC date is acceptable):

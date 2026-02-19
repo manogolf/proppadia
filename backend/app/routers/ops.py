@@ -8,6 +8,10 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from backend.app.services.nhl.prop_resolution_service import resolve_nhl_pending_props
+from backend.app.services.shared.mlb_prod12_job_service import (
+    get_prod12_cycle_status,
+    start_prod12_cycle,
+)
 from backend.app.services.shared.render_deploy_service import (
     fetch_latest_deploy,
     fetch_service_metrics,
@@ -27,6 +31,16 @@ class NhlResolveRequest(BaseModel):
     dry_run: bool = True
     only_past_games: bool = True
     outcome: str = "dnp"
+
+
+class Prod12TriggerRequest(BaseModel):
+    mlb_base_url: Optional[str] = None
+    mlb_weekly_base_url: Optional[str] = None
+    mlb_daily_base_url: Optional[str] = None
+    mlb_date: Optional[str] = None
+    mlb_replay_retry_attempts: Optional[int] = None
+    mlb_replay_retry_backoff_ms: Optional[int] = None
+    mlb_replay_max_predict_p95_ms: Optional[int] = None
 
 
 def _require_ops_token(header_value: Optional[str]) -> None:
@@ -99,6 +113,49 @@ def resolve_nhl_props(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.post("/mlb/prod12/trigger", summary="Ops: trigger detached MLB prod12 cycle")
+def trigger_mlb_prod12_cycle(
+    body: Prod12TriggerRequest,
+    x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
+):
+    _require_ops_token(x_ops_token)
+    env_overrides = {
+        "MLB_BASE_URL": body.mlb_base_url,
+        "MLB_WEEKLY_BASE_URL": body.mlb_weekly_base_url,
+        "MLB_DAILY_BASE_URL": body.mlb_daily_base_url,
+        "MLB_DATE": body.mlb_date,
+        "MLB_REPLAY_RETRY_ATTEMPTS": body.mlb_replay_retry_attempts,
+        "MLB_REPLAY_RETRY_BACKOFF_MS": body.mlb_replay_retry_backoff_ms,
+        "MLB_REPLAY_MAX_PREDICT_P95_MS": body.mlb_replay_max_predict_p95_ms,
+    }
+    try:
+        payload = start_prod12_cycle(triggered_by="ops_api", env_overrides=env_overrides)
+        if payload.get("status") == "already_running":
+            raise HTTPException(status_code=409, detail=payload)
+        return payload
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/prod12/status", summary="Ops: show MLB prod12 detached cycle status + log tail")
+def mlb_prod12_cycle_status(
+    tail_lines: int = 80,
+    x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
+):
+    _require_ops_token(x_ops_token)
+    safe_tail = max(0, min(int(tail_lines), 400))
+    try:
+        return get_prod12_cycle_status(tail_lines=safe_tail)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
