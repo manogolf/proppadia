@@ -20,8 +20,11 @@ PY
 
 _bootstrap_runtime_deps() {
   local py="$1"
-  echo "[prod12-cron] bootstrapping runtime deps with ${py} -m pip install -r requirements.txt" >&2
-  "$py" -m pip install --no-cache-dir -r requirements.txt
+  local boot_venv="${REPO_DIR}/.venv"
+  echo "[prod12-cron] bootstrapping runtime deps in ${boot_venv} using ${py}" >&2
+  "$py" -m venv "${boot_venv}"
+  "${boot_venv}/bin/python" -m pip install --upgrade pip
+  "${boot_venv}/bin/python" -m pip install --no-cache-dir -r requirements.txt
 }
 
 if [[ -n "${VENV_PY:-}" ]] && ! _py_has_runtime_deps "$VENV_PY"; then
