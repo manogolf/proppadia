@@ -358,8 +358,8 @@ mlb-prod12-cron-preview:
 mlb-prod12-script-preview:
 	@echo "Recommended prod12 scheduler script commands:"
 	@echo "1) One-time bootstrap after redeploy: make mlb-prod12-bootstrap MLB_BASE_URL=$(if $(MLB_BASE_URL),$(MLB_BASE_URL),https://baseball-streaks-sq44.onrender.com) MLB_DATE=$(MLB_DATE)"
-	@echo "2) Daily: bin/mlb_prod12_daily_cycle.sh"
-	@echo "3) Weekly: bin/mlb_prod12_weekly_cycle.sh"
+	@echo "2) Combined cron service command: bin/mlb_prod12_cron_cycle.sh"
+	@echo "3) Optional direct invocations: bin/mlb_prod12_daily_cycle.sh / bin/mlb_prod12_weekly_cycle.sh"
 
 mlb-prod12-bootstrap-preview:
 	@echo "Run after each deploy:"
