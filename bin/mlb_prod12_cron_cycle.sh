@@ -11,15 +11,30 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
+_py_has_runtime_deps() {
+  local py="$1"
+  "$py" - <<'PY' >/dev/null 2>&1
+import sklearn, psycopg, requests  # noqa: F401
+PY
+}
+
 if [[ -z "${VENV_PY:-}" ]]; then
-  if [[ -x ".venv/bin/python3" ]]; then
-    VENV_PY=".venv/bin/python3"
-  elif [[ -x ".venv/bin/python" ]]; then
-    VENV_PY=".venv/bin/python"
-  else
-    VENV_PY="python3"
-  fi
+  for candidate in ".venv/bin/python3" ".venv/bin/python" "python3" "python"; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      if _py_has_runtime_deps "$candidate"; then
+        VENV_PY="$candidate"
+        break
+      fi
+    fi
+  done
 fi
+
+if [[ -z "${VENV_PY:-}" ]]; then
+  echo "[prod12-cron] ERROR: no Python interpreter with required deps (sklearn, psycopg, requests) found." >&2
+  echo "[prod12-cron] Hint: set VENV_PY=python3 or ensure build installs requirements to .venv." >&2
+  exit 2
+fi
+
 export VENV_PY
 
 export PYTHONPATH="${PYTHONPATH:-.}"
