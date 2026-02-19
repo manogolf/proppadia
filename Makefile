@@ -989,6 +989,9 @@ mlb-prod12-status:
 mlb-prod12-status-strict:
 	$(VENV_PY) backend/scripts/mlb_prod12_status.py --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --phase2-history "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --daily-max-age-hours "$(MLB_PROD12_DAILY_MAX_AGE_HOURS)" --weekly-max-age-hours "$(MLB_PROD12_WEEKLY_MAX_AGE_HOURS)" --strict
 
+mlb-prod12-status-daily-strict:
+	$(VENV_PY) backend/scripts/mlb_prod12_status.py --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --phase2-history "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --daily-max-age-hours "$(MLB_PROD12_DAILY_MAX_AGE_HOURS)" --scope daily --strict
+
 mlb-prod12-health-report:
 	$(VENV_PY) backend/scripts/mlb_prod12_health_report.py --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --phase2-history "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --daily-window "$(MLB_PROD12_HEALTH_DAILY_WINDOW)" --weekly-window "$(MLB_PROD12_HEALTH_WEEKLY_WINDOW)"
 
@@ -1018,7 +1021,7 @@ mlb-prod12-track-daily:
 
 mlb-prod12-daily-gate:
 	$(MAKE) mlb-prod12-track-daily MLB_BASE_URL="$(MLB_BASE_URL)" MLB_DATE="$(MLB_DATE)" MLB_PREDICT_SAMPLE="$(MLB_PREDICT_SAMPLE)" MLB_PREDICT_MIN_SUCCESS="$(MLB_PREDICT_MIN_SUCCESS)"
-	$(MAKE) mlb-prod12-status-strict
+	$(MAKE) mlb-prod12-status-daily-strict
 
 mlb-prod12-daily-gate-incident:
 	@set -e; \

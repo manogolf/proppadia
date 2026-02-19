@@ -61,6 +61,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--phase2-history", default="artifacts/mlb_prod12_phase2_history.jsonl")
     ap.add_argument("--daily-max-age-hours", type=float, default=0.0, help="0 disables staleness check.")
     ap.add_argument("--weekly-max-age-hours", type=float, default=0.0, help="0 disables staleness check.")
+    ap.add_argument(
+        "--scope",
+        choices=("all", "daily", "weekly"),
+        default="all",
+        help="Status scope to enforce when computing pass/fail.",
+    )
     ap.add_argument("--strict", action="store_true", help="Exit non-zero when overall status is fail.")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
@@ -80,6 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "phase2_history": str(phase2_path),
             "daily_max_age_hours": float(args.daily_max_age_hours),
             "weekly_max_age_hours": float(args.weekly_max_age_hours),
+            "scope": args.scope,
         },
         "daily": {
             "captured_at": (pipeline or {}).get("captured_at"),
@@ -104,20 +111,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if phase2 is None:
         payload["warnings"].append("missing_weekly_phase2_history")
 
-    if pipeline is None or not bool((pipeline or {}).get("ok")):
-        payload["ok"] = False
-        payload["failures"].append("daily_failed_or_missing")
-    if phase2 is None or not bool((phase2 or {}).get("ok")):
-        payload["ok"] = False
-        payload["failures"].append("weekly_failed_or_missing")
+    if args.scope in {"all", "daily"}:
+        if pipeline is None or not bool((pipeline or {}).get("ok")):
+            payload["ok"] = False
+            payload["failures"].append("daily_failed_or_missing")
+    if args.scope in {"all", "weekly"}:
+        if phase2 is None or not bool((phase2 or {}).get("ok")):
+            payload["ok"] = False
+            payload["failures"].append("weekly_failed_or_missing")
 
     daily_max = float(args.daily_max_age_hours)
     weekly_max = float(args.weekly_max_age_hours)
-    if daily_max > 0:
+    if args.scope in {"all", "daily"} and daily_max > 0:
         if daily_age is None or daily_age > daily_max:
             payload["ok"] = False
             payload["failures"].append("daily_stale")
-    if weekly_max > 0:
+    if args.scope in {"all", "weekly"} and weekly_max > 0:
         if weekly_age is None or weekly_age > weekly_max:
             payload["ok"] = False
             payload["failures"].append("weekly_stale")
