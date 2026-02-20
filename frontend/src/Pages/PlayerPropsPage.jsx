@@ -10,6 +10,12 @@ import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
 import WorkspaceStatePanel from "../components/predictions/WorkspaceStatePanel.jsx";
+import {
+  MLB_WORKSPACE_MODES,
+  WORKSPACE_MODE_BOARD,
+  WORKSPACE_MODE_RESEARCH,
+  isWorkspaceMode,
+} from "../components/predictions/workspaceModes.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 import { normalizeHttpErrorMessage } from "../shared/httpErrorMessage.js";
@@ -23,23 +29,10 @@ import {
 } from "../shared/watchlistStorage.js";
 import { todayET } from "../shared/timeUtils.js";
 
-const MODES = [
-  {
-    id: "research",
-    label: "Player Research",
-    hint: "Single-player guided analysis",
-  },
-  {
-    id: "board",
-    label: "Market Board",
-    hint: "Saved props and calendar view",
-  },
-];
-
 export default function PlayerPropsPage() {
   const location = useLocation();
   const { user } = useAuth();
-  const [mode, setMode] = useState("research");
+  const [mode, setMode] = useState(WORKSPACE_MODE_RESEARCH);
   const [selectedDate, setSelectedDate] = useState(todayET());
   const [tableRefreshNonce, setTableRefreshNonce] = useState(0);
   const [lastSaveEvent, setLastSaveEvent] = useState(null);
@@ -58,11 +51,11 @@ export default function PlayerPropsPage() {
     const teamFromUrl = String(params.get("team") || "").trim();
     const dateFromUrl = String(params.get("date") || "").trim();
 
-    if (modeFromUrl === "research" || modeFromUrl === "board") {
+    if (isWorkspaceMode(modeFromUrl)) {
       setMode(modeFromUrl);
     } else if (playerFromUrl || teamFromUrl) {
       // Deep links from Players-by-Team should open directly into board view.
-      setMode("board");
+      setMode(WORKSPACE_MODE_BOARD);
     }
 
     setSeedPlayerName(playerFromUrl);
@@ -74,7 +67,7 @@ export default function PlayerPropsPage() {
   }, [location.search]);
 
   const subtitle = useMemo(() => {
-    return mode === "research"
+    return mode === WORKSPACE_MODE_RESEARCH
       ? "Resolve player and context, then generate model output."
       : "Review saved props by date and inspect tracking history.";
   }, [mode]);
@@ -205,11 +198,11 @@ export default function PlayerPropsPage() {
       title="Prediction Workspace"
       subtitle={subtitle}
       dateLabel={`Selected Date (ET): ${selectedDate}`}
-      modes={MODES}
+      modes={MLB_WORKSPACE_MODES}
       activeMode={mode}
       onModeChange={setMode}
     >
-      {mode === "research" ? (
+      {mode === WORKSPACE_MODE_RESEARCH ? (
         <div className="space-y-4">
           {gamesLoading ? (
             <WorkspaceStatePanel

@@ -8,6 +8,12 @@ import ModelVsMarketCard from "../../components/predictions/ModelVsMarketCard.js
 import MyPropsPanel from "../../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../../components/predictions/PredictionWorkspace.jsx";
 import WorkspaceStatePanel from "../../components/predictions/WorkspaceStatePanel.jsx";
+import {
+  NHL_WORKSPACE_MODES,
+  WORKSPACE_MODE_BOARD,
+  WORKSPACE_MODE_RESEARCH,
+  isWorkspaceMode,
+} from "../../components/predictions/workspaceModes.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import { normalizeHttpErrorMessage } from "../../shared/httpErrorMessage.js";
@@ -20,19 +26,6 @@ import {
   toWatchlistId,
   writeWatchlistScope,
 } from "../../shared/watchlistStorage.js";
-
-const MODES = [
-  {
-    id: "research",
-    label: "Player Research",
-    hint: "Evaluate leaders and model confidence",
-  },
-  {
-    id: "board",
-    label: "Market Board",
-    hint: "Search and sort the full slate",
-  },
-];
 
 function num(x) {
   const v = Number(x);
@@ -95,7 +88,7 @@ export default function NHLPredictions() {
   const location = useLocation();
   const { user } = useAuth();
   const slateDate = useMemo(() => todayET(), []);
-  const [mode, setMode] = useState("research");
+  const [mode, setMode] = useState(WORKSPACE_MODE_RESEARCH);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -126,10 +119,10 @@ export default function NHLPredictions() {
     const playerFromUrl = String(params.get("player") || "").trim();
     const teamFromUrl = String(params.get("team") || "").trim();
     const seed = playerFromUrl || teamFromUrl;
-    if (modeFromUrl === "research" || modeFromUrl === "board") {
+    if (isWorkspaceMode(modeFromUrl)) {
       setMode(modeFromUrl);
     } else if (seed) {
-      setMode("board");
+      setMode(WORKSPACE_MODE_BOARD);
     }
     if (!seed) return;
     setQ(seed);
@@ -412,7 +405,7 @@ export default function NHLPredictions() {
   }, [sortedSaves, sortedSog]);
 
   const subtitle = useMemo(() => {
-    return mode === "research"
+    return mode === WORKSPACE_MODE_RESEARCH
       ? "Review strongest model probabilities before scanning the full board."
       : "Search and rank shots-on-goal and saves lines for the active slate.";
   }, [mode]);
@@ -765,10 +758,10 @@ export default function NHLPredictions() {
       title="Prediction Workspace"
       subtitle={subtitle}
       dateLabel={`Slate (ET): ${slateDate}`}
-      modes={MODES}
+      modes={NHL_WORKSPACE_MODES}
       activeMode={mode}
       onModeChange={setMode}
-      controls={mode === "board" ? boardControls : null}
+      controls={mode === WORKSPACE_MODE_BOARD ? boardControls : null}
     >
       {loading ? (
         <WorkspaceStatePanel
@@ -784,7 +777,7 @@ export default function NHLPredictions() {
           title="No predictions available"
           detail="No rows returned for this slate date."
         />
-      ) : mode === "research" ? (
+      ) : mode === WORKSPACE_MODE_RESEARCH ? (
         <div className="space-y-6">
           {gamesLoading ? (
             <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading NHL slate...</div>
