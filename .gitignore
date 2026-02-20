@@ -12,6 +12,8 @@ Thumbs.db
 *.tmp
 *.bak
 *.backup
+*.tgz
+*.tar.gz
 */._*
 
 # ── Node / JS projects (CRA/Vite/any subpackage) ───────────────────
