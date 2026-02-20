@@ -120,6 +120,20 @@ Primary artifacts updated:
 - `artifacts/releases/mlb_prod12_replay_latency.json`
 - `artifacts/mlb_prod12_phase2_history.jsonl`
 
+## Model Bundle Publish
+
+When model artifacts are refreshed, publish the bundle with both keys:
+- versioned key: `mlb/prod12/mlb_latest_<timestamp>.tgz`
+- stable key: `mlb/prod12/latest.tgz`
+
+Command:
+
+```bash
+make mlb-prod12-model-bundle-publish
+```
+
+This keeps backend `MLB_MODELS_OBJECT_PATH=mlb/prod12/latest.tgz` stable so weekly jobs do not need env updates.
+
 ## Operator Actions On Fail
 
 1. Daily lane failure:

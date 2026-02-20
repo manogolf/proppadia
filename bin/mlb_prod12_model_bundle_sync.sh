@@ -10,7 +10,7 @@ cd "${REPO_DIR}"
 : "${SUPABASE_URL:?mlb_prod12_model_bundle_sync requires SUPABASE_URL}"
 : "${SUPABASE_SECRET_KEY:?mlb_prod12_model_bundle_sync requires SUPABASE_SECRET_KEY}"
 
-MLB_MODELS_OBJECT_PATH="${MLB_MODELS_OBJECT_PATH:-mlb/prod12/mlb_latest_20260219T003302Z.tgz}"
+MLB_MODELS_OBJECT_PATH="${MLB_MODELS_OBJECT_PATH:-mlb/prod12/latest.tgz}"
 MODEL_DIR="${MODEL_DIR:-/var/data/proppadia/models}"
 MODEL_STAGING_DIR="${MODEL_STAGING_DIR:-/tmp/mlb_models_unpack}"
 MODEL_TARBALL="${MODEL_TARBALL:-/tmp/mlb_latest.tgz}"
@@ -21,11 +21,15 @@ echo "[prod12-model-sync] target MODEL_DIR: ${MODEL_DIR}"
 rm -rf "${MODEL_STAGING_DIR}" "${MODEL_TARBALL}"
 mkdir -p "${MODEL_STAGING_DIR}" "${MODEL_DIR}/latest"
 
-curl -fsSL \
+if ! curl -fsSL \
   -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
   -H "apikey: ${SUPABASE_SECRET_KEY}" \
   "${SUPABASE_URL}/storage/v1/object/models/${MLB_MODELS_OBJECT_PATH}" \
-  -o "${MODEL_TARBALL}"
+  -o "${MODEL_TARBALL}"; then
+  echo "[prod12-model-sync] ERROR: unable to download models/${MLB_MODELS_OBJECT_PATH}" >&2
+  echo "[prod12-model-sync] Hint: publish bundle with a stable alias (mlb/prod12/latest.tgz) or update MLB_MODELS_OBJECT_PATH" >&2
+  exit 22
+fi
 
 tar -xzf "${MODEL_TARBALL}" -C "${MODEL_STAGING_DIR}"
 

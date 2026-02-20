@@ -178,6 +178,7 @@ MLB_PIPELINE_HISTORY_LIMIT ?= 10
 SEASON_CUTOVER_HISTORY_INPUT ?= artifacts/season_cutover_history.jsonl
 
 .PHONY: mlb-hybrid-window-refresh
+.PHONY: mlb-prod12-model-bundle-publish
 
 help:
 	@echo "Proppadia checks"
@@ -257,6 +258,7 @@ help:
 	@echo "  make mlb-model-publish [promote archived snapshot to active latest]"
 	@echo "  make mlb-model-prune [prune old archive snapshots; dry-run by default]"
 	@echo "  make mlb-model-rollback [rollback latest to a prior snapshot id]"
+	@echo "  make mlb-prod12-model-bundle-publish [upload prod12 bundle to versioned key + stable latest.tgz alias]"
 	@echo "  make mlb-feature-health [feature-source mix + fallback/default rates by prop lane]"
 	@echo "  make mlb-feature-health-prod12 [same feature-health report scoped to production-12 lanes]"
 	@echo "  make mlb-pfp-overlap-audit [report missing prop_features_precomputed overlap for selected props/window]"
@@ -939,6 +941,9 @@ mlb-model-rollback:
 		exit 2; \
 	fi
 	$(VENV_PY) backend/scripts/mlb_model_rollback.py --archive-dir "$(MLB_MODEL_ARCHIVE_DIR)" --snapshot-id "$(MLB_MODEL_ROLLBACK_SNAPSHOT)" --latest-dir "$(MLB_MODEL_LATEST_DIR)"
+
+mlb-prod12-model-bundle-publish:
+	bin/mlb_prod12_model_bundle_publish.sh
 
 mlb-feature-health:
 	$(VENV_PY) backend/scripts/report_mlb_feature_health.py --window-mode $(MLB_FEATURE_WINDOW_MODE) --window-days $(MLB_FEATURE_WINDOW_DAYS) --games-back $(MLB_FEATURE_GAMES_BACK) --prop-types "$(MLB_FEATURE_PROP_TYPES)" --prop-sources "$(MLB_FEATURE_PROP_SOURCES)" --warn-default-pct $(MLB_FEATURE_WARN_DEFAULT_PCT) --warn-min-rows $(MLB_FEATURE_WARN_MIN_ROWS) $(if $(filter 1,$(MLB_FEATURE_FAIL_ON_WARN)),--fail-on-warn,)
