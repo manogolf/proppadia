@@ -67,6 +67,32 @@ These labels must mean the same thing in every sport:
    - Date-centered browsing of slates, predictions, and outcomes.
    - Separate concern from saved props.
 
+## 2.2) Canonical Routes and Legacy Mapping
+
+Canonical user routes (active now):
+
+1. MLB:
+   - `/mlb/slate`
+   - `/mlb/predictions`
+   - `/mlb/players/:playerId`
+
+2. NHL:
+   - `/nhl/slate`
+   - `/nhl/predictions`
+   - `/nhl/players/:playerId`
+
+Legacy compatibility routes (kept functional via alias/redirect):
+
+1. `/mlb` -> `/mlb/slate`
+2. `/nhl` -> `/nhl/slate`
+3. `/props` -> `/mlb/predictions`
+4. `/props/v2` -> `/mlb/predictions`
+5. `/player/:playerId` -> legacy profile alias (kept until full sport-aware profile migration completes)
+
+Deprecation review date:
+- No legacy route removal before 2026-06-01.
+- Removal decision is made only after metrics confirm canonical route adoption and no regression risk.
+
 ## 3) Sport Integration Contract (Required for Every Sport)
 
 1. Required prediction record fields:

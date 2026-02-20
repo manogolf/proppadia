@@ -51,12 +51,12 @@ function RequireSignedIn({ children, requiredPath, requiredLabel }) {
   return children;
 }
 
-function RedirectLegacyPropsRoute() {
+function RedirectWithSearch({ pathname }) {
   const location = useLocation();
   return (
     <Navigate
       to={{
-        pathname: "/props",
+        pathname,
         search: location.search || "",
       }}
       replace
@@ -106,7 +106,7 @@ export default function AppRouter() {
               Home
             </a>
             {user ? (
-              <a href="/props" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              <a href="/mlb/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 Props
               </a>
             ) : (
@@ -144,8 +144,20 @@ export default function AppRouter() {
         <Routes>
           {/* New multi-sport gateway at "/" */}
           <Route path="/" element={<HomeGateway />} />
-          <Route path="/mlb" element={<MLBHome />} />
-          <Route path="/nhl" element={<NHLHome />} />
+          <Route path="/mlb/slate" element={<MLBHome />} />
+          <Route
+            path="/mlb/predictions"
+            element={
+              <RequireSignedIn
+                requiredPath="/mlb/predictions"
+                requiredLabel="MLB predictions"
+              >
+                <PlayerPropsPage />
+              </RequireSignedIn>
+            }
+          />
+          <Route path="/mlb/players/:playerId" element={<PlayerProfileDashboard />} />
+          <Route path="/nhl/slate" element={<NHLHome />} />
           <Route
             path="/nhl/predictions"
             element={
@@ -157,12 +169,15 @@ export default function AppRouter() {
               </RequireSignedIn>
             }
           />
-          {/* Existing MLB dashboard moved to "/mlb" */}
+          <Route path="/nhl/players/:playerId" element={<PlayerProfileDashboard />} />
+          {/* Legacy route aliases */}
+          <Route path="/mlb" element={<RedirectWithSearch pathname="/mlb/slate" />} />
+          <Route path="/nhl" element={<RedirectWithSearch pathname="/nhl/slate" />} />
           <Route
             path="/props"
             element={
-              <RequireSignedIn requiredPath="/props" requiredLabel="MLB predictions">
-                <PlayerPropsPage />
+              <RequireSignedIn requiredPath="/mlb/predictions" requiredLabel="MLB predictions">
+                <RedirectWithSearch pathname="/mlb/predictions" />
               </RequireSignedIn>
             }
           />
@@ -184,10 +199,10 @@ export default function AppRouter() {
             path="/props/v2"
             element={
               <RequireSignedIn
-                requiredPath="/props/v2"
+                requiredPath="/mlb/predictions"
                 requiredLabel="MLB predictions"
               >
-                <RedirectLegacyPropsRoute />
+                <RedirectWithSearch pathname="/mlb/predictions" />
               </RequireSignedIn>
             }
           />
