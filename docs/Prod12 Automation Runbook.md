@@ -177,6 +177,11 @@ Wrapper script preview:
 make mlb-prod12-script-preview
 ```
 
+## Preseason Checklist
+
+- Automate bundle publish after retrain/update so `mlb/prod12/latest.tgz` is always refreshed without manual shell steps.
+- Remove hardcoded offseason `MLB_DATE=2025-08-15` fallbacks before active season.
+
 ## Notes
 
 - `MLB_REPLAY_ALLOW_SPARSE=1` is enabled by default in `Makefile` for sparse/offseason safety.
