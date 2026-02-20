@@ -6,7 +6,7 @@ import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx";
 import PlayerPropsTable from "../components/PlayerPropsTable.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
-import CalendarCard from "../components/predictions/market/CalendarCard.jsx";
+import PredictionCalendar from "../components/predictions/calendar/PredictionCalendar.jsx";
 import SavedPropsCard from "../components/predictions/market/SavedPropsCard.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
 import WorkspaceStatePanel from "../components/predictions/WorkspaceStatePanel.jsx";
@@ -338,7 +338,13 @@ export default function PlayerPropsPage() {
               lastSaveEvent={lastSaveEvent}
             />
           </section>
-          <CalendarCard selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
+          <PredictionCalendar
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            title="Calendar View"
+            subtitle="Review saved props by date and inspect tracking history."
+            showTracker
+          />
         </div>
       )}
     </PredictionWorkspace>

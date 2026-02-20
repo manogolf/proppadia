@@ -2,9 +2,12 @@
 
 import { DateTime } from "luxon";
 
+const ET_ZONE = "America/New_York";
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 // 📌 Get Current Time in Eastern Time (ISO String)
 export function nowET() {
-  return DateTime.now().setZone("America/New_York");
+  return DateTime.now().setZone(ET_ZONE);
 }
 
 // 📌 Get Today’s Date in Eastern Time (YYYY-MM-DD)
@@ -20,6 +23,32 @@ export function yesterdayET() {
 // 📌 Get Current Time of Day in Eastern Time (HH:mm)
 export function currentTimeET() {
   return nowET().toFormat("HH:mm");
+}
+
+export function isISODateString(value) {
+  return ISO_DATE_RE.test(String(value || "").trim());
+}
+
+export function coerceISODate(value, fallback = todayET()) {
+  const raw = String(value || "").trim();
+  if (isISODateString(raw)) {
+    const dt = DateTime.fromISO(raw, { zone: ET_ZONE });
+    if (dt.isValid) return dt.toISODate();
+  }
+  return String(fallback || "").trim() || todayET();
+}
+
+export function shiftISODateByDaysET(isoDate, deltaDays = 0) {
+  const safeDate = coerceISODate(isoDate);
+  const shift = Number(deltaDays);
+  return DateTime.fromISO(safeDate, { zone: ET_ZONE })
+    .plus({ days: Number.isFinite(shift) ? shift : 0 })
+    .toISODate();
+}
+
+export function formatISODateLongET(isoDate) {
+  const safeDate = coerceISODate(isoDate);
+  return DateTime.fromISO(safeDate, { zone: ET_ZONE }).toFormat("ccc, LLL dd, yyyy");
 }
 
 // 📌 Convert Any Date to ISO Date (YYYY-MM-DD)
@@ -44,25 +73,25 @@ export function formatGameTime(isoDateTime) {
 
   const dt = DateTime.fromISO(isoDateTime);
   return {
-    etTime: dt.setZone("America/New_York").toFormat("HH:mm"),
+    etTime: dt.setZone(ET_ZONE).toFormat("HH:mm"),
     localTime: dt.toFormat("HH:mm"),
   };
 }
 
 export function formatDateET(dateString) {
   return DateTime.fromISO(dateString, { zone: "utc" })
-    .setZone("America/New_York")
+    .setZone(ET_ZONE)
     .toFormat("LLL dd, yyyy");
 }
 
 export function getDayOfWeekET(isoDate) {
-  return DateTime.fromISO(isoDate, { zone: "America/New_York" }).toFormat(
+  return DateTime.fromISO(isoDate, { zone: ET_ZONE }).toFormat(
     "cccc"
   );
 }
 
 export function getTimeOfDayBucketET(isoDateTime) {
-  const hour = DateTime.fromISO(isoDateTime, { zone: "America/New_York" }).hour;
+  const hour = DateTime.fromISO(isoDateTime, { zone: ET_ZONE }).hour;
   if (hour < 12) return "morning";
   if (hour < 17) return "afternoon";
   if (hour < 21) return "evening";
@@ -84,7 +113,7 @@ export async function getGameStartTimeET(gameId) {
       const schedJson = await res.json();
       const schedISO = schedJson?.dates?.[0]?.games?.[0]?.gameDate;
       if (schedISO) {
-        return DateTime.fromISO(schedISO).setZone("America/New_York").toISO(); // ✅ ISO 8601 full timestamp
+        return DateTime.fromISO(schedISO).setZone(ET_ZONE).toISO(); // ✅ ISO 8601 full timestamp
       }
     }
 
@@ -95,7 +124,7 @@ export async function getGameStartTimeET(gameId) {
       const boxJson = await res.json();
       const boxISO = boxJson?.gameData?.datetime?.dateTime;
       if (boxISO) {
-        return DateTime.fromISO(boxISO).setZone("America/New_York").toISO(); // ✅ ISO 8601 full timestamp
+        return DateTime.fromISO(boxISO).setZone(ET_ZONE).toISO(); // ✅ ISO 8601 full timestamp
       }
     }
 
@@ -112,5 +141,5 @@ export async function getGameStartTimeET(gameId) {
 export function toEasternDateTime(gameDate, gameTime) {
   if (!gameDate || !gameTime) return null; // guard clause
   const iso = `${gameDate}T${gameTime}`; // e.g. 2023-04-30T19:05:00
-  return DateTime.fromISO(iso, { zone: "America/New_York" });
+  return DateTime.fromISO(iso, { zone: ET_ZONE });
 }

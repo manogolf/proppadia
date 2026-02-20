@@ -90,11 +90,14 @@ function getClockLabelFromLanding(landing) {
   return null;
 }
 
-export default function TodayGamesNHL({ games = [] }) {
-  const today = useMemo(() => todayET(), []);
+export default function TodayGamesNHL({ games = [], selectedDate = null }) {
+  const targetDate = useMemo(
+    () => String(selectedDate || "").trim() || todayET(),
+    [selectedDate]
+  );
   const todays = useMemo(
-    () => (games || []).filter((g) => String(g.game_date) === String(today)),
-    [games, today]
+    () => (games || []).filter((g) => String(g.game_date) === String(targetDate)),
+    [games, targetDate]
   );
 
   const sorted = useMemo(() => {

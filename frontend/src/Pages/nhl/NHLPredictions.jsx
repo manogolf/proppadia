@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import SogEvalCard from "../../components/SogEvalCard.jsx";
 import { PrefetchLink } from "../../components/navigation/PrefetchLink.jsx";
 import TodayGamesNHL from "../../components/TodayGamesNHL.jsx";
+import PredictionCalendar from "../../components/predictions/calendar/PredictionCalendar.jsx";
 import ModelVsMarketCard from "../../components/predictions/ModelVsMarketCard.jsx";
 import MyPropsPanel from "../../components/predictions/MyPropsPanel.jsx";
 import PredictionWorkspace from "../../components/predictions/PredictionWorkspace.jsx";
@@ -22,7 +23,7 @@ import {
   adaptNhlBoardPrediction,
   formatNhlPredictionLine,
 } from "../../shared/predictionAdapters/nhlAdapter.js";
-import { todayET } from "../../shared/timeUtils.js";
+import { isISODateString, todayET } from "../../shared/timeUtils.js";
 import {
   WATCHLIST_UPDATED_EVENT,
   WATCHLIST_SCOPE_NHL,
@@ -91,7 +92,7 @@ function marketKey(playerId, gameId, line) {
 export default function NHLPredictions() {
   const location = useLocation();
   const { user } = useAuth();
-  const slateDate = useMemo(() => todayET(), []);
+  const [slateDate, setSlateDate] = useState(todayET());
   const [mode, setMode] = useState(WORKSPACE_MODE_RESEARCH);
 
   const [loading, setLoading] = useState(true);
@@ -122,11 +123,15 @@ export default function NHLPredictions() {
     const modeFromUrl = String(params.get("mode") || "").trim().toLowerCase();
     const playerFromUrl = String(params.get("player") || "").trim();
     const teamFromUrl = String(params.get("team") || "").trim();
+    const dateFromUrl = String(params.get("date") || "").trim();
     const seed = playerFromUrl || teamFromUrl;
     if (isWorkspaceMode(modeFromUrl)) {
       setMode(modeFromUrl);
     } else if (seed) {
       setMode(WORKSPACE_MODE_BOARD);
+    }
+    if (isISODateString(dateFromUrl)) {
+      setSlateDate(dateFromUrl);
     }
     if (!seed) return;
     setQ(seed);
@@ -435,8 +440,17 @@ export default function NHLPredictions() {
         />
       );
     }
-    return <TodayGamesNHL games={games} />;
+    return <TodayGamesNHL games={games} selectedDate={slateDate} />;
   }, [games, gamesError, gamesLoading, slateDate]);
+
+  const calendarSection = (
+    <PredictionCalendar
+      selectedDate={slateDate}
+      setSelectedDate={setSlateDate}
+      title="Slate Calendar"
+      subtitle="Choose the NHL slate date before scanning the board."
+    />
+  );
 
   const topSogRows = useMemo(() => sortedSog.slice(0, 8), [sortedSog]);
   const topSavesRows = useMemo(() => sortedSaves.slice(0, 8), [sortedSaves]);
@@ -839,6 +853,7 @@ export default function NHLPredictions() {
         />
       ) : mode === WORKSPACE_MODE_RESEARCH ? (
         <div className="space-y-6">
+          {calendarSection}
           {slateSection}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -978,6 +993,7 @@ export default function NHLPredictions() {
         </div>
       ) : (
         <div className="space-y-6">
+          {calendarSection}
           {slateSection}
 
           {saveError ? (
