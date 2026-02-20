@@ -90,6 +90,13 @@ class TestOpsRouter(unittest.TestCase):
                     "mlb_prod12_daily_prop_types": "hits,total_bases,strikeouts_batting",
                     "mlb_replay_retry_attempts": 8,
                     "mlb_replay_retry_backoff_ms": 1500,
+                    "mlb_weekly_prop_sequence_enabled": 1,
+                    "mlb_weekly_prop_sequence": "hits,runs_scored",
+                    "mlb_weekly_prop_sequence_continue_on_error": 1,
+                    "mlb_weekly_prop_sequence_sleep_sec": 8,
+                    "mlb_candidate_min_total": 0,
+                    "mlb_prod12_min_lift_pct": -5,
+                    "mlb_prod12_max_prop_drop_pct": 3.5,
                 },
             )
         self.assertEqual(resp.status_code, 200)
@@ -102,6 +109,13 @@ class TestOpsRouter(unittest.TestCase):
             "hits,total_bases,strikeouts_batting",
         )
         self.assertEqual(env_overrides.get("MLB_REPLAY_RETRY_ATTEMPTS"), 8)
+        self.assertEqual(env_overrides.get("MLB_WEEKLY_PROP_SEQUENCE_ENABLED"), 1)
+        self.assertEqual(env_overrides.get("MLB_WEEKLY_PROP_SEQUENCE"), "hits,runs_scored")
+        self.assertEqual(env_overrides.get("MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR"), 1)
+        self.assertEqual(env_overrides.get("MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC"), 8)
+        self.assertEqual(env_overrides.get("MLB_CANDIDATE_MIN_TOTAL"), 0)
+        self.assertEqual(env_overrides.get("MLB_PROD12_MIN_LIFT_PCT"), -5.0)
+        self.assertEqual(env_overrides.get("MLB_PROD12_MAX_PROP_DROP_PCT"), 3.5)
 
     @patch("backend.app.routers.ops.start_prod12_cycle")
     def test_trigger_mlb_prod12_cycle_conflict(self, mock_start):

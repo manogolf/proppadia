@@ -34,10 +34,14 @@ str_fields = {
     "MLB_DATE": "mlb_date",
     "MLB_PROD12_DAILY_PROP_TYPES": "mlb_prod12_daily_prop_types",
     "MLB_PROD12_PROP_TYPES": "mlb_prod12_prop_types",
+    "MLB_WEEKLY_PROP_SEQUENCE": "mlb_weekly_prop_sequence",
 }
 int_fields = {
     "MLB_CRON_WEEKLY_DAY_UTC": "weekly_day_utc",
     "MLB_WEEKLY_PHASE2_ENABLED": "mlb_weekly_phase2_enabled",
+    "MLB_WEEKLY_PROP_SEQUENCE_ENABLED": "mlb_weekly_prop_sequence_enabled",
+    "MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR": "mlb_weekly_prop_sequence_continue_on_error",
+    "MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC": "mlb_weekly_prop_sequence_sleep_sec",
     "MLB_PREDICT_SAMPLE": "mlb_predict_sample",
     "MLB_PREDICT_MIN_SUCCESS": "mlb_predict_min_success",
     "MLB_REPLAY_SAMPLE": "mlb_replay_sample",
@@ -45,6 +49,11 @@ int_fields = {
     "MLB_REPLAY_RETRY_ATTEMPTS": "mlb_replay_retry_attempts",
     "MLB_REPLAY_RETRY_BACKOFF_MS": "mlb_replay_retry_backoff_ms",
     "MLB_REPLAY_MAX_PREDICT_P95_MS": "mlb_replay_max_predict_p95_ms",
+    "MLB_CANDIDATE_MIN_TOTAL": "mlb_candidate_min_total",
+}
+float_fields = {
+    "MLB_PROD12_MIN_LIFT_PCT": "mlb_prod12_min_lift_pct",
+    "MLB_PROD12_MAX_PROP_DROP_PCT": "mlb_prod12_max_prop_drop_pct",
 }
 
 for env_name, body_key in str_fields.items():
@@ -60,6 +69,16 @@ for env_name, body_key in int_fields.items():
         payload[body_key] = int(value)
     except Exception:
         # Ignore invalid integer env values; backend defaults apply.
+        pass
+
+for env_name, body_key in float_fields.items():
+    value = get(env_name)
+    if value is None:
+        continue
+    try:
+        payload[body_key] = float(value)
+    except Exception:
+        # Ignore invalid numeric env values; backend defaults apply.
         pass
 
 print(json.dumps(payload, separators=(",", ":")))

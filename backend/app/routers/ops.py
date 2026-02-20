@@ -40,6 +40,10 @@ class Prod12TriggerRequest(BaseModel):
     mlb_weekly_base_url: Optional[str] = None
     mlb_daily_base_url: Optional[str] = None
     mlb_weekly_phase2_enabled: Optional[int] = None
+    mlb_weekly_prop_sequence_enabled: Optional[int] = None
+    mlb_weekly_prop_sequence: Optional[str] = None
+    mlb_weekly_prop_sequence_continue_on_error: Optional[int] = None
+    mlb_weekly_prop_sequence_sleep_sec: Optional[int] = None
     mlb_prod12_prop_types: Optional[str] = None
     mlb_date: Optional[str] = None
     mlb_predict_sample: Optional[int] = None
@@ -50,6 +54,9 @@ class Prod12TriggerRequest(BaseModel):
     mlb_replay_retry_attempts: Optional[int] = None
     mlb_replay_retry_backoff_ms: Optional[int] = None
     mlb_replay_max_predict_p95_ms: Optional[int] = None
+    mlb_candidate_min_total: Optional[int] = None
+    mlb_prod12_min_lift_pct: Optional[float] = None
+    mlb_prod12_max_prop_drop_pct: Optional[float] = None
 
 
 def _require_ops_token(header_value: Optional[str]) -> None:
@@ -144,6 +151,10 @@ def trigger_mlb_prod12_cycle(
         "MLB_WEEKLY_BASE_URL": body.mlb_weekly_base_url,
         "MLB_DAILY_BASE_URL": body.mlb_daily_base_url,
         "MLB_WEEKLY_PHASE2_ENABLED": body.mlb_weekly_phase2_enabled,
+        "MLB_WEEKLY_PROP_SEQUENCE_ENABLED": body.mlb_weekly_prop_sequence_enabled,
+        "MLB_WEEKLY_PROP_SEQUENCE": body.mlb_weekly_prop_sequence,
+        "MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR": body.mlb_weekly_prop_sequence_continue_on_error,
+        "MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC": body.mlb_weekly_prop_sequence_sleep_sec,
         "MLB_PROD12_PROP_TYPES": body.mlb_prod12_prop_types,
         "MLB_DATE": body.mlb_date,
         "MLB_PREDICT_SAMPLE": body.mlb_predict_sample,
@@ -154,6 +165,9 @@ def trigger_mlb_prod12_cycle(
         "MLB_REPLAY_RETRY_ATTEMPTS": body.mlb_replay_retry_attempts,
         "MLB_REPLAY_RETRY_BACKOFF_MS": body.mlb_replay_retry_backoff_ms,
         "MLB_REPLAY_MAX_PREDICT_P95_MS": body.mlb_replay_max_predict_p95_ms,
+        "MLB_CANDIDATE_MIN_TOTAL": body.mlb_candidate_min_total,
+        "MLB_PROD12_MIN_LIFT_PCT": body.mlb_prod12_min_lift_pct,
+        "MLB_PROD12_MAX_PROP_DROP_PCT": body.mlb_prod12_max_prop_drop_pct,
     }
     try:
         payload = start_prod12_cycle(triggered_by="ops_api", env_overrides=env_overrides)

@@ -90,7 +90,7 @@ if [[ "$SKLEARN_VERSION" != "1.6.1" ]]; then
 fi
 
 ORIG_MLB_BASE_URL="${MLB_BASE_URL:-}"
-MLB_WEEKLY_BASE_URL="${MLB_WEEKLY_BASE_URL:-}"
+MLB_WEEKLY_BASE_URL="${MLB_WEEKLY_BASE_URL:-${ORIG_MLB_BASE_URL}}"
 MLB_DAILY_BASE_URL="${MLB_DAILY_BASE_URL:-${ORIG_MLB_BASE_URL}}"
 MLB_DATE="${MLB_DATE:-2025-08-15}"
 MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE:-4}"
@@ -100,11 +100,19 @@ MLB_REPLAY_RETRY_BACKOFF_MS="${MLB_REPLAY_RETRY_BACKOFF_MS:-1500}"
 MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS:-12000}"
 MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-3}"
 MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
+MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
 MODEL_DIR="${MODEL_DIR:-/var/data/proppadia/models}"
 MLB_CRON_RUN_MODE="${MLB_CRON_RUN_MODE:-daily}"
 MLB_CRON_WEEKLY_DAY_UTC="${MLB_CRON_WEEKLY_DAY_UTC:-1}" # 1=Mon ... 7=Sun
 MLB_WEEKLY_PHASE2_ENABLED="${MLB_WEEKLY_PHASE2_ENABLED:-1}"
+MLB_WEEKLY_PROP_SEQUENCE_ENABLED="${MLB_WEEKLY_PROP_SEQUENCE_ENABLED:-0}"
+MLB_WEEKLY_PROP_SEQUENCE="${MLB_WEEKLY_PROP_SEQUENCE:-${MLB_PROD12_PROP_TYPES}}"
+MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR="${MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR:-1}"
+MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC="${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC:-5}"
+MLB_CANDIDATE_MIN_TOTAL="${MLB_CANDIDATE_MIN_TOTAL:-}"
+MLB_PROD12_MIN_LIFT_PCT="${MLB_PROD12_MIN_LIFT_PCT:-}"
+MLB_PROD12_MAX_PROP_DROP_PCT="${MLB_PROD12_MAX_PROP_DROP_PCT:-}"
 
 run_mode_normalized="$(echo "${MLB_CRON_RUN_MODE}" | tr '[:upper:]' '[:lower:]')"
 run_daily_now=0
@@ -156,6 +164,96 @@ run_weekly() {
   if [[ "${MLB_WEEKLY_PHASE2_ENABLED}" != "1" ]]; then
     echo "[prod12-cron] weekly phase-2 disabled (MLB_WEEKLY_PHASE2_ENABLED=${MLB_WEEKLY_PHASE2_ENABLED}); running sync+validate only"
     make mlb-model-artifact-validate-prod12
+    return
+  fi
+
+  run_weekly_phase2_for_prop() {
+    local prop="$1"
+    (
+      export MLB_BASE_URL="${MLB_WEEKLY_BASE_URL}"
+      export MLB_DATE="${MLB_DATE}"
+      export MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE}"
+      export MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS}"
+      export MLB_REPLAY_RETRY_ATTEMPTS="${MLB_REPLAY_RETRY_ATTEMPTS}"
+      export MLB_REPLAY_RETRY_BACKOFF_MS="${MLB_REPLAY_RETRY_BACKOFF_MS}"
+      export MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS}"
+      export MLB_PROD12_PROP_TYPES="${prop}"
+      if [[ -n "${MLB_CANDIDATE_MIN_TOTAL}" ]]; then
+        export MLB_CANDIDATE_MIN_TOTAL="${MLB_CANDIDATE_MIN_TOTAL}"
+      fi
+      if [[ -n "${MLB_PROD12_MIN_LIFT_PCT}" ]]; then
+        export MLB_PROD12_MIN_LIFT_PCT="${MLB_PROD12_MIN_LIFT_PCT}"
+      fi
+      if [[ -n "${MLB_PROD12_MAX_PROP_DROP_PCT}" ]]; then
+        export MLB_PROD12_MAX_PROP_DROP_PCT="${MLB_PROD12_MAX_PROP_DROP_PCT}"
+      fi
+      make mlb-prod12-phase2-readiness
+    )
+  }
+
+  if [[ "${MLB_WEEKLY_PROP_SEQUENCE_ENABLED}" == "1" ]]; then
+    local seq_csv="${MLB_WEEKLY_PROP_SEQUENCE}"
+    if [[ -z "${seq_csv// }" ]]; then
+      echo "[prod12-cron] ERROR: MLB_WEEKLY_PROP_SEQUENCE_ENABLED=1 but MLB_WEEKLY_PROP_SEQUENCE is empty" >&2
+      return 2
+    fi
+
+    local -a seq_props=()
+    IFS=',' read -r -a seq_props <<< "${seq_csv}"
+
+    local total=0
+    local raw=""
+    for raw in "${seq_props[@]}"; do
+      local trimmed
+      trimmed="$(echo "${raw}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      if [[ -n "${trimmed}" ]]; then
+        total=$((total + 1))
+      fi
+    done
+    if [[ "${total}" -le 0 ]]; then
+      echo "[prod12-cron] ERROR: MLB_WEEKLY_PROP_SEQUENCE has no valid props" >&2
+      return 2
+    fi
+
+    local idx=0
+    local failed=0
+    echo "[prod12-cron] running weekly phase-2 sequence: props=${total}"
+
+    for raw in "${seq_props[@]}"; do
+      local prop
+      prop="$(echo "${raw}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      if [[ -z "${prop}" ]]; then
+        continue
+      fi
+      idx=$((idx + 1))
+      echo "[prod12-cron] weekly phase-2 sequence [${idx}/${total}] prop=${prop}"
+
+      set +e
+      run_weekly_phase2_for_prop "${prop}"
+      local rc=$?
+      set -e
+
+      if [[ "${rc}" -ne 0 ]]; then
+        failed=$((failed + 1))
+        echo "[prod12-cron] weekly phase-2 sequence prop=${prop} failed rc=${rc}" >&2
+        if [[ "${MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR}" != "1" ]]; then
+          return "${rc}"
+        fi
+      else
+        echo "[prod12-cron] weekly phase-2 sequence prop=${prop} passed"
+      fi
+
+      if [[ "${idx}" -lt "${total}" ]] && [[ "${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC}" =~ ^[0-9]+$ ]] && [[ "${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC}" -gt 0 ]]; then
+        sleep "${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC}"
+      fi
+    done
+
+    if [[ "${failed}" -gt 0 ]]; then
+      echo "[prod12-cron] ERROR: weekly phase-2 sequence completed with failed_props=${failed}" >&2
+      return 1
+    fi
+
+    echo "[prod12-cron] weekly phase-2 sequence completed successfully"
     return
   fi
 
