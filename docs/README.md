@@ -92,3 +92,5 @@ If the question is “what is the active runtime path right now?”:
 - `docs/Project Map.md`: broad project inventory notes.
 - `docs/MLB Cutover Checklist.md`: final checklist to restore MLB site functionality.
 - `docs/Prediction UX Unification Draft.md`: draft plan to unify MLB/NHL prediction UX into a shared research workspace model.
+- `docs/Cross-Sport Product Plan.md`: canonical cross-sport product rules, phases, and acceptance criteria.
+- `docs/Cross-Sport Implementation Checklist.md`: file-level execution checklist for cross-sport UX and contract unification.
