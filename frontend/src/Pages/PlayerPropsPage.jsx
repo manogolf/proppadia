@@ -21,6 +21,10 @@ import { getBaseURL } from "../shared/getBaseURL.js";
 import { normalizeHttpErrorMessage } from "../shared/httpErrorMessage.js";
 import { buildMarketContext } from "../shared/marketContext.js";
 import {
+  adaptMlbPrediction,
+  formatMlbPredictionLine,
+} from "../shared/predictionAdapters/mlbAdapter.js";
+import {
   WATCHLIST_SCOPE_MLB,
   WATCHLIST_UPDATED_EVENT,
   readWatchlistScope,
@@ -71,15 +75,24 @@ export default function PlayerPropsPage() {
       ? "Resolve player and context, then generate model output."
       : "Review saved props by date and inspect tracking history.";
   }, [mode]);
+  const predictionLineLabel = useMemo(
+    () =>
+      formatMlbPredictionLine(
+        latestPrediction,
+        "Run a prediction to populate this card"
+      ),
+    [latestPrediction]
+  );
   const marketCtx = useMemo(
     () =>
       buildMarketContext({
         marketProbability: latestPrediction?.marketProbability ?? null,
         marketSource: latestPrediction?.marketSource || null,
         marketUpdatedAt: latestPrediction?.marketUpdatedAt || null,
-        modelUpdatedAt: latestPrediction?.updatedAt || null,
+        modelUpdatedAt: latestPrediction?.modelUpdatedAt || null,
         marketSourceFallback: "OddsAPI market",
-        modelSourceFallback: latestPrediction ? "Model output" : "Awaiting prediction",
+        modelSourceFallback:
+          latestPrediction?.modelSource || (latestPrediction ? "Model output" : "Awaiting prediction"),
       }),
     [latestPrediction]
   );
@@ -228,12 +241,8 @@ export default function PlayerPropsPage() {
 
           <ModelVsMarketCard
             title="Model vs Market (MLB)"
-            lineLabel={
-              latestPrediction?.features?.prop_type
-                ? `${latestPrediction.features.prop_type} • ${latestPrediction.features.over_under || ""} ${latestPrediction.features.prop_value ?? ""}`
-                : "Run a prediction to populate this card"
-            }
-            modelProbability={latestPrediction?.probability ?? null}
+            lineLabel={predictionLineLabel}
+            modelProbability={latestPrediction?.modelProbability ?? null}
             marketProbability={latestPrediction?.marketProbability ?? null}
             sourceLabel={marketCtx.sourceLabel}
             sourceKind={marketCtx.sourceKind}
@@ -275,7 +284,7 @@ export default function PlayerPropsPage() {
             <PlayerPropFormV2
               initialPlayerName={seedPlayerName}
               initialTeamAbbr={seedTeamAbbr}
-              onPredicted={(evt) => setLatestPrediction(evt || null)}
+              onPredicted={(evt) => setLatestPrediction(adaptMlbPrediction(evt || null))}
               onSaved={(evt) => {
                 if (evt?.gameDate) setSelectedDate(evt.gameDate);
                 setLastSaveEvent(evt || null);
@@ -305,11 +314,11 @@ export default function PlayerPropsPage() {
           <ModelVsMarketCard
             title="Board Snapshot (MLB)"
             lineLabel={
-              latestPrediction?.features?.prop_type
-                ? `${latestPrediction.features.prop_type} • ${latestPrediction.features.over_under || ""} ${latestPrediction.features.prop_value ?? ""}`
+              latestPrediction
+                ? formatMlbPredictionLine(latestPrediction)
                 : "Run a prediction in Player Research mode to populate snapshot context"
             }
-            modelProbability={latestPrediction?.probability ?? null}
+            modelProbability={latestPrediction?.modelProbability ?? null}
             marketProbability={latestPrediction?.marketProbability ?? null}
             sourceLabel={marketCtx.sourceLabel}
             sourceKind={marketCtx.sourceKind}

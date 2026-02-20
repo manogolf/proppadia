@@ -18,6 +18,10 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import { normalizeHttpErrorMessage } from "../../shared/httpErrorMessage.js";
 import { buildMarketContext } from "../../shared/marketContext.js";
+import {
+  adaptNhlBoardPrediction,
+  formatNhlPredictionLine,
+} from "../../shared/predictionAdapters/nhlAdapter.js";
 import { todayET } from "../../shared/timeUtils.js";
 import {
   WATCHLIST_UPDATED_EVENT,
@@ -452,6 +456,38 @@ export default function NHLPredictions() {
     return marketMaps.saves.get(marketKey(topSaves.player_id, topSaves.game_id, topSavesBest.line)) || null;
   }, [marketMaps.saves, topSaves, topSavesBest]);
 
+  const topSogPrediction = useMemo(
+    () =>
+      adaptNhlBoardPrediction({
+        propType: "sog",
+        row: topSog,
+        bestLine: topSogBest,
+        market: topSogMarket,
+        modelUpdatedAt: loadedAt || null,
+        marketUpdatedAt: marketLoadedAt || null,
+        modelSource: "NHL SOG model",
+        marketSource: "OddsAPI market median",
+      }),
+    [loadedAt, marketLoadedAt, topSog, topSogBest, topSogMarket]
+  );
+
+  const topSavesPrediction = useMemo(
+    () =>
+      adaptNhlBoardPrediction({
+        propType: "saves",
+        row: topSaves,
+        bestLine: topSavesBest,
+        market: topSavesMarket,
+        modelUpdatedAt: loadedAt || null,
+        marketUpdatedAt: marketLoadedAt || null,
+        modelSource: "NHL saves model",
+        marketSource: "OddsAPI market median",
+      }),
+    [loadedAt, marketLoadedAt, topSaves, topSavesBest, topSavesMarket]
+  );
+
+  const boardPrediction = topSogPrediction;
+
   const dataConfidence = useMemo(() => {
     const total = sortedSog.length + sortedSaves.length;
     if (total >= 120) return "High";
@@ -597,40 +633,40 @@ export default function NHLPredictions() {
   const sogMarketContext = useMemo(
     () =>
       buildMarketContext({
-        marketProbability: topSogMarket?.marketProbability ?? null,
-        marketSource: "OddsAPI market median",
-        marketUpdatedAt: marketLoadedAt || null,
-        modelUpdatedAt: loadedAt || null,
+        marketProbability: topSogPrediction?.marketProbability ?? null,
+        marketSource: topSogPrediction?.marketSource || null,
+        marketUpdatedAt: topSogPrediction?.marketUpdatedAt || null,
+        modelUpdatedAt: topSogPrediction?.modelUpdatedAt || null,
         marketSourceFallback: "OddsAPI market median",
-        modelSourceFallback: "NHL SOG model",
+        modelSourceFallback: topSogPrediction?.modelSource || "NHL SOG model",
       }),
-    [loadedAt, marketLoadedAt, topSogMarket?.marketProbability]
+    [topSogPrediction]
   );
 
   const savesMarketContext = useMemo(
     () =>
       buildMarketContext({
-        marketProbability: topSavesMarket?.marketProbability ?? null,
-        marketSource: "OddsAPI market median",
-        marketUpdatedAt: marketLoadedAt || null,
-        modelUpdatedAt: loadedAt || null,
+        marketProbability: topSavesPrediction?.marketProbability ?? null,
+        marketSource: topSavesPrediction?.marketSource || null,
+        marketUpdatedAt: topSavesPrediction?.marketUpdatedAt || null,
+        modelUpdatedAt: topSavesPrediction?.modelUpdatedAt || null,
         marketSourceFallback: "OddsAPI market median",
-        modelSourceFallback: "NHL saves model",
+        modelSourceFallback: topSavesPrediction?.modelSource || "NHL saves model",
       }),
-    [loadedAt, marketLoadedAt, topSavesMarket?.marketProbability]
+    [topSavesPrediction]
   );
 
   const boardMarketContext = useMemo(
     () =>
       buildMarketContext({
-        marketProbability: topSogMarket?.marketProbability ?? null,
-        marketSource: "OddsAPI market median",
-        marketUpdatedAt: marketLoadedAt || null,
-        modelUpdatedAt: loadedAt || null,
+        marketProbability: boardPrediction?.marketProbability ?? null,
+        marketSource: boardPrediction?.marketSource || null,
+        marketUpdatedAt: boardPrediction?.marketUpdatedAt || null,
+        modelUpdatedAt: boardPrediction?.modelUpdatedAt || null,
         marketSourceFallback: "OddsAPI market median",
-        modelSourceFallback: "NHL board",
+        modelSourceFallback: boardPrediction?.modelSource || "NHL board",
       }),
-    [loadedAt, marketLoadedAt, topSogMarket?.marketProbability]
+    [boardPrediction]
   );
 
   const topSogWatchId = topSog
@@ -808,13 +844,9 @@ export default function NHLPredictions() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ModelVsMarketCard
               title="Top SOG Model Edge"
-              lineLabel={
-                topSog && topSogBest
-                  ? `${topSog.player_name || topSog.player_id} • Over ${topSogBest.line}`
-                  : "No SOG edge available"
-              }
-              modelProbability={topSogBest?.p ?? null}
-              marketProbability={topSogMarket?.marketProbability ?? null}
+              lineLabel={formatNhlPredictionLine(topSogPrediction, "No SOG edge available")}
+              modelProbability={topSogPrediction?.modelProbability ?? null}
+              marketProbability={topSogPrediction?.marketProbability ?? null}
               sourceLabel={sogMarketContext.sourceLabel}
               sourceKind={sogMarketContext.sourceKind}
               updatedLabel={sogMarketContext.updatedLabel}
@@ -846,13 +878,9 @@ export default function NHLPredictions() {
             />
             <ModelVsMarketCard
               title="Top Saves Model Edge"
-              lineLabel={
-                topSaves && topSavesBest
-                  ? `${topSaves.player_name || topSaves.player_id} • Over ${topSavesBest.line}`
-                  : "No saves edge available"
-              }
-              modelProbability={topSavesBest?.p ?? null}
-              marketProbability={topSavesMarket?.marketProbability ?? null}
+              lineLabel={formatNhlPredictionLine(topSavesPrediction, "No saves edge available")}
+              modelProbability={topSavesPrediction?.modelProbability ?? null}
+              marketProbability={topSavesPrediction?.marketProbability ?? null}
               sourceLabel={savesMarketContext.sourceLabel}
               sourceKind={savesMarketContext.sourceKind}
               updatedLabel={savesMarketContext.updatedLabel}
@@ -1087,13 +1115,9 @@ export default function NHLPredictions() {
 
           <ModelVsMarketCard
             title="Board Snapshot"
-            lineLabel={
-              topSog && topSogBest
-                ? `${topSog.player_name || topSog.player_id} • Over ${topSogBest.line}`
-                : "Top line snapshot"
-            }
-            modelProbability={topSogBest?.p ?? null}
-            marketProbability={topSogMarket?.marketProbability ?? null}
+            lineLabel={formatNhlPredictionLine(boardPrediction, "Top line snapshot")}
+            modelProbability={boardPrediction?.modelProbability ?? null}
+            marketProbability={boardPrediction?.marketProbability ?? null}
             sourceLabel={boardMarketContext.sourceLabel}
             sourceKind={boardMarketContext.sourceKind}
             updatedLabel={boardMarketContext.updatedLabel}
