@@ -94,3 +94,4 @@ If the question is “what is the active runtime path right now?”:
 - `docs/Prediction UX Unification Draft.md`: draft plan to unify MLB/NHL prediction UX into a shared research workspace model.
 - `docs/Cross-Sport Product Plan.md`: canonical cross-sport product rules, phases, and acceptance criteria.
 - `docs/Cross-Sport Implementation Checklist.md`: file-level execution checklist for cross-sport UX and contract unification.
+- `docs/Cross-Sport Sprint Schedule.md`: 4-week sprint sequence with commit boundaries and gate checks.
