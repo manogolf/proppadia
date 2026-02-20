@@ -9,6 +9,7 @@ export default function PredictionWorkspace({
   activeMode,
   onModeChange,
   controls = null,
+  contentClassName = "",
   children,
 }) {
   return (
@@ -55,7 +56,7 @@ export default function PredictionWorkspace({
 
           {controls ? <div className="px-5 py-4 border-b border-slate-200">{controls}</div> : null}
 
-          <div className="px-5 py-5">{children}</div>
+          <div className={`px-5 py-5 ${contentClassName}`.trim()}>{children}</div>
         </div>
       </div>
     </div>

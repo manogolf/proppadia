@@ -192,6 +192,22 @@ export default function PlayerPropsPage() {
     };
   }, [selectedDate]);
 
+  const slateSection = useMemo(() => {
+    if (gamesLoading) {
+      return (
+        <WorkspaceStatePanel
+          kind="loading"
+          title="Loading MLB slate"
+          detail={`Checking schedule context for ${selectedDate}.`}
+        />
+      );
+    }
+    if (gamesError) {
+      return <WorkspaceStatePanel kind="error" title="Could not load MLB slate" detail={gamesError} />;
+    }
+    return <TodayGames games={games} />;
+  }, [games, gamesError, gamesLoading, selectedDate]);
+
   return (
     <PredictionWorkspace
       sportLabel="MLB"
@@ -204,17 +220,7 @@ export default function PlayerPropsPage() {
     >
       {mode === WORKSPACE_MODE_RESEARCH ? (
         <div className="space-y-4">
-          {gamesLoading ? (
-            <WorkspaceStatePanel
-              kind="loading"
-              title="Loading MLB slate"
-              detail={`Checking schedule context for ${selectedDate}.`}
-            />
-          ) : gamesError ? (
-            <WorkspaceStatePanel kind="error" title="Could not load MLB slate" detail={gamesError} />
-          ) : (
-            <TodayGames games={games} />
-          )}
+          {slateSection}
 
           <ModelVsMarketCard
             title="Model vs Market (MLB)"
@@ -275,17 +281,7 @@ export default function PlayerPropsPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {gamesLoading ? (
-            <WorkspaceStatePanel
-              kind="loading"
-              title="Loading MLB slate"
-              detail={`Checking schedule context for ${selectedDate}.`}
-            />
-          ) : gamesError ? (
-            <WorkspaceStatePanel kind="error" title="Could not load MLB slate" detail={gamesError} />
-          ) : (
-            <TodayGames games={games} />
-          )}
+          {slateSection}
 
           <MyPropsPanel
             refreshNonce={tableRefreshNonce}

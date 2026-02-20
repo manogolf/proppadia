@@ -410,6 +410,30 @@ export default function NHLPredictions() {
       : "Search and rank shots-on-goal and saves lines for the active slate.";
   }, [mode]);
 
+  const slateSection = useMemo(() => {
+    if (gamesLoading) {
+      return (
+        <WorkspaceStatePanel
+          kind="loading"
+          title="Loading NHL slate"
+          detail={`Checking schedule context for ${slateDate}.`}
+          centered
+        />
+      );
+    }
+    if (gamesError) {
+      return (
+        <WorkspaceStatePanel
+          kind="error"
+          title="Could not load NHL slate"
+          detail={gamesError}
+          centered
+        />
+      );
+    }
+    return <TodayGamesNHL games={games} />;
+  }, [games, gamesError, gamesLoading, slateDate]);
+
   const topSogRows = useMemo(() => sortedSog.slice(0, 8), [sortedSog]);
   const topSavesRows = useMemo(() => sortedSaves.slice(0, 8), [sortedSaves]);
 
@@ -779,13 +803,7 @@ export default function NHLPredictions() {
         />
       ) : mode === WORKSPACE_MODE_RESEARCH ? (
         <div className="space-y-6">
-          {gamesLoading ? (
-            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading NHL slate...</div>
-          ) : gamesError ? (
-            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
-          ) : (
-            <TodayGamesNHL games={games} />
-          )}
+          {slateSection}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ModelVsMarketCard
@@ -930,13 +948,7 @@ export default function NHLPredictions() {
         </div>
       ) : (
         <div className="space-y-6">
-          {gamesLoading ? (
-            <div className="pp-chip p-3 text-sm text-slate-500 text-center">Loading NHL slate...</div>
-          ) : gamesError ? (
-            <div className="pp-chip p-3 text-sm text-rose-700 text-center">{gamesError}</div>
-          ) : (
-            <TodayGamesNHL games={games} />
-          )}
+          {slateSection}
 
           {saveError ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
