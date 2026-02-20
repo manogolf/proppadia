@@ -200,7 +200,7 @@ Phase 7 gate:
 `make mlb-prod12-phase2-last-strict`
 
 4. NHL quality baseline:
-`make nhl-prediction-quality NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_MIN_TOTAL=1`
+`make nhl-prediction-quality-auto NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_ACTIVE_MIN_TOTAL=1`
 
 5. Cross-sport post-deploy check:
 `make cross-sport-post-deploy BASE_URL=<your_backend_url>`
@@ -216,4 +216,3 @@ Phase 7 gate:
 7. Phase 7
 
 No phase skipping.
-

@@ -34,8 +34,8 @@ Purpose: keep a minimal set of high-signal commands for operator use.
   - validates MLB/NHL day-0 baseline artifacts exist before cutover
 - `make season-cutover-ready`
   - strict phase-6 readiness plus governance gate in one command
-- `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD`
-  - NHL fixed-window quality baseline
+- `make nhl-prediction-quality-auto NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD [NHL_QUALITY_ACTIVE_MIN_TOTAL=1]`
+  - NHL fixed-window quality baseline (auto sparse-window tolerance)
 - `make mlb-prediction-flow-audit`
   - MLB date/game binding + duplicate/idempotency integrity check
 

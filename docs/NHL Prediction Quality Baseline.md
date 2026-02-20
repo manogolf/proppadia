@@ -9,10 +9,10 @@ This is a read-only report against `public.player_props` rows where `prop_source
 ## Command
 
 ```bash
-make nhl-prediction-quality \
+make nhl-prediction-quality-auto \
   NHL_QUALITY_FROM_DATE=2025-12-01 \
   NHL_QUALITY_TO_DATE=2025-12-31 \
-  NHL_QUALITY_MIN_TOTAL=1
+  NHL_QUALITY_ACTIVE_MIN_TOTAL=1
 ```
 
 ## Output
@@ -29,3 +29,4 @@ JSON payload containing:
 - Only graded outcomes (`win`/`loss`) count toward model accuracy.
 - `push`/`dnp` are excluded from correctness denominator.
 - Use explicit date windows for reproducibility between runs.
+- Auto mode keeps offseason windows non-blocking (`effective min_total=0` when no graded NHL rows exist).

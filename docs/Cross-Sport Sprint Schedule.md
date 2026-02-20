@@ -205,12 +205,12 @@ Gate:
 - `cd frontend && npm run build`
 - `make mlb-prod12-status-daily-strict`
 - `make mlb-prod12-phase2-last-strict`
-- `make nhl-prediction-quality NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_MIN_TOTAL=0`
+- `make nhl-prediction-quality-auto NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_ACTIVE_MIN_TOTAL=1`
 - `make cross-sport-post-deploy BASE_URL=<your_backend_url>`
 
 NHL gate note:
-- Use `NHL_QUALITY_MIN_TOTAL=0` until NHL player props form writes `nhl_%` rows into `player_props`.
-- Switch to `NHL_QUALITY_MIN_TOTAL=1` (or higher) once NHL user-added predictions are live and graded.
+- `nhl-prediction-quality-auto` lowers the effective threshold to `0` when the window has no graded NHL rows.
+- Once graded NHL rows exist, the effective threshold is `NHL_QUALITY_ACTIVE_MIN_TOTAL` (default `1`).
 
 Merge rule:
 - merge to `main` only after CB-12 passes.

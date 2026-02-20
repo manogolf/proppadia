@@ -332,7 +332,7 @@ make mlb-pipeline-daily-check MLB_DATE=2025-08-15 MLB_PREDICT_SAMPLE=10 MLB_PRED
 NHL fixed-window quality baseline:
 
 ```bash
-make nhl-prediction-quality NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_MIN_TOTAL=1
+make nhl-prediction-quality-auto NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_ACTIVE_MIN_TOTAL=1
 ```
 
 Season day-0 baseline artifact capture:

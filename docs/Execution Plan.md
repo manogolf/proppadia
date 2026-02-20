@@ -13,7 +13,7 @@ Completed slices:
   - repro tests for late-season date mismatch mode added
   - audit note documented (`docs/MLB Prediction Flow Audit.md`)
 - Phase 4.2:
-  - repeatable NHL fixed-window quality report added (`make nhl-prediction-quality`)
+  - repeatable NHL fixed-window quality report added (`make nhl-prediction-quality`, with `make nhl-prediction-quality-auto` now available for sparse windows)
   - baseline doc added (`docs/NHL Prediction Quality Baseline.md`)
 - Phase 5.2:
   - single purpose-based operations matrix added (`docs/Operations Command Matrix.md`)

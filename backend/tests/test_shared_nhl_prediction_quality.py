@@ -34,6 +34,32 @@ class TestSharedNhlPredictionQuality(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("YYYY-MM-DD", payload["error"])
 
+    def test_auto_min_total_passes_sparse_window(self):
+        side_effects = [
+            [{"total": 0, "correct": 0}],
+            [],
+            [],
+        ]
+        out = StringIO()
+        with patch.object(quality, "pg_fetchall", side_effect=side_effects), redirect_stdout(out):
+            rc = quality.main(
+                [
+                    "--from-date",
+                    "2025-12-01",
+                    "--to-date",
+                    "2025-12-31",
+                    "--min-total",
+                    "1",
+                    "--auto-min-total",
+                ]
+            )
+        self.assertEqual(rc, 0)
+        payload = json.loads(out.getvalue())
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["min_total_mode"], "auto")
+        self.assertEqual(payload["min_total_requested"], 1)
+        self.assertEqual(payload["min_total_effective"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

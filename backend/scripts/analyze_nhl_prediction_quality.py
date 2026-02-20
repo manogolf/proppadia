@@ -186,6 +186,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--from-date", required=True, help="YYYY-MM-DD (inclusive)")
     ap.add_argument("--to-date", required=True, help="YYYY-MM-DD (inclusive)")
     ap.add_argument("--min-total", type=int, default=1, help="Fail when graded total is below this threshold.")
+    ap.add_argument(
+        "--auto-min-total",
+        action="store_true",
+        help="Auto-lower threshold to 0 when there are no graded NHL rows in the window.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     try:
@@ -200,8 +205,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     quality = collect_quality(from_date, to_date)
     overall = quality["overall"]
-    min_total = max(0, int(args.min_total))
-    ok = int(overall.get("total") or 0) >= min_total
+    requested_min_total = max(0, int(args.min_total))
+    total = int(overall.get("total") or 0)
+    effective_min_total = requested_min_total
+    if args.auto_min_total and total == 0:
+        effective_min_total = 0
+    ok = total >= effective_min_total
     payload = {
         "ok": ok,
         "status": "pass" if ok else "fail",
@@ -209,7 +218,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "by_prop": quality["by_prop"],
         "by_source": quality["by_source"],
         "caveats": quality["caveats"],
-        "min_total": min_total,
+        "min_total": effective_min_total,
+        "min_total_requested": requested_min_total,
+        "min_total_effective": effective_min_total,
+        "min_total_mode": "auto" if args.auto_min_total else "fixed",
     }
     print(json.dumps(payload, indent=2, default=str))
     return 0 if ok else 1
