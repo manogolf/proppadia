@@ -6,8 +6,8 @@ export const loadNHLHome = () =>
   import("../Pages/nhl/NHLHome.jsx");
 export const loadPlayerPropsPage = () =>
   import("../Pages/PlayerPropsPage.jsx");
-export const loadNHLPredictions = () =>
-  import("../Pages/nhl/NHLPredictions.jsx");
+export const loadNHLPlayerPropsPage = () =>
+  import("../Pages/nhl/NHLPlayerPropsPage.jsx");
 export const loadLoginPage = () =>
   import("../Pages/Login.jsx");
 export const loadOpsPage = () =>
@@ -30,11 +30,12 @@ const routeLoaders = {
   "/mlb/slate": loadMLBHome,
   "/mlb/predictions": loadPlayerPropsPage,
   "/nhl/slate": loadNHLHome,
+  "/nhl/props": loadNHLPlayerPropsPage,
   "/mlb": loadMLBHome,
   "/nhl": loadNHLHome,
   "/props": loadPlayerPropsPage,
   "/props/v2": loadPlayerPropsPage,
-  "/nhl/predictions": loadNHLPredictions,
+  "/nhl/predictions": loadNHLPlayerPropsPage,
   "/login": loadLoginPage,
   "/ops": loadOpsPage,
   "/owner": loadOpsPage,

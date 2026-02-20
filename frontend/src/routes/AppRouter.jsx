@@ -26,7 +26,7 @@ import PlayerTeamChooser from "../Pages/PlayerTeamChooser.jsx";
 import WatchlistPage from "../Pages/WatchlistPage.jsx";
 import MLBHome from "../Pages/mlb/MLBHome.jsx";
 import NHLHome from "../Pages/nhl/NHLHome.jsx";
-import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
+import NHLPlayerPropsPage from "../Pages/nhl/NHLPlayerPropsPage.jsx";
 
 function RequireSignedIn({ children, requiredPath, requiredLabel }) {
   const { user, loading } = useAuth();
@@ -159,13 +159,24 @@ export default function AppRouter() {
           <Route path="/mlb/players/:playerId" element={<PlayerProfileDashboard />} />
           <Route path="/nhl/slate" element={<NHLHome />} />
           <Route
+            path="/nhl/props"
+            element={
+              <RequireSignedIn
+                requiredPath="/nhl/props"
+                requiredLabel="NHL player props"
+              >
+                <NHLPlayerPropsPage />
+              </RequireSignedIn>
+            }
+          />
+          <Route
             path="/nhl/predictions"
             element={
               <RequireSignedIn
                 requiredPath="/nhl/predictions"
                 requiredLabel="NHL predictions"
               >
-                <NHLPredictions />
+                <RedirectWithSearch pathname="/nhl/props" />
               </RequireSignedIn>
             }
           />
