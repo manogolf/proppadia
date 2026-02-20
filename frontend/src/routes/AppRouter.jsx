@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -9,7 +9,7 @@ import {
 import Header from "../components/Header.jsx";
 import RouteErrorBoundary from "../components/RouteErrorBoundary.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { isOpsUser } from "../shared/opsAccess.js";
+import { isOpsUser, isUserPredictionRoute } from "../shared/opsAccess.js";
 import {
   getWatchlistTotal,
   WATCHLIST_UPDATED_EVENT,
@@ -18,7 +18,6 @@ import AccessRequiredPage from "../Pages/AccessRequiredPage.jsx";
 import HomeGateway from "../Pages/HomeGateway.jsx";
 import LoginPage from "../Pages/Login.jsx";
 import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.jsx";
-import OpsPage from "../Pages/OpsPage.jsx";
 import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.jsx";
 import PlayerPropsPage from "../Pages/PlayerPropsPage.jsx";
 import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.jsx";
@@ -27,6 +26,8 @@ import WatchlistPage from "../Pages/WatchlistPage.jsx";
 import MLBHome from "../Pages/mlb/MLBHome.jsx";
 import NHLHome from "../Pages/nhl/NHLHome.jsx";
 import NHLPlayerPropsPage from "../Pages/nhl/NHLPlayerPropsPage.jsx";
+
+const OpsPage = lazy(() => import("../Pages/OpsPage.jsx"));
 
 function RequireSignedIn({ children, requiredPath, requiredLabel }) {
   const { user, loading } = useAuth();
@@ -64,9 +65,30 @@ function RedirectWithSearch({ pathname }) {
   );
 }
 
-export default function AppRouter() {
+function OpsAccessRestrictedCard() {
+  return (
+    <div className="min-h-screen pp-page px-4 py-10">
+      <div className="max-w-2xl mx-auto pp-card p-6">
+        <h2 className="text-2xl font-semibold text-slate-900">Ops Access Restricted</h2>
+        <p className="text-slate-700 mt-2">
+          This page is restricted to authorized operations users.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RequireOpsUser({ children }) {
   const { user } = useAuth();
+  if (isOpsUser(user)) return children;
+  return <OpsAccessRestrictedCard />;
+}
+
+function AppShell() {
+  const { user } = useAuth();
+  const location = useLocation();
   const hasOpsAccess = isOpsUser(user);
+  const hideOpsNav = isUserPredictionRoute(location.pathname);
   const [watchlistTotal, setWatchlistTotal] = useState(0);
 
   const refreshWatchlistTotal = useCallback(() => {
@@ -95,7 +117,7 @@ export default function AppRouter() {
   }, [refreshWatchlistTotal]);
 
   return (
-    <BrowserRouter>
+    <>
       <div>
         <Header />
 
@@ -130,7 +152,7 @@ export default function AppRouter() {
                 Login
               </a>
             ) : null}
-            {user && hasOpsAccess ? (
+            {user && hasOpsAccess && !hideOpsNav ? (
               <a href="/ops" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 Ops
               </a>
@@ -221,24 +243,31 @@ export default function AppRouter() {
             path="/ops"
             element={
               <RequireSignedIn requiredPath="/ops" requiredLabel="operations dashboard">
-                {hasOpsAccess ? (
-                  <OpsPage />
-                ) : (
-                  <div className="min-h-screen pp-page px-4 py-10">
-                    <div className="max-w-2xl mx-auto pp-card p-6">
-                      <h2 className="text-2xl font-semibold text-slate-900">Ops Access Restricted</h2>
-                      <p className="text-slate-700 mt-2">
-                        This page is restricted to authorized operations users.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                <RequireOpsUser>
+                  <Suspense
+                    fallback={
+                      <div className="min-h-screen pp-page flex items-center justify-center text-slate-600">
+                        Loading operations dashboard...
+                      </div>
+                    }
+                  >
+                    <OpsPage />
+                  </Suspense>
+                </RequireOpsUser>
               </RequireSignedIn>
             }
           />
           <Route path="/owner" element={<Navigate to="/ops" replace />} />
         </Routes>
       </RouteErrorBoundary>
+    </>
+  );
+}
+
+export default function AppRouter() {
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   );
 }

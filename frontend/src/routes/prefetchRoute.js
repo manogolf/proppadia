@@ -10,8 +10,6 @@ export const loadNHLPlayerPropsPage = () =>
   import("../Pages/nhl/NHLPlayerPropsPage.jsx");
 export const loadLoginPage = () =>
   import("../Pages/Login.jsx");
-export const loadOpsPage = () =>
-  import("../Pages/OpsPage.jsx");
 export const loadPlayerTeamBrowser = () =>
   import("../Pages/PlayerTeamBrowser.jsx");
 export const loadPlayerTeamChooser = () =>
@@ -37,8 +35,6 @@ const routeLoaders = {
   "/props/v2": loadPlayerPropsPage,
   "/nhl/predictions": loadNHLPlayerPropsPage,
   "/login": loadLoginPage,
-  "/ops": loadOpsPage,
-  "/owner": loadOpsPage,
   "/players": loadPlayerTeamChooser,
   "/players/mlb": loadPlayerTeamBrowser,
   "/players/nhl": loadPlayerTeamBrowser,
