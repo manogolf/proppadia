@@ -92,6 +92,8 @@ fi
 ORIG_MLB_BASE_URL="${MLB_BASE_URL:-}"
 MLB_WEEKLY_BASE_URL="${MLB_WEEKLY_BASE_URL:-${ORIG_MLB_BASE_URL}}"
 MLB_DAILY_BASE_URL="${MLB_DAILY_BASE_URL:-${ORIG_MLB_BASE_URL}}"
+# NOTE: before MLB regular season start, remove hardcoded fallback date 2025-08-15
+# and switch to dynamic date resolution (for example, yesterday UTC when MLB_DATE is unset).
 MLB_DATE="${MLB_DATE:-2025-08-15}"
 MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE:-4}"
 MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS:-1}"
