@@ -5,9 +5,9 @@ import TodayGames from "../components/TodayGames.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx";
 import PlayerPropsTable from "../components/PlayerPropsTable.jsx";
-import PropTracker from "../components/PropTracker.jsx";
 import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
-import MyPropsPanel from "../components/predictions/MyPropsPanel.jsx";
+import CalendarCard from "../components/predictions/market/CalendarCard.jsx";
+import SavedPropsCard from "../components/predictions/market/SavedPropsCard.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
 import WorkspaceStatePanel from "../components/predictions/WorkspaceStatePanel.jsx";
 import {
@@ -137,6 +137,10 @@ export default function PlayerPropsPage() {
   const currentPlayerLastPropDate = useMemo(
     () => String(latestPrediction?.features?.last_prop_date || "").trim(),
     [latestPrediction]
+  );
+  const boardContextLabel = useMemo(
+    () => `Date: ${selectedDate} • Watched players: ${watchlist.length}`,
+    [selectedDate, watchlist.length]
   );
 
   function toggleCurrentPredictionWatch() {
@@ -284,23 +288,48 @@ export default function PlayerPropsPage() {
         <div className="space-y-5">
           {slateSection}
 
-          <MyPropsPanel
+          <div className="pp-chip px-3 py-2 text-xs text-slate-600">{boardContextLabel}</div>
+
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs">
+              Selected Date <strong>{selectedDate}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-1 text-xs">
+              Watched <strong>{watchlist.length}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-700 px-2 py-1 text-xs">
+              Market snapshot <strong>{latestPrediction ? "ready" : "pending"}</strong>
+            </span>
+          </div>
+
+          <ModelVsMarketCard
+            title="Board Snapshot (MLB)"
+            lineLabel={
+              latestPrediction?.features?.prop_type
+                ? `${latestPrediction.features.prop_type} • ${latestPrediction.features.over_under || ""} ${latestPrediction.features.prop_value ?? ""}`
+                : "Run a prediction in Player Research mode to populate snapshot context"
+            }
+            modelProbability={latestPrediction?.probability ?? null}
+            marketProbability={latestPrediction?.marketProbability ?? null}
+            sourceLabel={marketCtx.sourceLabel}
+            sourceKind={marketCtx.sourceKind}
+            updatedLabel={marketCtx.updatedLabel}
+            confidenceLabel={latestPrediction ? "Model" : "Pending"}
+          />
+
+          <SavedPropsCard
             refreshNonce={tableRefreshNonce}
             selectedDate={selectedDate}
           />
           <section className="pp-card p-4">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Market Board</h3>
             <PlayerPropsTable
               selectedDate={selectedDate}
               refreshNonce={tableRefreshNonce}
               lastSaveEvent={lastSaveEvent}
             />
           </section>
-          <section className="pp-card p-4">
-            <PropTracker
-              selectedDate={selectedDate}
-              setSelectedDate={setSelectedDate}
-            />
-          </section>
+          <CalendarCard selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
         </div>
       )}
     </PredictionWorkspace>
