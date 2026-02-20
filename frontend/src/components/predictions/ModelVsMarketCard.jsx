@@ -18,11 +18,22 @@ export default function ModelVsMarketCard({
   marketProbability,
   lineLabel,
   sourceLabel,
+  sourceKind = "market",
   updatedLabel,
   confidenceLabel,
+  modelMetricLabel = "Model Probability",
+  marketMetricLabel = "Market Probability",
+  edgeMetricLabel = "Edge (Model - Market)",
+  contextSourceLabel = null,
+  contextUpdatedLabel = null,
   actions = null,
   badges = [],
 }) {
+  const resolvedContextSourceLabel =
+    contextSourceLabel || (sourceKind === "model" ? "Model source" : "Market source");
+  const resolvedContextUpdatedLabel =
+    contextUpdatedLabel || (sourceKind === "model" ? "Model updated" : "Market updated");
+
   const badgeToneClass = (tone) => {
     if (tone === "success") return "bg-emerald-100 text-emerald-700";
     if (tone === "muted") return "bg-slate-100 text-slate-600";
@@ -61,22 +72,22 @@ export default function ModelVsMarketCard({
 
       <div className="grid grid-cols-3 gap-3 text-sm mb-3">
         <div className="pp-chip p-2">
-          <div className="text-xs text-slate-500">Model</div>
+          <div className="text-xs text-slate-500">{modelMetricLabel}</div>
           <div className="font-semibold text-slate-900">{pct(modelProbability)}</div>
         </div>
         <div className="pp-chip p-2">
-          <div className="text-xs text-slate-500">Market</div>
+          <div className="text-xs text-slate-500">{marketMetricLabel}</div>
           <div className="font-semibold text-slate-900">{pct(marketProbability)}</div>
         </div>
         <div className="pp-chip p-2">
-          <div className="text-xs text-slate-500">Delta</div>
+          <div className="text-xs text-slate-500">{edgeMetricLabel}</div>
           <div className="font-semibold text-slate-900">{delta(modelProbability, marketProbability)}</div>
         </div>
       </div>
 
       <div className="text-xs text-slate-500 flex flex-wrap gap-3">
-        <span>Source: {sourceLabel || "Model only"}</span>
-        <span>Last updated: {updatedLabel || "-"}</span>
+        <span>{resolvedContextSourceLabel}: {sourceLabel || "Model only"}</span>
+        <span>{resolvedContextUpdatedLabel}: {updatedLabel || "-"}</span>
       </div>
     </section>
   );

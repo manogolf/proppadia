@@ -5,6 +5,10 @@ function formatTimestamp(ts) {
   return d.toLocaleString();
 }
 
+function hasNumericProbability(value) {
+  return value != null && Number.isFinite(Number(value));
+}
+
 export function buildMarketContext({
   marketProbability,
   marketSource,
@@ -13,11 +17,9 @@ export function buildMarketContext({
   marketSourceFallback = "OddsAPI market",
   modelSourceFallback = "Model output",
 }) {
-  const hasMarket = marketProbability != null && Number.isFinite(Number(marketProbability));
-  const sourceLabel = hasMarket
-    ? (marketSource || marketSourceFallback)
-    : modelSourceFallback;
+  const hasMarket = hasNumericProbability(marketProbability);
+  const sourceKind = hasMarket ? "market" : "model";
+  const sourceLabel = hasMarket ? (marketSource || marketSourceFallback) : modelSourceFallback;
   const updatedLabel = formatTimestamp(hasMarket ? (marketUpdatedAt || modelUpdatedAt) : modelUpdatedAt);
-  return { sourceLabel, updatedLabel };
+  return { hasMarket, sourceKind, sourceLabel, updatedLabel };
 }
-

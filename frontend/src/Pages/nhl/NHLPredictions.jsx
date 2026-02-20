@@ -816,6 +816,7 @@ export default function NHLPredictions() {
               modelProbability={topSogBest?.p ?? null}
               marketProbability={topSogMarket?.marketProbability ?? null}
               sourceLabel={sogMarketContext.sourceLabel}
+              sourceKind={sogMarketContext.sourceKind}
               updatedLabel={sogMarketContext.updatedLabel}
               confidenceLabel={dataConfidence}
               badges={[{ label: isTopSogWatched ? "Watched" : "Not watched", tone: isTopSogWatched ? "success" : "muted" }]}
@@ -853,6 +854,7 @@ export default function NHLPredictions() {
               modelProbability={topSavesBest?.p ?? null}
               marketProbability={topSavesMarket?.marketProbability ?? null}
               sourceLabel={savesMarketContext.sourceLabel}
+              sourceKind={savesMarketContext.sourceKind}
               updatedLabel={savesMarketContext.updatedLabel}
               confidenceLabel={dataConfidence}
               badges={[{ label: isTopSavesWatched ? "Watched" : "Not watched", tone: isTopSavesWatched ? "success" : "muted" }]}
@@ -1093,6 +1095,7 @@ export default function NHLPredictions() {
             modelProbability={topSogBest?.p ?? null}
             marketProbability={topSogMarket?.marketProbability ?? null}
             sourceLabel={boardMarketContext.sourceLabel}
+            sourceKind={boardMarketContext.sourceKind}
             updatedLabel={boardMarketContext.updatedLabel}
             confidenceLabel={dataConfidence}
           />

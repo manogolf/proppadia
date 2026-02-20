@@ -232,6 +232,7 @@ export default function PlayerPropsPage() {
             modelProbability={latestPrediction?.probability ?? null}
             marketProbability={latestPrediction?.marketProbability ?? null}
             sourceLabel={marketCtx.sourceLabel}
+            sourceKind={marketCtx.sourceKind}
             updatedLabel={marketCtx.updatedLabel}
             confidenceLabel={latestPrediction ? "Model" : "Pending"}
             badges={
