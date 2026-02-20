@@ -14,6 +14,7 @@ if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" && -z "${SUPABASE_SECRET_KEY:-}" ]]; t
   echo "mlb_prod12_model_bundle_publish requires SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY" >&2
   exit 2
 fi
+SUPABASE_API_KEY="${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}"
 
 MODELS_DIR="${MODELS_DIR:-/var/data/proppadia/models}"
 MODELS_BUCKET="${MODELS_BUCKET:-models}"
@@ -23,30 +24,71 @@ if [[ ! -d "${MODELS_DIR}/latest" ]]; then
   exit 2
 fi
 
-# Keep package step compatible with uploader assumptions.
-mkdir -p "${MODELS_DIR}/archive"
-
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 BUNDLE_OBJECT="${BUNDLE_OBJECT:-mlb/prod12/mlb_latest_${ts}.tgz}"
 BUNDLE_LATEST_OBJECT="${BUNDLE_LATEST_OBJECT:-mlb/prod12/latest.tgz}"
+MODEL_TARBALL="${MODEL_TARBALL:-/tmp/mlb_prod12_bundle_${ts}.tgz}"
+MODEL_TAR_SOURCE="${MODEL_TAR_SOURCE:-latest}"
+MANIFEST_OBJECT="${MANIFEST_OBJECT:-mlb/prod12/publish_manifest.json}"
 
-if [[ -x ".venv/bin/python3" ]]; then
-  PY=".venv/bin/python3"
-elif [[ -x ".venv/bin/python" ]]; then
-  PY=".venv/bin/python"
-else
-  PY="python3"
-fi
+upload_object() {
+  local object_path="$1"
+  curl -fsS -X POST \
+    "${SUPABASE_URL}/storage/v1/object/${MODELS_BUCKET}/${object_path}" \
+    -H "Authorization: Bearer ${SUPABASE_API_KEY}" \
+    -H "apikey: ${SUPABASE_API_KEY}" \
+    -H "x-upsert: true" \
+    -H "Content-Type: application/gzip" \
+    --data-binary @"${MODEL_TARBALL}" >/dev/null
+}
+
+upload_manifest() {
+  local uploaded_at="$1"
+  local size_bytes="$2"
+  local sha256="$3"
+  local payload
+  payload="$(printf '{"uploaded_at":"%s","bucket":"%s","size_bytes":%s,"sha256":"%s","objects":["%s","%s"]}' \
+    "${uploaded_at}" \
+    "${MODELS_BUCKET}" \
+    "${size_bytes}" \
+    "${sha256}" \
+    "${BUNDLE_OBJECT}" \
+    "${BUNDLE_LATEST_OBJECT}")"
+  curl -fsS -X POST \
+    "${SUPABASE_URL}/storage/v1/object/${MODELS_BUCKET}/${MANIFEST_OBJECT}" \
+    -H "Authorization: Bearer ${SUPABASE_API_KEY}" \
+    -H "apikey: ${SUPABASE_API_KEY}" \
+    -H "x-upsert: true" \
+    -H "Content-Type: application/json" \
+    --data-binary "${payload}" >/dev/null
+}
 
 echo "[prod12-model-publish] source MODELS_DIR=${MODELS_DIR}"
+echo "[prod12-model-publish] source subdir=${MODEL_TAR_SOURCE}"
 echo "[prod12-model-publish] target object=${BUNDLE_OBJECT}"
 echo "[prod12-model-publish] alias object=${BUNDLE_LATEST_OBJECT}"
+echo "[prod12-model-publish] tarball path=${MODEL_TARBALL}"
 
-MODELS_DIR="${MODELS_DIR}" \
-MODELS_BUCKET="${MODELS_BUCKET}" \
-BUNDLE_OBJECT="${BUNDLE_OBJECT}" \
-BUNDLE_LATEST_OBJECT="${BUNDLE_LATEST_OBJECT}" \
-BUNDLE_AUTO_PROD12_LATEST_ALIAS="0" \
-"${PY}" backend/mlb/modeling/package_and_upload.py
+if [[ "${MODEL_TAR_SOURCE}" == "." ]]; then
+  tar -czf "${MODEL_TARBALL}" -C "${MODELS_DIR}" .
+else
+  tar -czf "${MODEL_TARBALL}" -C "${MODELS_DIR}" "${MODEL_TAR_SOURCE}"
+fi
+
+size_bytes="$(wc -c < "${MODEL_TARBALL}" | tr -d ' ')"
+sha256="$(sha256sum "${MODEL_TARBALL}" | awk '{print $1}')"
+uploaded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+echo "[prod12-model-publish] tarball bytes=${size_bytes}"
+echo "[prod12-model-publish] tarball sha256=${sha256}"
+
+upload_object "${BUNDLE_OBJECT}"
+echo "[prod12-model-publish] uploaded ${MODELS_BUCKET}/${BUNDLE_OBJECT}"
+
+upload_object "${BUNDLE_LATEST_OBJECT}"
+echo "[prod12-model-publish] uploaded ${MODELS_BUCKET}/${BUNDLE_LATEST_OBJECT}"
+
+upload_manifest "${uploaded_at}" "${size_bytes}" "${sha256}"
+echo "[prod12-model-publish] uploaded ${MODELS_BUCKET}/${MANIFEST_OBJECT}"
 
 echo "[prod12-model-publish] publish complete"
