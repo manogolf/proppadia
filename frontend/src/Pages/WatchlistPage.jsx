@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
+import SavedPropsTable from "../components/predictions/saved/SavedPropsTable.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
+  encodeWatchlistPlayerQuery,
+  normalizeWatchlistRows,
   WATCHLIST_UPDATED_EVENT,
   WATCHLIST_SCOPE_MLB,
   WATCHLIST_SCOPE_NHL,
@@ -10,29 +13,6 @@ import {
 } from "../shared/watchlistStorage.js";
 
 const WATCHLIST_PAGE_PREFS_KEY = "proppadia_watchlist_page_prefs_v1";
-
-function playerQuery(row) {
-  return encodeURIComponent(String(row?.player_name || row?.player_id || "").trim());
-}
-
-function formatAddedAt(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString();
-}
-
-function addedRecency(value) {
-  if (!value) return { label: "Added: unknown", tone: "muted" };
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return { label: "Added: unknown", tone: "muted" };
-  const now = new Date();
-  const days = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-  if (days <= 0) return { label: "Added today", tone: "fresh" };
-  if (days <= 7) return { label: `Added ${days}d ago`, tone: "fresh" };
-  if (days <= 30) return { label: `Added ${days}d ago`, tone: "warn" };
-  return { label: `Added ${days}d ago`, tone: "stale" };
-}
 
 function recencyBucket(value) {
   if (!value) return "unknown";
@@ -43,46 +23,6 @@ function recencyBucket(value) {
   if (days <= 7) return "fresh";
   if (days <= 30) return "aging";
   return "stale";
-}
-
-function toRowId(row) {
-  const pid = row?.player_id;
-  if (pid !== undefined && pid !== null && String(pid).trim() !== "") return String(pid);
-  const name = String(row?.player_name || "").trim().toLowerCase();
-  const team = String(row?.team || row?.team_abbr || "").trim().toLowerCase();
-  return `${name}:${team}`;
-}
-
-function normalizeRows(rows) {
-  if (!Array.isArray(rows)) return [];
-  const dedup = new Map();
-  for (const row of rows) {
-    const id = toRowId(row);
-    if (!id) continue;
-    const candidate = {
-      id,
-      player_id:
-        row?.player_id !== undefined && row?.player_id !== null && String(row.player_id).trim() !== ""
-          ? row.player_id
-          : null,
-      player_name: row?.player_name ? String(row.player_name) : null,
-      team: row?.team ? String(row.team) : row?.team_abbr ? String(row.team_abbr) : null,
-      added_at: row?.added_at && !Number.isNaN(new Date(row.added_at).getTime())
-        ? String(row.added_at)
-        : new Date().toISOString(),
-    };
-    const existing = dedup.get(id);
-    if (!existing) {
-      dedup.set(id, candidate);
-      continue;
-    }
-    const existingTs = new Date(existing.added_at || 0).getTime();
-    const candidateTs = new Date(candidate.added_at || 0).getTime();
-    if (candidateTs > existingTs) dedup.set(id, candidate);
-  }
-  return Array.from(dedup.values())
-    .sort((a, b) => new Date(b.added_at || 0).getTime() - new Date(a.added_at || 0).getTime())
-    .slice(0, 100);
 }
 
 export default function WatchlistPage() {
@@ -504,8 +444,8 @@ export default function WatchlistPage() {
     if (!player) return;
     const path =
       sport === "mlb"
-        ? `/props?player=${playerQuery(row)}`
-        : `/nhl/predictions?player=${playerQuery(row)}`;
+        ? `/props?player=${encodeWatchlistPlayerQuery(row)}`
+        : `/nhl/predictions?player=${encodeWatchlistPlayerQuery(row)}`;
     try {
       const url = `${window.location.origin}${path}`;
       await navigator.clipboard.writeText(url);
@@ -585,7 +525,7 @@ export default function WatchlistPage() {
           rows.push({
             sport: "MLB",
             name: String(row?.player_name || row?.player_id || "Unknown"),
-            url: `${window.location.origin}/props?player=${playerQuery(row)}`,
+            url: `${window.location.origin}/props?player=${encodeWatchlistPlayerQuery(row)}`,
           });
         }
       }
@@ -594,7 +534,7 @@ export default function WatchlistPage() {
           rows.push({
             sport: "NHL",
             name: String(row?.player_name || row?.player_id || "Unknown"),
-            url: `${window.location.origin}/nhl/predictions?player=${playerQuery(row)}`,
+            url: `${window.location.origin}/nhl/predictions?player=${encodeWatchlistPlayerQuery(row)}`,
           });
         }
       }
@@ -627,16 +567,16 @@ export default function WatchlistPage() {
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        const incomingMlb = normalizeRows(parsed?.mlb);
-        const incomingNhl = normalizeRows(parsed?.nhl);
+        const incomingMlb = normalizeWatchlistRows(parsed?.mlb);
+        const incomingNhl = normalizeWatchlistRows(parsed?.nhl);
         if (!user?.id) return;
         const nextMlb =
           importMode === "merge"
-            ? normalizeRows([...mlbRows, ...incomingMlb])
+            ? normalizeWatchlistRows([...mlbRows, ...incomingMlb])
             : incomingMlb;
         const nextNhl =
           importMode === "merge"
-            ? normalizeRows([...nhlRows, ...incomingNhl])
+            ? normalizeWatchlistRows([...nhlRows, ...incomingNhl])
             : incomingNhl;
         setMlbRows(nextMlb);
         setNhlRows(nextNhl);
@@ -918,199 +858,33 @@ export default function WatchlistPage() {
               </div>
             </section>
             {(viewScope === "all" || viewScope === "mlb") ? (
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    MLB Watchlist ({visibleMlbRows.length}/{mlbRows.length})
-                  </h2>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[11px]">
-                      Fresh <strong>{mlbVisibleRecency.fresh}</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[11px]">
-                      Aging <strong>{mlbVisibleRecency.aging}</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2 py-0.5 text-[11px]">
-                      Stale <strong>{mlbVisibleRecency.stale}</strong>
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="pp-btn pp-btn-ghost pp-btn-sm text-rose-700"
-                    disabled={visibleMlbRows.length === 0}
-                    onClick={(e) => removeVisible(WATCHLIST_SCOPE_MLB, visibleMlbRows, e.shiftKey)}
-                    title="Shift+Click skips confirm"
-                  >
-                    Remove Visible
-                  </button>
-                  <button
-                    type="button"
-                    className="pp-btn pp-btn-ghost pp-btn-sm"
-                    disabled={mlbRows.length === 0}
-                    onClick={(e) => clearScope(WATCHLIST_SCOPE_MLB, e.shiftKey)}
-                    title="Shift+Click skips confirm"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {visibleMlbRows.length === 0 ? (
-                <div className="text-xs text-slate-500 mt-2">
-                  {mlbRows.length === 0 ? "No MLB players saved yet." : "No MLB matches for current search."}
-                </div>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {visibleMlbRows.map((row) => (
-                    <div
-                      key={String(row.id)}
-                      className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm flex items-center justify-between gap-2"
-                    >
-                      {(() => {
-                        const recency = addedRecency(row.added_at);
-                        const recencyClass =
-                          recency.tone === "fresh"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : recency.tone === "warn"
-                            ? "bg-amber-100 text-amber-700"
-                            : recency.tone === "stale"
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-slate-100 text-slate-600";
-                        return (
-                      <div>
-                        <PrefetchLink
-                          to={`/props?player=${playerQuery(row)}`}
-                          className="font-medium text-slate-900 underline"
-                        >
-                          {row.player_name || row.player_id || "Unknown"}
-                        </PrefetchLink>
-                        <div className="text-xs text-slate-500">{row.team || "-"}</div>
-                        <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium mt-1 ${recencyClass}`}>
-                          {recency.label}
-                        </div>
-                        <div className="text-xs text-slate-400">Added {formatAddedAt(row.added_at)}</div>
-                      </div>
-                        );
-                      })()}
-                      <button
-                        type="button"
-                        className="pp-btn pp-btn-ghost pp-btn-sm text-rose-700"
-                        onClick={() => removeRow(WATCHLIST_SCOPE_MLB, row.id)}
-                      >
-                        Remove
-                      </button>
-                      <button
-                        type="button"
-                        className="pp-btn pp-btn-ghost pp-btn-sm"
-                        onClick={() => handleCopyLink("mlb", row)}
-                      >
-                        Copy Link
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+              <SavedPropsTable
+                sport="mlb"
+                rows={visibleMlbRows}
+                totalRows={mlbRows.length}
+                recencyCounts={mlbVisibleRecency}
+                onRemoveVisible={(skipConfirm) =>
+                  removeVisible(WATCHLIST_SCOPE_MLB, visibleMlbRows, skipConfirm)
+                }
+                onClear={(skipConfirm) => clearScope(WATCHLIST_SCOPE_MLB, skipConfirm)}
+                onRemoveRow={(id) => removeRow(WATCHLIST_SCOPE_MLB, id)}
+                onCopyLink={(row) => handleCopyLink("mlb", row)}
+              />
             ) : null}
 
             {(viewScope === "all" || viewScope === "nhl") ? (
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    NHL Watchlist ({visibleNhlRows.length}/{nhlRows.length})
-                  </h2>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[11px]">
-                      Fresh <strong>{nhlVisibleRecency.fresh}</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[11px]">
-                      Aging <strong>{nhlVisibleRecency.aging}</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2 py-0.5 text-[11px]">
-                      Stale <strong>{nhlVisibleRecency.stale}</strong>
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="pp-btn pp-btn-ghost pp-btn-sm text-rose-700"
-                    disabled={visibleNhlRows.length === 0}
-                    onClick={(e) => removeVisible(WATCHLIST_SCOPE_NHL, visibleNhlRows, e.shiftKey)}
-                    title="Shift+Click skips confirm"
-                  >
-                    Remove Visible
-                  </button>
-                  <button
-                    type="button"
-                    className="pp-btn pp-btn-ghost pp-btn-sm"
-                    disabled={nhlRows.length === 0}
-                    onClick={(e) => clearScope(WATCHLIST_SCOPE_NHL, e.shiftKey)}
-                    title="Shift+Click skips confirm"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {visibleNhlRows.length === 0 ? (
-                <div className="text-xs text-slate-500 mt-2">
-                  {nhlRows.length === 0 ? "No NHL players saved yet." : "No NHL matches for current search."}
-                </div>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {visibleNhlRows.map((row) => (
-                    <div
-                      key={String(row.id)}
-                      className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm flex items-center justify-between gap-2"
-                    >
-                      {(() => {
-                        const recency = addedRecency(row.added_at);
-                        const recencyClass =
-                          recency.tone === "fresh"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : recency.tone === "warn"
-                            ? "bg-amber-100 text-amber-700"
-                            : recency.tone === "stale"
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-slate-100 text-slate-600";
-                        return (
-                      <div>
-                        <PrefetchLink
-                          to={`/nhl/predictions?player=${playerQuery(row)}`}
-                          className="font-medium text-slate-900 underline"
-                        >
-                          {row.player_name || row.player_id || "Unknown"}
-                        </PrefetchLink>
-                        <div className="text-xs text-slate-500">{row.team || "-"}</div>
-                        <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium mt-1 ${recencyClass}`}>
-                          {recency.label}
-                        </div>
-                        <div className="text-xs text-slate-400">Added {formatAddedAt(row.added_at)}</div>
-                      </div>
-                        );
-                      })()}
-                      <button
-                        type="button"
-                        className="pp-btn pp-btn-ghost pp-btn-sm text-rose-700"
-                        onClick={() => removeRow(WATCHLIST_SCOPE_NHL, row.id)}
-                      >
-                        Remove
-                      </button>
-                      <button
-                        type="button"
-                        className="pp-btn pp-btn-ghost pp-btn-sm"
-                        onClick={() => handleCopyLink("nhl", row)}
-                      >
-                        Copy Link
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+              <SavedPropsTable
+                sport="nhl"
+                rows={visibleNhlRows}
+                totalRows={nhlRows.length}
+                recencyCounts={nhlVisibleRecency}
+                onRemoveVisible={(skipConfirm) =>
+                  removeVisible(WATCHLIST_SCOPE_NHL, visibleNhlRows, skipConfirm)
+                }
+                onClear={(skipConfirm) => clearScope(WATCHLIST_SCOPE_NHL, skipConfirm)}
+                onRemoveRow={(id) => removeRow(WATCHLIST_SCOPE_NHL, id)}
+                onCopyLink={(row) => handleCopyLink("nhl", row)}
+              />
             ) : null}
           </div>
         </div>
