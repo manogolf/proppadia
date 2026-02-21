@@ -259,6 +259,22 @@ def _date_has_mlb_api_rows(conn, game_date: str) -> bool:
         return cur.fetchone() is not None
 
 
+def _date_has_negative_lines(conn, game_date: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM model_training_props
+            WHERE game_date = %s::date
+              AND prop_source = 'mlb_api'
+              AND line < 0
+            LIMIT 1
+            """,
+            (game_date,),
+        )
+        return cur.fetchone() is not None
+
+
 def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
     ids = [int(g) for g in game_ids if _to_int(g) is not None]
     if not ids:
@@ -566,9 +582,13 @@ def run(
             print(f"\n📅 Processing {d_iso} ...")
             try:
                 if skip_existing_dates and _date_has_mlb_api_rows(conn, d_iso):
-                    skipped_dates += 1
-                    print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
-                    continue
+                    if _date_has_negative_lines(conn, d_iso):
+                        if not quiet:
+                            print(f"🔧 {d_iso} reprocessing | repairing negative mlb_api lines")
+                    else:
+                        skipped_dates += 1
+                        print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
+                        continue
 
                 schedule = _fetch_schedule(d_iso)
                 final_games_meta = _final_games(
@@ -688,6 +708,9 @@ def run(
                                 seed = _hash01(f"line-{pid}-{game_id}-{prop_type}")
                                 line = (result - 0.5) if seed < 0.5 else (result + 0.5)
                                 line = round(line * 2) / 2
+                                # Synthetic count-market lines must be non-negative half-steps.
+                                if line < 0.5:
+                                    line = 0.5
 
                                 over_under = "over" if _hash01(f"ou-{pid}-{game_id}-{prop_type}") < 0.5 else "under"
                                 outcome = _determine_outcome(float(result), float(line), over_under)
