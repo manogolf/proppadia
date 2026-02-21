@@ -348,6 +348,7 @@ NHL SOG segmented calibration monitor history:
 ```bash
 make nhl-sog-calibration-log
 make nhl-sog-calibration-last NHL_SOG_MONITOR_HISTORY_LIMIT=5
+make nhl-sog-calibration-history-clean NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP=1
 ```
 
 Season day-0 baseline artifact capture:

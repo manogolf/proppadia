@@ -63,6 +63,7 @@ Command:
 ```bash
 make nhl-sog-calibration-log
 make nhl-sog-calibration-last NHL_SOG_MONITOR_HISTORY_LIMIT=5
+make nhl-sog-calibration-history-clean NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP=1
 ```
 
 Default history file:
@@ -71,3 +72,7 @@ Default history file:
 Pass/fail default:
 - each required line must have `delta_brier_vs_raw <= 0.0`
 - and `delta_logloss_vs_raw <= 0.0` when logloss exists
+
+History cleanup:
+- `nhl-sog-calibration-history-clean` removes transient DNS/network failure entries from history.
+- with `NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP=1`, a timestamped backup is written before rewrite.

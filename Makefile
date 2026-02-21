@@ -183,6 +183,7 @@ NHL_SOG_MONITOR_HISTORY_LIMIT ?= 10
 NHL_SOG_MONITOR_REQUIRED_LINES ?= 1.5,2.5,3.5
 NHL_SOG_MONITOR_MAX_DELTA_BRIER ?= 0.0
 NHL_SOG_MONITOR_MAX_DELTA_LOGLOSS ?= 0.0
+NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP ?= 1
 NHL_SOG_BASELINE_FROM_DATE ?=
 NHL_SOG_BASELINE_TO_DATE ?=
 NHL_SOG_BASELINE_OUTPUT ?= artifacts/season_baselines/nhl_sog_segmented_calibration_baseline.json
@@ -375,6 +376,7 @@ help:
 	@echo "  make nhl-sog-calibration-baseline NHL_SOG_BASELINE_FROM_DATE=YYYY-MM-DD NHL_SOG_BASELINE_TO_DATE=YYYY-MM-DD"
 	@echo "  make nhl-sog-calibration-log [NHL_SOG_MONITOR_HISTORY_INPUT=artifacts/nhl_sog_calibration_history.jsonl]"
 	@echo "  make nhl-sog-calibration-last [NHL_SOG_MONITOR_HISTORY_LIMIT=10]"
+	@echo "  make nhl-sog-calibration-history-clean [NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP=1]"
 	@echo "  make nhl-sog-segmented-calibrate-file [NHL_SOG_SEG_CAL_PRED_CSV=backend/nhl/data/processed/sog_predictions_wide_calibrated.csv]"
 	@echo "  make nhl-roster-refresh-all [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make cross-sport-post-deploy BASE_URL=<url> [MLB_DATE=YYYY-MM-DD] [NHL_DATE=YYYY-MM-DD]"
@@ -1372,6 +1374,12 @@ nhl-sog-calibration-last:
 		exit 2; \
 	fi
 	@tail -n $(NHL_SOG_MONITOR_HISTORY_LIMIT) $(NHL_SOG_MONITOR_HISTORY_INPUT)
+
+nhl-sog-calibration-history-clean:
+	$(VENV_PY) backend/scripts/clean_nhl_sog_calibration_history.py \
+		--input $(NHL_SOG_MONITOR_HISTORY_INPUT) \
+		--in-place \
+		$(if $(filter 1,$(NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP)),--backup,)
 
 nhl-sog-segmented-calibrate-file:
 	@if [ -z "$(NHL_SOG_SEG_CAL_PRED_CSV)" ]; then \
