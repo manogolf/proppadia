@@ -286,6 +286,23 @@ def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
             print(exc.stderr, file=sys.stderr)
         raise
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    val = raw.strip().lower()
+    if not val:
+        return default
+    return val in {"1", "true", "t", "yes", "y", "on"}
+
+def _append_cli_arg(cmd: list[str], flag: str, value: str | None) -> None:
+    if value is None:
+        return
+    s = str(value).strip()
+    if not s:
+        return
+    cmd.extend([flag, s])
+
 def require_db_url() -> str:
     db = os.environ.get("SUPABASE_DB_URL")
     if not db:
@@ -1198,6 +1215,77 @@ def cmd_daily(with_odds: bool):
             f"[daily] ordinal predictions slate mismatch: expected {slate}, got {dates}. "
             f"Refusing to continue."
         )
+
+    # 5a.1) Optional segmented recency calibration (feature-flagged).
+    # Default ON for daily runs; set NHL_SOG_SEGMENTED_CALIBRATION_ENABLED=0 to disable quickly.
+    seg_cal_enabled = _env_bool("NHL_SOG_SEGMENTED_CALIBRATION_ENABLED", default=True)
+    seg_cal_required = _env_bool("NHL_SOG_SEGMENTED_CALIBRATION_REQUIRED", default=False)
+    if seg_cal_enabled:
+        seg_cal_cmd = [
+            PY,
+            SCRIPTS_DIR / "calibrate_sog_segmented_recency.py",
+            "--pred-csv", str(calibrated_pred_path),
+            "--out-csv", str(calibrated_pred_path),
+        ]
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--model-family",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_MODEL_FAMILY")
+            or os.environ.get("NHL_SOG_MODEL_FAMILY"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--model-version",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_MODEL_VERSION")
+            or os.environ.get("NHL_SOG_MODEL_VERSION"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--lines",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_LINES")
+            or os.environ.get("NHL_SOG_LINES"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--lookback-days",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_LOOKBACK_DAYS")
+            or os.environ.get("NHL_SOG_CAL_LOOKBACK_DAYS"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--segment-min-rows",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_SEGMENT_MIN_ROWS")
+            or os.environ.get("NHL_SOG_CAL_SEGMENT_MIN_ROWS"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--blend-alpha",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_BLEND_ALPHA")
+            or os.environ.get("NHL_SOG_CAL_BLEND_ALPHA"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--decay-half-life-days",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_DECAY_HALF_LIFE_DAYS")
+            or os.environ.get("NHL_SOG_CAL_DECAY_HALF_LIFE_DAYS"),
+        )
+        _append_cli_arg(
+            seg_cal_cmd,
+            "--asof-date",
+            os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_ASOF_DATE"),
+        )
+        if _env_bool("NHL_SOG_SEGMENTED_CALIBRATION_STRICT", default=False):
+            seg_cal_cmd.append("--strict")
+
+        try:
+            run(seg_cal_cmd)
+            print("✅ segmented SOG calibration applied.")
+        except Exception as exc:
+            if seg_cal_required:
+                raise RuntimeError(
+                    "Segmented SOG calibration failed with NHL_SOG_SEGMENTED_CALIBRATION_REQUIRED=1."
+                ) from exc
+            print(f"⚠️ segmented SOG calibration failed; continuing with ordinal output: {exc}")
 
     # 5b) Load ordinal SOG into nhl.predictions
     run(

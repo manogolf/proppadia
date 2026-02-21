@@ -154,6 +154,42 @@ NHL_QUALITY_FROM_DATE ?=
 NHL_QUALITY_TO_DATE ?=
 NHL_QUALITY_MIN_TOTAL ?= 0
 NHL_QUALITY_ACTIVE_MIN_TOTAL ?= 1
+NHL_SOG_MODEL_FAMILY ?= denali_blend
+NHL_SOG_MODEL_VERSION ?= phoenix_v2
+NHL_SOG_LINES ?= 1.5,2.5,3.5
+NHL_SOG_FROM_DATE ?=
+NHL_SOG_TO_DATE ?=
+NHL_SOG_LOOKBACK_DAYS ?= 120
+NHL_SOG_RECENT_DAYS ?= 14
+NHL_SOG_SEGMENT_MIN_N ?= 80
+NHL_SOG_DECILE_MIN_N ?= 25
+NHL_SOG_PLAYER_MIN_N ?= 4
+NHL_SOG_PLAYER_TOP_N ?= 10
+NHL_SOG_WORST_LIMIT ?= 8
+NHL_SOG_OUTPUT ?=
+NHL_SOG_CAL_MODEL_FAMILY ?= denali_blend
+NHL_SOG_CAL_MODEL_VERSION ?= phoenix_v2
+NHL_SOG_CAL_LINES ?= 1.5,2.5,3.5
+NHL_SOG_CAL_FROM_DATE ?=
+NHL_SOG_CAL_TO_DATE ?=
+NHL_SOG_CAL_LOOKBACK_DAYS ?= 120
+NHL_SOG_CAL_HOLDOUT_DAYS ?= 14
+NHL_SOG_CAL_SEGMENT_MIN_ROWS ?= 120
+NHL_SOG_CAL_BLEND_ALPHA ?= 0.65
+NHL_SOG_CAL_DECAY_HALF_LIFE_DAYS ?= 21
+NHL_SOG_CAL_OUTPUT ?=
+NHL_SOG_MONITOR_HISTORY_INPUT ?= artifacts/nhl_sog_calibration_history.jsonl
+NHL_SOG_MONITOR_HISTORY_LIMIT ?= 10
+NHL_SOG_MONITOR_REQUIRED_LINES ?= 1.5,2.5,3.5
+NHL_SOG_MONITOR_MAX_DELTA_BRIER ?= 0.0
+NHL_SOG_MONITOR_MAX_DELTA_LOGLOSS ?= 0.0
+NHL_SOG_BASELINE_FROM_DATE ?=
+NHL_SOG_BASELINE_TO_DATE ?=
+NHL_SOG_BASELINE_OUTPUT ?= artifacts/season_baselines/nhl_sog_segmented_calibration_baseline.json
+NHL_SOG_SEG_CAL_PRED_CSV ?= backend/nhl/data/processed/sog_predictions_wide_calibrated.csv
+NHL_SOG_SEG_CAL_OUT_CSV ?=
+NHL_SOG_SEG_CAL_ASOF_DATE ?=
+NHL_SOG_SEG_CAL_STRICT ?= 0
 MLB_STAT_FROM_DATE ?=
 MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
@@ -334,6 +370,12 @@ help:
 	@echo "  make nhl-post-deploy BASE_URL=<url>"
 	@echo "  make nhl-prediction-quality NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD [NHL_QUALITY_MIN_TOTAL=0]"
 	@echo "  make nhl-prediction-quality-auto NHL_QUALITY_FROM_DATE=YYYY-MM-DD NHL_QUALITY_TO_DATE=YYYY-MM-DD [NHL_QUALITY_ACTIVE_MIN_TOTAL=1]"
+	@echo "  make nhl-sog-quality-layers [NHL_SOG_FROM_DATE=YYYY-MM-DD NHL_SOG_TO_DATE=YYYY-MM-DD NHL_SOG_OUTPUT=artifacts/nhl_sog_layers.json]"
+	@echo "  make nhl-sog-segmented-calibration-experiment [NHL_SOG_CAL_OUTPUT=artifacts/nhl_sog_cal_experiment.json]"
+	@echo "  make nhl-sog-calibration-baseline NHL_SOG_BASELINE_FROM_DATE=YYYY-MM-DD NHL_SOG_BASELINE_TO_DATE=YYYY-MM-DD"
+	@echo "  make nhl-sog-calibration-log [NHL_SOG_MONITOR_HISTORY_INPUT=artifacts/nhl_sog_calibration_history.jsonl]"
+	@echo "  make nhl-sog-calibration-last [NHL_SOG_MONITOR_HISTORY_LIMIT=10]"
+	@echo "  make nhl-sog-segmented-calibrate-file [NHL_SOG_SEG_CAL_PRED_CSV=backend/nhl/data/processed/sog_predictions_wide_calibrated.csv]"
 	@echo "  make nhl-roster-refresh-all [NHL_ROSTER_DATE=YYYY-MM-DD]"
 	@echo "  make cross-sport-post-deploy BASE_URL=<url> [MLB_DATE=YYYY-MM-DD] [NHL_DATE=YYYY-MM-DD]"
 
@@ -1258,6 +1300,96 @@ nhl-prediction-quality-auto:
 		exit 2; \
 	fi
 	$(VENV_PY) backend/scripts/analyze_nhl_prediction_quality.py --from-date $(NHL_QUALITY_FROM_DATE) --to-date $(NHL_QUALITY_TO_DATE) --min-total $(NHL_QUALITY_ACTIVE_MIN_TOTAL) --auto-min-total
+
+nhl-sog-quality-layers:
+	$(VENV_PY) backend/scripts/analyze_nhl_sog_quality_layers.py \
+		$(if $(NHL_SOG_MODEL_FAMILY),--model-family $(NHL_SOG_MODEL_FAMILY),) \
+		$(if $(NHL_SOG_MODEL_VERSION),--model-version $(NHL_SOG_MODEL_VERSION),) \
+		$(if $(NHL_SOG_LINES),--lines $(NHL_SOG_LINES),) \
+		$(if $(NHL_SOG_FROM_DATE),--from-date $(NHL_SOG_FROM_DATE),) \
+		$(if $(NHL_SOG_TO_DATE),--to-date $(NHL_SOG_TO_DATE),) \
+		--lookback-days $(NHL_SOG_LOOKBACK_DAYS) \
+		--recent-days $(NHL_SOG_RECENT_DAYS) \
+		--segment-min-n $(NHL_SOG_SEGMENT_MIN_N) \
+		--decile-min-n $(NHL_SOG_DECILE_MIN_N) \
+		--player-min-n $(NHL_SOG_PLAYER_MIN_N) \
+		--player-top-n $(NHL_SOG_PLAYER_TOP_N) \
+		--worst-limit $(NHL_SOG_WORST_LIMIT) \
+		$(if $(NHL_SOG_OUTPUT),--output $(NHL_SOG_OUTPUT),)
+
+nhl-sog-segmented-calibration-experiment:
+	$(VENV_PY) backend/scripts/experiment_nhl_sog_segmented_calibration.py \
+		--model-family $(NHL_SOG_CAL_MODEL_FAMILY) \
+		--model-version $(NHL_SOG_CAL_MODEL_VERSION) \
+		--lines $(NHL_SOG_CAL_LINES) \
+		$(if $(NHL_SOG_CAL_FROM_DATE),--from-date $(NHL_SOG_CAL_FROM_DATE),) \
+		$(if $(NHL_SOG_CAL_TO_DATE),--to-date $(NHL_SOG_CAL_TO_DATE),) \
+		--lookback-days $(NHL_SOG_CAL_LOOKBACK_DAYS) \
+		--holdout-days $(NHL_SOG_CAL_HOLDOUT_DAYS) \
+		--segment-min-rows $(NHL_SOG_CAL_SEGMENT_MIN_ROWS) \
+		--blend-alpha $(NHL_SOG_CAL_BLEND_ALPHA) \
+		--decay-half-life-days $(NHL_SOG_CAL_DECAY_HALF_LIFE_DAYS) \
+		$(if $(NHL_SOG_CAL_OUTPUT),--output $(NHL_SOG_CAL_OUTPUT),)
+
+nhl-sog-calibration-baseline:
+	@if [ -z "$(NHL_SOG_BASELINE_FROM_DATE)" ] || [ -z "$(NHL_SOG_BASELINE_TO_DATE)" ]; then \
+		echo "nhl-sog-calibration-baseline requires NHL_SOG_BASELINE_FROM_DATE and NHL_SOG_BASELINE_TO_DATE"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/scripts/experiment_nhl_sog_segmented_calibration.py \
+		--model-family $(NHL_SOG_CAL_MODEL_FAMILY) \
+		--model-version $(NHL_SOG_CAL_MODEL_VERSION) \
+		--lines $(NHL_SOG_CAL_LINES) \
+		--from-date $(NHL_SOG_BASELINE_FROM_DATE) \
+		--to-date $(NHL_SOG_BASELINE_TO_DATE) \
+		--lookback-days $(NHL_SOG_CAL_LOOKBACK_DAYS) \
+		--holdout-days $(NHL_SOG_CAL_HOLDOUT_DAYS) \
+		--segment-min-rows $(NHL_SOG_CAL_SEGMENT_MIN_ROWS) \
+		--blend-alpha $(NHL_SOG_CAL_BLEND_ALPHA) \
+		--decay-half-life-days $(NHL_SOG_CAL_DECAY_HALF_LIFE_DAYS) \
+		--output $(NHL_SOG_BASELINE_OUTPUT)
+
+nhl-sog-calibration-log:
+	$(VENV_PY) backend/scripts/nhl_sog_calibration_log.py \
+		--output $(NHL_SOG_MONITOR_HISTORY_INPUT) \
+		--model-family $(NHL_SOG_CAL_MODEL_FAMILY) \
+		--model-version $(NHL_SOG_CAL_MODEL_VERSION) \
+		--lines $(NHL_SOG_CAL_LINES) \
+		$(if $(NHL_SOG_CAL_FROM_DATE),--from-date $(NHL_SOG_CAL_FROM_DATE),) \
+		$(if $(NHL_SOG_CAL_TO_DATE),--to-date $(NHL_SOG_CAL_TO_DATE),) \
+		--lookback-days $(NHL_SOG_CAL_LOOKBACK_DAYS) \
+		--holdout-days $(NHL_SOG_CAL_HOLDOUT_DAYS) \
+		--segment-min-rows $(NHL_SOG_CAL_SEGMENT_MIN_ROWS) \
+		--blend-alpha $(NHL_SOG_CAL_BLEND_ALPHA) \
+		--decay-half-life-days $(NHL_SOG_CAL_DECAY_HALF_LIFE_DAYS) \
+		--required-lines $(NHL_SOG_MONITOR_REQUIRED_LINES) \
+		--max-delta-brier-vs-raw $(NHL_SOG_MONITOR_MAX_DELTA_BRIER) \
+		--max-delta-logloss-vs-raw $(NHL_SOG_MONITOR_MAX_DELTA_LOGLOSS)
+
+nhl-sog-calibration-last:
+	@if [ ! -f "$(NHL_SOG_MONITOR_HISTORY_INPUT)" ]; then \
+		echo "history file missing: $(NHL_SOG_MONITOR_HISTORY_INPUT)"; \
+		exit 2; \
+	fi
+	@tail -n $(NHL_SOG_MONITOR_HISTORY_LIMIT) $(NHL_SOG_MONITOR_HISTORY_INPUT)
+
+nhl-sog-segmented-calibrate-file:
+	@if [ -z "$(NHL_SOG_SEG_CAL_PRED_CSV)" ]; then \
+		echo "nhl-sog-segmented-calibrate-file requires NHL_SOG_SEG_CAL_PRED_CSV"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/nhl/scripts/calibrate_sog_segmented_recency.py \
+		--pred-csv $(NHL_SOG_SEG_CAL_PRED_CSV) \
+		$(if $(NHL_SOG_SEG_CAL_OUT_CSV),--out-csv $(NHL_SOG_SEG_CAL_OUT_CSV),) \
+		--model-family $(NHL_SOG_CAL_MODEL_FAMILY) \
+		--model-version $(NHL_SOG_CAL_MODEL_VERSION) \
+		--lines $(NHL_SOG_CAL_LINES) \
+		--lookback-days $(NHL_SOG_CAL_LOOKBACK_DAYS) \
+		--segment-min-rows $(NHL_SOG_CAL_SEGMENT_MIN_ROWS) \
+		--blend-alpha $(NHL_SOG_CAL_BLEND_ALPHA) \
+		--decay-half-life-days $(NHL_SOG_CAL_DECAY_HALF_LIFE_DAYS) \
+		$(if $(NHL_SOG_SEG_CAL_ASOF_DATE),--asof-date $(NHL_SOG_SEG_CAL_ASOF_DATE),) \
+		$(if $(filter 1,$(NHL_SOG_SEG_CAL_STRICT)),--strict,)
 
 # Fast local NHL verification (no external NHL API required).
 nhl-checks-offline:

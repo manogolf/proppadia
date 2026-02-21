@@ -335,6 +335,21 @@ NHL fixed-window quality baseline:
 make nhl-prediction-quality-auto NHL_QUALITY_FROM_DATE=2025-12-01 NHL_QUALITY_TO_DATE=2025-12-31 NHL_QUALITY_ACTIVE_MIN_TOTAL=1
 ```
 
+NHL SOG segmented calibration fixed-window baseline:
+
+```bash
+make nhl-sog-calibration-baseline \
+  NHL_SOG_BASELINE_FROM_DATE=2025-10-01 \
+  NHL_SOG_BASELINE_TO_DATE=2026-02-04
+```
+
+NHL SOG segmented calibration monitor history:
+
+```bash
+make nhl-sog-calibration-log
+make nhl-sog-calibration-last NHL_SOG_MONITOR_HISTORY_LIMIT=5
+```
+
 Season day-0 baseline artifact capture:
 
 ```bash
