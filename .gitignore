@@ -90,3 +90,5 @@ backend/nhl/exports/
 backend/nhl/_debug_dumps/
 nhl_daily_LAST_FAIL.txt
 nhl_daily_STATUS.txt
+
+backend/nhl/data/processed/*.csv
