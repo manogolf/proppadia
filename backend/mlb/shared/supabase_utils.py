@@ -56,6 +56,10 @@ class _SupabaseProxy:
 
     def __getattr__(self, name: str):
         self._ensure()
+        if name in {"from_", "table"}:
+            def _scoped(table_name: str):
+                return self._client.schema("mlb").from_(table_name)
+            return _scoped
         return getattr(self._client, name)
 
     def __call__(self):
@@ -65,7 +69,7 @@ class _SupabaseProxy:
 
 def table(name: str):
     """Convenience helper: table('foo').select(...).execute()"""
-    return get_supabase().from_(name)
+    return get_supabase().schema("mlb").from_(name)
 
 # What most code will import
 supabase = _SupabaseProxy()

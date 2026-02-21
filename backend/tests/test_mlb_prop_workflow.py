@@ -115,7 +115,13 @@ class TestMlbPropWorkflow(unittest.TestCase):
 
     @patch(
         "backend.domains.mlb.prop_workflow.build_game_context",
-        return_value={"team_id": 119, "team_abbr": "LAD", "for_date": "2026-02-10", "game_id": 12345},
+        return_value={
+            "team_id": 119,
+            "team_abbr": "LAD",
+            "for_date": "2026-02-10",
+            "game_id": 12345,
+            "game_type": "S",
+        },
     )
     @patch(
         "backend.domains.mlb.prop_workflow.resolve_player_candidate",
@@ -135,6 +141,7 @@ class TestMlbPropWorkflow(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertEqual(out["features"]["team_id"], 119)
         self.assertEqual(out["features"]["team"], "LAD")
+        self.assertEqual(out["features"]["game_type"], "S")
         self.assertIn("warnings", out)
         warning_text = " ".join(out["warnings"])
         self.assertIn("mismatched resolved player team", warning_text)
@@ -199,6 +206,37 @@ class TestMlbPropWorkflow(unittest.TestCase):
         self.assertTrue(out["saved"])
         self.assertFalse(out["duplicate"])
         self.assertEqual(mock_insert.call_args.kwargs["user_id"], "user-123")
+
+    @patch("backend.domains.mlb.prop_workflow.insert_prop_row")
+    @patch("backend.domains.mlb.prop_workflow.find_duplicate_prop_id", return_value=None)
+    def test_add_prop_passes_game_type_to_insert(self, _dup, mock_insert):
+        token = sign_commit_payload(
+            {
+                "flow": "mlb_prop_v1",
+                "prop_type": "hits",
+                "probability": 0.6,
+                "recommendation": "over",
+                "features": {
+                    "player_id": 660271,
+                    "player_name": "Shohei Ohtani",
+                    "team": "LAD",
+                    "team_id": 119,
+                    "game_date": "2026-02-10",
+                    "game_id": 12345,
+                    "game_type": "w",
+                    "prop_value": 1.5,
+                    "over_under": "over",
+                },
+            }
+        )
+        out = add_prop_from_commit(
+            commit_token=token,
+            prop_source="user_added",
+        )
+        self.assertTrue(out["ok"])
+        self.assertTrue(out["saved"])
+        self.assertFalse(out["duplicate"])
+        self.assertEqual(mock_insert.call_args.kwargs["game_type"], "W")
 
 
 if __name__ == "__main__":

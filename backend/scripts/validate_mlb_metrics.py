@@ -75,7 +75,7 @@ WITH src AS (
     lower(trim(outcome)) AS outcome_norm,
     lower(trim(predicted_outcome)) AS predicted_norm,
     was_correct
-  FROM player_props
+  FROM mlb.player_props
   WHERE game_date IS NOT NULL
 ),
 norm AS (

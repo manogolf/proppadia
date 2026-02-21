@@ -15,7 +15,7 @@ def _window_clause(window_mode: str) -> str:
         return """
   AND game_date::date IN (
     SELECT DISTINCT game_date::date
-    FROM model_training_props
+    FROM mlb.model_training_props
     WHERE game_date IS NOT NULL
       AND lower(trim(outcome)) IN ('win','loss')
     ORDER BY game_date::date DESC
@@ -40,7 +40,7 @@ SELECT
   COUNT(*) FILTER (WHERE lower(trim(outcome))='win')::int AS correct,
   COUNT(*) FILTER (WHERE lower(trim(over_under))='over')::int AS over_n,
   COUNT(*) FILTER (WHERE lower(trim(over_under))='under')::int AS under_n
-FROM model_training_props
+FROM mlb.model_training_props
 WHERE prop_type = %s
   AND prop_source IN ({placeholders})
   AND lower(trim(outcome)) IN ('win','loss')

@@ -20,7 +20,7 @@ def _player_props_columns() -> set[str]:
         """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema='public'
+        WHERE table_schema='mlb'
           AND table_name='player_props'
         """
     )
@@ -96,7 +96,7 @@ def resolve_nhl_pending_props(
           COUNT(*)::int AS pending_count,
           MIN(game_date)::text AS min_game_date,
           MAX(game_date)::text AS max_game_date
-        FROM player_props
+        FROM mlb.player_props
         WHERE {where_sql}
     """
     preview = pg_fetchone(preview_sql, tuple(params)) or {}
@@ -128,11 +128,11 @@ def resolve_nhl_pending_props(
     update_sql = f"""
         WITH targets AS (
             SELECT id
-            FROM player_props
+            FROM mlb.player_props
             WHERE {where_sql}
         ),
         updated AS (
-            UPDATE player_props p
+            UPDATE mlb.player_props p
             SET {", ".join(set_clauses)}
             WHERE p.id IN (SELECT id FROM targets)
             RETURNING p.id

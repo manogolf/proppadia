@@ -57,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if from_date and to_date:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE prop_source = 'mlb_api'
               AND game_date >= %s::date
               AND game_date <= %s::date
@@ -67,7 +67,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif from_date:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE prop_source = 'mlb_api'
               AND game_date >= %s::date
         """
@@ -76,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif to_date:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE prop_source = 'mlb_api'
               AND game_date <= %s::date
         """
@@ -85,7 +85,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         sql = """
             SELECT COUNT(*)::int AS n, MAX(game_date)::text AS latest_game_date
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE prop_source = 'mlb_api'
               AND game_date >= (CURRENT_DATE - (%s::int || ' days')::interval)::date
         """

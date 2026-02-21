@@ -36,7 +36,7 @@ def _load_pds_d7_columns() -> set[str]:
         """
 SELECT column_name
 FROM information_schema.columns
-WHERE table_schema='public'
+WHERE table_schema='mlb'
   AND table_name='player_derived_stats'
   AND column_name LIKE 'd7_%%'
 """
@@ -78,7 +78,7 @@ WITH mt AS (
     player_id,
     game_id,
     game_date::date AS game_day
-  FROM model_training_props
+  FROM mlb.model_training_props
   WHERE prop_type = %s
     AND prop_source IN ({placeholders})
     AND game_date IS NOT NULL
@@ -101,7 +101,7 @@ pf AS (
         ELSE NULL
       END
     ) AS pf_d7_stat
-  FROM prop_features_precomputed
+  FROM mlb.prop_features_precomputed
   WHERE prop_type=%s
   GROUP BY player_id, game_id
 ),
@@ -112,7 +112,7 @@ pds AS (
     """
         + pds_expr
         + """
-  FROM player_derived_stats
+  FROM mlb.player_derived_stats
   GROUP BY player_id, game_id
 ),
 labeled AS (

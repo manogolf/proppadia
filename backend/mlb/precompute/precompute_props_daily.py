@@ -337,7 +337,7 @@ def upsert_row(prop: str,
     row = {k2: v for k2, v in row.items() if v is not None}
 
     # single cached client; raises cleanly if env missing
-    get_supabase().from_("prop_features_precomputed").upsert(
+    get_supabase().schema("mlb").from_("prop_features_precomputed").upsert(
         row,
         on_conflict="prop_type,player_id,game_id,feature_set_tag"
     ).execute()

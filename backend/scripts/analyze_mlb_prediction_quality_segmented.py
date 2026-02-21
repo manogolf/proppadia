@@ -329,7 +329,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "comparison": _comparison(preseason, regular),
         "caveats": [
-            "Segmentation is date-window based; game_type is not stored in current MLB tables.",
+            "Segmentation is date-window based. game_type may be missing for historical MLB rows.",
             "Accuracy uses graded outcomes only (win/loss).",
         ],
     }

@@ -199,7 +199,7 @@ def fetch_players_directory(limit: int, offset: int, include_inactive: bool = Fa
       SELECT
         pp.player_id,
         MAX(pp.game_date)::date AS last_prop_date
-      FROM public.player_props pp
+      FROM mlb.player_props pp
       WHERE pp.prop_source LIKE 'nhl_%'
       GROUP BY pp.player_id
     )

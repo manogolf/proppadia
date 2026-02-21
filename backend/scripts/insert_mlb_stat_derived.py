@@ -205,7 +205,7 @@ def _get_positions_by_date(conn, game_date: str) -> Dict[int, str]:
         cur.execute(
             """
             SELECT player_id, position
-            FROM player_stats
+            FROM mlb.player_stats
             WHERE game_date = %s::date
             """,
             (game_date,),
@@ -225,7 +225,7 @@ def _get_streak(conn, player_id: int, prop_type: str) -> Tuple[Optional[str], Op
         cur.execute(
             """
             SELECT streak_type, streak_count
-            FROM player_streak_profiles
+            FROM mlb.player_streak_profiles
             WHERE CAST(player_id AS TEXT) = %s
               AND prop_type = %s
               AND prop_source = 'mlb_api'
@@ -249,7 +249,7 @@ def _date_has_mlb_api_rows(conn, game_date: str) -> bool:
         cur.execute(
             """
             SELECT 1
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE game_date = %s::date
               AND prop_source = 'mlb_api'
             LIMIT 1
@@ -264,7 +264,7 @@ def _date_has_negative_lines(conn, game_date: str) -> bool:
         cur.execute(
             """
             SELECT 1
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE game_date = %s::date
               AND prop_source = 'mlb_api'
               AND line < 0
@@ -283,7 +283,7 @@ def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
         cur.execute(
             """
             SELECT game_id
-            FROM game_info
+            FROM mlb.game_info
             WHERE game_id = ANY(%s)
             """,
             (ids,),
@@ -332,7 +332,7 @@ def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) ->
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO game_info (
+            INSERT INTO mlb.game_info (
                 game_id,
                 game_time,
                 game_date,
@@ -377,7 +377,7 @@ def _table_has_column(conn, table_name: str, column_name: str) -> bool:
             """
             SELECT 1
             FROM information_schema.columns
-            WHERE table_schema = 'public'
+            WHERE table_schema = 'mlb'
               AND table_name = %s
               AND column_name = %s
             LIMIT 1
@@ -420,7 +420,7 @@ def _upsert_player_id_min(
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            INSERT INTO player_ids ({", ".join(cols)})
+            INSERT INTO mlb.player_ids ({", ".join(cols)})
             VALUES ({", ".join(vals)})
             ON CONFLICT (player_id) DO NOTHING
             """,
@@ -438,7 +438,7 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            INSERT INTO model_training_props (
+            INSERT INTO mlb.model_training_props (
                 id, game_id, player_id, player_name, team, opponent,
                 team_id, opponent_team_id, opponent_encoded, is_home,
                 prop_type, prop_value, line, over_under, outcome, status,

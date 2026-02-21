@@ -9,7 +9,7 @@ Script:
 
 ## What It Checks
 
-- Required columns exist on `public.player_props`
+- Required columns exist on `mlb.player_props`
 - Sample recent rows satisfy UI assumptions:
   - `game_date` parseable as date
   - `prop_value` numeric

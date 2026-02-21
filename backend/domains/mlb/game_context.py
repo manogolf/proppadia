@@ -41,6 +41,7 @@ def build_game_context(*, team_id: int, game_date: str) -> Optional[Dict[str, An
         "team_abbr": _abbr(int(team_id)),
         "for_date": game_date,
         "game_id": int(game.game_id),
+        "game_type": game.game_type,
         "game_time": game_time,
         "is_home": bool(is_home),
         "opponent_team_id": opponent_team_id,
@@ -50,4 +51,3 @@ def build_game_context(*, team_id: int, game_date: str) -> Optional[Dict[str, An
         "time_of_day_bucket": time_bucket,
         "starting_pitcher_id": int(opposing_pitcher_id) if opposing_pitcher_id else None,
     }
-

@@ -3,7 +3,7 @@
 Validate DB contract for frontend MLB props table.
 
 Checks:
-- required columns exist on public.player_props
+- required columns exist on mlb.player_props
 - sample rows can be parsed for key UI fields
 """
 
@@ -40,7 +40,7 @@ def _columns() -> List[str]:
         """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='player_props'
+        WHERE table_schema='mlb' AND table_name='player_props'
         ORDER BY ordinal_position
         """
     )
@@ -69,7 +69,7 @@ def _sample_rows(limit: int, cols: Sequence[str]) -> List[Dict[str, Any]]:
 
     sql = f"""
         SELECT {", ".join(select_fields)}
-        FROM player_props
+        FROM mlb.player_props
         ORDER BY created_at DESC NULLS LAST
         LIMIT %s
     """

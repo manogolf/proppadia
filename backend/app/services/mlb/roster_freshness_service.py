@@ -24,23 +24,23 @@ def get_roster_freshness(*, require_min: int = 1, stale_after_hours: int = 30) -
         SELECT
           EXISTS (
             SELECT 1 FROM information_schema.columns
-            WHERE table_schema='public' AND table_name='player_ids' AND column_name='active'
+            WHERE table_schema='mlb' AND table_name='player_ids' AND column_name='active'
           ) AS has_active,
           EXISTS (
             SELECT 1 FROM information_schema.columns
-            WHERE table_schema='public' AND table_name='player_ids' AND column_name='updated_at'
+            WHERE table_schema='mlb' AND table_name='player_ids' AND column_name='updated_at'
           ) AS has_updated_at
         """
     ) or {}
     has_active = bool(col_row.get("has_active"))
     has_updated_at = bool(col_row.get("has_updated_at"))
 
-    total_row = pg_fetchone("SELECT COUNT(*)::int AS n FROM public.player_ids") or {}
+    total_row = pg_fetchone("SELECT COUNT(*)::int AS n FROM mlb.player_ids") or {}
     total_players = int(total_row.get("n") or 0)
 
     active_players = None
     if has_active:
-        active_row = pg_fetchone("SELECT COUNT(*)::int AS n FROM public.player_ids WHERE active = TRUE") or {}
+        active_row = pg_fetchone("SELECT COUNT(*)::int AS n FROM mlb.player_ids WHERE active = TRUE") or {}
         active_players = int(active_row.get("n") or 0)
 
     latest_updated_at = None
@@ -48,7 +48,7 @@ def get_roster_freshness(*, require_min: int = 1, stale_after_hours: int = 30) -
     age_hours = None
     if has_updated_at:
         updated_row = pg_fetchone(
-            "SELECT MAX(updated_at)::text AS latest_updated_at FROM public.player_ids"
+            "SELECT MAX(updated_at)::text AS latest_updated_at FROM mlb.player_ids"
         ) or {}
         latest_updated_at = updated_row.get("latest_updated_at")
         latest_dt = _parse_dt(latest_updated_at)
@@ -72,4 +72,3 @@ def get_roster_freshness(*, require_min: int = 1, stale_after_hours: int = 30) -
         "stale_after_hours": int(stale_after_hours),
         "require_min": int(require_min),
     }
-

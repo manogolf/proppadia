@@ -18,11 +18,11 @@ What it DOES NOT do
 - Does not generate features (that’s the backfill script).
 
 Reads
-- `public.model_training_props` (source of labeled rows).
-- `public.prop_features_precomputed` (source of feature blobs).
+- `mlb.model_training_props` (source of labeled rows).
+- `mlb.prop_features_precomputed` (source of feature blobs).
 
 Writes
-- `public.model_training_props` (adds/updates a features snapshot per row).
+- `mlb.model_training_props` (adds/updates a features snapshot per row).
   NOTE: If your MTP schema lacks a JSON features column, adjust the mapping
   or add one (e.g., `features jsonb` or `features_json jsonb`).
 
@@ -315,9 +315,10 @@ def _final_game_ids(date_str: str) -> set[int]:
     return out
 
 def _pfp_rows_for_date(date_str: str) -> List[Dict[str, Any]]:
-    # pull a minimal set from prop_features_precomputed (spine)
+    # pull a minimal set from mlb.prop_features_precomputed (spine)
     res = (
         supabase
+        .schema("mlb")
         .from_("prop_features_precomputed")
         .select("prop_type, player_id, game_id, game_date, features")
         .eq("game_date", date_str)
@@ -327,7 +328,7 @@ def _pfp_rows_for_date(date_str: str) -> List[Dict[str, Any]]:
     return getattr(res, "data", []) or []
 
 def upsert_mtp(row: Dict[str, Any]) -> None:
-    supabase.from_("model_training_props").upsert(
+    supabase.schema("mlb").from_("model_training_props").upsert(
         row,
         on_conflict="player_id,game_id,prop_type,prop_source",
     ).execute()

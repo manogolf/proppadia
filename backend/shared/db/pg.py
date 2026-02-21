@@ -23,7 +23,13 @@ def _db_url() -> str:
 def _connect():
     if psycopg is None:
         raise RuntimeError("psycopg not installed")
-    return psycopg.connect(_db_url(), row_factory=psycopg.rows.dict_row, prepare_threshold=None)
+    # Prefer MLB schema for unqualified MLB table names after public-view cleanup.
+    return psycopg.connect(
+        _db_url(),
+        row_factory=psycopg.rows.dict_row,
+        prepare_threshold=None,
+        options="-c search_path=mlb,public",
+    )
 
 
 def pg_connect():

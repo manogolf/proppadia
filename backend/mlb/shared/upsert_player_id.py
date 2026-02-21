@@ -17,7 +17,7 @@ async def upsert_player_id(player_name: str, team: str) -> str:
     try:
         # Step 1: Try player_ids
         result = (
-            supabase.table("player_ids")
+            supabase.schema("mlb").table("player_ids")
             .select("player_id")
             .eq("player_name", player_name)
             .eq("team", team)
@@ -30,7 +30,7 @@ async def upsert_player_id(player_name: str, team: str) -> str:
 
         # Step 2: Fallback to model_training_props
         fallback = (
-            supabase.table("model_training_props")
+            supabase.schema("mlb").table("model_training_props")
             .select("player_id")
             .eq("player_name", player_name)
             .eq("team", team)
@@ -44,8 +44,8 @@ async def upsert_player_id(player_name: str, team: str) -> str:
         if not player_id:
             raise ValueError(f"Unable to find player_id for {player_name} ({team})")
 
-        # Step 3: Upsert into player_ids
-        supabase.table("player_ids").upsert(
+        # Step 3: Upsert into mlb.player_ids
+        supabase.schema("mlb").table("player_ids").upsert(
             {
                 "player_name": player_name,
                 "team": team,

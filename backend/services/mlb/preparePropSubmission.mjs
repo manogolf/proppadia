@@ -21,7 +21,7 @@ export default async function preparePropSubmission({
     game_id,
   });
 
-  // ✅ 1. Try to fetch player_id from model_training_props
+  // ✅ 1. Try to fetch player_id from mlb.model_training_props
   const { data, error } = await supabase
     .from("model_training_props")
     .select("player_id")

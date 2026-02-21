@@ -21,7 +21,14 @@ class TestSharedCleanupMlbPreseasonRows(unittest.TestCase):
         with patch.object(
             cleanup,
             "_count_rows",
-            return_value={"model_training_props": 10, "player_props": 2},
+            return_value={
+                "model_training_props": 10,
+                "player_props": 2,
+                "type_filter_applied": {
+                    "model_training_props": True,
+                    "player_props": False,
+                },
+            },
         ), redirect_stdout(out):
             rc = cleanup.main(["--from-date", "2026-03-01", "--to-date", "2026-03-31"])
         self.assertEqual(rc, 0)
@@ -34,11 +41,25 @@ class TestSharedCleanupMlbPreseasonRows(unittest.TestCase):
         with patch.object(
             cleanup,
             "_count_rows",
-            return_value={"model_training_props": 10, "player_props": 2},
+            return_value={
+                "model_training_props": 10,
+                "player_props": 2,
+                "type_filter_applied": {
+                    "model_training_props": True,
+                    "player_props": False,
+                },
+            },
         ), patch.object(
             cleanup,
             "_delete_rows",
-            return_value={"model_training_props": 9, "player_props": 2},
+            return_value={
+                "model_training_props": 9,
+                "player_props": 2,
+                "type_filter_applied": {
+                    "model_training_props": True,
+                    "player_props": False,
+                },
+            },
         ), redirect_stdout(out):
             rc = cleanup.main(
                 [
@@ -48,13 +69,33 @@ class TestSharedCleanupMlbPreseasonRows(unittest.TestCase):
                     "2026-03-31",
                     "--apply",
                     "--include-user-added",
+                    "--game-types",
+                    "S,R",
                 ]
             )
         self.assertEqual(rc, 0)
         payload = json.loads(out.getvalue())
         self.assertEqual(payload["mode"], "apply")
         self.assertTrue(payload["include_user_added"])
+        self.assertEqual(payload["game_types"], ["R", "S"])
         self.assertEqual(payload["deleted_counts"]["model_training_props"], 9)
+
+    def test_main_fails_on_bad_game_types(self):
+        out = StringIO()
+        with redirect_stdout(out):
+            rc = cleanup.main(
+                [
+                    "--from-date",
+                    "2026-03-01",
+                    "--to-date",
+                    "2026-03-31",
+                    "--game-types",
+                    "SPRINGTRAININGCODETOOLONG",
+                ]
+            )
+        self.assertEqual(rc, 2)
+        payload = json.loads(out.getvalue())
+        self.assertFalse(payload["ok"])
 
 
 if __name__ == "__main__":

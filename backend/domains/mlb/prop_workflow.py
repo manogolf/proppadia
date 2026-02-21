@@ -78,7 +78,7 @@ def _load_latest_derived_stats(player_id: int, game_id: Optional[int], game_date
     row = pg_fetchone(
         """
 SELECT row_to_json(pds)::jsonb AS stats
-FROM player_derived_stats pds
+FROM mlb.player_derived_stats pds
 WHERE pds.player_id = %s
   AND (
     (%s::int IS NOT NULL AND pds.game_id = %s::int)
@@ -218,6 +218,7 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
             "team_abbr": team_abbr,
             "for_date": game_date,
             "game_id": game_id_fallback,
+            "game_type": (str(payload.get("game_type") or "").strip().upper() or None),
             "game_time": None,
             "is_home": bool(payload.get("is_home", False)),
             "opponent_team_id": payload.get("opponent_team_id"),
@@ -397,6 +398,7 @@ def add_prop_from_commit(
     game_date = game_date_raw
     team = normalizeTeamAbbreviation(features.get("team") or features.get("team_abbr"))
     team_id = features.get("team_id")
+    game_type = str(features.get("game_type") or "").strip().upper() or None
     player_name = features.get("player_name")
 
     dup_id = find_duplicate_prop_id(
@@ -424,6 +426,7 @@ def add_prop_from_commit(
             prop_source=prop_source,
             recommendation=recommendation,
             probability=probability,
+            game_type=game_type,
             user_id=user_id,
         )
     except DuplicatePropError:

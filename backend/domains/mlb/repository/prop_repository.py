@@ -22,7 +22,7 @@ def _player_props_columns() -> Set[str]:
     sql = """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema='public'
+        WHERE table_schema='mlb'
           AND table_name='player_props'
     """
     rows = pg_fetchall(sql)
@@ -49,7 +49,7 @@ def find_duplicate_prop_id(
 ) -> Optional[str]:
     sql = """
         SELECT id
-        FROM player_props
+        FROM mlb.player_props
         WHERE CAST(player_id AS TEXT) = %s
           AND CAST(game_id AS TEXT) = %s
           AND prop_type = %s
@@ -89,8 +89,10 @@ def insert_prop_row(
     prop_source: str,
     recommendation: str,
     probability: float,
+    game_type: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> None:
+    normalized_game_type = str(game_type or "").strip().upper() or None
     columns = [
         "player_id",
         "player_name",
@@ -125,13 +127,18 @@ def insert_prop_row(
     columns.extend(["created_at", "prediction_timestamp"])
     placeholders.extend(["NOW()", "NOW()"])
 
+    if "game_type" in _player_props_columns():
+        columns.append("game_type")
+        placeholders.append("%s")
+        values.append(normalized_game_type)
+
     if user_id and _has_user_id_column():
         columns.append("user_id")
         placeholders.append("%s")
         values.append(str(user_id))
 
     sql = f"""
-        INSERT INTO player_props ({", ".join(columns)})
+        INSERT INTO mlb.player_props ({", ".join(columns)})
         VALUES ({", ".join(placeholders)})
     """
     try:
@@ -196,7 +203,7 @@ def fetch_prop_history_rows(
     sql = f"""
         SELECT
           {", ".join(columns)}
-        FROM player_props
+        FROM mlb.player_props
         WHERE {where_sql}
         ORDER BY created_at DESC
         LIMIT %s OFFSET %s
@@ -224,7 +231,7 @@ def count_prop_history_rows(
     )
     sql = f"""
         SELECT COUNT(*) AS total
-        FROM player_props
+        FROM mlb.player_props
         WHERE {where_sql}
     """
     row = pg_fetchone(sql, tuple(params))

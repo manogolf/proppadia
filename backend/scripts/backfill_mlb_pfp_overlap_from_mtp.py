@@ -5,7 +5,7 @@ This script closes overlap gaps between model_training_props and
 prop_features_precomputed by creating missing PFP rows keyed by:
   (prop_type, player_id, game_id, feature_set_tag)
 
-Feature payloads are sourced from player_derived_stats rolling columns
+Feature payloads are sourced from mlb.player_derived_stats rolling columns
 (d7_*, d15_*, d30_*), which are the primary non-leaky rolling features used
 in training diagnostics.
 """
@@ -129,7 +129,7 @@ WITH mt_base AS (
     player_id,
     game_id,
     game_date::date AS game_day
-  FROM model_training_props
+  FROM mlb.model_training_props
   WHERE prop_source = %s
     AND prop_type IN ({placeholders})
     AND game_date IS NOT NULL
@@ -148,7 +148,7 @@ missing AS (
     m.game_id,
     m.game_day
   FROM mt_win m
-  LEFT JOIN prop_features_precomputed p
+  LEFT JOIN mlb.prop_features_precomputed p
     ON p.prop_type = m.prop_type
    AND p.player_id = m.player_id
    AND p.game_id = m.game_id
@@ -163,7 +163,7 @@ joined AS (
     m.game_day,
     pds.{", pds.".join(_ROLLING_FEATURE_COLUMNS)}
   FROM missing m
-  LEFT JOIN player_derived_stats pds
+  LEFT JOIN mlb.player_derived_stats pds
     ON pds.player_id = m.player_id
    AND pds.game_id = m.game_id
 )
@@ -206,7 +206,7 @@ def _upsert_rows(
     if not rows:
         return 0
     sql = """
-INSERT INTO prop_features_precomputed (
+INSERT INTO mlb.prop_features_precomputed (
   prop_type,
   player_id,
   game_id,

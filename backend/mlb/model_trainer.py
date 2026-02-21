@@ -187,7 +187,7 @@ def _fetch_base_and_merge(sb: Client, prop_type: str, days_back: int, limit: int
     """Fallback: model_training_props + join derived features by (player_id, game_id)."""
     since_date = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
     resp = (
-        sb.table("model_training_props")
+        sb.schema("mlb").table("model_training_props")
           .select("*")
           .eq("prop_type", prop_type)
           .not_.is_("line", "null")
@@ -229,7 +229,7 @@ def _fetch_base_and_merge(sb: Client, prop_type: str, days_back: int, limit: int
     derived_frames: List[pd.DataFrame] = []
     for chunk in _chunked(game_ids, 1000):
         r = (
-            sb.table("player_derived_stats")
+            sb.schema("mlb").table("player_derived_stats")
             .select("*")
             .in_("game_id", chunk)
             .execute()

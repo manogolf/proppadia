@@ -20,6 +20,7 @@ class GameLite:
     away_abbr: Optional[str]
     sp_home_id: Optional[int]  # probable starter
     sp_away_id: Optional[int]
+    game_type: Optional[str] = None
 
 def _get_json(url: str) -> Dict[str, Any]:
     r = requests.get(url, timeout=15)
@@ -56,6 +57,7 @@ def fetch_schedule_by_date(game_date: str) -> List[GameLite]:
             away_abbr=away_team.get("abbreviation"),
             sp_home_id=(home.get("probablePitcher") or {}).get("id"),
             sp_away_id=(away.get("probablePitcher") or {}).get("id"),
+            game_type=(str(g.get("gameType") or "").strip().upper() or None),
         ))
     return out
 

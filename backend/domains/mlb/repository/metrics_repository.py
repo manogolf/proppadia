@@ -16,7 +16,7 @@ WITH base AS (
     lower(trim(outcome)) AS outcome_norm,
     lower(trim(predicted_outcome)) AS predicted_norm,
     was_correct
-  FROM player_props
+  FROM mlb.player_props
   WHERE game_date IS NOT NULL
     AND lower(trim(status)) IN ('win', 'loss', 'resolved', 'pending', 'expired', 'dnp')
 ),

@@ -2,10 +2,10 @@
  * backend/scripts/generateDerivedStats.js
  *
  * Populates `player_derived_stats` with derived features for recently played games.
- * - Pulls (player_id, game_id, game_date) from model_training_props
+ * - Pulls (player_id, game_id, game_date) from mlb.model_training_props
  * - Builds per-player history (<= game_date)
  * - Computes features via getDerivedStats(...)
- * - Upserts into player_derived_stats on (player_id, game_date)
+ * - Upserts into mlb.player_derived_stats on (player_id, game_date)
  *
  * CLI:
  *   node backend/scripts/generateDerivedStats.js --start=YYYY-MM-DD --end=YYYY-MM-DD --lookback=21 --verbose

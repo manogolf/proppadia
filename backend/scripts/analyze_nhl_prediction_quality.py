@@ -23,7 +23,7 @@ WITH src AS (
     lower(trim(predicted_outcome)) AS predicted_norm,
     was_correct,
     confidence_score
-  FROM player_props
+  FROM mlb.player_props
   WHERE prop_source LIKE 'nhl_%%'
     AND game_date IS NOT NULL
     AND game_date::date BETWEEN %s::date AND %s::date

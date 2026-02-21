@@ -65,7 +65,7 @@ def upsert_streak_profiles(profiles):
     )
 
     sql = f"""
-        INSERT INTO player_streak_profiles (player_id, prop_type, hit_streak, win_streak, rolling_result_avg_7, streak_type)
+        INSERT INTO mlb.player_streak_profiles (player_id, prop_type, hit_streak, win_streak, rolling_result_avg_7, streak_type)
         VALUES {sql_values}
         ON CONFLICT (player_id, prop_type)
         DO UPDATE SET

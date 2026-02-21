@@ -7,9 +7,9 @@ from backend.domains.mlb.repository import player_repository as repo
 class TestMlbPlayerRepository(unittest.TestCase):
     def test_lookup_player_prefers_player_ids_source(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "LAD"}]
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
             return []
 
@@ -23,9 +23,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
     def test_lookup_player_falls_back_to_training_source(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 return []
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
             return []
 
@@ -39,9 +39,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
     def test_lookup_player_falls_back_when_player_ids_query_errors(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 raise RuntimeError("player_ids unavailable")
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
             return []
 
@@ -77,7 +77,7 @@ class TestMlbPlayerRepository(unittest.TestCase):
         def _fetchall(sql, params=()):
             captured["sql"] = sql
             captured["params"] = params
-            if "FROM player_ids" in sql and "lower(player_name) = lower(%s)" in sql:
+            if "FROM mlb.player_ids" in sql and "lower(player_name) = lower(%s)" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
             return []
 
@@ -93,9 +93,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
     def test_search_players_falls_back_to_training_rows(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 return []
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
             return []
 
@@ -109,9 +109,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
     def test_search_players_dedupes_player_ids_against_training_rows(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "LAD"}]
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [
                     {"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"},
                     {"player_id": "592450", "player_name": "Aaron Judge", "team": "NYY"},
@@ -130,9 +130,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
         def _fetchall(sql, params=()):
             calls["n"] += 1
-            if "FROM player_props" in sql:
+            if "FROM mlb.player_props" in sql:
                 return [{"prop_type": "hits"}]
-            if "FROM player_streak_profiles" in sql:
+            if "FROM mlb.player_streak_profiles" in sql:
                 raise RuntimeError("streaks unavailable")
             if "AND prop_source = 'mlb_api'" in sql:
                 return [{"prop_type": "hits", "outcome": "win"}]
@@ -153,7 +153,7 @@ class TestMlbPlayerRepository(unittest.TestCase):
         captured = {}
 
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql and "lower(player_name) = lower(%s)" in sql:
+            if "FROM mlb.player_ids" in sql and "lower(player_name) = lower(%s)" in sql:
                 captured["params"] = params
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "ARI"}]
             return []
@@ -169,9 +169,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
     def test_search_players_uses_training_fallback_when_player_ids_query_fails(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 raise RuntimeError("player_ids unavailable")
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"}]
             return []
 
@@ -185,9 +185,9 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
     def test_search_players_respects_limit_with_mixed_sources(self):
         def _fetchall(sql, params=()):
-            if "FROM player_ids" in sql:
+            if "FROM mlb.player_ids" in sql:
                 return [{"player_id": "660271", "player_name": "Shohei Ohtani", "team": "LAD"}]
-            if "FROM model_training_props" in sql:
+            if "FROM mlb.model_training_props" in sql:
                 return [
                     {"player_id": "660271", "player_name": "Shohei Ohtani", "team": "119"},
                     {"player_id": "592450", "player_name": "Aaron Judge", "team": "NYY"},

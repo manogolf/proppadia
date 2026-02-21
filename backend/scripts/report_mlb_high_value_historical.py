@@ -64,7 +64,7 @@ def _load_seasons(prop_types: Sequence[str], prop_sources: Sequence[str], limit:
     rows = pg_fetchall(
         f"""
         SELECT DISTINCT EXTRACT(YEAR FROM game_date)::int AS season
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE game_date IS NOT NULL
           AND prop_type IN ({prop_placeholders})
           AND prop_source IN ({source_placeholders})
@@ -91,7 +91,7 @@ def _current_stats(
           COUNT(*) FILTER (WHERE lower(trim(outcome))='win')::int AS correct,
           COUNT(*) FILTER (WHERE lower(trim(over_under))='over')::int AS over_n,
           COUNT(*) FILTER (WHERE lower(trim(over_under))='under')::int AS under_n
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE prop_type = %s
           AND EXTRACT(YEAR FROM game_date)::int = %s::int
           AND prop_source IN ({source_placeholders})
@@ -137,12 +137,12 @@ WITH base AS (
     mt.id,
     mt.prop_value::numeric AS actual,
     {exp_expr} AS exp_val
-  FROM model_training_props mt
-  LEFT JOIN prop_features_precomputed pf
+  FROM mlb.model_training_props mt
+  LEFT JOIN mlb.prop_features_precomputed pf
     ON pf.player_id = mt.player_id
    AND pf.game_id = mt.game_id
    AND pf.prop_type = %s
-  LEFT JOIN player_derived_stats pds
+  LEFT JOIN mlb.player_derived_stats pds
     ON pds.player_id = mt.player_id
    AND pds.game_id = mt.game_id
   WHERE mt.prop_type = %s

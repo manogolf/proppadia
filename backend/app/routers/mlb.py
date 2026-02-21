@@ -140,7 +140,7 @@ def mlb_standings(
     return payload
 
 
-@router.get("/mlb/roster-freshness", summary="MLB roster freshness status from player_ids")
+@router.get("/mlb/roster-freshness", summary="MLB roster freshness status from mlb.player_ids")
 def mlb_roster_freshness(
     stale_after_hours: int = Query(30, ge=1, le=336, description="Stale threshold in hours"),
     require_min: int = Query(1, ge=0, description="Minimum player_ids row count required"),

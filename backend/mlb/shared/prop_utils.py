@@ -57,14 +57,14 @@ def get_canonical_model_name(prop_type: str) -> Optional[str]:
     return PROP_MODEL_MAP.get(key)
 
 # -------------------------------------------------------------------
-# DB + mapping helpers (ID-first; matches public.player_ids schema)
+# DB + mapping helpers (ID-first; matches mlb.player_ids schema)
 # -------------------------------------------------------------------
 
 
 def get_player_id_by_name(name: str) -> Optional[int]:
     """
     Resolve MLB player_id using your Supabase table first:
-      table: public.player_ids
+      table: mlb.player_ids
       columns: player_name (text), player_id (text)
     Fallback to MLB StatsAPI if DB has no match.
     """
@@ -129,7 +129,7 @@ def get_player_id_by_name(name: str) -> Optional[int]:
 
 def get_latest_team_for_player(player_id: int) -> Tuple[Optional[str], Optional[int]]:
     """
-    From public.player_ids, return (team_abbr, team_id) for the given player_id,
+    From mlb.player_ids, return (team_abbr, team_id) for the given player_id,
     preferring the most recently updated row.
     Columns: player_id (text), team (abbr), team_id (bigint), updated_at/created_at.
     """

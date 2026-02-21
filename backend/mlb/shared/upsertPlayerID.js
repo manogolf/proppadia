@@ -28,7 +28,7 @@ export async function upsertPlayerID(supabase, { player_name, team }) {
 
   const player_id = mtp[0].player_id;
 
-  // Upsert into player_ids
+  // Upsert into mlb.player_ids
   const { error: upsertError } = await supabase.from("player_ids").upsert(
     {
       player_name,

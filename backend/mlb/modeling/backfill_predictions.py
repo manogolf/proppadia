@@ -397,7 +397,7 @@ def print_summary(summary: dict, started_at: float) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 def process_batch(db_prop_type: str, model_prop_type: str, batch_size: int = BATCH_SIZE) -> int:
     response = (
-        supabase.table("model_training_props")
+        supabase.schema("mlb").table("model_training_props")
         .select("*")
         .eq("prop_type", db_prop_type)
         .eq("prop_source", "mlb_api")
@@ -446,7 +446,7 @@ def process_batch(db_prop_type: str, model_prop_type: str, batch_size: int = BAT
             was_correct = (prediction == actual) if actual in ("over", "under") else None
             timestamp = datetime.now(timezone.utc).isoformat()
 
-            supabase.table("model_training_props").update({
+            supabase.schema("mlb").table("model_training_props").update({
                 "predicted_outcome": prediction,
                 "confidence_score": float(prob),
                 "was_correct": was_correct,
@@ -474,7 +474,7 @@ def process_batch(db_prop_type: str, model_prop_type: str, batch_size: int = BAT
 
 def fetch_pending_prop_types() -> list[str]:
     resp = (
-        supabase.table("model_training_props")
+        supabase.schema("mlb").table("model_training_props")
         .select("prop_type")
         .eq("prop_source", "mlb_api")
         .eq("status", "resolved")

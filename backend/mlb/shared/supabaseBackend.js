@@ -77,7 +77,11 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 export const supabase =
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey, {
+        db: { schema: "mlb" },
+      })
+    : null;
 
 // ─────────────────────────────────────────────
 // Retain all backend helper functions below

@@ -3,10 +3,10 @@
 // 📌 Purpose: Compute and upsert active streaks per player and prop_type
 //
 // 🔁 How it works:
-// - Fetches resolved props (status: 'win' or 'loss') from model_training_props
+// - Fetches resolved props (status: 'win' or 'loss') from mlb.model_training_props
 // - Groups by (player_id, prop_type, prop_source)
 // - Computes active "hot" or "cold" streaks
-// - Upserts into player_streak_profiles with one row per (player_id, prop_type, prop_source)
+// - Upserts into mlb.player_streak_profiles with one row per (player_id, prop_type, prop_source)
 //
 // 🛠️ Features:
 // - Fully bucketed for scalable execution over large datasets

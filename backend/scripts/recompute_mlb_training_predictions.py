@@ -72,10 +72,10 @@ def _score_probability(prop_type: str, features: Dict[str, Any], allow_heuristic
 def _window_dates(from_date: str | None, to_date: str | None, days_back: int) -> tuple[str, str]:
     if from_date and to_date:
         return from_date, to_date
-    max_day_row = pg_fetchone("SELECT MAX(game_date)::date AS d FROM model_training_props WHERE game_date IS NOT NULL") or {}
+    max_day_row = pg_fetchone("SELECT MAX(game_date)::date AS d FROM mlb.model_training_props WHERE game_date IS NOT NULL") or {}
     max_day = str(max_day_row.get("d") or "")
     if not max_day:
-        raise RuntimeError("unable to determine max game_date from model_training_props")
+        raise RuntimeError("unable to determine max game_date from mlb.model_training_props")
     end = datetime.fromisoformat(max_day).date()
     start = end - timedelta(days=max(1, int(days_back)))
     if from_date:
@@ -117,8 +117,8 @@ SELECT
   m.game_day_of_week,
   m.time_of_day_bucket,
   row_to_json(pds)::jsonb AS pds_stats
-FROM model_training_props m
-LEFT JOIN player_derived_stats pds
+FROM mlb.model_training_props m
+LEFT JOIN mlb.player_derived_stats pds
   ON pds.player_id = m.player_id
  AND pds.game_id = m.game_id
 WHERE m.prop_source = %s
@@ -300,7 +300,7 @@ def recompute(
                 was_correct = score.get("was_correct")
                 cur.execute(
                     """
-UPDATE model_training_props
+UPDATE mlb.model_training_props
 SET
   predicted_outcome = %s,
   confidence_score = %s,

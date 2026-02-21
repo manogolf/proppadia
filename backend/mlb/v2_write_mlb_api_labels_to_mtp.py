@@ -21,7 +21,7 @@ Reads
 - MLB schedule (to find completed games) and boxscore feeds.
 
 Writes
-- `public.model_training_props` (one row per (player_id, game_id, prop_type, prop_source='mlb_api')).
+- `mlb.model_training_props` (one row per (player_id, game_id, prop_type, prop_source='mlb_api')).
   Includes: game_date, team/opponent context, line, over_under, outcome/win-loss,
   and any other training metadata your schema supports.
 
@@ -413,6 +413,7 @@ def upsert_labels_for_date(date_yyyy_mm_dd: str) -> Dict[str, Any]:
                     try:
                         res = (
                             supabase
+                            .schema("mlb")
                             .from_("model_training_props")
                             .upsert(row, on_conflict="player_id,game_id,prop_type,prop_source")
                             .execute()

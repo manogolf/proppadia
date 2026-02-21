@@ -193,6 +193,15 @@ Stat-derived backfill window:
 make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=2025-08-15 MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1
 ```
 
+Preseason cleanup dry-run (date + game_type filter):
+
+```bash
+make mlb-preseason-cleanup \
+  MLB_PRESEASON_FROM_DATE=2026-02-20 \
+  MLB_PRESEASON_TO_DATE=2026-03-27 \
+  MLB_PRESEASON_GAME_TYPES=S
+```
+
 Rosters:
 
 ```bash
@@ -238,7 +247,8 @@ make mlb-prediction-quality-segmented \
 ```
 
 Notes:
-- Segmenting is date-window based because MLB `game_type` is not currently stored in `model_training_props`.
+- Segmenting remains date-window based.
+- `game_type` can now be stored on incoming MLB rows when the DB has the column.
 - Use top-level `comparison` to track regular-minus-preseason drift by overall and prop lane.
 
 MLB retrain prerequisites checklist bundle:

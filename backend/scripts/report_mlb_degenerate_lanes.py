@@ -27,7 +27,7 @@ def _window_clause(window_mode: str) -> str:
         return """
   AND mt.game_date::date IN (
     SELECT DISTINCT game_date::date
-    FROM model_training_props
+    FROM mlb.model_training_props
     WHERE game_date IS NOT NULL
       AND lower(trim(outcome)) IN ('win','loss')
     ORDER BY game_date::date DESC
@@ -95,12 +95,12 @@ WITH base AS (
     mt.id,
     mt.prop_value::numeric AS actual,
     {exp_expr} AS exp_val
-  FROM model_training_props mt
-  LEFT JOIN prop_features_precomputed pf
+  FROM mlb.model_training_props mt
+  LEFT JOIN mlb.prop_features_precomputed pf
     ON pf.player_id = mt.player_id
    AND pf.game_id = mt.game_id
    AND pf.prop_type = %s
-  LEFT JOIN player_derived_stats pds
+  LEFT JOIN mlb.player_derived_stats pds
     ON pds.player_id = mt.player_id
    AND pds.game_id = mt.game_id
   WHERE mt.prop_type = %s

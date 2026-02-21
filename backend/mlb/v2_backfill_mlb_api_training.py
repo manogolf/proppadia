@@ -20,7 +20,7 @@ Reads
 - Existing PFP rows (to avoid redundant work).
 
 Writes
-- `public.prop_features_precomputed`:
+- `mlb.prop_features_precomputed`:
   (prop_type, player_id, game_id, game_date, features jsonb, feature_set_tag, ...)
 
 Run Order
@@ -286,11 +286,11 @@ def upsert_game_info_min(game_id: int, game_time_et_iso: Optional[str]) -> None:
     """Make sure game_info has at least (game_id, game_time) so FKs pass."""
     try:
         # quick existence check
-        ex = supabase.from_("game_info").select("game_id").eq("game_id", game_id).limit(1).execute()
+        ex = supabase.schema("mlb").from_("game_info").select("game_id").eq("game_id", game_id).limit(1).execute()
         rows = getattr(ex, "data", []) or []
         if rows:
             return
-        supabase.from_("game_info").upsert(
+        supabase.schema("mlb").from_("game_info").upsert(
             {
                 "game_id": int(game_id),
                 # game_info.game_time is timestamp WITHOUT time zone in your schema
@@ -320,7 +320,7 @@ def upsert_prop_features_precomputed(
             "features": features,
             "feature_set_tag": feature_set_tag,
         }
-        supabase.from_("prop_features_precomputed").upsert(
+        supabase.schema("mlb").from_("prop_features_precomputed").upsert(
             payload,
             on_conflict="prop_type,player_id,game_id,feature_set_tag",
         ).execute()
@@ -329,7 +329,7 @@ def upsert_prop_features_precomputed(
 
 def upsert_model_training_prop(row: Dict[str, Any]) -> None:
     try:
-        supabase.from_("model_training_props").upsert(
+        supabase.schema("mlb").from_("model_training_props").upsert(
             row,
             on_conflict="player_id,game_id,prop_type,prop_source",
         ).execute()

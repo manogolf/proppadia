@@ -58,7 +58,7 @@ def lookup_player(player_id: int) -> Optional[Dict[str, Any]]:
         (
             """
             SELECT player_id, player_name, team
-            FROM player_ids
+            FROM mlb.player_ids
             WHERE CAST(player_id AS TEXT) = %s
             LIMIT 1
             """,
@@ -67,7 +67,7 @@ def lookup_player(player_id: int) -> Optional[Dict[str, Any]]:
         (
             """
             SELECT player_id, player_name, team
-            FROM model_training_props
+            FROM mlb.model_training_props
             WHERE CAST(player_id AS TEXT) = %s
             ORDER BY game_date DESC NULLS LAST
             LIMIT 1
@@ -98,7 +98,7 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
           CAST(player_id AS TEXT) AS player_id,
           MIN(player_name) AS player_name,
           MIN(team) AS team
-        FROM player_ids
+        FROM mlb.player_ids
         WHERE player_name ILIKE %s
         GROUP BY CAST(player_id AS TEXT)
         ORDER BY MIN(player_name) ASC
@@ -109,7 +109,7 @@ def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
           CAST(player_id AS TEXT) AS player_id,
           player_name,
           team
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE player_name ILIKE %s
         ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
         LIMIT %s
@@ -156,14 +156,14 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
             CAST(player_id AS TEXT) AS player_id,
             MIN(player_name) AS player_name,
             MIN(team) AS team
-          FROM player_ids
+          FROM mlb.player_ids
           GROUP BY CAST(player_id AS TEXT)
         ),
         latest_team AS (
           SELECT DISTINCT ON (CAST(player_id AS TEXT))
             CAST(player_id AS TEXT) AS player_id,
             team
-          FROM model_training_props
+          FROM mlb.model_training_props
           WHERE team IS NOT NULL
             AND BTRIM(CAST(team AS TEXT)) <> ''
           ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
@@ -172,7 +172,7 @@ def list_players(limit: int = 2000) -> List[Dict[str, Any]]:
           SELECT
             CAST(player_id AS TEXT) AS player_id,
             MAX(game_date)::date AS last_prop_date
-          FROM player_props
+          FROM mlb.player_props
           GROUP BY CAST(player_id AS TEXT)
         )
         SELECT
@@ -227,14 +227,14 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
             CAST(player_id AS TEXT) AS player_id,
             MIN(player_name) AS player_name,
             MIN(team) AS team
-          FROM player_ids
+          FROM mlb.player_ids
           GROUP BY CAST(player_id AS TEXT)
         ),
         latest_team AS (
           SELECT DISTINCT ON (CAST(player_id AS TEXT))
             CAST(player_id AS TEXT) AS player_id,
             team
-          FROM model_training_props
+          FROM mlb.model_training_props
           WHERE team IS NOT NULL
             AND BTRIM(CAST(team AS TEXT)) <> ''
           ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
@@ -243,7 +243,7 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
           SELECT DISTINCT ON (CAST(player_id AS TEXT))
             CAST(player_id AS TEXT) AS player_id,
             team
-          FROM player_props
+          FROM mlb.player_props
           WHERE team IS NOT NULL
             AND BTRIM(CAST(team AS TEXT)) <> ''
             AND (prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%')
@@ -253,7 +253,7 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
           SELECT
             CAST(player_id AS TEXT) AS player_id,
             MAX(game_date)::date AS last_prop_date
-          FROM player_props
+          FROM mlb.player_props
           WHERE prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%'
           GROUP BY CAST(player_id AS TEXT)
         )
@@ -310,7 +310,7 @@ def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, A
     team_id_txt = str(team_id) if team_id is not None else None
     exact_name_sql = """
         SELECT player_id, player_name, team
-        FROM player_ids
+        FROM mlb.player_ids
         WHERE lower(player_name) = lower(%s)
           AND (
             %s IS NULL
@@ -321,7 +321,7 @@ def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, A
     """
     fuzzy_name_sql = """
         SELECT player_id, player_name, team
-        FROM player_ids
+        FROM mlb.player_ids
         WHERE player_name ILIKE %s
           AND (
             %s IS NULL
@@ -332,7 +332,7 @@ def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, A
     """
     mtp_fallback_sql = """
         SELECT player_id, player_name, team
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE player_name ILIKE %s
           AND (
             %s IS NULL
@@ -367,21 +367,21 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]
     pid_txt = str(player_id)
     recent_props_sql = """
         SELECT game_date, prop_type, result, outcome, over_under, prop_value, confidence_score
-        FROM player_props
+        FROM mlb.player_props
         WHERE CAST(player_id AS TEXT) = %s
         ORDER BY game_date DESC NULLS LAST
         LIMIT 14
     """
     streaks_sql = """
         SELECT prop_type, streak_type, streak_count
-        FROM player_streak_profiles
+        FROM mlb.player_streak_profiles
         WHERE CAST(player_id AS TEXT) = %s
         ORDER BY streak_count DESC NULLS LAST
         LIMIT 10
     """
     stat_derived_sql = """
         SELECT game_date, prop_type, result, outcome
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE CAST(player_id AS TEXT) = %s
           AND prop_source = 'mlb_api'
         ORDER BY game_date DESC NULLS LAST
@@ -389,7 +389,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]
     """
     training_summary_sql = """
         SELECT prop_type, COUNT(*)::int AS count
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE CAST(player_id AS TEXT) = %s
         GROUP BY prop_type
         ORDER BY count DESC

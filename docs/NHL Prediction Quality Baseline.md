@@ -4,7 +4,7 @@
 
 Provide a repeatable, fixed-window backtest summary for NHL prediction direction quality.
 
-This is a read-only report against `public.player_props` rows where `prop_source` begins with `nhl_`.
+This is a read-only report against `mlb.player_props` rows where `prop_source` begins with `nhl_`.
 
 ## Command
 

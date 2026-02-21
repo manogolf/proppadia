@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report recent MLB prop coverage from model_training_props."""
+"""Report recent MLB prop coverage from mlb.model_training_props."""
 
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ def _mtp_rows(window_value: int, window_mode: str) -> list[Dict[str, Any]]:
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'loss')::int AS losses,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'push')::int AS pushes,
           COUNT(*) FILTER (WHERE lower(trim(outcome)) = 'dnp')::int AS dnps
-        FROM model_training_props
+        FROM mlb.model_training_props
         """
-        + _date_filter("game_date", "model_training_props", window_mode)
+        + _date_filter("game_date", "mlb.model_training_props", window_mode)
         + """
         GROUP BY prop_type
         ORDER BY total_rows DESC, prop_type
@@ -59,10 +59,10 @@ def _row_source_counts(window_value: int, window_mode: str, row_sources: Sequenc
         SELECT
           prop_type,
           COUNT(*)::int AS row_source_count
-        FROM model_training_props
+        FROM mlb.model_training_props
         WHERE prop_source IN ({source_placeholders})
         """
-        + _date_filter("game_date", "model_training_props", window_mode).replace("WHERE", "AND", 1)
+        + _date_filter("game_date", "mlb.model_training_props", window_mode).replace("WHERE", "AND", 1)
         + """
         GROUP BY prop_type
         """,
@@ -103,7 +103,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--row-sources",
         dest="row_sources",
         default="mlb_api",
-        help="Comma-separated model_training_props.prop_source values used for row_source counts.",
+        help="Comma-separated mlb.model_training_props.prop_source values used for row_source counts.",
     )
     ap.add_argument("--training-prop-sources", dest="row_sources", help=argparse.SUPPRESS)
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])

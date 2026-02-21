@@ -5,7 +5,7 @@ Back-fill missing feature columns for mlb_api rows in model_training_props.
 
 Fills:
   • line_diff
-  • hit_streak, win_streak       (from player_streak_profiles)
+  • hit_streak, win_streak       (from mlb.player_streak_profiles)
   • is_home, opponent, opponent_encoded
   • opponent_avg_win_rate        (via live standings)
 Run hourly (or daily) until ready_for_training rows are above threshold.
@@ -24,7 +24,7 @@ supabase = create_client(
 
 # ── 1 · Pull unresolved mlb_api rows needing line_diff ─────────────
 resp = (
-    supabase.table("model_training_props")
+    supabase.schema("mlb").table("model_training_props")
     .select("*")
     .match({"prop_source": "mlb_api"})
     .in_("status", ["win", "loss"])
@@ -40,10 +40,10 @@ if df.empty:
 # ── 2 · Compute line_diff (result – prop_value) ────────────────────
 df["line_diff"] = df["result"] - df["prop_value"]
 
-# ── 3 · Merge hit/win streaks from player_streak_profiles ──────────
+# ── 3 · Merge hit/win streaks from mlb.player_streak_profiles ──────────
 ids = df[["player_id", "prop_type"]].drop_duplicates()
 streak_df = (
-    supabase.table("player_streak_profiles")
+    supabase.schema("mlb").table("player_streak_profiles")
     .select("player_id, prop_type, hit_streak, win_streak")
     .in_("player_id", ids["player_id"].tolist())
     .in_("prop_type", ids["prop_type"].tolist())
@@ -88,7 +88,7 @@ if df_ready.empty:
 
 rows = df_ready.where(pd.notnull(df_ready), None).to_dict(orient="records")
 
-supabase.table("model_training_props").upsert(
+supabase.schema("mlb").table("model_training_props").upsert(
     rows,
     on_conflict="id",
 ).execute()

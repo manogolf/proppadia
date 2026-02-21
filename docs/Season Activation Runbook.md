@@ -70,12 +70,15 @@ When ready to move from offseason conservative cadence:
 ```bash
 make mlb-preseason-cleanup \
   MLB_PRESEASON_FROM_DATE=YYYY-MM-DD \
-  MLB_PRESEASON_TO_DATE=YYYY-MM-DD
+  MLB_PRESEASON_TO_DATE=YYYY-MM-DD \
+  MLB_PRESEASON_GAME_TYPES=S
 ```
 
 - This runs in dry-run mode and shows counts only.
 - If you want cleanup applied, run the printed `--apply` command.
 - Do not run cleanup now unless you intentionally want preseason-window rows removed now.
+- `MLB_PRESEASON_GAME_TYPES=S` adds game-type filtering when `game_type` column exists.
+- If `game_type` is not present yet, cleanup still works by date window and prints a warning.
 
 2. Enable intended in-season schedule windows for MLB refresh lane(s).
 3. Generate the lane plan:

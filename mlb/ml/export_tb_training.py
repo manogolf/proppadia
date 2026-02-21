@@ -95,7 +95,7 @@ WITH base AS (
     ps.team                              AS team,
     ps.opponent                          AS opponent,
     COALESCE(ps.total_bases, 0)::numeric AS y_tb
-  FROM player_stats ps
+  FROM mlb.player_stats ps
   WHERE ps.game_date IS NOT NULL
 ),
 prb AS (

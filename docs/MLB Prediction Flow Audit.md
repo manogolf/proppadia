@@ -11,8 +11,8 @@ End-to-end MLB prediction write path:
 
 ## Source Of Truth
 
-- Prediction/write table: `public.player_props`
-- Training/stat-derived table: `public.model_training_props`
+- Prediction/write table: `mlb.player_props`
+- Training/stat-derived table: `mlb.model_training_props`
 - Core flow keys: `player_id`, `game_id`, `prop_type`
 - User scoping key (when present): `user_id`
 

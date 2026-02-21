@@ -4,16 +4,9 @@ import csv from "csv-parser";
 import { supabase } from "../utils/supabaseUtils.js";
 import "dotenv/config";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  throw new Error("❌ Supabase environment variables are not loaded.");
+if (!supabase) {
+  throw new Error("❌ Supabase client is not available.");
 }
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false },
-});
 
 async function uploadHistoricalProps(csvFilePath) {
   const rows = [];

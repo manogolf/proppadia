@@ -67,7 +67,7 @@ WITH mt AS (
     game_id,
     game_date::date AS game_day,
     outcome
-  FROM model_training_props
+  FROM mlb.model_training_props
   WHERE prop_source='mlb_api'
     AND prop_type=%s
     AND game_date IS NOT NULL
@@ -94,7 +94,7 @@ pf AS (
         ''
       )::numeric
     ) AS pf_d7_stat
-  FROM prop_features_precomputed
+  FROM mlb.prop_features_precomputed
   WHERE prop_type=%s
   GROUP BY player_id, game_id
 ),
@@ -110,7 +110,7 @@ pds AS (
         ELSE NULL
       END
     )::numeric AS pds_d7_stat
-  FROM player_derived_stats
+  FROM mlb.player_derived_stats
   GROUP BY player_id, game_id
 ),
 labeled AS (

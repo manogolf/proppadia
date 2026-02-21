@@ -5,7 +5,7 @@ refresh_mlb_players_rosters.py
 Full-league MLB roster refresh:
 - fetch all MLB teams
 - fetch active roster for each team (for a target date)
-- upsert into public.player_ids
+- upsert into mlb.player_ids
 - if supported by schema, mark active/inactive status
 
 Safe-by-default behavior:
@@ -119,7 +119,7 @@ def _table_columns(cur: psycopg.Cursor, table_name: str = "player_ids") -> Set[s
         """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = %s
+        WHERE table_schema = 'mlb' AND table_name = %s
         """,
         (table_name,),
     )
@@ -171,7 +171,7 @@ def _upsert_player(
 
     placeholders = ", ".join(["%s"] * len(insert_cols))
     sql = f"""
-        INSERT INTO public.player_ids ({", ".join(insert_cols)})
+        INSERT INTO mlb.player_ids ({", ".join(insert_cols)})
         VALUES ({placeholders})
         ON CONFLICT (player_id)
         DO UPDATE SET {", ".join(update_sets) if update_sets else "player_id = EXCLUDED.player_id"}
@@ -193,7 +193,7 @@ def _mark_inactive(cur: psycopg.Cursor, cols: Set[str], active_ids: Iterable[int
     if not updates:
         return
     sql = f"""
-        UPDATE public.player_ids
+        UPDATE mlb.player_ids
         SET {", ".join(updates)}
         WHERE NOT (player_id = ANY(%s::bigint[]))
     """
@@ -201,7 +201,7 @@ def _mark_inactive(cur: psycopg.Cursor, cols: Set[str], active_ids: Iterable[int
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Refresh full MLB active rosters into public.player_ids")
+    parser = argparse.ArgumentParser(description="Refresh full MLB active rosters into mlb.player_ids")
     parser.add_argument("--date", default=None, help="YYYY-MM-DD ET context date (default: today ET)")
     args = parser.parse_args()
 

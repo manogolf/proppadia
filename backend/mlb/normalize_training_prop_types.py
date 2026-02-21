@@ -24,7 +24,7 @@ def normalize_model_training_props():
     print("🔍 Scanning model_training_props for legacy prop types...")
 
     # Pull all prop_type rows (id + prop_type)
-    response = supabase.table("model_training_props") \
+    response = supabase.schema("mlb").table("model_training_props") \
         .select("id, prop_type") \
         .execute()
 
@@ -35,7 +35,7 @@ def normalize_model_training_props():
         normalized = label_to_normalized.get(original.strip())
 
         if normalized and normalized != original:
-            supabase.table("model_training_props") \
+            supabase.schema("mlb").table("model_training_props") \
                 .update({"prop_type": normalized}) \
                 .eq("id", row["id"]) \
                 .execute()

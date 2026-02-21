@@ -79,7 +79,7 @@ export async function upsertUserPropsToTraining(opts = {}) {
   const { batchSize = 1_000, daysBack = 0 } = opts;
 
   console.log(
-    `🔁 Re-syncing user-added props into model_training_props (batch ${batchSize}, daysBack ${daysBack})`
+    `🔁 Re-syncing user-added props into mlb.model_training_props (batch ${batchSize}, daysBack ${daysBack})`
   );
 
   const allowedCols = await getModelTrainingPropsColumns();
@@ -101,7 +101,7 @@ export async function upsertUserPropsToTraining(opts = {}) {
   const t0 = Date.now();
 
   while (true) {
-    // Fetch a page from player_props — NOTE: no `line` in the select
+    // Fetch a page from mlb.player_props — NOTE: no `line` in the select
     let query = supabase
       .from("player_props")
       .select(

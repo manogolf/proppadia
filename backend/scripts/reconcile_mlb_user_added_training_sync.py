@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reconcile missing graded user_added MLB rows from player_props into model_training_props."""
+"""Reconcile missing graded user_added MLB rows from mlb.player_props into mlb.model_training_props."""
 
 from __future__ import annotations
 
@@ -37,8 +37,8 @@ WITH missing AS (
     pp.prop_type,
     pp.game_date,
     COALESCE(pp.team_id, pi.team_id)::bigint AS team_id_resolved
-  FROM player_props pp
-  LEFT JOIN player_ids pi
+  FROM mlb.player_props pp
+  LEFT JOIN mlb.player_ids pi
     ON CAST(pi.player_id AS TEXT) = CAST(pp.player_id AS TEXT)
   WHERE pp.prop_source = 'user_added'
     AND lower(trim(coalesce(pp.status, ''))) IN ('win','loss')
@@ -49,7 +49,7 @@ WITH missing AS (
     {window_where}
     AND NOT EXISTS (
       SELECT 1
-      FROM model_training_props mt
+      FROM mlb.model_training_props mt
       WHERE mt.prop_source = 'user_added'
         AND CAST(mt.player_id AS TEXT) = CAST(pp.player_id AS TEXT)
         AND CAST(mt.game_id AS TEXT) = CAST(pp.game_id AS TEXT)
@@ -105,8 +105,8 @@ WITH missing AS (
       ELSE NULL
     END AS result_numeric,
     pp.created_at
-  FROM player_props pp
-  LEFT JOIN player_ids pi
+  FROM mlb.player_props pp
+  LEFT JOIN mlb.player_ids pi
     ON CAST(pi.player_id AS TEXT) = CAST(pp.player_id AS TEXT)
   WHERE pp.prop_source = 'user_added'
     AND lower(trim(coalesce(pp.status, ''))) IN ('win','loss')
@@ -117,7 +117,7 @@ WITH missing AS (
     {window_where}
     AND NOT EXISTS (
       SELECT 1
-      FROM model_training_props mt
+      FROM mlb.model_training_props mt
       WHERE mt.prop_source = 'user_added'
         AND CAST(mt.player_id AS TEXT) = CAST(pp.player_id AS TEXT)
         AND CAST(mt.game_id AS TEXT) = CAST(pp.game_id AS TEXT)
@@ -130,7 +130,7 @@ eligible AS (
   WHERE team_id_resolved IS NOT NULL
 ),
 upserted AS (
-  INSERT INTO model_training_props (
+  INSERT INTO mlb.model_training_props (
     player_id,
     player_name,
     team,

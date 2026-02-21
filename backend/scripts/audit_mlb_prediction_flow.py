@@ -30,7 +30,7 @@ def _has_user_id_column() -> bool:
         """
         SELECT 1
         FROM information_schema.columns
-        WHERE table_schema='public'
+        WHERE table_schema='mlb'
           AND table_name='player_props'
           AND column_name='user_id'
         LIMIT 1
@@ -48,7 +48,7 @@ def _flow_summary(window_value: int, window_mode: str) -> Dict[str, int]:
           COUNT(*) FILTER (WHERE prop_source = 'mlb_api')::int AS mlb_api_rows,
           COUNT(*) FILTER (WHERE lower(trim(coalesce(outcome, ''))) IN ('win','loss','push','dnp'))::int AS resolved_rows,
           COUNT(*) FILTER (WHERE lower(trim(coalesce(outcome, ''))) IN ('win','loss'))::int AS graded_rows
-        FROM player_props
+        FROM mlb.player_props
         """
         + _date_filter("game_date", "player_props", window_mode),
         (int(window_value),),
@@ -102,14 +102,14 @@ def _integrity_checks(window_value: int, window_mode: str, max_drift_days: int) 
               AND cast(game_id as bigint) > 0
               AND NOT EXISTS (
                 SELECT 1
-                FROM model_training_props mt
+                FROM mlb.model_training_props mt
                 WHERE mt.prop_source = 'user_added'
                   AND CAST(mt.player_id AS TEXT) = CAST(player_props.player_id AS TEXT)
                   AND CAST(mt.game_id AS TEXT) = CAST(player_props.game_id AS TEXT)
                   AND mt.prop_type = player_props.prop_type
               )
           )::int AS user_added_missing_in_training
-        FROM player_props
+        FROM mlb.player_props
         """
         + _date_filter("game_date", "player_props", window_mode),
         (int(max_drift_days), int(window_value)),
@@ -134,7 +134,7 @@ def _duplicate_rows(window_value: int, window_mode: str, include_user_id: bool) 
           COALESCE(SUM(dup_count - 1), 0)::int AS duplicate_extra_rows
         FROM (
           SELECT COUNT(*)::int AS dup_count
-          FROM player_props
+          FROM mlb.player_props
           {user_where}
           GROUP BY player_id, game_id, prop_type, over_under, prop_value{user_expr}
           HAVING COUNT(*) > 1
@@ -150,7 +150,7 @@ def _duplicate_rows(window_value: int, window_mode: str, include_user_id: bool) 
           COALESCE(SUM(dup_count - 1), 0)::int AS duplicate_extra_rows
         FROM (
           SELECT COUNT(*)::int AS dup_count
-          FROM model_training_props
+          FROM mlb.model_training_props
           WHERE prop_source = 'mlb_api'
         """
         + _date_filter("game_date", "model_training_props", window_mode).replace("WHERE", "AND ", 1)
@@ -213,8 +213,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "window_value": window_value,
         "max_created_date_drift_days": max_drift_days,
         "source_of_truth": {
-            "prediction_write_table": "public.player_props",
-            "training_table": "public.model_training_props",
+            "prediction_write_table": "mlb.player_props",
+            "training_table": "mlb.model_training_props",
             "grade_fields": ["status", "outcome", "result"],
             "join_keys": ["player_id", "game_id", "prop_type"],
             "user_scope_key": "user_id" if include_user_id else None,

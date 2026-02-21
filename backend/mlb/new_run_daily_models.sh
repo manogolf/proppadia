@@ -30,7 +30,7 @@ BEGIN
       COALESCE(ps.is_home,false) AS is_home,
       ps.outs_recorded::numeric  AS outs_val,
       (ps.outs_recorded >= start_min_outs) AS is_start
-    FROM public.player_stats ps
+    FROM mlb.player_stats ps
     JOIN public.starting_pitchers_ref spr
       ON spr.game_id = ps.game_id
      AND ps.player_id::text IN (spr.home_starter_id, spr.away_starter_id)
@@ -205,7 +205,7 @@ base AS (
          COALESCE(ps.is_home,false) AS is_home,
          ps.outs_recorded::numeric  AS outs_val,
          (ps.outs_recorded >= 12)   AS is_start
-  FROM public.player_stats ps
+  FROM mlb.player_stats ps
   JOIN params p ON ps.game_date >= p.s::date AND ps.game_date < p.e::date
   WHERE ps.outs_recorded IS NOT NULL
 ),
