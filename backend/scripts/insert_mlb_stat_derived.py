@@ -47,6 +47,10 @@ PITCHER_PROP_TYPES = [
     "walks_allowed",
 ]
 
+# MLB StatsAPI gameType codes considered "in-season" for collection gates.
+# Keeps postseason rows when season mode excludes preseason.
+IN_SEASON_GAME_TYPES = {"R", "P", "F", "D", "L", "W"}
+
 
 def _parse_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
@@ -276,22 +280,160 @@ def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
         return out
 
 
-def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
+def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) -> int:
+    game_id = _to_int(game.get("gamePk"))
+    if game_id is None:
+        return 0
+
+    teams = (game.get("teams") or {})
+    home_team = ((teams.get("home") or {}).get("team") or {})
+    away_team = ((teams.get("away") or {}).get("team") or {})
+
+    game_time: Optional[datetime] = None
+    game_date_val: Optional[str] = None
+    raw_game_date = game.get("gameDate")
+    if raw_game_date:
+        try:
+            parsed = datetime.fromisoformat(str(raw_game_date).replace("Z", "+00:00"))
+            game_time = parsed.replace(tzinfo=None)
+            game_date_val = parsed.date().isoformat()
+        except Exception:
+            game_time = None
+            game_date_val = None
+    if not game_date_val:
+        game_date_val = fallback_date_iso
+
+    row = {
+        "game_id": game_id,
+        "game_time": game_time,
+        "game_date": game_date_val,
+        "home_team_id": _to_int(home_team.get("id")),
+        "away_team_id": _to_int(away_team.get("id")),
+        "home_team_abbr": normalizeTeamAbbreviation(home_team.get("abbreviation")),
+        "away_team_abbr": normalizeTeamAbbreviation(away_team.get("abbreviation")),
+    }
+
     with conn.cursor() as cur:
         cur.execute(
             """
+            INSERT INTO game_info (
+                game_id,
+                game_time,
+                game_date,
+                home_team_id,
+                away_team_id,
+                home_team_abbr,
+                away_team_abbr
+            ) VALUES (
+                %(game_id)s,
+                %(game_time)s,
+                %(game_date)s,
+                %(home_team_id)s,
+                %(away_team_id)s,
+                %(home_team_abbr)s,
+                %(away_team_abbr)s
+            )
+            ON CONFLICT (game_id)
+            DO UPDATE SET
+                game_time = COALESCE(game_info.game_time, EXCLUDED.game_time),
+                game_date = COALESCE(game_info.game_date, EXCLUDED.game_date),
+                home_team_id = COALESCE(game_info.home_team_id, EXCLUDED.home_team_id),
+                away_team_id = COALESCE(game_info.away_team_id, EXCLUDED.away_team_id),
+                home_team_abbr = COALESCE(game_info.home_team_abbr, EXCLUDED.home_team_abbr),
+                away_team_abbr = COALESCE(game_info.away_team_abbr, EXCLUDED.away_team_abbr)
+            WHERE (
+                game_info.game_time IS NULL
+                OR game_info.game_date IS NULL
+                OR game_info.home_team_id IS NULL
+                OR game_info.away_team_id IS NULL
+                OR game_info.home_team_abbr IS NULL
+                OR game_info.away_team_abbr IS NULL
+            )
+            """,
+            row,
+        )
+        return int(cur.rowcount or 0)
+
+
+def _table_has_column(conn, table_name: str, column_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+              AND column_name = %s
+            LIMIT 1
+            """,
+            (table_name, column_name),
+        )
+        return cur.fetchone() is not None
+
+
+def _upsert_player_id_min(
+    conn,
+    *,
+    player_id: int,
+    player_name: str,
+    team_abbr: Optional[str],
+    team_id: Optional[int],
+    has_team_col: bool,
+    has_team_id_col: bool,
+    has_placeholder_col: bool,
+) -> int:
+    row: Dict[str, Any] = {
+        "player_id": int(player_id),
+        "player_name": str(player_name) if player_name else f"player_{int(player_id)}",
+    }
+    cols = ["player_id", "player_name"]
+    vals = ["%(player_id)s", "%(player_name)s"]
+    if has_team_col:
+        cols.append("team")
+        vals.append("%(team)s")
+        row["team"] = normalizeTeamAbbreviation(team_abbr)
+    if has_team_id_col:
+        cols.append("team_id")
+        vals.append("%(team_id)s")
+        row["team_id"] = _to_int(team_id)
+    if has_placeholder_col:
+        cols.append("is_placeholder")
+        vals.append("%(is_placeholder)s")
+        row["is_placeholder"] = True
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            INSERT INTO player_ids ({", ".join(cols)})
+            VALUES ({", ".join(vals)})
+            ON CONFLICT (player_id) DO NOTHING
+            """,
+            row,
+        )
+        return int(cur.rowcount or 0)
+
+
+def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool = False) -> int:
+    extra_insert_col = ", game_type" if include_game_type else ""
+    extra_insert_val = ", %(game_type)s" if include_game_type else ""
+    extra_update_set = ", game_type = EXCLUDED.game_type" if include_game_type else ""
+    extra_current_tuple = ", model_training_props.game_type" if include_game_type else ""
+    extra_excluded_tuple = ", EXCLUDED.game_type" if include_game_type else ""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
             INSERT INTO model_training_props (
                 id, game_id, player_id, player_name, team, opponent,
                 team_id, opponent_team_id, opponent_encoded, is_home,
                 prop_type, prop_value, line, over_under, outcome, status,
                 created_at, updated_at, prop_source, was_correct, game_date,
-                game_time, game_day_of_week, time_of_day_bucket, streak_type, streak_count
+                game_time, game_day_of_week, time_of_day_bucket, streak_type, streak_count{extra_insert_col}
             ) VALUES (
                 %(id)s, %(game_id)s, %(player_id)s, %(player_name)s, %(team)s, %(opponent)s,
                 %(team_id)s, %(opponent_team_id)s, %(opponent_encoded)s, %(is_home)s,
                 %(prop_type)s, %(prop_value)s, %(line)s, %(over_under)s, %(outcome)s, %(status)s,
                 %(created_at)s, %(updated_at)s, %(prop_source)s, %(was_correct)s, %(game_date)s,
-                %(game_time)s, %(game_day_of_week)s, %(time_of_day_bucket)s, %(streak_type)s, %(streak_count)s
+                %(game_time)s, %(game_day_of_week)s, %(time_of_day_bucket)s, %(streak_type)s, %(streak_count)s{extra_insert_val}
             )
             ON CONFLICT (player_id, game_id, prop_type, prop_source)
             DO UPDATE SET
@@ -312,7 +454,7 @@ def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
                 game_day_of_week = EXCLUDED.game_day_of_week,
                 time_of_day_bucket = EXCLUDED.time_of_day_bucket,
                 streak_type = EXCLUDED.streak_type,
-                streak_count = EXCLUDED.streak_count
+                streak_count = EXCLUDED.streak_count{extra_update_set}
             WHERE (
                 model_training_props.prop_value,
                 model_training_props.line,
@@ -330,7 +472,7 @@ def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
                 model_training_props.team_id,
                 model_training_props.opponent_team_id,
                 model_training_props.opponent_encoded,
-                model_training_props.is_home
+                model_training_props.is_home{extra_current_tuple}
             ) IS DISTINCT FROM (
                 EXCLUDED.prop_value,
                 EXCLUDED.line,
@@ -348,7 +490,7 @@ def _upsert_training_row(conn, row: Dict[str, Any]) -> int:
                 EXCLUDED.team_id,
                 EXCLUDED.opponent_team_id,
                 EXCLUDED.opponent_encoded,
-                EXCLUDED.is_home
+                EXCLUDED.is_home{extra_excluded_tuple}
             )
             """,
             row,
@@ -368,19 +510,20 @@ def _is_starter(position: Optional[str], stats: Dict[str, Any]) -> bool:
     return gs > 0 or p == "SP"
 
 
-def _final_game_ids(
+def _final_games(
     schedule: List[Dict[str, Any]],
     *,
     require_regular_season: bool,
-) -> List[int]:
-    out: List[int] = []
+) -> List[Tuple[int, str]]:
+    out: List[Tuple[int, str]] = []
     for g in schedule:
         if (g.get("status", {}) or {}).get("detailedState") != "Final":
             continue
-        if require_regular_season and str((g.get("gameType") or "")).upper() != "R":
+        game_type = str((g.get("gameType") or "")).strip().upper()
+        if require_regular_season and game_type not in IN_SEASON_GAME_TYPES:
             continue
         try:
-            out.append(int(g["gamePk"]))
+            out.append((int(g["gamePk"]), game_type))
         except Exception:
             continue
     return out
@@ -405,10 +548,19 @@ def run(
     failed_dates = 0
     skipped_dates = 0
     skipped_games_missing_info = 0
+    game_info_upserts = 0
+    player_id_upserts = 0
     over_count = 0
     under_count = 0
 
     with pg_connect() as conn:
+        mtp_has_game_type = _table_has_column(conn, "model_training_props", "game_type")
+        player_ids_has_team = _table_has_column(conn, "player_ids", "team")
+        player_ids_has_team_id = _table_has_column(conn, "player_ids", "team_id")
+        player_ids_has_placeholder = _table_has_column(conn, "player_ids", "is_placeholder")
+        if not quiet:
+            print(f"ℹ️ model_training_props.game_type column detected: {mtp_has_game_type}")
+
         for d in _daterange(start, end):
             d_iso = d.isoformat()
             print(f"\n📅 Processing {d_iso} ...")
@@ -419,13 +571,28 @@ def run(
                     continue
 
                 schedule = _fetch_schedule(d_iso)
-                final_games = _final_game_ids(
+                final_games_meta = _final_games(
                     schedule,
                     require_regular_season=require_regular_season,
                 )
+                final_games = [gid for gid, _ in final_games_meta]
+                game_type_by_game_id = {gid: gtype for gid, gtype in final_games_meta}
+                schedule_by_game_id = {
+                    _to_int(g.get("gamePk")): g for g in schedule if _to_int(g.get("gamePk")) is not None
+                }
                 if max_games_per_date > 0:
                     final_games = final_games[:max_games_per_date]
                 existing_games = _existing_game_ids(conn, final_games)
+
+                missing_game_ids = [gid for gid in final_games if gid not in existing_games]
+                if missing_game_ids:
+                    for gid in missing_game_ids:
+                        sg = schedule_by_game_id.get(gid)
+                        if sg is None:
+                            continue
+                        game_info_upserts += _upsert_game_info_min(conn, sg, d_iso)
+                    existing_games = _existing_game_ids(conn, final_games)
+
                 missing_for_date = len(final_games) - len(existing_games)
                 if missing_for_date > 0:
                     skipped_games_missing_info += missing_for_date
@@ -440,6 +607,7 @@ def run(
                 for game_id in final_games:
                     if game_id not in existing_games:
                         continue
+                    game_type = game_type_by_game_id.get(game_id) or None
                     live = _fetch_live_feed(game_id)
                     box = _fetch_boxscore(game_id)
 
@@ -561,8 +729,23 @@ def run(
                                     "time_of_day_bucket": tod,
                                     "streak_type": streak_type,
                                     "streak_count": streak_count,
+                                    "game_type": game_type,
                                 }
-                                applied_upserts += _upsert_training_row(conn, row)
+                                player_id_upserts += _upsert_player_id_min(
+                                    conn,
+                                    player_id=pid,
+                                    player_name=pname,
+                                    team_abbr=team_abbr,
+                                    team_id=team_id,
+                                    has_team_col=player_ids_has_team,
+                                    has_team_id_col=player_ids_has_team_id,
+                                    has_placeholder_col=player_ids_has_placeholder,
+                                )
+                                applied_upserts += _upsert_training_row(
+                                    conn,
+                                    row,
+                                    include_game_type=mtp_has_game_type,
+                                )
                                 attempted_upserts += 1
 
                 conn.commit()
@@ -580,6 +763,8 @@ def run(
     print(f"   ➖ Under: {under_count}")
     print(f"\n📥 Upserts attempted: {attempted_upserts}")
     print(f"🧩 Upserts applied:   {applied_upserts}")
+    print(f"🗂️ game_info upserts: {game_info_upserts}")
+    print(f"👤 player_ids upserts: {player_id_upserts}")
     if skipped_dates:
         print(f"⏭️  Dates skipped:      {skipped_dates}")
     if skipped_games_missing_info:
@@ -612,7 +797,7 @@ def main() -> int:
     ap.add_argument(
         "--require-regular-season",
         action="store_true",
-        help="Only process final games where gameType is regular season (R).",
+        help="Only process final in-season games (R + postseason gameType codes).",
     )
     args = ap.parse_args()
 
