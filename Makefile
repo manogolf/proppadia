@@ -200,6 +200,7 @@ MLB_SEASON_REQUIRE_REGULAR ?= 0
 MLB_PRESEASON_FROM_DATE ?=
 MLB_PRESEASON_TO_DATE ?=
 MLB_PRESEASON_INCLUDE_USER_ADDED ?= 0
+MLB_PRESEASON_GAME_TYPES ?= S
 OPS_HISTORY_INPUT ?= artifacts/ops_operator_history.jsonl
 OPS_HISTORY_LIMIT ?= 10
 SEASON_HISTORY_INPUT ?= artifacts/season_activation_history.jsonl
@@ -360,7 +361,7 @@ help:
 	@echo "  make mlb-ops-check BASE_URL=<url> [ops confidence loop: config+daily-smoke+post-deploy]"
 	@echo "  make mlb-stat-derived-refresh [insert+check; supports MLB_STAT_DAYS_AGO/MLB_STAT_SKIP_EXISTING_DATES]"
 	@echo "  make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD [MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1]"
-	@echo "  make mlb-preseason-cleanup MLB_PRESEASON_FROM_DATE=YYYY-MM-DD MLB_PRESEASON_TO_DATE=YYYY-MM-DD [MLB_PRESEASON_INCLUDE_USER_ADDED=0]"
+	@echo "  make mlb-preseason-cleanup MLB_PRESEASON_FROM_DATE=YYYY-MM-DD MLB_PRESEASON_TO_DATE=YYYY-MM-DD [MLB_PRESEASON_INCLUDE_USER_ADDED=0] [MLB_PRESEASON_GAME_TYPES=S]"
 	@echo "  make mlb-season-mode-lock [smoke stat-derived with MLB_SEASON_REQUIRE_REGULAR=1]"
 	@echo "  make mlb-stat-derived-smoke [quick wiring check; forces MLB_STAT_MAX_GAMES=1]"
 	@echo "  make mlb-insert-stat-derived [advanced: direct insert flags]"
@@ -824,6 +825,7 @@ mlb-show-config:
 	@echo "MLB_PRESEASON_FROM_DATE=$(MLB_PRESEASON_FROM_DATE)"
 	@echo "MLB_PRESEASON_TO_DATE=$(MLB_PRESEASON_TO_DATE)"
 	@echo "MLB_PRESEASON_INCLUDE_USER_ADDED=$(MLB_PRESEASON_INCLUDE_USER_ADDED)"
+	@echo "MLB_PRESEASON_GAME_TYPES=$(MLB_PRESEASON_GAME_TYPES)"
 	@echo "MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS)"
 	@echo "MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)"
 	@echo "MLB_PREDICT_SAMPLE=$(MLB_PREDICT_SAMPLE)"
@@ -1222,9 +1224,9 @@ mlb-preseason-cleanup:
 		echo "mlb-preseason-cleanup requires MLB_PRESEASON_FROM_DATE and MLB_PRESEASON_TO_DATE"; \
 		exit 2; \
 	fi
-	$(VENV_PY) backend/scripts/cleanup_mlb_preseason_rows.py --from-date $(MLB_PRESEASON_FROM_DATE) --to-date $(MLB_PRESEASON_TO_DATE) $(if $(filter 1,$(MLB_PRESEASON_INCLUDE_USER_ADDED)),--include-user-added,)
+	$(VENV_PY) backend/scripts/cleanup_mlb_preseason_rows.py --from-date $(MLB_PRESEASON_FROM_DATE) --to-date $(MLB_PRESEASON_TO_DATE) $(if $(filter 1,$(MLB_PRESEASON_INCLUDE_USER_ADDED)),--include-user-added,) $(if $(strip $(MLB_PRESEASON_GAME_TYPES)),--game-types "$(MLB_PRESEASON_GAME_TYPES)",)
 	@echo "Dry-run complete. Re-run with:"
-	@echo "  $(VENV_PY) backend/scripts/cleanup_mlb_preseason_rows.py --from-date $(MLB_PRESEASON_FROM_DATE) --to-date $(MLB_PRESEASON_TO_DATE) --apply $(if $(filter 1,$(MLB_PRESEASON_INCLUDE_USER_ADDED)),--include-user-added,)"
+	@echo "  $(VENV_PY) backend/scripts/cleanup_mlb_preseason_rows.py --from-date $(MLB_PRESEASON_FROM_DATE) --to-date $(MLB_PRESEASON_TO_DATE) --apply $(if $(filter 1,$(MLB_PRESEASON_INCLUDE_USER_ADDED)),--include-user-added,) $(if $(strip $(MLB_PRESEASON_GAME_TYPES)),--game-types \"$(MLB_PRESEASON_GAME_TYPES)\",)"
 
 mlb-season-mode-lock:
 	$(MAKE) mlb-show-config MLB_SEASON_REQUIRE_REGULAR=1
