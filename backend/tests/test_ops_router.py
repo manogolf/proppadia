@@ -87,6 +87,15 @@ class TestOpsRouter(unittest.TestCase):
                 headers={"X-Ops-Token": "secret"},
                 json={
                     "mlb_date": "2025-08-15",
+                    "mlb_daily_stat_derived_enabled": 1,
+                    "mlb_stat_days_ago": 2,
+                    "mlb_stat_from_date": "2025-08-01",
+                    "mlb_stat_to_date": "2025-08-15",
+                    "mlb_stat_max_games": 0,
+                    "mlb_stat_skip_existing_dates": 1,
+                    "mlb_stat_derived_days": 7,
+                    "mlb_stat_derived_min": 0,
+                    "mlb_season_require_regular": 0,
                     "mlb_prod12_daily_prop_types": "hits,total_bases,strikeouts_batting",
                     "mlb_replay_retry_attempts": 8,
                     "mlb_replay_retry_backoff_ms": 1500,
@@ -104,6 +113,15 @@ class TestOpsRouter(unittest.TestCase):
         env_overrides = mock_start.call_args.kwargs.get("env_overrides") or {}
         self.assertEqual(env_overrides.get("MLB_CRON_RUN_MODE"), "daily")
         self.assertEqual(env_overrides.get("MLB_DATE"), "2025-08-15")
+        self.assertEqual(env_overrides.get("MLB_DAILY_STAT_DERIVED_ENABLED"), 1)
+        self.assertEqual(env_overrides.get("MLB_STAT_DAYS_AGO"), 2)
+        self.assertEqual(env_overrides.get("MLB_STAT_FROM_DATE"), "2025-08-01")
+        self.assertEqual(env_overrides.get("MLB_STAT_TO_DATE"), "2025-08-15")
+        self.assertEqual(env_overrides.get("MLB_STAT_MAX_GAMES"), 0)
+        self.assertEqual(env_overrides.get("MLB_STAT_SKIP_EXISTING_DATES"), 1)
+        self.assertEqual(env_overrides.get("MLB_STAT_DERIVED_DAYS"), 7)
+        self.assertEqual(env_overrides.get("MLB_STAT_DERIVED_MIN"), 0)
+        self.assertEqual(env_overrides.get("MLB_SEASON_REQUIRE_REGULAR"), 0)
         self.assertEqual(
             env_overrides.get("MLB_PROD12_DAILY_PROP_TYPES"),
             "hits,total_bases,strikeouts_batting",

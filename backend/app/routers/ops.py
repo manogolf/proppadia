@@ -40,10 +40,19 @@ class Prod12TriggerRequest(BaseModel):
     mlb_weekly_base_url: Optional[str] = None
     mlb_daily_base_url: Optional[str] = None
     mlb_weekly_phase2_enabled: Optional[int] = None
+    mlb_daily_stat_derived_enabled: Optional[int] = None
     mlb_weekly_prop_sequence_enabled: Optional[int] = None
     mlb_weekly_prop_sequence: Optional[str] = None
     mlb_weekly_prop_sequence_continue_on_error: Optional[int] = None
     mlb_weekly_prop_sequence_sleep_sec: Optional[int] = None
+    mlb_stat_days_ago: Optional[int] = None
+    mlb_stat_from_date: Optional[str] = None
+    mlb_stat_to_date: Optional[str] = None
+    mlb_stat_max_games: Optional[int] = None
+    mlb_stat_skip_existing_dates: Optional[int] = None
+    mlb_stat_derived_days: Optional[int] = None
+    mlb_stat_derived_min: Optional[int] = None
+    mlb_season_require_regular: Optional[int] = None
     mlb_prod12_prop_types: Optional[str] = None
     mlb_date: Optional[str] = None
     mlb_predict_sample: Optional[int] = None
@@ -151,10 +160,19 @@ def trigger_mlb_prod12_cycle(
         "MLB_WEEKLY_BASE_URL": body.mlb_weekly_base_url,
         "MLB_DAILY_BASE_URL": body.mlb_daily_base_url,
         "MLB_WEEKLY_PHASE2_ENABLED": body.mlb_weekly_phase2_enabled,
+        "MLB_DAILY_STAT_DERIVED_ENABLED": body.mlb_daily_stat_derived_enabled,
         "MLB_WEEKLY_PROP_SEQUENCE_ENABLED": body.mlb_weekly_prop_sequence_enabled,
         "MLB_WEEKLY_PROP_SEQUENCE": body.mlb_weekly_prop_sequence,
         "MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR": body.mlb_weekly_prop_sequence_continue_on_error,
         "MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC": body.mlb_weekly_prop_sequence_sleep_sec,
+        "MLB_STAT_DAYS_AGO": body.mlb_stat_days_ago,
+        "MLB_STAT_FROM_DATE": body.mlb_stat_from_date,
+        "MLB_STAT_TO_DATE": body.mlb_stat_to_date,
+        "MLB_STAT_MAX_GAMES": body.mlb_stat_max_games,
+        "MLB_STAT_SKIP_EXISTING_DATES": body.mlb_stat_skip_existing_dates,
+        "MLB_STAT_DERIVED_DAYS": body.mlb_stat_derived_days,
+        "MLB_STAT_DERIVED_MIN": body.mlb_stat_derived_min,
+        "MLB_SEASON_REQUIRE_REGULAR": body.mlb_season_require_regular,
         "MLB_PROD12_PROP_TYPES": body.mlb_prod12_prop_types,
         "MLB_DATE": body.mlb_date,
         "MLB_PREDICT_SAMPLE": body.mlb_predict_sample,

@@ -104,6 +104,15 @@ MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-3}"
 MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
 MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
+MLB_DAILY_STAT_DERIVED_ENABLED="${MLB_DAILY_STAT_DERIVED_ENABLED:-1}"
+MLB_STAT_DAYS_AGO="${MLB_STAT_DAYS_AGO:-2}"
+MLB_STAT_FROM_DATE="${MLB_STAT_FROM_DATE:-}"
+MLB_STAT_TO_DATE="${MLB_STAT_TO_DATE:-}"
+MLB_STAT_MAX_GAMES="${MLB_STAT_MAX_GAMES:-0}"
+MLB_STAT_SKIP_EXISTING_DATES="${MLB_STAT_SKIP_EXISTING_DATES:-1}"
+MLB_STAT_DERIVED_DAYS="${MLB_STAT_DERIVED_DAYS:-7}"
+MLB_STAT_DERIVED_MIN="${MLB_STAT_DERIVED_MIN:-0}"
+MLB_SEASON_REQUIRE_REGULAR="${MLB_SEASON_REQUIRE_REGULAR:-0}"
 MODEL_DIR="${MODEL_DIR:-/var/data/proppadia/models}"
 MLB_CRON_RUN_MODE="${MLB_CRON_RUN_MODE:-daily}"
 MLB_CRON_WEEKLY_DAY_UTC="${MLB_CRON_WEEKLY_DAY_UTC:-1}" # 1=Mon ... 7=Sun
@@ -271,6 +280,21 @@ run_weekly() {
 }
 
 run_daily() {
+  if [[ "${MLB_DAILY_STAT_DERIVED_ENABLED}" == "1" ]]; then
+    echo "[prod12-cron] running daily stat-derived refresh"
+    MLB_STAT_DAYS_AGO="${MLB_STAT_DAYS_AGO}" \
+    MLB_STAT_FROM_DATE="${MLB_STAT_FROM_DATE}" \
+    MLB_STAT_TO_DATE="${MLB_STAT_TO_DATE}" \
+    MLB_STAT_MAX_GAMES="${MLB_STAT_MAX_GAMES}" \
+    MLB_STAT_SKIP_EXISTING_DATES="${MLB_STAT_SKIP_EXISTING_DATES}" \
+    MLB_STAT_DERIVED_DAYS="${MLB_STAT_DERIVED_DAYS}" \
+    MLB_STAT_DERIVED_MIN="${MLB_STAT_DERIVED_MIN}" \
+    MLB_SEASON_REQUIRE_REGULAR="${MLB_SEASON_REQUIRE_REGULAR}" \
+    make mlb-stat-derived-refresh
+  else
+    echo "[prod12-cron] daily stat-derived refresh disabled (MLB_DAILY_STAT_DERIVED_ENABLED=${MLB_DAILY_STAT_DERIVED_ENABLED})"
+  fi
+
   echo "[prod12-cron] running daily cycle"
   if [[ -n "${MLB_DAILY_BASE_URL}" ]]; then
     MLB_BASE_URL="${MLB_DAILY_BASE_URL}" \
