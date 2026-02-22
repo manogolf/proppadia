@@ -35,7 +35,6 @@ from pathlib import Path
 import pandas as pd
 from typing import Optional, Sequence, Union
 from datetime import datetime, timedelta, timezone
-import psycopg2  # or psycopg2-binary, whichever you're using
 import requests
 import re
 
