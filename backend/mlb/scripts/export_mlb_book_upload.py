@@ -2,12 +2,15 @@
 """
 python backend/mlb/scripts/export_mlb_book_upload.py
 
-MLB equivalent of NHL book-upload exporter:
-- Reads calibrated WIDE predictions with p_over_* columns.
-- Converts to long rows.
-- Joins game metadata from mlb.game_info.
-- Filters to slate_date (ET).
-- Writes BOTH over and under rows in upload format.
+MLB equivalent of NHL book-upload exporter.
+
+Input modes:
+- Preferred (new): canonical MLB slate output CSV (`mlb_slate_output.csv`)
+- Back-compat: calibrated WIDE predictions with p_over_* columns
+
+Behavior:
+- Filters to slate_date (ET)
+- Writes BOTH over and under rows in external upload format
 
 Input expectations:
 - Required: player_id, game_id
@@ -37,6 +40,12 @@ PRED_CSV = Path(
             "PRED_CSV",
             str(BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv"),
         ),
+    )
+)
+SLATE_CSV = Path(
+    os.environ.get(
+        "MLB_SLATE_OUTPUT_CSV",
+        str(BASE_DIR / "mlb" / "data" / "processed" / "mlb_slate_output.csv"),
     )
 )
 OUT_CSV = Path(
@@ -78,6 +87,15 @@ _PCOL_RE = re.compile(r"^p_over_(\d+)_([05])$")
 
 def _canonical_prop_type(value: object) -> str:
     return str(value or "").strip().lower()
+
+
+def _clean_optional_str(value: object) -> Optional[str]:
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return None
+    return text
 
 
 def _parse_lines_from_cols(cols: Iterable[str]) -> List[Tuple[str, float]]:
@@ -123,6 +141,27 @@ def _load_predictions(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"missing predictions file: {path}")
     return pd.read_csv(path)
+
+
+def _load_slate_output(path: Path) -> pd.DataFrame:
+    print(f"[mlb-book-upload] reading slate output from: {path}")
+    if not path.exists():
+        raise FileNotFoundError(f"missing slate output file: {path}")
+    df = pd.read_csv(path)
+    required = {
+        "player_id",
+        "game_id",
+        "prop_type",
+        "line",
+        "prob_over",
+        "game_date",
+        "home_team_code",
+        "away_team_code",
+    }
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"slate output missing required columns: {missing}")
+    return df
 
 
 def _melt_to_long(df_wide: pd.DataFrame, default_prop_type: Optional[str]) -> pd.DataFrame:
@@ -172,6 +211,22 @@ def _melt_to_long(df_wide: pd.DataFrame, default_prop_type: Optional[str]) -> pd
     return df_long
 
 
+def _normalize_slate_output(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out["prop_type"] = out["prop_type"].map(_canonical_prop_type)
+    for c in ("player_id", "game_id", "line", "prob_over"):
+        out[c] = pd.to_numeric(out[c], errors="coerce")
+    if "market_key" in out.columns:
+        out["market_key"] = out["market_key"].map(_clean_optional_str)
+    out = out.dropna(
+        subset=["player_id", "game_id", "line", "prob_over", "game_date", "home_team_code", "away_team_code"]
+    )
+    out = out[out["prop_type"].astype(str).str.len() > 0]
+    out["player_id"] = out["player_id"].astype(int)
+    out["game_id"] = out["game_id"].astype(int)
+    return out
+
+
 def _prob_to_fair_american(prob: float) -> Optional[int]:
     if not (0.0 < prob < 1.0):
         return None
@@ -204,6 +259,16 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--slate-date", default=None, help="YYYY-MM-DD (ET). Defaults to SLATE_DATE or ET today.")
     ap.add_argument("--strict", action="store_true", help="Fail if predictions contain non-slate rows.")
+    ap.add_argument(
+        "--use-slate-output",
+        action="store_true",
+        help="Use canonical MLB slate output CSV instead of wide predictions input.",
+    )
+    ap.add_argument(
+        "--slate-csv",
+        default="",
+        help="Optional override path for canonical MLB slate output CSV.",
+    )
     ap.add_argument("--prop-type", default=os.environ.get("MLB_BOOK_UPLOAD_PROP_TYPE", ""))
     ap.add_argument("--market", default="", help="Force one market key for all rows.")
     ap.add_argument("--market-map-json", default="", help="Optional JSON object prop_type->market_key overrides.")
@@ -224,45 +289,66 @@ def main() -> None:
         arg_json=str(args.market_map_json),
         env_json=str(os.environ.get("MLB_BOOK_UPLOAD_MARKET_MAP_JSON", "")),
     )
+    print(f"[mlb-book-upload] slate_date (ET) = {slate_date}")
+
+    slate_csv_arg = str(args.slate_csv or "").strip()
+    use_slate_output = bool(args.use_slate_output or slate_csv_arg)
+
+    if use_slate_output:
+        slate_path = Path(slate_csv_arg) if slate_csv_arg else SLATE_CSV
+        print(f"[mlb-book-upload] using SLATE_CSV = {slate_path}")
+        merged = _normalize_slate_output(_load_slate_output(slate_path))
+    else:
+        print(f"[mlb-book-upload] using PRED_CSV = {PRED_CSV}")
+        df_wide = _load_predictions(PRED_CSV)
+        df_long = _melt_to_long(df_wide, prop_type_arg)
+
+        unique_game_ids = sorted(df_long["game_id"].unique().tolist())
+        print(f"[mlb-book-upload] fetching game metadata for {len(unique_game_ids)} game_ids")
+
+        with _get_db_conn() as conn:
+            games = _fetch_games(conn, unique_game_ids)
+
+        if games.empty:
+            print("ERROR: no matching rows in mlb.game_info for game_ids in predictions", file=sys.stderr)
+            sys.exit(1)
+
+        merged = df_long.merge(games, on="game_id", how="left")
+        merged = merged.dropna(subset=["game_date", "home_team_code", "away_team_code"])
+        if merged.empty:
+            print("ERROR: no rows after joining with mlb.game_info", file=sys.stderr)
+            sys.exit(1)
 
     # Safety: fail fast when any prop_type in source lacks a market mapping.
     # (unless a single explicit --market override is provided).
     if not str(args.market).strip():
-        present_props = sorted({_canonical_prop_type(x) for x in df_long["prop_type"].tolist()})
-        unmapped = [p for p in present_props if p and p not in market_map]
+        present_props = sorted({_canonical_prop_type(x) for x in merged["prop_type"].tolist()})
+        if "market_key" in merged.columns:
+            # Rows with explicit market_key from slate output can bypass local map.
+            missing_market_key_props = sorted(
+                {
+                    _canonical_prop_type(r.get("prop_type"))
+                    for _, r in merged.iterrows()
+                    if _canonical_prop_type(r.get("prop_type"))
+                    and not _clean_optional_str(r.get("market_key"))
+                    and _canonical_prop_type(r.get("prop_type")) not in market_map
+                }
+            )
+            unmapped = missing_market_key_props
+        else:
+            unmapped = [p for p in present_props if p and p not in market_map]
         if unmapped:
             print(
-                "[mlb-book-upload] ERROR: unmapped prop_type(s) found in predictions input: "
+                "[mlb-book-upload] ERROR: unmapped prop_type(s) found in source input: "
                 + ", ".join(unmapped),
                 file=sys.stderr,
             )
             print(
-                "[mlb-book-upload] Add mapping via --market-map-json or MLB_BOOK_UPLOAD_MARKET_MAP_JSON "
-                "or filter source to supported prop types.",
+                "[mlb-book-upload] Add mapping via --market-map-json / MLB_BOOK_UPLOAD_MARKET_MAP_JSON "
+                "or provide market_key in MLB slate output.",
                 file=sys.stderr,
             )
             sys.exit(1)
-
-    print(f"[mlb-book-upload] slate_date (ET) = {slate_date}")
-    print(f"[mlb-book-upload] using PRED_CSV = {PRED_CSV}")
-    df_wide = _load_predictions(PRED_CSV)
-    df_long = _melt_to_long(df_wide, prop_type_arg)
-
-    unique_game_ids = sorted(df_long["game_id"].unique().tolist())
-    print(f"[mlb-book-upload] fetching game metadata for {len(unique_game_ids)} game_ids")
-
-    with _get_db_conn() as conn:
-        games = _fetch_games(conn, unique_game_ids)
-
-    if games.empty:
-        print("ERROR: no matching rows in mlb.game_info for game_ids in predictions", file=sys.stderr)
-        sys.exit(1)
-
-    merged = df_long.merge(games, on="game_id", how="left")
-    merged = merged.dropna(subset=["game_date", "home_team_code", "away_team_code"])
-    if merged.empty:
-        print("ERROR: no rows after joining with mlb.game_info", file=sys.stderr)
-        sys.exit(1)
 
     merged["game_date"] = pd.to_datetime(merged["game_date"]).dt.date
     target_date = pd.to_datetime(slate_date).date()
@@ -307,11 +393,12 @@ def main() -> None:
             continue
 
         prop_type = _canonical_prop_type(row["prop_type"])
-        market = (
-            str(args.market).strip()
-            or market_map.get(prop_type)
-            or f"player-{prop_type.replace('_', '-')}-ou"
-        )
+        market = str(args.market).strip()
+        if not market:
+            if "market_key" in merged.columns:
+                market = _clean_optional_str(row.get("market_key")) or ""
+            if not market:
+                market = market_map.get(prop_type) or f"player-{prop_type.replace('_', '-')}-ou"
         date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
 
         base = {

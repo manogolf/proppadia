@@ -105,6 +105,10 @@ MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
 MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
 MLB_DAILY_STAT_DERIVED_ENABLED="${MLB_DAILY_STAT_DERIVED_ENABLED:-1}"
+MLB_DAILY_WIDE_PREDICTIONS_ENABLED="${MLB_DAILY_WIDE_PREDICTIONS_ENABLED:-0}"
+MLB_DAILY_WIDE_PREDICTIONS_REQUIRED="${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED:-0}"
+MLB_DAILY_SLATE_ARTIFACTS_ENABLED="${MLB_DAILY_SLATE_ARTIFACTS_ENABLED:-0}"
+MLB_DAILY_SLATE_ARTIFACTS_REQUIRED="${MLB_DAILY_SLATE_ARTIFACTS_REQUIRED:-0}"
 MLB_STAT_DAYS_AGO="${MLB_STAT_DAYS_AGO:-2}"
 MLB_STAT_FROM_DATE="${MLB_STAT_FROM_DATE:-}"
 MLB_STAT_TO_DATE="${MLB_STAT_TO_DATE:-}"
@@ -124,6 +128,12 @@ MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC="${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC:-5}"
 MLB_CANDIDATE_MIN_TOTAL="${MLB_CANDIDATE_MIN_TOTAL:-}"
 MLB_PROD12_MIN_LIFT_PCT="${MLB_PROD12_MIN_LIFT_PCT:-}"
 MLB_PROD12_MAX_PROP_DROP_PCT="${MLB_PROD12_MAX_PROP_DROP_PCT:-}"
+MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV:-backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv}"
+MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV:-backend/mlb/data/processed/mlb_slate_output.csv}"
+MLB_SLATE_PROP_TYPE="${MLB_SLATE_PROP_TYPE:-}"
+MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV:-backend/mlb/data/processed/mlb_book_upload.csv}"
+MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES:-}"
+MLB_WIDE_REQUIRE_MIN_ROWS="${MLB_WIDE_REQUIRE_MIN_ROWS:-1}"
 
 run_mode_normalized="$(echo "${MLB_CRON_RUN_MODE}" | tr '[:upper:]' '[:lower:]')"
 run_daily_now=0
@@ -307,6 +317,65 @@ run_daily() {
     MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS}" \
     MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES}" \
     bin/mlb_prod12_daily_cycle.sh
+  fi
+
+  if [[ "${MLB_DAILY_WIDE_PREDICTIONS_ENABLED}" == "1" ]]; then
+    echo "[prod12-cron] running daily MLB wide-predictions stage"
+    set +e
+    MLB_DATE="${MLB_DATE}" \
+    MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV}" \
+    MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES}" \
+    MLB_WIDE_REQUIRE_MIN_ROWS="${MLB_WIDE_REQUIRE_MIN_ROWS}" \
+    make mlb-predictions-wide
+    local wide_rc=$?
+    set -e
+    if [[ "${wide_rc}" -ne 0 ]]; then
+      if [[ "${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED}" == "1" ]]; then
+        echo "[prod12-cron] daily MLB wide-predictions stage failed rc=${wide_rc}" >&2
+        return "${wide_rc}"
+      fi
+      echo "[prod12-cron] WARN: daily MLB wide-predictions stage failed rc=${wide_rc}; continuing"
+    fi
+  else
+    echo "[prod12-cron] daily MLB wide-predictions stage disabled (MLB_DAILY_WIDE_PREDICTIONS_ENABLED=${MLB_DAILY_WIDE_PREDICTIONS_ENABLED})"
+  fi
+
+  if [[ "${MLB_DAILY_SLATE_ARTIFACTS_ENABLED}" == "1" ]]; then
+    echo "[prod12-cron] running daily slate/book-upload artifact stage"
+
+    if [[ ! -f "${MLB_SLATE_PRED_CSV}" ]]; then
+      msg="[prod12-cron] daily slate artifact input missing: ${MLB_SLATE_PRED_CSV} (daily path does not currently generate this file)"
+      if [[ "${MLB_DAILY_SLATE_ARTIFACTS_REQUIRED}" == "1" ]]; then
+        echo "${msg}" >&2
+        return 2
+      fi
+      echo "${msg}; skipping artifact stage"
+      return 0
+    fi
+
+    if [[ -n "${MLB_SLATE_PROP_TYPE}" ]]; then
+      MLB_DATE="${MLB_DATE}" \
+      MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV}" \
+      MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV}" \
+      MLB_SLATE_PROP_TYPE="${MLB_SLATE_PROP_TYPE}" \
+      make mlb-slate-output
+    else
+      MLB_DATE="${MLB_DATE}" \
+      MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV}" \
+      MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV}" \
+      make mlb-slate-output
+    fi
+
+    MLB_DATE="${MLB_DATE}" \
+    MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV}" \
+    MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV}" \
+    make mlb-book-upload
+
+    echo "[prod12-cron] daily slate artifact outputs:"
+    echo "[prod12-cron]   slate_output=${MLB_SLATE_OUTPUT_CSV}"
+    echo "[prod12-cron]   book_upload=${MLB_BOOK_UPLOAD_OUT_CSV}"
+  else
+    echo "[prod12-cron] daily slate/book-upload artifact stage disabled (MLB_DAILY_SLATE_ARTIFACTS_ENABLED=${MLB_DAILY_SLATE_ARTIFACTS_ENABLED})"
   fi
 }
 
