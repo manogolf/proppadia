@@ -750,7 +750,7 @@ runtime-boundaries:
 	$(VENV_PY) backend/scripts/check_runtime_import_boundaries.py
 
 frontend-route-smoke:
-	$(VENV_PY) backend/scripts/check_frontend_route_smoke.py
+	$(VENV_PY) backend/_legacy/scripts/check_frontend_route_smoke.py
 
 # Shared backend checks not tied to one sport.
 shared-checks-offline:
@@ -764,8 +764,8 @@ mlb-checks-offline:
 
 mlb-checks-offline-core:
 	$(VENV_PY) -m unittest discover -s backend/tests -p 'test_mlb_*.py' -v
-	$(VENV_PY) backend/scripts/smoke_mlb_api.py --mode offline
-	$(VENV_PY) backend/scripts/check_mlb_openapi_contract.py
+	$(VENV_PY) backend/_legacy/scripts/smoke_mlb_api.py --mode offline
+	$(VENV_PY) backend/_legacy/scripts/check_mlb_openapi_contract.py
 	$(MAKE) mlb-checks-profile-contract
 
 # Default day-to-day MLB verification.
@@ -785,7 +785,7 @@ mlb-checks-auto: mlb-checks-offline
 # Full verification pass (historical DB + schedule/context checks).
 # Requires DB connectivity and outbound MLB StatsAPI access.
 mlb-checks-full: mlb-checks
-	$(VENV_PY) backend/scripts/smoke_mlb_api.py --mode full --date 2025-08-15
+	$(VENV_PY) backend/_legacy/scripts/smoke_mlb_api.py --mode full --date 2025-08-15
 	$(VENV_PY) backend/scripts/validate_mlb_metrics.py
 	$(MAKE) mlb-checks-props-contract
 	$(MAKE) mlb-checks-golden
@@ -793,7 +793,7 @@ mlb-checks-full: mlb-checks
 # Golden-path write-aware smoke (prepare -> predict -> add -> duplicate replay).
 # Requires DB connectivity and a resolvable historical game context.
 mlb-checks-golden:
-	$(VENV_PY) backend/scripts/smoke_mlb_prop_flow.py --date 2025-08-15 --team-id 119 --player-id 660271
+	$(VENV_PY) backend/_legacy/scripts/smoke_mlb_prop_flow.py --date 2025-08-15 --team-id 119 --player-id 660271
 
 # DB contract check for fields consumed by frontend PlayerPropsTable.
 mlb-checks-props-contract:
@@ -877,7 +877,7 @@ mlb-prediction-quality-prod12:
 	$(VENV_PY) backend/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD12_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-recompute-training-predictions:
-	$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back $(MLB_RECOMPUTE_DAYS_BACK) --prop-types "$(MLB_RECOMPUTE_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit $(MLB_RECOMPUTE_LIMIT)
+	$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back $(MLB_RECOMPUTE_DAYS_BACK) --prop-types "$(MLB_RECOMPUTE_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit $(MLB_RECOMPUTE_LIMIT)
 
 mlb-corrected-props-recompute:
 	@set -e; \
@@ -889,7 +889,7 @@ mlb-corrected-props-recompute:
 		echo "mlb-corrected-props-recompute requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
 		exit 2; \
 	fi; \
-	$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)"; \
+	$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
 mlb-corrected-props-recompute-gated:
@@ -902,7 +902,7 @@ mlb-corrected-props-recompute-gated:
 		echo "mlb-corrected-props-recompute-gated requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
 		exit 2; \
 	fi; \
-	$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+	$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
 mlb-corrected-props-recompute-gated-batched:
@@ -921,7 +921,7 @@ mlb-corrected-props-recompute-gated-batched:
 		prop=$$(echo "$$prop" | xargs); \
 		if [ -z "$$prop" ]; then continue; fi; \
 		echo "==> recompute gated batch prop=$$prop"; \
-		$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" || exit $$?; \
+		$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" || exit $$?; \
 	done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
@@ -958,7 +958,7 @@ mlb-hybrid-window-refresh:
 		echo "==> hybrid train prop=$$prop days_back=$$days_back"; \
 		$(VENV_PY) backend/mlb/model_trainer.py --prop "$$prop" --days-back "$$days_back" --limit "$(MLB_HYBRID_TRAIN_LIMIT)" || exit $$?; \
 		echo "==> hybrid recompute prop=$$prop"; \
-		$(VENV_PY) backend/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" || exit $$?; \
+		$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" || exit $$?; \
 	done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
@@ -1000,10 +1000,10 @@ mlb-feature-health-prod12:
 	$(MAKE) mlb-feature-health MLB_FEATURE_WINDOW_MODE=games MLB_FEATURE_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_FEATURE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_FEATURE_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)"
 
 mlb-pfp-overlap-audit:
-	$(VENV_PY) backend/scripts/backfill_mlb_pfp_overlap_from_mtp.py --prop-types "$(MLB_PFP_OVERLAP_PROP_TYPES)" --prop-source "$(MLB_PFP_OVERLAP_PROP_SOURCE)" --feature-set-tag "$(MLB_PFP_OVERLAP_FEATURE_SET_TAG)" --model-tag "$(MLB_PFP_OVERLAP_MODEL_TAG)" --window-mode "$(MLB_PFP_OVERLAP_WINDOW_MODE)" --games-back "$(MLB_PFP_OVERLAP_GAMES_BACK)" --window-days "$(MLB_PFP_OVERLAP_WINDOW_DAYS)" --from-date "$(MLB_PFP_OVERLAP_FROM_DATE)" --to-date "$(MLB_PFP_OVERLAP_TO_DATE)" --limit "$(MLB_PFP_OVERLAP_LIMIT)" --batch-size "$(MLB_PFP_OVERLAP_BATCH_SIZE)"
+	$(VENV_PY) backend/_legacy/scripts/backfill_mlb_pfp_overlap_from_mtp.py --prop-types "$(MLB_PFP_OVERLAP_PROP_TYPES)" --prop-source "$(MLB_PFP_OVERLAP_PROP_SOURCE)" --feature-set-tag "$(MLB_PFP_OVERLAP_FEATURE_SET_TAG)" --model-tag "$(MLB_PFP_OVERLAP_MODEL_TAG)" --window-mode "$(MLB_PFP_OVERLAP_WINDOW_MODE)" --games-back "$(MLB_PFP_OVERLAP_GAMES_BACK)" --window-days "$(MLB_PFP_OVERLAP_WINDOW_DAYS)" --from-date "$(MLB_PFP_OVERLAP_FROM_DATE)" --to-date "$(MLB_PFP_OVERLAP_TO_DATE)" --limit "$(MLB_PFP_OVERLAP_LIMIT)" --batch-size "$(MLB_PFP_OVERLAP_BATCH_SIZE)"
 
 mlb-pfp-overlap-backfill:
-	$(VENV_PY) backend/scripts/backfill_mlb_pfp_overlap_from_mtp.py --apply --prop-types "$(MLB_PFP_OVERLAP_PROP_TYPES)" --prop-source "$(MLB_PFP_OVERLAP_PROP_SOURCE)" --feature-set-tag "$(MLB_PFP_OVERLAP_FEATURE_SET_TAG)" --model-tag "$(MLB_PFP_OVERLAP_MODEL_TAG)" --window-mode "$(MLB_PFP_OVERLAP_WINDOW_MODE)" --games-back "$(MLB_PFP_OVERLAP_GAMES_BACK)" --window-days "$(MLB_PFP_OVERLAP_WINDOW_DAYS)" --from-date "$(MLB_PFP_OVERLAP_FROM_DATE)" --to-date "$(MLB_PFP_OVERLAP_TO_DATE)" --limit "$(MLB_PFP_OVERLAP_LIMIT)" --batch-size "$(MLB_PFP_OVERLAP_BATCH_SIZE)"
+	$(VENV_PY) backend/_legacy/scripts/backfill_mlb_pfp_overlap_from_mtp.py --apply --prop-types "$(MLB_PFP_OVERLAP_PROP_TYPES)" --prop-source "$(MLB_PFP_OVERLAP_PROP_SOURCE)" --feature-set-tag "$(MLB_PFP_OVERLAP_FEATURE_SET_TAG)" --model-tag "$(MLB_PFP_OVERLAP_MODEL_TAG)" --window-mode "$(MLB_PFP_OVERLAP_WINDOW_MODE)" --games-back "$(MLB_PFP_OVERLAP_GAMES_BACK)" --window-days "$(MLB_PFP_OVERLAP_WINDOW_DAYS)" --from-date "$(MLB_PFP_OVERLAP_FROM_DATE)" --to-date "$(MLB_PFP_OVERLAP_TO_DATE)" --limit "$(MLB_PFP_OVERLAP_LIMIT)" --batch-size "$(MLB_PFP_OVERLAP_BATCH_SIZE)"
 
 mlb-balance-guard:
 	$(VENV_PY) backend/scripts/check_mlb_prop_balance_guard.py --prop-type "$(MLB_BALANCE_GUARD_PROP_TYPE)" --prop-sources "$(MLB_BALANCE_GUARD_PROP_SOURCES)" --window-mode "$(MLB_BALANCE_GUARD_WINDOW_MODE)" --window-days $(MLB_BALANCE_GUARD_WINDOW_DAYS) --games-back $(MLB_BALANCE_GUARD_GAMES_BACK) --min-total $(MLB_BALANCE_GUARD_MIN_TOTAL) --min-accuracy-pct $(MLB_BALANCE_GUARD_MIN_ACCURACY) --min-over-pct $(MLB_BALANCE_GUARD_MIN_OVER_PCT)
@@ -1261,15 +1261,15 @@ mlb-checks-profile-contract:
 
 # Fast deployed-environment health check (safe, no write operations).
 mlb-post-deploy:
-	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE)
+	$(VENV_PY) backend/_legacy/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE)
 
 # Post-deploy check that also requires non-sparse probe data.
 mlb-post-deploy-strict:
-	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data
+	$(VENV_PY) backend/_legacy/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data
 
 # Post-deploy strict transport/DB checks, but tolerate sparse probe data (offseason-safe).
 mlb-post-deploy-strict-offseason:
-	$(VENV_PY) backend/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data --allow-sparse
+	$(VENV_PY) backend/_legacy/scripts/post_deploy_mlb_check.py --base-url $(BASE_URL) --date $(MLB_DATE) --require-data --allow-sparse
 
 # One-command MLB release confidence gate (offseason-safe strict deploy check).
 mlb-release-check: mlb-checks-offline
@@ -1277,19 +1277,19 @@ mlb-release-check: mlb-checks-offline
 
 # Fast NHL deployed-environment health check (safe, no write operations).
 nhl-post-deploy:
-	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE)
+	$(VENV_PY) backend/_legacy/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE)
 
 # NHL post-deploy check requiring non-sparse probe data.
 nhl-post-deploy-strict:
-	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE) --require-data
+	$(VENV_PY) backend/_legacy/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE) --require-data
 
 # NHL post-deploy strict transport/DB checks, but tolerate sparse probe data.
 nhl-post-deploy-strict-offseason:
-	$(VENV_PY) backend/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE) --require-data --allow-sparse
+	$(VENV_PY) backend/_legacy/scripts/post_deploy_nhl_check.py --base-url $(BASE_URL) --date $(NHL_DATE) --require-data --allow-sparse
 
 # NHL OpenAPI contract drift check.
 nhl-openapi-contract:
-	$(VENV_PY) backend/scripts/check_nhl_openapi_contract.py
+	$(VENV_PY) backend/_legacy/scripts/check_nhl_openapi_contract.py
 
 nhl-prediction-quality:
 	@if [ -z "$(NHL_QUALITY_FROM_DATE)" ] || [ -z "$(NHL_QUALITY_TO_DATE)" ]; then \
@@ -1378,7 +1378,7 @@ nhl-sog-calibration-last:
 	@tail -n $(NHL_SOG_MONITOR_HISTORY_LIMIT) $(NHL_SOG_MONITOR_HISTORY_INPUT)
 
 nhl-sog-calibration-history-clean:
-	$(VENV_PY) backend/scripts/clean_nhl_sog_calibration_history.py \
+	$(VENV_PY) backend/_legacy/scripts/clean_nhl_sog_calibration_history.py \
 		--input $(NHL_SOG_MONITOR_HISTORY_INPUT) \
 		--in-place \
 		$(if $(filter 1,$(NHL_SOG_MONITOR_HISTORY_CLEAN_BACKUP)),--backup,)

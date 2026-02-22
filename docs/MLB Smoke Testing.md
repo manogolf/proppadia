@@ -5,7 +5,7 @@
 Quickly validate MLB API wiring and critical endpoint behavior after refactors.
 
 Script:
-- `backend/scripts/smoke_mlb_api.py`
+- `backend/_legacy/scripts/smoke_mlb_api.py`
 
 ## Release Checklist
 
@@ -186,17 +186,17 @@ make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=2025-08-01 MLB_STAT_TO_DATE=20
 In-process (imports FastAPI app directly):
 
 ```bash
-.venv/bin/python backend/scripts/smoke_mlb_api.py --mode offline
-.venv/bin/python backend/scripts/smoke_mlb_api.py --mode full --date 2025-08-15
+.venv/bin/python backend/_legacy/scripts/smoke_mlb_api.py --mode offline
+.venv/bin/python backend/_legacy/scripts/smoke_mlb_api.py --mode full --date 2025-08-15
 ```
 
 Against a running backend:
 
 ```bash
-.venv/bin/python backend/scripts/smoke_mlb_api.py --mode offline --base-url http://127.0.0.1:8001
-.venv/bin/python backend/scripts/smoke_mlb_api.py --mode full --base-url http://127.0.0.1:8001 --date 2025-08-15
-.venv/bin/python backend/scripts/smoke_mlb_prop_flow.py --base-url http://127.0.0.1:8001 --date 2025-08-15 --team-id 119 --player-id 660271
-.venv/bin/python backend/scripts/post_deploy_mlb_check.py --base-url https://baseball-streaks-sq44.onrender.com
+.venv/bin/python backend/_legacy/scripts/smoke_mlb_api.py --mode offline --base-url http://127.0.0.1:8001
+.venv/bin/python backend/_legacy/scripts/smoke_mlb_api.py --mode full --base-url http://127.0.0.1:8001 --date 2025-08-15
+.venv/bin/python backend/_legacy/scripts/smoke_mlb_prop_flow.py --base-url http://127.0.0.1:8001 --date 2025-08-15 --team-id 119 --player-id 660271
+.venv/bin/python backend/_legacy/scripts/post_deploy_mlb_check.py --base-url https://baseball-streaks-sq44.onrender.com
 ```
 
 ## Useful Flags

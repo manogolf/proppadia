@@ -5,7 +5,7 @@
 Quickly validate deployed NHL API wiring and core read endpoints after backend changes.
 
 Script:
-- `backend/scripts/post_deploy_nhl_check.py`
+- `backend/_legacy/scripts/post_deploy_nhl_check.py`
 
 ## Release Checklist
 
@@ -68,9 +68,9 @@ Meaning:
 Direct script usage:
 
 ```bash
-.venv/bin/python backend/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com
-.venv/bin/python backend/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com --date 2025-11-20 --require-data
-.venv/bin/python backend/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com --date 2025-11-20 --require-data --allow-sparse
+.venv/bin/python backend/_legacy/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com
+.venv/bin/python backend/_legacy/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com --date 2025-11-20 --require-data
+.venv/bin/python backend/_legacy/scripts/post_deploy_nhl_check.py --base-url https://baseball-streaks-sq44.onrender.com --date 2025-11-20 --require-data --allow-sparse
 .venv/bin/python -m unittest discover -s backend/tests -p 'test_shared_*.py' -v
 ```
 

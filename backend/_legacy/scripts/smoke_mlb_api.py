@@ -7,9 +7,9 @@ Modes:
 - full: includes DB-backed metrics and MLB-schedule-backed endpoints
 
 Examples:
-  python backend/scripts/smoke_mlb_api.py --mode offline
-  python backend/scripts/smoke_mlb_api.py --mode full --date 2025-08-15 --team-id 144 --player-id 660271
-  python backend/scripts/smoke_mlb_api.py --mode full --base-url http://127.0.0.1:8001
+  python backend/_legacy/scripts/smoke_mlb_api.py --mode offline
+  python backend/_legacy/scripts/smoke_mlb_api.py --mode full --date 2025-08-15 --team-id 144 --player-id 660271
+  python backend/_legacy/scripts/smoke_mlb_api.py --mode full --base-url http://127.0.0.1:8001
 """
 
 from __future__ import annotations

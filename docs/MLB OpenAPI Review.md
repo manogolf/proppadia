@@ -22,7 +22,7 @@ PY
 Contract drift check:
 
 ```bash
-.venv/bin/python backend/scripts/check_mlb_openapi_contract.py
+.venv/bin/python backend/_legacy/scripts/check_mlb_openapi_contract.py
 ```
 
 Expected output:
