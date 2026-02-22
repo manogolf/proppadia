@@ -14,11 +14,26 @@ from typing import Sequence
 ROOT = Path(__file__).resolve().parents[2]
 
 REQUIRED = [
-    Path("backend/nhl/scripts/attach_names.py"),
-    Path("backend/nhl/scripts/import_skater_logs.py"),
-    Path("backend/nhl/scripts/import_skater_logs_for_date.py"),
-    Path("backend/nhl/scripts/score_goalie_saves.py"),
-    Path("backend/nhl/scripts/score_sog_phoenix.py"),
+    Path("backend/nhl/scripts/backfill_game_manpower_segments.py"),
+    Path("backend/nhl/scripts/build_points_with_market.py"),
+    Path("backend/nhl/scripts/build_saves_with_market.py"),
+    Path("backend/nhl/scripts/build_sog_with_market.py"),
+    Path("backend/nhl/scripts/calibrate_sog_segmented_recency.py"),
+    Path("backend/nhl/scripts/evaluate_sog_predictions.py"),
+    Path("backend/nhl/scripts/fill_pp_toi_minutes_for_date.py"),
+    Path("backend/nhl/scripts/import_roster_today.py"),
+    Path("backend/nhl/scripts/import_schedule_today.py"),
+    Path("backend/nhl/scripts/ingest_shiftcharts_for_date.py"),
+    Path("backend/nhl/scripts/load_nhl_predictions_generic.py"),
+    Path("backend/nhl/scripts/load_sog_predictions_denali.py"),
+    Path("backend/nhl/scripts/refresh_all_team_rosters.py"),
+    Path("backend/nhl/scripts/refresh_players_and_roster_today.py"),
+    Path("backend/nhl/scripts/score_nhl_props.py"),
+    Path("backend/nhl/scripts/score_points_phoenix.py"),
+    Path("backend/nhl/scripts/score_sog_denali_pairings_ordinal_lgbm.py"),
+    Path("backend/nhl/scripts/seed_goalie_logs_for_date.py"),
+    Path("backend/nhl/scripts/seed_skater_logs_for_date.py"),
+    Path("backend/nhl/scripts/sog_integrity_report.py"),
 ]
 
 
