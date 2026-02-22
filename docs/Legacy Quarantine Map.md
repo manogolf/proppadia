@@ -1,14 +1,13 @@
 # Legacy Quarantine Map
 
-These paths were moved out of active code locations and into `backend/_legacy/*`
-to prevent accidental runtime coupling.
+These paths were moved out of active code locations into `backend/_legacy/*`
+to prevent accidental runtime coupling. MLB legacy quarantine has since been
+fully removed from the repo after Python pipeline replacement.
 
 ## MLB
 
-- `backend/mlb/archive` -> `backend/_legacy/mlb/archive`
-- `backend/mlb/legacy` -> `backend/_legacy/mlb/legacy`
-- `backend/mlb/resolution/archive` -> `backend/_legacy/mlb/resolution/archive`
-- `backend/mlb/shared/archive` -> `backend/_legacy/mlb/shared/archive`
+- Legacy quarantine previously used `backend/_legacy/mlb/*`.
+- As of 2026-02-22, MLB legacy quarantine files were removed from git.
 
 ## NHL
 

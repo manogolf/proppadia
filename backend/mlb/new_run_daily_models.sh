@@ -31,7 +31,7 @@ BEGIN
       ps.outs_recorded::numeric  AS outs_val,
       (ps.outs_recorded >= start_min_outs) AS is_start
     FROM mlb.player_stats ps
-    JOIN public.starting_pitchers_ref spr
+    JOIN mlb.starting_pitchers_ref spr
       ON spr.game_id = ps.game_id
      AND ps.player_id::text IN (spr.home_starter_id, spr.away_starter_id)
     WHERE ps.outs_recorded IS NOT NULL
@@ -186,8 +186,8 @@ cd "$REPO_DIR"
 psql "${DATABASE_URL:-}" -v ON_ERROR_STOP=1 <<'SQL' || true
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_matviews WHERE schemaname='public' AND matviewname='team_rolling_agg_v1') THEN
-    EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY public.team_rolling_agg_v1';
+  IF EXISTS (SELECT 1 FROM pg_matviews WHERE schemaname='mlb' AND matviewname='team_rolling_agg_v1') THEN
+    EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY mlb.team_rolling_agg_v1';
   END IF;
 END$$;
 SQL
@@ -286,7 +286,7 @@ echo "done."
 -- adjust the list to your actual MV names
 SET statement_timeout = '15min';
 
-REFRESH MATERIALIZED VIEW CONCURRENTLY public.team_rolling_agg_v1;
+REFRESH MATERIALIZED VIEW CONCURRENTLY mlb.team_rolling_agg_v1;
 
 -- if you created per-prop MVs, add them here, e.g.:
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY public.training_features_batting_enriched_mv;

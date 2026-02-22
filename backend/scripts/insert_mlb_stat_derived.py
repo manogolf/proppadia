@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """DB-URL-native MLB stat-derived backfill.
 
-Recreates core behavior of legacy backend/mlb/insertStatDerivedProps.js while
+Recreates core behavior of the retired legacy JS stat-derived job while
 using psycopg + DATABASE_URL/SUPABASE_DB_URL (no Supabase JS credentials).
 """
 

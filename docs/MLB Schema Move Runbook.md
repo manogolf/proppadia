@@ -1,6 +1,6 @@
 # MLB Schema Move Runbook
 
-This runbook moves MLB-owned tables from `public` to `mlb` while preserving compatibility for existing code paths.
+This runbook moves MLB-owned relations from `public` to `mlb` while preserving compatibility for existing code paths during transition.
 
 ## Scope
 
@@ -21,7 +21,7 @@ Phase 1 moves these base tables to `mlb` and creates same-name compatibility vie
 
 Out of scope in phase 1:
 
-- none
+- remaining legacy MLB views/materialized views/tables in `public`
 
 ## Apply
 
@@ -101,4 +101,40 @@ Phase 2 rollback:
 psql "$DATABASE_URL" \
   -v ON_ERROR_STOP=1 \
   -f backend/mlb/sql/migrations/20260221_rollback_drop_public_mlb_compat_views.sql
+```
+
+## Phase 3: Move Remaining MLB Relations Out of `public`
+
+Phase 3 moves the remaining MLB-owned relations (tables, views, and materialized views) from `public` to `mlb`.
+
+Apply:
+
+```bash
+psql "$DATABASE_URL" \
+  -v ON_ERROR_STOP=1 \
+  -f backend/mlb/sql/migrations/20260222_move_remaining_public_mlb_objects_to_mlb_schema.sql
+```
+
+Verify public is clear of MLB runtime relations:
+
+```sql
+SELECT n.nspname AS schema_name, c.relname AS object_name, c.relkind
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname IN ('public', 'mlb')
+  AND c.relkind IN ('r', 'v', 'm')
+ORDER BY n.nspname, c.relname;
+```
+
+Expected after phase 3:
+
+- `mlb` contains MLB relations (including legacy views/materialized views).
+- `public` has no MLB-owned `r/v/m` relations.
+
+Phase 3 rollback:
+
+```bash
+psql "$DATABASE_URL" \
+  -v ON_ERROR_STOP=1 \
+  -f backend/mlb/sql/migrations/20260222_rollback_move_remaining_public_mlb_objects_to_mlb_schema.sql
 ```
