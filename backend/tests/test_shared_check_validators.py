@@ -1,6 +1,6 @@
 import unittest
 
-from backend.scripts.check_validators import (
+from backend.shared.scripts.check_validators import (
     expect_list_or_error_object,
     expect_ok,
     expect_ok_count_rows,

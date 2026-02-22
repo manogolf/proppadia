@@ -18,7 +18,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
 from backend.shared.db import pg_fetchall
 
 

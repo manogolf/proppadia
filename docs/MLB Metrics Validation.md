@@ -5,7 +5,7 @@
 Validate MLB metrics endpoints against independent SQL aggregations over historical `player_props` data.
 
 Script:
-- `backend/scripts/validate_mlb_metrics.py`
+- `backend/mlb/scripts/validate_mlb_metrics.py`
 
 ## What It Checks
 
@@ -23,15 +23,15 @@ Comparison modes:
 In-process (imports app directly):
 
 ```bash
-.venv/bin/python backend/scripts/validate_mlb_metrics.py --api-only
-.venv/bin/python backend/scripts/validate_mlb_metrics.py
+.venv/bin/python backend/mlb/scripts/validate_mlb_metrics.py --api-only
+.venv/bin/python backend/mlb/scripts/validate_mlb_metrics.py
 ```
 
 Against a running backend:
 
 ```bash
-.venv/bin/python backend/scripts/validate_mlb_metrics.py --api-only --base-url http://127.0.0.1:8001
-.venv/bin/python backend/scripts/validate_mlb_metrics.py --base-url http://127.0.0.1:8001
+.venv/bin/python backend/mlb/scripts/validate_mlb_metrics.py --api-only --base-url http://127.0.0.1:8001
+.venv/bin/python backend/mlb/scripts/validate_mlb_metrics.py --base-url http://127.0.0.1:8001
 ```
 
 ## Requirements

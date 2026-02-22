@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from backend.scripts.mlb_readiness_snapshot import collect_snapshot
+from backend.mlb.scripts.mlb_readiness_snapshot import collect_snapshot
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from backend.scripts.api_client_utils import HttpClient, first_keys, safe_json
+from backend.shared.scripts.api_client_utils import HttpClient, first_keys, safe_json
 
 
 class _Resp:

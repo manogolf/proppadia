@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from backend.scripts import experiment_nhl_sog_segmented_calibration
-from backend.scripts.json_check_runner import run_json_check
+from backend.shared.scripts.json_check_runner import run_json_check
 
 
 def _parse_lines(raw: str) -> list[float]:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-python backend/scripts/export_mlb_book_upload.py
+python backend/mlb/scripts/export_mlb_book_upload.py
 
 MLB equivalent of NHL book-upload exporter:
 - Reads calibrated WIDE predictions with p_over_* columns.
@@ -29,7 +29,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import pandas as pd
 
 
-BASE_DIR = Path(__file__).resolve().parents[1]  # .../backend
+BASE_DIR = Path(__file__).resolve().parents[2]  # .../backend
 PRED_CSV = Path(
     os.environ.get(
         "MLB_PRED_CSV",

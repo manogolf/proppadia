@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from backend.scripts.strict_data_gate import enforce_strict_data_gate
+from backend.shared.scripts.strict_data_gate import enforce_strict_data_gate
 
 
 class TestSharedStrictDataGate(unittest.TestCase):

@@ -3,9 +3,9 @@
 Warm MLB OddsAPI market cache for one or more ET dates.
 
 Examples:
-  .venv/bin/python backend/scripts/refresh_mlb_market_cache.py
-  .venv/bin/python backend/scripts/refresh_mlb_market_cache.py --days 2
-  .venv/bin/python backend/scripts/refresh_mlb_market_cache.py --date 2026-04-01 --date 2026-04-02
+  .venv/bin/python backend/mlb/scripts/refresh_mlb_market_cache.py
+  .venv/bin/python backend/mlb/scripts/refresh_mlb_market_cache.py --days 2
+  .venv/bin/python backend/mlb/scripts/refresh_mlb_market_cache.py --date 2026-04-01 --date 2026-04-02
 """
 
 from __future__ import annotations

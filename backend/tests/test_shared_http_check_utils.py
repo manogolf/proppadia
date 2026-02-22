@@ -1,6 +1,6 @@
 import unittest
 
-from backend.scripts.http_check_utils import HttpClient, run_check
+from backend.shared.scripts.http_check_utils import HttpClient, run_check
 
 
 class _Resp:

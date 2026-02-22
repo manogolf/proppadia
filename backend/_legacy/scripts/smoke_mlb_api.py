@@ -18,10 +18,10 @@ import argparse
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, first_keys, safe_json
-from backend.scripts.check_output_utils import print_check_rows, print_summary
-from backend.scripts.check_validators import expect_predict_probability_and_token
-from backend.scripts.http_check_utils import CheckResult
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, first_keys, safe_json
+from backend.shared.scripts.check_output_utils import print_check_rows, print_summary
+from backend.shared.scripts.check_validators import expect_predict_probability_and_token
+from backend.shared.scripts.http_check_utils import CheckResult
 
 
 def _run_check(

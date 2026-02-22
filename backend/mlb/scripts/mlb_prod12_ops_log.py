@@ -13,7 +13,7 @@ from typing import Any, Sequence
 from backend.scripts import mlb_prod12_health_report
 from backend.scripts import mlb_prod12_incident
 from backend.scripts import mlb_prod12_status
-from backend.scripts.json_check_runner import run_json_check
+from backend.shared.scripts.json_check_runner import run_json_check
 
 
 def collect_snapshot(

@@ -34,7 +34,7 @@ make mlb-prediction-flow-audit
 Underlying script:
 
 ```bash
-.venv/bin/python backend/scripts/audit_mlb_prediction_flow.py
+.venv/bin/python backend/mlb/scripts/audit_mlb_prediction_flow.py
 ```
 
 Checks:

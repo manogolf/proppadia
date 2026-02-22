@@ -12,11 +12,11 @@ from __future__ import annotations
 import argparse
 from typing import List, Sequence
 
-from backend.scripts.check_output_utils import print_check_rows, print_summary, print_warn_rows
-from backend.scripts.check_validators import expect_list_or_error_object, expect_ok, expect_ok_count_rows, expect_ping_sport
-from backend.scripts.http_check_utils import CheckResult, HttpClient, run_check
-from backend.scripts.sparse_warning_utils import find_sparse_warnings
-from backend.scripts.strict_data_gate import enforce_strict_data_gate
+from backend.shared.scripts.check_output_utils import print_check_rows, print_summary, print_warn_rows
+from backend.shared.scripts.check_validators import expect_list_or_error_object, expect_ok, expect_ok_count_rows, expect_ping_sport
+from backend.shared.scripts.http_check_utils import CheckResult, HttpClient, run_check
+from backend.shared.scripts.sparse_warning_utils import find_sparse_warnings
+from backend.shared.scripts.strict_data_gate import enforce_strict_data_gate
 
 def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> int:
     client = HttpClient(base_url)

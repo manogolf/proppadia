@@ -9,7 +9,7 @@ import argparse
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
 
 def _is_intish(v: Any) -> bool:
     if isinstance(v, bool):

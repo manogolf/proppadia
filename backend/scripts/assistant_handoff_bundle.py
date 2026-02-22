@@ -17,8 +17,8 @@ from backend.scripts import json_check_runner
 from backend.scripts import mlb_pipeline_check
 from backend.scripts import mlb_pipeline_last
 from backend.scripts import season_activation_report
-from backend.scripts.mlb_readiness_last import _load_history, _regressions
-from backend.scripts.mlb_readiness_snapshot import collect_snapshot
+from backend.mlb.scripts.mlb_readiness_last import _load_history, _regressions
+from backend.mlb.scripts.mlb_readiness_snapshot import collect_snapshot
 
 
 def _default_ops_vars() -> dict[str, Any]:

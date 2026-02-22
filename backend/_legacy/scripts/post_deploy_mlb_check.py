@@ -12,11 +12,11 @@ from __future__ import annotations
 import argparse
 from typing import Any, Dict, List
 
-from backend.scripts.check_output_utils import print_check_rows, print_summary, print_warn_rows
-from backend.scripts.check_validators import expect_ok, expect_ping_sport, expect_predict_probability_and_token
-from backend.scripts.http_check_utils import CheckResult, HttpClient, run_check
-from backend.scripts.sparse_warning_utils import find_sparse_warnings
-from backend.scripts.strict_data_gate import enforce_strict_data_gate
+from backend.shared.scripts.check_output_utils import print_check_rows, print_summary, print_warn_rows
+from backend.shared.scripts.check_validators import expect_ok, expect_ping_sport, expect_predict_probability_and_token
+from backend.shared.scripts.http_check_utils import CheckResult, HttpClient, run_check
+from backend.shared.scripts.sparse_warning_utils import find_sparse_warnings
+from backend.shared.scripts.strict_data_gate import enforce_strict_data_gate
 
 def build_predict_payload(player_id: int, game_date: str) -> Dict[str, Any]:
     return {

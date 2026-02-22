@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
 
 DEFAULT_PROP_TYPES = (
     "hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,"

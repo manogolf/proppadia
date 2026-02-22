@@ -5,7 +5,7 @@
 Validate the DB-level contract consumed by frontend `PlayerPropsTable`.
 
 Script:
-- `backend/scripts/validate_mlb_props_contract.py`
+- `backend/mlb/scripts/validate_mlb_props_contract.py`
 
 ## What It Checks
 
@@ -19,8 +19,8 @@ Script:
 ## Run Commands
 
 ```bash
-.venv/bin/python backend/scripts/validate_mlb_props_contract.py
-.venv/bin/python backend/scripts/validate_mlb_props_contract.py --sample-limit 100
+.venv/bin/python backend/mlb/scripts/validate_mlb_props_contract.py
+.venv/bin/python backend/mlb/scripts/validate_mlb_props_contract.py --sample-limit 100
 ```
 
 Also available via:

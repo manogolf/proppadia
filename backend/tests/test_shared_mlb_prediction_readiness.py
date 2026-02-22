@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from backend.scripts.probe_mlb_prediction_readiness import run
+from backend.mlb.scripts.probe_mlb_prediction_readiness import run
 
 
 class _Resp:

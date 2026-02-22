@@ -8,9 +8,9 @@ import json
 import sys
 from typing import Sequence
 
-from backend.scripts.analyze_mlb_prediction_quality import collect_quality
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
-from backend.scripts.probe_mlb_prediction_readiness import collect_probe
+from backend.mlb.scripts.analyze_mlb_prediction_quality import collect_quality
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient
+from backend.mlb.scripts.probe_mlb_prediction_readiness import collect_probe
 
 DEFAULT_PROP_TYPES = "hits,total_bases,strikeouts_batting"
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from backend.scripts import mlb_candidate_eval
-from backend.scripts.json_check_runner import run_json_check
+from backend.shared.scripts.json_check_runner import run_json_check
 
 
 def _load_json_file(path: Path) -> dict[str, Any]:

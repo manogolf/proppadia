@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import dataclass
 
-from backend.scripts.sparse_warning_utils import find_sparse_warnings
+from backend.shared.scripts.sparse_warning_utils import find_sparse_warnings
 
 
 @dataclass

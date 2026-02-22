@@ -8,7 +8,7 @@ import json
 import sys
 from typing import Any, Dict, Sequence
 
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
 
 
 PROP_PROFILES: dict[str, dict[str, Any]] = {

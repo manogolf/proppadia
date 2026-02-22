@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from backend.scripts.api_client_utils import HttpClient, first_keys, safe_json
+from backend.shared.scripts.api_client_utils import HttpClient, first_keys, safe_json
 
 
 @dataclass

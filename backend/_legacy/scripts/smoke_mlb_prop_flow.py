@@ -14,9 +14,9 @@ import json
 import sys
 from typing import Any, Dict, Optional
 
-from backend.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
-from backend.scripts.check_output_utils import print_check_rows, print_summary
-from backend.scripts.http_check_utils import CheckResult
+from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, InProcessClient, safe_json
+from backend.shared.scripts.check_output_utils import print_check_rows, print_summary
+from backend.shared.scripts.http_check_utils import CheckResult
 
 
 def _json_obj(resp) -> Dict[str, Any]:

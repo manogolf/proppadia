@@ -12,7 +12,7 @@ from typing import Any, Sequence
 from backend.scripts import ops_operator_last
 from backend.scripts import ops_operator_summary
 from backend.scripts import mlb_pipeline_last
-from backend.scripts.mlb_readiness_last import _load_history
+from backend.mlb.scripts.mlb_readiness_last import _load_history
 
 
 def collect_incident_snapshot(

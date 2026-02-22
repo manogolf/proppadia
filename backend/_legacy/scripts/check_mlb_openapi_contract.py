@@ -18,7 +18,7 @@ import argparse
 from pathlib import Path
 from typing import Dict
 
-from backend.scripts.openapi_contract_utils import diff_contract, load_json
+from backend.shared.scripts.openapi_contract_utils import diff_contract, load_json
 
 SNAPSHOT_DEFAULT = Path("docs/openapi/openapi.snapshot.json")
 

@@ -19,7 +19,7 @@ def main() -> int:
 
     cmd = [
         sys.executable,
-        "backend/scripts/mlb_model_publish.py",
+        "backend/mlb/scripts/mlb_model_publish.py",
         "--archive-dir",
         args.archive_dir,
         "--snapshot-id",

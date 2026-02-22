@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Sequence
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 REQUIRED = [
     Path("backend/nhl/scripts/backfill_game_manpower_segments.py"),

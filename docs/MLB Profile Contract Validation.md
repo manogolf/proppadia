@@ -5,7 +5,7 @@
 Validate the API contract consumed by frontend `PlayerProfileDashboard`.
 
 Script:
-- `backend/scripts/validate_mlb_profile_contract.py`
+- `backend/mlb/scripts/validate_mlb_profile_contract.py`
 
 ## What It Checks
 
@@ -23,9 +23,9 @@ Script:
 ## Run Commands
 
 ```bash
-.venv/bin/python backend/scripts/validate_mlb_profile_contract.py
-.venv/bin/python backend/scripts/validate_mlb_profile_contract.py --player-id 660271
-.venv/bin/python backend/scripts/validate_mlb_profile_contract.py --base-url http://127.0.0.1:8001 --player-id 660271
+.venv/bin/python backend/mlb/scripts/validate_mlb_profile_contract.py
+.venv/bin/python backend/mlb/scripts/validate_mlb_profile_contract.py --player-id 660271
+.venv/bin/python backend/mlb/scripts/validate_mlb_profile_contract.py --base-url http://127.0.0.1:8001 --player-id 660271
 ```
 
 Also available via:

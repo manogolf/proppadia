@@ -304,8 +304,8 @@ jobs:
             fi
           done
 
-      # -------------------- Score SOG (phoenix) --------------------
-      - name: Score SOG (phoenix)
+      # -------------------- Score SOG (Denali ordinal) --------------------
+      - name: Score SOG (Denali ordinal)
         if: steps.slate.outputs.has_games == 't'
         run: |
           set -euo pipefail
@@ -315,18 +315,23 @@ jobs:
             exit 0
           fi
 
-          MDL_ROOT="backend/nhl/models/sog"
-          if [ ! -d "$MDL_ROOT" ]; then
-            echo "No SOG models found at $MDL_ROOT; skipping SOG scoring."
+          MDL_ROOT="backend/nhl/models/latest/shots_on_goal/sog_player_denali_pairings_ordinal_v1__no_shiftcounts"
+          FEATURE_META="$MDL_ROOT/ge_2/metadata.json"
+          if [ ! -d "$MDL_ROOT" ] || [ ! -f "$FEATURE_META" ]; then
+            echo "No Denali ordinal SOG models found at $MDL_ROOT; skipping SOG scoring."
             exit 0
           fi
 
-          python backend/nhl/scripts/score_sog_phoenix.py \
-            --features-csv "$FEATURES" \
+          if ! python backend/nhl/scripts/score_sog_denali_pairings_ordinal_lgbm.py \
+            --in "$FEATURES" \
             --model-root "$MDL_ROOT" \
-            --out backend/nhl/data/processed/sog_predictions.csv
+            --feature-meta "$FEATURE_META" \
+            --out backend/nhl/data/processed/sog_predictions_wide_calibrated.csv; then
+            echo "SOG Denali scorer failed; skipping SOG scoring for this run."
+            exit 0
+          fi
 
-          head -n 5 backend/nhl/data/processed/sog_predictions.csv || true
+          head -n 5 backend/nhl/data/processed/sog_predictions_wide_calibrated.csv || true
 
       # -------------------- Score Saves --------------------
       - name: Score Saves
@@ -339,16 +344,28 @@ jobs:
             exit 0
           fi
 
-          MDL_ROOT="backend/nhl/models/saves"
+          MDL_ROOT="backend/nhl/models/latest/goalie_saves"
+          FEATURE_JSON="backend/nhl/features/feature_metadata_nhl.json"
           if [ ! -d "$MDL_ROOT" ]; then
             echo "No saves models found at $MDL_ROOT; skipping saves scoring."
             exit 0
           fi
 
-          python backend/nhl/scripts/score_goalie_saves.py \
-            --features-csv "$FEATURES" \
-            --model-root "$MDL_ROOT" \
-            --out backend/nhl/data/processed/saves_predictions.csv
+          if [ ! -f "$FEATURE_JSON" ]; then
+            echo "Missing feature metadata ($FEATURE_JSON); skipping saves scoring."
+            exit 0
+          fi
+
+          if ! python backend/nhl/scripts/score_nhl_props.py \
+            --model-dir "$MDL_ROOT" \
+            --csv "$FEATURES" \
+            --feature-json "$FEATURE_JSON" \
+            --feature-key "goalie_saves" \
+            --line "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5" \
+            --out backend/nhl/data/processed/saves_predictions.csv; then
+            echo "Saves scorer failed; skipping saves scoring for this run."
+            exit 0
+          fi
 
           head -n 5 backend/nhl/data/processed/saves_predictions.csv || true
 
@@ -376,12 +393,15 @@ jobs:
 
           head -n 5 backend/nhl/data/processed/points_predictions.csv || true
 
-      - name: Attach player names to predictions
+      - name: Verify exported names file
         if: steps.slate.outputs.has_games == 't'
         run: |
-          /tmp/guard.sh "python backend/nhl/scripts/attach_names.py" 300
-          head -n 3 backend/nhl/data/processed/sog_with_names.csv  || true
-          head -n 3 backend/nhl/data/processed/saves_with_names.csv || true
+          NAMES="exports/names_${SLATE_DATE}.csv"
+          if [ -s "$NAMES" ]; then
+            head -n 3 "$NAMES" || true
+          else
+            echo "Names file missing ($NAMES) — continuing without names preview."
+          fi
 
       - name: Build points_with_market.csv
         if: steps.slate.outputs.has_games == 't'
@@ -473,10 +493,6 @@ jobs:
           echo "Seeding skater logs for YDAY=${YDAY}"
           if [ -f backend/nhl/scripts/seed_skater_logs_for_date.py ]; then
             /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/seed_skater_logs_for_date.py"
-          elif [ -f backend/nhl/scripts/import_skater_logs_for_date.py ]; then
-            /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/import_skater_logs_for_date.py"
-          elif [ -f backend/nhl/scripts/import_skater_logs.py ]; then
-            /tmp/retry.sh "SLATE_DATE='${YDAY}' python backend/nhl/scripts/import_skater_logs.py"
           else
             echo 'No skater logs import script found; skipping.'
           fi

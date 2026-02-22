@@ -87,7 +87,7 @@ Meaning:
 - `mlb-market-cache-refresh`: warms in-process OddsAPI snapshot cache for ET date window (`MLB_MARKET_DAYS`, default `1`)
 - `mlb-roster-refresh-all`: refreshes all MLB team active rosters into `player_ids` (schema-aware active/inactive sync)
 - `mlb-show-config`: prints effective MLB make/runtime values (preflight sanity check)
-- `mlb-insert-stat-derived`: runs DB-URL-native stat-derived insertion (`backend/scripts/insert_mlb_stat_derived.py`) in quiet mode
+- `mlb-insert-stat-derived`: runs DB-URL-native stat-derived insertion (`backend/mlb/scripts/insert_mlb_stat_derived.py`) in quiet mode
   - default window: yesterday back through `MLB_STAT_DAYS_AGO`
   - explicit historical window: `MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD`
 - `mlb-check-stat-derived`: validates recent `model_training_props` stat-derived volume (`MLB_STAT_DERIVED_DAYS`, `MLB_STAT_DERIVED_MIN`)

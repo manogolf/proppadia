@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.scripts.mlb_readiness_last import _load_history
+from backend.mlb.scripts.mlb_readiness_last import _load_history
 
 
 def _regressions(prev: dict[str, Any], cur: dict[str, Any]) -> list[str]:

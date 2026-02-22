@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.scripts import check_nhl_workflow_compat as compat
+from backend.nhl.scripts import check_nhl_workflow_compat as compat
 
 
 class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
                 with patch.object(
                     compat,
                     "REQUIRED",
-                    [Path("backend/scripts/check_nhl_workflow_compat.py")],
+                    [Path("backend/nhl/scripts/check_nhl_workflow_compat.py")],
                 ):
                     rc = compat.main([])
         self.assertEqual(rc, 0)
@@ -33,7 +33,7 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
                 with patch.object(
                     compat,
                     "REQUIRED",
-                    [Path("backend/scripts/check_nhl_workflow_compat.py")],
+                    [Path("backend/nhl/scripts/check_nhl_workflow_compat.py")],
                 ):
                     with patch.object(
                         compat.py_compile, "compile", side_effect=Exception("compile boom")
@@ -47,7 +47,7 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
             with patch.object(
                 compat,
                 "REQUIRED",
-                [Path("backend/scripts/check_nhl_workflow_compat.py")],
+                [Path("backend/nhl/scripts/check_nhl_workflow_compat.py")],
             ):
                 with redirect_stdout(out):
                     rc = compat.main(["--quiet"])
@@ -55,7 +55,7 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
         printed = out.getvalue()
         self.assertIn("Summary:", printed)
         self.assertNotIn("NHL workflow compatibility check:", printed)
-        self.assertNotIn("- OK backend/scripts/check_nhl_workflow_compat.py", printed)
+        self.assertNotIn("- OK backend/nhl/scripts/check_nhl_workflow_compat.py", printed)
 
     def test_main_json_outputs_machine_readable_summary(self):
         out = StringIO()
@@ -63,7 +63,7 @@ class TestSharedNhlWorkflowCompatCheck(unittest.TestCase):
             with patch.object(
                 compat,
                 "REQUIRED",
-                [Path("backend/scripts/check_nhl_workflow_compat.py")],
+                [Path("backend/nhl/scripts/check_nhl_workflow_compat.py")],
             ):
                 with redirect_stdout(out):
                     rc = compat.main(["--json"])

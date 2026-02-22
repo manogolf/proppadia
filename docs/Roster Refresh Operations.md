@@ -40,7 +40,7 @@ make roster-refresh-all MLB_ROSTER_DATE=2025-08-15 NHL_ROSTER_DATE=2025-11-20
 ```
 
 Notes:
-- `mlb-roster-refresh-all` runs `backend/scripts/refresh_mlb_players_rosters.py`.
+- `mlb-roster-refresh-all` runs `backend/mlb/scripts/refresh_mlb_players_rosters.py`.
 - `nhl-roster-refresh-all` runs `python -m backend.nhl.cli refresh-rosters-all`.
 - `roster-refresh-all` is an umbrella target that runs MLB then NHL.
 

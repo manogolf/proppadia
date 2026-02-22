@@ -172,7 +172,7 @@ FROM agg
 
 
 def collect(window_mode: str, window_value: int) -> dict[str, Any]:
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     forbidden = _scan_forbidden_token(root)
     source_mix_hits = _source_mix_for_prop(window_mode, window_value, "hits")
     source_mix_doubles = _source_mix_for_prop(window_mode, window_value, "doubles")
