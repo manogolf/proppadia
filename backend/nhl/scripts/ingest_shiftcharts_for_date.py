@@ -142,19 +142,24 @@ def ensure_table(conn) -> None:
               ingested_at timestamptz NOT NULL DEFAULT now(),
 
               PRIMARY KEY (game_id, shift_id)
-            );
-
-            -- If the table already existed from older runs, ensure the new cols exist.
-            ALTER TABLE nhl.shiftcharts_raw
-              ADD COLUMN IF NOT EXISTS start_sec int;
-            ALTER TABLE nhl.shiftcharts_raw
-              ADD COLUMN IF NOT EXISTS end_sec int;
-            ALTER TABLE nhl.shiftcharts_raw
-              ADD COLUMN IF NOT EXISTS duration_sec int;
-
-            CREATE INDEX IF NOT EXISTS idx_shiftcharts_raw_game ON nhl.shiftcharts_raw (game_id);
-            CREATE INDEX IF NOT EXISTS idx_shiftcharts_raw_player ON nhl.shiftcharts_raw (player_id);
+            )
             """
+        )
+        # psycopg v3 executes one statement per prepared query.
+        cur.execute(
+            "ALTER TABLE nhl.shiftcharts_raw ADD COLUMN IF NOT EXISTS start_sec int"
+        )
+        cur.execute(
+            "ALTER TABLE nhl.shiftcharts_raw ADD COLUMN IF NOT EXISTS end_sec int"
+        )
+        cur.execute(
+            "ALTER TABLE nhl.shiftcharts_raw ADD COLUMN IF NOT EXISTS duration_sec int"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_shiftcharts_raw_game ON nhl.shiftcharts_raw (game_id)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_shiftcharts_raw_player ON nhl.shiftcharts_raw (player_id)"
         )
     conn.commit()
 
