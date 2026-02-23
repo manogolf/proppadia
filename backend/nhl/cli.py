@@ -269,14 +269,15 @@ def assert_sog_rollups_present(db_url: str, slate_date: str, *, min_ok_frac: flo
 
 def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
     cmd = [str(c) for c in cmd]
-    print("▶", " ".join(cmd))
+    cmd_for_log = _format_cmd_for_log(cmd)
+    print("▶", cmd_for_log)
     e = os.environ.copy()
     if env:
         e.update(env)
     try:
         return sp.run(cmd, cwd=str(cwd), env=e, check=check, text=True, capture_output=True)
     except sp.CalledProcessError as exc:
-        print(f"[run] COMMAND FAILED: {' '.join(map(str, cmd))}", file=sys.stderr)
+        print(f"[run] COMMAND FAILED: {cmd_for_log}", file=sys.stderr)
         if exc.stdout:
             print("[run] --- stdout ---", file=sys.stderr)
             print(exc.stdout, file=sys.stderr)
@@ -301,6 +302,29 @@ def _append_cli_arg(cmd: list[str], flag: str, value: str | None) -> None:
     if not s:
         return
     cmd.extend([flag, s])
+
+
+_URL_CRED_RE = re.compile(r"((?:[a-z][a-z0-9+.\-]*):\/\/[^:@\/\s]+:)([^@\/\s]+)(@)", re.I)
+_SENSITIVE_ENV_KEY_RE = re.compile(
+    r"(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASS|KEY|API_KEY|DB_URL|DATABASE_URL|URL)$", re.I
+)
+
+
+def _redact_token_for_log(token: str) -> str:
+    redacted = _URL_CRED_RE.sub(r"\1***\3", token)
+    if "=" in redacted:
+        key, value = redacted.split("=", 1)
+        if _SENSITIVE_ENV_KEY_RE.search(key):
+            if "://" in value:
+                value = _URL_CRED_RE.sub(r"\1***\3", value)
+            elif value:
+                value = "***"
+            redacted = f"{key}={value}"
+    return redacted
+
+
+def _format_cmd_for_log(cmd: Sequence[object]) -> str:
+    return " ".join(_redact_token_for_log(str(c)) for c in cmd)
 
 def require_db_url() -> str:
     db = os.environ.get("SUPABASE_DB_URL")
