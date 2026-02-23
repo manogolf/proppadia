@@ -1,64 +1,13 @@
-export const loadHomeGateway = () =>
-  import("../Pages/HomeGateway.jsx");
-export const loadMLBHome = () =>
-  import("../Pages/mlb/MLBHome.jsx");
-export const loadNHLHome = () =>
-  import("../Pages/nhl/NHLHome.jsx");
-export const loadPlayerPropsPage = () =>
-  import("../Pages/PlayerPropsPage.jsx");
-export const loadNHLPlayerPropsPage = () =>
-  import("../Pages/nhl/NHLPlayerPropsPage.jsx");
-export const loadLoginPage = () =>
-  import("../Pages/Login.jsx");
-export const loadPlayerTeamBrowser = () =>
-  import("../Pages/PlayerTeamBrowser.jsx");
-export const loadPlayerTeamChooser = () =>
-  import("../Pages/PlayerTeamChooser.jsx");
-export const loadModelMetricsDashboard = () =>
-  import("../Pages/ModelMetricsDashboard.jsx");
-export const loadPlayerProfileDashboard = () =>
-  import("../Pages/PlayerProfileDashboard.jsx");
-export const loadAccessRequiredPage = () =>
-  import("../Pages/AccessRequiredPage.jsx");
-export const loadWatchlistPage = () =>
-  import("../Pages/WatchlistPage.jsx");
+export const loadOpsPage = () => import("../Pages/OpsPage.jsx");
 
 const routeLoaders = {
-  "/": loadHomeGateway,
-  "/mlb/slate": loadMLBHome,
-  "/mlb/predictions": loadPlayerPropsPage,
-  "/nhl/slate": loadNHLHome,
-  "/nhl/props": loadNHLPlayerPropsPage,
-  "/mlb": loadMLBHome,
-  "/nhl": loadNHLHome,
-  "/props": loadPlayerPropsPage,
-  "/props/v2": loadPlayerPropsPage,
-  "/nhl/predictions": loadNHLPlayerPropsPage,
-  "/login": loadLoginPage,
-  "/players": loadPlayerTeamChooser,
-  "/players/mlb": loadPlayerTeamBrowser,
-  "/players/nhl": loadPlayerTeamBrowser,
-  "/metrics": loadModelMetricsDashboard,
-  "/watchlist": loadWatchlistPage,
+  // Keep prefetch only for routes that are actually lazy-loaded in AppRouter.
+  // Revisit bundle-size optimization later: if we reintroduce route-level lazy
+  // loading for non-core pages, add matching prefetch loaders here in lockstep
+  // with AppRouter to avoid dynamic/static import mismatch warnings and nav
+  // instability.
+  "/ops": loadOpsPage,
 };
-
-const dynamicRouteLoaders = [
-  {
-    pattern: "/mlb/players/:playerId",
-    test: (path) => path.startsWith("/mlb/players/"),
-    loader: loadPlayerProfileDashboard,
-  },
-  {
-    pattern: "/nhl/players/:playerId",
-    test: (path) => path.startsWith("/nhl/players/"),
-    loader: loadPlayerProfileDashboard,
-  },
-  {
-    pattern: "/player/:playerId",
-    test: (path) => path.startsWith("/player/"),
-    loader: loadPlayerProfileDashboard,
-  },
-];
 
 const prefetched = new Set();
 
@@ -66,16 +15,11 @@ export function prefetchRoute(pathname) {
   const key = String(pathname || "").trim();
   if (!key || prefetched.has(key)) return;
   const staticLoader = routeLoaders[key];
-  const dynamicMatch = !staticLoader
-    ? dynamicRouteLoaders.find((entry) => entry.test(key))
-    : null;
-  const loader = staticLoader || dynamicMatch?.loader;
+  const loader = staticLoader;
   if (!loader) return;
-  const prefetchKey = dynamicMatch ? dynamicMatch.pattern : key;
-  if (prefetched.has(prefetchKey)) return;
-  prefetched.add(prefetchKey);
+  prefetched.add(key);
   loader().catch(() => {
     // Best-effort prefetch only; ignore transient failures.
-    prefetched.delete(prefetchKey);
+    prefetched.delete(key);
   });
 }
