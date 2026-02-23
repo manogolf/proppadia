@@ -74,7 +74,7 @@ def fetch_game_ids_for_date(conn, game_date: str) -> List[int]:
             """
             SELECT game_id::bigint
             FROM nhl.games
-            WHERE game_date = DATE %s
+            WHERE game_date = %s::date
             ORDER BY game_id;
             """,
             (game_date,),
