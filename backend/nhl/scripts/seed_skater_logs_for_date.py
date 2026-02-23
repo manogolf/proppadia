@@ -624,9 +624,9 @@ def main():
     inserted_total = 0
     skipped_no_map_total = 0
 
-    with psycopg.connect(DB_URL, autocommit=False, row_factory=dict_row, prepare_threshold=0) as conn:
+    with psycopg.connect(DB_URL, autocommit=False, row_factory=dict_row, prepare_threshold=None) as conn:
         try:
-            conn.prepare_threshold = 0  # some drivers expose this
+            conn.prepare_threshold = None  # some drivers expose this
         except Exception:
             pass
 

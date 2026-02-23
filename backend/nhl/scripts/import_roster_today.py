@@ -149,9 +149,9 @@ def fetch_player_name(nhl_pid: str) -> str | None:
 
 # --------------------------- main ---------------------------
 def main():
-    with psycopg.connect(DB, prepare_threshold=0) as conn:
+    with psycopg.connect(DB, prepare_threshold=None) as conn:
         try:
-            conn.prepare_threshold = 0  # type: ignore[attr-defined]
+            conn.prepare_threshold = None  # type: ignore[attr-defined]
         except Exception:
             pass
 

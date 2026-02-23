@@ -344,9 +344,9 @@ def main() -> None:
     if not db_url:
         die("Missing DATABASE_URL or SUPABASE_DB_URL in environment.")
 
-    conn = psycopg.connect(db_url, prepare_threshold=0)
+    conn = psycopg.connect(db_url, prepare_threshold=None)
     try:
-        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+        conn.prepare_threshold = None  # type: ignore[attr-defined]
     except Exception:
         pass
     conn.autocommit = False

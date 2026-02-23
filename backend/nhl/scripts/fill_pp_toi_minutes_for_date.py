@@ -355,9 +355,9 @@ def main() -> None:
 
     commit = bool(args.commit)
 
-    conn = psycopg.connect(db_url, prepare_threshold=0)
+    conn = psycopg.connect(db_url, prepare_threshold=None)
     try:
-        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+        conn.prepare_threshold = None  # type: ignore[attr-defined]
     except Exception:
         pass
     conn.autocommit = False

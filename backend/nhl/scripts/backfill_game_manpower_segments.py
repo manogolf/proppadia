@@ -324,9 +324,9 @@ def main() -> None:
 
     conn = None
     if dsn and (needs_db_for_game_list or (not args.dry_run)):
-        conn = psycopg.connect(dsn, prepare_threshold=0)
+        conn = psycopg.connect(dsn, prepare_threshold=None)
         try:
-            conn.prepare_threshold = 0  # type: ignore[attr-defined]
+            conn.prepare_threshold = None  # type: ignore[attr-defined]
         except Exception:
             pass
 

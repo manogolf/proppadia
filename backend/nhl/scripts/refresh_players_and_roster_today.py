@@ -379,9 +379,9 @@ def _append_from_section(out: list[dict], section: list | None, default_pos: str
 # ---------------- Main ----------------
 def main():
     source = "features-fallback"
-    with psycopg.connect(DB_URL, prepare_threshold=0, row_factory=dict_row) as conn:
+    with psycopg.connect(DB_URL, prepare_threshold=None, row_factory=dict_row) as conn:
         try:
-            conn.prepare_threshold = 0  # type: ignore[attr-defined]
+            conn.prepare_threshold = None  # type: ignore[attr-defined]
         except Exception:
             pass
 

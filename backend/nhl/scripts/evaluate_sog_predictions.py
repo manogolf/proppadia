@@ -296,9 +296,9 @@ def main() -> None:
     args = ap.parse_args()
 
     db = require_db_url()
-    conn = psycopg.connect(db, prepare_threshold=0)
+    conn = psycopg.connect(db, prepare_threshold=None)
     try:
-        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+        conn.prepare_threshold = None  # type: ignore[attr-defined]
     except Exception:
         pass
 
