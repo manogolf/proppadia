@@ -15,7 +15,7 @@ import {
   WATCHLIST_UPDATED_EVENT,
 } from "../shared/watchlistStorage.js";
 import AccessRequiredPage from "../Pages/AccessRequiredPage.jsx";
-import HomeGateway from "../Pages/HomeGateway.jsx";
+import Home from "../Pages/Home.jsx";
 import LoginPage from "../Pages/Login.jsx";
 import ModelMetricsDashboard from "../Pages/ModelMetricsDashboard.jsx";
 import PlayerProfileDashboard from "../Pages/PlayerProfileDashboard.jsx";
@@ -127,15 +127,12 @@ function AppShell() {
             <a href="/" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
               Home
             </a>
-            {user ? (
-              <a href="/mlb/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
-                Props
-              </a>
-            ) : (
-              <a href="/login" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
-                Predictions
-              </a>
-            )}
+            <a href="/mlb/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              MLB Picks
+            </a>
+            <a href="/nhl/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              NHL Picks
+            </a>
             {user ? (
               <a href="/watchlist" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
                 {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
@@ -165,7 +162,7 @@ function AppShell() {
       <RouteErrorBoundary>
         <Routes>
           {/* New multi-sport gateway at "/" */}
-          <Route path="/" element={<HomeGateway />} />
+          <Route path="/" element={<Home />} />
           <Route path="/mlb/slate" element={<MLBHome />} />
           <Route
             path="/mlb/predictions"

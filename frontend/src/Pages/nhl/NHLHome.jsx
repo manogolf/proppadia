@@ -4,6 +4,7 @@ import TodayGamesNHL from "../../components/TodayGamesNHL.jsx";
 import { todayET } from "../../shared/timeUtils.js";
 import MemberAccessCard from "../../components/predictions/MemberAccessCard.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
+import NHLStreaksDashboardCard from "../../components/NHLStreaksDashboardCard.jsx";
 
 export default function NhlHome() {
   const [games, setGames] = useState([]);
@@ -65,6 +66,10 @@ export default function NhlHome() {
         ) : (
           <TodayGamesNHL games={games} />
         )}
+
+        <div className="mt-6">
+          <NHLStreaksDashboardCard />
+        </div>
 
         <div className="mt-6">
           <MemberAccessCard
