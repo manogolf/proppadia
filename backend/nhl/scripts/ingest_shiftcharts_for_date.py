@@ -22,14 +22,21 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-import psycopg2
-import psycopg2.extras
+import psycopg
 import requests
 
 
 SHIFTCHARTS_URL = "https://api.nhle.com/stats/rest/en/shiftcharts"
 DEFAULT_TIMEOUT_SEC = 30
 SLEEP_BETWEEN_GAMES_SEC = 0.25
+
+
+def _executemany(cur, sql: str, rows: List[tuple], *, page_size: int = 5000) -> None:
+    """Batch executemany for psycopg v3 without psycopg2.extras helpers."""
+    if not rows:
+        return
+    for i in range(0, len(rows), page_size):
+        cur.executemany(sql, rows[i : i + page_size])
 
 def require_db_url() -> str:
     return os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL") or ""
@@ -184,14 +191,14 @@ def upsert_base_shifts(
         return 0
 
     with conn.cursor() as cur:
-        psycopg2.extras.execute_values(
+        _executemany(
             cur,
             """
             INSERT INTO nhl.shiftcharts_shifts
               (game_id, shift_id, player_id, team_id, period,
                start_sec, end_sec, dur_sec,
                start_time, end_time, duration)
-            VALUES %s
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (game_id, shift_id) DO UPDATE SET
               player_id   = EXCLUDED.player_id,
               team_id     = EXCLUDED.team_id,
@@ -205,7 +212,6 @@ def upsert_base_shifts(
               ingested_at = now();
             """,
             rows,
-            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             page_size=5000,
         )
     conn.commit()
@@ -290,7 +296,7 @@ def upsert_rows(
         return 0
 
     with conn.cursor() as cur:
-        psycopg2.extras.execute_values(
+        _executemany(
             cur,
             """
             INSERT INTO nhl.shiftcharts_raw
@@ -298,7 +304,7 @@ def upsert_rows(
                start_time, end_time, duration,
                start_sec, end_sec, duration_sec,
                raw_json)
-            VALUES %s
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CAST(%s AS jsonb))
             ON CONFLICT (game_id, shift_id) DO UPDATE SET
               player_id    = EXCLUDED.player_id,
               team_id      = COALESCE(EXCLUDED.team_id, nhl.shiftcharts_raw.team_id),
@@ -313,7 +319,6 @@ def upsert_rows(
               ingested_at  = now();
             """,
             rows,
-            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)",
             page_size=5000,
         )
     conn.commit()
@@ -334,7 +339,11 @@ def main() -> None:
     if not db_url:
         die("Missing DATABASE_URL or SUPABASE_DB_URL in environment.")
 
-    conn = psycopg2.connect(db_url)
+    conn = psycopg.connect(db_url, prepare_threshold=0)
+    try:
+        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+    except Exception:
+        pass
     conn.autocommit = False
 
     ensure_table(conn)

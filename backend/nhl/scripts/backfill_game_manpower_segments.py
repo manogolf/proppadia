@@ -39,8 +39,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-import psycopg2
-import psycopg2.extras
+import psycopg
 import requests
 
 API = "https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play"
@@ -293,11 +292,12 @@ def upsert_segments(conn, rows: List[Tuple[int, int, int, int, int, int, str]]) 
     sql = """
         INSERT INTO nhl.game_manpower_segments
           (game_id, period, start_sec, end_sec, pp_team_id, pk_team_id, source)
-        VALUES %s
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT DO NOTHING
     """
     with conn.cursor() as cur:
-        psycopg2.extras.execute_values(cur, sql, rows, page_size=5000)
+        for i in range(0, len(rows), 5000):
+            cur.executemany(sql, rows[i : i + 5000])
         # rowcount is only rows affected by last execute; good enough for logging
         rc = cur.rowcount
     conn.commit()
@@ -324,7 +324,11 @@ def main() -> None:
 
     conn = None
     if dsn and (needs_db_for_game_list or (not args.dry_run)):
-        conn = psycopg2.connect(dsn)
+        conn = psycopg.connect(dsn, prepare_threshold=0)
+        try:
+            conn.prepare_threshold = 0  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
     # Only ensure/create table when we will write.
     if conn is not None and (not args.dry_run):

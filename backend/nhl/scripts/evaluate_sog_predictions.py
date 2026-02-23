@@ -9,8 +9,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-import psycopg2
-from psycopg2.extras import execute_values
+import psycopg
 from sklearn.metrics import roc_auc_score, log_loss
 
 
@@ -236,7 +235,13 @@ def upsert_daily_rows(conn, payload: List[Dict]) -> None:
       games_on_date, skater_rows_date, is_low_sample,
       hit_rate, avg_p, auc, logloss, brier
     )
-    VALUES %s
+    VALUES (
+      %s, %s, %s,
+      %s, %s, %s,
+      %s, %s, %s, %s,
+      %s, %s, %s,
+      %s, %s, %s, %s, %s
+    )
     ON CONFLICT (game_date, model_family, model_version, line, segment_type, segment_value)
     DO UPDATE SET
       n_pred = EXCLUDED.n_pred,
@@ -280,7 +285,7 @@ def upsert_daily_rows(conn, payload: List[Dict]) -> None:
     ]
 
     with conn.cursor() as cur:
-        execute_values(cur, sql, values)
+        cur.executemany(sql, values)
     conn.commit()
 
 
@@ -291,7 +296,11 @@ def main() -> None:
     args = ap.parse_args()
 
     db = require_db_url()
-    conn = psycopg2.connect(db)
+    conn = psycopg.connect(db, prepare_threshold=0)
+    try:
+        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     try:
         game_date = args.game_date or pick_latest_truth_date(conn)

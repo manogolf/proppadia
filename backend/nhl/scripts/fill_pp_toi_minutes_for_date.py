@@ -32,8 +32,7 @@ import sys
 import time
 from typing import Any, Dict, Iterable, Optional, Tuple, List
 
-import psycopg2
-import psycopg2.extras
+import psycopg
 import requests
 
 
@@ -216,8 +215,7 @@ def update_game(cur, game_id: int, pp_map: Dict[int, float]) -> Tuple[int, int, 
 
     rows = [(pp_map[pid], game_id, pid) for pid in overlap]
 
-    psycopg2.extras.execute_batch(
-        cur,
+    cur.executemany(
         """
         UPDATE nhl.skater_game_logs_raw
            SET pp_toi_minutes = %s
@@ -226,7 +224,6 @@ def update_game(cur, game_id: int, pp_map: Dict[int, float]) -> Tuple[int, int, 
            AND (pp_toi_minutes IS NULL OR pp_toi_minutes = 0);
         """,
         rows,
-        page_size=500,
     )
     return (len(db_players), len(overlap), len(rows))
 
@@ -358,7 +355,11 @@ def main() -> None:
 
     commit = bool(args.commit)
 
-    conn = psycopg2.connect(db_url)
+    conn = psycopg.connect(db_url, prepare_threshold=0)
+    try:
+        conn.prepare_threshold = 0  # type: ignore[attr-defined]
+    except Exception:
+        pass
     conn.autocommit = False
     cur = conn.cursor()
 
