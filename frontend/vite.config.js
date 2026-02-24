@@ -63,6 +63,10 @@ export default defineConfig({
     outDir: "dist",
     rollupOptions: {
       output: {
+        // Prevent Rollup from auto-hoisting dependencies of a manually chunked
+        // module into that chunk. We want explicit vendor grouping so React
+        // stays in the React chunk and doesn't get pulled into vendor-charts.
+        onlyExplicitManualChunks: true,
         manualChunks(id) {
           return vendorChunkName(id);
         },
