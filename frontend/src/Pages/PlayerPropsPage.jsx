@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 
-import TodayGames from "../components/TodayGames.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 import PlayerPropFormV2 from "../components/PlayerPropFormv2.jsx";
 import PlayerPropsTable from "../components/PlayerPropsTable.jsx";
@@ -9,7 +8,6 @@ import ModelVsMarketCard from "../components/predictions/ModelVsMarketCard.jsx";
 import PredictionCalendar from "../components/predictions/calendar/PredictionCalendar.jsx";
 import SavedPropsCard from "../components/predictions/market/SavedPropsCard.jsx";
 import PredictionWorkspace from "../components/predictions/PredictionWorkspace.jsx";
-import WorkspaceStatePanel from "../components/predictions/WorkspaceStatePanel.jsx";
 import {
   MLB_WORKSPACE_MODES,
   WORKSPACE_MODE_BOARD,
@@ -17,8 +15,6 @@ import {
   isWorkspaceMode,
 } from "../components/predictions/workspaceModes.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getBaseURL } from "../shared/getBaseURL.js";
-import { normalizeHttpErrorMessage } from "../shared/httpErrorMessage.js";
 import { buildMarketContext } from "../shared/marketContext.js";
 import {
   adaptMlbPrediction,
@@ -42,9 +38,6 @@ export default function PlayerPropsPage() {
   const [lastSaveEvent, setLastSaveEvent] = useState(null);
   const [latestPrediction, setLatestPrediction] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
-  const [games, setGames] = useState([]);
-  const [gamesLoading, setGamesLoading] = useState(true);
-  const [gamesError, setGamesError] = useState("");
   const [seedPlayerName, setSeedPlayerName] = useState("");
   const [seedTeamAbbr, setSeedTeamAbbr] = useState("");
 
@@ -181,50 +174,6 @@ export default function PlayerPropsPage() {
     });
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadGames() {
-      try {
-        setGamesLoading(true);
-        setGamesError("");
-        const base = getBaseURL();
-        const res = await fetch(
-          `${base}/api/mlb/schedule?date=${encodeURIComponent(selectedDate)}`
-        );
-        const data = await res.json();
-        const gameList = Array.isArray(data?.dates) ? data.dates[0]?.games || [] : [];
-        if (!cancelled) setGames(Array.isArray(gameList) ? gameList : []);
-      } catch (e) {
-        if (!cancelled) {
-          setGamesError(normalizeHttpErrorMessage(e, "Failed to load MLB games."));
-          setGames([]);
-        }
-      } finally {
-        if (!cancelled) setGamesLoading(false);
-      }
-    }
-    loadGames();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDate]);
-
-  const slateSection = useMemo(() => {
-    if (gamesLoading) {
-      return (
-        <WorkspaceStatePanel
-          kind="loading"
-          title="Loading MLB slate"
-          detail={`Checking schedule context for ${selectedDate}.`}
-        />
-      );
-    }
-    if (gamesError) {
-      return <WorkspaceStatePanel kind="error" title="Could not load MLB slate" detail={gamesError} />;
-    }
-    return <TodayGames games={games} />;
-  }, [games, gamesError, gamesLoading, selectedDate]);
-
   return (
     <PredictionWorkspace
       sportLabel="MLB"
@@ -237,8 +186,6 @@ export default function PlayerPropsPage() {
     >
       {mode === WORKSPACE_MODE_RESEARCH ? (
         <div className="space-y-4">
-          {slateSection}
-
           <ModelVsMarketCard
             title="Model vs Market (MLB)"
             lineLabel={predictionLineLabel}
@@ -295,8 +242,6 @@ export default function PlayerPropsPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {slateSection}
-
           <div className="pp-chip px-3 py-2 text-xs text-slate-600">{boardContextLabel}</div>
 
           <div className="flex flex-wrap gap-2">

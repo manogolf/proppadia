@@ -28,12 +28,18 @@ export default function Header() {
 
         {/* CENTER: Brand + sport quick links */}
         <div className="flex items-center gap-4 sm:gap-6">
-          <nav className="flex items-center gap-3 sm:gap-4">
-            <a href="/mlb" className="text-sm font-medium transition text-slate-700 hover:text-slate-900">
-              MLB
+          <nav className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+            <a
+              href="/mlb"
+              className="pp-chip px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold tracking-tight text-slate-900 transition hover:bg-white"
+            >
+              Today&apos;s MLB Games
             </a>
-            <a href="/nhl" className="text-sm font-medium transition text-slate-700 hover:text-slate-900">
-              NHL
+            <a
+              href="/nhl"
+              className="pp-chip px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold tracking-tight text-slate-900 transition hover:bg-white"
+            >
+              Today&apos;s NHL Games
             </a>
           </nav>
         </div>
