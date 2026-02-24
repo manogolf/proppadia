@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../utils/supabaseFrontend.js";
 import { toISODate } from "../shared/timeUtils.js";
+import { fetchMlbPropsForDate } from "../lib/mlbPropsApi.js";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
 
 export default function AccuracyByPropType({ selectedDate }) {
@@ -12,15 +12,35 @@ export default function AccuracyByPropType({ selectedDate }) {
 
     const fetchAccuracy = async () => {
       setLoading(true);
-      const { data, error } = await supabase.rpc("get_daily_prop_accuracy", {
-        target_date: toISODate(selectedDate),
-      });
+      try {
+        const rows = await fetchMlbPropsForDate(toISODate(selectedDate));
+        const byProp = new Map();
 
-      if (error) {
-        console.error("❌ Failed to fetch accuracy data:", error.message);
-        setAccuracyData([]);
-      } else {
+        for (const row of rows) {
+          const propType = String(row?.prop_type || "").trim();
+          if (!propType) continue;
+          const outcome = String(row?.outcome || row?.status || "").toLowerCase();
+          // Treat win/loss as accuracy rows; pushes are neutral and excluded.
+          if (!["win", "loss"].includes(outcome)) continue;
+
+          const bucket = byProp.get(propType) || { prop_type: propType, total: 0, correct: 0 };
+          bucket.total += 1;
+          if (outcome === "win") bucket.correct += 1;
+          byProp.set(propType, bucket);
+        }
+
+        const data = Array.from(byProp.values())
+          .map((row) => ({
+            ...row,
+            accuracy_pct:
+              row.total > 0 ? ((row.correct / row.total) * 100).toFixed(1) : "0.0",
+          }))
+          .sort((a, b) => a.prop_type.localeCompare(b.prop_type));
+
         setAccuracyData(data);
+      } catch (error) {
+        console.error("❌ Failed to fetch accuracy data:", error?.message || error);
+        setAccuracyData([]);
       }
       setLoading(false);
     };

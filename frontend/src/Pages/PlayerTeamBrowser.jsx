@@ -211,18 +211,27 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           }
         }
         setPlayers(Array.from(dedup.values()));
-        const slateRes = await fetch(`${getBaseURL()}/api/nhl/props/today?limit=5000&offset=0`);
-        const slatePayload = await slateRes.json().catch(() => ({}));
-        if (slateRes.ok && Array.isArray(slatePayload?.rows)) {
-          const ids = new Set(
-            slatePayload.rows
-              .map((r) => (r?.player_id != null ? String(r.player_id) : ""))
-              .filter(Boolean)
+        const ids = new Set();
+        let offset = 0;
+        const pageLimit = 200;
+        let total = Infinity;
+        while (offset < total && offset < 5000) {
+          const slateRes = await fetch(
+            `${getBaseURL()}/api/nhl/props/today?limit=${pageLimit}&offset=${offset}`
           );
-          setNhlSlatePlayerIds(ids);
-        } else {
-          setNhlSlatePlayerIds(new Set());
+          const slatePayload = await slateRes.json().catch(() => ({}));
+          if (!slateRes.ok || !Array.isArray(slatePayload?.rows)) {
+            break;
+          }
+          for (const row of slatePayload.rows) {
+            const pid = row?.player_id != null ? String(row.player_id) : "";
+            if (pid) ids.add(pid);
+          }
+          total = Number(slatePayload?.total ?? slatePayload.rows.length);
+          if (slatePayload.rows.length < pageLimit) break;
+          offset += pageLimit;
         }
+        setNhlSlatePlayerIds(ids);
       }
       setLoadedAt(new Date().toISOString());
       if (silent) {
