@@ -22,15 +22,6 @@ function vendorChunkName(id) {
   }
 
   if (
-    normalized.includes("/node_modules/recharts/") ||
-    normalized.includes("/node_modules/d3-") ||
-    normalized.includes("/node_modules/internmap/") ||
-    normalized.includes("/node_modules/decimal.js-light/")
-  ) {
-    return "vendor-charts";
-  }
-
-  if (
     normalized.includes("/node_modules/@supabase/") ||
     normalized.includes("/node_modules/@babel/runtime/")
   ) {
