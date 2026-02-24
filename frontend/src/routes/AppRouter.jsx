@@ -25,6 +25,7 @@ import PlayerTeamChooser from "../Pages/PlayerTeamChooser.jsx";
 import WatchlistPage from "../Pages/WatchlistPage.jsx";
 import MLBHome from "../Pages/mlb/MLBHome.jsx";
 import NHLHome from "../Pages/nhl/NHLHome.jsx";
+import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
 import NHLPlayerPropsPage from "../Pages/nhl/NHLPlayerPropsPage.jsx";
 
 const OpsPage = lazy(() => import("../Pages/OpsPage.jsx"));
@@ -182,7 +183,18 @@ function AppShell() {
             element={
               <RequireSignedIn
                 requiredPath="/nhl/props"
-                requiredLabel="NHL player props"
+                requiredLabel="NHL predictions"
+              >
+                <NHLPredictions />
+              </RequireSignedIn>
+            }
+          />
+          <Route
+            path="/nhl/props-form"
+            element={
+              <RequireSignedIn
+                requiredPath="/nhl/props-form"
+                requiredLabel="NHL player props form"
               >
                 <NHLPlayerPropsPage />
               </RequireSignedIn>
