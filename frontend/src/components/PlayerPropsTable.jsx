@@ -1,7 +1,7 @@
 // /src/components/PlayerPropsTable.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isValid } from "date-fns";
-import { supabase } from "../utils/supabaseFrontend.js";
+import { fetchMlbPropsForDate } from "../lib/mlbPropsApi.js";
 import { todayET } from "../shared/timeUtils.js";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
 // (Optional) if you want "only my props":
@@ -72,49 +72,20 @@ export default function PlayerPropsTable({
   const fetchRows = useCallback(async () => {
     setLoading(true);
     setLastError("");
-    let q = supabase
-      .schema("mlb")
-      .from("player_props")
-      .select("*")
-      .eq("game_date", day)
-      .neq("status", "expired")
-      .order("created_at", { ascending: false });
-
-    // If you want to show only the current user’s props, uncomment this:
-    // if (onlyMine && user?.id) q = q.eq("user_id", user.id);
-
-    const { data, error } = await q;
-    if (error) {
-      console.error("❌ fetch player_props:", error);
+    try {
+      const out = await fetchMlbPropsForDate(day);
+      setRows(out.filter((row) => String(row?.status || "").toLowerCase() !== "expired"));
+    } catch (error) {
+      console.error("❌ fetch player props via backend:", error);
       setRows([]);
       setLastError("Failed to refresh props table.");
-    } else {
-      setRows(data || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [day]);
 
   useEffect(() => {
     fetchRows();
-
-    // Realtime (optional; v2 syntax). Requires Realtime enabled on the table.
-    const channel = supabase
-      .channel("props-table")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "mlb",
-          table: "player_props",
-          filter: `game_date=eq.${day}`,
-        },
-        () => fetchRows()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [day, fetchRows /*, onlyMine, user?.id */]);
 
   useEffect(() => {

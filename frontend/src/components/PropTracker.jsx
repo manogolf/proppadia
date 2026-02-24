@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { format, isValid } from "date-fns";
 import { todayET } from "../shared/timeUtils.js";
-import { supabase } from "../utils/supabaseFrontend.js";
+import { fetchMlbPropsForDate } from "../lib/mlbPropsApi.js";
 import Calendar from "./ui/calendar.jsx";
 import AccuracyByPropType from "./AccuracyByPropType.jsx";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
@@ -24,20 +24,19 @@ export default function PropTracker({ selectedDate, setSelectedDate }) {
   const [props, setProps] = useState([]);
 
   useEffect(() => {
-    supabase
-      .schema("mlb")
-      .from("player_props")
-      .select("*")
-      .eq("game_date", day)
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("❌ fetch props:", error);
-          setProps([]);
-        } else {
-          setProps(data || []);
-        }
-      });
+    let cancelled = false;
+    (async () => {
+      try {
+        const out = await fetchMlbPropsForDate(day);
+        if (!cancelled) setProps(out);
+      } catch (error) {
+        console.error("❌ fetch props via backend:", error);
+        if (!cancelled) setProps([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [day]);
 
   const selectedDateObj = useMemo(() => new Date(`${day}T00:00:00`), [day]);

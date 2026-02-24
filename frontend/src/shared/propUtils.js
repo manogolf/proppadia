@@ -1,5 +1,6 @@
 // shared/propUtils.js
-
+// Frontend-only prop display and pure utility helpers.
+// Data retrieval / feature derivation now belongs to backend APIs + domain services.
 import { toISODate, todayET } from "./timeUtils.js";
 
 // ✅ Canonical list of supported prop types
@@ -86,71 +87,6 @@ export function determineStatus(actual, line, overUnder) {
     (direction === "under" && actual < line);
 
   return isWin ? "win" : "loss";
-}
-
-export async function determineHomeAway(supabase, team, gameId) {
-  const { data, error } = await supabase
-    .schema("mlb")
-    .from("player_props")
-    .select("team, is_home, game_id")
-    .eq("team", team)
-    .eq("game_id", gameId)
-    .limit(1)
-    .maybeSingle();
-  return error || !data ? null : data.is_home;
-}
-
-export async function determineOpponent(supabase, team, gameId) {
-  const { data, error } = await supabase
-    .schema("mlb")
-    .from("player_props")
-    .select("team")
-    .eq("game_id", gameId)
-    .neq("team", team)
-    .limit(1)
-    .maybeSingle();
-  return error || !data ? null : data.team;
-}
-
-export async function getRollingAverage(
-  supabase,
-  playerId,
-  propType,
-  gameDate,
-  gameId,
-  days = 7
-) {
-  const { data, error } = await supabase
-    .schema("mlb")
-    .from("model_training_props")
-    .select("result, game_date, game_id")
-    .eq("player_id", playerId)
-    .eq("prop_type", propType)
-    .lt("game_date", gameDate)
-    .order("game_date", { ascending: false });
-
-  if (error) {
-    return null;
-  }
-
-  if (!data || data.length === 0) {
-    return null;
-  }
-
-  const filtered = data
-    .filter((row) => row.game_id !== gameId)
-    .slice(0, days)
-    .map((row) => parseFloat(row.result))
-    .filter((v) => !isNaN(v));
-
-  if (filtered.length === 0) {
-    return null;
-  }
-
-  const sum = filtered.reduce((acc, v) => acc + v, 0);
-  const avg = parseFloat((sum / filtered.length).toFixed(2));
-
-  return avg;
 }
 
 export const BATTER_PROP_TYPES = [

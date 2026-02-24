@@ -1,20 +1,10 @@
 // src/shared/resolvePlayerAndTeam.js
 
-import { supabase } from "../utils/supabaseFrontend.js";
+import { playersAPI } from "../lib/api.js";
 import { normalizeTeamAbbreviation, getTeamIdFromAbbr } from "./teamNameMap.jsx";
 
 /**
- * Normalize player names (remove accents and lowercase).
- */
-function normalizeName(name) {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-/**
- * Resolve player_id from player_ids or fallback to MT by name.
+ * Resolve player identity via backend-owned MLB endpoints.
  */
 export async function resolvePlayerId({ player_id, player_name }) {
   if (!player_id && !player_name) {
@@ -23,31 +13,16 @@ export async function resolvePlayerId({ player_id, player_name }) {
   }
 
   if (player_id) {
-    const { data, error } = await supabase
-      .schema("mlb")
-      .from("player_ids")
-      .select("player_id")
-      .eq("player_id", player_id)
-      .maybeSingle();
-
-    if (data?.player_id) return data.player_id;
+    const lookup = await playersAPI.lookup(player_id).catch(() => null);
+    if (lookup?.ok && lookup?.found && lookup?.player_id) return lookup.player_id;
   }
 
   if (player_name) {
-    const { data, error } = await supabase
-      .schema("mlb")
-      .from("model_training_props")
-      .select("player_id, player_name")
-      .order("game_date", { ascending: false })
-      .limit(50); // short recent window
-
-    const match = data?.find(
-      (row) => normalizeName(row.player_name) === normalizeName(player_name)
-    );
-
-    if (match?.player_id) {
-      console.warn("⚠️ Resolved player_id via MT fallback");
-      return match.player_id;
+    const resolved = await playersAPI
+      .resolve({ player_name })
+      .catch(() => null);
+    if (resolved?.ok && resolved?.found && resolved?.player_id) {
+      return resolved.player_id;
     }
   }
 
@@ -56,7 +31,7 @@ export async function resolvePlayerId({ player_id, player_name }) {
 }
 
 /**
- * Resolve team_id from player_ids (preferred), fallback to MT.
+ * Resolve team_id via backend-owned MLB player lookup.
  */
 export async function resolveTeamId(player_id) {
   if (!player_id) {
@@ -64,27 +39,8 @@ export async function resolveTeamId(player_id) {
     return null;
   }
 
-  // Preferred: player_ids
-  const { data: ids, error: idsError } = await supabase
-    .schema("mlb")
-    .from("player_ids")
-    .select("team_id")
-    .eq("player_id", player_id)
-    .maybeSingle();
-
-  if (ids?.team_id) return ids.team_id;
-
-  // Fallback: model_training_props
-  const { data: mt, error: mtError } = await supabase
-    .schema("mlb")
-    .from("model_training_props")
-    .select("team_id")
-    .eq("player_id", player_id)
-    .filter("team_id", "not.is", null)
-    .order("game_date", { ascending: false })
-    .limit(1);
-
-  if (mt?.[0]?.team_id) return mt[0].team_id;
+  const lookup = await playersAPI.lookup(player_id).catch(() => null);
+  if (lookup?.ok && lookup?.found && lookup?.team_id) return lookup.team_id;
 
   console.warn(`⚠️ Could not resolve team_id for player ${player_id}`);
   return null;

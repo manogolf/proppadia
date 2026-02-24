@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../utils/supabaseFrontend.js";
+import { fetchMlbPropHistoryAll } from "../lib/mlbPropsApi.js";
 import { todayET, nowET } from "../shared/timeUtils.js";
 
 const StreaksCard = () => {
@@ -12,18 +12,10 @@ const StreaksCard = () => {
       try {
         const today = todayET();
         const sevenDaysAgo = nowET().minus({ days: 7 }).toISODate();
-
-        const { data, error } = await supabase
-          .schema("mlb")
-          .from("player_props")
-          .select("*")
-          .gte("game_date", sevenDaysAgo)
-          .lte("game_date", today);
-
-        if (error) {
-          console.error("Error fetching player props:", error.message);
-          return;
-        }
+        const data = await fetchMlbPropHistoryAll({
+          fromDate: sevenDaysAgo,
+          toDate: today,
+        });
 
         const playerStreaks = {};
 
