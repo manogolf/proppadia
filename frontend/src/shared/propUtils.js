@@ -90,6 +90,7 @@ export function determineStatus(actual, line, overUnder) {
 
 export async function determineHomeAway(supabase, team, gameId) {
   const { data, error } = await supabase
+    .schema("mlb")
     .from("player_props")
     .select("team, is_home, game_id")
     .eq("team", team)
@@ -101,6 +102,7 @@ export async function determineHomeAway(supabase, team, gameId) {
 
 export async function determineOpponent(supabase, team, gameId) {
   const { data, error } = await supabase
+    .schema("mlb")
     .from("player_props")
     .select("team")
     .eq("game_id", gameId)
@@ -119,6 +121,7 @@ export async function getRollingAverage(
   days = 7
 ) {
   const { data, error } = await supabase
+    .schema("mlb")
     .from("model_training_props")
     .select("result, game_date, game_id")
     .eq("player_id", playerId)

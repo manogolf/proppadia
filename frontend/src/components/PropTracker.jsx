@@ -25,6 +25,7 @@ export default function PropTracker({ selectedDate, setSelectedDate }) {
 
   useEffect(() => {
     supabase
+      .schema("mlb")
       .from("player_props")
       .select("*")
       .eq("game_date", day)

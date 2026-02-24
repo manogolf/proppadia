@@ -73,6 +73,7 @@ export default function PlayerPropsTable({
     setLoading(true);
     setLastError("");
     let q = supabase
+      .schema("mlb")
       .from("player_props")
       .select("*")
       .eq("game_date", day)
@@ -103,7 +104,7 @@ export default function PlayerPropsTable({
         "postgres_changes",
         {
           event: "INSERT",
-          schema: "public",
+          schema: "mlb",
           table: "player_props",
           filter: `game_date=eq.${day}`,
         },

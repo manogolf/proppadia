@@ -24,6 +24,7 @@ export async function resolvePlayerId({ player_id, player_name }) {
 
   if (player_id) {
     const { data, error } = await supabase
+      .schema("mlb")
       .from("player_ids")
       .select("player_id")
       .eq("player_id", player_id)
@@ -34,6 +35,7 @@ export async function resolvePlayerId({ player_id, player_name }) {
 
   if (player_name) {
     const { data, error } = await supabase
+      .schema("mlb")
       .from("model_training_props")
       .select("player_id, player_name")
       .order("game_date", { ascending: false })
@@ -64,6 +66,7 @@ export async function resolveTeamId(player_id) {
 
   // Preferred: player_ids
   const { data: ids, error: idsError } = await supabase
+    .schema("mlb")
     .from("player_ids")
     .select("team_id")
     .eq("player_id", player_id)
@@ -73,6 +76,7 @@ export async function resolveTeamId(player_id) {
 
   // Fallback: model_training_props
   const { data: mt, error: mtError } = await supabase
+    .schema("mlb")
     .from("model_training_props")
     .select("team_id")
     .eq("player_id", player_id)

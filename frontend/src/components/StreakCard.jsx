@@ -14,6 +14,7 @@ const StreaksCard = () => {
         const sevenDaysAgo = nowET().minus({ days: 7 }).toISODate();
 
         const { data, error } = await supabase
+          .schema("mlb")
           .from("player_props")
           .select("*")
           .gte("game_date", sevenDaysAgo)
