@@ -25,6 +25,7 @@ from backend.domains.nhl.repository import (
     fetch_players_directory,
     fetch_props_today,
     fetch_saves,
+    fetch_sog_streaks,
     fetch_sog,
 )
 
@@ -122,6 +123,25 @@ def sog(
     offset: int = Query(0, ge=0),
 ):
     return fetch_sog(date, limit, offset)
+
+
+@router.get(
+    "/streaks/sog",
+    summary="NHL SOG streaks (real results vs predicted line)",
+    description=(
+        "Build hot/cold NHL SOG streaks from nhl.predictions joined to "
+        "nhl.skater_game_logs_raw. Uses a per-player primary line selected "
+        "from prediction rows (line with p_over closest to 0.5)."
+    ),
+)
+def sog_streaks(
+    date: Optional[str] = Query(None, description="Anchor date YYYY-MM-DD (defaults to today ET)"),
+    lookback_days: int = Query(45, ge=7, le=180),
+    window_games: int = Query(7, ge=3, le=15),
+    min_streak: int = Query(2, ge=2, le=10),
+    top_n: int = Query(5, ge=1, le=25),
+) -> Dict[str, Any]:
+    return fetch_sog_streaks(date, lookback_days, window_games, min_streak, top_n)
 
 
 # --- Saves (wide) ---

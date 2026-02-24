@@ -1,66 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { nowET, todayET } from "../shared/timeUtils.js";
-import { getPropDisplayLabel } from "../shared/propUtils.js";
+import { todayET } from "../shared/timeUtils.js";
 
 const STREAK_WINDOW_GAMES = 7;
-// Fetch more than 7 calendar days so each player/market can still have 7 recent graded entries.
-const HISTORY_LOOKBACK_DAYS = 45;
 
-function rowTime(row) {
-  const raw = row?.game_date || row?.created_at || row?.updated_at || "";
-  const t = new Date(raw).getTime();
-  return Number.isFinite(t) ? t : 0;
+function fmtLine(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(1) : "—";
 }
 
-function buildStreakRows(rows) {
-  const grouped = new Map();
-
-  for (const row of rows || []) {
-    const outcome = String(row?.outcome || row?.status || "").toLowerCase();
-    if (!["win", "loss"].includes(outcome)) continue;
-    const key = `${row?.player_id ?? row?.player_name}-${row?.prop_type}`;
-    if (!key) continue;
-    const bucket = grouped.get(key) || [];
-    bucket.push(row);
-    grouped.set(key, bucket);
-  }
-
-  const hot = [];
-  const cold = [];
-
-  for (const bucket of grouped.values()) {
-    bucket.sort((a, b) => rowTime(b) - rowTime(a));
-    const recentWindow = bucket.slice(0, STREAK_WINDOW_GAMES);
-    if (!recentWindow.length) continue;
-    const firstOutcome = String(
-      recentWindow[0]?.outcome || recentWindow[0]?.status || ""
-    ).toLowerCase();
-    if (!["win", "loss"].includes(firstOutcome)) continue;
-    let streak = 0;
-    for (const row of recentWindow) {
-      const outcome = String(row?.outcome || row?.status || "").toLowerCase();
-      if (outcome !== firstOutcome) break;
-      streak += 1;
-    }
-    if (streak < 2) continue;
-
-    const item = {
-      player_name:
-        recentWindow[0]?.player_name || String(recentWindow[0]?.player_id || "Unknown"),
-      team: recentWindow[0]?.team || null,
-      prop_type: recentWindow[0]?.prop_type || "",
-      streak,
-      lastOutcome: firstOutcome,
-      windowSize: recentWindow.length,
-    };
-    if (firstOutcome === "win") hot.push(item);
-    if (firstOutcome === "loss") cold.push(item);
-  }
-
-  hot.sort((a, b) => b.streak - a.streak || String(a.player_name).localeCompare(String(b.player_name)));
-  cold.sort((a, b) => b.streak - a.streak || String(a.player_name).localeCompare(String(b.player_name)));
-  return { hot: hot.slice(0, 5), cold: cold.slice(0, 5) };
+function fmtActual(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? String(Math.round(n * 10) / 10) : "—";
 }
 
 export default function NHLStreaksDashboardCard() {
@@ -68,6 +19,7 @@ export default function NHLStreaksDashboardCard() {
   const [coldStreaks, setColdStreaks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [windowGames, setWindowGames] = useState(STREAK_WINDOW_GAMES);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,34 +28,25 @@ export default function NHLStreaksDashboardCard() {
       setLoading(true);
       setError("");
       try {
-        const toDate = todayET();
-        const fromDate = nowET().minus({ days: HISTORY_LOOKBACK_DAYS }).toISODate();
-        const rows = [];
-        let offset = 0;
-        const limit = 200;
-        let total = Infinity;
-
-        while (offset < total && offset < 5000) {
-          const payload = await api(
-            `/api/nhl/props/history?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}&limit=${limit}&offset=${offset}`
-          );
-          const pageRows = Array.isArray(payload?.rows) ? payload.rows : [];
-          total = Number(payload?.total ?? pageRows.length);
-          rows.push(...pageRows);
-          if (pageRows.length < limit) break;
-          offset += limit;
-        }
-
-        const { hot, cold } = buildStreakRows(rows);
+        const anchorDate = todayET();
+        const payload = await api(
+          `/api/nhl/streaks/sog?date=${encodeURIComponent(anchorDate)}&window_games=${STREAK_WINDOW_GAMES}&min_streak=2&top_n=5`
+        );
         if (!cancelled) {
-          setHotStreaks(hot);
-          setColdStreaks(cold);
+          setHotStreaks(Array.isArray(payload?.hot) ? payload.hot : []);
+          setColdStreaks(Array.isArray(payload?.cold) ? payload.cold : []);
+          setWindowGames(
+            Number.isFinite(Number(payload?.window_games))
+              ? Number(payload.window_games)
+              : STREAK_WINDOW_GAMES
+          );
         }
       } catch (e) {
         if (!cancelled) {
           setError(e?.message || "Failed to load NHL streaks.");
           setHotStreaks([]);
           setColdStreaks([]);
+          setWindowGames(STREAK_WINDOW_GAMES);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -128,11 +71,11 @@ export default function NHLStreaksDashboardCard() {
           </span>
         </div>
         <div className="pp-chip px-3 py-1 text-xs font-semibold text-slate-600">
-          7-Game Window
+          {windowGames}-Game Window
         </div>
       </div>
       <p className="text-sm text-slate-600">
-        Recent graded NHL props (win/loss only), using each player market&apos;s last 7 graded entries.
+        Real NHL SOG streaks from prediction rows + skater game logs, ranked by consecutive hits/misses vs each player&apos;s model-selected line.
       </p>
 
       {loading ? (
@@ -159,10 +102,13 @@ export default function NHLStreaksDashboardCard() {
                     <div>
                       <div className="font-medium truncate">
                         {row.player_name}
-                        {row.team ? ` (${row.team})` : ""}
+                        {row.team_abbr ? ` (${row.team_abbr})` : ""}
                       </div>
                       <div className="text-sm text-slate-600">
-                        {getPropDisplayLabel(row.prop_type)}
+                        SOG vs {fmtLine(row.line_value)} • {row.window_wins ?? 0}-{row.window_losses ?? 0} in {row.window_games ?? windowGames}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Last: {fmtActual(row.last_actual_value)} on {row.last_game_date || "—"}
                       </div>
                     </div>
                     <div className="text-emerald-600 font-bold pl-4">W{row.streak}</div>
@@ -188,10 +134,13 @@ export default function NHLStreaksDashboardCard() {
                     <div>
                       <div className="font-medium truncate">
                         {row.player_name}
-                        {row.team ? ` (${row.team})` : ""}
+                        {row.team_abbr ? ` (${row.team_abbr})` : ""}
                       </div>
                       <div className="text-sm text-slate-600">
-                        {getPropDisplayLabel(row.prop_type)}
+                        SOG vs {fmtLine(row.line_value)} • {row.window_wins ?? 0}-{row.window_losses ?? 0} in {row.window_games ?? windowGames}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Last: {fmtActual(row.last_actual_value)} on {row.last_game_date || "—"}
                       </div>
                     </div>
                     <div className="text-sky-600 font-bold pl-4">L{row.streak}</div>

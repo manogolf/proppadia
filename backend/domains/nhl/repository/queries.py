@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
@@ -184,6 +184,181 @@ def fetch_saves(date: Optional[str], limit: int, offset: int):
         return pg_fetchall(sql, (date, date, limit, offset))
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def fetch_sog_streaks(
+    date: Optional[str],
+    lookback_days: int,
+    window_games: int,
+    min_streak: int,
+    top_n: int,
+) -> Dict[str, Any]:
+    target_date, err = _resolve_target_date(date)
+    if err:
+        return {"ok": False, "error": err}
+
+    from_date = target_date - timedelta(days=lookback_days)
+
+    sql = """
+        WITH pred_base AS (
+            SELECT
+                p.player_id,
+                p.game_id,
+                p.line::float8 AS line_value,
+                p.p_over::float8 AS p_over
+            FROM nhl.predictions p
+            JOIN nhl.games g
+              ON g.game_id = p.game_id
+            WHERE p.prop = 'shots_on_goal'
+              AND p.line IS NOT NULL
+              AND p.p_over IS NOT NULL
+              AND g.game_date >= %s::date
+              AND g.game_date <= %s::date
+        ),
+        pred_ranked AS (
+            SELECT
+                pb.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY pb.player_id, pb.game_id
+                    ORDER BY ABS(pb.p_over - 0.5) ASC, pb.line_value ASC
+                ) AS line_rank
+            FROM pred_base pb
+        ),
+        obs AS (
+            SELECT
+                pr.player_id,
+                pr.game_id,
+                g.game_date,
+                COALESCE(pl.full_name, pr.player_id::text) AS player_name,
+                COALESCE(ts.team, tp.team) AS team_abbr,
+                pr.line_value,
+                pr.p_over,
+                s.shots_on_goal::float8 AS actual_value,
+                CASE
+                    WHEN s.shots_on_goal >= pr.line_value THEN 'win'
+                    ELSE 'loss'
+                END AS outcome
+            FROM pred_ranked pr
+            JOIN nhl.games g
+              ON g.game_id = pr.game_id
+            JOIN nhl.skater_game_logs_raw s
+              ON s.player_id = pr.player_id
+             AND s.game_id = pr.game_id
+            LEFT JOIN nhl.players pl
+              ON pl.player_id = pr.player_id
+            LEFT JOIN nhl.teams ts
+              ON ts.team_id = s.team_id
+            LEFT JOIN nhl.teams tp
+              ON tp.team_id = pl.current_team_id
+            WHERE pr.line_rank = 1
+              AND s.shots_on_goal IS NOT NULL
+        ),
+        ordered AS (
+            SELECT
+                o.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY o.player_id
+                    ORDER BY o.game_date DESC, o.game_id DESC
+                ) AS rn,
+                FIRST_VALUE(o.outcome) OVER (
+                    PARTITION BY o.player_id
+                    ORDER BY o.game_date DESC, o.game_id DESC
+                ) AS first_outcome
+            FROM obs o
+        ),
+        recent AS (
+            SELECT *
+            FROM ordered
+            WHERE rn <= %s
+        ),
+        streak_marks AS (
+            SELECT
+                r.*,
+                SUM(CASE WHEN r.outcome <> r.first_outcome THEN 1 ELSE 0 END) OVER (
+                    PARTITION BY r.player_id
+                    ORDER BY r.rn
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) AS break_group
+            FROM recent r
+        ),
+        agg AS (
+            SELECT
+                sm.player_id,
+                MAX(sm.player_name) AS player_name,
+                MAX(CASE WHEN sm.rn = 1 THEN sm.team_abbr END) AS team_abbr,
+                MAX(CASE WHEN sm.rn = 1 THEN sm.line_value END) AS line_value,
+                MAX(CASE WHEN sm.rn = 1 THEN sm.actual_value END) AS last_actual_value,
+                MAX(CASE WHEN sm.rn = 1 THEN sm.p_over END) AS latest_p_over,
+                MAX(CASE WHEN sm.rn = 1 THEN sm.game_date END) AS last_game_date,
+                MAX(sm.first_outcome) AS streak_type,
+                SUM(CASE WHEN sm.break_group = 0 THEN 1 ELSE 0 END) AS streak,
+                COUNT(*) AS window_games,
+                SUM(CASE WHEN sm.outcome = 'win' THEN 1 ELSE 0 END) AS window_wins,
+                SUM(CASE WHEN sm.outcome = 'loss' THEN 1 ELSE 0 END) AS window_losses
+            FROM streak_marks sm
+            GROUP BY sm.player_id
+        ),
+        ranked_out AS (
+            SELECT
+                a.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY a.streak_type
+                    ORDER BY
+                        a.streak DESC,
+                        CASE
+                            WHEN a.streak_type = 'win' THEN a.window_wins
+                            ELSE a.window_losses
+                        END DESC,
+                        a.player_name ASC
+                ) AS bucket_rank
+            FROM agg a
+            WHERE a.streak_type IN ('win', 'loss')
+              AND a.streak >= %s
+        )
+        SELECT
+            player_id,
+            player_name,
+            team_abbr,
+            line_value,
+            last_actual_value,
+            latest_p_over,
+            last_game_date,
+            streak_type,
+            streak,
+            window_games,
+            window_wins,
+            window_losses,
+            bucket_rank
+        FROM ranked_out
+        WHERE bucket_rank <= %s
+        ORDER BY streak_type ASC, bucket_rank ASC;
+    """
+    try:
+        rows = pg_fetchall(
+            sql,
+            (from_date, target_date, window_games, min_streak, top_n),
+        )
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    hot = []
+    cold = []
+    for row in rows:
+        if row.get("streak_type") == "win":
+            hot.append(row)
+        elif row.get("streak_type") == "loss":
+            cold.append(row)
+
+    return {
+        "ok": True,
+        "date": str(target_date),
+        "from_date": str(from_date),
+        "window_games": int(window_games),
+        "min_streak": int(min_streak),
+        "top_n": int(top_n),
+        "hot": hot,
+        "cold": cold,
+    }
 
 
 def fetch_players_directory(limit: int, offset: int, include_inactive: bool = False):
