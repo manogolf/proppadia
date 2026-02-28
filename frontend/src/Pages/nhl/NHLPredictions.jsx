@@ -91,13 +91,28 @@ function marketKey(playerId, gameId, line) {
   return `${String(playerId ?? "")}|${String(gameId ?? "")}|${String(line ?? "")}`;
 }
 
+const MAX_EDGE_FAVORITE_PRICE = -350;
+
+function marketPrice(value) {
+  const parsed = num(value);
+  return parsed == null ? null : Math.trunc(parsed);
+}
+
+function isPlayableMarket(market) {
+  const marketProbability = num(market?.marketProbability);
+  const priceOver = marketPrice(market?.priceOver);
+  if (marketProbability == null || priceOver == null) return false;
+  if (priceOver < 0 && priceOver < MAX_EDGE_FAVORITE_PRICE) return false;
+  return true;
+}
+
 function bestEdgeCandidate(rows, marketMap) {
   let best = null;
   for (const row of rows || []) {
     for (const line of extractOverLines(row)) {
       const market = marketMap.get(marketKey(row.player_id, row.game_id, line.line)) || null;
+      if (!isPlayableMarket(market)) continue;
       const marketProbability = num(market?.marketProbability);
-      if (marketProbability == null) continue;
       const edge = line.p - marketProbability;
       if (!best || edge > best.edge) {
         best = { row, bestLine: line, market, edge };
@@ -423,6 +438,50 @@ export default function NHLPredictions() {
 
   const topSogRows = useMemo(() => sortedSog.slice(0, 8), [sortedSog]);
   const topSavesRows = useMemo(() => sortedSaves.slice(0, 8), [sortedSaves]);
+
+  const topPlayableSogRows = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const row of sortedSog) {
+      let bestPlayable = null;
+      for (const line of extractOverLines(row)) {
+        const market = marketMaps.sog.get(marketKey(row.player_id, row.game_id, line.line)) || null;
+        if (!isPlayableMarket(market)) continue;
+        if (!bestPlayable || line.p > bestPlayable.p) {
+          bestPlayable = line;
+        }
+      }
+      if (!bestPlayable) continue;
+      const dedupeKey = `${row.game_id}:${row.player_id}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      out.push({ row, bestLine: bestPlayable });
+      if (out.length >= 8) break;
+    }
+    return out;
+  }, [marketMaps.sog, sortedSog]);
+
+  const topPlayableSavesRows = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const row of sortedSaves) {
+      let bestPlayable = null;
+      for (const line of extractOverLines(row)) {
+        const market = marketMaps.saves.get(marketKey(row.player_id, row.game_id, line.line)) || null;
+        if (!isPlayableMarket(market)) continue;
+        if (!bestPlayable || line.p > bestPlayable.p) {
+          bestPlayable = line;
+        }
+      }
+      if (!bestPlayable) continue;
+      const dedupeKey = `${row.game_id}:${row.player_id}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      out.push({ row, bestLine: bestPlayable });
+      if (out.length >= 8) break;
+    }
+    return out;
+  }, [marketMaps.saves, sortedSaves]);
 
   const topSogCandidate = useMemo(
     () => bestEdgeCandidate(sortedSog, marketMaps.sog),
@@ -932,11 +991,10 @@ export default function NHLPredictions() {
             <section className="pp-card p-4">
               <div className="flex items-baseline justify-between mb-3">
                 <h3 className="text-lg font-semibold text-slate-900">Top SOG Edges</h3>
-                <div className="text-sm text-slate-500">Top {topSogRows.length}</div>
+                <div className="text-sm text-slate-500">Top {topPlayableSogRows.length}</div>
               </div>
               <div className="space-y-2">
-                {topSogRows.map((r) => {
-                  const best = bestLineFromRow(r);
+                {topPlayableSogRows.map(({ row: r, bestLine: best }) => {
                   return (
                     <div
                       key={`top-sog-${r.game_id}-${r.player_id}`}
@@ -958,11 +1016,10 @@ export default function NHLPredictions() {
             <section className="pp-card p-4">
               <div className="flex items-baseline justify-between mb-3">
                 <h3 className="text-lg font-semibold text-slate-900">Top Saves Edges</h3>
-                <div className="text-sm text-slate-500">Top {topSavesRows.length}</div>
+                <div className="text-sm text-slate-500">Top {topPlayableSavesRows.length}</div>
               </div>
               <div className="space-y-2">
-                {topSavesRows.map((r) => {
-                  const best = bestLineFromRow(r);
+                {topPlayableSavesRows.map(({ row: r, bestLine: best }) => {
                   return (
                     <div
                       key={`top-saves-${r.game_id}-${r.player_id}`}
