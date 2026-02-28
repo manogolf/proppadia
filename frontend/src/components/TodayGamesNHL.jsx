@@ -90,6 +90,17 @@ function getClockLabelFromLanding(landing) {
   return null;
 }
 
+function formatRecord(team) {
+  if (!team) return "Record: N/A";
+  const wins = team.wins;
+  const losses = team.losses;
+  const otLosses = team.otLosses ?? team.otl ?? team.otlLosses;
+  if (wins == null || losses == null) return "Record: N/A";
+  return otLosses != null
+    ? `Record: ${wins}-${losses}-${otLosses}`
+    : `Record: ${wins}-${losses}`;
+}
+
 export default function TodayGamesNHL({ games = [], selectedDate = null }) {
   const targetDate = useMemo(
     () => String(selectedDate || "").trim() || todayET(),
@@ -108,6 +119,8 @@ export default function TodayGamesNHL({ games = [], selectedDate = null }) {
 
   // game_id -> { ok, data }
   const [liveDetails, setLiveDetails] = useState({});
+  const [standings, setStandings] = useState([]);
+  const [projectedGoalies, setProjectedGoalies] = useState([]);
 
   // Fetch landing for ALL games on slate (small list, avoids DB status mismatch)
   useEffect(() => {
@@ -149,12 +162,67 @@ export default function TodayGamesNHL({ games = [], selectedDate = null }) {
     };
   }, [sorted]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSupportData() {
+      try {
+        const [standingsRes, goaliesRes] = await Promise.all([
+          fetch(
+            `${getBaseURL()}/api/nhl/standings?date=${encodeURIComponent(targetDate)}`
+          ),
+          fetch(
+            `${getBaseURL()}/api/nhl/goalies/projected?date=${encodeURIComponent(targetDate)}&limit=100`
+          ),
+        ]);
+
+        const standingsJson = await standingsRes.json().catch(() => ({}));
+        const goaliesJson = await goaliesRes.json().catch(() => ({}));
+
+        if (cancelled) return;
+
+        setStandings(Array.isArray(standingsJson?.standings) ? standingsJson.standings : []);
+        setProjectedGoalies(Array.isArray(goaliesJson?.rows) ? goaliesJson.rows : []);
+      } catch (e) {
+        console.error("NHL support data fetch failed:", e);
+      }
+    }
+
+    loadSupportData();
+    return () => {
+      cancelled = true;
+    };
+  }, [targetDate]);
+
   // Force re-render so countdown ticks even if no state changes
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000);
     return () => clearInterval(id);
   }, []);
+
+  const standingsByAbbr = useMemo(() => {
+    const map = new Map();
+    for (const row of standings) {
+      const abbr =
+        row?.teamAbbrev?.default ||
+        row?.teamAbbrev ||
+        row?.teamCommonName?.default ||
+        row?.teamName?.default ||
+        null;
+      if (abbr) map.set(String(abbr).toUpperCase(), row);
+    }
+    return map;
+  }, [standings]);
+
+  const projectedGoalieByTeamGame = useMemo(() => {
+    const map = new Map();
+    for (const row of projectedGoalies) {
+      const key = `${row.game_id}::${row.team_id}`;
+      map.set(key, row);
+    }
+    return map;
+  }, [projectedGoalies]);
 
   return (
     <section className="w-full pp-card p-4">
@@ -197,6 +265,10 @@ export default function TodayGamesNHL({ games = [], selectedDate = null }) {
             // Prefer NHL-provided SVG logos, fallback to ESPN PNG
             const awayLogoSrc = landing?.awayTeam?.logo || fallbackAwayLogo;
             const homeLogoSrc = landing?.homeTeam?.logo || fallbackHomeLogo;
+            const awayRecord = formatRecord(standingsByAbbr.get(String(away || "").toUpperCase()));
+            const homeRecord = formatRecord(standingsByAbbr.get(String(home || "").toUpperCase()));
+            const awayGoalie = projectedGoalieByTeamGame.get(`${g.game_id}::${g.away_team_id}`);
+            const homeGoalie = projectedGoalieByTeamGame.get(`${g.game_id}::${g.home_team_id}`);
 
             return (
               <li
@@ -204,18 +276,22 @@ export default function TodayGamesNHL({ games = [], selectedDate = null }) {
                 className="pp-chip grid grid-cols-[1fr_auto_1fr] items-center gap-4 p-4 rounded-lg max-w-5xl mx-auto"
               >
                 {/* Away */}
-                <div className="flex flex-col items-start gap-2 max-w-[160px]">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col items-start gap-2 max-w-[240px]">
+                  <div className="flex items-center gap-3">
                     {awayLogoSrc ? (
                       <img
                         src={awayLogoSrc}
                         alt={away}
-                        className="w-10 h-10 object-contain shrink-0"
+                        className="w-20 h-20 object-contain shrink-0"
                       />
                     ) : null}
-                    <span className="text-sm font-medium text-slate-800 break-words">
+                    <span className="text-3xl font-bold tracking-tight text-slate-900 break-words">
                       {away}
                     </span>
+                  </div>
+                  <div className="text-sm text-slate-500">{awayRecord}</div>
+                  <div className="text-sm text-slate-500">
+                    Projected G: {awayGoalie?.goalie_name || "TBD"}
                   </div>
                 </div>
 
@@ -243,18 +319,22 @@ export default function TodayGamesNHL({ games = [], selectedDate = null }) {
                 </div>
 
                 {/* Home */}
-                <div className="flex flex-col items-end gap-2 text-right ml-auto max-w-[160px]">
-                  <div className="flex items-center gap-2 justify-end">
-                    <span className="text-sm font-medium text-slate-800 break-words">
+                <div className="flex flex-col items-end gap-2 text-right ml-auto max-w-[240px]">
+                  <div className="flex items-center gap-3 justify-end">
+                    <span className="text-3xl font-bold tracking-tight text-slate-900 break-words">
                       {home}
                     </span>
                     {homeLogoSrc ? (
                       <img
                         src={homeLogoSrc}
                         alt={home}
-                        className="w-10 h-10 object-contain shrink-0"
+                        className="w-20 h-20 object-contain shrink-0"
                       />
                     ) : null}
+                  </div>
+                  <div className="text-sm text-slate-500">{homeRecord}</div>
+                  <div className="text-sm text-slate-500">
+                    Projected G: {homeGoalie?.goalie_name || "TBD"}
                   </div>
                 </div>
               </li>

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from zoneinfo import ZoneInfo
 
 from backend.shared.db import pg_fetchall, pg_fetchone
+from backend.domains.nhl.repository.prop_repository import ensure_user_props_table
 
 ET = ZoneInfo("America/New_York")
 _PLAYER_PROPS_COLUMNS_CACHE: Optional[set[str]] = None
@@ -14,14 +15,15 @@ _PLAYER_PROPS_COLUMNS_CACHE: Optional[set[str]] = None
 
 def _player_props_columns() -> set[str]:
     global _PLAYER_PROPS_COLUMNS_CACHE
+    ensure_user_props_table()
     if _PLAYER_PROPS_COLUMNS_CACHE is not None:
         return _PLAYER_PROPS_COLUMNS_CACHE
     rows = pg_fetchall(
         """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema='mlb'
-          AND table_name='player_props'
+        WHERE table_schema='nhl'
+          AND table_name='user_props'
         """
     )
     _PLAYER_PROPS_COLUMNS_CACHE = {str(r.get("column_name") or "").strip() for r in rows}
@@ -96,7 +98,7 @@ def resolve_nhl_pending_props(
           COUNT(*)::int AS pending_count,
           MIN(game_date)::text AS min_game_date,
           MAX(game_date)::text AS max_game_date
-        FROM mlb.player_props
+        FROM nhl.user_props
         WHERE {where_sql}
     """
     preview = pg_fetchone(preview_sql, tuple(params)) or {}
@@ -128,11 +130,11 @@ def resolve_nhl_pending_props(
     update_sql = f"""
         WITH targets AS (
             SELECT id
-            FROM mlb.player_props
+            FROM nhl.user_props
             WHERE {where_sql}
         ),
         updated AS (
-            UPDATE mlb.player_props p
+            UPDATE nhl.user_props p
             SET {", ".join(set_clauses)}
             WHERE p.id IN (SELECT id FROM targets)
             RETURNING p.id

@@ -1,6 +1,6 @@
 // PlayerProfileDashboard.js
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import { getPropDisplayLabel } from "../shared/propUtils.js";
@@ -8,15 +8,35 @@ import { getBaseURL } from "../shared/getBaseURL.js";
 
 export default function PlayerProfileDashboard() {
   const { playerId } = useParams();
+  const location = useLocation();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const routedPlayerName = String(location.state?.player_name || "").trim();
+  const routedTeam = String(location.state?.team || "").trim();
+  const routedSport = String(location.state?.sport || "").trim().toLowerCase();
+  const profileSport = location.pathname.startsWith("/nhl/")
+    ? "nhl"
+    : location.pathname.startsWith("/mlb/")
+      ? "mlb"
+      : routedSport === "nhl"
+        ? "nhl"
+        : "mlb";
+  const profilePlayerName = String(profileData?.player_info?.player_name || "").trim();
+  const profileTeam = String(profileData?.player_info?.team || "").trim();
+  const displayPlayerName = routedPlayerName || profilePlayerName || "";
+  const displayTeam = routedTeam || profileTeam || "";
 
   useEffect(() => {
     async function fetchProfile() {
       try {
         setError("");
-        const res = await fetch(`${getBaseURL()}/api/player-profile/${playerId}`);
+        const endpoint =
+          profileSport === "nhl"
+            ? `${getBaseURL()}/api/nhl/player-profile/${playerId}`
+            : `${getBaseURL()}/api/player-profile/${playerId}`;
+        const res = await fetch(endpoint);
         if (!res.ok) {
           const txt = await res.text();
           throw new Error(`${res.status}: ${txt}`);
@@ -31,7 +51,7 @@ export default function PlayerProfileDashboard() {
       }
     }
     fetchProfile();
-  }, [playerId]);
+  }, [playerId, profileSport]);
 
   if (loading) {
     return (
@@ -88,9 +108,14 @@ export default function PlayerProfileDashboard() {
     <div className="min-h-screen pp-page p-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <div>
+          {displayPlayerName ? (
+            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 mb-1">
+              {displayPlayerName}
+              {displayTeam ? ` · ${displayTeam}` : ""}
+            </div>
+          ) : null}
           <h1 className="text-2xl font-bold text-slate-900">
-            Player Profile: {profileData?.player_info?.player_name || playerId}
-            {profileData?.player_info?.team ? ` (${profileData.player_info.team})` : ""}
+            Player Profile: {playerId}
           </h1>
           <div className="text-sm text-slate-600 mt-1">
             Data freshness:{" "}

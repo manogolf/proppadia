@@ -163,6 +163,53 @@ def upsert_players_from_stage(cur) -> None:
     with open(UPsertPlayersSQL, "r") as f:
         cur.execute(f.read())
 
+def roster_status_has_column(cur, column_name: str) -> bool:
+    cur.execute(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'nhl'
+            AND table_name = 'roster_status'
+            AND column_name = %s
+        ) AS has_col
+        """,
+        (column_name,),
+    )
+    row = cur.fetchone()
+    return bool(row["has_col"] if isinstance(row, dict) else row[0])
+
+
+def _roster_status_upsert_parts(*, has_line_role: bool, has_pp_unit: bool, source_alias: str) -> tuple[str, str, str]:
+    """
+    Build INSERT cols / SELECT cols / UPDATE SET fragments for nhl.roster_status
+    while tolerating optional columns on older DB schemas.
+    """
+    insert_cols = ["game_id", "team_id", "player_id", "active_flag"]
+    select_cols = [
+        f"{source_alias}.game_id",
+        f"{source_alias}.team_id",
+        f"{source_alias}.player_id",
+        f"{source_alias}.active_flag",
+    ]
+    update_set = ["active_flag = EXCLUDED.active_flag"]
+
+    if has_line_role:
+        insert_cols.append("line_role")
+        select_cols.append(f"{source_alias}.line_role")
+        update_set.append("line_role = COALESCE(EXCLUDED.line_role, nhl.roster_status.line_role)")
+
+    if has_pp_unit:
+        insert_cols.append("pp_unit")
+        select_cols.append(f"{source_alias}.pp_unit")
+        update_set.append("pp_unit = EXCLUDED.pp_unit")
+
+    insert_cols.append("asof_ts")
+    select_cols.append("now()")
+    update_set.append("asof_ts = now()")
+
+    return ", ".join(insert_cols), ", ".join(select_cols), ",\n              ".join(update_set)
+
 def merge_roster_status_from_temp(cur, slate_date: str):
     """
     Merge roster rows either from tmp_import_roster (if present) or,
@@ -177,10 +224,18 @@ def merge_roster_status_from_temp(cur, slate_date: str):
     row = cur.fetchone()
     has_tmp = bool(row["has_tmp"] if isinstance(row, dict) else row[0])
 
+    has_line_role = roster_status_has_column(cur, "line_role")
+    has_pp_unit = roster_status_has_column(cur, "pp_unit")
+
     if has_tmp:
         # NOTE: tmp_import_roster has (game_date, team_id, player_id, active_flag, pp_unit).
         # Resolve the target game_id from date+team, then enforce player FK.
-        cur.execute("""
+        insert_cols, select_cols, update_set = _roster_status_upsert_parts(
+            has_line_role=has_line_role,
+            has_pp_unit=has_pp_unit,
+            source_alias="s",
+        )
+        cur.execute(f"""
         WITH src AS (
           SELECT DISTINCT
             g.game_id,
@@ -201,20 +256,22 @@ def merge_roster_status_from_temp(cur, slate_date: str):
           JOIN nhl.players p ON p.player_id = s.player_id  -- FK guard
         )
         INSERT INTO nhl.roster_status (
-          game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts
+          {insert_cols}
         )
         SELECT
-          s.game_id, s.team_id, s.player_id, s.active_flag, s.line_role, s.pp_unit, now()
+          {select_cols}
         FROM src_checked s
         ON CONFLICT (game_id, team_id, player_id)
         DO UPDATE
-          SET active_flag = EXCLUDED.active_flag,
-              line_role   = COALESCE(EXCLUDED.line_role, nhl.roster_status.line_role),
-              pp_unit     = EXCLUDED.pp_unit,
-              asof_ts     = now();
+          SET {update_set};
         """, (slate_date,))
     else:
-        cur.execute("""
+        insert_cols, select_cols, update_set = _roster_status_upsert_parts(
+            has_line_role=has_line_role,
+            has_pp_unit=has_pp_unit,
+            source_alias="sc",
+        )
+        cur.execute(f"""
         WITH f AS (
           SELECT game_id, team_id, player_id
             FROM nhl.v_slate_sog_features   WHERE game_date = %s::date
@@ -228,15 +285,14 @@ def merge_roster_status_from_temp(cur, slate_date: str):
           JOIN nhl.players p ON p.player_id = f.player_id  -- FK guard
         )
         INSERT INTO nhl.roster_status (
-          game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts
+          {insert_cols}
         )
         SELECT
-          sc.game_id, sc.team_id, sc.player_id, TRUE, NULL::text, 'None', now()
+          {select_cols}
         FROM src_checked sc
         ON CONFLICT (game_id, team_id, player_id)
         DO UPDATE
-          SET active_flag = TRUE,
-              asof_ts     = now();
+          SET {update_set};
         """, (slate_date, slate_date))
 
 def ensure_players_exist(cur, player_ids: list[int]) -> None:
@@ -288,7 +344,14 @@ def _dedupe_roster_rows(rows: list[dict]) -> list[dict]:
 
 def upsert_roster_status_from_features(cur, slate_date: str) -> None:
     """Offline UPSERT directly from feature views (no temp table), FK-safe."""
-    cur.execute("""
+    has_line_role = roster_status_has_column(cur, "line_role")
+    has_pp_unit = roster_status_has_column(cur, "pp_unit")
+    insert_cols, select_cols, update_set = _roster_status_upsert_parts(
+        has_line_role=has_line_role,
+        has_pp_unit=has_pp_unit,
+        source_alias="sc",
+    )
+    cur.execute(f"""
     WITH f AS (
       SELECT game_id, team_id, player_id
         FROM nhl.v_slate_sog_features   WHERE game_date = %s
@@ -302,15 +365,14 @@ def upsert_roster_status_from_features(cur, slate_date: str) -> None:
       JOIN nhl.players p ON p.player_id = f.player_id  -- FK guard
     )
     INSERT INTO nhl.roster_status (
-      game_id, team_id, player_id, active_flag, line_role, pp_unit, asof_ts
+      {insert_cols}
     )
     SELECT
-      sc.game_id, sc.team_id, sc.player_id, TRUE, NULL::text, 'None', now()
+      {select_cols}
     FROM src_checked sc
     ON CONFLICT (game_id, team_id, player_id)
     DO UPDATE SET
-      active_flag = TRUE,
-      asof_ts     = now();
+      {update_set};
     """, (slate_date, slate_date))
 
 def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:

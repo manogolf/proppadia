@@ -122,7 +122,7 @@ def render_metrics(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
-@router.post("/nhl/resolve-props", summary="Ops: resolve NHL pending props in player_props")
+@router.post("/nhl/resolve-props", summary="Ops: resolve NHL pending props in nhl.user_props")
 def resolve_nhl_props(
     body: NhlResolveRequest,
     x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),

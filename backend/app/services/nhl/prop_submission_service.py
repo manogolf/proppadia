@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from backend.domains.mlb.repository.prop_repository import (
+from backend.domains.nhl.repository.prop_repository import (
     DuplicatePropError,
     count_prop_history_rows,
     fetch_prop_history_rows,

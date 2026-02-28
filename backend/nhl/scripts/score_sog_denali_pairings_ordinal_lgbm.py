@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import joblib
@@ -157,7 +158,16 @@ def _quick_feature_sanity_check(df: pd.DataFrame, feats: list[str], *, in_path: 
     # 3) Hard fail if the model-required “dead columns” pattern appears.
     #    This catches the exact thing you just discovered in the 22,658-row training CSV.
     #    If the model expects num_sog_* but those are all-null/all-zero, stop now.
+    # Some required features are legitimately constant on a given slate.
+    # Example: first slate after a long break can produce b2b_flag=0 for everyone.
+    allow_constant_required = {
+        "b2b_flag",
+        "d10_pairings_available",
+        "d20_pairings_available",
+    }
+
     dead = []
+    constant_allowed = []
     for c in feats:
         if c not in df.columns:
             continue
@@ -165,8 +175,22 @@ def _quick_feature_sanity_check(df: pd.DataFrame, feats: list[str], *, in_path: 
         nonnull = float(s.notna().mean())
         nunique = int(s.dropna().nunique())
         gt0 = float((s.fillna(0) > 0).mean())
-        if nonnull == 0.0 or nunique <= 1:
+        if nonnull == 0.0:
             dead.append((c, nonnull, gt0, nunique))
+            continue
+        if nunique <= 1:
+            if c in allow_constant_required:
+                constant_allowed.append((c, nonnull, gt0, nunique))
+            else:
+                dead.append((c, nonnull, gt0, nunique))
+
+    if constant_allowed:
+        sample_ok = constant_allowed[:10]
+        msg_ok = " | ".join([f"{c}:nonnull={nn:.3f} gt0={g0:.3f} nunique={nu}" for c, nn, g0, nu in sample_ok])
+        print(
+            f"[sanity] allowed constant required feature cols ({len(constant_allowed)}): {msg_ok}",
+            file=sys.stderr,
+        )
 
     # Don’t print 200 columns; just the first few to prove the point.
     if dead:

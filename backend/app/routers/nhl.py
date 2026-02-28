@@ -14,14 +14,16 @@ from backend.app.schemas.nhl import (
     NhlErrorResponse,
     NhlGamecenterLandingResponse,
     NhlPingResponse,
+    NhlPlayerProfileResponse,
     NhlPropHistoryResponse,
 )
-from backend.app.services.nhl import fetch_gamecenter_landing
+from backend.app.services.nhl import fetch_gamecenter_landing, get_standings, player_profile
 from backend.app.services.nhl.slate_meta_service import get_nhl_slate_meta
 from backend.app.services.nhl.prop_submission_service import add_prop, get_prop_history
 from backend.app.services.shared import ping_db, sport_ping
 from backend.domains.nhl.repository import (
     fetch_games_today,
+    fetch_projected_goalies,
     fetch_players_directory,
     fetch_props_today,
     fetch_saves,
@@ -51,6 +53,16 @@ def ping_nhl():
 @router.get("/ping-db", summary="Nhl Ping Db", response_model=NhlDbPingResponse)
 def nhl_ping_db():
     return ping_db()
+
+
+@router.get("/standings", summary="NHL standings proxy (backend-owned)")
+def nhl_standings(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to now)"),
+):
+    try:
+        return get_standings(as_of=(date or "now"), allow_stale_on_error=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.get(
@@ -115,6 +127,21 @@ def nhl_players_directory(
     return fetch_players_directory(limit, offset, include_inactive)
 
 
+@router.get(
+    "/player-profile/{player_id}",
+    summary="NHL player profile",
+    response_model=NhlPlayerProfileResponse,
+    response_model_exclude_none=True,
+)
+def nhl_player_profile(player_id: int):
+    try:
+        return player_profile(player_id=player_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
 # --- SOG (wide) ---
 @router.get("/sog", summary="Skater SOG predictions (wide)", response_model=Union[List[Dict[str, Any]], NhlErrorResponse])
 def sog(
@@ -152,6 +179,18 @@ def saves(
     offset: int = Query(0, ge=0),
 ):
     return fetch_saves(date, limit, offset)
+
+
+@router.get(
+    "/goalies/projected",
+    summary="Projected NHL goalies for a slate",
+    description="Returns the top start_prob goalie per team from training_features_goalie_saves_v2.",
+)
+def projected_goalies(
+    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    return fetch_projected_goalies(date, limit)
 
 
 @router.post(

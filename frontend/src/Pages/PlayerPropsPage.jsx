@@ -211,7 +211,12 @@ export default function PlayerPropsPage() {
                     {currentPlayerWatched ? "Watching" : "+ Watch"}
                   </button>
                   <PrefetchLink
-                    to={`/player/${encodeURIComponent(String(latestPrediction.features.player_id))}`}
+                    to={`/mlb/players/${encodeURIComponent(String(latestPrediction.features.player_id))}`}
+                    state={{
+                      sport: "mlb",
+                      player_name: latestPrediction.features.player_name || null,
+                      team: latestPrediction.features.team_abbr || latestPrediction.features.team || null,
+                    }}
                     className="text-xs text-slate-500 underline"
                   >
                     Open Player

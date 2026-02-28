@@ -7,6 +7,8 @@ import { normalizeHttpErrorMessage } from "../../shared/httpErrorMessage.js";
 import { getPropDisplayLabel } from "../../shared/propUtils.js";
 import { nowET, todayET } from "../../shared/timeUtils.js";
 import {
+  normalizeWatchlistRows,
+  WATCHLIST_UPDATED_EVENT,
   readWatchlistScope,
   toWatchlistId,
   writeWatchlistScope,
@@ -122,7 +124,7 @@ export default function MyPropsPanel({
     }
   }, [location.search]);
 
-  useEffect(() => {
+  const refreshWatchlistRows = useCallback(() => {
     if (!user?.id) {
       setWatchlist([]);
       return;
@@ -130,10 +132,39 @@ export default function MyPropsPanel({
     setWatchlist(readWatchlistScope(user.id, apiPath));
   }, [apiPath, user?.id]);
 
+  const commitWatchlist = useCallback(
+    (updater) => {
+      if (!user?.id) return;
+      setWatchlist((prev) => {
+        const nextRaw = typeof updater === "function" ? updater(prev) : updater;
+        const next = normalizeWatchlistRows(nextRaw);
+        writeWatchlistScope(user.id, apiPath, next);
+        return next;
+      });
+    },
+    [apiPath, user?.id]
+  );
+
   useEffect(() => {
-    if (!user?.id) return;
-    writeWatchlistScope(user.id, apiPath, watchlist);
-  }, [apiPath, user?.id, watchlist]);
+    refreshWatchlistRows();
+  }, [refreshWatchlistRows]);
+
+  useEffect(() => {
+    function onStorage(e) {
+      if (e?.key && String(e.key).startsWith("proppadia_watchlist_v1:")) {
+        refreshWatchlistRows();
+      }
+    }
+    function onWatchlistUpdated() {
+      refreshWatchlistRows();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    };
+  }, [refreshWatchlistRows]);
 
   const watchIdSet = useMemo(
     () => new Set(watchlist.map((w) => String(w.id))),
@@ -493,7 +524,7 @@ export default function MyPropsPanel({
     if (!selectedRow) return;
     const id = toWatchlistId(selectedRow);
     if (!id) return;
-    setWatchlist((prev) => {
+    commitWatchlist((prev) => {
       if (prev.some((w) => String(w.id) === id)) return prev;
       const item = {
         id,
@@ -502,23 +533,23 @@ export default function MyPropsPanel({
         team: selectedRow.team || null,
         added_at: new Date().toISOString(),
       };
-      return [item, ...prev].slice(0, 100);
+      return [item, ...prev];
     });
     setNotice("Player added to watchlist.");
     setError("");
-  }, [selectedRow]);
+  }, [commitWatchlist, selectedRow]);
 
   const removeSelectedFromWatchlist = useCallback(() => {
     if (!selectedRow) return;
     const id = toWatchlistId(selectedRow);
-    setWatchlist((prev) => prev.filter((w) => String(w.id) !== id));
+    commitWatchlist((prev) => prev.filter((w) => String(w.id) !== id));
     setNotice("Player removed from watchlist.");
     setError("");
-  }, [selectedRow]);
+  }, [commitWatchlist, selectedRow]);
 
   const removeWatchItem = useCallback((id) => {
-    setWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
-  }, []);
+    commitWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
+  }, [commitWatchlist]);
 
   const toggleTopPlayerWatch = useCallback(
     (playerName) => {
@@ -534,7 +565,7 @@ export default function MyPropsPanel({
       const id = toWatchlistId(match);
       if (!id) return;
       const exists = watchIdSet.has(id);
-      setWatchlist((prev) => {
+      commitWatchlist((prev) => {
         if (exists) {
           return prev.filter((w) => String(w.id) !== id);
         }
@@ -545,12 +576,12 @@ export default function MyPropsPanel({
           team: match.team || null,
           added_at: new Date().toISOString(),
         };
-        return [item, ...prev].slice(0, 100);
+        return [item, ...prev];
       });
       setNotice(exists ? "Player removed from watchlist." : "Player added to watchlist.");
       setError("");
     },
-    [sortedRows, watchIdSet]
+    [commitWatchlist, sortedRows, watchIdSet]
   );
 
   const topPlayerWatchState = useMemo(() => {
@@ -606,10 +637,10 @@ export default function MyPropsPanel({
           added_at: w?.added_at || new Date().toISOString(),
         }))
         .filter((w) => w.id);
-      setWatchlist((prev) => {
-        const byId = new Map(prev.map((w) => [String(w.id), w]));
+      commitWatchlist((prev) => {
+        const byId = new Map(normalizeWatchlistRows(prev).map((w) => [String(w.id), w]));
         for (const row of normalized) byId.set(String(row.id), row);
-        return Array.from(byId.values()).slice(0, 100);
+        return Array.from(byId.values());
       });
       setNotice(`Imported ${normalized.length} watchlist rows.`);
       setError("");
@@ -618,7 +649,7 @@ export default function MyPropsPanel({
     } finally {
       if (e?.target) e.target.value = "";
     }
-  }, []);
+  }, [commitWatchlist]);
 
   const applyDatePreset = useCallback(
     (preset) => {

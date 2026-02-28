@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from backend.app.services.nhl.prop_submission_service import add_prop
-from backend.domains.mlb.repository.prop_repository import DuplicatePropError
+from backend.domains.nhl.repository.prop_repository import DuplicatePropError
 
 
 class TestNhlPropSubmissionService(unittest.TestCase):

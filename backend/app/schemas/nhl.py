@@ -91,3 +91,20 @@ class NhlPropHistoryResponse(BaseModel):
     limit: int
     offset: int
     rows: List[NhlPropHistoryRow]
+
+
+class NhlPlayerProfileInfo(BaseModel):
+    player_id: Optional[int] = None
+    player_name: Optional[str] = None
+    team: Optional[str] = None
+    team_id: Optional[int] = None
+
+
+class NhlPlayerProfileResponse(BaseModel):
+    player_info: NhlPlayerProfileInfo
+    streaks: List[Dict[str, Any]]
+    recent_props: List[Dict[str, Any]]
+    stat_derived: List[Dict[str, Any]]
+    training_summary: List[Dict[str, Any]]
+    season_stats: Dict[str, Any]
+    career_stats: Dict[str, Any]

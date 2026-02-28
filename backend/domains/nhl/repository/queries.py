@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
-from backend.shared.db import pg_fetchall
+from backend.shared.db import pg_fetchall, pg_fetchone
+from .prop_repository import ensure_user_props_table
 
 
 def _resolve_target_date(date: Optional[str]):
@@ -186,6 +187,50 @@ def fetch_saves(date: Optional[str], limit: int, offset: int):
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+def fetch_projected_goalies(date: Optional[str], limit: int = 100) -> Dict[str, Any]:
+    target_date, err = _resolve_target_date(date)
+    if err:
+        return {"ok": False, "error": err}
+
+    sql = """
+        WITH ranked AS (
+            SELECT
+                tf.game_id,
+                tf.team_id,
+                t.team AS team_abbr,
+                COALESCE(p.full_name, tf.player_id::text) AS goalie_name,
+                tf.start_prob,
+                ROW_NUMBER() OVER (
+                    PARTITION BY tf.game_id, tf.team_id
+                    ORDER BY tf.start_prob DESC NULLS LAST, COALESCE(p.full_name, tf.player_id::text)
+                ) AS rn
+            FROM nhl.training_features_goalie_saves_v2 tf
+            JOIN nhl.games g
+              ON g.game_id = tf.game_id
+            LEFT JOIN nhl.players p
+              ON p.player_id = tf.player_id
+            LEFT JOIN nhl.teams t
+              ON t.team_id = tf.team_id
+            WHERE g.game_date = %s::date
+        )
+        SELECT
+            game_id,
+            team_id,
+            team_abbr,
+            goalie_name,
+            start_prob
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY game_id, team_abbr NULLS LAST
+        LIMIT %s
+    """
+    try:
+        rows = pg_fetchall(sql, (target_date, limit))
+        return {"ok": True, "date": str(target_date), "count": len(rows), "rows": rows}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 def fetch_sog_streaks(
     date: Optional[str],
     lookback_days: int,
@@ -362,6 +407,7 @@ def fetch_sog_streaks(
 
 
 def fetch_players_directory(limit: int, offset: int, include_inactive: bool = False):
+    ensure_user_props_table()
     sql = """
     WITH latest_team AS (
       SELECT DISTINCT ON (rs.player_id)
@@ -374,8 +420,7 @@ def fetch_players_directory(limit: int, offset: int, include_inactive: bool = Fa
       SELECT
         pp.player_id,
         MAX(pp.game_date)::date AS last_prop_date
-      FROM mlb.player_props pp
-      WHERE pp.prop_source LIKE 'nhl_%'
+      FROM nhl.user_props pp
       GROUP BY pp.player_id
     )
     SELECT
@@ -404,3 +449,224 @@ def fetch_players_directory(limit: int, offset: int, include_inactive: bool = Fa
         return pg_fetchall(sql, (include_inactive, limit, offset))
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def _isoish(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def fetch_player_profile(player_id: int) -> Dict[str, Any]:
+    info_sql = """
+        WITH latest_team AS (
+          SELECT DISTINCT ON (rs.player_id)
+            rs.player_id,
+            rs.team_id
+          FROM nhl.roster_status rs
+          WHERE rs.player_id = %s
+          ORDER BY rs.player_id, rs.asof_ts DESC
+        )
+        SELECT
+          p.player_id,
+          p.full_name AS player_name,
+          COALESCE(t.team, 'Unknown') AS team,
+          COALESCE(p.current_team_id, lt.team_id) AS team_id
+        FROM nhl.players p
+        LEFT JOIN latest_team lt
+          ON lt.player_id = p.player_id
+        LEFT JOIN nhl.teams t
+          ON t.team_id = COALESCE(p.current_team_id, lt.team_id)
+        WHERE p.player_id = %s
+        LIMIT 1
+    """
+
+    recent_props_sql = """
+        WITH pred_base AS (
+          SELECT
+            p.player_id,
+            p.game_id,
+            g.game_date,
+            p.prop AS prop_type,
+            p.line::float8 AS prop_value,
+            p.p_over::float8 AS confidence_score,
+            ROW_NUMBER() OVER (
+              PARTITION BY p.player_id, p.game_id, p.prop
+              ORDER BY ABS(COALESCE(p.p_over, 0.5) - 0.5) ASC, p.line::float8 ASC
+            ) AS rn
+          FROM nhl.predictions p
+          JOIN nhl.games g
+            ON g.game_id = p.game_id
+          WHERE p.player_id = %s
+            AND p.prop IN ('shots_on_goal', 'goalie_saves', 'points')
+            AND p.line IS NOT NULL
+        ),
+        picked AS (
+          SELECT
+            player_id,
+            game_id,
+            game_date,
+            prop_type,
+            prop_value,
+            confidence_score
+          FROM pred_base
+          WHERE rn = 1
+        )
+        SELECT
+          pk.game_date,
+          pk.prop_type,
+          CASE
+            WHEN pk.prop_type = 'shots_on_goal' THEN sgr.shots_on_goal::float8
+            WHEN pk.prop_type = 'goalie_saves' THEN ggr.saves::float8
+            ELSE NULL
+          END AS result,
+          CASE
+            WHEN pk.prop_type = 'shots_on_goal' AND sgr.shots_on_goal IS NOT NULL THEN
+              CASE
+                WHEN sgr.shots_on_goal::float8 > pk.prop_value THEN 'win'
+                WHEN sgr.shots_on_goal::float8 = pk.prop_value THEN 'push'
+                ELSE 'loss'
+              END
+            WHEN pk.prop_type = 'goalie_saves' AND ggr.saves IS NOT NULL THEN
+              CASE
+                WHEN ggr.saves::float8 > pk.prop_value THEN 'win'
+                WHEN ggr.saves::float8 = pk.prop_value THEN 'push'
+                ELSE 'loss'
+              END
+            ELSE NULL
+          END AS outcome,
+          'over'::text AS over_under,
+          pk.prop_value,
+          pk.confidence_score
+        FROM picked pk
+        LEFT JOIN nhl.skater_game_logs_raw sgr
+          ON sgr.player_id = pk.player_id
+         AND sgr.game_id = pk.game_id
+        LEFT JOIN nhl.goalie_game_logs_raw ggr
+          ON ggr.player_id = pk.player_id
+         AND ggr.game_id = pk.game_id
+        ORDER BY pk.game_date DESC NULLS LAST, pk.prop_type ASC
+        LIMIT 20
+    """
+
+    stat_derived_sql = """
+        WITH actuals AS (
+          SELECT
+            l.game_date,
+            'shots_on_goal'::text AS prop_type,
+            l.shots_on_goal::float8 AS result,
+            NULL::text AS outcome
+          FROM nhl.skater_game_logs_raw l
+          WHERE l.player_id = %s
+          UNION ALL
+          SELECT
+            l.game_date,
+            'goalie_saves'::text AS prop_type,
+            l.saves::float8 AS result,
+            NULL::text AS outcome
+          FROM nhl.goalie_game_logs_raw l
+          WHERE l.player_id = %s
+        )
+        SELECT game_date, prop_type, result, outcome
+        FROM actuals
+        ORDER BY game_date DESC NULLS LAST, prop_type ASC
+        LIMIT 20
+    """
+
+    training_summary_sql = """
+        SELECT
+          p.prop AS prop_type,
+          COUNT(*)::int AS count
+        FROM nhl.predictions p
+        WHERE p.player_id = %s
+        GROUP BY p.prop
+        ORDER BY count DESC, p.prop ASC
+        LIMIT 20
+    """
+
+    try:
+      info = pg_fetchone(info_sql, (player_id, player_id)) or {"player_id": player_id}
+    except Exception:
+      info = {"player_id": player_id}
+
+    def run_or_empty(sql: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
+        try:
+            return pg_fetchall(sql, params)
+        except Exception:
+            return []
+
+    recent_rows = run_or_empty(recent_props_sql, (player_id,))
+    stat_rows = run_or_empty(stat_derived_sql, (player_id, player_id))
+    training_rows = run_or_empty(training_summary_sql, (player_id,))
+
+    recent_props: list[dict[str, Any]] = []
+    for row in recent_rows[:14]:
+        recent_props.append(
+            {
+                "game_date": _isoish(row.get("game_date")),
+                "prop_type": row.get("prop_type"),
+                "result": row.get("result"),
+                "outcome": row.get("outcome"),
+                "over_under": row.get("over_under"),
+                "prop_value": row.get("prop_value"),
+                "confidence_score": row.get("confidence_score"),
+            }
+        )
+
+    stat_derived: list[dict[str, Any]] = []
+    for row in stat_rows:
+        stat_derived.append(
+            {
+                "game_date": _isoish(row.get("game_date")),
+                "prop_type": row.get("prop_type"),
+                "result": row.get("result"),
+                "outcome": row.get("outcome"),
+            }
+        )
+
+    streaks: list[dict[str, Any]] = []
+    recent_by_prop: dict[str, list[dict[str, Any]]] = {}
+    for row in recent_props:
+        prop_type = str(row.get("prop_type") or "").strip()
+        outcome = str(row.get("outcome") or "").strip().lower()
+        if not prop_type or outcome not in {"win", "loss"}:
+            continue
+        recent_by_prop.setdefault(prop_type, []).append(row)
+
+    for prop_type, rows in recent_by_prop.items():
+        first = str(rows[0].get("outcome") or "").lower()
+        count = 0
+        for row in rows:
+            if str(row.get("outcome") or "").lower() != first:
+                break
+            count += 1
+        if count > 0:
+            streaks.append(
+                {
+                    "prop_type": prop_type,
+                    "streak_type": first,
+                    "streak_count": count,
+                }
+            )
+
+    streaks.sort(key=lambda row: int(row.get("streak_count") or 0), reverse=True)
+
+    return {
+        "player_info": {
+            "player_id": info.get("player_id"),
+            "player_name": info.get("player_name"),
+            "team": info.get("team"),
+            "team_id": info.get("team_id"),
+        },
+        "streaks": streaks,
+        "recent_props": recent_props,
+        "stat_derived": stat_derived,
+        "training_summary": training_rows,
+        "season_stats": {},
+        "career_stats": {},
+    }

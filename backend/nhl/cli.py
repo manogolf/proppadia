@@ -1426,7 +1426,9 @@ def cmd_daily(with_odds: bool):
     UNION ALL SELECT 'preds_points',      COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'player_points'
     UNION ALL SELECT 'predictions_total', COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g);
     """
-    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", sanity])
+    sanity_res = run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", sanity])
+    if sanity_res.stdout:
+        print(sanity_res.stdout, end="")
 
     print("\n✅ Daily pipeline complete. Site data in nhl/site/data/.")
 

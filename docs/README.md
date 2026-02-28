@@ -36,6 +36,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/Season Activation Runbook.md`: preseason dry run, in-season cutover, and day-0 baseline checklist.
 - `docs/Prod12 Automation Runbook.md`: daily/weekly production-12 automation commands, pass criteria, and fail handling.
 - `docs/Supabase Optimization Planning Note.md`: placeholder note for future measured Supabase scaling/optimization planning as live workload grows.
+- `docs/Readiness Checkpoint 2026-02-24.md`: dated MLB preseason + NHL restart readiness snapshot, known caveats, and next checks.
 - `docs/Runtime Surface.md`: currently served FastAPI routes and entrypoint.
 - `docs/Legacy Quarantine Map.md`: backend archive/legacy move map to `backend/_legacy/*`.
 - `docs/Workflow Classification.md`: current keep/suspend/archive workflow status map.

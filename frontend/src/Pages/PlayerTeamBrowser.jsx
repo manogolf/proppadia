@@ -924,7 +924,15 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                           }`}
                         >
                           <div className="min-w-0">
-                            <Link to={`/player/${p.player_id}`} className="text-slate-700 hover:underline">
+                            <Link
+                              to={sport === "nhl" ? `/nhl/players/${p.player_id}` : `/mlb/players/${p.player_id}`}
+                              state={{
+                                sport,
+                                player_name: p.player_name || null,
+                                team: p.teamLabel || null,
+                              }}
+                              className="text-slate-700 hover:underline"
+                            >
                               {p.player_name || p.player_id}
                             </Link>
                             <div className="mt-0.5">

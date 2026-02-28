@@ -24,6 +24,7 @@ import {
 } from "../../shared/predictionAdapters/nhlAdapter.js";
 import { isISODateString, todayET } from "../../shared/timeUtils.js";
 import {
+  normalizeWatchlistRows,
   WATCHLIST_UPDATED_EVENT,
   WATCHLIST_SCOPE_NHL,
   readWatchlistScope,
@@ -32,6 +33,8 @@ import {
 } from "../../shared/watchlistStorage.js";
 
 function num(x) {
+  if (x == null) return null;
+  if (typeof x === "string" && x.trim() === "") return null;
   const v = Number(x);
   return Number.isFinite(v) ? v : null;
 }
@@ -88,6 +91,22 @@ function marketKey(playerId, gameId, line) {
   return `${String(playerId ?? "")}|${String(gameId ?? "")}|${String(line ?? "")}`;
 }
 
+function bestEdgeCandidate(rows, marketMap) {
+  let best = null;
+  for (const row of rows || []) {
+    for (const line of extractOverLines(row)) {
+      const market = marketMap.get(marketKey(row.player_id, row.game_id, line.line)) || null;
+      const marketProbability = num(market?.marketProbability);
+      if (marketProbability == null) continue;
+      const edge = line.p - marketProbability;
+      if (!best || edge > best.edge) {
+        best = { row, bestLine: line, market, edge };
+      }
+    }
+  }
+  return best;
+}
+
 export default function NHLPredictions() {
   const location = useLocation();
   const { user } = useAuth();
@@ -142,6 +161,16 @@ export default function NHLPredictions() {
     setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_NHL));
   }
 
+  function commitWatchlist(updater) {
+    if (!user?.id) return;
+    setWatchlist((prev) => {
+      const nextRaw = typeof updater === "function" ? updater(prev) : updater;
+      const next = normalizeWatchlistRows(nextRaw);
+      writeWatchlistScope(user.id, WATCHLIST_SCOPE_NHL, next);
+      return next;
+    });
+  }
+
   useEffect(() => {
     if (!user?.id) {
       setWatchlist([]);
@@ -166,11 +195,6 @@ export default function NHLPredictions() {
       window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
     };
   }, [user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    writeWatchlistScope(user.id, WATCHLIST_SCOPE_NHL, watchlist);
-  }, [user?.id, watchlist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -400,20 +424,23 @@ export default function NHLPredictions() {
   const topSogRows = useMemo(() => sortedSog.slice(0, 8), [sortedSog]);
   const topSavesRows = useMemo(() => sortedSaves.slice(0, 8), [sortedSaves]);
 
-  const topSog = topSogRows[0] || null;
-  const topSogBest = topSog ? bestLineFromRow(topSog) : null;
-  const topSaves = topSavesRows[0] || null;
-  const topSavesBest = topSaves ? bestLineFromRow(topSaves) : null;
+  const topSogCandidate = useMemo(
+    () => bestEdgeCandidate(sortedSog, marketMaps.sog),
+    [marketMaps.sog, sortedSog]
+  );
+  const topSavesCandidate = useMemo(
+    () => bestEdgeCandidate(sortedSaves, marketMaps.saves),
+    [marketMaps.saves, sortedSaves]
+  );
 
-  const topSogMarket = useMemo(() => {
-    if (!topSog || !topSogBest) return null;
-    return marketMaps.sog.get(marketKey(topSog.player_id, topSog.game_id, topSogBest.line)) || null;
-  }, [marketMaps.sog, topSog, topSogBest]);
+  const topSog = topSogCandidate?.row || topSogRows[0] || null;
+  const topSogBest = topSogCandidate?.bestLine || (topSog ? bestLineFromRow(topSog) : null);
+  const topSaves = topSavesCandidate?.row || topSavesRows[0] || null;
+  const topSavesBest =
+    topSavesCandidate?.bestLine || (topSaves ? bestLineFromRow(topSaves) : null);
 
-  const topSavesMarket = useMemo(() => {
-    if (!topSaves || !topSavesBest) return null;
-    return marketMaps.saves.get(marketKey(topSaves.player_id, topSaves.game_id, topSavesBest.line)) || null;
-  }, [marketMaps.saves, topSaves, topSavesBest]);
+  const topSogMarket = topSogCandidate?.market || null;
+  const topSavesMarket = topSavesCandidate?.market || null;
 
   const topSogPrediction = useMemo(
     () =>
@@ -445,7 +472,17 @@ export default function NHLPredictions() {
     [loadedAt, marketLoadedAt, topSaves, topSavesBest, topSavesMarket]
   );
 
-  const boardPrediction = topSogPrediction;
+  const boardPrediction =
+    (topSogPrediction?.marketProbability != null &&
+    topSavesPrediction?.marketProbability != null
+      ? (topSogCandidate?.edge ?? -Infinity) >= (topSavesCandidate?.edge ?? -Infinity)
+        ? topSogPrediction
+        : topSavesPrediction
+      : topSogPrediction?.marketProbability != null
+        ? topSogPrediction
+        : topSavesPrediction?.marketProbability != null
+          ? topSavesPrediction
+          : topSogPrediction);
 
   const dataConfidence = useMemo(() => {
     const total = sortedSog.length + sortedSaves.length;
@@ -525,7 +562,7 @@ export default function NHLPredictions() {
     });
     if (!id) return;
     const exists = watchIdSet.has(String(id));
-    setWatchlist((prev) => {
+    commitWatchlist((prev) => {
       if (exists) return prev.filter((w) => String(w.id) !== String(id));
       const next = [
         {
@@ -537,7 +574,7 @@ export default function NHLPredictions() {
         },
         ...prev,
       ];
-      return next.slice(0, 100);
+      return next;
     });
     setSaveError("");
     setSaveNotice(exists ? "Player removed from NHL watchlist." : "Player added to NHL watchlist.");
@@ -556,7 +593,7 @@ export default function NHLPredictions() {
     });
     if (!id) return;
     const exists = watchIdSet.has(String(id));
-    setWatchlist((prev) => {
+    commitWatchlist((prev) => {
       if (exists) return prev.filter((w) => String(w.id) !== String(id));
       const next = [
         {
@@ -568,14 +605,14 @@ export default function NHLPredictions() {
         },
         ...prev,
       ];
-      return next.slice(0, 100);
+      return next;
     });
     setSaveError("");
     setSaveNotice(exists ? "Player removed from NHL watchlist." : "Player added to NHL watchlist.");
   }
 
   function removeWatchById(id) {
-    setWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
+    commitWatchlist((prev) => prev.filter((w) => String(w.id) !== String(id)));
     setSaveError("");
     setSaveNotice("Player removed from NHL watchlist.");
   }
@@ -823,7 +860,12 @@ export default function NHLPredictions() {
                       {isTopSogWatched ? "Watching" : "+ Watch"}
                     </button>
                     <PrefetchLink
-                      to={`/player/${encodeURIComponent(String(topSog.player_id))}`}
+                      to={`/nhl/players/${encodeURIComponent(String(topSog.player_id))}`}
+                      state={{
+                        sport: "nhl",
+                        player_name: topSog.player_name || null,
+                        team: topSog.team_abbr || topSog.team || null,
+                      }}
                       className="text-xs text-slate-500 underline"
                     >
                       Open Player
@@ -857,7 +899,12 @@ export default function NHLPredictions() {
                       {isTopSavesWatched ? "Watching" : "+ Watch"}
                     </button>
                     <PrefetchLink
-                      to={`/player/${encodeURIComponent(String(topSaves.player_id))}`}
+                      to={`/nhl/players/${encodeURIComponent(String(topSaves.player_id))}`}
+                      state={{
+                        sport: "nhl",
+                        player_name: topSaves.player_name || null,
+                        team: topSaves.team_abbr || topSaves.team || null,
+                      }}
                       className="text-xs text-slate-500 underline"
                     >
                       Open Player
