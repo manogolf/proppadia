@@ -78,9 +78,6 @@ def fetch_sog(date: Optional[str], limit: int, offset: int):
         p.p_over
     FROM nhl.predictions p
     WHERE p.prop = 'shots_on_goal'
-        AND p.model_family = 'denali_blend'
-        AND p.model_version = 'phoenix_v2'
-        AND p.feature_hash = 'phoenix_v2'
     ),
     joined AS (
     SELECT

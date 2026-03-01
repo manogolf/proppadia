@@ -510,7 +510,7 @@ export default function NHLPredictions() {
         market: topSogMarket,
         modelUpdatedAt: loadedAt || null,
         marketUpdatedAt: marketLoadedAt || null,
-        modelSource: "NHL SOG model",
+        modelSource: "NHL SOG Poisson baseline",
         marketSource: "OddsAPI market median",
       }),
     [loadedAt, marketLoadedAt, topSog, topSogBest, topSogMarket]
@@ -693,7 +693,7 @@ export default function NHLPredictions() {
         marketUpdatedAt: topSogPrediction?.marketUpdatedAt || null,
         modelUpdatedAt: topSogPrediction?.modelUpdatedAt || null,
         marketSourceFallback: "OddsAPI market median",
-        modelSourceFallback: topSogPrediction?.modelSource || "NHL SOG model",
+        modelSourceFallback: topSogPrediction?.modelSource || "NHL SOG Poisson baseline",
       }),
     [topSogPrediction]
   );

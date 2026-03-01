@@ -90,6 +90,9 @@ base AS (
     v.season_5on5_shifts_per_game,
     v.season_5on4_icetime_per_game,
     v.season_4on5_icetime_per_game,
+    v.d5_toi_min_avg,
+    v.d10_toi_min_avg,
+    v.d20_toi_min_avg,
 
 
     v.last10_team_sog_share,
@@ -127,6 +130,9 @@ SELECT
   calc.d10_sog_per60,
   calc.d20_sog_per60,
   calc.attempts_d10_per60,
+  b.d5_toi_min_avg,
+  b.d10_toi_min_avg,
+  b.d20_toi_min_avg,
 
   -- team shot / allowed context
   b.team_d10_sf_per_game,

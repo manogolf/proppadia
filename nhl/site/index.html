@@ -10,7 +10,7 @@ Purpose:
 Expected inputs under ./data/:
   - sog_with_market.csv
       • One row per (player_id, game_id, line) for Shots on Goal.
-      • Includes calibrated Denali probabilities in p_over_* columns
+      • Includes SOG probabilities in p_over_* columns
         (built from sog_predictions_wide_calibrated.csv).
       • This page uses those calibrated p_over_* values as “Model P(over)”.
   - saves_with_market.csv
@@ -24,7 +24,7 @@ Expected inputs under ./data/:
 
 What “Model P(over)” shows:
   - For SOG:
-      • Calibrated Denali LR/RF blend probabilities from p_over_<line> columns
+      • Current NHL SOG probability source from p_over_<line> columns
         in sog_with_market.csv.
   - For Saves / Points:
       • Whatever p_over_* you feed in those CSVs (currently raw model outputs).

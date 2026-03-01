@@ -1198,31 +1198,54 @@ def cmd_daily(with_odds: bool):
     (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
 
-    # 5) Score SOG (ORDINAL LGBM) — single source of truth
-    ordinal_root = (
-        ROOT
-        / "backend" / "nhl" / "models" / "latest" / "shots_on_goal"
-        / "sog_player_denali_pairings_ordinal_v1__no_shiftcounts"
-    )
-    ordinal_meta = ordinal_root / "ge_2" / "metadata.json"  # canonical feature list lives here
-
-    if not ordinal_root.exists():
-        raise SystemExit(f"Missing ORDINAL SOG models at {ordinal_root}")
-
-    if not ordinal_meta.exists():
-        raise SystemExit(f"Missing ORDINAL feature metadata at {ordinal_meta}")
-
     calibrated_pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
-    run(
-        [
-            PY,
-            SCRIPTS_DIR / "score_sog_denali_pairings_ordinal_lgbm.py",
-            "--in",           str(sog_feat_path),
-            "--out",          str(calibrated_pred_path),
-            "--model-root",   str(ordinal_root),
-            "--feature-meta", str(ordinal_meta),
-        ]
-    )
+    sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
+    if sog_scorer == "poisson_baseline":
+        run(
+            [
+                PY,
+                SCRIPTS_DIR / "score_sog_poisson_baseline.py",
+                "--in",
+                str(sog_feat_path),
+                "--out",
+                str(calibrated_pred_path),
+            ]
+        )
+        sog_model_family = "poisson_baseline"
+        sog_model_version = "baseline_v1"
+        sog_feature_hash = "poisson_baseline_v1"
+    elif sog_scorer == "ordinal_lgbm":
+        ordinal_root = (
+            ROOT
+            / "backend" / "nhl" / "models" / "latest" / "shots_on_goal"
+            / "sog_player_denali_pairings_ordinal_v1__no_shiftcounts"
+        )
+        ordinal_meta = ordinal_root / "ge_2" / "metadata.json"
+
+        if not ordinal_root.exists():
+            raise SystemExit(f"Missing ORDINAL SOG models at {ordinal_root}")
+        if not ordinal_meta.exists():
+            raise SystemExit(f"Missing ORDINAL feature metadata at {ordinal_meta}")
+
+        run(
+            [
+                PY,
+                SCRIPTS_DIR / "score_sog_denali_pairings_ordinal_lgbm.py",
+                "--in",
+                str(sog_feat_path),
+                "--out",
+                str(calibrated_pred_path),
+                "--model-root",
+                str(ordinal_root),
+                "--feature-meta",
+                str(ordinal_meta),
+            ]
+        )
+        sog_model_family = "denali_blend"
+        sog_model_version = "phoenix_v2"
+        sog_feature_hash = "phoenix_v2"
+    else:
+        raise SystemExit(f"Unsupported NHL_SOG_SCORER={sog_scorer!r}")
 
     # ---- GUARD: ordinal predictions must exist + match slate ----
     calib_path = calibrated_pred_path
@@ -1241,7 +1264,8 @@ def cmd_daily(with_odds: bool):
 
     # 5a.1) Optional segmented recency calibration (feature-flagged).
     # Default ON for daily runs; set NHL_SOG_SEGMENTED_CALIBRATION_ENABLED=0 to disable quickly.
-    seg_cal_enabled = _env_bool("NHL_SOG_SEGMENTED_CALIBRATION_ENABLED", default=True)
+    seg_cal_default = sog_scorer == "ordinal_lgbm"
+    seg_cal_enabled = _env_bool("NHL_SOG_SEGMENTED_CALIBRATION_ENABLED", default=seg_cal_default)
     seg_cal_required = _env_bool("NHL_SOG_SEGMENTED_CALIBRATION_REQUIRED", default=False)
     if seg_cal_enabled:
         seg_cal_cmd = [
@@ -1254,13 +1278,15 @@ def cmd_daily(with_odds: bool):
             seg_cal_cmd,
             "--model-family",
             os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_MODEL_FAMILY")
-            or os.environ.get("NHL_SOG_MODEL_FAMILY"),
+            or os.environ.get("NHL_SOG_MODEL_FAMILY")
+            or sog_model_family,
         )
         _append_cli_arg(
             seg_cal_cmd,
             "--model-version",
             os.environ.get("NHL_SOG_SEGMENTED_CALIBRATION_MODEL_VERSION")
-            or os.environ.get("NHL_SOG_MODEL_VERSION"),
+            or os.environ.get("NHL_SOG_MODEL_VERSION")
+            or sog_model_version,
         )
         _append_cli_arg(
             seg_cal_cmd,
@@ -1310,7 +1336,7 @@ def cmd_daily(with_odds: bool):
                 ) from exc
             print(f"⚠️ segmented SOG calibration failed; continuing with ordinal output: {exc}")
 
-    # 5b) Load ordinal SOG into nhl.predictions
+    # 5b) Load SOG into nhl.predictions
     run(
         [
             PY,
@@ -1319,6 +1345,9 @@ def cmd_daily(with_odds: bool):
             "--project",    "nhl",
             "--prop-type",  "shots_on_goal",
             "--slate-date", slate,
+            "--model-family", sog_model_family,
+            "--model-version", sog_model_version,
+            "--feature-hash", sog_feature_hash,
         ]
     )
     # 6) Score + load Saves

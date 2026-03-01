@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Load Phoenix SOG predictions into nhl.predictions.
+Load NHL SOG wide probabilities into nhl.predictions.
 
 Inputs:
-  --pred-csv   Path to sog_predictions.csv from score_sog_phoenix.py
+  --pred-csv   Path to wide SOG prediction CSV
   --db-url     Postgres connection string (SUPABASE_DB_URL)
   --slate-date (optional) for logging/debug; not required for insert
 
@@ -16,7 +16,7 @@ Table: nhl.predictions
   - game_id      bigint
   - line         numeric
   - prob_over    double precision
-  - model_name   text          -- which model produced this (e.g. 'sog_phoenix_lr')
+  - model_name   text          -- which model produced this
   - created_at   timestamptz   -- defaults to now()
 
 Unique index (recommended):
@@ -41,6 +41,9 @@ def main():
     ap.add_argument("--prop-type", default="sog")
     ap.add_argument("--project", default="nhl")
     ap.add_argument("--slate-date", default=None)
+    ap.add_argument("--model-family", default="denali_blend")
+    ap.add_argument("--model-version", default="phoenix_v2")
+    ap.add_argument("--feature-hash", default="phoenix_v2")
     args = ap.parse_args()
 
     if not args.db_url:
@@ -108,7 +111,7 @@ def main():
                         {
                             **base,
                             "line": line_val,
-                            "model": "denali_blend",
+                            "model": str(args.model_family),
                             "prob_over": float(val),
                         }
                     )
@@ -148,7 +151,8 @@ def main():
             float(r.line),
             float(r.prob_over),  # becomes p_over
             str(r.model),        # becomes model_family (e.g. "sog_phoenix_lr")
-            "phoenix_v2",        # model_version tag – pick any label you like
+            str(args.model_version),
+            str(args.feature_hash),
         )
         for r in df.itertuples(index=False)
     ]
@@ -166,14 +170,16 @@ def main():
       line,
       p_over,
       model_family,
-      model_version
+      model_version,
+      feature_hash
     )
-    VALUES (%s,%s,%s,%s,%s,%s,%s)
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (player_id, game_id, prop, line)
     DO UPDATE SET
       p_over       = EXCLUDED.p_over,
       model_family = EXCLUDED.model_family,
       model_version= EXCLUDED.model_version,
+      feature_hash = EXCLUDED.feature_hash,
       updated_at   = now();
     """
 

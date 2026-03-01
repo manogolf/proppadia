@@ -416,6 +416,27 @@ def main() -> None:
         merged["prob_over"] = 1.0 - merged["prob_over"]
         print("[book_upload] prob_semantic=under → converted to P(OVER) via (1 - p)")
 
+    # Exact 0/1 probabilities can occur in the Poisson path for degenerate fallback rows.
+    # Fair American odds are undefined at the endpoints, so omit those line rows explicitly
+    # before diagnostics and shape assertions.
+    invalid_prob_mask = (
+        merged["prob_over"].isna()
+        | (merged["prob_over"] <= 0.0)
+        | (merged["prob_over"] >= 1.0)
+    )
+    if invalid_prob_mask.any():
+        dropped = merged.loc[invalid_prob_mask, ["player_id", "game_id", "line", "prob_over"]].copy()
+        print(
+            f"[book_upload] dropping {len(dropped)} line rows with endpoint/invalid probabilities "
+            f"(fair odds undefined)."
+        )
+        print("[book_upload] sample dropped rows:\n" + dropped.head(12).to_string(index=False))
+        merged = merged.loc[~invalid_prob_mask].copy()
+
+    if merged.empty:
+        print("ERROR: no valid rows remain after filtering invalid endpoint probabilities.", file=sys.stderr)
+        sys.exit(1)
+
     # Diagnostics (safe; never mutates unless monotone-repair is enabled)
     print_prob_summaries(merged)
     monotonicity_check(merged, semantic=semantic_for_checks)
