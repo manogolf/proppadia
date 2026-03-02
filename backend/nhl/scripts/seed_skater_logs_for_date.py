@@ -415,7 +415,14 @@ def _stage_cols(conn) -> set[str]:
               AND table_name = 'import_skater_logs_stage'
             """
         )
-        return {str(r[0]) for r in cur.fetchall() or []}
+        rows = cur.fetchall() or []
+        cols: set[str] = set()
+        for r in rows:
+            if isinstance(r, dict):
+                cols.add(str(r["column_name"]))
+            else:
+                cols.add(str(r[0]))
+        return cols
 
 def upsert_rows(conn, rows):
     """
