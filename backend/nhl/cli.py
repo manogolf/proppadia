@@ -37,6 +37,7 @@ from typing import Optional, Sequence, Union
 from datetime import datetime, timedelta, timezone
 import requests
 import re
+import psycopg
 
 
 # ---------- bootstrap env ----------
@@ -138,6 +139,21 @@ def guard_require_not_done(key: str, slate: str | None = None) -> None:
     if p.exists():
         msg = p.read_text(encoding="utf-8").strip()
         raise AssertionError(f"[guard] step already done: {key} (slate={slate}). Notes: {msg}")
+
+
+def _table_has_column(db_url: str, schema: str, table: str, column: str) -> bool:
+    with psycopg.connect(db_url, prepare_threshold=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = %s
+              AND table_name = %s
+              AND column_name = %s
+            """,
+            (schema, table, column),
+        )
+        return cur.fetchone() is not None
 
 def guard_clear(key: str, slate: str | None = None) -> None:
     p = _guard_path(key, slate)
@@ -1016,11 +1032,19 @@ def cmd_daily(with_odds: bool):
     run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
 
     # A2) Promote stage → raw for yday (idempotent upsert)
+    stage_has_blocks = _table_has_column(db, "nhl", "import_skater_logs_stage", "blocks")
+    raw_has_blocks = _table_has_column(db, "nhl", "skater_game_logs_raw", "blocks")
+    src_blocks = ", s.blocks" if stage_has_blocks and raw_has_blocks else ""
+    joined_blocks = ", src.blocks AS blocks" if stage_has_blocks and raw_has_blocks else ""
+    insert_blocks = ", blocks" if stage_has_blocks and raw_has_blocks else ""
+    select_blocks = ", blocks" if stage_has_blocks and raw_has_blocks else ""
+    update_blocks = ",\n      blocks         = COALESCE(EXCLUDED.blocks, nhl.skater_game_logs_raw.blocks)" if stage_has_blocks and raw_has_blocks else ""
+
     promote_sql = f"""
     WITH src AS (
       SELECT DISTINCT
         s.player_id, s.game_id, s.game_date,
-        s.shots_on_goal, s.shot_attempts, s.toi_minutes, s.pp_toi_minutes
+        s.shots_on_goal, s.shot_attempts, s.toi_minutes, s.pp_toi_minutes{src_blocks}
       FROM nhl.import_skater_logs_stage s
       WHERE s.game_date = DATE '{yday}'
     ),
@@ -1054,16 +1078,17 @@ def cmd_daily(with_odds: bool):
         src.shot_attempts,
         src.toi_minutes,
         src.pp_toi_minutes
+        {joined_blocks}
       FROM src
       JOIN rs ON rs.game_id = src.game_id AND rs.player_id = src.player_id
       JOIN g  ON g.game_id  = src.game_id
     )
     INSERT INTO nhl.skater_game_logs_raw
       (player_id, game_id, team_id, opponent_id, is_home, game_date,
-       shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+       shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes{insert_blocks})
     SELECT
       player_id, game_id, team_id, opponent_id, is_home, game_date,
-      shots_on_goal, shot_attempts, toi_minutes, NULLIF(pp_toi_minutes, 0) AS pp_toi_minutes
+      shots_on_goal, shot_attempts, toi_minutes, NULLIF(pp_toi_minutes, 0) AS pp_toi_minutes{select_blocks}
     FROM joined
     WHERE opponent_id IS NOT NULL
     ON CONFLICT (player_id, game_id) DO UPDATE SET
@@ -1074,7 +1099,7 @@ def cmd_daily(with_odds: bool):
       shots_on_goal  = EXCLUDED.shots_on_goal,
       shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
       toi_minutes    = EXCLUDED.toi_minutes,
-      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes);
+      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes){update_blocks};
     """
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
 
@@ -1246,6 +1271,56 @@ def cmd_daily(with_odds: bool):
         sog_feature_hash = "phoenix_v2"
     else:
         raise SystemExit(f"Unsupported NHL_SOG_SCORER={sog_scorer!r}")
+
+    shadow_default = sog_scorer == "poisson_baseline"
+    shadow_enabled = _env_bool("NHL_SOG_DEFENSE_SHADOW_ENABLED", default=shadow_default)
+    shadow_required = _env_bool("NHL_SOG_DEFENSE_SHADOW_REQUIRED", default=False)
+    if shadow_enabled and sog_scorer == "poisson_baseline":
+        shadow_pred_path = PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv"
+        shadow_cmd = [
+            PY,
+            SCRIPTS_DIR / "score_sog_poisson_defense_surprise_shadow.py",
+            "--in",
+            str(sog_feat_path),
+            "--out",
+            str(shadow_pred_path),
+            "--slate-date",
+            slate,
+        ]
+        _append_cli_arg(
+            shadow_cmd,
+            "--alphas",
+            os.environ.get("NHL_SOG_DEFENSE_SHADOW_ALPHAS"),
+        )
+        _append_cli_arg(
+            shadow_cmd,
+            "--bandwidth",
+            os.environ.get("NHL_SOG_DEFENSE_SHADOW_BANDWIDTH"),
+        )
+        _append_cli_arg(
+            shadow_cmd,
+            "--goalie-weight",
+            os.environ.get("NHL_SOG_DEFENSE_SHADOW_GOALIE_WEIGHT"),
+        )
+        _append_cli_arg(
+            shadow_cmd,
+            "--clip-low",
+            os.environ.get("NHL_SOG_DEFENSE_SHADOW_CLIP_LOW"),
+        )
+        _append_cli_arg(
+            shadow_cmd,
+            "--clip-high",
+            os.environ.get("NHL_SOG_DEFENSE_SHADOW_CLIP_HIGH"),
+        )
+        try:
+            run(shadow_cmd)
+            print(f"✅ defense surprise shadow written: {shadow_pred_path}")
+        except Exception as exc:
+            if shadow_required:
+                raise RuntimeError(
+                    "Defense surprise shadow failed with NHL_SOG_DEFENSE_SHADOW_REQUIRED=1."
+                ) from exc
+            print(f"⚠️ defense surprise shadow failed; continuing without sidecar: {exc}")
 
     # ---- GUARD: ordinal predictions must exist + match slate ----
     calib_path = calibrated_pred_path

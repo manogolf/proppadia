@@ -404,18 +404,47 @@ def upsert_external_id(conn, player_id: int, nhl_id: int):
             # Extremely rare; keep going
             print(f"[learn-extid] WARN: player_id={player_id} nhl_id={nhl_id} -> {e}", file=sys.stderr)
 
+
+def _stage_cols(conn) -> set[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'nhl'
+              AND table_name = 'import_skater_logs_stage'
+            """
+        )
+        return {str(r[0]) for r in cur.fetchall() or []}
+
 def upsert_rows(conn, rows):
     """
     rows items must be:
-      (player_id, game_id, game_date, team_id, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
+      (player_id, game_id, game_date, team_id, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes, blocks)
     """
     if not rows:
         return 0
 
-    sql = """
+    cols = _stage_cols(conn)
+    has_blocks = "blocks" in cols
+    insert_cols = [
+        "player_id",
+        "game_id",
+        "game_date",
+        "team_id",
+        "shots_on_goal",
+        "shot_attempts",
+        "toi_minutes",
+        "pp_toi_minutes",
+    ]
+    if has_blocks:
+        insert_cols.append("blocks")
+
+    placeholders = ",".join(["%s"] * len(insert_cols))
+    sql = f"""
     INSERT INTO nhl.import_skater_logs_stage
-      (player_id, game_id, game_date, team_id, shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes)
-    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+      ({", ".join(insert_cols)})
+    VALUES ({placeholders})
     ON CONFLICT (player_id, game_id) DO UPDATE SET
       -- keep date/team_id fresh (this was the bug causing old dates + NULL team_id to persist)
       game_date       = EXCLUDED.game_date,
@@ -433,10 +462,12 @@ def upsert_rows(conn, rows):
       pp_toi_minutes  = COALESCE(
                           NULLIF(EXCLUDED.pp_toi_minutes, 0),
                           nhl.import_skater_logs_stage.pp_toi_minutes
-                        );
+                        )
+      {"," if has_blocks else ""}{f" blocks = COALESCE(EXCLUDED.blocks, nhl.import_skater_logs_stage.blocks)" if has_blocks else ""};
     """
+    use_rows = [tuple(r[: len(insert_cols)]) for r in rows]
     with conn.cursor() as cur:
-        cur.executemany(sql, rows)
+        cur.executemany(sql, use_rows)
     return len(rows)
 
 def refresh_roster_status_from_box(conn, gpk: int):
@@ -582,12 +613,16 @@ def _iter_skaters_from_box(box: dict):
                 toi_s = p.get("toi")  # "MM:SS"
                 sog = p.get("sog")
 
+                # NHL boxscore `blockedShots` is defensive blocks by this skater, not the
+                # offensive player's own attempts that were blocked. Only use explicit
+                # shot-attempt fields for attempts; otherwise leave attempts unknown here.
                 attempts = p.get("shotAttempts")
-                if attempts is None:
+                if attempts is None and p.get("missedShots") is not None:
                     try:
-                        attempts = int(p.get("sog") or 0) + int(p.get("missedShots") or 0) + int(p.get("blockedShots") or 0)
+                        attempts = int(p.get("sog") or 0) + int(p.get("missedShots") or 0)
                     except Exception:
                         attempts = None
+                blocks = p.get("blockedShots")
 
                 toi_min = toi_to_minutes(toi_s)
 
@@ -611,6 +646,7 @@ def _iter_skaters_from_box(box: dict):
                     "team_id": team_id,
                     "sog": int(sog) if sog is not None else None,
                     "attempts": int(attempts) if attempts is not None else None,
+                    "blocks": int(blocks) if blocks is not None else None,
                     "toi_min": toi_min,
                     "pp_min": pp_min,
                 }                
@@ -731,6 +767,7 @@ def main():
                             s["attempts"],
                             float(s["toi_min"]) if s["toi_min"] is not None else None,
                             float(s["pp_min"]) if s["pp_min"] is not None else None,
+                            s["blocks"],
                         )
                     )
 
