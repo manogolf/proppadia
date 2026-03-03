@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""Build NHL SOG shadow probabilities using the defense-surprise adjustment."""
+"""Build NHL SOG shadow probabilities using a projected-context defense-surprise adjustment."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import math
-from collections import defaultdict, deque
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Deque, Dict, Iterable, List, Tuple
+from typing import List
 
 import pandas as pd
 
 from backend.nhl.scripts.build_sog_poisson_residual_dataset import build_dataset_df
-from backend.nhl.scripts.experiment_sog_opponent_surprise_defense_base import (
-    _attach_defense_signature,
-    _build_goalie_rows,
-    _build_opponent_rows,
-    _gaussian_weight,
+from backend.nhl.scripts.experiment_sog_projected_context_surprise_defense_base import (
+    _attach_projected_signature,
+    _apply_surprise,
+    _build_projected_rows,
+    _build_recent_faced_baseline,
 )
 from backend.nhl.scripts.score_sog_poisson_baseline import (
     _bucket_series,
@@ -38,27 +37,22 @@ def _infer_season(slate_date: str) -> int:
 
 
 def _history_cutoff(slate_date: str) -> str:
-    dt = datetime.strptime(slate_date, "%Y-%m-%d").date() - timedelta(days=1)
+    dt = datetime.strptime(slate_date, "%Y-%m-%d").date()
     return dt.isoformat()
 
 
 def _parse_alphas(raw: str) -> List[float]:
-    vals = []
+    vals: List[float] = []
     for token in (raw or "").split(","):
         token = token.strip()
-        if not token:
-            continue
-        vals.append(float(token))
+        if token:
+            vals.append(float(token))
     if not vals:
         raise ValueError("Need at least one alpha value")
     return vals
 
 
-def _norm_pos(raw: str | None) -> str:
-    return "D" if str(raw or "").strip() == "D" else "F"
-
-
-def _load_player_info(player_ids: Iterable[int]) -> pd.DataFrame:
+def _load_player_info(player_ids) -> pd.DataFrame:
     ids = sorted({int(x) for x in player_ids if pd.notna(x)})
     if not ids:
         return pd.DataFrame(columns=["player_id", "player_name", "position_raw"])
@@ -84,7 +78,16 @@ def _load_projected_goalies(game_rows: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"opponent_id": "team_id"})
     )
     if pairs.empty:
-        return pd.DataFrame(columns=["game_id", "team_id", "projected_goalie_id", "projected_goalie_start_prob"])
+        return pd.DataFrame(
+            columns=[
+                "game_id",
+                "team_id",
+                "projected_goalie_id",
+                "projected_goalie_start_prob",
+                "projected_goalie_d10_shots_faced_per60",
+                "projected_goalie_d10_save_pct",
+            ]
+        )
     game_ids = sorted({int(x) for x in pairs["game_id"].tolist()})
     team_ids = sorted({int(x) for x in pairs["team_id"].tolist()})
     rows = pg_fetchall(
@@ -120,41 +123,18 @@ def _load_projected_goalies(game_rows: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _latest_faced_baseline_by_player(full_hist: pd.DataFrame) -> Dict[int, float]:
+def _latest_faced_baseline_by_player(full_hist: pd.DataFrame) -> dict[int, float]:
     work = full_hist.sort_values(["player_id", "game_date", "game_id"]).copy()
-    hist: Dict[int, Deque[float]] = defaultdict(lambda: deque(maxlen=10))
-    out: Dict[int, float] = {}
-    for row in work.itertuples(index=False):
-        pid = int(row.player_id)
-        sig = float(row.defense_signature_rate_per60) if pd.notna(row.defense_signature_rate_per60) else math.nan
-        dq = hist[pid]
-        if math.isfinite(sig):
-            dq.append(sig)
-        if dq:
-            out[pid] = sum(dq) / len(dq)
+    out: dict[int, float] = {}
+    for pid, grp in work.groupby("player_id", sort=False):
+        vals = pd.to_numeric(grp["projected_signature_rate_per60"], errors="coerce").dropna()
+        if not vals.empty:
+            out[int(pid)] = float(vals.tail(10).mean())
     return out
 
 
-def _build_surprise_terms(
-    base: pd.Series,
-    tonight: pd.Series,
-    recent: pd.Series,
-    alpha: float,
-    clip_low: float,
-    clip_high: float,
-) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
-    raw_ratio = (tonight / recent).replace([math.inf, -math.inf], math.nan)
-    clipped_ratio = raw_ratio.clip(lower=clip_low, upper=clip_high)
-    applied = raw_ratio.notna()
-    reason = pd.Series("applied", index=base.index, dtype="object")
-    reason = reason.where(applied, "missing_recent_faced_baseline")
-    mult = clipped_ratio.pow(alpha).where(applied, 1.0)
-    lam = (base * mult).clip(lower=0.0)
-    return lam, raw_ratio, clipped_ratio, reason
-
-
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build a shadow NHL SOG defense-surprise CSV from current slate features.")
+    ap = argparse.ArgumentParser(description="Build a shadow NHL SOG projected-context defense-surprise CSV from current slate features.")
     ap.add_argument("--in", dest="in_path", required=True)
     ap.add_argument("--out", dest="out_path", default=DEFAULT_OUT)
     ap.add_argument("--slate-date", default=None)
@@ -178,7 +158,14 @@ def main() -> None:
     slate_date = args.slate_date or (slate_dates[0] if len(slate_dates) == 1 else None)
     if not slate_date:
         raise SystemExit("[defense shadow] slate date is required when input contains multiple or no game_date values")
-    season = int(args.season or (pd.to_numeric(df.get("season", pd.Series(dtype=float)), errors="coerce").dropna().iloc[0] if "season" in df.columns and pd.to_numeric(df.get("season"), errors="coerce").dropna().size else _infer_season(slate_date)))
+    season = int(
+        args.season
+        or (
+            pd.to_numeric(df.get("season", pd.Series(dtype=float)), errors="coerce").dropna().iloc[0]
+            if "season" in df.columns and pd.to_numeric(df.get("season"), errors="coerce").dropna().size
+            else _infer_season(slate_date)
+        )
+    )
 
     rate = _coalesce(
         _to_numeric(df, "d10_sog_per60"),
@@ -189,7 +176,7 @@ def main() -> None:
         _to_numeric(df, "d10_toi_min_avg"),
         _to_numeric(df, "d20_toi_min_avg"),
         _to_numeric(df, "d5_toi_min_avg"),
-        _to_numeric(df, "szn_toi_per_game_5on5") + _to_numeric(df, "szn_toi_per_game_pp"),
+        (_to_numeric(df, "szn_toi_per_game_5on5") + _to_numeric(df, "szn_toi_per_game_pp")),
         (_to_numeric(df, "season_5on5_icetime_per_game") / 60.0)
         + (_to_numeric(df, "season_5on4_icetime_per_game") / 60.0),
     )
@@ -228,19 +215,18 @@ def main() -> None:
     if hist.empty:
         raise SystemExit(f"[defense shadow] no historical rows available for season={season} through {hist_to}")
 
-    opp_rows = _build_opponent_rows(hist)
-    goalie_rows = _build_goalie_rows(hist)
-    hist_sig = _attach_defense_signature(hist.copy(), opp_rows, goalie_rows, float(args.bandwidth), float(args.goalie_weight))
-    faced_map = _latest_faced_baseline_by_player(hist_sig)
-
-    curr = _attach_defense_signature(curr, opp_rows, goalie_rows, float(args.bandwidth), float(args.goalie_weight))
-    curr["faced_defense_rate_last10"] = curr["player_id"].map(faced_map)
+    goalie_rows, opp_rows = _build_projected_rows(hist)
+    hist = _attach_projected_signature(hist, goalie_rows, opp_rows, float(args.bandwidth), float(args.goalie_weight))
+    faced_map = _latest_faced_baseline_by_player(hist)
+    curr = _attach_projected_signature(curr, goalie_rows, opp_rows, float(args.bandwidth), float(args.goalie_weight))
+    curr["faced_projected_rate_last10"] = curr["player_id"].map(faced_map)
     curr["defense_surprise_ratio"] = (
-        pd.to_numeric(curr["defense_signature_rate_per60"], errors="coerce")
-        / pd.to_numeric(curr["faced_defense_rate_last10"], errors="coerce")
+        pd.to_numeric(curr["projected_signature_rate_per60"], errors="coerce")
+        / pd.to_numeric(curr["faced_projected_rate_last10"], errors="coerce")
     ).replace([math.inf, -math.inf], math.nan)
 
     out = pd.DataFrame()
+    out["shadow_model"] = "projected_context_surprise"
     for c in [
         "player_id", "player_name", "position_raw", "game_id", "team_id", "opponent_id",
         "is_home", "game_date", "season", "projected_goalie_id", "projected_goalie_start_prob",
@@ -249,52 +235,49 @@ def main() -> None:
         if c in curr.columns:
             out[c] = curr[c]
     out["lambda_offense"] = pd.to_numeric(curr["lambda_base"], errors="coerce").clip(lower=0.0)
-    out["defense_signature_rate_per60"] = pd.to_numeric(curr["defense_signature_rate_per60"], errors="coerce")
-    out["faced_defense_rate_last10"] = pd.to_numeric(curr["faced_defense_rate_last10"], errors="coerce")
+    out["projected_signature_rate_per60"] = pd.to_numeric(curr["projected_signature_rate_per60"], errors="coerce")
+    out["projected_signature_source"] = curr["projected_signature_source"]
+    out["faced_projected_rate_last10"] = pd.to_numeric(curr["faced_projected_rate_last10"], errors="coerce")
     out["defense_surprise_ratio"] = pd.to_numeric(curr["defense_surprise_ratio"], errors="coerce")
     out["defense_surprise_applied"] = out["defense_surprise_ratio"].notna()
     out["p_offense_over_1_5"] = out["lambda_offense"].apply(lambda v: _poisson_tail(float(v), 2))
     out["p_offense_over_2_5"] = out["lambda_offense"].apply(lambda v: _poisson_tail(float(v), 3))
     out["p_offense_over_3_5"] = out["lambda_offense"].apply(lambda v: _poisson_tail(float(v), 4))
 
-    base_series = pd.to_numeric(curr["lambda_base"], errors="coerce").clip(lower=0.0)
-    tonight_series = pd.to_numeric(curr["defense_signature_rate_per60"], errors="coerce")
-    recent_series = pd.to_numeric(curr["faced_defense_rate_last10"], errors="coerce")
-
     for alpha in alphas:
-        key = str(alpha).replace(".", "_")
-        lam_col = f"lambda_surprise_a{key}"
+        key = str(alpha).replace('.', '_')
+        lam_col = f"lambda_projected_a{key}"
         raw_ratio_col = f"defense_surprise_raw_ratio_a{key}"
         clipped_ratio_col = f"defense_surprise_clipped_ratio_a{key}"
         reason_col = f"defense_surprise_reason_a{key}"
-        lam, raw_ratio, clipped_ratio, reason = _build_surprise_terms(
-            base_series,
-            tonight_series,
-            recent_series,
-            alpha=float(alpha),
-            clip_low=float(args.clip_low),
-            clip_high=float(args.clip_high),
-        )
+        lam = _apply_surprise(curr, float(alpha), float(args.clip_low), float(args.clip_high))
+        raw_ratio = pd.to_numeric(curr["projected_signature_rate_per60"], errors="coerce") / pd.to_numeric(curr["faced_projected_rate_last10"], errors="coerce")
+        raw_ratio = raw_ratio.replace([math.inf, -math.inf], math.nan)
+        clipped_ratio = raw_ratio.clip(lower=float(args.clip_low), upper=float(args.clip_high))
+        reason = pd.Series("applied", index=curr.index, dtype="object")
+        reason = reason.where(raw_ratio.notna(), "missing_recent_projected_baseline")
         out[lam_col] = lam
         out[raw_ratio_col] = raw_ratio
         out[clipped_ratio_col] = clipped_ratio
         out[reason_col] = reason
-        out[f"p_surprise_a{key}_over_1_5"] = out[lam_col].apply(lambda v: _poisson_tail(float(v), 2))
-        out[f"p_surprise_a{key}_over_2_5"] = out[lam_col].apply(lambda v: _poisson_tail(float(v), 3))
-        out[f"p_surprise_a{key}_over_3_5"] = out[lam_col].apply(lambda v: _poisson_tail(float(v), 4))
+        out[f"p_projected_a{key}_over_1_5"] = out[lam_col].apply(lambda v: _poisson_tail(float(v), 2))
+        out[f"p_projected_a{key}_over_2_5"] = out[lam_col].apply(lambda v: _poisson_tail(float(v), 3))
+        out[f"p_projected_a{key}_over_3_5"] = out[lam_col].apply(lambda v: _poisson_tail(float(v), 4))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_path, index=False)
 
     summary = {
         "ok": True,
+        "shadow_model": "projected_context_surprise",
         "slate_date": slate_date,
         "season": season,
         "rows": int(len(out)),
         "history_rows": int(len(hist)),
         "coverage": {
-            "rows_with_signature": int(pd.to_numeric(out["defense_signature_rate_per60"], errors="coerce").notna().sum()),
-            "rows_with_faced_baseline": int(pd.to_numeric(out["faced_defense_rate_last10"], errors="coerce").notna().sum()),
+            "rows_with_projected_signature": int(pd.to_numeric(out["projected_signature_rate_per60"], errors="coerce").notna().sum()),
+            "rows_with_faced_baseline": int(pd.to_numeric(out["faced_projected_rate_last10"], errors="coerce").notna().sum()),
+            "projected_signature_source_counts": out["projected_signature_source"].value_counts(dropna=False).to_dict(),
         },
         "alphas": alphas,
         "out_csv": str(out_path),

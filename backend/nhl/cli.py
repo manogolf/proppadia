@@ -31,6 +31,7 @@ import os
 import sys
 import subprocess
 import subprocess as sp
+import shutil
 from pathlib import Path
 import pandas as pd
 from typing import Optional, Sequence, Union
@@ -78,6 +79,7 @@ MODELS_DIR  = NHL_DIR / "models"
 # Daily artifact organization
 EXPORTS_DAILY_NAMES_DIR = EXPORTS_DIR / "daily" / "names"
 EXPORTS_DAILY_SOG_DIR   = EXPORTS_DIR / "daily" / "sog_features"
+EXPORTS_HISTORY_DIR     = EXPORTS_DIR / "history"
 
 for d in (
     SITE_DIR,
@@ -85,8 +87,32 @@ for d in (
     PROC_DIR,
     EXPORTS_DAILY_NAMES_DIR,
     EXPORTS_DAILY_SOG_DIR,
+    EXPORTS_HISTORY_DIR,
 ):
     d.mkdir(parents=True, exist_ok=True)
+
+
+def archive_site_artifacts(slate: str) -> None:
+    hist_dir = EXPORTS_HISTORY_DIR / slate
+    hist_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = [
+        SITE_DIR / "sog_with_market.csv",
+        SITE_DIR / "unmatched_sog.csv",
+        SITE_DIR / "saves_with_market.csv",
+        SITE_DIR / "unmatched_saves.csv",
+        SITE_DIR / "points_with_market.csv",
+        SITE_DIR / "unmatched_points.csv",
+    ]
+    copied: list[str] = []
+    for src in artifacts:
+        if src.exists() and src.stat().st_size > 0:
+            dst = hist_dir / src.name
+            shutil.copy2(src, dst)
+            copied.append(src.name)
+    if copied:
+        print(f"archive → {hist_dir} ({', '.join(copied)})")
+    else:
+        print(f"archive → {hist_dir} (no site artifacts copied)")
 
 # ---------- time helpers (ET) ----------
 
@@ -1497,6 +1523,7 @@ def cmd_daily(with_odds: bool):
     build_sog(slate)
     build_saves(slate)
     build_points(slate)
+    archive_site_artifacts(slate)
 
     # 9b) SOG integrity report (warn-only, except guard-fatal)
     try:
