@@ -10,6 +10,7 @@ Thumbs.db
 *.orig
 *.rej
 *.tmp
+/tmp/
 *.bak
 *.backup
 *.tgz
