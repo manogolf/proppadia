@@ -88,6 +88,64 @@ def _combined_metric(scored: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
+def _load_market_coverage(
+    history_root: Path,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> Dict[float, pd.DataFrame]:
+    out: Dict[float, pd.DataFrame] = {1.5: pd.DataFrame(), 2.5: pd.DataFrame(), 3.5: pd.DataFrame()}
+    files = sorted(history_root.glob("*/sog_with_market.csv"))
+    if not files:
+        return out
+
+    rows: list[pd.DataFrame] = []
+    for fp in files:
+        try:
+            df = pd.read_csv(
+                fp,
+                usecols=["game_date", "game_id", "player_id", "line", "price_over"],
+            )
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        df["game_date"] = df["game_date"].astype(str)
+        if from_date:
+            df = df[df["game_date"] >= str(from_date)]
+        if to_date:
+            df = df[df["game_date"] <= str(to_date)]
+        if df.empty:
+            continue
+        df["line"] = pd.to_numeric(df["line"], errors="coerce")
+        df["game_id"] = pd.to_numeric(df["game_id"], errors="coerce")
+        df["player_id"] = pd.to_numeric(df["player_id"], errors="coerce")
+        df["price_over"] = pd.to_numeric(df["price_over"], errors="coerce")
+        df = df.dropna(subset=["line", "game_id", "player_id", "price_over"])
+        if df.empty:
+            continue
+        rows.append(df[["game_date", "game_id", "player_id", "line"]].copy())
+
+    if not rows:
+        return out
+
+    all_cov = pd.concat(rows, ignore_index=True).drop_duplicates()
+    all_cov["game_id"] = all_cov["game_id"].astype(int)
+    all_cov["player_id"] = all_cov["player_id"].astype(int)
+    for line in THRESHOLDS:
+        sub = all_cov[all_cov["line"] == float(line)][["game_date", "game_id", "player_id"]].drop_duplicates()
+        out[line] = sub.reset_index(drop=True)
+    return out
+
+
+def _filter_by_market(scored: pd.DataFrame, coverage_df: pd.DataFrame) -> pd.DataFrame:
+    if coverage_df is None or coverage_df.empty:
+        return scored.iloc[0:0].copy()
+    keys = ["game_date", "game_id", "player_id"]
+    base = scored.copy()
+    base["game_date"] = base["game_date"].astype(str)
+    return base.merge(coverage_df, on=keys, how="inner")
+
+
 def _topn_by_date(scored: pd.DataFrame, line: float, top_n: int) -> Dict[str, Any]:
     threshold = THRESHOLDS[line]
     col = f"p_over_{str(line).replace('.', '_')}"
@@ -166,19 +224,119 @@ def _largest_misses(report: pd.DataFrame, limit: int = 10) -> List[Dict[str, Any
     return out
 
 
-def analyze(df: pd.DataFrame, report_csv: str | None = None) -> Dict[str, Any]:
+def _any_market_coverage(market_coverage: Dict[float, pd.DataFrame] | None) -> pd.DataFrame:
+    if not market_coverage:
+        return pd.DataFrame()
+    parts: list[pd.DataFrame] = []
+    for line in THRESHOLDS:
+        cov = market_coverage.get(line)
+        if cov is None or cov.empty:
+            continue
+        parts.append(cov[["game_date", "game_id", "player_id"]].drop_duplicates())
+    if not parts:
+        return pd.DataFrame()
+    merged = pd.concat(parts, ignore_index=True).drop_duplicates()
+    return merged.reset_index(drop=True)
+
+
+def _base_sections(scored: pd.DataFrame) -> Dict[str, Any]:
+    by_line: Dict[str, Any] = {}
+    top_n: Dict[str, Any] = {}
+    for line, threshold in THRESHOLDS.items():
+        lk = str(line)
+        pk = str(line).replace(".", "_")
+        by_line[lk] = _metric_rows(scored, f"p_over_{pk}", threshold)
+        top_n[lk] = {}
+        for n in (5, 10, 20):
+            top_n[lk][str(n)] = _topn_by_date(scored, line, n)
+    return {
+        "overall": _combined_metric(scored),
+        "by_line": by_line,
+        "top_n": top_n,
+    }
+
+
+def _bettable_sections(scored: pd.DataFrame, market_coverage: Dict[float, pd.DataFrame]) -> Dict[str, Any]:
+    by_line: Dict[str, Any] = {}
+    top_n: Dict[str, Any] = {}
+    coverage: Dict[str, Any] = {}
+    overall_probs: list[pd.Series] = []
+    overall_ys: list[pd.Series] = []
+
+    for line, threshold in THRESHOLDS.items():
+        lk = str(line)
+        pk = str(line).replace(".", "_")
+        cov = market_coverage.get(line, pd.DataFrame())
+        bet_scored = _filter_by_market(scored, cov)
+
+        coverage[lk] = {
+            "rows_scored": int(len(scored)),
+            "rows_with_market": int(len(bet_scored)),
+        }
+        by_line[lk] = _metric_rows(bet_scored, f"p_over_{pk}", threshold)
+        top_n[lk] = {}
+        for n in (5, 10, 20):
+            top_n[lk][str(n)] = _topn_by_date(bet_scored, line, n)
+
+        if not bet_scored.empty:
+            probs = pd.to_numeric(bet_scored[f"p_over_{pk}"], errors="coerce")
+            ys = (pd.to_numeric(bet_scored["shots_on_goal"], errors="coerce") >= threshold).astype(int)
+            mask = probs.notna() & ys.notna()
+            probs = probs[mask].astype(float)
+            ys = ys[mask].astype(int)
+            if not probs.empty:
+                overall_probs.append(probs)
+                overall_ys.append(ys)
+
+    if overall_probs:
+        probs = pd.concat(overall_probs, ignore_index=True)
+        ys = pd.concat(overall_ys, ignore_index=True).astype(int)
+        overall = {
+            "n": int(len(probs)),
+            "avg_p": _round(float(probs.mean())),
+            "hit_rate": _round(float(ys.mean())),
+            "gap": _round(float(probs.mean() - ys.mean())),
+            "brier": _round(float(((probs - ys) ** 2).mean())),
+        }
+    else:
+        overall = {"n": 0, "avg_p": None, "hit_rate": None, "gap": None, "brier": None}
+
+    return {
+        "overall": overall,
+        "by_line": by_line,
+        "top_n": top_n,
+        "coverage": coverage,
+    }
+
+
+def analyze(
+    df: pd.DataFrame,
+    report_csv: str | None = None,
+    market_coverage: Dict[float, pd.DataFrame] | None = None,
+    metrics_scope: str = "bettable_only",
+) -> Dict[str, Any]:
     if df.empty:
         raise ValueError("No rows available for the requested season/date range.")
     scored = _score_probs(df)
-    report = _build_report_df(scored)
+    if metrics_scope not in {"bettable_only", "all_rows"}:
+        raise ValueError(f"Unsupported metrics_scope={metrics_scope!r}")
+
+    report_scored = scored
+    if metrics_scope == "bettable_only":
+        any_cov = _any_market_coverage(market_coverage)
+        report_scored = _filter_by_market(scored, any_cov)
+
+    report = _build_report_df(report_scored)
     report_path: str | None = None
     if report_csv:
         out_path = Path(report_csv)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         report.to_csv(out_path, index=False)
         report_path = str(out_path)
+    base_sections = _base_sections(scored)
     out: Dict[str, Any] = {
         "ok": True,
+        "metrics_scope": metrics_scope,
         "rows": int(len(scored)),
         "dates": {
             "min": str(scored["game_date"].min()),
@@ -186,21 +344,27 @@ def analyze(df: pd.DataFrame, report_csv: str | None = None) -> Dict[str, Any]:
             "distinct": int(scored["game_date"].nunique()),
         },
         "players": int(scored["player_id"].nunique()),
-        "overall": _combined_metric(scored),
-        "by_line": {},
-        "top_n": {},
+        "overall": base_sections["overall"],
+        "by_line": base_sections["by_line"],
+        "top_n": base_sections["top_n"],
+        "coverage": {},
         "report": {
             "csv": report_path,
             "largest_misses": _largest_misses(report),
+            "rows": int(len(report)),
         },
     }
-    for line, threshold in THRESHOLDS.items():
-        lk = str(line)
-        pk = str(line).replace(".", "_")
-        out["by_line"][lk] = _metric_rows(scored, f"p_over_{pk}", threshold)
-        out["top_n"][lk] = {}
-        for n in (5, 10, 20):
-            out["top_n"][lk][str(n)] = _topn_by_date(scored, line, n)
+
+    if market_coverage is not None:
+        bettable = _bettable_sections(scored, market_coverage)
+        out["bettable_only"] = bettable
+        if metrics_scope == "bettable_only":
+            out["overall"] = bettable["overall"]
+            out["by_line"] = bettable["by_line"]
+            out["top_n"] = bettable["top_n"]
+            out["coverage"] = bettable["coverage"]
+            out["all_rows"] = base_sections
+
     return out
 
 
@@ -211,6 +375,17 @@ def main() -> None:
     ap.add_argument("--to-date", default=None)
     ap.add_argument("--dataset-csv", default=None)
     ap.add_argument("--report-csv", default=None)
+    ap.add_argument(
+        "--market-history-root",
+        default="backend/nhl/exports/odds_history",
+        help="History root with */sog_with_market.csv for bettable-only scoring.",
+    )
+    ap.add_argument(
+        "--metrics-scope",
+        choices=["bettable_only", "all_rows"],
+        default="bettable_only",
+        help="Primary summary scope. bettable_only excludes rows without matched market lines.",
+    )
     args = ap.parse_args()
 
     if args.dataset_csv:
@@ -224,7 +399,22 @@ def main() -> None:
     else:
         df = build_dataset_df(args.season, args.from_date, args.to_date)
 
-    print(json.dumps(analyze(df, args.report_csv), indent=2))
+    market_cov = None
+    if args.market_history_root:
+        market_cov = _load_market_coverage(Path(args.market_history_root), args.from_date, args.to_date)
+    if args.metrics_scope == "bettable_only" and market_cov is None:
+        raise SystemExit("--metrics-scope bettable_only requires --market-history-root.")
+    if args.metrics_scope == "bettable_only":
+        cov_rows = 0
+        if market_cov is not None:
+            cov_rows = sum(int(len(market_cov.get(line, pd.DataFrame()))) for line in THRESHOLDS)
+        if cov_rows == 0:
+            raise SystemExit(
+                "No market coverage rows found for the requested range. "
+                "Set --metrics-scope all_rows to bypass or provide populated --market-history-root."
+            )
+
+    print(json.dumps(analyze(df, args.report_csv, market_cov, args.metrics_scope), indent=2))
 
 
 if __name__ == "__main__":

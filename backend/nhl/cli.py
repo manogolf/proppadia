@@ -79,7 +79,7 @@ MODELS_DIR  = NHL_DIR / "models"
 # Daily artifact organization
 EXPORTS_DAILY_NAMES_DIR = EXPORTS_DIR / "daily" / "names"
 EXPORTS_DAILY_SOG_DIR   = EXPORTS_DIR / "daily" / "sog_features"
-EXPORTS_HISTORY_DIR     = EXPORTS_DIR / "history"
+EXPORTS_ODDS_HISTORY_DIR = EXPORTS_DIR / "odds_history"
 
 for d in (
     SITE_DIR,
@@ -87,14 +87,15 @@ for d in (
     PROC_DIR,
     EXPORTS_DAILY_NAMES_DIR,
     EXPORTS_DAILY_SOG_DIR,
-    EXPORTS_HISTORY_DIR,
+    EXPORTS_ODDS_HISTORY_DIR,
 ):
     d.mkdir(parents=True, exist_ok=True)
 
 
 def archive_site_artifacts(slate: str) -> None:
-    hist_dir = EXPORTS_HISTORY_DIR / slate
-    hist_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir = EXPORTS_ODDS_HISTORY_DIR / slate
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
     artifacts = [
         SITE_DIR / "sog_with_market.csv",
         SITE_DIR / "unmatched_sog.csv",
@@ -102,17 +103,22 @@ def archive_site_artifacts(slate: str) -> None:
         SITE_DIR / "unmatched_saves.csv",
         SITE_DIR / "points_with_market.csv",
         SITE_DIR / "unmatched_points.csv",
+        SITE_DIR / "odds_latest.json",
+        SITE_DIR / "odds_nhl_playerprops_today.json",
+        SITE_DIR / "events_today.json",
     ]
     copied: list[str] = []
+
     for src in artifacts:
         if src.exists() and src.stat().st_size > 0:
-            dst = hist_dir / src.name
+            dst = archive_dir / src.name
             shutil.copy2(src, dst)
             copied.append(src.name)
+
     if copied:
-        print(f"archive → {hist_dir} ({', '.join(copied)})")
+        print(f"archive → {archive_dir} ({', '.join(copied)})")
     else:
-        print(f"archive → {hist_dir} (no site artifacts copied)")
+        print(f"archive → {archive_dir} (no site artifacts copied)")
 
 # ---------- time helpers (ET) ----------
 
