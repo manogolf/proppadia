@@ -331,6 +331,20 @@ def main() -> None:
         default="off",
         help="Optional repair to enforce p15>=p25>=p35 (default: off).",
     )
+    ap.add_argument(
+        "--max-fair-favorite",
+        type=int,
+        default=-300,
+        help=(
+            "Drop sides whose fair odds are more juiced than this favorite threshold "
+            "(e.g. -300 drops -301, -1169; dogs are unaffected)."
+        ),
+    )
+    ap.add_argument(
+        "--skip-fair-odds-cap",
+        action="store_true",
+        help="Disable fair-odds favorite cap filtering.",
+    )
     args = ap.parse_args()
 
     et = pytz.timezone("America/New_York")
@@ -450,6 +464,8 @@ def main() -> None:
     # --- build upload rows (OVER only; fair American odds) ---
     rows = []
     first_example_printed = False
+    dropped_by_fair_cap_over = 0
+    dropped_by_fair_cap_under = 0
 
     for _, row in merged.iterrows():
         try:
@@ -476,6 +492,13 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
+        if -99 < odds_under < 99:
+            print(
+                f"ERROR: suspicious WIN %={odds_under} (looks like percent/decimal leakage). "
+                f"p_under={p_under} player_id={row['player_id']} game_id={row['game_id']} line={row['line']}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
 
@@ -489,50 +512,67 @@ def main() -> None:
             first_example_printed = True
 
         # --- OVER row ---
-        rows.append(
-            {
-                "LEAGUE": "NHL",
-                "DATE": date_str,
-                "HOME": row["home_team_code"],
-                "AWAY": row["away_team_code"],
-                "DOUBLEHEADER": "",
-                "SECTION": "player_prop",
-                "MARKET": "player-shots_onGoal-ou",
-                "SELECTOR": int(row["player_id"]),
-                "POINT": float(row["line"]),
-                "SIDE": "over",
-                "WIN %": odds_over,
-            }
-        )
+        if (not args.skip_fair_odds_cap) and odds_over < 0 and odds_over < int(args.max_fair_favorite):
+            dropped_by_fair_cap_over += 1
+        else:
+            rows.append(
+                {
+                    "LEAGUE": "NHL",
+                    "DATE": date_str,
+                    "HOME": row["home_team_code"],
+                    "AWAY": row["away_team_code"],
+                    "DOUBLEHEADER": "",
+                    "SECTION": "player_prop",
+                    "MARKET": "player-shots_onGoal-ou",
+                    "SELECTOR": int(row["player_id"]),
+                    "POINT": float(row["line"]),
+                    "SIDE": "over",
+                    "WIN %": odds_over,
+                }
+            )
 
         # --- UNDER row ---
-        rows.append(
-            {
-                "LEAGUE": "NHL",
-                "DATE": date_str,
-                "HOME": row["home_team_code"],
-                "AWAY": row["away_team_code"],
-                "DOUBLEHEADER": "",
-                "SECTION": "player_prop",
-                "MARKET": "player-shots_onGoal-ou",
-                "SELECTOR": int(row["player_id"]),
-                "POINT": float(row["line"]),
-                "SIDE": "under",
-                "WIN %": odds_under,
-            }
-        )
+        if (not args.skip_fair_odds_cap) and odds_under < 0 and odds_under < int(args.max_fair_favorite):
+            dropped_by_fair_cap_under += 1
+        else:
+            rows.append(
+                {
+                    "LEAGUE": "NHL",
+                    "DATE": date_str,
+                    "HOME": row["home_team_code"],
+                    "AWAY": row["away_team_code"],
+                    "DOUBLEHEADER": "",
+                    "SECTION": "player_prop",
+                    "MARKET": "player-shots_onGoal-ou",
+                    "SELECTOR": int(row["player_id"]),
+                    "POINT": float(row["line"]),
+                    "SIDE": "under",
+                    "WIN %": odds_under,
+                }
+            )
 
     print(f"[book_upload] output rows to write: {len(rows)}")
+    print(
+        "[book_upload] dropped by fair-odds cap:",
+        {
+            "over": int(dropped_by_fair_cap_over),
+            "under": int(dropped_by_fair_cap_under),
+            "total": int(dropped_by_fair_cap_over + dropped_by_fair_cap_under),
+            "max_fair_favorite": int(args.max_fair_favorite),
+            "skip": bool(args.skip_fair_odds_cap),
+        },
+    )
 
     out_df = pd.DataFrame(rows)
 
     # --- guards: shape + SIDE sanity ---
-    expected = 2 * len(merged)  # we emit BOTH sides for each merged row
-    if len(out_df) != expected:
-        raise AssertionError(
-            f"[book_upload] unexpected row count: wrote {len(out_df)} rows, expected {expected} "
-            f"(2x merged rows={len(merged)}). This usually means one side didn't get appended."
-        )
+    if args.skip_fair_odds_cap:
+        expected = 2 * len(merged)  # with cap off we still emit BOTH sides for each merged row
+        if len(out_df) != expected:
+            raise AssertionError(
+                f"[book_upload] unexpected row count: wrote {len(out_df)} rows, expected {expected} "
+                f"(2x merged rows={len(merged)}). This usually means one side didn't get appended."
+            )
 
     bad_sides = sorted(set(out_df["SIDE"].dropna().unique()) - {"over", "under"})
     if bad_sides:
