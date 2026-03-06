@@ -89,6 +89,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/NHL Smoke Testing.md`: runbooks for `make nhl-checks-*`.
 - `docs/NHL Prediction Quality Baseline.md`: fixed-window NHL backtest report command and output contract.
 - `docs/NHL OpenAPI Review.md`: NHL OpenAPI snapshot and drift process.
+- `docs/NHL SOG Command Deck.md`: compact daily command deck for NHL SOG pipeline, candidate upload flow, and walk-forward policy refresh.
 
 ## Other
 

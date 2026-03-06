@@ -108,6 +108,11 @@ def _summarize(df: pd.DataFrame) -> dict[str, Any]:
     return out
 
 
+def _write_summary_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2))
+
+
 def _emit_book_upload(
     candidates_csv: Path,
     out_csv: Path,
@@ -388,23 +393,29 @@ def main() -> None:
         "outputs": {"csv": str(out_csv), "json": str(Path(args.out_json))},
     }
 
+    out_json = Path(args.out_json)
+    _write_summary_json(out_json, summary)
+
     if args.emit_book_upload:
         exclude_ids = [int(x) for x in (args.book_upload_exclude_player_id or [])]
         book_out = Path(args.book_upload_out_csv)
         book_out.parent.mkdir(parents=True, exist_ok=True)
-        emitted = _emit_book_upload(
-            candidates_csv=out_csv,
-            out_csv=book_out,
-            max_fair_favorite=int(args.book_upload_max_fair_favorite),
-            availability_csv=str(args.book_upload_availability_csv),
-            skip_availability_filter=bool(args.book_upload_skip_availability_filter),
-            exclude_player_ids=exclude_ids,
-        )
-        summary["outputs"]["book_upload"] = emitted
+        try:
+            emitted = _emit_book_upload(
+                candidates_csv=out_csv,
+                out_csv=book_out,
+                max_fair_favorite=int(args.book_upload_max_fair_favorite),
+                availability_csv=str(args.book_upload_availability_csv),
+                skip_availability_filter=bool(args.book_upload_skip_availability_filter),
+                exclude_player_ids=exclude_ids,
+            )
+            summary["outputs"]["book_upload"] = emitted
+        except SystemExit as e:
+            summary["outputs"]["book_upload_error"] = str(e)
+            _write_summary_json(out_json, summary)
+            raise
 
-    out_json = Path(args.out_json)
-    out_json.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps(summary, indent=2))
+    _write_summary_json(out_json, summary)
     print(json.dumps(summary, indent=2))
 
 
