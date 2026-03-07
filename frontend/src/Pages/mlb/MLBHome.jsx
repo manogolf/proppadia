@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import TodayGames from "../../components/TodayGames.jsx";
 import StreakCard from "../../components/StreakCard.jsx";
 import { todayET } from "../../shared/timeUtils.js";
@@ -7,19 +7,16 @@ import MemberAccessCard from "../../components/predictions/MemberAccessCard.jsx"
 
 export default function MLBHome() {
   const [games, setGames] = useState([]);
+  const slateDate = useMemo(() => todayET(), []);
 
   useEffect(() => {
     let isMounted = true;
     (async () => {
       try {
-        const today =
-          typeof todayET === "function"
-            ? todayET()
-            : new Date().toISOString().slice(0, 10);
         const base = getBaseURL();
 
         const res = await fetch(
-          `${base}/api/mlb/schedule?date=${encodeURIComponent(today)}`
+          `${base}/api/mlb/schedule?date=${encodeURIComponent(slateDate)}`
         );
         const data = await res.json();
         const gameList = Array.isArray(data?.dates)
@@ -34,17 +31,30 @@ export default function MLBHome() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [slateDate]);
 
   return (
-    <div className="min-h-screen pp-page px-4 py-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <TodayGames games={games} />
-        <StreakCard />
-        <MemberAccessCard
-          openTo="/mlb/predictions"
-          loginFrom="/mlb/predictions"
-        />
+    <div className="min-h-screen pp-page">
+      <div className="max-w-5xl mx-auto px-4 pb-10">
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-2xl font-bold text-slate-900">MLB</h2>
+          <div className="text-sm text-slate-500">Slate (ET): {slateDate}</div>
+        </div>
+
+        <div className="mt-2">
+          <StreakCard />
+        </div>
+
+        <div className="mt-6">
+          <TodayGames games={games} />
+        </div>
+
+        <div className="mt-6">
+          <MemberAccessCard
+            openTo="/mlb/predictions"
+            loginFrom="/mlb/predictions"
+          />
+        </div>
       </div>
     </div>
   );

@@ -49,26 +49,28 @@ export default function NhlHome() {
 
   return (
     <div className="min-h-screen pp-page">
-      <div className="max-w-5xl mx-auto px-4">
+      <div className="max-w-5xl mx-auto px-4 pb-10">
         <div className="flex items-baseline justify-between mb-4">
           <h2 className="text-2xl font-bold text-slate-900">NHL</h2>
           <div className="text-sm text-slate-500">Slate (ET): {slateDate}</div>
         </div>
 
-        {loading ? (
-          <div className="w-full pp-card p-6 text-center text-slate-500">
-            Loading NHL games…
-          </div>
-        ) : error ? (
-          <div className="w-full pp-card p-6 text-center text-rose-600">
-            {error}
-          </div>
-        ) : (
-          <TodayGamesNHL games={games} />
-        )}
+        <div className="mt-2">
+          <NHLStreaksDashboardCard />
+        </div>
 
         <div className="mt-6">
-          <NHLStreaksDashboardCard />
+          {loading ? (
+            <div className="w-full pp-card p-6 text-center text-slate-500">
+              Loading NHL games…
+            </div>
+          ) : error ? (
+            <div className="w-full pp-card p-6 text-center text-rose-600">
+              {error}
+            </div>
+          ) : (
+            <TodayGamesNHL games={games} />
+          )}
         </div>
 
         <div className="mt-6">
