@@ -51,6 +51,27 @@ backend/nhl/data/processed/sog_candidate_book_upload.csv
 Example: /Users/jerrystrain/Downloads/8rainstation_daily_YYYY_MM_DD.csv
 ```
 
+7. Summarize graded NHL SOG results from the downloaded CSV.
+
+Preferred (auto-pick newest grader CSV in Downloads):
+
+```bash
+GRADER_CSV="$(ls -t ~/Downloads/8rainstation_daily_*.csv | head -n 1)"
+[ -n "$GRADER_CSV" ] || { echo "No grader CSV found in ~/Downloads"; exit 1; }
+.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$GRADER_CSV"
+```
+
+Manual (specific file path):
+
+```bash
+GRADER_CSV=/Users/jerrystrain/Downloads/8rainstation_daily_YYYY_MM_DD.csv
+.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$GRADER_CSV"
+```
+
+Outputs:
+- `tmp/graded/nhl_sog_graded_YYYY-MM-DD.csv`
+- `tmp/graded/nhl_sog_graded_YYYY-MM-DD_summary.json`
+
 ## Line Moved (Pass/Fail)
 
 Use this when the live book line/price moved after card generation.
@@ -98,6 +119,8 @@ Examples:
 - Dated candidate card CSV: `tmp/cards/nhl_sog_card_YYYY-MM-DD.csv`
 - Dated candidate card summary JSON: `tmp/cards/nhl_sog_card_YYYY-MM-DD_summary.json`
 - Candidate selection summary: `tmp/nhl_sog_live_candidates_summary.json`
+- Graded daily cleaned rows: `tmp/graded/nhl_sog_graded_YYYY-MM-DD.csv`
+- Graded daily summary: `tmp/graded/nhl_sog_graded_YYYY-MM-DD_summary.json`
 - Walk-forward policy: `tmp/nhl_sog_walkforward_summary.json`
 - Reconciliation rows: `tmp/nhl_sog_base_vs_betonline_rows.csv`
 - Reconciliation monthly summary: `tmp/nhl_sog_base_vs_betonline_monthly.csv`

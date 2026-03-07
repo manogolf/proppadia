@@ -5,7 +5,7 @@ set -euo pipefail
 # Override via env vars when needed.
 
 MLB_BASE_URL="${MLB_BASE_URL:-https://baseball-streaks-sq44.onrender.com}"
-MLB_DATE="${MLB_DATE:-2025-08-15}"
+MLB_DATE="${MLB_DATE:-$(date -u +%F)}"
 MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-10}"
 MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-3}"
 MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS:-4000}"

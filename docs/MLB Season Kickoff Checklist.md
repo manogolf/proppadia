@@ -7,7 +7,7 @@ Purpose: one repeatable command bundle for opening-day readiness.
 ```bash
 make mlb-season-kickoff-check \
   BASE_URL=https://baseball-streaks-sq44.onrender.com \
-  MLB_DATE=2025-08-15
+  MLB_DATE=$(date -u +%F)
 ```
 
 ## What It Runs

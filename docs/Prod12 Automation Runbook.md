@@ -18,7 +18,7 @@ Use this once after each deploy before relying on scheduler jobs:
 
 ```bash
 cd /opt/render/project/src
-make mlb-prod12-bootstrap-strict MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" MLB_DATE="2025-08-15"
+make mlb-prod12-bootstrap-strict MLB_BASE_URL="https://baseball-streaks-sq44.onrender.com" MLB_DATE="$(date -u +%F)"
 ```
 
 What it guarantees:
@@ -180,7 +180,7 @@ make mlb-prod12-script-preview
 ## Preseason Checklist
 
 - Automate bundle publish after retrain/update so `mlb/prod12/latest.tgz` is always refreshed without manual shell steps.
-- Remove hardcoded offseason `MLB_DATE=2025-08-15` fallbacks before active season.
+- Use UTC current date by default (`MLB_DATE=$(date -u +%F)`), and set `MLB_DATE` explicitly only for replay/backfill.
 
 ## Notes
 

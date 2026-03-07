@@ -3,7 +3,7 @@
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
 MLB_BASE_URL ?=
-MLB_DATE ?= 2025-08-15
+MLB_DATE ?= $(shell date -u +%F)
 NHL_DATE ?= 2025-11-20
 MLB_MARKET_DAYS ?= 1
 MLB_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv
