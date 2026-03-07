@@ -7,12 +7,14 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from backend.domains.nhl.repository.prop_repository import (
+    delete_prop_row,
     DuplicatePropError,
     count_prop_history_rows,
     fetch_prop_history_rows,
     find_duplicate_prop_id,
     insert_prop_row,
 )
+from backend.app.services.nhl.prop_resolution_service import grade_nhl_pending_props_from_logs
 
 ET = ZoneInfo("America/New_York")
 
@@ -120,6 +122,21 @@ def get_prop_history(payload: Dict[str, Any]) -> Dict[str, Any]:
     prop_source = _normalize_prop_source(prop_source) if prop_source else None
     status = str(payload.get("status") or "").strip() or None
 
+    # Keep My Saved NHL Props living: resolve pending rows against realized game logs
+    # before reading history. Scope to current user/filter window for lightweight updates.
+    if user_id:
+        try:
+            grade_nhl_pending_props_from_logs(
+                user_id=user_id,
+                from_date=from_date,
+                to_date=to_date,
+                prop_source=prop_source,
+                only_past_games=True,
+            )
+        except Exception:
+            # History should still load even if grading is temporarily unavailable.
+            pass
+
     rows = fetch_prop_history_rows(
         limit=limit,
         offset=offset,
@@ -155,4 +172,17 @@ def get_prop_history(payload: Dict[str, Any]) -> Dict[str, Any]:
         "limit": int(limit),
         "offset": int(offset),
         "rows": out_rows,
+    }
+
+
+def delete_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
+    prop_id = str(payload.get("id") or "").strip()
+    if not prop_id:
+        raise ValueError("id is required")
+    user_id = str(payload.get("user_id") or "").strip() or None
+    deleted = delete_prop_row(prop_id=prop_id, user_id=user_id)
+    return {
+        "ok": True,
+        "deleted": bool(deleted),
+        "id": prop_id,
     }

@@ -182,6 +182,29 @@ def insert_prop_row(
         raise
 
 
+def delete_prop_row(
+    *,
+    prop_id: str,
+    user_id: Optional[str] = None,
+) -> int:
+    ensure_user_props_table()
+    where = ["id::text = %s"]
+    params: List[Any] = [str(prop_id)]
+    columns = _user_props_columns()
+    if user_id and "user_id" in columns:
+        where.append("CAST(user_id AS TEXT) = %s")
+        params.append(str(user_id))
+    sql = f"""
+        DELETE FROM nhl.user_props
+        WHERE {" AND ".join(where)}
+    """
+    with pg_connect() as conn, conn.cursor() as cur:
+        cur.execute(sql, tuple(params))
+        deleted = int(cur.rowcount or 0)
+        conn.commit()
+    return deleted
+
+
 def fetch_prop_history_rows(
     *,
     limit: int = 50,

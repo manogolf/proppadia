@@ -11,6 +11,8 @@ from backend.app.schemas.nhl import (
     NhlAddPropResponse,
     NhlDateRowsResponse,
     NhlDbPingResponse,
+    NhlDeletePropRequest,
+    NhlDeletePropResponse,
     NhlErrorResponse,
     NhlGamecenterLandingResponse,
     NhlPingResponse,
@@ -19,7 +21,7 @@ from backend.app.schemas.nhl import (
 )
 from backend.app.services.nhl import fetch_gamecenter_landing, get_standings, player_profile
 from backend.app.services.nhl.slate_meta_service import get_nhl_slate_meta
-from backend.app.services.nhl.prop_submission_service import add_prop, get_prop_history
+from backend.app.services.nhl.prop_submission_service import add_prop, delete_prop, get_prop_history
 from backend.app.services.shared import ping_db, sport_ping
 from backend.domains.nhl.repository import (
     fetch_games_today,
@@ -202,6 +204,23 @@ def projected_goalies(
 def add_prop_endpoint(body: NhlAddPropRequest):
     try:
         return add_prop(_model_to_dict(body))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.post(
+    "/props/delete",
+    summary="Delete a saved NHL prop row",
+    response_model=NhlDeletePropResponse,
+    response_model_exclude_none=True,
+)
+def delete_prop_endpoint(body: NhlDeletePropRequest):
+    try:
+        return delete_prop(_model_to_dict(body))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:

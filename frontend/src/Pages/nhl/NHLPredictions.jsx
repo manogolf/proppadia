@@ -45,6 +45,13 @@ function fmtProb(x) {
   return `${Math.round(v * 1000) / 10}%`;
 }
 
+function fmtEdgePoints(x) {
+  const v = num(x);
+  if (v == null) return "-";
+  const points = v * 100;
+  return `${points >= 0 ? "+" : ""}${points.toFixed(1)} pts`;
+}
+
 function extractOverLines(row) {
   const out = [];
   for (const [key, value] of Object.entries(row || {})) {
@@ -87,11 +94,40 @@ function parseCsvRows(text) {
   });
 }
 
+function buildWideRowsFromMarketCsv(rowsCsv, { probabilityColumn = "p_over", nameColumn = "full_name" } = {}) {
+  const grouped = new Map();
+  for (const row of rowsCsv || []) {
+    const playerId = row.player_id;
+    const gameId = row.game_id;
+    const line = num(row.line);
+    const probability = num(row[probabilityColumn]);
+    if (playerId == null || gameId == null || line == null || probability == null) continue;
+
+    const key = `${String(playerId)}|${String(gameId)}`;
+    const lineKey = `p_over_${String(line).replace(/\./g, "_")}`;
+    let wide = grouped.get(key);
+    if (!wide) {
+      wide = {
+        player_id: num(playerId) ?? playerId,
+        player_name: row[nameColumn] || row.player_name || String(playerId),
+        game_id: num(gameId) ?? gameId,
+        game_date: row.game_date || "",
+        team_id: num(row.team_id),
+        team_abbr: row.team_abbr || row.team || "",
+      };
+      grouped.set(key, wide);
+    }
+    wide[lineKey] = probability;
+  }
+  return Array.from(grouped.values());
+}
+
 function marketKey(playerId, gameId, line) {
   return `${String(playerId ?? "")}|${String(gameId ?? "")}|${String(line ?? "")}`;
 }
 
 const MAX_EDGE_FAVORITE_PRICE = -350;
+const MAX_EDGE_DOG_PRICE = 500;
 
 function marketPrice(value) {
   const parsed = num(value);
@@ -103,6 +139,7 @@ function isPlayableMarket(market) {
   const priceOver = marketPrice(market?.priceOver);
   if (marketProbability == null || priceOver == null) return false;
   if (priceOver < 0 && priceOver < MAX_EDGE_FAVORITE_PRICE) return false;
+  if (priceOver > 0 && priceOver > MAX_EDGE_DOG_PRICE) return false;
   return true;
 }
 
@@ -122,6 +159,26 @@ function bestEdgeCandidate(rows, marketMap) {
   return best;
 }
 
+function topPlayableEdgeRows(rows, marketMap, limit = 8) {
+  const out = [];
+  for (const row of rows || []) {
+    let best = null;
+    for (const line of extractOverLines(row)) {
+      const market = marketMap.get(marketKey(row.player_id, row.game_id, line.line)) || null;
+      if (!isPlayableMarket(market)) continue;
+      const marketProbability = num(market?.marketProbability);
+      if (marketProbability == null) continue;
+      const edge = line.p - marketProbability;
+      if (!best || edge > best.edge) {
+        best = { row, bestLine: line, market, edge };
+      }
+    }
+    if (best) out.push(best);
+  }
+  out.sort((a, b) => b.edge - a.edge || (b.bestLine?.p ?? 0) - (a.bestLine?.p ?? 0));
+  return out.slice(0, limit);
+}
+
 export default function NHLPredictions() {
   const location = useLocation();
   const { user } = useAuth();
@@ -132,10 +189,15 @@ export default function NHLPredictions() {
   const [error, setError] = useState("");
   const [loadedAt, setLoadedAt] = useState(null);
   const [marketLoadedAt, setMarketLoadedAt] = useState(null);
-  const [marketMaps, setMarketMaps] = useState({ sog: new Map(), saves: new Map() });
+  const [marketMaps, setMarketMaps] = useState({
+    sog: new Map(),
+    saves: new Map(),
+    points: new Map(),
+  });
 
   const [sogRows, setSogRows] = useState([]);
   const [savesRows, setSavesRows] = useState([]);
+  const [pointsRows, setPointsRows] = useState([]);
 
   const [q, setQ] = useState("");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
@@ -258,23 +320,69 @@ export default function NHLPredictions() {
 
     async function loadMarketContext() {
       try {
-        const [sogRes, savesRes] = await Promise.all([
-          fetch(`${getBaseURL()}/nhl/site/data/sog_with_market.csv`, { cache: "no-store" }),
-          fetch(`${getBaseURL()}/nhl/site/data/saves_with_market.csv`, { cache: "no-store" }),
-        ]);
+        const selectedDate = String(slateDate || "").trim();
+        const isHistorical = Boolean(selectedDate && selectedDate !== todayET());
+        const encodedDate = encodeURIComponent(selectedDate);
 
-        const [sogText, savesText] = await Promise.all([
-          sogRes.ok ? sogRes.text() : Promise.resolve(""),
-          savesRes.ok ? savesRes.text() : Promise.resolve(""),
+        const primaryPrefix = isHistorical
+          ? `${getBaseURL()}/nhl/exports/odds_history/${encodedDate}`
+          : `${getBaseURL()}/nhl/site/data`;
+        const fallbackPrefix = `${getBaseURL()}/nhl/site/data`;
+
+        async function fetchText(primaryPath, fallbackPath) {
+          const primary = await fetch(primaryPath, { cache: "no-store" });
+          if (primary.ok) return primary.text();
+          if (fallbackPath) {
+            const fallback = await fetch(fallbackPath, { cache: "no-store" });
+            if (fallback.ok) return fallback.text();
+          }
+          return "";
+        }
+
+        const [sogText, savesText, pointsText] = await Promise.all([
+          fetchText(
+            `${primaryPrefix}/sog_with_market.csv`,
+            isHistorical ? null : `${fallbackPrefix}/sog_with_market.csv`
+          ),
+          fetchText(
+            `${primaryPrefix}/saves_with_market.csv`,
+            isHistorical ? null : `${fallbackPrefix}/saves_with_market.csv`
+          ),
+          fetchText(
+            `${primaryPrefix}/points_with_market.csv`,
+            isHistorical ? null : `${fallbackPrefix}/points_with_market.csv`
+          ),
         ]);
 
         if (cancelled) return;
 
+        const effectiveDate = isHistorical ? selectedDate : null;
+
         const sogRowsCsv = parseCsvRows(sogText);
         const savesRowsCsv = parseCsvRows(savesText);
+        const pointsRowsCsv = parseCsvRows(pointsText);
+        const filteredSogRowsCsv = effectiveDate
+          ? sogRowsCsv.filter((row) => String(row.game_date || "").trim() === effectiveDate)
+          : sogRowsCsv;
+        const filteredSavesRowsCsv = effectiveDate
+          ? savesRowsCsv.filter((row) => String(row.game_date || "").trim() === effectiveDate)
+          : savesRowsCsv;
+        const filteredPointsRowsCsv = effectiveDate
+          ? pointsRowsCsv.filter((row) => String(row.game_date || "").trim() === effectiveDate)
+          : pointsRowsCsv;
+        const matchedPointsRowsCsv = filteredPointsRowsCsv.filter((row) => {
+          const marketProbability = num(row.p_over_mkt);
+          const priceOver = marketPrice(row.price_over);
+          return marketProbability != null && priceOver != null;
+        });
+
+        const pointsWideRows = buildWideRowsFromMarketCsv(matchedPointsRowsCsv, {
+          probabilityColumn: "p_over",
+          nameColumn: "full_name",
+        });
 
         const sogMap = new Map();
-        for (const row of sogRowsCsv) {
+        for (const row of filteredSogRowsCsv) {
           const key = marketKey(row.player_id, row.game_id, row.line);
           sogMap.set(key, {
             marketProbability: num(row.p_over_mkt),
@@ -283,7 +391,7 @@ export default function NHLPredictions() {
         }
 
         const savesMap = new Map();
-        for (const row of savesRowsCsv) {
+        for (const row of filteredSavesRowsCsv) {
           const key = marketKey(row.player_id, row.game_id, row.line);
           savesMap.set(key, {
             marketProbability: num(row.p_over_mkt),
@@ -291,11 +399,22 @@ export default function NHLPredictions() {
           });
         }
 
-        setMarketMaps({ sog: sogMap, saves: savesMap });
+        const pointsMap = new Map();
+        for (const row of matchedPointsRowsCsv) {
+          const key = marketKey(row.player_id, row.game_id, row.line);
+          pointsMap.set(key, {
+            marketProbability: num(row.p_over_mkt),
+            priceOver: row.price_over,
+          });
+        }
+
+        setPointsRows(pointsWideRows);
+        setMarketMaps({ sog: sogMap, saves: savesMap, points: pointsMap });
         setMarketLoadedAt(new Date().toISOString());
       } catch {
         if (cancelled) return;
-        setMarketMaps({ sog: new Map(), saves: new Map() });
+        setPointsRows([]);
+        setMarketMaps({ sog: new Map(), saves: new Map(), points: new Map() });
       }
     }
 
@@ -303,7 +422,7 @@ export default function NHLPredictions() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slateDate]);
 
   const query = useMemo(() => q.trim().toLowerCase(), [q]);
   const watchIdSet = useMemo(
@@ -361,6 +480,47 @@ export default function NHLPredictions() {
     });
   }, [savesRows, query, watchIdSet, watchlistOnly]);
 
+  const teamAbbrByTeamId = useMemo(() => {
+    const out = new Map();
+    for (const row of [...(sogRows || []), ...(savesRows || [])]) {
+      const key = String(row?.team_id ?? "").trim();
+      const value = String(row?.team_abbr || row?.team || "").trim();
+      if (!key || !value || out.has(key)) continue;
+      out.set(key, value);
+    }
+    return out;
+  }, [savesRows, sogRows]);
+
+  const normalizedPointsRows = useMemo(() => {
+    return (pointsRows || []).map((row) => {
+      const key = String(row?.team_id ?? "").trim();
+      return {
+        ...row,
+        team_abbr: row?.team_abbr || (key ? teamAbbrByTeamId.get(key) || "" : ""),
+      };
+    });
+  }, [pointsRows, teamAbbrByTeamId]);
+
+  const filteredPoints = useMemo(() => {
+    const baseRows = watchlistOnly
+      ? normalizedPointsRows.filter((r) => {
+          const id = toWatchlistId({
+            player_id: r.player_id,
+            player_name: r.player_name,
+            team: r.team_abbr || r.team || "",
+          });
+          return Boolean(id && watchIdSet.has(id));
+        })
+      : normalizedPointsRows;
+    if (!query) return baseRows;
+    return baseRows.filter((r) => {
+      const haystack = [r.player_id, r.game_id, r.player_name, r.team_abbr]
+        .map((v) => String(v ?? "").toLowerCase())
+        .join(" ");
+      return haystack.includes(query);
+    });
+  }, [normalizedPointsRows, query, watchIdSet, watchlistOnly]);
+
   const sogLines = useMemo(() => {
     const set = new Set();
     for (const row of filteredSog) {
@@ -399,6 +559,16 @@ export default function NHLPredictions() {
     return arr;
   }, [filteredSaves, savesSort]);
 
+  const sortedPoints = useMemo(() => {
+    const arr = [...(filteredPoints || [])];
+    arr.sort((a, b) => {
+      const aBest = bestLineFromRow(a)?.p ?? -1;
+      const bBest = bestLineFromRow(b)?.p ?? -1;
+      return bBest - aBest;
+    });
+    return arr;
+  }, [filteredPoints]);
+
   useEffect(() => {
     const qLower = queryAutoSelectRef.current;
     if (!qLower) return;
@@ -423,7 +593,7 @@ export default function NHLPredictions() {
 
   const subtitle = useMemo(() => {
     return mode === WORKSPACE_MODE_RESEARCH
-      ? "Review strongest model probabilities before scanning the full board."
+      ? "Review strongest SOG and points edges before scanning the full board."
       : "Search and rank shots-on-goal and saves lines for the active slate.";
   }, [mode]);
 
@@ -432,56 +602,24 @@ export default function NHLPredictions() {
       selectedDate={slateDate}
       setSelectedDate={setSlateDate}
       title="Slate Calendar"
-      subtitle="Choose the NHL slate date before scanning the board."
+      subtitle="Choose the NHL slate date before scanning the board to find past top SOG model edges."
     />
   );
 
-  const topSogRows = useMemo(() => sortedSog.slice(0, 8), [sortedSog]);
-  const topSavesRows = useMemo(() => sortedSaves.slice(0, 8), [sortedSaves]);
+  const topSogRows = useMemo(() => sortedSog.slice(0, 10), [sortedSog]);
+  const topSavesRows = useMemo(() => sortedSaves.slice(0, 10), [sortedSaves]);
+  const hasResearchRows = sortedSog.length > 0 || sortedPoints.length > 0;
+  const hasBoardRows = sortedSog.length > 0 || sortedSaves.length > 0;
 
-  const topPlayableSogRows = useMemo(() => {
-    const seen = new Set();
-    const out = [];
-    for (const row of sortedSog) {
-      let bestPlayable = null;
-      for (const line of extractOverLines(row)) {
-        const market = marketMaps.sog.get(marketKey(row.player_id, row.game_id, line.line)) || null;
-        if (!isPlayableMarket(market)) continue;
-        if (!bestPlayable || line.p > bestPlayable.p) {
-          bestPlayable = line;
-        }
-      }
-      if (!bestPlayable) continue;
-      const dedupeKey = `${row.game_id}:${row.player_id}`;
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      out.push({ row, bestLine: bestPlayable });
-      if (out.length >= 8) break;
-    }
-    return out;
-  }, [marketMaps.sog, sortedSog]);
+  const topPlayableSogRows = useMemo(
+    () => topPlayableEdgeRows(sortedSog, marketMaps.sog, 10),
+    [marketMaps.sog, sortedSog]
+  );
 
-  const topPlayableSavesRows = useMemo(() => {
-    const seen = new Set();
-    const out = [];
-    for (const row of sortedSaves) {
-      let bestPlayable = null;
-      for (const line of extractOverLines(row)) {
-        const market = marketMaps.saves.get(marketKey(row.player_id, row.game_id, line.line)) || null;
-        if (!isPlayableMarket(market)) continue;
-        if (!bestPlayable || line.p > bestPlayable.p) {
-          bestPlayable = line;
-        }
-      }
-      if (!bestPlayable) continue;
-      const dedupeKey = `${row.game_id}:${row.player_id}`;
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      out.push({ row, bestLine: bestPlayable });
-      if (out.length >= 8) break;
-    }
-    return out;
-  }, [marketMaps.saves, sortedSaves]);
+  const topPlayablePointsRows = useMemo(
+    () => topPlayableEdgeRows(sortedPoints, marketMaps.points, 10),
+    [marketMaps.points, sortedPoints]
+  );
 
   const topSogCandidate = useMemo(
     () => bestEdgeCandidate(sortedSog, marketMaps.sog),
@@ -544,15 +682,15 @@ export default function NHLPredictions() {
           : topSogPrediction);
 
   const dataConfidence = useMemo(() => {
-    const total = sortedSog.length + sortedSaves.length;
+    const total = sortedSog.length + sortedPoints.length;
     if (total >= 120) return "High";
     if (total >= 40) return "Medium";
     return "Low";
-  }, [sortedSog.length, sortedSaves.length]);
+  }, [sortedPoints.length, sortedSog.length]);
 
   const sparseData = useMemo(() => {
-    return sortedSog.length + sortedSaves.length < 25;
-  }, [sortedSog.length, sortedSaves.length]);
+    return sortedSog.length + sortedPoints.length < 25;
+  }, [sortedPoints.length, sortedSog.length]);
 
   const boardSummary = useMemo(() => {
     const sogTop = sortedSog.slice(0, 25);
@@ -685,32 +823,6 @@ export default function NHLPredictions() {
     return parts.length ? parts.join(" • ") : "No active board filters";
   }, [query, savesSort, sogSort, watchlistOnly]);
 
-  const sogMarketContext = useMemo(
-    () =>
-      buildMarketContext({
-        marketProbability: topSogPrediction?.marketProbability ?? null,
-        marketSource: topSogPrediction?.marketSource || null,
-        marketUpdatedAt: topSogPrediction?.marketUpdatedAt || null,
-        modelUpdatedAt: topSogPrediction?.modelUpdatedAt || null,
-        marketSourceFallback: "OddsAPI market median",
-        modelSourceFallback: topSogPrediction?.modelSource || "NHL SOG Poisson baseline",
-      }),
-    [topSogPrediction]
-  );
-
-  const savesMarketContext = useMemo(
-    () =>
-      buildMarketContext({
-        marketProbability: topSavesPrediction?.marketProbability ?? null,
-        marketSource: topSavesPrediction?.marketSource || null,
-        marketUpdatedAt: topSavesPrediction?.marketUpdatedAt || null,
-        modelUpdatedAt: topSavesPrediction?.modelUpdatedAt || null,
-        marketSourceFallback: "OddsAPI market median",
-        modelSourceFallback: topSavesPrediction?.modelSource || "NHL saves model",
-      }),
-    [topSavesPrediction]
-  );
-
   const boardMarketContext = useMemo(
     () =>
       buildMarketContext({
@@ -724,24 +836,68 @@ export default function NHLPredictions() {
     [boardPrediction]
   );
 
-  const topSogWatchId = topSog
-    ? toWatchlistId({
-        player_id: topSog.player_id,
-        player_name: topSog.player_name,
-        team: topSog.team_abbr || topSog.team || "",
-      })
-    : "";
-  const topSavesWatchId = topSaves
-    ? toWatchlistId({
-        player_id: topSaves.player_id,
-        player_name: topSaves.player_name,
-        team: topSaves.team_abbr || topSaves.team || "",
-      })
-    : "";
-  const isTopSogWatched = Boolean(topSogWatchId && watchIdSet.has(String(topSogWatchId)));
-  const isTopSavesWatched = Boolean(topSavesWatchId && watchIdSet.has(String(topSavesWatchId)));
-  const topSogLastPropDate = String(topSog?.last_prop_date || "").trim();
-  const topSavesLastPropDate = String(topSaves?.last_prop_date || "").trim();
+  const topSogEdgeCards = useMemo(() => {
+    return topPlayableSogRows.map((candidate, index) => {
+      const prediction = adaptNhlBoardPrediction({
+        propType: "sog",
+        row: candidate.row,
+        bestLine: candidate.bestLine,
+        market: candidate.market,
+        modelUpdatedAt: loadedAt || null,
+        marketUpdatedAt: marketLoadedAt || null,
+        modelSource: "NHL SOG Poisson baseline",
+        marketSource: "OddsAPI market median",
+      });
+      const watchId = toWatchlistId({
+        player_id: candidate.row?.player_id,
+        player_name: candidate.row?.player_name,
+        team: candidate.row?.team_abbr || candidate.row?.team || "",
+      });
+      const isWatched = Boolean(watchId && watchIdSet.has(String(watchId)));
+      return {
+        key: `sog-edge-${String(candidate.row?.game_id)}-${String(candidate.row?.player_id)}-${index}`,
+        row: candidate.row,
+        prediction,
+        isWatched,
+        lastPropDate: String(candidate.row?.last_prop_date || "").trim(),
+        edge: candidate.edge,
+        rank: index + 1,
+      };
+    });
+  }, [loadedAt, marketLoadedAt, topPlayableSogRows, watchIdSet]);
+
+  const topPointsEdgeCards = useMemo(() => {
+    return topPlayablePointsRows.map((candidate, index) => {
+      const prediction = adaptNhlBoardPrediction({
+        propType: "points",
+        row: candidate.row,
+        bestLine: candidate.bestLine,
+        market: candidate.market,
+        modelUpdatedAt: loadedAt || null,
+        marketUpdatedAt: marketLoadedAt || null,
+        modelSource: "NHL points model",
+        marketSource: "OddsAPI market median",
+      });
+      const watchId = toWatchlistId({
+        player_id: candidate.row?.player_id,
+        player_name: candidate.row?.player_name,
+        team: candidate.row?.team_abbr || candidate.row?.team || "",
+      });
+      const isWatched = Boolean(watchId && watchIdSet.has(String(watchId)));
+      return {
+        key: `points-edge-${String(candidate.row?.game_id)}-${String(candidate.row?.player_id)}-${index}`,
+        row: candidate.row,
+        prediction,
+        isWatched,
+        lastPropDate: String(candidate.row?.last_prop_date || "").trim(),
+        edge: candidate.edge,
+        rank: index + 1,
+      };
+    });
+  }, [loadedAt, marketLoadedAt, topPlayablePointsRows, watchIdSet]);
+
+  const matchedSogLineCount = useMemo(() => marketMaps.sog.size, [marketMaps.sog]);
+  const matchedPointsLineCount = useMemo(() => marketMaps.points.size, [marketMaps.points]);
 
   const boardControls = (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
@@ -882,11 +1038,11 @@ export default function NHLPredictions() {
         <WorkspaceStatePanel
           kind="loading"
           title="Loading NHL predictions"
-          detail="Fetching shots-on-goal and saves models for the current slate."
+          detail="Fetching shots-on-goal, saves, and points context for the current slate."
         />
       ) : error ? (
         <WorkspaceStatePanel kind="error" title="Could not load NHL predictions" detail={error} />
-      ) : sortedSog.length === 0 && sortedSaves.length === 0 ? (
+      ) : (mode === WORKSPACE_MODE_RESEARCH ? !hasResearchRows : !hasBoardRows) ? (
         <WorkspaceStatePanel
           kind="empty"
           title="No predictions available"
@@ -897,84 +1053,135 @@ export default function NHLPredictions() {
           {calendarSection}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ModelVsMarketCard
-              title="Top SOG Model Edge"
-              lineLabel={formatNhlPredictionLine(topSogPrediction, "No SOG edge available")}
-              modelProbability={topSogPrediction?.modelProbability ?? null}
-              marketProbability={topSogPrediction?.marketProbability ?? null}
-              sourceLabel={sogMarketContext.sourceLabel}
-              sourceKind={sogMarketContext.sourceKind}
-              updatedLabel={sogMarketContext.updatedLabel}
-              confidenceLabel={dataConfidence}
-              badges={[{ label: isTopSogWatched ? "Watched" : "Not watched", tone: isTopSogWatched ? "success" : "muted" }]}
-              actions={
-                topSog ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="pp-btn pp-btn-secondary pp-btn-sm"
-                      onClick={() => toggleWatchByRow(topSog)}
-                      title={isTopSogWatched ? "Remove player from watchlist" : "Add player to watchlist"}
-                    >
-                      {isTopSogWatched ? "Watching" : "+ Watch"}
-                    </button>
-                    <PrefetchLink
-                      to={`/nhl/players/${encodeURIComponent(String(topSog.player_id))}`}
-                      state={{
-                        sport: "nhl",
-                        player_name: topSog.player_name || null,
-                        team: topSog.team_abbr || topSog.team || null,
-                      }}
-                      className="text-xs text-slate-500 underline"
-                    >
-                      Open Player
-                    </PrefetchLink>
-                    <span className="text-xs text-slate-500">
-                      {topSogLastPropDate ? `last prop ${topSogLastPropDate}` : "last prop unavailable"}
-                    </span>
+            <section className="pp-card p-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <h3 className="text-lg font-semibold text-slate-900">Top SOG Model Edges</h3>
+                <div className="text-sm text-slate-500">Top {topSogEdgeCards.length}</div>
+              </div>
+              <div className="text-xs text-slate-500 mb-3">
+                Ranked by model-minus-market edge (playable prices only).
+              </div>
+              <div className="text-xs text-slate-500 mb-3">
+                Matched lines: {matchedSogLineCount}
+              </div>
+              <div className="space-y-2">
+                {topSogEdgeCards.map((card) => (
+                  <div key={card.key} className="pp-chip px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          #{card.rank} {card.row?.player_name || card.row?.player_id}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {card.row?.team_abbr || ""} - game {card.row?.game_id}
+                        </div>
+                        <div className="text-sm text-slate-700 mt-1">
+                          {formatNhlPredictionLine(card.prediction, "No SOG edge available")}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs min-w-[8rem]">
+                        <div className="text-slate-600">Model: {fmtProb(card.prediction?.modelProbability) || "-"}</div>
+                        <div className="text-slate-600">Market: {fmtProb(card.prediction?.marketProbability) || "-"}</div>
+                        <div className={card.edge >= 0 ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold"}>
+                          Edge: {fmtEdgePoints(card.edge)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        className="pp-btn pp-btn-secondary pp-btn-sm"
+                        onClick={() => toggleWatchByRow(card.row)}
+                        title={card.isWatched ? "Remove player from watchlist" : "Add player to watchlist"}
+                      >
+                        {card.isWatched ? "Watching" : "+ Watch"}
+                      </button>
+                      <PrefetchLink
+                        to={`/nhl/players/${encodeURIComponent(String(card.row?.player_id))}`}
+                        state={{
+                          sport: "nhl",
+                          player_name: card.row?.player_name || null,
+                          team: card.row?.team_abbr || card.row?.team || null,
+                        }}
+                        className="text-xs text-slate-500 underline"
+                      >
+                        Open Player
+                      </PrefetchLink>
+                      {card.lastPropDate ? (
+                        <span className="text-xs text-slate-500">
+                          {`last prop ${card.lastPropDate}`}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                ) : null
-              }
-            />
-            <ModelVsMarketCard
-              title="Top Saves Model Edge"
-              lineLabel={formatNhlPredictionLine(topSavesPrediction, "No saves edge available")}
-              modelProbability={topSavesPrediction?.modelProbability ?? null}
-              marketProbability={topSavesPrediction?.marketProbability ?? null}
-              sourceLabel={savesMarketContext.sourceLabel}
-              sourceKind={savesMarketContext.sourceKind}
-              updatedLabel={savesMarketContext.updatedLabel}
-              confidenceLabel={dataConfidence}
-              badges={[{ label: isTopSavesWatched ? "Watched" : "Not watched", tone: isTopSavesWatched ? "success" : "muted" }]}
-              actions={
-                topSaves ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="pp-btn pp-btn-secondary pp-btn-sm"
-                      onClick={() => toggleWatchByRow(topSaves)}
-                      title={isTopSavesWatched ? "Remove player from watchlist" : "Add player to watchlist"}
-                    >
-                      {isTopSavesWatched ? "Watching" : "+ Watch"}
-                    </button>
-                    <PrefetchLink
-                      to={`/nhl/players/${encodeURIComponent(String(topSaves.player_id))}`}
-                      state={{
-                        sport: "nhl",
-                        player_name: topSaves.player_name || null,
-                        team: topSaves.team_abbr || topSaves.team || null,
-                      }}
-                      className="text-xs text-slate-500 underline"
-                    >
-                      Open Player
-                    </PrefetchLink>
-                    <span className="text-xs text-slate-500">
-                      {topSavesLastPropDate ? `last prop ${topSavesLastPropDate}` : "last prop unavailable"}
-                    </span>
+                ))}
+              </div>
+            </section>
+
+            <section className="pp-card p-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <h3 className="text-lg font-semibold text-slate-900">Top Points Model Edges</h3>
+                <div className="text-sm text-slate-500">Top {topPointsEdgeCards.length}</div>
+              </div>
+              <div className="text-xs text-slate-500 mb-3">
+                Ranked by model-minus-market edge (playable prices only).
+              </div>
+              <div className="text-xs text-slate-500 mb-3">
+                Matched lines: {matchedPointsLineCount}
+              </div>
+              <div className="space-y-2">
+                {topPointsEdgeCards.map((card) => (
+                  <div key={card.key} className="pp-chip px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          #{card.rank} {card.row?.player_name || card.row?.player_id}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {card.row?.team_abbr || ""} - game {card.row?.game_id}
+                        </div>
+                        <div className="text-sm text-slate-700 mt-1">
+                          {formatNhlPredictionLine(card.prediction, "No points edge available")}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs min-w-[8rem]">
+                        <div className="text-slate-600">Model: {fmtProb(card.prediction?.modelProbability) || "-"}</div>
+                        <div className="text-slate-600">Market: {fmtProb(card.prediction?.marketProbability) || "-"}</div>
+                        <div className={card.edge >= 0 ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold"}>
+                          Edge: {fmtEdgePoints(card.edge)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        className="pp-btn pp-btn-secondary pp-btn-sm"
+                        onClick={() => toggleWatchByRow(card.row)}
+                        title={card.isWatched ? "Remove player from watchlist" : "Add player to watchlist"}
+                      >
+                        {card.isWatched ? "Watching" : "+ Watch"}
+                      </button>
+                      <PrefetchLink
+                        to={`/nhl/players/${encodeURIComponent(String(card.row?.player_id))}`}
+                        state={{
+                          sport: "nhl",
+                          player_name: card.row?.player_name || null,
+                          team: card.row?.team_abbr || card.row?.team || null,
+                        }}
+                        className="text-xs text-slate-500 underline"
+                      >
+                        Open Player
+                      </PrefetchLink>
+                      {card.lastPropDate ? (
+                        <span className="text-xs text-slate-500">
+                          {`last prop ${card.lastPropDate}`}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                ) : null
-              }
-            />
+                ))}
+              </div>
+            </section>
           </div>
 
           {sparseData ? (
@@ -985,59 +1192,19 @@ export default function NHLPredictions() {
             />
           ) : null}
 
+          <section className="pp-card p-4">
+            <h3 className="text-base font-semibold text-slate-900 mb-2">Model Quality Explained</h3>
+            <p className="text-sm text-slate-700">
+              This is the model&apos;s report card. If these numbers are stable, it means our projected
+              shot lines are matching real game outcomes at a usable level over time.
+            </p>
+            <p className="text-sm text-slate-700 mt-2">
+              Lower error means fewer bad misses. Higher ranking quality means the players we rate as
+              stronger shot candidates are more often the ones who actually produce.
+            </p>
+          </section>
+
           <SogEvalCard />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <section className="pp-card p-4">
-              <div className="flex items-baseline justify-between mb-3">
-                <h3 className="text-lg font-semibold text-slate-900">Top SOG Edges</h3>
-                <div className="text-sm text-slate-500">Top {topPlayableSogRows.length}</div>
-              </div>
-              <div className="space-y-2">
-                {topPlayableSogRows.map(({ row: r, bestLine: best }) => {
-                  return (
-                    <div
-                      key={`top-sog-${r.game_id}-${r.player_id}`}
-                      className="pp-chip px-3 py-2 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-medium text-slate-900">{r.player_name || r.player_id}</div>
-                        <div className="text-xs text-slate-500">{r.team_abbr || ""} - game {r.game_id}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-slate-700">
-                        {best ? `Over ${best.line}: ${fmtProb(best.p)}` : "-"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="pp-card p-4">
-              <div className="flex items-baseline justify-between mb-3">
-                <h3 className="text-lg font-semibold text-slate-900">Top Saves Edges</h3>
-                <div className="text-sm text-slate-500">Top {topPlayableSavesRows.length}</div>
-              </div>
-              <div className="space-y-2">
-                {topPlayableSavesRows.map(({ row: r, bestLine: best }) => {
-                  return (
-                    <div
-                      key={`top-saves-${r.game_id}-${r.player_id}`}
-                      className="pp-chip px-3 py-2 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-medium text-slate-900">{r.player_name || r.player_id}</div>
-                        <div className="text-xs text-slate-500">{r.team_abbr || ""} - game {r.game_id}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-slate-700">
-                        {best ? `Over ${best.line}: ${fmtProb(best.p)}` : "-"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
         </div>
       ) : (
         <div className="space-y-6">
@@ -1323,6 +1490,7 @@ export default function NHLPredictions() {
 
           <MyPropsPanel
             apiPath="/api/nhl/props/history"
+            deletePath="/api/nhl/props/delete"
             propSource="nhl_user_added"
             title="My Saved NHL Props"
             exportPrefix="my_nhl_props"

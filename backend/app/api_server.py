@@ -13,11 +13,18 @@ app = FastAPI(title="Proppadia Backend", version="0.1.0")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NHL_SITE_DATA_DIR = REPO_ROOT / "nhl" / "site" / "data"
+NHL_ODDS_HISTORY_DIR = REPO_ROOT / "backend" / "nhl" / "exports" / "odds_history"
 
 app.mount(
     "/nhl/site/data",
     StaticFiles(directory=str(NHL_SITE_DATA_DIR)),
     name="nhl_site_data",
+)
+
+app.mount(
+    "/nhl/exports/odds_history",
+    StaticFiles(directory=str(NHL_ODDS_HISTORY_DIR), check_dir=False),
+    name="nhl_odds_history",
 )
 
 # CORS (adjust as needed)

@@ -62,6 +62,17 @@ class NhlAddPropResponse(BaseModel):
     id: Optional[str] = None
 
 
+class NhlDeletePropRequest(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+
+
+class NhlDeletePropResponse(BaseModel):
+    ok: bool
+    deleted: bool
+    id: Optional[str] = None
+
+
 class NhlPropHistoryRow(BaseModel):
     id: str
     player_id: Optional[int] = None
