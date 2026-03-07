@@ -13,6 +13,57 @@ import {
 } from "../shared/watchlistStorage.js";
 
 const PLAYER_BROWSER_PREFS_KEY = "proppadia_player_browser_prefs_v2";
+const UNKNOWN_TEAM = "Unknown";
+
+const NHL_ACTIVE_TEAM_ABBRS = new Set([
+  "ANA",
+  "BOS",
+  "BUF",
+  "CAR",
+  "CBJ",
+  "CGY",
+  "CHI",
+  "COL",
+  "DAL",
+  "DET",
+  "EDM",
+  "FLA",
+  "LAK",
+  "MIN",
+  "MTL",
+  "NJD",
+  "NSH",
+  "NYI",
+  "NYR",
+  "OTT",
+  "PHI",
+  "PIT",
+  "SEA",
+  "SJS",
+  "STL",
+  "TBL",
+  "TOR",
+  "UTA",
+  "VAN",
+  "VGK",
+  "WPG",
+  "WSH",
+]);
+
+const NHL_TEAM_ALIASES = {
+  ARI: "UTA",
+  PHX: "UTA",
+  UTAH: "UTA",
+};
+
+function normalizeTeamLabelBySport(rawValue, sport) {
+  const raw = String(rawValue || "").trim();
+  if (!raw) return UNKNOWN_TEAM;
+  if (sport !== "nhl") return raw;
+  const upper = raw.toUpperCase();
+  const mapped = NHL_TEAM_ALIASES[upper] || upper;
+  return NHL_ACTIVE_TEAM_ABBRS.has(mapped) ? mapped : UNKNOWN_TEAM;
+}
 
 function playerQuery(value) {
   return encodeURIComponent(String(value || "").trim());
@@ -302,9 +353,9 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     () =>
       (players || []).map((p) => ({
         ...p,
-        teamLabel: p.team || p.team_abbr || "Unknown",
+        teamLabel: normalizeTeamLabelBySport(p.team || p.team_abbr, sport),
       })),
-    [players]
+    [players, sport]
   );
 
   const filteredPlayers = useMemo(() => {
@@ -372,7 +423,6 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
     return filtered;
   }, [filteredPlayers, watchedTeamsOnly, watchIdSet]);
 
-  const UNKNOWN_TEAM = "Unknown";
   const unknownTeamRows = groupedByTeam[UNKNOWN_TEAM] || [];
   const unknownTeamCount = unknownTeamRows.length;
 
@@ -406,10 +456,18 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   }, [UNKNOWN_TEAM, groupedByTeam, showUnknownTeam, teamSort, watchIdSet]);
   const visiblePlayerCount = filteredPlayers.length;
   const totalPlayerCount = normalizedPlayers.length;
-  const visibleTeamCount = teamNames.length;
+  const visibleTeamCount = useMemo(
+    () => teamNames.filter((name) => name !== UNKNOWN_TEAM).length,
+    [UNKNOWN_TEAM, teamNames]
+  );
   const totalTeamCount = useMemo(
-    () => new Set(normalizedPlayers.map((p) => p.teamLabel || "Unknown")).size,
-    [normalizedPlayers]
+    () =>
+      new Set(
+        normalizedPlayers
+          .map((p) => p.teamLabel || UNKNOWN_TEAM)
+          .filter((name) => name !== UNKNOWN_TEAM)
+      ).size,
+    [UNKNOWN_TEAM, normalizedPlayers]
   );
 
   useEffect(() => {
@@ -433,7 +491,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   }, [groupedByTeam, openTeams, query, teamNames.length]);
 
   const freshnessLabel = (d) => {
-    if (!d) return "no recent props";
+    if (!d) return "";
     return `last prop ${d}`;
   };
 
@@ -770,6 +828,10 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
               </span>
             ) : null}
           </div>
+          <div className="mt-2 text-xs text-slate-500">
+            Team header counts reflect player rows currently in this view (after filters), not official game-day roster size.
+            {unknownTeamCount > 0 ? " Unknown-team rows are excluded unless Unknown is shown." : ""}
+          </div>
           {notice ? (
             <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 rounded-md px-3 py-2">
               {notice}
@@ -884,6 +946,9 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                         : `/nhl/predictions?mode=board&team=${playerQuery(team)}`
                     }
                     className="text-xs text-slate-500 hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in a new tab"
                   >
                     {sport === "mlb" ? "Open Team Props" : "Open Team Predictions"}
                   </Link>
@@ -916,6 +981,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                         team: p.teamLabel,
                       });
                       const isWatched = Boolean(id && watchIdSet.has(String(id)));
+                      const freshness = freshnessLabel(p.last_prop_date);
                       return (
                         <li
                           key={p.player_id}
@@ -947,6 +1013,9 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                                       )}`
                                 }
                                 className="text-xs text-slate-500 hover:underline"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Open in a new tab"
                               >
                                 {sport === "mlb" ? "Open Props" : "Open Predictions"}
                               </Link>
@@ -959,7 +1028,9 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                                 Watched
                               </span>
                             ) : null}
-                            <span className="text-xs text-slate-500">{freshnessLabel(p.last_prop_date)}</span>
+                            {freshness ? (
+                              <span className="text-xs text-slate-500">{freshness}</span>
+                            ) : null}
                             <button
                               type="button"
                               className="pp-btn pp-btn-secondary pp-btn-sm"

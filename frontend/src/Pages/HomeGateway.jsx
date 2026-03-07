@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import MemberAccessCard from "../components/predictions/MemberAccessCard.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 
 const HOME_SNAPSHOT_CACHE_KEY = "proppadia_home_snapshot_v1";
@@ -79,6 +80,7 @@ function overallSnapshotStatus(mlbSnapshot, nhlSnapshot) {
 }
 
 export default function HomeGateway() {
+  const { user } = useAuth();
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
   const [mlbScheduleSnapshot, setMlbScheduleSnapshot] = useState(null);
@@ -94,6 +96,13 @@ export default function HomeGateway() {
   const mlbState = mlbSlateState(mlbScheduleSnapshot);
   const nhlState = nhlSlateState(nhlSnapshot);
   const overallStatus = overallSnapshotStatus(mlbSnapshot, nhlSnapshot);
+  const mlbGamesToday = Number.isFinite(Number(mlbScheduleSnapshot?.totalGames))
+    ? Number(mlbScheduleSnapshot.totalGames)
+    : 0;
+  const nhlGamesToday = Number(nhlSnapshot?.components?.games_today?.count || 0);
+  const nhlPropsToday = Number(nhlSnapshot?.components?.props_today?.count || 0);
+  const nhlSogRowsToday = Number(nhlSnapshot?.components?.sog?.count || 0);
+  const nhlSavesRowsToday = Number(nhlSnapshot?.components?.saves?.count || 0);
 
   const loadSnapshot = async () => {
     const reqId = snapshotReqRef.current + 1;
@@ -185,51 +194,144 @@ export default function HomeGateway() {
 
   return (
     <div className="min-h-screen pp-page px-4 py-10">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6">
-          Welcome to Proppadia
-        </h1>
-        <p className="text-slate-600 mb-8">
-          Choose a league to view today&rsquo;s games, streaks, and dashboards.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {/* MLB tile */}
-          <PrefetchLink
-            to="/mlb"
-            className="pp-card transition p-6 flex items-center justify-between hover:shadow-md"
-          >
+      <div className="max-w-5xl mx-auto space-y-6">
+        <section className="pp-card p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-lg font-medium text-slate-900">MLB</h2>
-              <p className="text-sm text-slate-500">
-                Today&rsquo;s games & streaks
+              <h1 className="text-3xl font-semibold text-slate-900">
+                Proppadia
+              </h1>
+              <p className="mt-2 text-slate-600">
+                Member-first MLB/NHL prediction workspace. Home shows a limited preview;
+                full boards, filters, and tools stay behind member access.
               </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs">
+                  MLB games today <strong>{mlbGamesToday}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs">
+                  NHL games today <strong>{nhlGamesToday}</strong>
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${overallStatus.tone}`}
+                >
+                  {overallStatus.label}
+                </span>
+              </div>
             </div>
-            <span className="text-slate-400" aria-hidden>
-              →
-            </span>
-          </PrefetchLink>
-
-          {/* NHL tile (placeholder for now) */}
-          <PrefetchLink
-            to="/nhl"
-            className="pp-card transition p-6 flex items-center justify-between hover:shadow-md"
-          >
-            <div>
-              <h2 className="text-lg font-medium text-slate-900">NHL</h2>
-              <p className="text-sm text-slate-500">
-                Shots on goal & dashboards
-              </p>
+            <div className="flex flex-wrap gap-2">
+              <PrefetchLink to="/mlb" className="pp-btn pp-btn-secondary pp-btn-md">
+                Open MLB Slate
+              </PrefetchLink>
+              <PrefetchLink to="/nhl" className="pp-btn pp-btn-secondary pp-btn-md">
+                Open NHL Slate
+              </PrefetchLink>
+              {user ? (
+                <PrefetchLink to="/nhl/predictions" className="pp-btn pp-btn-primary pp-btn-md">
+                  Open Predictions
+                </PrefetchLink>
+              ) : (
+                <PrefetchLink to="/login" className="pp-btn pp-btn-primary pp-btn-md">
+                  Member Login
+                </PrefetchLink>
+              )}
             </div>
-            <span className="text-slate-400" aria-hidden>
-              →
-            </span>
-          </PrefetchLink>
-        </div>
+          </div>
+        </section>
 
-        <div className="mt-6 pp-card p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-slate-900">Today Snapshot</h2>
-            <div className="flex items-center gap-2">
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="pp-card p-5 h-full flex flex-col">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-slate-900">MLB Preview</h2>
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${mlbChip.tone}`}
+              >
+                {mlbChip.label}
+              </span>
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              <div>Today&apos;s schedule: <strong>{mlbGamesToday}</strong> games</div>
+              <div className={`mt-1 text-xs font-medium ${mlbState.tone}`}>{mlbState.label}</div>
+              <div className="mt-2 text-xs text-slate-500">
+                {mlbGamesToday > 0
+                  ? "Preview available on MLB slate page. Full prediction workspace is member-only."
+                  : "No active slate right now. Workspace remains member-only."}
+                </div>
+            </div>
+            <div className="mt-auto pt-8">
+              <PrefetchLink to="/mlb" className="pp-btn pp-btn-ghost pp-btn-sm text-xs">
+                Open MLB
+              </PrefetchLink>
+            </div>
+          </div>
+
+          <div className="pp-card p-5 h-full flex flex-col">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-slate-900">NHL Preview</h2>
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${nhlChip.tone}`}
+              >
+                {nhlChip.label}
+              </span>
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              <div>Games: <strong>{nhlGamesToday}</strong></div>
+              <div>Prediction rows: <strong>{nhlPropsToday}</strong></div>
+              <div>SOG rows: <strong>{nhlSogRowsToday}</strong> • Saves rows: <strong>{nhlSavesRowsToday}</strong></div>
+              <div className={`mt-1 text-xs font-medium ${nhlState.tone}`}>{nhlState.label}</div>
+              <div className="mt-2 text-xs text-slate-500">
+                Home preview is intentionally limited. Full edges, watchlist actions, and exports are member-only.
+              </div>
+            </div>
+            <div className="mt-auto pt-8">
+              <PrefetchLink to="/nhl" className="pp-btn pp-btn-ghost pp-btn-sm text-xs">
+                Open NHL
+              </PrefetchLink>
+            </div>
+          </div>
+        </section>
+
+        <section className="pp-card p-5">
+          <h2 className="text-base font-semibold text-slate-900">Member Tools (Locked Preview)</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Built for paying members: full prediction boards, research flows, and tracking tools.
+          </p>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="font-semibold text-slate-900">Prediction Workspace</div>
+              <div className="mt-1 text-xs text-slate-600">Full model board, date controls, and edge scanning.</div>
+              <div className="mt-2 text-[11px] text-slate-500">Members only</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="font-semibold text-slate-900">Player Research</div>
+              <div className="mt-1 text-xs text-slate-600">Team browsers, player profiles, and context workflows.</div>
+              <div className="mt-2 text-[11px] text-slate-500">Members only</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="font-semibold text-slate-900">Tracking + Watchlist</div>
+              <div className="mt-1 text-xs text-slate-600">Save, grade, and manage picks with exportable history.</div>
+              <div className="mt-2 text-[11px] text-slate-500">Members only</div>
+            </div>
+          </div>
+        </section>
+
+        <MemberAccessCard
+          ctas={[
+            { label: "MLB Predictions", openTo: "/props", loginFrom: "/props" },
+            {
+              label: "NHL Predictions",
+              openTo: "/nhl/predictions",
+              loginFrom: "/nhl/predictions",
+            },
+          ]}
+        />
+
+        <details className="pp-card p-5">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+            System Snapshot (technical)
+          </summary>
+          <div className="mt-3">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-slate-500">
                 {snapshotLoading
                   ? "Loading..."
@@ -237,139 +339,66 @@ export default function HomeGateway() {
                     ? `Updated ${new Date(lastUpdated).toLocaleTimeString()}`
                     : "Backend-owned status"}
               </span>
-              {lastFetchMs !== null ? (
-                <span className="text-[11px] text-slate-400">Fetch {lastFetchMs}ms</span>
-              ) : null}
-              <span className="text-[11px] text-slate-400">Auto refresh 5m</span>
-              <button
-                type="button"
-                onClick={loadSnapshot}
-                disabled={snapshotLoading}
-                className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
-              >
-                {snapshotLoading ? "Refreshing..." : "Refresh snapshot"}
-              </button>
-            </div>
-          </div>
-          {snapshotError ? (
-            <div className="mt-2 text-xs text-amber-700">
-              {snapshotError}
-              {snapshotErrorDetail ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowSnapshotErrorDetail((v) => !v)}
-                    className="ml-2 underline"
-                  >
-                    {showSnapshotErrorDetail ? "Hide detail" : "Show detail"}
-                  </button>
-                  {showSnapshotErrorDetail ? (
-                    <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] text-amber-800">
-                      {JSON.stringify(snapshotErrorDetail, null, 2)}
-                    </pre>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="mt-3">
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${overallStatus.tone}`}
-            >
-              {overallStatus.label}
-            </span>
-          </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-semibold text-slate-900">MLB</div>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${mlbChip.tone}`}
+              <div className="flex items-center gap-2">
+                {lastFetchMs !== null ? (
+                  <span className="text-[11px] text-slate-400">Fetch {lastFetchMs}ms</span>
+                ) : null}
+                <span className="text-[11px] text-slate-400">Auto refresh 5m</span>
+                <button
+                  type="button"
+                  onClick={loadSnapshot}
+                  disabled={snapshotLoading}
+                  className="pp-btn pp-btn-secondary pp-btn-sm text-xs"
                 >
-                  {mlbChip.label}
-                </span>
+                  {snapshotLoading ? "Refreshing..." : "Refresh snapshot"}
+                </button>
               </div>
-              <div className="text-slate-600 mt-1">
-                Games today: {Number.isFinite(Number(mlbScheduleSnapshot?.totalGames)) ? Number(mlbScheduleSnapshot.totalGames) : "-"}
+            </div>
+            {snapshotError ? (
+              <div className="mt-2 text-xs text-amber-700">
+                {snapshotError}
+                {snapshotErrorDetail ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowSnapshotErrorDetail((v) => !v)}
+                      className="ml-2 underline"
+                    >
+                      {showSnapshotErrorDetail ? "Hide detail" : "Show detail"}
+                    </button>
+                    {showSnapshotErrorDetail ? (
+                      <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] text-amber-800">
+                        {JSON.stringify(snapshotErrorDetail, null, 2)}
+                      </pre>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
-              {!mlbSnapshot ? (
-                <div className="text-xs text-amber-700 mt-1">
-                  MLB snapshot unavailable right now.
+            ) : null}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <div className="font-semibold text-slate-900">MLB source</div>
+                <div className="text-slate-600 mt-1">
+                  Source: {mlbSnapshot?.source || "-"}{mlbSnapshot?.stale ? " (stale)" : ""}
                 </div>
-              ) : null}
-              <div className={`text-xs font-medium mt-1 ${mlbState.tone}`}>{mlbState.label}</div>
-              <div className="text-slate-600">
-                Source: {mlbSnapshot?.source || "-"}{mlbSnapshot?.stale ? " (stale)" : ""}
-              </div>
-              <div className="text-slate-600">
-                As of: {mlbSnapshot?.cached_at ? new Date(mlbSnapshot.cached_at).toLocaleString() : "-"}
-              </div>
-              <div className="text-slate-500 text-xs">
-                Cache age: {agoLabel(mlbSnapshot?.cached_at)}
-              </div>
-              <div className="mt-2">
-                <PrefetchLink
-                  to="/mlb"
-                  className="pp-btn pp-btn-ghost pp-btn-sm text-xs"
-                >
-                  Open MLB
-                </PrefetchLink>
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-semibold text-slate-900">NHL</div>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${nhlChip.tone}`}
-                >
-                  {nhlChip.label}
-                </span>
-              </div>
-              <div className="text-slate-600 mt-1">
-                Components healthy: {nhlSnapshot?.components ? Object.values(nhlSnapshot.components).filter((c) => c?.ok === true).length : "-"}
-              </div>
-              {!nhlSnapshot ? (
-                <div className="text-xs text-amber-700 mt-1">
-                  NHL snapshot unavailable right now.
+                <div className="text-slate-600">
+                  As of: {mlbSnapshot?.cached_at ? new Date(mlbSnapshot.cached_at).toLocaleString() : "-"}
                 </div>
-              ) : null}
-              <div className="text-slate-600">
-                Counts: games {nhlSnapshot?.components?.games_today?.count ?? "-"}, props {nhlSnapshot?.components?.props_today?.count ?? "-"}, sog {nhlSnapshot?.components?.sog?.count ?? "-"}, saves {nhlSnapshot?.components?.saves?.count ?? "-"}
+                <div className="text-slate-500 text-xs">Cache age: {agoLabel(mlbSnapshot?.cached_at)}</div>
               </div>
-              <div className={`text-xs font-medium mt-1 ${nhlState.tone}`}>{nhlState.label}</div>
-              <div className="text-slate-600">
-                Source: {nhlSnapshot?.source || "-"}{nhlSnapshot?.stale ? " (stale)" : ""}
-              </div>
-              <div className="text-slate-600">
-                As of: {nhlSnapshot?.cached_at ? new Date(nhlSnapshot.cached_at).toLocaleString() : "-"}
-              </div>
-              <div className="text-slate-500 text-xs">
-                Cache age: {agoLabel(nhlSnapshot?.cached_at)}
-              </div>
-              <div className="mt-2">
-                <PrefetchLink
-                  to="/nhl"
-                  className="pp-btn pp-btn-ghost pp-btn-sm text-xs"
-                >
-                  Open NHL
-                </PrefetchLink>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <div className="font-semibold text-slate-900">NHL source</div>
+                <div className="text-slate-600 mt-1">
+                  Source: {nhlSnapshot?.source || "-"}{nhlSnapshot?.stale ? " (stale)" : ""}
+                </div>
+                <div className="text-slate-600">
+                  As of: {nhlSnapshot?.cached_at ? new Date(nhlSnapshot.cached_at).toLocaleString() : "-"}
+                </div>
+                <div className="text-slate-500 text-xs">Cache age: {agoLabel(nhlSnapshot?.cached_at)}</div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="mt-6">
-          <MemberAccessCard
-            ctas={[
-              { label: "MLB Predictions", openTo: "/props", loginFrom: "/props" },
-              {
-                label: "NHL Predictions",
-                openTo: "/nhl/predictions",
-                loginFrom: "/nhl/predictions",
-              },
-            ]}
-          />
-        </div>
+        </details>
       </div>
     </div>
   );
