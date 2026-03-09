@@ -34,7 +34,7 @@ import subprocess as sp
 import shutil
 from pathlib import Path
 import pandas as pd
-from typing import Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 from datetime import datetime, timedelta, timezone
 import requests
 import re
@@ -783,6 +783,75 @@ def fetch_odds(
     out_latest: Path = SITE_DIR / "odds_latest.json",
     out_today: Path = SITE_DIR / "odds_nhl_playerprops_today.json",
 ):
+    def _market_chunks(markets_csv: str) -> list[str]:
+        toks = [m.strip() for m in str(markets_csv).split(",") if m.strip()]
+        if not toks:
+            raw = str(markets_csv).strip()
+            return [raw] if raw else []
+        primary = "player_shots_on_goal"
+        alternate = "player_shots_on_goal_alternate"
+        chunks: list[list[str]] = []
+        if primary in toks:
+            chunks.append([primary])
+        if alternate in toks:
+            chunks.append([alternate])
+        rest = [m for m in toks if m not in {primary, alternate}]
+        if rest:
+            chunks.append(rest)
+        if not chunks:
+            chunks = [toks]
+        return [",".join(c) for c in chunks]
+
+    def _merge_event_payload(base_payload: dict, next_payload: dict) -> dict:
+        out = dict(base_payload)
+        base_books = out.get("bookmakers")
+        next_books = next_payload.get("bookmakers")
+        if not isinstance(base_books, list) or not isinstance(next_books, list):
+            return out
+
+        def _book_key(book_obj: dict) -> str:
+            return str(book_obj.get("key") or "").strip()
+
+        by_key: dict[str, dict] = {}
+        ordered_books: list[dict] = []
+        for book in base_books:
+            if not isinstance(book, dict):
+                continue
+            key = _book_key(book)
+            if not key:
+                continue
+            cp = dict(book)
+            markets_list = cp.get("markets")
+            cp["markets"] = list(markets_list) if isinstance(markets_list, list) else []
+            by_key[key] = cp
+            ordered_books.append(cp)
+
+        for book in next_books:
+            if not isinstance(book, dict):
+                continue
+            key = _book_key(book)
+            if not key:
+                continue
+            if key not in by_key:
+                cp = dict(book)
+                markets_list = cp.get("markets")
+                cp["markets"] = list(markets_list) if isinstance(markets_list, list) else []
+                by_key[key] = cp
+                ordered_books.append(cp)
+                continue
+
+            existing = by_key[key]
+            ex_markets = existing.get("markets")
+            if not isinstance(ex_markets, list):
+                ex_markets = []
+                existing["markets"] = ex_markets
+            for m in book.get("markets", []) if isinstance(book.get("markets"), list) else []:
+                if isinstance(m, dict):
+                    ex_markets.append(m)
+
+        out["bookmakers"] = ordered_books
+        return out
+
     key = os.environ.get("ODDS_API_KEY", "").strip()
     print(f"[fetch_odds] Using ODDS_API_KEY starting with: {key[:8]!r}")
     if not key:
@@ -836,11 +905,14 @@ def fetch_odds(
     print(f"   events_today.json → {len(events)} events")
 
     # 2) Fetch player props per event
+    market_chunks = _market_chunks(markets)
     print(f"→ Fetching player props (markets={markets}, regions={regions}) …")
+    print(f"   market call groups: {market_chunks}")
     all_event_odds: list[dict] = []
     ok_count = 0
     fail_no_id = 0
     fail_http = 0
+    fail_chunks = 0
 
     for ev in events:
         eid = ev.get("id")
@@ -853,49 +925,70 @@ def fetch_odds(
             all_event_odds.append({})
             continue
 
-        url = (
-            f"{base}/events/{eid}/odds"
-            f"?regions={regions}&markets={markets}&oddsFormat={odds_format}&apiKey={key}"
-        )
+        merged_event: dict[str, Any] | None = None
+        event_ok = False
 
-        last_status = None
-        last_text = None
-        success = False
-
-        for attempt in (1, 2, 3):
-            try:
-                rr = requests.get(url, timeout=30)
-                last_status = rr.status_code
-                if rr.ok:
-                    try:
-                        j = rr.json()
-                        all_event_odds.append(j)
-                        ok_count += 1
-                        success = True
-                        break
-                    except Exception as e:
-                        print(f"   ❌ JSON parse error for event {eid} (attempt {attempt}): {e}")
-                else:
-                    last_text = rr.text[:200]
-                    print(
-                        f"   ⚠️  Odds request failed for event {eid} (attempt {attempt}) "
-                        f"status={rr.status_code}"
-                    )
-            except Exception as e:
-                print(f"   ❌ Exception fetching odds for event {eid} (attempt {attempt}): {e}")
-
-        if not success:
-            fail_http += 1
-            print(
-                f"   ⚠️  Giving up on event {eid} after retries; "
-                f"last_status={last_status}, snippet={last_text!r}"
+        for chunk_idx, chunk_markets in enumerate(market_chunks, start=1):
+            url = (
+                f"{base}/events/{eid}/odds"
+                f"?regions={regions}&markets={chunk_markets}&oddsFormat={odds_format}&apiKey={key}"
             )
+            last_status = None
+            last_text = None
+            chunk_success = False
+
+            for attempt in (1, 2, 3):
+                try:
+                    rr = requests.get(url, timeout=30)
+                    last_status = rr.status_code
+                    if rr.ok:
+                        try:
+                            j = rr.json()
+                            if isinstance(j, dict):
+                                if merged_event is None:
+                                    merged_event = j
+                                else:
+                                    merged_event = _merge_event_payload(merged_event, j)
+                            chunk_success = True
+                            ok_count += 1
+                            event_ok = True
+                            break
+                        except Exception as e:
+                            print(
+                                f"   ❌ JSON parse error for event {eid} "
+                                f"(group {chunk_idx}/{len(market_chunks)}, attempt {attempt}): {e}"
+                            )
+                    else:
+                        last_text = rr.text[:200]
+                        print(
+                            f"   ⚠️  Odds request failed for event {eid} "
+                            f"(group {chunk_idx}/{len(market_chunks)}, attempt {attempt}) "
+                            f"status={rr.status_code}"
+                        )
+                except Exception as e:
+                    print(
+                        f"   ❌ Exception fetching odds for event {eid} "
+                        f"(group {chunk_idx}/{len(market_chunks)}, attempt {attempt}): {e}"
+                    )
+
+            if not chunk_success:
+                fail_chunks += 1
+                print(
+                    f"   ⚠️  Giving up on event {eid} group {chunk_idx}/{len(market_chunks)}; "
+                    f"last_status={last_status}, snippet={last_text!r}"
+                )
+
+        if not event_ok:
+            fail_http += 1
             all_event_odds.append({})
+        else:
+            all_event_odds.append(merged_event if isinstance(merged_event, dict) else {})
 
     # 3) Summary + write files
     print(
         f"✅ fetch_odds summary: events={len(events)}, "
-        f"success={ok_count}, missing_id={fail_no_id}, http_fail={fail_http}"
+        f"success_chunks={ok_count}, failed_chunks={fail_chunks}, "
+        f"missing_id={fail_no_id}, event_fail={fail_http}"
     )
 
     # If literally everything failed, prefer an empty array over [ {}, {}, ... ]

@@ -36,6 +36,10 @@ class SegmentThreshold:
     train_losses: int
     train_win_pct: float | None
     train_wilson_lb: float | None
+    train_expected_roi: float | None
+    train_expected_pnl: float | None
+    train_realized_roi: float | None
+    train_realized_pnl: float | None
 
 
 def _to_bool(v: Any) -> bool:
@@ -65,6 +69,27 @@ def _wilson_lower_bound(wins: int, n: int, z: float = 1.96) -> float:
     center = p + (z * z) / (2 * n)
     spread = z * math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)
     return (center - spread) / den
+
+
+def _prob_to_american(p: float) -> float | None:
+    if not (0.0 < float(p) < 1.0):
+        return None
+    if p >= 0.5:
+        return -100.0 * float(p) / (1.0 - float(p))
+    return 100.0 * (1.0 - float(p)) / float(p)
+
+
+def _apply_slippage(price: float, slippage_cents: float) -> float:
+    p = float(price)
+    s = max(0.0, float(slippage_cents))
+    if p > 0:
+        return max(100.0, p - s)
+    return p - s
+
+
+def _win_profit_units(american_price: float) -> float:
+    p = float(american_price)
+    return p / 100.0 if p > 0 else 100.0 / abs(p)
 
 
 def _prepare(df: pd.DataFrame) -> pd.DataFrame:
@@ -104,19 +129,80 @@ def _prepare(df: pd.DataFrame) -> pd.DataFrame:
     out["line_key"] = out["line"].map(_to_line)
     out["segment"] = out["model_pick"] + ":" + out["line_key"]
     out["is_win"] = (out["model_wl"] == "W").astype(int)
+    out["market_side_price"] = out["market_side_prob"].map(_prob_to_american)
+    out["market_side_price"] = pd.to_numeric(out["market_side_price"], errors="coerce")
+    out = out[out["market_side_price"].notna()].copy()
     return out
 
 
-def _segment_perf(df: pd.DataFrame, min_ev: float, min_gap: float) -> dict[str, Any]:
+def _segment_perf(
+    df: pd.DataFrame,
+    min_ev: float,
+    min_gap: float,
+    objective_slippage_cents: float,
+) -> dict[str, Any]:
     sel = df[(df["ev_side"] >= float(min_ev)) & (df["edge_side"] >= float(min_gap))]
     n = int(len(sel))
     if n == 0:
-        return {"rows": 0, "wins": 0, "losses": 0, "win_pct": None, "lb": None}
+        return {
+            "rows": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_pct": None,
+            "lb": None,
+            "expected_roi": None,
+            "expected_pnl": None,
+            "realized_roi": None,
+            "realized_pnl": None,
+        }
     wins = int(sel["is_win"].sum())
     losses = n - wins
     win_pct = wins / n if n else None
     lb = _wilson_lower_bound(wins, n) if n else None
-    return {"rows": n, "wins": wins, "losses": losses, "win_pct": win_pct, "lb": lb}
+
+    prices = pd.to_numeric(sel["market_side_price"], errors="coerce").map(
+        lambda p: _apply_slippage(float(p), objective_slippage_cents)
+    )
+    win_profit = prices.map(_win_profit_units)
+    model_prob = pd.to_numeric(sel["model_side_prob"], errors="coerce")
+    is_win = pd.to_numeric(sel["is_win"], errors="coerce")
+
+    expected = (model_prob * win_profit) - (1.0 - model_prob)
+    realized = (is_win * win_profit) - (1.0 - is_win)
+    expected_roi = float(expected.mean()) if not expected.empty else None
+    realized_roi = float(realized.mean()) if not realized.empty else None
+
+    return {
+        "rows": n,
+        "wins": wins,
+        "losses": losses,
+        "win_pct": win_pct,
+        "lb": lb,
+        "expected_roi": expected_roi,
+        "expected_pnl": (None if expected_roi is None else float(expected_roi * n)),
+        "realized_roi": realized_roi,
+        "realized_pnl": (None if realized_roi is None else float(realized_roi * n)),
+    }
+
+
+def _candidate_score(perf: dict[str, Any], objective: str) -> tuple[float, float, float, float]:
+    rows = float(perf.get("rows") or 0.0)
+    lb = float(perf.get("lb") or 0.0)
+    wp = float(perf.get("win_pct") or 0.0)
+    expected_roi = float(perf.get("expected_roi") or -1e9)
+    expected_pnl = float(perf.get("expected_pnl") or -1e9)
+    realized_roi = float(perf.get("realized_roi") or -1e9)
+    realized_pnl = float(perf.get("realized_pnl") or -1e9)
+    if objective == "expected_pnl":
+        return (expected_pnl, expected_roi, rows, lb)
+    if objective == "expected_roi":
+        return (expected_roi, expected_pnl, rows, lb)
+    if objective == "realized_pnl":
+        return (realized_pnl, realized_roi, rows, lb)
+    if objective == "realized_roi":
+        return (realized_roi, realized_pnl, rows, lb)
+    # objective == "wilson_lb"
+    return (lb, rows, wp, expected_roi)
 
 
 def _choose_threshold(
@@ -126,24 +212,25 @@ def _choose_threshold(
     min_train_rows: int,
     fallback_min_ev: float,
     fallback_min_gap: float,
+    objective: str,
+    objective_slippage_cents: float,
 ) -> SegmentThreshold:
-    best: tuple[float, int, float, float, dict[str, Any]] | None = None
+    best_score: tuple[float, float, float, float] | None = None
+    best_payload: dict[str, Any] | None = None
 
     for ev in ev_grid:
         for gap in gap_grid:
-            perf = _segment_perf(seg_df, ev, gap)
+            perf = _segment_perf(seg_df, ev, gap, objective_slippage_cents)
             rows = int(perf["rows"])
             if rows < int(min_train_rows):
                 continue
-            lb = float(perf["lb"] or 0.0)
-            wp = float(perf["win_pct"] or 0.0)
-            # maximize Wilson LB, then sample size, then win%
-            key = (lb, rows, wp)
-            if best is None or key > best[:3]:
-                best = (lb, rows, wp, ev, {"gap": gap, **perf})
+            score = _candidate_score(perf, objective)
+            if best_score is None or score > best_score:
+                best_score = score
+                best_payload = {"ev": ev, "gap": gap, **perf}
 
-    if best is None:
-        perf = _segment_perf(seg_df, fallback_min_ev, fallback_min_gap)
+    if best_payload is None:
+        perf = _segment_perf(seg_df, fallback_min_ev, fallback_min_gap, objective_slippage_cents)
         return SegmentThreshold(
             min_ev=float(fallback_min_ev),
             min_gap=float(fallback_min_gap),
@@ -152,17 +239,25 @@ def _choose_threshold(
             train_losses=int(perf["losses"]),
             train_win_pct=(None if perf["win_pct"] is None else float(perf["win_pct"])),
             train_wilson_lb=(None if perf["lb"] is None else float(perf["lb"])),
+            train_expected_roi=(None if perf["expected_roi"] is None else float(perf["expected_roi"])),
+            train_expected_pnl=(None if perf["expected_pnl"] is None else float(perf["expected_pnl"])),
+            train_realized_roi=(None if perf["realized_roi"] is None else float(perf["realized_roi"])),
+            train_realized_pnl=(None if perf["realized_pnl"] is None else float(perf["realized_pnl"])),
         )
 
-    _, _, _, ev, payload = best
+    payload = best_payload
     return SegmentThreshold(
-        min_ev=float(ev),
+        min_ev=float(payload["ev"]),
         min_gap=float(payload["gap"]),
         train_rows=int(payload["rows"]),
         train_wins=int(payload["wins"]),
         train_losses=int(payload["losses"]),
         train_win_pct=(None if payload["win_pct"] is None else float(payload["win_pct"])),
         train_wilson_lb=(None if payload["lb"] is None else float(payload["lb"])),
+        train_expected_roi=(None if payload["expected_roi"] is None else float(payload["expected_roi"])),
+        train_expected_pnl=(None if payload["expected_pnl"] is None else float(payload["expected_pnl"])),
+        train_realized_roi=(None if payload["realized_roi"] is None else float(payload["realized_roi"])),
+        train_realized_pnl=(None if payload["realized_pnl"] is None else float(payload["realized_pnl"])),
     )
 
 
@@ -200,13 +295,25 @@ def _summarize_threshold_history(df: pd.DataFrame) -> dict[str, Any]:
         return {}
     out: dict[str, Any] = {}
     for seg, sub in df.groupby("segment", dropna=False):
-        out[str(seg)] = {
+        row: dict[str, Any] = {
             "reopt_points": int(len(sub)),
             "median_min_ev": float(median(sub["min_ev"].astype(float).tolist())),
             "median_min_gap": float(median(sub["min_gap"].astype(float).tolist())),
             "last_min_ev": float(sub.iloc[-1]["min_ev"]),
             "last_min_gap": float(sub.iloc[-1]["min_gap"]),
         }
+        for col in (
+            "train_expected_roi",
+            "train_expected_pnl",
+            "train_realized_roi",
+            "train_realized_pnl",
+        ):
+            if col in sub.columns and sub[col].notna().any():
+                vals = pd.to_numeric(sub[col], errors="coerce").dropna()
+                if not vals.empty:
+                    row[f"median_{col}"] = float(median(vals.astype(float).tolist()))
+                    row[f"last_{col}"] = float(pd.to_numeric(sub.iloc[-1][col], errors="coerce"))
+        out[str(seg)] = row
     return out
 
 
@@ -220,6 +327,18 @@ def main() -> None:
     ap.add_argument("--min-train-rows", type=int, default=80, help="Minimum selected train rows required per segment.")
     ap.add_argument("--ev-grid", default="0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10")
     ap.add_argument("--gap-grid", default="0.00,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08")
+    ap.add_argument(
+        "--objective",
+        default="expected_roi",
+        choices=["expected_roi", "expected_pnl", "realized_roi", "realized_pnl", "wilson_lb"],
+        help="Threshold ranking objective on train rows.",
+    )
+    ap.add_argument(
+        "--objective-slippage-cents",
+        type=float,
+        default=0.0,
+        help="Apply cents slippage to market-side prices while scoring objective.",
+    )
     ap.add_argument("--fallback-min-ev", type=float, default=0.05)
     ap.add_argument("--fallback-min-gap", type=float, default=0.04)
     ap.add_argument("--out-picks-csv", default="tmp/nhl_sog_walkforward_selected.csv")
@@ -270,6 +389,8 @@ def main() -> None:
                     min_train_rows=int(args.min_train_rows),
                     fallback_min_ev=float(args.fallback_min_ev),
                     fallback_min_gap=float(args.fallback_min_gap),
+                    objective=str(args.objective),
+                    objective_slippage_cents=float(args.objective_slippage_cents),
                 )
                 current_thr[seg] = chosen
                 threshold_rows.append(
@@ -283,6 +404,10 @@ def main() -> None:
                         "train_losses": chosen.train_losses,
                         "train_win_pct": chosen.train_win_pct,
                         "train_wilson_lb": chosen.train_wilson_lb,
+                        "train_expected_roi": chosen.train_expected_roi,
+                        "train_expected_pnl": chosen.train_expected_pnl,
+                        "train_realized_roi": chosen.train_realized_roi,
+                        "train_realized_pnl": chosen.train_realized_pnl,
                     }
                 )
 
@@ -340,6 +465,10 @@ def main() -> None:
             "train_losses": thr.train_losses,
             "train_win_pct": thr.train_win_pct,
             "train_wilson_lb": thr.train_wilson_lb,
+            "train_expected_roi": thr.train_expected_roi,
+            "train_expected_pnl": thr.train_expected_pnl,
+            "train_realized_roi": thr.train_realized_roi,
+            "train_realized_pnl": thr.train_realized_pnl,
         }
         for seg, thr in sorted(current_thr.items())
     }
@@ -354,6 +483,8 @@ def main() -> None:
             "min_train_rows": int(args.min_train_rows),
             "ev_grid": ev_grid,
             "gap_grid": gap_grid,
+            "objective": str(args.objective),
+            "objective_slippage_cents": float(args.objective_slippage_cents),
             "fallback_min_ev": float(args.fallback_min_ev),
             "fallback_min_gap": float(args.fallback_min_gap),
         },

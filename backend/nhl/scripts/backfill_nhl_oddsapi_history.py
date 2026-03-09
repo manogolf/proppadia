@@ -57,6 +57,26 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_OUT_ROOT = BACKEND_DIR / "nhl" / "exports" / "odds_history"
 
 
+def _load_dotenv_multi() -> None:
+    try:
+        from dotenv import load_dotenv
+    except Exception:
+        return
+    here = Path(__file__).resolve()
+    root = here.parents[3]
+    for p in (
+        root / ".env.local",
+        root / ".env",
+        root / "backend" / ".env",
+        root / "nhl" / ".env",
+    ):
+        if p.exists():
+            load_dotenv(p, override=False)
+
+
+_load_dotenv_multi()
+
+
 def _parse_iso_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
@@ -113,9 +133,89 @@ def _pick_events_list(payload: Any) -> list[dict[str, Any]]:
 class FetchContext:
     api_key: str
     markets: str
+    market_groups: list[str]
     regions: str
     odds_format: str
     timeout: int
+
+
+def _market_groups(markets_csv: str) -> list[str]:
+    toks = [m.strip() for m in str(markets_csv).split(",") if m.strip()]
+    if not toks:
+        raw = str(markets_csv).strip()
+        return [raw] if raw else []
+    primary = "player_shots_on_goal"
+    alternate = "player_shots_on_goal_alternate"
+    chunks: list[list[str]] = []
+    if primary in toks:
+        chunks.append([primary])
+    if alternate in toks:
+        chunks.append([alternate])
+    rest = [m for m in toks if m not in {primary, alternate}]
+    if rest:
+        chunks.append(rest)
+    if not chunks:
+        chunks = [toks]
+    return [",".join(c) for c in chunks]
+
+
+def _merge_market_payload(base_payload: dict[str, Any], next_payload: dict[str, Any]) -> dict[str, Any]:
+    out = dict(base_payload)
+    base_books = out.get("bookmakers")
+    next_books = next_payload.get("bookmakers")
+    if not isinstance(base_books, list) or not isinstance(next_books, list):
+        return out
+
+    def _book_key(book_obj: dict[str, Any]) -> str:
+        return str(book_obj.get("key", "")).strip()
+
+    by_key: dict[str, dict[str, Any]] = {}
+    ordered: list[dict[str, Any]] = []
+    for b in base_books:
+        if not isinstance(b, dict):
+            continue
+        k = _book_key(b)
+        if not k:
+            continue
+        cp = dict(b)
+        markets = cp.get("markets")
+        cp["markets"] = list(markets) if isinstance(markets, list) else []
+        by_key[k] = cp
+        ordered.append(cp)
+
+    for b in next_books:
+        if not isinstance(b, dict):
+            continue
+        k = _book_key(b)
+        if not k:
+            continue
+        if k not in by_key:
+            cp = dict(b)
+            markets = cp.get("markets")
+            cp["markets"] = list(markets) if isinstance(markets, list) else []
+            by_key[k] = cp
+            ordered.append(cp)
+            continue
+        ex = by_key[k]
+        ex_markets = ex.get("markets")
+        if not isinstance(ex_markets, list):
+            ex_markets = []
+            ex["markets"] = ex_markets
+        for m in b.get("markets", []) if isinstance(b.get("markets"), list) else []:
+            if isinstance(m, dict):
+                ex_markets.append(m)
+
+    out["bookmakers"] = ordered
+    return out
+
+
+def _merge_wrapped_event_odds(base_wrapped: dict[str, Any], next_wrapped: dict[str, Any]) -> dict[str, Any]:
+    out = dict(base_wrapped)
+    base_data = out.get("data")
+    next_data = next_wrapped.get("data")
+    if isinstance(base_data, dict) and isinstance(next_data, dict):
+        out["data"] = _merge_market_payload(base_data, next_data)
+    return out
 
 
 def _get_json(url: str, *, params: dict[str, Any], timeout: int) -> tuple[Any, dict[str, str], int]:
@@ -140,14 +240,14 @@ def _fetch_events_snapshot(ctx: FetchContext, snapshot_iso_utc: str) -> tuple[An
 
 
 def _fetch_event_odds_snapshot(
-    ctx: FetchContext, event_id: str, snapshot_iso_utc: str
+    ctx: FetchContext, event_id: str, snapshot_iso_utc: str, markets_csv: str
 ) -> tuple[Any, dict[str, str], int]:
     url = f"https://api.the-odds-api.com/v4/historical/sports/{SPORT_KEY}/events/{event_id}/odds"
     params = {
         "apiKey": ctx.api_key,
         "date": snapshot_iso_utc,
         "regions": ctx.regions,
-        "markets": ctx.markets,
+        "markets": markets_csv,
         "oddsFormat": ctx.odds_format,
         "dateFormat": "iso",
     }
@@ -212,6 +312,7 @@ def main() -> None:
     ctx = FetchContext(
         api_key=api_key or "dry-run",
         markets=args.markets,
+        market_groups=_market_groups(args.markets),
         regions=args.regions,
         odds_format=args.odds_format,
         timeout=int(args.timeout_sec),
@@ -223,6 +324,7 @@ def main() -> None:
         f"snapshot_time_et={args.snapshot_time_et.strftime('%H:%M')}"
     )
     print(f"[odds-backfill] out_root={out_root}")
+    print(f"[odds-backfill] market call groups={ctx.market_groups}")
 
     copied = 0
     skipped = pre_skipped
@@ -259,19 +361,30 @@ def main() -> None:
                     wrappers.append({})
                     odds_data.append({})
                     continue
-                try:
-                    odds_wrapped, odds_headers, _odds_status = _fetch_event_odds_snapshot(
-                        ctx, event_id, snapshot_iso
-                    )
-                    last_headers = odds_headers
-                    wrappers.append(odds_wrapped if isinstance(odds_wrapped, dict) else {"data": odds_wrapped})
-                    if isinstance(odds_wrapped, dict):
-                        odds_data.append(odds_wrapped.get("data") or {})
-                    else:
-                        odds_data.append({})
-                except Exception as e:
-                    print(f"[odds-backfill] {day_str} event {event_id} failed: {e}")
-                    wrappers.append({"event_id": event_id, "error": str(e)})
+                merged_wrapped: dict[str, Any] | None = None
+                event_ok = False
+                for group_idx, markets_csv in enumerate(ctx.market_groups, start=1):
+                    try:
+                        odds_wrapped, odds_headers, _odds_status = _fetch_event_odds_snapshot(
+                            ctx, event_id, snapshot_iso, markets_csv
+                        )
+                        last_headers = odds_headers
+                        wrapped_dict = odds_wrapped if isinstance(odds_wrapped, dict) else {"data": odds_wrapped}
+                        if merged_wrapped is None:
+                            merged_wrapped = wrapped_dict
+                        else:
+                            merged_wrapped = _merge_wrapped_event_odds(merged_wrapped, wrapped_dict)
+                        event_ok = True
+                    except Exception as e:
+                        print(
+                            f"[odds-backfill] {day_str} event {event_id} "
+                            f"group {group_idx}/{len(ctx.market_groups)} failed: {e}"
+                        )
+                if event_ok and isinstance(merged_wrapped, dict):
+                    wrappers.append(merged_wrapped)
+                    odds_data.append(merged_wrapped.get("data") or {})
+                else:
+                    wrappers.append({"event_id": event_id, "error": "all market groups failed"})
                     odds_data.append({})
 
                 if args.sleep_ms > 0 and idx < len(events_for_slate):
