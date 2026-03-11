@@ -235,17 +235,6 @@ export default function HomeGateway() {
             </div>
             <div className="w-full max-w-xs md:w-64 flex flex-col gap-3 md:items-stretch md:self-stretch md:justify-between">
               <div className="hidden md:block rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white px-4 py-4">
-                <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-slate-900 leading-none">
-                    P<span className="text-[13px] align-super">3</span>
-                  </span>
-                  <span className="text-2xl font-bold text-slate-900 mt-0.5 -ml-[4px]">
-                    roppadia
-                  </span>
-                </div>
-                <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                  Member Lane
-                </div>
                 <p className="mt-2 text-sm text-slate-600 leading-6">
                   Model edge, market board context, and custom slate builder in
                   one workflow.
