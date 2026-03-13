@@ -96,6 +96,8 @@ def archive_site_artifacts(slate: str) -> None:
     archive_dir = EXPORTS_ODDS_HISTORY_DIR / slate
     archive_dir.mkdir(parents=True, exist_ok=True)
 
+    # Keep both publish artifacts and raw prediction snapshots per slate.
+    # This preserves reproducibility for later bakeoff/reconciliation reruns.
     artifacts = [
         SITE_DIR / "sog_with_market.csv",
         SITE_DIR / "unmatched_sog.csv",
@@ -106,6 +108,8 @@ def archive_site_artifacts(slate: str) -> None:
         SITE_DIR / "odds_latest.json",
         SITE_DIR / "odds_nhl_playerprops_today.json",
         SITE_DIR / "events_today.json",
+        PROC_DIR / "sog_predictions_wide_calibrated.csv",
+        PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv",
     ]
     copied: list[str] = []
 
