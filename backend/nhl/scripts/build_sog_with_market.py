@@ -260,6 +260,39 @@ def american_to_prob(a) -> float:
         return float("nan")
     return 100.0 / (A + 100.0) if A > 0 else (-A) / ((-A) + 100.0)
 
+
+def is_reasonable_american_price(a: float) -> bool:
+    """Guard against malformed odds values like -1 or -2.5."""
+    if not isinstance(a, (int, float)) or not math.isfinite(float(a)):
+        return False
+    A = float(a)
+    if A == 0:
+        return False
+    return abs(A) >= 100.0
+
+
+def de_vig_two_way(p_over_raw, p_under_raw) -> tuple[float, float]:
+    """
+    Return no-vig over/under probabilities from two one-sided implied probs.
+
+    Fallback behavior:
+    - if only one side is available, use that side and derive complement.
+    - if neither is available, return NaN, NaN.
+    """
+    over = float(p_over_raw) if isinstance(p_over_raw, (int, float)) and math.isfinite(float(p_over_raw)) else float("nan")
+    under = float(p_under_raw) if isinstance(p_under_raw, (int, float)) and math.isfinite(float(p_under_raw)) else float("nan")
+
+    if math.isfinite(over) and math.isfinite(under) and (over + under) > 0:
+        denom = over + under
+        return over / denom, under / denom
+
+    if math.isfinite(over):
+        return over, 1.0 - over
+    if math.isfinite(under):
+        return 1.0 - under, under
+    return float("nan"), float("nan")
+
+
 def prob_to_american(p) -> str:
     if not (isinstance(p, (int, float)) and 0 < p < 1):
         return ""
@@ -510,29 +543,20 @@ def main():
     # Ensure pred is always defined even if we take an early/alternate path.
     pred: pd.DataFrame | None = None
 
-    slate = args.slate_date or os.environ.get("SLATE_DATE")
+    slate = str(args.slate_date or os.environ.get("SLATE_DATE") or "").strip()
     if not slate:
         die("Provide --slate-date YYYY-MM-DD or set SLATE_DATE env (ET).")
 
     db_url = args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-
+    print(f"[sog_with_market] SLATE_DATE (ET) = {slate}")
 
     names_path = Path(args.names)
     pred_path = Path(args.pred)
 
     if not names_path.exists() or names_path.stat().st_size == 0:
         raise AssertionError(f"[sog_with_market] expected artifact missing/empty: {names_path}")
-    if not pred_path.exists() or pred_path.stat().st_size == 0:
+    if (not db_url) and (not pred_path.exists() or pred_path.stat().st_size == 0):
         raise AssertionError(f"[sog_with_market] expected artifact missing/empty: {pred_path}")
-
-    slate = os.environ.get("SLATE_DATE")
-    if not slate:
-        raise AssertionError("[sog_with_market] SLATE_DATE env is required")
-    print(f"[sog_with_market] SLATE_DATE (ET) = {slate}")
-
-    slate = args.slate_date or os.environ.get("SLATE_DATE")
-    if not slate:
-        die("Provide --slate-date YYYY-MM-DD or set SLATE_DATE env (ET).")
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -564,7 +588,6 @@ def main():
     pred_long = None
 
     # Prefer DB nhl.predictions when db_url is available; fallback to CSV otherwise.
-# Prefer DB nhl.predictions when db_url is available; fallback to CSV otherwise.
     if db_url:
         pred_long = _fetch_pred_long_from_db(db_url=db_url, slate=slate, prop=args.prop)
         if pred_long is None or len(pred_long) == 0:
@@ -807,6 +830,7 @@ def main():
     if odds_raw is not None:
         recs: list[dict] = []
         accept_keys = _market_keys_to_accept()
+        dropped_bad_price = 0
 
         seen_keys: set[str] = set()
 
@@ -828,6 +852,16 @@ def main():
                         pr = o.get("price")
 
                         if pt is not None and pr is not None:
+                            try:
+                                price = float(pr)
+                            except Exception:
+                                continue
+                            if not is_reasonable_american_price(price):
+                                dropped_bad_price += 1
+                                continue
+                            implied_prob = american_to_prob(price)
+                            if not math.isfinite(implied_prob):
+                                continue
                             for alias_key in alias_keys:
                                 if alias_key:
                                     recs.append(
@@ -835,7 +869,8 @@ def main():
                                             "alias_key": alias_key,
                                             "line_str": _fmt_line_str(pt),
                                             "side": side,
-                                            "price": float(pr),
+                                            "price": price,
+                                            "implied_prob": implied_prob,
                                         }
                                     )
 
@@ -848,6 +883,8 @@ def main():
 
         walk(odds_raw)
         print(f"[sog_with_market] odds recs (over+under outcomes) built: {len(recs)}")
+        if dropped_bad_price:
+            print(f"[sog_with_market] dropped malformed american prices: {dropped_bad_price}")
 
         print(f"[sog_with_market] markets seen in odds (filtered to slate): {sorted(seen_keys)}")
 
@@ -859,9 +896,10 @@ def main():
                 od["side"] = od["side"].astype(str).str.strip().str.lower()
                 od = od[od["side"].isin(["over", "under"])]
 
-            # Expect recs rows like: alias_key, line_str, side ('over'/'under'), price (american int/float)
+            # Expect recs rows like: alias_key, line_str, side ('over'/'under'),
+            # price (american), implied_prob (side implied probability).
             if "side" in od.columns:
-                med_prices = (
+                med_price = (
                     od.pivot_table(
                         index=["alias_key", "line_str"],
                         columns="side",
@@ -871,20 +909,39 @@ def main():
                     .reset_index()
                     .rename(columns={"over": "price_over", "under": "price_under"})
                 )
+                med_prob = (
+                    od.pivot_table(
+                        index=["alias_key", "line_str"],
+                        columns="side",
+                        values="implied_prob",
+                        aggfunc="median",
+                    )
+                    .reset_index()
+                    .rename(columns={"over": "p_over_mkt_raw", "under": "p_under_mkt_raw"})
+                )
+                med_prices = med_price.merge(med_prob, on=["alias_key", "line_str"], how="outer")
 
                 # guarantee columns exist even if pivot didn't create one of them
                 if "price_over" not in med_prices.columns:
                     med_prices["price_over"] = pd.NA
                 if "price_under" not in med_prices.columns:
                     med_prices["price_under"] = pd.NA
+                if "p_over_mkt_raw" not in med_prices.columns:
+                    med_prices["p_over_mkt_raw"] = pd.NA
+                if "p_under_mkt_raw" not in med_prices.columns:
+                    med_prices["p_under_mkt_raw"] = pd.NA
 
             else:
                 # Backward compat: if recs only captured "over" rows historically
                 med_prices = (
                     od.groupby(["alias_key", "line_str"], as_index=False)
-                    .agg(price_over=("price", "median"))
+                    .agg(
+                        price_over=("price", "median"),
+                        p_over_mkt_raw=("implied_prob", "median"),
+                    )
                 )
                 med_prices["price_under"] = pd.NA
+                med_prices["p_under_mkt_raw"] = pd.NA
         else:
             med_prices = None
 
@@ -923,6 +980,8 @@ def main():
         # still create the columns so downstream code never KeyErrors
         df_alias["price_over"] = pd.NA
         df_alias["price_under"] = pd.NA
+        df_alias["p_over_mkt_raw"] = pd.NA
+        df_alias["p_under_mkt_raw"] = pd.NA
 
     # Collapse exploded aliases back to original rows by taking median price across aliases
     def _median_or_na(s: pd.Series):
@@ -934,6 +993,8 @@ def main():
         .agg(
             price_over=("price_over", _median_or_na),
             price_under=("price_under", _median_or_na),
+            p_over_mkt_raw=("p_over_mkt_raw", _median_or_na),
+            p_under_mkt_raw=("p_under_mkt_raw", _median_or_na),
         )
     )
 
@@ -954,8 +1015,22 @@ def main():
     if "price_over" not in df.columns:
         raise AssertionError("price_over missing — odds join path is broken")
 
-    # market probability from price if present
-    df["p_over_mkt"] = df["price_over"].map(american_to_prob)
+    # market probability:
+    # - raw one-sided implied probabilities from each side (already aggregated in prob-space)
+    # - no-vig two-way normalized probabilities when both sides exist
+    if "p_over_mkt_raw" not in df.columns:
+        df["p_over_mkt_raw"] = df["price_over"].map(american_to_prob)
+    if "p_under_mkt_raw" not in df.columns:
+        df["p_under_mkt_raw"] = df["price_under"].map(american_to_prob) if "price_under" in df.columns else pd.NA
+
+    novig = [
+        de_vig_two_way(po, pu)
+        for po, pu in zip(df["p_over_mkt_raw"], df["p_under_mkt_raw"])
+    ]
+    df["p_over_mkt_novig"] = [x[0] for x in novig]
+    df["p_under_mkt_novig"] = [x[1] for x in novig]
+    # Keep legacy column name; downstream selectors read p_over_mkt.
+    df["p_over_mkt"] = df["p_over_mkt_novig"]
 
     def edge(a, b):
         if (
@@ -970,21 +1045,28 @@ def main():
     df["edge_over"] = [edge(a, b) for a, b in zip(df["p_over"], df["p_over_mkt"])]
     df["fair_over"] = df["p_over"].map(prob_to_american)
 
-    # If price_over missing, p_over_mkt will be NA/NaN; keep edge/fair blank too
-    df.loc[df["price_over"].isna(), ["p_over_mkt", "edge_over", "fair_over"]] = pd.NA
+    # If market probability is unavailable, keep edge/fair blank.
+    df.loc[pd.to_numeric(df["p_over_mkt"], errors="coerce").isna(), ["p_over_mkt", "edge_over", "fair_over"]] = pd.NA
 
-    # ---------------- UNDER side (optional; compute only when price_under exists) ----------------
+    # ---------------- UNDER side ----------------
     df["p_under"] = 1.0 - df["p_over"]
+    df["p_under_mkt"] = df["p_under_mkt_novig"]
+    df["edge_under"] = [edge(a, b) for a, b in zip(df["p_under"], df["p_under_mkt"])]
+    df["fair_under"] = df["p_under"].map(prob_to_american)
 
-    if "price_under" in df.columns:
-        df["p_under_mkt"] = df["price_under"].map(american_to_prob)
-        df["edge_under"] = [edge(a, b) for a, b in zip(df["p_under"], df["p_under_mkt"])]
-        df["fair_under"] = df["p_under"].map(prob_to_american)
+    # If market probability is unavailable, blank under-derived fields too.
+    df.loc[pd.to_numeric(df["p_under_mkt"], errors="coerce").isna(), ["p_under_mkt", "edge_under", "fair_under"]] = pd.NA
 
-        # If price_under missing, blank the derived under fields too
-        df.loc[df["price_under"].isna(), ["p_under_mkt", "edge_under", "fair_under"]] = pd.NA
+    both_sides = pd.to_numeric(df["p_over_mkt_raw"], errors="coerce").notna() & pd.to_numeric(
+        df["p_under_mkt_raw"], errors="coerce"
+    ).notna()
+    print(
+        f"[sog_with_market] no-vig pairs available: {int(both_sides.sum())}/{len(df)} "
+        f"({(float(both_sides.mean()) * 100.0 if len(df) else 0.0):.1f}%)"
+    )
+
     # ---------------- unmatched report (no price) ----------------
-    unmatched = df[df["price_over"].isna()].copy()
+    unmatched = df[pd.to_numeric(df["p_over_mkt"], errors="coerce").isna()].copy()
     unmatched_cols = [c for c in ["full_name", "player_id", "game_id", "team_id", "line", "p_over", "game_date"] if c in df.columns]
     unmatched[unmatched_cols].to_csv(unmatched_path, index=False)
 
@@ -999,9 +1081,17 @@ def main():
             "line",
             "p_over",
             "price_over",
+            "price_under",
+            "p_over_mkt_raw",
+            "p_under_mkt_raw",
+            "p_over_mkt_novig",
+            "p_under_mkt_novig",
             "p_over_mkt",
+            "p_under_mkt",
             "edge_over",
+            "edge_under",
             "fair_over",
+            "fair_under",
             "game_date",
         ]
         if c in df.columns

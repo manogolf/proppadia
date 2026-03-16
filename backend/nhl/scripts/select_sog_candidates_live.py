@@ -113,6 +113,40 @@ def _write_summary_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2))
 
 
+def _parse_segment_float_pairs(raw_items: list[str], *, arg_name: str) -> dict[str, float]:
+    """Parse repeatable segment=value (or comma-joined segment=value) items."""
+    out: dict[str, float] = {}
+    for raw in raw_items:
+        for tok in str(raw).split(","):
+            item = tok.strip()
+            if not item:
+                continue
+            if "=" not in item:
+                raise SystemExit(
+                    f"invalid {arg_name} value '{item}'. Expected format segment=value (example: under:1.5=0.65)"
+                )
+            seg, val = item.split("=", 1)
+            seg = str(seg).strip()
+            if not seg:
+                raise SystemExit(f"invalid {arg_name} value '{item}': missing segment key")
+            try:
+                out[seg] = float(val)
+            except Exception as exc:
+                raise SystemExit(f"invalid {arg_name} numeric value '{item}'") from exc
+    return out
+
+
+def _parse_segment_list(raw_items: list[str]) -> set[str]:
+    """Parse repeatable segment entries (or comma-separated list)."""
+    out: set[str] = set()
+    for raw in raw_items:
+        for tok in str(raw).split(","):
+            item = tok.strip()
+            if item:
+                out.add(item)
+    return out
+
+
 def _emit_book_upload(
     candidates_csv: Path,
     out_csv: Path,
@@ -239,6 +273,55 @@ def main() -> None:
         default=[],
         help="Repeatable player ID exclude passed to exporter.",
     )
+    ap.add_argument(
+        "--segment-min-ev-override",
+        action="append",
+        default=[],
+        help=(
+            "Segment-specific min EV override (repeatable). "
+            "Format: segment=value (example: under:3.5=0.20). "
+            "Comma-separated pairs are also accepted."
+        ),
+    )
+    ap.add_argument(
+        "--segment-min-gap-override",
+        action="append",
+        default=[],
+        help=(
+            "Segment-specific min gap override (repeatable). "
+            "Format: segment=value (example: over:2.5=0.07). "
+            "Comma-separated pairs are also accepted."
+        ),
+    )
+    ap.add_argument(
+        "--segment-min-model-prob",
+        action="append",
+        default=[],
+        help=(
+            "Segment-specific post-selection model probability gate (repeatable). "
+            "Format: segment=value (example: under:1.5=0.65). "
+            "Comma-separated pairs are also accepted."
+        ),
+    )
+    ap.add_argument(
+        "--segment-max-price",
+        action="append",
+        default=[],
+        help=(
+            "Segment-specific post-selection max side price cap in American odds (repeatable). "
+            "Keeps rows where side_price <= cap. Example: under:1.5=100 or over:3.5=130. "
+            "Comma-separated pairs are also accepted."
+        ),
+    )
+    ap.add_argument(
+        "--segment-disable",
+        action="append",
+        default=[],
+        help=(
+            "Disable full segment(s) before selection (repeatable). "
+            "Example: over:3.5 . Comma-separated values are also accepted."
+        ),
+    )
     args = ap.parse_args()
 
     market_csv = Path(args.market_csv)
@@ -252,14 +335,37 @@ def main() -> None:
     if not policy:
         raise SystemExit("policy is empty")
 
+    seg_min_ev_override = _parse_segment_float_pairs(args.segment_min_ev_override, arg_name="--segment-min-ev-override")
+    seg_min_gap_override = _parse_segment_float_pairs(
+        args.segment_min_gap_override, arg_name="--segment-min-gap-override"
+    )
+    seg_min_model_prob = _parse_segment_float_pairs(
+        args.segment_min_model_prob, arg_name="--segment-min-model-prob"
+    )
+    seg_max_price = _parse_segment_float_pairs(args.segment_max_price, arg_name="--segment-max-price")
+    seg_disable = _parse_segment_list(args.segment_disable)
+
+    for seg, p in seg_min_model_prob.items():
+        if not (0.0 < float(p) < 1.0):
+            raise SystemExit(f"--segment-min-model-prob for {seg} must be within (0,1), got {p}")
+
     df = pd.read_csv(market_csv)
-    required = ["full_name", "player_id", "game_id", "line", "p_over", "p_over_mkt", "game_date"]
+    required = ["full_name", "player_id", "game_id", "line", "p_over", "game_date"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise SystemExit(f"market csv missing required columns: {missing}")
+    market_prob_col = "p_over_mkt_novig" if "p_over_mkt_novig" in df.columns else "p_over_mkt"
+    if market_prob_col not in df.columns:
+        raise SystemExit("market csv missing required market probability column: p_over_mkt or p_over_mkt_novig")
+    if market_prob_col != "p_over_mkt":
+        # Keep downstream logic stable; selection always reads p_over_mkt.
+        df["p_over_mkt"] = df[market_prob_col]
 
     for c in ["player_id", "game_id", "line", "p_over", "p_over_mkt"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+    for c in ["price_over", "price_under"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
     df["game_date"] = df["game_date"].astype(str)
     df = df.dropna(subset=["player_id", "game_id", "line", "p_over", "p_over_mkt", "game_date"]).copy()
     if df.empty:
@@ -275,6 +381,11 @@ def main() -> None:
         sides["model_side_prob"].between(0.0, 1.0, inclusive="neither")
         & sides["market_side_prob"].between(0.0, 1.0, inclusive="neither")
     ].copy()
+    sides["price_side"] = np.where(
+        sides["model_pick"] == "over",
+        pd.to_numeric(sides.get("price_over"), errors="coerce"),
+        pd.to_numeric(sides.get("price_under"), errors="coerce"),
+    )
 
     # Attach policy thresholds.
     sides["policy_min_ev"] = sides["segment"].map(lambda s: policy[s].min_ev if s in policy else pd.NA)
@@ -286,10 +397,28 @@ def main() -> None:
     sides["policy_min_ev"] = pd.to_numeric(sides["policy_min_ev"], errors="coerce")
     sides["policy_min_gap"] = pd.to_numeric(sides["policy_min_gap"], errors="coerce")
 
+    # Optional segment-level threshold overrides.
+    if seg_min_ev_override:
+        sides["policy_min_ev"] = sides.apply(
+            lambda r: float(seg_min_ev_override.get(str(r["segment"]), r["policy_min_ev"])),
+            axis=1,
+        )
+    if seg_min_gap_override:
+        sides["policy_min_gap"] = sides.apply(
+            lambda r: float(seg_min_gap_override.get(str(r["segment"]), r["policy_min_gap"])),
+            axis=1,
+        )
+
     if float(args.min_train_wilson_lb) > 0.0:
         sides = sides[
             pd.to_numeric(sides["policy_train_wilson_lb"], errors="coerce").fillna(0.0) >= float(args.min_train_wilson_lb)
         ].copy()
+
+    dropped_by_segment_disable = 0
+    if seg_disable:
+        before = len(sides)
+        sides = sides[~sides["segment"].astype(str).isin(seg_disable)].copy()
+        dropped_by_segment_disable = before - len(sides)
 
     sides["effective_min_ev"] = sides["policy_min_ev"].clip(lower=float(args.min_ev_floor))
     sides["effective_min_gap"] = np.where(
@@ -315,6 +444,32 @@ def main() -> None:
             | (selected["model_side_fair_american"] >= int(args.max_fair_favorite))
         ].copy()
         dropped_fair_odds = before - len(selected)
+
+    dropped_by_segment_model_prob = 0
+    if seg_min_model_prob and not selected.empty:
+        before = len(selected)
+        keep = selected.apply(
+            lambda r: float(r["model_side_prob"]) >= float(seg_min_model_prob.get(str(r["segment"]), -np.inf)),
+            axis=1,
+        )
+        selected = selected[keep].copy()
+        dropped_by_segment_model_prob = before - len(selected)
+
+    dropped_by_segment_max_price = 0
+    if seg_max_price and not selected.empty:
+        before = len(selected)
+
+        def _keep_max_price(r: pd.Series) -> bool:
+            seg = str(r["segment"])
+            if seg not in seg_max_price:
+                return True
+            px = pd.to_numeric(pd.Series([r.get("price_side")]), errors="coerce").iloc[0]
+            if pd.isna(px):
+                return False
+            return float(px) <= float(seg_max_price[seg])
+
+        selected = selected[selected.apply(_keep_max_price, axis=1)].copy()
+        dropped_by_segment_max_price = before - len(selected)
 
     # Rank strongest first for any capping.
     selected = selected.sort_values(
@@ -360,6 +515,8 @@ def main() -> None:
         "policy_train_wilson_lb",
         "market_side",
         "price_over",
+        "price_under",
+        "price_side",
         "p_over",
         "p_over_mkt",
         "model_side_fair_american",
@@ -384,11 +541,19 @@ def main() -> None:
             "max_per_slate": int(args.max_per_slate),
             "max_fair_favorite": int(args.max_fair_favorite),
             "emit_book_upload": bool(args.emit_book_upload),
+            "segment_min_ev_override": dict(sorted(seg_min_ev_override.items())),
+            "segment_min_gap_override": dict(sorted(seg_min_gap_override.items())),
+            "segment_min_model_prob": dict(sorted(seg_min_model_prob.items())),
+            "segment_max_price": dict(sorted(seg_max_price.items())),
+            "segment_disable": sorted(seg_disable),
         },
         "policy_segments_loaded": sorted(policy.keys()),
         "source_rows_for_date": int(len(df)),
         "source_side_rows_for_date": int(len(sides)),
         "dropped_by_fair_odds_cap": int(dropped_fair_odds),
+        "dropped_by_segment_disable": int(dropped_by_segment_disable),
+        "dropped_by_segment_model_prob": int(dropped_by_segment_model_prob),
+        "dropped_by_segment_max_price": int(dropped_by_segment_max_price),
         "selected": _summarize(selected),
         "outputs": {"csv": str(out_csv), "json": str(Path(args.out_json))},
     }

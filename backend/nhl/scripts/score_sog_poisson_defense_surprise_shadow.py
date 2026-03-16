@@ -139,11 +139,17 @@ def main() -> None:
     ap.add_argument("--out", dest="out_path", default=DEFAULT_OUT)
     ap.add_argument("--slate-date", default=None)
     ap.add_argument("--season", type=int, default=None)
-    ap.add_argument("--alphas", default="0.5,0.6")
+    ap.add_argument("--alphas", default="0.4,0.5")
     ap.add_argument("--bandwidth", type=float, default=0.6)
     ap.add_argument("--goalie-weight", type=float, default=0.7)
-    ap.add_argument("--clip-low", type=float, default=0.75)
-    ap.add_argument("--clip-high", type=float, default=1.25)
+    ap.add_argument("--clip-low", type=float, default=0.9)
+    ap.add_argument("--clip-high", type=float, default=1.1)
+    ap.add_argument(
+        "--defense-blend-weight",
+        type=float,
+        default=0.4,
+        help="Blend weight for explicit defense base: lambda_blend=(1-w)*lambda_offense + w*lambda_defense_base",
+    )
     args = ap.parse_args()
 
     in_path = Path(args.in_path)
@@ -240,9 +246,23 @@ def main() -> None:
     out["faced_projected_rate_last10"] = pd.to_numeric(curr["faced_projected_rate_last10"], errors="coerce")
     out["defense_surprise_ratio"] = pd.to_numeric(curr["defense_surprise_ratio"], errors="coerce")
     out["defense_surprise_applied"] = out["defense_surprise_ratio"].notna()
+    defense_base = (
+        pd.to_numeric(curr["projected_signature_rate_per60"], errors="coerce")
+        * pd.to_numeric(toi, errors="coerce")
+        / 60.0
+    )
+    out["lambda_defense_base"] = defense_base.where(defense_base.notna(), out["lambda_offense"]).clip(lower=0.0)
+    blend_w = max(0.0, min(1.0, float(args.defense_blend_weight)))
+    blend_key = str(blend_w).replace(".", "_")
+    out[f"lambda_blend_w{blend_key}"] = (
+        (1.0 - blend_w) * out["lambda_offense"] + blend_w * out["lambda_defense_base"]
+    ).clip(lower=0.0)
     out["p_offense_over_1_5"] = out["lambda_offense"].apply(lambda v: _poisson_tail(float(v), 2))
     out["p_offense_over_2_5"] = out["lambda_offense"].apply(lambda v: _poisson_tail(float(v), 3))
     out["p_offense_over_3_5"] = out["lambda_offense"].apply(lambda v: _poisson_tail(float(v), 4))
+    out[f"p_blend_w{blend_key}_over_1_5"] = out[f"lambda_blend_w{blend_key}"].apply(lambda v: _poisson_tail(float(v), 2))
+    out[f"p_blend_w{blend_key}_over_2_5"] = out[f"lambda_blend_w{blend_key}"].apply(lambda v: _poisson_tail(float(v), 3))
+    out[f"p_blend_w{blend_key}_over_3_5"] = out[f"lambda_blend_w{blend_key}"].apply(lambda v: _poisson_tail(float(v), 4))
 
     for alpha in alphas:
         key = str(alpha).replace('.', '_')
@@ -279,6 +299,7 @@ def main() -> None:
             "rows_with_faced_baseline": int(pd.to_numeric(out["faced_projected_rate_last10"], errors="coerce").notna().sum()),
             "projected_signature_source_counts": out["projected_signature_source"].value_counts(dropna=False).to_dict(),
         },
+        "defense_blend_weight": blend_w,
         "alphas": alphas,
         "out_csv": str(out_path),
     }

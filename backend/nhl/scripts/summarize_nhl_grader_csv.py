@@ -22,7 +22,7 @@ BET_RE = re.compile(
     re.IGNORECASE,
 )
 RAQ_RE = re.compile(
-    r"raq\s+(?P<model>\d+(?:\.\d+)?)/(?P<stat>\d+(?:\.\d+)?|n\/a)/(?P<market>\d+(?:\.\d+)?)%?",
+    r"raq\s+(?P<model>\d+(?:\.\d+)?)/(?P<stat>\d+(?:\.\d+)?|n\/?a|n\.a\.?)/(?P<market>\d+(?:\.\d+)?)%?",
     re.IGNORECASE,
 )
 
@@ -66,7 +66,7 @@ def _extract_raq(notes: str) -> Tuple[Optional[float], Optional[float], Optional
         return None, None, None
     model = _f(m.group("model"), default=0.0)
     stat_raw = str(m.group("stat")).strip().lower()
-    stat = None if stat_raw == "n/a" else _f(stat_raw, default=0.0)
+    stat = None if stat_raw in {"n/a", "na", "n.a", "n.a."} else _f(stat_raw, default=0.0)
     market = _f(m.group("market"), default=0.0)
     return model, stat, market
 

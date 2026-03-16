@@ -3,6 +3,7 @@
 
 For each day in [anchor_from, anchor_to]:
   - Build baseline card from historical market snapshot
+  - Build B_conservative card (current production protocol)
   - Build toggled card (cap over:3.5)
   - Build toggled card (disable over:3.5)
   - Match graded placed wagers to each card by (player short key, side, line)
@@ -200,6 +201,24 @@ def main() -> None:
     variants = [
         VariantSpec(name="baseline", out_suffix="baseline", extra_args=[]),
         VariantSpec(
+            name="b_conservative",
+            out_suffix="b_conservative",
+            extra_args=[
+                "--min-train-wilson-lb",
+                "0.50",
+                "--segment-disable",
+                "over:3.5",
+                "--segment-min-model-prob",
+                "under:1.5=0.65",
+                "--segment-max-price",
+                "under:1.5=100",
+                "--max-per-game",
+                "4",
+                "--max-per-slate",
+                "60",
+            ],
+        ),
+        VariantSpec(
             name="toggles_cap",
             out_suffix="toggles",
             extra_args=[
@@ -215,10 +234,6 @@ def main() -> None:
                 "under:2.5=0.19",
                 "--segment-min-gap-override",
                 "under:2.5=0.10",
-                "--segment-min-ev-override",
-                "under:3.5=0.20",
-                "--segment-min-gap-override",
-                "under:3.5=0.10",
                 "--segment-max-price",
                 "over:3.5=130",
             ],
@@ -239,10 +254,6 @@ def main() -> None:
                 "under:2.5=0.19",
                 "--segment-min-gap-override",
                 "under:2.5=0.10",
-                "--segment-min-ev-override",
-                "under:3.5=0.20",
-                "--segment-min-gap-override",
-                "under:3.5=0.10",
                 "--segment-disable",
                 "over:3.5",
             ],
@@ -365,6 +376,7 @@ def main() -> None:
                 "roi": (float(placed_pnl / placed_staked) if placed_staked else None),
             },
             "baseline_alignment": _agg_variant("baseline"),
+            "b_conservative_alignment": _agg_variant("b_conservative"),
             "toggles_cap_alignment": _agg_variant("toggles_cap"),
             "toggles_disable_over35_alignment": _agg_variant("toggles_disable_over35"),
         },
@@ -387,4 +399,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -26,13 +26,19 @@ set -a && source backend/.env && set +a
 .venv/bin/python -m backend.nhl.cli daily --with-odds
 ```
 
+Daily archive note:
+- Copies per-slate artifacts into `backend/nhl/exports/odds_history/YYYY-MM-DD/`.
+- Includes `sog_with_market.csv` and raw prediction snapshots (`sog_predictions_wide_calibrated.csv`, plus shadow file when present).
+
 3. Build full-slate upload CSV (all rows).
 
 ```bash
 .venv/bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
 ```
 
-4. Build candidate upload CSV (toggle-policy selected rows).
+4. Build candidate upload CSV (choose one profile).
+
+#### 4a. Default daily upload (recommended)
 
 ```bash
 SLATE=$(date +%F)
@@ -46,12 +52,210 @@ SLATE=$(date +%F)
   --segment-min-gap-override over:2.5=0.07 \
   --segment-min-ev-override under:2.5=0.19 \
   --segment-min-gap-override under:2.5=0.10 \
-  --segment-min-ev-override under:3.5=0.20 \
-  --segment-min-gap-override under:3.5=0.10 \
   --segment-max-price over:3.5=130 \
   --emit-book-upload \
   --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv \
   --book-upload-max-fair-favorite -300
+```
+
+#### 4b. Conservative daily upload (smaller/slower card)
+
+```bash
+SLATE=$(date +%F)
+.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+  --policy-json tmp/nhl_sog_walkforward_summary.json \
+  --game-date "$SLATE" \
+  --min-train-wilson-lb 0.50 \
+  --segment-disable over:3.5 \
+  --segment-min-model-prob under:1.5=0.65 \
+  --segment-max-price under:1.5=100 \
+  --max-per-game 4 \
+  --max-per-slate 60 \
+  --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" \
+  --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" \
+  --emit-book-upload \
+  --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv \
+  --book-upload-max-fair-favorite -300
+```
+
+#### 4c. Executable-reconciled profile (testing path)
+
+```bash
+SLATE=$(date +%F)
+.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+  --policy-json tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_summary.json \
+  --game-date "$SLATE" \
+  --segment-disable over:3.5 \
+  --segment-disable under:1.5 \
+  --out-csv "tmp/cards/nhl_sog_card_${SLATE}_exec_midgate.csv" \
+  --out-json "tmp/cards/nhl_sog_card_${SLATE}_exec_midgate_summary.json" \
+  --emit-book-upload \
+  --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv \
+  --book-upload-max-fair-favorite -300
+```
+
+### Slate Run Note (2026-03-14)
+
+Wager-history reconciliation note:
+
+- Wagers placed before `08:30` used:
+
+```bash
+SLATE=2026-03-14
+.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+  --policy-json tmp/nhl_sog_walkforward_summary.json \
+  --game-date "$SLATE" \
+  --segment-disable over:1.5 \
+  --segment-disable over:2.5 \
+  --segment-disable over:3.5 \
+  --segment-min-model-prob under:1.5=0.65 \
+  --segment-max-price under:1.5=100 \
+  --segment-min-ev-override under:2.5=0.19 \
+  --segment-min-gap-override under:2.5=0.10 \
+  --segment-min-ev-override under:3.5=0.20 \
+  --segment-min-gap-override under:3.5=0.10 \
+  --max-per-game 4 \
+  --max-per-slate 60 \
+  --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" \
+  --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" \
+  --emit-book-upload \
+  --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv \
+  --book-upload-max-fair-favorite -300
+```
+
+- Wagers placed after `08:30` used `Step 4a` (default daily upload).
+
+## Executable-Reconciled Policy (Proposed Path)
+
+1. Rebuild walk-forward thresholds using executable two-sided prices and realized PnL objective.
+
+```bash
+.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
+  --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
+  --odds-root backend/nhl/exports/odds_history \
+  --bookmaker betonlineag \
+  --market-key player_shots_on_goal \
+  --from-date 2025-10-07 \
+  --to-date 2026-03-08 \
+  --warmup-days 30 \
+  --reopt-every-days 1 \
+  --min-train-rows 80 \
+  --objective realized_pnl \
+  --objective-slippage-cents 5 \
+  --out-picks-csv tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_selected.csv \
+  --out-threshold-history-csv tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_threshold_history.csv \
+  --out-summary-json tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_summary.json
+```
+
+2. Run slate selection from executable-reconciled policy (mid-gate profile currently used in testing).
+
+```bash
+SLATE=$(date +%F)
+.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+  --policy-json tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_summary.json \
+  --game-date "$SLATE" \
+  --segment-disable over:3.5 \
+  --segment-disable under:1.5 \
+  --out-csv "tmp/cards/nhl_sog_card_${SLATE}_exec_midgate.csv" \
+  --out-json "tmp/cards/nhl_sog_card_${SLATE}_exec_midgate_summary.json" \
+  --emit-book-upload \
+  --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv \
+  --book-upload-max-fair-favorite -300
+```
+
+## Truth Scoreboard (Executable + Placed Stream)
+
+Use this to produce one scoreboard that shows:
+- executable ROI at 0c/5c by policy
+- selected vs executable match rate
+- placed-stream alignment metrics from anchored reconcile
+
+```bash
+.venv/bin/python backend/nhl/scripts/build_sog_truth_scoreboard.py \
+  --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
+  --odds-root backend/nhl/exports/odds_history \
+  --bookmaker betonlineag \
+  --market-key player_shots_on_goal \
+  --from-date 2025-10-07 \
+  --to-date 2026-03-12 \
+  --slippage-cents-grid 0,5,10 \
+  --strategy baseline=tmp/nhl_sog_walkforward_threshold_history.csv \
+  --strategy exec_reconciled=tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_threshold_history.csv \
+  --anchored-summary-json tmp/analysis/anchored_reconcile/anchored_reconcile_summary.json \
+  --out-csv tmp/analysis/sog_truth_scoreboard.csv \
+  --out-json tmp/analysis/sog_truth_scoreboard.json
+```
+
+## Challenger Foundation Scoreboard (Base Prob vs Residual Prob)
+
+Use this when evaluating challenger model foundations on the same holdout population.
+
+1. Build comparable rows from month-end holdout probabilities.
+
+```bash
+.venv/bin/python backend/nhl/scripts/build_sog_rows_from_holdout_probs.py \
+  --in-csv tmp/nhl_sog_market_residual_monthend14_holdout_rows.csv \
+  --model-prob-col p_base \
+  --out-csv tmp/analysis/challenger/rows_base_prob_monthend14.csv
+
+.venv/bin/python backend/nhl/scripts/build_sog_rows_from_holdout_probs.py \
+  --in-csv tmp/nhl_sog_market_residual_monthend14_holdout_rows.csv \
+  --model-prob-col p_model \
+  --out-csv tmp/analysis/challenger/rows_residual_prob_monthend14.csv
+```
+
+2. Optimize executable thresholds for each foundation.
+
+```bash
+.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
+  --rows-csv tmp/analysis/challenger/rows_base_prob_monthend14.csv \
+  --odds-root backend/nhl/exports/odds_history \
+  --bookmaker betonlineag \
+  --market-key player_shots_on_goal \
+  --from-date 2025-10-18 \
+  --to-date 2026-02-28 \
+  --warmup-days 30 \
+  --reopt-every-days 1 \
+  --min-train-rows 80 \
+  --objective realized_pnl \
+  --objective-slippage-cents 5 \
+  --out-picks-csv tmp/analysis/challenger/base_prob_exec_selected.csv \
+  --out-threshold-history-csv tmp/analysis/challenger/base_prob_exec_threshold_history.csv \
+  --out-summary-json tmp/analysis/challenger/base_prob_exec_summary.json
+
+.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
+  --rows-csv tmp/analysis/challenger/rows_residual_prob_monthend14.csv \
+  --odds-root backend/nhl/exports/odds_history \
+  --bookmaker betonlineag \
+  --market-key player_shots_on_goal \
+  --from-date 2025-10-18 \
+  --to-date 2026-02-28 \
+  --warmup-days 30 \
+  --reopt-every-days 1 \
+  --min-train-rows 80 \
+  --objective realized_pnl \
+  --objective-slippage-cents 5 \
+  --out-picks-csv tmp/analysis/challenger/residual_prob_exec_selected.csv \
+  --out-threshold-history-csv tmp/analysis/challenger/residual_prob_exec_threshold_history.csv \
+  --out-summary-json tmp/analysis/challenger/residual_prob_exec_summary.json
+```
+
+3. Build challenger scoreboard (supports strategy-specific rows via `@ROWS_CSV`).
+
+```bash
+.venv/bin/python backend/nhl/scripts/build_sog_truth_scoreboard.py \
+  --rows-csv tmp/analysis/challenger/rows_base_prob_monthend14.csv \
+  --odds-root backend/nhl/exports/odds_history \
+  --bookmaker betonlineag \
+  --market-key player_shots_on_goal \
+  --from-date 2025-10-18 \
+  --to-date 2026-02-28 \
+  --slippage-cents-grid 0,5,10 \
+  --strategy base_prob=tmp/analysis/challenger/base_prob_exec_threshold_history.csv@tmp/analysis/challenger/rows_base_prob_monthend14.csv \
+  --strategy residual_prob=tmp/analysis/challenger/residual_prob_exec_threshold_history.csv@tmp/analysis/challenger/rows_residual_prob_monthend14.csv \
+  --anchored-summary-json tmp/analysis/anchored_reconcile/_skip.json \
+  --out-csv tmp/analysis/challenger/sog_truth_scoreboard_monthend14.csv \
+  --out-json tmp/analysis/challenger/sog_truth_scoreboard_monthend14.json
 ```
 
 ## Segment Toggle Shadow Run (Baseline vs New)
@@ -79,10 +283,10 @@ SLATE=$(date +%F)
   --segment-min-gap-override over:2.5=0.07 \
   --segment-min-ev-override under:2.5=0.19 \
   --segment-min-gap-override under:2.5=0.10 \
-  --segment-min-ev-override under:3.5=0.20 \
-  --segment-min-gap-override under:3.5=0.10 \
   --segment-max-price over:3.5=130
 ```
+
+`under:3.5` is re-enabled here via policy defaults (no segment override clamp).
 
 Optional stricter `over:3.5` control:
 
@@ -110,9 +314,9 @@ print("\ntoggle segments:\n", t["segment"].value_counts().sort_index().to_string
 PY
 ```
 
-## Arm Bakeoff (Base vs Calibrated vs Defense Blend)
+## Arm Bakeoff (Base vs Calibrated vs Base_V2 vs Defense Blend vs Residual vs Full Refit)
 
-Use this to generate three candidate-card arms for the same slate plus one overlap report.
+Use this to generate shadow candidate-card arms for the same slate plus one overlap report.
 
 ```bash
 SLATE=$(date +%F)
@@ -126,10 +330,89 @@ SLATE=$(date +%F)
 PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --strict-calibration --strict-arms
 ```
 
+Optional residual arm controls:
+
+```bash
+SLATE=$(date +%F)
+PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
+  --slate-date "$SLATE" \
+  --residual-history-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
+  --residual-min-train-rows-per-line 400 \
+  --residual-blend-alpha 1.0
+```
+
+Optional `base_v2_calibrated` arm (strengthen base with team-env + opponent-suppression + game-state adjustments, then calibrate):
+
+```bash
+SLATE=$(date +%F)
+PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
+  --slate-date "$SLATE" \
+  --enable-base-v2-arm \
+  --base-v2-features-csv "backend/nhl/exports/daily/sog_features/sog_features_${SLATE}_denali.csv" \
+  --base-v2-history-from-date 2025-10-01 \
+  --base-v2-ridge-alpha 25 \
+  --base-v2-half-life-days 45 \
+  --base-v2-min-train-rows 5000 \
+  --base-v2-min-multiplier 0.75 \
+  --base-v2-max-multiplier 1.30 \
+  --base-v2-min-coverage-weight 0.50
+```
+
+Optional full-refit arm controls (shadow only):
+
+```bash
+SLATE=$(date +%F)
+PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
+  --slate-date "$SLATE" \
+  --full-refit-dataset-csv backend/nhl/data/analysis/sog_poisson_residual_dataset_season_2025.csv \
+  --full-refit-odds-root backend/nhl/exports/odds_history \
+  --full-refit-bookmaker betonlineag \
+  --full-refit-features-csv "backend/nhl/exports/daily/sog_features/sog_features_${SLATE}_denali.csv" \
+  --full-refit-min-train-rows-per-line 400 \
+  --full-refit-blend-alpha 1.0
+```
+
+Disable residual arm:
+
+```bash
+SLATE=$(date +%F)
+PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --disable-residual-arm
+```
+
+Disable full-refit arm:
+
+```bash
+SLATE=$(date +%F)
+PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --disable-full-refit-arm
+```
+
+Standalone `base_v2` scorer (writes shadow wide CSV + optional holdout diagnostics):
+
+```bash
+SLATE=$(date +%F)
+set -a; source backend/.env; set +a
+PYTHONPATH=. .venv/bin/python backend/nhl/scripts/score_sog_poisson_base_v2_shadow.py \
+  --in "backend/nhl/exports/daily/sog_features/sog_features_${SLATE}_denali.csv" \
+  --out "tmp/analysis/challenger/sog_predictions_wide_base_v2_shadow_${SLATE}.csv" \
+  --slate-date "$SLATE" \
+  --history-from-date 2025-10-01 \
+  --ridge-alpha 25 \
+  --half-life-days 45 \
+  --min-train-rows 5000 \
+  --min-multiplier 0.75 \
+  --max-multiplier 1.30 \
+  --min-coverage-weight 0.50 \
+  --eval-holdout-days 21 \
+  --summary-json "tmp/analysis/challenger/sog_predictions_wide_base_v2_shadow_${SLATE}_summary.json"
+```
+
 Outputs:
 - `tmp/analysis/arm_bakeoff/YYYY-MM-DD/base/nhl_sog_card_base.csv`
 - `tmp/analysis/arm_bakeoff/YYYY-MM-DD/calibrated/nhl_sog_card_calibrated.csv`
+- `tmp/analysis/arm_bakeoff/YYYY-MM-DD/base_v2_calibrated/nhl_sog_card_base_v2_calibrated.csv`
 - `tmp/analysis/arm_bakeoff/YYYY-MM-DD/defense_blend_calibrated/nhl_sog_card_defense_blend_calibrated.csv`
+- `tmp/analysis/arm_bakeoff/YYYY-MM-DD/residual_prob/nhl_sog_card_residual_prob.csv`
+- `tmp/analysis/arm_bakeoff/YYYY-MM-DD/full_refit_prob/nhl_sog_card_full_refit_prob.csv`
 - `tmp/analysis/arm_bakeoff/YYYY-MM-DD/nhl_sog_arm_bakeoff_YYYY-MM-DD.json`
 
 ## Pick Waterfall (Feature Influence)
@@ -213,6 +496,7 @@ Outputs:
 - `tmp/graded/nhl_sog_graded_YYYY-MM-DD_summary.json`
 
 8. Run anchored reevaluation from `2026-03-04` through latest graded day (post-grade diagnostics only; does not change Step 4 candidate generation/upload).
+   - Compares placed wagers against: `baseline`, `b_conservative`, `toggles_cap`, `toggles_disable_over35`.
 
 ```bash
 ANCHOR_FROM=2026-03-04
@@ -233,6 +517,27 @@ ANCHOR_TO=$(date +%F)
 Outputs:
 - `tmp/analysis/anchored_reconcile/anchored_reconcile_summary.json`
 - `tmp/analysis/anchored_reconcile/anchored_reconcile_rows.csv`
+
+9. Run live truth gate (uses placed+graded wagers only) before upload decisions.
+
+```bash
+.venv/bin/python backend/nhl/scripts/live_truth_gate_sog.py \
+  --anchor-from 2026-03-04 \
+  --window-days 7 \
+  --min-segment-bets 20 \
+  --min-segment-roi 0.0 \
+  --max-calibration-gap-abs 0.08 \
+  --min-overall-roi 0.0 \
+  --emit-history \
+  --out-json tmp/analysis/nhl_sog_live_truth_gate.json \
+  --out-history-csv tmp/analysis/nhl_sog_live_truth_gate_history.csv
+```
+
+Outputs:
+- `tmp/analysis/nhl_sog_live_truth_gate.json`
+- `tmp/analysis/nhl_sog_live_truth_gate_history.csv`
+
+Use `recommendation.recommended_segment_disable_args` from the JSON for `select_sog_candidates_live.py` if you want gate-enforced segment disables.
 
 ## Line Moved (Pass/Fail)
 
@@ -288,6 +593,47 @@ Examples:
 - Walk-forward policy: `tmp/nhl_sog_walkforward_summary.json`
 - Reconciliation rows: `tmp/nhl_sog_base_vs_betonline_rows.csv`
 - Reconciliation monthly summary: `tmp/nhl_sog_base_vs_betonline_monthly.csv`
+
+## Source Control Noise Control (Local Only)
+
+Use this when tracked run-artifact files keep showing in VS Code `Changes`.
+This hides local churn without deleting files and without dummy commits.
+
+Set `skip-worktree` on common NHL artifact files:
+
+```bash
+git update-index --skip-worktree \
+  nhl/site/data/events_today.json \
+  nhl/site/data/odds_latest.json \
+  nhl/site/data/odds_nhl_playerprops_today.json \
+  nhl/site/data/points_with_market.csv \
+  nhl/site/data/saves_with_market.csv \
+  nhl/site/data/sog_with_market.csv \
+  nhl/site/data/unmatched_points.csv \
+  nhl/site/data/unmatched_saves.csv \
+  nhl/site/data/unmatched_sog.csv
+```
+
+Check which files are currently hidden (`S` prefix):
+
+```bash
+git ls-files -v | rg '^S '
+```
+
+Re-enable tracking for these files (when you actually want to commit one):
+
+```bash
+git update-index --no-skip-worktree \
+  nhl/site/data/events_today.json \
+  nhl/site/data/odds_latest.json \
+  nhl/site/data/odds_nhl_playerprops_today.json \
+  nhl/site/data/points_with_market.csv \
+  nhl/site/data/saves_with_market.csv \
+  nhl/site/data/sog_with_market.csv \
+  nhl/site/data/unmatched_points.csv \
+  nhl/site/data/unmatched_saves.csv \
+  nhl/site/data/unmatched_sog.csv
+```
 
 ## Odds History Backfill (SOG-only)
 

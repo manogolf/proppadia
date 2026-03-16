@@ -153,6 +153,9 @@ def _load_training(
     df = pd.DataFrame(rows)
     if df.empty:
         return df
+    # Older DB snapshots can omit this alias; degrade to line-only calibration.
+    if "expected_sog_bucket" not in df.columns:
+        df["expected_sog_bucket"] = "missing"
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce").dt.date
     df["line"] = pd.to_numeric(df["line"], errors="coerce")
     df["p_over"] = pd.to_numeric(df["p_over"], errors="coerce")
@@ -169,6 +172,8 @@ def _load_slate_bucket_map(slate_date: date) -> pd.DataFrame:
     m = pd.DataFrame(rows)
     if m.empty:
         return m
+    if "expected_sog_bucket" not in m.columns:
+        m["expected_sog_bucket"] = "missing"
     m["player_id"] = pd.to_numeric(m["player_id"], errors="coerce").astype("Int64")
     m["game_id"] = pd.to_numeric(m["game_id"], errors="coerce").astype("Int64")
     m["expected_sog_bucket"] = m["expected_sog_bucket"].fillna("missing").astype(str)
@@ -369,18 +374,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if train_df.empty:
             raise RuntimeError("No training rows found for requested training window.")
 
+        existing_bucket_col = "expected_sog_bucket" in pred_df.columns
+        if existing_bucket_col:
+            pred_df["expected_sog_bucket"] = pred_df["expected_sog_bucket"].fillna("missing").astype(str)
+
         bucket_map = _load_slate_bucket_map(slate_date)
         if bucket_map.empty:
             msg = f"No expected_sog_bucket map found for slate {slate_date}."
-            if args.strict:
+            if args.strict and not existing_bucket_col:
                 raise RuntimeError(msg)
-            pred_df["expected_sog_bucket"] = "missing"
-            map_coverage = 0.0
-        else:
-            pred_df = pred_df.merge(bucket_map, on=["player_id", "game_id"], how="left")
-            pred_df["expected_sog_bucket"] = pred_df["expected_sog_bucket"].fillna("missing").astype(str)
+            if not existing_bucket_col:
+                pred_df["expected_sog_bucket"] = "missing"
             matched = int((pred_df["expected_sog_bucket"] != "missing").sum())
             map_coverage = matched / max(1, len(pred_df))
+        else:
+            map_col = "expected_sog_bucket_map"
+            map_df = bucket_map.rename(columns={"expected_sog_bucket": map_col})
+            pred_df = pred_df.merge(map_df, on=["player_id", "game_id"], how="left")
+            if existing_bucket_col:
+                pred_df["expected_sog_bucket"] = (
+                    pred_df[map_col].fillna(pred_df["expected_sog_bucket"]).fillna("missing").astype(str)
+                )
+            else:
+                pred_df["expected_sog_bucket"] = pred_df[map_col].fillna("missing").astype(str)
+            matched = int(pred_df[map_col].notna().sum())
+            map_coverage = matched / max(1, len(pred_df))
+            pred_df = pred_df.drop(columns=[map_col], errors="ignore")
 
         fit_pack = _fit_models(
             train_df=train_df,
