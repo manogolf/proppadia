@@ -19,6 +19,7 @@ Notes:
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -39,7 +40,11 @@ if str(REPO_ROOT) not in sys.path:
 from backend.app.services.mlb import market_odds_service
 from backend.domains.mlb import prop_workflow
 from backend.mlb.shared.mlb_api_v2 import GameLite, fetch_schedule_by_date
-from backend.mlb.shared.team_name_map import getFullTeamAbbreviationFromID, getTeamIdFromAbbr, normalizeTeamAbbreviation
+from backend.mlb.shared.team_name_map import (
+    getFullTeamAbbreviationFromID,
+    getTeamIdFromAbbr,
+    normalizeTeamAbbreviation,
+)
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 from backend.shared.db.pg import pg_connect
 
@@ -85,6 +90,24 @@ def _line_to_pcol(line: float) -> Optional[str]:
 
 def _date_et_today() -> str:
     return datetime.now(ET).date().isoformat()
+
+
+def _load_events_from_snapshot_file(path: Path) -> List[Dict[str, Any]]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        events = raw.get("events")
+        if isinstance(events, list):
+            return [x for x in events if isinstance(x, dict)]
+        data = raw.get("data")
+        if isinstance(data, list):
+            return [x for x in data if isinstance(x, dict)]
+        # Some snapshots store one wrapped event object.
+        if all(k in raw for k in ("home_team", "away_team", "bookmakers")):
+            return [raw]
+        return []
+    if isinstance(raw, list):
+        return [x for x in raw if isinstance(x, dict)]
+    return []
 
 
 def _invert_market_map() -> Dict[str, str]:
@@ -173,12 +196,39 @@ def _load_player_rows(*, active_only: bool) -> tuple[Dict[int, PlayerRow], Dict[
         name = _clean_str(row.get("player_name"))
         if not name:
             continue
-        team_abbr = normalizeTeamAbbreviation(_clean_str(row.get("team_abbr")))
+        raw_team = _clean_str(row.get("team_abbr"))
+        team_abbr = normalizeTeamAbbreviation(raw_team)
         team_id = row.get("team_id")
         try:
             team_id_i = int(team_id) if team_id is not None else None
         except Exception:
             team_id_i = None
+
+        # normalizeTeamAbbreviation can pass through numeric team ids as strings.
+        if team_abbr and str(team_abbr).isdigit():
+            try:
+                raw_team_id = int(str(team_abbr))
+                mapped_abbr = normalizeTeamAbbreviation(getFullTeamAbbreviationFromID(raw_team_id))
+                if mapped_abbr:
+                    team_abbr = mapped_abbr
+                if team_id_i is None:
+                    team_id_i = raw_team_id
+            except Exception:
+                pass
+
+        # Legacy/alternate player_ids.team stores numeric team IDs as strings.
+        if team_abbr is None and raw_team:
+            try:
+                raw_team_id = int(raw_team)
+                team_abbr = normalizeTeamAbbreviation(getFullTeamAbbreviationFromID(raw_team_id))
+                if team_id_i is None:
+                    team_id_i = raw_team_id
+            except Exception:
+                pass
+
+        # Fall back to team_id -> abbreviation when team text is absent/unusable.
+        if team_abbr is None and team_id_i is not None:
+            team_abbr = normalizeTeamAbbreviation(getFullTeamAbbreviationFromID(team_id_i))
         active_raw = row.get("active")
         active = bool(active_raw) if active_raw is not None else None
         if active_only and active is False:
@@ -648,6 +698,18 @@ def _to_wide(pred_rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     return wide[ordered].sort_values(by=["game_date", "game_id", "prop_type", "player_name"], kind="stable").reset_index(drop=True)
 
 
+def _write_odds_snapshot_json(*, out_path: Path, slate_date: str, events: Sequence[Dict[str, Any]]) -> None:
+    payload = {
+        "sport": "baseball_mlb",
+        "game_date_et": str(slate_date),
+        "captured_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
+        "event_count": int(len(events)),
+        "events": list(events),
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     import argparse
 
@@ -659,6 +721,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=os.environ.get("MLB_PREDICT_PROP_TYPES", ""),
         help="Optional CSV of internal MLB prop types to include (default: all supported OddsAPI O/U props).",
     )
+    ap.add_argument(
+        "--odds-snapshot-in",
+        default=os.environ.get("MLB_ODDS_SNAPSHOT_IN", ""),
+        help="Optional JSON path to load a pre-captured OddsAPI snapshot instead of fetching live.",
+    )
+    ap.add_argument(
+        "--odds-snapshot-out",
+        default=os.environ.get("MLB_ODDS_SNAPSHOT_JSON", ""),
+        help="Optional JSON path to persist the exact OddsAPI snapshot used for this slate.",
+    )
     ap.add_argument("--include-inactive", action="store_true", help="Include inactive player_ids rows in name resolution.")
     ap.add_argument("--require-min-rows", type=int, default=1, help="Fail if fewer than N wide rows are produced.")
     ap.add_argument("--strict", action="store_true", help="Fail when any rows are skipped for resolution/prediction reasons.")
@@ -666,10 +738,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     slate_date = _clean_str(args.slate_date) or _clean_str(os.environ.get("SLATE_DATE")) or _date_et_today()
     out_csv = Path(str(args.output)).expanduser()
+    odds_snapshot_in = (
+        Path(str(args.odds_snapshot_in)).expanduser() if str(args.odds_snapshot_in or "").strip() else None
+    )
+    odds_snapshot_out = Path(str(args.odds_snapshot_out)).expanduser() if str(args.odds_snapshot_out or "").strip() else None
     prop_filter = _parse_prop_types_csv(str(args.prop_types or ""))
 
     print(f"[mlb-wide-pred] slate_date (ET) = {slate_date}")
     print(f"[mlb-wide-pred] output = {out_csv}")
+    if odds_snapshot_in:
+        print(f"[mlb-wide-pred] odds snapshot in = {odds_snapshot_in}")
+    if odds_snapshot_out:
+        print(f"[mlb-wide-pred] odds snapshot out = {odds_snapshot_out}")
     if prop_filter:
         print(f"[mlb-wide-pred] prop filter = {sorted(prop_filter)}")
 
@@ -680,8 +760,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         by_team_ctx, by_pair_games = _build_schedule_maps(str(slate_date))
         print(f"[mlb-wide-pred] schedule contexts={len(by_team_ctx)} pair_games={len(by_pair_games)}")
 
-        events = market_odds_service._fetch_market_snapshot(game_date=str(slate_date))
-        print(f"[mlb-wide-pred] odds snapshot events={len(events)}")
+        if odds_snapshot_in:
+            if not odds_snapshot_in.exists():
+                raise FileNotFoundError(f"missing odds snapshot file: {odds_snapshot_in}")
+            events = _load_events_from_snapshot_file(odds_snapshot_in)
+            print(f"[mlb-wide-pred] loaded snapshot events={len(events)} from file")
+        else:
+            events = market_odds_service._fetch_market_snapshot(game_date=str(slate_date))
+            print(f"[mlb-wide-pred] odds snapshot events={len(events)}")
+        if odds_snapshot_out:
+            _write_odds_snapshot_json(out_path=odds_snapshot_out, slate_date=str(slate_date), events=events)
+            print(f"[mlb-wide-pred] wrote odds snapshot json={odds_snapshot_out}")
 
         market_to_prop = _invert_market_map()
         team_name_rev = _build_team_name_reverse()

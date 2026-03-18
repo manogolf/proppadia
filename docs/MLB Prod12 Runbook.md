@@ -93,3 +93,65 @@ make mlb-pipeline-check-prod12 MLB_BASE_URL=https://baseball-streaks-sq44.onrend
 - If daily loop is missed: treat as incident and run catch-up immediately.
 - If weekly retrain is missed: treat as incident and run full retrain within 24 hours.
 - If any gate fails: hold rollout changes and remediate before next promotion.
+
+## Phase 1 Replay/Reconcile Retention
+
+Daily slate artifacts are now archived under:
+
+- `backend/mlb/exports/odds_history/YYYY-MM-DD/`
+
+When running the slate build path:
+
+```bash
+make mlb-predictions-wide MLB_DATE=YYYY-MM-DD
+make mlb-slate-output MLB_DATE=YYYY-MM-DD
+make mlb-book-upload MLB_DATE=YYYY-MM-DD
+```
+
+`mlb-book-upload` now auto-runs `mlb-slate-archive`, preserving:
+
+- `mlb_predictions_wide_calibrated.csv`
+- `mlb_slate_output.csv`
+- `mlb_book_upload.csv`
+- `odds_mlb_playerprops.json` (exact OddsAPI snapshot used by predictions-wide)
+
+Prod12 cron default behavior (to prevent retention gaps):
+
+- `MLB_DAILY_WIDE_PREDICTIONS_ENABLED=1`
+- `MLB_DAILY_WIDE_PREDICTIONS_REQUIRED=1`
+- `MLB_DAILY_SLATE_ARTIFACTS_ENABLED=1`
+- `MLB_DAILY_SLATE_ARTIFACTS_REQUIRED=1`
+
+Daily cron now verifies `backend/mlb/exports/odds_history/YYYY-MM-DD/manifest.json`
+exists after upload. If missing, the run fails (required mode).
+
+Build row-level reconcile rows from archived slates:
+
+```bash
+make mlb-reconcile-rows \
+  MLB_RECONCILE_FROM_DATE=YYYY-MM-DD \
+  MLB_RECONCILE_TO_DATE=YYYY-MM-DD \
+  MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+Outputs:
+
+- `tmp/mlb_base_vs_market_rows.csv`
+- `tmp/mlb_base_vs_market_summary.json`
+
+Historical MLB regular-season odds backfill (recommended before lowering OddsAPI plan):
+
+```bash
+make mlb-odds-backfill-history \
+  MLB_ODDS_BACKFILL_SEASON=2025 \
+  MLB_ODDS_BACKFILL_TO_DATE=2025-09-28
+```
+
+Dry-run estimate first (no API spend):
+
+```bash
+make mlb-odds-backfill-history \
+  MLB_ODDS_BACKFILL_SEASON=2025 \
+  MLB_ODDS_BACKFILL_TO_DATE=2025-09-28 \
+  MLB_ODDS_BACKFILL_DRY_RUN=1
+```

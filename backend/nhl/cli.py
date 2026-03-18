@@ -80,11 +80,18 @@ MODELS_DIR  = NHL_DIR / "models"
 EXPORTS_DAILY_NAMES_DIR = EXPORTS_DIR / "daily" / "names"
 EXPORTS_DAILY_SOG_DIR   = EXPORTS_DIR / "daily" / "sog_features"
 EXPORTS_ODDS_HISTORY_DIR = EXPORTS_DIR / "odds_history"
+TMP_DIR = ROOT / "tmp"
+SOG_RECONCILE_MONTHLY_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_monthly.csv"
+SOG_RECONCILE_MONTHLY_JSON = TMP_DIR / "nhl_sog_base_vs_betonline_monthly.json"
+SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_monthly_publishable.csv"
+SOG_RECONCILE_ROWS_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_rows.csv"
+SOG_RESIDUAL_DATASET_DEFAULT_CSV = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_season_2025.csv"
 
 for d in (
     SITE_DIR,
     EXPORTS_DIR,
     PROC_DIR,
+    TMP_DIR,
     EXPORTS_DAILY_NAMES_DIR,
     EXPORTS_DAILY_SOG_DIR,
     EXPORTS_ODDS_HISTORY_DIR,
@@ -110,6 +117,10 @@ def archive_site_artifacts(slate: str) -> None:
         SITE_DIR / "events_today.json",
         PROC_DIR / "sog_predictions_wide_calibrated.csv",
         PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv",
+        SOG_RECONCILE_MONTHLY_CSV,
+        SOG_RECONCILE_MONTHLY_JSON,
+        SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV,
+        SOG_RECONCILE_ROWS_CSV,
     ]
     copied: list[str] = []
 
@@ -123,6 +134,59 @@ def archive_site_artifacts(slate: str) -> None:
         print(f"archive → {archive_dir} ({', '.join(copied)})")
     else:
         print(f"archive → {archive_dir} (no site artifacts copied)")
+
+
+def refresh_sog_reconcile_artifacts(*, to_date: str) -> None:
+    """Refresh row-level SOG reconcile artifacts used by backtests/replays."""
+    from_date = (os.environ.get("NHL_SOG_RECONCILE_FROM_DATE") or "2025-10-07").strip()
+    to_date = str(to_date).strip() or et_today()
+    dataset_csv = (
+        os.environ.get("NHL_SOG_RECONCILE_DATASET_CSV")
+        or os.environ.get("NHL_SOG_DATASET_CSV")
+        or str(SOG_RESIDUAL_DATASET_DEFAULT_CSV)
+    ).strip()
+    run(
+        [
+            PY,
+            SCRIPTS_DIR / "reconcile_sog_base_vs_betonline_by_month.py",
+            "--dataset-csv",
+            dataset_csv,
+            "--from-date",
+            from_date,
+            "--to-date",
+            to_date,
+            "--out-csv",
+            SOG_RECONCILE_MONTHLY_CSV,
+            "--out-json",
+            SOG_RECONCILE_MONTHLY_JSON,
+            "--out-rows-csv",
+            SOG_RECONCILE_ROWS_CSV,
+        ]
+    )
+
+
+def refresh_sog_residual_dataset(*, slate: str) -> None:
+    """Refresh season-scoped SOG residual dataset used by reconcile/replay scripts."""
+    season = infer_nhl_season_from_date_yyyy_mm_dd(str(slate))
+    from_date = (os.environ.get("NHL_SOG_DATASET_FROM_DATE") or "").strip()
+    to_date = str(slate).strip() or et_today()
+    out_csv = (
+        os.environ.get("NHL_SOG_DATASET_CSV")
+        or str(SOG_RESIDUAL_DATASET_DEFAULT_CSV)
+    ).strip()
+    cmd: list[str] = [
+        str(PY),
+        str(SCRIPTS_DIR / "build_sog_poisson_residual_dataset.py"),
+        "--season",
+        str(season),
+        "--to-date",
+        to_date,
+        "--out-csv",
+        out_csv,
+    ]
+    if from_date:
+        cmd.extend(["--from-date", from_date])
+    run(cmd)
 
 # ---------- time helpers (ET) ----------
 
@@ -1626,6 +1690,34 @@ def cmd_daily(with_odds: bool):
     build_sog(slate)
     build_saves(slate)
     build_points(slate)
+
+    # 9a) Refresh residual dataset + reconcile artifacts used by policy replay/testing.
+    dataset_refresh_enabled = _env_bool("NHL_DAILY_SOG_DATASET_REFRESH_ENABLED", default=True)
+    dataset_refresh_required = _env_bool("NHL_DAILY_SOG_DATASET_REFRESH_REQUIRED", default=False)
+    if dataset_refresh_enabled:
+        try:
+            refresh_sog_residual_dataset(slate=slate)
+            print("✅ SOG residual dataset refreshed.")
+        except Exception as exc:
+            if dataset_refresh_required:
+                raise RuntimeError(
+                    "SOG residual dataset refresh failed with NHL_DAILY_SOG_DATASET_REFRESH_REQUIRED=1."
+                ) from exc
+            print(f"⚠️ SOG residual dataset refresh failed (continuing): {exc}")
+
+    reconcile_enabled = _env_bool("NHL_DAILY_RECONCILE_ENABLED", default=True)
+    reconcile_required = _env_bool("NHL_DAILY_RECONCILE_REQUIRED", default=False)
+    if reconcile_enabled:
+        try:
+            refresh_sog_reconcile_artifacts(to_date=slate)
+            print("✅ SOG reconcile artifacts refreshed.")
+        except Exception as exc:
+            if reconcile_required:
+                raise RuntimeError(
+                    "SOG reconcile refresh failed with NHL_DAILY_RECONCILE_REQUIRED=1."
+                ) from exc
+            print(f"⚠️ SOG reconcile refresh failed (continuing): {exc}")
+
     archive_site_artifacts(slate)
 
     # 9b) SOG integrity report (warn-only, except guard-fatal)

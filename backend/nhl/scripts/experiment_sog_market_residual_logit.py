@@ -176,57 +176,69 @@ def _load_market_rows(
             continue
         if to_date and day > str(to_date):
             continue
-        fp = day_dir / "odds_latest_compatible.json"
-        if not fp.exists():
-            continue
-        try:
-            events = json.loads(fp.read_text())
-        except Exception:
-            continue
-        if not isinstance(events, list):
-            continue
-        for ev in events:
-            books = ev.get("bookmakers", [])
-            if not isinstance(books, list):
+        # Read both snapshots when available:
+        # - odds_latest_compatible.json (legacy normalized)
+        # - odds_latest.json (raw daily snapshot)
+        #
+        # This prevents date holes when only one of the two artifacts is present.
+        events_sources: list[list[Any]] = []
+        for fname in ("odds_latest_compatible.json", "odds_latest.json"):
+            fp = day_dir / fname
+            if not fp.exists():
                 continue
-            for book in books:
-                if str(book.get("key", "")).strip() != bookmaker_key:
+            try:
+                events = json.loads(fp.read_text())
+            except Exception:
+                continue
+            if isinstance(events, list):
+                events_sources.append(events)
+
+        if not events_sources:
+            continue
+
+        for events in events_sources:
+            for ev in events:
+                books = ev.get("bookmakers", [])
+                if not isinstance(books, list):
                     continue
-                markets = book.get("markets", [])
-                if not isinstance(markets, list):
-                    continue
-                for market in markets:
-                    market_key = str(market.get("key", "")).strip()
-                    if market_key not in SHOT_MARKETS:
+                for book in books:
+                    if str(book.get("key", "")).strip() != bookmaker_key:
                         continue
-                    outcomes = market.get("outcomes", [])
-                    if not isinstance(outcomes, list):
+                    markets = book.get("markets", [])
+                    if not isinstance(markets, list):
                         continue
-                    for outcome in outcomes:
-                        if not isinstance(outcome, dict):
+                    for market in markets:
+                        market_key = str(market.get("key", "")).strip()
+                        if market_key not in SHOT_MARKETS:
                             continue
-                        if _outcome_side(outcome) != "over":
+                        outcomes = market.get("outcomes", [])
+                        if not isinstance(outcomes, list):
                             continue
-                        name = _pick_market_player_name(outcome)
-                        if not name:
-                            continue
-                        line = pd.to_numeric(outcome.get("point"), errors="coerce")
-                        price = pd.to_numeric(outcome.get("price"), errors="coerce")
-                        if pd.isna(line) or pd.isna(price):
-                            continue
-                        key = _short_key(_norm_name(name))
-                        if not key:
-                            continue
-                        rows.append(
-                            {
-                                "game_date": day,
-                                "player_key": key,
-                                "line": float(line),
-                                "price_over": float(price),
-                                "bookmaker": bookmaker_key,
-                                "market_key": market_key,
-                            }
-                        )
+                        for outcome in outcomes:
+                            if not isinstance(outcome, dict):
+                                continue
+                            if _outcome_side(outcome) != "over":
+                                continue
+                            name = _pick_market_player_name(outcome)
+                            if not name:
+                                continue
+                            line = pd.to_numeric(outcome.get("point"), errors="coerce")
+                            price = pd.to_numeric(outcome.get("price"), errors="coerce")
+                            if pd.isna(line) or pd.isna(price):
+                                continue
+                            key = _short_key(_norm_name(name))
+                            if not key:
+                                continue
+                            rows.append(
+                                {
+                                    "game_date": day,
+                                    "player_key": key,
+                                    "line": float(line),
+                                    "price_over": float(price),
+                                    "bookmaker": bookmaker_key,
+                                    "market_key": market_key,
+                                }
+                            )
     if not rows:
         return pd.DataFrame(
             columns=["game_date", "player_key", "line", "price_over", "bookmaker", "market_key", "p_mkt"]

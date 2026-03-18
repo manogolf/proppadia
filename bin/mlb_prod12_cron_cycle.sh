@@ -105,10 +105,10 @@ MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
 MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
 MLB_DAILY_STAT_DERIVED_ENABLED="${MLB_DAILY_STAT_DERIVED_ENABLED:-1}"
-MLB_DAILY_WIDE_PREDICTIONS_ENABLED="${MLB_DAILY_WIDE_PREDICTIONS_ENABLED:-0}"
-MLB_DAILY_WIDE_PREDICTIONS_REQUIRED="${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED:-0}"
-MLB_DAILY_SLATE_ARTIFACTS_ENABLED="${MLB_DAILY_SLATE_ARTIFACTS_ENABLED:-0}"
-MLB_DAILY_SLATE_ARTIFACTS_REQUIRED="${MLB_DAILY_SLATE_ARTIFACTS_REQUIRED:-0}"
+MLB_DAILY_WIDE_PREDICTIONS_ENABLED="${MLB_DAILY_WIDE_PREDICTIONS_ENABLED:-1}"
+MLB_DAILY_WIDE_PREDICTIONS_REQUIRED="${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED:-1}"
+MLB_DAILY_SLATE_ARTIFACTS_ENABLED="${MLB_DAILY_SLATE_ARTIFACTS_ENABLED:-1}"
+MLB_DAILY_SLATE_ARTIFACTS_REQUIRED="${MLB_DAILY_SLATE_ARTIFACTS_REQUIRED:-1}"
 MLB_STAT_DAYS_AGO="${MLB_STAT_DAYS_AGO:-2}"
 MLB_STAT_FROM_DATE="${MLB_STAT_FROM_DATE:-}"
 MLB_STAT_TO_DATE="${MLB_STAT_TO_DATE:-}"
@@ -132,6 +132,8 @@ MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV:-backend/mlb/data/processed/mlb_predict
 MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV:-backend/mlb/data/processed/mlb_slate_output.csv}"
 MLB_SLATE_PROP_TYPE="${MLB_SLATE_PROP_TYPE:-}"
 MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV:-backend/mlb/data/processed/mlb_book_upload.csv}"
+MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT:-backend/mlb/exports/odds_history}"
+MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON:-${MLB_ODDS_HISTORY_ROOT}/${MLB_DATE}/odds_mlb_playerprops.json}"
 MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES:-}"
 MLB_WIDE_REQUIRE_MIN_ROWS="${MLB_WIDE_REQUIRE_MIN_ROWS:-1}"
 
@@ -324,6 +326,7 @@ run_daily() {
     set +e
     MLB_DATE="${MLB_DATE}" \
     MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV}" \
+    MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON}" \
     MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES}" \
     MLB_WIDE_REQUIRE_MIN_ROWS="${MLB_WIDE_REQUIRE_MIN_ROWS}" \
     make mlb-predictions-wide
@@ -369,11 +372,25 @@ run_daily() {
     MLB_DATE="${MLB_DATE}" \
     MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV}" \
     MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV}" \
+    MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT}" \
+    MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON}" \
     make mlb-book-upload
+
+    local archive_manifest="${MLB_ODDS_HISTORY_ROOT}/${MLB_DATE}/manifest.json"
+    if [[ ! -f "${archive_manifest}" ]]; then
+      msg="[prod12-cron] daily slate artifact manifest missing: ${archive_manifest}"
+      if [[ "${MLB_DAILY_SLATE_ARTIFACTS_REQUIRED}" == "1" ]]; then
+        echo "${msg}" >&2
+        return 2
+      fi
+      echo "${msg}; continuing"
+    fi
 
     echo "[prod12-cron] daily slate artifact outputs:"
     echo "[prod12-cron]   slate_output=${MLB_SLATE_OUTPUT_CSV}"
     echo "[prod12-cron]   book_upload=${MLB_BOOK_UPLOAD_OUT_CSV}"
+    echo "[prod12-cron]   odds_snapshot=${MLB_ODDS_SNAPSHOT_JSON}"
+    echo "[prod12-cron]   archive_manifest=${archive_manifest}"
   else
     echo "[prod12-cron] daily slate/book-upload artifact stage disabled (MLB_DAILY_SLATE_ARTIFACTS_ENABLED=${MLB_DAILY_SLATE_ARTIFACTS_ENABLED})"
   fi
