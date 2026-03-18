@@ -8,19 +8,41 @@ Quick index tool:
 bin/nhl_ops.sh list
 bin/nhl_ops.sh show daily
 bin/nhl_ops.sh show candidates
+bin/nhl_ops.sh show bakeoff-trigger
 bin/nhl_ops.sh copy candidates
 bin/nhl_ops.sh export tmp/nhl_ops_commands.txt
 ```
 
+## Daily Runbook (Quick 1-9)
+
+Use this when you want the full daily sequence in one contiguous block.
+
+- `Step 1`: Load env vars.
+- `Step 2`: Run NHL daily pipeline.
+- `Step 3`: Build full-slate upload CSV.
+- `Step 3b` (optional): Trigger full bakeoff only on large slates (`>=8` games).
+- `Step 4`: Build candidate upload CSV (choose one):
+  - `4a` Default daily upload (recommended).
+  - `4b` Conservative daily upload.
+  - `4c` Executable-reconciled testing profile.
+  - `4d` Recency + over-shrink shadow profile (no upload overwrite).
+- `Step 5`: Upload candidate CSV to grading tool.
+- `Step 6`: Download grader CSV after games are final.
+- `Step 7`: Summarize graded results.
+- `Step 8`: Run anchored reevaluation.
+- `Step 9`: Run live truth gate.
+
+Detailed commands for each step remain below.
+
 ## Daily Sequence (From Upload Prep)
 
-1. Load environment vars in current shell.
+Step 1. Load environment vars in current shell.
 
 ```bash
 set -a && source backend/.env && set +a
 ```
 
-2. Run NHL daily pipeline.
+Step 2. Run NHL daily pipeline.
 
 ```bash
 .venv/bin/python -m backend.nhl.cli daily --with-odds
@@ -29,14 +51,34 @@ set -a && source backend/.env && set +a
 Daily archive note:
 - Copies per-slate artifacts into `backend/nhl/exports/odds_history/YYYY-MM-DD/`.
 - Includes `sog_with_market.csv` and raw prediction snapshots (`sog_predictions_wide_calibrated.csv`, plus shadow file when present).
+- `daily` also refreshes the SOG residual dataset and reconcile artifacts (default on) so replay/reconcile rows keep moving forward each day.
+- Daily CLI also refreshes SOG reconcile artifacts (`tmp/nhl_sog_base_vs_betonline_*.csv/json`) and archives them per-slate for replay/testing continuity.
 
-3. Build full-slate upload CSV (all rows).
+Step 3. Build full-slate upload CSV (all rows).
 
 ```bash
 .venv/bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
 ```
 
-4. Build candidate upload CSV (choose one profile).
+Step 3b (optional). Trigger bakeoff on larger slates only (`>=8` games).
+
+```bash
+SLATE=$(date +%F)
+bin/nhl_bakeoff_trigger.sh --slate-date "$SLATE" --min-games 8
+```
+
+Behavior:
+- Runs full bakeoff (including `--enable-base-v2-arm`) when game count is `>=8`.
+- Prints `skip` and exits cleanly when game count is below threshold.
+
+Step 4. Build candidate upload CSV (choose one profile).
+
+Matchup confirmation note (auto-enabled):
+- Candidate cards now include opponent-history confirmation fields per pick:
+  `matchup_confirmation_label`, `matchup_confirmation_score`,
+  `matchup_prev_games_vs_opp`, `matchup_side_hit_rate_vs_opp`, and related context columns.
+- Labels are: `real`, `mixed`, `likely_luck`, `low_sample`, `no_history`.
+- To disable for a run: add `--disable-matchup-confirmation`.
 
 #### 4a. Default daily upload (recommended)
 
@@ -93,6 +135,38 @@ SLATE=$(date +%F)
   --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv \
   --book-upload-max-fair-favorite -300
 ```
+
+#### 4d. Recency + over-shrink shadow profile (no upload overwrite)
+
+Builds a 30-day recency policy for the slate date, then runs a shadow card with
+segment alpha shrink (`over:1.5=0.25`, `over:2.5=0.40`) and writes outputs only
+to `tmp/analysis/cards_shadow/`.
+
+```bash
+SLATE=$(date +%F)
+
+.venv/bin/python backend/nhl/scripts/build_sog_recency_policy_json.py \
+  --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
+  --as-of-date "$SLATE" \
+  --window-days 30 \
+  --min-train-rows-per-segment 25 \
+  --fallback-policy-json tmp/nhl_sog_walkforward_summary.json \
+  --out-json "tmp/analysis/cards_shadow/nhl_sog_policy_${SLATE}_4d_recency30.json"
+
+.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+  --market-csv nhl/site/data/sog_with_market.csv \
+  --policy-json "tmp/analysis/cards_shadow/nhl_sog_policy_${SLATE}_4d_recency30.json" \
+  --game-date "$SLATE" \
+  --segment-alpha over:1.5=0.25 \
+  --segment-alpha over:2.5=0.40 \
+  --segment-min-model-prob under:1.5=0.65 \
+  --segment-max-price under:1.5=100 \
+  --segment-max-price over:3.5=130 \
+  --out-csv "tmp/analysis/cards_shadow/nhl_sog_card_${SLATE}_4d_shadow.csv" \
+  --out-json "tmp/analysis/cards_shadow/nhl_sog_card_${SLATE}_4d_shadow_summary.json"
+```
+
+Daily sequence note: Steps 5-9 appear later in this file after the analysis/testing command sections.
 
 ### Slate Run Note (2026-03-14)
 
@@ -259,6 +333,10 @@ Use this when evaluating challenger model foundations on the same holdout popula
 ```
 
 ## Segment Toggle Shadow Run (Baseline vs New)
+
+Runbook note:
+- This and the following sections are optional analysis/testing lanes.
+- Daily runbook numbering resumes at `Step 5` later in the file.
 
 Use this when testing policy toggles before promoting.
 This writes a shadow card only (no candidate-upload overwrite).
@@ -462,19 +540,23 @@ PYTHONPATH=. .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py 
   --book-upload-max-fair-favorite -300
 ```
 
-5. Upload candidate CSV to the grading tool.
+Daily sequence handoff:
+- `Step 4` (including `4a/4b/4c/4d`) appears earlier in this file under `Daily Sequence (From Upload Prep)`.
+- Sections between that Step 4 block and Step 5 are optional analysis/testing lanes.
+
+Step 5. Upload candidate CSV to the grading tool.
 
 ```text
 backend/nhl/data/processed/sog_candidate_book_upload.csv
 ```
 
-6. After games are final, download grader CSV for analysis.
+Step 6. After games are final, download grader CSV for analysis.
 
 ```text
 Example: /Users/jerrystrain/Downloads/8rainstation_daily_YYYY_MM_DD.csv
 ```
 
-7. Summarize graded NHL SOG results from the downloaded CSV.
+Step 7. Summarize graded NHL SOG results from the downloaded CSV.
 
 Preferred (auto-pick newest grader CSV in Downloads):
 
@@ -495,7 +577,7 @@ Outputs:
 - `tmp/graded/nhl_sog_graded_YYYY-MM-DD.csv`
 - `tmp/graded/nhl_sog_graded_YYYY-MM-DD_summary.json`
 
-8. Run anchored reevaluation from `2026-03-04` through latest graded day (post-grade diagnostics only; does not change Step 4 candidate generation/upload).
+Step 8. Run anchored reevaluation from `2026-03-04` through latest graded day (post-grade diagnostics only; does not change Step 4 candidate generation/upload).
    - Compares placed wagers against: `baseline`, `b_conservative`, `toggles_cap`, `toggles_disable_over35`.
 
 ```bash
@@ -518,7 +600,7 @@ Outputs:
 - `tmp/analysis/anchored_reconcile/anchored_reconcile_summary.json`
 - `tmp/analysis/anchored_reconcile/anchored_reconcile_rows.csv`
 
-9. Run live truth gate (uses placed+graded wagers only) before upload decisions.
+Step 9. Run live truth gate (uses placed+graded wagers only) before upload decisions.
 
 ```bash
 .venv/bin/python backend/nhl/scripts/live_truth_gate_sog.py \

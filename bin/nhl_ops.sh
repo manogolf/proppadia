@@ -40,6 +40,11 @@ CMD
 SLATE=$(date +%F) && .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
 CMD
       ;;
+    bakeoff-trigger)
+      cat <<'CMD'
+SLATE=$(date +%F) && bin/nhl_bakeoff_trigger.sh --slate-date "$SLATE" --min-games 8
+CMD
+      ;;
     reconcile)
       cat <<'CMD'
 .venv/bin/python -m backend.nhl.scripts.reconcile_sog_base_vs_betonline_by_month --from-date 2025-10-07 --to-date $(date +%F) --out-csv tmp/nhl_sog_base_vs_betonline_monthly.csv --out-json tmp/nhl_sog_base_vs_betonline_monthly.json --out-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv
@@ -72,6 +77,7 @@ description_for() {
     daily) echo "Run NHL daily pipeline" ;;
     denali-upload) echo "Build full SOG book-upload CSV" ;;
     candidates) echo "Build policy-selected candidate upload CSV + dated card files" ;;
+    bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
     walkforward) echo "Refresh threshold policy JSON from row report" ;;
     odds-backfill-sog) echo "Backfill OddsAPI SOG-only historical files" ;;
@@ -85,6 +91,7 @@ ids=(
   daily
   denali-upload
   candidates
+  bakeoff-trigger
   reconcile
   walkforward
   odds-backfill-sog
