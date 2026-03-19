@@ -104,6 +104,8 @@ MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-3}"
 MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
 MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
+MLB_DAILY_ROSTER_REFRESH_ENABLED="${MLB_DAILY_ROSTER_REFRESH_ENABLED:-1}"
+MLB_DAILY_ROSTER_REFRESH_REQUIRED="${MLB_DAILY_ROSTER_REFRESH_REQUIRED:-1}"
 MLB_DAILY_STAT_DERIVED_ENABLED="${MLB_DAILY_STAT_DERIVED_ENABLED:-1}"
 MLB_DAILY_WIDE_PREDICTIONS_ENABLED="${MLB_DAILY_WIDE_PREDICTIONS_ENABLED:-1}"
 MLB_DAILY_WIDE_PREDICTIONS_REQUIRED="${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED:-1}"
@@ -132,6 +134,7 @@ MLB_SLATE_PRED_CSV="${MLB_SLATE_PRED_CSV:-backend/mlb/data/processed/mlb_predict
 MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV:-backend/mlb/data/processed/mlb_slate_output.csv}"
 MLB_SLATE_PROP_TYPE="${MLB_SLATE_PROP_TYPE:-}"
 MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV:-backend/mlb/data/processed/mlb_book_upload.csv}"
+MLB_ROSTER_DATE="${MLB_ROSTER_DATE:-${MLB_DATE}}"
 MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT:-backend/mlb/exports/odds_history}"
 MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON:-${MLB_ODDS_HISTORY_ROOT}/${MLB_DATE}/odds_mlb_playerprops.json}"
 MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES:-}"
@@ -292,6 +295,24 @@ run_weekly() {
 }
 
 run_daily() {
+  if [[ "${MLB_DAILY_ROSTER_REFRESH_ENABLED}" == "1" ]]; then
+    echo "[prod12-cron] running daily roster refresh"
+    set +e
+    MLB_ROSTER_DATE="${MLB_ROSTER_DATE}" \
+    make mlb-roster-refresh-all
+    local roster_rc=$?
+    set -e
+    if [[ "${roster_rc}" -ne 0 ]]; then
+      if [[ "${MLB_DAILY_ROSTER_REFRESH_REQUIRED}" == "1" ]]; then
+        echo "[prod12-cron] daily roster refresh failed rc=${roster_rc}" >&2
+        return "${roster_rc}"
+      fi
+      echo "[prod12-cron] WARN: daily roster refresh failed rc=${roster_rc}; continuing"
+    fi
+  else
+    echo "[prod12-cron] daily roster refresh disabled (MLB_DAILY_ROSTER_REFRESH_ENABLED=${MLB_DAILY_ROSTER_REFRESH_ENABLED})"
+  fi
+
   if [[ "${MLB_DAILY_STAT_DERIVED_ENABLED}" == "1" ]]; then
     echo "[prod12-cron] running daily stat-derived refresh"
     MLB_STAT_DAYS_AGO="${MLB_STAT_DAYS_AGO}" \
