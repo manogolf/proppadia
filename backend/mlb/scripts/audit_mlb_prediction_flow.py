@@ -50,7 +50,7 @@ def _flow_summary(window_value: int, window_mode: str) -> Dict[str, int]:
           COUNT(*) FILTER (WHERE lower(trim(coalesce(outcome, ''))) IN ('win','loss'))::int AS graded_rows
         FROM mlb.player_props
         """
-        + _date_filter("game_date", "player_props", window_mode),
+        + _date_filter("game_date", "mlb.player_props", window_mode),
         (int(window_value),),
     )
     row = (rows or [{}])[0]
@@ -111,7 +111,7 @@ def _integrity_checks(window_value: int, window_mode: str, max_drift_days: int) 
           )::int AS user_added_missing_in_training
         FROM mlb.player_props
         """
-        + _date_filter("game_date", "player_props", window_mode),
+        + _date_filter("game_date", "mlb.player_props", window_mode),
         (int(max_drift_days), int(window_value)),
     )
     row = (rows or [{}])[0]
@@ -126,7 +126,7 @@ def _integrity_checks(window_value: int, window_mode: str, max_drift_days: int) 
 
 def _duplicate_rows(window_value: int, window_mode: str, include_user_id: bool) -> Dict[str, int]:
     user_expr = ", COALESCE(cast(user_id as text), '')" if include_user_id else ""
-    user_where = _date_filter("game_date", "player_props", window_mode).replace("WHERE", "WHERE prop_source = 'user_added' AND ", 1)
+    user_where = _date_filter("game_date", "mlb.player_props", window_mode).replace("WHERE", "WHERE prop_source = 'user_added' AND ", 1)
     user_rows = pg_fetchall(
         f"""
         SELECT
@@ -153,7 +153,7 @@ def _duplicate_rows(window_value: int, window_mode: str, include_user_id: bool) 
           FROM mlb.model_training_props
           WHERE prop_source = 'mlb_api'
         """
-        + _date_filter("game_date", "model_training_props", window_mode).replace("WHERE", "AND ", 1)
+        + _date_filter("game_date", "mlb.model_training_props", window_mode).replace("WHERE", "AND ", 1)
         + """
           GROUP BY player_id, game_id, prop_type, prop_source
           HAVING COUNT(*) > 1
