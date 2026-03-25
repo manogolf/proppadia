@@ -21,6 +21,11 @@ def _normalize_source_table(source_table: str) -> str:
     return table
 
 
+def _source_table_sql(source_table: str) -> str:
+    table = _normalize_source_table(source_table)
+    return f"mlb.{table}"
+
+
 def _common_cte(
     source_table: str,
     prop_types: Sequence[str] | None = None,
@@ -50,7 +55,7 @@ WITH src AS (
     was_correct,
     confidence_score
   FROM """
-        + _normalize_source_table(source_table)
+        + _source_table_sql(source_table)
         + """
   WHERE game_date IS NOT NULL
 """

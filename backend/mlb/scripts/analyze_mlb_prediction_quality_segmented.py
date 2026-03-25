@@ -22,6 +22,11 @@ def _normalize_source_table(source_table: str) -> str:
     return table
 
 
+def _source_table_sql(source_table: str) -> str:
+    table = _normalize_source_table(source_table)
+    return f"mlb.{table}"
+
+
 def _validate_iso(raw: str, label: str) -> str:
     value = str(raw or "").strip()
     try:
@@ -54,7 +59,7 @@ WITH src AS (
     was_correct,
     confidence_score
   FROM """
-        + _normalize_source_table(source_table)
+        + _source_table_sql(source_table)
         + """
   WHERE game_date IS NOT NULL
     AND game_date::date BETWEEN %s::date AND %s::date
