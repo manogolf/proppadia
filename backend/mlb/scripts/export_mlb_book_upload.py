@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 """
-python backend/mlb/scripts/export_mlb_book_upload.py
+Recommended entrypoint (daily chain):
+  make mlb-daily-capture MLB_DATE=YYYY-MM-DD
+
+Direct script usage requires existing input artifacts:
+  - wide predictions mode (default):
+      python backend/mlb/scripts/export_mlb_book_upload.py \
+        --slate-date YYYY-MM-DD
+    and MLB_PRED_CSV must exist (default: backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv)
+
+  - slate output mode (preferred for historical replay/smoke):
+      python backend/mlb/scripts/export_mlb_book_upload.py \
+        --slate-date YYYY-MM-DD \
+        --use-slate-output \
+        --slate-csv backend/mlb/exports/odds_history/YYYY-MM-DD/mlb_slate_output.csv \
+        --policy-plan-csv backend/mlb/config/policy/all11_forward_plan_pass4.csv \
+        --odds-snapshot-json backend/mlb/exports/odds_history/YYYY-MM-DD/odds_latest_compatible.json \
+        --policy-allow-empty
 
 MLB equivalent of NHL book-upload exporter.
 
@@ -31,6 +47,15 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 
+from backend.app.services.mlb import market_odds_service
+from backend.mlb.scripts.build_mlb_reconcile_rows import (
+    _build_market_index,
+    _build_team_name_reverse,
+    _line_key,
+    _load_events,
+    _norm_name,
+)
+from backend.mlb.shared.policy_plan import load_policy_plan, score_policy_plan_rows
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # .../backend
 PRED_CSV = Path(
@@ -139,7 +164,12 @@ def _fetch_games(conn, game_ids: List[int]) -> pd.DataFrame:
 def _load_predictions(path: Path) -> pd.DataFrame:
     print(f"[mlb-book-upload] reading predictions from: {path}")
     if not path.exists():
-        raise FileNotFoundError(f"missing predictions file: {path}")
+        raise FileNotFoundError(
+            "missing predictions file: "
+            f"{path}\n"
+            "Run upstream capture first (make mlb-daily-capture) "
+            "or pass --use-slate-output --slate-csv <path>."
+        )
     return pd.read_csv(path)
 
 
@@ -251,6 +281,132 @@ def _load_market_map(arg_json: str, env_json: str) -> Dict[str, str]:
     return out
 
 
+def _pick_book_row(
+    *,
+    by_book: Dict[str, Dict[str, object]],
+    bookmaker_key: str,
+) -> Tuple[Optional[str], Optional[Dict[str, object]]]:
+    target = str(bookmaker_key or "").strip().lower()
+    if not target or not by_book:
+        return None, None
+    for key, payload in by_book.items():
+        if str(key or "").strip().lower() == target:
+            return str(key), payload
+    return None, None
+
+
+def _build_policy_candidate_rows(
+    *,
+    merged: pd.DataFrame,
+    plan_df: pd.DataFrame,
+    odds_snapshot_json: Path,
+    market_map: Dict[str, str],
+) -> pd.DataFrame:
+    if not odds_snapshot_json.exists():
+        raise FileNotFoundError(f"missing odds snapshot json for policy mode: {odds_snapshot_json}")
+
+    events = _load_events(odds_snapshot_json)
+    market_idx = _build_market_index(events=events, team_name_rev=_build_team_name_reverse())
+
+    plan_by_prop = {str(r["prop_type"]).strip().lower(): r for _, r in plan_df.iterrows()}
+    out_rows: List[Dict[str, object]] = []
+    out_cols = [
+        "league",
+        "slate_date",
+        "game_date",
+        "game_id",
+        "home_team_code",
+        "away_team_code",
+        "player_id",
+        "player_name",
+        "prop_type",
+        "market_key",
+        "line",
+        "model_prob_over",
+        "model_prob_under",
+        "bookmaker_key",
+        "price_over_american",
+        "price_under_american",
+    ]
+
+    for _, row in merged.iterrows():
+        prop_type = _canonical_prop_type(row.get("prop_type"))
+        plan_row = plan_by_prop.get(prop_type)
+        if plan_row is None:
+            continue
+
+        home = str(row.get("home_team_code") or "").strip().upper()
+        away = str(row.get("away_team_code") or "").strip().upper()
+        player_name = str(row.get("player_name") or "").strip()
+        line = _line_key(row.get("line"))
+        if not home or not away or not player_name or line is None:
+            continue
+
+        market_key = _clean_optional_str(row.get("market_key")) or market_map.get(prop_type)
+        if not market_key:
+            continue
+
+        market_candidates = market_odds_service.get_prop_market_candidates(
+            prop_type=prop_type,
+            include_aliases=True,
+        )
+        candidate_keys = [market_key] + [mk for mk in market_candidates if str(mk) != str(market_key)]
+
+        selected_market_key: Optional[str] = None
+        selected_book_key: Optional[str] = None
+        selected_book_row: Optional[Dict[str, object]] = None
+        for market_key_try in candidate_keys:
+            market_key_norm = str(market_key_try or "").strip()
+            if not market_key_norm:
+                continue
+            k = (home, away, market_key_norm, _norm_name(player_name), float(line))
+            by_book = market_idx.get(k, {})
+            book_key, book_row = _pick_book_row(
+                by_book=by_book,
+                bookmaker_key=str(plan_row.get("bookmaker_key") or ""),
+            )
+            if book_key and book_row:
+                selected_market_key = market_key_norm
+                selected_book_key = book_key
+                selected_book_row = book_row
+                break
+
+        if not selected_book_row:
+            continue
+
+        try:
+            price_over = float(selected_book_row.get("over")) if selected_book_row.get("over") is not None else None
+            price_under = (
+                float(selected_book_row.get("under")) if selected_book_row.get("under") is not None else None
+            )
+        except Exception:
+            price_over = None
+            price_under = None
+
+        out_rows.append(
+            {
+                "league": row.get("league"),
+                "slate_date": row.get("slate_date"),
+                "game_date": row.get("game_date"),
+                "game_id": row.get("game_id"),
+                "home_team_code": home,
+                "away_team_code": away,
+                "player_id": row.get("player_id"),
+                "player_name": player_name,
+                "prop_type": prop_type,
+                "market_key": selected_market_key or market_key,
+                "line": float(line),
+                "model_prob_over": float(row.get("prob_over")),
+                "model_prob_under": float(row.get("prob_under")),
+                "bookmaker_key": str(selected_book_key or plan_row.get("bookmaker_key")),
+                "price_over_american": price_over,
+                "price_under_american": price_under,
+            }
+        )
+
+    return pd.DataFrame(out_rows, columns=out_cols)
+
+
 def main() -> None:
     import argparse
     from datetime import datetime
@@ -278,6 +434,26 @@ def main() -> None:
         "--drop-line-0-5",
         action="store_true",
         help="Drop 0.5 lines (default keeps them for MLB).",
+    )
+    ap.add_argument(
+        "--policy-plan-csv",
+        default=os.environ.get("MLB_POLICY_PLAN_CSV", ""),
+        help="Optional per-prop policy plan CSV (book/side/thresholds). When set, emits selected-side rows only.",
+    )
+    ap.add_argument(
+        "--odds-snapshot-json",
+        default=os.environ.get("MLB_ODDS_SNAPSHOT_JSON", ""),
+        help="Odds snapshot JSON used for policy plan filtering (required when --policy-plan-csv is set).",
+    )
+    ap.add_argument(
+        "--policy-allow-one-sided",
+        action="store_true",
+        help="Allow one-sided rows in policy evaluation (default requires two-sided).",
+    )
+    ap.add_argument(
+        "--policy-allow-empty",
+        action="store_true",
+        help="Allow policy mode to write an empty upload file when no rows pass.",
     )
     args = ap.parse_args()
 
@@ -381,48 +557,132 @@ def main() -> None:
         print(f"[mlb-book-upload] dropped line 0.5: before={lines_before} after={lines_after}")
 
     rows: List[Dict[str, object]] = []
-    for _, row in merged.iterrows():
-        p_over = float(row["prob_over"])
-        if not (0.0 < p_over < 1.0):
-            continue
-        p_under = 1.0 - p_over
+    policy_plan_csv = Path(str(args.policy_plan_csv or "").strip()).expanduser() if str(args.policy_plan_csv or "").strip() else None
+    if policy_plan_csv is not None:
+        odds_snapshot_raw = str(args.odds_snapshot_json or "").strip()
+        if not odds_snapshot_raw:
+            raise RuntimeError("--odds-snapshot-json is required when --policy-plan-csv is set")
+        odds_snapshot_json = Path(odds_snapshot_raw).expanduser()
+        plan_df = load_policy_plan(policy_plan_csv, include_actions=("enable",))
+        candidate_rows = _build_policy_candidate_rows(
+            merged=merged,
+            plan_df=plan_df,
+            odds_snapshot_json=odds_snapshot_json,
+            market_map=market_map,
+        )
+        scored = score_policy_plan_rows(
+            candidate_rows,
+            plan_df,
+            require_two_sided=not bool(args.policy_allow_one_sided),
+        )
+        selected = scored[scored["pass_policy"]].copy() if not scored.empty else scored
+        print(
+            "[mlb-book-upload] policy mode: candidates=",
+            len(candidate_rows),
+            "scored=",
+            len(scored),
+            "selected=",
+            len(selected),
+        )
 
-        odds_over = _prob_to_fair_american(p_over)
-        odds_under = _prob_to_fair_american(p_under)
-        if odds_over is None or odds_under is None:
-            continue
+        for _, row in selected.iterrows():
+            side = str(row.get("plan_side") or "").strip().lower()
+            if side not in {"over", "under"}:
+                continue
+            side_prob = float(row.get("side_model_prob"))
+            if not (0.0 < side_prob < 1.0):
+                continue
+            win_pct = _prob_to_fair_american(side_prob)
+            if win_pct is None:
+                continue
 
-        prop_type = _canonical_prop_type(row["prop_type"])
-        market = str(args.market).strip()
-        if not market:
-            if "market_key" in merged.columns:
+            prop_type = _canonical_prop_type(row.get("prop_type"))
+            market = str(args.market).strip()
+            if not market:
                 market = _clean_optional_str(row.get("market_key")) or ""
             if not market:
                 market = market_map.get(prop_type) or f"player-{prop_type.replace('_', '-')}-ou"
-        date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
 
-        base = {
-            "LEAGUE": str(args.league).strip() or "MLB",
-            "DATE": date_str,
-            "HOME": str(row["home_team_code"]).strip(),
-            "AWAY": str(row["away_team_code"]).strip(),
-            "DOUBLEHEADER": "",
-            "SECTION": str(args.section).strip() or "player_prop",
-            "MARKET": market,
-            "SELECTOR": int(row["player_id"]),
-            "POINT": float(row["line"]),
-        }
-        rows.append({**base, "SIDE": "over", "WIN %": int(odds_over)})
-        rows.append({**base, "SIDE": "under", "WIN %": int(odds_under)})
+            date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
+            rows.append(
+                {
+                    "LEAGUE": str(args.league).strip() or "MLB",
+                    "DATE": date_str,
+                    "HOME": str(row["home_team_code"]).strip(),
+                    "AWAY": str(row["away_team_code"]).strip(),
+                    "DOUBLEHEADER": "",
+                    "SECTION": str(args.section).strip() or "player_prop",
+                    "MARKET": market,
+                    "SELECTOR": int(row["player_id"]),
+                    "POINT": float(row["line"]),
+                    "SIDE": side,
+                    "WIN %": int(win_pct),
+                }
+            )
+    else:
+        for _, row in merged.iterrows():
+            p_over = float(row["prob_over"])
+            if not (0.0 < p_over < 1.0):
+                continue
+            p_under = 1.0 - p_over
+
+            odds_over = _prob_to_fair_american(p_over)
+            odds_under = _prob_to_fair_american(p_under)
+            if odds_over is None or odds_under is None:
+                continue
+
+            prop_type = _canonical_prop_type(row["prop_type"])
+            market = str(args.market).strip()
+            if not market:
+                if "market_key" in merged.columns:
+                    market = _clean_optional_str(row.get("market_key")) or ""
+                if not market:
+                    market = market_map.get(prop_type) or f"player-{prop_type.replace('_', '-')}-ou"
+            date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
+
+            base = {
+                "LEAGUE": str(args.league).strip() or "MLB",
+                "DATE": date_str,
+                "HOME": str(row["home_team_code"]).strip(),
+                "AWAY": str(row["away_team_code"]).strip(),
+                "DOUBLEHEADER": "",
+                "SECTION": str(args.section).strip() or "player_prop",
+                "MARKET": market,
+                "SELECTOR": int(row["player_id"]),
+                "POINT": float(row["line"]),
+            }
+            rows.append({**base, "SIDE": "over", "WIN %": int(odds_over)})
+            rows.append({**base, "SIDE": "under", "WIN %": int(odds_under)})
 
     if not rows:
+        if policy_plan_csv is not None and args.policy_allow_empty:
+            out_df = pd.DataFrame(
+                columns=[
+                    "LEAGUE",
+                    "DATE",
+                    "HOME",
+                    "AWAY",
+                    "DOUBLEHEADER",
+                    "SECTION",
+                    "MARKET",
+                    "SELECTOR",
+                    "POINT",
+                    "SIDE",
+                    "WIN %",
+                ]
+            )
+            OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+            out_df.to_csv(OUT_CSV, index=False)
+            print(f"[mlb-book-upload] wrote empty policy output to {OUT_CSV}")
+            return
         print("ERROR: no output rows generated", file=sys.stderr)
         sys.exit(1)
 
     out_df = pd.DataFrame(rows)
-    expected = 2 * len(merged)
-    if len(out_df) != expected:
-        raise AssertionError(f"unexpected row count: wrote {len(out_df)} expected {expected}")
+    if policy_plan_csv is None:
+        expected = 2 * len(merged)
+        if len(out_df) != expected:
+            raise AssertionError(f"unexpected row count: wrote {len(out_df)} expected {expected}")
     bad_sides = sorted(set(out_df["SIDE"].dropna().unique()) - {"over", "under"})
     if bad_sides:
         raise AssertionError(f"invalid SIDE values: {bad_sides}")

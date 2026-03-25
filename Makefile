@@ -12,6 +12,10 @@ MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
 MLB_ODDS_HISTORY_ROOT ?= backend/mlb/exports/odds_history
 MLB_ODDS_SNAPSHOT_JSON ?= $(MLB_ODDS_HISTORY_ROOT)/$(MLB_DATE)/odds_mlb_playerprops.json
+MLB_POLICY_PLAN_ENABLED ?= 1
+MLB_POLICY_PLAN_CSV ?= backend/mlb/config/policy/all11_forward_plan_pass4.csv
+MLB_POLICY_PLAN_ALLOW_ONE_SIDED ?= 0
+MLB_POLICY_PLAN_ALLOW_EMPTY ?= 1
 MLB_ODDS_BACKFILL_SEASON ?= 2025
 MLB_ODDS_BACKFILL_FROM_DATE ?=
 MLB_ODDS_BACKFILL_TO_DATE ?=
@@ -28,6 +32,10 @@ MLB_RECONCILE_TO_DATE ?= $(MLB_DATE)
 MLB_RECONCILE_BOOKMAKER ?= betonlineag
 MLB_RECONCILE_ROWS_OUT_CSV ?= tmp/mlb_base_vs_market_rows.csv
 MLB_RECONCILE_SUMMARY_OUT_JSON ?= tmp/mlb_base_vs_market_summary.json
+MLB_POLICY_REPLAY_ROWS_CSV ?= tmp/mlb_reconcile_rows_2024_2025_prod11_allbooks_noncollapsed.csv
+MLB_POLICY_REPLAY_OUT_DIR ?= tmp/analysis/mlb_baseline_readiness_pack/pass4_execution_replay
+MLB_POLICY_MONITOR_PROPS ?= doubles,walks_allowed
+MLB_POLICY_MONITOR_MIN_BETS_ALERT ?= 30
 MLB_WIDE_PROP_TYPES ?=
 MLB_WIDE_REQUIRE_MIN_ROWS ?= 1
 MLB_DAILY_INCLUDE_CAPTURE ?= 1
@@ -851,7 +859,7 @@ mlb-slate-output:
 
 # Export MLB book-upload CSV from canonical MLB slate output.
 mlb-book-upload:
-	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)"
+	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(filter 1,$(MLB_POLICY_PLAN_ENABLED)),--policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)),--policy-allow-one-sided,) $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_EMPTY)),--policy-allow-empty,),)
 	$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)"
 
 # Archive one MLB slate's reproducibility artifacts under backend/mlb/exports/odds_history/YYYY-MM-DD.
@@ -861,6 +869,10 @@ mlb-slate-archive:
 # Build row-level MLB reconcile dataset from archived odds history artifacts.
 mlb-reconcile-rows:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_reconcile_rows.py --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --from-date "$(MLB_RECONCILE_FROM_DATE)" --to-date "$(MLB_RECONCILE_TO_DATE)" --bookmaker "$(MLB_RECONCILE_BOOKMAKER)" --out-csv "$(MLB_RECONCILE_ROWS_OUT_CSV)" --out-summary-json "$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+
+# Replay locked MLB policy plan across historical reconcile rows (includes fragile-lane monitor output).
+mlb-policy-plan-replay:
+	$(VENV_PY) backend/mlb/scripts/replay_mlb_policy_plan.py --rows-csv "$(MLB_POLICY_REPLAY_ROWS_CSV)" --policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --out-dir "$(MLB_POLICY_REPLAY_OUT_DIR)" --monitor-props "$(MLB_POLICY_MONITOR_PROPS)" --monitor-min-bets-alert "$(MLB_POLICY_MONITOR_MIN_BETS_ALERT)"
 
 # Backfill MLB historical odds snapshots from OddsAPI into odds_history root.
 mlb-odds-backfill-history:
@@ -887,11 +899,19 @@ mlb-show-config:
 	@echo "MLB_BOOK_UPLOAD_OUT_CSV=$(MLB_BOOK_UPLOAD_OUT_CSV)"
 	@echo "MLB_ODDS_HISTORY_ROOT=$(MLB_ODDS_HISTORY_ROOT)"
 	@echo "MLB_ODDS_SNAPSHOT_JSON=$(MLB_ODDS_SNAPSHOT_JSON)"
+	@echo "MLB_POLICY_PLAN_ENABLED=$(MLB_POLICY_PLAN_ENABLED)"
+	@echo "MLB_POLICY_PLAN_CSV=$(MLB_POLICY_PLAN_CSV)"
+	@echo "MLB_POLICY_PLAN_ALLOW_ONE_SIDED=$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)"
+	@echo "MLB_POLICY_PLAN_ALLOW_EMPTY=$(MLB_POLICY_PLAN_ALLOW_EMPTY)"
 	@echo "MLB_RECONCILE_FROM_DATE=$(MLB_RECONCILE_FROM_DATE)"
 	@echo "MLB_RECONCILE_TO_DATE=$(MLB_RECONCILE_TO_DATE)"
 	@echo "MLB_RECONCILE_BOOKMAKER=$(MLB_RECONCILE_BOOKMAKER)"
 	@echo "MLB_RECONCILE_ROWS_OUT_CSV=$(MLB_RECONCILE_ROWS_OUT_CSV)"
 	@echo "MLB_RECONCILE_SUMMARY_OUT_JSON=$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	@echo "MLB_POLICY_REPLAY_ROWS_CSV=$(MLB_POLICY_REPLAY_ROWS_CSV)"
+	@echo "MLB_POLICY_REPLAY_OUT_DIR=$(MLB_POLICY_REPLAY_OUT_DIR)"
+	@echo "MLB_POLICY_MONITOR_PROPS=$(MLB_POLICY_MONITOR_PROPS)"
+	@echo "MLB_POLICY_MONITOR_MIN_BETS_ALERT=$(MLB_POLICY_MONITOR_MIN_BETS_ALERT)"
 	@echo "MLB_ODDS_BACKFILL_SEASON=$(MLB_ODDS_BACKFILL_SEASON)"
 	@echo "MLB_ODDS_BACKFILL_FROM_DATE=$(MLB_ODDS_BACKFILL_FROM_DATE)"
 	@echo "MLB_ODDS_BACKFILL_TO_DATE=$(MLB_ODDS_BACKFILL_TO_DATE)"
