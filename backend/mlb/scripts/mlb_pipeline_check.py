@@ -9,10 +9,10 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
-from backend.scripts import audit_mlb_prediction_flow
-from backend.scripts import check_mlb_hits_expectation_sources
-from backend.scripts import mlb_prediction_gate
-from backend.scripts import report_mlb_prop_coverage
+from backend.mlb.scripts import audit_mlb_prediction_flow
+from backend.mlb.scripts import check_mlb_hits_expectation_sources
+from backend.mlb.scripts import mlb_prediction_gate
+from backend.mlb.scripts import report_mlb_prop_coverage
 from backend.shared.scripts.json_check_runner import run_json_check
 
 DEFAULT_PROP_TYPES = "hits,total_bases,strikeouts_batting"

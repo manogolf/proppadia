@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.scripts import analyze_mlb_prediction_quality
+from backend.mlb.scripts import analyze_mlb_prediction_quality
 
 
 def _latest_baseline_file(root: Path) -> Path | None:

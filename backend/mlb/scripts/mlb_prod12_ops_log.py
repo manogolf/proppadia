@@ -10,9 +10,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.scripts import mlb_prod12_health_report
-from backend.scripts import mlb_prod12_incident
-from backend.scripts import mlb_prod12_status
+from backend.mlb.scripts import mlb_prod12_health_report
+from backend.mlb.scripts import mlb_prod12_incident
+from backend.mlb.scripts import mlb_prod12_status
 from backend.shared.scripts.json_check_runner import run_json_check
 
 

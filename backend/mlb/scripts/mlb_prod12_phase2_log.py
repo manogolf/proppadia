@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.scripts import mlb_candidate_eval
+from backend.mlb.scripts import mlb_candidate_eval
 from backend.shared.scripts.json_check_runner import run_json_check
 
 

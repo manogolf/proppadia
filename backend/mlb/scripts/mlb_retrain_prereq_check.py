@@ -10,11 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.scripts import analyze_mlb_prediction_quality
-from backend.scripts import json_check_runner
-from backend.scripts import report_mlb_prop_coverage
+from backend.mlb.scripts import analyze_mlb_prediction_quality
+from backend.shared.scripts import json_check_runner
+from backend.mlb.scripts import report_mlb_prop_coverage
 from backend.scripts import season_baseline_last
-from backend.scripts import validate_mlb_stat_derived_recent
+from backend.mlb.scripts import validate_mlb_stat_derived_recent
 
 
 def _safe_run_json_check(fn: Any, args: list[str], check_name: str) -> tuple[int, dict[str, Any]]:

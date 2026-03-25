@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from backend.scripts import mlb_pipeline_check
+from backend.mlb.scripts import mlb_pipeline_check
 
 
 def main(argv: Sequence[str] | None = None) -> int:
