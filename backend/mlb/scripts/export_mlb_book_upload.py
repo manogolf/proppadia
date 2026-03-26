@@ -4,8 +4,10 @@ Recommended entrypoint (daily chain):
   make mlb-daily-capture MLB_DATE=YYYY-MM-DD
 
 Most common manual command (download ready upload CSV from remote run; no local rebuild):
-  PROPPADIA_BACKEND_URL="https://baseball-streaks-sq44.onrender.com" \
-  OPS_API_TOKEN="***" \
+  set -a
+  source backend/.env
+  set +a
+  export OPS_API_TOKEN="$(printf '%s' "$OPS_API_TOKEN" | tr -d '\r\n')"
   .venv/bin/python backend/mlb/scripts/export_mlb_book_upload.py \
     --slate-date "$(date -u +%F)" \
     --remote-fetch-first \
@@ -13,8 +15,10 @@ Most common manual command (download ready upload CSV from remote run; no local 
     --remote-fetch-required
 
 Alternative (fetch remote slate first, then build upload CSV locally):
-  PROPPADIA_BACKEND_URL="https://baseball-streaks-sq44.onrender.com" \
-  OPS_API_TOKEN="***" \
+  set -a
+  source backend/.env
+  set +a
+  export OPS_API_TOKEN="$(printf '%s' "$OPS_API_TOKEN" | tr -d '\r\n')"
   .venv/bin/python backend/mlb/scripts/export_mlb_book_upload.py \
     --slate-date "$(date -u +%F)" \
     --remote-fetch-first \
@@ -491,6 +495,7 @@ def _build_policy_candidate_rows(
     plan_df: pd.DataFrame,
     odds_snapshot_json: Path,
     market_map: Dict[str, str],
+    include_all_books: bool = False,
 ) -> pd.DataFrame:
     if not odds_snapshot_json.exists():
         raise FileNotFoundError(f"missing odds snapshot json for policy mode: {odds_snapshot_json}")
@@ -554,29 +559,49 @@ def _build_policy_candidate_rows(
             prop_type=prop_type,
             base_market=market_key,
         )
-        for plan_book in prop_books:
-            selected_market_key: Optional[str] = None
-            selected_book_key: Optional[str] = None
-            selected_book_row: Optional[Dict[str, object]] = None
+        selected_by_book: Dict[str, Tuple[str, Dict[str, object], str]] = {}
+        if include_all_books:
             for market_key_try in market_candidates:
                 market_key_norm = str(market_key_try or "").strip()
                 if not market_key_norm:
                     continue
                 k = (home, away, market_key_norm, _norm_name(player_name), float(line))
                 by_book = market_idx.get(k, {})
-                book_key, book_row = _pick_book_row(
-                    by_book=by_book,
-                    bookmaker_key=plan_book,
-                )
-                if book_key and book_row:
-                    selected_market_key = market_key_norm
-                    selected_book_key = book_key
-                    selected_book_row = book_row
-                    break
+                for book_key, book_row in by_book.items():
+                    book_norm = str(book_key or "").strip().lower()
+                    if not book_norm or book_norm in selected_by_book:
+                        continue
+                    if not isinstance(book_row, dict):
+                        continue
+                    selected_by_book[book_norm] = (str(book_key), dict(book_row), market_key_norm)
+        else:
+            for plan_book in prop_books:
+                selected_market_key: Optional[str] = None
+                selected_book_key: Optional[str] = None
+                selected_book_row: Optional[Dict[str, object]] = None
+                for market_key_try in market_candidates:
+                    market_key_norm = str(market_key_try or "").strip()
+                    if not market_key_norm:
+                        continue
+                    k = (home, away, market_key_norm, _norm_name(player_name), float(line))
+                    by_book = market_idx.get(k, {})
+                    book_key, book_row = _pick_book_row(
+                        by_book=by_book,
+                        bookmaker_key=plan_book,
+                    )
+                    if book_key and book_row:
+                        selected_market_key = market_key_norm
+                        selected_book_key = book_key
+                        selected_book_row = book_row
+                        break
+                if selected_book_key and selected_book_row:
+                    selected_by_book[str(selected_book_key).strip().lower()] = (
+                        str(selected_book_key),
+                        dict(selected_book_row),
+                        str(selected_market_key or market_key),
+                    )
 
-            if not selected_book_row:
-                continue
-
+        for selected_book_key, selected_book_row, selected_market_key in selected_by_book.values():
             try:
                 price_over = float(selected_book_row.get("over")) if selected_book_row.get("over") is not None else None
                 price_under = (
@@ -601,7 +626,7 @@ def _build_policy_candidate_rows(
                     "line": float(line),
                     "model_prob_over": float(row.get("prob_over")),
                     "model_prob_under": float(row.get("prob_under")),
-                    "bookmaker_key": str(selected_book_key or plan_book),
+                    "bookmaker_key": str(selected_book_key),
                     "price_over_american": price_over,
                     "price_under_american": price_under,
                 }
@@ -613,6 +638,65 @@ def _build_policy_candidate_rows(
     return out.drop_duplicates(subset=["game_id", "player_id", "prop_type", "line", "bookmaker_key"]).reset_index(
         drop=True
     )
+
+
+def _expand_policy_plan_books_from_candidates(plan_df: pd.DataFrame, candidate_rows: pd.DataFrame) -> pd.DataFrame:
+    if plan_df.empty or candidate_rows.empty:
+        return plan_df.copy()
+
+    plan = plan_df.copy()
+    plan["prop_type"] = plan["prop_type"].map(_canonical_prop_type)
+    plan["bookmaker_key"] = plan["bookmaker_key"].astype(str).str.strip().str.lower()
+    plan["side"] = plan["side"].astype(str).str.strip().str.lower()
+    if "action" not in plan.columns:
+        plan["action"] = "enable"
+    plan["action"] = plan["action"].astype(str).str.strip().str.lower()
+
+    candidates = candidate_rows[["prop_type", "bookmaker_key"]].copy()
+    candidates["prop_type"] = candidates["prop_type"].map(_canonical_prop_type)
+    candidates["bookmaker_key"] = candidates["bookmaker_key"].astype(str).str.strip().str.lower()
+    candidates = candidates[
+        candidates["prop_type"].astype(str).str.len().gt(0) & candidates["bookmaker_key"].astype(str).str.len().gt(0)
+    ]
+    if candidates.empty:
+        return plan
+
+    books_by_prop = (
+        candidates.groupby("prop_type")["bookmaker_key"]
+        .agg(lambda s: sorted({str(x).strip().lower() for x in s if str(x).strip()}))
+        .to_dict()
+    )
+
+    existing = {
+        (
+            str(r.get("prop_type") or "").strip().lower(),
+            str(r.get("bookmaker_key") or "").strip().lower(),
+            str(r.get("side") or "").strip().lower(),
+        )
+        for _, r in plan.iterrows()
+    }
+    add_rows: List[Dict[str, object]] = []
+    for _, plan_row in plan.iterrows():
+        prop = str(plan_row.get("prop_type") or "").strip().lower()
+        side = str(plan_row.get("side") or "").strip().lower()
+        if not prop or side not in {"over", "under"}:
+            continue
+        for book in books_by_prop.get(prop, []):
+            key = (prop, book, side)
+            if key in existing:
+                continue
+            synthetic = dict(plan_row)
+            synthetic["bookmaker_key"] = book
+            synthetic["action"] = "promote"
+            add_rows.append(synthetic)
+            existing.add(key)
+
+    if not add_rows:
+        return plan
+
+    out = pd.concat([plan, pd.DataFrame(add_rows)], ignore_index=True)
+    out = out.drop_duplicates(subset=["prop_type", "bookmaker_key", "side"], keep="first").reset_index(drop=True)
+    return out
 
 
 def _select_policy_rows(scored: pd.DataFrame) -> pd.DataFrame:
@@ -940,10 +1024,12 @@ def main() -> None:
             plan_df=plan_df,
             odds_snapshot_json=odds_snapshot_json,
             market_map=market_map,
+            include_all_books=True,
         )
+        scored_plan_df = _expand_policy_plan_books_from_candidates(plan_df, candidate_rows)
         scored = score_policy_plan_rows(
             candidate_rows,
-            plan_df,
+            scored_plan_df,
             require_two_sided=not bool(args.policy_allow_one_sided),
         )
         pass_count = int(scored["pass_policy"].sum()) if not scored.empty else 0

@@ -4,7 +4,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 import requests
@@ -15,6 +15,13 @@ ET = ZoneInfo("America/New_York")
 ODDS_BASE = "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds"
 EVENTS_BASE = "https://api.the-odds-api.com/v4/sports/baseball_mlb/events"
 SNAPSHOT_TTL_SECONDS = int(os.getenv("MLB_ODDS_CACHE_TTL_SECONDS", "21600"))
+
+BOOKMAKER_KEY_ALIASES = {
+    "betonline.ag": "betonlineag",
+    "mybookie.ag": "mybookieag",
+    "betonline_ag": "betonlineag",
+    "mybookie_ag": "mybookieag",
+}
 
 PROP_TO_ODDS_MARKET = {
     # Batter O/U props
@@ -43,18 +50,201 @@ PROP_TO_ODDS_MARKET = {
     # - pitcher_record_a_win (yes/no)
 }
 
+# Experimental/undocumented market-key aliases. These are only queried when
+# MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=1 and are fetched in event-level chunks so a
+# bad key cannot block baseline daily markets.
+PROP_TO_ODDS_MARKET_ALIASES = {
+    "runs_rbis": (
+        "batter_runs_rbis",
+        "batter_runs_rbi",
+        "batter_r+rbi",
+    ),
+}
+
 _snapshot_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 _API_KEY_RE = re.compile(r"(apiKey=)([^&\s]+)")
 
 
-def _markets_query() -> str:
-    # Fetch all supported O/U markets in one call to minimize credit burn.
-    return ",".join(sorted(set(PROP_TO_ODDS_MARKET.values())))
+def _env_bool(name: str, default: bool) -> bool:
+    raw = str(os.getenv(name, "1" if default else "0") or "").strip().lower()
+    return raw in {"1", "true", "yes", "y", "on"}
+
+
+def _parse_csv(raw: str) -> List[str]:
+    vals = [str(x).strip() for x in str(raw or "").split(",")]
+    return [v for v in vals if v]
+
+
+def _normalize_bookmaker_key(value: str) -> str:
+    key = str(value or "").strip().lower()
+    if not key:
+        return ""
+    key = BOOKMAKER_KEY_ALIASES.get(key, key)
+    return key
+
+
+def _bookmakers_query_csv() -> str:
+    toks = _parse_csv(str(os.getenv("MLB_ODDS_BOOKMAKERS", "") or ""))
+    seen = set()
+    out: List[str] = []
+    for tok in toks:
+        key = _normalize_bookmaker_key(tok)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return ",".join(out)
+
+
+def _include_bet_limits_param() -> str:
+    return "true" if _env_bool("MLB_ODDS_INCLUDE_BET_LIMITS", True) else "false"
+
+
+def _stable_market_keys() -> List[str]:
+    keys = sorted(set(str(v) for v in (PROP_TO_ODDS_MARKET or {}).values() if str(v).strip()))
+    configured = set(_parse_csv(str(os.getenv("MLB_ODDS_MARKETS", "") or "")))
+    if configured:
+        keys = [k for k in keys if k in configured]
+    return keys
+
+
+def _experimental_market_keys() -> List[str]:
+    if not _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
+        return []
+    keys: List[str] = []
+    for _prop_type, aliases in (PROP_TO_ODDS_MARKET_ALIASES or {}).items():
+        for key in aliases or ():
+            k = str(key or "").strip()
+            if k:
+                keys.append(k)
+    for key in _parse_csv(str(os.getenv("MLB_ODDS_EXTRA_MARKETS", "") or "")):
+        keys.append(key)
+    stable = set(_stable_market_keys())
+    return sorted(set(k for k in keys if k and k not in stable))
+
+
+def _markets_query(*, include_experimental: bool = False) -> str:
+    # Fetch all stable O/U markets in one call to minimize credit burn.
+    keys = list(_stable_market_keys())
+    if include_experimental:
+        keys.extend(_experimental_market_keys())
+    return ",".join(sorted(set(keys)))
+
+
+def _market_groups(markets_csv: str, *, max_per_group: int) -> List[str]:
+    toks = _parse_csv(markets_csv)
+    if not toks:
+        return []
+    step = max(1, int(max_per_group))
+    return [",".join(toks[i : i + step]) for i in range(0, len(toks), step)]
+
+
+def _merge_market_payload(base_payload: Dict[str, Any], next_payload: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(base_payload or {})
+    base_books = out.get("bookmakers")
+    next_books = (next_payload or {}).get("bookmakers")
+    if not isinstance(base_books, list) or not isinstance(next_books, list):
+        return out
+
+    by_key: Dict[str, Dict[str, Any]] = {}
+    ordered: List[Dict[str, Any]] = []
+    for b in base_books:
+        if not isinstance(b, dict):
+            continue
+        key = str(b.get("key") or "").strip()
+        if not key:
+            continue
+        cp = dict(b)
+        markets = cp.get("markets")
+        cp["markets"] = list(markets) if isinstance(markets, list) else []
+        by_key[key] = cp
+        ordered.append(cp)
+
+    for b in next_books:
+        if not isinstance(b, dict):
+            continue
+        key = str(b.get("key") or "").strip()
+        if not key:
+            continue
+        if key not in by_key:
+            cp = dict(b)
+            markets = cp.get("markets")
+            cp["markets"] = list(markets) if isinstance(markets, list) else []
+            by_key[key] = cp
+            ordered.append(cp)
+            continue
+        ex = by_key[key]
+        ex_markets = ex.get("markets")
+        if not isinstance(ex_markets, list):
+            ex_markets = []
+            ex["markets"] = ex_markets
+        for m in b.get("markets", []) if isinstance(b.get("markets"), list) else []:
+            if isinstance(m, dict):
+                ex_markets.append(m)
+
+    out["bookmakers"] = ordered
+    return out
+
+
+def _merge_event_rows(
+    *,
+    base_rows: List[Dict[str, Any]],
+    extra_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not extra_rows:
+        return list(base_rows)
+    out = [dict(r) for r in base_rows if isinstance(r, dict)]
+    by_event: Dict[str, int] = {}
+    for i, row in enumerate(out):
+        event_id = str(row.get("id") or "").strip()
+        if event_id:
+            by_event[event_id] = i
+    for row in extra_rows:
+        if not isinstance(row, dict):
+            continue
+        event_id = str(row.get("id") or "").strip()
+        if not event_id or event_id not in by_event:
+            out.append(dict(row))
+            if event_id:
+                by_event[event_id] = len(out) - 1
+            continue
+        idx = by_event[event_id]
+        out[idx] = _merge_market_payload(out[idx], row)
+    return out
 
 
 def get_supported_market_map() -> Dict[str, str]:
     # Return a copy to keep module constants immutable to callers.
     return dict(PROP_TO_ODDS_MARKET)
+
+
+def get_market_to_prop_map(*, include_aliases: bool = True) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for prop_type, market_key in (PROP_TO_ODDS_MARKET or {}).items():
+        k = str(market_key or "").strip()
+        if k:
+            out[k] = str(prop_type)
+    if include_aliases and _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
+        for prop_type, aliases in (PROP_TO_ODDS_MARKET_ALIASES or {}).items():
+            for alias in aliases or ():
+                k = str(alias or "").strip()
+                if k and k not in out:
+                    out[k] = str(prop_type)
+    return out
+
+
+def get_prop_market_candidates(*, prop_type: str, include_aliases: bool = True) -> List[str]:
+    normalized = normalize_prop_type(prop_type)
+    out: List[str] = []
+    primary = PROP_TO_ODDS_MARKET.get(normalized)
+    if primary:
+        out.append(str(primary))
+    if include_aliases and _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
+        for alias in (PROP_TO_ODDS_MARKET_ALIASES.get(normalized) or ()):
+            k = str(alias or "").strip()
+            if k and k not in out:
+                out.append(k)
+    return out
 
 
 def get_market_cache_status() -> Dict[str, Any]:
@@ -76,6 +266,11 @@ def get_market_cache_status() -> Dict[str, Any]:
         "entry_count": len(entries),
         "supported_prop_count": len(PROP_TO_ODDS_MARKET),
         "supported_market_count": len(set(PROP_TO_ODDS_MARKET.values())),
+        "configured_markets": _parse_csv(str(os.getenv("MLB_ODDS_MARKETS", "") or "")),
+        "configured_bookmakers": _parse_csv(_bookmakers_query_csv()),
+        "experimental_markets_enabled": _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False),
+        "experimental_market_count": len(_experimental_market_keys()),
+        "include_bet_limits": _env_bool("MLB_ODDS_INCLUDE_BET_LIMITS", True),
         "entries": entries,
     }
 
@@ -160,19 +355,38 @@ def _fetch_market_snapshot(*, game_date: str) -> List[Dict[str, Any]]:
     if not api_key:
         raise RuntimeError("ODDS_API_KEY missing")
 
+    stable_markets = _markets_query(include_experimental=False)
     params = {
         "apiKey": api_key,
-        "regions": "us",
-        "markets": _markets_query(),
+        "regions": str(os.getenv("MLB_ODDS_REGIONS", "us") or "us"),
+        "markets": stable_markets,
         "oddsFormat": "american",
         "dateFormat": "iso",
+        "includeBetLimits": _include_bet_limits_param(),
     }
+    bookmakers_csv = _bookmakers_query_csv()
+    if bookmakers_csv:
+        params["bookmakers"] = bookmakers_csv
 
     # Preferred one-call fetch for all events/markets on the sport endpoint.
     # If OddsAPI rejects market keys at this endpoint (422), fallback to per-event odds.
     res = requests.get(ODDS_BASE, params=params, timeout=20)
     if res.status_code == 422:
-        rows = _fetch_event_level_market_snapshot(api_key=api_key, game_date=game_date)
+        rows = _fetch_event_level_market_snapshot(
+            api_key=api_key,
+            game_date=game_date,
+            markets_csv=stable_markets,
+            allow_422_skip=False,
+        )
+        extra_markets = _experimental_market_keys()
+        if extra_markets:
+            extra_rows = _fetch_event_level_market_snapshot(
+                api_key=api_key,
+                game_date=game_date,
+                markets_csv=",".join(extra_markets),
+                allow_422_skip=True,
+            )
+            rows = _merge_event_rows(base_rows=rows, extra_rows=extra_rows)
         _snapshot_cache[cache_key] = (now, rows)
         return rows
 
@@ -181,12 +395,27 @@ def _fetch_market_snapshot(*, game_date: str) -> List[Dict[str, Any]]:
     if not isinstance(payload, list):
         raise RuntimeError("unexpected OddsAPI payload shape")
     rows = [ev for ev in payload if _event_date_et(ev) == game_date]
+    extra_markets = _experimental_market_keys()
+    if extra_markets:
+        extra_rows = _fetch_event_level_market_snapshot(
+            api_key=api_key,
+            game_date=game_date,
+            markets_csv=",".join(extra_markets),
+            allow_422_skip=True,
+        )
+        rows = _merge_event_rows(base_rows=rows, extra_rows=extra_rows)
 
     _snapshot_cache[cache_key] = (now, rows)
     return rows
 
 
-def _fetch_event_level_market_snapshot(*, api_key: str, game_date: str) -> List[Dict[str, Any]]:
+def _fetch_event_level_market_snapshot(
+    *,
+    api_key: str,
+    game_date: str,
+    markets_csv: str,
+    allow_422_skip: bool,
+) -> List[Dict[str, Any]]:
     events_res = requests.get(
         EVENTS_BASE,
         params={
@@ -204,32 +433,54 @@ def _fetch_event_level_market_snapshot(*, api_key: str, game_date: str) -> List[
     if not target_events:
         return []
 
+    try:
+        max_per_group = int(str(os.getenv("MLB_ODDS_EVENT_MAX_MARKETS_PER_CALL", "6") or "6"))
+    except Exception:
+        max_per_group = 6
+    market_groups = _market_groups(markets_csv, max_per_group=max_per_group)
+    if not market_groups:
+        return []
+
     rows: List[Dict[str, Any]] = []
+    regions_csv = str(os.getenv("MLB_ODDS_REGIONS", "us") or "us")
+    bookmakers_csv = _bookmakers_query_csv()
     for ev in target_events:
         event_id = ev.get("id")
         if not event_id:
             continue
 
-        odds_res = requests.get(
-            f"{EVENTS_BASE}/{event_id}/odds",
-            params={
+        merged_payload: Optional[Dict[str, Any]] = None
+        for markets_group in market_groups:
+            params = {
                 "apiKey": api_key,
-                "regions": "us",
-                "markets": _markets_query(),
+                "regions": regions_csv,
+                "markets": markets_group,
                 "oddsFormat": "american",
                 "dateFormat": "iso",
-            },
-            timeout=20,
-        )
+                "includeBetLimits": _include_bet_limits_param(),
+            }
+            if bookmakers_csv:
+                params["bookmakers"] = bookmakers_csv
+            odds_res = requests.get(
+                f"{EVENTS_BASE}/{event_id}/odds",
+                params=params,
+                timeout=20,
+            )
 
-        # Some events may not expose props yet; skip those gracefully.
-        if odds_res.status_code == 422:
-            continue
+            # Some events may not expose props yet; optionally skip those gracefully.
+            if odds_res.status_code == 422 and allow_422_skip:
+                continue
+            odds_res.raise_for_status()
+            payload = odds_res.json()
+            if not isinstance(payload, dict):
+                continue
+            if merged_payload is None:
+                merged_payload = payload
+            else:
+                merged_payload = _merge_market_payload(merged_payload, payload)
 
-        odds_res.raise_for_status()
-        payload = odds_res.json()
-        if isinstance(payload, dict):
-            rows.append(payload)
+        if isinstance(merged_payload, dict):
+            rows.append(merged_payload)
 
     return rows
 
@@ -237,13 +488,22 @@ def _fetch_event_level_market_snapshot(*, api_key: str, game_date: str) -> List[
 def _extract_candidate_outcomes(
     *,
     events: List[Dict[str, Any]],
-    market_key: str,
+    market_key: Optional[str] = None,
+    market_keys: Optional[Sequence[str]] = None,
     player_name: str,
     over_under: str,
     line: Optional[float],
 ) -> List[Dict[str, Any]]:
     player_norm = _normalize_name(player_name)
     side_norm = (over_under or "over").strip().lower()
+    keys: List[str] = []
+    if market_keys:
+        keys.extend(str(k) for k in market_keys if str(k or "").strip())
+    if market_key:
+        keys.append(str(market_key))
+    allowed_market_keys = set(keys)
+    if not allowed_market_keys:
+        return []
     out: List[Dict[str, Any]] = []
 
     for ev in events:
@@ -251,7 +511,8 @@ def _extract_candidate_outcomes(
             bookmaker_key = book.get("key")
             bookmaker_title = book.get("title")
             for market in book.get("markets") or []:
-                if market.get("key") != market_key:
+                market_key_actual = str(market.get("key") or "").strip()
+                if market_key_actual not in allowed_market_keys:
                     continue
                 for outcome in market.get("outcomes") or []:
                     desc = str(outcome.get("description") or "").strip()
@@ -301,7 +562,7 @@ def _extract_candidate_outcomes(
                             "away_team": ev.get("away_team"),
                             "bookmaker_key": bookmaker_key,
                             "bookmaker_title": bookmaker_title,
-                            "market_key": market_key,
+                            "market_key": market_key_actual,
                             "player_name": desc,
                             "side": side,
                             "line": point_num,
@@ -322,8 +583,8 @@ def fetch_mlb_market_odds(
     line: Optional[float] = None,
 ) -> Dict[str, Any]:
     normalized_prop = normalize_prop_type(prop_type)
-    market_key = PROP_TO_ODDS_MARKET.get(normalized_prop)
-    if not market_key:
+    market_candidates = get_prop_market_candidates(prop_type=normalized_prop, include_aliases=True)
+    if not market_candidates:
         return {
             "ok": True,
             "found": False,
@@ -345,7 +606,8 @@ def fetch_mlb_market_odds(
             "ok": False,
             "found": False,
             "reason": f"{type(e).__name__}: {_sanitize_error_message(e)}",
-            "market_key": market_key,
+            "market_key": market_candidates[0],
+            "market_candidates": market_candidates,
         }
 
     snapshot = _snapshot_cache.get(game_date)
@@ -362,7 +624,7 @@ def fetch_mlb_market_odds(
 
     candidates = _extract_candidate_outcomes(
         events=events,
-        market_key=market_key,
+        market_keys=market_candidates,
         player_name=player_name,
         over_under=over_under,
         line=line,
@@ -372,7 +634,8 @@ def fetch_mlb_market_odds(
             "ok": True,
             "found": False,
             "reason": "no matching market outcome",
-            "market_key": market_key,
+            "market_key": market_candidates[0],
+            "market_candidates": market_candidates,
             "events_considered": len(events),
             "snapshot_cached_at": snapshot_cached_at,
             "snapshot_age_seconds": snapshot_age_seconds,
@@ -382,7 +645,8 @@ def fetch_mlb_market_odds(
     return {
         "ok": True,
         "found": True,
-        "market_key": market_key,
+        "market_key": best.get("market_key") or market_candidates[0],
+        "market_candidates": market_candidates,
         "events_considered": len(events),
         "event_id": best.get("event_id"),
         "commence_time": best.get("commence_time"),

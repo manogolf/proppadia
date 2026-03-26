@@ -10,6 +10,44 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
+RUN_STARTED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+_emit_completion_summary_json() {
+  local exit_code="${1:-1}"
+  local status="failed"
+  if [[ "${exit_code}" == "0" ]]; then
+    status="succeeded"
+  fi
+  local finished_at_utc
+  finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  local book_upload_path="${MLB_BOOK_UPLOAD_OUT_CSV:-backend/mlb/data/processed/mlb_book_upload.csv}"
+  local book_upload_exists="false"
+  if [[ -f "${book_upload_path}" ]]; then
+    book_upload_exists="true"
+  fi
+  local run_id="${MLB_PROD12_RUN_ID:-${RUN_ID:-}}"
+
+  printf '{\n'
+  printf '  "status": "%s",\n' "${status}"
+  printf '  "running": false,\n'
+  printf '  "exit_code": %s,\n' "${exit_code}"
+  printf '  "run_id": "%s",\n' "${run_id}"
+  printf '  "started_at": "%s",\n' "${RUN_STARTED_AT_UTC}"
+  printf '  "finished_at": "%s",\n' "${finished_at_utc}"
+  printf '  "book_upload_exists": %s,\n' "${book_upload_exists}"
+  printf '  "book_upload_path": "%s"\n' "${book_upload_path}"
+  printf '}\n'
+}
+
+_on_exit_emit_completion_summary() {
+  local exit_code="$?"
+  trap - EXIT
+  _emit_completion_summary_json "${exit_code}" || true
+  exit "${exit_code}"
+}
+
+trap _on_exit_emit_completion_summary EXIT
+
 # Constrain native math thread pools to reduce CPU and memory spikes on small instances.
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
@@ -139,9 +177,9 @@ MLB_ROSTER_DATE="${MLB_ROSTER_DATE:-${MLB_DATE}}"
 MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT:-backend/mlb/exports/odds_history}"
 MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON:-${MLB_ODDS_HISTORY_ROOT}/${MLB_DATE}/odds_mlb_playerprops.json}"
 MLB_ODDS_MARKETS="${MLB_ODDS_MARKETS:-batter_hits,batter_total_bases,batter_strikeouts,pitcher_earned_runs,batter_doubles,pitcher_hits_allowed,pitcher_strikeouts,batter_walks,batter_hits_runs_rbis,batter_runs_scored,pitcher_walks}"
-# Low-memory default bookmaker scope for daily automation on constrained Render instances.
-# Override MLB_ODDS_BOOKMAKERS in env if broader coverage is needed.
-MLB_ODDS_BOOKMAKERS="${MLB_ODDS_BOOKMAKERS:-draftkings,betmgm,espnbet}"
+# Bookmaker scope for daily automation.
+# Override MLB_ODDS_BOOKMAKERS in env as needed.
+MLB_ODDS_BOOKMAKERS="${MLB_ODDS_BOOKMAKERS:-betonlineag,mybookieag,betopenly,draftkings}"
 MLB_POLICY_PLAN_ENABLED="${MLB_POLICY_PLAN_ENABLED:-1}"
 MLB_POLICY_PLAN_CSV="${MLB_POLICY_PLAN_CSV:-backend/mlb/config/policy/all11_forward_plan_pass4.csv}"
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED="${MLB_POLICY_PLAN_ALLOW_ONE_SIDED:-0}"
