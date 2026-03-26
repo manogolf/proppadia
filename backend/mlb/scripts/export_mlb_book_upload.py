@@ -326,6 +326,55 @@ def _load_market_map(arg_json: str, env_json: str) -> Dict[str, str]:
     return out
 
 
+def _market_candidates_for_prop(*, prop_type: str, base_market: Optional[str]) -> List[str]:
+    out: List[str] = []
+
+    fn = getattr(market_odds_service, "get_prop_market_candidates", None)
+    if callable(fn):
+        try:
+            candidates = fn(prop_type=prop_type, include_aliases=True)
+        except TypeError:
+            candidates = fn(prop_type=prop_type)
+        except Exception:
+            candidates = []
+        if isinstance(candidates, (list, tuple)):
+            out.extend(str(x).strip() for x in candidates if str(x or "").strip())
+
+    if not out:
+        stable_map = getattr(market_odds_service, "PROP_TO_ODDS_MARKET", {}) or {}
+        if isinstance(stable_map, dict):
+            primary = str(stable_map.get(prop_type) or "").strip()
+            if primary:
+                out.append(primary)
+
+        include_aliases = str(os.getenv("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", "0") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if include_aliases:
+            aliases_map = getattr(market_odds_service, "PROP_TO_ODDS_MARKET_ALIASES", {}) or {}
+            if isinstance(aliases_map, dict):
+                for alias in aliases_map.get(prop_type) or ():
+                    a = str(alias or "").strip()
+                    if a:
+                        out.append(a)
+
+    if base_market:
+        out.insert(0, str(base_market).strip())
+
+    seen = set()
+    uniq: List[str] = []
+    for mk in out:
+        key = str(mk).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        uniq.append(key)
+    return uniq
+
+
 def _pick_book_row(
     *,
     by_book: Dict[str, Dict[str, object]],
@@ -391,11 +440,11 @@ def _build_policy_candidate_rows(
         if not market_key:
             continue
 
-        market_candidates = market_odds_service.get_prop_market_candidates(
+        market_candidates = _market_candidates_for_prop(
             prop_type=prop_type,
-            include_aliases=True,
+            base_market=market_key,
         )
-        candidate_keys = [market_key] + [mk for mk in market_candidates if str(mk) != str(market_key)]
+        candidate_keys = list(market_candidates)
 
         selected_market_key: Optional[str] = None
         selected_book_key: Optional[str] = None
