@@ -109,12 +109,22 @@ def _load_market_map(arg_json: str, env_json: str) -> Dict[str, str]:
 
 
 def _get_db_conn():
-    import psycopg2  # type: ignore
-
     db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
     if not db_url:
         raise RuntimeError("missing SUPABASE_DB_URL or DATABASE_URL")
-    return psycopg2.connect(db_url)
+
+    # Prefer psycopg2 when present, but support psycopg (v3) runtimes.
+    try:
+        import psycopg2  # type: ignore
+
+        return psycopg2.connect(db_url)
+    except Exception:
+        try:
+            import psycopg  # type: ignore
+
+            return psycopg.connect(db_url)
+        except Exception as exc:
+            raise RuntimeError(f"database driver unavailable (need psycopg2 or psycopg): {exc}") from exc
 
 
 def _table_columns(conn, *, schema: str, table: str) -> set[str]:
@@ -245,13 +255,33 @@ def _enrich_with_db(df_long: pd.DataFrame) -> pd.DataFrame:
     need_game_cols = ["game_date", "home_team_code", "away_team_code"]
     embedded_complete = all(c in df_long.columns for c in need_game_cols) and not df_long[need_game_cols].isna().any(axis=None)
 
+    # Preserve row order through DB merges. This prevents value re-alignment bugs
+    # when pandas merge reindexes rows.
+    merged = df_long.copy().reset_index(drop=True)
+    merged["_row_idx"] = range(len(merged))
+
     if embedded_complete:
         print(
             f"[mlb-slate-output] using embedded game metadata for rows={len(df_long)} players={len(unique_player_ids)}"
         )
-        merged = df_long.copy()
-        with _get_db_conn() as conn:
-            players = _fetch_players(conn, unique_player_ids)
+        # Prefer fully embedded rows (from build_mlb_predictions_wide) to avoid
+        # unnecessary DB dependency during local/offline smoke runs.
+        embedded_player_names = (
+            "player_name" in merged.columns
+            and merged["player_name"].map(_clean_optional_str).notna().any()
+        )
+        if embedded_player_names:
+            players = pd.DataFrame(columns=["player_id", "player_name"])
+            print("[mlb-slate-output] using embedded player names (DB player lookup skipped)")
+        else:
+            try:
+                with _get_db_conn() as conn:
+                    players = _fetch_players(conn, unique_player_ids)
+            except Exception as exc:
+                # When game metadata is already embedded, player-name lookup is optional.
+                # Keep pipeline alive on lean/runtime images missing DB drivers.
+                print(f"[mlb-slate-output] WARNING: player lookup skipped ({exc})")
+                players = pd.DataFrame(columns=["player_id", "player_name"])
     else:
         unique_game_ids = sorted(df_long["game_id"].unique().tolist())
         print(
@@ -264,7 +294,7 @@ def _enrich_with_db(df_long: pd.DataFrame) -> pd.DataFrame:
         if games.empty:
             raise RuntimeError("no matching rows in mlb.game_info for prediction game_ids")
 
-        merged = df_long.merge(games, on="game_id", how="left", suffixes=("", "_db"))
+        merged = merged.merge(games, on="game_id", how="left", suffixes=("", "_db"), sort=False)
         for c in ("game_date", "game_type", "home_team_code", "away_team_code"):
             db_col = f"{c}_db"
             if db_col in merged.columns:
@@ -276,17 +306,40 @@ def _enrich_with_db(df_long: pd.DataFrame) -> pd.DataFrame:
 
     merged = merged.dropna(subset=["game_date", "home_team_code", "away_team_code"])
 
+    # player_ids can contain duplicate player_id rows. De-duplicate before merge to
+    # enforce a stable many-to-one join from prediction rows -> player dimension.
+    if not players.empty:
+        players = (
+            players.dropna(subset=["player_id"])
+            .sort_values(by=["player_id", "player_name"], kind="stable")
+            .drop_duplicates(subset=["player_id"], keep="first")
+            .reset_index(drop=True)
+        )
+
     if "player_name" in merged.columns:
-        # Keep prediction-provided name when present; backfill from player_ids.
-        pred_name = merged["player_name"].copy()
-        merged = merged.drop(columns=["player_name"])
-        merged = merged.merge(players, on="player_id", how="left")
-        merged["player_name"] = pred_name.where(pred_name.notna() & (pred_name.astype(str).str.len() > 0), merged["player_name"])
+        merged = merged.merge(
+            players.rename(columns={"player_name": "player_name_db"}),
+            on="player_id",
+            how="left",
+            sort=False,
+            validate="many_to_one",
+        )
+        pred_name = merged["player_name"].astype("object")
+        pred_name_clean = pred_name.map(_clean_optional_str)
+        merged["player_name"] = pred_name_clean.where(pred_name_clean.notna(), merged["player_name_db"])
+        merged = merged.drop(columns=["player_name_db"])
     else:
-        merged = merged.merge(players, on="player_id", how="left")
+        merged = merged.merge(
+            players,
+            on="player_id",
+            how="left",
+            sort=False,
+            validate="many_to_one",
+        )
 
     if merged.empty:
         raise RuntimeError("no rows remain after joining game metadata")
+    merged = merged.sort_values("_row_idx", kind="stable").drop(columns=["_row_idx"]).reset_index(drop=True)
     return merged
 
 
