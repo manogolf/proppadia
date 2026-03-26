@@ -37,7 +37,7 @@ Direct script usage requires existing input artifacts:
         --use-slate-output \
         --slate-csv backend/mlb/exports/odds_history/YYYY-MM-DD/mlb_slate_output.csv \
         --policy-plan-csv backend/mlb/config/policy/all11_forward_plan_pass4.csv \
-        --odds-snapshot-json backend/mlb/exports/odds_history/YYYY-MM-DD/odds_latest_compatible.json \
+        --odds-snapshot-json backend/mlb/exports/odds_history/YYYY-MM-DD/odds_mlb_playerprops.json \
         --policy-allow-empty
 
 MLB equivalent of NHL book-upload exporter.
@@ -158,6 +158,23 @@ UPLOAD_MARKET_ALIASES: Dict[str, str] = {
     "pitcher_hits_allowed": "pitcher_hits",
 }
 
+UPLOAD_TEAM_CODE_ALIASES: Dict[str, str] = {
+    # External upload tool codes
+    "ARI": "AZ",
+    "AZ": "AZ",
+    "OAK": "ATH",
+    "ATH": "ATH",
+    "LV": "ATH",
+    "VIL": "ATH",
+    # Common alternate abbreviations
+    "KCR": "KC",
+    "SDP": "SD",
+    "SFG": "SF",
+    "TBR": "TB",
+    "CHW": "CWS",
+    "WAS": "WSH",
+}
+
 _PCOL_RE = re.compile(r"^p_over_(\d+)_([05])$")
 
 
@@ -190,6 +207,13 @@ def _normalize_upload_market(
         f"unsupported upload market '{market}' for prop_type='{prop_type}'. "
         f"Allowed markets: {sorted(ALLOWED_UPLOAD_MARKETS)}"
     )
+
+
+def _normalize_upload_team_code(raw_team: object) -> str:
+    code = (_clean_optional_str(raw_team) or "").strip().upper()
+    if not code:
+        return ""
+    return UPLOAD_TEAM_CODE_ALIASES.get(code, code)
 
 
 def _parse_lines_from_cols(cols: Iterable[str]) -> List[Tuple[str, float]]:
@@ -1076,8 +1100,8 @@ def main() -> None:
                 {
                     "LEAGUE": str(args.league).strip() or "MLB",
                     "DATE": date_str,
-                    "HOME": str(row["home_team_code"]).strip(),
-                    "AWAY": str(row["away_team_code"]).strip(),
+                    "HOME": _normalize_upload_team_code(row["home_team_code"]),
+                    "AWAY": _normalize_upload_team_code(row["away_team_code"]),
                     "DOUBLEHEADER": "",
                     "SECTION": str(args.section).strip() or "player_prop",
                     "MARKET": market,
@@ -1119,8 +1143,8 @@ def main() -> None:
             base = {
                 "LEAGUE": str(args.league).strip() or "MLB",
                 "DATE": date_str,
-                "HOME": str(row["home_team_code"]).strip(),
-                "AWAY": str(row["away_team_code"]).strip(),
+                "HOME": _normalize_upload_team_code(row["home_team_code"]),
+                "AWAY": _normalize_upload_team_code(row["away_team_code"]),
                 "DOUBLEHEADER": "",
                 "SECTION": str(args.section).strip() or "player_prop",
                 "MARKET": market,
