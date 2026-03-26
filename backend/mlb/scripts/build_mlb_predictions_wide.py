@@ -112,7 +112,49 @@ def _load_events_from_snapshot_file(path: Path) -> List[Dict[str, Any]]:
 
 
 def _invert_market_map() -> Dict[str, str]:
-    return market_odds_service.get_market_to_prop_map(include_aliases=True)
+    # Compatibility: some deployed environments may not yet expose
+    # market_odds_service.get_market_to_prop_map().
+    fn = getattr(market_odds_service, "get_market_to_prop_map", None)
+    if callable(fn):
+        try:
+            out = fn(include_aliases=True)
+        except TypeError:
+            out = fn()
+        if isinstance(out, dict) and out:
+            return {str(k): str(v) for k, v in out.items() if str(k).strip() and str(v).strip()}
+
+    base_fn = getattr(market_odds_service, "get_supported_market_map", None)
+    if callable(base_fn):
+        base = base_fn()
+    else:
+        base = getattr(market_odds_service, "PROP_TO_ODDS_MARKET", {}) or {}
+
+    market_to_prop: Dict[str, str] = {}
+    if isinstance(base, dict):
+        for prop_type, market_key in base.items():
+            mk = str(market_key or "").strip()
+            pt = str(prop_type or "").strip()
+            if mk and pt:
+                market_to_prop[mk] = pt
+
+    # Optional alias support when available.
+    aliases = getattr(market_odds_service, "PROP_TO_ODDS_MARKET_ALIASES", {}) or {}
+    include_aliases = str(os.getenv("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", "0") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if include_aliases and isinstance(aliases, dict):
+        for prop_type, keys in aliases.items():
+            pt = str(prop_type or "").strip()
+            if not pt:
+                continue
+            for alias_key in keys or ():
+                mk = str(alias_key or "").strip()
+                if mk and mk not in market_to_prop:
+                    market_to_prop[mk] = pt
+    return market_to_prop
 
 
 def _parse_prop_types_csv(raw: str) -> Optional[set[str]]:
