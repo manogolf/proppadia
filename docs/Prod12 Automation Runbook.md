@@ -48,6 +48,7 @@ Default behavior:
   - `MLB_DAILY_GATE_ENABLED=0` (skips heavy daily gate checks in cron path)
   - `MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=0` (disables alias/extra market fetches)
   - `MLB_ODDS_MARKETS` scoped to prod12 lane markets only
+  - `MLB_ODDS_BOOKMAKERS` defaults to `draftkings,betmgm,espnbet` for lower memory usage
   - `MLB_WIDE_PROP_TYPES` pinned to `MLB_PROD12_PROP_TYPES` unless explicitly overridden
 
 Optional extra lean setting (if memory pressure persists):

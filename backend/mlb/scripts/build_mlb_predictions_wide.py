@@ -24,6 +24,7 @@ import math
 import os
 import re
 import sys
+import gc
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -111,10 +112,7 @@ def _load_events_from_snapshot_file(path: Path) -> List[Dict[str, Any]]:
 
 
 def _invert_market_map() -> Dict[str, str]:
-    out: Dict[str, str] = {}
-    for prop_type, market_key in (market_odds_service.PROP_TO_ODDS_MARKET or {}).items():
-        out[str(market_key)] = str(prop_type)
-    return out
+    return market_odds_service.get_market_to_prop_map(include_aliases=True)
 
 
 def _parse_prop_types_csv(raw: str) -> Optional[set[str]]:
@@ -144,6 +142,7 @@ class Offer:
     player_name: str
     line: float
     books_seen: int
+    books_two_sided: int
 
 
 @dataclass
@@ -389,11 +388,17 @@ def _flatten_market_snapshot(
     market_to_prop: Dict[str, str],
     team_name_rev: Dict[str, str],
     prop_filter: Optional[set[str]],
+    require_two_sided: bool = False,
+    two_sided_bookmaker: Optional[str] = None,
 ) -> tuple[List[Offer], Dict[str, int]]:
     counts: Dict[str, int] = defaultdict(int)
-    grouped_books: Dict[Tuple[str, str, str, str, str, float], set[str]] = defaultdict(set)
+    grouped_book_sides: Dict[Tuple[str, str, str, str, str, float], Dict[str, set[str]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
     grouped_names: Dict[Tuple[str, str, str, str, str, float], str] = {}
     event_meta: Dict[str, Dict[str, Any]] = {}
+    target_book = _clean_str(two_sided_bookmaker)
+    target_book = str(target_book).strip().lower() if target_book else None
 
     for ev in events:
         event_id = _clean_str(ev.get("id"))
@@ -451,13 +456,30 @@ def _flatten_market_snapshot(
                         away_abbr,
                         float(line),
                     )
-                    grouped_books[key].add(str(book_key))
+                    grouped_book_sides[key][str(book_key)].add(side)
                     grouped_names.setdefault(key, str(player_name))
                     counts["raw_outcomes"] += 1
 
     offers: List[Offer] = []
-    for (event_id, prop_type, norm_player_name, home_abbr, away_abbr, line), books in grouped_books.items():
+    for (event_id, prop_type, norm_player_name, home_abbr, away_abbr, line), by_book in grouped_book_sides.items():
         meta = event_meta.get(event_id) or {}
+        books_two_sided = [
+            str(book_key)
+            for book_key, sides in by_book.items()
+            if isinstance(sides, set) and {"over", "under"}.issubset(sides)
+        ]
+        if require_two_sided:
+            if target_book:
+                target_sides = by_book.get(target_book) or set()
+                if not target_sides:
+                    counts["skip_two_sided_missing_target_book"] += 1
+                    continue
+                if not {"over", "under"}.issubset(target_sides):
+                    counts["skip_two_sided_target_book_one_sided"] += 1
+                    continue
+            elif not books_two_sided:
+                counts["skip_two_sided_no_book_pair"] += 1
+                continue
         display_name = grouped_names.get((event_id, prop_type, norm_player_name, home_abbr, away_abbr, line))
         if not display_name:
             display_name = " ".join(w.capitalize() for w in norm_player_name.split())
@@ -472,7 +494,8 @@ def _flatten_market_snapshot(
                 prop_type=str(prop_type),
                 player_name=display_name,
                 line=float(line),
-                books_seen=len(books),
+                books_seen=len(by_book),
+                books_two_sided=len(books_two_sided),
             )
         )
     offers.sort(key=lambda o: (o.home_team_abbr, o.away_team_abbr, o.prop_type, o.player_name, o.line))
@@ -581,79 +604,103 @@ def _predict_rows(
     counts: Dict[str, int] = defaultdict(int)
     rows: List[Dict[str, Any]] = []
 
+    def _clear_prediction_caches() -> None:
+        """Release per-prop model caches to keep peak RSS bounded on small instances."""
+        try:
+            from backend.mlb.prediction import make_prediction as mp  # local import to avoid module-level side effects
+
+            for fn_name in ("_load_model_cached", "_load_artifact_meta", "_input_columns_for", "_forced_invert_props"):
+                fn = getattr(mp, fn_name, None)
+                if fn is not None and hasattr(fn, "cache_clear"):
+                    fn.cache_clear()
+        except Exception:
+            pass
+        gc.collect()
+
     restore = _monkeypatch_prepare_runtime(by_team_ctx=by_team_ctx, by_player_id=by_player_id)
     try:
+        by_prop: Dict[str, List[ResolvedOffer]] = defaultdict(list)
         for item in resolved_offers:
-            off = item.offer
-            g = item.game
-            team_abbr = item.team_abbr
-            home_abbr = normalizeTeamAbbreviation(g.home_abbr or getFullTeamAbbreviationFromID(g.home_team_id)) or off.home_team_abbr
-            away_abbr = normalizeTeamAbbreviation(g.away_abbr or getFullTeamAbbreviationFromID(g.away_team_id)) or off.away_team_abbr
+            by_prop[str(item.offer.prop_type or "").strip().lower()].append(item)
 
-            payload = {
-                "player_id": item.player.player_id,
-                "player_name": item.player.player_name,
-                "team_id": item.team_id,
-                "team_abbr": team_abbr,
-                "game_date": str(g.game_date),
-                "game_id": int(g.game_id),
-                "game_type": _clean_str(g.game_type),
-                "game_time": _clean_str(g.game_time),
-                "is_home": bool(item.is_home),
-                "opponent_team_id": int(g.away_team_id if item.is_home else g.home_team_id),
-                "opponent": away_abbr if item.is_home else home_abbr,
-                "opponent_encoded": int(g.away_team_id if item.is_home else g.home_team_id),
-                "game_day_of_week": (
-                    datetime.fromisoformat(g.game_time).weekday() if g.game_time else None
-                ),
-                "time_of_day_bucket": (
-                    get_time_of_day_bucket_et(datetime.fromisoformat(g.game_time)) if g.game_time else None
-                ),
-                "starting_pitcher_id": int(g.sp_away_id if item.is_home else g.sp_home_id) if (g.sp_away_id if item.is_home else g.sp_home_id) else None,
-                "prop_type": off.prop_type,
-                "prop_value": float(off.line),
-                "over_under": "over",
-            }
-            try:
-                prepared = prop_workflow.prepare_prop(payload)
-                pred = prop_workflow.predict_prop(off.prop_type, prepared)
-            except Exception:
-                counts["skip_predict_error"] += 1
-                continue
+        for prop_type in sorted(by_prop.keys()):
+            items = by_prop[prop_type]
+            for item in items:
+                off = item.offer
+                g = item.game
+                team_abbr = item.team_abbr
+                home_abbr = normalizeTeamAbbreviation(g.home_abbr or getFullTeamAbbreviationFromID(g.home_team_id)) or off.home_team_abbr
+                away_abbr = normalizeTeamAbbreviation(g.away_abbr or getFullTeamAbbreviationFromID(g.away_team_id)) or off.away_team_abbr
 
-            try:
-                prob_over = float(pred.get("probability_over"))
-            except Exception:
-                counts["skip_missing_probability"] += 1
-                continue
-            pcol = _line_to_pcol(off.line)
-            if not pcol:
-                counts["skip_non_half_line_late"] += 1
-                continue
-
-            rows.append(
-                {
-                    "player_id": int(item.player.player_id),
+                payload = {
+                    "player_id": item.player.player_id,
                     "player_name": item.player.player_name,
-                    "team_id": int(item.team_id),
-                    "team": team_abbr,
-                    "opponent_id": int(g.away_team_id if item.is_home else g.home_team_id),
-                    "opponent": away_abbr if item.is_home else home_abbr,
-                    "is_home": bool(item.is_home),
-                    "game_id": int(g.game_id),
+                    "team_id": item.team_id,
+                    "team_abbr": team_abbr,
                     "game_date": str(g.game_date),
+                    "game_id": int(g.game_id),
                     "game_type": _clean_str(g.game_type),
                     "game_time": _clean_str(g.game_time),
-                    "home_team_code": home_abbr,
-                    "away_team_code": away_abbr,
+                    "is_home": bool(item.is_home),
+                    "opponent_team_id": int(g.away_team_id if item.is_home else g.home_team_id),
+                    "opponent": away_abbr if item.is_home else home_abbr,
+                    "opponent_encoded": int(g.away_team_id if item.is_home else g.home_team_id),
+                    "game_day_of_week": (
+                        datetime.fromisoformat(g.game_time).weekday() if g.game_time else None
+                    ),
+                    "time_of_day_bucket": (
+                        get_time_of_day_bucket_et(datetime.fromisoformat(g.game_time)) if g.game_time else None
+                    ),
+                    "starting_pitcher_id": int(g.sp_away_id if item.is_home else g.sp_home_id) if (g.sp_away_id if item.is_home else g.sp_home_id) else None,
                     "prop_type": off.prop_type,
-                    "line": float(off.line),
-                    "prob_over": prob_over,
-                    "prob_col": pcol,
-                    "books_seen": int(off.books_seen),
+                    "prop_value": float(off.line),
+                    "over_under": "over",
                 }
-            )
-            counts["predicted"] += 1
+                try:
+                    prepared = prop_workflow.prepare_prop(payload)
+                    pred = prop_workflow.predict_prop(off.prop_type, prepared)
+                except Exception:
+                    counts["skip_predict_error"] += 1
+                    continue
+
+                try:
+                    prob_over = float(pred.get("probability_over"))
+                except Exception:
+                    counts["skip_missing_probability"] += 1
+                    continue
+                pcol = _line_to_pcol(off.line)
+                if not pcol:
+                    counts["skip_non_half_line_late"] += 1
+                    continue
+
+                rows.append(
+                    {
+                        "player_id": int(item.player.player_id),
+                        "player_name": item.player.player_name,
+                        "team_id": int(item.team_id),
+                        "team": team_abbr,
+                        "opponent_id": int(g.away_team_id if item.is_home else g.home_team_id),
+                        "opponent": away_abbr if item.is_home else home_abbr,
+                        "is_home": bool(item.is_home),
+                        "game_id": int(g.game_id),
+                        "game_date": str(g.game_date),
+                        "game_type": _clean_str(g.game_type),
+                        "game_time": _clean_str(g.game_time),
+                        "home_team_code": home_abbr,
+                        "away_team_code": away_abbr,
+                        "prop_type": off.prop_type,
+                        "line": float(off.line),
+                        "prob_over": prob_over,
+                        "prob_col": pcol,
+                        "books_seen": int(off.books_seen),
+                        "books_two_sided": int(off.books_two_sided),
+                    }
+                )
+                counts["predicted"] += 1
+
+            # Important on 2GB instances: drop model caches before scoring the next prop.
+            _clear_prediction_caches()
+            counts["cache_clears"] += 1
     finally:
         restore()
 
@@ -680,9 +727,12 @@ def _to_wide(pred_rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
         "away_team_code",
         "prop_type",
     ]
+    if "books_two_sided" not in df.columns:
+        df["books_two_sided"] = 0
     df["rank_books_seen"] = pd.to_numeric(df["books_seen"], errors="coerce").fillna(0).astype(int)
+    df["rank_books_two_sided"] = pd.to_numeric(df["books_two_sided"], errors="coerce").fillna(0).astype(int)
     # If duplicate player/game/prop/line rows occur, keep the version seen across more books.
-    df = df.sort_values(by=["rank_books_seen"], ascending=False, kind="stable")
+    df = df.sort_values(by=["rank_books_two_sided", "rank_books_seen"], ascending=False, kind="stable")
     df = df.drop_duplicates(subset=id_cols + ["prob_col"], keep="first")
 
     wide = df.pivot_table(
@@ -733,6 +783,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     ap.add_argument("--include-inactive", action="store_true", help="Include inactive player_ids rows in name resolution.")
     ap.add_argument("--require-min-rows", type=int, default=1, help="Fail if fewer than N wide rows are produced.")
+    ap.add_argument(
+        "--require-two-sided",
+        action="store_true",
+        default=str(os.environ.get("MLB_PREDICT_REQUIRE_TWO_SIDED", "0")).strip().lower() in {"1", "true", "yes", "on"},
+        help="Keep only offers with both over and under prices.",
+    )
+    ap.add_argument(
+        "--two-sided-bookmaker",
+        default=os.environ.get("MLB_PREDICT_TWO_SIDED_BOOKMAKER", ""),
+        help="Optional bookmaker key constraint for --require-two-sided (for example: betonlineag).",
+    )
     ap.add_argument("--strict", action="store_true", help="Fail when any rows are skipped for resolution/prediction reasons.")
     args = ap.parse_args(list(argv) if argv is not None else None)
 
@@ -752,6 +813,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"[mlb-wide-pred] odds snapshot out = {odds_snapshot_out}")
     if prop_filter:
         print(f"[mlb-wide-pred] prop filter = {sorted(prop_filter)}")
+    if bool(args.require_two_sided):
+        if str(args.two_sided_bookmaker or "").strip():
+            print(f"[mlb-wide-pred] require_two_sided = true bookmaker={str(args.two_sided_bookmaker).strip()}")
+        else:
+            print("[mlb-wide-pred] require_two_sided = true bookmaker=any")
 
     try:
         by_player_id, by_name_team = _load_player_rows(active_only=not bool(args.include_inactive))
@@ -779,6 +845,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             market_to_prop=market_to_prop,
             team_name_rev=team_name_rev,
             prop_filter=prop_filter,
+            require_two_sided=bool(args.require_two_sided),
+            two_sided_bookmaker=str(args.two_sided_bookmaker or ""),
         )
         print(f"[mlb-wide-pred] offers_unique={len(offers)} flatten_counts={flatten_counts}")
 
