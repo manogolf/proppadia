@@ -498,7 +498,21 @@ def _build_policy_candidate_rows(
     events = _load_events(odds_snapshot_json)
     market_idx = _build_market_index(events=events, team_name_rev=_build_team_name_reverse())
 
-    plan_by_prop = {str(r["prop_type"]).strip().lower(): r for _, r in plan_df.iterrows()}
+    books_by_prop: Dict[str, List[str]] = {}
+    books_seen_by_prop: Dict[str, set[str]] = {}
+    for _, plan_row in plan_df.iterrows():
+        prop = _canonical_prop_type(plan_row.get("prop_type"))
+        book = str(plan_row.get("bookmaker_key") or "").strip()
+        if not prop or not book:
+            continue
+        book_norm = book.lower()
+        prop_books = books_by_prop.setdefault(prop, [])
+        prop_seen = books_seen_by_prop.setdefault(prop, set())
+        if book_norm in prop_seen:
+            continue
+        prop_seen.add(book_norm)
+        prop_books.append(book)
+
     out_rows: List[Dict[str, object]] = []
     out_cols = [
         "league",
@@ -521,8 +535,8 @@ def _build_policy_candidate_rows(
 
     for _, row in merged.iterrows():
         prop_type = _canonical_prop_type(row.get("prop_type"))
-        plan_row = plan_by_prop.get(prop_type)
-        if plan_row is None:
+        prop_books = books_by_prop.get(prop_type) or []
+        if not prop_books:
             continue
 
         home = str(row.get("home_team_code") or "").strip().upper()
@@ -540,61 +554,126 @@ def _build_policy_candidate_rows(
             prop_type=prop_type,
             base_market=market_key,
         )
-        candidate_keys = list(market_candidates)
+        for plan_book in prop_books:
+            selected_market_key: Optional[str] = None
+            selected_book_key: Optional[str] = None
+            selected_book_row: Optional[Dict[str, object]] = None
+            for market_key_try in market_candidates:
+                market_key_norm = str(market_key_try or "").strip()
+                if not market_key_norm:
+                    continue
+                k = (home, away, market_key_norm, _norm_name(player_name), float(line))
+                by_book = market_idx.get(k, {})
+                book_key, book_row = _pick_book_row(
+                    by_book=by_book,
+                    bookmaker_key=plan_book,
+                )
+                if book_key and book_row:
+                    selected_market_key = market_key_norm
+                    selected_book_key = book_key
+                    selected_book_row = book_row
+                    break
 
-        selected_market_key: Optional[str] = None
-        selected_book_key: Optional[str] = None
-        selected_book_row: Optional[Dict[str, object]] = None
-        for market_key_try in candidate_keys:
-            market_key_norm = str(market_key_try or "").strip()
-            if not market_key_norm:
+            if not selected_book_row:
                 continue
-            k = (home, away, market_key_norm, _norm_name(player_name), float(line))
-            by_book = market_idx.get(k, {})
-            book_key, book_row = _pick_book_row(
-                by_book=by_book,
-                bookmaker_key=str(plan_row.get("bookmaker_key") or ""),
+
+            try:
+                price_over = float(selected_book_row.get("over")) if selected_book_row.get("over") is not None else None
+                price_under = (
+                    float(selected_book_row.get("under")) if selected_book_row.get("under") is not None else None
+                )
+            except Exception:
+                price_over = None
+                price_under = None
+
+            out_rows.append(
+                {
+                    "league": row.get("league"),
+                    "slate_date": row.get("slate_date"),
+                    "game_date": row.get("game_date"),
+                    "game_id": row.get("game_id"),
+                    "home_team_code": home,
+                    "away_team_code": away,
+                    "player_id": row.get("player_id"),
+                    "player_name": player_name,
+                    "prop_type": prop_type,
+                    "market_key": selected_market_key or market_key,
+                    "line": float(line),
+                    "model_prob_over": float(row.get("prob_over")),
+                    "model_prob_under": float(row.get("prob_under")),
+                    "bookmaker_key": str(selected_book_key or plan_book),
+                    "price_over_american": price_over,
+                    "price_under_american": price_under,
+                }
             )
-            if book_key and book_row:
-                selected_market_key = market_key_norm
-                selected_book_key = book_key
-                selected_book_row = book_row
-                break
 
-        if not selected_book_row:
-            continue
+    out = pd.DataFrame(out_rows, columns=out_cols)
+    if out.empty:
+        return out
+    return out.drop_duplicates(subset=["game_id", "player_id", "prop_type", "line", "bookmaker_key"]).reset_index(
+        drop=True
+    )
 
-        try:
-            price_over = float(selected_book_row.get("over")) if selected_book_row.get("over") is not None else None
-            price_under = (
-                float(selected_book_row.get("under")) if selected_book_row.get("under") is not None else None
-            )
-        except Exception:
-            price_over = None
-            price_under = None
 
-        out_rows.append(
-            {
-                "league": row.get("league"),
-                "slate_date": row.get("slate_date"),
-                "game_date": row.get("game_date"),
-                "game_id": row.get("game_id"),
-                "home_team_code": home,
-                "away_team_code": away,
-                "player_id": row.get("player_id"),
-                "player_name": player_name,
-                "prop_type": prop_type,
-                "market_key": selected_market_key or market_key,
-                "line": float(line),
-                "model_prob_over": float(row.get("prob_over")),
-                "model_prob_under": float(row.get("prob_under")),
-                "bookmaker_key": str(selected_book_key or plan_row.get("bookmaker_key")),
-                "price_over_american": price_over,
-                "price_under_american": price_under,
-            }
-        )
+def _select_policy_rows(scored: pd.DataFrame) -> pd.DataFrame:
+    if scored.empty:
+        return scored
+    selected = scored[scored["pass_policy"]].copy()
+    if selected.empty:
+        return selected
 
-    return pd.DataFrame(out_rows, columns=out_cols)
+    def _series_or_default(col: str, default: object) -> pd.Series:
+        if col in selected.columns:
+            return selected[col]
+        return pd.Series([default] * len(selected), index=selected.index)
+
+    action_priority = {"enable": 0, "promote": 1}
+    selected["_action_priority"] = (
+        _series_or_default("plan_action", "enable")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .map(action_priority)
+        .fillna(99)
+    )
+    selected["_ev_sort"] = pd.to_numeric(_series_or_default("ev", float("nan")), errors="coerce").fillna(
+        float("-inf")
+    )
+    selected["_gap_sort"] = pd.to_numeric(_series_or_default("gap", float("nan")), errors="coerce").fillna(
+        float("-inf")
+    )
+    selected["_prob_sort"] = pd.to_numeric(
+        _series_or_default("side_model_prob", float("nan")),
+        errors="coerce",
+    ).fillna(float("-inf"))
+    selected["_price_sort"] = pd.to_numeric(
+        _series_or_default("side_price_american", float("nan")),
+        errors="coerce",
+    ).fillna(float("-inf"))
+
+    selected = selected.sort_values(
+        by=[
+            "_action_priority",
+            "_ev_sort",
+            "_gap_sort",
+            "_prob_sort",
+            "_price_sort",
+            "bookmaker_key",
+        ],
+        ascending=[True, False, False, False, False, True],
+        kind="mergesort",
+    )
+    selected = selected.drop_duplicates(
+        subset=[
+            "game_id",
+            "player_id",
+            "prop_type",
+            "line",
+            "plan_side",
+        ],
+        keep="first",
+    ).reset_index(drop=True)
+    return selected.drop(columns=["_action_priority", "_ev_sort", "_gap_sort", "_prob_sort", "_price_sort"])
 
 
 def main() -> None:
@@ -644,6 +723,11 @@ def main() -> None:
         "--policy-allow-empty",
         action="store_true",
         help="Allow policy mode to write an empty upload file when no rows pass.",
+    )
+    ap.add_argument(
+        "--policy-include-actions",
+        default=os.environ.get("MLB_POLICY_INCLUDE_ACTIONS", "enable,promote"),
+        help="Comma-separated policy actions to include (default: enable,promote).",
     )
     ap.add_argument(
         "--remote-fetch-first",
@@ -847,7 +931,10 @@ def main() -> None:
         if not odds_snapshot_raw:
             raise RuntimeError("--odds-snapshot-json is required when --policy-plan-csv is set")
         odds_snapshot_json = Path(odds_snapshot_raw).expanduser()
-        plan_df = load_policy_plan(policy_plan_csv, include_actions=("enable",))
+        policy_include_actions = tuple(
+            str(x).strip().lower() for x in str(args.policy_include_actions or "").split(",") if str(x).strip()
+        ) or ("enable", "promote")
+        plan_df = load_policy_plan(policy_plan_csv, include_actions=policy_include_actions)
         candidate_rows = _build_policy_candidate_rows(
             merged=merged,
             plan_df=plan_df,
@@ -859,12 +946,15 @@ def main() -> None:
             plan_df,
             require_two_sided=not bool(args.policy_allow_one_sided),
         )
-        selected = scored[scored["pass_policy"]].copy() if not scored.empty else scored
+        pass_count = int(scored["pass_policy"].sum()) if not scored.empty else 0
+        selected = _select_policy_rows(scored)
         print(
             "[mlb-book-upload] policy mode: candidates=",
             len(candidate_rows),
             "scored=",
             len(scored),
+            "pass=",
+            pass_count,
             "selected=",
             len(selected),
         )

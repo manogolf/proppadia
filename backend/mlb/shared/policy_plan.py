@@ -76,13 +76,16 @@ def load_policy_plan(path: Path | str, *, include_actions: Iterable[str] = ("ena
             out[col] = np.nan
         out[col] = pd.to_numeric(out[col], errors="coerce")
 
-    if "action" in out.columns:
-        action_set = {str(x).strip().lower() for x in include_actions if str(x).strip()}
-        if action_set:
-            out["action"] = out["action"].map(_clean_text)
-            out = out[out["action"].isin(action_set)]
+    action_set = {str(x).strip().lower() for x in include_actions if str(x).strip()}
+    if "action" not in out.columns:
+        out["action"] = "enable"
+    out["action"] = out["action"].map(_clean_text)
+    if action_set:
+        out = out[out["action"].isin(action_set)]
+    out = out[out["action"].astype(str).str.len() > 0]
 
-    out = out.drop_duplicates(subset=["prop_type"], keep="first").reset_index(drop=True)
+    # Keep distinct lanes by prop/book/side so policy can evaluate fallback books.
+    out = out.drop_duplicates(subset=["prop_type", "bookmaker_key", "side"], keep="first").reset_index(drop=True)
     return out
 
 
@@ -132,6 +135,9 @@ def score_policy_plan_rows(
     p["prop_type"] = p["prop_type"].map(_clean_text)
     p["bookmaker_key"] = p["bookmaker_key"].map(_clean_text)
     p["side"] = p["side"].map(_clean_text)
+    if "action" not in p.columns:
+        p["action"] = "enable"
+    p["action"] = p["action"].map(_clean_text)
 
     merged = r.merge(
         p[
@@ -139,6 +145,7 @@ def score_policy_plan_rows(
                 "prop_type",
                 "bookmaker_key",
                 "side",
+                "action",
                 "min_gap",
                 "min_ev",
                 "min_model_prob",
@@ -148,6 +155,7 @@ def score_policy_plan_rows(
         ].rename(
             columns={
                 "side": "plan_side",
+                "action": "plan_action",
                 "min_gap": "plan_min_gap",
                 "min_ev": "plan_min_ev",
                 "min_model_prob": "plan_min_model_prob",
@@ -210,4 +218,3 @@ def score_policy_plan_rows(
 
     merged["pass_policy"] = base_ok & cond_model_prob & cond_gap & cond_ev & cond_min_price & cond_max_price
     return merged
-
