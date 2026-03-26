@@ -112,14 +112,47 @@ def _default_mlb_date_et() -> str:
         return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def _normalize_mlb_date(value: Optional[str]) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"invalid mlb_date '{text}' (expected YYYY-MM-DD)") from exc
+
+
+def _resolve_mlb_date(value: Optional[str] = None) -> str:
+    explicit = _normalize_mlb_date(value)
+    if explicit:
+        return explicit
+    state = _read_json(STATE_PATH)
+    env_overrides = state.get("env_overrides") if isinstance(state.get("env_overrides"), dict) else {}
+    try:
+        from_state = _normalize_mlb_date(str(env_overrides.get("MLB_DATE") or ""))
+    except ValueError:
+        from_state = ""
+    if from_state:
+        return from_state
+    return _default_mlb_date_et()
+
+
+def _mlb_artifact_paths(mlb_date: str) -> dict[str, Path]:
+    return {
+        "predictions_wide": REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv",
+        "slate_output": REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_slate_output.csv",
+        "book_upload": REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_book_upload.csv",
+        "archive_manifest": REPO_ROOT / "backend" / "mlb" / "exports" / "odds_history" / mlb_date / "manifest.json",
+    }
+
+
 def _collect_artifact_status(state: dict[str, Any]) -> dict[str, Any]:
     env_overrides = state.get("env_overrides") if isinstance(state.get("env_overrides"), dict) else {}
-    mlb_date = str(env_overrides.get("MLB_DATE") or "").strip() or _default_mlb_date_et()
-
-    predictions_path = REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv"
-    slate_path = REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_slate_output.csv"
-    book_upload_path = REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_book_upload.csv"
-    manifest_path = REPO_ROOT / "backend" / "mlb" / "exports" / "odds_history" / mlb_date / "manifest.json"
+    try:
+        mlb_date = _normalize_mlb_date(str(env_overrides.get("MLB_DATE") or "")) or _default_mlb_date_et()
+    except ValueError:
+        mlb_date = _default_mlb_date_et()
+    artifact_paths = _mlb_artifact_paths(mlb_date)
 
     def _entry(path: Path) -> dict[str, Any]:
         exists = path.exists()
@@ -137,10 +170,10 @@ def _collect_artifact_status(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "mlb_date": mlb_date,
-        "predictions_wide": _entry(predictions_path),
-        "slate_output": _entry(slate_path),
-        "book_upload": _entry(book_upload_path),
-        "archive_manifest": _entry(manifest_path),
+        "predictions_wide": _entry(artifact_paths["predictions_wide"]),
+        "slate_output": _entry(artifact_paths["slate_output"]),
+        "book_upload": _entry(artifact_paths["book_upload"]),
+        "archive_manifest": _entry(artifact_paths["archive_manifest"]),
     }
 
 
@@ -280,3 +313,27 @@ def get_prod12_cycle_status(*, tail_lines: int = 120) -> dict[str, Any]:
     result["log_tail"] = _tail_log(LOG_PATH, max(0, int(tail_lines)))
     result["artifacts"] = _collect_artifact_status(state)
     return result
+
+
+def resolve_prod12_artifact(*, artifact_kind: str = "book_upload", mlb_date: Optional[str] = None) -> dict[str, Any]:
+    normalized_kind = str(artifact_kind or "").strip().lower()
+    if normalized_kind not in {"book_upload", "predictions_wide", "slate_output", "archive_manifest"}:
+        raise ValueError(
+            "artifact_kind must be one of: book_upload, predictions_wide, slate_output, archive_manifest"
+        )
+    resolved_date = _resolve_mlb_date(mlb_date)
+    path = _mlb_artifact_paths(resolved_date)[normalized_kind]
+    exists = path.exists()
+    size_bytes = None
+    if exists:
+        try:
+            size_bytes = int(path.stat().st_size)
+        except Exception:
+            size_bytes = None
+    return {
+        "kind": normalized_kind,
+        "mlb_date": resolved_date,
+        "path": path,
+        "exists": bool(exists),
+        "size_bytes": size_bytes,
+    }

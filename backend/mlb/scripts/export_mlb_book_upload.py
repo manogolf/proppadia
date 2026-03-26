@@ -3,6 +3,24 @@
 Recommended entrypoint (daily chain):
   make mlb-daily-capture MLB_DATE=YYYY-MM-DD
 
+Most common manual command (download ready upload CSV from remote run; no local rebuild):
+  PROPPADIA_BACKEND_URL="https://baseball-streaks-sq44.onrender.com" \
+  OPS_API_TOKEN="***" \
+  .venv/bin/python backend/mlb/scripts/export_mlb_book_upload.py \
+    --slate-date "$(date -u +%F)" \
+    --remote-fetch-first \
+    --remote-fetch-kind book_upload \
+    --remote-fetch-required
+
+Alternative (fetch remote slate first, then build upload CSV locally):
+  PROPPADIA_BACKEND_URL="https://baseball-streaks-sq44.onrender.com" \
+  OPS_API_TOKEN="***" \
+  .venv/bin/python backend/mlb/scripts/export_mlb_book_upload.py \
+    --slate-date "$(date -u +%F)" \
+    --remote-fetch-first \
+    --remote-fetch-kind slate_output \
+    --remote-fetch-required
+
 Direct script usage requires existing input artifacts:
   - wide predictions mode (default):
       python backend/mlb/scripts/export_mlb_book_upload.py \
@@ -23,6 +41,8 @@ MLB equivalent of NHL book-upload exporter.
 Input modes:
 - Preferred (new): canonical MLB slate output CSV (`mlb_slate_output.csv`)
 - Back-compat: calibrated WIDE predictions with p_over_* columns
+- Remote-prefetch mode: fetch prod12 artifact from ops API first
+  (for example `--remote-fetch-first --remote-fetch-kind book_upload`).
 
 Behavior:
 - Filters to slate_date (ET)
@@ -180,6 +200,82 @@ def _parse_lines_from_cols(cols: Iterable[str]) -> List[Tuple[str, float]]:
         out.append((col, line))
     out.sort(key=lambda x: x[1])
     return out
+
+
+def _env_truthy(name: str) -> bool:
+    return str(os.environ.get(name, "") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = str(os.environ.get(name, "") or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
+
+
+def _fetch_remote_prod12_artifact(
+    *,
+    backend_url: str,
+    ops_token: str,
+    artifact_kind: str,
+    mlb_date: str,
+    out_path: Path,
+    timeout_sec: float,
+) -> Dict[str, object]:
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    base = str(backend_url or "").strip()
+    token = str(ops_token or "").strip()
+    kind = str(artifact_kind or "").strip().lower()
+    date_text = str(mlb_date or "").strip()
+    if not base:
+        raise ValueError("missing remote backend URL (set --remote-backend-url or PROPPADIA_BACKEND_URL)")
+    if not token:
+        raise ValueError("missing ops token (set --remote-ops-token or OPS_API_TOKEN)")
+    if kind not in {"book_upload", "predictions_wide", "slate_output", "archive_manifest"}:
+        raise ValueError(
+            "invalid remote artifact kind "
+            f"'{kind}' (expected book_upload|predictions_wide|slate_output|archive_manifest)"
+        )
+    if not date_text:
+        raise ValueError("missing mlb_date for remote fetch")
+
+    timeout = max(1.0, float(timeout_sec))
+    qs = urlencode({"kind": kind, "mlb_date": date_text})
+    url = f"{base.rstrip('/')}/api/ops/mlb/prod12/artifact?{qs}"
+    req = Request(url, headers={"X-Ops-Token": token})
+
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            payload = resp.read()
+    except HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        raise RuntimeError(
+            f"remote artifact fetch failed status={exc.code} kind={kind} mlb_date={date_text} "
+            f"url={url} body={body[:300]}"
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError(
+            f"remote artifact fetch failed kind={kind} mlb_date={date_text} url={url} reason={exc.reason}"
+        ) from exc
+
+    if not payload:
+        raise RuntimeError(f"remote artifact fetch returned empty payload for kind={kind} mlb_date={date_text}")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = out_path.parent / f".{out_path.name}.tmp.{os.getpid()}"
+    tmp_path.write_bytes(payload)
+    tmp_path.replace(out_path)
+    return {"url": url, "bytes": len(payload), "path": str(out_path), "kind": kind, "mlb_date": date_text}
 
 
 def _get_db_conn():
@@ -549,6 +645,57 @@ def main() -> None:
         action="store_true",
         help="Allow policy mode to write an empty upload file when no rows pass.",
     )
+    ap.add_argument(
+        "--remote-fetch-first",
+        action="store_true",
+        help=(
+            "Fetch a remote prod12 artifact before local processing "
+            "(or set MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=1)."
+        ),
+    )
+    ap.add_argument(
+        "--remote-fetch-kind",
+        choices=["book_upload", "predictions_wide", "slate_output", "archive_manifest"],
+        default=os.environ.get("MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND", "book_upload"),
+        help="Artifact kind for --remote-fetch-first. Default: book_upload.",
+    )
+    ap.add_argument(
+        "--remote-fetch-only",
+        action="store_true",
+        help=(
+            "Exit after successful remote fetch "
+            "(or set MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY=1)."
+        ),
+    )
+    ap.add_argument(
+        "--remote-fetch-required",
+        action="store_true",
+        help=(
+            "Fail if remote fetch fails "
+            "(or set MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=1)."
+        ),
+    )
+    ap.add_argument(
+        "--remote-backend-url",
+        default=os.environ.get("PROPPADIA_BACKEND_URL", ""),
+        help="Backend URL for remote artifact fetch. Defaults to PROPPADIA_BACKEND_URL.",
+    )
+    ap.add_argument(
+        "--remote-ops-token",
+        default=os.environ.get("OPS_API_TOKEN", ""),
+        help="Ops token for remote artifact fetch. Defaults to OPS_API_TOKEN.",
+    )
+    ap.add_argument(
+        "--remote-fetch-timeout-sec",
+        type=float,
+        default=_float_env("MLB_BOOK_UPLOAD_REMOTE_FETCH_TIMEOUT_SEC", 90.0),
+        help="Timeout (seconds) for remote artifact fetch.",
+    )
+    ap.add_argument(
+        "--remote-fetch-mlb-date",
+        default=os.environ.get("MLB_BOOK_UPLOAD_REMOTE_FETCH_MLB_DATE", ""),
+        help="Optional mlb_date override for remote fetch. Defaults to --slate-date.",
+    )
     args = ap.parse_args()
 
     et = pytz.timezone("America/New_York")
@@ -563,6 +710,49 @@ def main() -> None:
 
     slate_csv_arg = str(args.slate_csv or "").strip()
     use_slate_output = bool(args.use_slate_output or slate_csv_arg)
+    remote_fetch_first = bool(args.remote_fetch_first or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST"))
+    remote_fetch_only = bool(args.remote_fetch_only or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY"))
+    remote_fetch_required = bool(args.remote_fetch_required or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED"))
+    remote_kind = str(args.remote_fetch_kind or "").strip().lower() or "book_upload"
+    remote_mlb_date = str(args.remote_fetch_mlb_date or "").strip() or slate_date
+
+    if remote_fetch_first:
+        if remote_kind == "book_upload":
+            remote_out_path = OUT_CSV
+        elif remote_kind == "slate_output":
+            remote_out_path = Path(slate_csv_arg).expanduser() if slate_csv_arg else SLATE_CSV
+        elif remote_kind == "predictions_wide":
+            remote_out_path = PRED_CSV
+        else:
+            remote_out_path = BASE_DIR / "mlb" / "exports" / "odds_history" / remote_mlb_date / "manifest.json"
+
+        try:
+            fetched = _fetch_remote_prod12_artifact(
+                backend_url=str(args.remote_backend_url or "").strip(),
+                ops_token=str(args.remote_ops_token or "").strip(),
+                artifact_kind=remote_kind,
+                mlb_date=remote_mlb_date,
+                out_path=remote_out_path,
+                timeout_sec=float(args.remote_fetch_timeout_sec),
+            )
+            print(
+                "[mlb-book-upload] remote fetch ok: "
+                f"kind={fetched.get('kind')} mlb_date={fetched.get('mlb_date')} "
+                f"bytes={fetched.get('bytes')} path={fetched.get('path')}"
+            )
+        except Exception as exc:
+            if remote_fetch_required:
+                print(f"ERROR: remote fetch failed and is required: {exc}", file=sys.stderr)
+                sys.exit(1)
+            print(f"[mlb-book-upload] WARNING: remote fetch failed; falling back to local build: {exc}")
+        else:
+            if remote_fetch_only or remote_kind == "book_upload":
+                if remote_kind == "book_upload" and not remote_fetch_only:
+                    print("[mlb-book-upload] fetched remote book_upload artifact; skipping local rebuild.")
+                return
+            if remote_kind == "slate_output":
+                slate_csv_arg = str(remote_out_path)
+                use_slate_output = True
 
     if use_slate_output:
         slate_path = Path(slate_csv_arg) if slate_csv_arg else SLATE_CSV

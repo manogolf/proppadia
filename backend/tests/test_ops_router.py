@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -161,6 +163,45 @@ class TestOpsRouter(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json().get("ok"))
         self.assertEqual(mock_status.call_args.kwargs.get("tail_lines"), 25)
+
+    @patch("backend.app.routers.ops.resolve_prod12_artifact")
+    def test_mlb_prod12_artifact_ok(self, mock_artifact):
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as fh:
+            fh.write("player_name,prop_line\nExample,2.5\n")
+            csv_path = Path(fh.name)
+        self.addCleanup(lambda: csv_path.unlink(missing_ok=True))
+        mock_artifact.return_value = {
+            "kind": "book_upload",
+            "mlb_date": "2026-03-26",
+            "path": csv_path,
+            "exists": True,
+            "size_bytes": csv_path.stat().st_size,
+        }
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.get(
+                "/api/ops/mlb/prod12/artifact?kind=book_upload&mlb_date=2026-03-26",
+                headers={"X-Ops-Token": "secret"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("mlb_book_upload_2026-03-26.csv", resp.headers.get("content-disposition", ""))
+        self.assertIn("player_name,prop_line", resp.text)
+
+    @patch("backend.app.routers.ops.resolve_prod12_artifact")
+    def test_mlb_prod12_artifact_missing(self, mock_artifact):
+        missing_path = Path("/tmp/does_not_exist_mlb_book_upload.csv")
+        mock_artifact.return_value = {
+            "kind": "book_upload",
+            "mlb_date": "2026-03-26",
+            "path": missing_path,
+            "exists": False,
+            "size_bytes": None,
+        }
+        with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):
+            resp = self.client.get(
+                "/api/ops/mlb/prod12/artifact?kind=book_upload&mlb_date=2026-03-26",
+                headers={"X-Ops-Token": "secret"},
+            )
+        self.assertEqual(resp.status_code, 404)
 
     def test_trigger_mlb_prod12_cycle_rejects_bad_weekday(self):
         with patch.dict(os.environ, {"OPS_API_TOKEN": "secret"}, clear=False):

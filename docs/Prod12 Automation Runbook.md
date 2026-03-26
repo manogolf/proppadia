@@ -69,7 +69,29 @@ bin/mlb_prod12_remote_trigger_and_wait.sh 2400 10 120
 This exits non-zero if:
 - the run fails,
 - state disappears (idle/no `exit_code`),
-- or `mlb_book_upload.csv` is missing after a successful exit.
+- `mlb_book_upload.csv` is missing after a successful exit,
+- or the post-run local sync of `mlb_book_upload.csv` fails.
+
+Local sync target defaults to:
+- `backend/mlb/data/processed/mlb_book_upload.csv`
+
+Override target path with either:
+- arg 4: `bin/mlb_prod12_remote_trigger_and_wait.sh 2400 10 120 <out_csv>`
+- env var: `MLB_BOOK_UPLOAD_LOCAL_OUT_CSV=<out_csv>`
+
+If the run already finished remotely and you only want the local upload CSV, run this:
+
+```bash
+MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=1 \
+MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=1 \
+PROPPADIA_BACKEND_URL="$PROPPADIA_BACKEND_URL" \
+OPS_API_TOKEN="$OPS_API_TOKEN" \
+make mlb-book-upload MLB_DATE="$(date -u +%F)"
+```
+
+Behavior:
+- default remote kind is `book_upload`, so this writes the local upload CSV directly and exits.
+- set `MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND=slate_output` to fetch remote slate first, then build upload CSV locally.
 
 Direct curl equivalents:
 

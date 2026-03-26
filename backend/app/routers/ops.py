@@ -5,11 +5,13 @@ import secrets
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.app.services.nhl.prop_resolution_service import resolve_nhl_pending_props
 from backend.app.services.shared.mlb_prod12_job_service import (
     get_prod12_cycle_status,
+    resolve_prod12_artifact,
     start_prod12_cycle,
 )
 from backend.app.services.shared.render_deploy_service import (
@@ -213,3 +215,38 @@ def mlb_prod12_cycle_status(
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/prod12/artifact", summary="Ops: download MLB prod12 artifact")
+def mlb_prod12_artifact(
+    kind: Literal["book_upload", "predictions_wide", "slate_output", "archive_manifest"] = "book_upload",
+    mlb_date: Optional[str] = None,
+    x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
+):
+    _require_ops_token(x_ops_token)
+    try:
+        artifact = resolve_prod12_artifact(artifact_kind=kind, mlb_date=mlb_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+    path = artifact["path"]
+    if not artifact.get("exists"):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "artifact_missing",
+                "kind": artifact.get("kind"),
+                "mlb_date": artifact.get("mlb_date"),
+                "path": str(path),
+            },
+        )
+
+    media_type = "application/json" if str(path).endswith(".json") else "text/csv"
+    filename = str(path.name)
+    if kind == "book_upload":
+        filename = f"mlb_book_upload_{artifact.get('mlb_date')}.csv"
+    return FileResponse(path=str(path), media_type=media_type, filename=filename)
