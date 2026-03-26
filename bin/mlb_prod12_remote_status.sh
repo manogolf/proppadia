@@ -24,6 +24,11 @@ fi
 tail_lines="${1:-80}"
 
 curl -fsS \
+  --http1.1 \
+  --retry 4 \
+  --retry-delay 2 \
+  --retry-all-errors \
+  --max-time 45 \
   -H "X-Ops-Token: ${OPS_API_TOKEN}" \
   "${PROPPADIA_BACKEND_URL%/}/api/ops/mlb/prod12/status?tail_lines=${tail_lines}"
 echo

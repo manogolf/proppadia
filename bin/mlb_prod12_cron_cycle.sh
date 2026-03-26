@@ -108,9 +108,10 @@ MLB_DAILY_ROSTER_REFRESH_REQUIRED="${MLB_DAILY_ROSTER_REFRESH_REQUIRED:-1}"
 MLB_DAILY_STAT_DERIVED_ENABLED="${MLB_DAILY_STAT_DERIVED_ENABLED:-1}"
 MLB_DAILY_WIDE_PREDICTIONS_ENABLED="${MLB_DAILY_WIDE_PREDICTIONS_ENABLED:-1}"
 MLB_DAILY_WIDE_PREDICTIONS_REQUIRED="${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED:-1}"
-MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED="${MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED:-1}"
+MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED="${MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED:-0}"
 MLB_DAILY_SLATE_ARTIFACTS_ENABLED="${MLB_DAILY_SLATE_ARTIFACTS_ENABLED:-1}"
 MLB_DAILY_SLATE_ARTIFACTS_REQUIRED="${MLB_DAILY_SLATE_ARTIFACTS_REQUIRED:-1}"
+MLB_DAILY_GATE_ENABLED="${MLB_DAILY_GATE_ENABLED:-0}"
 MLB_STAT_DAYS_AGO="${MLB_STAT_DAYS_AGO:-2}"
 MLB_STAT_FROM_DATE="${MLB_STAT_FROM_DATE:-}"
 MLB_STAT_TO_DATE="${MLB_STAT_TO_DATE:-}"
@@ -137,11 +138,12 @@ MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV:-backend/mlb/data/processed/m
 MLB_ROSTER_DATE="${MLB_ROSTER_DATE:-${MLB_DATE}}"
 MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT:-backend/mlb/exports/odds_history}"
 MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON:-${MLB_ODDS_HISTORY_ROOT}/${MLB_DATE}/odds_mlb_playerprops.json}"
+MLB_ODDS_MARKETS="${MLB_ODDS_MARKETS:-batter_hits,batter_total_bases,batter_strikeouts,pitcher_earned_runs,batter_doubles,pitcher_hits_allowed,pitcher_strikeouts,batter_walks,batter_hits_runs_rbis,batter_runs_scored,pitcher_walks}"
 MLB_POLICY_PLAN_ENABLED="${MLB_POLICY_PLAN_ENABLED:-1}"
 MLB_POLICY_PLAN_CSV="${MLB_POLICY_PLAN_CSV:-backend/mlb/config/policy/all11_forward_plan_pass4.csv}"
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED="${MLB_POLICY_PLAN_ALLOW_ONE_SIDED:-0}"
 MLB_POLICY_PLAN_ALLOW_EMPTY="${MLB_POLICY_PLAN_ALLOW_EMPTY:-1}"
-MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES:-}"
+MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES:-${MLB_PROD12_PROP_TYPES}}"
 MLB_WIDE_REQUIRE_MIN_ROWS="${MLB_WIDE_REQUIRE_MIN_ROWS:-1}"
 
 run_mode_normalized="$(echo "${MLB_CRON_RUN_MODE}" | tr '[:upper:]' '[:lower:]')"
@@ -175,6 +177,14 @@ esac
 # Keep this pinned to avoid env drift when weekly validation runs.
 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT="60"
 export MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT
+export MLB_ODDS_MARKETS
+
+if [[ -n "${MLB_ODDS_MARKETS}" ]]; then
+  echo "[prod12-cron] odds markets scope=${MLB_ODDS_MARKETS}"
+fi
+if [[ -n "${MLB_ODDS_BOOKMAKERS:-}" ]]; then
+  echo "[prod12-cron] odds bookmakers scope=${MLB_ODDS_BOOKMAKERS}"
+fi
 
 if [[ "${run_weekly_now}" == "1" ]]; then
   echo "[prod12-cron] weekly mode: syncing model bundle to persistent MODEL_DIR=${MODEL_DIR}"
@@ -332,18 +342,22 @@ run_daily() {
     echo "[prod12-cron] daily stat-derived refresh disabled (MLB_DAILY_STAT_DERIVED_ENABLED=${MLB_DAILY_STAT_DERIVED_ENABLED})"
   fi
 
-  echo "[prod12-cron] running daily cycle"
-  if [[ -n "${MLB_DAILY_BASE_URL}" ]]; then
-    MLB_BASE_URL="${MLB_DAILY_BASE_URL}" \
-    MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE}" \
-    MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS}" \
-    MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES}" \
-    bin/mlb_prod12_daily_cycle.sh
+  if [[ "${MLB_DAILY_GATE_ENABLED}" == "1" ]]; then
+    echo "[prod12-cron] running daily cycle gate"
+    if [[ -n "${MLB_DAILY_BASE_URL}" ]]; then
+      MLB_BASE_URL="${MLB_DAILY_BASE_URL}" \
+      MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE}" \
+      MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS}" \
+      MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES}" \
+      bin/mlb_prod12_daily_cycle.sh
+    else
+      MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE}" \
+      MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS}" \
+      MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES}" \
+      bin/mlb_prod12_daily_cycle.sh
+    fi
   else
-    MLB_PREDICT_SAMPLE="${MLB_PREDICT_SAMPLE}" \
-    MLB_PREDICT_MIN_SUCCESS="${MLB_PREDICT_MIN_SUCCESS}" \
-    MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES}" \
-    bin/mlb_prod12_daily_cycle.sh
+    echo "[prod12-cron] daily cycle gate disabled (MLB_DAILY_GATE_ENABLED=${MLB_DAILY_GATE_ENABLED})"
   fi
 
   if [[ "${MLB_DAILY_WIDE_PREDICTIONS_ENABLED}" == "1" ]]; then

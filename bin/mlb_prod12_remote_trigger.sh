@@ -126,6 +126,11 @@ else
 fi
 
 curl -fsS \
+  --http1.1 \
+  --retry 4 \
+  --retry-delay 2 \
+  --retry-all-errors \
+  --max-time 45 \
   -X POST \
   -H "Content-Type: application/json" \
   -H "X-Ops-Token: ${OPS_API_TOKEN}" \

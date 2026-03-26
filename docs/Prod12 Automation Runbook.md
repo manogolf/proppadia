@@ -7,7 +7,7 @@ Date reference: this runbook was aligned on February 17, 2026.
 ## Scope
 
 - Prop lane set (`prod12`):
-  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed`
 - Gate posture:
   - Daily health + logging strict gate (`mlb-prod12-daily-gate`)
   - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
@@ -44,12 +44,31 @@ bin/mlb_prod12_remote_trigger.sh
 Default behavior:
 - Trigger defaults to `run_mode=daily` (lighter resource profile).
 - Weekly phase-2 is triggered separately.
+- Daily cron now defaults to lean mode:
+  - `MLB_DAILY_GATE_ENABLED=0` (skips heavy daily gate checks in cron path)
+  - `MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=0` (disables alias/extra market fetches)
+  - `MLB_ODDS_MARKETS` scoped to prod12 lane markets only
+  - `MLB_WIDE_PROP_TYPES` pinned to `MLB_PROD12_PROP_TYPES` unless explicitly overridden
+
+Optional extra lean setting (if memory pressure persists):
+- set `MLB_ODDS_BOOKMAKERS` to a small CSV (for example `draftkings,betmgm,espnbet`)
 
 Status command:
 
 ```bash
 bin/mlb_prod12_remote_status.sh 120
 ```
+
+One-command trigger + wait (recommended for manual checks):
+
+```bash
+bin/mlb_prod12_remote_trigger_and_wait.sh 2400 10 120
+```
+
+This exits non-zero if:
+- the run fails,
+- state disappears (idle/no `exit_code`),
+- or `mlb_book_upload.csv` is missing after a successful exit.
 
 Direct curl equivalents:
 

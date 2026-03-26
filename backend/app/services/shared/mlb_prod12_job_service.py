@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 STATE_DIR = REPO_ROOT / "artifacts" / "ops"
@@ -102,6 +103,45 @@ def _tail_log(path: Path, lines: int) -> list[str]:
         return [line.rstrip("\n") for line in all_lines[-lines:]]
     except Exception:
         return []
+
+
+def _default_mlb_date_et() -> str:
+    try:
+        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except ZoneInfoNotFoundError:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _collect_artifact_status(state: dict[str, Any]) -> dict[str, Any]:
+    env_overrides = state.get("env_overrides") if isinstance(state.get("env_overrides"), dict) else {}
+    mlb_date = str(env_overrides.get("MLB_DATE") or "").strip() or _default_mlb_date_et()
+
+    predictions_path = REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv"
+    slate_path = REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_slate_output.csv"
+    book_upload_path = REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_book_upload.csv"
+    manifest_path = REPO_ROOT / "backend" / "mlb" / "exports" / "odds_history" / mlb_date / "manifest.json"
+
+    def _entry(path: Path) -> dict[str, Any]:
+        exists = path.exists()
+        size_bytes = None
+        if exists:
+            try:
+                size_bytes = int(path.stat().st_size)
+            except Exception:
+                size_bytes = None
+        return {
+            "path": str(path),
+            "exists": bool(exists),
+            "size_bytes": size_bytes,
+        }
+
+    return {
+        "mlb_date": mlb_date,
+        "predictions_wide": _entry(predictions_path),
+        "slate_output": _entry(slate_path),
+        "book_upload": _entry(book_upload_path),
+        "archive_manifest": _entry(manifest_path),
+    }
 
 
 def _sanitize_env_overrides(env_overrides: Optional[dict[str, Any]]) -> dict[str, str]:
@@ -225,6 +265,7 @@ def get_prod12_cycle_status(*, tail_lines: int = 120) -> dict[str, Any]:
             "state_path": str(STATE_PATH),
             "log_path": str(LOG_PATH),
             "log_tail": _tail_log(LOG_PATH, max(0, int(tail_lines))),
+            "artifacts": _collect_artifact_status({}),
         }
 
     pid = int(state.get("pid") or 0)
@@ -237,4 +278,5 @@ def get_prod12_cycle_status(*, tail_lines: int = 120) -> dict[str, Any]:
     result["state_path"] = str(STATE_PATH)
     result["log_path"] = str(LOG_PATH)
     result["log_tail"] = _tail_log(LOG_PATH, max(0, int(tail_lines)))
+    result["artifacts"] = _collect_artifact_status(state)
     return result

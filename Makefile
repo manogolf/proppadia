@@ -12,6 +12,7 @@ MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
 MLB_ODDS_HISTORY_ROOT ?= backend/mlb/exports/odds_history
 MLB_ODDS_SNAPSHOT_JSON ?= $(MLB_ODDS_HISTORY_ROOT)/$(MLB_DATE)/odds_mlb_playerprops.json
+MLB_ODDS_SNAPSHOT_IN ?=
 MLB_POLICY_PLAN_ENABLED ?= 1
 MLB_POLICY_PLAN_CSV ?= backend/mlb/config/policy/all11_forward_plan_pass4.csv
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED ?= 0
@@ -851,7 +852,7 @@ mlb-roster-refresh-all:
 
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
-	$(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",)
+	$(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",) $(if $(strip $(MLB_ODDS_SNAPSHOT_IN)),--odds-snapshot-in "$(MLB_ODDS_SNAPSHOT_IN)",)
 
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:
@@ -861,6 +862,16 @@ mlb-slate-output:
 mlb-book-upload:
 	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(filter 1,$(MLB_POLICY_PLAN_ENABLED)),--policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)),--policy-allow-one-sided,) $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_EMPTY)),--policy-allow-empty,),)
 	$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)"
+
+# Full daily capture smoke path using an existing odds snapshot (no live OddsAPI fetch).
+mlb-daily-capture-from-snapshot:
+	@if [ -z "$(MLB_ODDS_SNAPSHOT_IN)" ]; then \
+		echo "mlb-daily-capture-from-snapshot requires MLB_ODDS_SNAPSHOT_IN=<path/to/odds_snapshot.json>"; \
+		exit 2; \
+	fi
+	$(MAKE) mlb-predictions-wide MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_ODDS_SNAPSHOT_IN="$(MLB_ODDS_SNAPSHOT_IN)" MLB_WIDE_PROP_TYPES="$(MLB_WIDE_PROP_TYPES)" MLB_WIDE_REQUIRE_MIN_ROWS="$(MLB_WIDE_REQUIRE_MIN_ROWS)"
+	$(MAKE) mlb-slate-output MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_SLATE_PROP_TYPE="$(MLB_SLATE_PROP_TYPE)"
+	$(MAKE) mlb-book-upload MLB_DATE="$(MLB_DATE)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)"
 
 # Archive one MLB slate's reproducibility artifacts under backend/mlb/exports/odds_history/YYYY-MM-DD.
 mlb-slate-archive:
@@ -899,6 +910,7 @@ mlb-show-config:
 	@echo "MLB_BOOK_UPLOAD_OUT_CSV=$(MLB_BOOK_UPLOAD_OUT_CSV)"
 	@echo "MLB_ODDS_HISTORY_ROOT=$(MLB_ODDS_HISTORY_ROOT)"
 	@echo "MLB_ODDS_SNAPSHOT_JSON=$(MLB_ODDS_SNAPSHOT_JSON)"
+	@echo "MLB_ODDS_SNAPSHOT_IN=$(MLB_ODDS_SNAPSHOT_IN)"
 	@echo "MLB_POLICY_PLAN_ENABLED=$(MLB_POLICY_PLAN_ENABLED)"
 	@echo "MLB_POLICY_PLAN_CSV=$(MLB_POLICY_PLAN_CSV)"
 	@echo "MLB_POLICY_PLAN_ALLOW_ONE_SIDED=$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)"

@@ -107,6 +107,33 @@ DEFAULT_MARKET_BY_PROP: Dict[str, str] = {
     # pitcher_win is yes/no (not over/under) and intentionally excluded here.
 }
 
+ALLOWED_UPLOAD_MARKETS = {
+    "batter_hits",
+    "batter_runs",
+    "batter_rbis",
+    "batter_bases",
+    "batter_h+r+rbi",
+    "batter_walks",
+    "batter_strikeouts",
+    "batter_stolen_bases",
+    "batter_singles",
+    "batter_doubles",
+    "batter_triples",
+    "batter_home_runs",
+    "pitcher_hits",
+    "pitcher_earned_runs",
+    "pitcher_outs",
+    "pitcher_walks",
+    "pitcher_strikeouts",
+}
+
+UPLOAD_MARKET_ALIASES: Dict[str, str] = {
+    "batter_hits_runs_rbis": "batter_h+r+rbi",
+    "batter_total_bases": "batter_bases",
+    "batter_runs_scored": "batter_runs",
+    "pitcher_hits_allowed": "pitcher_hits",
+}
+
 _PCOL_RE = re.compile(r"^p_over_(\d+)_([05])$")
 
 
@@ -121,6 +148,24 @@ def _clean_optional_str(value: object) -> Optional[str]:
     if not text or text.lower() == "nan":
         return None
     return text
+
+
+def _normalize_upload_market(
+    *,
+    raw_market: object,
+    prop_type: str,
+    market_map: Dict[str, str],
+) -> str:
+    market = (_clean_optional_str(raw_market) or "").strip().lower()
+    if not market:
+        market = str(market_map.get(prop_type) or "").strip().lower()
+    market = UPLOAD_MARKET_ALIASES.get(market, market)
+    if market in ALLOWED_UPLOAD_MARKETS:
+        return market
+    raise ValueError(
+        f"unsupported upload market '{market}' for prop_type='{prop_type}'. "
+        f"Allowed markets: {sorted(ALLOWED_UPLOAD_MARKETS)}"
+    )
 
 
 def _parse_lines_from_cols(cols: Iterable[str]) -> List[Tuple[str, float]]:
@@ -599,9 +644,17 @@ def main() -> None:
             prop_type = _canonical_prop_type(row.get("prop_type"))
             market = str(args.market).strip()
             if not market:
-                market = _clean_optional_str(row.get("market_key")) or ""
-            if not market:
-                market = market_map.get(prop_type) or f"player-{prop_type.replace('_', '-')}-ou"
+                market = _normalize_upload_market(
+                    raw_market=row.get("market_key"),
+                    prop_type=prop_type,
+                    market_map=market_map,
+                )
+            else:
+                market = _normalize_upload_market(
+                    raw_market=market,
+                    prop_type=prop_type,
+                    market_map=market_map,
+                )
 
             date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
             rows.append(
@@ -634,10 +687,18 @@ def main() -> None:
             prop_type = _canonical_prop_type(row["prop_type"])
             market = str(args.market).strip()
             if not market:
-                if "market_key" in merged.columns:
-                    market = _clean_optional_str(row.get("market_key")) or ""
-                if not market:
-                    market = market_map.get(prop_type) or f"player-{prop_type.replace('_', '-')}-ou"
+                raw_market = _clean_optional_str(row.get("market_key")) if "market_key" in merged.columns else None
+                market = _normalize_upload_market(
+                    raw_market=raw_market,
+                    prop_type=prop_type,
+                    market_map=market_map,
+                )
+            else:
+                market = _normalize_upload_market(
+                    raw_market=market,
+                    prop_type=prop_type,
+                    market_map=market_map,
+                )
             date_str = pd.to_datetime(row["game_date"]).strftime("%Y%m%d")
 
             base = {
