@@ -556,21 +556,41 @@ Step 6. After games are final, download grader CSV for analysis.
 Example: /Users/jerrystrain/Downloads/8rainstation_daily_YYYY_MM_DD.csv
 ```
 
-Step 7. Summarize graded NHL SOG results from the downloaded CSV.
+Step 6.5. Split the combined grader CSV into per-league files (NHL + MLB, same source file).
 
 Preferred (auto-pick newest grader CSV in Downloads):
 
 ```bash
 GRADER_CSV="$(ls -t ~/Downloads/8rainstation_daily_*.csv | head -n 1)"
 [ -n "$GRADER_CSV" ] || { echo "No grader CSV found in ~/Downloads"; exit 1; }
-.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$GRADER_CSV"
+.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+```
+
+Outputs:
+- `tmp/graded/8rainstation_daily_YYYY-MM-DD_nhl.csv`
+- `tmp/graded/8rainstation_daily_YYYY-MM-DD_mlb.csv`
+- `tmp/graded/8rainstation_daily_YYYY-MM-DD_split_summary.json`
+
+Step 7. Summarize graded NHL SOG results from the NHL split CSV.
+
+Preferred (auto-pick newest grader CSV in Downloads):
+
+```bash
+GRADER_CSV="$(ls -t ~/Downloads/8rainstation_daily_*.csv | head -n 1)"
+[ -n "$GRADER_CSV" ] || { echo "No grader CSV found in ~/Downloads"; exit 1; }
+.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+DATE_TAG="$(basename "$GRADER_CSV" .csv | sed 's/^8rainstation_daily_//' | tr '_' '-')"
+NHL_SPLIT_CSV="tmp/graded/8rainstation_daily_${DATE_TAG}_nhl.csv"
+.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$NHL_SPLIT_CSV"
 ```
 
 Manual (specific file path):
 
 ```bash
 GRADER_CSV=/Users/jerrystrain/Downloads/8rainstation_daily_YYYY_MM_DD.csv
-.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$GRADER_CSV"
+.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+NHL_SPLIT_CSV=tmp/graded/8rainstation_daily_YYYY-MM-DD_nhl.csv
+.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$NHL_SPLIT_CSV"
 ```
 
 Outputs:

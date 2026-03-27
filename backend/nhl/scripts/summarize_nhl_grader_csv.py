@@ -232,8 +232,9 @@ def main() -> None:
         raise SystemExit(f"Missing input CSV: {in_csv}")
 
     stem = in_csv.stem
-    if stem.startswith("8rainstation_daily_"):
-        date_part = stem.replace("8rainstation_daily_", "").replace("_", "-")
+    m = re.search(r"(\d{4})[_-](\d{2})[_-](\d{2})", stem)
+    if m:
+        date_part = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
     else:
         date_part = _choose_slate_date(csv.DictReader(in_csv.open("r", encoding="utf-8-sig", newline="")))
 
