@@ -48,11 +48,11 @@ Default behavior:
   - `MLB_DAILY_GATE_ENABLED=0` (skips heavy daily gate checks in cron path)
   - `MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=0` (disables alias/extra market fetches)
   - `MLB_ODDS_MARKETS` scoped to prod12 lane markets only
-  - `MLB_ODDS_BOOKMAKERS` defaults to `draftkings,betmgm,espnbet` for lower memory usage
+  - `MLB_ODDS_BOOKMAKERS` defaults to `betonlineag,mybookieag,betopenly,draftkings,betmgm,espnbet,fanatics,williamhill_us,superbook,rebet`
   - `MLB_WIDE_PROP_TYPES` pinned to `MLB_PROD12_PROP_TYPES` unless explicitly overridden
 
 Optional extra lean setting (if memory pressure persists):
-- set `MLB_ODDS_BOOKMAKERS` to a small CSV (for example `draftkings,betmgm,espnbet`)
+- set `MLB_ODDS_BOOKMAKERS` to a small CSV (for example `betonlineag,mybookieag,betopenly,draftkings`)
 
 Status command:
 

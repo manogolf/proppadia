@@ -179,7 +179,7 @@ MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON:-${MLB_ODDS_HISTORY_ROOT}/${MLB
 MLB_ODDS_MARKETS="${MLB_ODDS_MARKETS:-batter_hits,batter_total_bases,batter_strikeouts,pitcher_earned_runs,batter_doubles,pitcher_hits_allowed,pitcher_strikeouts,batter_walks,batter_hits_runs_rbis,batter_runs_scored,pitcher_walks}"
 # Bookmaker scope for daily automation.
 # Override MLB_ODDS_BOOKMAKERS in env as needed.
-MLB_ODDS_BOOKMAKERS="${MLB_ODDS_BOOKMAKERS:-betonlineag,mybookieag,betopenly,draftkings}"
+MLB_ODDS_BOOKMAKERS="${MLB_ODDS_BOOKMAKERS:-betonlineag,mybookieag,betopenly,draftkings,betmgm,espnbet,fanatics,williamhill_us,superbook,rebet}"
 MLB_POLICY_PLAN_ENABLED="${MLB_POLICY_PLAN_ENABLED:-1}"
 MLB_POLICY_PLAN_CSV="${MLB_POLICY_PLAN_CSV:-backend/mlb/config/policy/all11_forward_plan_pass4.csv}"
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED="${MLB_POLICY_PLAN_ALLOW_ONE_SIDED:-0}"
