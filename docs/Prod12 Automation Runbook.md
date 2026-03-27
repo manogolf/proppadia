@@ -91,6 +91,11 @@ make mlb-book-upload MLB_DATE="$(date -u +%F)"
 
 Behavior:
 - default remote kind is `book_upload`, so this writes the local upload CSV directly and exits.
+- when `kind=book_upload`, companion artifacts are also synced locally by default:
+  - `backend/mlb/data/processed/mlb_slate_output.csv`
+  - `backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv`
+  - `backend/mlb/exports/odds_history/YYYY-MM-DD/manifest.json`
+- disable companion sync by setting `MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0`.
 - set `MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND=slate_output` to fetch remote slate first, then build upload CSV locally.
 
 Direct curl equivalents:

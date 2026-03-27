@@ -14,6 +14,14 @@ Most common manual command (download ready upload CSV from remote run; no local 
     --remote-fetch-kind book_upload \
     --remote-fetch-required
 
+Notes:
+- Remote book-upload fetch now also syncs companion artifacts by default:
+  - `backend/mlb/data/processed/mlb_slate_output.csv`
+  - `backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv`
+  - `backend/mlb/exports/odds_history/YYYY-MM-DD/manifest.json`
+- Disable companion sync with `--no-remote-fetch-companions` (or set
+  `MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0`).
+
 Alternative (fetch remote slate first, then build upload CSV locally):
   set -a
   source backend/.env
@@ -242,6 +250,13 @@ def _float_env(name: str, default: float) -> float:
         return float(raw)
     except Exception:
         return float(default)
+
+
+def _bool_env_with_default(name: str, default: bool) -> bool:
+    raw = str(os.environ.get(name, "") or "").strip()
+    if not raw:
+        return bool(default)
+    return raw.lower() in {"1", "true", "yes", "on"}
 
 
 def _fetch_remote_prod12_artifact(
@@ -868,6 +883,28 @@ def main() -> None:
         ),
     )
     ap.add_argument(
+        "--remote-fetch-companions",
+        action="store_true",
+        help=(
+            "When fetching remote kind=book_upload, also sync companion artifacts "
+            "(slate_output, predictions_wide, archive_manifest). "
+            "Default: enabled (set MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0 to disable)."
+        ),
+    )
+    ap.add_argument(
+        "--no-remote-fetch-companions",
+        action="store_true",
+        help="Disable companion artifact sync for remote kind=book_upload.",
+    )
+    ap.add_argument(
+        "--remote-fetch-companions-required",
+        action="store_true",
+        help=(
+            "Fail if any companion artifact sync fails "
+            "(or set MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS_REQUIRED=1)."
+        ),
+    )
+    ap.add_argument(
         "--remote-backend-url",
         default=os.environ.get("PROPPADIA_BACKEND_URL", ""),
         help="Backend URL for remote artifact fetch. Defaults to PROPPADIA_BACKEND_URL.",
@@ -905,6 +942,15 @@ def main() -> None:
     remote_fetch_first = bool(args.remote_fetch_first or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST"))
     remote_fetch_only = bool(args.remote_fetch_only or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY"))
     remote_fetch_required = bool(args.remote_fetch_required or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED"))
+    remote_fetch_companions = _bool_env_with_default("MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS", True)
+    if bool(args.remote_fetch_companions):
+        remote_fetch_companions = True
+    if bool(args.no_remote_fetch_companions):
+        remote_fetch_companions = False
+    remote_fetch_companions_required = bool(
+        args.remote_fetch_companions_required
+        or _env_truthy("MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS_REQUIRED")
+    )
     remote_kind = str(args.remote_fetch_kind or "").strip().lower() or "book_upload"
     remote_mlb_date = str(args.remote_fetch_mlb_date or "").strip() or slate_date
 
@@ -939,6 +985,42 @@ def main() -> None:
             print(f"[mlb-book-upload] WARNING: remote fetch failed; falling back to local build: {exc}")
         else:
             if remote_fetch_only or remote_kind == "book_upload":
+                if remote_kind == "book_upload" and remote_fetch_companions and not remote_fetch_only:
+                    companion_targets = [
+                        ("slate_output", Path(slate_csv_arg).expanduser() if slate_csv_arg else SLATE_CSV),
+                        ("predictions_wide", PRED_CSV),
+                        (
+                            "archive_manifest",
+                            BASE_DIR / "mlb" / "exports" / "odds_history" / remote_mlb_date / "manifest.json",
+                        ),
+                    ]
+                    for companion_kind, companion_out in companion_targets:
+                        try:
+                            companion = _fetch_remote_prod12_artifact(
+                                backend_url=str(args.remote_backend_url or "").strip(),
+                                ops_token=str(args.remote_ops_token or "").strip(),
+                                artifact_kind=companion_kind,
+                                mlb_date=remote_mlb_date,
+                                out_path=companion_out,
+                                timeout_sec=float(args.remote_fetch_timeout_sec),
+                            )
+                            print(
+                                "[mlb-book-upload] remote companion fetch ok: "
+                                f"kind={companion.get('kind')} mlb_date={companion.get('mlb_date')} "
+                                f"bytes={companion.get('bytes')} path={companion.get('path')}"
+                            )
+                        except Exception as exc:
+                            if remote_fetch_companions_required:
+                                print(
+                                    "ERROR: remote companion fetch failed and is required: "
+                                    f"kind={companion_kind} mlb_date={remote_mlb_date} error={exc}",
+                                    file=sys.stderr,
+                                )
+                                sys.exit(1)
+                            print(
+                                "[mlb-book-upload] WARNING: remote companion fetch failed: "
+                                f"kind={companion_kind} mlb_date={remote_mlb_date} error={exc}"
+                            )
                 if remote_kind == "book_upload" and not remote_fetch_only:
                     print("[mlb-book-upload] fetched remote book_upload artifact; skipping local rebuild.")
                 return
