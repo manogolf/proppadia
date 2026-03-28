@@ -18,6 +18,7 @@ Notes:
 - Remote book-upload fetch now also syncs companion artifacts by default:
   - `backend/mlb/data/processed/mlb_slate_output.csv`
   - `backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv`
+  - `backend/mlb/exports/odds_history/YYYY-MM-DD/odds_mlb_playerprops.json`
   - `backend/mlb/exports/odds_history/YYYY-MM-DD/manifest.json`
 - Disable companion sync with `--no-remote-fetch-companions` (or set
   `MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0`).
@@ -280,10 +281,10 @@ def _fetch_remote_prod12_artifact(
         raise ValueError("missing remote backend URL (set --remote-backend-url or PROPPADIA_BACKEND_URL)")
     if not token:
         raise ValueError("missing ops token (set --remote-ops-token or OPS_API_TOKEN)")
-    if kind not in {"book_upload", "predictions_wide", "slate_output", "archive_manifest"}:
+    if kind not in {"book_upload", "predictions_wide", "slate_output", "odds_snapshot", "archive_manifest"}:
         raise ValueError(
             "invalid remote artifact kind "
-            f"'{kind}' (expected book_upload|predictions_wide|slate_output|archive_manifest)"
+            f"'{kind}' (expected book_upload|predictions_wide|slate_output|odds_snapshot|archive_manifest)"
         )
     if not date_text:
         raise ValueError("missing mlb_date for remote fetch")
@@ -862,7 +863,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--remote-fetch-kind",
-        choices=["book_upload", "predictions_wide", "slate_output", "archive_manifest"],
+        choices=["book_upload", "predictions_wide", "slate_output", "odds_snapshot", "archive_manifest"],
         default=os.environ.get("MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND", "book_upload"),
         help="Artifact kind for --remote-fetch-first. Default: book_upload.",
     )
@@ -887,7 +888,7 @@ def main() -> None:
         action="store_true",
         help=(
             "When fetching remote kind=book_upload, also sync companion artifacts "
-            "(slate_output, predictions_wide, archive_manifest). "
+            "(slate_output, predictions_wide, odds_snapshot, archive_manifest). "
             "Default: enabled (set MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0 to disable)."
         ),
     )
@@ -961,6 +962,8 @@ def main() -> None:
             remote_out_path = Path(slate_csv_arg).expanduser() if slate_csv_arg else SLATE_CSV
         elif remote_kind == "predictions_wide":
             remote_out_path = PRED_CSV
+        elif remote_kind == "odds_snapshot":
+            remote_out_path = BASE_DIR / "mlb" / "exports" / "odds_history" / remote_mlb_date / "odds_mlb_playerprops.json"
         else:
             remote_out_path = BASE_DIR / "mlb" / "exports" / "odds_history" / remote_mlb_date / "manifest.json"
 
@@ -989,6 +992,10 @@ def main() -> None:
                     companion_targets = [
                         ("slate_output", Path(slate_csv_arg).expanduser() if slate_csv_arg else SLATE_CSV),
                         ("predictions_wide", PRED_CSV),
+                        (
+                            "odds_snapshot",
+                            BASE_DIR / "mlb" / "exports" / "odds_history" / remote_mlb_date / "odds_mlb_playerprops.json",
+                        ),
                         (
                             "archive_manifest",
                             BASE_DIR / "mlb" / "exports" / "odds_history" / remote_mlb_date / "manifest.json",

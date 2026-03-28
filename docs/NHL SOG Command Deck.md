@@ -338,7 +338,7 @@ Runbook note:
 - This and the following sections are optional analysis/testing lanes.
 - Daily runbook numbering resumes at `Step 5` later in the file.
 
-Use this when testing policy toggles before promoting.
+Use this when testing policy toggles for diagnostics.
 This writes a shadow card only (no candidate-upload overwrite).
 
 ```bash
@@ -599,6 +599,7 @@ Outputs:
 
 Step 8. Run anchored reevaluation from `2026-03-04` through latest graded day (post-grade diagnostics only; does not change Step 4 candidate generation/upload).
    - Compares placed wagers against: `baseline`, `b_conservative`, `toggles_cap`, `toggles_disable_over35`.
+   - Baseline is operationally locked for the current stretch; use this to measure truth, not to claim promotion.
 
 ```bash
 ANCHOR_FROM=2026-03-04
@@ -651,6 +652,10 @@ Outputs:
 - `tmp/analysis/nhl_model_vs_fade_summary.json`
 - `tmp/analysis/nhl_model_vs_fade_by_segment.csv`
 - `tmp/analysis/nhl_model_vs_fade_rows.csv`
+
+Interpretation note:
+- Treat this as the primary truth check for segment behavior.
+- Do not claim model improvement unless this report shows sustained positive delta vs fade on adequate sample.
 
 ## Line Moved (Pass/Fail)
 

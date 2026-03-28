@@ -219,7 +219,7 @@ def mlb_prod12_cycle_status(
 
 @router.get("/mlb/prod12/artifact", summary="Ops: download MLB prod12 artifact")
 def mlb_prod12_artifact(
-    kind: Literal["book_upload", "predictions_wide", "slate_output", "archive_manifest"] = "book_upload",
+    kind: Literal["book_upload", "predictions_wide", "slate_output", "odds_snapshot", "archive_manifest"] = "book_upload",
     mlb_date: Optional[str] = None,
     x_ops_token: Optional[str] = Header(default=None, alias="X-Ops-Token"),
 ):
@@ -249,4 +249,6 @@ def mlb_prod12_artifact(
     filename = str(path.name)
     if kind == "book_upload":
         filename = f"mlb_book_upload_{artifact.get('mlb_date')}.csv"
+    elif kind == "odds_snapshot":
+        filename = f"odds_mlb_playerprops_{artifact.get('mlb_date')}.json"
     return FileResponse(path=str(path), media_type=media_type, filename=filename)

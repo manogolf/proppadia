@@ -142,6 +142,7 @@ def _mlb_artifact_paths(mlb_date: str) -> dict[str, Path]:
         "predictions_wide": REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv",
         "slate_output": REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_slate_output.csv",
         "book_upload": REPO_ROOT / "backend" / "mlb" / "data" / "processed" / "mlb_book_upload.csv",
+        "odds_snapshot": REPO_ROOT / "backend" / "mlb" / "exports" / "odds_history" / mlb_date / "odds_mlb_playerprops.json",
         "archive_manifest": REPO_ROOT / "backend" / "mlb" / "exports" / "odds_history" / mlb_date / "manifest.json",
     }
 
@@ -173,6 +174,7 @@ def _collect_artifact_status(state: dict[str, Any]) -> dict[str, Any]:
         "predictions_wide": _entry(artifact_paths["predictions_wide"]),
         "slate_output": _entry(artifact_paths["slate_output"]),
         "book_upload": _entry(artifact_paths["book_upload"]),
+        "odds_snapshot": _entry(artifact_paths["odds_snapshot"]),
         "archive_manifest": _entry(artifact_paths["archive_manifest"]),
     }
 
@@ -317,9 +319,9 @@ def get_prod12_cycle_status(*, tail_lines: int = 120) -> dict[str, Any]:
 
 def resolve_prod12_artifact(*, artifact_kind: str = "book_upload", mlb_date: Optional[str] = None) -> dict[str, Any]:
     normalized_kind = str(artifact_kind or "").strip().lower()
-    if normalized_kind not in {"book_upload", "predictions_wide", "slate_output", "archive_manifest"}:
+    if normalized_kind not in {"book_upload", "predictions_wide", "slate_output", "odds_snapshot", "archive_manifest"}:
         raise ValueError(
-            "artifact_kind must be one of: book_upload, predictions_wide, slate_output, archive_manifest"
+            "artifact_kind must be one of: book_upload, predictions_wide, slate_output, odds_snapshot, archive_manifest"
         )
     resolved_date = _resolve_mlb_date(mlb_date)
     path = _mlb_artifact_paths(resolved_date)[normalized_kind]

@@ -11,6 +11,12 @@ NHL_MODEL_VS_FADE_MIN_BETS_ALERT ?= 20
 NHL_MODEL_VS_FADE_OUT_JSON ?= tmp/analysis/nhl_model_vs_fade_summary.json
 NHL_MODEL_VS_FADE_OUT_SEGMENTS_CSV ?= tmp/analysis/nhl_model_vs_fade_by_segment.csv
 NHL_MODEL_VS_FADE_OUT_ROWS_CSV ?= tmp/analysis/nhl_model_vs_fade_rows.csv
+CROSS_SPORT_MODEL_VS_FADE_OUT_JSON ?= tmp/analysis/cross_sport_model_vs_fade_summary.json
+CROSS_SPORT_MODEL_VS_FADE_MAX_DELTA ?= 0
+CROSS_SPORT_MODEL_VS_FADE_NHL_MIN_BETS ?= $(NHL_MODEL_VS_FADE_MIN_BETS_ALERT)
+CROSS_SPORT_MODEL_VS_FADE_MLB_MIN_BETS ?= $(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)
+CROSS_SPORT_MODEL_VS_FADE_REQUIRE_NHL ?= 1
+CROSS_SPORT_MODEL_VS_FADE_REQUIRE_MLB ?= 1
 MLB_MARKET_DAYS ?= 1
 MLB_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv
 MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
@@ -916,6 +922,19 @@ nhl-model-vs-fade:
 
 # Post-grade NHL check alias (keeps this check explicit in daily routine).
 nhl-post-grade-fade-check: nhl-model-vs-fade
+
+.PHONY: cross-sport-model-vs-fade cross-sport-model-vs-fade-strict cross-sport-post-grade-fade-check
+
+cross-sport-model-vs-fade:
+	$(VENV_PY) backend/scripts/report_cross_sport_model_vs_fade.py --nhl-json "$(NHL_MODEL_VS_FADE_OUT_JSON)" --mlb-json "$(MLB_MODEL_VS_FADE_OUT_JSON)" --nhl-min-bets "$(CROSS_SPORT_MODEL_VS_FADE_NHL_MIN_BETS)" --mlb-min-bets "$(CROSS_SPORT_MODEL_VS_FADE_MLB_MIN_BETS)" --max-fade-minus-model-delta "$(CROSS_SPORT_MODEL_VS_FADE_MAX_DELTA)" $(if $(filter 1,$(CROSS_SPORT_MODEL_VS_FADE_REQUIRE_NHL)),--require-nhl,) $(if $(filter 1,$(CROSS_SPORT_MODEL_VS_FADE_REQUIRE_MLB)),--require-mlb,) --out-json "$(CROSS_SPORT_MODEL_VS_FADE_OUT_JSON)"
+
+cross-sport-model-vs-fade-strict:
+	$(VENV_PY) backend/scripts/report_cross_sport_model_vs_fade.py --nhl-json "$(NHL_MODEL_VS_FADE_OUT_JSON)" --mlb-json "$(MLB_MODEL_VS_FADE_OUT_JSON)" --nhl-min-bets "$(CROSS_SPORT_MODEL_VS_FADE_NHL_MIN_BETS)" --mlb-min-bets "$(CROSS_SPORT_MODEL_VS_FADE_MLB_MIN_BETS)" --max-fade-minus-model-delta "$(CROSS_SPORT_MODEL_VS_FADE_MAX_DELTA)" $(if $(filter 1,$(CROSS_SPORT_MODEL_VS_FADE_REQUIRE_NHL)),--require-nhl,) $(if $(filter 1,$(CROSS_SPORT_MODEL_VS_FADE_REQUIRE_MLB)),--require-mlb,) --strict --out-json "$(CROSS_SPORT_MODEL_VS_FADE_OUT_JSON)"
+
+cross-sport-post-grade-fade-check:
+	$(MAKE) nhl-post-grade-fade-check NHL_MODEL_VS_FADE_GRADED_GLOB="$(NHL_MODEL_VS_FADE_GRADED_GLOB)" NHL_MODEL_VS_FADE_CARDS_DIR="$(NHL_MODEL_VS_FADE_CARDS_DIR)" NHL_MODEL_VS_FADE_MIN_BETS_ALERT="$(NHL_MODEL_VS_FADE_MIN_BETS_ALERT)" NHL_MODEL_VS_FADE_OUT_JSON="$(NHL_MODEL_VS_FADE_OUT_JSON)" NHL_MODEL_VS_FADE_OUT_SEGMENTS_CSV="$(NHL_MODEL_VS_FADE_OUT_SEGMENTS_CSV)" NHL_MODEL_VS_FADE_OUT_ROWS_CSV="$(NHL_MODEL_VS_FADE_OUT_ROWS_CSV)"
+	$(MAKE) mlb-post-grade-fade-check MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_MODEL_VS_FADE_OUT_CSV="$(MLB_MODEL_VS_FADE_OUT_CSV)" MLB_MODEL_VS_FADE_MIN_BETS_ALERT="$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
+	$(MAKE) cross-sport-model-vs-fade-strict CROSS_SPORT_MODEL_VS_FADE_OUT_JSON="$(CROSS_SPORT_MODEL_VS_FADE_OUT_JSON)" CROSS_SPORT_MODEL_VS_FADE_MAX_DELTA="$(CROSS_SPORT_MODEL_VS_FADE_MAX_DELTA)" CROSS_SPORT_MODEL_VS_FADE_NHL_MIN_BETS="$(CROSS_SPORT_MODEL_VS_FADE_NHL_MIN_BETS)" CROSS_SPORT_MODEL_VS_FADE_MLB_MIN_BETS="$(CROSS_SPORT_MODEL_VS_FADE_MLB_MIN_BETS)" CROSS_SPORT_MODEL_VS_FADE_REQUIRE_NHL="$(CROSS_SPORT_MODEL_VS_FADE_REQUIRE_NHL)" CROSS_SPORT_MODEL_VS_FADE_REQUIRE_MLB="$(CROSS_SPORT_MODEL_VS_FADE_REQUIRE_MLB)"
 
 # Backfill MLB historical odds snapshots from OddsAPI into odds_history root.
 mlb-odds-backfill-history:

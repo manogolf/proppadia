@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pandas.errors import EmptyDataError
 
 
 def _is_win_loss(series: pd.Series) -> pd.Series:
@@ -96,7 +97,39 @@ def main() -> int:
         "pnl_over_1u",
         "pnl_under_1u",
     ]
-    df = pd.read_csv(rows_csv, usecols=usecols, low_memory=False)
+    try:
+        df = pd.read_csv(rows_csv, usecols=usecols, low_memory=False)
+    except EmptyDataError:
+        payload = {
+            "rows_csv": str(rows_csv),
+            "window": {"game_date_min": None, "game_date_max": None},
+            "counts": {
+                "rows_input": 0,
+                "rows_with_model_pnl": 0,
+                "rows_with_fade_pnl": 0,
+                "rows_paired_for_fade": 0,
+            },
+            "overall": {
+                "model_bets": 0,
+                "fade_bets": 0,
+                "paired_bets": 0,
+                "model_roi_1u": None,
+                "fade_roi_1u": None,
+                "delta_fade_minus_model_1u": None,
+                "model_win_rate": None,
+                "fade_win_rate": None,
+                "fade_beating_model_alert": False,
+                "status": "no_data",
+            },
+            "outputs": {
+                "by_prop_csv": str(out_csv),
+                "summary_json": str(out_json),
+            },
+        }
+        pd.DataFrame().to_csv(out_csv, index=False)
+        out_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(json.dumps(payload, indent=2))
+        return 0
     df = _build_fade_columns(df)
 
     game_date = pd.to_datetime(df["game_date"], errors="coerce")

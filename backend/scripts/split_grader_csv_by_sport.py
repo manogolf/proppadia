@@ -98,6 +98,12 @@ def _build_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _is_mlb_player_props_row(row: dict[str, Any]) -> bool:
+    section = _norm_slug(row.get("Section"))
+    # Common 8rainstation label observed in exports.
+    return section == "player_props"
+
+
 def split_grader_csv(*, in_csv: Path, out_dir: Path) -> dict[str, Any]:
     with in_csv.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -125,10 +131,39 @@ def split_grader_csv(*, in_csv: Path, out_dir: Path) -> dict[str, Any]:
             writer.writeheader()
             writer.writerows(group)
         stats = _build_stats(group)
-        outputs[f"{sport}:{league}"] = {
+        payload: dict[str, Any] = {
             "out_csv": str(out_csv),
             **stats,
         }
+        # MLB convenience split: player props vs non-player rows.
+        if league == "mlb":
+            player_rows = [r for r in group if _is_mlb_player_props_row(r)]
+            non_player_rows = [r for r in group if not _is_mlb_player_props_row(r)]
+
+            out_player_csv = out_dir / f"8rainstation_daily_{date_label}_{league}_player_props.csv"
+            with out_player_csv.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(player_rows)
+
+            out_non_player_csv = out_dir / f"8rainstation_daily_{date_label}_{league}_non_player.csv"
+            with out_non_player_csv.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(non_player_rows)
+
+            payload["mlb_splits"] = {
+                "player_props": {
+                    "out_csv": str(out_player_csv),
+                    **_build_stats(player_rows),
+                },
+                "non_player": {
+                    "out_csv": str(out_non_player_csv),
+                    **_build_stats(non_player_rows),
+                },
+            }
+
+        outputs[f"{sport}:{league}"] = payload
         total_rows_written += len(group)
 
     summary = {
@@ -167,9 +202,24 @@ def main() -> None:
             f"W-L-P={payload['wins']}-{payload['losses']}-{payload['pushes']} "
             f"roi={payload['roi']*100:.2f}% -> {payload['out_csv']}"
         )
+        mlb_splits = payload.get("mlb_splits")
+        if isinstance(mlb_splits, dict):
+            pp = mlb_splits.get("player_props") or {}
+            np = mlb_splits.get("non_player") or {}
+            if pp:
+                print(
+                    f"[split-grader] {key}:player_props rows={pp.get('rows', 0)} "
+                    f"W-L-P={pp.get('wins', 0)}-{pp.get('losses', 0)}-{pp.get('pushes', 0)} "
+                    f"roi={float(pp.get('roi', 0.0))*100:.2f}% -> {pp.get('out_csv')}"
+                )
+            if np:
+                print(
+                    f"[split-grader] {key}:non_player rows={np.get('rows', 0)} "
+                    f"W-L-P={np.get('wins', 0)}-{np.get('losses', 0)}-{np.get('pushes', 0)} "
+                    f"roi={float(np.get('roi', 0.0))*100:.2f}% -> {np.get('out_csv')}"
+                )
     print(f"[split-grader] summary_json={summary['out_json']}")
 
 
 if __name__ == "__main__":
     main()
-

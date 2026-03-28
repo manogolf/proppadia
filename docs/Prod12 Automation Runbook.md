@@ -115,6 +115,23 @@ This routine rebuilds reconcile rows for the window, then compares:
 - model-picked side ROI (`pnl_model_pick_1u`)
 - opposite-side fade ROI (the opposite side at the same row)
 
+Cross-sport sanity check (NHL + MLB summaries):
+
+```bash
+make cross-sport-model-vs-fade-strict
+```
+
+Output:
+- `tmp/analysis/cross_sport_model_vs_fade_summary.json`
+
+One-command post-grade routine (rebuild both sport summaries, then strict cross-sport gate):
+
+```bash
+make cross-sport-post-grade-fade-check \
+  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_TO_DATE="$(date -u +%F)"
+```
+
 Direct curl equivalents:
 
 ```bash
