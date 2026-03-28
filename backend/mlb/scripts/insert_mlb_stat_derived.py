@@ -580,8 +580,13 @@ def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -
                     WHEN mt.prop_type = 'strikeouts_batting' THEN pds.d7_strikeouts_batting
                     WHEN mt.prop_type = 'earned_runs' THEN pds.d7_earned_runs
                     WHEN mt.prop_type = 'doubles' THEN pds.d7_doubles
+                    WHEN mt.prop_type = 'triples' THEN pds.d7_triples
+                    WHEN mt.prop_type = 'singles' THEN pds.d7_singles
+                    WHEN mt.prop_type = 'stolen_bases' THEN pds.d7_stolen_bases
+                    WHEN mt.prop_type = 'home_runs' THEN pds.d7_home_runs
                     WHEN mt.prop_type = 'hits_allowed' THEN pds.d7_hits_allowed
                     WHEN mt.prop_type = 'strikeouts_pitching' THEN pds.d7_strikeouts_pitching
+                    WHEN mt.prop_type = 'outs_recorded' THEN pds.d7_outs_recorded
                     WHEN mt.prop_type = 'walks' THEN pds.d7_walks
                     WHEN mt.prop_type = 'hits_runs_rbis' THEN pds.d7_hits_runs_rbis
                     WHEN mt.prop_type = 'runs_scored' THEN pds.d7_runs_scored
