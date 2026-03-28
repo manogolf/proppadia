@@ -45,6 +45,8 @@ int_fields = {
     "MLB_WEEKLY_PROP_SEQUENCE_ENABLED": "mlb_weekly_prop_sequence_enabled",
     "MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR": "mlb_weekly_prop_sequence_continue_on_error",
     "MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC": "mlb_weekly_prop_sequence_sleep_sec",
+    "MLB_WEEKLY_RETRAIN_CADENCE_ENABLED": "mlb_weekly_retrain_cadence_enabled",
+    "MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED": "mlb_weekly_retrain_cadence_required",
     "MLB_STAT_DAYS_AGO": "mlb_stat_days_ago",
     "MLB_STAT_MAX_GAMES": "mlb_stat_max_games",
     "MLB_STAT_SKIP_EXISTING_DATES": "mlb_stat_skip_existing_dates",

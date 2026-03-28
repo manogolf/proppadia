@@ -166,6 +166,8 @@ MLB_WEEKLY_PROP_SEQUENCE_ENABLED="${MLB_WEEKLY_PROP_SEQUENCE_ENABLED:-0}"
 MLB_WEEKLY_PROP_SEQUENCE="${MLB_WEEKLY_PROP_SEQUENCE:-${MLB_PROD12_PROP_TYPES}}"
 MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR="${MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR:-1}"
 MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC="${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC:-5}"
+MLB_WEEKLY_RETRAIN_CADENCE_ENABLED="${MLB_WEEKLY_RETRAIN_CADENCE_ENABLED:-0}"
+MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED="${MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED:-0}"
 MLB_CANDIDATE_MIN_TOTAL="${MLB_CANDIDATE_MIN_TOTAL:-}"
 MLB_PROD12_MIN_LIFT_PCT="${MLB_PROD12_MIN_LIFT_PCT:-}"
 MLB_PROD12_MAX_PROP_DROP_PCT="${MLB_PROD12_MAX_PROP_DROP_PCT:-}"
@@ -243,6 +245,62 @@ else
 fi
 
 run_weekly() {
+  run_weekly_retrain_cadence() {
+    if [[ "${MLB_WEEKLY_RETRAIN_CADENCE_ENABLED}" != "1" ]]; then
+      echo "[prod12-cron] weekly retrain/recompute cadence disabled (MLB_WEEKLY_RETRAIN_CADENCE_ENABLED=${MLB_WEEKLY_RETRAIN_CADENCE_ENABLED})"
+      return 0
+    fi
+
+    local required="${MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED}"
+    local rc=0
+
+    echo "[prod12-cron] running weekly retrain/recompute cadence"
+
+    set +e
+    make mlb-retrain-prereq-check
+    rc=$?
+    set -e
+    if [[ "${rc}" -ne 0 ]]; then
+      if [[ "${required}" == "1" ]]; then
+        echo "[prod12-cron] weekly retrain/recompute failed at mlb-retrain-prereq-check rc=${rc}" >&2
+        return "${rc}"
+      fi
+      echo "[prod12-cron] WARN: weekly retrain/recompute failed at mlb-retrain-prereq-check rc=${rc}; continuing"
+      return 0
+    fi
+
+    set +e
+    make mlb-hybrid-window-refresh
+    rc=$?
+    set -e
+    if [[ "${rc}" -ne 0 ]]; then
+      if [[ "${required}" == "1" ]]; then
+        echo "[prod12-cron] weekly retrain/recompute failed at mlb-hybrid-window-refresh rc=${rc}" >&2
+        return "${rc}"
+      fi
+      echo "[prod12-cron] WARN: weekly retrain/recompute failed at mlb-hybrid-window-refresh rc=${rc}; continuing"
+      return 0
+    fi
+
+    set +e
+    make mlb-candidate-eval-prod12
+    rc=$?
+    set -e
+    if [[ "${rc}" -ne 0 ]]; then
+      if [[ "${required}" == "1" ]]; then
+        echo "[prod12-cron] weekly retrain/recompute failed at mlb-candidate-eval-prod12 rc=${rc}" >&2
+        return "${rc}"
+      fi
+      echo "[prod12-cron] WARN: weekly retrain/recompute failed at mlb-candidate-eval-prod12 rc=${rc}; continuing"
+      return 0
+    fi
+
+    echo "[prod12-cron] weekly retrain/recompute cadence completed"
+    return 0
+  }
+
+  run_weekly_retrain_cadence
+
   if [[ "${MLB_WEEKLY_PHASE2_ENABLED}" != "1" ]]; then
     echo "[prod12-cron] weekly phase-2 disabled (MLB_WEEKLY_PHASE2_ENABLED=${MLB_WEEKLY_PHASE2_ENABLED}); running sync+validate only"
     make mlb-model-artifact-validate-prod12

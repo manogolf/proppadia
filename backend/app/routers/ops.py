@@ -47,6 +47,8 @@ class Prod12TriggerRequest(BaseModel):
     mlb_weekly_prop_sequence: Optional[str] = None
     mlb_weekly_prop_sequence_continue_on_error: Optional[int] = None
     mlb_weekly_prop_sequence_sleep_sec: Optional[int] = None
+    mlb_weekly_retrain_cadence_enabled: Optional[int] = None
+    mlb_weekly_retrain_cadence_required: Optional[int] = None
     mlb_stat_days_ago: Optional[int] = None
     mlb_stat_from_date: Optional[str] = None
     mlb_stat_to_date: Optional[str] = None
@@ -167,6 +169,8 @@ def trigger_mlb_prod12_cycle(
         "MLB_WEEKLY_PROP_SEQUENCE": body.mlb_weekly_prop_sequence,
         "MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR": body.mlb_weekly_prop_sequence_continue_on_error,
         "MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC": body.mlb_weekly_prop_sequence_sleep_sec,
+        "MLB_WEEKLY_RETRAIN_CADENCE_ENABLED": body.mlb_weekly_retrain_cadence_enabled,
+        "MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED": body.mlb_weekly_retrain_cadence_required,
         "MLB_STAT_DAYS_AGO": body.mlb_stat_days_ago,
         "MLB_STAT_FROM_DATE": body.mlb_stat_from_date,
         "MLB_STAT_TO_DATE": body.mlb_stat_to_date,

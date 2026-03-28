@@ -177,7 +177,13 @@ Primary artifact updated:
 
 ## Weekly Schedule
 
-Run once per week:
+Run once per week (thin-trigger path, recommended):
+
+```bash
+bin/mlb_prod12_remote_trigger_weekly.sh
+```
+
+Direct local weekly cycle (no remote ops trigger) remains available:
 
 ```bash
 bin/mlb_prod12_weekly_cycle.sh
@@ -201,6 +207,35 @@ Primary artifacts updated:
 - `artifacts/releases/mlb_prod12_replay_latency.json`
 - `artifacts/mlb_prod12_phase2_history.jsonl`
 
+### Weekly Candidate/Review Runs
+
+Weekly remote trigger runs phase2 candidate/review flow by default.
+Retrain/recompute cadence is disabled by default in remote mode.
+
+Trigger:
+
+```bash
+bin/mlb_prod12_remote_trigger_weekly.sh
+```
+
+Monitor until complete:
+
+```bash
+set -a
+source backend/.env
+set +a
+bin/mlb_prod12_remote_status.sh 180 | jq '{status,running,exit_code,run_id,started_at,finished_at}'
+```
+
+Review checkpoints after success:
+- latest phase2 snapshot strict-pass: `make mlb-prod12-phase2-last-strict`
+- current prod12 status strict-pass: `make mlb-prod12-status-strict`
+- candidate decision in latest phase2 snapshot (`recommendation`, `overall_lift_pct`, degraded props)
+
+Optional toggles for weekly trigger:
+- enable retrain/recompute stage for one run: `MLB_WEEKLY_RETRAIN_CADENCE_ENABLED=1`
+- make retrain/recompute stage hard-fail weekly run: `MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED=1`
+
 ## Model Bundle Publish
 
 When model artifacts are refreshed, publish the bundle with both keys:
@@ -214,6 +249,41 @@ make mlb-prod12-model-bundle-publish
 ```
 
 This keeps backend `MLB_MODELS_OBJECT_PATH=mlb/prod12/latest.tgz` stable so weekly jobs do not need env updates.
+
+## Retrain/Recompute Cadence
+
+Suggested cadence:
+- daily: keep running normal prod12 daily automation only
+- weekly: run retrain/recompute locally, then publish bundle if promoted
+
+Recommended weekly sequence:
+
+```bash
+make mlb-retrain-prereq-check
+make mlb-hybrid-window-refresh
+make mlb-candidate-eval-prod12
+```
+
+The sequence above remains useful for manual/on-demand runs outside cron.
+
+If candidate recommendation is `promote`, then publish:
+
+```bash
+make mlb-prod12-model-bundle-publish
+```
+
+Post-publish validation (same session):
+
+```bash
+bin/mlb_prod12_remote_trigger_weekly.sh
+set -a; source backend/.env; set +a
+bin/mlb_prod12_remote_status.sh 180 | jq '{status,running,exit_code,run_id,started_at,finished_at}'
+make mlb-prod12-phase2-last-strict
+make mlb-prod12-status-strict
+```
+
+Notes:
+- do not auto-publish on every recompute; keep publish gated by candidate eval and strict weekly checks
 
 ## Operator Actions On Fail
 
