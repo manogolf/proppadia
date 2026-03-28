@@ -98,6 +98,23 @@ Behavior:
 - disable companion sync by setting `MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0`.
 - set `MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND=slate_output` to fetch remote slate first, then build upload CSV locally.
 
+Post-grade model-vs-fade check (recommended daily after graded wagers are posted):
+
+```bash
+make mlb-post-grade-fade-check \
+  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+Outputs:
+- `tmp/analysis/mlb_model_vs_fade_summary.json`
+- `tmp/analysis/mlb_model_vs_fade_by_prop.csv`
+
+This routine rebuilds reconcile rows for the window, then compares:
+- model-picked side ROI (`pnl_model_pick_1u`)
+- opposite-side fade ROI (the opposite side at the same row)
+
 Direct curl equivalents:
 
 ```bash

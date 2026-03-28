@@ -1,10 +1,16 @@
-.PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview mlb-prod12-script-preview mlb-prod12-bootstrap-preview mlb-prod12-scheduler-smoke mlb-prod12-bootstrap mlb-prod12-bootstrap-strict nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-predictions-wide mlb-slate-output mlb-book-upload mlb-slate-archive mlb-reconcile-rows mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-recompute-training-predictions mlb-corrected-props-recompute mlb-model-artifact-validate mlb-model-artifact-validate-prod12 mlb-model-snapshot mlb-model-publish mlb-model-prune mlb-model-rollback mlb-feature-health mlb-feature-health-prod12 mlb-pfp-overlap-audit mlb-pfp-overlap-backfill mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-health-report mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-ops-check mlb-prod12-ops-log mlb-prod12-ops-last mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-daily-cycle mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-weekly-cycle mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-prediction-quality-auto nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview mlb-prod12-script-preview mlb-prod12-bootstrap-preview mlb-prod12-scheduler-smoke mlb-prod12-bootstrap mlb-prod12-bootstrap-strict nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-predictions-wide mlb-slate-output mlb-book-upload mlb-slate-archive mlb-reconcile-rows mlb-model-vs-fade mlb-post-grade-fade-check mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-recompute-training-predictions mlb-corrected-props-recompute mlb-model-artifact-validate mlb-model-artifact-validate-prod12 mlb-model-snapshot mlb-model-publish mlb-model-prune mlb-model-rollback mlb-feature-health mlb-feature-health-prod12 mlb-pfp-overlap-audit mlb-pfp-overlap-backfill mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-health-report mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-ops-check mlb-prod12-ops-log mlb-prod12-ops-last mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-daily-cycle mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-weekly-cycle mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-prediction-quality-auto nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
 BASE_URL ?= http://127.0.0.1:8001
 MLB_BASE_URL ?=
 MLB_DATE ?= $(shell date -u +%F)
 NHL_DATE ?= 2025-11-20
+NHL_MODEL_VS_FADE_GRADED_GLOB ?= tmp/graded/nhl_sog_graded_*.csv
+NHL_MODEL_VS_FADE_CARDS_DIR ?= tmp/cards
+NHL_MODEL_VS_FADE_MIN_BETS_ALERT ?= 20
+NHL_MODEL_VS_FADE_OUT_JSON ?= tmp/analysis/nhl_model_vs_fade_summary.json
+NHL_MODEL_VS_FADE_OUT_SEGMENTS_CSV ?= tmp/analysis/nhl_model_vs_fade_by_segment.csv
+NHL_MODEL_VS_FADE_OUT_ROWS_CSV ?= tmp/analysis/nhl_model_vs_fade_rows.csv
 MLB_MARKET_DAYS ?= 1
 MLB_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv
 MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
@@ -33,6 +39,10 @@ MLB_RECONCILE_TO_DATE ?= $(MLB_DATE)
 MLB_RECONCILE_BOOKMAKER ?= betonlineag
 MLB_RECONCILE_ROWS_OUT_CSV ?= tmp/mlb_base_vs_market_rows.csv
 MLB_RECONCILE_SUMMARY_OUT_JSON ?= tmp/mlb_base_vs_market_summary.json
+MLB_MODEL_VS_FADE_ROWS_CSV ?= $(MLB_RECONCILE_ROWS_OUT_CSV)
+MLB_MODEL_VS_FADE_OUT_JSON ?= tmp/analysis/mlb_model_vs_fade_summary.json
+MLB_MODEL_VS_FADE_OUT_CSV ?= tmp/analysis/mlb_model_vs_fade_by_prop.csv
+MLB_MODEL_VS_FADE_MIN_BETS_ALERT ?= 30
 MLB_POLICY_REPLAY_ROWS_CSV ?= tmp/mlb_reconcile_rows_2024_2025_prod11_allbooks_noncollapsed.csv
 MLB_POLICY_REPLAY_OUT_DIR ?= tmp/analysis/mlb_baseline_readiness_pack/pass4_execution_replay
 MLB_POLICY_MONITOR_PROPS ?= doubles,walks_allowed
@@ -885,9 +895,27 @@ mlb-slate-archive:
 mlb-reconcile-rows:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_reconcile_rows.py --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --from-date "$(MLB_RECONCILE_FROM_DATE)" --to-date "$(MLB_RECONCILE_TO_DATE)" --bookmaker "$(MLB_RECONCILE_BOOKMAKER)" --out-csv "$(MLB_RECONCILE_ROWS_OUT_CSV)" --out-summary-json "$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
 
+# Compare model-picked side performance vs opposite-side fade from reconcile rows.
+mlb-model-vs-fade:
+	$(VENV_PY) backend/mlb/scripts/report_mlb_model_vs_fade.py --rows-csv "$(MLB_MODEL_VS_FADE_ROWS_CSV)" --out-json "$(MLB_MODEL_VS_FADE_OUT_JSON)" --out-csv "$(MLB_MODEL_VS_FADE_OUT_CSV)" --min-bets-alert "$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
+
+# Post-grade routine: rebuild reconcile rows then report model-vs-fade for that window.
+mlb-post-grade-fade-check:
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	$(MAKE) mlb-model-vs-fade MLB_MODEL_VS_FADE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_MODEL_VS_FADE_OUT_CSV="$(MLB_MODEL_VS_FADE_OUT_CSV)" MLB_MODEL_VS_FADE_MIN_BETS_ALERT="$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
+
 # Replay locked MLB policy plan across historical reconcile rows (includes fragile-lane monitor output).
 mlb-policy-plan-replay:
 	$(VENV_PY) backend/mlb/scripts/replay_mlb_policy_plan.py --rows-csv "$(MLB_POLICY_REPLAY_ROWS_CSV)" --policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --out-dir "$(MLB_POLICY_REPLAY_OUT_DIR)" --monitor-props "$(MLB_POLICY_MONITOR_PROPS)" --monitor-min-bets-alert "$(MLB_POLICY_MONITOR_MIN_BETS_ALERT)"
+
+.PHONY: nhl-model-vs-fade nhl-post-grade-fade-check
+
+# Compare NHL SOG model-picked performance vs opposite-side fade using card prices.
+nhl-model-vs-fade:
+	$(VENV_PY) backend/nhl/scripts/report_nhl_model_vs_fade.py --graded-glob "$(NHL_MODEL_VS_FADE_GRADED_GLOB)" --cards-dir "$(NHL_MODEL_VS_FADE_CARDS_DIR)" --min-bets-alert "$(NHL_MODEL_VS_FADE_MIN_BETS_ALERT)" --out-json "$(NHL_MODEL_VS_FADE_OUT_JSON)" --out-segments-csv "$(NHL_MODEL_VS_FADE_OUT_SEGMENTS_CSV)" --out-rows-csv "$(NHL_MODEL_VS_FADE_OUT_ROWS_CSV)"
+
+# Post-grade NHL check alias (keeps this check explicit in daily routine).
+nhl-post-grade-fade-check: nhl-model-vs-fade
 
 # Backfill MLB historical odds snapshots from OddsAPI into odds_history root.
 mlb-odds-backfill-history:
@@ -924,6 +952,10 @@ mlb-show-config:
 	@echo "MLB_RECONCILE_BOOKMAKER=$(MLB_RECONCILE_BOOKMAKER)"
 	@echo "MLB_RECONCILE_ROWS_OUT_CSV=$(MLB_RECONCILE_ROWS_OUT_CSV)"
 	@echo "MLB_RECONCILE_SUMMARY_OUT_JSON=$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	@echo "MLB_MODEL_VS_FADE_ROWS_CSV=$(MLB_MODEL_VS_FADE_ROWS_CSV)"
+	@echo "MLB_MODEL_VS_FADE_OUT_JSON=$(MLB_MODEL_VS_FADE_OUT_JSON)"
+	@echo "MLB_MODEL_VS_FADE_OUT_CSV=$(MLB_MODEL_VS_FADE_OUT_CSV)"
+	@echo "MLB_MODEL_VS_FADE_MIN_BETS_ALERT=$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
 	@echo "MLB_POLICY_REPLAY_ROWS_CSV=$(MLB_POLICY_REPLAY_ROWS_CSV)"
 	@echo "MLB_POLICY_REPLAY_OUT_DIR=$(MLB_POLICY_REPLAY_OUT_DIR)"
 	@echo "MLB_POLICY_MONITOR_PROPS=$(MLB_POLICY_MONITOR_PROPS)"

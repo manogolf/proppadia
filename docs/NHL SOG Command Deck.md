@@ -641,6 +641,17 @@ Outputs:
 
 Use `recommendation.recommended_segment_disable_args` from the JSON for `select_sog_candidates_live.py` if you want gate-enforced segment disables.
 
+Step 9.5. Run explicit model-vs-fade check (post-grade accountability check).
+
+```bash
+make nhl-post-grade-fade-check
+```
+
+Outputs:
+- `tmp/analysis/nhl_model_vs_fade_summary.json`
+- `tmp/analysis/nhl_model_vs_fade_by_segment.csv`
+- `tmp/analysis/nhl_model_vs_fade_rows.csv`
+
 ## Line Moved (Pass/Fail)
 
 Use this when the live book line/price moved after card generation.
@@ -692,6 +703,8 @@ Examples:
 - Graded daily summary: `tmp/graded/nhl_sog_graded_YYYY-MM-DD_summary.json`
 - Anchored reevaluation summary: `tmp/analysis/anchored_reconcile/anchored_reconcile_summary.json`
 - Anchored reevaluation rows: `tmp/analysis/anchored_reconcile/anchored_reconcile_rows.csv`
+- Model vs fade summary: `tmp/analysis/nhl_model_vs_fade_summary.json`
+- Model vs fade by segment: `tmp/analysis/nhl_model_vs_fade_by_segment.csv`
 - Walk-forward policy: `tmp/nhl_sog_walkforward_summary.json`
 - Reconciliation rows: `tmp/nhl_sog_base_vs_betonline_rows.csv`
 - Reconciliation monthly summary: `tmp/nhl_sog_base_vs_betonline_monthly.csv`
