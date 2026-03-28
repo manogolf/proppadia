@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import requests
 
 from backend.mlb.shared.team_name_map import (
+    getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
@@ -46,6 +47,32 @@ PITCHER_PROP_TYPES = [
     "hits_allowed",
     "walks_allowed",
 ]
+
+ROLLING_METRICS = [
+    "hits",
+    "runs_scored",
+    "rbis",
+    "home_runs",
+    "singles",
+    "doubles",
+    "triples",
+    "walks",
+    "strikeouts_batting",
+    "stolen_bases",
+    "total_bases",
+    "hits_runs_rbis",
+    "runs_rbis",
+    "outs_recorded",
+    "strikeouts_pitching",
+    "walks_allowed",
+    "earned_runs",
+    "hits_allowed",
+]
+
+ROLLING_METRIC_SOURCE_SQL = {
+    "hits_runs_rbis": "COALESCE(ps.hits, 0) + COALESCE(ps.runs_scored, 0) + COALESCE(ps.rbis, 0)",
+    "runs_rbis": "COALESCE(ps.runs_scored, 0) + COALESCE(ps.rbis, 0)",
+}
 
 # MLB StatsAPI gameType codes considered "in-season" for collection gates.
 # Keeps postseason rows when season mode excludes preseason.
@@ -123,6 +150,11 @@ def _to_int(x: Any) -> Optional[int]:
         return None
 
 
+def _stat_int(x: Any) -> int:
+    v = _to_int(x)
+    return int(v) if v is not None else 0
+
+
 def _extract_stat_for_prop(stats: Dict[str, Any], prop_type: str) -> Optional[float]:
     b = stats.get("batting") or {}
     p = stats.get("pitching") or {}
@@ -174,6 +206,63 @@ def _extract_stat_for_prop(stats: Dict[str, Any], prop_type: str) -> Optional[fl
     if prop_type == "walks_allowed":
         return _num(p.get("baseOnBalls") or p.get("walks_allowed") or p.get("walks"))
     return None
+
+
+def _extract_player_stats_row(
+    *,
+    player_id: int,
+    game_id: int,
+    game_date: str,
+    team_abbr: Optional[str],
+    opponent_abbr: Optional[str],
+    is_home: bool,
+    position: Optional[str],
+    stats: Dict[str, Any],
+    is_starter: bool,
+) -> Dict[str, Any]:
+    bat = stats.get("batting") or {}
+    pitch = stats.get("pitching") or {}
+
+    hits = _stat_int(bat.get("hits"))
+    doubles = _stat_int(bat.get("doubles"))
+    triples = _stat_int(bat.get("triples"))
+    home_runs = _stat_int(bat.get("homeRuns") or bat.get("home_runs"))
+    singles = hits - doubles - triples - home_runs
+    if singles < 0:
+        singles = 0
+
+    outs_recorded = _to_int(pitch.get("outs"))
+    if outs_recorded is None:
+        outs_recorded = _ip_to_outs(pitch.get("inningsPitched"))
+
+    return {
+        "player_id": int(player_id),
+        "game_id": int(game_id),
+        "game_date": str(game_date),
+        "team": normalizeTeamAbbreviation(team_abbr),
+        "opponent": normalizeTeamAbbreviation(opponent_abbr),
+        "is_home": bool(is_home),
+        "position": (str(position).upper() if position else None),
+        "hits": hits,
+        "total_bases": _stat_int(bat.get("totalBases") or bat.get("total_bases")),
+        "rbis": _stat_int(bat.get("rbi") or bat.get("rbis")),
+        "runs_scored": _stat_int(bat.get("runs")),
+        "strikeouts_batting": _stat_int(bat.get("strikeOuts") or bat.get("strikeouts")),
+        "walks": _stat_int(bat.get("baseOnBalls") or bat.get("walks")),
+        "singles": singles,
+        "doubles": doubles,
+        "triples": triples,
+        "home_runs": home_runs,
+        "stolen_bases": _stat_int(bat.get("stolenBases") or bat.get("stolen_bases")),
+        "strikeouts_pitching": _stat_int(pitch.get("strikeOuts") or pitch.get("strikeouts")),
+        "walks_allowed": _stat_int(
+            pitch.get("baseOnBalls") or pitch.get("walks_allowed") or pitch.get("walks")
+        ),
+        "hits_allowed": _stat_int(pitch.get("hits") or pitch.get("hits_allowed")),
+        "outs_recorded": int(outs_recorded or 0),
+        "earned_runs": _stat_int(pitch.get("earnedRuns") or pitch.get("earned_runs")),
+        "is_starter": 1 if bool(is_starter) else 0,
+    }
 
 
 def _fetch_json(url: str) -> Dict[str, Any]:
@@ -275,6 +364,52 @@ def _date_has_negative_lines(conn, game_date: str) -> bool:
         return cur.fetchone() is not None
 
 
+def _date_has_player_stats_rows(conn, game_date: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM mlb.player_stats
+            WHERE game_date = %s::date
+            LIMIT 1
+            """,
+            (game_date,),
+        )
+        return cur.fetchone() is not None
+
+
+def _date_has_player_derived_rows(conn, game_date: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM mlb.player_derived_stats
+            WHERE game_date = %s::date
+            LIMIT 1
+            """,
+            (game_date,),
+        )
+        return cur.fetchone() is not None
+
+
+def _date_has_missing_game_info_abbr(conn, game_date: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM mlb.game_info
+            WHERE game_date = %s::date
+              AND (
+                    home_team_abbr IS NULL
+                 OR away_team_abbr IS NULL
+              )
+            LIMIT 1
+            """,
+            (game_date,),
+        )
+        return cur.fetchone() is not None
+
+
 def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
     ids = [int(g) for g in game_ids if _to_int(g) is not None]
     if not ids:
@@ -294,6 +429,193 @@ def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
             if v is not None:
                 out.add(int(v))
         return out
+
+
+def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO mlb.player_stats (
+                player_id, game_id, game_date, team, opponent, is_home, position,
+                hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
+                singles, doubles, triples, home_runs, stolen_bases,
+                strikeouts_pitching, walks_allowed, hits_allowed, outs_recorded, earned_runs, is_starter
+            ) VALUES (
+                %(player_id)s, %(game_id)s, %(game_date)s, %(team)s, %(opponent)s, %(is_home)s, %(position)s,
+                %(hits)s, %(total_bases)s, %(rbis)s, %(runs_scored)s, %(strikeouts_batting)s, %(walks)s,
+                %(singles)s, %(doubles)s, %(triples)s, %(home_runs)s, %(stolen_bases)s,
+                %(strikeouts_pitching)s, %(walks_allowed)s, %(hits_allowed)s, %(outs_recorded)s, %(earned_runs)s, %(is_starter)s
+            )
+            ON CONFLICT (player_id, game_id)
+            DO UPDATE SET
+                game_date = EXCLUDED.game_date,
+                team = EXCLUDED.team,
+                opponent = EXCLUDED.opponent,
+                is_home = EXCLUDED.is_home,
+                position = COALESCE(EXCLUDED.position, player_stats.position),
+                hits = EXCLUDED.hits,
+                total_bases = EXCLUDED.total_bases,
+                rbis = EXCLUDED.rbis,
+                runs_scored = EXCLUDED.runs_scored,
+                strikeouts_batting = EXCLUDED.strikeouts_batting,
+                walks = EXCLUDED.walks,
+                singles = EXCLUDED.singles,
+                doubles = EXCLUDED.doubles,
+                triples = EXCLUDED.triples,
+                home_runs = EXCLUDED.home_runs,
+                stolen_bases = EXCLUDED.stolen_bases,
+                strikeouts_pitching = EXCLUDED.strikeouts_pitching,
+                walks_allowed = EXCLUDED.walks_allowed,
+                hits_allowed = EXCLUDED.hits_allowed,
+                outs_recorded = EXCLUDED.outs_recorded,
+                earned_runs = EXCLUDED.earned_runs,
+                is_starter = EXCLUDED.is_starter
+            """,
+            row,
+        )
+        return int(cur.rowcount or 0)
+
+
+def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
+    select_agg_cols = ",\n               ".join(
+        [
+            f"SUM({ROLLING_METRIC_SOURCE_SQL.get(m, f'COALESCE(ps.{m}, 0)')})::numeric AS {m}"
+            for m in ROLLING_METRICS
+        ]
+    )
+    roll_select_cols = ",\n             ".join(
+        [f"AVG(d.{m}) OVER w7 AS d7_{m}" for m in ROLLING_METRICS]
+        + [f"AVG(d.{m}) OVER w15 AS d15_{m}" for m in ROLLING_METRICS]
+        + [f"AVG(d.{m}) OVER w30 AS d30_{m}" for m in ROLLING_METRICS]
+    )
+    insert_cols = ",\n                ".join(
+        ["player_id", "game_id", "game_date", "team", "is_home", "updated_at"]
+        + [f"d7_{m}" for m in ROLLING_METRICS]
+        + [f"d15_{m}" for m in ROLLING_METRICS]
+        + [f"d30_{m}" for m in ROLLING_METRICS]
+    )
+    select_cols = ",\n                ".join(
+        ["t.player_id", "t.game_id", "t.game_date", "t.team", "t.is_home", "now()"]
+        + [f"t.d7_{m}" for m in ROLLING_METRICS]
+        + [f"t.d15_{m}" for m in ROLLING_METRICS]
+        + [f"t.d30_{m}" for m in ROLLING_METRICS]
+    )
+    update_cols = ",\n                ".join(
+        ["game_id = EXCLUDED.game_id", "team = EXCLUDED.team", "is_home = EXCLUDED.is_home", "updated_at = now()"]
+        + [f"d7_{m} = EXCLUDED.d7_{m}" for m in ROLLING_METRICS]
+        + [f"d15_{m} = EXCLUDED.d15_{m}" for m in ROLLING_METRICS]
+        + [f"d30_{m} = EXCLUDED.d30_{m}" for m in ROLLING_METRICS]
+    )
+
+    sql = f"""
+        WITH target_players AS (
+            SELECT DISTINCT player_id
+            FROM mlb.player_stats
+            WHERE game_date >= %s::date
+              AND game_date <= %s::date
+        ),
+        daily AS (
+            SELECT
+               ps.player_id,
+               MAX(ps.game_id)::bigint AS game_id,
+               ps.game_date::date AS game_date,
+               MAX(NULLIF(ps.team, '')) AS team,
+               bool_or(COALESCE(ps.is_home, false)) AS is_home,
+               {select_agg_cols}
+            FROM mlb.player_stats ps
+            JOIN target_players tp
+              ON tp.player_id = ps.player_id
+            GROUP BY ps.player_id, ps.game_date
+        ),
+        rolled AS (
+            SELECT
+             d.player_id,
+             d.game_id,
+             d.game_date,
+             d.team,
+             d.is_home,
+             {roll_select_cols}
+            FROM daily d
+            WINDOW
+              w7 AS (PARTITION BY d.player_id ORDER BY d.game_date, d.game_id ROWS BETWEEN 6 PRECEDING AND CURRENT ROW),
+              w15 AS (PARTITION BY d.player_id ORDER BY d.game_date, d.game_id ROWS BETWEEN 14 PRECEDING AND CURRENT ROW),
+              w30 AS (PARTITION BY d.player_id ORDER BY d.game_date, d.game_id ROWS BETWEEN 29 PRECEDING AND CURRENT ROW)
+        ),
+        target AS (
+            SELECT *
+            FROM rolled
+            WHERE game_date >= %s::date
+              AND game_date <= %s::date
+        ),
+        upserted AS (
+            INSERT INTO mlb.player_derived_stats (
+                {insert_cols}
+            )
+            SELECT
+                {select_cols}
+            FROM target t
+            ON CONFLICT (player_id, game_date)
+            DO UPDATE SET
+                {update_cols}
+            RETURNING 1
+        )
+        SELECT COUNT(*)::int AS n FROM upserted
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (from_date, to_date, from_date, to_date))
+        row = cur.fetchone()
+        if isinstance(row, dict):
+            return int(row.get("n") or 0)
+        return int((row or [0])[0] or 0)
+
+
+def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -> int:
+    sql = """
+        WITH src AS (
+            SELECT
+                mt.id,
+                CASE
+                    WHEN mt.prop_type = 'hits' THEN pds.d7_hits
+                    WHEN mt.prop_type = 'total_bases' THEN pds.d7_total_bases
+                    WHEN mt.prop_type = 'strikeouts_batting' THEN pds.d7_strikeouts_batting
+                    WHEN mt.prop_type = 'earned_runs' THEN pds.d7_earned_runs
+                    WHEN mt.prop_type = 'doubles' THEN pds.d7_doubles
+                    WHEN mt.prop_type = 'hits_allowed' THEN pds.d7_hits_allowed
+                    WHEN mt.prop_type = 'strikeouts_pitching' THEN pds.d7_strikeouts_pitching
+                    WHEN mt.prop_type = 'walks' THEN pds.d7_walks
+                    WHEN mt.prop_type = 'hits_runs_rbis' THEN pds.d7_hits_runs_rbis
+                    WHEN mt.prop_type = 'runs_scored' THEN pds.d7_runs_scored
+                    WHEN mt.prop_type = 'walks_allowed' THEN pds.d7_walks_allowed
+                    WHEN mt.prop_type = 'runs_rbis' THEN pds.d7_runs_rbis
+                    WHEN mt.prop_type = 'rbis' THEN pds.d7_rbis
+                    ELSE NULL::numeric
+                END AS d7_val
+            FROM mlb.model_training_props mt
+            JOIN mlb.player_derived_stats pds
+              ON pds.player_id = mt.player_id
+             AND pds.game_date = mt.game_date
+            WHERE mt.game_date >= %s::date
+              AND mt.game_date <= %s::date
+              AND mt.prop_source = 'mlb_api'
+        ),
+        upd AS (
+            UPDATE mlb.model_training_props mt
+               SET rolling_result_avg_7 = src.d7_val,
+                   updated_at = now()
+              FROM src
+             WHERE mt.id = src.id
+               AND src.d7_val IS NOT NULL
+               AND mt.rolling_result_avg_7 IS DISTINCT FROM src.d7_val
+            RETURNING 1
+        )
+        SELECT COUNT(*)::int AS n FROM upd
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (from_date, to_date))
+        row = cur.fetchone()
+        if isinstance(row, dict):
+            return int(row.get("n") or 0)
+        return int((row or [0])[0] or 0)
 
 
 def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) -> int:
@@ -319,14 +641,23 @@ def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) ->
     if not game_date_val:
         game_date_val = fallback_date_iso
 
+    home_team_id = _to_int(home_team.get("id"))
+    away_team_id = _to_int(away_team.get("id"))
+    home_team_abbr = normalizeTeamAbbreviation(
+        home_team.get("abbreviation") or getFullTeamAbbreviationFromID(home_team_id)
+    )
+    away_team_abbr = normalizeTeamAbbreviation(
+        away_team.get("abbreviation") or getFullTeamAbbreviationFromID(away_team_id)
+    )
+
     row = {
         "game_id": game_id,
         "game_time": game_time,
         "game_date": game_date_val,
-        "home_team_id": _to_int(home_team.get("id")),
-        "away_team_id": _to_int(away_team.get("id")),
-        "home_team_abbr": normalizeTeamAbbreviation(home_team.get("abbreviation")),
-        "away_team_abbr": normalizeTeamAbbreviation(away_team.get("abbreviation")),
+        "home_team_id": home_team_id,
+        "away_team_id": away_team_id,
+        "home_team_abbr": home_team_abbr,
+        "away_team_abbr": away_team_abbr,
     }
 
     with conn.cursor() as cur:
@@ -566,6 +897,9 @@ def run(
     skipped_games_missing_info = 0
     game_info_upserts = 0
     player_id_upserts = 0
+    player_stats_upserts = 0
+    player_derived_upserts = 0
+    rolling_sync_updates = 0
     over_count = 0
     under_count = 0
 
@@ -582,9 +916,27 @@ def run(
             print(f"\n📅 Processing {d_iso} ...")
             try:
                 if skip_existing_dates and _date_has_mlb_api_rows(conn, d_iso):
-                    if _date_has_negative_lines(conn, d_iso):
+                    has_negative_lines = _date_has_negative_lines(conn, d_iso)
+                    has_player_stats = _date_has_player_stats_rows(conn, d_iso)
+                    has_player_derived = _date_has_player_derived_rows(conn, d_iso)
+                    has_missing_game_abbr = _date_has_missing_game_info_abbr(conn, d_iso)
+                    if (
+                        has_negative_lines
+                        or (not has_player_stats)
+                        or (not has_player_derived)
+                        or has_missing_game_abbr
+                    ):
                         if not quiet:
-                            print(f"🔧 {d_iso} reprocessing | repairing negative mlb_api lines")
+                            repair_reasons: List[str] = []
+                            if has_negative_lines:
+                                repair_reasons.append("negative mlb_api lines")
+                            if not has_player_stats:
+                                repair_reasons.append("missing player_stats")
+                            if not has_player_derived:
+                                repair_reasons.append("missing player_derived_stats")
+                            if has_missing_game_abbr:
+                                repair_reasons.append("missing game_info team abbr")
+                            print(f"🔧 {d_iso} reprocessing | repairing {', '.join(repair_reasons)}")
                     else:
                         skipped_dates += 1
                         print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
@@ -602,16 +954,12 @@ def run(
                 }
                 if max_games_per_date > 0:
                     final_games = final_games[:max_games_per_date]
+                for gid in final_games:
+                    sg = schedule_by_game_id.get(gid)
+                    if sg is None:
+                        continue
+                    game_info_upserts += _upsert_game_info_min(conn, sg, d_iso)
                 existing_games = _existing_game_ids(conn, final_games)
-
-                missing_game_ids = [gid for gid in final_games if gid not in existing_games]
-                if missing_game_ids:
-                    for gid in missing_game_ids:
-                        sg = schedule_by_game_id.get(gid)
-                        if sg is None:
-                            continue
-                        game_info_upserts += _upsert_game_info_min(conn, sg, d_iso)
-                    existing_games = _existing_game_ids(conn, final_games)
 
                 missing_for_date = len(final_games) - len(existing_games)
                 if missing_for_date > 0:
@@ -623,6 +971,9 @@ def run(
                 pos_map = _get_positions_by_date(conn, d_iso)
                 before_attempted = attempted_upserts
                 before_applied = applied_upserts
+                before_player_stats = player_stats_upserts
+                before_player_derived = player_derived_upserts
+                before_rolling_sync = rolling_sync_updates
 
                 for game_id in final_games:
                     if game_id not in existing_games:
@@ -680,12 +1031,28 @@ def run(
                             pitch = stats.get("pitching") or {}
                             has_bat = len(bat.keys()) > 0
                             has_pitch = len(pitch.keys()) > 0
-                            position = pos_map.get(pid)
+                            box_position = ((p.get("position") or {}).get("abbreviation") or "")
+                            position = pos_map.get(pid) or (str(box_position).upper() if box_position else None)
                             is_pitch = _is_pitcher(position, has_pitch)
                             is_starter = _is_starter(position, stats)
 
                             if not (has_bat or is_pitch):
                                 continue
+
+                            player_stats_upserts += _upsert_player_stats_row(
+                                conn,
+                                _extract_player_stats_row(
+                                    player_id=pid,
+                                    game_id=game_id,
+                                    game_date=d_iso,
+                                    team_abbr=team_abbr,
+                                    opponent_abbr=opp_abbr,
+                                    is_home=bool(is_home),
+                                    position=position,
+                                    stats=stats,
+                                    is_starter=bool(is_starter),
+                                ),
+                            )
 
                             prop_types: List[str] = []
                             if has_bat:
@@ -771,10 +1138,16 @@ def run(
                                 )
                                 attempted_upserts += 1
 
+                player_derived_upserts += _refresh_player_derived_stats(conn, d_iso, d_iso)
+                rolling_sync_updates += _sync_training_rows_rolling_result_avg(conn, d_iso, d_iso)
+
                 conn.commit()
                 print(
                     f"✅ {d_iso} done | attempted: {attempted_upserts - before_attempted} "
-                    f"| applied: {applied_upserts - before_applied}"
+                    f"| applied: {applied_upserts - before_applied} "
+                    f"| player_stats: {player_stats_upserts - before_player_stats} "
+                    f"| player_derived: {player_derived_upserts - before_player_derived} "
+                    f"| rolling_sync: {rolling_sync_updates - before_rolling_sync}"
                 )
             except Exception as e:
                 failed_dates += 1
@@ -788,6 +1161,9 @@ def run(
     print(f"🧩 Upserts applied:   {applied_upserts}")
     print(f"🗂️ game_info upserts: {game_info_upserts}")
     print(f"👤 player_ids upserts: {player_id_upserts}")
+    print(f"📊 player_stats upserts: {player_stats_upserts}")
+    print(f"📈 player_derived upserts: {player_derived_upserts}")
+    print(f"🔄 rolling_result_avg_7 sync updates: {rolling_sync_updates}")
     if skipped_dates:
         print(f"⏭️  Dates skipped:      {skipped_dates}")
     if skipped_games_missing_info:
