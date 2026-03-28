@@ -51,18 +51,32 @@ def run(
     search_q: str,
     require_data: bool,
     allow_sparse: bool,
+    retry_attempts: int,
+    retry_backoff_seconds: float,
 ) -> int:
     client = HttpClient(base_url)
     checks: List[CheckResult] = []
 
+    def _check(**kwargs) -> CheckResult:
+        return run_check(
+            client,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            retry_statuses=[429, 502, 503, 504],
+            **kwargs,
+        )
+
     checks.append(
-        run_check(
-            client, name="health", method="GET", path="/api/health", expected_status=[200], validate=expect_ok
+        _check(
+            name="health",
+            method="GET",
+            path="/api/health",
+            expected_status=[200],
+            validate=expect_ok,
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="mlb_ping",
             method="GET",
             path="/api/mlb/ping",
@@ -71,8 +85,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="mlb_standings",
             method="GET",
             path="/api/mlb/standings",
@@ -92,8 +105,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="market_supported",
             method="GET",
             path="/api/mlb/market-supported-props",
@@ -105,8 +117,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="market_cache_status",
             method="GET",
             path="/api/mlb/market-cache-status",
@@ -123,8 +134,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="mlb_ping_db",
             method="GET",
             path="/api/mlb/ping-db",
@@ -133,8 +143,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="players_lookup",
             method="GET",
             path="/api/players/lookup",
@@ -143,8 +152,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="players_search",
             method="GET",
             path="/api/players/search",
@@ -153,8 +161,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="players_list",
             method="GET",
             path="/api/players",
@@ -163,8 +170,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="mlb_players_list",
             method="GET",
             path="/api/mlb/players",
@@ -174,8 +180,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="player_profile",
             method="GET",
             path=f"/api/player-profile/{player_id}",
@@ -183,8 +188,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="predict",
             method="POST",
             path="/api/predict",
@@ -194,8 +198,7 @@ def run(
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="props_add_invalid_token",
             method="POST",
             path="/api/props/add",
@@ -242,6 +245,18 @@ def main() -> int:
         action="store_true",
         help="When used with --require-data, keep warnings but do not fail on sparse probe data",
     )
+    ap.add_argument(
+        "--retry-attempts",
+        type=int,
+        default=2,
+        help="Retries for transient transport/status failures per endpoint check.",
+    )
+    ap.add_argument(
+        "--retry-backoff-seconds",
+        type=float,
+        default=1.5,
+        help="Linear backoff seconds used between retries.",
+    )
     args = ap.parse_args()
     return run(
         args.base_url,
@@ -250,6 +265,8 @@ def main() -> int:
         search_q=args.search_q,
         require_data=args.require_data,
         allow_sparse=args.allow_sparse,
+        retry_attempts=args.retry_attempts,
+        retry_backoff_seconds=args.retry_backoff_seconds,
     )
 
 

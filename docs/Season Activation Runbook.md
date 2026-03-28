@@ -2,6 +2,16 @@
 
 Purpose: execute preseason-to-in-season cutover with one clear checklist.
 
+## Latest Status (2026-03-28)
+
+- [x] `make season-activation-status-strict SEASON_HISTORY_MAX_AGE_HOURS=12` passed
+- [x] `make season-cutover-ready` passed
+- [x] `make mlb-season-kickoff-check BASE_URL="" MLB_DATE=2026-03-28` passed (repo/local gate path)
+- [x] `make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2026-03-28` passed (deployed gate path)
+- [x] Previously observed blockers were cleared:
+  - stale season-activation history
+  - governance inventory mismatch for scheduled workflows
+
 Fast path:
 
 ```bash

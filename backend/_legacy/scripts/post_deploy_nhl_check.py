@@ -18,18 +18,38 @@ from backend.shared.scripts.http_check_utils import CheckResult, HttpClient, run
 from backend.shared.scripts.sparse_warning_utils import find_sparse_warnings
 from backend.shared.scripts.strict_data_gate import enforce_strict_data_gate
 
-def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> int:
+def run(
+    base_url: str,
+    *,
+    date: str,
+    require_data: bool,
+    allow_sparse: bool,
+    retry_attempts: int,
+    retry_backoff_seconds: float,
+) -> int:
     client = HttpClient(base_url)
     checks: List[CheckResult] = []
 
+    def _check(**kwargs) -> CheckResult:
+        return run_check(
+            client,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            retry_statuses=[429, 502, 503, 504],
+            **kwargs,
+        )
+
     checks.append(
-        run_check(
-            client, name="health", method="GET", path="/api/health", expected_status=[200], validate=expect_ok
+        _check(
+            name="health",
+            method="GET",
+            path="/api/health",
+            expected_status=[200],
+            validate=expect_ok,
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="nhl_ping",
             method="GET",
             path="/api/nhl/ping",
@@ -38,8 +58,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="nhl_ping_db",
             method="GET",
             path="/api/nhl/ping-db",
@@ -48,8 +67,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="slate_meta",
             method="GET",
             path="/api/nhl/slate/meta",
@@ -69,8 +87,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="games_today",
             method="GET",
             path="/api/nhl/games/today",
@@ -80,8 +97,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="props_today",
             method="GET",
             path="/api/nhl/props/today",
@@ -91,8 +107,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="props_history",
             method="GET",
             path="/api/nhl/props/history",
@@ -102,8 +117,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="nhl_players_list",
             method="GET",
             path="/api/nhl/players",
@@ -113,8 +127,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="props_add_invalid",
             method="POST",
             path="/api/nhl/props/add",
@@ -130,8 +143,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="sog",
             method="GET",
             path="/api/nhl/sog",
@@ -141,8 +153,7 @@ def run(base_url: str, *, date: str, require_data: bool, allow_sparse: bool) -> 
         )
     )
     checks.append(
-        run_check(
-            client,
+        _check(
             name="saves",
             method="GET",
             path="/api/nhl/saves",
@@ -188,12 +199,26 @@ def main() -> int:
         action="store_true",
         help="When used with --require-data, keep warnings but do not fail on sparse probe data",
     )
+    ap.add_argument(
+        "--retry-attempts",
+        type=int,
+        default=2,
+        help="Retries for transient transport/status failures per endpoint check.",
+    )
+    ap.add_argument(
+        "--retry-backoff-seconds",
+        type=float,
+        default=1.5,
+        help="Linear backoff seconds used between retries.",
+    )
     args = ap.parse_args()
     return run(
         args.base_url,
         date=args.date,
         require_data=args.require_data,
         allow_sparse=args.allow_sparse,
+        retry_attempts=args.retry_attempts,
+        retry_backoff_seconds=args.retry_backoff_seconds,
     )
 
 

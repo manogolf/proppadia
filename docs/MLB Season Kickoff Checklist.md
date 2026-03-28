@@ -2,6 +2,14 @@
 
 Purpose: one repeatable command bundle for opening-day readiness.
 
+## Completion Status (2026-03-28)
+
+- [x] `make cron-governance-check` passed
+- [x] `make mlb-daily-refresh-smoke ...` passed
+- [x] `make mlb-pipeline-check-json` passed
+- [x] `make mlb-post-deploy-strict-offseason BASE_URL=https://baseball-streaks-sq44.onrender.com MLB_DATE=2026-03-28` passed
+- [x] Runtime/deploy 502 blocker was transient and resolved; deployed gate is currently green
+
 ## Command
 
 ```bash

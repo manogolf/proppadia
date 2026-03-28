@@ -17,7 +17,6 @@ from typing import List, Sequence, Tuple
 WORKFLOWS_DIR = Path(".github/workflows")
 EXPECTED_SCHEDULED = {
     "mlb-refresh-player-ids.yml",
-    "nhl-daily-refresh.yml",
 }
 
 
