@@ -26,6 +26,7 @@ import pandas as pd
 import joblib
 
 from supabase import create_client, Client
+from backend.shared.db.pg import pg_fetchall
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -98,10 +99,30 @@ _debug_feature_paths()
 
 # Single source of truth for the training view (public schema via PostgREST)
 # Training data source selection:
-# - base_merge (default): model_training_props + player_derived_stats join
+# - reconcile_csv (default): market+outcome rows CSV + player_derived_stats join
+# - base_merge: model_training_props + player_derived_stats join
 # - view: explicit FEATURE_VIEW relation via Supabase table API
-TRAIN_FEATURE_SOURCE = str(os.environ.get("TRAIN_FEATURE_SOURCE", "base_merge")).strip().lower()
+TRAIN_FEATURE_SOURCE = str(os.environ.get("TRAIN_FEATURE_SOURCE", "reconcile_csv")).strip().lower()
 FEATURE_VIEW = os.environ.get("FEATURE_VIEW", "").strip()
+RECONCILE_ROWS_CSV = str(
+    os.environ.get("MLB_TRAIN_RECONCILE_ROWS_CSV")
+    or os.environ.get("MLB_RECONCILE_ROWS_OUT_CSV")
+    or (Path(__file__).resolve().parents[2] / "tmp" / "mlb_base_vs_market_rows.csv")
+)
+RECONCILE_REQUIRE_TWO_SIDED = str(os.environ.get("MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+RECONCILE_FALLBACK_BASE_MERGE = str(
+    os.environ.get("MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE", "1")
+).strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 # ---- Training thresholds (class balance) -------------------------------------
 MIN_CLASS_COUNT = int(os.getenv("MIN_CLASS_COUNT", "100"))
@@ -123,11 +144,11 @@ def _atomic_write_bytes(path: Path, blob: bytes):
         f.write(blob)
     os.replace(tmp, path)
 
-def _supabase_client() -> Client:
+def _supabase_client() -> Optional[Client]:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
     if not url or not key:
-        raise RuntimeError("Missing SUPABASE_URL or key (SERVICE_ROLE/ANON).")
+        return None
     return create_client(url, key)
 
 def _load_feature_spec() -> Dict[str, Any]:
@@ -157,9 +178,9 @@ def _pg_data(resp):
 
 
 # ---- Data access -------------------------------------------------------------
-def _fetch_from_view(sb: Client, prop_type: str, days_back: int, limit: int, cols: List[str]) -> Optional[pd.DataFrame]:
+def _fetch_from_view(sb: Optional[Client], prop_type: str, days_back: int, limit: int, cols: List[str]) -> Optional[pd.DataFrame]:
     """Use consolidated feature view/table (joined, de-duped, backfills applied)."""
-    if not FEATURE_VIEW:
+    if not FEATURE_VIEW or sb is None:
         return None
     since_date = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
     try:
@@ -183,58 +204,92 @@ def _fetch_from_view(sb: Client, prop_type: str, days_back: int, limit: int, col
         return None
 
 
-def _fetch_base_and_merge(sb: Client, prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
+def _fetch_base_rows_pg(prop_type: str, since_date: str, limit: int) -> List[Dict[str, Any]]:
+    sql = """
+    SELECT *
+    FROM mlb.model_training_props
+    WHERE lower(trim(prop_type)) = lower(trim(%s))
+      AND line IS NOT NULL
+      AND prop_value IS NOT NULL
+      AND game_date::date >= %s::date
+      AND lower(trim(coalesce(outcome, ''))) IN ('win', 'loss')
+    ORDER BY game_date DESC
+    LIMIT %s
+    """
+    return pg_fetchall(sql, (prop_type, since_date, int(limit)))
+
+
+def _fetch_base_and_merge(sb: Optional[Client], prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
     """Fallback: model_training_props + join derived features by (player_id, game_id)."""
     since_date = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
-    resp = (
-        sb.schema("mlb").table("model_training_props")
-          .select("*")
-          .eq("prop_type", prop_type)
-          .not_.is_("line", "null")
-          .not_.is_("prop_value", "null")
-          .gte("game_date", since_date)
-          .order("game_date", desc=True)
-          .limit(limit)
-          .execute()
-    )
-    rows = resp.data or []
-    rows = [r for r in rows if r.get("outcome") in ("win","loss")]
+    if sb is not None:
+        resp = (
+            sb.schema("mlb").table("model_training_props")
+              .select("*")
+              .eq("prop_type", prop_type)
+              .not_.is_("line", "null")
+              .not_.is_("prop_value", "null")
+              .gte("game_date", since_date)
+              .order("game_date", desc=True)
+              .limit(limit)
+              .execute()
+        )
+        rows = resp.data or []
+        rows = [r for r in rows if r.get("outcome") in ("win", "loss")]
+    else:
+        rows = _fetch_base_rows_pg(prop_type, since_date, limit)
+
     df = pd.DataFrame(rows)
     if df.empty:
         print(f"[trainer] source=fallback:base empty prop={prop_type}")
         return df
 
-    # time features (mirror inference)
-    if "game_date" in df.columns:
-        try:
-            dt = pd.to_datetime(df["game_date"])
-        except Exception:
-            dt = pd.to_datetime(df["game_date"], errors="coerce")
-        hour = getattr(dt.dt, "hour", pd.Series([None]*len(df)))
-        bucket = np.where(hour < 12, "morning", np.where(hour < 18, "afternoon", "night"))
-        dow = dt.dt.day_name().str[:3]
-        df["time_of_day_bucket"] = bucket
-        df["game_day_of_week"] = dow
+    df = _add_time_features(df)
+    df = _merge_derived_features(sb, df, feat_cols)
+    print(f"[trainer] source=fallback:base+merge prop={prop_type} rows={len(df)}")
+    return df
 
-    # ensure join keys are numeric to avoid object/int64 mismatch
+
+def _add_time_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if "game_date" not in out.columns:
+        return out
+    try:
+        dt = pd.to_datetime(out["game_date"])
+    except Exception:
+        dt = pd.to_datetime(out["game_date"], errors="coerce")
+    hour = getattr(dt.dt, "hour", pd.Series([None] * len(out)))
+    bucket = np.where(hour < 12, "morning", np.where(hour < 18, "afternoon", "night"))
+    dow = dt.dt.day_name().str[:3]
+    out["time_of_day_bucket"] = bucket
+    out["game_day_of_week"] = dow
+    return out
+
+
+def _merge_derived_features(sb: Optional[Client], df: pd.DataFrame, feat_cols: List[str]) -> pd.DataFrame:
+    out = df.copy()
     for k in ("player_id", "game_id"):
-        if k in df.columns:
-            df[k] = pd.to_numeric(df[k], errors="coerce")
+        if k in out.columns:
+            out[k] = pd.to_numeric(out[k], errors="coerce")
 
     # merge in derived features for the exact games we have
-    pairs = df[["player_id","game_id"]].dropna().drop_duplicates()
+    pairs = out[["player_id", "game_id"]].dropna().drop_duplicates() if {"player_id", "game_id"}.issubset(out.columns) else pd.DataFrame()
     game_ids = pairs["game_id"].astype(str).tolist()
-    feat_cols_needed = list(dict.fromkeys(feat_cols))
 
     derived_frames: List[pd.DataFrame] = []
     for chunk in _chunked(game_ids, 1000):
-        r = (
-            sb.schema("mlb").table("player_derived_stats")
-            .select("*")
-            .in_("game_id", chunk)
-            .execute()
-        )
-        part = _pg_data(r)
+        if sb is not None:
+            r = (
+                sb.schema("mlb").table("player_derived_stats")
+                .select("*")
+                .in_("game_id", chunk)
+                .execute()
+            )
+            part = _pg_data(r)
+        else:
+            placeholders = ",".join(["%s"] * len(chunk))
+            sql = f"SELECT * FROM mlb.player_derived_stats WHERE game_id IN ({placeholders})"
+            part = pg_fetchall(sql, tuple(chunk))
         if part:
             derived_frames.append(pd.DataFrame(part))
     if derived_frames:
@@ -247,18 +302,95 @@ def _fetch_base_and_merge(sb: Client, prop_type: str, days_back: int, limit: int
         if k in derived.columns:
             derived[k] = pd.to_numeric(derived[k], errors="coerce")
 
-    df = df.merge(derived, on=["player_id","game_id"], how="left", suffixes=("","_der"))
+    if {"player_id", "game_id"}.issubset(out.columns):
+        out = out.merge(derived, on=["player_id", "game_id"], how="left", suffixes=("", "_der"))
 
     # ensure all requested features exist
     for f in feat_cols:
-        if f not in df.columns:
-            df[f] = np.nan
-
-    print(f"[trainer] source=fallback:base+merge prop={prop_type} rows={len(df)}")
-    return df
+        if f not in out.columns:
+            out[f] = np.nan
+    return out
 
 
-def fetch_training_rows(sb: Client, prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
+def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
+    """
+    Preferred source: row-level reconcile CSV (market lines + realized outcomes),
+    then merge player_derived_stats for model features.
+    """
+    path = Path(RECONCILE_ROWS_CSV).expanduser()
+    if not path.exists():
+        print(f"[trainer] source=reconcile_csv missing file: {path}")
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        print(f"[trainer] source=reconcile_csv read failed ({path}): {e}")
+        return pd.DataFrame()
+    if df.empty:
+        print(f"[trainer] source=reconcile_csv empty file: {path}")
+        return df
+
+    since_date = pd.Timestamp((datetime.utcnow() - timedelta(days=days_back)).date())
+    out = df.copy()
+    prop_series = out["prop_type"] if "prop_type" in out.columns else pd.Series([""] * len(out), index=out.index)
+    out["prop_type"] = prop_series.astype(str).str.strip().str.lower()
+    out = out[out["prop_type"] == str(prop_type).strip().lower()]
+    if out.empty:
+        print(f"[trainer] source=reconcile_csv no rows for prop={prop_type}")
+        return out
+
+    if "game_date" in out.columns:
+        out["game_date"] = pd.to_datetime(out["game_date"], errors="coerce")
+        out = out[out["game_date"] >= since_date]
+
+    out["line"] = pd.to_numeric(out.get("line"), errors="coerce")
+    out = out[out["line"].notna()]
+
+    if RECONCILE_REQUIRE_TWO_SIDED:
+        px_o = pd.to_numeric(out.get("price_over_american"), errors="coerce")
+        px_u = pd.to_numeric(out.get("price_under_american"), errors="coerce")
+        out = out[px_o.notna() & px_u.notna()]
+
+    over_outcome_series = (
+        out["actual_over_outcome"]
+        if "actual_over_outcome" in out.columns
+        else pd.Series([""] * len(out), index=out.index)
+    )
+    over_outcome = over_outcome_series.astype(str).str.strip().str.lower()
+    out = out[over_outcome.isin({"win", "loss"})].copy()
+    if out.empty:
+        print(f"[trainer] source=reconcile_csv no labeled rows for prop={prop_type}")
+        return out
+    out["y"] = (over_outcome == "win").astype("Int64")
+
+    # Keep compatibility with legacy preprocessing fallbacks.
+    out["prop_value"] = out["line"]
+
+    # De-duplicate repeated records for same player/game/line.
+    dedupe_cols = [c for c in ("player_id", "game_id", "line") if c in out.columns]
+    if dedupe_cols:
+        out = out.drop_duplicates(subset=dedupe_cols, keep="first")
+
+    if "game_date" in out.columns:
+        out = out.sort_values("game_date", ascending=False, na_position="last")
+    if int(limit) > 0:
+        out = out.head(int(limit))
+
+    out = _add_time_features(out)
+    out = _merge_derived_features(sb, out, feat_cols)
+    print(f"[trainer] source=reconcile_csv prop={prop_type} rows={len(out)} file={path}")
+    return out
+
+
+def fetch_training_rows(sb: Optional[Client], prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
+    if TRAIN_FEATURE_SOURCE in {"reconcile", "reconcile_csv"}:
+        df = _fetch_reconcile_and_merge(sb, prop_type, days_back, limit, feat_cols)
+        if not df.empty:
+            return df
+        if not RECONCILE_FALLBACK_BASE_MERGE:
+            print(f"[trainer] source=reconcile_csv strict mode; no fallback for prop={prop_type}")
+            return df
+        print(f"[trainer] source=reconcile_csv fallback->base_merge prop={prop_type}")
     if TRAIN_FEATURE_SOURCE == "view":
         df = _fetch_from_view(sb, prop_type, days_back, limit, feat_cols)
         if df is not None:
@@ -275,7 +407,12 @@ def _prep_frame(df: pd.DataFrame) -> pd.DataFrame:
     # --- choose label source (strict) ---
     # Training target must be "actual over side" (1=over, 0=under), not generic win/loss.
     label_source = None
-    if {"over_under", "outcome"}.issubset(df.columns):
+    if "y" in df.columns:
+        y = pd.to_numeric(df["y"], errors="coerce")
+        y = y.where(y.isin([0, 1]))
+        df["y"] = y.astype("Int64")
+        label_source = "provided(y)"
+    elif {"over_under", "outcome"}.issubset(df.columns):
         ou = df["over_under"].astype(str).str.strip().str.lower()
         oc = df["outcome"].astype(str).str.strip().str.lower()
         y = pd.Series([pd.NA] * len(df), dtype="Int64")
@@ -349,6 +486,8 @@ def build_pipeline(num_cols: List[str], cat_cols: List[str]):
 # ---- Trainer -----------------------------------------------------------------
 def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=DEFAULT_ROW_LIMIT, quiet=True):
     sb = _supabase_client()
+    if sb is None and not quiet:
+        print("[trainer] SUPABASE_URL/key not set; using DATABASE_URL/SUPABASE_DB_URL via direct Postgres fallback.")
 
     # 1) expected features from repo JSON (same universe as prediction)
     spec_all = _load_feature_spec()

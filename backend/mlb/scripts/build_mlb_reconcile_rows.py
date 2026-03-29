@@ -4,7 +4,7 @@ Build MLB row-level reconcile dataset from archived daily artifacts.
 
 Inputs per slate date (under --odds-root/YYYY-MM-DD):
 - mlb_slate_output.csv
-- odds_mlb_playerprops.json
+- odds_latest_compatible.json
 
 Output:
 - one CSV with model probabilities/fair odds + executable market prices + optional outcomes
@@ -259,7 +259,7 @@ def main() -> int:
     ap.add_argument("--to-date", required=True, help="YYYY-MM-DD")
     ap.add_argument("--bookmaker", default="betonlineag", help="Bookmaker key to use (empty = best available per row)")
     ap.add_argument("--slate-filename", default="mlb_slate_output.csv")
-    ap.add_argument("--odds-filename", default="odds_mlb_playerprops.json")
+    ap.add_argument("--odds-filename", default="odds_latest_compatible.json")
     ap.add_argument("--out-csv", default="tmp/mlb_base_vs_market_rows.csv")
     ap.add_argument("--out-summary-json", default="tmp/mlb_base_vs_market_summary.json")
     ap.add_argument("--skip-outcomes", action="store_true", help="Skip DB outcome join")

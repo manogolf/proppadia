@@ -107,6 +107,10 @@ make mlb-post-grade-fade-check \
   MLB_RECONCILE_BOOKMAKER=betonlineag
 ```
 
+Notes:
+- reconcile now defaults to `odds_latest_compatible.json` via `MLB_RECONCILE_ODDS_FILENAME`.
+- override only when needed, for example: `MLB_RECONCILE_ODDS_FILENAME=odds_mlb_playerprops.json`.
+
 Outputs:
 - `tmp/analysis/mlb_model_vs_fade_summary.json`
 - `tmp/analysis/mlb_model_vs_fade_by_prop.csv`
@@ -260,8 +264,15 @@ Recommended weekly sequence:
 
 ```bash
 make mlb-retrain-prereq-check
-make mlb-hybrid-window-refresh
-make mlb-candidate-eval-prod12
+make mlb-reconcile-rows \
+  MLB_RECONCILE_FROM_DATE="2025-03-01" \
+  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_BOOKMAKER= \
+  MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" \
+  MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
+make mlb-retrain-broad-reconcile \
+  MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
+  MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0
 ```
 
 The sequence above remains useful for manual/on-demand runs outside cron.
@@ -284,6 +295,90 @@ make mlb-prod12-status-strict
 
 Notes:
 - do not auto-publish on every recompute; keep publish gated by candidate eval and strict weekly checks
+
+## Local Scheduler (macOS launchd)
+
+Use this when you want retrain/recompute cadence to run on your machine (not Render).
+
+1. Create a local runner script:
+
+```bash
+mkdir -p "$HOME/bin" "$HOME/Projects/proppadia/artifacts/ops"
+
+cat > "$HOME/bin/proppadia_mlb_retrain_weekly.sh" <<'EOF'
+#!/bin/zsh
+set -euo pipefail
+cd "$HOME/Projects/proppadia"
+
+set -a
+source backend/.env
+set +a
+
+echo "[$(date -u +%FT%TZ)] START weekly retrain cadence"
+make mlb-retrain-prereq-check
+make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="2025-03-01" MLB_RECONCILE_TO_DATE="$(date -u +%F)" MLB_RECONCILE_BOOKMAKER= MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
+make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0
+echo "[$(date -u +%FT%TZ)] DONE weekly retrain cadence"
+EOF
+
+chmod +x "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
+```
+
+2. Create a LaunchAgent plist (example: Monday 6:30 AM local time):
+
+```bash
+cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.proppadia.mlb.retrain.weekly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$HOME/bin/proppadia_mlb_retrain_weekly.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>$HOME/Projects/proppadia</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>6</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.out.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.err.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
+EOF
+```
+
+3. Load or reload the job:
+
+```bash
+launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist" 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
+```
+
+4. Trigger once now to verify:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.proppadia.mlb.retrain.weekly
+tail -n 80 "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.out.log"
+tail -n 80 "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.err.log"
+```
+
+5. Check status anytime:
+
+```bash
+launchctl print gui/$(id -u)/com.proppadia.mlb.retrain.weekly | head -n 80
+```
+
+6. Disable/remove later if needed:
+
+```bash
+launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
+rm -f "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
+```
 
 ## Operator Actions On Fail
 
