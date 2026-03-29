@@ -91,10 +91,17 @@ def _fetch_rows(
     prop_types: Sequence[str],
     prop_source: str,
     limit: int,
+    require_regular_season: bool,
 ) -> List[Dict[str, Any]]:
     placeholders = ", ".join(["%s"] * len(prop_types))
     limit_sql = "LIMIT %s" if int(limit or 0) > 0 else ""
-    params: List[Any] = [str(prop_source), str(from_date), str(to_date), *[str(p) for p in prop_types]]
+    params: List[Any] = [
+        str(prop_source),
+        str(from_date),
+        str(to_date),
+        bool(require_regular_season),
+        *[str(p) for p in prop_types],
+    ]
     if int(limit or 0) > 0:
         params.append(int(limit))
 
@@ -127,6 +134,10 @@ WHERE m.prop_source = %s
   AND (m.team IS NULL OR m.team = '' OR m.team ~ '^[0-9]+$')
   AND m.game_date::date >= %s::date
   AND m.game_date::date <= %s::date
+  -- Optional spring-training exclusion for regular-season-only recomputes.
+  -- Use to_jsonb(m)->>'game_type' so this remains compatible with DBs where
+  -- model_training_props.game_type has not been added yet.
+  AND (%s::boolean = FALSE OR COALESCE(NULLIF(upper(trim(to_jsonb(m)->>'game_type')), ''), 'R') = 'R')
   AND m.prop_type IN ({placeholders})
 ORDER BY m.game_date, m.id
 {limit_sql}
@@ -200,8 +211,16 @@ def recompute(
     allow_heuristic: bool,
     gate_min_total_per_prop: int,
     gate_min_accuracy_pct: float,
+    require_regular_season: bool,
 ) -> Dict[str, Any]:
-    rows = _fetch_rows(from_date, to_date, prop_types, prop_source, limit)
+    rows = _fetch_rows(
+        from_date,
+        to_date,
+        prop_types,
+        prop_source,
+        limit,
+        require_regular_season=bool(require_regular_season),
+    )
     attempted = len(rows)
     updated = 0
     skipped_by_gate = 0
@@ -330,6 +349,7 @@ WHERE id = %s
         "from_date": from_date,
         "to_date": to_date,
         "prop_source": prop_source,
+        "require_regular_season": bool(require_regular_season),
         "allow_heuristic": bool(allow_heuristic),
         "gate_enabled": gate_enabled,
         "gate_min_total_per_prop": int(gate_min_total_per_prop),
@@ -356,6 +376,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--prop-source", default="mlb_api")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--allow-heuristic", action="store_true")
+    ap.add_argument("--require-regular-season", action="store_true")
     ap.add_argument("--gate-min-total-per-prop", type=int, default=200)
     ap.add_argument("--gate-min-accuracy-pct", type=float, default=-1.0)
     args = ap.parse_args(list(argv) if argv is not None else None)
@@ -373,6 +394,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         allow_heuristic=bool(args.allow_heuristic),
         gate_min_total_per_prop=max(1, int(args.gate_min_total_per_prop)),
         gate_min_accuracy_pct=float(args.gate_min_accuracy_pct),
+        require_regular_season=bool(args.require_regular_season),
     )
     print(json.dumps(payload, indent=2))
     return 0 if payload.get("ok") else 1
