@@ -33,6 +33,7 @@ def collect_phase2_snapshot(
     baseline_path: str,
     baseline_dir: str,
     source_table: str,
+    rows_csv: str,
     window_mode: str,
     window_days: int,
     games_back: int,
@@ -67,6 +68,8 @@ def collect_phase2_snapshot(
         "--max-prop-drop-pct",
         str(float(max_prop_drop_pct)),
     ]
+    if str(rows_csv).strip():
+        candidate_args.extend(["--rows-csv", str(rows_csv).strip()])
     if str(window_mode).strip():
         candidate_args.extend(["--window-mode", str(window_mode).strip()])
 
@@ -108,7 +111,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--replay-path", default="artifacts/releases/mlb_prod12_replay_latency.json")
     ap.add_argument("--baseline-path", default="")
     ap.add_argument("--baseline-dir", default="artifacts/season_baselines")
-    ap.add_argument("--source-table", choices=["player_props", "model_training_props"], default="model_training_props")
+    ap.add_argument(
+        "--source-table",
+        choices=["player_props", "model_training_props", "reconcile_rows"],
+        default="model_training_props",
+    )
+    ap.add_argument("--rows-csv", default="")
     ap.add_argument("--window-mode", choices=["", "days", "games"], default="")
     ap.add_argument("--window-days", type=int, default=120)
     ap.add_argument("--games-back", type=int, default=30)
@@ -125,6 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         baseline_path=str(args.baseline_path),
         baseline_dir=str(args.baseline_dir),
         source_table=str(args.source_table),
+        rows_csv=str(args.rows_csv),
         window_mode=str(args.window_mode),
         window_days=int(args.window_days),
         games_back=int(args.games_back),

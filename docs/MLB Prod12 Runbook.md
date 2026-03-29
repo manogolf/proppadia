@@ -75,10 +75,10 @@ make mlb-pipeline-check-prod12 MLB_BASE_URL=https://baseball-streaks-sq44.onrend
 
 ## Model Artifact Policy
 
-- Primary runtime location: Render persistent disk (`/var/data/models`).
+- Primary runtime location: Render persistent disk (`/var/data/proppadia/models`).
 - Backup location: Supabase storage.
-- Keep versioned releases under `/var/data/models/releases/<timestamp>/latest`.
-- Activate by symlink swap to `/var/data/models/latest`.
+- Keep versioned releases under `/var/data/proppadia/models/releases/<timestamp>/latest`.
+- Activate by symlink swap to `/var/data/proppadia/models/latest`.
 - Keep previous release for immediate rollback.
 
 ## Readiness Gates

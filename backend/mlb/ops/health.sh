@@ -5,7 +5,7 @@ mkdir -p backend/scripts/ops
 cat > backend/scripts/ops/promote_models.sh <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-BASE="${MODEL_DIR:-/var/data/models/props}"
+BASE="${MODEL_DIR:-/var/data/proppadia/models/props}"
 VER="${1:-}"
 if [[ -z "$VER" ]]; then
   echo "usage: $0 vYYYYMMDD" >&2; exit 2

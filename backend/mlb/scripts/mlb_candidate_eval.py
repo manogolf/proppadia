@@ -149,7 +149,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Evaluate MLB candidate quality against baseline artifact.")
     ap.add_argument("--baseline-path", default="", help="Optional path to baseline JSON artifact.")
     ap.add_argument("--baseline-dir", default="artifacts/season_baselines", help="Used when --baseline-path is empty.")
-    ap.add_argument("--source-table", choices=["player_props", "model_training_props"], default="model_training_props")
+    ap.add_argument(
+        "--source-table",
+        choices=["player_props", "model_training_props", "reconcile_rows"],
+        default="model_training_props",
+    )
+    ap.add_argument(
+        "--rows-csv",
+        default="",
+        help="Required when --source-table reconcile_rows; path to reconcile rows csv.",
+    )
     ap.add_argument("--window-mode", choices=["days", "games"], default="")
     ap.add_argument("--window-days", type=int, default=120)
     ap.add_argument("--games-back", type=int, default=30)
@@ -200,6 +209,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             window_value=window_value,
             prop_types=prop_types,
             source_table=args.source_table,
+            rows_csv=args.rows_csv,
         )
     except Exception as exc:
         print(
@@ -231,6 +241,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "baseline_path": str(baseline_path),
         "source_table": args.source_table,
+        "rows_csv": str(args.rows_csv or ""),
         "window_mode": window_mode,
         "window_value": window_value,
         "prop_types": prop_types,

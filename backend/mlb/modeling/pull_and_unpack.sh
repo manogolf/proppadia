@@ -2,7 +2,7 @@
 set -euo pipefail
 
 : "${MODELS_REPO:?set MODELS_REPO like owner/repo}"
-DEST="${MODELS_DIR:-/var/data/models}"
+DEST="${MODELS_DIR:-/var/data/proppadia/models}"
 TAG="${MODELS_TAG:-models-latest}"      # or a timestamp tag
 USE_LATEST="${USE_LATEST_API:-0}"
 

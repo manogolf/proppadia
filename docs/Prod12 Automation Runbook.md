@@ -44,8 +44,8 @@ bin/mlb_prod12_remote_trigger.sh
 Default behavior:
 - Trigger defaults to `run_mode=daily` (lighter resource profile).
 - Weekly phase-2 is triggered separately.
-- Daily cron now defaults to lean mode:
-  - `MLB_DAILY_GATE_ENABLED=0` (skips heavy daily gate checks in cron path)
+- Daily trigger now defaults to running the daily gate:
+  - `MLB_DAILY_GATE_ENABLED=1` unless explicitly set to `0`
   - `MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=0` (disables alias/extra market fetches)
   - `MLB_ODDS_MARKETS` scoped to prod12 lane markets only
   - `MLB_ODDS_BOOKMAKERS` defaults to `betonlineag,mybookieag,betopenly,draftkings,betmgm,espnbet,fanatics,williamhill_us,superbook,rebet`
@@ -53,6 +53,7 @@ Default behavior:
 
 Optional extra lean setting (if memory pressure persists):
 - set `MLB_ODDS_BOOKMAKERS` to a small CSV (for example `betonlineag,mybookieag,betopenly,draftkings`)
+- set `MLB_DAILY_GATE_ENABLED=0` to skip daily gate checks
 
 Status command:
 
@@ -70,14 +71,24 @@ This exits non-zero if:
 - the run fails,
 - state disappears (idle/no `exit_code`),
 - `mlb_book_upload.csv` is missing after a successful exit,
-- or the post-run local sync of `mlb_book_upload.csv` fails.
+- the post-run local sync of `mlb_book_upload.csv` fails,
+- or post-run local sync of prod12 status histories fails (default behavior).
 
 Local sync target defaults to:
 - `backend/mlb/data/processed/mlb_book_upload.csv`
+- `artifacts/mlb_pipeline_history.jsonl`
+- `artifacts/mlb_prod12_phase2_history.jsonl`
 
 Override target path with either:
 - arg 4: `bin/mlb_prod12_remote_trigger_and_wait.sh 2400 10 120 <out_csv>`
 - env var: `MLB_BOOK_UPLOAD_LOCAL_OUT_CSV=<out_csv>`
+
+Optional history-sync controls:
+- disable history sync entirely: `MLB_REMOTE_SYNC_STATUS_HISTORY=0`
+- keep history sync but do not fail on history-sync errors: `MLB_REMOTE_SYNC_STATUS_HISTORY_REQUIRED=0`
+- override history output paths:
+  - `MLB_PIPELINE_HISTORY_LOCAL_OUT=<path>`
+  - `MLB_PROD12_PHASE2_HISTORY_LOCAL_OUT=<path>`
 
 If the run already finished remotely and you only want the local upload CSV, run this:
 
@@ -118,6 +129,25 @@ Outputs:
 This routine rebuilds reconcile rows for the window, then compares:
 - model-picked side ROI (`pnl_model_pick_1u`)
 - opposite-side fade ROI (the opposite side at the same row)
+
+Post-grade all-available resolved report (recommended daily):
+
+```bash
+make mlb-post-grade-all-available-check \
+  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+Outputs:
+- `tmp/analysis/mlb_all_available_summary.json`
+- `tmp/analysis/mlb_all_available_by_prop.csv`
+
+This routine rebuilds reconcile rows for the window, then reports:
+- all available resolved rows
+- two-sided resolved rows
+- model win rate across resolved rows
+- per-prop over/under hit rates and model win rate
 
 Cross-sport sanity check (NHL + MLB summaries):
 
@@ -260,6 +290,9 @@ Suggested cadence:
 - daily: keep running normal prod12 daily automation only
 - weekly: run retrain/recompute locally, then publish bundle if promoted
 
+Migration mode:
+- use market/reconcile rows for quality + candidate evaluation (no `model_training_props/mlb_api` dependency)
+
 Recommended weekly sequence:
 
 ```bash
@@ -273,9 +306,30 @@ make mlb-reconcile-rows \
 make mlb-retrain-broad-reconcile \
   MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
   MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0
+make mlb-prediction-quality-prod12 \
+  MLB_QUALITY_SOURCE_TABLE="reconcile_rows" \
+  MLB_QUALITY_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
+  MLB_QUALITY_PROP_SOURCES=""
+make mlb-candidate-eval-prod12 \
+  MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" \
+  MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
 ```
 
-The sequence above remains useful for manual/on-demand runs outside cron.
+`mlb-retrain-broad-reconcile` now runs the reconcile-based quality + candidate checks automatically at the end.
+
+Optional: separate candidate scope vs required stability props for prod12 gate:
+
+```bash
+make mlb-candidate-eval-prod12 \
+  MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" \
+  MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
+  MLB_PROD12_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" \
+  MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed"
+```
+
+Default prod12 weekly tracking now reads reconcile rows:
+- `MLB_PROD12_CANDIDATE_SOURCE_TABLE=reconcile_rows`
+- `MLB_PROD12_CANDIDATE_ROWS_CSV=tmp/mlb_base_vs_market_rows_anybook.csv`
 
 If candidate recommendation is `promote`, then publish:
 

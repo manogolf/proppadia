@@ -1,6 +1,8 @@
 .PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview mlb-prod12-script-preview mlb-prod12-bootstrap-preview mlb-prod12-scheduler-smoke mlb-prod12-bootstrap mlb-prod12-bootstrap-strict nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-predictions-wide mlb-slate-output mlb-book-upload mlb-slate-archive mlb-reconcile-rows mlb-model-vs-fade mlb-post-grade-fade-check mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-recompute-training-predictions mlb-corrected-props-recompute mlb-model-artifact-validate mlb-model-artifact-validate-prod12 mlb-model-snapshot mlb-model-publish mlb-model-prune mlb-model-rollback mlb-feature-health mlb-feature-health-prod12 mlb-pfp-overlap-audit mlb-pfp-overlap-backfill mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-health-report mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-ops-check mlb-prod12-ops-log mlb-prod12-ops-last mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-daily-cycle mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-weekly-cycle mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-prediction-quality-auto nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
 
 VENV_PY ?= .venv/bin/python
+# Canonical model root (same default local + render); cron/runtime can still override MODEL_DIR.
+export MODEL_DIR ?= /var/data/proppadia/models
 BASE_URL ?= http://127.0.0.1:8001
 MLB_BASE_URL ?=
 MLB_DATE ?= $(shell date -u +%F)
@@ -50,6 +52,9 @@ MLB_MODEL_VS_FADE_ROWS_CSV ?= $(MLB_RECONCILE_ROWS_OUT_CSV)
 MLB_MODEL_VS_FADE_OUT_JSON ?= tmp/analysis/mlb_model_vs_fade_summary.json
 MLB_MODEL_VS_FADE_OUT_CSV ?= tmp/analysis/mlb_model_vs_fade_by_prop.csv
 MLB_MODEL_VS_FADE_MIN_BETS_ALERT ?= 30
+MLB_ALL_AVAILABLE_ROWS_CSV ?= $(MLB_RECONCILE_ROWS_OUT_CSV)
+MLB_ALL_AVAILABLE_OUT_JSON ?= tmp/analysis/mlb_all_available_summary.json
+MLB_ALL_AVAILABLE_OUT_CSV ?= tmp/analysis/mlb_all_available_by_prop.csv
 MLB_POLICY_REPLAY_ROWS_CSV ?= tmp/mlb_reconcile_rows_2024_2025_prod11_allbooks_noncollapsed.csv
 MLB_POLICY_REPLAY_OUT_DIR ?= tmp/analysis/mlb_baseline_readiness_pack/pass4_execution_replay
 MLB_POLICY_MONITOR_PROPS ?= doubles,walks_allowed
@@ -69,6 +74,8 @@ MLB_QUALITY_WINDOW_MODE ?= days
 MLB_QUALITY_GAMES_BACK ?= 30
 MLB_QUALITY_MIN_TOTAL ?= 1000
 MLB_QUALITY_MIN_ACCURACY ?= 48
+MLB_QUALITY_SOURCE_TABLE ?= model_training_props
+MLB_QUALITY_ROWS_CSV ?=
 MLB_QUALITY_PROP_SOURCES ?= mlb_api
 MLB_RECOMPUTE_PROP_TYPES ?= runs_scored,runs_rbis,hits_runs_rbis
 MLB_RECOMPUTE_PROP_SOURCE ?= mlb_api
@@ -77,6 +84,7 @@ MLB_RECOMPUTE_FROM_DATE ?=
 MLB_RECOMPUTE_TO_DATE ?=
 MLB_RECOMPUTE_LIMIT ?= 0
 MLB_RECOMPUTE_REQUIRE_REGULAR ?= 1
+MLB_RECOMPUTE_FORCE_INVERT_PROPS ?=
 MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP ?= 200
 MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT ?= 45
 MLB_RECOMPUTE_BATCH_PROP_TYPES ?= $(MLB_CORRECTED_PROP_TYPES)
@@ -115,7 +123,7 @@ MLB_PFP_OVERLAP_TO_DATE ?=
 MLB_PFP_OVERLAP_LIMIT ?= 0
 MLB_PFP_OVERLAP_BATCH_SIZE ?= 1000
 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT ?= 60
-MLB_MODEL_ROOT ?= $(if $(MODEL_DIR),$(MODEL_DIR),/var/data/models)
+MLB_MODEL_ROOT ?= $(if $(MODEL_DIR),$(MODEL_DIR),/var/data/proppadia/models)
 MLB_MODEL_LATEST_DIR ?= $(MLB_MODEL_ROOT)/latest
 MLB_MODEL_ARCHIVE_DIR ?= $(MLB_MODEL_ROOT)/archive
 MLB_MODEL_SNAPSHOT_SOURCE ?= $(MLB_MODEL_LATEST_DIR)
@@ -157,11 +165,16 @@ MLB_CANDIDATE_BASELINE_PATH ?=
 MLB_CANDIDATE_BASELINE_DIR ?= artifacts/season_baselines
 MLB_PROD8_BASELINE_DIR ?= artifacts/season_baselines
 MLB_CANDIDATE_SOURCE_TABLE ?= model_training_props
+MLB_CANDIDATE_ROWS_CSV ?=
 MLB_CANDIDATE_WINDOW_MODE ?=
 MLB_CANDIDATE_WINDOW_DAYS ?= 120
 MLB_CANDIDATE_GAMES_BACK ?= 30
 MLB_CANDIDATE_PROP_TYPES ?= $(MLB_CORE_PROP_TYPES)
 MLB_CANDIDATE_REQUIRED_PROPS ?= $(MLB_CORE_PROP_TYPES)
+MLB_PROD12_CANDIDATE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
+MLB_PROD12_CANDIDATE_REQUIRED_PROPS ?= $(MLB_PROD12_PROP_TYPES)
+MLB_PROD12_CANDIDATE_SOURCE_TABLE ?= reconcile_rows
+MLB_PROD12_CANDIDATE_ROWS_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
 MLB_CANDIDATE_MIN_TOTAL ?= -1
 MLB_CANDIDATE_MIN_LIFT_PCT ?= 0.25
 MLB_CANDIDATE_MAX_PROP_DROP_PCT ?= 0.5
@@ -178,6 +191,10 @@ MLB_PROD12_BOOTSTRAP_MAX_AGE_HOURS ?= 2
 MLB_PROD12_HEALTH_DAILY_WINDOW ?= 14
 MLB_PROD12_HEALTH_WEEKLY_WINDOW ?= 8
 MLB_PROD12_OPS_HISTORY_INPUT ?= artifacts/mlb_prod12_ops_history.jsonl
+# Ops snapshot logging should capture current state without freshness gating.
+# Freshness enforcement is handled by mlb-prod12-status-strict.
+MLB_PROD12_OPS_DAILY_MAX_AGE_HOURS ?= 0
+MLB_PROD12_OPS_WEEKLY_MAX_AGE_HOURS ?= 0
 MLB_REPLAY_SAMPLE ?= $(MLB_PREDICT_SAMPLE)
 MLB_REPLAY_MIN_SUCCESS ?= $(MLB_PREDICT_MIN_SUCCESS)
 MLB_REPLAY_MAX_PREDICT_P95_MS ?= 4000
@@ -196,7 +213,8 @@ MLB_CORE_PROP_TYPES ?= hits,total_bases,hits_runs_rbis,runs_rbis,rbis,runs_score
 MLB_PROD8_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks
 MLB_UNDERSERVED_PROMOTED_PROP_TYPES ?= runs_scored,walks_allowed,runs_rbis
 MLB_UNDERSERVED_WATCHLIST_PROP_TYPES ?= outs_recorded,home_runs
-MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,$(MLB_UNDERSERVED_PROMOTED_PROP_TYPES)
+# Keep prod12 default lane aligned with cron/runbook (11 props; excludes runs_rbis).
+MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed
 MLB_PROD12_DAILY_PROP_TYPES ?= hits,total_bases,strikeouts_batting
 MLB_PROD12_PIPELINE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_DEGENERATE_PROP_TYPES ?= $(MLB_UNDERSERVED_WATCHLIST_PROP_TYPES)
@@ -296,6 +314,7 @@ help:
 	@echo "  make mlb-predictions-wide MLB_DATE=YYYY-MM-DD [writes per-slate odds snapshot json]"
 	@echo "  make mlb-slate-archive MLB_DATE=YYYY-MM-DD [archive wide/slate/book/odds artifacts]"
 	@echo "  make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE=YYYY-MM-DD MLB_RECONCILE_TO_DATE=YYYY-MM-DD [row-level model+market(+outcome) csv]"
+	@echo "  make mlb-all-available-report [resolved all-available summary + by-prop rates from reconcile rows]"
 	@echo "  make mlb-odds-backfill-history [historical OddsAPI pull; defaults to season 2025 regular-season start]"
 	@echo "  make frontend-route-smoke [verify critical nav/route surface in AppRouter]"
 	@echo "  make workflow-inventory [report scheduled workflow files]"
@@ -705,7 +724,7 @@ season-baseline-capture:
 	mlb_tmp="$$mlb_out.tmp"; \
 	nhl_tmp="$$nhl_out.tmp"; \
 	rm -f "$$mlb_tmp" "$$nhl_tmp"; \
-	if ! $(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; then \
+	if ! $(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; then \
 		echo "season-baseline-capture: MLB baseline generation failed"; \
 		if [ -s "$$mlb_tmp" ]; then cat "$$mlb_tmp"; fi; \
 		exit 1; \
@@ -726,7 +745,7 @@ mlb-season-baseline-capture:
 	mlb_out="artifacts/season_baselines/mlb_quality_$(MLB_QUALITY_WINDOW_MODE)_$(MLB_QUALITY_GAMES_BACK)_$(MLB_QUALITY_WINDOW_DAYS).json"; \
 	mlb_tmp="$$mlb_out.tmp"; \
 	rm -f "$$mlb_tmp"; \
-	if ! $(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD12_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; then \
+	if ! $(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --prop-types "$(MLB_PROD12_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$mlb_tmp"; then \
 		echo "mlb-season-baseline-capture: MLB baseline generation failed"; \
 		if [ -s "$$mlb_tmp" ]; then cat "$$mlb_tmp"; fi; \
 		exit 1; \
@@ -742,7 +761,7 @@ mlb-prod8-baseline-capture:
 	quality_tmp="$$quality_out.tmp"; \
 	pipeline_tmp="$$pipeline_out.tmp"; \
 	rm -f "$$quality_tmp" "$$pipeline_tmp"; \
-	if ! $(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD8_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$quality_tmp"; then \
+	if ! $(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --prop-types "$(MLB_PROD8_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL) > "$$quality_tmp"; then \
 		echo "mlb-prod8-baseline-capture: quality generation failed"; \
 		if [ -s "$$quality_tmp" ]; then cat "$$quality_tmp"; fi; \
 		exit 1; \
@@ -919,14 +938,25 @@ mlb-reconcile-rows:
 mlb-model-vs-fade:
 	$(VENV_PY) backend/mlb/scripts/report_mlb_model_vs_fade.py --rows-csv "$(MLB_MODEL_VS_FADE_ROWS_CSV)" --out-json "$(MLB_MODEL_VS_FADE_OUT_JSON)" --out-csv "$(MLB_MODEL_VS_FADE_OUT_CSV)" --min-bets-alert "$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
 
+# Report all-available resolved outcomes from reconcile rows.
+mlb-all-available-report:
+	$(VENV_PY) backend/mlb/scripts/report_mlb_all_available.py --rows-csv "$(MLB_ALL_AVAILABLE_ROWS_CSV)" --out-json "$(MLB_ALL_AVAILABLE_OUT_JSON)" --out-csv "$(MLB_ALL_AVAILABLE_OUT_CSV)"
+
 # Post-grade routine: rebuild reconcile rows then report model-vs-fade for that window.
 mlb-post-grade-fade-check:
 	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
 	$(MAKE) mlb-model-vs-fade MLB_MODEL_VS_FADE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_MODEL_VS_FADE_OUT_CSV="$(MLB_MODEL_VS_FADE_OUT_CSV)" MLB_MODEL_VS_FADE_MIN_BETS_ALERT="$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
 
+# Post-grade routine: rebuild reconcile rows then report all-available resolved outcomes.
+mlb-post-grade-all-available-check:
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	$(MAKE) mlb-all-available-report MLB_ALL_AVAILABLE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_ALL_AVAILABLE_OUT_JSON="$(MLB_ALL_AVAILABLE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_CSV="$(MLB_ALL_AVAILABLE_OUT_CSV)"
+
 # Replay locked MLB policy plan across historical reconcile rows (includes fragile-lane monitor output).
 mlb-policy-plan-replay:
 	$(VENV_PY) backend/mlb/scripts/replay_mlb_policy_plan.py --rows-csv "$(MLB_POLICY_REPLAY_ROWS_CSV)" --policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --out-dir "$(MLB_POLICY_REPLAY_OUT_DIR)" --monitor-props "$(MLB_POLICY_MONITOR_PROPS)" --monitor-min-bets-alert "$(MLB_POLICY_MONITOR_MIN_BETS_ALERT)"
+
+.PHONY: mlb-all-available-report mlb-post-grade-all-available-check
 
 .PHONY: nhl-model-vs-fade nhl-post-grade-fade-check
 
@@ -990,6 +1020,9 @@ mlb-show-config:
 	@echo "MLB_MODEL_VS_FADE_OUT_JSON=$(MLB_MODEL_VS_FADE_OUT_JSON)"
 	@echo "MLB_MODEL_VS_FADE_OUT_CSV=$(MLB_MODEL_VS_FADE_OUT_CSV)"
 	@echo "MLB_MODEL_VS_FADE_MIN_BETS_ALERT=$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
+	@echo "MLB_ALL_AVAILABLE_ROWS_CSV=$(MLB_ALL_AVAILABLE_ROWS_CSV)"
+	@echo "MLB_ALL_AVAILABLE_OUT_JSON=$(MLB_ALL_AVAILABLE_OUT_JSON)"
+	@echo "MLB_ALL_AVAILABLE_OUT_CSV=$(MLB_ALL_AVAILABLE_OUT_CSV)"
 	@echo "MLB_POLICY_REPLAY_ROWS_CSV=$(MLB_POLICY_REPLAY_ROWS_CSV)"
 	@echo "MLB_POLICY_REPLAY_OUT_DIR=$(MLB_POLICY_REPLAY_OUT_DIR)"
 	@echo "MLB_POLICY_MONITOR_PROPS=$(MLB_POLICY_MONITOR_PROPS)"
@@ -1029,6 +1062,8 @@ mlb-show-config:
 	@echo "MLB_QUALITY_GAMES_BACK=$(MLB_QUALITY_GAMES_BACK)"
 	@echo "MLB_QUALITY_MIN_TOTAL=$(MLB_QUALITY_MIN_TOTAL)"
 	@echo "MLB_QUALITY_MIN_ACCURACY=$(MLB_QUALITY_MIN_ACCURACY)"
+	@echo "MLB_QUALITY_SOURCE_TABLE=$(MLB_QUALITY_SOURCE_TABLE)"
+	@echo "MLB_QUALITY_ROWS_CSV=$(MLB_QUALITY_ROWS_CSV)"
 	@echo "MLB_QUALITY_PROP_SOURCES=$(MLB_QUALITY_PROP_SOURCES)"
 	@echo "MLB_PROP_COVERAGE_WINDOW_DAYS=$(MLB_PROP_COVERAGE_WINDOW_DAYS)"
 	@echo "MLB_PROP_COVERAGE_WINDOW_MODE=$(MLB_PROP_COVERAGE_WINDOW_MODE)"
@@ -1053,6 +1088,13 @@ mlb-show-config:
 	@echo "MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK=$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)"
 	@echo "MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT=$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)"
 	@echo "MLB_RECOMPUTE_REQUIRE_REGULAR=$(MLB_RECOMPUTE_REQUIRE_REGULAR)"
+	@echo "MLB_RECOMPUTE_FORCE_INVERT_PROPS=$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)"
+	@echo "MLB_CANDIDATE_SOURCE_TABLE=$(MLB_CANDIDATE_SOURCE_TABLE)"
+	@echo "MLB_CANDIDATE_ROWS_CSV=$(MLB_CANDIDATE_ROWS_CSV)"
+	@echo "MLB_PROD12_CANDIDATE_PROP_TYPES=$(MLB_PROD12_CANDIDATE_PROP_TYPES)"
+	@echo "MLB_PROD12_CANDIDATE_REQUIRED_PROPS=$(MLB_PROD12_CANDIDATE_REQUIRED_PROPS)"
+	@echo "MLB_PROD12_CANDIDATE_SOURCE_TABLE=$(MLB_PROD12_CANDIDATE_SOURCE_TABLE)"
+	@echo "MLB_PROD12_CANDIDATE_ROWS_CSV=$(MLB_PROD12_CANDIDATE_ROWS_CSV)"
 
 # JSON snapshot for MLB readiness signals (stat-derived + roster freshness).
 mlb-readiness-snapshot:
@@ -1068,19 +1110,19 @@ mlb-prediction-readiness:
 	$(VENV_PY) backend/mlb/scripts/probe_mlb_prediction_readiness.py --date $(MLB_DATE) --sample-size $(MLB_PREDICT_SAMPLE) --require-min-success $(MLB_PREDICT_MIN_SUCCESS) --prop-types "$(MLB_PREDICT_PROP_TYPES)"
 
 mlb-prediction-quality:
-	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode $(MLB_QUALITY_WINDOW_MODE) --window-days $(MLB_QUALITY_WINDOW_DAYS) --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --prop-types "$(MLB_PREDICT_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-prediction-quality-core:
-	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_CORE_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --prop-types "$(MLB_CORE_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-prediction-quality-prod8:
-	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD8_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --prop-types "$(MLB_PROD8_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-prediction-quality-prod12:
-	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --prop-types "$(MLB_PROD12_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
+	$(VENV_PY) backend/mlb/scripts/analyze_mlb_prediction_quality.py --window-mode games --games-back $(MLB_QUALITY_GAMES_BACK) --source-table "$(MLB_QUALITY_SOURCE_TABLE)" $(if $(MLB_QUALITY_ROWS_CSV),--rows-csv "$(MLB_QUALITY_ROWS_CSV)",) --prop-types "$(MLB_PROD12_PROP_TYPES)" --prop-sources "$(MLB_QUALITY_PROP_SOURCES)" --min-total $(MLB_QUALITY_MIN_TOTAL)
 
 mlb-recompute-training-predictions:
-	$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back $(MLB_RECOMPUTE_DAYS_BACK) --prop-types "$(MLB_RECOMPUTE_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit $(MLB_RECOMPUTE_LIMIT) $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG)
+	MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back $(MLB_RECOMPUTE_DAYS_BACK) --prop-types "$(MLB_RECOMPUTE_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit $(MLB_RECOMPUTE_LIMIT) $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG)
 
 mlb-corrected-props-recompute:
 	@set -e; \
@@ -1092,7 +1134,7 @@ mlb-corrected-props-recompute:
 		echo "mlb-corrected-props-recompute requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
 		exit 2; \
 	fi; \
-	$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG); \
+	MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG); \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
 mlb-corrected-props-recompute-gated:
@@ -1105,7 +1147,7 @@ mlb-corrected-props-recompute-gated:
 		echo "mlb-corrected-props-recompute-gated requires MODEL_DIR (directory containing feature_metadata.json and prop model artifacts)"; \
 		exit 2; \
 	fi; \
-	$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG); \
+	MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$(MLB_CORRECTED_PROP_TYPES)" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG); \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
 mlb-corrected-props-recompute-gated-batched:
@@ -1124,7 +1166,7 @@ mlb-corrected-props-recompute-gated-batched:
 		prop=$$(echo "$$prop" | xargs); \
 		if [ -z "$$prop" ]; then continue; fi; \
 		echo "==> recompute gated batch prop=$$prop"; \
-		$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+			MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
 	done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
@@ -1147,6 +1189,11 @@ mlb-hybrid-window-refresh:
 		echo "mlb-hybrid-window-refresh requires SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) for model trainer"; \
 		exit 2; \
 	fi; \
+	if [ ! -f "$(MLB_TRAIN_RECONCILE_ROWS_CSV)" ]; then \
+		echo "mlb-hybrid-window-refresh missing reconcile rows csv: $(MLB_TRAIN_RECONCILE_ROWS_CSV)"; \
+		echo "build it first with make mlb-reconcile-rows (set MLB_RECONCILE_BOOKMAKER= for any-book rows)"; \
+		exit 2; \
+	fi; \
 	hybrid_pairs="$(MLB_HYBRID_PROP_WINDOWS)"; \
 	OLD_IFS="$$IFS"; IFS=','; \
 	for pair in $$hybrid_pairs; do \
@@ -1165,16 +1212,17 @@ mlb-hybrid-window-refresh:
 			continue; \
 		fi; \
 		echo "==> hybrid recompute prop=$$prop"; \
-		$(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+		MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
 	done; \
 	IFS="$$OLD_IFS"; \
-	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
-	$(MAKE) mlb-candidate-eval-prod12 MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
+	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
+	$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 mlb-retrain-broad-reconcile:
 	@set -e; \
 	model_root="$(MLB_MODEL_ROOT)"; \
-	if [ -z "$$MODEL_DIR" ] && [ "$$model_root" = "/var/data/models" ]; then \
+	if [ -z "$$MODEL_DIR" ] && [ "$$model_root" = "/var/data/proppadia/models" ]; then \
+		echo "mlb-retrain-broad-reconcile: MODEL_DIR unset; local fallback to $(CURDIR)/models_out"; \
 		model_root="$(CURDIR)/models_out"; \
 	fi; \
 	if [ -z "$$DATABASE_URL" ] && [ -z "$$SUPABASE_DB_URL" ]; then \
@@ -1199,11 +1247,11 @@ mlb-retrain-broad-reconcile:
 			continue; \
 		fi; \
 		echo "==> broad recompute prop=$$prop"; \
-		MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+			MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
 	done; \
 	IFS="$$OLD_IFS"; \
-	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
-	$(MAKE) mlb-candidate-eval-prod12 MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
+		$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
+		$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 mlb-model-artifact-validate:
 	$(VENV_PY) backend/mlb/scripts/validate_mlb_model_artifacts.py --prop-types "$(MLB_PREDICT_PROP_TYPES)" --min-feature-overlap-pct "$(MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT)"
@@ -1272,10 +1320,10 @@ mlb-retrain-prereq-check:
 	$(VENV_PY) backend/mlb/scripts/mlb_retrain_prereq_check.py --freshness-days $(MLB_RETRAIN_FRESHNESS_DAYS) --freshness-min-rows $(MLB_RETRAIN_FRESHNESS_MIN_ROWS) --coverage-window-mode $(MLB_RETRAIN_COVERAGE_WINDOW_MODE) --coverage-window-days $(MLB_RETRAIN_COVERAGE_WINDOW_DAYS) --coverage-games-back $(MLB_RETRAIN_COVERAGE_GAMES_BACK) --coverage-required-props "$(MLB_RETRAIN_REQUIRED_PROPS)" --coverage-min-training-source-per-prop $(MLB_RETRAIN_MIN_TRAINING_SOURCE_PER_PROP) --coverage-training-prop-sources "$(MLB_RETRAIN_TRAINING_PROP_SOURCES)" --grading-window-mode $(MLB_RETRAIN_GRADING_WINDOW_MODE) --grading-window-days $(MLB_RETRAIN_GRADING_WINDOW_DAYS) --grading-games-back $(MLB_RETRAIN_GRADING_GAMES_BACK) --grading-prop-types "$(MLB_RETRAIN_GRADING_PROP_TYPES)" --grading-min-total $(MLB_RETRAIN_GRADING_MIN_TOTAL) --baseline-max-age-hours $(MLB_RETRAIN_BASELINE_MAX_AGE_HOURS)
 
 mlb-candidate-eval:
-	$(VENV_PY) backend/mlb/scripts/mlb_candidate_eval.py --baseline-path "$(MLB_CANDIDATE_BASELINE_PATH)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --source-table "$(MLB_CANDIDATE_SOURCE_TABLE)" $(if $(MLB_CANDIDATE_WINDOW_MODE),--window-mode $(MLB_CANDIDATE_WINDOW_MODE),) --window-days $(MLB_CANDIDATE_WINDOW_DAYS) --games-back $(MLB_CANDIDATE_GAMES_BACK) --prop-types "$(MLB_CANDIDATE_PROP_TYPES)" --required-props "$(MLB_CANDIDATE_REQUIRED_PROPS)" --min-candidate-total $(MLB_CANDIDATE_MIN_TOTAL) --min-overall-lift-pct $(MLB_CANDIDATE_MIN_LIFT_PCT) --max-prop-drop-pct $(MLB_CANDIDATE_MAX_PROP_DROP_PCT)
+	$(VENV_PY) backend/mlb/scripts/mlb_candidate_eval.py --baseline-path "$(MLB_CANDIDATE_BASELINE_PATH)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --source-table "$(MLB_CANDIDATE_SOURCE_TABLE)" $(if $(MLB_CANDIDATE_ROWS_CSV),--rows-csv "$(MLB_CANDIDATE_ROWS_CSV)",) $(if $(MLB_CANDIDATE_WINDOW_MODE),--window-mode $(MLB_CANDIDATE_WINDOW_MODE),) --window-days $(MLB_CANDIDATE_WINDOW_DAYS) --games-back $(MLB_CANDIDATE_GAMES_BACK) --prop-types "$(MLB_CANDIDATE_PROP_TYPES)" --required-props "$(MLB_CANDIDATE_REQUIRED_PROPS)" --min-candidate-total $(MLB_CANDIDATE_MIN_TOTAL) --min-overall-lift-pct $(MLB_CANDIDATE_MIN_LIFT_PCT) --max-prop-drop-pct $(MLB_CANDIDATE_MAX_PROP_DROP_PCT)
 
 mlb-candidate-eval-prod12:
-	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_PROP_TYPES)"
+	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_SOURCE_TABLE="$(MLB_PROD12_CANDIDATE_SOURCE_TABLE)" MLB_CANDIDATE_ROWS_CSV="$(MLB_PROD12_CANDIDATE_ROWS_CSV)" MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_CANDIDATE_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_CANDIDATE_REQUIRED_PROPS)" MLB_CANDIDATE_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_CANDIDATE_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 mlb-prod12-status:
 	$(VENV_PY) backend/mlb/scripts/mlb_prod12_status.py --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --phase2-history "$(MLB_PROD12_PHASE2_HISTORY_INPUT)"
@@ -1305,7 +1353,7 @@ mlb-prod12-ops-check:
 	$(MAKE) mlb-prod12-health-report
 
 mlb-prod12-ops-log:
-	$(VENV_PY) backend/mlb/scripts/mlb_prod12_ops_log.py --output "$(MLB_PROD12_OPS_HISTORY_INPUT)" --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --phase2-history "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --daily-max-age-hours "$(MLB_PROD12_DAILY_MAX_AGE_HOURS)" --weekly-max-age-hours "$(MLB_PROD12_WEEKLY_MAX_AGE_HOURS)" --daily-window "$(MLB_PROD12_HEALTH_DAILY_WINDOW)" --weekly-window "$(MLB_PROD12_HEALTH_WEEKLY_WINDOW)"
+	$(VENV_PY) backend/mlb/scripts/mlb_prod12_ops_log.py --output "$(MLB_PROD12_OPS_HISTORY_INPUT)" --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --phase2-history "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --daily-max-age-hours "$(MLB_PROD12_OPS_DAILY_MAX_AGE_HOURS)" --weekly-max-age-hours "$(MLB_PROD12_OPS_WEEKLY_MAX_AGE_HOURS)" --daily-window "$(MLB_PROD12_HEALTH_DAILY_WINDOW)" --weekly-window "$(MLB_PROD12_HEALTH_WEEKLY_WINDOW)"
 
 mlb-prod12-ops-last:
 	$(VENV_PY) backend/mlb/scripts/mlb_prod12_ops_last.py --input "$(MLB_PROD12_OPS_HISTORY_INPUT)" --limit 10 --json
@@ -1332,7 +1380,7 @@ mlb-prod12-daily-cycle:
 	exit $$rc
 
 mlb-prod12-track-weekly:
-	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_PROP_TYPES)" MLB_CANDIDATE_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_CANDIDATE_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
+	$(MAKE) mlb-candidate-eval MLB_CANDIDATE_SOURCE_TABLE="$(MLB_PROD12_CANDIDATE_SOURCE_TABLE)" MLB_CANDIDATE_ROWS_CSV="$(MLB_PROD12_CANDIDATE_ROWS_CSV)" MLB_CANDIDATE_PROP_TYPES="$(MLB_PROD12_CANDIDATE_PROP_TYPES)" MLB_CANDIDATE_REQUIRED_PROPS="$(MLB_PROD12_CANDIDATE_REQUIRED_PROPS)" MLB_CANDIDATE_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_CANDIDATE_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 mlb-prod12-release-manifest:
 	$(VENV_PY) backend/mlb/scripts/mlb_prod12_release_manifest.py --output "$(MLB_PROD12_RELEASE_OUTPUT)" --artifact-dirs "$(MLB_PROD12_ARTIFACT_DIRS)" --artifact-patterns "$(MLB_PROD12_ARTIFACT_PATTERNS)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --pipeline-history "$(MLB_PIPELINE_HISTORY_INPUT)" --prop-types "$(MLB_PROD12_PROP_TYPES)" --quality-games-back $(MLB_QUALITY_GAMES_BACK) --quality-min-total $(MLB_QUALITY_MIN_TOTAL) --quality-min-accuracy $(MLB_QUALITY_MIN_ACCURACY) --max-prop-drop-pct $(MLB_PROD12_MAX_PROP_DROP_PCT)
@@ -1341,7 +1389,7 @@ mlb-prod12-replay-latency:
 	$(VENV_PY) backend/mlb/scripts/mlb_prod12_replay_latency.py $(if $(MLB_BASE_URL),--base-url $(MLB_BASE_URL),) --date $(MLB_DATE) --sample-size $(MLB_REPLAY_SAMPLE) --require-min-success $(MLB_REPLAY_MIN_SUCCESS) --prop-types "$(MLB_PROD12_PROP_TYPES)" --max-predict-p95-ms $(MLB_REPLAY_MAX_PREDICT_P95_MS) --retry-attempts $(MLB_REPLAY_RETRY_ATTEMPTS) --retry-backoff-ms $(MLB_REPLAY_RETRY_BACKOFF_MS) $(if $(filter 1,$(MLB_REPLAY_ALLOW_SPARSE)),--allow-sparse,) --output "$(MLB_PROD12_REPLAY_OUTPUT)"
 
 mlb-prod12-phase2-log:
-	$(VENV_PY) backend/mlb/scripts/mlb_prod12_phase2_log.py --output "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --manifest-path "$(MLB_PROD12_RELEASE_OUTPUT)" --replay-path "$(MLB_PROD12_REPLAY_OUTPUT)" --baseline-path "$(MLB_CANDIDATE_BASELINE_PATH)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --source-table "$(MLB_CANDIDATE_SOURCE_TABLE)" $(if $(MLB_CANDIDATE_WINDOW_MODE),--window-mode $(MLB_CANDIDATE_WINDOW_MODE),) --window-days $(MLB_CANDIDATE_WINDOW_DAYS) --games-back $(MLB_CANDIDATE_GAMES_BACK) --prop-types "$(MLB_PROD12_PROP_TYPES)" --required-props "$(MLB_PROD12_PROP_TYPES)" --min-candidate-total $(MLB_CANDIDATE_MIN_TOTAL) --min-overall-lift-pct $(MLB_PROD12_MIN_LIFT_PCT) --max-prop-drop-pct $(MLB_PROD12_MAX_PROP_DROP_PCT)
+	$(VENV_PY) backend/mlb/scripts/mlb_prod12_phase2_log.py --output "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --manifest-path "$(MLB_PROD12_RELEASE_OUTPUT)" --replay-path "$(MLB_PROD12_REPLAY_OUTPUT)" --baseline-path "$(MLB_CANDIDATE_BASELINE_PATH)" --baseline-dir "$(MLB_CANDIDATE_BASELINE_DIR)" --source-table "$(MLB_PROD12_CANDIDATE_SOURCE_TABLE)" $(if $(MLB_PROD12_CANDIDATE_ROWS_CSV),--rows-csv "$(MLB_PROD12_CANDIDATE_ROWS_CSV)",) $(if $(MLB_CANDIDATE_WINDOW_MODE),--window-mode $(MLB_CANDIDATE_WINDOW_MODE),) --window-days $(MLB_CANDIDATE_WINDOW_DAYS) --games-back $(MLB_CANDIDATE_GAMES_BACK) --prop-types "$(MLB_PROD12_CANDIDATE_PROP_TYPES)" --required-props "$(MLB_PROD12_CANDIDATE_REQUIRED_PROPS)" --min-candidate-total $(MLB_CANDIDATE_MIN_TOTAL) --min-overall-lift-pct $(MLB_PROD12_MIN_LIFT_PCT) --max-prop-drop-pct $(MLB_PROD12_MAX_PROP_DROP_PCT)
 
 mlb-prod12-phase2-last:
 	$(VENV_PY) backend/mlb/scripts/mlb_prod12_phase2_last.py --input "$(MLB_PROD12_PHASE2_HISTORY_INPUT)" --limit 10 --json

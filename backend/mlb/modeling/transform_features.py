@@ -5,12 +5,12 @@ import json
 import pandas as pd
 import numpy as np
 
-MODEL_DIR = os.getenv("MODEL_DIR", "/var/data/models")
+MODEL_DIR = os.getenv("MODEL_DIR", "/var/data/proppadia/models")
 _FEATURE_META = None
 
 import os, json, numpy as np, pandas as pd
 
-MODEL_DIR = os.getenv("MODEL_DIR", "/var/data/models")
+MODEL_DIR = os.getenv("MODEL_DIR", "/var/data/proppadia/models")
 _FEATURE_META = None
 
 def _load_feature_meta():

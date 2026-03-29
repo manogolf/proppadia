@@ -27,6 +27,11 @@ payload = {
     "run_mode": (get("MLB_CRON_RUN_MODE") or "daily").lower(),
 }
 
+# Default to running the daily gate unless explicitly disabled by env.
+# This avoids silent drift where daily health checks are skipped.
+if get("MLB_DAILY_GATE_ENABLED") is None:
+    payload["mlb_daily_gate_enabled"] = 1
+
 str_fields = {
     "MLB_BASE_URL": "mlb_base_url",
     "MLB_WEEKLY_BASE_URL": "mlb_weekly_base_url",

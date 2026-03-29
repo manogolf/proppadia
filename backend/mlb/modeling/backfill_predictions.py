@@ -41,7 +41,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
     raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-MODEL_DIR = os.getenv("MODEL_DIR", "/var/data/models")
+MODEL_DIR = os.getenv("MODEL_DIR", "/var/data/proppadia/models")
 Path(MODEL_DIR).mkdir(parents=True, exist_ok=True)
 
 BATCH_SIZE = int(os.getenv("BACKFILL_BATCH_SIZE", "500"))
@@ -168,7 +168,7 @@ def load_models(model_prop_type: str):
     return rf, lr
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Feature metadata (per-model schemas from /var/data/models/feature_metadata.json)
+# Feature metadata (per-model schemas from /var/data/proppadia/models/feature_metadata.json)
 # ──────────────────────────────────────────────────────────────────────────────
 _FEATURE_META: dict | None = None
 

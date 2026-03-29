@@ -5,13 +5,13 @@ Train and save per-prop models (LogReg + RandomForest) to local filesystem.
 - Primary source: training_examples_v1 (if exists)
 - Fallback: model_training_props + merge player_derived_stats for requested features
 - Target: outcome ('win'→1, 'loss'→0)
-- Saves models to: $MODELS_DIR/{latest,archive} (default /var/data/models)
+- Saves models to: $MODELS_DIR/{latest,archive} (default /var/data/proppadia/models)
 - Embeds exact feature lists used into joblib meta (features_num/features_cat)
 
 Env:
   SUPABASE_URL
   SUPABASE_SERVICE_ROLE_KEY  (or SUPABASE_ANON_KEY for read-only)
-  MODELS_DIR (optional, default /var/data/models)
+  MODELS_DIR (optional, default /var/data/proppadia/models)
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ PITCHING_PROPS = {
 }
 
 
-MODELS_DIR  = Path(os.environ.get("MODELS_DIR", "/var/data/models")).resolve()
+MODELS_DIR  = Path(os.environ.get("MODELS_DIR", "/var/data/proppadia/models")).resolve()
 LATEST_DIR  = MODELS_DIR / "latest"
 ARCHIVE_DIR = MODELS_DIR / "archive"
 

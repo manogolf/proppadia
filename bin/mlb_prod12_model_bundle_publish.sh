@@ -9,6 +9,29 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_DIR}"
 
+derive_supabase_url_from_db_url() {
+  local db_url="$1"
+  local after_scheme username project_ref
+  after_scheme="${db_url#*://}"
+  username="${after_scheme%%:*}"
+  if [[ "${username}" == postgres.* ]]; then
+    project_ref="${username#postgres.}"
+    project_ref="${project_ref%%@*}"
+    if [[ -n "${project_ref}" ]]; then
+      printf 'https://%s.supabase.co\n' "${project_ref}"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+if [[ -z "${SUPABASE_URL:-}" && -n "${SUPABASE_DB_URL:-}" ]]; then
+  if derived_url="$(derive_supabase_url_from_db_url "${SUPABASE_DB_URL}")"; then
+    export SUPABASE_URL="${derived_url}"
+    echo "[prod12-model-publish] derived SUPABASE_URL from SUPABASE_DB_URL: ${SUPABASE_URL}"
+  fi
+fi
+
 : "${SUPABASE_URL:?mlb_prod12_model_bundle_publish requires SUPABASE_URL}"
 if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" && -z "${SUPABASE_SECRET_KEY:-}" ]]; then
   echo "mlb_prod12_model_bundle_publish requires SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY" >&2
@@ -18,6 +41,11 @@ SUPABASE_API_KEY="${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}"
 
 MODELS_DIR="${MODELS_DIR:-/var/data/proppadia/models}"
 MODELS_BUCKET="${MODELS_BUCKET:-models}"
+
+if [[ ! -d "${MODELS_DIR}/latest" && -d "${REPO_DIR}/models_out/latest" ]]; then
+  MODELS_DIR="${REPO_DIR}/models_out"
+  echo "[prod12-model-publish] default MODEL_DIR missing; using local fallback MODELS_DIR=${MODELS_DIR}"
+fi
 
 if [[ ! -d "${MODELS_DIR}/latest" ]]; then
   echo "mlb_prod12_model_bundle_publish: missing ${MODELS_DIR}/latest" >&2

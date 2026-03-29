@@ -168,7 +168,7 @@ def _to_probability_from_predict(raw: float, features: Dict[str, Any]) -> float:
 
 
 def _artifact_latest_dir() -> Path:
-    root = Path(os.getenv("MODEL_DIR", "/var/data/models"))
+    root = Path(os.getenv("MODEL_DIR", "/var/data/proppadia/models"))
     return root / "latest"
 
 @lru_cache(maxsize=128)
@@ -231,7 +231,7 @@ def _blend(a: Optional[float], b: Optional[float]) -> float:
 
 @lru_cache(maxsize=128)
 def _load_artifact_meta(prop: str) -> dict:
-    """Read /var/data/models/latest/{prop}.joblib and return its meta dict."""
+    """Read /var/data/proppadia/models/latest/{prop}.joblib and return its meta dict."""
     try:
         p = _artifact_latest_dir() / f"{prop}.joblib"
         obj = joblib.load(p)

@@ -6,11 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date, timedelta
+from pathlib import Path
 from typing import Any, Dict, Sequence, Tuple
 
 from backend.shared.db.pg import pg_fetchall
 
-_ALLOWED_SOURCE_TABLES = {"player_props", "model_training_props"}
+_ALLOWED_SOURCE_TABLES = {"player_props", "model_training_props", "reconcile_rows"}
 _DEFAULT_SOURCE_TABLE = "model_training_props"
 
 
@@ -23,7 +25,209 @@ def _normalize_source_table(source_table: str) -> str:
 
 def _source_table_sql(source_table: str) -> str:
     table = _normalize_source_table(source_table)
+    if table == "reconcile_rows":
+        raise ValueError("reconcile_rows source_table is csv-only and does not map to SQL table")
     return f"mlb.{table}"
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return 0
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _confidence_bucket_from_prob(model_pick_prob: float | None) -> str:
+    if model_pick_prob is None:
+        return "unknown"
+    diff = abs(float(model_pick_prob) - 0.5)
+    if diff < 0.05:
+        return "low"
+    if diff < 0.10:
+        return "medium"
+    return "high"
+
+
+def _window_filter_rows(
+    rows: list[dict[str, Any]],
+    *,
+    window_mode: str,
+    window_value: int,
+) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    if window_mode == "games":
+        ordered_days = sorted({r["game_day"] for r in rows if r.get("game_day") is not None}, reverse=True)
+        selected_days = set(ordered_days[: int(window_value)])
+        return [r for r in rows if r.get("game_day") in selected_days]
+    min_day = date.today() - timedelta(days=int(window_value))
+    return [r for r in rows if (r.get("game_day") is not None and r["game_day"] >= min_day)]
+
+
+def _collect_quality_from_rows_csv(
+    *,
+    rows_csv: str,
+    window_mode: str,
+    window_value: int,
+    prop_types: Sequence[str],
+) -> Dict[str, Any]:
+    try:
+        import pandas as pd
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(f"pandas is required for reconcile_rows source_table: {exc}") from exc
+
+    csv_path = Path(rows_csv).expanduser()
+    if not csv_path.exists():
+        raise FileNotFoundError(f"reconcile rows csv not found: {csv_path}")
+
+    df = pd.read_csv(csv_path, low_memory=False)
+    if df.empty:
+        return {
+            "source_table": "reconcile_rows",
+            "window_mode": window_mode,
+            "window_value": int(window_value),
+            "prop_types": list(prop_types),
+            "prop_sources": [],
+            "overall": {"window_mode": window_mode, "window_value": int(window_value), "total": 0, "correct": 0, "accuracy_pct": None},
+            "by_prop": [],
+            "by_confidence_bucket": [],
+            "drift_14d": {
+                "last_14d": {"total": 0, "correct": 0, "accuracy_pct": None},
+                "prev_14d": {"total": 0, "correct": 0, "accuracy_pct": None},
+                "delta_pct": None,
+            },
+        }
+
+    for col in ("game_date", "prop_type", "actual_model_pick_outcome", "model_pick_prob"):
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    if prop_types:
+        prop_set = {str(p).strip() for p in prop_types if str(p).strip()}
+        df = df[df["prop_type"].astype(str).str.strip().isin(prop_set)]
+
+    df["game_day"] = pd.to_datetime(df["game_date"], errors="coerce").dt.date
+    df["actual_model_pick_outcome"] = df["actual_model_pick_outcome"].astype(str).str.lower().str.strip()
+    df["model_pick_prob"] = pd.to_numeric(df["model_pick_prob"], errors="coerce")
+
+    normalized_rows: list[dict[str, Any]] = []
+    for row in df.itertuples(index=False):
+        outcome = str(getattr(row, "actual_model_pick_outcome", "") or "").strip().lower()
+        model_correct_i: int | None
+        if outcome == "win":
+            model_correct_i = 1
+        elif outcome == "loss":
+            model_correct_i = 0
+        else:
+            model_correct_i = None
+
+        model_pick_prob_val = _safe_float(getattr(row, "model_pick_prob", None))
+        normalized_rows.append(
+            {
+                "prop_type": str(getattr(row, "prop_type", "") or "").strip(),
+                "game_day": getattr(row, "game_day", None),
+                "model_correct_i": model_correct_i,
+                "confidence_bucket": _confidence_bucket_from_prob(model_pick_prob_val),
+            }
+        )
+
+    scoped_rows = _window_filter_rows(normalized_rows, window_mode=window_mode, window_value=int(window_value))
+
+    scored_rows = [r for r in scoped_rows if r.get("model_correct_i") is not None]
+    total = len(scored_rows)
+    correct = sum(_safe_int(r.get("model_correct_i")) for r in scored_rows)
+    overall = {
+        "window_mode": window_mode,
+        "window_value": int(window_value),
+        "total": int(total),
+        "correct": int(correct),
+        "accuracy_pct": round((100.0 * float(correct) / float(total)), 2) if total > 0 else None,
+    }
+
+    by_prop_map: dict[str, dict[str, int]] = {}
+    for row in scored_rows:
+        prop = str(row.get("prop_type") or "").strip()
+        if not prop:
+            continue
+        bucket = by_prop_map.setdefault(prop, {"total": 0, "correct": 0})
+        bucket["total"] += 1
+        bucket["correct"] += _safe_int(row.get("model_correct_i"))
+    by_prop = []
+    for prop in sorted(by_prop_map.keys(), key=lambda p: (-by_prop_map[p]["total"], p)):
+        p_total = by_prop_map[prop]["total"]
+        p_correct = by_prop_map[prop]["correct"]
+        by_prop.append(
+            {
+                "prop_type": prop,
+                "total": int(p_total),
+                "correct": int(p_correct),
+                "accuracy_pct": round((100.0 * float(p_correct) / float(p_total)), 2) if p_total > 0 else None,
+            }
+        )
+
+    by_conf_map: dict[str, dict[str, int]] = {}
+    for row in scored_rows:
+        bucket_name = str(row.get("confidence_bucket") or "unknown")
+        bucket = by_conf_map.setdefault(bucket_name, {"total": 0, "correct": 0})
+        bucket["total"] += 1
+        bucket["correct"] += _safe_int(row.get("model_correct_i"))
+    confidence_order = {"high": 1, "medium": 2, "low": 3, "unknown": 4}
+    by_confidence_bucket = []
+    for bucket_name in sorted(by_conf_map.keys(), key=lambda b: (confidence_order.get(b, 99), b)):
+        b_total = by_conf_map[bucket_name]["total"]
+        b_correct = by_conf_map[bucket_name]["correct"]
+        by_confidence_bucket.append(
+            {
+                "confidence_bucket": bucket_name,
+                "total": int(b_total),
+                "correct": int(b_correct),
+                "accuracy_pct": round((100.0 * float(b_correct) / float(b_total)), 2) if b_total > 0 else None,
+            }
+        )
+
+    today = date.today()
+    last_14_start = today - timedelta(days=14)
+    prev_14_start = today - timedelta(days=28)
+
+    drift_rows = [r for r in normalized_rows if r.get("model_correct_i") is not None and r.get("game_day") is not None and r["game_day"] >= prev_14_start]
+
+    def _bucket_stats(bucket_rows: list[dict[str, Any]]) -> dict[str, Any]:
+        b_total = len(bucket_rows)
+        b_correct = sum(_safe_int(r.get("model_correct_i")) for r in bucket_rows)
+        return {
+            "total": int(b_total),
+            "correct": int(b_correct),
+            "accuracy_pct": round((100.0 * float(b_correct) / float(b_total)), 2) if b_total > 0 else None,
+        }
+
+    last_14_rows = [r for r in drift_rows if r["game_day"] >= last_14_start]
+    prev_14_rows = [r for r in drift_rows if prev_14_start <= r["game_day"] < last_14_start]
+    last_14 = _bucket_stats(last_14_rows)
+    prev_14 = _bucket_stats(prev_14_rows)
+    delta = None
+    if last_14.get("accuracy_pct") is not None and prev_14.get("accuracy_pct") is not None:
+        delta = round(float(last_14["accuracy_pct"]) - float(prev_14["accuracy_pct"]), 2)
+
+    return {
+        "source_table": "reconcile_rows",
+        "window_mode": window_mode,
+        "window_value": int(window_value),
+        "prop_types": list(prop_types),
+        "prop_sources": [],
+        "overall": overall,
+        "by_prop": by_prop,
+        "by_confidence_bucket": by_confidence_bucket,
+        "drift_14d": {"last_14d": last_14, "prev_14d": prev_14, "delta_pct": delta},
+    }
 
 
 def _common_cte(
@@ -286,12 +490,20 @@ def collect_quality(
     prop_types: Sequence[str] | None = None,
     prop_sources: Sequence[str] | None = None,
     source_table: str = _DEFAULT_SOURCE_TABLE,
+    rows_csv: str | None = None,
 ) -> Dict[str, Any]:
     normalized_mode = "games" if str(window_mode).lower() == "games" else "days"
     normalized_source = _normalize_source_table(source_table)
     window_value = max(1, int(window_value))
     filtered_prop_types = [str(p).strip() for p in (prop_types or []) if str(p).strip()]
     filtered_prop_sources = [str(s).strip().lower() for s in (prop_sources or []) if str(s).strip()]
+    if normalized_source == "reconcile_rows":
+        return _collect_quality_from_rows_csv(
+            rows_csv=str(rows_csv or "").strip(),
+            window_mode=normalized_mode,
+            window_value=window_value,
+            prop_types=filtered_prop_types,
+        )
     overall = _overall(window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources)
     by_prop = _by_prop(window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources)
     by_bucket = _by_confidence_bucket(
@@ -323,7 +535,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--source-table",
         choices=sorted(_ALLOWED_SOURCE_TABLES),
         default=_DEFAULT_SOURCE_TABLE,
-        help="Source table for quality metrics (default: model_training_props).",
+        help="Source table for quality metrics.",
+    )
+    ap.add_argument(
+        "--rows-csv",
+        default="",
+        help="Required when --source-table reconcile_rows; path to reconcile rows csv.",
     )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
@@ -336,6 +553,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         prop_types=prop_types,
         prop_sources=prop_sources,
         source_table=args.source_table,
+        rows_csv=args.rows_csv,
     )
     overall = quality["overall"]
 

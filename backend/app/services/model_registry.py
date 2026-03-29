@@ -30,7 +30,10 @@ def canonicalize_prop_type(prop_type: str) -> str:
 
 
 def _models_root() -> Path:
-    return Path(os.getenv("MODEL_DIR", "/var/data/models"))
+    configured = os.getenv("MODEL_DIR")
+    if configured:
+        return Path(configured)
+    return Path("/var/data/proppadia/models")
 
 
 def _latest_artifact_path(prop: str) -> Path:
