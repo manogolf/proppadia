@@ -316,10 +316,8 @@ def _prep_frame(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # sample weights: keep your existing behavior
+    # sample weights: uniform (no source-based overweighting)
     w = np.ones(len(df), dtype="float64")
-    if "prop_source" in df.columns:
-        w[df["prop_source"] == "user_added"] = 1000.0
     df["sample_weight"] = w
     return df
 
