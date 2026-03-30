@@ -50,9 +50,10 @@ PROP_TO_ODDS_MARKET = {
     # - pitcher_record_a_win (yes/no)
 }
 
-# Experimental/undocumented market-key aliases. These are only queried when
-# MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=1 and are fetched in event-level chunks so a
-# bad key cannot block baseline daily markets.
+# Additional market-key aliases.
+# - Aliases for props that do not have a primary stable market mapping are always
+#   attempted via event-level fetch (422-safe).
+# - Other aliases are enabled by MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=1.
 PROP_TO_ODDS_MARKET_ALIASES = {
     "runs_rbis": (
         "batter_runs_rbis",
@@ -108,17 +109,30 @@ def _stable_market_keys() -> List[str]:
     return keys
 
 
-def _experimental_market_keys() -> List[str]:
-    if not _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
-        return []
+def _always_alias_market_keys() -> List[str]:
+    stable_props = set(str(k or "").strip() for k in (PROP_TO_ODDS_MARKET or {}).keys())
     keys: List[str] = []
-    for _prop_type, aliases in (PROP_TO_ODDS_MARKET_ALIASES or {}).items():
+    for prop_type, aliases in (PROP_TO_ODDS_MARKET_ALIASES or {}).items():
+        prop = str(prop_type or "").strip()
+        if not prop or prop in stable_props:
+            continue
         for key in aliases or ():
             k = str(key or "").strip()
             if k:
                 keys.append(k)
-    for key in _parse_csv(str(os.getenv("MLB_ODDS_EXTRA_MARKETS", "") or "")):
-        keys.append(key)
+    return sorted(set(keys))
+
+
+def _experimental_market_keys() -> List[str]:
+    keys: List[str] = list(_always_alias_market_keys())
+    if _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
+        for _prop_type, aliases in (PROP_TO_ODDS_MARKET_ALIASES or {}).items():
+            for key in aliases or ():
+                k = str(key or "").strip()
+                if k:
+                    keys.append(k)
+        for key in _parse_csv(str(os.getenv("MLB_ODDS_EXTRA_MARKETS", "") or "")):
+            keys.append(key)
     stable = set(_stable_market_keys())
     return sorted(set(k for k in keys if k and k not in stable))
 
@@ -224,7 +238,7 @@ def get_market_to_prop_map(*, include_aliases: bool = True) -> Dict[str, str]:
         k = str(market_key or "").strip()
         if k:
             out[k] = str(prop_type)
-    if include_aliases and _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
+    if include_aliases:
         for prop_type, aliases in (PROP_TO_ODDS_MARKET_ALIASES or {}).items():
             for alias in aliases or ():
                 k = str(alias or "").strip()
@@ -239,7 +253,7 @@ def get_prop_market_candidates(*, prop_type: str, include_aliases: bool = True) 
     primary = PROP_TO_ODDS_MARKET.get(normalized)
     if primary:
         out.append(str(primary))
-    if include_aliases and _env_bool("MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED", False):
+    if include_aliases:
         for alias in (PROP_TO_ODDS_MARKET_ALIASES.get(normalized) or ()):
             k = str(alias or "").strip()
             if k and k not in out:

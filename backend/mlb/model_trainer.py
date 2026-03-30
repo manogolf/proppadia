@@ -115,6 +115,11 @@ RECONCILE_REQUIRE_TWO_SIDED = str(os.environ.get("MLB_TRAIN_RECONCILE_REQUIRE_TW
     "no",
     "off",
 }
+RECONCILE_ALLOW_MISSING_PRICE_PROPS = {
+    p.strip().lower()
+    for p in str(os.environ.get("MLB_TRAIN_RECONCILE_ALLOW_MISSING_PRICE_PROPS", "runs_rbis")).split(",")
+    if p.strip()
+}
 RECONCILE_FALLBACK_BASE_MERGE = str(
     os.environ.get("MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE", "1")
 ).strip().lower() not in {
@@ -346,7 +351,7 @@ def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: 
     out["line"] = pd.to_numeric(out.get("line"), errors="coerce")
     out = out[out["line"].notna()]
 
-    if RECONCILE_REQUIRE_TWO_SIDED:
+    if RECONCILE_REQUIRE_TWO_SIDED and str(prop_type).strip().lower() not in RECONCILE_ALLOW_MISSING_PRICE_PROPS:
         px_o = pd.to_numeric(out.get("price_over_american"), errors="coerce")
         px_u = pd.to_numeric(out.get("price_under_american"), errors="coerce")
         out = out[px_o.notna() & px_u.notna()]

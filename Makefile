@@ -87,6 +87,8 @@ MLB_RECOMPUTE_REQUIRE_REGULAR ?= 1
 MLB_RECOMPUTE_FORCE_INVERT_PROPS ?=
 MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP ?= 200
 MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT ?= 45
+# Non-blocking recompute lanes (typically derived-only props not consistently market-backed).
+MLB_RECOMPUTE_NON_BLOCKING_PROPS ?= runs_rbis
 MLB_RECOMPUTE_BATCH_PROP_TYPES ?= $(MLB_CORRECTED_PROP_TYPES)
 MLB_RECOMPUTE_REQUIRE_REGULAR_ARG = $(if $(filter 1,$(MLB_RECOMPUTE_REQUIRE_REGULAR)),--require-regular-season,)
 MLB_CORRECTED_PROP_TYPES ?= runs_scored,runs_rbis,hits_runs_rbis
@@ -172,7 +174,9 @@ MLB_CANDIDATE_GAMES_BACK ?= 30
 MLB_CANDIDATE_PROP_TYPES ?= $(MLB_CORE_PROP_TYPES)
 MLB_CANDIDATE_REQUIRED_PROPS ?= $(MLB_CORE_PROP_TYPES)
 MLB_PROD12_CANDIDATE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
-MLB_PROD12_CANDIDATE_REQUIRED_PROPS ?= $(MLB_PROD12_PROP_TYPES)
+# Keep reconcile-required stability set scoped to props with reliable reconcile coverage.
+# runs_rbis is included in prod12 lane/predictions, but excluded from required stability by default.
+MLB_PROD12_CANDIDATE_REQUIRED_PROPS ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
 MLB_PROD12_CANDIDATE_SOURCE_TABLE ?= reconcile_rows
 MLB_PROD12_CANDIDATE_ROWS_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
 MLB_CANDIDATE_MIN_TOTAL ?= -1
@@ -213,8 +217,8 @@ MLB_CORE_PROP_TYPES ?= hits,total_bases,hits_runs_rbis,runs_rbis,rbis,runs_score
 MLB_PROD8_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks
 MLB_UNDERSERVED_PROMOTED_PROP_TYPES ?= runs_scored,walks_allowed,runs_rbis
 MLB_UNDERSERVED_WATCHLIST_PROP_TYPES ?= outs_recorded,home_runs
-# Keep prod12 default lane aligned with cron/runbook (11 props; excludes runs_rbis).
-MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed
+# Keep prod12 default lane aligned with cron/runbook (12 props; runs_rbis re-enabled).
+MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed,runs_rbis
 MLB_PROD12_DAILY_PROP_TYPES ?= hits,total_bases,strikeouts_batting
 MLB_PROD12_PIPELINE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_DEGENERATE_PROP_TYPES ?= $(MLB_UNDERSERVED_WATCHLIST_PROP_TYPES)
@@ -1162,12 +1166,14 @@ mlb-corrected-props-recompute-gated-batched:
 	fi; \
 	batch_props="$(MLB_RECOMPUTE_BATCH_PROP_TYPES)"; \
 	OLD_IFS="$$IFS"; IFS=','; \
-	for prop in $$batch_props; do \
-		prop=$$(echo "$$prop" | xargs); \
-		if [ -z "$$prop" ]; then continue; fi; \
-		echo "==> recompute gated batch prop=$$prop"; \
-			MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
-	done; \
+		for prop in $$batch_props; do \
+			prop=$$(echo "$$prop" | xargs); \
+			if [ -z "$$prop" ]; then continue; fi; \
+			echo "==> recompute gated batch prop=$$prop"; \
+				gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+				case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
+				MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+		done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="$(MLB_QUALITY_PROP_SOURCES)" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"
 
@@ -1207,13 +1213,15 @@ mlb-hybrid-window-refresh:
 		fi; \
 		echo "==> hybrid train prop=$$prop days_back=$$days_back"; \
 		$(VENV_PY) backend/mlb/model_trainer.py --prop "$$prop" --days-back "$$days_back" --limit "$(MLB_HYBRID_TRAIN_LIMIT)" || exit $$?; \
-		if [ ! -f "$$MODEL_DIR/latest/$$prop.joblib" ]; then \
-			echo "==> hybrid recompute skipped prop=$$prop (no model artifact at $$MODEL_DIR/latest/$$prop.joblib)"; \
-			continue; \
-		fi; \
-		echo "==> hybrid recompute prop=$$prop"; \
-		MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
-	done; \
+			if [ ! -f "$$MODEL_DIR/latest/$$prop.joblib" ]; then \
+				echo "==> hybrid recompute skipped prop=$$prop (no model artifact at $$MODEL_DIR/latest/$$prop.joblib)"; \
+				continue; \
+			fi; \
+			echo "==> hybrid recompute prop=$$prop"; \
+			gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+			case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
+			MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+		done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
 	$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
@@ -1242,13 +1250,15 @@ mlb-retrain-broad-reconcile:
 		if [ -z "$$prop" ]; then continue; fi; \
 		echo "==> broad train prop=$$prop source=$(MLB_TRAIN_FEATURE_SOURCE) rows=$(MLB_TRAIN_RECONCILE_ROWS_CSV) model_root=$$model_root"; \
 		MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" TRAIN_FEATURE_SOURCE="$(MLB_TRAIN_FEATURE_SOURCE)" MLB_TRAIN_RECONCILE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED="$(MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED)" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE="$(MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE)" $(VENV_PY) backend/mlb/model_trainer.py --prop "$$prop" --days-back "$(MLB_RETRAIN_BROAD_DAYS_BACK)" --limit "$(MLB_RETRAIN_BROAD_TRAIN_LIMIT)" || exit $$?; \
-		if [ ! -f "$$model_root/latest/$$prop.joblib" ]; then \
-			echo "==> broad recompute skipped prop=$$prop (no model artifact at $$model_root/latest/$$prop.joblib)"; \
-			continue; \
-		fi; \
-		echo "==> broad recompute prop=$$prop"; \
-			MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
-	done; \
+			if [ ! -f "$$model_root/latest/$$prop.joblib" ]; then \
+				echo "==> broad recompute skipped prop=$$prop (no model artifact at $$model_root/latest/$$prop.joblib)"; \
+				continue; \
+			fi; \
+			echo "==> broad recompute prop=$$prop"; \
+				gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+				case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
+				MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+		done; \
 	IFS="$$OLD_IFS"; \
 		$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_QUALITY_MIN_TOTAL)"; \
 		$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"

@@ -7,7 +7,8 @@ Date reference: this runbook was aligned on February 17, 2026.
 ## Scope
 
 - Prop lane set (`prod12`):
-  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed`
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
+  - Candidate required-props stability gate remains scoped to 11 props (excludes `runs_rbis`) by design.
 - Gate posture:
   - Daily health + logging strict gate (`mlb-prod12-daily-gate`)
   - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
@@ -316,6 +317,15 @@ make mlb-candidate-eval-prod12 \
 ```
 
 `mlb-retrain-broad-reconcile` now runs the reconcile-based quality + candidate checks automatically at the end.
+
+Current caveat:
+- `runs_rbis` reconcile rows require snapshots that include one of the alias keys (`batter_runs_rbis`, `batter_runs_rbi`, `batter_r+rbi`).
+- Older archived snapshots may still have zero `runs_rbis` coverage; in strict reconcile mode (`MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0`), that prop will be skipped for those windows.
+- Reconcile builder now supports synthetic backfill from `mlb.model_training_props` for missing props (default includes `runs_rbis`):
+  - `--derive-props-from-mtp runs_rbis`
+  - Synthetic rows use `market_key=derived:runs_rbis` and no price columns.
+  - Trainer allows this lane by default via `MLB_TRAIN_RECONCILE_ALLOW_MISSING_PRICE_PROPS=runs_rbis`.
+- Broad/hybrid recompute gates treat `runs_rbis` as non-blocking by default (`MLB_RECOMPUTE_NON_BLOCKING_PROPS=runs_rbis`), so missing market support does not hold the entire lane.
 
 Optional: separate candidate scope vs required stability props for prod12 gate:
 
