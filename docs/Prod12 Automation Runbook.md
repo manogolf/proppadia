@@ -367,7 +367,7 @@ Use this when you want retrain/recompute cadence to run on your machine (not Ren
 1. Create a local runner script:
 
 ```bash
-mkdir -p "$HOME/bin" "$HOME/Projects/proppadia/artifacts/ops"
+mkdir -p "$HOME/bin" "$HOME/Projects/proppadia/artifacts/ops" "$HOME/Library/LaunchAgents"
 
 cat > "$HOME/bin/proppadia_mlb_retrain_weekly.sh" <<'EOF'
 #!/bin/zsh
@@ -382,11 +382,19 @@ echo "[$(date -u +%FT%TZ)] START weekly retrain cadence"
 make mlb-retrain-prereq-check
 make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="2025-03-01" MLB_RECONCILE_TO_DATE="$(date -u +%F)" MLB_RECONCILE_BOOKMAKER= MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
 make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0
+make mlb-prod12-model-bundle-publish
 echo "[$(date -u +%FT%TZ)] DONE weekly retrain cadence"
 EOF
 
 chmod +x "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
+
+# Optional quick script sanity check (runs once immediately in current shell):
+# "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
 ```
+
+Notes:
+- Because the script runs with `set -e`, publish only runs if prior retrain/eval steps pass.
+- Ensure publish credentials are present in `backend/.env` (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`).
 
 2. Create a LaunchAgent plist (example: Monday 6:30 AM local time):
 
@@ -414,6 +422,10 @@ cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist" <<EOF
 </dict>
 </plist>
 EOF
+
+touch "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.out.log"
+touch "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.err.log"
+plutil -lint "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
 ```
 
 3. Load or reload the job:
@@ -423,13 +435,17 @@ launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.ret
 launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
 ```
 
-4. Trigger once now to verify:
+4. Trigger once now to verify (without killing a running job):
 
 ```bash
-launchctl kickstart -k gui/$(id -u)/com.proppadia.mlb.retrain.weekly
+launchctl kickstart gui/$(id -u)/com.proppadia.mlb.retrain.weekly
 tail -n 80 "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.out.log"
 tail -n 80 "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.err.log"
 ```
+
+Important:
+- `launchctl kickstart -k ...` force-restarts the job and sends `SIGTERM` to the current process.
+- If the weekly run is mid-step (for example `make mlb-reconcile-rows`), logs will show `Terminated: 15`.
 
 5. Check status anytime:
 

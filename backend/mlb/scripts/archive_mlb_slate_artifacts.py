@@ -129,6 +129,8 @@ def main() -> int:
     ]
     if odds_snapshot_src is not None:
         copy_plan.append((odds_snapshot_src, archive_dir / "odds_mlb_playerprops.json"))
+        # Keep legacy-compatible filename in sync for reconcile/report defaults.
+        copy_plan.append((odds_snapshot_src, archive_dir / "odds_latest_compatible.json"))
 
     results: List[CopyResult] = []
     for src, dst in copy_plan:
@@ -162,4 +164,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
