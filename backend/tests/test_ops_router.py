@@ -89,6 +89,7 @@ class TestOpsRouter(unittest.TestCase):
                 headers={"X-Ops-Token": "secret"},
                 json={
                     "mlb_date": "2025-08-15",
+                    "mlb_daily_gate_enabled": 1,
                     "mlb_daily_stat_derived_enabled": 1,
                     "mlb_stat_days_ago": 2,
                     "mlb_stat_from_date": "2025-08-01",
@@ -115,6 +116,7 @@ class TestOpsRouter(unittest.TestCase):
         env_overrides = mock_start.call_args.kwargs.get("env_overrides") or {}
         self.assertEqual(env_overrides.get("MLB_CRON_RUN_MODE"), "daily")
         self.assertEqual(env_overrides.get("MLB_DATE"), "2025-08-15")
+        self.assertEqual(env_overrides.get("MLB_DAILY_GATE_ENABLED"), 1)
         self.assertEqual(env_overrides.get("MLB_DAILY_STAT_DERIVED_ENABLED"), 1)
         self.assertEqual(env_overrides.get("MLB_STAT_DAYS_AGO"), 2)
         self.assertEqual(env_overrides.get("MLB_STAT_FROM_DATE"), "2025-08-01")

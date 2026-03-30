@@ -10,6 +10,9 @@ book_upload_local_out="${4:-${MLB_BOOK_UPLOAD_LOCAL_OUT_CSV:-backend/mlb/data/pr
 pipeline_history_local_out="${MLB_PIPELINE_HISTORY_LOCAL_OUT:-artifacts/mlb_pipeline_history.jsonl}"
 phase2_history_local_out="${MLB_PROD12_PHASE2_HISTORY_LOCAL_OUT:-artifacts/mlb_prod12_phase2_history.jsonl}"
 sync_status_history="${MLB_REMOTE_SYNC_STATUS_HISTORY:-1}"
+# Require history sync by default when history artifacts are present.
+# If artifacts are not present for this run (for example phase2 on daily runs),
+# sync is skipped cleanly.
 sync_status_history_required="${MLB_REMOTE_SYNC_STATUS_HISTORY_REQUIRED:-1}"
 
 _trim() {
@@ -93,17 +96,25 @@ download_remote_artifact() {
   mkdir -p "${out_dir}"
   tmp_out="${out_path}.tmp.$$"
 
-  if ! curl -fsS \
-    --http1.1 \
-    --retry 4 \
-    --retry-delay 2 \
-    --retry-all-errors \
-    --max-time 90 \
-    -H "X-Ops-Token: ${OPS_API_TOKEN}" \
-    "${endpoint}" \
-    -o "${tmp_out}"; then
+  http_code="$(
+    curl -sS \
+      --http1.1 \
+      --retry 4 \
+      --retry-delay 2 \
+      --max-time 90 \
+      -H "X-Ops-Token: ${OPS_API_TOKEN}" \
+      -w "%{http_code}" \
+      "${endpoint}" \
+      -o "${tmp_out}" || printf '000'
+  )"
+
+  if [[ "${http_code}" != "200" ]]; then
     rm -f "${tmp_out}" || true
-    echo "[prod12-remote] ERROR failed to download remote ${label} artifact from ${endpoint}" >&2
+    if [[ "${http_code}" == "404" ]]; then
+      echo "[prod12-remote] WARN remote ${label} artifact not found (404): ${endpoint}" >&2
+      return 44
+    fi
+    echo "[prod12-remote] ERROR failed to download remote ${label} artifact (HTTP ${http_code}) from ${endpoint}" >&2
     return 1
   fi
 
@@ -218,6 +229,8 @@ sys.stdout.write(SEP.join(p.replace("\n", " ").replace("\r", " ") for p in parts
 
       history_sync_failed=0
       history_sync_supported=1
+      history_pipeline_exists=0
+      history_phase2_exists=0
       if [[ "${sync_status_history}" == "1" ]]; then
         history_sync_supported="$(
           "${py_bin}" -c '
@@ -234,10 +247,49 @@ print("1" if ok else "0")
           ' "${status_json}" 2>/dev/null || printf '0'
         )"
         if [[ "${history_sync_supported}" == "1" ]]; then
-          if ! download_remote_artifact "pipeline_history" "" "${pipeline_history_local_out}"; then
+          history_presence="$(
+            "${py_bin}" -c '
+import json
+import sys
+
+SEP = "\x1f"
+try:
+    payload = json.loads(sys.argv[1] if len(sys.argv) > 1 else "{}")
+except Exception:
+    payload = {}
+artifacts = payload.get("artifacts") or {}
+pipeline = artifacts.get("pipeline_history") or {}
+phase2 = artifacts.get("phase2_history") or {}
+print(SEP.join([
+    str(bool(pipeline.get("exists"))),
+    str(bool(phase2.get("exists"))),
+]))
+            ' "${status_json}" 2>/dev/null || printf 'False\x1fFalse'
+          )"
+          IFS=$'\x1f' read -r history_pipeline_exists_raw history_phase2_exists_raw <<< "${history_presence}"
+          history_pipeline_exists="$(printf '%s' "${history_pipeline_exists_raw}" | tr '[:upper:]' '[:lower:]')"
+          history_phase2_exists="$(printf '%s' "${history_phase2_exists_raw}" | tr '[:upper:]' '[:lower:]')"
+
+          set +e
+          if [[ "${history_pipeline_exists}" == "true" ]]; then
+            download_remote_artifact "pipeline_history" "" "${pipeline_history_local_out}"
+            history_pipeline_rc=$?
+          else
+            history_pipeline_rc=0
+            echo "[prod12-remote] INFO remote pipeline history artifact not present for this run; skipping local sync"
+          fi
+          if [[ "${history_phase2_exists}" == "true" ]]; then
+            download_remote_artifact "phase2_history" "" "${phase2_history_local_out}"
+            history_phase2_rc=$?
+          else
+            history_phase2_rc=0
+            echo "[prod12-remote] INFO remote phase2 history artifact not present for this run; skipping local sync"
+          fi
+          set -e
+          if [[ "${history_pipeline_rc}" -ne 0 && "${history_pipeline_rc}" -ne 44 ]]; then
             history_sync_failed=1
           fi
-          if ! download_remote_artifact "phase2_history" "" "${phase2_history_local_out}"; then
+          if [[ "${history_phase2_rc}" -ne 0 && "${history_phase2_rc}" -ne 44 ]]; then
             history_sync_failed=1
           fi
         else
