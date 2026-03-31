@@ -5,6 +5,8 @@ Inputs:
 - tmp/analysis/mlb_model_vs_fade_summary.json
 - tmp/analysis/mlb_all_available_summary.json
 - tmp/analysis/mlb_all_available_by_prop.csv
+- optional: tmp/analysis/mlb_graded_wagers_summary.json
+- optional: tmp/analysis/mlb_graded_wagers_by_prop.csv
 - optional: backend/mlb/data/processed/mlb_book_upload.csv
 
 Outputs:
@@ -144,12 +146,73 @@ def _extract_all_available_by_prop(by_prop_csv: Path) -> pd.DataFrame:
     return out[["prop_type", "rows", "model_rows", "model_win_rate_pct"]].copy()
 
 
+def _extract_graded_metrics(summary_json: Path) -> tuple[dict[str, Any], str | None]:
+    out = {
+        "graded_rows": 0,
+        "graded_wl_rows": 0,
+        "graded_wins": 0,
+        "graded_losses": 0,
+        "graded_pushes": 0,
+        "graded_win_rate_pct": None,
+        "graded_roi_pct": None,
+        "graded_staked": 0.0,
+        "graded_pnl": 0.0,
+        "graded_signal_rows": 0,
+        "graded_signal_wl_rows": 0,
+        "graded_signal_win_rate_pct": None,
+    }
+    if not summary_json.exists():
+        return out, None
+    try:
+        payload = json.loads(summary_json.read_text(encoding="utf-8"))
+    except Exception:
+        return out, None
+    summary = (payload or {}).get("summary", {}) or {}
+    graded_report_date = str(summary.get("report_date") or "").strip() or None
+    out["graded_rows"] = _to_int(summary.get("graded_rows")) or 0
+    out["graded_wl_rows"] = _to_int(summary.get("wl_rows")) or 0
+    out["graded_wins"] = _to_int(summary.get("wins")) or 0
+    out["graded_losses"] = _to_int(summary.get("losses")) or 0
+    out["graded_pushes"] = _to_int(summary.get("pushes")) or 0
+    out["graded_win_rate_pct"] = _to_float(summary.get("win_rate_pct"))
+    out["graded_roi_pct"] = _to_float(summary.get("roi_pct"))
+    out["graded_staked"] = _to_float(summary.get("staked")) or 0.0
+    out["graded_pnl"] = _to_float(summary.get("pnl")) or 0.0
+    out["graded_signal_rows"] = _to_int(summary.get("signal_rows")) or 0
+    out["graded_signal_wl_rows"] = _to_int(summary.get("signal_wl_rows")) or 0
+    out["graded_signal_win_rate_pct"] = _to_float(summary.get("signal_win_rate_pct"))
+    return out, graded_report_date
+
+
+def _extract_graded_by_prop(by_prop_csv: Path) -> pd.DataFrame:
+    if not by_prop_csv.exists():
+        return pd.DataFrame(columns=["prop_type", "graded_rows", "graded_win_rate_pct", "graded_roi_pct"])
+    try:
+        df = pd.read_csv(by_prop_csv, low_memory=False)
+    except Exception:
+        return pd.DataFrame(columns=["prop_type", "graded_rows", "graded_win_rate_pct", "graded_roi_pct"])
+    if df.empty:
+        return pd.DataFrame(columns=["prop_type", "graded_rows", "graded_win_rate_pct", "graded_roi_pct"])
+
+    out = df.copy()
+    for col in ("prop_type", "rows", "win_rate_pct", "roi_pct"):
+        if col not in out.columns:
+            out[col] = pd.NA
+    out["prop_type"] = out["prop_type"].astype(str).str.lower().str.strip()
+    out = out[(out["prop_type"] != "") & out["prop_type"].notna()]
+    out["graded_rows"] = pd.to_numeric(out["rows"], errors="coerce")
+    out["graded_win_rate_pct"] = pd.to_numeric(out["win_rate_pct"], errors="coerce")
+    out["graded_roi_pct"] = pd.to_numeric(out["roi_pct"], errors="coerce")
+    return out[["prop_type", "graded_rows", "graded_win_rate_pct", "graded_roi_pct"]].copy()
+
+
 def _build_row(
     *,
     report_date: str,
     model_payload: dict[str, Any],
     all_payload: dict[str, Any],
     book_metrics: dict[str, int],
+    graded_metrics: dict[str, Any],
 ) -> dict[str, Any]:
     model_overall = model_payload.get("overall", {}) or {}
     model_counts = model_payload.get("counts", {}) or {}
@@ -180,6 +243,7 @@ def _build_row(
         "all_rows_with_model_pick_result": _to_int(all_counts.get("rows_with_model_pick_result")) or 0,
         "all_model_win_rate_pct": _to_float(all_overall.get("model_win_rate_pct")),
         **book_metrics,
+        **graded_metrics,
     }
 
 
@@ -205,7 +269,13 @@ def _upsert_daily_row(out_csv: Path, row: dict[str, Any]) -> pd.DataFrame:
     return merged
 
 
-def _upsert_prop_rows(out_csv: Path, *, report_date: str, by_prop: pd.DataFrame) -> pd.DataFrame:
+def _upsert_prop_rows(
+    out_csv: Path,
+    *,
+    report_date: str,
+    by_prop: pd.DataFrame,
+    graded_by_prop: pd.DataFrame,
+) -> pd.DataFrame:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     if out_csv.exists():
         try:
@@ -218,13 +288,44 @@ def _upsert_prop_rows(out_csv: Path, *, report_date: str, by_prop: pd.DataFrame)
     if not prev.empty and "report_date" in prev.columns:
         prev = prev[prev["report_date"].astype(str) != str(report_date)]
 
-    if by_prop.empty:
+    merged_day = pd.DataFrame(columns=["prop_type", "rows", "model_rows", "model_win_rate_pct"])
+    if not by_prop.empty:
+        merged_day = by_prop.copy()
+    if not graded_by_prop.empty:
+        if merged_day.empty:
+            merged_day = graded_by_prop.copy()
+        else:
+            merged_day = merged_day.merge(graded_by_prop, on="prop_type", how="outer")
+
+    if merged_day.empty:
         merged = prev.copy()
     else:
-        add = by_prop.copy()
+        add = merged_day.copy()
         add["report_date"] = report_date
         add["captured_at_utc"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-        add = add[["report_date", "captured_at_utc", "prop_type", "rows", "model_rows", "model_win_rate_pct"]]
+        for col in (
+            "rows",
+            "model_rows",
+            "model_win_rate_pct",
+            "graded_rows",
+            "graded_win_rate_pct",
+            "graded_roi_pct",
+        ):
+            if col not in add.columns:
+                add[col] = pd.NA
+        add = add[
+            [
+                "report_date",
+                "captured_at_utc",
+                "prop_type",
+                "rows",
+                "model_rows",
+                "model_win_rate_pct",
+                "graded_rows",
+                "graded_win_rate_pct",
+                "graded_roi_pct",
+            ]
+        ]
         merged = pd.concat([prev, add], ignore_index=True)
 
     if not merged.empty and "report_date" in merged.columns:
@@ -421,6 +522,13 @@ def _maybe_build_charts(history: pd.DataFrame, charts_dir: Path) -> tuple[list[s
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(x, pd.to_numeric(work["model_roi_1u"], errors="coerce"), marker="o", label="Model ROI (1u)")
     ax.plot(x, pd.to_numeric(work["fade_roi_1u"], errors="coerce"), marker="o", label="Fade ROI (1u)")
+    if "graded_roi_pct" in work.columns:
+        ax.plot(
+            x,
+            pd.to_numeric(work["graded_roi_pct"], errors="coerce") / 100.0,
+            marker="o",
+            label="Graded Wagers ROI (1u)",
+        )
     ax.axhline(0.0, color="#999999", linewidth=1, linestyle="--")
     ax.set_title("MLB Post-Grade ROI Trend")
     ax.set_ylabel("ROI per bet")
@@ -436,6 +544,8 @@ def _maybe_build_charts(history: pd.DataFrame, charts_dir: Path) -> tuple[list[s
     ax.plot(x, pd.to_numeric(work["model_win_rate_pct"], errors="coerce"), marker="o", label="Model Win Rate %")
     ax.plot(x, pd.to_numeric(work["fade_win_rate_pct"], errors="coerce"), marker="o", label="Fade Win Rate %")
     ax.plot(x, pd.to_numeric(work["all_model_win_rate_pct"], errors="coerce"), marker="o", label="All-Available Model Win Rate %")
+    if "graded_win_rate_pct" in work.columns:
+        ax.plot(x, pd.to_numeric(work["graded_win_rate_pct"], errors="coerce"), marker="o", label="Graded Wagers Win Rate %")
     ax.axhline(50.0, color="#999999", linewidth=1, linestyle="--")
     ax.set_title("MLB Post-Grade Win-Rate Trend")
     ax.set_ylabel("Win Rate %")
@@ -455,6 +565,8 @@ def _maybe_build_charts(history: pd.DataFrame, charts_dir: Path) -> tuple[list[s
         marker="o",
         label="All-Available Two-Sided Resolved Rows",
     )
+    if "graded_wl_rows" in work.columns:
+        ax.plot(x, pd.to_numeric(work["graded_wl_rows"], errors="coerce"), marker="o", label="Graded Wagers (W/L Rows)")
     ax.set_title("MLB Post-Grade Volume Trend")
     ax.set_ylabel("Count")
     ax.legend(loc="best")
@@ -468,6 +580,13 @@ def _maybe_build_charts(history: pd.DataFrame, charts_dir: Path) -> tuple[list[s
     fig, axs = plt.subplots(3, 1, figsize=(11, 11), sharex=True)
     axs[0].plot(x, pd.to_numeric(work["model_roi_1u"], errors="coerce"), marker="o", label="Model ROI")
     axs[0].plot(x, pd.to_numeric(work["fade_roi_1u"], errors="coerce"), marker="o", label="Fade ROI")
+    if "graded_roi_pct" in work.columns:
+        axs[0].plot(
+            x,
+            pd.to_numeric(work["graded_roi_pct"], errors="coerce") / 100.0,
+            marker="o",
+            label="Graded ROI",
+        )
     axs[0].axhline(0.0, color="#999999", linewidth=1, linestyle="--")
     axs[0].set_ylabel("ROI")
     axs[0].legend(loc="best")
@@ -476,6 +595,8 @@ def _maybe_build_charts(history: pd.DataFrame, charts_dir: Path) -> tuple[list[s
     axs[1].plot(x, pd.to_numeric(work["model_win_rate_pct"], errors="coerce"), marker="o", label="Model %")
     axs[1].plot(x, pd.to_numeric(work["fade_win_rate_pct"], errors="coerce"), marker="o", label="Fade %")
     axs[1].plot(x, pd.to_numeric(work["all_model_win_rate_pct"], errors="coerce"), marker="o", label="All-Avail Model %")
+    if "graded_win_rate_pct" in work.columns:
+        axs[1].plot(x, pd.to_numeric(work["graded_win_rate_pct"], errors="coerce"), marker="o", label="Graded %")
     axs[1].axhline(50.0, color="#999999", linewidth=1, linestyle="--")
     axs[1].set_ylabel("Win %")
     axs[1].legend(loc="best")
@@ -488,6 +609,8 @@ def _maybe_build_charts(history: pd.DataFrame, charts_dir: Path) -> tuple[list[s
         marker="o",
         label="Two-Sided Resolved",
     )
+    if "graded_wl_rows" in work.columns:
+        axs[2].plot(x, pd.to_numeric(work["graded_wl_rows"], errors="coerce"), marker="o", label="Graded W/L")
     axs[2].set_ylabel("Count")
     axs[2].legend(loc="best")
     axs[2].grid(alpha=0.25)
@@ -507,6 +630,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model-vs-fade-summary-json", default="tmp/analysis/mlb_model_vs_fade_summary.json")
     ap.add_argument("--all-available-summary-json", default="tmp/analysis/mlb_all_available_summary.json")
     ap.add_argument("--all-available-by-prop-csv", default="tmp/analysis/mlb_all_available_by_prop.csv")
+    ap.add_argument("--graded-summary-json", default="tmp/analysis/mlb_graded_wagers_summary.json")
+    ap.add_argument("--graded-by-prop-csv", default="tmp/analysis/mlb_graded_wagers_by_prop.csv")
     ap.add_argument("--book-upload-csv", default="backend/mlb/data/processed/mlb_book_upload.csv")
     ap.add_argument("--out-csv", default="artifacts/mlb_postgrade_daily_tracker.csv")
     ap.add_argument("--out-by-prop-csv", default="artifacts/mlb_postgrade_by_prop_daily_tracker.csv")
@@ -521,6 +646,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--alert-prop-drop-window-days", type=int, default=3)
     ap.add_argument("--alert-prop-drop-threshold-pct", type=float, default=8.0)
     ap.add_argument("--alert-prop-drop-min-model-rows", type=int, default=20)
+    ap.add_argument(
+        "--allow-graded-date-mismatch",
+        action="store_true",
+        help=(
+            "Allow tracker row writes when graded summary report_date differs from tracker report_date. "
+            "Default behavior is strict (fail on mismatch) to prevent stale graded data."
+        ),
+    )
     ap.add_argument("--alerts-strict", action="store_true", help="Exit non-zero when critical alerts are present.")
     ap.add_argument("--skip-charts", action="store_true")
     args = ap.parse_args(argv)
@@ -528,6 +661,8 @@ def main(argv: list[str] | None = None) -> int:
     model_path = Path(args.model_vs_fade_summary_json).expanduser()
     all_path = Path(args.all_available_summary_json).expanduser()
     all_by_prop_path = Path(args.all_available_by_prop_csv).expanduser()
+    graded_summary_path = Path(args.graded_summary_json).expanduser()
+    graded_by_prop_path = Path(args.graded_by_prop_csv).expanduser()
     out_csv = Path(args.out_csv).expanduser()
     out_by_prop_csv = Path(args.out_by_prop_csv).expanduser()
     charts_dir = Path(args.charts_dir).expanduser()
@@ -538,11 +673,29 @@ def main(argv: list[str] | None = None) -> int:
     model_payload = _load_json(model_path)
     all_payload = _load_json(all_path)
     all_by_prop = _extract_all_available_by_prop(all_by_prop_path)
+    graded_metrics, graded_report_date = _extract_graded_metrics(graded_summary_path)
+    graded_by_prop = _extract_graded_by_prop(graded_by_prop_path)
     report_date = _extract_report_date(
         explicit_date=str(args.date or ""),
         model_payload=model_payload,
         all_payload=all_payload,
     )
+
+    if graded_report_date and str(graded_report_date) != str(report_date):
+        msg = (
+            "graded summary date mismatch: "
+            f"graded_report_date={graded_report_date} tracker_report_date={report_date} "
+            f"graded_summary_json={graded_summary_path}"
+        )
+        if not bool(args.allow_graded_date_mismatch):
+            print(f"[mlb-postgrade-tracker] ERROR {msg}", file=sys.stderr)
+            print(
+                "[mlb-postgrade-tracker] HINT rerun split/report for the correct date or pass --allow-graded-date-mismatch to bypass.",
+                file=sys.stderr,
+            )
+            return 3
+        print(f"[mlb-postgrade-tracker] WARN {msg}")
+
     book_metrics = _extract_book_upload_metrics(book_upload_csv)
 
     row = _build_row(
@@ -550,9 +703,15 @@ def main(argv: list[str] | None = None) -> int:
         model_payload=model_payload,
         all_payload=all_payload,
         book_metrics=book_metrics,
+        graded_metrics=graded_metrics,
     )
     history = _upsert_daily_row(out_csv, row)
-    prop_history = _upsert_prop_rows(out_by_prop_csv, report_date=report_date, by_prop=all_by_prop)
+    prop_history = _upsert_prop_rows(
+        out_by_prop_csv,
+        report_date=report_date,
+        by_prop=all_by_prop,
+        graded_by_prop=graded_by_prop,
+    )
     if args.skip_charts:
         charts, chart_warning = [], "charts_skipped_by_flag"
     else:
@@ -603,6 +762,8 @@ def main(argv: list[str] | None = None) -> int:
     summary = {
         "status": "ok" if (critical_count == 0 or not args.alerts_strict) else "fail",
         "report_date": report_date,
+        "graded_report_date": graded_report_date,
+        "allow_graded_date_mismatch": bool(args.allow_graded_date_mismatch),
         "tracker_csv": str(out_csv),
         "by_prop_tracker_csv": str(out_by_prop_csv),
         "rows_in_tracker": int(len(history)),

@@ -300,6 +300,14 @@ def main() -> int:
     ap.add_argument("--slate-filename", default="mlb_slate_output.csv")
     ap.add_argument("--odds-filename", default="odds_latest_compatible.json")
     ap.add_argument(
+        "--odds-filename-fallback",
+        default="",
+        help=(
+            "Optional alternate odds filename to use when --odds-filename is missing for a date. "
+            "Default auto-maps between odds_latest_compatible.json and odds_mlb_playerprops.json."
+        ),
+    )
+    ap.add_argument(
         "--derive-props-from-mtp",
         default="runs_rbis",
         help=(
@@ -310,6 +318,17 @@ def main() -> int:
     ap.add_argument("--out-csv", default="tmp/mlb_base_vs_market_rows.csv")
     ap.add_argument("--out-summary-json", default="tmp/mlb_base_vs_market_summary.json")
     ap.add_argument("--skip-outcomes", action="store_true", help="Skip DB outcome join")
+    ap.add_argument(
+        "--require-outcomes",
+        action="store_true",
+        help="Fail if outcomes could not be loaded from DB.",
+    )
+    ap.add_argument(
+        "--require-outcome-rows-min",
+        type=int,
+        default=0,
+        help="When >0, fail if rows_with_outcomes is below this minimum.",
+    )
     args = ap.parse_args()
 
     odds_root = Path(str(args.odds_root)).expanduser()
@@ -376,6 +395,15 @@ def main() -> int:
     skipped_missing_columns = 0
     processed_dates = 0
     derived_rows_added = 0
+    fallback_dates_used: List[str] = []
+
+    odds_filename = str(args.odds_filename or "").strip()
+    fallback_filename = str(args.odds_filename_fallback or "").strip()
+    if not fallback_filename:
+        if odds_filename == "odds_latest_compatible.json":
+            fallback_filename = "odds_mlb_playerprops.json"
+        elif odds_filename == "odds_mlb_playerprops.json":
+            fallback_filename = "odds_latest_compatible.json"
 
     required_cols = {
         "slate_date",
@@ -398,7 +426,13 @@ def main() -> int:
     for day in dates:
         day_dir = odds_root / day
         slate_csv = day_dir / str(args.slate_filename)
-        odds_json = day_dir / str(args.odds_filename)
+        odds_json = day_dir / odds_filename
+        if not odds_json.exists() and fallback_filename:
+            fallback_path = day_dir / fallback_filename
+            if fallback_path.exists():
+                odds_json = fallback_path
+                fallback_dates_used.append(day)
+
         if not slate_csv.exists() or not odds_json.exists():
             skipped_missing_artifacts += 1
             continue
@@ -619,6 +653,10 @@ def main() -> int:
         "generated_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
         "derived_rows_added": int(derived_rows_added),
         "derived_props_from_mtp": derive_props,
+        "odds_filename_requested": odds_filename,
+        "odds_filename_fallback": fallback_filename or None,
+        "odds_fallback_dates_used": fallback_dates_used,
+        "odds_fallback_dates_used_count": int(len(fallback_dates_used)),
     }
     if not out_df.empty:
         summary["by_date"] = (
@@ -647,6 +685,17 @@ def main() -> int:
     )
     if outcomes_error:
         print(f"[mlb-reconcile] outcomes unavailable: {outcomes_error}")
+
+    rows_with_outcomes = int(summary.get("rows_with_outcomes") or 0)
+    if bool(args.require_outcomes) and not outcomes_loaded:
+        print("[mlb-reconcile] ERROR outcomes are required but DB outcomes were unavailable.")
+        return 2
+    if int(args.require_outcome_rows_min or 0) > 0 and rows_with_outcomes < int(args.require_outcome_rows_min):
+        print(
+            "[mlb-reconcile] ERROR outcomes row minimum not met: "
+            f"rows_with_outcomes={rows_with_outcomes} require_outcome_rows_min={int(args.require_outcome_rows_min)}"
+        )
+        return 3
     return 0
 
 

@@ -6,6 +6,8 @@ export MODEL_DIR ?= /var/data/proppadia/models
 BASE_URL ?= http://127.0.0.1:8001
 MLB_BASE_URL ?=
 MLB_DATE ?= $(shell date -u +%F)
+MLB_DATE_ET ?= $(shell TZ=America/New_York date +%F)
+MLB_POST_GRADE_DATE ?= $(MLB_DATE_ET)
 NHL_DATE ?= 2025-11-20
 NHL_MODEL_VS_FADE_GRADED_GLOB ?= tmp/graded/nhl_sog_graded_*.csv
 NHL_MODEL_VS_FADE_CARDS_DIR ?= tmp/cards
@@ -24,6 +26,15 @@ MLB_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated
 MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
 MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
+MLB_BOOK_UPLOAD_FILTER_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv
+MLB_BOOK_UPLOAD_FILTER_OUT_JSON ?= tmp/analysis/mlb_book_upload_filter_recommendation.json
+MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS ?= 5
+MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS ?= 40
+MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_ROWS ?= 60
+MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT ?= 52
+MLB_BOOK_UPLOAD_FILTER_MIN_GRADED_ROWS ?= 8
+MLB_BOOK_UPLOAD_FILTER_GRADED_ROI_FLOOR_PCT ?= -8
+MLB_BOOK_UPLOAD_FILTER_MIN_OVERS ?= 4
 MLB_ODDS_HISTORY_ROOT ?= backend/mlb/exports/odds_history
 MLB_ODDS_SNAPSHOT_JSON ?= $(MLB_ODDS_HISTORY_ROOT)/$(MLB_DATE)/odds_mlb_playerprops.json
 MLB_ARCHIVE_RUN_TAG ?=
@@ -49,6 +60,10 @@ MLB_RECONCILE_BOOKMAKER ?= betonlineag
 MLB_RECONCILE_ODDS_FILENAME ?= odds_latest_compatible.json
 MLB_RECONCILE_ROWS_OUT_CSV ?= tmp/mlb_base_vs_market_rows.csv
 MLB_RECONCILE_SUMMARY_OUT_JSON ?= tmp/mlb_base_vs_market_summary.json
+MLB_RECONCILE_REQUIRE_OUTCOMES ?= 0
+MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN ?= 0
+MLB_POST_GRADE_REQUIRE_OUTCOMES ?= 1
+MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN ?= 1
 MLB_MODEL_VS_FADE_ROWS_CSV ?= $(MLB_RECONCILE_ROWS_OUT_CSV)
 MLB_MODEL_VS_FADE_OUT_JSON ?= tmp/analysis/mlb_model_vs_fade_summary.json
 MLB_MODEL_VS_FADE_OUT_CSV ?= tmp/analysis/mlb_model_vs_fade_by_prop.csv
@@ -56,11 +71,19 @@ MLB_MODEL_VS_FADE_MIN_BETS_ALERT ?= 30
 MLB_ALL_AVAILABLE_ROWS_CSV ?= $(MLB_RECONCILE_ROWS_OUT_CSV)
 MLB_ALL_AVAILABLE_OUT_JSON ?= tmp/analysis/mlb_all_available_summary.json
 MLB_ALL_AVAILABLE_OUT_CSV ?= tmp/analysis/mlb_all_available_by_prop.csv
+MLB_GRADED_IN_CSV ?=
+MLB_GRADED_ROWS_OUT_CSV ?= tmp/analysis/mlb_graded_wagers_rows.csv
+MLB_GRADED_SUMMARY_OUT_JSON ?= tmp/analysis/mlb_graded_wagers_summary.json
+MLB_GRADED_BY_PROP_OUT_CSV ?= tmp/analysis/mlb_graded_wagers_by_prop.csv
+MLB_GRADED_REPORT_REQUIRED ?= 0
+MLB_POSTGRADE_INCLUDE_GRADED ?= 1
+MLB_GRADER_IN_CSV ?=
 MLB_POSTGRADE_TRACKER_DATE ?=
 MLB_POSTGRADE_TRACKER_OUT_CSV ?= artifacts/mlb_postgrade_daily_tracker.csv
 MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV ?= artifacts/mlb_postgrade_by_prop_daily_tracker.csv
 MLB_POSTGRADE_TRACKER_CHARTS_DIR ?= artifacts/analysis/mlb
 MLB_POSTGRADE_TRACKER_SKIP_CHARTS ?= 0
+MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH ?= 0
 MLB_POSTGRADE_ALERTS_OUT_JSON ?= artifacts/analysis/mlb/mlb_postgrade_alerts_latest.json
 MLB_POSTGRADE_ALERTS_HISTORY_JSONL ?= artifacts/analysis/mlb/mlb_postgrade_alerts_history.jsonl
 MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS ?= 30
@@ -337,6 +360,12 @@ help:
 	@echo "  make mlb-slate-archive MLB_DATE=YYYY-MM-DD [archive wide/slate/book/odds artifacts]"
 	@echo "  make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE=YYYY-MM-DD MLB_RECONCILE_TO_DATE=YYYY-MM-DD [row-level model+market(+outcome) csv]"
 	@echo "  make mlb-all-available-report [resolved all-available summary + by-prop rates from reconcile rows]"
+	@echo "  make mlb-graded-wagers-report MLB_GRADED_IN_CSV=tmp/graded/8rainstation_daily_YYYY-MM-DD_mlb_player_props.csv [placed graded-wager summary + by-prop]"
+	@echo "  make mlb-graded-wagers-report-latest [auto-pick latest split MLB player-props grader csv from tmp/graded]"
+	@echo "  make mlb-book-upload-top-recommended [adaptive top-N from current book upload + recent post-grade tracker]"
+	@echo "  make mlb-post-grade-step7 [split latest grader download + run full MLB post-grade tracking for that slate date]"
+	@echo "  make mlb-post-grade-next-day [one-step post-grade bundle after next-day cron]"
+	@echo "  make mlb-post-grade-report-and-track-latest [all-available + model-vs-fade + graded wagers merged into tracker/charts]"
 	@echo "  make mlb-odds-backfill-history [historical OddsAPI pull; defaults to season 2025 regular-season start]"
 	@echo "  make frontend-route-smoke [verify critical nav/route surface in AppRouter]"
 	@echo "  make workflow-inventory [report scheduled workflow files]"
@@ -930,6 +959,8 @@ mlb-slate-output:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_slate_output.py --slate-date $(MLB_DATE) --pred-csv "$(MLB_SLATE_PRED_CSV)" --out-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(strip $(MLB_SLATE_PROP_TYPE)),--prop-type "$(MLB_SLATE_PROP_TYPE)")
 
 # Export MLB book-upload CSV from canonical MLB slate output.
+.PHONY: mlb-book-upload-top-recommended
+
 mlb-book-upload:
 	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(filter 1,$(MLB_POLICY_PLAN_ENABLED)),--policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)),--policy-allow-one-sided,) $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_EMPTY)),--policy-allow-empty,),)
 	@if [ "$${MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST:-0}" = "1" ] && [ "$${MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND:-book_upload}" = "book_upload" ]; then \
@@ -937,6 +968,10 @@ mlb-book-upload:
 	else \
 		$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_ARCHIVE_RUN_TAG="$(MLB_ARCHIVE_RUN_TAG)"; \
 	fi
+
+# Build adaptive top-N recommendation from current book upload + recent post-grade history.
+mlb-book-upload-top-recommended:
+	$(VENV_PY) backend/mlb/scripts/recommend_mlb_book_upload_filters.py --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --by-prop-tracker-csv "$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" --lookback-days "$(MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS)" --target-rows "$(MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS)" --min-model-rows "$(MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_ROWS)" --min-model-win-rate-pct "$(MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT)" --min-graded-rows "$(MLB_BOOK_UPLOAD_FILTER_MIN_GRADED_ROWS)" --graded-roi-floor-pct "$(MLB_BOOK_UPLOAD_FILTER_GRADED_ROI_FLOOR_PCT)" --min-overs "$(MLB_BOOK_UPLOAD_FILTER_MIN_OVERS)" --out-csv "$(MLB_BOOK_UPLOAD_FILTER_OUT_CSV)" --out-json "$(MLB_BOOK_UPLOAD_FILTER_OUT_JSON)"
 
 # Full daily capture smoke path using an existing odds snapshot (no live OddsAPI fetch).
 mlb-daily-capture-from-snapshot:
@@ -954,7 +989,7 @@ mlb-slate-archive:
 
 # Build row-level MLB reconcile dataset from archived odds history artifacts.
 mlb-reconcile-rows:
-	$(VENV_PY) backend/mlb/scripts/build_mlb_reconcile_rows.py --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --from-date "$(MLB_RECONCILE_FROM_DATE)" --to-date "$(MLB_RECONCILE_TO_DATE)" --bookmaker "$(MLB_RECONCILE_BOOKMAKER)" --odds-filename "$(MLB_RECONCILE_ODDS_FILENAME)" --out-csv "$(MLB_RECONCILE_ROWS_OUT_CSV)" --out-summary-json "$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	$(VENV_PY) backend/mlb/scripts/build_mlb_reconcile_rows.py --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --from-date "$(MLB_RECONCILE_FROM_DATE)" --to-date "$(MLB_RECONCILE_TO_DATE)" --bookmaker "$(MLB_RECONCILE_BOOKMAKER)" --odds-filename "$(MLB_RECONCILE_ODDS_FILENAME)" --out-csv "$(MLB_RECONCILE_ROWS_OUT_CSV)" --out-summary-json "$(MLB_RECONCILE_SUMMARY_OUT_JSON)" $(if $(filter 1,$(MLB_RECONCILE_REQUIRE_OUTCOMES)),--require-outcomes,) --require-outcome-rows-min "$(MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN)"
 
 # Compare model-picked side performance vs opposite-side fade from reconcile rows.
 mlb-model-vs-fade:
@@ -966,30 +1001,100 @@ mlb-all-available-report:
 
 # Post-grade routine: rebuild reconcile rows then report model-vs-fade for that window.
 mlb-post-grade-fade-check:
-	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)" MLB_RECONCILE_REQUIRE_OUTCOMES="$(MLB_POST_GRADE_REQUIRE_OUTCOMES)" MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN="$(MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN)"
 	$(MAKE) mlb-model-vs-fade MLB_MODEL_VS_FADE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_MODEL_VS_FADE_OUT_CSV="$(MLB_MODEL_VS_FADE_OUT_CSV)" MLB_MODEL_VS_FADE_MIN_BETS_ALERT="$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
 
 # Post-grade routine: rebuild reconcile rows then report all-available resolved outcomes.
 mlb-post-grade-all-available-check:
-	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)" MLB_RECONCILE_REQUIRE_OUTCOMES="$(MLB_POST_GRADE_REQUIRE_OUTCOMES)" MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN="$(MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN)"
 	$(MAKE) mlb-all-available-report MLB_ALL_AVAILABLE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_ALL_AVAILABLE_OUT_JSON="$(MLB_ALL_AVAILABLE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_CSV="$(MLB_ALL_AVAILABLE_OUT_CSV)"
+
+# Summarize posted MLB graded wagers (priority placed-wager analysis source).
+mlb-graded-wagers-report:
+	@if [ -z "$(MLB_GRADED_IN_CSV)" ]; then \
+		echo "mlb-graded-wagers-report requires MLB_GRADED_IN_CSV=<path/to/*_mlb_player_props.csv>"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/mlb/scripts/report_mlb_graded_wagers.py --in-csv "$(MLB_GRADED_IN_CSV)" --out-rows-csv "$(MLB_GRADED_ROWS_OUT_CSV)" --out-summary-json "$(MLB_GRADED_SUMMARY_OUT_JSON)" --out-by-prop-csv "$(MLB_GRADED_BY_PROP_OUT_CSV)"
+
+# Convenience alias: use latest split MLB player-props grader CSV from tmp/graded.
+mlb-graded-wagers-report-latest:
+	@latest=$$(ls -1t tmp/graded/8rainstation_daily_*_mlb_player_props.csv 2>/dev/null | head -n 1); \
+	if [ -z "$$latest" ]; then \
+		if [ "$(MLB_GRADED_REPORT_REQUIRED)" = "1" ]; then \
+			echo "mlb-graded-wagers-report-latest: no split MLB player-props grader CSV found under tmp/graded"; \
+			exit 2; \
+		fi; \
+		echo "mlb-graded-wagers-report-latest: no split MLB player-props grader CSV found; skipping (MLB_GRADED_REPORT_REQUIRED=$(MLB_GRADED_REPORT_REQUIRED))"; \
+		rm -f "$(MLB_GRADED_SUMMARY_OUT_JSON)" "$(MLB_GRADED_BY_PROP_OUT_CSV)" "$(MLB_GRADED_ROWS_OUT_CSV)"; \
+	else \
+		echo "mlb-graded-wagers-report-latest: using $$latest"; \
+		$(MAKE) mlb-graded-wagers-report MLB_GRADED_IN_CSV="$$latest" MLB_GRADED_ROWS_OUT_CSV="$(MLB_GRADED_ROWS_OUT_CSV)" MLB_GRADED_SUMMARY_OUT_JSON="$(MLB_GRADED_SUMMARY_OUT_JSON)" MLB_GRADED_BY_PROP_OUT_CSV="$(MLB_GRADED_BY_PROP_OUT_CSV)"; \
+	fi
 
 # Append one post-grade tracker row and render trend charts.
 mlb-post-grade-tracker:
-	$(VENV_PY) backend/mlb/scripts/mlb_postgrade_tracker.py $(if $(strip $(MLB_POSTGRADE_TRACKER_DATE)),--date "$(MLB_POSTGRADE_TRACKER_DATE)",) --model-vs-fade-summary-json "$(MLB_MODEL_VS_FADE_OUT_JSON)" --all-available-summary-json "$(MLB_ALL_AVAILABLE_OUT_JSON)" --all-available-by-prop-csv "$(MLB_ALL_AVAILABLE_OUT_CSV)" --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --out-csv "$(MLB_POSTGRADE_TRACKER_OUT_CSV)" --out-by-prop-csv "$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" --charts-dir "$(MLB_POSTGRADE_TRACKER_CHARTS_DIR)" --alerts-out-json "$(MLB_POSTGRADE_ALERTS_OUT_JSON)" --alerts-history-jsonl "$(MLB_POSTGRADE_ALERTS_HISTORY_JSONL)" --alert-fade-min-paired-bets "$(MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS)" --alert-roi-min-paired-bets "$(MLB_POSTGRADE_ALERT_ROI_MIN_PAIRED_BETS)" --alert-roi-breach-threshold "$(MLB_POSTGRADE_ALERT_ROI_BREACH_THRESHOLD)" --alert-overall-drop-window-days "$(MLB_POSTGRADE_ALERT_OVERALL_DROP_WINDOW_DAYS)" --alert-overall-drop-threshold-pct "$(MLB_POSTGRADE_ALERT_OVERALL_DROP_THRESHOLD_PCT)" --alert-prop-drop-window-days "$(MLB_POSTGRADE_ALERT_PROP_DROP_WINDOW_DAYS)" --alert-prop-drop-threshold-pct "$(MLB_POSTGRADE_ALERT_PROP_DROP_THRESHOLD_PCT)" --alert-prop-drop-min-model-rows "$(MLB_POSTGRADE_ALERT_PROP_DROP_MIN_MODEL_ROWS)" $(if $(filter 1,$(MLB_POSTGRADE_ALERTS_STRICT)),--alerts-strict,) $(if $(filter 1,$(MLB_POSTGRADE_TRACKER_SKIP_CHARTS)),--skip-charts,)
+	$(VENV_PY) backend/mlb/scripts/mlb_postgrade_tracker.py $(if $(strip $(MLB_POSTGRADE_TRACKER_DATE)),--date "$(MLB_POSTGRADE_TRACKER_DATE)",) --model-vs-fade-summary-json "$(MLB_MODEL_VS_FADE_OUT_JSON)" --all-available-summary-json "$(MLB_ALL_AVAILABLE_OUT_JSON)" --all-available-by-prop-csv "$(MLB_ALL_AVAILABLE_OUT_CSV)" --graded-summary-json "$(MLB_GRADED_SUMMARY_OUT_JSON)" --graded-by-prop-csv "$(MLB_GRADED_BY_PROP_OUT_CSV)" --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --out-csv "$(MLB_POSTGRADE_TRACKER_OUT_CSV)" --out-by-prop-csv "$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" --charts-dir "$(MLB_POSTGRADE_TRACKER_CHARTS_DIR)" --alerts-out-json "$(MLB_POSTGRADE_ALERTS_OUT_JSON)" --alerts-history-jsonl "$(MLB_POSTGRADE_ALERTS_HISTORY_JSONL)" --alert-fade-min-paired-bets "$(MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS)" --alert-roi-min-paired-bets "$(MLB_POSTGRADE_ALERT_ROI_MIN_PAIRED_BETS)" --alert-roi-breach-threshold "$(MLB_POSTGRADE_ALERT_ROI_BREACH_THRESHOLD)" --alert-overall-drop-window-days "$(MLB_POSTGRADE_ALERT_OVERALL_DROP_WINDOW_DAYS)" --alert-overall-drop-threshold-pct "$(MLB_POSTGRADE_ALERT_OVERALL_DROP_THRESHOLD_PCT)" --alert-prop-drop-window-days "$(MLB_POSTGRADE_ALERT_PROP_DROP_WINDOW_DAYS)" --alert-prop-drop-threshold-pct "$(MLB_POSTGRADE_ALERT_PROP_DROP_THRESHOLD_PCT)" --alert-prop-drop-min-model-rows "$(MLB_POSTGRADE_ALERT_PROP_DROP_MIN_MODEL_ROWS)" $(if $(filter 1,$(MLB_POSTGRADE_ALERTS_STRICT)),--alerts-strict,) $(if $(filter 1,$(MLB_POSTGRADE_TRACKER_SKIP_CHARTS)),--skip-charts,) $(if $(filter 1,$(MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH)),--allow-graded-date-mismatch,)
 
 # One-command post-grade routine: reconcile rows -> reports -> tracker row + charts.
 mlb-post-grade-report-and-track:
-	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)" MLB_RECONCILE_REQUIRE_OUTCOMES="$(MLB_POST_GRADE_REQUIRE_OUTCOMES)" MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN="$(MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN)"
 	$(MAKE) mlb-model-vs-fade MLB_MODEL_VS_FADE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_MODEL_VS_FADE_OUT_CSV="$(MLB_MODEL_VS_FADE_OUT_CSV)" MLB_MODEL_VS_FADE_MIN_BETS_ALERT="$(MLB_MODEL_VS_FADE_MIN_BETS_ALERT)"
 	$(MAKE) mlb-all-available-report MLB_ALL_AVAILABLE_ROWS_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_ALL_AVAILABLE_OUT_JSON="$(MLB_ALL_AVAILABLE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_CSV="$(MLB_ALL_AVAILABLE_OUT_CSV)"
-	$(MAKE) mlb-post-grade-tracker MLB_POSTGRADE_TRACKER_DATE="$(MLB_POSTGRADE_TRACKER_DATE)" MLB_POSTGRADE_TRACKER_OUT_CSV="$(MLB_POSTGRADE_TRACKER_OUT_CSV)" MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV="$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" MLB_POSTGRADE_TRACKER_CHARTS_DIR="$(MLB_POSTGRADE_TRACKER_CHARTS_DIR)" MLB_POSTGRADE_TRACKER_SKIP_CHARTS="$(MLB_POSTGRADE_TRACKER_SKIP_CHARTS)" MLB_POSTGRADE_ALERTS_OUT_JSON="$(MLB_POSTGRADE_ALERTS_OUT_JSON)" MLB_POSTGRADE_ALERTS_HISTORY_JSONL="$(MLB_POSTGRADE_ALERTS_HISTORY_JSONL)" MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS="$(MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS)" MLB_POSTGRADE_ALERT_ROI_MIN_PAIRED_BETS="$(MLB_POSTGRADE_ALERT_ROI_MIN_PAIRED_BETS)" MLB_POSTGRADE_ALERT_ROI_BREACH_THRESHOLD="$(MLB_POSTGRADE_ALERT_ROI_BREACH_THRESHOLD)" MLB_POSTGRADE_ALERT_OVERALL_DROP_WINDOW_DAYS="$(MLB_POSTGRADE_ALERT_OVERALL_DROP_WINDOW_DAYS)" MLB_POSTGRADE_ALERT_OVERALL_DROP_THRESHOLD_PCT="$(MLB_POSTGRADE_ALERT_OVERALL_DROP_THRESHOLD_PCT)" MLB_POSTGRADE_ALERT_PROP_DROP_WINDOW_DAYS="$(MLB_POSTGRADE_ALERT_PROP_DROP_WINDOW_DAYS)" MLB_POSTGRADE_ALERT_PROP_DROP_THRESHOLD_PCT="$(MLB_POSTGRADE_ALERT_PROP_DROP_THRESHOLD_PCT)" MLB_POSTGRADE_ALERT_PROP_DROP_MIN_MODEL_ROWS="$(MLB_POSTGRADE_ALERT_PROP_DROP_MIN_MODEL_ROWS)" MLB_POSTGRADE_ALERTS_STRICT="$(MLB_POSTGRADE_ALERTS_STRICT)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_JSON="$(MLB_ALL_AVAILABLE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_CSV="$(MLB_ALL_AVAILABLE_OUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)"
+	@if [ "$(MLB_POSTGRADE_INCLUDE_GRADED)" = "1" ]; then \
+		$(MAKE) mlb-graded-wagers-report-latest MLB_GRADED_REPORT_REQUIRED="$(MLB_GRADED_REPORT_REQUIRED)" MLB_GRADED_ROWS_OUT_CSV="$(MLB_GRADED_ROWS_OUT_CSV)" MLB_GRADED_SUMMARY_OUT_JSON="$(MLB_GRADED_SUMMARY_OUT_JSON)" MLB_GRADED_BY_PROP_OUT_CSV="$(MLB_GRADED_BY_PROP_OUT_CSV)"; \
+	else \
+		echo "mlb-post-grade-report-and-track: skipping graded-wagers report (MLB_POSTGRADE_INCLUDE_GRADED=$(MLB_POSTGRADE_INCLUDE_GRADED))"; \
+	fi
+	$(MAKE) mlb-post-grade-tracker MLB_POSTGRADE_TRACKER_DATE="$(MLB_POSTGRADE_TRACKER_DATE)" MLB_POSTGRADE_TRACKER_OUT_CSV="$(MLB_POSTGRADE_TRACKER_OUT_CSV)" MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV="$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" MLB_POSTGRADE_TRACKER_CHARTS_DIR="$(MLB_POSTGRADE_TRACKER_CHARTS_DIR)" MLB_POSTGRADE_TRACKER_SKIP_CHARTS="$(MLB_POSTGRADE_TRACKER_SKIP_CHARTS)" MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH="$(MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH)" MLB_POSTGRADE_ALERTS_OUT_JSON="$(MLB_POSTGRADE_ALERTS_OUT_JSON)" MLB_POSTGRADE_ALERTS_HISTORY_JSONL="$(MLB_POSTGRADE_ALERTS_HISTORY_JSONL)" MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS="$(MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS)" MLB_POSTGRADE_ALERT_ROI_MIN_PAIRED_BETS="$(MLB_POSTGRADE_ALERT_ROI_MIN_PAIRED_BETS)" MLB_POSTGRADE_ALERT_ROI_BREACH_THRESHOLD="$(MLB_POSTGRADE_ALERT_ROI_BREACH_THRESHOLD)" MLB_POSTGRADE_ALERT_OVERALL_DROP_WINDOW_DAYS="$(MLB_POSTGRADE_ALERT_OVERALL_DROP_WINDOW_DAYS)" MLB_POSTGRADE_ALERT_OVERALL_DROP_THRESHOLD_PCT="$(MLB_POSTGRADE_ALERT_OVERALL_DROP_THRESHOLD_PCT)" MLB_POSTGRADE_ALERT_PROP_DROP_WINDOW_DAYS="$(MLB_POSTGRADE_ALERT_PROP_DROP_WINDOW_DAYS)" MLB_POSTGRADE_ALERT_PROP_DROP_THRESHOLD_PCT="$(MLB_POSTGRADE_ALERT_PROP_DROP_THRESHOLD_PCT)" MLB_POSTGRADE_ALERT_PROP_DROP_MIN_MODEL_ROWS="$(MLB_POSTGRADE_ALERT_PROP_DROP_MIN_MODEL_ROWS)" MLB_POSTGRADE_ALERTS_STRICT="$(MLB_POSTGRADE_ALERTS_STRICT)" MLB_MODEL_VS_FADE_OUT_JSON="$(MLB_MODEL_VS_FADE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_JSON="$(MLB_ALL_AVAILABLE_OUT_JSON)" MLB_ALL_AVAILABLE_OUT_CSV="$(MLB_ALL_AVAILABLE_OUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_GRADED_SUMMARY_OUT_JSON="$(MLB_GRADED_SUMMARY_OUT_JSON)" MLB_GRADED_BY_PROP_OUT_CSV="$(MLB_GRADED_BY_PROP_OUT_CSV)"
+
+# Convenience alias: post-grade run pinned to ET date.
+mlb-post-grade-report-and-track-et:
+	$(MAKE) mlb-post-grade-report-and-track MLB_RECONCILE_FROM_DATE="$(MLB_POST_GRADE_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_POST_GRADE_DATE)"
+
+# Convenience alias: post-grade run pinned to latest archived slate date.
+mlb-post-grade-report-and-track-latest:
+	@latest=$$(ls -1 "$(MLB_ODDS_HISTORY_ROOT)" 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$$' | sort | tail -n 1); \
+	if [ -z "$$latest" ]; then \
+		echo "mlb-post-grade-report-and-track-latest: no dated dirs found under $(MLB_ODDS_HISTORY_ROOT)"; \
+		exit 2; \
+	fi; \
+	echo "mlb-post-grade-report-and-track-latest: using $$latest"; \
+	$(MAKE) mlb-post-grade-report-and-track MLB_RECONCILE_FROM_DATE="$$latest" MLB_RECONCILE_TO_DATE="$$latest"
+
+# Step 7 (MLB): split current grader CSV and run full post-grade tracking for that grader date.
+mlb-post-grade-step7:
+	@grader="$(MLB_GRADER_IN_CSV)"; \
+	if [ -z "$$grader" ]; then \
+		grader=$$(ls -1t ~/Downloads/8rainstation_daily_*.csv 2>/dev/null | head -n 1); \
+	fi; \
+	if [ -z "$$grader" ]; then \
+		echo "mlb-post-grade-step7: no grader CSV found. Set MLB_GRADER_IN_CSV or place 8rainstation_daily_*.csv in ~/Downloads"; \
+		exit 2; \
+	fi; \
+	echo "mlb-post-grade-step7: grader=$$grader"; \
+	$(VENV_PY) backend/scripts/split_grader_csv_by_sport.py --in-csv "$$grader"; \
+	date_tag=$$(basename "$$grader" .csv | sed -E 's/^8rainstation_daily_([0-9]{4})[_-]([0-9]{2})[_-]([0-9]{2}).*/\1-\2-\3/'); \
+	if ! echo "$$date_tag" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$$'; then \
+		echo "mlb-post-grade-step7: could not infer date from $$grader"; \
+		exit 2; \
+	fi; \
+	echo "mlb-post-grade-step7: date=$$date_tag"; \
+	$(MAKE) mlb-post-grade-report-and-track \
+		MLB_RECONCILE_FROM_DATE="$$date_tag" \
+		MLB_RECONCILE_TO_DATE="$$date_tag" \
+		MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" \
+		MLB_GRADED_REPORT_REQUIRED=1
+
+# One-step alias for post-grade processing after next-day cron settles outcomes.
+mlb-post-grade-next-day:
+	$(MAKE) mlb-post-grade-step7 MLB_GRADER_IN_CSV="$(MLB_GRADER_IN_CSV)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)"
 
 # Replay locked MLB policy plan across historical reconcile rows (includes fragile-lane monitor output).
 mlb-policy-plan-replay:
 	$(VENV_PY) backend/mlb/scripts/replay_mlb_policy_plan.py --rows-csv "$(MLB_POLICY_REPLAY_ROWS_CSV)" --policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --out-dir "$(MLB_POLICY_REPLAY_OUT_DIR)" --monitor-props "$(MLB_POLICY_MONITOR_PROPS)" --monitor-min-bets-alert "$(MLB_POLICY_MONITOR_MIN_BETS_ALERT)"
 
-.PHONY: mlb-all-available-report mlb-post-grade-all-available-check mlb-post-grade-tracker mlb-post-grade-report-and-track
+.PHONY: mlb-all-available-report mlb-post-grade-all-available-check mlb-graded-wagers-report mlb-graded-wagers-report-latest mlb-post-grade-tracker mlb-post-grade-report-and-track mlb-post-grade-report-and-track-et mlb-post-grade-report-and-track-latest mlb-post-grade-step7 mlb-post-grade-next-day
 
 .PHONY: nhl-model-vs-fade nhl-post-grade-fade-check
 
@@ -1031,6 +1136,8 @@ mlb-odds-backfill-history:
 # Show effective MLB make/runtime values before execution.
 mlb-show-config:
 	@echo "MLB_DATE=$(MLB_DATE)"
+	@echo "MLB_DATE_ET=$(MLB_DATE_ET)"
+	@echo "MLB_POST_GRADE_DATE=$(MLB_POST_GRADE_DATE)"
 	@echo "MLB_MARKET_DAYS=$(MLB_MARKET_DAYS)"
 	@echo "MLB_SLATE_PRED_CSV=$(MLB_SLATE_PRED_CSV)"
 	@echo "MLB_SLATE_OUTPUT_CSV=$(MLB_SLATE_OUTPUT_CSV)"
@@ -1050,6 +1157,10 @@ mlb-show-config:
 	@echo "MLB_RECONCILE_ODDS_FILENAME=$(MLB_RECONCILE_ODDS_FILENAME)"
 	@echo "MLB_RECONCILE_ROWS_OUT_CSV=$(MLB_RECONCILE_ROWS_OUT_CSV)"
 	@echo "MLB_RECONCILE_SUMMARY_OUT_JSON=$(MLB_RECONCILE_SUMMARY_OUT_JSON)"
+	@echo "MLB_RECONCILE_REQUIRE_OUTCOMES=$(MLB_RECONCILE_REQUIRE_OUTCOMES)"
+	@echo "MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN=$(MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN)"
+	@echo "MLB_POST_GRADE_REQUIRE_OUTCOMES=$(MLB_POST_GRADE_REQUIRE_OUTCOMES)"
+	@echo "MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN=$(MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN)"
 	@echo "MLB_MODEL_VS_FADE_ROWS_CSV=$(MLB_MODEL_VS_FADE_ROWS_CSV)"
 	@echo "MLB_MODEL_VS_FADE_OUT_JSON=$(MLB_MODEL_VS_FADE_OUT_JSON)"
 	@echo "MLB_MODEL_VS_FADE_OUT_CSV=$(MLB_MODEL_VS_FADE_OUT_CSV)"
@@ -1062,6 +1173,7 @@ mlb-show-config:
 	@echo "MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV=$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)"
 	@echo "MLB_POSTGRADE_TRACKER_CHARTS_DIR=$(MLB_POSTGRADE_TRACKER_CHARTS_DIR)"
 	@echo "MLB_POSTGRADE_TRACKER_SKIP_CHARTS=$(MLB_POSTGRADE_TRACKER_SKIP_CHARTS)"
+	@echo "MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH=$(MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH)"
 	@echo "MLB_POSTGRADE_ALERTS_OUT_JSON=$(MLB_POSTGRADE_ALERTS_OUT_JSON)"
 	@echo "MLB_POSTGRADE_ALERTS_HISTORY_JSONL=$(MLB_POSTGRADE_ALERTS_HISTORY_JSONL)"
 	@echo "MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS=$(MLB_POSTGRADE_ALERT_FADE_MIN_PAIRED_BETS)"

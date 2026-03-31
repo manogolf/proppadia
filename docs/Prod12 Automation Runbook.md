@@ -101,6 +101,31 @@ OPS_API_TOKEN="$OPS_API_TOKEN" \
 make mlb-book-upload MLB_DATE="$(date -u +%F)"
 ```
 
+Adaptive "best of bunch" trim (recommended before placing wagers):
+
+```bash
+make mlb-book-upload-top-recommended
+```
+
+Defaults:
+- trims current `backend/mlb/data/processed/mlb_book_upload.csv` to adaptive top-40
+- uses recent `artifacts/mlb_postgrade_by_prop_daily_tracker.csv` (lookback 5 days)
+- enforces side-balance nudge (`min_overs=4`) when overs are available
+
+Outputs:
+- `backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv`
+- `tmp/analysis/mlb_book_upload_filter_recommendation.json`
+
+Optional tuning example:
+
+```bash
+make mlb-book-upload-top-recommended \
+  MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS=40 \
+  MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS=7 \
+  MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT=53 \
+  MLB_BOOK_UPLOAD_FILTER_MIN_OVERS=6
+```
+
 Behavior:
 - default remote kind is `book_upload`, so this writes the local upload CSV directly and exits.
 - when `kind=book_upload`, companion artifacts are also synced locally by default:
@@ -110,18 +135,51 @@ Behavior:
 - disable companion sync by setting `MLB_BOOK_UPLOAD_REMOTE_FETCH_COMPANIONS=0`.
 - set `MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND=slate_output` to fetch remote slate first, then build upload CSV locally.
 
-Post-grade model-vs-fade check (recommended daily after graded wagers are posted):
+## Step 7 (After Graded Wagers Are Posted)
+
+Use this one-step command after graded wagers are posted and next-day cron has settled outcomes:
+
+```bash
+make mlb-post-grade-next-day MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+It:
+- auto-picks your newest `~/Downloads/8rainstation_daily_*.csv`,
+- splits it into `tmp/graded/*_mlb_player_props.csv`,
+- infers the grader date,
+- runs reconcile + model-vs-fade + all-available + graded-wager tracker updates for that date.
+
+Equivalent direct target:
+
+```bash
+make mlb-post-grade-step7 MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+If needed, pin a specific grader file:
+
+```bash
+make mlb-post-grade-step7 \
+  MLB_GRADER_IN_CSV="$HOME/Downloads/8rainstation_daily_YYYY_MM_DD.csv" \
+  MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+Important:
+- `make mlb-post-grade-all-available-check ...` only rebuilds reconcile + all-available report.
+- It does **not** split/read the current grader CSV, so it won’t refresh placed graded-wager metrics by itself.
+
+Post-grade model-vs-fade check (optional standalone):
 
 ```bash
 make mlb-post-grade-fade-check \
-  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
-  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_FROM_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RECONCILE_TO_DATE="$(TZ=America/New_York date +%F)" \
   MLB_RECONCILE_BOOKMAKER=betonlineag
 ```
 
 Notes:
 - reconcile now defaults to `odds_latest_compatible.json` via `MLB_RECONCILE_ODDS_FILENAME`.
 - override only when needed, for example: `MLB_RECONCILE_ODDS_FILENAME=odds_mlb_playerprops.json`.
+- reconcile now auto-falls back between `odds_latest_compatible.json` and `odds_mlb_playerprops.json` when one filename is missing for a day; fallback dates are recorded in the summary JSON.
 
 Outputs:
 - `tmp/analysis/mlb_model_vs_fade_summary.json`
@@ -135,8 +193,8 @@ Post-grade all-available resolved report (recommended daily):
 
 ```bash
 make mlb-post-grade-all-available-check \
-  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
-  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_FROM_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RECONCILE_TO_DATE="$(TZ=America/New_York date +%F)" \
   MLB_RECONCILE_BOOKMAKER=betonlineag
 ```
 
@@ -152,11 +210,25 @@ This routine rebuilds reconcile rows for the window, then reports:
 
 Post-grade daily tracker table + charts (recommended daily):
 
+If your grader export is still a combined file, split it first:
+
 ```bash
-make mlb-post-grade-report-and-track \
-  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
-  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+GRADER_CSV="$(ls -t ~/Downloads/8rainstation_daily_*.csv | head -n 1)"
+[ -n "$GRADER_CSV" ] || { echo "No grader CSV found in ~/Downloads"; exit 1; }
+.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+```
+
+```bash
+make mlb-post-grade-report-and-track-latest \
   MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+Optional strict mode for placed-wager ingestion (fail if no split MLB grader file exists under `tmp/graded`):
+
+```bash
+make mlb-post-grade-report-and-track-latest \
+  MLB_RECONCILE_BOOKMAKER=betonlineag \
+  MLB_GRADED_REPORT_REQUIRED=1
 ```
 
 Outputs:
@@ -168,8 +240,17 @@ Outputs:
 - `artifacts/analysis/mlb/mlb_postgrade_roi.png`
 - `artifacts/analysis/mlb/mlb_postgrade_winrate.png`
 - `artifacts/analysis/mlb/mlb_postgrade_volume.png`
+- `tmp/analysis/mlb_graded_wagers_summary.json`
+- `tmp/analysis/mlb_graded_wagers_by_prop.csv`
+- `tmp/analysis/mlb_graded_wagers_rows.csv`
 
 Notes:
+- post-grade reconcile now requires outcomes by default (fails fast if outcomes are unavailable or zero for the window).
+- the post-grade tracker now merges three lenses in one place:
+  - placed graded wagers (from latest `tmp/graded/8rainstation_daily_*_mlb_player_props.csv`)
+  - model-vs-fade (reconcile rows)
+  - all-available resolved slate metrics (reconcile rows)
+- tracker now enforces graded-date alignment by default: if graded summary `report_date` does not match tracker `report_date`, the run fails to prevent stale graded metrics from being written.
 - tracker upserts one row per `report_date` (re-runs replace that date, no duplicate rows).
 - charts require `matplotlib` in `.venv` (install once: `.venv/bin/pip install matplotlib`).
 - automatic alerts now include:
@@ -180,6 +261,31 @@ Notes:
 
 ```bash
 make mlb-post-grade-tracker MLB_POSTGRADE_ALERTS_STRICT=1
+```
+
+- optional override (not recommended): allow tracker write even when graded summary date mismatches tracker date
+
+```bash
+make mlb-post-grade-tracker MLB_POSTGRADE_ALLOW_GRADED_DATE_MISMATCH=1
+```
+
+- to rebuild only the placed graded-wager summary from a specific split file:
+
+```bash
+make mlb-graded-wagers-report \
+  MLB_GRADED_IN_CSV="tmp/graded/8rainstation_daily_YYYY-MM-DD_mlb_player_props.csv"
+```
+
+- ET convenience alias (single-date post-grade run):
+
+```bash
+make mlb-post-grade-report-and-track-et
+```
+
+- latest-archive convenience alias (recommended to avoid date rollover mismatches):
+
+```bash
+make mlb-post-grade-report-and-track-latest
 ```
 
 - to append only tracker row/charts (without rebuilding reports):
@@ -201,8 +307,8 @@ One-command post-grade routine (rebuild both sport summaries, then strict cross-
 
 ```bash
 make cross-sport-post-grade-fade-check \
-  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
-  MLB_RECONCILE_TO_DATE="$(date -u +%F)"
+  MLB_RECONCILE_FROM_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RECONCILE_TO_DATE="$(TZ=America/New_York date +%F)"
 ```
 
 Direct curl equivalents:
