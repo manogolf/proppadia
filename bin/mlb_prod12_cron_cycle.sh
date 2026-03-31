@@ -71,6 +71,70 @@ _bootstrap_runtime_deps() {
   "${boot_venv}/bin/python" -m pip install --no-cache-dir -r requirements.txt
 }
 
+_csv_assert_has_expected_date() {
+  local csv_path="${1:-}"
+  local date_col="${2:-}"
+  local expected_date="${3:-}"
+  local label="${4:-csv}"
+
+  if [[ -z "${csv_path}" || -z "${date_col}" || -z "${expected_date}" ]]; then
+    echo "[prod12-cron] ERROR: ${label} date check missing args" >&2
+    return 2
+  fi
+  if [[ ! -f "${csv_path}" ]]; then
+    echo "[prod12-cron] ERROR: ${label} date check missing file: ${csv_path}" >&2
+    return 2
+  fi
+
+  local py_out=""
+  local py_rc=0
+  set +e
+  py_out="$("$VENV_PY" - "$csv_path" "$date_col" "$expected_date" <<'PY'
+import csv
+import sys
+
+path, col, expected = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path, "r", encoding="utf-8", errors="replace", newline="") as fh:
+        reader = csv.DictReader(fh)
+        fieldnames = reader.fieldnames or []
+        if col not in fieldnames:
+            print(f"missing_column:{col}")
+            raise SystemExit(3)
+        seen = set()
+        for row in reader:
+            val = str(row.get(col) or "").strip()
+            if val:
+                seen.add(val)
+except FileNotFoundError:
+    print("missing_file")
+    raise SystemExit(2)
+except Exception as exc:
+    print(f"read_error:{type(exc).__name__}:{exc}")
+    raise SystemExit(4)
+
+if not seen:
+    print("no_nonempty_dates")
+    raise SystemExit(5)
+
+if expected not in seen:
+    sample = ",".join(sorted(seen)[:8])
+    print(f"date_mismatch:expected={expected}:seen={sample}")
+    raise SystemExit(6)
+
+print("ok")
+PY
+)"
+  py_rc=$?
+  set -e
+  if [[ "${py_rc}" -ne 0 ]]; then
+    echo "[prod12-cron] ERROR: ${label} date check failed path=${csv_path} col=${date_col} expected=${expected_date} detail=${py_out}" >&2
+    return "${py_rc}"
+  fi
+
+  echo "[prod12-cron] ${label} date check passed (${expected_date})"
+}
+
 if [[ -n "${VENV_PY:-}" ]] && ! _py_has_runtime_deps "$VENV_PY"; then
   echo "[prod12-cron] WARN: VENV_PY=${VENV_PY} missing required deps; auto-resolving Python runtime." >&2
   unset VENV_PY
@@ -483,6 +547,8 @@ run_daily() {
         return "${wide_rc}"
       fi
       echo "[prod12-cron] WARN: daily MLB wide-predictions stage failed rc=${wide_rc}; continuing"
+    else
+      _csv_assert_has_expected_date "${MLB_SLATE_PRED_CSV}" "game_date" "${MLB_DATE}" "wide_predictions"
     fi
   else
     echo "[prod12-cron] daily MLB wide-predictions stage disabled (MLB_DAILY_WIDE_PREDICTIONS_ENABLED=${MLB_DAILY_WIDE_PREDICTIONS_ENABLED})"
@@ -513,6 +579,8 @@ run_daily() {
       MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV}" \
       make mlb-slate-output
     fi
+
+    _csv_assert_has_expected_date "${MLB_SLATE_OUTPUT_CSV}" "slate_date" "${MLB_DATE}" "slate_output"
 
     MLB_DATE="${MLB_DATE}" \
     MLB_SLATE_OUTPUT_CSV="${MLB_SLATE_OUTPUT_CSV}" \
