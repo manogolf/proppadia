@@ -178,6 +178,11 @@ MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV:-backend/mlb/data/processed/m
 MLB_ROSTER_DATE="${MLB_ROSTER_DATE:-${MLB_DATE}}"
 MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT:-backend/mlb/exports/odds_history}"
 MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON:-${MLB_ODDS_HISTORY_ROOT}/${MLB_DATE}/odds_mlb_playerprops.json}"
+# Keep a run-specific archive copy while maintaining canonical snapshot filenames.
+MLB_ARCHIVE_RUN_TAG="${MLB_ARCHIVE_RUN_TAG:-${MLB_PROD12_RUN_ID:-${RUN_ID:-}}}"
+if [[ -z "${MLB_ARCHIVE_RUN_TAG}" ]]; then
+  MLB_ARCHIVE_RUN_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
+fi
 MLB_ODDS_MARKETS="${MLB_ODDS_MARKETS:-batter_hits,batter_total_bases,batter_strikeouts,pitcher_earned_runs,batter_doubles,pitcher_hits_allowed,pitcher_strikeouts,batter_walks,batter_hits_runs_rbis,batter_runs_scored,pitcher_walks}"
 # Bookmaker scope for daily automation.
 # Override MLB_ODDS_BOOKMAKERS in env as needed.
@@ -514,6 +519,7 @@ run_daily() {
     MLB_BOOK_UPLOAD_OUT_CSV="${MLB_BOOK_UPLOAD_OUT_CSV}" \
     MLB_ODDS_HISTORY_ROOT="${MLB_ODDS_HISTORY_ROOT}" \
     MLB_ODDS_SNAPSHOT_JSON="${MLB_ODDS_SNAPSHOT_JSON}" \
+    MLB_ARCHIVE_RUN_TAG="${MLB_ARCHIVE_RUN_TAG}" \
     MLB_POLICY_PLAN_ENABLED="${MLB_POLICY_PLAN_ENABLED}" \
     MLB_POLICY_PLAN_CSV="${MLB_POLICY_PLAN_CSV}" \
     MLB_POLICY_PLAN_ALLOW_ONE_SIDED="${MLB_POLICY_PLAN_ALLOW_ONE_SIDED}" \

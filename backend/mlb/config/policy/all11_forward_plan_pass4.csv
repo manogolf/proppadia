@@ -1,5 +1,5 @@
 prop_type,bookmaker_key,side,min_gap,min_ev,min_model_prob,min_price,max_price,bets,roi,min_slice_roi,min_slice_bets,has_positive_min_slice,status,lift_needed_to_zero,lane_mode,action,note
-doubles,draftkings,over,0.0,0.0,0.5,-220,300,234,-0.0011111111111111,-0.19375,18,,PASS_MONITOR,0.19375,baseline,enable,kept in baseline by operator decision; monitor slice drift and cap allocation if needed
+doubles,draftkings,over,0.03,0.05,0.22,-220,650,234,-0.0011111111111111,-0.19375,18,,PASS_MONITOR,0.19375,baseline,enable,allow qualified plus-money doubles overs while requiring positive edge and EV
 earned_runs,williamhill_us,under,0.0,0.0,0.6,-110,140,264,0.1585391733415128,0.0854066369495102,71,True,PASS,0.0,production,enable,
 hits,superbook,under,0.04,0.0,0.6,-220,130,253,0.0980267824557582,0.0856372082672922,107,True,PASS,0.0,production,enable,raised min_gap to 0.04 for tighter entry; monitor volume/roi
 hits_allowed,fanatics,under,0.0,0.0,0.5,-110,110,262,0.035404481015168,0.0341483619261397,100,True,PASS,0.0,production,enable,
@@ -9,4 +9,4 @@ strikeouts_batting,superbook,under,0.1,0.2,0.55,-220,140,269,0.2291880574025396,
 strikeouts_pitching,fanatics,under,0.0,0.0,0.65,-100,130,259,0.0467181467181467,0.0429577464788732,71,True,PASS,0.0,production,enable,
 total_bases,rebet,under,0.0,0.0,0.55,-120,110,824,0.0508209781666956,0.0378252466579556,45,True,PASS,0.0,production,enable,
 walks,betmgm,under,0.04,0.0,0.5,-220,200,263,0.0758989350725526,0.0140663486206623,66,True,PASS,0.0,production,enable,
-walks_allowed,betmgm,over,0.0,0.16,0.67,-220,200,279,0.0206492340799701,0.0070029097855891,66,False,PASS,0.0,production,enable,fine-tuned lane (positive but thin margin); monitor by slice | thin margin: keep live monitor
+walks_allowed,betmgm,over,0.0,0.1,0.58,-220,200,279,0.0206492340799701,0.0070029097855891,66,False,PASS,0.0,production,enable,relaxed from ultra-tight over gate; still requires positive EV and meaningful model confidence

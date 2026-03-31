@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -40,6 +41,14 @@ class CopyResult:
 
 def _date_et_today() -> str:
     return datetime.now(ET).date().isoformat()
+
+
+def _sanitize_run_tag(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
+    return text[:96]
 
 
 def _copy_artifact(src: Path, dst: Path) -> CopyResult:
@@ -104,6 +113,11 @@ def main() -> int:
         help="Optional odds snapshot JSON source to archive as odds_mlb_playerprops.json",
     )
     ap.add_argument(
+        "--run-tag",
+        default=os.environ.get("MLB_ARCHIVE_RUN_TAG", ""),
+        help="Optional tag to keep a per-run odds snapshot copy in the date archive folder.",
+    )
+    ap.add_argument(
         "--manifest-json",
         default="",
         help="Optional explicit manifest path. Default: <archive_dir>/manifest.json",
@@ -121,6 +135,7 @@ def main() -> int:
     odds_snapshot_src: Optional[Path] = None
     if str(args.odds_snapshot_json or "").strip():
         odds_snapshot_src = Path(str(args.odds_snapshot_json)).expanduser()
+    run_tag = _sanitize_run_tag(str(args.run_tag or ""))
 
     copy_plan: List[tuple[Path, Path]] = [
         (pred_csv, archive_dir / pred_csv.name),
@@ -131,6 +146,8 @@ def main() -> int:
         copy_plan.append((odds_snapshot_src, archive_dir / "odds_mlb_playerprops.json"))
         # Keep legacy-compatible filename in sync for reconcile/report defaults.
         copy_plan.append((odds_snapshot_src, archive_dir / "odds_latest_compatible.json"))
+        if run_tag:
+            copy_plan.append((odds_snapshot_src, archive_dir / f"odds_mlb_playerprops__{run_tag}.json"))
 
     results: List[CopyResult] = []
     for src, dst in copy_plan:

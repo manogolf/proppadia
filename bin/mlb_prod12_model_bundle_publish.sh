@@ -58,16 +58,27 @@ BUNDLE_LATEST_OBJECT="${BUNDLE_LATEST_OBJECT:-mlb/prod12/latest.tgz}"
 MODEL_TARBALL="${MODEL_TARBALL:-/tmp/mlb_prod12_bundle_${ts}.tgz}"
 MODEL_TAR_SOURCE="${MODEL_TAR_SOURCE:-latest}"
 MANIFEST_OBJECT="${MANIFEST_OBJECT:-mlb/prod12/publish_manifest.json}"
+UPLOAD_CONNECT_TIMEOUT="${UPLOAD_CONNECT_TIMEOUT:-30}"
+UPLOAD_MAX_TIME="${UPLOAD_MAX_TIME:-10800}"
+UPLOAD_RETRY="${UPLOAD_RETRY:-3}"
+UPLOAD_RETRY_DELAY="${UPLOAD_RETRY_DELAY:-5}"
 
 upload_object() {
   local object_path="$1"
-  curl -fsS -X POST \
+  # Stream large bundle from disk; avoids macOS curl OOM seen with --data-binary @file on ~1GB payloads.
+  curl -fS -X POST \
     "${SUPABASE_URL}/storage/v1/object/${MODELS_BUCKET}/${object_path}" \
     -H "Authorization: Bearer ${SUPABASE_API_KEY}" \
     -H "apikey: ${SUPABASE_API_KEY}" \
     -H "x-upsert: true" \
     -H "Content-Type: application/gzip" \
-    --data-binary @"${MODEL_TARBALL}" >/dev/null
+    --connect-timeout "${UPLOAD_CONNECT_TIMEOUT}" \
+    --max-time "${UPLOAD_MAX_TIME}" \
+    --retry "${UPLOAD_RETRY}" \
+    --retry-delay "${UPLOAD_RETRY_DELAY}" \
+    --retry-all-errors \
+    --http1.1 \
+    --upload-file "${MODEL_TARBALL}" >/dev/null
 }
 
 upload_manifest() {
@@ -82,12 +93,17 @@ upload_manifest() {
     "${sha256}" \
     "${BUNDLE_OBJECT}" \
     "${BUNDLE_LATEST_OBJECT}")"
-  curl -fsS -X POST \
+  curl -fS -X POST \
     "${SUPABASE_URL}/storage/v1/object/${MODELS_BUCKET}/${MANIFEST_OBJECT}" \
     -H "Authorization: Bearer ${SUPABASE_API_KEY}" \
     -H "apikey: ${SUPABASE_API_KEY}" \
     -H "x-upsert: true" \
     -H "Content-Type: application/json" \
+    --connect-timeout "${UPLOAD_CONNECT_TIMEOUT}" \
+    --max-time "${UPLOAD_MAX_TIME}" \
+    --retry "${UPLOAD_RETRY}" \
+    --retry-delay "${UPLOAD_RETRY_DELAY}" \
+    --retry-all-errors \
     --data-binary "${payload}" >/dev/null
 }
 
@@ -109,13 +125,17 @@ uploaded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "[prod12-model-publish] tarball bytes=${size_bytes}"
 echo "[prod12-model-publish] tarball sha256=${sha256}"
+echo "[prod12-model-publish] upload settings connect_timeout=${UPLOAD_CONNECT_TIMEOUT}s max_time=${UPLOAD_MAX_TIME}s retry=${UPLOAD_RETRY}"
 
+echo "[prod12-model-publish] uploading ${MODELS_BUCKET}/${BUNDLE_OBJECT}"
 upload_object "${BUNDLE_OBJECT}"
 echo "[prod12-model-publish] uploaded ${MODELS_BUCKET}/${BUNDLE_OBJECT}"
 
+echo "[prod12-model-publish] uploading ${MODELS_BUCKET}/${BUNDLE_LATEST_OBJECT}"
 upload_object "${BUNDLE_LATEST_OBJECT}"
 echo "[prod12-model-publish] uploaded ${MODELS_BUCKET}/${BUNDLE_LATEST_OBJECT}"
 
+echo "[prod12-model-publish] uploading ${MODELS_BUCKET}/${MANIFEST_OBJECT}"
 upload_manifest "${uploaded_at}" "${size_bytes}" "${sha256}"
 echo "[prod12-model-publish] uploaded ${MODELS_BUCKET}/${MANIFEST_OBJECT}"
 
