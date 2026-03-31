@@ -150,6 +150,44 @@ This routine rebuilds reconcile rows for the window, then reports:
 - model win rate across resolved rows
 - per-prop over/under hit rates and model win rate
 
+Post-grade daily tracker table + charts (recommended daily):
+
+```bash
+make mlb-post-grade-report-and-track \
+  MLB_RECONCILE_FROM_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_BOOKMAKER=betonlineag
+```
+
+Outputs:
+- `artifacts/mlb_postgrade_daily_tracker.csv`
+- `artifacts/mlb_postgrade_by_prop_daily_tracker.csv`
+- `artifacts/analysis/mlb/mlb_postgrade_alerts_latest.json`
+- `artifacts/analysis/mlb/mlb_postgrade_alerts_history.jsonl`
+- `artifacts/analysis/mlb/mlb_postgrade_dashboard.png`
+- `artifacts/analysis/mlb/mlb_postgrade_roi.png`
+- `artifacts/analysis/mlb/mlb_postgrade_winrate.png`
+- `artifacts/analysis/mlb/mlb_postgrade_volume.png`
+
+Notes:
+- tracker upserts one row per `report_date` (re-runs replace that date, no duplicate rows).
+- charts require `matplotlib` in `.venv` (install once: `.venv/bin/pip install matplotlib`).
+- automatic alerts now include:
+  - fade beating model on meaningful paired-bet sample
+  - model ROI breach threshold
+  - overall and per-prop short-window win-rate drops
+- strict mode (optional): fail command on critical alerts
+
+```bash
+make mlb-post-grade-tracker MLB_POSTGRADE_ALERTS_STRICT=1
+```
+
+- to append only tracker row/charts (without rebuilding reports):
+
+```bash
+make mlb-post-grade-tracker
+```
+
 Cross-sport sanity check (NHL + MLB summaries):
 
 ```bash
