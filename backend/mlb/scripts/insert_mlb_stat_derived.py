@@ -833,7 +833,9 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                 created_at, updated_at, prop_source, was_correct, game_date,
                 game_time, game_day_of_week, time_of_day_bucket, streak_type, streak_count{extra_insert_col}
             ) VALUES (
-                %(id)s, %(game_id)s, %(player_id)s, %(player_name)s, %(team)s, %(opponent)s,
+                %(id)s, %(game_id)s, %(player_id)s, %(player_name)s,
+                COALESCE(NULLIF(%(team_id)s::text, ''), CASE WHEN %(team)s ~ '^[0-9]+$' THEN %(team)s ELSE NULL END),
+                COALESCE(NULLIF(%(opponent_team_id)s::text, ''), CASE WHEN %(opponent)s ~ '^[0-9]+$' THEN %(opponent)s ELSE NULL END),
                 %(team_id)s, %(opponent_team_id)s, %(opponent_encoded)s, %(is_home)s,
                 %(prop_type)s, %(prop_value)s, %(line)s, %(over_under)s, %(outcome)s, %(status)s,
                 %(created_at)s, %(updated_at)s, %(prop_source)s, %(was_correct)s, %(game_date)s,
@@ -841,8 +843,8 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
             )
             ON CONFLICT (player_id, game_id, prop_type, prop_source)
             DO UPDATE SET
-                team = EXCLUDED.team,
-                opponent = EXCLUDED.opponent,
+                team = COALESCE(NULLIF(EXCLUDED.team_id::text, ''), CASE WHEN EXCLUDED.team ~ '^[0-9]+$' THEN EXCLUDED.team ELSE NULL END),
+                opponent = COALESCE(NULLIF(EXCLUDED.opponent_team_id::text, ''), CASE WHEN EXCLUDED.opponent ~ '^[0-9]+$' THEN EXCLUDED.opponent ELSE NULL END),
                 team_id = EXCLUDED.team_id,
                 opponent_team_id = EXCLUDED.opponent_team_id,
                 opponent_encoded = EXCLUDED.opponent_encoded,
