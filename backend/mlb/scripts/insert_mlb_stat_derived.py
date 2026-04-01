@@ -615,7 +615,14 @@ def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -
         ),
         upd AS (
             UPDATE mlb.model_training_props mt
-               SET rolling_result_avg_7 = src.d7_val,
+               SET team = COALESCE(
+                       NULLIF(mt.team_id::text, ''),
+                       CASE
+                           WHEN mt.team ~ '^[0-9]+$' THEN mt.team
+                           ELSE NULL
+                       END
+                   ),
+                   rolling_result_avg_7 = src.d7_val,
                    updated_at = now()
               FROM src
              WHERE mt.id = src.id
