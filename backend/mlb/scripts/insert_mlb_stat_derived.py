@@ -1028,7 +1028,11 @@ def run(
                         opp_abbr = normalizeTeamAbbreviation(away_abbr if is_home else home_abbr)
                         team_id = _to_int(home_id if is_home else away_id)
                         opp_id = _to_int(away_id if is_home else home_id)
-                        opp_encoded = str(opp_id) if opp_id is not None else str(getTeamIdFromAbbr(opp_abbr) or "")
+                        if team_id is None:
+                            team_id = _to_int(getTeamIdFromAbbr(team_abbr))
+                        if opp_id is None:
+                            opp_id = _to_int(getTeamIdFromAbbr(opp_abbr))
+                        opp_encoded = str(opp_id) if opp_id is not None else None
 
                         for _, p in players_map.items():
                             person = p.get("person") or {}
