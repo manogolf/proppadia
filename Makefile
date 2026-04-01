@@ -1,4 +1,5 @@
 .PHONY: help mlb-help mlb-runbook mlb-cron-preview mlb-prod12-cron-preview mlb-prod12-script-preview mlb-prod12-bootstrap-preview mlb-prod12-scheduler-smoke mlb-prod12-bootstrap mlb-prod12-bootstrap-strict nhl-help ops-help ops-show-config ops-status ops-operator-summary ops-operator-summary-json ops-operator-summary-json-compact ops-operator-log ops-operator-last ops-operator-incident ops-operator-incident-strict ops-daily-check phase-status phase-status-json season-activation-status season-activation-status-strict season-activation-log season-activation-last season-activation-report season-activation-report-strict season-baseline-check season-baseline-last season-baseline-lock season-cutover-cadence season-cutover-log season-cutover-last season-cutover-ready season-activation-check cron-governance-check cron-governance-snapshot cron-fast-check cron-fast-check-json cron-current-state cron-scheduled-state cron-summary cron-summary-json cron-path-summary cron-path-summary-json nhl-workflow-compat-summary nhl-workflow-compat-summary-json assistant-handoff-bundle workflow-inventory workflow-inventory-strict workflow-path-audit workflow-path-audit-strict docs-make-target-audit ops-shortlist-check mlb-season-kickoff-check season-baseline-capture mlb-season-baseline-capture mlb-prod8-baseline-capture frontend-route-smoke diagnose ci-offline-checks shared-checks-offline mlb-checks-offline mlb-checks-offline-core mlb-checks mlb-checks-full mlb-checks-auto mlb-checks-golden mlb-checks-props-contract mlb-checks-profile-contract mlb-player-surface-checks mlb-market-cache-refresh mlb-roster-refresh-all mlb-predictions-wide mlb-slate-output mlb-book-upload mlb-slate-archive mlb-reconcile-rows mlb-model-vs-fade mlb-post-grade-fade-check mlb-show-config mlb-readiness-snapshot mlb-readiness-log mlb-readiness-last mlb-prediction-readiness mlb-prediction-quality mlb-prediction-quality-core mlb-prediction-quality-prod8 mlb-prediction-quality-prod12 mlb-recompute-training-predictions mlb-corrected-props-recompute mlb-model-artifact-validate mlb-model-artifact-validate-prod12 mlb-model-snapshot mlb-model-publish mlb-model-prune mlb-model-rollback mlb-feature-health mlb-feature-health-prod12 mlb-pfp-overlap-audit mlb-pfp-overlap-backfill mlb-prediction-quality-user-added mlb-prediction-quality-segmented mlb-degenerate-lane-report mlb-underserved-historical-report mlb-high-value-historical-report mlb-retrain-prereq-check mlb-candidate-eval mlb-candidate-eval-prod12 mlb-prod12-status mlb-prod12-status-strict mlb-prod12-health-report mlb-prod12-incident mlb-prod12-incident-strict mlb-prod12-ops-check mlb-prod12-ops-log mlb-prod12-ops-last mlb-prod12-track-daily mlb-prod12-daily-gate mlb-prod12-daily-gate-incident mlb-prod12-daily-cycle mlb-prod12-track-weekly mlb-prod12-release-manifest mlb-prod12-replay-latency mlb-prod12-phase2-log mlb-prod12-phase2-last mlb-prod12-phase2-last-strict mlb-prod12-phase2-weekly-gate mlb-prod12-phase2-weekly-gate-incident mlb-prod12-phase2-weekly-cycle mlb-prod12-phase2-readiness mlb-prediction-gate mlb-pipeline-check mlb-pipeline-check-json mlb-pipeline-check-core mlb-pipeline-check-prod8 mlb-pipeline-check-prod12 mlb-pipeline-check-ops mlb-pipeline-log mlb-pipeline-log-prod12 mlb-pipeline-log-ops mlb-pipeline-last mlb-pipeline-daily-check mlb-prop-coverage mlb-prop-coverage-core mlb-prediction-flow-audit mlb-hits-expectation-sources mlb-insert-stat-derived mlb-check-stat-derived mlb-check-stat-derived-json mlb-stat-derived-refresh mlb-stat-derived-smoke mlb-stat-derived-backfill mlb-preseason-cleanup mlb-season-mode-lock mlb-daily-refresh mlb-daily-refresh-strict mlb-daily-refresh-smoke mlb-ops-check mlb-post-deploy mlb-post-deploy-strict mlb-post-deploy-strict-offseason mlb-release-check nhl-checks-offline nhl-checks-offline-core nhl-workflow-compat-check nhl-prediction-quality nhl-prediction-quality-auto nhl-openapi-contract nhl-post-deploy nhl-post-deploy-strict nhl-post-deploy-strict-offseason nhl-release-check nhl-roster-refresh-all roster-refresh-all cross-sport-post-deploy runtime-boundaries
+.PHONY: tmp-audit tmp-prune-bulky tmp-prune-age tmp-prune-fat-csv tmp-prune mlb-odds-history-audit mlb-odds-history-prune-intermediate mlb-odds-history-prune-old-dates mlb-odds-history-offload-status mlb-odds-history-offload-sync mlb-odds-history-offload-prune-local mlb-odds-history-offload-cycle artifacts-audit artifacts-prune-safe artifacts-prune-experiments artifacts-prune
 
 VENV_PY ?= .venv/bin/python
 # Canonical model root (same default local + render); cron/runtime can still override MODEL_DIR.
@@ -29,6 +30,7 @@ MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
 MLB_BOOK_UPLOAD_FILTER_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv
 MLB_BOOK_UPLOAD_FILTER_OUT_JSON ?= tmp/analysis/mlb_book_upload_filter_recommendation.json
 MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS ?= 5
+MLB_BOOK_UPLOAD_FILTER_WINDOWS_DAYS ?= 7,14
 MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS ?= 40
 MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_ROWS ?= 60
 MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT ?= 52
@@ -106,6 +108,13 @@ MLB_ROSTER_DATE ?= $(shell date +%F)
 NHL_ROSTER_DATE ?= $(shell date +%F)
 MLB_STAT_DERIVED_DAYS ?= 7
 MLB_STAT_DERIVED_MIN ?= 0
+TMP_RETENTION_DAYS ?= 7
+TMP_FAT_CSV_MIN_MB ?= 10
+TMP_FAT_CSV_MIN_AGE_DAYS ?= 2
+MLB_ODDS_HISTORY_RETENTION_DAYS ?= 365
+MLB_ODDS_HISTORY_ARCHIVE_ROOT ?=
+MLB_ODDS_HISTORY_LOCAL_RETENTION_DAYS ?= 180
+ARTIFACTS_RETENTION_DAYS ?= 30
 MLB_PREDICT_SAMPLE ?= 10
 MLB_PREDICT_MIN_SUCCESS ?= 3
 MLB_PREDICT_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
@@ -321,6 +330,7 @@ MLB_STAT_TO_DATE ?=
 MLB_STAT_DAYS_AGO ?= 2
 MLB_STAT_MAX_GAMES ?= 0
 MLB_STAT_SKIP_EXISTING_DATES ?= 1
+MLB_STAT_BATTER_SAMPLE_RATIO ?= 1.0
 MLB_SEASON_REQUIRE_REGULAR ?= 0
 MLB_PRESEASON_FROM_DATE ?=
 MLB_PRESEASON_TO_DATE ?=
@@ -498,11 +508,27 @@ help:
 	@echo "  make mlb-daily-refresh-strict [daily baseline + require stat-derived min=1]"
 	@echo "  make mlb-daily-refresh-smoke [daily baseline smoke; forces MLB_STAT_MAX_GAMES=1]"
 	@echo "  make mlb-ops-check BASE_URL=<url> [ops confidence loop: config+daily-smoke+post-deploy]"
-	@echo "  make mlb-stat-derived-refresh [insert+check; supports MLB_STAT_DAYS_AGO/MLB_STAT_SKIP_EXISTING_DATES]"
+	@echo "  make mlb-stat-derived-refresh [insert+check; supports MLB_STAT_DAYS_AGO/MLB_STAT_SKIP_EXISTING_DATES/MLB_STAT_BATTER_SAMPLE_RATIO]"
 	@echo "  make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD [MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1]"
 	@echo "  make mlb-preseason-cleanup MLB_PRESEASON_FROM_DATE=YYYY-MM-DD MLB_PRESEASON_TO_DATE=YYYY-MM-DD [MLB_PRESEASON_INCLUDE_USER_ADDED=0] [MLB_PRESEASON_GAME_TYPES=S]"
 	@echo "  make mlb-season-mode-lock [smoke stat-derived with MLB_SEASON_REQUIRE_REGULAR=1]"
 	@echo "  make mlb-stat-derived-smoke [quick wiring check; forces MLB_STAT_MAX_GAMES=1]"
+	@echo "  make tmp-audit [show tmp footprint and largest files]"
+	@echo "  make tmp-prune-bulky [remove bulky generated reconcile CSVs in tmp]"
+	@echo "  make tmp-prune-age [remove tmp files older than TMP_RETENTION_DAYS]"
+	@echo "  make tmp-prune-fat-csv [remove tmp CSV files >= TMP_FAT_CSV_MIN_MB older than TMP_FAT_CSV_MIN_AGE_DAYS]"
+	@echo "  make tmp-prune [run bulky prune then age-based prune]"
+	@echo "  make mlb-odds-history-audit [show MLB odds_history footprint and largest files]"
+	@echo "  make mlb-odds-history-prune-intermediate [remove raw intermediate files when odds_latest_compatible exists]"
+	@echo "  make mlb-odds-history-prune-old-dates [remove odds_history date dirs older than MLB_ODDS_HISTORY_RETENTION_DAYS]"
+	@echo "  make mlb-odds-history-offload-status MLB_ODDS_HISTORY_ARCHIVE_ROOT=/Volumes/<Drive>/... [show local vs external odds_history footprint]"
+	@echo "  make mlb-odds-history-offload-sync MLB_ODDS_HISTORY_ARCHIVE_ROOT=/Volumes/<Drive>/... [rsync local odds_history to external archive]"
+	@echo "  make mlb-odds-history-offload-prune-local MLB_ODDS_HISTORY_ARCHIVE_ROOT=/Volumes/<Drive>/... [prune local old dates only when archived copy exists]"
+	@echo "  make mlb-odds-history-offload-cycle MLB_ODDS_HISTORY_ARCHIVE_ROOT=/Volumes/<Drive>/... [status -> sync -> prune-local -> status]"
+	@echo "  make artifacts-audit [show artifacts footprint and largest files]"
+	@echo "  make artifacts-prune-safe [remove stale experiments/log/cache files older than ARTIFACTS_RETENTION_DAYS]"
+	@echo "  make artifacts-prune-experiments [remove all files under artifacts/experiments]"
+	@echo "  make artifacts-prune [run safe prune using ARTIFACTS_RETENTION_DAYS]"
 	@echo "  make mlb-insert-stat-derived [advanced: direct insert flags]"
 	@echo "  make mlb-check-stat-derived [advanced: direct volume guard flags]"
 	@echo "  make mlb-check-stat-derived-json [advanced: direct volume guard json]"
@@ -971,7 +997,7 @@ mlb-book-upload:
 
 # Build adaptive top-N recommendation from current book upload + recent post-grade history.
 mlb-book-upload-top-recommended:
-	$(VENV_PY) backend/mlb/scripts/recommend_mlb_book_upload_filters.py --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --by-prop-tracker-csv "$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" --lookback-days "$(MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS)" --target-rows "$(MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS)" --min-model-rows "$(MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_ROWS)" --min-model-win-rate-pct "$(MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT)" --min-graded-rows "$(MLB_BOOK_UPLOAD_FILTER_MIN_GRADED_ROWS)" --graded-roi-floor-pct "$(MLB_BOOK_UPLOAD_FILTER_GRADED_ROI_FLOOR_PCT)" --min-overs "$(MLB_BOOK_UPLOAD_FILTER_MIN_OVERS)" --out-csv "$(MLB_BOOK_UPLOAD_FILTER_OUT_CSV)" --out-json "$(MLB_BOOK_UPLOAD_FILTER_OUT_JSON)"
+	$(VENV_PY) backend/mlb/scripts/recommend_mlb_book_upload_filters.py --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --by-prop-tracker-csv "$(MLB_POSTGRADE_TRACKER_OUT_BY_PROP_CSV)" --lookback-days "$(MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS)" --windows-days "$(MLB_BOOK_UPLOAD_FILTER_WINDOWS_DAYS)" --target-rows "$(MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS)" --min-model-rows "$(MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_ROWS)" --min-model-win-rate-pct "$(MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT)" --min-graded-rows "$(MLB_BOOK_UPLOAD_FILTER_MIN_GRADED_ROWS)" --graded-roi-floor-pct "$(MLB_BOOK_UPLOAD_FILTER_GRADED_ROI_FLOOR_PCT)" --min-overs "$(MLB_BOOK_UPLOAD_FILTER_MIN_OVERS)" --out-csv "$(MLB_BOOK_UPLOAD_FILTER_OUT_CSV)" --out-json "$(MLB_BOOK_UPLOAD_FILTER_OUT_JSON)"
 
 # Full daily capture smoke path using an existing odds snapshot (no live OddsAPI fetch).
 mlb-daily-capture-from-snapshot:
@@ -1209,6 +1235,7 @@ mlb-show-config:
 	@echo "MLB_STAT_TO_DATE=$(MLB_STAT_TO_DATE)"
 	@echo "MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES)"
 	@echo "MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES)"
+	@echo "MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO)"
 	@echo "MLB_SEASON_REQUIRE_REGULAR=$(MLB_SEASON_REQUIRE_REGULAR)"
 	@echo "MLB_PRESEASON_FROM_DATE=$(MLB_PRESEASON_FROM_DATE)"
 	@echo "MLB_PRESEASON_TO_DATE=$(MLB_PRESEASON_TO_DATE)"
@@ -1649,7 +1676,7 @@ mlb-hits-expectation-sources:
 
 # Generate historical stat-derived MLB rows (legacy workhorse script).
 mlb-insert-stat-derived:
-	$(VENV_PY) backend/mlb/scripts/insert_mlb_stat_derived.py --quiet --days-ago $(MLB_STAT_DAYS_AGO) --max-games-per-date $(MLB_STAT_MAX_GAMES) $(if $(filter 1,$(MLB_STAT_SKIP_EXISTING_DATES)),--skip-existing-dates,) $(if $(filter 1,$(MLB_SEASON_REQUIRE_REGULAR)),--require-regular-season,) $(if $(MLB_STAT_FROM_DATE),--from-date $(MLB_STAT_FROM_DATE),) $(if $(MLB_STAT_TO_DATE),--to-date $(MLB_STAT_TO_DATE),)
+	$(VENV_PY) backend/mlb/scripts/insert_mlb_stat_derived.py --quiet --days-ago $(MLB_STAT_DAYS_AGO) --max-games-per-date $(MLB_STAT_MAX_GAMES) --batter-sample-ratio $(MLB_STAT_BATTER_SAMPLE_RATIO) $(if $(filter 1,$(MLB_STAT_SKIP_EXISTING_DATES)),--skip-existing-dates,) $(if $(filter 1,$(MLB_SEASON_REQUIRE_REGULAR)),--require-regular-season,) $(if $(MLB_STAT_FROM_DATE),--from-date $(MLB_STAT_FROM_DATE),) $(if $(MLB_STAT_TO_DATE),--to-date $(MLB_STAT_TO_DATE),)
 
 # Validate recent stat-derived row volume in model_training_props.
 mlb-check-stat-derived:
@@ -1660,12 +1687,12 @@ mlb-check-stat-derived-json:
 
 # One-command stat-derived refresh + guard (cron-friendly).
 mlb-stat-derived-refresh:
-	$(MAKE) mlb-insert-stat-derived MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES)
+	$(MAKE) mlb-insert-stat-derived MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO)
 	$(MAKE) mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
 
 # Quick smoke for stat-derived wiring (limits game load).
 mlb-stat-derived-smoke:
-	$(MAKE) mlb-insert-stat-derived MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=1 MLB_STAT_SKIP_EXISTING_DATES=0
+	$(MAKE) mlb-insert-stat-derived MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=1 MLB_STAT_SKIP_EXISTING_DATES=0 MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO)
 
 # Historical window backfill + guard in one command.
 mlb-stat-derived-backfill:
@@ -1673,7 +1700,7 @@ mlb-stat-derived-backfill:
 		echo "mlb-stat-derived-backfill requires MLB_STAT_FROM_DATE and MLB_STAT_TO_DATE"; \
 		exit 2; \
 	fi
-	$(MAKE) mlb-insert-stat-derived MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES)
+	$(MAKE) mlb-insert-stat-derived MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO)
 	$(MAKE) mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
 
 mlb-preseason-cleanup:
@@ -1689,6 +1716,62 @@ mlb-season-mode-lock:
 	$(MAKE) mlb-show-config MLB_SEASON_REQUIRE_REGULAR=1
 	$(MAKE) mlb-stat-derived-smoke MLB_SEASON_REQUIRE_REGULAR=1 MLB_STAT_SKIP_EXISTING_DATES=0
 
+# Local tmp housekeeping helpers (tmp is git-ignored; safe to prune aggressively).
+tmp-audit:
+	bin/tmp_housekeeping.sh audit
+
+tmp-prune-bulky:
+	bin/tmp_housekeeping.sh prune-bulky
+
+tmp-prune-age:
+	bin/tmp_housekeeping.sh prune-age $(TMP_RETENTION_DAYS)
+
+tmp-prune-fat-csv:
+	bin/tmp_housekeeping.sh prune-fat-csv $(TMP_FAT_CSV_MIN_MB) $(TMP_FAT_CSV_MIN_AGE_DAYS)
+
+tmp-prune:
+	$(MAKE) tmp-prune-bulky
+	$(MAKE) tmp-prune-age TMP_RETENTION_DAYS=$(TMP_RETENTION_DAYS)
+
+# Local MLB odds_history housekeeping helpers (generated, untracked runtime snapshots).
+mlb-odds-history-audit:
+	bin/mlb_odds_history_housekeeping.sh audit
+
+mlb-odds-history-prune-intermediate:
+	bin/mlb_odds_history_housekeeping.sh prune-intermediate
+
+mlb-odds-history-prune-old-dates:
+	bin/mlb_odds_history_housekeeping.sh prune-old-dates $(MLB_ODDS_HISTORY_RETENTION_DAYS)
+
+# Offload MLB odds_history to external storage while retaining recoverability.
+mlb-odds-history-offload-status:
+	bin/mlb_odds_history_offload.sh status "$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)"
+
+mlb-odds-history-offload-sync:
+	bin/mlb_odds_history_offload.sh sync "$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)"
+
+mlb-odds-history-offload-prune-local:
+	bin/mlb_odds_history_offload.sh prune-local-synced "$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)" "$(MLB_ODDS_HISTORY_LOCAL_RETENTION_DAYS)"
+
+mlb-odds-history-offload-cycle:
+	$(MAKE) mlb-odds-history-offload-status MLB_ODDS_HISTORY_ARCHIVE_ROOT="$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)"
+	$(MAKE) mlb-odds-history-offload-sync MLB_ODDS_HISTORY_ARCHIVE_ROOT="$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)"
+	$(MAKE) mlb-odds-history-offload-prune-local MLB_ODDS_HISTORY_ARCHIVE_ROOT="$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)" MLB_ODDS_HISTORY_LOCAL_RETENTION_DAYS="$(MLB_ODDS_HISTORY_LOCAL_RETENTION_DAYS)"
+	$(MAKE) mlb-odds-history-offload-status MLB_ODDS_HISTORY_ARCHIVE_ROOT="$(MLB_ODDS_HISTORY_ARCHIVE_ROOT)"
+
+# Local artifacts housekeeping helpers (keep history/baselines, prune stale generated bulk).
+artifacts-audit:
+	bin/artifacts_housekeeping.sh audit
+
+artifacts-prune-safe:
+	bin/artifacts_housekeeping.sh prune-safe $(ARTIFACTS_RETENTION_DAYS)
+
+artifacts-prune-experiments:
+	bin/artifacts_housekeeping.sh prune-experiments-all
+
+artifacts-prune:
+	$(MAKE) artifacts-prune-safe ARTIFACTS_RETENTION_DAYS=$(ARTIFACTS_RETENTION_DAYS)
+
 # Daily capture lane: persist MLB odds snapshot + slate artifacts into odds_history.
 mlb-daily-capture:
 	$(MAKE) mlb-predictions-wide MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_WIDE_PROP_TYPES="$(MLB_WIDE_PROP_TYPES)" MLB_WIDE_REQUIRE_MIN_ROWS="$(MLB_WIDE_REQUIRE_MIN_ROWS)"
@@ -1700,7 +1783,7 @@ mlb-daily-refresh:
 	$(MAKE) mlb-show-config
 	$(MAKE) mlb-market-cache-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS)
 	$(MAKE) mlb-roster-refresh-all MLB_ROSTER_DATE=$(MLB_ROSTER_DATE)
-	$(MAKE) mlb-stat-derived-refresh MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
+	$(MAKE) mlb-stat-derived-refresh MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
 	@if [ "$(MLB_DAILY_INCLUDE_CAPTURE)" = "1" ]; then \
 		echo "mlb-daily-refresh: running daily capture lane"; \
 		$(MAKE) mlb-daily-capture MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_WIDE_PROP_TYPES="$(MLB_WIDE_PROP_TYPES)" MLB_WIDE_REQUIRE_MIN_ROWS="$(MLB_WIDE_REQUIRE_MIN_ROWS)" MLB_SLATE_PROP_TYPE="$(MLB_SLATE_PROP_TYPE)"; \
@@ -1710,18 +1793,18 @@ mlb-daily-refresh:
 
 # Strict daily baseline: enforces stat-derived volume guard.
 mlb-daily-refresh-strict:
-	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=1 MLB_DAILY_INCLUDE_CAPTURE=$(MLB_DAILY_INCLUDE_CAPTURE)
+	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=1 MLB_DAILY_INCLUDE_CAPTURE=$(MLB_DAILY_INCLUDE_CAPTURE)
 
 # Daily baseline smoke mode: quick end-to-end validation with max one game/date.
 mlb-daily-refresh-smoke:
-	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=1 MLB_STAT_SKIP_EXISTING_DATES=0 MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN) MLB_DAILY_INCLUDE_CAPTURE=0
+	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=1 MLB_STAT_SKIP_EXISTING_DATES=0 MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN) MLB_DAILY_INCLUDE_CAPTURE=0
 
 # Ops confidence loop for MLB: config snapshot + quick daily smoke + deployed API smoke.
 mlb-ops-check:
 	$(MAKE) mlb-show-config
 	$(MAKE) mlb-market-cache-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS)
 	$(MAKE) mlb-roster-refresh-all MLB_ROSTER_DATE=$(MLB_ROSTER_DATE)
-	$(MAKE) mlb-stat-derived-smoke MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
+	$(MAKE) mlb-stat-derived-smoke MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
 	$(MAKE) mlb-post-deploy BASE_URL=$(BASE_URL) MLB_DATE=$(MLB_DATE)
 
 # API contract check for /api/player-profile payload consumed by frontend.

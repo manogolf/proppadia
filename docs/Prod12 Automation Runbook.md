@@ -13,6 +13,16 @@ Date reference: this runbook was aligned on February 17, 2026.
   - Daily health + logging strict gate (`mlb-prod12-daily-gate`)
   - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
 
+## Stat-Derived Coverage Default
+
+- Batter stat-derived insert coverage now defaults to full coverage (`1.0`), not sampled `0.2`.
+- Make variable: `MLB_STAT_BATTER_SAMPLE_RATIO` (default `1.0`).
+- Applies to:
+  - `make mlb-insert-stat-derived`
+  - `make mlb-stat-derived-refresh`
+  - `make mlb-stat-derived-backfill`
+  - `make mlb-daily-refresh`
+
 ## Render Shell Quickstart
 
 Use this once after each deploy before relying on scheduler jobs:
@@ -98,7 +108,7 @@ MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=1 \
 MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=1 \
 PROPPADIA_BACKEND_URL="$PROPPADIA_BACKEND_URL" \
 OPS_API_TOKEN="$OPS_API_TOKEN" \
-make mlb-book-upload MLB_DATE="$(date -u +%F)"
+make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
 Adaptive "best of bunch" trim (recommended before placing wagers):
@@ -110,6 +120,8 @@ make mlb-book-upload-top-recommended
 Defaults:
 - trims current `backend/mlb/data/processed/mlb_book_upload.csv` to adaptive top-40
 - uses recent `artifacts/mlb_postgrade_by_prop_daily_tracker.csv` (lookback 5 days)
+- scores with rolling windows `7,14` by default when available
+- early season fallback is automatic: if full 7d/14d history is not present yet, the selector degrades to available history and continues
 - enforces side-balance nudge (`min_overs=4`) when overs are available
 
 Outputs:
@@ -122,6 +134,7 @@ Optional tuning example:
 make mlb-book-upload-top-recommended \
   MLB_BOOK_UPLOAD_FILTER_TARGET_ROWS=40 \
   MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS=7 \
+  MLB_BOOK_UPLOAD_FILTER_WINDOWS_DAYS=7,14 \
   MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT=53 \
   MLB_BOOK_UPLOAD_FILTER_MIN_OVERS=6
 ```
@@ -662,3 +675,49 @@ make mlb-prod12-script-preview
 - `MLB_REPLAY_ALLOW_SPARSE=1` is enabled by default in `Makefile` for sparse/offseason safety.
 - The release manifest currently fingerprints artifacts from `models_out`; update `MLB_PROD12_ARTIFACT_DIRS` if MLB artifacts are moved to a dedicated path.
 - Wrapper scripts auto-select Python runtime: `.venv/bin/python` when present, otherwise `python3`.
+
+## OddsAPI External Archive (Keep Full History)
+
+If you want to keep all OddsAPI snapshots without growing local disk usage, offload `backend/mlb/exports/odds_history` to an external drive and then prune only local copies that are confirmed archived.
+
+Set your archive root (example using mounted drive `ACASIS 1`):
+
+```bash
+export MLB_ODDS_HISTORY_ARCHIVE_ROOT="/Volumes/ACASIS 1/OddsAPI/mlb"
+```
+
+Audit local vs archive:
+
+```bash
+make mlb-odds-history-offload-status \
+  MLB_ODDS_HISTORY_ARCHIVE_ROOT="$MLB_ODDS_HISTORY_ARCHIVE_ROOT"
+```
+
+Sync local odds history to external archive:
+
+```bash
+make mlb-odds-history-offload-sync \
+  MLB_ODDS_HISTORY_ARCHIVE_ROOT="$MLB_ODDS_HISTORY_ARCHIVE_ROOT"
+```
+
+Prune local only for dates older than retention when archive copy exists (safe mode):
+
+```bash
+make mlb-odds-history-offload-prune-local \
+  MLB_ODDS_HISTORY_ARCHIVE_ROOT="$MLB_ODDS_HISTORY_ARCHIVE_ROOT" \
+  MLB_ODDS_HISTORY_LOCAL_RETENTION_DAYS=180
+```
+
+One-command cycle:
+
+```bash
+make mlb-odds-history-offload-cycle \
+  MLB_ODDS_HISTORY_ARCHIVE_ROOT="$MLB_ODDS_HISTORY_ARCHIVE_ROOT" \
+  MLB_ODDS_HISTORY_LOCAL_RETENTION_DAYS=180
+```
+
+Optional pre-prune local compaction (removes raw intermediates where `odds_latest_compatible.json` already exists):
+
+```bash
+make mlb-odds-history-prune-intermediate
+```
