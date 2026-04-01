@@ -775,7 +775,49 @@ def _upsert_player_id_min(
         return int(cur.rowcount or 0)
 
 
+def _coerce_team_text_numeric(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    as_int = _to_int(value)
+    if as_int is not None:
+        return str(as_int)
+    as_text = str(value).strip()
+    if not as_text:
+        return None
+    team_id = _to_int(getTeamIdFromAbbr(as_text))
+    if team_id is not None:
+        return str(team_id)
+    return None
+
+
+def _normalize_training_row_team_fields(row: Dict[str, Any]) -> None:
+    team_id = _to_int(row.get("team_id"))
+    opp_id = _to_int(row.get("opponent_team_id"))
+    opp_encoded = _to_int(row.get("opponent_encoded"))
+
+    # Prefer explicit numeric ids when available; otherwise coerce text/abbr to numeric text.
+    team_txt = str(team_id) if team_id is not None else _coerce_team_text_numeric(row.get("team"))
+    opp_txt = str(opp_id) if opp_id is not None else _coerce_team_text_numeric(row.get("opponent"))
+    if opp_txt is None and opp_encoded is not None:
+        opp_txt = str(opp_encoded)
+        if opp_id is None:
+            opp_id = opp_encoded
+
+    # Keep id/text fields consistent for mtp_team_text_numeric-style constraints.
+    if team_id is None:
+        team_id = _to_int(team_txt)
+    if opp_id is None:
+        opp_id = _to_int(opp_txt)
+
+    row["team"] = team_txt
+    row["opponent"] = opp_txt
+    row["team_id"] = team_id
+    row["opponent_team_id"] = opp_id
+    row["opponent_encoded"] = _to_int(row.get("opponent_encoded"))
+
+
 def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool = False) -> int:
+    _normalize_training_row_team_fields(row)
     extra_insert_col = ", game_type" if include_game_type else ""
     extra_insert_val = ", %(game_type)s" if include_game_type else ""
     extra_update_set = ", game_type = EXCLUDED.game_type" if include_game_type else ""
