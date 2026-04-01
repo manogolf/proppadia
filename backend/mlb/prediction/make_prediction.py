@@ -167,6 +167,123 @@ def _to_probability_from_predict(raw: float, features: Dict[str, Any]) -> float:
     return 1.0 / (1.0 + math.exp(-margin))
 
 
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
+    except Exception:
+        return None
+
+
+def _logit(p: float) -> float:
+    p = min(max(float(p), 1e-6), 1.0 - 1e-6)
+    return math.log(p / (1.0 - p))
+
+
+def _sigmoid(x: float) -> float:
+    x = max(-20.0, min(20.0, float(x)))
+    return 1.0 / (1.0 + math.exp(-x))
+
+
+def _prop_mean_proxy(prop: str, features: Dict[str, Any]) -> Optional[float]:
+    # Prefer explicit rolling windows for the exact prop lane.
+    d7 = _safe_float(features.get(f"d7_{prop}"))
+    d15 = _safe_float(features.get(f"d15_{prop}"))
+    d30 = _safe_float(features.get(f"d30_{prop}"))
+
+    vals = []
+    if d7 is not None:
+        vals.append((d7, 0.60))
+    if d15 is not None:
+        vals.append((d15, 0.30))
+    if d30 is not None:
+        vals.append((d30, 0.10))
+    if vals:
+        num = sum(v * w for v, w in vals)
+        den = sum(w for _, w in vals)
+        if den > 0:
+            return float(num / den)
+
+    # Back-compat fallback.
+    return _safe_float(features.get("rolling_result_avg_7"))
+
+
+def _prop_scale_proxy(prop: str, features: Dict[str, Any]) -> float:
+    # Reasonable default dispersion by prop lane (units are prop stat units).
+    base_scale_by_prop = {
+        "hits": 0.85,
+        "total_bases": 1.20,
+        "hits_runs_rbis": 1.45,
+        "runs_rbis": 1.10,
+        "runs_scored": 0.75,
+        "rbis": 0.75,
+        "walks": 0.70,
+        "strikeouts_batting": 1.10,
+        "doubles": 0.45,
+        "singles": 0.85,
+        "triples": 0.25,
+        "home_runs": 0.35,
+        "stolen_bases": 0.35,
+        "hits_allowed": 1.30,
+        "earned_runs": 1.10,
+        "walks_allowed": 0.90,
+        "strikeouts_pitching": 1.70,
+        "outs_recorded": 3.00,
+    }
+    base = float(base_scale_by_prop.get(prop, 1.0))
+
+    # Widen/narrow scale based on short/medium/long horizon spread when available.
+    history = [
+        _safe_float(features.get(f"d7_{prop}")),
+        _safe_float(features.get(f"d15_{prop}")),
+        _safe_float(features.get(f"d30_{prop}")),
+    ]
+    history = [v for v in history if v is not None]
+    if len(history) >= 2:
+        spread = max(history) - min(history)
+        # Keep effect bounded to avoid overreaction to noisy windows.
+        spread_adj = min(max(spread, 0.0), 4.0)
+        base = base * (1.0 + 0.15 * spread_adj)
+
+    return float(min(max(base, 0.35), 6.0))
+
+
+def _apply_line_sensitivity(
+    *,
+    prop: str,
+    p_over: float,
+    features: Dict[str, Any],
+) -> float:
+    # Emergency off-switch if we need to rollback quickly in prod.
+    enabled = str(os.getenv("MLB_LINE_SENSITIVITY_CORRECTION_ENABLED", "1") or "").strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        return p_over
+
+    line = _safe_float(features.get("prop_value"))
+    if line is None:
+        line = _safe_float(features.get("line"))
+    if line is None:
+        return p_over
+
+    mu = _prop_mean_proxy(prop, features)
+    if mu is None:
+        return p_over
+
+    scale = _prop_scale_proxy(prop, features)
+    alpha = _safe_float(os.getenv("MLB_LINE_SENSITIVITY_ALPHA")) or 0.90
+    alpha = min(max(alpha, 0.0), 3.0)
+
+    # Shift model log-odds by normalized distance from expected stat mean.
+    # If line > expected mean, p_over should decrease; if line < mean, increase.
+    z = (mu - line) / scale
+    corrected = _sigmoid(_logit(p_over) + (alpha * z))
+    return float(min(max(corrected, 0.0), 1.0))
+
+
 def _artifact_latest_dir() -> Path:
     root = Path(os.getenv("MODEL_DIR", "/var/data/proppadia/models"))
     return root / "latest"
@@ -377,6 +494,7 @@ def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
 
     # clamp
     p_over = max(0.0, min(1.0, p_over))
+    p_over = _apply_line_sensitivity(prop=prop, p_over=p_over, features=features)
     decision_threshold = _decision_threshold_for(prop)
     predicted_outcome = "over" if p_over >= decision_threshold else "under"
     forced_invert = prop in _forced_invert_props()

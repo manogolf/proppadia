@@ -76,6 +76,7 @@ def _weighted_mean(values: pd.Series, weights: pd.Series) -> float | None:
 @dataclass
 class SuggestionConfig:
     lookback_days: int
+    windows_days: list[int]
     target_rows: int
     min_model_rows: int
     min_model_win_rate_pct: float
@@ -84,49 +85,146 @@ class SuggestionConfig:
     min_overs: int
 
 
+def _parse_windows_days(raw: str, fallback_days: int) -> list[int]:
+    vals: list[int] = []
+    for part in str(raw or "").split(","):
+        text = str(part or "").strip()
+        if not text:
+            continue
+        try:
+            v = int(text)
+        except Exception:
+            continue
+        if v > 0:
+            vals.append(v)
+    if not vals:
+        vals = [max(1, int(fallback_days))]
+    return sorted(set(vals))
+
+
+def _weighted_mean_from_pairs(pairs: list[tuple[float, float]]) -> float | None:
+    clean = [(v, w) for (v, w) in pairs if v is not None and w is not None and w > 0]
+    if not clean:
+        return None
+    w_sum = sum(w for _, w in clean)
+    if w_sum <= 0:
+        return None
+    return float(sum(v * w for v, w in clean) / w_sum)
+
+
 def _build_prop_metrics(
     *,
     by_prop_df: pd.DataFrame,
     as_of_date: date,
     cfg: SuggestionConfig,
-) -> tuple[pd.DataFrame, date]:
+) -> tuple[pd.DataFrame, date, dict[str, Any]]:
     if by_prop_df.empty:
-        return pd.DataFrame(), as_of_date
+        return pd.DataFrame(), as_of_date, {
+            "requested_windows_days": list(cfg.windows_days or [cfg.lookback_days]),
+            "active_windows_days": [],
+            "fallback_mode": "no_tracker_rows",
+            "tracker_distinct_days": 0,
+        }
 
     work = by_prop_df.copy()
     work["report_date"] = pd.to_datetime(work["report_date"], errors="coerce").dt.date
     work = work.dropna(subset=["report_date", "prop_type"])
     if work.empty:
-        return pd.DataFrame(), as_of_date
+        return pd.DataFrame(), as_of_date, {
+            "requested_windows_days": list(cfg.windows_days or [cfg.lookback_days]),
+            "active_windows_days": [],
+            "fallback_mode": "no_valid_dates",
+            "tracker_distinct_days": 0,
+        }
 
     latest_date = max(work["report_date"])
-    window_start = latest_date - timedelta(days=max(1, int(cfg.lookback_days)) - 1)
-    work = work[work["report_date"] >= window_start]
+    tracker_distinct_days = int(work["report_date"].nunique())
+    requested_windows = sorted(set(int(x) for x in (cfg.windows_days or [cfg.lookback_days]) if int(x) > 0))
+    if not requested_windows:
+        requested_windows = [max(1, int(cfg.lookback_days))]
+    active_windows = [w for w in requested_windows if tracker_distinct_days >= int(w)]
+    scoring_windows = list(active_windows) if active_windows else [int(requested_windows[0])]
+    fallback_mode = "none" if active_windows else "insufficient_window_history"
+
+    largest_window = max(requested_windows)
+    keep_start = latest_date - timedelta(days=max(1, int(largest_window)) - 1)
+    work = work[work["report_date"] >= keep_start].copy()
     if work.empty:
-        return pd.DataFrame(), latest_date
+        return pd.DataFrame(), latest_date, {
+            "requested_windows_days": requested_windows,
+            "active_windows_days": active_windows,
+            "scoring_windows_days": scoring_windows,
+            "fallback_mode": "no_rows_in_window",
+            "tracker_distinct_days": tracker_distinct_days,
+        }
+
+    window_weights_raw = {int(w): (1.0 / float(max(1, int(w)))) for w in scoring_windows}
+    weight_sum = float(sum(window_weights_raw.values())) if window_weights_raw else 0.0
+    if weight_sum <= 0:
+        window_weights = {int(w): 1.0 for w in scoring_windows}
+        weight_sum = float(len(window_weights)) if window_weights else 1.0
+    else:
+        window_weights = dict(window_weights_raw)
+    window_weights = {int(w): float(v) / float(weight_sum) for w, v in window_weights.items()}
 
     rows: list[dict[str, Any]] = []
     for prop, grp in work.groupby("prop_type", dropna=False):
         prop_type = _norm_text(prop)
         if not prop_type:
             continue
-        model_rows_sum = int(pd.to_numeric(grp.get("model_rows"), errors="coerce").fillna(0).sum())
-        graded_rows_sum = int(pd.to_numeric(grp.get("graded_rows"), errors="coerce").fillna(0).sum())
 
-        model_wr = _weighted_mean(grp.get("model_win_rate_pct"), grp.get("model_rows"))
-        graded_wr = _weighted_mean(grp.get("graded_win_rate_pct"), grp.get("graded_rows"))
-        graded_roi = _weighted_mean(grp.get("graded_roi_pct"), grp.get("graded_rows"))
+        largest_active_for_rows = max(scoring_windows) if scoring_windows else int(cfg.lookback_days)
+        rows_start = latest_date - timedelta(days=max(1, int(largest_active_for_rows)) - 1)
+        grp_rows = grp[grp["report_date"] >= rows_start]
+        model_rows_sum = int(pd.to_numeric(grp_rows.get("model_rows"), errors="coerce").fillna(0).sum())
+        graded_rows_sum = int(pd.to_numeric(grp_rows.get("graded_rows"), errors="coerce").fillna(0).sum())
+
+        by_window: dict[int, dict[str, Any]] = {}
+        for w in requested_windows:
+            w_start = latest_date - timedelta(days=max(1, int(w)) - 1)
+            w_grp = grp[grp["report_date"] >= w_start]
+            model_rows_w = int(pd.to_numeric(w_grp.get("model_rows"), errors="coerce").fillna(0).sum())
+            graded_rows_w = int(pd.to_numeric(w_grp.get("graded_rows"), errors="coerce").fillna(0).sum())
+            model_wr_w = _weighted_mean(w_grp.get("model_win_rate_pct"), w_grp.get("model_rows"))
+            graded_wr_w = _weighted_mean(w_grp.get("graded_win_rate_pct"), w_grp.get("graded_rows"))
+            graded_roi_w = _weighted_mean(w_grp.get("graded_roi_pct"), w_grp.get("graded_rows"))
+            by_window[int(w)] = {
+                "model_rows": model_rows_w,
+                "graded_rows": graded_rows_w,
+                "model_wr": model_wr_w,
+                "graded_wr": graded_wr_w,
+                "graded_roi": graded_roi_w,
+            }
+
+        model_wr = _weighted_mean_from_pairs(
+            [(by_window[w]["model_wr"], window_weights.get(int(w), 0.0)) for w in scoring_windows]
+        )
+        graded_wr = _weighted_mean_from_pairs(
+            [(by_window[w]["graded_wr"], window_weights.get(int(w), 0.0)) for w in scoring_windows]
+        )
+        graded_roi = _weighted_mean_from_pairs(
+            [(by_window[w]["graded_roi"], window_weights.get(int(w), 0.0)) for w in scoring_windows]
+        )
 
         model_edge = (model_wr - 50.0) if model_wr is not None else 0.0
         graded_edge = (graded_wr - 50.0) if graded_wr is not None else 0.0
         graded_roi_component = graded_roi if graded_roi is not None else 0.0
         score = (0.60 * model_edge) + (0.25 * graded_edge) + (0.15 * graded_roi_component)
 
-        pass_model = (model_rows_sum >= int(cfg.min_model_rows)) and (
-            model_wr is not None and model_wr >= float(cfg.min_model_win_rate_pct)
-        )
+        pass_model_rows = model_rows_sum >= int(cfg.min_model_rows)
+        pass_model_windows = True
+        if active_windows:
+            for w in active_windows:
+                wr_w = by_window[int(w)]["model_wr"]
+                if wr_w is not None and float(wr_w) < float(cfg.min_model_win_rate_pct):
+                    pass_model_windows = False
+                    break
+        elif model_wr is not None and float(model_wr) < float(cfg.min_model_win_rate_pct):
+            pass_model_windows = False
+
+        pass_model = bool(pass_model_rows and pass_model_windows)
         if graded_rows_sum >= int(cfg.min_graded_rows):
-            pass_graded = graded_roi is not None and graded_roi >= float(cfg.graded_roi_floor_pct)
+            pass_graded = graded_roi is not None and float(graded_roi) >= float(cfg.graded_roi_floor_pct)
         else:
             pass_graded = True
         allow = bool(pass_model and pass_graded)
@@ -141,12 +239,28 @@ def _build_prop_metrics(
                 "graded_roi_pct_w": None if graded_roi is None else round(float(graded_roi), 2),
                 "score": round(float(score), 4),
                 "allow": allow,
+                "active_windows_count": int(len(active_windows)),
+                "fallback_mode": fallback_mode,
             }
         )
+        for w in requested_windows:
+            wv = by_window[int(w)]
+            rows[-1][f"model_rows_{int(w)}d"] = int(wv["model_rows"])
+            rows[-1][f"graded_rows_{int(w)}d"] = int(wv["graded_rows"])
+            rows[-1][f"model_wr_{int(w)}d"] = None if wv["model_wr"] is None else round(float(wv["model_wr"]), 2)
+            rows[-1][f"graded_wr_{int(w)}d"] = None if wv["graded_wr"] is None else round(float(wv["graded_wr"]), 2)
+            rows[-1][f"graded_roi_{int(w)}d"] = None if wv["graded_roi"] is None else round(float(wv["graded_roi"]), 2)
 
     out = pd.DataFrame(rows)
     if out.empty:
-        return out, latest_date
+        return out, latest_date, {
+            "requested_windows_days": requested_windows,
+            "active_windows_days": active_windows,
+            "scoring_windows_days": scoring_windows,
+            "scoring_weights": {str(k): round(float(v), 4) for k, v in window_weights.items()},
+            "fallback_mode": fallback_mode,
+            "tracker_distinct_days": tracker_distinct_days,
+        }
 
     if not out["allow"].any():
         # Safety fallback: keep flow alive with the strongest model-backed props.
@@ -155,7 +269,14 @@ def _build_prop_metrics(
     else:
         out = out.sort_values(["allow", "score", "model_rows_sum"], ascending=[False, False, False], kind="mergesort")
 
-    return out.reset_index(drop=True), latest_date
+    return out.reset_index(drop=True), latest_date, {
+        "requested_windows_days": requested_windows,
+        "active_windows_days": active_windows,
+        "scoring_windows_days": scoring_windows,
+        "scoring_weights": {str(k): round(float(v), 4) for k, v in window_weights.items()},
+        "fallback_mode": fallback_mode,
+        "tracker_distinct_days": tracker_distinct_days,
+    }
 
 
 def _select_rows(
@@ -234,6 +355,11 @@ def main() -> int:
     ap.add_argument("--book-upload-csv", default="backend/mlb/data/processed/mlb_book_upload.csv")
     ap.add_argument("--by-prop-tracker-csv", default="artifacts/mlb_postgrade_by_prop_daily_tracker.csv")
     ap.add_argument("--lookback-days", type=int, default=5)
+    ap.add_argument(
+        "--windows-days",
+        default="",
+        help="Comma-separated rolling windows (for example: 7,14). Early season fallback keeps flow running when full windows are unavailable.",
+    )
     ap.add_argument("--target-rows", type=int, default=40)
     ap.add_argument("--min-model-rows", type=int, default=60)
     ap.add_argument("--min-model-win-rate-pct", type=float, default=52.0)
@@ -266,6 +392,7 @@ def main() -> int:
 
     cfg = SuggestionConfig(
         lookback_days=max(1, int(args.lookback_days)),
+        windows_days=_parse_windows_days(str(args.windows_days or ""), fallback_days=max(1, int(args.lookback_days))),
         target_rows=max(1, int(args.target_rows)),
         min_model_rows=max(1, int(args.min_model_rows)),
         min_model_win_rate_pct=float(args.min_model_win_rate_pct),
@@ -275,7 +402,7 @@ def main() -> int:
     )
 
     as_of = date.today()
-    prop_metrics, metrics_latest_date = _build_prop_metrics(by_prop_df=by_prop_df, as_of_date=as_of, cfg=cfg)
+    prop_metrics, metrics_latest_date, window_meta = _build_prop_metrics(by_prop_df=by_prop_df, as_of_date=as_of, cfg=cfg)
     selected_df, notes = _select_rows(book_df=book_df, prop_metrics=prop_metrics, cfg=cfg)
 
     out_cols = [c for c in book_df.columns if c in selected_df.columns]
@@ -306,6 +433,7 @@ def main() -> int:
         },
         "config": {
             "lookback_days": cfg.lookback_days,
+            "windows_days": cfg.windows_days,
             "target_rows": cfg.target_rows,
             "min_model_rows": cfg.min_model_rows,
             "min_model_win_rate_pct": cfg.min_model_win_rate_pct,
@@ -315,6 +443,7 @@ def main() -> int:
         },
         "window": {
             "metrics_latest_report_date": str(metrics_latest_date),
+            **window_meta,
         },
         "summary": {
             "rows_input": int(len(book_df)),

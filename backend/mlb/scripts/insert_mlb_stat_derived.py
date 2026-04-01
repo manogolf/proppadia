@@ -95,7 +95,7 @@ def _hash01(s: str) -> float:
     return int(h[:8], 16) / 0xFFFFFFFF
 
 
-def _should_include(player_id: int, game_id: int, prop_type: str, ratio: float = 0.2) -> bool:
+def _should_include(player_id: int, game_id: int, prop_type: str, ratio: float = 1.0) -> bool:
     return _hash01(f"{player_id}-{game_id}-{prop_type}") < ratio
 
 
@@ -884,7 +884,7 @@ def _final_games(
 def run(
     from_date: str,
     to_date: str,
-    batter_sample_ratio: float = 0.2,
+    batter_sample_ratio: float = 1.0,
     quiet: bool = False,
     max_games_per_date: int = 0,
     skip_existing_dates: bool = False,
@@ -1185,7 +1185,12 @@ def main() -> int:
     ap.add_argument("--from-date", default=None, help="YYYY-MM-DD")
     ap.add_argument("--to-date", default=None, help="YYYY-MM-DD")
     ap.add_argument("--days-ago", type=int, default=2, help="Default rolling range if no explicit dates.")
-    ap.add_argument("--batter-sample-ratio", type=float, default=0.2, help="Sampling ratio for batter props.")
+    ap.add_argument(
+        "--batter-sample-ratio",
+        type=float,
+        default=1.0,
+        help="Sampling ratio for batter props (default 1.0 = full coverage).",
+    )
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument(
         "--max-games-per-date",

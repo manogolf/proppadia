@@ -129,6 +129,11 @@ else
       exit 2
       ;;
   esac
+  # For daily triggers, default to backend-side "today ET" unless an explicit
+  # date override is intentionally allowed.
+  if [[ "${run_mode}" == "daily" ]] && [[ "${MLB_REMOTE_ALLOW_MLB_DATE_OVERRIDE:-0}" != "1" ]]; then
+    unset MLB_DATE || true
+  fi
   payload="$(_json_payload_from_env)"
 fi
 
