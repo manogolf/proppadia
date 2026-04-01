@@ -1109,6 +1109,18 @@ def run(
                             if not (has_bat or is_pitch):
                                 continue
 
+                            # Ensure FK parent exists before writing player_stats rows.
+                            player_id_upserts += _upsert_player_id_min(
+                                conn,
+                                player_id=pid,
+                                player_name=pname,
+                                team_abbr=team_abbr,
+                                team_id=team_id,
+                                has_team_col=player_ids_has_team,
+                                has_team_id_col=player_ids_has_team_id,
+                                has_placeholder_col=player_ids_has_placeholder,
+                            )
+
                             player_stats_upserts += _upsert_player_stats_row(
                                 conn,
                                 _extract_player_stats_row(
@@ -1191,16 +1203,6 @@ def run(
                                     "streak_count": streak_count,
                                     "game_type": game_type,
                                 }
-                                player_id_upserts += _upsert_player_id_min(
-                                    conn,
-                                    player_id=pid,
-                                    player_name=pname,
-                                    team_abbr=team_abbr,
-                                    team_id=team_id,
-                                    has_team_col=player_ids_has_team,
-                                    has_team_id_col=player_ids_has_team_id,
-                                    has_placeholder_col=player_ids_has_placeholder,
-                                )
                                 try:
                                     applied_upserts += _upsert_training_row(
                                         conn,
