@@ -1194,11 +1194,38 @@ def run(
                                     has_team_id_col=player_ids_has_team_id,
                                     has_placeholder_col=player_ids_has_placeholder,
                                 )
-                                applied_upserts += _upsert_training_row(
-                                    conn,
-                                    row,
-                                    include_game_type=mtp_has_game_type,
-                                )
+                                try:
+                                    applied_upserts += _upsert_training_row(
+                                        conn,
+                                        row,
+                                        include_game_type=mtp_has_game_type,
+                                    )
+                                except Exception as upsert_exc:
+                                    # Last-chance guard for legacy mtp_team_text_numeric constraint.
+                                    # Keep the row and continue date processing by coercing team text
+                                    # to numeric ids when available (or null when unavailable).
+                                    if "mtp_team_text_numeric" not in str(upsert_exc):
+                                        raise
+                                    row["team"] = (
+                                        str(_to_int(row.get("team_id")))
+                                        if _to_int(row.get("team_id")) is not None
+                                        else None
+                                    )
+                                    row["opponent"] = (
+                                        str(_to_int(row.get("opponent_team_id")))
+                                        if _to_int(row.get("opponent_team_id")) is not None
+                                        else None
+                                    )
+                                    applied_upserts += _upsert_training_row(
+                                        conn,
+                                        row,
+                                        include_game_type=mtp_has_game_type,
+                                    )
+                                    if not quiet:
+                                        print(
+                                            "⚠️ recovered mtp_team_text_numeric row"
+                                            f" game_id={game_id} player_id={pid} prop={prop_type}"
+                                        )
                                 attempted_upserts += 1
 
                 player_derived_upserts += _refresh_player_derived_stats(conn, d_iso, d_iso)
