@@ -547,6 +547,16 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             WHERE game_date >= %s::date
               AND game_date <= %s::date
         ),
+        purged_conflicts AS (
+            DELETE FROM mlb.player_derived_stats p
+            USING target t
+            WHERE p.player_id = t.player_id
+              AND (
+                    (p.game_id = t.game_id AND p.game_date IS DISTINCT FROM t.game_date)
+                 OR (p.game_date = t.game_date AND p.game_id IS DISTINCT FROM t.game_id)
+              )
+            RETURNING 1
+        ),
         upserted AS (
             INSERT INTO mlb.player_derived_stats (
                 {insert_cols}
