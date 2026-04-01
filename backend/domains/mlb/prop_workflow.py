@@ -229,8 +229,21 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
             "starting_pitcher_id": payload.get("starting_pitcher_id"),
         }
 
-    rolling_result_avg_7 = _to_float(payload.get("rolling_result_avg_7"), 0.0)
-    line_diff = _to_float(payload.get("line_diff"), rolling_result_avg_7 - prop_value)
+    rolling_raw = payload.get("rolling_result_avg_7")
+    if _is_missing(rolling_raw):
+        rolling_result_avg_7 = None
+    else:
+        rolling_result_avg_7 = _to_float(rolling_raw, None)
+
+    line_diff_raw = payload.get("line_diff")
+    if _is_missing(line_diff_raw):
+        line_diff = (
+            (float(rolling_result_avg_7) - prop_value)
+            if rolling_result_avg_7 is not None
+            else None
+        )
+    else:
+        line_diff = _to_float(line_diff_raw, None)
     market_odds_american = payload.get("market_odds_american")
     market_implied_probability = payload.get("market_implied_probability")
     market_odds_american = _to_float(market_odds_american, None) if market_odds_american not in (None, "") else None

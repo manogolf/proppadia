@@ -69,6 +69,14 @@ ROLLING_METRICS = [
     "hits_allowed",
 ]
 
+PITCHER_ROLLING_METRICS = {
+    "outs_recorded",
+    "strikeouts_pitching",
+    "walks_allowed",
+    "earned_runs",
+    "hits_allowed",
+}
+
 ROLLING_METRIC_SOURCE_SQL = {
     "hits_runs_rbis": "COALESCE(ps.hits, 0) + COALESCE(ps.runs_scored, 0) + COALESCE(ps.rbis, 0)",
     "runs_rbis": "COALESCE(ps.runs_scored, 0) + COALESCE(ps.rbis, 0)",
@@ -477,11 +485,19 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
 
 
 def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
+    agg_metric_exprs: List[str] = []
+    for metric in ROLLING_METRICS:
+        source_expr = ROLLING_METRIC_SOURCE_SQL.get(metric, f"COALESCE(ps.{metric}, 0)")
+        if metric in PITCHER_ROLLING_METRICS:
+            # Exclude non-appearance pitcher rows (outs_recorded == 0) from pitcher rolling windows.
+            # This prevents inactive/unused pitcher rows from biasing u1.5-style props downward.
+            source_expr = (
+                f"CASE WHEN COALESCE(ps.outs_recorded, 0) > 0 "
+                f"THEN ({source_expr})::numeric ELSE NULL::numeric END"
+            )
+        agg_metric_exprs.append(f"SUM({source_expr})::numeric AS {metric}")
     select_agg_cols = ",\n               ".join(
-        [
-            f"SUM({ROLLING_METRIC_SOURCE_SQL.get(m, f'COALESCE(ps.{m}, 0)')})::numeric AS {m}"
-            for m in ROLLING_METRICS
-        ]
+        agg_metric_exprs
     )
     roll_select_cols = ",\n             ".join(
         [f"AVG(d.{m}) OVER w7 AS d7_{m}" for m in ROLLING_METRICS]

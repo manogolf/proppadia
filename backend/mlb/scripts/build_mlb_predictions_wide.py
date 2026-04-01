@@ -56,6 +56,13 @@ DEFAULT_OUT_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wid
 
 _ALLOWED_LINE_FRAC = {0.0, 0.5}
 _NAME_RE = re.compile(r"[^a-z0-9 ]+")
+_PITCHER_PROP_TYPES = {
+    "earned_runs",
+    "hits_allowed",
+    "strikeouts_pitching",
+    "walks_allowed",
+    "outs_recorded",
+}
 
 
 def _norm_name(value: object) -> str:
@@ -91,6 +98,23 @@ def _line_to_pcol(line: float) -> Optional[str]:
 
 def _date_et_today() -> str:
     return datetime.now(ET).date().isoformat()
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw = str(os.getenv(name, "") or "").strip().lower()
+    if not raw:
+        return bool(default)
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = str(os.getenv(name, "") or "").strip()
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except Exception:
+        return int(default)
 
 
 def _load_events_from_snapshot_file(path: Path) -> List[Dict[str, Any]]:
@@ -601,6 +625,111 @@ def _resolve_offers(
     return resolved, dict(counts)
 
 
+def _fetch_pitcher_starter_games(
+    *,
+    player_ids: Sequence[int],
+    slate_date: str,
+    min_outs_recorded: int,
+) -> Dict[int, int]:
+    if not player_ids:
+        return {}
+    sql = """
+    SELECT
+      ps.player_id::bigint AS player_id,
+      COUNT(DISTINCT ps.game_id)::int AS starter_games
+    FROM mlb.player_stats ps
+    WHERE ps.player_id = ANY(%s::bigint[])
+      AND ps.game_date < %s::date
+      AND COALESCE(ps.is_starter, 0) = 1
+      AND COALESCE(ps.outs_recorded, 0) >= %s::int
+    GROUP BY ps.player_id
+    """
+    out: Dict[int, int] = {}
+    with pg_connect() as conn, conn.cursor() as cur:
+        cur.execute(sql, (list(player_ids), str(slate_date), int(min_outs_recorded)))
+        rows = cur.fetchall() or []
+    for r in rows:
+        row = dict(r)
+        try:
+            pid = int(row.get("player_id"))
+            games = int(row.get("starter_games") or 0)
+        except Exception:
+            continue
+        out[pid] = games
+    return out
+
+
+def _apply_pitcher_experience_policy(
+    *,
+    resolved_offers: Sequence[ResolvedOffer],
+    slate_date: str,
+    min_starter_games: int,
+    min_outs_recorded: int,
+    require_probable_starter: bool,
+) -> tuple[List[ResolvedOffer], Dict[str, int]]:
+    counts: Dict[str, int] = defaultdict(int)
+    if not resolved_offers:
+        return [], dict(counts)
+
+    pitcher_items = [
+        item
+        for item in resolved_offers
+        if str(item.offer.prop_type or "").strip().lower() in _PITCHER_PROP_TYPES
+    ]
+    if not pitcher_items:
+        return list(resolved_offers), dict(counts)
+
+    starter_games_by_player: Dict[int, int] = {}
+    if int(min_starter_games) > 0:
+        pitcher_player_ids = sorted({int(item.player.player_id) for item in pitcher_items})
+        try:
+            starter_games_by_player = _fetch_pitcher_starter_games(
+                player_ids=pitcher_player_ids,
+                slate_date=str(slate_date),
+                min_outs_recorded=max(1, int(min_outs_recorded)),
+            )
+        except Exception:
+            # Fail-open on lookup issues so daily flow still runs; probable-starter gate still applies.
+            counts["info_pitcher_starter_lookup_failed"] += 1
+            starter_games_by_player = {}
+            min_starter_games = 0
+
+    out: List[ResolvedOffer] = []
+    for item in resolved_offers:
+        prop_type = str(item.offer.prop_type or "").strip().lower()
+        if prop_type not in _PITCHER_PROP_TYPES:
+            out.append(item)
+            continue
+
+        counts["pitcher_policy_checked"] += 1
+        player_id = int(item.player.player_id)
+
+        if bool(require_probable_starter):
+            expected_starter = item.game.sp_home_id if item.is_home else item.game.sp_away_id
+            try:
+                expected_starter_id = int(expected_starter) if expected_starter is not None else None
+            except Exception:
+                expected_starter_id = None
+            if expected_starter_id is None:
+                # Fail-open when schedule lacks probable SP ids for the slate;
+                # still enforce experience gate below.
+                counts["info_pitcher_missing_probable_starter_fallback"] += 1
+            elif player_id != expected_starter_id:
+                counts["skip_pitcher_not_probable_starter"] += 1
+                continue
+
+        if int(min_starter_games) > 0:
+            starter_games = int(starter_games_by_player.get(player_id, 0))
+            if starter_games < int(min_starter_games):
+                counts["skip_pitcher_min_starter_games"] += 1
+                continue
+
+        counts["pitcher_policy_kept"] += 1
+        out.append(item)
+
+    return out, dict(counts)
+
+
 def _monkeypatch_prepare_runtime(
     *,
     by_team_ctx: Dict[int, Dict[str, Any]],
@@ -861,6 +990,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             print("[mlb-wide-pred] require_two_sided = true bookmaker=any")
 
+    pitcher_min_starter_games = max(0, _int_env("MLB_PITCHER_STARTER_MIN_GAMES", 5))
+    pitcher_min_starter_outs = max(1, _int_env("MLB_PITCHER_STARTER_MIN_OUTS", 1))
+    pitcher_require_probable_starter = _bool_env("MLB_PITCHER_REQUIRE_PROBABLE_STARTER", True)
+    print(
+        "[mlb-wide-pred] pitcher_policy"
+        f" require_probable_starter={int(bool(pitcher_require_probable_starter))}"
+        f" min_starter_games={int(pitcher_min_starter_games)}"
+        f" min_starter_outs={int(pitcher_min_starter_outs)}"
+    )
+
     try:
         by_player_id, by_name_team = _load_player_rows(active_only=not bool(args.include_inactive))
         print(f"[mlb-wide-pred] player index rows={len(by_player_id)}")
@@ -897,6 +1036,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             by_name_team=by_name_team,
             by_pair_games=by_pair_games,
         )
+        resolved_offers, pitcher_policy_counts = _apply_pitcher_experience_policy(
+            resolved_offers=resolved_offers,
+            slate_date=str(slate_date),
+            min_starter_games=int(pitcher_min_starter_games),
+            min_outs_recorded=int(pitcher_min_starter_outs),
+            require_probable_starter=bool(pitcher_require_probable_starter),
+        )
+        if pitcher_policy_counts:
+            for k, v in pitcher_policy_counts.items():
+                resolve_counts[k] = int(resolve_counts.get(k, 0)) + int(v)
         print(f"[mlb-wide-pred] resolved_offers={len(resolved_offers)} resolve_counts={resolve_counts}")
 
         pred_rows, pred_counts = _predict_rows(
