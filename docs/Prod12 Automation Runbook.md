@@ -101,7 +101,20 @@ Optional history-sync controls:
   - `MLB_PIPELINE_HISTORY_LOCAL_OUT=<path>`
   - `MLB_PROD12_PHASE2_HISTORY_LOCAL_OUT=<path>`
 
-If the run already finished remotely and you only want the local upload CSV, run this:
+Day-to-day local upload build (recommended):
+
+```bash
+make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
+```
+
+Minimal-policy local upload build (broader set; filter in tool by book/prop/odds/EV as needed):
+
+```bash
+MLB_POLICY_PLAN_ENABLED=0 \
+make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
+```
+
+Remote sync-only fallback (use only when you intentionally want to pull the remote artifact):
 
 ```bash
 MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=1 \
@@ -139,7 +152,7 @@ make mlb-book-upload-top-recommended \
   MLB_BOOK_UPLOAD_FILTER_MIN_OVERS=6
 ```
 
-Behavior:
+Remote sync-only behavior:
 - default remote kind is `book_upload`, so this writes the local upload CSV directly and exits.
 - when `kind=book_upload`, companion artifacts are also synced locally by default:
   - `backend/mlb/data/processed/mlb_slate_output.csv`
@@ -520,6 +533,138 @@ Notes:
 ## Local Scheduler (macOS launchd)
 
 Use this when you want retrain/recompute cadence to run on your machine (not Render).
+
+### Daily Local Capture Job (Refresh + Build)
+
+This LaunchAgent runs the local daily chain end-to-end:
+- roster refresh
+- stat-derived refresh
+- `mlb-predictions-wide`
+- `mlb-slate-output`
+- `mlb-book-upload` (forced local build; remote fetch flags are set to `0`)
+- `mlb-prod12-track-daily` + `mlb-prod12-ops-log` (local daily history snapshots; best effort)
+
+Create/update runner script:
+
+```bash
+mkdir -p "$HOME/bin" "$HOME/Projects/proppadia/artifacts/ops" "$HOME/Library/LaunchAgents"
+
+cat > "$HOME/bin/proppadia_mlb_refresh_daily.sh" <<'EOF'
+#!/bin/zsh
+set -euo pipefail
+
+REPO="$HOME/Projects/proppadia"
+cd "$REPO"
+
+set -a
+source backend/.env
+set +a
+
+MLB_DATE_ET="$(TZ=America/New_York date +%F)"
+MLB_LOCAL_DAILY_TRACKING_ENABLED="${MLB_LOCAL_DAILY_TRACKING_ENABLED:-1}"
+
+echo "[$(date -u +%FT%TZ)] START local daily MLB refresh+capture (MLB_DATE_ET=${MLB_DATE_ET})"
+
+MLB_ROSTER_DATE="$MLB_DATE_ET" \
+make mlb-roster-refresh-all
+
+MLB_STAT_DAYS_AGO=2 \
+MLB_STAT_SKIP_EXISTING_DATES=1 \
+MLB_STAT_DERIVED_DAYS=7 \
+MLB_STAT_DERIVED_MIN=0 \
+MLB_SEASON_REQUIRE_REGULAR=1 \
+make mlb-stat-derived-refresh
+
+make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
+make mlb-slate-output MLB_DATE="$MLB_DATE_ET"
+
+MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=0 \
+MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=0 \
+MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY=0 \
+make mlb-book-upload MLB_DATE="$MLB_DATE_ET"
+
+# 3) Append local prod12 daily history snapshots (best effort).
+if [[ "${MLB_LOCAL_DAILY_TRACKING_ENABLED}" == "1" ]]; then
+  set +e
+  MLB_DATE="$MLB_DATE_ET" make mlb-prod12-track-daily
+  track_rc=$?
+  make mlb-prod12-ops-log
+  ops_rc=$?
+  set -e
+
+  if [[ "$track_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN mlb-prod12-track-daily failed rc=${track_rc}" >&2
+  fi
+  if [[ "$ops_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN mlb-prod12-ops-log failed rc=${ops_rc}" >&2
+  fi
+else
+  echo "[$(date -u +%FT%TZ)] INFO local prod12 history tracking disabled (MLB_LOCAL_DAILY_TRACKING_ENABLED=${MLB_LOCAL_DAILY_TRACKING_ENABLED})"
+fi
+
+echo "[$(date -u +%FT%TZ)] DONE local daily MLB refresh+capture (MLB_DATE_ET=${MLB_DATE_ET})"
+EOF
+
+chmod +x "$HOME/bin/proppadia_mlb_refresh_daily.sh"
+```
+
+History outputs written locally:
+- `artifacts/mlb_pipeline_history.jsonl`
+- `artifacts/mlb_prod12_ops_history.jsonl`
+
+Create daily LaunchAgent (example: 5:20 AM local):
+
+```bash
+cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.proppadia.mlb.refresh.daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$HOME/bin/proppadia_mlb_refresh_daily.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>$HOME/Projects/proppadia</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>5</integer>
+    <key>Minute</key><integer>20</integer>
+  </dict>
+  <key>StandardOutPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.out.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.err.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
+EOF
+
+touch "$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.out.log"
+touch "$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.err.log"
+plutil -lint "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist"
+```
+
+Load/reload:
+
+```bash
+launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist"
+```
+
+Trigger once to validate:
+
+```bash
+launchctl kickstart gui/$(id -u)/com.proppadia.mlb.refresh.daily
+tail -n 120 "$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.out.log"
+tail -n 120 "$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.err.log"
+```
+
+Check state:
+
+```bash
+launchctl print gui/$(id -u)/com.proppadia.mlb.refresh.daily | rg "state = |runs = |last exit code"
+```
+
+### Weekly Local Retrain Job
 
 1. Create a local runner script:
 
