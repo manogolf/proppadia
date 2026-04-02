@@ -140,6 +140,14 @@ DEFAULT_MARKET_BY_PROP: Dict[str, str] = {
     # pitcher_win is yes/no (not over/under) and intentionally excluded here.
 }
 
+PITCHER_PROP_TYPES = {
+    "earned_runs",
+    "hits_allowed",
+    "strikeouts_pitching",
+    "walks_allowed",
+    "outs_recorded",
+}
+
 ALLOWED_UPLOAD_MARKETS = {
     "batter_hits",
     "batter_runs",
@@ -258,6 +266,16 @@ def _bool_env_with_default(name: str, default: bool) -> bool:
     if not raw:
         return bool(default)
     return raw.lower() in {"1", "true", "yes", "on"}
+
+
+def _policy_soft_pitcher_under_plus_penalty_config() -> Dict[str, float | bool]:
+    return {
+        "enabled": _bool_env_with_default("MLB_POLICY_PITCHER_UNDER_PLUS_PENALTY_ENABLED", True),
+        "base": _float_env("MLB_POLICY_PITCHER_UNDER_PLUS_PENALTY_BASE", 0.15),
+        "slope": _float_env("MLB_POLICY_PITCHER_UNDER_PLUS_PENALTY_SLOPE", 0.60),
+        "prob_floor": _float_env("MLB_POLICY_PITCHER_UNDER_PLUS_PENALTY_PROB_FLOOR", 0.60),
+        "price_min": _float_env("MLB_POLICY_PITCHER_UNDER_PLUS_PRICE_MIN", 100.0),
+    }
 
 
 def _fetch_remote_prod12_artifact(
@@ -775,6 +793,31 @@ def _select_policy_rows(scored: pd.DataFrame) -> pd.DataFrame:
         errors="coerce",
     ).fillna(float("-inf"))
 
+    # Soft ranking correction: de-prioritize plus-money pitcher unders that were
+    # repeatedly overconfident in recent diagnostics, without hard-gating them.
+    penalty_cfg = _policy_soft_pitcher_under_plus_penalty_config()
+    selected["_pitcher_under_plus_penalty"] = 0.0
+    if bool(penalty_cfg.get("enabled")):
+        prop_type = _series_or_default("prop_type", "").astype(str).str.strip().str.lower()
+        plan_side = _series_or_default("plan_side", "").astype(str).str.strip().str.lower()
+        model_prob = pd.to_numeric(_series_or_default("side_model_prob", float("nan")), errors="coerce")
+        side_price = pd.to_numeric(_series_or_default("side_price_american", float("nan")), errors="coerce")
+        mask = (
+            prop_type.isin(PITCHER_PROP_TYPES)
+            & plan_side.eq("under")
+            & model_prob.notna()
+            & side_price.notna()
+            & (side_price >= float(penalty_cfg["price_min"]))
+        )
+        if bool(mask.any()):
+            base_penalty = float(penalty_cfg["base"])
+            slope = float(penalty_cfg["slope"])
+            prob_floor = float(penalty_cfg["prob_floor"])
+            selected.loc[mask, "_pitcher_under_plus_penalty"] = base_penalty + (
+                (model_prob.loc[mask] - prob_floor).clip(lower=0.0) * slope
+            )
+            selected["_ev_sort"] = selected["_ev_sort"] - selected["_pitcher_under_plus_penalty"]
+
     selected = selected.sort_values(
         by=[
             "_action_priority",
@@ -797,7 +840,16 @@ def _select_policy_rows(scored: pd.DataFrame) -> pd.DataFrame:
         ],
         keep="first",
     ).reset_index(drop=True)
-    return selected.drop(columns=["_action_priority", "_ev_sort", "_gap_sort", "_prob_sort", "_price_sort"])
+    return selected.drop(
+        columns=[
+            "_action_priority",
+            "_ev_sort",
+            "_gap_sort",
+            "_prob_sort",
+            "_price_sort",
+            "_pitcher_under_plus_penalty",
+        ]
+    )
 
 
 def main() -> None:
