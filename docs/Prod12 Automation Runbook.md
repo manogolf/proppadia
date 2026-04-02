@@ -33,6 +33,7 @@ make mlb-prod12-bootstrap-strict MLB_BASE_URL="https://baseball-streaks-sq44.onr
 ```
 
 What it guarantees:
+
 - weekly and daily cycles both run
 - baseline auto-captures if missing
 - latest weekly phase2 snapshot is strict-pass
@@ -43,6 +44,7 @@ What it guarantees:
 Use scheduler jobs to call backend ops endpoints only. This keeps dependency/model runtime in one place (backend service) and avoids cron runtime drift.
 
 Required env vars on the scheduler service:
+
 - `PROPPADIA_BACKEND_URL` (example: `https://baseball-streaks-sq44.onrender.com`)
 - `OPS_API_TOKEN` (must match backend `OPS_API_TOKEN`)
 
@@ -53,6 +55,7 @@ bin/mlb_prod12_remote_trigger.sh
 ```
 
 Default behavior:
+
 - Trigger defaults to `run_mode=daily` (lighter resource profile).
 - Weekly phase-2 is triggered separately.
 - Daily trigger now defaults to running the daily gate:
@@ -63,6 +66,7 @@ Default behavior:
   - `MLB_WIDE_PROP_TYPES` pinned to `MLB_PROD12_PROP_TYPES` unless explicitly overridden
 
 Optional extra lean setting (if memory pressure persists):
+
 - set `MLB_ODDS_BOOKMAKERS` to a small CSV (for example `betonlineag,mybookieag,betopenly,draftkings`)
 - set `MLB_DAILY_GATE_ENABLED=0` to skip daily gate checks
 
@@ -79,6 +83,7 @@ bin/mlb_prod12_remote_trigger_and_wait.sh 2400 10 120
 ```
 
 This exits non-zero if:
+
 - the run fails,
 - state disappears (idle/no `exit_code`),
 - `mlb_book_upload.csv` is missing after a successful exit,
@@ -86,15 +91,18 @@ This exits non-zero if:
 - or post-run local sync of prod12 status histories fails (default behavior).
 
 Local sync target defaults to:
+
 - `backend/mlb/data/processed/mlb_book_upload.csv`
 - `artifacts/mlb_pipeline_history.jsonl`
 - `artifacts/mlb_prod12_phase2_history.jsonl`
 
 Override target path with either:
+
 - arg 4: `bin/mlb_prod12_remote_trigger_and_wait.sh 2400 10 120 <out_csv>`
 - env var: `MLB_BOOK_UPLOAD_LOCAL_OUT_CSV=<out_csv>`
 
 Optional history-sync controls:
+
 - disable history sync entirely: `MLB_REMOTE_SYNC_STATUS_HISTORY=0`
 - keep history sync but do not fail on history-sync errors: `MLB_REMOTE_SYNC_STATUS_HISTORY_REQUIRED=0`
 - override history output paths:
@@ -131,6 +139,7 @@ make mlb-book-upload-top-recommended
 ```
 
 When using `mlb-book-upload-top-recommended`, defaults are:
+
 - trims current `backend/mlb/data/processed/mlb_book_upload.csv` to adaptive top-40
 - uses recent `artifacts/mlb_postgrade_by_prop_daily_tracker.csv` (lookback 5 days)
 - scores with rolling windows `7,14` by default when available
@@ -142,6 +151,7 @@ When using `mlb-book-upload-top-recommended`, defaults are:
 - enforces side-balance nudge (`min_overs=4`) when overs are available
 
 Outputs:
+
 - `backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv`
 - `tmp/analysis/mlb_book_upload_filter_recommendation.json`
 
@@ -170,7 +180,7 @@ Escalation: `ROOT-CAUSE` mode (prolonged `RED` / structural underperformance)
   - both `7d` and `14d` windows remain `< 0` for:
     - all-available BetOnline ROI, and
     - placed-wager ROI,
-    with zero props in `promote`.
+      with zero props in `promote`.
 - `ROOT-CAUSE` actions (run in order):
   1. data integrity audit (missing books/dates, odds snapshot completeness, joins, grading alignment)
   2. selection-vs-model split (all-available vs placed by prop/side/odds bucket)
@@ -195,6 +205,7 @@ make mlb-book-upload-top-recommended \
 ```
 
 Remote sync-only behavior:
+
 - default remote kind is `book_upload`, so this writes the local upload CSV directly and exits.
 - when `kind=book_upload`, companion artifacts are also synced locally by default:
   - `backend/mlb/data/processed/mlb_slate_output.csv`
@@ -212,6 +223,7 @@ make mlb-post-grade-next-day MLB_RECONCILE_BOOKMAKER=betonlineag
 ```
 
 It:
+
 - auto-picks your newest `~/Downloads/8rainstation_daily_*.csv`,
 - splits it into `tmp/graded/*_mlb_player_props.csv`,
 - infers the grader date,
@@ -232,6 +244,7 @@ make mlb-post-grade-step7 \
 ```
 
 Important:
+
 - `make mlb-post-grade-all-available-check ...` only rebuilds reconcile + all-available report.
 - It does **not** split/read the current grader CSV, so it won’t refresh placed graded-wager metrics by itself.
 
@@ -245,15 +258,18 @@ make mlb-post-grade-fade-check \
 ```
 
 Notes:
+
 - reconcile now defaults to `odds_latest_compatible.json` via `MLB_RECONCILE_ODDS_FILENAME`.
 - override only when needed, for example: `MLB_RECONCILE_ODDS_FILENAME=odds_mlb_playerprops.json`.
 - reconcile now auto-falls back between `odds_latest_compatible.json` and `odds_mlb_playerprops.json` when one filename is missing for a day; fallback dates are recorded in the summary JSON.
 
 Outputs:
+
 - `tmp/analysis/mlb_model_vs_fade_summary.json`
 - `tmp/analysis/mlb_model_vs_fade_by_prop.csv`
 
 This routine rebuilds reconcile rows for the window, then compares:
+
 - model-picked side ROI (`pnl_model_pick_1u`)
 - opposite-side fade ROI (the opposite side at the same row)
 
@@ -267,10 +283,12 @@ make mlb-post-grade-all-available-check \
 ```
 
 Outputs:
+
 - `tmp/analysis/mlb_all_available_summary.json`
 - `tmp/analysis/mlb_all_available_by_prop.csv`
 
 This routine rebuilds reconcile rows for the window, then reports:
+
 - all available resolved rows
 - two-sided resolved rows
 - model win rate across resolved rows
@@ -300,6 +318,7 @@ make mlb-post-grade-report-and-track-latest \
 ```
 
 Outputs:
+
 - `artifacts/mlb_postgrade_daily_tracker.csv`
 - `artifacts/mlb_postgrade_by_prop_daily_tracker.csv`
 - `artifacts/analysis/mlb/mlb_postgrade_alerts_latest.json`
@@ -313,6 +332,7 @@ Outputs:
 - `tmp/analysis/mlb_graded_wagers_rows.csv`
 
 Notes:
+
 - post-grade reconcile now requires outcomes by default (fails fast if outcomes are unavailable or zero for the window).
 - the post-grade tracker now merges three lenses in one place:
   - placed graded wagers (from latest `tmp/graded/8rainstation_daily_*_mlb_player_props.csv`)
@@ -369,6 +389,7 @@ make cross-sport-model-vs-fade-strict
 ```
 
 Output:
+
 - `tmp/analysis/cross_sport_model_vs_fade_summary.json`
 
 One-command post-grade routine (rebuild both sport summaries, then strict cross-sport gate):
@@ -414,12 +435,14 @@ bin/mlb_prod12_daily_cycle.sh
 ```
 
 Expected pass conditions:
+
 - `prediction_gate`: pass
 - `prediction_flow_audit`: pass
 - `hits_expectation_sources`: pass
 - no degraded prop lanes
 
 Primary artifact updated:
+
 - `artifacts/mlb_pipeline_history.jsonl`
 
 ## Weekly Schedule
@@ -437,6 +460,7 @@ bin/mlb_prod12_weekly_cycle.sh
 ```
 
 What this includes:
+
 1. `mlb-prod12-release-manifest`
 2. `mlb-prod12-replay-latency`
 3. `mlb-prod12-track-weekly` (candidate eval, max drop `3.5`)
@@ -445,11 +469,13 @@ What this includes:
 6. always appends operator snapshot history (`mlb-prod12-ops-log`)
 
 Expected pass conditions:
+
 - release manifest: `ok=true`
 - replay latency: `ok=true`, `predict p95 <= 4000 ms`
 - weekly candidate eval: `ok=true`, `recommendation="promote"`
 
 Primary artifacts updated:
+
 - `artifacts/releases/mlb_prod12_release_manifest.json`
 - `artifacts/releases/mlb_prod12_replay_latency.json`
 - `artifacts/mlb_prod12_phase2_history.jsonl`
@@ -475,17 +501,20 @@ bin/mlb_prod12_remote_status.sh 180 | jq '{status,running,exit_code,run_id,start
 ```
 
 Review checkpoints after success:
+
 - latest phase2 snapshot strict-pass: `make mlb-prod12-phase2-last-strict`
 - current prod12 status strict-pass: `make mlb-prod12-status-strict`
 - candidate decision in latest phase2 snapshot (`recommendation`, `overall_lift_pct`, degraded props)
 
 Optional toggles for weekly trigger:
+
 - enable retrain/recompute stage for one run: `MLB_WEEKLY_RETRAIN_CADENCE_ENABLED=1`
 - make retrain/recompute stage hard-fail weekly run: `MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED=1`
 
 ## Model Bundle Publish
 
 When model artifacts are refreshed, publish the bundle with both keys:
+
 - versioned key: `mlb/prod12/mlb_latest_<timestamp>.tgz`
 - stable key: `mlb/prod12/latest.tgz`
 
@@ -500,10 +529,12 @@ This keeps backend `MLB_MODELS_OBJECT_PATH=mlb/prod12/latest.tgz` stable so week
 ## Retrain/Recompute Cadence
 
 Suggested cadence:
+
 - daily: keep running normal prod12 daily automation only
 - weekly: run retrain/recompute locally, then publish bundle if promoted
 
 Migration mode:
+
 - use market/reconcile rows for quality + candidate evaluation (no `model_training_props/mlb_api` dependency)
 
 Recommended weekly sequence:
@@ -531,6 +562,7 @@ make mlb-candidate-eval-prod12 \
 `mlb-retrain-broad-reconcile` now runs the reconcile-based quality + candidate checks automatically at the end.
 
 Current caveat:
+
 - `runs_rbis` reconcile rows require snapshots that include one of the alias keys (`batter_runs_rbis`, `batter_runs_rbi`, `batter_r+rbi`).
 - Older archived snapshots may still have zero `runs_rbis` coverage; in strict reconcile mode (`MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0`), that prop will be skipped for those windows.
 - Reconcile builder now supports synthetic backfill from `mlb.model_training_props` for missing props (default includes `runs_rbis`):
@@ -550,6 +582,7 @@ make mlb-candidate-eval-prod12 \
 ```
 
 Default prod12 weekly tracking now reads reconcile rows:
+
 - `MLB_PROD12_CANDIDATE_SOURCE_TABLE=reconcile_rows`
 - `MLB_PROD12_CANDIDATE_ROWS_CSV=tmp/mlb_base_vs_market_rows_anybook.csv`
 
@@ -570,6 +603,7 @@ make mlb-prod12-status-strict
 ```
 
 Notes:
+
 - do not auto-publish on every recompute; keep publish gated by candidate eval and strict weekly checks
 
 ## Local Scheduler (macOS launchd)
@@ -579,6 +613,7 @@ Use this when you want retrain/recompute cadence to run on your machine (not Ren
 ### Daily Local Capture Job (Refresh + Build)
 
 This LaunchAgent runs the local daily chain end-to-end:
+
 - roster refresh
 - stat-derived refresh
 - `mlb-predictions-wide`
@@ -651,10 +686,11 @@ chmod +x "$HOME/bin/proppadia_mlb_refresh_daily.sh"
 ```
 
 History outputs written locally:
+
 - `artifacts/mlb_pipeline_history.jsonl`
 - `artifacts/mlb_prod12_ops_history.jsonl`
 
-Create daily LaunchAgent (example: 5:20 AM local):
+Create daily LaunchAgent (example: three runs to catch later-game odds movement):
 
 ```bash
 cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
@@ -669,10 +705,20 @@ cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
   </array>
   <key>WorkingDirectory</key><string>$HOME/Projects/proppadia</string>
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key><integer>5</integer>
-    <key>Minute</key><integer>20</integer>
-  </dict>
+  <array>
+    <dict>
+      <key>Hour</key><integer>5</integer>
+      <key>Minute</key><integer>20</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>11</integer>
+      <key>Minute</key><integer>20</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>20</integer>
+    </dict>
+  </array>
   <key>StandardOutPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.out.log</string>
   <key>StandardErrorPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.err.log</string>
   <key>RunAtLoad</key><false/>
@@ -737,6 +783,7 @@ chmod +x "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
 ```
 
 Notes:
+
 - Because the script runs with `set -e`, publish only runs if prior retrain/eval steps pass.
 - Ensure publish credentials are present in `backend/.env` (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`).
 - `MLB_RETRAIN_QUALITY_MIN_TOTAL=600` avoids early-season false-fail on low resolved row counts; raise it back toward `1000` once coverage is consistently higher.
@@ -793,6 +840,7 @@ tail -n 80 "$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.err.log"
 ```
 
 Important:
+
 - `launchctl kickstart -k ...` force-restarts the job and sends `SIGTERM` to the current process.
 - If the weekly run is mid-step (for example `make mlb-reconcile-rows`), logs will show `Terminated: 15`.
 
@@ -812,6 +860,7 @@ rm -f "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
 ## Operator Actions On Fail
 
 1. Daily lane failure:
+
 - Re-run the same daily command once.
 - If still failing, run:
   - `make mlb-prod12-incident`
@@ -820,11 +869,13 @@ rm -f "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist"
 - Hold production changes until lane returns to pass.
 
 2. Weekly replay latency failure:
+
 - Re-run weekly bundle once.
 - If `predict p95` remains above threshold, keep current lane active but do not widen scope.
 - Track `summary_latency.predict.p95_ms` week-over-week from `artifacts/releases/mlb_prod12_replay_latency.json`.
 
 3. Weekly candidate eval failure:
+
 - Keep current prod12 lane (no additional promotion).
 - Run:
   - `make mlb-prod12-incident`
@@ -908,3 +959,7 @@ Optional pre-prune local compaction (removes raw intermediates where `odds_lates
 ```bash
 make mlb-odds-history-prune-intermediate
 ```
+
+LaunchAgent script/Launch Control Status:
+
+launchctl print gui/$(id -u)/com.proppadia.mlb.refresh.daily | rg "state =|runs =|last exit code"
