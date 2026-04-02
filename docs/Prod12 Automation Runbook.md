@@ -145,6 +145,23 @@ Outputs:
 - `backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv`
 - `tmp/analysis/mlb_book_upload_filter_recommendation.json`
 
+Contingency: `RED` mode (all eligible props below 0% ROI)
+
+- Trigger `RED` when every eligible prop has both `7d ROI < 0` and `14d ROI < 0`.
+- Eligible means `graded_rows_7d >= 15` and `graded_rows_14d >= 30`.
+- In `RED`, continue full daily pipeline and reporting, but switch to paper-only execution for at least 3 report days.
+- Keep using full upload build (`MLB_POLICY_PLAN_ENABLED=0 make mlb-book-upload ...`) so discovery/learning still runs.
+- Exit `RED` only when at least 2 props return to `promote` for 2 consecutive report days.
+- Recovery thresholds to exit `RED`:
+  - combined promoted-prop `7d ROI > +2%`
+  - combined promoted-prop `14d ROI > 0%`
+  - combined promoted-prop graded sample `>= 40` rows
+- Re-entry phase (`YELLOW`): resume with reduced exposure for 3 days.
+- If promoted lanes flip negative again during `YELLOW`, return immediately to `RED`.
+- Always-on guardrails:
+  - do not play `bench` props
+  - treat `watch` props as observational unless manually overridden
+
 Optional tuning example:
 
 ```bash
