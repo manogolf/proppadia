@@ -83,6 +83,10 @@ class SuggestionConfig:
     min_graded_rows: int
     graded_roi_floor_pct: float
     min_overs: int
+    balanced_min_graded_rows_7d: int
+    balanced_min_graded_rows_14d: int
+    balanced_promote_roi_floor_pct: float
+    balanced_bench_roi_ceiling_pct: float
 
 
 def _parse_windows_days(raw: str, fallback_days: int) -> list[int]:
@@ -110,6 +114,56 @@ def _weighted_mean_from_pairs(pairs: list[tuple[float, float]]) -> float | None:
     if w_sum <= 0:
         return None
     return float(sum(v * w for v, w in clean) / w_sum)
+
+
+def _to_int_or_none(v: Any) -> int | None:
+    try:
+        if v is None:
+            return None
+        if pd.isna(v):
+            return None
+        return int(v)
+    except Exception:
+        return None
+
+
+def _to_float_or_none(v: Any) -> float | None:
+    try:
+        if v is None:
+            return None
+        if pd.isna(v):
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+
+def _balanced_lane_status(row: dict[str, Any], cfg: SuggestionConfig) -> tuple[str, str]:
+    """Balanced mode (#2): promote if 7d+14d ROI are both positive with row minimums.
+
+    Bench if both are negative with the same row minimums; otherwise watch.
+    """
+    r7 = _to_int_or_none(row.get("graded_rows_7d"))
+    r14 = _to_int_or_none(row.get("graded_rows_14d"))
+    roi7 = _to_float_or_none(row.get("graded_roi_7d"))
+    roi14 = _to_float_or_none(row.get("graded_roi_14d"))
+
+    if r7 is None or r14 is None or roi7 is None or roi14 is None:
+        return "watch", "insufficient_window_history"
+
+    if r7 < int(cfg.balanced_min_graded_rows_7d) or r14 < int(cfg.balanced_min_graded_rows_14d):
+        return "watch", "insufficient_samples"
+
+    promote_floor = float(cfg.balanced_promote_roi_floor_pct)
+    bench_ceiling = float(cfg.balanced_bench_roi_ceiling_pct)
+
+    if roi7 > promote_floor and roi14 > promote_floor:
+        return "promote", "both_windows_positive_roi"
+
+    if roi7 < bench_ceiling and roi14 < bench_ceiling:
+        return "bench", "both_windows_negative_roi"
+
+    return "watch", "mixed_window_signal"
 
 
 def _build_prop_metrics(
@@ -269,6 +323,16 @@ def _build_prop_metrics(
     else:
         out = out.sort_values(["allow", "score", "model_rows_sum"], ascending=[False, False, False], kind="mergesort")
 
+    # Add balanced daily lane status for operator decisioning.
+    status_vals: list[str] = []
+    reason_vals: list[str] = []
+    for rec in out.astype(object).where(pd.notna(out), None).to_dict(orient="records"):
+        status, reason = _balanced_lane_status(rec, cfg)
+        status_vals.append(status)
+        reason_vals.append(reason)
+    out["balanced_status"] = status_vals
+    out["balanced_reason"] = reason_vals
+
     return out.reset_index(drop=True), latest_date, {
         "requested_windows_days": requested_windows,
         "active_windows_days": active_windows,
@@ -366,6 +430,10 @@ def main() -> int:
     ap.add_argument("--min-graded-rows", type=int, default=8)
     ap.add_argument("--graded-roi-floor-pct", type=float, default=-8.0)
     ap.add_argument("--min-overs", type=int, default=4)
+    ap.add_argument("--balanced-min-graded-rows-7d", type=int, default=15)
+    ap.add_argument("--balanced-min-graded-rows-14d", type=int, default=30)
+    ap.add_argument("--balanced-promote-roi-floor-pct", type=float, default=0.0)
+    ap.add_argument("--balanced-bench-roi-ceiling-pct", type=float, default=0.0)
     ap.add_argument("--out-csv", default="backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv")
     ap.add_argument("--out-json", default="tmp/analysis/mlb_book_upload_filter_recommendation.json")
     args = ap.parse_args()
@@ -399,6 +467,10 @@ def main() -> int:
         min_graded_rows=max(0, int(args.min_graded_rows)),
         graded_roi_floor_pct=float(args.graded_roi_floor_pct),
         min_overs=max(0, int(args.min_overs)),
+        balanced_min_graded_rows_7d=max(0, int(args.balanced_min_graded_rows_7d)),
+        balanced_min_graded_rows_14d=max(0, int(args.balanced_min_graded_rows_14d)),
+        balanced_promote_roi_floor_pct=float(args.balanced_promote_roi_floor_pct),
+        balanced_bench_roi_ceiling_pct=float(args.balanced_bench_roi_ceiling_pct),
     )
 
     as_of = date.today()
@@ -440,6 +512,10 @@ def main() -> int:
             "min_graded_rows": cfg.min_graded_rows,
             "graded_roi_floor_pct": cfg.graded_roi_floor_pct,
             "min_overs": cfg.min_overs,
+            "balanced_min_graded_rows_7d": cfg.balanced_min_graded_rows_7d,
+            "balanced_min_graded_rows_14d": cfg.balanced_min_graded_rows_14d,
+            "balanced_promote_roi_floor_pct": cfg.balanced_promote_roi_floor_pct,
+            "balanced_bench_roi_ceiling_pct": cfg.balanced_bench_roi_ceiling_pct,
         },
         "window": {
             "metrics_latest_report_date": str(metrics_latest_date),
@@ -454,6 +530,21 @@ def main() -> int:
             "allowlist_props_count": int(len(allowlist)),
             "allowlist_props": allowlist,
             "selected_top_props": selected_props,
+            "balanced_status_counts": (
+                prop_metrics["balanced_status"].value_counts().to_dict()
+                if not prop_metrics.empty and "balanced_status" in prop_metrics.columns
+                else {}
+            ),
+            "balanced_promote_props": (
+                prop_metrics[prop_metrics["balanced_status"] == "promote"]["prop_type"].astype(str).tolist()
+                if not prop_metrics.empty and "balanced_status" in prop_metrics.columns
+                else []
+            ),
+            "balanced_bench_props": (
+                prop_metrics[prop_metrics["balanced_status"] == "bench"]["prop_type"].astype(str).tolist()
+                if not prop_metrics.empty and "balanced_status" in prop_metrics.columns
+                else []
+            ),
             "notes": notes,
         },
         "outputs": {

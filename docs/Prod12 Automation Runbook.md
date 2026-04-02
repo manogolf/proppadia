@@ -101,16 +101,16 @@ Optional history-sync controls:
   - `MLB_PIPELINE_HISTORY_LOCAL_OUT=<path>`
   - `MLB_PROD12_PHASE2_HISTORY_LOCAL_OUT=<path>`
 
-Day-to-day local upload build (recommended):
-
-```bash
-make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
-```
-
-Minimal-policy local upload build (broader set; filter in tool by book/prop/odds/EV as needed):
+Day-to-day local upload build (primary workflow):
 
 ```bash
 MLB_POLICY_PLAN_ENABLED=0 \
+make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
+```
+
+Policy-on variant (optional legacy behavior):
+
+```bash
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
@@ -124,17 +124,21 @@ OPS_API_TOKEN="$OPS_API_TOKEN" \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
-Adaptive "best of bunch" trim (recommended before placing wagers):
+Adaptive "best of bunch" trim (optional legacy path; skip if you are filtering directly in the tool):
 
 ```bash
 make mlb-book-upload-top-recommended
 ```
 
-Defaults:
+When using `mlb-book-upload-top-recommended`, defaults are:
 - trims current `backend/mlb/data/processed/mlb_book_upload.csv` to adaptive top-40
 - uses recent `artifacts/mlb_postgrade_by_prop_daily_tracker.csv` (lookback 5 days)
 - scores with rolling windows `7,14` by default when available
 - early season fallback is automatic: if full 7d/14d history is not present yet, the selector degrades to available history and continues
+- balanced lane status is emitted per prop in recommendation JSON:
+  - `promote`: graded `7d` and `14d` ROI both `> 0` with min rows `7d>=15`, `14d>=30`
+  - `bench`: graded `7d` and `14d` ROI both `< 0` with min rows `7d>=15`, `14d>=30`
+  - otherwise `watch` (including insufficient sample history)
 - enforces side-balance nudge (`min_overs=4`) when overs are available
 
 Outputs:
