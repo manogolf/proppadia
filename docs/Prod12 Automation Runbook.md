@@ -162,6 +162,27 @@ Contingency: `RED` mode (all eligible props below 0% ROI)
   - do not play `bench` props
   - treat `watch` props as observational unless manually overridden
 
+Escalation: `ROOT-CAUSE` mode (prolonged `RED` / structural underperformance)
+
+- Enter `ROOT-CAUSE` when any one condition is met:
+  - `RED` persists for `>= 10` consecutive report days, or
+  - cumulative graded sample since `RED` start is `>= 300` wagers with cumulative ROI `<= -5%`, or
+  - both `7d` and `14d` windows remain `< 0` for:
+    - all-available BetOnline ROI, and
+    - placed-wager ROI,
+    with zero props in `promote`.
+- `ROOT-CAUSE` actions (run in order):
+  1. data integrity audit (missing books/dates, odds snapshot completeness, joins, grading alignment)
+  2. selection-vs-model split (all-available vs placed by prop/side/odds bucket)
+  3. calibration audit (predicted probability vs realized win rate by prop + odds bucket)
+  4. lane reset (hard-bench structurally negative lanes; whitelist only lanes with positive 14d ROI and minimum sample)
+  5. model refresh/retrain pass with recency-aware checks
+  6. controlled restart: paper-only for 3 days, then reduced exposure until recovery criteria are met
+- Exit `ROOT-CAUSE` only when all are true:
+  - at least 2 props in `promote` for 2 consecutive report days
+  - combined promoted graded sample `>= 40` rows
+  - combined promoted `7d ROI > 0` and `14d ROI > 0`
+
 Optional tuning example:
 
 ```bash
