@@ -116,6 +116,14 @@ MLB_POLICY_PLAN_ENABLED=0 \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
+Optional single-filter variant (emit only sides with model probability >=51%):
+
+```bash
+MLB_POLICY_PLAN_ENABLED=0 \
+MLB_BOOK_UPLOAD_MIN_SIDE_PROB=0.51 \
+make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
+```
+
 Policy-on variant (optional legacy behavior):
 
 ```bash
@@ -171,6 +179,31 @@ Contingency: `RED` mode (all eligible props below 0% ROI)
 - Always-on guardrails:
   - do not play `bench` props
   - treat `watch` props as observational unless manually overridden
+
+Daily cumulative RED-mode bucket report (BetOnline, model-picked side):
+
+```bash
+make mlb-red-mode-bucket-report \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag
+```
+
+Focus lanes reported daily:
+
+- `+111..+120`
+- `+131..+150`
+- `+151..+200`
+- `-299..-250`
+- `-249..-220`
+- `<=-300`
+
+Outputs:
+
+- `tmp/mlb_red_mode_reconcile_summary.json`
+- `tmp/analysis/mlb_red_mode_odds_bucket_summary.json`
+- `tmp/analysis/mlb_red_mode_odds_bucket_by_bucket.csv`
+- `tmp/analysis/mlb_red_mode_odds_bucket_focus.csv`
 
 Escalation: `ROOT-CAUSE` mode (prolonged `RED` / structural underperformance)
 
@@ -616,6 +649,7 @@ This LaunchAgent runs the local daily chain end-to-end:
 
 - roster refresh
 - stat-derived refresh
+- rolling integrity check (`PASS/FAIL` for d7/d15/d30 coverage + movement)
 - `mlb-predictions-wide`
 - `mlb-slate-output`
 - `mlb-book-upload` (forced local build; remote fetch flags are set to `0`)
@@ -651,6 +685,11 @@ MLB_STAT_DERIVED_DAYS=7 \
 MLB_STAT_DERIVED_MIN=0 \
 MLB_SEASON_REQUIRE_REGULAR=1 \
 make mlb-stat-derived-refresh
+
+MLB_ROLLING_CHECK_DAYS=10 \
+MLB_ROLLING_CHECK_MIN_COVERAGE_PCT=99 \
+MLB_ROLLING_CHECK_MIN_COMPARABLE=100 \
+make mlb-check-rolling-integrity
 
 make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
 make mlb-slate-output MLB_DATE="$MLB_DATE_ET"
@@ -750,6 +789,15 @@ Check state:
 
 ```bash
 launchctl print gui/$(id -u)/com.proppadia.mlb.refresh.daily | rg "state = |runs = |last exit code"
+```
+
+Manual rolling integrity check (on demand):
+
+```bash
+MLB_ROLLING_CHECK_DAYS=10 \
+MLB_ROLLING_CHECK_MIN_COVERAGE_PCT=99 \
+MLB_ROLLING_CHECK_MIN_COMPARABLE=100 \
+make mlb-check-rolling-integrity
 ```
 
 ### Weekly Local Retrain Job

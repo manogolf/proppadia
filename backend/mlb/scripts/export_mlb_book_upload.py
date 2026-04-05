@@ -881,6 +881,15 @@ def main() -> None:
         help="Drop 0.5 lines (default keeps them for MLB).",
     )
     ap.add_argument(
+        "--min-side-prob",
+        type=float,
+        default=float(os.environ.get("MLB_BOOK_UPLOAD_MIN_SIDE_PROB", "0") or 0.0),
+        help=(
+            "Optional minimum model probability required per emitted side row (0..1). "
+            "Example: 0.51 emits only sides with >=51%% model probability."
+        ),
+    )
+    ap.add_argument(
         "--policy-plan-csv",
         default=os.environ.get("MLB_POLICY_PLAN_CSV", ""),
         help="Optional per-prop policy plan CSV (book/side/thresholds). When set, emits selected-side rows only.",
@@ -979,6 +988,10 @@ def main() -> None:
         help="Optional mlb_date override for remote fetch. Defaults to --slate-date.",
     )
     args = ap.parse_args()
+
+    min_side_prob = float(args.min_side_prob or 0.0)
+    if not (0.0 <= min_side_prob <= 1.0):
+        raise RuntimeError(f"--min-side-prob must be between 0 and 1; got {min_side_prob}")
 
     et = pytz.timezone("America/New_York")
     et_today = datetime.now(et).strftime("%Y-%m-%d")
@@ -1174,6 +1187,7 @@ def main() -> None:
         print(f"[mlb-book-upload] dropped line 0.5: before={lines_before} after={lines_after}")
 
     rows: List[Dict[str, object]] = []
+    prob_filtered_rows = 0
     policy_plan_csv = Path(str(args.policy_plan_csv or "").strip()).expanduser() if str(args.policy_plan_csv or "").strip() else None
     if policy_plan_csv is not None:
         odds_snapshot_raw = str(args.odds_snapshot_json or "").strip()
@@ -1216,6 +1230,9 @@ def main() -> None:
                 continue
             side_prob = float(row.get("side_model_prob"))
             if not (0.0 < side_prob < 1.0):
+                continue
+            if side_prob < min_side_prob:
+                prob_filtered_rows += 1
                 continue
             win_pct = _prob_to_fair_american(side_prob)
             if win_pct is None:
@@ -1292,8 +1309,14 @@ def main() -> None:
                 "SELECTOR": int(row["player_id"]),
                 "POINT": float(row["line"]),
             }
-            rows.append({**base, "SIDE": "over", "WIN %": int(odds_over)})
-            rows.append({**base, "SIDE": "under", "WIN %": int(odds_under)})
+            if p_over >= min_side_prob:
+                rows.append({**base, "SIDE": "over", "WIN %": int(odds_over)})
+            else:
+                prob_filtered_rows += 1
+            if p_under >= min_side_prob:
+                rows.append({**base, "SIDE": "under", "WIN %": int(odds_under)})
+            else:
+                prob_filtered_rows += 1
 
     if not rows:
         if policy_plan_csv is not None and args.policy_allow_empty:
@@ -1320,7 +1343,7 @@ def main() -> None:
         sys.exit(1)
 
     out_df = pd.DataFrame(rows)
-    if policy_plan_csv is None:
+    if policy_plan_csv is None and min_side_prob <= 0.0:
         expected = 2 * len(merged)
         if len(out_df) != expected:
             raise AssertionError(f"unexpected row count: wrote {len(out_df)} expected {expected}")
@@ -1330,6 +1353,10 @@ def main() -> None:
 
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     out_df.to_csv(OUT_CSV, index=False)
+    if min_side_prob > 0.0:
+        print(
+            f"[mlb-book-upload] min-side-prob={min_side_prob:.3f} filtered_side_rows={prob_filtered_rows}"
+        )
     print(f"[mlb-book-upload] wrote {len(out_df)} rows to {OUT_CSV}")
 
 
