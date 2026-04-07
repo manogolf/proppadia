@@ -189,6 +189,24 @@ make mlb-red-mode-bucket-report \
   MLB_RED_BUCKET_BOOKMAKER=betonlineag
 ```
 
+Daily cumulative RED-mode fade bucket report (compact positive buckets):
+
+```bash
+make mlb-red-mode-fade-bucket-report \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag
+```
+
+Combined one-command run (model + fade):
+
+```bash
+make mlb-red-mode-bucket-report-combined \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag
+```
+
 Focus lanes reported daily:
 
 - `+111..+120`
@@ -204,6 +222,8 @@ Outputs:
 - `tmp/analysis/mlb_red_mode_odds_bucket_summary.json`
 - `tmp/analysis/mlb_red_mode_odds_bucket_by_bucket.csv`
 - `tmp/analysis/mlb_red_mode_odds_bucket_focus.csv`
+- `tmp/analysis/mlb_red_mode_fade_odds_bucket_summary.json`
+- `tmp/analysis/mlb_red_mode_fade_odds_bucket_by_bucket.csv`
 
 Escalation: `ROOT-CAUSE` mode (prolonged `RED` / structural underperformance)
 

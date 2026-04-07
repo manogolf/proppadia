@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report MLB model-picked ROI by American-odds bucket from reconcile rows."""
+"""Report MLB selected-side ROI by American-odds bucket from reconcile rows."""
 
 from __future__ import annotations
 
@@ -74,8 +74,41 @@ def _pnl_1u(odds: float, outcome: str) -> float:
     return (odds / 100.0) if odds > 0 else (100.0 / abs(odds))
 
 
+def _build_selected_columns(df: pd.DataFrame, selection: str) -> pd.DataFrame:
+    out = df.copy()
+    pick = out["model_pick_side"].astype(str).str.lower().str.strip()
+    model_over = pick.eq("over")
+    model_under = pick.eq("under")
+
+    if selection == "model":
+        selected_side = np.where(model_over, "over", np.where(model_under, "under", None))
+        selected_outcome = out["actual_model_pick_outcome"].astype(str).str.lower().str.strip()
+        selected_odds = np.where(
+            model_over,
+            pd.to_numeric(out["price_over_american"], errors="coerce"),
+            np.where(model_under, pd.to_numeric(out["price_under_american"], errors="coerce"), np.nan),
+        )
+    else:
+        selected_side = np.where(model_over, "under", np.where(model_under, "over", None))
+        selected_outcome = np.where(
+            model_over,
+            out["actual_under_outcome"].astype(str).str.lower().str.strip(),
+            np.where(model_under, out["actual_over_outcome"].astype(str).str.lower().str.strip(), None),
+        )
+        selected_odds = np.where(
+            model_over,
+            pd.to_numeric(out["price_under_american"], errors="coerce"),
+            np.where(model_under, pd.to_numeric(out["price_over_american"], errors="coerce"), np.nan),
+        )
+
+    out["selected_side"] = selected_side
+    out["selected_outcome"] = selected_outcome
+    out["selected_american_odds"] = pd.to_numeric(selected_odds, errors="coerce")
+    return out
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Report MLB model-picked ROI by American-odds bucket.")
+    ap = argparse.ArgumentParser(description="Report MLB selected-side ROI by American-odds bucket.")
     ap.add_argument("--rows-csv", default="tmp/mlb_base_vs_market_rows.csv")
     ap.add_argument("--out-json", default="tmp/analysis/mlb_red_mode_odds_bucket_summary.json")
     ap.add_argument("--out-csv", default="tmp/analysis/mlb_red_mode_odds_bucket_by_bucket.csv")
@@ -86,51 +119,74 @@ def main() -> int:
     )
     ap.add_argument("--label-from-date", default="")
     ap.add_argument("--label-to-date", default="")
+    ap.add_argument(
+        "--selection",
+        choices=["model", "fade"],
+        default="model",
+        help="Which side to evaluate per row. model=model-picked side; fade=opposite side.",
+    )
+    ap.add_argument(
+        "--print-positive-only",
+        action="store_true",
+        help="Print only buckets with ROI above --min-print-roi-pct.",
+    )
+    ap.add_argument(
+        "--compact-print",
+        action="store_true",
+        help="Print compact lines: '* bucket: +X.XX%%'.",
+    )
+    ap.add_argument(
+        "--min-print-roi-pct",
+        type=float,
+        default=0.0,
+        help="Minimum ROI threshold used with --print-positive-only.",
+    )
     args = ap.parse_args()
 
     rows_csv = Path(args.rows_csv).expanduser()
     out_json = Path(args.out_json).expanduser()
     out_csv = Path(args.out_csv).expanduser()
     out_focus_csv = Path(args.out_focus_csv).expanduser()
+    selection = str(args.selection).strip().lower()
     focus_buckets = [x.strip() for x in str(args.focus_buckets).split(",") if str(x).strip()]
 
     if not rows_csv.exists():
         raise FileNotFoundError(f"rows csv not found: {rows_csv}")
 
     df = pd.read_csv(rows_csv, low_memory=False)
-    required = {"actual_model_pick_outcome", "model_pick_side", "price_over_american", "price_under_american"}
+    required = {
+        "actual_model_pick_outcome",
+        "actual_over_outcome",
+        "actual_under_outcome",
+        "model_pick_side",
+        "price_over_american",
+        "price_under_american",
+        "prop_type",
+    }
     missing = sorted(required - set(df.columns))
     if missing:
         raise RuntimeError(f"missing required columns in rows csv: {missing}")
 
-    mask = (
-        df["actual_model_pick_outcome"].isin(["win", "loss"])
-        & df["model_pick_side"].isin(["over", "under"])
-    )
-    picked_odds = np.where(
-        df["model_pick_side"].eq("over"),
-        pd.to_numeric(df["price_over_american"], errors="coerce"),
-        pd.to_numeric(df["price_under_american"], errors="coerce"),
-    )
-    work = df.loc[mask].copy()
-    work["picked_american_odds"] = pd.to_numeric(pd.Series(picked_odds, index=df.index), errors="coerce").loc[mask]
-    work = work[work["picked_american_odds"].notna()].copy()
+    selected = _build_selected_columns(df, selection)
+    mask = selected["selected_outcome"].isin(["win", "loss"]) & selected["selected_side"].isin(["over", "under"])
+    work = selected.loc[mask].copy()
+    work = work[work["selected_american_odds"].notna()].copy()
 
     if work.empty:
-        raise RuntimeError("no resolved model-pick rows with valid picked-side American odds")
+        raise RuntimeError("no resolved selected-side rows with valid selected-side American odds")
 
-    work["odds_bucket"] = work["picked_american_odds"].map(_bucket_from_american)
+    work["odds_bucket"] = work["selected_american_odds"].map(_bucket_from_american)
     work["pnl_1u"] = [
         _pnl_1u(float(o), str(r))
-        for o, r in zip(work["picked_american_odds"].tolist(), work["actual_model_pick_outcome"].tolist())
+        for o, r in zip(work["selected_american_odds"].tolist(), work["selected_outcome"].tolist())
     ]
 
     grouped = (
         work.groupby("odds_bucket", dropna=False)
         .agg(
-            rows=("actual_model_pick_outcome", "size"),
-            wins=("actual_model_pick_outcome", lambda s: int((s == "win").sum())),
-            losses=("actual_model_pick_outcome", lambda s: int((s == "loss").sum())),
+            rows=("selected_outcome", "size"),
+            wins=("selected_outcome", lambda s: int((s == "win").sum())),
+            losses=("selected_outcome", lambda s: int((s == "loss").sum())),
             pnl_sum=("pnl_1u", "sum"),
         )
         .reset_index()
@@ -154,7 +210,7 @@ def main() -> int:
     bucket_prop = (
         work.groupby(["odds_bucket", "prop_type"], dropna=False)
         .agg(
-            top_prop_rows=("actual_model_pick_outcome", "size"),
+            top_prop_rows=("selected_outcome", "size"),
             top_prop_pnl_1u=("pnl_1u", "sum"),
         )
         .reset_index()
@@ -215,15 +271,22 @@ def main() -> int:
     window_min = str(game_dates.min()) if len(game_dates) else ""
     window_max = str(game_dates.max()) if len(game_dates) else ""
 
+    counts: dict[str, int] = {
+        "rows_input": int(len(df)),
+        "resolved_selected_rows": int(mask.sum()),
+        "resolved_rows_with_selected_odds": int(len(work)),
+    }
+    if selection == "model":
+        # Backward-compatible keys used by existing workflows.
+        counts["resolved_model_pick_rows"] = counts["resolved_selected_rows"]
+        counts["resolved_rows_with_picked_odds"] = counts["resolved_rows_with_selected_odds"]
+
     payload = {
         "status": "ok",
+        "selection": selection,
         "rows_csv": str(rows_csv),
         "window": {"game_date_min": window_min, "game_date_max": window_max},
-        "counts": {
-            "rows_input": int(len(df)),
-            "resolved_model_pick_rows": int(mask.sum()),
-            "resolved_rows_with_picked_odds": int(len(work)),
-        },
+        "counts": counts,
         "focus_buckets": focus_buckets,
         "focus_results": focus_df.to_dict(orient="records"),
         "extra_positive_results": extra_positive_df.to_dict(orient="records"),
@@ -235,42 +298,41 @@ def main() -> int:
     }
     out_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(json.dumps(payload, indent=2))
-    label_from = str(args.label_from_date or "").strip()
-    label_to = str(args.label_to_date or "").strip()
-    if not label_from:
-        label_from = window_min
-    if not label_to:
-        label_to = window_max
-    label_from = label_from.replace("-", ".")
-    label_to = label_to.replace("-", ".")
-    if label_from and label_to:
-        print(f"Model results {label_from} to {label_to}")
-    elif label_from:
-        print(f"Model results from {label_from}")
-    elif label_to:
-        print(f"Model results through {label_to}")
+
+    label_from = str(args.label_from_date or "").strip() or window_min
+    label_to = str(args.label_to_date or "").strip() or window_max
+    label_from_print = label_from.replace("-", ".") if label_from else ""
+    label_to_print = label_to.replace("-", ".") if label_to else ""
+    title = "Model" if selection == "model" else "Fade"
+
+    if label_from_print and label_to_print:
+        print(f"{title} results {label_from_print} to {label_to_print}")
+    elif label_from_print:
+        print(f"{title} results from {label_from_print}")
+    elif label_to_print:
+        print(f"{title} results through {label_to_print}")
+
     resolved_from = (window_min or "").replace("-", ".")
     resolved_to = (window_max or "").replace("-", ".")
-    if resolved_from and resolved_to and (resolved_from != label_from or resolved_to != label_to):
+    if resolved_from and resolved_to and (resolved_from != label_from_print or resolved_to != label_to_print):
         print(f"Resolved outcomes {resolved_from} to {resolved_to}")
 
-    for row in focus_df.to_dict(orient="records"):
+    if args.print_positive_only:
+        min_roi = float(args.min_print_roi_pct or 0.0)
+        print_df = out_table[out_table["roi_pct"] > min_roi].copy()
+    else:
+        print_df = pd.concat([focus_df, extra_positive_df], ignore_index=True)
+
+    for row in print_df.to_dict(orient="records"):
         bucket = str(row.get("odds_bucket") or "")
         rows = int(row.get("rows") or 0)
         roi_pct = float(row.get("roi_pct") or 0.0)
         top_prop = str(row.get("top_prop_type") or "").strip()
         top_pnl = float(row.get("top_prop_pnl_1u") or 0.0)
-        if top_prop:
-            print(f"* {bucket}: {rows} rows, {roi_pct:+.2f}% ({top_prop} {top_pnl:+.2f}u)")
-        else:
-            print(f"* {bucket}: {rows} rows, {roi_pct:+.2f}%")
-    for row in extra_positive_df.to_dict(orient="records"):
-        bucket = str(row.get("odds_bucket") or "")
-        rows = int(row.get("rows") or 0)
-        roi_pct = float(row.get("roi_pct") or 0.0)
-        top_prop = str(row.get("top_prop_type") or "").strip()
-        top_pnl = float(row.get("top_prop_pnl_1u") or 0.0)
-        if top_prop:
+
+        if args.compact_print:
+            print(f"* {bucket}: {roi_pct:+.2f}%")
+        elif top_prop:
             print(f"* {bucket}: {rows} rows, {roi_pct:+.2f}% ({top_prop} {top_pnl:+.2f}u)")
         else:
             print(f"* {bucket}: {rows} rows, {roi_pct:+.2f}%")

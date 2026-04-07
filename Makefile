@@ -83,6 +83,10 @@ MLB_RED_BUCKET_SUMMARY_OUT_JSON ?= tmp/analysis/mlb_red_mode_odds_bucket_summary
 MLB_RED_BUCKET_BY_BUCKET_OUT_CSV ?= tmp/analysis/mlb_red_mode_odds_bucket_by_bucket.csv
 MLB_RED_BUCKET_FOCUS_OUT_CSV ?= tmp/analysis/mlb_red_mode_odds_bucket_focus.csv
 MLB_RED_BUCKET_FOCUS_BUCKETS ?= +111..+120,+131..+150,+151..+200,-299..-250,-249..-220,<=-300
+MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON ?= tmp/analysis/mlb_red_mode_fade_odds_bucket_summary.json
+MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV ?= tmp/analysis/mlb_red_mode_fade_odds_bucket_by_bucket.csv
+MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV ?= tmp/analysis/mlb_red_mode_fade_odds_bucket_focus.csv
+MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT ?= 0
 MLB_GRADED_IN_CSV ?=
 MLB_GRADED_ROWS_OUT_CSV ?= tmp/analysis/mlb_graded_wagers_rows.csv
 MLB_GRADED_SUMMARY_OUT_JSON ?= tmp/analysis/mlb_graded_wagers_summary.json
@@ -370,7 +374,7 @@ SEASON_CUTOVER_HISTORY_INPUT ?= artifacts/season_cutover_history.jsonl
 .PHONY: mlb-retrain-broad-reconcile
 .PHONY: mlb-prod12-model-bundle-publish
 .PHONY: mlb-odds-backfill-history
-.PHONY: mlb-red-mode-bucket-report
+.PHONY: mlb-red-mode-bucket-report mlb-red-mode-fade-bucket-report mlb-red-mode-bucket-report-combined
 
 help:
 	@echo "Proppadia checks"
@@ -393,6 +397,8 @@ help:
 	@echo "  make mlb-post-grade-next-day [one-step post-grade bundle after next-day cron]"
 	@echo "  make mlb-post-grade-report-and-track-latest [all-available + model-vs-fade + graded wagers merged into tracker/charts]"
 	@echo "  make mlb-red-mode-bucket-report [cumulative model ROI by odds bucket for RED mode focus lanes]"
+	@echo "  make mlb-red-mode-fade-bucket-report [cumulative fade ROI by odds bucket; prints positive buckets compact]"
+	@echo "  make mlb-red-mode-bucket-report-combined [run model + fade bucket reports together]"
 	@echo "  make mlb-odds-backfill-history [historical OddsAPI pull; defaults to season 2025 regular-season start]"
 	@echo "  make frontend-route-smoke [verify critical nav/route surface in AppRouter]"
 	@echo "  make workflow-inventory [report scheduled workflow files]"
@@ -1047,6 +1053,16 @@ mlb-all-available-report:
 mlb-red-mode-bucket-report:
 	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RECONCILE_REQUIRE_OUTCOMES=1 MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN=1
 	$(VENV_PY) backend/mlb/scripts/report_mlb_odds_bucket_roi.py --rows-csv "$(MLB_RED_BUCKET_ROWS_CSV)" --out-json "$(MLB_RED_BUCKET_SUMMARY_OUT_JSON)" --out-csv "$(MLB_RED_BUCKET_BY_BUCKET_OUT_CSV)" --out-focus-csv "$(MLB_RED_BUCKET_FOCUS_OUT_CSV)" --focus-buckets "$(MLB_RED_BUCKET_FOCUS_BUCKETS)" --label-from-date "$(MLB_RED_BUCKET_FROM_DATE)" --label-to-date "$(MLB_RED_BUCKET_TO_DATE)"
+
+# RED-mode cumulative report: fade ROI by American-odds bucket (compact positive-bucket printout).
+mlb-red-mode-fade-bucket-report:
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RECONCILE_REQUIRE_OUTCOMES=1 MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN=1
+	$(VENV_PY) backend/mlb/scripts/report_mlb_odds_bucket_roi.py --selection fade --rows-csv "$(MLB_RED_BUCKET_ROWS_CSV)" --out-json "$(MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON)" --out-csv "$(MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV)" --out-focus-csv "$(MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV)" --focus-buckets "" --label-from-date "$(MLB_RED_BUCKET_FROM_DATE)" --label-to-date "$(MLB_RED_BUCKET_TO_DATE)" --print-positive-only --compact-print --min-print-roi-pct "$(MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT)"
+
+# RED-mode combined report: model + fade in one command.
+mlb-red-mode-bucket-report-combined:
+	$(MAKE) mlb-red-mode-bucket-report MLB_RED_BUCKET_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RED_BUCKET_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RED_BUCKET_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RED_BUCKET_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RED_BUCKET_ROWS_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_BY_BUCKET_OUT_CSV="$(MLB_RED_BUCKET_BY_BUCKET_OUT_CSV)" MLB_RED_BUCKET_FOCUS_OUT_CSV="$(MLB_RED_BUCKET_FOCUS_OUT_CSV)" MLB_RED_BUCKET_FOCUS_BUCKETS="$(MLB_RED_BUCKET_FOCUS_BUCKETS)"
+	$(MAKE) mlb-red-mode-fade-bucket-report MLB_RED_BUCKET_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RED_BUCKET_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RED_BUCKET_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RED_BUCKET_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RED_BUCKET_ROWS_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV="$(MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV)" MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV="$(MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV)" MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT="$(MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT)"
 
 # Post-grade routine: rebuild reconcile rows then report model-vs-fade for that window.
 mlb-post-grade-fade-check:
