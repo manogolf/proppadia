@@ -207,6 +207,8 @@ MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batt
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-hits,total_bases,strikeouts_batting}"
 MLB_DAILY_ROSTER_REFRESH_ENABLED="${MLB_DAILY_ROSTER_REFRESH_ENABLED:-1}"
 MLB_DAILY_ROSTER_REFRESH_REQUIRED="${MLB_DAILY_ROSTER_REFRESH_REQUIRED:-1}"
+MLB_DAILY_BVP_PVB_ENABLED="${MLB_DAILY_BVP_PVB_ENABLED:-1}"
+MLB_DAILY_BVP_PVB_REQUIRED="${MLB_DAILY_BVP_PVB_REQUIRED:-0}"
 MLB_DAILY_STAT_DERIVED_ENABLED="${MLB_DAILY_STAT_DERIVED_ENABLED:-1}"
 MLB_DAILY_WIDE_PREDICTIONS_ENABLED="${MLB_DAILY_WIDE_PREDICTIONS_ENABLED:-1}"
 MLB_DAILY_WIDE_PREDICTIONS_REQUIRED="${MLB_DAILY_WIDE_PREDICTIONS_REQUIRED:-1}"
@@ -222,6 +224,10 @@ MLB_STAT_SKIP_EXISTING_DATES="${MLB_STAT_SKIP_EXISTING_DATES:-1}"
 MLB_STAT_DERIVED_DAYS="${MLB_STAT_DERIVED_DAYS:-7}"
 MLB_STAT_DERIVED_MIN="${MLB_STAT_DERIVED_MIN:-0}"
 MLB_SEASON_REQUIRE_REGULAR="${MLB_SEASON_REQUIRE_REGULAR:-0}"
+MLB_BVP_FEATURE_SET_TAG="${MLB_BVP_FEATURE_SET_TAG:-v1}"
+MLB_BVP_MODEL_TAG="${MLB_BVP_MODEL_TAG:-bvp_pvb_refresh_v1}"
+MLB_BVP_BATCH_SIZE="${MLB_BVP_BATCH_SIZE:-1000}"
+MLB_BVP_REQUEST_TIMEOUT_SEC="${MLB_BVP_REQUEST_TIMEOUT_SEC:-20}"
 MODEL_DIR="${MODEL_DIR:-/var/data/proppadia/models}"
 MLB_CRON_RUN_MODE="${MLB_CRON_RUN_MODE:-daily}"
 MLB_CRON_WEEKLY_DAY_UTC="${MLB_CRON_WEEKLY_DAY_UTC:-1}" # 1=Mon ... 7=Sun
@@ -494,6 +500,28 @@ run_daily() {
     fi
   else
     echo "[prod12-cron] daily roster refresh disabled (MLB_DAILY_ROSTER_REFRESH_ENABLED=${MLB_DAILY_ROSTER_REFRESH_ENABLED})"
+  fi
+
+  if [[ "${MLB_DAILY_BVP_PVB_ENABLED}" == "1" ]]; then
+    echo "[prod12-cron] running daily bvp/pvb refresh"
+    set +e
+    MLB_BVP_DATE="${MLB_DATE}" \
+    MLB_BVP_FEATURE_SET_TAG="${MLB_BVP_FEATURE_SET_TAG}" \
+    MLB_BVP_MODEL_TAG="${MLB_BVP_MODEL_TAG}" \
+    MLB_BVP_BATCH_SIZE="${MLB_BVP_BATCH_SIZE}" \
+    MLB_BVP_REQUEST_TIMEOUT_SEC="${MLB_BVP_REQUEST_TIMEOUT_SEC}" \
+    make mlb-bvp-pvb-refresh
+    local bvp_rc=$?
+    set -e
+    if [[ "${bvp_rc}" -ne 0 ]]; then
+      if [[ "${MLB_DAILY_BVP_PVB_REQUIRED}" == "1" ]]; then
+        echo "[prod12-cron] daily bvp/pvb refresh failed rc=${bvp_rc}" >&2
+        return "${bvp_rc}"
+      fi
+      echo "[prod12-cron] WARN: daily bvp/pvb refresh failed rc=${bvp_rc}; continuing"
+    fi
+  else
+    echo "[prod12-cron] daily bvp/pvb refresh disabled (MLB_DAILY_BVP_PVB_ENABLED=${MLB_DAILY_BVP_PVB_ENABLED})"
   fi
 
   if [[ "${MLB_DAILY_STAT_DERIVED_ENABLED}" == "1" ]]; then

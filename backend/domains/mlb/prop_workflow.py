@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
@@ -39,6 +40,32 @@ _DERIVED_BASE_PROPS = {
     "runs_rbis",
     "rbis",
 }
+_BVP_ALIAS_TO_CANONICAL = {
+    "bvp_pa_prior": "bvp_plate_appearances",
+    "bvp_ab_prior": "bvp_at_bats",
+    "bvp_hits_prior": "bvp_hits",
+    "bvp_hr_prior": "bvp_home_runs",
+    "bvp_bb_prior": "bvp_walks",
+    "bvp_so_prior": "bvp_strikeouts",
+    "bvp_tb_prior": "bvp_total_bases",
+}
+_BVP_CANONICAL_KEYS = {
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_home_runs",
+    "bvp_rbi",
+    "bvp_strikeouts",
+    "bvp_walks",
+    "bvp_total_bases",
+}
+
+
+def _env_enabled(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def normalize_prop_type(prop_type: str) -> str:
@@ -93,6 +120,102 @@ LIMIT 1
     ) or {}
     stats = row.get("stats")
     return stats if isinstance(stats, dict) else {}
+
+
+def _load_latest_pfp_features(
+    *,
+    prop_type: str,
+    player_id: int,
+    game_id: Optional[int],
+    game_date: str,
+    feature_set_tag: str,
+) -> Dict[str, Any]:
+    row = pg_fetchone(
+        """
+SELECT pfp.features
+FROM mlb.prop_features_precomputed pfp
+WHERE pfp.prop_type = %s
+  AND pfp.player_id = %s
+  AND pfp.feature_set_tag = %s
+  AND (
+    (%s::int IS NOT NULL AND pfp.game_id = %s::int)
+    OR pfp.game_date::date <= %s::date
+  )
+ORDER BY
+  CASE WHEN %s::int IS NOT NULL AND pfp.game_id = %s::int THEN 1 ELSE 0 END DESC,
+  pfp.game_date DESC NULLS LAST
+LIMIT 1
+""",
+        (
+            str(prop_type),
+            int(player_id),
+            str(feature_set_tag),
+            game_id,
+            game_id,
+            str(game_date),
+            game_id,
+            game_id,
+        ),
+    ) or {}
+    features = row.get("features")
+    return features if isinstance(features, dict) else {}
+
+
+def _hydrate_bvp_feature_snapshot(
+    *,
+    prop_type: str,
+    player_id: int,
+    game_id: Optional[int],
+    game_date: str,
+) -> Dict[str, Any]:
+    if not _env_enabled("MLB_BVP_FEATURES_ENABLED", True):
+        return {}
+
+    feature_set_tag = (
+        os.getenv("MLB_BVP_FEATURE_SET_TAG")
+        or os.getenv("MLB_PFP_OVERLAP_FEATURE_SET_TAG")
+        or "v1"
+    )
+    try:
+        features = _load_latest_pfp_features(
+            prop_type=prop_type,
+            player_id=player_id,
+            game_id=game_id,
+            game_date=game_date,
+            feature_set_tag=feature_set_tag,
+        )
+    except Exception:
+        return {}
+    if not features:
+        return {}
+
+    out: Dict[str, Any] = {}
+
+    # Keep direct bvp_* payloads from prop_features_precomputed.
+    for k, v in features.items():
+        key = str(k)
+        if not key.startswith("bvp_"):
+            continue
+        if _is_missing(v):
+            continue
+        out[key] = _to_float(v, 0.0)
+
+    # Normalize legacy aliases into canonical keys expected by feature metadata.
+    for alias, canonical in _BVP_ALIAS_TO_CANONICAL.items():
+        if _is_missing(out.get(canonical)) and not _is_missing(out.get(alias)):
+            out[canonical] = _to_float(out.get(alias), 0.0)
+
+    # Mirror canonical keys back to aliases for backward compatibility.
+    for alias, canonical in _BVP_ALIAS_TO_CANONICAL.items():
+        if _is_missing(out.get(alias)) and not _is_missing(out.get(canonical)):
+            out[alias] = _to_float(out.get(canonical), 0.0)
+
+    # Ensure all canonical keys are present when we have any BvP payload.
+    for canonical in _BVP_CANONICAL_KEYS:
+        if canonical not in out:
+            out[canonical] = 0.0
+
+    return out
 
 
 def _derive_combo_stat(stats: Dict[str, Any], horizon: str, target_prop: str) -> Optional[float]:
@@ -284,6 +407,17 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
         prop_type=prop_type,
     )
     for k, v in derived.items():
+        if _is_missing(features.get(k)):
+            features[k] = v
+
+    # Hydrate BvP/PvB precomputed payloads from prop_features_precomputed.
+    bvp_features = _hydrate_bvp_feature_snapshot(
+        prop_type=prop_type,
+        player_id=int(player_id),
+        game_id=resolved_game_id,
+        game_date=game_date,
+    )
+    for k, v in bvp_features.items():
         if _is_missing(features.get(k)):
             features[k] = v
 

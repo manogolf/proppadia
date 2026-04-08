@@ -21,7 +21,7 @@ Date reference: this runbook was aligned on February 17, 2026.
   - `make mlb-insert-stat-derived`
   - `make mlb-stat-derived-refresh`
   - `make mlb-stat-derived-backfill`
-  - `make mlb-daily-refresh`
+  - `make mlb-daily-refresh` (also runs `mlb-bvp-pvb-refresh` and `mlb-bvp-impact-report` unless disabled)
 
 ## Render Shell Quickstart
 
@@ -116,6 +116,20 @@ MLB_POLICY_PLAN_ENABLED=0 \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
+Daily BvP/PvB prediction impact check (watch whether BvP is moving probabilities):
+
+```bash
+source backend/.env
+MLB_BVP_IMPACT_LABEL_DATE="$(TZ=America/New_York date +%F)" \
+make mlb-bvp-impact-report
+```
+
+`make mlb-daily-refresh` now runs this monitor automatically by default.
+Controls:
+
+- `MLB_DAILY_BVP_IMPACT_ENABLED=1` (default on)
+- `MLB_DAILY_BVP_IMPACT_REQUIRED=0` (warn-only on failure; set `1` to fail the daily run)
+
 Optional single-filter variant (emit only sides with model probability >=51%):
 
 ```bash
@@ -123,6 +137,41 @@ MLB_POLICY_PLAN_ENABLED=0 \
 MLB_BOOK_UPLOAD_MIN_SIDE_PROB=0.51 \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
+
+One-command side-matrix upload (no EV/gap policy filters; builds model+fade bucket reports, computes preferred side per bucket, and writes upload CSV):
+
+```bash
+make mlb-book-upload-side-matrix \
+  MLB_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag
+```
+
+Selection behavior (default `MLB_BOOK_UPLOAD_SIDE_MATRIX_SELECTION_MODE=all-qualified`):
+
+- Includes **model** plays whose own market-odds bucket is marked `model + play`.
+- Includes **fade** plays whose own market-odds bucket is marked `fade + play`.
+- If both sides qualify for the same player/market/line, both rows are emitted.
+- `WIN %` remains model fair odds; market-odds provenance is recorded in the details CSV.
+
+Optional refresh (rebuild model/fade bucket reports before export):
+
+```bash
+make mlb-book-upload-side-matrix \
+  MLB_BOOK_UPLOAD_SIDE_MATRIX_REFRESH_REPORTS=1 \
+  MLB_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag
+```
+
+Outputs:
+
+- `backend/mlb/data/processed/mlb_book_upload_side_matrix.csv`
+- `tmp/analysis/mlb_book_upload_side_matrix_YYYYMMDD.csv`
+- `tmp/analysis/mlb_book_upload_side_matrix_details_YYYYMMDD.csv`
+- `tmp/analysis/mlb_red_mode_side_matrix.csv`
 
 Policy-on variant (optional legacy behavior):
 
@@ -668,11 +717,13 @@ Use this when you want retrain/recompute cadence to run on your machine (not Ren
 This LaunchAgent runs the local daily chain end-to-end:
 
 - roster refresh
+- BvP/PvB refresh (writes into `mlb.prop_features_precomputed`)
 - stat-derived refresh
 - rolling integrity check (`PASS/FAIL` for d7/d15/d30 coverage + movement)
 - `mlb-predictions-wide`
 - `mlb-slate-output`
 - `mlb-book-upload` (forced local build; remote fetch flags are set to `0`)
+- `mlb-bvp-impact-report` (BvP on/off probability-delta summary + history append)
 - `mlb-prod12-track-daily` + `mlb-prod12-ops-log` (local daily history snapshots; best effort)
 
 Create/update runner script:
@@ -699,6 +750,9 @@ echo "[$(date -u +%FT%TZ)] START local daily MLB refresh+capture (MLB_DATE_ET=${
 MLB_ROSTER_DATE="$MLB_DATE_ET" \
 make mlb-roster-refresh-all
 
+MLB_BVP_DATE="$MLB_DATE_ET" \
+make mlb-bvp-pvb-refresh
+
 MLB_STAT_DAYS_AGO=2 \
 MLB_STAT_SKIP_EXISTING_DATES=1 \
 MLB_STAT_DERIVED_DAYS=7 \
@@ -718,6 +772,9 @@ MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=0 \
 MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=0 \
 MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY=0 \
 make mlb-book-upload MLB_DATE="$MLB_DATE_ET"
+
+MLB_BVP_IMPACT_LABEL_DATE="$MLB_DATE_ET" \
+make mlb-bvp-impact-report
 
 # 3) Append local prod12 daily history snapshots (best effort).
 if [[ "${MLB_LOCAL_DAILY_TRACKING_ENABLED}" == "1" ]]; then
@@ -748,6 +805,8 @@ History outputs written locally:
 
 - `artifacts/mlb_pipeline_history.jsonl`
 - `artifacts/mlb_prod12_ops_history.jsonl`
+- `artifacts/analysis/mlb/mlb_bvp_impact_latest.json`
+- `artifacts/analysis/mlb/mlb_bvp_impact_history.jsonl`
 
 Create daily LaunchAgent (example: three runs to catch later-game odds movement):
 

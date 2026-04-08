@@ -87,6 +87,14 @@ MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON ?= tmp/analysis/mlb_red_mode_fade_odds_buck
 MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV ?= tmp/analysis/mlb_red_mode_fade_odds_bucket_by_bucket.csv
 MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV ?= tmp/analysis/mlb_red_mode_fade_odds_bucket_focus.csv
 MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT ?= 0
+MLB_RED_SIDE_MATRIX_OUT_CSV ?= tmp/analysis/mlb_red_mode_side_matrix.csv
+MLB_BOOK_UPLOAD_SIDE_MATRIX_BOOKMAKER ?= $(MLB_RED_BUCKET_BOOKMAKER)
+MLB_BOOK_UPLOAD_SIDE_MATRIX_ALLOWED_STATUSES ?= play
+MLB_BOOK_UPLOAD_SIDE_MATRIX_SELECTION_MODE ?= all-qualified
+MLB_BOOK_UPLOAD_SIDE_MATRIX_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_side_matrix.csv
+MLB_BOOK_UPLOAD_SIDE_MATRIX_DATED_OUT_CSV ?= tmp/analysis/mlb_book_upload_side_matrix_$(subst -,,$(MLB_DATE)).csv
+MLB_BOOK_UPLOAD_SIDE_MATRIX_DETAILS_OUT_CSV ?= tmp/analysis/mlb_book_upload_side_matrix_details_$(subst -,,$(MLB_DATE)).csv
+MLB_BOOK_UPLOAD_SIDE_MATRIX_REFRESH_REPORTS ?= 0
 MLB_GRADED_IN_CSV ?=
 MLB_GRADED_ROWS_OUT_CSV ?= tmp/analysis/mlb_graded_wagers_rows.csv
 MLB_GRADED_SUMMARY_OUT_JSON ?= tmp/analysis/mlb_graded_wagers_summary.json
@@ -118,6 +126,8 @@ MLB_POLICY_MONITOR_MIN_BETS_ALERT ?= 30
 MLB_WIDE_PROP_TYPES ?=
 MLB_WIDE_REQUIRE_MIN_ROWS ?= 1
 MLB_DAILY_INCLUDE_CAPTURE ?= 1
+MLB_DAILY_BVP_IMPACT_ENABLED ?= 1
+MLB_DAILY_BVP_IMPACT_REQUIRED ?= 0
 MLB_ROSTER_DATE ?= $(shell date +%F)
 NHL_ROSTER_DATE ?= $(shell date +%F)
 MLB_STAT_DERIVED_DAYS ?= 7
@@ -193,6 +203,23 @@ MLB_PFP_OVERLAP_FROM_DATE ?=
 MLB_PFP_OVERLAP_TO_DATE ?=
 MLB_PFP_OVERLAP_LIMIT ?= 0
 MLB_PFP_OVERLAP_BATCH_SIZE ?= 1000
+MLB_BVP_DATE ?= $(MLB_DATE_ET)
+MLB_BVP_FROM_DATE ?=
+MLB_BVP_TO_DATE ?=
+MLB_BVP_FEATURE_SET_TAG ?= $(MLB_PFP_OVERLAP_FEATURE_SET_TAG)
+MLB_BVP_MODEL_TAG ?= bvp_pvb_refresh_v1
+MLB_BVP_BATCH_SIZE ?= 1000
+MLB_BVP_REQUEST_TIMEOUT_SEC ?= 20
+MLB_BVP_DRY_RUN ?= 0
+MLB_DAILY_BVP_PVB_ENABLED ?= 1
+MLB_BVP_IMPACT_SLATE_CSV ?= $(MLB_SLATE_OUTPUT_CSV)
+MLB_BVP_IMPACT_WIDE_CSV ?= $(MLB_SLATE_PRED_CSV)
+MLB_BVP_IMPACT_OUT_JSON ?= artifacts/analysis/mlb/mlb_bvp_impact_latest.json
+MLB_BVP_IMPACT_OUT_CSV ?= tmp/analysis/mlb_bvp_impact_rows.csv
+MLB_BVP_IMPACT_HISTORY_JSONL ?= artifacts/analysis/mlb/mlb_bvp_impact_history.jsonl
+MLB_BVP_IMPACT_LABEL_DATE ?= $(MLB_DATE_ET)
+MLB_BVP_IMPACT_MAX_ROWS ?= 0
+MLB_BVP_IMPACT_REQUIRE_DB ?= 1
 MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT ?= 60
 MLB_MODEL_ROOT ?= $(if $(MODEL_DIR),$(MODEL_DIR),/var/data/proppadia/models)
 MLB_MODEL_LATEST_DIR ?= $(MLB_MODEL_ROOT)/latest
@@ -374,7 +401,7 @@ SEASON_CUTOVER_HISTORY_INPUT ?= artifacts/season_cutover_history.jsonl
 .PHONY: mlb-retrain-broad-reconcile
 .PHONY: mlb-prod12-model-bundle-publish
 .PHONY: mlb-odds-backfill-history
-.PHONY: mlb-red-mode-bucket-report mlb-red-mode-fade-bucket-report mlb-red-mode-bucket-report-combined
+.PHONY: mlb-red-mode-bucket-report mlb-red-mode-fade-bucket-report mlb-red-mode-bucket-report-combined mlb-book-upload-side-matrix mlb-bvp-impact-report
 
 help:
 	@echo "Proppadia checks"
@@ -393,6 +420,7 @@ help:
 	@echo "  make mlb-graded-wagers-report MLB_GRADED_IN_CSV=tmp/graded/8rainstation_daily_YYYY-MM-DD_mlb_player_props.csv [placed graded-wager summary + by-prop]"
 	@echo "  make mlb-graded-wagers-report-latest [auto-pick latest split MLB player-props grader csv from tmp/graded]"
 	@echo "  make mlb-book-upload-top-recommended [adaptive top-N from current book upload + recent post-grade tracker]"
+	@echo "  make mlb-book-upload-side-matrix [one-command side-matrix upload; no EV/gap policy filters]"
 	@echo "  make mlb-post-grade-step7 [split latest grader download + run full MLB post-grade tracking for that slate date]"
 	@echo "  make mlb-post-grade-next-day [one-step post-grade bundle after next-day cron]"
 	@echo "  make mlb-post-grade-report-and-track-latest [all-available + model-vs-fade + graded wagers merged into tracker/charts]"
@@ -474,6 +502,8 @@ help:
 	@echo "  make mlb-feature-health-prod12 [same feature-health report scoped to production-12 lanes]"
 	@echo "  make mlb-pfp-overlap-audit [report missing prop_features_precomputed overlap for selected props/window]"
 	@echo "  make mlb-pfp-overlap-backfill [upsert missing prop_features_precomputed rows from reconciled model_training_props]"
+	@echo "  make mlb-bvp-pvb-refresh [refresh daily BvP/PvB feature payloads into prop_features_precomputed]"
+	@echo "  make mlb-bvp-impact-report [compare slate probabilities with BvP on vs off; writes latest+history impact artifacts]"
 	@echo "  make mlb-balance-guard [single-prop one-sided drift guard (default runs_scored)]"
 	@echo "  make mlb-prediction-quality-user-added [user_added-only quality summary json]"
 	@echo "  make mlb-prediction-quality-segmented [preseason vs regular-season date-window quality report]"
@@ -527,7 +557,7 @@ help:
 	@echo "  make mlb-prop-coverage [recent prop-type coverage and graded volume]"
 	@echo "  make mlb-prop-coverage-core [core 12 prop coverage guard]"
 	@echo "  make mlb-player-surface-checks [focused player lookup/search/profile regression suite]"
-	@echo "  make mlb-daily-refresh [daily baseline; cache+roster+stat-derived]"
+	@echo "  make mlb-daily-refresh [daily baseline; cache+roster+bvp/pvb+stat-derived+capture+bvp-impact monitor]"
 	@echo "  make mlb-daily-refresh-strict [daily baseline + require stat-derived min=1]"
 	@echo "  make mlb-daily-refresh-smoke [daily baseline smoke; forces MLB_STAT_MAX_GAMES=1]"
 	@echo "  make mlb-ops-check BASE_URL=<url> [ops confidence loop: config+daily-smoke+post-deploy]"
@@ -1000,6 +1030,26 @@ mlb-market-cache-refresh:
 mlb-roster-refresh-all:
 	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_players_rosters --date $(MLB_ROSTER_DATE)
 
+.PHONY: mlb-bvp-pvb-refresh
+
+# Refresh BvP/PvB features and merge into mlb.prop_features_precomputed.
+mlb-bvp-pvb-refresh:
+	@if [ -n "$(MLB_BVP_FROM_DATE)" ] || [ -n "$(MLB_BVP_TO_DATE)" ]; then \
+		if [ -z "$(MLB_BVP_FROM_DATE)" ] || [ -z "$(MLB_BVP_TO_DATE)" ]; then \
+			echo "mlb-bvp-pvb-refresh requires both MLB_BVP_FROM_DATE and MLB_BVP_TO_DATE when range mode is used"; \
+			exit 2; \
+		fi; \
+		$(VENV_PY) backend/mlb/scripts/refresh_mlb_bvp_pvb.py --from-date "$(MLB_BVP_FROM_DATE)" --to-date "$(MLB_BVP_TO_DATE)" --feature-set-tag "$(MLB_BVP_FEATURE_SET_TAG)" --model-tag "$(MLB_BVP_MODEL_TAG)" --batch-size "$(MLB_BVP_BATCH_SIZE)" --request-timeout-sec "$(MLB_BVP_REQUEST_TIMEOUT_SEC)" $(if $(filter 1,$(MLB_BVP_DRY_RUN)),--dry-run,); \
+	else \
+		$(VENV_PY) backend/mlb/scripts/refresh_mlb_bvp_pvb.py --date "$(MLB_BVP_DATE)" --feature-set-tag "$(MLB_BVP_FEATURE_SET_TAG)" --model-tag "$(MLB_BVP_MODEL_TAG)" --batch-size "$(MLB_BVP_BATCH_SIZE)" --request-timeout-sec "$(MLB_BVP_REQUEST_TIMEOUT_SEC)" $(if $(filter 1,$(MLB_BVP_DRY_RUN)),--dry-run,); \
+	fi
+
+.PHONY: mlb-bvp-impact-report
+
+# Compare prediction probabilities with BvP/PvB hydration enabled vs disabled.
+mlb-bvp-impact-report:
+	$(VENV_PY) backend/mlb/scripts/report_mlb_bvp_impact.py --slate-csv "$(MLB_BVP_IMPACT_SLATE_CSV)" --wide-csv "$(MLB_BVP_IMPACT_WIDE_CSV)" --out-json "$(MLB_BVP_IMPACT_OUT_JSON)" --out-csv "$(MLB_BVP_IMPACT_OUT_CSV)" --history-jsonl "$(MLB_BVP_IMPACT_HISTORY_JSONL)" --label-date "$(MLB_BVP_IMPACT_LABEL_DATE)" --max-rows "$(MLB_BVP_IMPACT_MAX_ROWS)" --require-db "$(MLB_BVP_IMPACT_REQUIRE_DB)"
+
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",) $(if $(strip $(MLB_ODDS_SNAPSHOT_IN)),--odds-snapshot-in "$(MLB_ODDS_SNAPSHOT_IN)",)
@@ -1018,6 +1068,16 @@ mlb-book-upload:
 	else \
 		$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_ARCHIVE_RUN_TAG="$(MLB_ARCHIVE_RUN_TAG)"; \
 	fi
+
+# One-command side-matrix upload build (no EV/gap policy filters).
+# 1) (optional) refresh cumulative model+fade bucket reports
+# 2) build side matrix (preferred model/fade side by odds bucket)
+# 3) emit tool-ready upload CSV for today's slate
+mlb-book-upload-side-matrix:
+	@if [ "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_REFRESH_REPORTS)" = "1" ]; then \
+		$(MAKE) mlb-red-mode-bucket-report-combined MLB_RED_BUCKET_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RED_BUCKET_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RED_BUCKET_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RED_BUCKET_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RED_BUCKET_ROWS_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_BY_BUCKET_OUT_CSV="$(MLB_RED_BUCKET_BY_BUCKET_OUT_CSV)" MLB_RED_BUCKET_FOCUS_OUT_CSV="$(MLB_RED_BUCKET_FOCUS_OUT_CSV)" MLB_RED_BUCKET_FOCUS_BUCKETS="$(MLB_RED_BUCKET_FOCUS_BUCKETS)" MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV="$(MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV)" MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV="$(MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV)" MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT="$(MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT)"; \
+	fi
+	$(VENV_PY) backend/mlb/scripts/export_mlb_book_upload_side_matrix.py --model-buckets-csv "$(MLB_RED_BUCKET_BY_BUCKET_OUT_CSV)" --fade-buckets-csv "$(MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV)" --side-matrix-out-csv "$(MLB_RED_SIDE_MATRIX_OUT_CSV)" --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --slate-date "$(MLB_DATE)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" --odds-history-root "$(MLB_ODDS_HISTORY_ROOT)" --bookmaker "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_BOOKMAKER)" --allowed-statuses "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_ALLOWED_STATUSES)" --selection-mode "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_SELECTION_MODE)" --out-csv "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_OUT_CSV)" --dated-out-csv "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_DATED_OUT_CSV)" --details-out-csv "$(MLB_BOOK_UPLOAD_SIDE_MATRIX_DETAILS_OUT_CSV)"
 
 # Build adaptive top-N recommendation from current book upload + recent post-grade history.
 mlb-book-upload-top-recommended:
@@ -1268,6 +1328,25 @@ mlb-show-config:
 	@echo "MLB_WIDE_PROP_TYPES=$(MLB_WIDE_PROP_TYPES)"
 	@echo "MLB_WIDE_REQUIRE_MIN_ROWS=$(MLB_WIDE_REQUIRE_MIN_ROWS)"
 	@echo "MLB_DAILY_INCLUDE_CAPTURE=$(MLB_DAILY_INCLUDE_CAPTURE)"
+	@echo "MLB_DAILY_BVP_IMPACT_ENABLED=$(MLB_DAILY_BVP_IMPACT_ENABLED)"
+	@echo "MLB_DAILY_BVP_IMPACT_REQUIRED=$(MLB_DAILY_BVP_IMPACT_REQUIRED)"
+	@echo "MLB_DAILY_BVP_PVB_ENABLED=$(MLB_DAILY_BVP_PVB_ENABLED)"
+	@echo "MLB_BVP_DATE=$(MLB_BVP_DATE)"
+	@echo "MLB_BVP_FROM_DATE=$(MLB_BVP_FROM_DATE)"
+	@echo "MLB_BVP_TO_DATE=$(MLB_BVP_TO_DATE)"
+	@echo "MLB_BVP_FEATURE_SET_TAG=$(MLB_BVP_FEATURE_SET_TAG)"
+	@echo "MLB_BVP_MODEL_TAG=$(MLB_BVP_MODEL_TAG)"
+	@echo "MLB_BVP_BATCH_SIZE=$(MLB_BVP_BATCH_SIZE)"
+	@echo "MLB_BVP_REQUEST_TIMEOUT_SEC=$(MLB_BVP_REQUEST_TIMEOUT_SEC)"
+	@echo "MLB_BVP_DRY_RUN=$(MLB_BVP_DRY_RUN)"
+	@echo "MLB_BVP_IMPACT_SLATE_CSV=$(MLB_BVP_IMPACT_SLATE_CSV)"
+	@echo "MLB_BVP_IMPACT_WIDE_CSV=$(MLB_BVP_IMPACT_WIDE_CSV)"
+	@echo "MLB_BVP_IMPACT_OUT_JSON=$(MLB_BVP_IMPACT_OUT_JSON)"
+	@echo "MLB_BVP_IMPACT_OUT_CSV=$(MLB_BVP_IMPACT_OUT_CSV)"
+	@echo "MLB_BVP_IMPACT_HISTORY_JSONL=$(MLB_BVP_IMPACT_HISTORY_JSONL)"
+	@echo "MLB_BVP_IMPACT_LABEL_DATE=$(MLB_BVP_IMPACT_LABEL_DATE)"
+	@echo "MLB_BVP_IMPACT_MAX_ROWS=$(MLB_BVP_IMPACT_MAX_ROWS)"
+	@echo "MLB_BVP_IMPACT_REQUIRE_DB=$(MLB_BVP_IMPACT_REQUIRE_DB)"
 	@echo "MLB_ROSTER_DATE=$(MLB_ROSTER_DATE)"
 	@echo "MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO)"
 	@echo "MLB_STAT_FROM_DATE=$(MLB_STAT_FROM_DATE)"
@@ -1820,11 +1899,17 @@ mlb-daily-capture:
 	$(MAKE) mlb-slate-output MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_SLATE_PROP_TYPE="$(MLB_SLATE_PROP_TYPE)"
 	$(MAKE) mlb-book-upload MLB_DATE="$(MLB_DATE)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)"
 
-# One-command MLB daily refresh baseline (cache + rosters + stat-derived + guard + optional capture).
+# One-command MLB daily refresh baseline (cache + rosters + bvp/pvb + stat-derived + guard + optional capture).
 mlb-daily-refresh:
 	$(MAKE) mlb-show-config
 	$(MAKE) mlb-market-cache-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS)
 	$(MAKE) mlb-roster-refresh-all MLB_ROSTER_DATE=$(MLB_ROSTER_DATE)
+	@if [ "$(MLB_DAILY_BVP_PVB_ENABLED)" = "1" ]; then \
+		echo "mlb-daily-refresh: running bvp/pvb refresh"; \
+		$(MAKE) mlb-bvp-pvb-refresh MLB_BVP_DATE="$(MLB_DATE_ET)" MLB_BVP_FEATURE_SET_TAG="$(MLB_BVP_FEATURE_SET_TAG)" MLB_BVP_MODEL_TAG="$(MLB_BVP_MODEL_TAG)" MLB_BVP_BATCH_SIZE="$(MLB_BVP_BATCH_SIZE)" MLB_BVP_REQUEST_TIMEOUT_SEC="$(MLB_BVP_REQUEST_TIMEOUT_SEC)"; \
+	else \
+		echo "mlb-daily-refresh: skipping bvp/pvb refresh (MLB_DAILY_BVP_PVB_ENABLED=$(MLB_DAILY_BVP_PVB_ENABLED))"; \
+	fi
 	$(MAKE) mlb-stat-derived-refresh MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN)
 	@if [ "$(MLB_DAILY_INCLUDE_CAPTURE)" = "1" ]; then \
 		echo "mlb-daily-refresh: running daily capture lane"; \
@@ -1832,14 +1917,30 @@ mlb-daily-refresh:
 	else \
 		echo "mlb-daily-refresh: skipping capture (MLB_DAILY_INCLUDE_CAPTURE=$(MLB_DAILY_INCLUDE_CAPTURE))"; \
 	fi
+	@if [ "$(MLB_DAILY_BVP_IMPACT_ENABLED)" = "1" ]; then \
+		echo "mlb-daily-refresh: running bvp/pvb impact monitor"; \
+		set +e; \
+		$(MAKE) mlb-bvp-impact-report MLB_BVP_IMPACT_LABEL_DATE="$(MLB_DATE)" MLB_BVP_IMPACT_SLATE_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BVP_IMPACT_WIDE_CSV="$(MLB_SLATE_PRED_CSV)"; \
+		impact_rc=$$?; \
+		set -e; \
+		if [ "$$impact_rc" -ne 0 ]; then \
+			if [ "$(MLB_DAILY_BVP_IMPACT_REQUIRED)" = "1" ]; then \
+				echo "mlb-daily-refresh: bvp/pvb impact monitor failed rc=$$impact_rc"; \
+				exit "$$impact_rc"; \
+			fi; \
+			echo "mlb-daily-refresh: WARN bvp/pvb impact monitor failed rc=$$impact_rc; continuing"; \
+		fi; \
+	else \
+		echo "mlb-daily-refresh: skipping bvp/pvb impact monitor (MLB_DAILY_BVP_IMPACT_ENABLED=$(MLB_DAILY_BVP_IMPACT_ENABLED))"; \
+	fi
 
 # Strict daily baseline: enforces stat-derived volume guard.
 mlb-daily-refresh-strict:
-	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=1 MLB_DAILY_INCLUDE_CAPTURE=$(MLB_DAILY_INCLUDE_CAPTURE)
+	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_DAILY_BVP_PVB_ENABLED=$(MLB_DAILY_BVP_PVB_ENABLED) MLB_BVP_FEATURE_SET_TAG="$(MLB_BVP_FEATURE_SET_TAG)" MLB_BVP_MODEL_TAG="$(MLB_BVP_MODEL_TAG)" MLB_BVP_BATCH_SIZE="$(MLB_BVP_BATCH_SIZE)" MLB_BVP_REQUEST_TIMEOUT_SEC="$(MLB_BVP_REQUEST_TIMEOUT_SEC)" MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=$(MLB_STAT_MAX_GAMES) MLB_STAT_SKIP_EXISTING_DATES=$(MLB_STAT_SKIP_EXISTING_DATES) MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=1 MLB_DAILY_INCLUDE_CAPTURE=$(MLB_DAILY_INCLUDE_CAPTURE) MLB_DAILY_BVP_IMPACT_ENABLED=$(MLB_DAILY_BVP_IMPACT_ENABLED) MLB_DAILY_BVP_IMPACT_REQUIRED=$(MLB_DAILY_BVP_IMPACT_REQUIRED)
 
 # Daily baseline smoke mode: quick end-to-end validation with max one game/date.
 mlb-daily-refresh-smoke:
-	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=1 MLB_STAT_SKIP_EXISTING_DATES=0 MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN) MLB_DAILY_INCLUDE_CAPTURE=0
+	$(MAKE) mlb-daily-refresh MLB_MARKET_DAYS=$(MLB_MARKET_DAYS) MLB_ROSTER_DATE=$(MLB_ROSTER_DATE) MLB_DAILY_BVP_PVB_ENABLED=0 MLB_STAT_DAYS_AGO=$(MLB_STAT_DAYS_AGO) MLB_STAT_FROM_DATE="$(MLB_STAT_FROM_DATE)" MLB_STAT_TO_DATE="$(MLB_STAT_TO_DATE)" MLB_STAT_MAX_GAMES=1 MLB_STAT_SKIP_EXISTING_DATES=0 MLB_STAT_BATTER_SAMPLE_RATIO=$(MLB_STAT_BATTER_SAMPLE_RATIO) MLB_STAT_DERIVED_DAYS=$(MLB_STAT_DERIVED_DAYS) MLB_STAT_DERIVED_MIN=$(MLB_STAT_DERIVED_MIN) MLB_DAILY_INCLUDE_CAPTURE=0 MLB_DAILY_BVP_IMPACT_ENABLED=0
 
 # Ops confidence loop for MLB: config snapshot + quick daily smoke + deployed API smoke.
 mlb-ops-check:
