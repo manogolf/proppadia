@@ -900,6 +900,7 @@ make mlb-retrain-prereq-check
 make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="2025-03-01" MLB_RECONCILE_TO_DATE="$(date -u +%F)" MLB_RECONCILE_BOOKMAKER= MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
 make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0 MLB_RETRAIN_QUALITY_MIN_TOTAL=600 MLB_CANDIDATE_MIN_TOTAL=1000 MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
 make mlb-prod12-model-bundle-publish
+make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL="${MLB_BASE_URL:-}" MLB_DATE="$(date -u +%F)" MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
 echo "[$(date -u +%FT%TZ)] DONE weekly retrain cadence"
 EOF
 
@@ -911,8 +912,11 @@ chmod +x "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
 
 Notes:
 
-- Because the script runs with `set -e`, publish only runs if prior retrain/eval steps pass.
+- Because the script runs with `set -e`, publish and phase2 weekly logging only run if prior retrain/eval steps pass.
 - Ensure publish credentials are present in `backend/.env` (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`).
+- `mlb-prod12-phase2-weekly-cycle` writes `artifacts/mlb_prod12_phase2_history.jsonl`, which keeps `make mlb-prod12-status-strict` from going `weekly_stale`.
+- Phase2 cycle should use the same early-season candidate overrides as retrain (`MLB_PROD12_CANDIDATE_REQUIRED_PROPS` and `MLB_PROD12_MAX_PROP_DROP_PCT=12`) to avoid false weekly gate failures.
+- `MLB_BASE_URL` defaults empty here, which uses local in-process replay (more resilient than external 5xx from Render); set `MLB_BASE_URL` explicitly if you want remote replay checks.
 - `MLB_RETRAIN_QUALITY_MIN_TOTAL=600` avoids early-season false-fail on low resolved row counts; raise it back toward `1000` once coverage is consistently higher.
 - Early-season candidate gate override keeps weekly cadence moving with current reconcile coverage:
   - `MLB_CANDIDATE_MIN_TOTAL=1000`
