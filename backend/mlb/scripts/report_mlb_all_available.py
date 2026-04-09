@@ -47,6 +47,7 @@ def main() -> int:
             "window": {"game_date_min": None, "game_date_max": None},
             "counts": {
                 "rows_input": 0,
+                "rows_two_sided_prices": 0,
                 "rows_resolved_any": 0,
                 "rows_resolved_two_sided": 0,
                 "rows_with_model_pick_result": 0,
@@ -71,6 +72,8 @@ def main() -> int:
         "actual_over_outcome",
         "actual_under_outcome",
         "actual_model_pick_outcome",
+        "price_over_american",
+        "price_under_american",
     ):
         if col not in df.columns:
             df[col] = pd.NA
@@ -79,10 +82,19 @@ def main() -> int:
     df["actual_under_outcome"] = _normalize_text(df["actual_under_outcome"])
     df["actual_model_pick_outcome"] = _normalize_text(df["actual_model_pick_outcome"])
     df["prop_type"] = _normalize_text(df["prop_type"])
+    df["price_over_american"] = pd.to_numeric(df["price_over_american"], errors="coerce")
+    df["price_under_american"] = pd.to_numeric(df["price_under_american"], errors="coerce")
 
-    resolved_any_mask = df["actual_over_outcome"].isin(RESOLVED_OUTCOMES) | df["actual_under_outcome"].isin(RESOLVED_OUTCOMES)
-    resolved_two_mask = df["actual_over_outcome"].isin(RESOLVED_OUTCOMES) & df["actual_under_outcome"].isin(RESOLVED_OUTCOMES)
-    model_mask = resolved_any_mask & df["actual_model_pick_outcome"].isin(MODEL_OUTCOMES)
+    # All-available should reflect executable, two-sided market lines only.
+    two_sided_price_mask = df["price_over_american"].notna() & df["price_under_american"].notna()
+
+    resolved_any_mask = two_sided_price_mask & (
+        df["actual_over_outcome"].isin(RESOLVED_OUTCOMES) | df["actual_under_outcome"].isin(RESOLVED_OUTCOMES)
+    )
+    resolved_two_mask = two_sided_price_mask & (
+        df["actual_over_outcome"].isin(RESOLVED_OUTCOMES) & df["actual_under_outcome"].isin(RESOLVED_OUTCOMES)
+    )
+    model_mask = resolved_two_mask & df["actual_model_pick_outcome"].isin(MODEL_OUTCOMES)
 
     resolved_any = df.loc[resolved_any_mask].copy()
     resolved_two = df.loc[resolved_two_mask].copy()
@@ -147,6 +159,7 @@ def main() -> int:
         },
         "counts": {
             "rows_input": int(df.shape[0]),
+            "rows_two_sided_prices": int(two_sided_price_mask.sum()),
             "rows_resolved_any": int(resolved_any.shape[0]),
             "rows_resolved_two_sided": int(resolved_two.shape[0]),
             "rows_with_model_pick_result": model_total,
@@ -167,4 +180,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

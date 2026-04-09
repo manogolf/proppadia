@@ -919,7 +919,7 @@ Notes:
   - `MLB_PROD12_CANDIDATE_REQUIRED_PROPS` excludes `strikeouts_batting` until that market resumes in reconcile rows.
   - `MLB_PROD12_MAX_PROP_DROP_PCT=12` (to avoid false holds on low-volume lanes like `walks`).
 
-2. Create a LaunchAgent plist (example: Monday 6:30 AM local time):
+2. Create a LaunchAgent plist (example: Wednesday 11:05 PM local time, aligned to Thursday 06:05 UTC during PDT):
 
 ```bash
 cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist" <<EOF
@@ -935,9 +935,9 @@ cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist" <<EOF
   <key>WorkingDirectory</key><string>$HOME/Projects/proppadia</string>
   <key>StartCalendarInterval</key>
   <dict>
-    <key>Weekday</key><integer>1</integer>
-    <key>Hour</key><integer>6</integer>
-    <key>Minute</key><integer>30</integer>
+    <key>Weekday</key><integer>3</integer>
+    <key>Hour</key><integer>23</integer>
+    <key>Minute</key><integer>5</integer>
   </dict>
   <key>StandardOutPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.out.log</string>
   <key>StandardErrorPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_retrain_weekly.err.log</string>

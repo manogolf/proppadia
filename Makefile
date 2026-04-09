@@ -165,6 +165,8 @@ MLB_RECOMPUTE_REQUIRE_REGULAR ?= 1
 MLB_RECOMPUTE_FORCE_INVERT_PROPS ?=
 MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP ?= 200
 MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT ?= 45
+# Per-prop gate override (used by looped recompute targets).
+MLB_RECOMPUTE_GATE_MIN_ACCURACY_HITS_RUNS_RBIS_PCT ?= 36
 # Non-blocking recompute lanes (typically derived-only props not consistently market-backed).
 MLB_RECOMPUTE_NON_BLOCKING_PROPS ?= runs_rbis
 MLB_RECOMPUTE_BATCH_PROP_TYPES ?= $(MLB_CORRECTED_PROP_TYPES)
@@ -1474,6 +1476,9 @@ mlb-corrected-props-recompute-gated-batched:
 			if [ -z "$$prop" ]; then continue; fi; \
 			echo "==> recompute gated batch prop=$$prop"; \
 				gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+				case "$$prop" in \
+					hits_runs_rbis) gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_HITS_RUNS_RBIS_PCT)" ;; \
+				esac; \
 				case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
 				MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
 		done; \
@@ -1522,6 +1527,9 @@ mlb-hybrid-window-refresh:
 			fi; \
 			echo "==> hybrid recompute prop=$$prop"; \
 			gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+			case "$$prop" in \
+				hits_runs_rbis) gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_HITS_RUNS_RBIS_PCT)" ;; \
+			esac; \
 			case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
 			MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_HYBRID_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_HYBRID_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
 		done; \
@@ -1558,9 +1566,12 @@ mlb-retrain-broad-reconcile:
 				continue; \
 			fi; \
 			echo "==> broad recompute prop=$$prop"; \
-				gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
-				case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
-				MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
+					gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+					case "$$prop" in \
+						hits_runs_rbis) gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_HITS_RUNS_RBIS_PCT)" ;; \
+					esac; \
+					case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
+					MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
 		done; \
 	IFS="$$OLD_IFS"; \
 		$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_RETRAIN_QUALITY_MIN_TOTAL)"; \
