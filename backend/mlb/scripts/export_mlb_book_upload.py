@@ -468,6 +468,61 @@ def _prob_to_fair_american(prob: float) -> Optional[int]:
     return int(round(100.0 * (1.0 - prob) / prob))
 
 
+def _american_to_implied_probability(price: object) -> Optional[float]:
+    if price is None or pd.isna(price):
+        return None
+    try:
+        p = float(price)
+    except Exception:
+        return None
+    if p == 0:
+        return None
+    if p > 0:
+        return 100.0 / (p + 100.0)
+    return abs(p) / (abs(p) + 100.0)
+
+
+def _select_over_edge_rows(rows: pd.DataFrame, edge_threshold: float = 0.15) -> pd.DataFrame:
+    if rows.empty:
+        return rows.copy()
+
+    out = rows.copy()
+    out["model_prob_over"] = pd.to_numeric(out.get("model_prob_over"), errors="coerce")
+    out["line"] = pd.to_numeric(out.get("line"), errors="coerce")
+    out["price_over_american"] = pd.to_numeric(out.get("price_over_american"), errors="coerce")
+    out["price_under_american"] = pd.to_numeric(out.get("price_under_american"), errors="coerce")
+
+    out["p_market_over_raw"] = out["price_over_american"].map(_american_to_implied_probability)
+    out["p_market_under_raw"] = out["price_under_american"].map(_american_to_implied_probability)
+    denom = out["p_market_over_raw"] + out["p_market_under_raw"]
+    out["p_market_over_novig"] = (out["p_market_over_raw"] / denom).where(denom > 0)
+    out["edge_over_novig"] = out["model_prob_over"] - out["p_market_over_novig"]
+
+    selected = out[
+        out["edge_over_novig"].notna()
+        & out["model_prob_over"].notna()
+        & out["p_market_over_novig"].notna()
+        & out["line"].notna()
+        & (out["edge_over_novig"] >= float(edge_threshold))
+        & (out["model_prob_over"] >= 0.55)
+        & (out["p_market_over_novig"] <= 0.60)
+        & (out["line"] > 0.5)
+    ].copy()
+    if selected.empty:
+        return selected
+
+    selected = selected.sort_values(
+        by=["edge_over_novig", "bookmaker_key"],
+        ascending=[False, True],
+        kind="mergesort",
+    )
+    selected = selected.drop_duplicates(
+        subset=["player_id", "game_id", "prop_type", "line"],
+        keep="first",
+    ).reset_index(drop=True)
+    return selected
+
+
 def _load_market_map(arg_json: str, env_json: str) -> Dict[str, str]:
     out = dict(DEFAULT_MARKET_BY_PROP)
     raw = (arg_json or "").strip() or (env_json or "").strip()
@@ -915,6 +970,12 @@ def main() -> None:
         help="Comma-separated policy actions to include (default: enable,promote).",
     )
     ap.add_argument(
+        "--selection-mode",
+        choices=["policy", "over_edge"],
+        default=str(os.environ.get("MLB_BOOK_UPLOAD_SELECTION_MODE", "policy") or "policy").strip().lower(),
+        help="Selection mode in policy branch (default: policy).",
+    )
+    ap.add_argument(
         "--remote-fetch-first",
         action="store_true",
         help=(
@@ -1001,7 +1062,11 @@ def main() -> None:
         arg_json=str(args.market_map_json),
         env_json=str(os.environ.get("MLB_BOOK_UPLOAD_MARKET_MAP_JSON", "")),
     )
+    selection_mode = str(args.selection_mode or "policy").strip().lower()
+    if selection_mode not in {"policy", "over_edge"}:
+        raise RuntimeError(f"unsupported --selection-mode: {selection_mode}")
     print(f"[mlb-book-upload] slate_date (ET) = {slate_date}")
+    print(f"[mlb-book-upload] selection_mode={selection_mode}")
 
     slate_csv_arg = str(args.slate_csv or "").strip()
     use_slate_output = bool(args.use_slate_output or slate_csv_arg)
@@ -1188,7 +1253,14 @@ def main() -> None:
 
     rows: List[Dict[str, object]] = []
     prob_filtered_rows = 0
+    over_edge_candidate_rows_in = 0
+    over_edge_rows_selected = 0
+    over_edge_avg_edge = float("nan")
+    over_edge_avg_model_prob = float("nan")
+    over_edge_avg_market_prob = float("nan")
     policy_plan_csv = Path(str(args.policy_plan_csv or "").strip()).expanduser() if str(args.policy_plan_csv or "").strip() else None
+    if selection_mode == "over_edge" and policy_plan_csv is None:
+        raise RuntimeError("--selection-mode over_edge requires --policy-plan-csv and --odds-snapshot-json")
     if policy_plan_csv is not None:
         odds_snapshot_raw = str(args.odds_snapshot_json or "").strip()
         if not odds_snapshot_raw:
@@ -1205,30 +1277,61 @@ def main() -> None:
             market_map=market_map,
             include_all_books=True,
         )
-        scored_plan_df = _expand_policy_plan_books_from_candidates(plan_df, candidate_rows)
-        scored = score_policy_plan_rows(
-            candidate_rows,
-            scored_plan_df,
-            require_two_sided=not bool(args.policy_allow_one_sided),
-        )
-        pass_count = int(scored["pass_policy"].sum()) if not scored.empty else 0
-        selected = _select_policy_rows(scored)
-        print(
-            "[mlb-book-upload] policy mode: candidates=",
-            len(candidate_rows),
-            "scored=",
-            len(scored),
-            "pass=",
-            pass_count,
-            "selected=",
-            len(selected),
-        )
+        if selection_mode == "over_edge":
+            selected = _select_over_edge_rows(candidate_rows, edge_threshold=0.15)
+            over_edge_candidate_rows_in = int(len(candidate_rows))
+            over_edge_rows_selected = int(len(selected))
+            if not selected.empty:
+                over_edge_avg_edge = float(pd.to_numeric(selected["edge_over_novig"], errors="coerce").mean())
+                over_edge_avg_model_prob = float(pd.to_numeric(selected["model_prob_over"], errors="coerce").mean())
+                over_edge_avg_market_prob = float(pd.to_numeric(selected["p_market_over_novig"], errors="coerce").mean())
+            print(
+                "[mlb-book-upload] over_edge mode: candidates=",
+                len(candidate_rows),
+                "selected=",
+                len(selected),
+            )
+            if not selected.empty:
+                sample_cols = [
+                    "player_id",
+                    "game_id",
+                    "prop_type",
+                    "line",
+                    "model_prob_over",
+                    "p_market_over_novig",
+                    "edge_over_novig",
+                ]
+                print("[mlb-book-upload] over_edge sample (first 10):")
+                print(selected[sample_cols].head(10).to_string(index=False))
+        else:
+            scored_plan_df = _expand_policy_plan_books_from_candidates(plan_df, candidate_rows)
+            scored = score_policy_plan_rows(
+                candidate_rows,
+                scored_plan_df,
+                require_two_sided=not bool(args.policy_allow_one_sided),
+            )
+            pass_count = int(scored["pass_policy"].sum()) if not scored.empty else 0
+            selected = _select_policy_rows(scored)
+            print(
+                "[mlb-book-upload] policy mode: candidates=",
+                len(candidate_rows),
+                "scored=",
+                len(scored),
+                "pass=",
+                pass_count,
+                "selected=",
+                len(selected),
+            )
 
         for _, row in selected.iterrows():
-            side = str(row.get("plan_side") or "").strip().lower()
-            if side not in {"over", "under"}:
-                continue
-            side_prob = float(row.get("side_model_prob"))
+            if selection_mode == "over_edge":
+                side = "over"
+                side_prob = float(row.get("model_prob_over"))
+            else:
+                side = str(row.get("plan_side") or "").strip().lower()
+                if side not in {"over", "under"}:
+                    continue
+                side_prob = float(row.get("side_model_prob"))
             if not (0.0 < side_prob < 1.0):
                 continue
             if side_prob < min_side_prob:
@@ -1338,6 +1441,16 @@ def main() -> None:
             OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
             out_df.to_csv(OUT_CSV, index=False)
             print(f"[mlb-book-upload] wrote empty policy output to {OUT_CSV}")
+            if selection_mode == "over_edge":
+                print(
+                    "[mlb-book-upload] over_edge summary: "
+                    f"candidate_rows_in={over_edge_candidate_rows_in} "
+                    f"rows_selected={over_edge_rows_selected} "
+                    f"avg_edge_over_novig={over_edge_avg_edge:.6f} "
+                    f"avg_model_prob_over={over_edge_avg_model_prob:.6f} "
+                    f"avg_p_market_over_novig={over_edge_avg_market_prob:.6f} "
+                    f"output_path={OUT_CSV}"
+                )
             return
         print("ERROR: no output rows generated", file=sys.stderr)
         sys.exit(1)
@@ -1358,6 +1471,16 @@ def main() -> None:
             f"[mlb-book-upload] min-side-prob={min_side_prob:.3f} filtered_side_rows={prob_filtered_rows}"
         )
     print(f"[mlb-book-upload] wrote {len(out_df)} rows to {OUT_CSV}")
+    if selection_mode == "over_edge":
+        print(
+            "[mlb-book-upload] over_edge summary: "
+            f"candidate_rows_in={over_edge_candidate_rows_in} "
+            f"rows_selected={over_edge_rows_selected} "
+            f"avg_edge_over_novig={over_edge_avg_edge:.6f} "
+            f"avg_model_prob_over={over_edge_avg_model_prob:.6f} "
+            f"avg_p_market_over_novig={over_edge_avg_market_prob:.6f} "
+            f"output_path={OUT_CSV}"
+        )
 
 
 if __name__ == "__main__":
