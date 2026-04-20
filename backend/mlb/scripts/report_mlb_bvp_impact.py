@@ -17,8 +17,11 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from statistics import mean, median
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+import joblib
 
 from backend.domains.mlb import prop_workflow
 from backend.mlb.prediction import make_prediction as prediction_runtime
@@ -92,18 +95,115 @@ def _append_history(path: str, summary: Dict[str, Any]) -> None:
         fh.write("\n")
 
 
+def _extract_model_input_columns(model: Any) -> List[str]:
+    try:
+        named_steps = getattr(model, "named_steps", None)
+        if not isinstance(named_steps, dict):
+            return []
+        pre = named_steps.get("pre")
+        transformers = getattr(pre, "transformers", None)
+        if not transformers:
+            return []
+    except Exception:
+        return []
+
+    cols: List[str] = []
+    for entry in list(transformers):
+        try:
+            name, _, tcols = entry
+        except Exception:
+            continue
+        if str(name) == "remainder" or tcols is None:
+            continue
+        if isinstance(tcols, (list, tuple)):
+            seq = tcols
+        else:
+            try:
+                seq = list(tcols)
+            except Exception:
+                seq = []
+        for c in seq:
+            sc = str(c)
+            if sc and sc not in cols:
+                cols.append(sc)
+    return cols
+
+
+def _artifact_feature_inventory(prop: str) -> Dict[str, Any]:
+    root_fn = getattr(prediction_runtime, "_artifact_latest_dir", None)  # noqa: SLF001
+    if root_fn is None:
+        return {}
+    try:
+        root = Path(root_fn())
+    except Exception:
+        return {}
+    path = root / f"{prop}.joblib"
+    if not path.exists():
+        return {}
+
+    try:
+        obj = joblib.load(path)
+    except Exception:
+        return {}
+    if not isinstance(obj, dict):
+        return {}
+
+    meta = obj.get("meta") if isinstance(obj.get("meta"), dict) else {}
+    meta_cols: List[str] = []
+    for c in list(meta.get("features_num") or []) + list(meta.get("features_cat") or []):
+        sc = str(c)
+        if sc and sc not in meta_cols:
+            meta_cols.append(sc)
+
+    candidates: List[List[str]] = []
+    for key in ("best", "rf", "lr", "random_forest", "logistic_regression"):
+        cols = _extract_model_input_columns(obj.get(key))
+        if cols:
+            candidates.append(cols)
+    models_block = obj.get("models")
+    if isinstance(models_block, dict):
+        for key in ("best", "rf", "lr", "random_forest", "logistic_regression"):
+            cols = _extract_model_input_columns(models_block.get(key))
+            if cols:
+                candidates.append(cols)
+
+    trained_cols = max(candidates, key=len) if candidates else []
+    inventory_source = "artifact_pipeline"
+    if not trained_cols and meta_cols:
+        trained_cols = meta_cols
+        inventory_source = "artifact_meta"
+
+    return {
+        "artifact_path": str(path),
+        "trained_feature_columns": trained_cols,
+        "inventory_source": inventory_source,
+    }
+
+
 def _model_bvp_feature_inventory(prop_types: Sequence[str]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for prop in sorted({str(p).strip().lower() for p in prop_types if str(p).strip()}):
-        cols = prediction_runtime._input_columns_for(prop) or []  # noqa: SLF001
-        bvp_cols = [str(c) for c in cols if str(c).startswith("bvp_")]
+        configured_cols = prediction_runtime._input_columns_for(prop) or []  # noqa: SLF001
+        configured_bvp_cols = [str(c) for c in configured_cols if str(c).startswith("bvp_")]
+        artifact_info = _artifact_feature_inventory(prop)
+        trained_cols = list(artifact_info.get("trained_feature_columns") or [])
+        trained_bvp_cols = [str(c) for c in trained_cols if str(c).startswith("bvp_")]
+        uses_bvp = len(trained_bvp_cols) > 0 if trained_cols else len(configured_bvp_cols) > 0
         out.append(
             {
                 "prop_type": prop,
-                "feature_count": len(cols),
-                "bvp_feature_count": len(bvp_cols),
-                "bvp_features": bvp_cols,
-                "uses_bvp": len(bvp_cols) > 0,
+                "feature_count": len(configured_cols),
+                "bvp_feature_count": len(configured_bvp_cols),
+                "bvp_features": configured_bvp_cols,
+                "configured_feature_count": len(configured_cols),
+                "configured_bvp_feature_count": len(configured_bvp_cols),
+                "configured_bvp_features": configured_bvp_cols,
+                "trained_feature_count": len(trained_cols),
+                "trained_bvp_feature_count": len(trained_bvp_cols),
+                "trained_bvp_features": trained_bvp_cols,
+                "inventory_source": str(artifact_info.get("inventory_source") or "configured_fallback"),
+                "artifact_path": artifact_info.get("artifact_path"),
+                "uses_bvp": uses_bvp,
             }
         )
     return out

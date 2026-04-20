@@ -21,7 +21,7 @@ Date reference: this runbook was aligned on February 17, 2026.
   - `make mlb-insert-stat-derived`
   - `make mlb-stat-derived-refresh`
   - `make mlb-stat-derived-backfill`
-  - `make mlb-daily-refresh` (also runs `mlb-bvp-pvb-refresh` and `mlb-bvp-impact-report` unless disabled)
+  - `make mlb-daily-refresh` (also runs `mlb-bvp-pvb-refresh`, `mlb-bvp-impact-report`, and `mlb-hits-environment-report` unless disabled)
 
 ## Render Shell Quickstart
 
@@ -60,6 +60,7 @@ Default behavior:
 - Weekly phase-2 is triggered separately.
 - Daily trigger now defaults to running the daily gate:
   - `MLB_DAILY_GATE_ENABLED=1` unless explicitly set to `0`
+  - full daily prod12 eval is hard-pinned to all 12 props (`MLB_PROD12_PROP_TYPES`)
   - `MLB_ODDS_EXPERIMENTAL_MARKETS_ENABLED=0` (disables alias/extra market fetches)
   - `MLB_ODDS_MARKETS` scoped to prod12 lane markets only
   - `MLB_ODDS_BOOKMAKERS` defaults to `betonlineag,mybookieag,betopenly,draftkings,betmgm,espnbet,fanatics,williamhill_us,superbook,rebet`
@@ -69,6 +70,12 @@ Optional extra lean setting (if memory pressure persists):
 
 - set `MLB_ODDS_BOOKMAKERS` to a small CSV (for example `betonlineag,mybookieag,betopenly,draftkings`)
 - set `MLB_DAILY_GATE_ENABLED=0` to skip daily gate checks
+- for optional narrowed experiments, run an explicit additional pass (does not replace full daily):
+
+```bash
+make mlb-prod12-track-daily-waterline \
+  MLB_PROD12_WATERLINE_PROP_TYPES="hits,total_bases,strikeouts_batting"
+```
 
 Status command:
 
@@ -116,6 +123,39 @@ MLB_POLICY_PLAN_ENABLED=0 \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
+Daily upload hub (recommended to avoid hunting through `tmp/analysis`):
+
+```bash
+make mlb-tmp-focus MLB_TMP_FOCUS_DATE="$(TZ=America/New_York date +%F)"
+```
+
+This copies key upload CSVs into one folder with stable file names:
+
+- `backend/mlb/data/processed/mlb_uploads/01_side_matrix.csv`
+- `backend/mlb/data/processed/mlb_uploads/02_bet_sheet_core.csv`
+- `backend/mlb/data/processed/mlb_uploads/03_bet_sheet_balanced.csv`
+- `backend/mlb/data/processed/mlb_uploads/04_bet_sheet_default.csv`
+- `backend/mlb/data/processed/mlb_uploads/05_book_upload_base.csv`
+- `backend/mlb/data/processed/mlb_uploads/06_top40_recommended.csv`
+
+Manifest:
+
+- `backend/mlb/data/processed/mlb_uploads/MANIFEST.md`
+
+Two-sided market enforcement is now the default for `mlb-predictions-wide`, `mlb-reconcile-rows`, quality/candidate eval on `reconcile_rows`, and red-mode bucket reports. Use these toggles only if you intentionally need old one-sided behavior:
+
+- `MLB_PREDICT_REQUIRE_TWO_SIDED=0`
+- `MLB_RECONCILE_REQUIRE_TWO_SIDED=0`
+- `MLB_QUALITY_RECONCILE_REQUIRE_TWO_SIDED=0`
+- `MLB_ODDS_BUCKET_REQUIRE_TWO_SIDED=0`
+
+DB one-sided row cleanup (preview, then apply):
+
+```bash
+make mlb-cleanup-one-sided-price-rows
+MLB_ONE_SIDED_CLEANUP_APPLY=1 make mlb-cleanup-one-sided-price-rows
+```
+
 Daily BvP/PvB prediction impact check (watch whether BvP is moving probabilities):
 
 ```bash
@@ -129,6 +169,61 @@ Controls:
 
 - `MLB_DAILY_BVP_IMPACT_ENABLED=1` (default on)
 - `MLB_DAILY_BVP_IMPACT_REQUIRED=0` (warn-only on failure; set `1` to fail the daily run)
+
+Daily hits-environment monitor (league hits/game regime + `hits_allowed` opponent-team form):
+
+```bash
+source backend/.env
+MLB_HITS_ENV_AS_OF_DATE="$(TZ=America/New_York date +%F)" \
+MLB_HITS_ENV_SLATE_DATE="$(TZ=America/New_York date +%F)" \
+MLB_HITS_ENV_STARTER_BASELINE_SEASONS=3 \
+MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS=5 \
+MLB_HITS_ENV_STARTER_BASELINE_DECAY=0.70 \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST7=0.50 \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST15=0.30 \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST30=0.20 \
+MLB_HITS_ENV_SLATE_FACTOR_MIN=0.70 \
+MLB_HITS_ENV_SLATE_FACTOR_MAX=1.30 \
+make mlb-hits-environment-report
+```
+
+`make mlb-daily-refresh` now runs this monitor automatically by default.
+Controls:
+
+- `MLB_DAILY_HITS_ENV_ENABLED=1` (default on)
+- `MLB_DAILY_HITS_ENV_REQUIRED=0` (warn-only on failure; set `1` to fail the daily run)
+- `MLB_HITS_ENV_STARTER_BASELINE_SEASONS=3` (default; include prior seasons for starter baseline stability)
+- `MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS=5` (default minimum historical starts for weighted starter expectation)
+- `MLB_HITS_ENV_STARTER_BASELINE_DECAY=0.70` (default recency decay by season; older seasons down-weighted)
+- `MLB_HITS_ENV_SLATE_WEIGHT_LAST7=0.50` / `MLB_HITS_ENV_SLATE_WEIGHT_LAST15=0.30` / `MLB_HITS_ENV_SLATE_WEIGHT_LAST30=0.20` (opponent team-form blend weights)
+- `MLB_HITS_ENV_SLATE_FACTOR_MIN=0.70` / `MLB_HITS_ENV_SLATE_FACTOR_MAX=1.30` (clamp for matchup adjustment factor)
+
+The report now emits per-row matchup expectation fields for `hits_allowed` slate rows:
+
+- `pitcher_expected_hits_allowed_weighted` (multi-season starter baseline)
+- `expected_hits_allowed_matchup` (pitcher baseline adjusted by opponent team hits form)
+- `line_minus_expected_hits_allowed_matchup` (quick line-vs-expectation gap)
+
+Daily human-readable ops brief (single-file summary of pipeline + alerts + model/fade + BvP impact + hits environment):
+
+```bash
+source backend/.env
+MLB_DAILY_BRIEF_REPORT_DATE="$(TZ=America/New_York date +%F)" \
+make mlb-daily-ops-brief
+```
+
+`make mlb-daily-refresh` now runs this brief automatically by default.
+Controls:
+
+- `MLB_DAILY_OPS_BRIEF_ENABLED=1` (default on)
+- `MLB_DAILY_OPS_BRIEF_REQUIRED=0` (warn-only on failure; set `1` to fail the daily run)
+
+Brief outputs:
+
+- `artifacts/analysis/mlb/mlb_daily_ops_brief_latest.md`
+- `artifacts/analysis/mlb/mlb_daily_ops_brief_<YYYY-MM-DD>.md`
+- `artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json`
+- `artifacts/analysis/mlb/mlb_daily_ops_brief_history.jsonl`
 
 Optional single-filter variant (emit only sides with model probability >=51%):
 
@@ -147,6 +242,8 @@ make mlb-book-upload-side-matrix \
   MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
   MLB_RED_BUCKET_BOOKMAKER=betonlineag
 ```
+
+Note: side-matrix refresh uses legacy bucket layout for compatibility (`MLB_BOOK_UPLOAD_SIDE_MATRIX_BUCKET_LAYOUT=legacy`).
 
 Selection behavior (default `MLB_BOOK_UPLOAD_SIDE_MATRIX_SELECTION_MODE=all-qualified`):
 
@@ -238,6 +335,29 @@ make mlb-red-mode-bucket-report \
   MLB_RED_BUCKET_BOOKMAKER=betonlineag
 ```
 
+Default bucket layout is 10-point (`MLB_RED_BUCKET_LAYOUT=ten`).  
+Set `MLB_RED_BUCKET_LAYOUT=legacy` to reproduce older mixed-width buckets.
+
+Positive-only output variant (drops negative-ROI buckets from the output CSV/JSON report):
+
+```bash
+make mlb-red-mode-bucket-report-positive \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag \
+  MLB_RED_BUCKET_PRINT_BOTH_CONTRIBUTORS=1
+```
+
+Optional terminal detail (show both lead contributor and biggest drag in each bucket line):
+
+```bash
+make mlb-red-mode-bucket-report \
+  MLB_RED_BUCKET_FROM_DATE=2026-03-25 \
+  MLB_RED_BUCKET_TO_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_RED_BUCKET_BOOKMAKER=betonlineag \
+  MLB_RED_BUCKET_PRINT_BOTH_CONTRIBUTORS=1
+```
+
 Daily cumulative RED-mode fade bucket report (compact positive buckets):
 
 ```bash
@@ -256,14 +376,10 @@ make mlb-red-mode-bucket-report-combined \
   MLB_RED_BUCKET_BOOKMAKER=betonlineag
 ```
 
-Focus lanes reported daily:
+Default print behavior:
 
-- `+111..+120`
-- `+131..+150`
-- `+151..+200`
-- `-299..-250`
-- `-249..-220`
-- `<=-300`
+- When `MLB_RED_BUCKET_FOCUS_BUCKETS` is empty (default), all buckets are printed.
+- Set `MLB_RED_BUCKET_FOCUS_BUCKETS` to a comma-separated subset if you want a shorter fixed list.
 
 Outputs:
 
@@ -646,22 +762,49 @@ make mlb-retrain-prereq-check
 make mlb-reconcile-rows \
   MLB_RECONCILE_FROM_DATE="2025-03-01" \
   MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
-  MLB_RECONCILE_BOOKMAKER= \
+  MLB_RECONCILE_BOOKMAKER=betonlineag \
+  MLB_RECONCILE_REQUIRE_TWO_SIDED=1 \
   MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" \
-  MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
+  MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows.csv"
 make mlb-retrain-broad-reconcile \
-  MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
+  MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" \
   MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0
 make mlb-prediction-quality-prod12 \
   MLB_QUALITY_SOURCE_TABLE="reconcile_rows" \
-  MLB_QUALITY_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
+  MLB_QUALITY_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" \
   MLB_QUALITY_PROP_SOURCES=""
 make mlb-candidate-eval-prod12 \
   MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" \
-  MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
+  MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv"
 ```
 
 `mlb-retrain-broad-reconcile` now runs the reconcile-based quality + candidate checks automatically at the end.
+
+Market-native reset (clean-room model lane):
+
+- Use this when you want a brand-new model profile trained only on BetOnline two-sided reconcile rows.
+- It retires legacy feature hydration for that run (`player_derived_stats` and BvP/PvB merge are disabled in trainer).
+
+```bash
+make mlb-reconcile-rows \
+  MLB_RECONCILE_FROM_DATE="2026-03-25" \
+  MLB_RECONCILE_TO_DATE="$(date -u +%F)" \
+  MLB_RECONCILE_BOOKMAKER="betonlineag" \
+  MLB_RECONCILE_REQUIRE_TWO_SIDED=1 \
+  MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_bol_two_sided.csv"
+
+make mlb-retrain-bol-market-only \
+  MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_bol_two_sided.csv"
+```
+
+If early-season class balance is too strict for some props, retry with:
+
+```bash
+make mlb-retrain-bol-market-only \
+  MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_bol_two_sided.csv" \
+  MLB_TRAIN_MIN_CLASS_COUNT=40 \
+  MLB_TRAIN_MIN_MINORITY_PCT=0.05
+```
 
 Current caveat:
 
@@ -678,7 +821,7 @@ Optional: separate candidate scope vs required stability props for prod12 gate:
 ```bash
 make mlb-candidate-eval-prod12 \
   MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" \
-  MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" \
+  MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" \
   MLB_PROD12_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" \
   MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed"
 ```
@@ -686,7 +829,7 @@ make mlb-candidate-eval-prod12 \
 Default prod12 weekly tracking now reads reconcile rows:
 
 - `MLB_PROD12_CANDIDATE_SOURCE_TABLE=reconcile_rows`
-- `MLB_PROD12_CANDIDATE_ROWS_CSV=tmp/mlb_base_vs_market_rows_anybook.csv`
+- `MLB_PROD12_CANDIDATE_ROWS_CSV=tmp/mlb_base_vs_market_rows.csv`
 
 If candidate recommendation is `promote`, then publish:
 
@@ -717,14 +860,16 @@ Use this when you want retrain/recompute cadence to run on your machine (not Ren
 This LaunchAgent runs the local daily chain end-to-end:
 
 - roster refresh
-- BvP/PvB refresh (writes into `mlb.prop_features_precomputed`)
 - stat-derived refresh
 - rolling integrity check (`PASS/FAIL` for d7/d15/d30 coverage + movement)
 - `mlb-predictions-wide`
 - `mlb-slate-output`
 - `mlb-book-upload` (forced local build; remote fetch flags are set to `0`)
-- `mlb-bvp-impact-report` (BvP on/off probability-delta summary + history append)
+- `mlb-hits-environment-report` (league hits/game regime + `hits_allowed` opponent-form history)
+- `mlb-daily-ops-brief` (human-readable daily consolidated summary)
 - `mlb-prod12-track-daily` + `mlb-prod12-ops-log` (local daily history snapshots; best effort)
+
+`mlb-bvp-pvb-refresh` + `mlb-bvp-impact-report` run in a separate prewarm LaunchAgent 90 minutes before the first daily run so core daily build latency stays predictable.
 
 Create/update runner script:
 
@@ -744,14 +889,17 @@ set +a
 
 MLB_DATE_ET="$(TZ=America/New_York date +%F)"
 MLB_LOCAL_DAILY_TRACKING_ENABLED="${MLB_LOCAL_DAILY_TRACKING_ENABLED:-1}"
+MLB_RUN_TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
+MLB_RUN_TAG="local_daily_${MLB_RUN_TS_UTC}"
+MLB_ODDS_DAY_DIR="backend/mlb/exports/odds_history/${MLB_DATE_ET}"
+MLB_ODDS_CANONICAL_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops.json"
+MLB_ODDS_COMPAT_JSON="${MLB_ODDS_DAY_DIR}/odds_latest_compatible.json"
+MLB_ODDS_TAGGED_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops__${MLB_RUN_TAG}.json"
 
 echo "[$(date -u +%FT%TZ)] START local daily MLB refresh+capture (MLB_DATE_ET=${MLB_DATE_ET})"
 
 MLB_ROSTER_DATE="$MLB_DATE_ET" \
 make mlb-roster-refresh-all
-
-MLB_BVP_DATE="$MLB_DATE_ET" \
-make mlb-bvp-pvb-refresh
 
 MLB_STAT_DAYS_AGO=2 \
 MLB_STAT_SKIP_EXISTING_DATES=1 \
@@ -768,13 +916,35 @@ make mlb-check-rolling-integrity
 make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
 make mlb-slate-output MLB_DATE="$MLB_DATE_ET"
 
+# Keep reconcile-compatible snapshot in sync and preserve run-specific odds snapshot.
+if [[ -f "${MLB_ODDS_CANONICAL_JSON}" ]]; then
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_COMPAT_JSON}"
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_TAGGED_JSON}"
+  echo "[$(date -u +%FT%TZ)] INFO odds snapshot synced -> ${MLB_ODDS_COMPAT_JSON} + ${MLB_ODDS_TAGGED_JSON}"
+else
+  echo "[$(date -u +%FT%TZ)] WARN missing odds snapshot after predictions-wide: ${MLB_ODDS_CANONICAL_JSON}" >&2
+fi
+
 MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=0 \
 MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=0 \
 MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY=0 \
+MLB_ARCHIVE_RUN_TAG="$MLB_RUN_TAG" \
 make mlb-book-upload MLB_DATE="$MLB_DATE_ET"
 
-MLB_BVP_IMPACT_LABEL_DATE="$MLB_DATE_ET" \
-make mlb-bvp-impact-report
+MLB_HITS_ENV_AS_OF_DATE="$MLB_DATE_ET" \
+MLB_HITS_ENV_SLATE_DATE="$MLB_DATE_ET" \
+MLB_HITS_ENV_STARTER_BASELINE_SEASONS="${MLB_HITS_ENV_STARTER_BASELINE_SEASONS:-3}" \
+MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS="${MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS:-5}" \
+MLB_HITS_ENV_STARTER_BASELINE_DECAY="${MLB_HITS_ENV_STARTER_BASELINE_DECAY:-0.70}" \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST7="${MLB_HITS_ENV_SLATE_WEIGHT_LAST7:-0.50}" \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST15="${MLB_HITS_ENV_SLATE_WEIGHT_LAST15:-0.30}" \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST30="${MLB_HITS_ENV_SLATE_WEIGHT_LAST30:-0.20}" \
+MLB_HITS_ENV_SLATE_FACTOR_MIN="${MLB_HITS_ENV_SLATE_FACTOR_MIN:-0.70}" \
+MLB_HITS_ENV_SLATE_FACTOR_MAX="${MLB_HITS_ENV_SLATE_FACTOR_MAX:-1.30}" \
+make mlb-hits-environment-report
+
+MLB_DAILY_BRIEF_REPORT_DATE="$MLB_DATE_ET" \
+make mlb-daily-ops-brief
 
 # 3) Append local prod12 daily history snapshots (best effort).
 if [[ "${MLB_LOCAL_DAILY_TRACKING_ENABLED}" == "1" ]]; then
@@ -801,14 +971,135 @@ EOF
 chmod +x "$HOME/bin/proppadia_mlb_refresh_daily.sh"
 ```
 
+### Daily Local BvP Prewarm Job (T-90)
+
+Run BvP precompute + BvP impact as a separate job 90 minutes before the first daily capture run.
+
+Create/update prewarm runner script:
+
+```bash
+cat > "$HOME/bin/proppadia_mlb_bvp_prewarm.sh" <<'EOF'
+#!/bin/zsh
+set -euo pipefail
+
+REPO="$HOME/Projects/proppadia"
+cd "$REPO"
+
+set -a
+source backend/.env
+set +a
+
+MLB_DATE_ET="$(TZ=America/New_York date +%F)"
+MLB_RUN_TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
+MLB_RUN_TAG="local_prewarm_${MLB_RUN_TS_UTC}"
+MLB_ODDS_DAY_DIR="backend/mlb/exports/odds_history/${MLB_DATE_ET}"
+MLB_ODDS_CANONICAL_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops.json"
+MLB_ODDS_COMPAT_JSON="${MLB_ODDS_DAY_DIR}/odds_latest_compatible.json"
+MLB_ODDS_TAGGED_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops__${MLB_RUN_TAG}.json"
+
+echo "[$(date -u +%FT%TZ)] START local MLB BvP prewarm (MLB_DATE_ET=${MLB_DATE_ET})"
+
+MLB_BVP_DATE="$MLB_DATE_ET" \
+make mlb-bvp-pvb-refresh
+
+# Build today's slate context before running BvP impact monitor.
+make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
+make mlb-slate-output MLB_DATE="$MLB_DATE_ET"
+
+# Prewarm also refreshes canonical reconcile snapshot + stores a run-specific odds file.
+if [[ -f "${MLB_ODDS_CANONICAL_JSON}" ]]; then
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_COMPAT_JSON}"
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_TAGGED_JSON}"
+  echo "[$(date -u +%FT%TZ)] INFO prewarm odds snapshot synced -> ${MLB_ODDS_COMPAT_JSON} + ${MLB_ODDS_TAGGED_JSON}"
+else
+  echo "[$(date -u +%FT%TZ)] WARN missing prewarm odds snapshot: ${MLB_ODDS_CANONICAL_JSON}" >&2
+fi
+
+set +e
+MLB_BVP_IMPACT_LABEL_DATE="$MLB_DATE_ET" \
+make mlb-bvp-impact-report
+impact_rc=$?
+set -e
+if [[ "$impact_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-bvp-impact-report failed rc=${impact_rc}" >&2
+fi
+
+echo "[$(date -u +%FT%TZ)] DONE local MLB BvP prewarm (MLB_DATE_ET=${MLB_DATE_ET})"
+EOF
+
+chmod +x "$HOME/bin/proppadia_mlb_bvp_prewarm.sh"
+```
+
+Odds snapshot behavior (important for fast-moving heavy favorites):
+
+- every prewarm/daily run now writes a timestamped copy:
+  - `backend/mlb/exports/odds_history/YYYY-MM-DD/odds_mlb_playerprops__local_*.json`
+- every run also refreshes:
+  - `odds_latest_compatible.json` from the same just-fetched snapshot
+- this prevents reconcile/report defaults from accidentally reading an older morning-compatible file when fresher snapshots exist.
+
+Quick verify command:
+
+```bash
+MLB_DATE_ET="$(TZ=America/New_York date +%F)"
+stat -f "%Sm %N" -t "%Y-%m-%d %H:%M:%S" \
+  "backend/mlb/exports/odds_history/${MLB_DATE_ET}/odds_mlb_playerprops.json" \
+  "backend/mlb/exports/odds_history/${MLB_DATE_ET}/odds_latest_compatible.json"
+ls -1t "backend/mlb/exports/odds_history/${MLB_DATE_ET}"/odds_mlb_playerprops__local_*.json | head -n 5
+```
+
+Create prewarm LaunchAgent (90 minutes before first daily run at `06:50`):
+
+```bash
+cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.proppadia.mlb.bvp.prewarm.daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$HOME/bin/proppadia_mlb_bvp_prewarm.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>$HOME/Projects/proppadia</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>5</integer>
+    <key>Minute</key><integer>20</integer>
+  </dict>
+  <key>StandardOutPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_bvp_prewarm_daily.out.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_bvp_prewarm_daily.err.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
+EOF
+
+touch "$HOME/Projects/proppadia/artifacts/ops/mlb_bvp_prewarm_daily.out.log"
+touch "$HOME/Projects/proppadia/artifacts/ops/mlb_bvp_prewarm_daily.err.log"
+plutil -lint "$HOME/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist"
+```
+
+Load/reload prewarm job:
+
+```bash
+launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist" 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist"
+```
+
 History outputs written locally:
 
 - `artifacts/mlb_pipeline_history.jsonl`
 - `artifacts/mlb_prod12_ops_history.jsonl`
 - `artifacts/analysis/mlb/mlb_bvp_impact_latest.json`
 - `artifacts/analysis/mlb/mlb_bvp_impact_history.jsonl`
+- `artifacts/analysis/mlb/mlb_hits_environment_latest.json`
+- `artifacts/analysis/mlb/mlb_daily_ops_brief_latest.md`
+- `artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json`
+- `artifacts/analysis/mlb/mlb_hits_environment_history.jsonl`
+- `artifacts/ops/mlb_bvp_prewarm_daily.out.log`
+- `artifacts/ops/mlb_bvp_prewarm_daily.err.log`
 
-Create daily LaunchAgent (example: three runs to catch later-game odds movement):
+Create daily LaunchAgent (example: three runs to catch later-game odds movement; first run shifted +90 minutes):
 
 ```bash
 cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
@@ -825,8 +1116,8 @@ cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
   <key>StartCalendarInterval</key>
   <array>
     <dict>
-      <key>Hour</key><integer>5</integer>
-      <key>Minute</key><integer>20</integer>
+      <key>Hour</key><integer>6</integer>
+      <key>Minute</key><integer>50</integer>
     </dict>
     <dict>
       <key>Hour</key><integer>11</integer>
@@ -897,8 +1188,10 @@ set +a
 
 echo "[$(date -u +%FT%TZ)] START weekly retrain cadence"
 make mlb-retrain-prereq-check
-make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="2025-03-01" MLB_RECONCILE_TO_DATE="$(date -u +%F)" MLB_RECONCILE_BOOKMAKER= MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows_anybook.csv"
-make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows_anybook.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0 MLB_RETRAIN_QUALITY_MIN_TOTAL=600 MLB_CANDIDATE_MIN_TOTAL=1000 MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
+MLB_BVP_DATE="$(TZ=America/New_York date +%F)" \
+make mlb-bvp-pvb-refresh
+make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="2025-03-01" MLB_RECONCILE_TO_DATE="$(date -u +%F)" MLB_RECONCILE_BOOKMAKER=betonlineag MLB_RECONCILE_REQUIRE_TWO_SIDED=1 MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows.csv"
+make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0 MLB_RETRAIN_QUALITY_MIN_TOTAL=600 MLB_CANDIDATE_MIN_TOTAL=1000 MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
 make mlb-prod12-model-bundle-publish
 make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL="${MLB_BASE_URL:-}" MLB_DATE="$(date -u +%F)" MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
 echo "[$(date -u +%FT%TZ)] DONE weekly retrain cadence"
@@ -913,6 +1206,7 @@ chmod +x "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
 Notes:
 
 - Because the script runs with `set -e`, publish and phase2 weekly logging only run if prior retrain/eval steps pass.
+- Weekly cadence now refreshes BvP/PvB first (`mlb-bvp-pvb-refresh`) before reconcile/retrain.
 - Ensure publish credentials are present in `backend/.env` (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`).
 - `mlb-prod12-phase2-weekly-cycle` writes `artifacts/mlb_prod12_phase2_history.jsonl`, which keeps `make mlb-prod12-status-strict` from going `weekly_stale`.
 - Phase2 cycle should use the same early-season candidate overrides as retrain (`MLB_PROD12_CANDIDATE_REQUIRED_PROPS` and `MLB_PROD12_MAX_PROP_DROP_PCT=12`) to avoid false weekly gate failures.
@@ -1090,6 +1384,10 @@ Optional pre-prune local compaction (removes raw intermediates where `odds_lates
 ```bash
 make mlb-odds-history-prune-intermediate
 ```
+
+LaunchAgent Scheduled Run Settings:
+
+plutil -p "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" | rg '"Hour"|"Minute"|StartCalendarInterval|RunAtLoad|KeepAlive|Label'
 
 LaunchAgent script/Launch Control Status:
 

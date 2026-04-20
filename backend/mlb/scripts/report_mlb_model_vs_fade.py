@@ -90,6 +90,8 @@ def main() -> int:
         "game_date",
         "prop_type",
         "model_pick_side",
+        "price_over_american",
+        "price_under_american",
         "actual_model_pick_outcome",
         "actual_over_outcome",
         "actual_under_outcome",
@@ -105,6 +107,7 @@ def main() -> int:
             "window": {"game_date_min": None, "game_date_max": None},
             "counts": {
                 "rows_input": 0,
+                "rows_two_sided_prices": 0,
                 "rows_with_model_pnl": 0,
                 "rows_with_fade_pnl": 0,
                 "rows_paired_for_fade": 0,
@@ -131,12 +134,17 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         return 0
     df = _build_fade_columns(df)
+    two_sided_price_mask = (
+        pd.to_numeric(df["price_over_american"], errors="coerce").notna()
+        & pd.to_numeric(df["price_under_american"], errors="coerce").notna()
+    )
 
     game_date = pd.to_datetime(df["game_date"], errors="coerce")
     date_min = game_date.min()
     date_max = game_date.max()
 
-    paired = df[df["paired_for_fade"]].copy()
+    # Enforce true two-sided market rows for both model and fade summaries.
+    paired = df[df["paired_for_fade"] & two_sided_price_mask].copy()
     overall = _summary_block(paired, min_bets_alert=int(args.min_bets_alert))
 
     prop_rows = []
@@ -158,6 +166,7 @@ def main() -> int:
         },
         "counts": {
             "rows_input": int(len(df)),
+            "rows_two_sided_prices": int(two_sided_price_mask.sum()),
             "rows_with_model_pnl": int(df["pnl_model_pick_1u"].notna().sum()),
             "rows_with_fade_pnl": int(df["fade_pnl_1u"].notna().sum()),
             "rows_paired_for_fade": int(paired.shape[0]),

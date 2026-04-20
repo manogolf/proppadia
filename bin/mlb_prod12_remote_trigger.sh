@@ -27,6 +27,13 @@ payload = {
     "run_mode": (get("MLB_CRON_RUN_MODE") or "daily").lower(),
 }
 
+# Keep daily checks aligned with prod12 full set unless explicitly overridden.
+DEFAULT_PROD12_PROP_TYPES = (
+    "hits,total_bases,strikeouts_batting,earned_runs,doubles,"
+    "hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,"
+    "runs_scored,walks_allowed,runs_rbis"
+)
+
 # Default to running the daily gate unless explicitly disabled by env.
 # This avoids silent drift where daily health checks are skipped.
 if get("MLB_DAILY_GATE_ENABLED") is None:
@@ -96,6 +103,11 @@ for env_name, body_key in float_fields.items():
     except Exception:
         # Ignore invalid numeric env values; backend defaults apply.
         pass
+
+if get("MLB_PROD12_DAILY_PROP_TYPES") is None:
+    payload["mlb_prod12_daily_prop_types"] = (
+        get("MLB_PROD12_PROP_TYPES") or DEFAULT_PROD12_PROP_TYPES
+    )
 
 print(json.dumps(payload, separators=(",", ":")))
 PY
