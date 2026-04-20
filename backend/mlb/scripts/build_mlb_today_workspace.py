@@ -70,6 +70,31 @@ def _canonical_prop_type(value: object) -> str:
     return str(value or "").strip().lower()
 
 
+def _sanitize_american_odds_frame(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, int]]:
+    if df.empty:
+        return df, {
+            "invalid_odds_values_nullified": 0,
+            "rows_dropped_no_valid_odds": 0,
+        }
+
+    out = df.copy()
+    invalid_count = 0
+    for col in ("price_over_american", "price_under_american"):
+        vals = pd.to_numeric(out[col], errors="coerce")
+        invalid_mask = vals.notna() & (vals.abs() < 100)
+        invalid_count += int(invalid_mask.sum())
+        vals = vals.mask(invalid_mask)
+        out[col] = vals
+
+    before = len(out)
+    out = out[out["price_over_american"].notna() | out["price_under_american"].notna()].copy()
+    dropped = before - len(out)
+    return out, {
+        "invalid_odds_values_nullified": int(invalid_count),
+        "rows_dropped_no_valid_odds": int(dropped),
+    }
+
+
 def _resolve_snapshot_ts(path: Path) -> datetime:
     m = SNAPSHOT_TS_RE.match(path.name)
     if m:
@@ -642,6 +667,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         "unmatched_to_slate": 0,
         "matched_rows": 0,
     }
+    sanitize_stats: Dict[str, int] = {
+        "invalid_odds_values_nullified": 0,
+        "rows_dropped_no_valid_odds": 0,
+    }
     for ref in snapshots:
         rows, counts = _parse_snapshot_rows(
             snapshot_ref=ref,
@@ -659,6 +688,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         odds_rows = odds_rows.dropna(subset=["game_id", "player_id", "prop_type", "line", "bookmaker_key"])
         odds_rows["game_id"] = odds_rows["game_id"].astype("int64")
         odds_rows["player_id"] = odds_rows["player_id"].astype("int64")
+        odds_rows, sanitize_stats = _sanitize_american_odds_frame(odds_rows)
         odds_rows = odds_rows.sort_values(
             ["snapshot_ts", "game_id", "player_id", "prop_type", "line", "bookmaker_key"],
             kind="stable",
@@ -731,6 +761,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     print(f"  missing_player_or_line={summary_counts['missing_player_or_line']}")
     print(f"  unmatched_to_slate={unresolved}")
     print(f"  matched_rows={summary_counts['matched_rows']}")
+    print("[mlb-today-workspace] odds sanitization")
+    print(f"  invalid_odds_values_nullified={sanitize_stats['invalid_odds_values_nullified']}")
+    print(f"  rows_dropped_no_valid_odds={sanitize_stats['rows_dropped_no_valid_odds']}")
     print("[mlb-today-workspace] player_id resolution")
     print(f"  resolved_odds_rows={resolved_odds}")
     print(f"  unresolved_odds_rows={unresolved}")

@@ -27,7 +27,18 @@ WITH active_slate AS (
   FROM mlb.today_slate_rows
 ),
 base AS (
-  SELECT o.*
+  SELECT
+    o.*,
+    CASE
+      WHEN o.price_over_american IS NOT NULL AND abs(o.price_over_american) >= 100
+      THEN o.price_over_american
+      ELSE NULL
+    END AS price_over_american_clean,
+    CASE
+      WHEN o.price_under_american IS NOT NULL AND abs(o.price_under_american) >= 100
+      THEN o.price_under_american
+      ELSE NULL
+    END AS price_under_american_clean
   FROM mlb.today_odds_book_rows o
   JOIN active_slate a
     ON o.slate_date = a.slate_date
@@ -59,10 +70,10 @@ best_over AS (
     prop_type,
     line,
     bookmaker_key AS best_over_book,
-    price_over_american AS best_over_price
+    price_over_american_clean AS best_over_price
   FROM latest
-  WHERE price_over_american IS NOT NULL
-  ORDER BY player_id, game_id, prop_type, line, price_over_american DESC, bookmaker_key
+  WHERE price_over_american_clean IS NOT NULL
+  ORDER BY player_id, game_id, prop_type, line, price_over_american_clean DESC, bookmaker_key
 ),
 best_under AS (
   SELECT DISTINCT ON (player_id, game_id, prop_type, line)
@@ -71,10 +82,10 @@ best_under AS (
     prop_type,
     line,
     bookmaker_key AS best_under_book,
-    price_under_american AS best_under_price
+    price_under_american_clean AS best_under_price
   FROM latest
-  WHERE price_under_american IS NOT NULL
-  ORDER BY player_id, game_id, prop_type, line, price_under_american DESC, bookmaker_key
+  WHERE price_under_american_clean IS NOT NULL
+  ORDER BY player_id, game_id, prop_type, line, price_under_american_clean DESC, bookmaker_key
 ),
 agg AS (
   SELECT
@@ -87,12 +98,14 @@ agg AS (
     bool_or(is_home) AS is_home,
     prop_type,
     line,
-    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_over_american) AS market_median_over_price,
-    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_under_american) AS market_median_under_price,
-    count(*) FILTER (WHERE price_over_american IS NOT NULL) AS book_count_over,
-    count(*) FILTER (WHERE price_under_american IS NOT NULL) AS book_count_under,
-    stddev_pop(price_over_american) AS price_dispersion_over,
-    stddev_pop(price_under_american) AS price_dispersion_under
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_over_american_clean) AS market_median_over_price_raw,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_under_american_clean) AS market_median_under_price_raw,
+    max(price_over_american_clean) AS market_max_over_price,
+    min(price_over_american_clean) AS market_min_over_price,
+    count(*) FILTER (WHERE price_over_american_clean IS NOT NULL) AS book_count_over,
+    count(*) FILTER (WHERE price_under_american_clean IS NOT NULL) AS book_count_under,
+    stddev_pop(price_over_american_clean) AS price_dispersion_over,
+    stddev_pop(price_under_american_clean) AS price_dispersion_under
   FROM latest
   GROUP BY 1,2,3,8,9
 )
@@ -110,8 +123,17 @@ SELECT
   bu.best_under_price,
   bo.best_over_book,
   bu.best_under_book,
-  a.market_median_over_price,
-  a.market_median_under_price,
+  CASE
+    WHEN a.market_median_over_price_raw IS NOT NULL AND abs(a.market_median_over_price_raw) >= 100
+    THEN a.market_median_over_price_raw
+    ELSE NULL
+  END AS market_median_over_price,
+  CASE
+    WHEN a.market_median_under_price_raw IS NOT NULL AND abs(a.market_median_under_price_raw) >= 100
+    THEN a.market_median_under_price_raw
+    ELSE NULL
+  END AS market_median_under_price,
+  (a.market_max_over_price - a.market_min_over_price) AS market_range_over,
   a.book_count_over,
   a.book_count_under,
   a.price_dispersion_over,
@@ -147,7 +169,18 @@ WITH active_slate AS (
   FROM mlb.today_slate_rows
 ),
 base AS (
-  SELECT o.*
+  SELECT
+    o.*,
+    CASE
+      WHEN o.price_over_american IS NOT NULL AND abs(o.price_over_american) >= 100
+      THEN o.price_over_american
+      ELSE NULL
+    END AS price_over_american_clean,
+    CASE
+      WHEN o.price_under_american IS NOT NULL AND abs(o.price_under_american) >= 100
+      THEN o.price_under_american
+      ELSE NULL
+    END AS price_under_american_clean
   FROM mlb.today_odds_book_rows o
   JOIN active_slate a
     ON o.slate_date = a.slate_date
@@ -159,10 +192,10 @@ snap AS (
     prop_type,
     line,
     snapshot_ts,
-    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_over_american) AS snap_over_median,
-    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_under_american) AS snap_under_median,
-    max(price_over_american) AS snap_best_over,
-    max(price_under_american) AS snap_best_under
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_over_american_clean) AS snap_over_median_raw,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_under_american_clean) AS snap_under_median_raw,
+    max(price_over_american_clean) AS snap_best_over,
+    max(price_under_american_clean) AS snap_best_under
   FROM base
   GROUP BY 1,2,3,4,5
 ),
@@ -186,8 +219,8 @@ vol AS (
     game_id,
     prop_type,
     line,
-    max(snap_over_median) - min(snap_over_median) AS over_span,
-    max(snap_under_median) - min(snap_under_median) AS under_span
+    max(snap_over_median_raw) - min(snap_over_median_raw) AS over_span,
+    max(snap_under_median_raw) - min(snap_under_median_raw) AS under_span
   FROM snap
   GROUP BY 1,2,3,4
 )
@@ -196,28 +229,128 @@ SELECT
   l.game_id,
   l.prop_type,
   l.line,
-  o.snap_over_median AS open_over_price,
-  o.snap_under_median AS open_under_price,
-  l.snap_over_median AS latest_over_price,
-  l.snap_under_median AS latest_under_price,
+  CASE
+    WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+    THEN o.snap_over_median_raw
+    ELSE NULL
+  END AS open_over_price,
+  CASE
+    WHEN o.snap_under_median_raw IS NOT NULL AND abs(o.snap_under_median_raw) >= 100
+    THEN o.snap_under_median_raw
+    ELSE NULL
+  END AS open_under_price,
+  CASE
+    WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+    THEN l.snap_over_median_raw
+    ELSE NULL
+  END AS latest_over_price,
+  CASE
+    WHEN l.snap_under_median_raw IS NOT NULL AND abs(l.snap_under_median_raw) >= 100
+    THEN l.snap_under_median_raw
+    ELSE NULL
+  END AS latest_under_price,
   l.snap_best_over AS best_over_price_now,
   l.snap_best_under AS best_under_price_now,
   extract(epoch FROM (l.snapshot_ts - o.snapshot_ts)) / 60.0 AS minutes_since_open,
   l.num_snapshots,
-  (l.snap_over_median - o.snap_over_median) AS over_price_change_from_open,
-  (l.snap_under_median - o.snap_under_median) AS under_price_change_from_open,
+  (
+    CASE
+      WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+      THEN l.snap_over_median_raw
+      ELSE NULL
+    END
+    -
+    CASE
+      WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+      THEN o.snap_over_median_raw
+      ELSE NULL
+    END
+  ) AS over_price_change_from_open,
+  (
+    CASE
+      WHEN l.snap_under_median_raw IS NOT NULL AND abs(l.snap_under_median_raw) >= 100
+      THEN l.snap_under_median_raw
+      ELSE NULL
+    END
+    -
+    CASE
+      WHEN o.snap_under_median_raw IS NOT NULL AND abs(o.snap_under_median_raw) >= 100
+      THEN o.snap_under_median_raw
+      ELSE NULL
+    END
+  ) AS under_price_change_from_open,
   (coalesce(l.snap_best_over, o.snap_best_over) > o.snap_best_over) AS best_price_improved_since_open,
   (coalesce(l.snap_best_over, o.snap_best_over) < o.snap_best_over) AS best_price_worsened_since_open,
   CASE
     WHEN greatest(coalesce(v.over_span, 0), coalesce(v.under_span, 0)) >= 25 THEN 'VOLATILE'
-    WHEN coalesce(l.snap_over_median - o.snap_over_median, 0) >= 10 THEN 'WAIT'
-    WHEN coalesce(l.snap_over_median - o.snap_over_median, 0) <= -10 THEN 'EARLY'
+    WHEN coalesce(
+      (
+        CASE
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          THEN l.snap_over_median_raw
+          ELSE NULL
+        END
+        -
+        CASE
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          THEN o.snap_over_median_raw
+          ELSE NULL
+        END
+      ),
+      0
+    ) >= 10 THEN 'WAIT'
+    WHEN coalesce(
+      (
+        CASE
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          THEN l.snap_over_median_raw
+          ELSE NULL
+        END
+        -
+        CASE
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          THEN o.snap_over_median_raw
+          ELSE NULL
+        END
+      ),
+      0
+    ) <= -10 THEN 'EARLY'
     ELSE 'STABLE'
   END AS timing_signal,
   CASE
     WHEN greatest(coalesce(v.over_span, 0), coalesce(v.under_span, 0)) >= 25 THEN 'Large intraday movement'
-    WHEN coalesce(l.snap_over_median - o.snap_over_median, 0) >= 10 THEN 'Current price better than open'
-    WHEN coalesce(l.snap_over_median - o.snap_over_median, 0) <= -10 THEN 'Current price worse than open'
+    WHEN coalesce(
+      (
+        CASE
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          THEN l.snap_over_median_raw
+          ELSE NULL
+        END
+        -
+        CASE
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          THEN o.snap_over_median_raw
+          ELSE NULL
+        END
+      ),
+      0
+    ) >= 10 THEN 'Current price better than open'
+    WHEN coalesce(
+      (
+        CASE
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          THEN l.snap_over_median_raw
+          ELSE NULL
+        END
+        -
+        CASE
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          THEN o.snap_over_median_raw
+          ELSE NULL
+        END
+      ),
+      0
+    ) <= -10 THEN 'Current price worse than open'
     ELSE 'Little intraday movement'
   END AS timing_reason
 FROM latest_rows l
@@ -405,7 +538,40 @@ SELECT
   ms.best_under_book,
   ms.market_median_over_price AS market_median,
   ms.market_median_under_price,
+  ms.market_range_over AS market_range,
   (ms.best_over_price - ms.market_median_over_price) AS value_vs_market,
+  CASE
+    WHEN ms.best_over_price IS NULL OR ms.market_median_over_price IS NULL THEN 'UNRELIABLE'
+    WHEN coalesce(ms.book_count_over, 0) < 2 THEN 'THIN'
+    WHEN coalesce(ts.num_snapshots, 0) <= 1 THEN 'LIMITED'
+    WHEN ms.market_range_over IS NULL THEN 'LIMITED'
+    WHEN ms.market_range_over >= 120 THEN 'LIMITED'
+    WHEN coalesce(ms.book_count_over, 0) >= 4
+      AND coalesce(ts.num_snapshots, 0) >= 3
+      AND ms.market_range_over <= 40
+      THEN 'STRONG'
+    WHEN coalesce(ms.book_count_over, 0) >= 3
+      AND coalesce(ts.num_snapshots, 0) >= 2
+      AND ms.market_range_over <= 80
+      THEN 'GOOD'
+    ELSE 'LIMITED'
+  END AS coverage_quality_label,
+  CASE
+    WHEN ms.best_over_price IS NULL OR ms.market_median_over_price IS NULL THEN 'No reliable median'
+    WHEN coalesce(ms.book_count_over, 0) < 2 THEN 'Few books available'
+    WHEN coalesce(ts.num_snapshots, 0) <= 1 THEN 'Sparse snapshot coverage'
+    WHEN ms.market_range_over IS NULL THEN 'Incomplete market range'
+    WHEN ms.market_range_over >= 120 THEN 'Wide market spread'
+    WHEN coalesce(ms.book_count_over, 0) >= 4
+      AND coalesce(ts.num_snapshots, 0) >= 3
+      AND ms.market_range_over <= 40
+      THEN 'Median available across multiple books with tight range'
+    WHEN coalesce(ms.book_count_over, 0) >= 3
+      AND coalesce(ts.num_snapshots, 0) >= 2
+      AND ms.market_range_over <= 80
+      THEN 'Median available with solid book and snapshot coverage'
+    ELSE 'Partial market coverage'
+  END AS coverage_quality_reason,
   ts.timing_signal,
   ts.timing_reason,
   pc.streak_context_label AS streak_context_label,
