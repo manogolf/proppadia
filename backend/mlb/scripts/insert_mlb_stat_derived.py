@@ -12,7 +12,7 @@ import hashlib
 import random
 import uuid
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import requests
 
@@ -939,6 +939,63 @@ def _is_starter(position: Optional[str], stats: Dict[str, Any]) -> bool:
     return gs > 0 or p == "SP"
 
 
+def _infer_team_starter_ids(
+    players_map: Dict[str, Any],
+    pos_map: Dict[int, str],
+) -> Tuple[Set[int], str]:
+    candidates: List[Dict[str, Any]] = []
+    for _, p in (players_map or {}).items():
+        person = p.get("person") or {}
+        stats = p.get("stats") or {}
+        pitch = stats.get("pitching") or {}
+        pid_raw = person.get("id")
+        if pid_raw is None:
+            continue
+        try:
+            pid = int(pid_raw)
+        except Exception:
+            continue
+        has_pitch = len(pitch.keys()) > 0
+        box_position = ((p.get("position") or {}).get("abbreviation") or "")
+        position = pos_map.get(pid) or (str(box_position).upper() if box_position else None)
+        if not _is_pitcher(position, has_pitch):
+            continue
+        gs = _num(pitch.get("gamesStarted")) or 0.0
+        outs = _to_int(pitch.get("outs"))
+        if outs is None:
+            outs = _ip_to_outs(pitch.get("inningsPitched"))
+        outs_int = int(outs or 0)
+        pitch_count = _to_int(
+            pitch.get("numberOfPitches") or pitch.get("pitchesThrown") or pitch.get("pitches")
+        ) or 0
+        candidates.append(
+            {
+                "player_id": int(pid),
+                "games_started": float(gs),
+                "outs": int(outs_int),
+                "pitch_count": int(pitch_count),
+            }
+        )
+
+    if not candidates:
+        return set(), "none"
+
+    explicit = {int(c["player_id"]) for c in candidates if float(c["games_started"]) > 0.0}
+    if explicit:
+        return explicit, "games_started"
+
+    with_outs = [c for c in candidates if int(c["outs"]) > 0]
+    if not with_outs:
+        return set(), "no_outs"
+
+    best = sorted(
+        with_outs,
+        key=lambda c: (int(c["outs"]), int(c["pitch_count"]), -int(c["player_id"])),
+        reverse=True,
+    )[0]
+    return {int(best["player_id"])}, "max_outs"
+
+
 def _final_games(
     schedule: List[Dict[str, Any]],
     *,
@@ -984,6 +1041,7 @@ def run(
     rolling_sync_updates = 0
     over_count = 0
     under_count = 0
+    starter_inferred_flags = 0
 
     with pg_connect() as conn:
         mtp_has_game_type = _table_has_column(conn, "model_training_props", "game_type")
@@ -1090,6 +1148,7 @@ def run(
                     for side in ("home", "away"):
                         side_box = (box.get("teams", {}) or {}).get(side, {}) or {}
                         players_map = side_box.get("players") or {}
+                        inferred_starters, inferred_mode = _infer_team_starter_ids(players_map, pos_map)
                         is_home = side == "home"
                         team_abbr = normalizeTeamAbbreviation(home_abbr if is_home else away_abbr)
                         opp_abbr = normalizeTeamAbbreviation(away_abbr if is_home else home_abbr)
@@ -1121,6 +1180,10 @@ def run(
                             position = pos_map.get(pid) or (str(box_position).upper() if box_position else None)
                             is_pitch = _is_pitcher(position, has_pitch)
                             is_starter = _is_starter(position, stats)
+                            if (not is_starter) and is_pitch and (pid in inferred_starters):
+                                is_starter = True
+                                if inferred_mode != "games_started":
+                                    starter_inferred_flags += 1
 
                             if not (has_bat or is_pitch):
                                 continue
@@ -1279,6 +1342,8 @@ def run(
     print(f"📊 player_stats upserts: {player_stats_upserts}")
     print(f"📈 player_derived upserts: {player_derived_upserts}")
     print(f"🔄 rolling_result_avg_7 sync updates: {rolling_sync_updates}")
+    if starter_inferred_flags:
+        print(f"🪄 starter flags inferred (fallback): {starter_inferred_flags}")
     if skipped_dates:
         print(f"⏭️  Dates skipped:      {skipped_dates}")
     if skipped_games_missing_info:

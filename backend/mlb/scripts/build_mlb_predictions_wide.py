@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import gc
+import shutil
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -56,6 +57,7 @@ DEFAULT_OUT_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wid
 
 _ALLOWED_LINE_FRAC = {0.0, 0.5}
 _NAME_RE = re.compile(r"[^a-z0-9 ]+")
+_SNAPSHOT_TS_RE = re.compile(r"^(.+?)_(\d{8}T\d{6})(?:_(\d+))?\.json$")
 _PITCHER_PROP_TYPES = {
     "earned_runs",
     "hits_allowed",
@@ -94,6 +96,20 @@ def _line_to_pcol(line: float) -> Optional[str]:
     whole = int(math.floor(x))
     frac_digit = "5" if abs(frac - 0.5) < 1e-9 else "0"
     return f"p_over_{whole}_{frac_digit}"
+
+
+def _american_to_implied_probability(price: Optional[float]) -> Optional[float]:
+    try:
+        if price is None:
+            return None
+        p = float(price)
+        if p == 0.0:
+            return None
+        if p > 0:
+            return 100.0 / (p + 100.0)
+        return abs(p) / (abs(p) + 100.0)
+    except Exception:
+        return None
 
 
 def _date_et_today() -> str:
@@ -209,6 +225,14 @@ class Offer:
     line: float
     books_seen: int
     books_two_sided: int
+    bookmaker_key: Optional[str]
+    price_over_american: Optional[float]
+    price_under_american: Optional[float]
+    implied_over: Optional[float]
+    implied_under: Optional[float]
+    implied_over_novig: Optional[float]
+    implied_under_novig: Optional[float]
+    market_hold: Optional[float]
 
 
 @dataclass
@@ -461,6 +485,9 @@ def _flatten_market_snapshot(
     grouped_book_sides: Dict[Tuple[str, str, str, str, str, float], Dict[str, set[str]]] = defaultdict(
         lambda: defaultdict(set)
     )
+    grouped_book_prices: Dict[
+        Tuple[str, str, str, str, str, float], Dict[str, Dict[str, float]]
+    ] = defaultdict(lambda: defaultdict(dict))
     grouped_names: Dict[Tuple[str, str, str, str, str, float], str] = {}
     event_meta: Dict[str, Dict[str, Any]] = {}
     target_book = _clean_str(two_sided_bookmaker)
@@ -514,6 +541,13 @@ def _flatten_market_snapshot(
                     if side not in {"over", "under"}:
                         counts["skip_non_ou_side"] += 1
                         continue
+                    price_num: Optional[float] = None
+                    try:
+                        raw_price = outcome.get("price")
+                        if raw_price is not None:
+                            price_num = float(raw_price)
+                    except Exception:
+                        price_num = None
                     key = (
                         event_id,
                         prop_type,
@@ -523,6 +557,8 @@ def _flatten_market_snapshot(
                         float(line),
                     )
                     grouped_book_sides[key][str(book_key)].add(side)
+                    if price_num is not None:
+                        grouped_book_prices[key][str(book_key)][side] = float(price_num)
                     grouped_names.setdefault(key, str(player_name))
                     counts["raw_outcomes"] += 1
 
@@ -546,6 +582,36 @@ def _flatten_market_snapshot(
             elif not books_two_sided:
                 counts["skip_two_sided_no_book_pair"] += 1
                 continue
+        selected_book: Optional[str] = None
+        price_over: Optional[float] = None
+        price_under: Optional[float] = None
+        book_price_map = grouped_book_prices.get((event_id, prop_type, norm_player_name, home_abbr, away_abbr, line), {})
+        if target_book:
+            price_map = book_price_map.get(target_book) or {}
+            if {"over", "under"}.issubset(set(price_map.keys())):
+                selected_book = str(target_book)
+                price_over = float(price_map.get("over")) if price_map.get("over") is not None else None
+                price_under = float(price_map.get("under")) if price_map.get("under") is not None else None
+        if selected_book is None:
+            for bk in sorted(books_two_sided):
+                price_map = book_price_map.get(str(bk)) or {}
+                if {"over", "under"}.issubset(set(price_map.keys())):
+                    selected_book = str(bk)
+                    price_over = float(price_map.get("over")) if price_map.get("over") is not None else None
+                    price_under = float(price_map.get("under")) if price_map.get("under") is not None else None
+                    break
+
+        implied_over = _american_to_implied_probability(price_over)
+        implied_under = _american_to_implied_probability(price_under)
+        implied_over_novig: Optional[float] = None
+        implied_under_novig: Optional[float] = None
+        market_hold: Optional[float] = None
+        if implied_over is not None and implied_under is not None:
+            denom = float(implied_over + implied_under)
+            market_hold = float(denom - 1.0)
+            if denom > 0:
+                implied_over_novig = float(implied_over / denom)
+                implied_under_novig = float(implied_under / denom)
         display_name = grouped_names.get((event_id, prop_type, norm_player_name, home_abbr, away_abbr, line))
         if not display_name:
             display_name = " ".join(w.capitalize() for w in norm_player_name.split())
@@ -562,6 +628,14 @@ def _flatten_market_snapshot(
                 line=float(line),
                 books_seen=len(by_book),
                 books_two_sided=len(books_two_sided),
+                bookmaker_key=selected_book,
+                price_over_american=price_over,
+                price_under_american=price_under,
+                implied_over=implied_over,
+                implied_under=implied_under,
+                implied_over_novig=implied_over_novig,
+                implied_under_novig=implied_under_novig,
+                market_hold=market_hold,
             )
         )
     offers.sort(key=lambda o: (o.home_team_abbr, o.away_team_abbr, o.prop_type, o.player_name, o.line))
@@ -825,6 +899,18 @@ def _predict_rows(
                     "starting_pitcher_id": int(g.sp_away_id if item.is_home else g.sp_home_id) if (g.sp_away_id if item.is_home else g.sp_home_id) else None,
                     "prop_type": off.prop_type,
                     "prop_value": float(off.line),
+                    "line": float(off.line),
+                    "bookmaker_key": _clean_str(off.bookmaker_key),
+                    "price_over_american": off.price_over_american,
+                    "price_under_american": off.price_under_american,
+                    "implied_over": off.implied_over,
+                    "implied_under": off.implied_under,
+                    "implied_over_novig": off.implied_over_novig,
+                    "implied_under_novig": off.implied_under_novig,
+                    "market_hold": off.market_hold,
+                    # Backward-compatible single-side aliases.
+                    "market_odds_american": off.price_over_american,
+                    "market_implied_probability": off.implied_over,
                     "over_under": "over",
                 }
                 try:
@@ -919,16 +1005,81 @@ def _to_wide(pred_rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     return wide[ordered].sort_values(by=["game_date", "game_id", "prop_type", "player_name"], kind="stable").reset_index(drop=True)
 
 
-def _write_odds_snapshot_json(*, out_path: Path, slate_date: str, events: Sequence[Dict[str, Any]]) -> None:
+def _snapshot_tagged_path(*, out_path: Path, captured_at_utc: datetime) -> Path:
+    token = captured_at_utc.strftime("%Y%m%dT%H%M%S")
+    stem = out_path.stem
+    suffix = out_path.suffix or ".json"
+    candidate = out_path.with_name(f"{stem}_{token}{suffix}")
+    if not candidate.exists():
+        return candidate
+    # Extremely rare: multiple runs write in the same second.
+    i = 1
+    while True:
+        candidate = out_path.with_name(f"{stem}_{token}_{i}{suffix}")
+        if not candidate.exists():
+            return candidate
+        i += 1
+
+
+def _collect_tagged_snapshots(*, out_path: Path) -> List[Tuple[Path, str, int]]:
+    stem = out_path.stem
+    suffix = out_path.suffix or ".json"
+    out: List[Tuple[Path, str, int]] = []
+    for p in out_path.parent.glob(f"{stem}_*{suffix}"):
+        m = _SNAPSHOT_TS_RE.match(p.name)
+        if not m:
+            continue
+        if m.group(1) != stem:
+            continue
+        ts = m.group(2)
+        seq = int(m.group(3) or "0")
+        out.append((p, ts, seq))
+    out.sort(key=lambda x: (x[1], x[2], x[0].name))
+    return out
+
+
+def _refresh_snapshot_aliases(*, out_path: Path) -> Dict[str, str]:
+    tagged = _collect_tagged_snapshots(out_path=out_path)
+    if not tagged:
+        return {}
+    by_rank = {
+        "earliest": tagged[0][0],
+        "mid": tagged[len(tagged) // 2][0],
+        "final": tagged[-1][0],
+    }
+    aliases: Dict[str, str] = {}
+    suffix = out_path.suffix or ".json"
+    for label, src in by_rank.items():
+        alias = out_path.with_name(f"{out_path.stem}_{label}{suffix}")
+        if src.resolve() != alias.resolve():
+            shutil.copyfile(src, alias)
+        aliases[label] = str(alias)
+    return aliases
+
+
+def _write_odds_snapshot_json(*, out_path: Path, slate_date: str, events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    captured_at_utc = datetime.now(ZoneInfo("UTC"))
     payload = {
         "sport": "baseball_mlb",
         "game_date_et": str(slate_date),
-        "captured_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
+        "captured_at_utc": captured_at_utc.isoformat(),
         "event_count": int(len(events)),
         "events": list(events),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    # Compatibility path: keep latest snapshot where downstream scripts expect it.
+    out_path.write_text(body, encoding="utf-8")
+    # Retention path: persist every run with a timestamped filename.
+    tagged_path = _snapshot_tagged_path(out_path=out_path, captured_at_utc=captured_at_utc)
+    tagged_path.write_text(body, encoding="utf-8")
+    aliases = _refresh_snapshot_aliases(out_path=out_path)
+    return {
+        "canonical_path": str(out_path),
+        "tagged_path": str(tagged_path),
+        "tagged_count": int(len(_collect_tagged_snapshots(out_path=out_path))),
+        "alias_paths": aliases,
+    }
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -957,7 +1108,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument(
         "--require-two-sided",
         action="store_true",
-        default=str(os.environ.get("MLB_PREDICT_REQUIRE_TWO_SIDED", "0")).strip().lower() in {"1", "true", "yes", "on"},
+        default=str(os.environ.get("MLB_PREDICT_REQUIRE_TWO_SIDED", "1")).strip().lower() in {"1", "true", "yes", "on"},
         help="Keep only offers with both over and under prices.",
     )
     ap.add_argument(
@@ -1016,8 +1167,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             events = market_odds_service._fetch_market_snapshot(game_date=str(slate_date))
             print(f"[mlb-wide-pred] odds snapshot events={len(events)}")
         if odds_snapshot_out:
-            _write_odds_snapshot_json(out_path=odds_snapshot_out, slate_date=str(slate_date), events=events)
-            print(f"[mlb-wide-pred] wrote odds snapshot json={odds_snapshot_out}")
+            write_meta = _write_odds_snapshot_json(out_path=odds_snapshot_out, slate_date=str(slate_date), events=events)
+            print(f"[mlb-wide-pred] wrote odds snapshot latest={write_meta.get('canonical_path')}")
+            print(f"[mlb-wide-pred] wrote odds snapshot tagged={write_meta.get('tagged_path')}")
+            print(f"[mlb-wide-pred] odds snapshot tagged_count={write_meta.get('tagged_count')}")
+            alias_paths = write_meta.get("alias_paths") or {}
+            if alias_paths:
+                print(
+                    "[mlb-wide-pred] odds snapshot aliases "
+                    f"earliest={alias_paths.get('earliest')} mid={alias_paths.get('mid')} final={alias_paths.get('final')}"
+                )
 
         market_to_prop = _invert_market_map()
         team_name_rev = _build_team_name_reverse()

@@ -344,6 +344,8 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
             "game_type": (str(payload.get("game_type") or "").strip().upper() or None),
             "game_time": None,
             "is_home": bool(payload.get("is_home", False)),
+            "home_team_code": payload.get("home_team_code"),
+            "away_team_code": payload.get("away_team_code"),
             "opponent_team_id": payload.get("opponent_team_id"),
             "opponent": payload.get("opponent"),
             "opponent_encoded": payload.get("opponent_encoded"),
@@ -375,6 +377,22 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
         if market_implied_probability not in (None, "")
         else None
     )
+    # Two-sided market fields (OddsAPI snapshot native).
+    price_over_american = payload.get("price_over_american")
+    price_under_american = payload.get("price_under_american")
+    implied_over = payload.get("implied_over")
+    implied_under = payload.get("implied_under")
+    implied_over_novig = payload.get("implied_over_novig")
+    implied_under_novig = payload.get("implied_under_novig")
+    market_hold = payload.get("market_hold")
+
+    price_over_american = _to_float(price_over_american, None) if price_over_american not in (None, "") else None
+    price_under_american = _to_float(price_under_american, None) if price_under_american not in (None, "") else None
+    implied_over = _to_float(implied_over, None) if implied_over not in (None, "") else None
+    implied_under = _to_float(implied_under, None) if implied_under not in (None, "") else None
+    implied_over_novig = _to_float(implied_over_novig, None) if implied_over_novig not in (None, "") else None
+    implied_under_novig = _to_float(implied_under_novig, None) if implied_under_novig not in (None, "") else None
+    market_hold = _to_float(market_hold, None) if market_hold not in (None, "") else None
 
     features = {
         "player_id": int(player_id),
@@ -383,16 +401,28 @@ def prepare_prop(payload: Dict[str, Any]) -> Dict[str, Any]:
         "team": team_abbr,
         "game_date": game_date,
         "prop_type": prop_type,
+        "line": prop_value,
         "prop_value": prop_value,
         "over_under": over_under,
         "rolling_result_avg_7": rolling_result_avg_7,
         "hit_streak": _to_float(payload.get("hit_streak"), 0.0),
         "win_streak": _to_float(payload.get("win_streak"), 0.0),
         "line_diff": line_diff,
+        "price_over_american": price_over_american,
+        "price_under_american": price_under_american,
+        "implied_over": implied_over,
+        "implied_under": implied_under,
+        "implied_over_novig": implied_over_novig,
+        "implied_under_novig": implied_under_novig,
+        "market_hold": market_hold,
         "market_odds_american": market_odds_american,
         "market_implied_probability": market_implied_probability,
         **context,
     }
+    if _is_missing(features.get("home_team_code")) and not _is_missing(payload.get("home_team_code")):
+        features["home_team_code"] = payload.get("home_team_code")
+    if _is_missing(features.get("away_team_code")) and not _is_missing(payload.get("away_team_code")):
+        features["away_team_code"] = payload.get("away_team_code")
 
     # Hydrate derived rolling stats so prediction has signal even when caller omits them.
     game_id_context = context.get("game_id")

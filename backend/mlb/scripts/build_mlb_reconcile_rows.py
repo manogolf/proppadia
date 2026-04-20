@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -329,6 +330,12 @@ def main() -> int:
         default=0,
         help="When >0, fail if rows_with_outcomes is below this minimum.",
     )
+    ap.add_argument(
+        "--require-two-sided",
+        action="store_true",
+        default=str(os.environ.get("MLB_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower() in {"1", "true", "yes", "on"},
+        help="Keep only rows where both over and under market prices are present.",
+    )
     args = ap.parse_args()
 
     odds_root = Path(str(args.odds_root)).expanduser()
@@ -623,6 +630,11 @@ def main() -> int:
     # Keep a stable header even when no rows are produced, so downstream reads do
     # not fail with pandas EmptyDataError.
     out_df = pd.DataFrame(rows, columns=output_columns)
+    rows_filtered_non_two_sided = 0
+    if bool(args.require_two_sided) and not out_df.empty:
+        two_sided_mask = out_df[["price_over_american", "price_under_american"]].notna().all(axis=1)
+        rows_filtered_non_two_sided = int((~two_sided_mask).sum())
+        out_df = out_df.loc[two_sided_mask].copy()
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     out_summary_json.parent.mkdir(parents=True, exist_ok=True)
     out_df.to_csv(out_csv, index=False)
@@ -650,6 +662,8 @@ def main() -> int:
         "rows_with_outcomes": int(out_df["actual_value"].notna().sum()) if ("actual_value" in out_df.columns and not out_df.empty) else 0,
         "outcomes_loaded": bool(outcomes_loaded),
         "outcomes_error": outcomes_error,
+        "require_two_sided": bool(args.require_two_sided),
+        "rows_filtered_non_two_sided": int(rows_filtered_non_two_sided),
         "generated_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
         "derived_rows_added": int(derived_rows_added),
         "derived_props_from_mtp": derive_props,

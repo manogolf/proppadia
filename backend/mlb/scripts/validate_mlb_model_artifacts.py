@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+import joblib
 from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 
@@ -15,6 +18,24 @@ from backend.app.services.model_registry import (
     get_expected_features,
     load_model,
 )
+
+
+def _artifact_latest_dir() -> Path:
+    root = Path(str(os.environ.get("MODEL_DIR", "/var/data/proppadia/models")))
+    return root / "latest"
+
+
+def _load_artifact_meta(prop_type: str) -> Dict[str, Any]:
+    path = _artifact_latest_dir() / f"{prop_type}.joblib"
+    try:
+        obj = joblib.load(path)
+        if isinstance(obj, dict):
+            meta = obj.get("meta")
+            if isinstance(meta, dict):
+                return meta
+    except Exception:
+        pass
+    return {}
 
 
 def _feature_names(model: Any) -> List[str]:
@@ -42,7 +63,15 @@ def _validate_prop(
         "failures": [],
         "models": {},
     }
-    expected = get_expected_features(prop_type) or []
+    artifact_meta = _load_artifact_meta(prop_type)
+    expected = list(artifact_meta.get("input_columns") or [])
+    expected_source = "artifact_meta_input_columns"
+    if not expected:
+        expected = get_expected_features(prop_type) or []
+        expected_source = "feature_registry"
+    row["expected_features_source"] = expected_source
+    if artifact_meta:
+        row["artifact_training_profile"] = artifact_meta.get("training_profile")
     row["expected_features_count"] = len(expected)
     if not expected:
         row["ok"] = False

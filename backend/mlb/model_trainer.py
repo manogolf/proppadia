@@ -102,13 +102,26 @@ _debug_feature_paths()
 # - reconcile_csv (default): market+outcome rows CSV + player_derived_stats join
 # - base_merge: model_training_props + player_derived_stats join
 # - view: explicit FEATURE_VIEW relation via Supabase table API
+def _env_enabled(name: str, default: bool = False) -> bool:
+    raw = str(os.environ.get(name, "") or "").strip().lower()
+    if not raw:
+        return bool(default)
+    return raw in {"1", "true", "yes", "on"}
+
+
 TRAIN_FEATURE_SOURCE = str(os.environ.get("TRAIN_FEATURE_SOURCE", "reconcile_csv")).strip().lower()
+TRAIN_PROFILE = str(os.environ.get("MLB_TRAIN_PROFILE", "legacy")).strip().lower()
+TRAIN_MARKET_ONLY = _env_enabled("MLB_TRAIN_MARKET_ONLY", False) or TRAIN_PROFILE in {
+    "market_only",
+    "bol_market_only",
+}
 FEATURE_VIEW = os.environ.get("FEATURE_VIEW", "").strip()
 RECONCILE_ROWS_CSV = str(
     os.environ.get("MLB_TRAIN_RECONCILE_ROWS_CSV")
     or os.environ.get("MLB_RECONCILE_ROWS_OUT_CSV")
     or (Path(__file__).resolve().parents[2] / "tmp" / "mlb_base_vs_market_rows.csv")
 )
+RECONCILE_BOOKMAKER = str(os.environ.get("MLB_TRAIN_RECONCILE_BOOKMAKER", "") or "").strip().lower()
 RECONCILE_REQUIRE_TWO_SIDED = str(os.environ.get("MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower() not in {
     "0",
     "false",
@@ -127,6 +140,48 @@ RECONCILE_FALLBACK_BASE_MERGE = str(
     "false",
     "no",
     "off",
+}
+
+BVP_FEATURE_SET_TAG = str(
+    os.environ.get("MLB_TRAIN_BVP_FEATURE_SET_TAG")
+    or os.environ.get("MLB_BVP_FEATURE_SET_TAG")
+    or os.environ.get("MLB_PFP_OVERLAP_FEATURE_SET_TAG")
+    or "v1"
+).strip() or "v1"
+
+ALWAYS_CATEGORICAL_FEATURES = {
+    "streak_type",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "home_team_code",
+    "away_team_code",
+}
+
+# Brand-new market-native profile: use only OddsAPI/market-context features.
+# This intentionally excludes d7/d15/d30 derived stats and BvP/PvB.
+MARKET_ONLY_FEATURES: List[str] = [
+    "line",
+    "prop_value",
+    "price_over_american",
+    "price_under_american",
+    "implied_over",
+    "implied_under",
+    "implied_over_novig",
+    "implied_under_novig",
+    "market_hold",
+    "home_team_code",
+    "away_team_code",
+    "game_day_of_week",
+]
+
+_BVP_ALIAS_TO_CANONICAL = {
+    "bvp_pa_prior": "bvp_plate_appearances",
+    "bvp_ab_prior": "bvp_at_bats",
+    "bvp_hits_prior": "bvp_hits",
+    "bvp_hr_prior": "bvp_home_runs",
+    "bvp_bb_prior": "bvp_walks",
+    "bvp_so_prior": "bvp_strikeouts",
+    "bvp_tb_prior": "bvp_total_bases",
 }
 
 # ---- Training thresholds (class balance) -------------------------------------
@@ -180,6 +235,138 @@ def _pg_data(resp):
     if isinstance(resp, list):
         return resp
     return []
+
+
+def _normalize_pfp_features_blob(features: Any) -> Dict[str, float]:
+    payload: Dict[str, Any]
+    if isinstance(features, dict):
+        payload = features
+    elif isinstance(features, str):
+        try:
+            parsed = json.loads(features)
+            payload = parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            payload = {}
+    else:
+        payload = {}
+
+    out: Dict[str, float] = {}
+    for k, v in payload.items():
+        key = str(k).strip()
+        if not key.startswith("bvp_"):
+            continue
+        try:
+            out[key] = float(v)
+        except Exception:
+            continue
+
+    # Normalize legacy aliases to canonical names.
+    for alias, canonical in _BVP_ALIAS_TO_CANONICAL.items():
+        if canonical not in out and alias in out:
+            out[canonical] = out[alias]
+    return out
+
+
+def _fetch_pfp_feature_rows(
+    sb: Optional[Client],
+    *,
+    game_ids: List[int],
+    feature_set_tag: str,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for chunk in _chunked(game_ids, 1000):
+        if sb is not None:
+            r = (
+                sb.schema("mlb").table("prop_features_precomputed")
+                .select("prop_type,player_id,game_id,features")
+                .eq("feature_set_tag", feature_set_tag)
+                .in_("game_id", chunk)
+                .execute()
+            )
+            part = _pg_data(r)
+        else:
+            placeholders = ",".join(["%s"] * len(chunk))
+            sql = (
+                "SELECT prop_type, player_id, game_id, features "
+                "FROM mlb.prop_features_precomputed "
+                f"WHERE feature_set_tag = %s AND game_id IN ({placeholders})"
+            )
+            part = pg_fetchall(sql, tuple([feature_set_tag, *chunk]))
+        if part:
+            rows.extend(part)
+    return rows
+
+
+def _merge_pfp_bvp_features(sb: Optional[Client], df: pd.DataFrame, feat_cols: List[str]) -> pd.DataFrame:
+    """Merge BvP fields from prop_features_precomputed into the training frame."""
+    bvp_cols = [c for c in feat_cols if str(c).startswith("bvp_")]
+    if not bvp_cols:
+        return df
+    required = {"prop_type", "player_id", "game_id"}
+    if not required.issubset(df.columns):
+        return df
+
+    out = df.copy()
+    out["prop_type"] = out["prop_type"].astype(str).str.strip().str.lower()
+    out["player_id"] = pd.to_numeric(out["player_id"], errors="coerce")
+    out["game_id"] = pd.to_numeric(out["game_id"], errors="coerce")
+
+    keys_df = out[list(required)].dropna().drop_duplicates()
+    if keys_df.empty:
+        return out
+    keys_df["player_id"] = keys_df["player_id"].astype(int)
+    keys_df["game_id"] = keys_df["game_id"].astype(int)
+    wanted_keys = {
+        (str(r["prop_type"]).strip().lower(), int(r["player_id"]), int(r["game_id"]))
+        for _, r in keys_df.iterrows()
+    }
+    game_ids = sorted({int(g) for g in keys_df["game_id"].tolist()})
+    pfp_rows = _fetch_pfp_feature_rows(sb, game_ids=game_ids, feature_set_tag=BVP_FEATURE_SET_TAG)
+    if not pfp_rows:
+        return out
+
+    merged_rows: List[Dict[str, Any]] = []
+    for row in pfp_rows:
+        try:
+            key = (
+                str(row.get("prop_type") or "").strip().lower(),
+                int(row.get("player_id")),
+                int(row.get("game_id")),
+            )
+        except Exception:
+            continue
+        if key not in wanted_keys:
+            continue
+        feats = _normalize_pfp_features_blob(row.get("features"))
+        if not feats:
+            continue
+        entry: Dict[str, Any] = {
+            "prop_type": key[0],
+            "player_id": key[1],
+            "game_id": key[2],
+        }
+        for c in bvp_cols:
+            if c in feats:
+                entry[c] = feats[c]
+        if len(entry) > 3:
+            merged_rows.append(entry)
+    if not merged_rows:
+        return out
+
+    pfp_df = pd.DataFrame(merged_rows).drop_duplicates(
+        subset=["prop_type", "player_id", "game_id"],
+        keep="first",
+    )
+    out = out.merge(pfp_df, on=["prop_type", "player_id", "game_id"], how="left", suffixes=("", "_pfp"))
+    for c in bvp_cols:
+        pcol = f"{c}_pfp"
+        if pcol not in out.columns:
+            continue
+        base = pd.to_numeric(out[c], errors="coerce") if c in out.columns else pd.Series(np.nan, index=out.index)
+        fill = pd.to_numeric(out[pcol], errors="coerce")
+        out[c] = base.where(base.notna(), fill)
+        out.drop(columns=[pcol], inplace=True)
+    return out
 
 
 # ---- Data access -------------------------------------------------------------
@@ -310,6 +497,8 @@ def _merge_derived_features(sb: Optional[Client], df: pd.DataFrame, feat_cols: L
     if {"player_id", "game_id"}.issubset(out.columns):
         out = out.merge(derived, on=["player_id", "game_id"], how="left", suffixes=("", "_der"))
 
+    out = _merge_pfp_bvp_features(sb, out, feat_cols)
+
     # ensure all requested features exist
     for f in feat_cols:
         if f not in out.columns:
@@ -344,6 +533,13 @@ def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: 
         print(f"[trainer] source=reconcile_csv no rows for prop={prop_type}")
         return out
 
+    if RECONCILE_BOOKMAKER:
+        book_col = out["bookmaker_key"] if "bookmaker_key" in out.columns else pd.Series([""] * len(out), index=out.index)
+        out = out[book_col.astype(str).str.strip().str.lower().eq(RECONCILE_BOOKMAKER)]
+        if out.empty:
+            print(f"[trainer] source=reconcile_csv no rows for prop={prop_type} bookmaker={RECONCILE_BOOKMAKER}")
+            return out
+
     if "game_date" in out.columns:
         out["game_date"] = pd.to_datetime(out["game_date"], errors="coerce")
         out = out[out["game_date"] >= since_date]
@@ -351,7 +547,8 @@ def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: 
     out["line"] = pd.to_numeric(out.get("line"), errors="coerce")
     out = out[out["line"].notna()]
 
-    if RECONCILE_REQUIRE_TWO_SIDED and str(prop_type).strip().lower() not in RECONCILE_ALLOW_MISSING_PRICE_PROPS:
+    allow_missing_prices = (not TRAIN_MARKET_ONLY) and str(prop_type).strip().lower() in RECONCILE_ALLOW_MISSING_PRICE_PROPS
+    if RECONCILE_REQUIRE_TWO_SIDED and not allow_missing_prices:
         px_o = pd.to_numeric(out.get("price_over_american"), errors="coerce")
         px_u = pd.to_numeric(out.get("price_under_american"), errors="coerce")
         out = out[px_o.notna() & px_u.notna()]
@@ -382,6 +579,14 @@ def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: 
         out = out.head(int(limit))
 
     out = _add_time_features(out)
+    if TRAIN_MARKET_ONLY:
+        # Keep this profile clean-room: no player_derived_stats/BvP hydration.
+        for f in feat_cols:
+            if f not in out.columns:
+                out[f] = np.nan
+        print(f"[trainer] source=reconcile_csv market_only=1 prop={prop_type} rows={len(out)} file={path}")
+        return out
+
     out = _merge_derived_features(sb, out, feat_cols)
     print(f"[trainer] source=reconcile_csv prop={prop_type} rows={len(out)} file={path}")
     return out
@@ -494,17 +699,23 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
     if sb is None and not quiet:
         print("[trainer] SUPABASE_URL/key not set; using DATABASE_URL/SUPABASE_DB_URL via direct Postgres fallback.")
 
-    # 1) expected features from repo JSON (same universe as prediction)
-    spec_all = _load_feature_spec()
-    spec = spec_all.get(prop_type) or {}
-    feat_list: List[str] = (
-        spec.get("random_forest")
-        or spec.get("rf")
-        or spec.get("logistic_regression")
-        or spec.get("lr")
-        or spec.get("features")
-        or []
-    )
+    # 1) expected features
+    if TRAIN_MARKET_ONLY:
+        feat_list = list(MARKET_ONLY_FEATURES)
+        if not quiet:
+            print(f"[trainer] profile=market_only prop={prop_type} features={len(feat_list)}")
+    else:
+        # legacy universe from repo metadata
+        spec_all = _load_feature_spec()
+        spec = spec_all.get(prop_type) or {}
+        feat_list = (
+            spec.get("random_forest")
+            or spec.get("rf")
+            or spec.get("logistic_regression")
+            or spec.get("lr")
+            or spec.get("features")
+            or []
+        )
     if not feat_list:
         if not quiet:
             print(f"⏭️  {prop_type}: no feature list in feature_metadata.json; skipping.")
@@ -571,9 +782,14 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
             print("ℹ️  {0}: low-coverage kept → {1}".format(prop_type, ", ".join(low[:12]) + (" ..." if len(low)>12 else "")))
 
     # 3) determine num/cat AFTER pruning
-    ALWAYS_CAT = {"time_of_day_bucket","game_day_of_week"}
-    num_used = [c for c in feat_list if c in df.columns and (is_numeric_dtype(df[c]) and c not in ALWAYS_CAT)]
-    cat_used = [c for c in feat_list if c in df.columns and (not is_numeric_dtype(df[c]) or c in ALWAYS_CAT)]
+    for c in feat_list:
+        if c in ALWAYS_CATEGORICAL_FEATURES:
+            continue
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    num_used = [c for c in feat_list if c in df.columns and (is_numeric_dtype(df[c]) and c not in ALWAYS_CATEGORICAL_FEATURES)]
+    cat_used = [c for c in feat_list if c in df.columns and (not is_numeric_dtype(df[c]) or c in ALWAYS_CATEGORICAL_FEATURES)]
 
     # 4) add missingness indicators for numeric features that have NaNs
     miss_inds = []
@@ -701,8 +917,11 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
             "auc_rf": float(auc_rf) if not np.isnan(auc_rf) else None,
             "decision_threshold": float(best_thr),
             "val_weighted_accuracy": float(best_score),
+            "input_columns": cols_used,
             "features_num": num_used,
             "features_cat": cat_used,
+            "training_profile": "market_only" if TRAIN_MARKET_ONLY else "legacy",
+            "reconcile_bookmaker": RECONCILE_BOOKMAKER or None,
         },
     }
     buf = io.BytesIO()
@@ -734,9 +953,12 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         "auc_rf": None if np.isnan(auc_rf) else float(auc_rf),
         "decision_threshold": float(best_thr),
         "val_weighted_accuracy": float(best_score),
+        "input_columns": cols_used,
         "rows": int(len(df)),
         "features_num": num_used,
         "features_cat": cat_used,
+        "training_profile": "market_only" if TRAIN_MARKET_ONLY else "legacy",
+        "reconcile_bookmaker": RECONCILE_BOOKMAKER or None,
     }
     _atomic_write_bytes(index_path, json.dumps(index, indent=2).encode("utf-8"))
 

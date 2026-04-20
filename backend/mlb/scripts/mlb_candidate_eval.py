@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -159,6 +160,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="",
         help="Required when --source-table reconcile_rows; path to reconcile rows csv.",
     )
+    ap.add_argument(
+        "--reconcile-require-two-sided",
+        action="store_true",
+        default=str(os.environ.get("MLB_QUALITY_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower()
+        in {"1", "true", "yes", "on"},
+        help="When using --source-table reconcile_rows, keep only two-sided market rows.",
+    )
     ap.add_argument("--window-mode", choices=["days", "games"], default="")
     ap.add_argument("--window-days", type=int, default=120)
     ap.add_argument("--games-back", type=int, default=30)
@@ -210,6 +218,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             prop_types=prop_types,
             source_table=args.source_table,
             rows_csv=args.rows_csv,
+            require_two_sided_reconcile_rows=bool(args.reconcile_require_two_sided),
         )
     except Exception as exc:
         print(
@@ -242,6 +251,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "baseline_path": str(baseline_path),
         "source_table": args.source_table,
         "rows_csv": str(args.rows_csv or ""),
+        "reconcile_require_two_sided": bool(args.reconcile_require_two_sided),
         "window_mode": window_mode,
         "window_value": window_value,
         "prop_types": prop_types,

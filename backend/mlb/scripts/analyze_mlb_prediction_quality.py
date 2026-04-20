@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -79,6 +80,7 @@ def _collect_quality_from_rows_csv(
     window_mode: str,
     window_value: int,
     prop_types: Sequence[str],
+    require_two_sided: bool,
 ) -> Dict[str, Any]:
     try:
         import pandas as pd
@@ -110,10 +112,21 @@ def _collect_quality_from_rows_csv(
     for col in ("game_date", "prop_type", "actual_model_pick_outcome", "model_pick_prob"):
         if col not in df.columns:
             df[col] = pd.NA
+    if require_two_sided:
+        for col in ("price_over_american", "price_under_american"):
+            if col not in df.columns:
+                df[col] = pd.NA
 
     if prop_types:
         prop_set = {str(p).strip() for p in prop_types if str(p).strip()}
         df = df[df["prop_type"].astype(str).str.strip().isin(prop_set)]
+
+    if require_two_sided:
+        two_sided_mask = (
+            pd.to_numeric(df["price_over_american"], errors="coerce").notna()
+            & pd.to_numeric(df["price_under_american"], errors="coerce").notna()
+        )
+        df = df.loc[two_sided_mask].copy()
 
     df["game_day"] = pd.to_datetime(df["game_date"], errors="coerce").dt.date
     df["actual_model_pick_outcome"] = df["actual_model_pick_outcome"].astype(str).str.lower().str.strip()
@@ -491,6 +504,10 @@ def collect_quality(
     prop_sources: Sequence[str] | None = None,
     source_table: str = _DEFAULT_SOURCE_TABLE,
     rows_csv: str | None = None,
+    require_two_sided_reconcile_rows: bool = (
+        str(os.environ.get("MLB_QUALITY_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower()
+        in {"1", "true", "yes", "on"}
+    ),
 ) -> Dict[str, Any]:
     normalized_mode = "games" if str(window_mode).lower() == "games" else "days"
     normalized_source = _normalize_source_table(source_table)
@@ -503,6 +520,7 @@ def collect_quality(
             window_mode=normalized_mode,
             window_value=window_value,
             prop_types=filtered_prop_types,
+            require_two_sided=bool(require_two_sided_reconcile_rows),
         )
     overall = _overall(window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources)
     by_prop = _by_prop(window_value, normalized_mode, normalized_source, filtered_prop_types, filtered_prop_sources)
@@ -542,6 +560,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="",
         help="Required when --source-table reconcile_rows; path to reconcile rows csv.",
     )
+    ap.add_argument(
+        "--reconcile-require-two-sided",
+        action="store_true",
+        default=str(os.environ.get("MLB_QUALITY_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower()
+        in {"1", "true", "yes", "on"},
+        help="When using --source-table reconcile_rows, keep only two-sided market rows.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     window_value = int(args.games_back) if args.window_mode == "games" else int(args.window_days)
@@ -554,6 +579,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         prop_sources=prop_sources,
         source_table=args.source_table,
         rows_csv=args.rows_csv,
+        require_two_sided_reconcile_rows=bool(args.reconcile_require_two_sided),
     )
     overall = quality["overall"]
 
