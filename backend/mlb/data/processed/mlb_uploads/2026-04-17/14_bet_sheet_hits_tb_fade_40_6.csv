@@ -1,0 +1,22 @@
+LEAGUE,DATE,HOME,AWAY,DOUBLEHEADER,SECTION,MARKET,SELECTOR,POINT,SIDE,WIN %
+MLB,20260417,PIT,TB,,player_prop,batter_bases,668804,1.5,over,106
+MLB,20260417,PIT,TB,,player_prop,batter_bases,802415,1.5,over,128
+MLB,20260417,MIA,MIL,,player_prop,batter_bases,686217,1.5,over,427
+MLB,20260417,LAA,SD,,player_prop,batter_bases,687263,1.5,over,111
+MLB,20260417,HOU,STL,,player_prop,batter_bases,621043,1.5,over,141
+MLB,20260417,COL,LAD,,player_prop,batter_hits,660271,1.5,over,326
+MLB,20260417,CLE,BAL,,player_prop,batter_bases,624413,1.5,over,138
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,666182,1.5,over,145
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,683146,1.5,over,224
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,682626,1.5,over,194
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,664023,1.5,over,115
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,673357,1.5,over,217
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,683737,1.5,over,313
+MLB,20260417,CHC,NYM,,player_prop,batter_bases,673548,1.5,over,152
+MLB,20260417,BOS,DET,,player_prop,batter_bases,701350,1.5,over,167
+MLB,20260417,BOS,DET,,player_prop,batter_bases,677800,1.5,over,161
+MLB,20260417,ATH,CWS,,player_prop,batter_bases,805367,1.5,over,345
+MLB,20260417,ATH,CWS,,player_prop,batter_bases,643446,1.5,over,154
+MLB,20260417,ATH,CWS,,player_prop,batter_bases,678246,1.5,over,255
+MLB,20260417,ATH,CWS,,player_prop,batter_bases,691016,1.5,over,127
+MLB,20260417,AZ,TOR,,player_prop,batter_bases,699912,1.5,over,116
