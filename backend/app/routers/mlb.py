@@ -46,6 +46,7 @@ from backend.app.services.mlb.prop_submission_service import (
 )
 from backend.app.services.mlb.schedule_service import fetch_schedule
 from backend.app.services.mlb.standings_service import get_standings
+from backend.app.services.mlb.today_workspace_service import fetch_today_workspace
 from backend.app.services.mlb.player_service import (
     list_players_mlb,
     list_players,
@@ -147,6 +148,28 @@ def mlb_roster_freshness(
 ):
     try:
         return get_roster_freshness(require_min=require_min, stale_after_hours=stale_after_hours)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/today/workspace", summary="MLB today workspace rows")
+def mlb_today_workspace(
+    prop_type: Optional[str] = Query(None, description="Optional prop_type filter"),
+    team: Optional[str] = Query(None, description="Optional team abbreviation filter"),
+    timing_signal: Optional[str] = Query(None, description="Optional timing signal filter"),
+    player_query: Optional[str] = Query(None, description="Optional player-name text search"),
+    limit: int = Query(500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+):
+    try:
+        return fetch_today_workspace(
+            prop_type=prop_type,
+            team=team,
+            timing_signal=timing_signal,
+            player_query=player_query,
+            limit=limit,
+            offset=offset,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 

@@ -24,6 +24,7 @@ import PlayerTeamBrowser from "../Pages/PlayerTeamBrowser.jsx";
 import PlayerTeamChooser from "../Pages/PlayerTeamChooser.jsx";
 import WatchlistPage from "../Pages/WatchlistPage.jsx";
 import MLBHome from "../Pages/mlb/MLBHome.jsx";
+import MLBTodayWorkspacePage from "../Pages/mlb/MLBTodayWorkspacePage.jsx";
 import NHLHome from "../Pages/nhl/NHLHome.jsx";
 import NHLPredictions from "../Pages/nhl/NHLPredictions.jsx";
 import NHLPlayerPropsPage from "../Pages/nhl/NHLPlayerPropsPage.jsx";
@@ -131,6 +132,9 @@ function AppShell() {
             <a href="/mlb/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
               MLB Picks
             </a>
+            <a href="/mlb/today" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              MLB Today
+            </a>
             <a href="/nhl/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
               NHL Picks
             </a>
@@ -165,6 +169,7 @@ function AppShell() {
           {/* New multi-sport gateway at "/" */}
           <Route path="/" element={<Home />} />
           <Route path="/mlb/slate" element={<MLBHome />} />
+          <Route path="/mlb/today" element={<MLBTodayWorkspacePage />} />
           <Route
             path="/mlb/predictions"
             element={
