@@ -233,6 +233,56 @@ def _extract_hits_env(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _fetch_today_workspace_status(slate_date: str) -> Tuple[Dict[str, Any], Optional[str]]:
+    status: Dict[str, Any] = {
+        "requested_slate_date": slate_date,
+        "active_slate_date": None,
+        "is_ready": False,
+        "row_count": 0,
+        "last_updated": None,
+        "status": "fail",
+        "reason": "not_staged",
+    }
+    try:
+        # Use the exact service function wired behind GET /api/mlb/today/workspace.
+        from backend.app.services.mlb.today_workspace_service import fetch_today_workspace
+
+        payload = fetch_today_workspace(slate_date=slate_date, limit=1, offset=0)
+        requested = str(payload.get("requested_slate_date") or slate_date)
+        active = payload.get("active_slate_date")
+        is_ready = bool(payload.get("is_ready"))
+        total_rows = _as_int(payload.get("total"))
+        if total_rows is None:
+            total_rows = _as_int(payload.get("count")) or 0
+        last_updated = payload.get("last_updated")
+        if isinstance(last_updated, datetime):
+            last_updated = last_updated.isoformat()
+
+        reasons: List[str] = []
+        if not is_ready:
+            reasons.append("not_staged")
+        if str(active or "") != requested:
+            reasons.append("wrong_active_date")
+        if int(total_rows) <= 0:
+            reasons.append("zero_rows")
+
+        status.update(
+            {
+                "requested_slate_date": requested,
+                "active_slate_date": active,
+                "is_ready": is_ready,
+                "row_count": int(total_rows),
+                "last_updated": last_updated,
+                "status": "pass" if not reasons else "fail",
+                "reason": ",".join(reasons) if reasons else "ok",
+            }
+        )
+        return status, None
+    except Exception as exc:
+        status["reason"] = f"error:{type(exc).__name__}"
+        return status, f"error:{type(exc).__name__}"
+
+
 def _derive_overall_status(
     *,
     pipeline: Dict[str, Any],
@@ -437,6 +487,7 @@ def build_markdown(
     model_vs_fade: Dict[str, Any],
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
+    today_workspace: Dict[str, Any],
     path_forward: Sequence[Dict[str, str]],
     source_states: Dict[str, Any],
 ) -> str:
@@ -626,6 +677,18 @@ def build_markdown(
     for name, state in source_states.items():
         lines.append(f"- {name}: `{state}`")
     lines.append("")
+
+    lines.append("## MLB Today Workspace")
+    lines.append(f"requested_slate_date: {today_workspace.get('requested_slate_date')}")
+    lines.append(f"active_slate_date: {today_workspace.get('active_slate_date')}")
+    lines.append(f"row_count: {today_workspace.get('row_count')}")
+    lines.append(f"last_updated: {today_workspace.get('last_updated')}")
+    ws_status = str(today_workspace.get("status") or "fail").upper()
+    lines.append("")
+    lines.append(f"Status: {ws_status}")
+    if ws_status != "PASS":
+        lines.append(f"Reason: {today_workspace.get('reason') or 'unknown'}")
+    lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -653,6 +716,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     hits_raw, hits_err = _load_json(Path(args.hits_environment_json))
     pipeline_raw, pipeline_err = _load_last_jsonl(Path(args.pipeline_history_jsonl))
     ops_raw, ops_err = _load_last_jsonl(Path(args.ops_history_jsonl))
+    today_workspace, today_workspace_err = _fetch_today_workspace_status(report_date)
 
     source_states = {
         "postgrade_alerts_json": postgrade_err or "ok",
@@ -661,6 +725,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "hits_environment_json": hits_err or "ok",
         "pipeline_history_jsonl": pipeline_err or "ok",
         "ops_history_jsonl": ops_err or "ok",
+        "today_workspace": today_workspace_err or "ok",
     }
 
     postgrade = _extract_postgrade(postgrade_raw if isinstance(postgrade_raw, dict) else None)
@@ -698,6 +763,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_vs_fade=model_vs_fade,
         bvp_impact=bvp_impact,
         hits_env=hits_env,
+        today_workspace=today_workspace,
         path_forward=path_forward,
         source_states=source_states,
     )
@@ -715,6 +781,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "model_vs_fade": model_vs_fade,
         "bvp_impact": bvp_impact,
         "hits_environment": hits_env,
+        "today_workspace": today_workspace,
         "path_forward": path_forward,
         "outputs": {
             "out_md": str(args.out_md),
