@@ -61,7 +61,9 @@ def _row_brief(row: Dict[str, Any]) -> Dict[str, Any]:
         "game_id",
         "prop_type",
         "line",
+        "side",
         "best_price",
+        "best_price_book",
         "market_median",
         "market_range",
         "value_vs_market",
@@ -73,9 +75,10 @@ def _row_brief(row: Dict[str, Any]) -> Dict[str, Any]:
         "consistency_score",
         "hit_rate_last_10",
         "hit_rate_season",
-        "open_over_price",
-        "latest_over_price",
-        "over_price_change_from_open",
+        "open_price",
+        "latest_price",
+        "price_change_from_open",
+        "book_count",
         "num_snapshots",
     ]
     return {k: row.get(k) for k in keep}
@@ -127,8 +130,8 @@ def _validate_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "value_vs_market_exact_fail": 0,
         "value_sign_pass": 0,
         "value_sign_fail": 0,
-        "over_price_delta_field_pass": 0,
-        "over_price_delta_field_fail": 0,
+        "price_delta_field_pass": 0,
+        "price_delta_field_fail": 0,
         "timing_signal_rule_pass": 0,
         "timing_signal_rule_fail": 0,
         "timing_reason_mapping_pass": 0,
@@ -182,17 +185,17 @@ def _validate_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 }
             )
 
-        open_over = _to_float(r.get("open_over_price"))
-        latest_over = _to_float(r.get("latest_over_price"))
-        delta_field = _to_float(r.get("over_price_change_from_open"))
-        delta_calc = None if (open_over is None or latest_over is None) else (latest_over - open_over)
+        open_price = _to_float(r.get("open_price"))
+        latest_price = _to_float(r.get("latest_price"))
+        delta_field = _to_float(r.get("price_change_from_open"))
+        delta_calc = None if (open_price is None or latest_price is None) else (latest_price - open_price)
         if (_missing(delta_field) and delta_calc is None) or _eq(delta_field, delta_calc):
-            checks["over_price_delta_field_pass"] += 1
+            checks["price_delta_field_pass"] += 1
         else:
-            checks["over_price_delta_field_fail"] += 1
+            checks["price_delta_field_fail"] += 1
             issues.append(
                 {
-                    "type": "over_price_delta_mismatch",
+                    "type": "price_delta_mismatch",
                     "row": _row_brief(r),
                     "expected": delta_calc,
                     "actual": delta_field,
@@ -299,7 +302,7 @@ def _validate_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 }
             )
 
-        price_fields = ("best_price", "market_median", "open_over_price", "latest_over_price")
+        price_fields = ("best_price", "market_median", "open_price", "latest_price")
         invalid_fields = []
         for pf in price_fields:
             pv = _to_float(r.get(pf))
@@ -369,8 +372,20 @@ def _build_report(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "row_count": len(rows),
         "bucket_counts": {
+            "side": _bucket_counts(rows, "side"),
             "timing_signal": _bucket_counts(rows, "timing_signal"),
             "streak_context_label": _bucket_counts(rows, "streak_context_label"),
+            "prop_type__side": _bucket_counts(
+                [
+                    {
+                        "prop_side": (
+                            f"{str(r.get('prop_type') or '').strip()}|{str(r.get('side') or '').strip().upper()}"
+                        )
+                    }
+                    for r in rows
+                ],
+                "prop_side",
+            ),
         },
         "missing_counts": missing,
         "value_vs_market_distribution": value_distribution,

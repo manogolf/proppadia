@@ -102,6 +102,8 @@ agg AS (
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_under_american_clean) AS market_median_under_price_raw,
     max(price_over_american_clean) AS market_max_over_price,
     min(price_over_american_clean) AS market_min_over_price,
+    max(price_under_american_clean) AS market_max_under_price,
+    min(price_under_american_clean) AS market_min_under_price,
     count(*) FILTER (WHERE price_over_american_clean IS NOT NULL) AS book_count_over,
     count(*) FILTER (WHERE price_under_american_clean IS NOT NULL) AS book_count_under,
     stddev_pop(price_over_american_clean) AS price_dispersion_over,
@@ -134,6 +136,7 @@ SELECT
     ELSE NULL
   END AS market_median_under_price,
   (a.market_max_over_price - a.market_min_over_price) AS market_range_over,
+  (a.market_max_under_price - a.market_min_under_price) AS market_range_under,
   a.book_count_over,
   a.book_count_under,
   a.price_dispersion_over,
@@ -279,6 +282,8 @@ SELECT
       ELSE NULL
     END
   ) AS under_price_change_from_open,
+  v.over_span,
+  v.under_span,
   (coalesce(l.snap_best_over, o.snap_best_over) > o.snap_best_over) AS best_price_improved_since_open,
   (coalesce(l.snap_best_over, o.snap_best_over) < o.snap_best_over) AS best_price_worsened_since_open,
   CASE
@@ -522,92 +527,214 @@ CREATE UNIQUE INDEX idx_today_player_context_key
 -- STAGE 4: Frontend-serving workspace
 -- ---------------------------------------------------------------------------
 CREATE MATERIALIZED VIEW mlb.today_workspace_mlb AS
+WITH joined AS (
+  SELECT
+    ms.game_date,
+    ms.game_id,
+    ms.player_id,
+    ms.player_name,
+    ms.team,
+    ms.opponent,
+    ms.is_home,
+    ms.prop_type,
+    ms.line,
+    ms.best_over_price,
+    ms.best_under_price,
+    ms.best_over_book,
+    ms.best_under_book,
+    ms.market_median_over_price,
+    ms.market_median_under_price,
+    ms.market_range_over,
+    ms.market_range_under,
+    ms.book_count_over,
+    ms.book_count_under,
+    ms.price_dispersion_over,
+    ms.price_dispersion_under,
+    ts.open_over_price,
+    ts.open_under_price,
+    ts.latest_over_price,
+    ts.latest_under_price,
+    ts.minutes_since_open,
+    ts.num_snapshots,
+    ts.over_price_change_from_open,
+    ts.under_price_change_from_open,
+    ts.over_span,
+    ts.under_span,
+    pc.streak_context_label,
+    pc.consistency_score,
+    pc.last_5_avg,
+    pc.last_10_avg,
+    pc.season_avg,
+    pc.hit_rate_last_5,
+    pc.hit_rate_last_10,
+    pc.hit_rate_season,
+    pc.streak_type,
+    pc.streak_count,
+    pc.baseline_delta
+  FROM mlb.today_market_snapshot ms
+  LEFT JOIN mlb.today_market_timing_signal ts
+    ON ms.player_id = ts.player_id
+   AND ms.game_id = ts.game_id
+   AND ms.prop_type = ts.prop_type
+   AND ms.line = ts.line
+  LEFT JOIN mlb.today_player_context pc
+    ON ms.player_id = pc.player_id
+   AND ms.prop_type = pc.prop_type
+),
+side_rows AS (
+  SELECT
+    j.game_date,
+    j.game_id,
+    j.player_id,
+    j.player_name,
+    j.team,
+    j.opponent,
+    j.is_home,
+    j.prop_type,
+    j.line,
+    'OVER'::text AS side,
+    j.best_over_price AS best_price,
+    j.best_over_book AS best_price_book,
+    j.market_median_over_price AS market_median,
+    j.market_range_over AS market_range,
+    j.open_over_price AS open_price,
+    j.latest_over_price AS latest_price,
+    j.over_price_change_from_open AS price_change_from_open,
+    j.book_count_over AS book_count,
+    j.price_dispersion_over AS price_dispersion,
+    j.over_span AS intraday_span,
+    j.minutes_since_open,
+    j.num_snapshots,
+    j.streak_context_label,
+    j.consistency_score,
+    j.last_5_avg,
+    j.last_10_avg,
+    j.season_avg,
+    j.hit_rate_last_5,
+    j.hit_rate_last_10,
+    j.hit_rate_season,
+    j.streak_type,
+    j.streak_count,
+    j.baseline_delta
+  FROM joined j
+  UNION ALL
+  SELECT
+    j.game_date,
+    j.game_id,
+    j.player_id,
+    j.player_name,
+    j.team,
+    j.opponent,
+    j.is_home,
+    j.prop_type,
+    j.line,
+    'UNDER'::text AS side,
+    j.best_under_price AS best_price,
+    j.best_under_book AS best_price_book,
+    j.market_median_under_price AS market_median,
+    j.market_range_under AS market_range,
+    j.open_under_price AS open_price,
+    j.latest_under_price AS latest_price,
+    j.under_price_change_from_open AS price_change_from_open,
+    j.book_count_under AS book_count,
+    j.price_dispersion_under AS price_dispersion,
+    j.under_span AS intraday_span,
+    j.minutes_since_open,
+    j.num_snapshots,
+    j.streak_context_label,
+    j.consistency_score,
+    j.last_5_avg,
+    j.last_10_avg,
+    j.season_avg,
+    j.hit_rate_last_5,
+    j.hit_rate_last_10,
+    j.hit_rate_season,
+    j.streak_type,
+    j.streak_count,
+    j.baseline_delta
+  FROM joined j
+)
 SELECT
-  ms.game_date,
-  ms.game_id,
-  ms.player_id,
-  ms.player_name,
-  ms.team,
-  ms.opponent,
-  ms.is_home,
-  ms.prop_type,
-  ms.line,
-  ms.best_over_price AS best_price,
-  ms.best_over_book AS best_price_book,
-  ms.best_under_price,
-  ms.best_under_book,
-  ms.market_median_over_price AS market_median,
-  ms.market_median_under_price,
-  ms.market_range_over AS market_range,
-  (ms.best_over_price - ms.market_median_over_price) AS value_vs_market,
+  s.game_date,
+  s.game_id,
+  s.player_id,
+  s.player_name,
+  s.team,
+  s.opponent,
+  s.is_home,
+  s.prop_type,
+  s.line,
+  s.side,
+  s.best_price,
+  s.best_price_book,
+  s.market_median,
+  s.market_range,
+  (s.best_price - s.market_median) AS value_vs_market,
+  s.open_price,
+  s.latest_price,
+  s.minutes_since_open,
+  s.num_snapshots,
+  s.price_change_from_open,
+  s.book_count,
+  s.price_dispersion,
   CASE
-    WHEN ms.best_over_price IS NULL OR ms.market_median_over_price IS NULL THEN 'UNRELIABLE'
-    WHEN coalesce(ms.book_count_over, 0) < 2 THEN 'THIN'
-    WHEN coalesce(ts.num_snapshots, 0) <= 1 THEN 'LIMITED'
-    WHEN ms.market_range_over IS NULL THEN 'LIMITED'
-    WHEN ms.market_range_over >= 120 THEN 'LIMITED'
-    WHEN coalesce(ms.book_count_over, 0) >= 4
-      AND coalesce(ts.num_snapshots, 0) >= 3
-      AND ms.market_range_over <= 40
+    WHEN s.best_price IS NULL OR s.market_median IS NULL THEN 'UNRELIABLE'
+    WHEN coalesce(s.book_count, 0) < 2 THEN 'THIN'
+    WHEN coalesce(s.num_snapshots, 0) <= 1 THEN 'LIMITED'
+    WHEN s.market_range IS NULL THEN 'LIMITED'
+    WHEN s.market_range >= 120 THEN 'LIMITED'
+    WHEN coalesce(s.book_count, 0) >= 4
+      AND coalesce(s.num_snapshots, 0) >= 3
+      AND s.market_range <= 40
       THEN 'STRONG'
-    WHEN coalesce(ms.book_count_over, 0) >= 3
-      AND coalesce(ts.num_snapshots, 0) >= 2
-      AND ms.market_range_over <= 80
+    WHEN coalesce(s.book_count, 0) >= 3
+      AND coalesce(s.num_snapshots, 0) >= 2
+      AND s.market_range <= 80
       THEN 'GOOD'
     ELSE 'LIMITED'
   END AS coverage_quality_label,
   CASE
-    WHEN ms.best_over_price IS NULL OR ms.market_median_over_price IS NULL THEN 'No reliable median'
-    WHEN coalesce(ms.book_count_over, 0) < 2 THEN 'Few books available'
-    WHEN coalesce(ts.num_snapshots, 0) <= 1 THEN 'Sparse snapshot coverage'
-    WHEN ms.market_range_over IS NULL THEN 'Incomplete market range'
-    WHEN ms.market_range_over >= 120 THEN 'Wide market spread'
-    WHEN coalesce(ms.book_count_over, 0) >= 4
-      AND coalesce(ts.num_snapshots, 0) >= 3
-      AND ms.market_range_over <= 40
+    WHEN s.best_price IS NULL OR s.market_median IS NULL THEN 'No reliable median'
+    WHEN coalesce(s.book_count, 0) < 2 THEN 'Few books available'
+    WHEN coalesce(s.num_snapshots, 0) <= 1 THEN 'Sparse snapshot coverage'
+    WHEN s.market_range IS NULL THEN 'Incomplete market range'
+    WHEN s.market_range >= 120 THEN 'Wide market spread'
+    WHEN coalesce(s.book_count, 0) >= 4
+      AND coalesce(s.num_snapshots, 0) >= 3
+      AND s.market_range <= 40
       THEN 'Median available across multiple books with tight range'
-    WHEN coalesce(ms.book_count_over, 0) >= 3
-      AND coalesce(ts.num_snapshots, 0) >= 2
-      AND ms.market_range_over <= 80
+    WHEN coalesce(s.book_count, 0) >= 3
+      AND coalesce(s.num_snapshots, 0) >= 2
+      AND s.market_range <= 80
       THEN 'Median available with solid book and snapshot coverage'
     ELSE 'Partial market coverage'
   END AS coverage_quality_reason,
-  ts.timing_signal,
-  ts.timing_reason,
-  pc.streak_context_label AS streak_context_label,
-  pc.consistency_score,
-  ts.open_over_price,
-  ts.latest_over_price,
-  ts.open_under_price,
-  ts.latest_under_price,
-  ts.minutes_since_open,
-  ts.num_snapshots,
-  ts.over_price_change_from_open,
-  ts.under_price_change_from_open,
-  ms.book_count_over,
-  ms.book_count_under,
-  ms.price_dispersion_over,
-  ms.price_dispersion_under,
-  pc.last_5_avg,
-  pc.last_10_avg,
-  pc.season_avg,
-  pc.hit_rate_last_5,
-  pc.hit_rate_last_10,
-  pc.hit_rate_season,
-  pc.streak_type,
-  pc.streak_count,
-  pc.baseline_delta
-FROM mlb.today_market_snapshot ms
-LEFT JOIN mlb.today_market_timing_signal ts
-  ON ms.player_id = ts.player_id
- AND ms.game_id = ts.game_id
- AND ms.prop_type = ts.prop_type
- AND ms.line = ts.line
-LEFT JOIN mlb.today_player_context pc
-  ON ms.player_id = pc.player_id
- AND ms.prop_type = pc.prop_type;
+  CASE
+    WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'VOLATILE'
+    WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'WAIT'
+    WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'EARLY'
+    ELSE 'STABLE'
+  END AS timing_signal,
+  CASE
+    WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'Large intraday movement'
+    WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'Current price better than open'
+    WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'Current price worse than open'
+    ELSE 'Little intraday movement'
+  END AS timing_reason,
+  s.streak_context_label,
+  s.consistency_score,
+  s.last_5_avg,
+  s.last_10_avg,
+  s.season_avg,
+  s.hit_rate_last_5,
+  s.hit_rate_last_10,
+  s.hit_rate_season,
+  s.streak_type,
+  s.streak_count,
+  s.baseline_delta
+FROM side_rows s;
 
 CREATE UNIQUE INDEX idx_today_workspace_mlb_key
-  ON mlb.today_workspace_mlb (player_id, game_id, prop_type, line);
+  ON mlb.today_workspace_mlb (player_id, game_id, prop_type, line, side);
 
 COMMIT;

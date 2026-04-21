@@ -154,17 +154,26 @@ def mlb_roster_freshness(
 
 @router.get("/mlb/today/workspace", summary="MLB today workspace rows")
 def mlb_today_workspace(
+    slate_date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today ET)"),
     prop_type: Optional[str] = Query(None, description="Optional prop_type filter"),
     team: Optional[str] = Query(None, description="Optional team abbreviation filter"),
+    side: Optional[str] = Query(None, description="Optional side filter (OVER|UNDER)"),
     timing_signal: Optional[str] = Query(None, description="Optional timing signal filter"),
     player_query: Optional[str] = Query(None, description="Optional player-name text search"),
     limit: int = Query(500, ge=1, le=5000),
     offset: int = Query(0, ge=0),
 ):
+    if slate_date:
+        try:
+            date.fromisoformat(slate_date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="slate_date must be YYYY-MM-DD") from e
     try:
         return fetch_today_workspace(
+            slate_date=slate_date,
             prop_type=prop_type,
             team=team,
+            side=side,
             timing_signal=timing_signal,
             player_query=player_query,
             limit=limit,

@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from backend.mlb.shared.team_name_map import normalizeTeamAbbreviation, teamIdMap, teamNameMap
 from backend.mlb.scripts import export_mlb_book_upload as ex
 from backend.mlb.scripts import report_mlb_graded_wagers as rgw
 
@@ -33,6 +34,59 @@ POTENTIAL_JOIN_KEYS: List[List[str]] = [
 
 def _norm_text(v: Any) -> str:
     return str(v if v is not None else "").strip()
+
+
+def _norm_team_key(v: Any) -> str:
+    text = _norm_text(v).lower()
+    keep: List[str] = []
+    for ch in text:
+        if ch.isalnum() or ch.isspace():
+            keep.append(ch)
+    return " ".join("".join(keep).split())
+
+
+def _build_team_lookup() -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for _tid, info in (teamIdMap or {}).items():
+        abbr = normalizeTeamAbbreviation(info.get("abbr"))
+        full_name = _norm_team_key(info.get("fullName"))
+        if abbr and full_name:
+            out[full_name] = str(abbr).upper()
+    for abbr, full_name in (teamNameMap or {}).items():
+        norm_abbr = normalizeTeamAbbreviation(abbr)
+        norm_full = _norm_team_key(full_name)
+        if norm_abbr and norm_full:
+            out[norm_full] = str(norm_abbr).upper()
+    # Explicit fallback aliases seen in external graded files.
+    out[_norm_team_key("Athletics")] = "OAK"
+    out[_norm_team_key("Arizona Diamondbacks")] = "ARI"
+    out[_norm_team_key("Kansas City Royals")] = "KC"
+    out[_norm_team_key("San Diego Padres")] = "SD"
+    out[_norm_team_key("San Francisco Giants")] = "SF"
+    out[_norm_team_key("Tampa Bay Rays")] = "TB"
+    out[_norm_team_key("Washington Nationals")] = "WSH"
+    out[_norm_team_key("Chicago White Sox")] = "CWS"
+    out[_norm_team_key("St Louis Cardinals")] = "STL"
+    out[_norm_team_key("St. Louis Cardinals")] = "STL"
+    return out
+
+
+TEAM_LOOKUP = _build_team_lookup()
+
+
+def _normalize_team_value(v: Any) -> str:
+    text = _norm_text(v)
+    if not text:
+        return ""
+    compact = text.replace(".", "").replace(" ", "")
+    if compact.isalpha() and len(compact) <= 4:
+        abbr = normalizeTeamAbbreviation(compact)
+        return str(abbr).upper() if abbr else compact.upper()
+    mapped = TEAM_LOOKUP.get(_norm_team_key(text))
+    if mapped:
+        return mapped
+    # Last-resort fallback keeps deterministic matching behavior for unknown teams.
+    return text.upper()
 
 
 def _normalize_date_value(v: Any) -> str:
@@ -134,8 +188,8 @@ def _normalize_upload(upload_raw: pd.DataFrame) -> pd.DataFrame:
     out = upload_raw.copy()
     out["upload_row_id"] = np.arange(len(out), dtype=int)
     out["date_norm"] = out["DATE"].map(_normalize_date_value)
-    out["home_norm"] = _series_or_blank(out, _resolve_col(out, ["HOME"])).map(lambda v: _norm_text(v).upper())
-    out["away_norm"] = _series_or_blank(out, _resolve_col(out, ["AWAY"])).map(lambda v: _norm_text(v).upper())
+    out["home_norm"] = _series_or_blank(out, _resolve_col(out, ["HOME"])).map(_normalize_team_value)
+    out["away_norm"] = _series_or_blank(out, _resolve_col(out, ["AWAY"])).map(_normalize_team_value)
     out["market_norm"] = out["MARKET"].map(_normalize_market_value)
     out["selector_norm"] = pd.to_numeric(
         _series_or_blank(out, _resolve_col(out, ["SELECTOR", "selector", "player_id"])),
@@ -194,8 +248,8 @@ def _normalize_graded(graded_raw: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str,
     out["graded_price_american"] = pd.to_numeric(_series_or_blank(out, colmap["price_american"]), errors="coerce")
 
     out["date_norm"] = _series_or_blank(out, colmap["date"]).map(_normalize_date_value)
-    out["home_norm"] = _series_or_blank(out, colmap["home"]).map(lambda v: _norm_text(v).upper())
-    out["away_norm"] = _series_or_blank(out, colmap["away"]).map(lambda v: _norm_text(v).upper())
+    out["home_norm"] = _series_or_blank(out, colmap["home"]).map(_normalize_team_value)
+    out["away_norm"] = _series_or_blank(out, colmap["away"]).map(_normalize_team_value)
     out["selector_norm"] = pd.to_numeric(_series_or_blank(out, colmap["selector"]), errors="coerce")
 
     prop_base = _series_or_blank(out, colmap["prop_type"]).map(ex._canonical_prop_type)
@@ -256,6 +310,18 @@ def _complete_key_mask(df: pd.DataFrame, keys: Sequence[str]) -> pd.Series:
         if str(s.dtype) == "object":
             m = m & s.astype(str).str.strip().ne("")
     return m
+
+
+def _apply_within_key_pair_rank(df: pd.DataFrame, keys: Sequence[str], col_name: str) -> pd.DataFrame:
+    out = df.copy()
+    out[col_name] = -1
+    mask = _complete_key_mask(out, keys)
+    if not bool(mask.any()):
+        return out
+    ranked = out.loc[mask, [*keys]].copy()
+    ranked[col_name] = ranked.groupby(list(keys), dropna=False).cumcount().astype(int)
+    out.loc[mask, col_name] = ranked[col_name].to_numpy()
+    return out
 
 
 def _evaluate_key(upload: pd.DataFrame, graded: pd.DataFrame, keys: Sequence[str]) -> Dict[str, Any]:
@@ -478,17 +544,26 @@ def main() -> int:
         else:
             print("  (none)")
 
+    join_cols = list(key_cols)
+    pair_rank_col: Optional[str] = None
     if int(best_key["overlap_many_to_many_key_count"]) > 0:
-        print("[reconcile-manual-surface] ERROR: many-to-many join risk on selected key (overlapping duplicate keys).")
+        print("[reconcile-manual-surface] WARNING: many-to-many join risk detected on selected key.")
         sample = best_key.get("overlap_dup_keys_sample")
         if isinstance(sample, pd.DataFrame) and not sample.empty:
             print(sample.to_string(index=False))
-        raise RuntimeError("ambiguous many-to-many join detected; aborting")
+        print(
+            "[reconcile-manual-surface] applying deterministic within-key pairing fallback "
+            "(group rank by key via cumcount) to avoid join explosion."
+        )
+        pair_rank_col = "__pair_rank"
+        upload = _apply_within_key_pair_rank(upload, key_cols, pair_rank_col)
+        graded = _apply_within_key_pair_rank(graded, key_cols, pair_rank_col)
+        join_cols = [*key_cols, pair_rank_col]
 
     graded_pref_cols = [c for c in graded.columns if str(c).startswith("graded__")]
     graded_keep_cols = [
         "graded_row_id",
-        *key_cols,
+        *join_cols,
         "grade_norm",
         "is_win",
         "is_loss",
@@ -513,7 +588,7 @@ def main() -> int:
     merged = pd.merge(
         upload,
         graded[graded_keep_cols],
-        on=key_cols,
+        on=join_cols,
         how="outer",
         indicator=True,
         suffixes=("", "_graded"),

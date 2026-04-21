@@ -125,6 +125,17 @@
   animation: pp-fade-rise 220ms ease-out both;
 }
 
+/* Keep horizontal scroll behavior while hiding the redundant native bottom bar. */
+.mlb-today-table-scroll-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mlb-today-table-scroll-hidden::-webkit-scrollbar {
+  height: 0;
+  width: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pp-reveal,
   .pp-reveal-soft {

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from backend.shared.db import pg_fetchall
+from backend.shared.db import pg_fetchall, pg_fetchone
 
 
 def fetch_today_workspace_rows(
     *,
+    slate_date: Optional[str] = None,
     prop_type: Optional[str] = None,
     team: Optional[str] = None,
+    side: Optional[str] = None,
     timing_signal: Optional[str] = None,
     player_query: Optional[str] = None,
     limit: int = 500,
@@ -22,12 +24,18 @@ def fetch_today_workspace_rows(
     where = []
     params: List[Any] = []
 
+    if slate_date:
+        where.append("game_date = %s::date")
+        params.append(str(slate_date).strip())
     if prop_type:
         where.append("lower(trim(prop_type)) = lower(trim(%s))")
         params.append(str(prop_type).strip())
     if team:
         where.append("upper(trim(team)) = upper(trim(%s))")
         params.append(str(team).strip())
+    if side:
+        where.append("upper(trim(side)) = upper(trim(%s))")
+        params.append(str(side).strip())
     if timing_signal:
         where.append("upper(trim(timing_signal)) = upper(trim(%s))")
         params.append(str(timing_signal).strip())
@@ -48,7 +56,9 @@ def fetch_today_workspace_rows(
       game_id,
       prop_type,
       line,
+      side,
       best_price,
+      best_price_book,
       market_median,
       market_range,
       value_vs_market,
@@ -63,21 +73,44 @@ def fetch_today_workspace_rows(
       hit_rate_last_5,
       hit_rate_last_10,
       hit_rate_season,
-      open_over_price,
-      latest_over_price,
+      open_price,
+      latest_price,
       num_snapshots,
-      over_price_change_from_open,
-      book_count_over,
-      book_count_under,
+      price_change_from_open,
+      book_count,
+      price_dispersion,
       last_5_avg,
       last_10_avg,
       season_avg,
       COUNT(*) OVER()::int AS total_rows
     FROM mlb.today_workspace_mlb
     {where_sql}
-    ORDER BY abs(value_vs_market) DESC NULLS LAST, player_name ASC, prop_type ASC, line ASC
+    ORDER BY abs(value_vs_market) DESC NULLS LAST, player_name ASC, prop_type ASC, line ASC, side ASC
     LIMIT %s::int
     OFFSET %s::int
     """
     params.extend([lim, off])
     return pg_fetchall(sql, tuple(params))
+
+
+def fetch_today_workspace_last_updated(*, slate_date: str) -> Optional[Any]:
+    row = pg_fetchone(
+        """
+        SELECT coalesce(
+          (
+            SELECT max(ms.last_snapshot_ts)
+            FROM mlb.today_market_snapshot ms
+            WHERE ms.game_date = %s::date
+          ),
+          (
+            SELECT max(o.snapshot_ts)
+            FROM mlb.today_odds_book_rows o
+            WHERE o.slate_date = %s::date
+          )
+        ) AS last_updated
+        """,
+        (slate_date, slate_date),
+    )
+    if not row:
+        return None
+    return row.get("last_updated")
