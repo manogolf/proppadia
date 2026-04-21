@@ -5,6 +5,7 @@ import {
   Route,
   Navigate,
   useLocation,
+  NavLink,
 } from "react-router-dom";
 import Header from "../components/Header.jsx";
 import RouteErrorBoundary from "../components/RouteErrorBoundary.jsx";
@@ -93,6 +94,14 @@ function AppShell() {
   const hideOpsNav = isUserPredictionRoute(location.pathname);
   const [watchlistTotal, setWatchlistTotal] = useState(0);
 
+  const navLinkClass = useCallback(
+    ({ isActive }) =>
+      `text-xs sm:text-sm font-medium transition ${
+        isActive ? "text-slate-900 underline underline-offset-4 decoration-slate-400" : "text-slate-700 hover:text-slate-900"
+      }`,
+    []
+  );
+
   const refreshWatchlistTotal = useCallback(() => {
     setWatchlistTotal(getWatchlistTotal(user?.id));
   }, [user?.id]);
@@ -126,38 +135,38 @@ function AppShell() {
         {/* ✅ This nav bar is global, shown on every page */}
         <nav className="px-4 py-2 mb-0">
           <div className="max-w-6xl mx-auto pp-chip pp-reveal-soft px-3 sm:px-4 py-2 flex flex-wrap justify-center sm:justify-end gap-x-4 sm:gap-x-6 gap-y-1">
-            <a href="/" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+            <NavLink to="/" end className={navLinkClass}>
               Home
-            </a>
-            <a href="/mlb/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+            </NavLink>
+            <NavLink to="/mlb/predictions" className={navLinkClass}>
               MLB Picks
-            </a>
-            <a href="/mlb/today" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+            </NavLink>
+            <NavLink to="/mlb/today" className={navLinkClass}>
               MLB Today
-            </a>
-            <a href="/nhl/predictions" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+            </NavLink>
+            <NavLink to="/nhl/predictions" className={navLinkClass}>
               NHL Picks
-            </a>
+            </NavLink>
             {user ? (
-              <a href="/watchlist" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              <NavLink to="/watchlist" className={navLinkClass}>
                 {watchlistTotal > 0 ? `Watchlist (${watchlistTotal})` : "Watchlist"}
-              </a>
+              </NavLink>
             ) : null}
-            <a href="/players/mlb" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+            <NavLink to="/players/mlb" className={navLinkClass}>
               MLB Players
-            </a>
-            <a href="/players/nhl" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+            </NavLink>
+            <NavLink to="/players/nhl" className={navLinkClass}>
               NHL Players
-            </a>
+            </NavLink>
             {!user ? (
-              <a href="/login" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              <NavLink to="/login" className={navLinkClass}>
                 Login
-              </a>
+              </NavLink>
             ) : null}
             {user && hasOpsAccess && !hideOpsNav ? (
-              <a href="/ops" className="text-xs sm:text-sm font-medium transition text-slate-700 hover:text-slate-900">
+              <NavLink to="/ops" className={navLinkClass}>
                 Ops
-              </a>
+              </NavLink>
             ) : null}
           </div>
         </nav>
@@ -169,7 +178,17 @@ function AppShell() {
           {/* New multi-sport gateway at "/" */}
           <Route path="/" element={<Home />} />
           <Route path="/mlb/slate" element={<MLBHome />} />
-          <Route path="/mlb/today" element={<MLBTodayWorkspacePage />} />
+          <Route
+            path="/mlb/today"
+            element={
+              <RequireSignedIn
+                requiredPath="/mlb/today"
+                requiredLabel="MLB today workspace"
+              >
+                <MLBTodayWorkspacePage />
+              </RequireSignedIn>
+            }
+          />
           <Route
             path="/mlb/predictions"
             element={

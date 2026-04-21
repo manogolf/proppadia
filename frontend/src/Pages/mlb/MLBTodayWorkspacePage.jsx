@@ -353,11 +353,27 @@ function compareDefaultRows(a, b) {
   return as.localeCompare(bs);
 }
 
+function rowKeyForRow(row) {
+  return `${row?.player_id}:${row?.game_id}:${row?.prop_type}:${row?.line}:${row?.side}`;
+}
+
 const VIEW_PRESETS = [
-  { key: "all", label: "All rows" },
-  { key: "best_covered", label: "Best covered" },
-  { key: "wide_markets", label: "Wide markets" },
-  { key: "sparse_markets", label: "Sparse markets" },
+  { key: "all", label: "All rows", tooltip: "Show the full workspace without preset filtering." },
+  {
+    key: "best_covered",
+    label: "Best covered",
+    tooltip: "Strong market coverage across multiple books with tight pricing.",
+  },
+  {
+    key: "wide_markets",
+    label: "Wide markets",
+    tooltip: "Books disagree significantly. Prices are spread out.",
+  },
+  {
+    key: "sparse_markets",
+    label: "Sparse markets",
+    tooltip: "Limited or incomplete market data (few books or weak coverage).",
+  },
 ];
 
 export default function MLBTodayWorkspacePage() {
@@ -374,9 +390,10 @@ export default function MLBTodayWorkspacePage() {
   const [requestedSlateDate, setRequestedSlateDate] = useState(null);
   const [activeSlateDate, setActiveSlateDate] = useState(null);
   const [isReady, setIsReady] = useState(false);
+  const [workspaceReady, setWorkspaceReady] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [expandedRowKey, setExpandedRowKey] = useState(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState(() => new Set());
   const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
   const [lastInteraction, setLastInteraction] = useState("none");
   const [viewPreset, setViewPreset] = useState("all");
@@ -447,11 +464,15 @@ export default function MLBTodayWorkspacePage() {
     return sortedRows;
   }, [sortedRows, viewPreset]);
 
-  const expandedRowCount = expandedRowKey ? 1 : 0;
+  const compareMode = useMemo(() => {
+    const hasPlayerQuery = Boolean(filters.player_query && filters.player_query.trim());
+    return hasPlayerQuery || displayedRows.length <= 12;
+  }, [filters.player_query, displayedRows.length]);
+
+  const expandedRowCount = expandedRowKeys.size;
+  const expandedRowKeyList = useMemo(() => Array.from(expandedRowKeys), [expandedRowKeys]);
   const focusedRowKey =
-    focusedRowIndex >= 0 && focusedRowIndex < displayedRows.length
-      ? `${displayedRows[focusedRowIndex]?.player_id}:${displayedRows[focusedRowIndex]?.game_id}:${displayedRows[focusedRowIndex]?.prop_type}:${displayedRows[focusedRowIndex]?.line}:${displayedRows[focusedRowIndex]?.side}`
-      : null;
+    focusedRowIndex >= 0 && focusedRowIndex < displayedRows.length ? rowKeyForRow(displayedRows[focusedRowIndex]) : null;
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
@@ -503,6 +524,7 @@ export default function MLBTodayWorkspacePage() {
       "market_position_label"
     );
   }, [displayedRows]);
+  const isWorkspaceReady = workspaceReady === null ? isReady : workspaceReady;
   const propDisplayCounts = useMemo(() => {
     return bucketCounts(
       displayedRows.map((r) => ({ prop_label: propLabel(r.prop_type) })),
@@ -638,9 +660,15 @@ export default function MLBTodayWorkspacePage() {
         if (!res.ok || !isMounted) return;
         const nextRows = Array.isArray(data?.rows) ? data.rows : [];
         setOptionRows(nextRows);
+        setWorkspaceReady(Boolean(data?.is_ready));
+        setRequestedSlateDate(data?.requested_slate_date ?? slateDate);
+        setActiveSlateDate(data?.active_slate_date ?? null);
+        setLastUpdated(data?.last_updated ?? null);
+        setTotal(Number(data?.total) || nextRows.length);
       } catch (_e) {
         if (!isMounted) return;
         setOptionRows([]);
+        setWorkspaceReady(null);
       }
     }
     loadOptions();
@@ -763,20 +791,50 @@ export default function MLBTodayWorkspacePage() {
   }, [displayedRows.length, loading, error]);
 
   useEffect(() => {
-    if (!expandedRowKey) return;
-    const stillVisible = displayedRows.some(
-      (r) => `${r.player_id}:${r.game_id}:${r.prop_type}:${r.line}:${r.side}` === expandedRowKey
-    );
-    if (!stillVisible) {
-      setExpandedRowKey(null);
+    if (!expandedRowKeys.size) return;
+    const visibleKeys = new Set(displayedRows.map((r) => rowKeyForRow(r)));
+    let changed = false;
+    const next = new Set();
+    expandedRowKeys.forEach((key) => {
+      if (visibleKeys.has(key)) {
+        next.add(key);
+      } else {
+        changed = true;
+      }
+    });
+    if (changed) {
+      setExpandedRowKeys(next);
       setLastInteraction("auto-collapse:view-change");
     }
-  }, [displayedRows, expandedRowKey]);
+  }, [displayedRows, expandedRowKeys]);
+
+  useEffect(() => {
+    setExpandedRowKeys(new Set());
+    setFocusedRowIndex(-1);
+    setLastInteraction("collapse:controls-change");
+  }, [viewPreset, filters.prop_type, filters.team, filters.side, filters.timing_signal, filters.player_query]);
 
   function toggleRow(key, source = "row") {
-    setExpandedRowKey((prev) => {
-      const next = prev === key ? null : key;
-      setLastInteraction(`${next ? "expand" : "collapse"}:${source}:${key}`);
+    setExpandedRowKeys((prev) => {
+      const next = new Set(prev);
+      let action = "collapse";
+      if (compareMode) {
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.add(key);
+          action = "expand";
+        }
+      } else {
+        if (next.has(key)) {
+          next.clear();
+        } else {
+          next.clear();
+          next.add(key);
+          action = "expand";
+        }
+      }
+      setLastInteraction(`${action}:${source}:${key}`);
       return next;
     });
   }
@@ -799,10 +857,10 @@ export default function MLBTodayWorkspacePage() {
   function handleRowKeyDown(event, rowIndex, key) {
     const interactive = event.target.closest("button, a, input, select, textarea, label");
     if (interactive && interactive !== event.currentTarget) {
-      if (event.key === "Escape" && expandedRowKey) {
+      if (event.key === "Escape" && expandedRowCount > 0) {
         event.preventDefault();
-        setExpandedRowKey(null);
-        setLastInteraction(`collapse:escape:${expandedRowKey}`);
+        setExpandedRowKeys(new Set());
+        setLastInteraction("collapse:escape:all");
       }
       return;
     }
@@ -824,16 +882,16 @@ export default function MLBTodayWorkspacePage() {
       toggleRow(key, "keyboard-toggle");
       return;
     }
-    if (event.key === "Escape" && expandedRowKey) {
+    if (event.key === "Escape" && expandedRowCount > 0) {
       event.preventDefault();
-      setExpandedRowKey(null);
-      setLastInteraction(`collapse:escape:${expandedRowKey}`);
+      setExpandedRowKeys(new Set());
+      setLastInteraction("collapse:escape:all");
     }
   }
 
   function clearAllReviewControls() {
     setViewPreset("all");
-    setExpandedRowKey(null);
+    setExpandedRowKeys(new Set());
     setFocusedRowIndex(-1);
     setLastInteraction("reset-view");
     setFilters({
@@ -948,6 +1006,7 @@ export default function MLBTodayWorkspacePage() {
               key={preset.key}
               type="button"
               onClick={() => setViewPreset(preset.key)}
+              title={preset.tooltip}
               className={`text-xs px-2 py-1 rounded border ${
                 viewPreset === preset.key
                   ? "bg-slate-800 text-white border-slate-800"
@@ -974,6 +1033,10 @@ export default function MLBTodayWorkspacePage() {
             ))
           )}
         </div>
+
+        {compareMode ? (
+          <div className="text-xs text-slate-500 mb-2 px-1">Multiple rows can be opened for comparison.</div>
+        ) : null}
 
         <div className="pp-card p-3 mb-4 flex flex-wrap gap-2">
           <div className="text-xs text-slate-500 mr-1">Timing mix:</div>
@@ -1020,9 +1083,15 @@ export default function MLBTodayWorkspacePage() {
               <div>Preset: {VIEW_PRESETS.find((p) => p.key === viewPreset)?.label || "All rows"}</div>
               <div>Filters: {activeFilterTokens.length ? activeFilterTokens.join(" · ") : "None"}</div>
               <div>Visible rows: {displayedRows.length}</div>
+              <div>Compare mode: {compareMode ? "on" : "off"}</div>
               <div>Expanded rows: {expandedRowCount}</div>
               <div>Focused row key: {focusedRowKey || DASH}</div>
-              <div>Expanded row key: {expandedRowKey || DASH}</div>
+              <div>
+                Expanded row keys:{" "}
+                {expandedRowKeyList.length
+                  ? expandedRowKeyList.slice(0, 4).join(", ") + (expandedRowKeyList.length > 4 ? " …" : "")
+                  : DASH}
+              </div>
               <div>Last interaction: {lastInteraction}</div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1317,13 +1386,14 @@ export default function MLBTodayWorkspacePage() {
             <div className="p-4 text-slate-600 text-sm">Loading workspace…</div>
           ) : error ? (
             <div className="p-4 text-rose-700 text-sm">{error}</div>
-          ) : !isReady ? (
+          ) : !isWorkspaceReady ? (
             <div className="p-4 text-slate-600 text-sm">
               Today&apos;s slate is not loaded yet for {requestedSlateDate || slateDate}. Check back after the scheduled refresh.
             </div>
           ) : displayedRows.length === 0 ? (
             <div className="p-4 text-slate-600 text-sm">
-              No rows match the current view. Try clearing filters or switching to <strong>All rows</strong>. Over and Under are listed as separate rows.
+              <div>No rows match the current filters.</div>
+              <div className="mt-1">Try clearing one or more filters.</div>
             </div>
           ) : (
             <table className="min-w-[1320px] w-full text-sm text-slate-800 table-fixed">
@@ -1341,8 +1411,8 @@ export default function MLBTodayWorkspacePage() {
               </colgroup>
               <tbody>
                 {displayedRows.map((r, rowIndex) => {
-                  const key = `${r.player_id}:${r.game_id}:${r.prop_type}:${r.line}:${r.side}`;
-                  const isOpen = expandedRowKey === key;
+                  const key = rowKeyForRow(r);
+                  const isOpen = expandedRowKeys.has(key);
                   const marketPosition = marketPositionInfo(r);
                   return (
                     <React.Fragment key={key}>
@@ -1356,12 +1426,12 @@ export default function MLBTodayWorkspacePage() {
                         onClick={(event) => handleRowClick(event, key)}
                         onKeyDown={(event) => handleRowKeyDown(event, rowIndex, key)}
                         className={`group border-b border-slate-100 align-top focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 ${
-                          isOpen ? "bg-slate-50" : "hover:bg-slate-50"
+                          isOpen ? "bg-slate-100 border-slate-200" : "hover:bg-slate-50"
                         }`}
                       >
                         <td
                           className={`sticky left-0 z-30 py-2.5 px-3 border-r border-slate-100 shadow-[inset_-1px_0_0_0_rgba(148,163,184,0.35)] ${
-                            isOpen ? "bg-slate-50" : "bg-white group-hover:bg-slate-50"
+                            isOpen ? "bg-slate-100" : "bg-white group-hover:bg-slate-50"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -1433,8 +1503,8 @@ export default function MLBTodayWorkspacePage() {
                         </td>
                       </tr>
                       {isOpen ? (
-                        <tr className="border-b border-slate-100 bg-slate-50">
-                          <td colSpan={10} className="py-2 px-3">
+                        <tr className="border-b border-slate-200 bg-slate-100/70">
+                          <td colSpan={10} className="py-2 px-3 border-l-2 border-slate-300">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                               <div className="space-y-1.5">
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Market</div>
