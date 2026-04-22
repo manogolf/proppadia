@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
+import {
+  WATCHLIST_MAX_ROWS,
+  WATCHLIST_SCOPE_MLB,
+  WATCHLIST_UPDATED_EVENT,
+  readWatchlistScope,
+  toWatchlistId,
+  writeWatchlistScope,
+} from "../../shared/watchlistStorage.js";
 import { todayET } from "../../shared/timeUtils.js";
 
 const DASH = "—";
@@ -378,6 +387,7 @@ const VIEW_PRESETS = [
 
 export default function MLBTodayWorkspacePage() {
   const location = useLocation();
+  const { user } = useAuth();
   const debugMode = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
     return params.get("debug") === "1";
@@ -396,6 +406,7 @@ export default function MLBTodayWorkspacePage() {
   const [expandedRowKeys, setExpandedRowKeys] = useState(() => new Set());
   const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
   const [lastInteraction, setLastInteraction] = useState("none");
+  const [watchlist, setWatchlist] = useState([]);
   const [viewPreset, setViewPreset] = useState("all");
   const [filters, setFilters] = useState({
     prop_type: "",
@@ -405,6 +416,7 @@ export default function MLBTodayWorkspacePage() {
     player_query: "",
   });
   const rowRefs = useRef([]);
+  const watchlistHydratedRef = useRef(false);
   const topScrollRef = useRef(null);
   const headerScrollRef = useRef(null);
   const tableScrollRef = useRef(null);
@@ -440,6 +452,7 @@ export default function MLBTodayWorkspacePage() {
   }, [optionRows, rows, filters.timing_signal]);
 
   const sortedRows = useMemo(() => [...rows].sort(compareDefaultRows), [rows]);
+  const watchIdSet = useMemo(() => new Set(watchlist.map((w) => String(w.id))), [watchlist]);
 
   const displayedRows = useMemo(() => {
     if (viewPreset === "all") return sortedRows;
@@ -645,6 +658,51 @@ export default function MLBTodayWorkspacePage() {
       })),
     };
   }, [displayedRows, timingCounts, streakCounts, coverageCounts, sideCounts, propSideCounts, marketPositionCounts, propDisplayCounts]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      watchlistHydratedRef.current = false;
+      setWatchlist([]);
+      return;
+    }
+    setWatchlist(readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB));
+    watchlistHydratedRef.current = true;
+  }, [user?.id]);
+
+  useEffect(() => {
+    function refreshWatchlistFromStorage() {
+      if (!user?.id) {
+        watchlistHydratedRef.current = false;
+        setWatchlist([]);
+        return;
+      }
+      const next = readWatchlistScope(user.id, WATCHLIST_SCOPE_MLB);
+      watchlistHydratedRef.current = true;
+      setWatchlist((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
+      });
+    }
+    function onStorage(e) {
+      if (e?.key && String(e.key).startsWith("proppadia_watchlist_v1:")) {
+        refreshWatchlistFromStorage();
+      }
+    }
+    function onWatchlistUpdated() {
+      refreshWatchlistFromStorage();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onWatchlistUpdated);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !watchlistHydratedRef.current) return;
+    writeWatchlistScope(user.id, WATCHLIST_SCOPE_MLB, watchlist);
+  }, [user?.id, watchlist]);
 
   useEffect(() => {
     let isMounted = true;
@@ -900,6 +958,35 @@ export default function MLBTodayWorkspacePage() {
       side: "",
       timing_signal: "",
       player_query: "",
+    });
+  }
+
+  function watchEntryFromWorkspaceRow(row) {
+    return {
+      player_id: row?.player_id ?? null,
+      player_name: row?.player_name || null,
+      team: row?.team || row?.team_abbr || null,
+    };
+  }
+
+  function toggleWatchForRow(row) {
+    if (!user?.id) return;
+    const watchEntry = watchEntryFromWorkspaceRow(row);
+    const watchId = toWatchlistId(watchEntry);
+    if (!watchId) return;
+    setWatchlist((prev) => {
+      const exists = prev.some((w) => String(w.id) === String(watchId));
+      if (exists) return prev.filter((w) => String(w.id) !== String(watchId));
+      return [
+        {
+          id: String(watchId),
+          player_id: watchEntry.player_id ?? null,
+          player_name: watchEntry.player_name || null,
+          team: watchEntry.team || null,
+          added_at: new Date().toISOString(),
+        },
+        ...prev,
+      ].slice(0, WATCHLIST_MAX_ROWS);
     });
   }
 
@@ -1359,7 +1446,7 @@ export default function MLBTodayWorkspacePage() {
           >
             <table className="min-w-[1320px] w-full text-sm text-slate-800 table-fixed">
               <colgroup>
-                <col style={{ width: "220px" }} />
+                <col style={{ width: "230px" }} />
                 <col style={{ width: "170px" }} />
                 <col style={{ width: "82px" }} />
                 <col style={{ width: "76px" }} />
@@ -1403,7 +1490,7 @@ export default function MLBTodayWorkspacePage() {
           ) : (
             <table className="min-w-[1320px] w-full text-sm text-slate-800 table-fixed">
               <colgroup>
-                <col style={{ width: "220px" }} />
+                <col style={{ width: "230px" }} />
                 <col style={{ width: "170px" }} />
                 <col style={{ width: "82px" }} />
                 <col style={{ width: "76px" }} />
@@ -1419,6 +1506,8 @@ export default function MLBTodayWorkspacePage() {
                   const key = rowKeyForRow(r);
                   const isOpen = expandedRowKeys.has(key);
                   const marketPosition = marketPositionInfo(r);
+                  const watchId = toWatchlistId(watchEntryFromWorkspaceRow(r));
+                  const isWatched = Boolean(watchId && watchIdSet.has(String(watchId)));
                   return (
                     <React.Fragment key={key}>
                       <tr
@@ -1448,19 +1537,38 @@ export default function MLBTodayWorkspacePage() {
                                 {(r.team || DASH)} vs {(r.opponent || DASH)}
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              className="shrink-0 text-[11px] border rounded px-1.5 py-0.5 hover:bg-slate-50"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleRow(key, "button");
-                              }}
-                              aria-label={isOpen ? "Collapse row details" : "Expand row details"}
-                              title={isOpen ? "Hide details" : "Show details"}
-                            >
-                              <span className="mr-1" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
-                              {isOpen ? "Hide" : "Details"}
-                            </button>
+                            <div className="shrink-0 flex flex-col items-end gap-1">
+                              <button
+                                type="button"
+                                className={`text-[11px] border rounded px-1.5 py-0.5 transition-colors ${
+                                  isWatched
+                                    ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100 group-hover:border-slate-400"
+                                }`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleWatchForRow(r);
+                                }}
+                                aria-pressed={isWatched}
+                                aria-label={isWatched ? "Remove player from watchlist" : "Add player to watchlist"}
+                                title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+                              >
+                                {isWatched ? "✓ Watching" : "+ Watch"}
+                              </button>
+                              <button
+                                type="button"
+                                className="text-[11px] border rounded px-1.5 py-0.5 bg-white text-slate-700 hover:bg-slate-50"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleRow(key, "button");
+                                }}
+                                aria-label={isOpen ? "Collapse row details" : "Expand row details"}
+                                title={isOpen ? "Hide details" : "Show details"}
+                              >
+                                <span className="mr-1" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
+                                {isOpen ? "Hide" : "Details"}
+                              </button>
+                            </div>
                           </div>
                         </td>
                         <td className="py-2.5 px-3 font-medium">{propLabel(r.prop_type)}</td>
