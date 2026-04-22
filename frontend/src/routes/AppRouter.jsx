@@ -138,14 +138,8 @@ function AppShell() {
             <NavLink to="/" end className={navLinkClass}>
               Home
             </NavLink>
-            <NavLink to="/mlb/predictions" className={navLinkClass}>
-              MLB Picks
-            </NavLink>
             <NavLink to="/mlb/today" className={navLinkClass}>
               MLB Today
-            </NavLink>
-            <NavLink to="/nhl/predictions" className={navLinkClass}>
-              NHL Picks
             </NavLink>
             {user ? (
               <NavLink to="/watchlist" className={navLinkClass}>
@@ -153,10 +147,10 @@ function AppShell() {
               </NavLink>
             ) : null}
             <NavLink to="/players/mlb" className={navLinkClass}>
-              MLB Players
+              Player Research
             </NavLink>
-            <NavLink to="/players/nhl" className={navLinkClass}>
-              NHL Players
+            <NavLink to="/archive" className={navLinkClass}>
+              Archive
             </NavLink>
             {!user ? (
               <NavLink to="/login" className={navLinkClass}>
@@ -239,6 +233,14 @@ function AppShell() {
           {/* Legacy route aliases */}
           <Route path="/mlb" element={<RedirectWithSearch pathname="/mlb/slate" />} />
           <Route path="/nhl" element={<RedirectWithSearch pathname="/nhl/slate" />} />
+          <Route
+            path="/archive"
+            element={
+              <RequireSignedIn requiredPath="/archive" requiredLabel="archive">
+                <RedirectWithSearch pathname="/mlb/predictions" />
+              </RequireSignedIn>
+            }
+          />
           <Route
             path="/props"
             element={

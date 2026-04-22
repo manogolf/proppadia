@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import MemberAccessCard from "../components/predictions/MemberAccessCard.jsx";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
-import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
 
 const HOME_SNAPSHOT_CACHE_KEY = "proppadia_home_snapshot_v1";
@@ -73,7 +71,6 @@ function nhlSlateState(snapshot) {
 }
 
 export default function HomeGateway() {
-  const { user } = useAuth();
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
   const [mlbScheduleSnapshot, setMlbScheduleSnapshot] = useState(null);
@@ -203,71 +200,51 @@ export default function HomeGateway() {
           <div className="flex flex-col gap-6 md:flex-row md:items-stretch md:justify-between">
             <div className="max-w-3xl">
               <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-800">
-                Member-First Prediction Workspace
+                Decision Workspace
               </span>
-              <h1 className="mt-3 flex items-baseline">
-                <span className="text-5xl md:text-6xl font-bold text-slate-900 flex items-start leading-none">
-                  <span>P</span>
-                  <span className="text-[20px] md:text-[25px] align-super">
-                    3
-                  </span>
-                </span>
-                <span className="text-4xl md:text-5xl font-bold text-slate-900 mt-1 -ml-[8px] md:-ml-[10px]">
-                  roppadia
-                </span>
+              <h1 className="mt-3 text-4xl md:text-5xl font-bold text-slate-900 leading-tight">
+                Understand line movement before you act.
               </h1>
-              <p className="mt-4 text-[1.05rem] text-slate-700 leading-9">
-                Inside our member-first MLB/NHL workspace you have exclusive
-                access to player prop predictions. Gain deep insight into
-                today&apos;s games using our market board. Here you will see
-                edge calculated using in house models or create your own slate
-                with the included player prop prediction builder.
+              <p className="mt-4 text-[1.05rem] text-slate-700 leading-8">
+                See where prices sit, how they move, and what makes those moves
+                meaningful.
               </p>
               <div className="mt-4 rounded-xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-sky-50 px-4 py-3 text-slate-700">
-                <p className="text-[1.05rem] leading-9">
-                  <span className="font-semibold text-slate-900">
-                    Release the power of model predictions with Proppadia.
-                  </span>{" "}
-                  Paired with your sports knowledge this can elevate player prop
-                  predictions to the next level you&apos;ve been looking for.
-                </p>
+                <ul className="space-y-1.5 text-[0.95rem] leading-7">
+                  <li>Track how prices move across the slate.</li>
+                  <li>
+                    Understand which numbers are stable and which are shifting.
+                  </li>
+                  <li>Evaluate players with context, not guesses.</li>
+                </ul>
               </div>
             </div>
             <div className="w-full max-w-xs md:w-64 flex flex-col gap-3 md:items-stretch md:self-stretch md:justify-between">
               <div className="hidden md:block rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white px-4 py-4">
                 <p className="mt-2 text-sm text-slate-600 leading-6">
-                  Model edge, market board context, and custom slate builder in
-                  one workflow.
+                  Better decisions are made after understanding the market
+                  behind the number.
                 </p>
               </div>
               <div className="flex flex-col gap-3">
                 <PrefetchLink
-                  to="/mlb"
-                  className="pp-btn pp-btn-secondary pp-btn-md w-full text-center"
+                  to="/mlb/today"
+                  className="pp-btn pp-btn-primary pp-btn-md w-full text-center"
                 >
-                  Open MLB Slate
+                  Open MLB Today
                 </PrefetchLink>
                 <PrefetchLink
-                  to="/nhl"
+                  to="/players/mlb"
                   className="pp-btn pp-btn-secondary pp-btn-md w-full text-center"
                 >
-                  Open NHL Slate
+                  Explore Player Research
                 </PrefetchLink>
-                {user ? (
-                  <PrefetchLink
-                    to="/nhl/predictions"
-                    className="pp-btn pp-btn-primary pp-btn-md w-full text-center"
-                  >
-                    Open Predictions
-                  </PrefetchLink>
-                ) : (
-                  <PrefetchLink
-                    to="/login"
-                    className="pp-btn pp-btn-primary pp-btn-md w-full text-center"
-                  >
-                    Member Login
-                  </PrefetchLink>
-                )}
+                <PrefetchLink
+                  to="/archive"
+                  className="pp-btn pp-btn-ghost pp-btn-md w-full text-center text-slate-600"
+                >
+                  Browse Archive
+                </PrefetchLink>
               </div>
             </div>
           </div>
@@ -294,16 +271,16 @@ export default function HomeGateway() {
               </div>
               <div className="mt-2 text-xs text-slate-500">
                 {mlbGamesToday > 0
-                  ? "Preview available on MLB slate page. Full prediction workspace is member-only."
-                  : "No active slate right now. Workspace remains member-only."}
+                  ? "Use MLB Today to see current market position, timing, and player context."
+                  : "No active slate right now. Research tools remain available."}
               </div>
             </div>
             <div className="mt-auto pt-8">
               <PrefetchLink
-                to="/mlb"
+                to="/mlb/today"
                 className="pp-btn pp-btn-ghost pp-btn-sm text-xs"
               >
-                Open MLB
+                Open MLB Today
               </PrefetchLink>
             </div>
           </div>
@@ -324,7 +301,7 @@ export default function HomeGateway() {
                 Games: <strong>{nhlGamesToday}</strong>
               </div>
               <div>
-                Prediction rows: <strong>{nhlPropsToday}</strong>
+                Prop rows: <strong>{nhlPropsToday}</strong>
               </div>
               <div>
                 SOG rows: <strong>{nhlSogRowsToday}</strong> • Saves rows:{" "}
@@ -334,8 +311,8 @@ export default function HomeGateway() {
                 {nhlState.label}
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                Home preview is intentionally limited. Full edges, watchlist
-                actions, and exports are member-only.
+                Home preview is intentionally limited. Open the NHL workspace
+                for detailed market context.
               </div>
             </div>
             <div className="mt-auto pt-8">
@@ -351,22 +328,22 @@ export default function HomeGateway() {
 
         <section className="pp-card p-5">
           <h2 className="text-base font-semibold text-slate-900">
-            Member Tools (Locked Preview)
+            Workspace Tools
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Built for paying members: full prediction boards, research flows,
-            and tracking tools.
+            We show what&apos;s happening and why it matters across market,
+            timing, and player context.
           </p>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="font-semibold text-slate-900">
-                Prediction Workspace
+                Market Workspace
               </div>
               <div className="mt-1 text-xs text-slate-600">
-                Full model board, date controls, and edge scanning.
+                Read price position, movement, and stability for the live slate.
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
-                Members only
+                MLB Today
               </div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
@@ -374,36 +351,25 @@ export default function HomeGateway() {
                 Player Research
               </div>
               <div className="mt-1 text-xs text-slate-600">
-                Team browsers, player profiles, and context workflows.
+                Team browsers, player pages, and profile-level context workflows.
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
-                Members only
+                Research tools
               </div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="font-semibold text-slate-900">
-                Tracking + Watchlist
+                Watchlist + Archive
               </div>
               <div className="mt-1 text-xs text-slate-600">
-                Save, grade, and manage picks with exportable history.
+                Track players you follow and review historical model reference pages.
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
-                Members only
+                Ongoing review
               </div>
             </div>
           </div>
         </section>
-
-        <MemberAccessCard
-          ctas={[
-            { label: "MLB Predictions", openTo: "/props", loginFrom: "/props" },
-            {
-              label: "NHL Predictions",
-              openTo: "/nhl/predictions",
-              loginFrom: "/nhl/predictions",
-            },
-          ]}
-        />
 
         <details className="pp-card p-5">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">

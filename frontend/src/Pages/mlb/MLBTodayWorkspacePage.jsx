@@ -907,7 +907,12 @@ export default function MLBTodayWorkspacePage() {
     <div className="min-h-screen pp-page">
       <div className="max-w-7xl mx-auto px-4 pb-10">
         <div className="flex items-baseline justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-900">MLB Today Workspace</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">MLB Today Workspace</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Your decision workspace for today&apos;s slate. See where prices sit, how they move, and how stable each player profile looks right now.
+            </p>
+          </div>
         </div>
 
         <div className="pp-card p-3 mb-4 flex flex-wrap gap-3 items-end">
