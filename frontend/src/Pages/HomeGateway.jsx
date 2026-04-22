@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { getBaseURL } from "../shared/getBaseURL.js";
+import { isOpsUser } from "../shared/opsAccess.js";
 
 const HOME_SNAPSHOT_CACHE_KEY = "proppadia_home_snapshot_v1";
 
@@ -71,6 +73,7 @@ function nhlSlateState(snapshot) {
 }
 
 export default function HomeGateway() {
+  const { user } = useAuth();
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [mlbSnapshot, setMlbSnapshot] = useState(null);
   const [mlbScheduleSnapshot, setMlbScheduleSnapshot] = useState(null);
@@ -96,6 +99,7 @@ export default function HomeGateway() {
   );
   const nhlSogRowsToday = Number(nhlSnapshot?.components?.sog?.count || 0);
   const nhlSavesRowsToday = Number(nhlSnapshot?.components?.saves?.count || 0);
+  const hasOpsAccess = isOpsUser(user);
 
   const loadSnapshot = async () => {
     const reqId = snapshotReqRef.current + 1;
@@ -239,12 +243,14 @@ export default function HomeGateway() {
                 >
                   Explore Player Research
                 </PrefetchLink>
-                <PrefetchLink
-                  to="/archive"
-                  className="pp-btn pp-btn-ghost pp-btn-md w-full text-center text-slate-600"
-                >
-                  Browse Archive
-                </PrefetchLink>
+                {hasOpsAccess ? (
+                  <PrefetchLink
+                    to="/archive"
+                    className="pp-btn pp-btn-ghost pp-btn-md w-full text-center text-slate-600"
+                  >
+                    Browse Archive
+                  </PrefetchLink>
+                ) : null}
               </div>
             </div>
           </div>

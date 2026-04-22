@@ -149,9 +149,11 @@ function AppShell() {
             <NavLink to="/players/mlb" className={navLinkClass}>
               Player Research
             </NavLink>
-            <NavLink to="/archive" className={navLinkClass}>
-              Archive
-            </NavLink>
+            {user && hasOpsAccess ? (
+              <NavLink to="/archive" className={navLinkClass}>
+                Archive
+              </NavLink>
+            ) : null}
             {!user ? (
               <NavLink to="/login" className={navLinkClass}>
                 Login
@@ -190,7 +192,11 @@ function AppShell() {
                 requiredPath="/mlb/predictions"
                 requiredLabel="MLB predictions"
               >
-                <PlayerPropsPage />
+                {hasOpsAccess ? (
+                  <PlayerPropsPage />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
@@ -203,7 +209,11 @@ function AppShell() {
                 requiredPath="/nhl/props"
                 requiredLabel="NHL predictions"
               >
-                <NHLPredictions />
+                {hasOpsAccess ? (
+                  <NHLPredictions />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
@@ -214,7 +224,11 @@ function AppShell() {
                 requiredPath="/nhl/props-form"
                 requiredLabel="NHL player props form"
               >
-                <NHLPlayerPropsPage />
+                {hasOpsAccess ? (
+                  <NHLPlayerPropsPage />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
@@ -225,7 +239,11 @@ function AppShell() {
                 requiredPath="/nhl/predictions"
                 requiredLabel="NHL predictions"
               >
-                <RedirectWithSearch pathname="/nhl/props" />
+                {hasOpsAccess ? (
+                  <RedirectWithSearch pathname="/nhl/props" />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
@@ -237,7 +255,11 @@ function AppShell() {
             path="/archive"
             element={
               <RequireSignedIn requiredPath="/archive" requiredLabel="archive">
-                <RedirectWithSearch pathname="/mlb/predictions" />
+                {hasOpsAccess ? (
+                  <RedirectWithSearch pathname="/mlb/predictions" />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
@@ -245,7 +267,11 @@ function AppShell() {
             path="/props"
             element={
               <RequireSignedIn requiredPath="/mlb/predictions" requiredLabel="MLB predictions">
-                <RedirectWithSearch pathname="/mlb/predictions" />
+                {hasOpsAccess ? (
+                  <RedirectWithSearch pathname="/mlb/predictions" />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
@@ -270,7 +296,11 @@ function AppShell() {
                 requiredPath="/mlb/predictions"
                 requiredLabel="MLB predictions"
               >
-                <RedirectWithSearch pathname="/mlb/predictions" />
+                {hasOpsAccess ? (
+                  <RedirectWithSearch pathname="/mlb/predictions" />
+                ) : (
+                  <RedirectWithSearch pathname="/mlb/today" />
+                )}
               </RequireSignedIn>
             }
           />
