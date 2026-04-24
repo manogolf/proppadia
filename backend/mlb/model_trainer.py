@@ -195,6 +195,16 @@ except Exception:
     MIN_CLASS_COUNT_BY_PROP = {}
     MIN_MINORITY_PCT_BY_PROP = {}
 
+# Optional hits-only recency + line-regime weighting (off by default).
+TRAIN_HITS_WEIGHTING = _env_enabled("MLB_TRAIN_HITS_WEIGHTING", False)
+TRAIN_HITS_WEIGHTING_HALFLIFE_DAYS = max(
+    float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_HALFLIFE_DAYS", "90")),
+    1.0,
+)
+TRAIN_HITS_WEIGHTING_LINE_GE_2_5 = float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_LINE_GE_2_5", "4.0"))
+TRAIN_HITS_WEIGHTING_LINE_GE_1_5 = float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_LINE_GE_1_5", "1.5"))
+TRAIN_HITS_WEIGHTING_LINE_LT_1_5 = float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_LINE_LT_1_5", "1.0"))
+
 
 # ---- Utilities ---------------------------------------------------------------
 def _atomic_write_bytes(path: Path, blob: bytes):
@@ -609,7 +619,38 @@ def fetch_training_rows(sb: Optional[Client], prop_type: str, days_back: int, li
 
 
 # ---- Preprocessing / pipelines ----------------------------------------------
-def _prep_frame(df: pd.DataFrame) -> pd.DataFrame:
+def _hits_sample_weights(df: pd.DataFrame) -> np.ndarray:
+    n = len(df)
+    if n <= 0:
+        return np.array([], dtype="float64")
+
+    line = pd.to_numeric(df.get("line"), errors="coerce")
+    line_w = np.where(
+        line >= 2.5,
+        TRAIN_HITS_WEIGHTING_LINE_GE_2_5,
+        np.where(
+            line >= 1.5,
+            TRAIN_HITS_WEIGHTING_LINE_GE_1_5,
+            TRAIN_HITS_WEIGHTING_LINE_LT_1_5,
+        ),
+    ).astype("float64")
+    line_w = np.where(pd.isna(line), TRAIN_HITS_WEIGHTING_LINE_LT_1_5, line_w)
+
+    age_days = np.zeros(n, dtype="float64")
+    if "game_date" in df.columns:
+        game_date = pd.to_datetime(df["game_date"], errors="coerce")
+        max_date = game_date.max()
+        if not pd.isna(max_date):
+            raw_age = (max_date - game_date).dt.days.to_numpy(dtype="float64")
+            age_days = np.where(np.isfinite(raw_age), np.maximum(raw_age, 0.0), 0.0)
+
+    recency = np.exp(-age_days / float(TRAIN_HITS_WEIGHTING_HALFLIFE_DAYS))
+    w = recency * line_w
+    w = np.where(np.isfinite(w) & (w > 0.0), w, 1.0)
+    return w.astype("float64")
+
+
+def _prep_frame(df: pd.DataFrame, *, prop_type: str | None = None, quiet: bool = True) -> pd.DataFrame:
     if df.empty:
         return df.copy()
     df = df.copy()
@@ -663,8 +704,21 @@ def _prep_frame(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # sample weights: uniform (no source-based overweighting)
+    # sample weights: uniform unless hits-only weighting is explicitly enabled.
     w = np.ones(len(df), dtype="float64")
+    prop_key = str(prop_type or "").strip().lower()
+    if TRAIN_HITS_WEIGHTING and prop_key == "hits":
+        w = _hits_sample_weights(df)
+        if not quiet and len(w):
+            print(
+                "[trainer] hits_weighting=on "
+                f"rows={len(w)} half_life_days={TRAIN_HITS_WEIGHTING_HALFLIFE_DAYS} "
+                f"line_w={{lt1.5:{TRAIN_HITS_WEIGHTING_LINE_LT_1_5},"
+                f"ge1.5:{TRAIN_HITS_WEIGHTING_LINE_GE_1_5},"
+                f"ge2.5:{TRAIN_HITS_WEIGHTING_LINE_GE_2_5}}} "
+                f"weight_mean={float(np.mean(w)):.4f} weight_min={float(np.min(w)):.4f} "
+                f"weight_max={float(np.max(w)):.4f}"
+            )
     df["sample_weight"] = w
     return df
 
@@ -729,7 +783,7 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         return None
 
     # 3) prep labels/weights
-    df = _prep_frame(df)
+    df = _prep_frame(df, prop_type=prop_type, quiet=quiet)
     if df.empty or df["y"].nunique() < 2:
         if not quiet:
             print(f"⏭️  {prop_type}: target has a single class or no labeled rows; skipping.")

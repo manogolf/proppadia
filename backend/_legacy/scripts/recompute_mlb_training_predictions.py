@@ -113,6 +113,7 @@ SELECT
   m.game_id,
   m.game_date::date AS game_date,
   m.prop_type,
+  m.line,
   m.prop_value,
   m.over_under,
   m.outcome,
@@ -139,7 +140,8 @@ WHERE m.prop_source = %s
   -- model_training_props.game_type has not been added yet.
   AND (%s::boolean = FALSE OR COALESCE(NULLIF(upper(trim(to_jsonb(m)->>'game_type')), ''), 'R') = 'R')
   AND m.prop_type IN ({placeholders})
-ORDER BY m.game_date, m.id
+-- Recency-first ordering ensures capped runs evaluate the newest completed games first.
+ORDER BY m.game_date DESC, m.id DESC
 {limit_sql}
 """,
         tuple(params),
@@ -149,7 +151,14 @@ ORDER BY m.game_date, m.id
 
 def _build_features(row: Dict[str, Any]) -> Dict[str, Any]:
     prop_type = str(row.get("prop_type") or "").strip()
-    prop_value = _n(row.get("prop_value")) or 0.0
+    raw_line = _n(row.get("line"))
+    raw_prop_value = _n(row.get("prop_value"))
+    # TEMP semantic alignment for lane scoring:
+    # weekly recompute should evaluate against the market line used in training semantics.
+    if prop_type in {"hits", "doubles", "runs_scored", "runs_rbis", "hits_runs_rbis"} and raw_line is not None:
+        scoring_line = raw_line
+    else:
+        scoring_line = raw_prop_value if raw_prop_value is not None else 0.0
     pds = row.get("pds_stats") if isinstance(row.get("pds_stats"), dict) else {}
     features: Dict[str, Any] = {
         "player_id": int(row.get("player_id")),
@@ -158,7 +167,8 @@ def _build_features(row: Dict[str, Any]) -> Dict[str, Any]:
         "game_id": row.get("game_id"),
         "game_date": str(row.get("game_date")),
         "prop_type": prop_type,
-        "prop_value": prop_value,
+        "prop_value": scoring_line,
+        "line": raw_line if raw_line is not None else scoring_line,
         "over_under": row.get("over_under"),
         "is_home": bool(row.get("is_home")),
         "opponent": row.get("opponent"),
@@ -197,7 +207,7 @@ def _build_features(row: Dict[str, Any]) -> Dict[str, Any]:
     d7 = _n(features.get(f"d7_{prop_type}"))
     if d7 is not None:
         features["rolling_result_avg_7"] = d7
-        features["line_diff"] = d7 - prop_value
+        features["line_diff"] = d7 - scoring_line
     return features
 
 
@@ -235,6 +245,41 @@ def recompute(
     gate_by_prop: Dict[str, Dict[str, Any]] = {}
     blocked_props: List[str] = []
     blocked_reasons: Dict[str, str] = {}
+    # TEMP diagnostic guard: surface hits line/prop_value divergence at scoring time.
+    hits_line_semantics_guard: Dict[str, Any] = {
+        "rows_with_both_line_and_prop_value": 0,
+        "mismatch_rows": 0,
+        "mismatch_rate_pct": None,
+        "sample_mismatches": [],
+    }
+    # TEMP diagnostic guard: surface doubles line/prop_value divergence at scoring time.
+    doubles_line_semantics_guard: Dict[str, Any] = {
+        "rows_with_both_line_and_prop_value": 0,
+        "mismatch_rows": 0,
+        "mismatch_rate_pct": None,
+        "sample_mismatches": [],
+    }
+    # TEMP diagnostic guard: surface runs_scored line/prop_value divergence at scoring time.
+    runs_scored_line_semantics_guard: Dict[str, Any] = {
+        "rows_with_both_line_and_prop_value": 0,
+        "mismatch_rows": 0,
+        "mismatch_rate_pct": None,
+        "sample_mismatches": [],
+    }
+    # TEMP diagnostic guard: surface runs_rbis line/prop_value divergence at scoring time.
+    runs_rbis_line_semantics_guard: Dict[str, Any] = {
+        "rows_with_both_line_and_prop_value": 0,
+        "mismatch_rows": 0,
+        "mismatch_rate_pct": None,
+        "sample_mismatches": [],
+    }
+    # TEMP diagnostic guard: surface hits_runs_rbis line/prop_value divergence at scoring time.
+    hits_runs_rbis_line_semantics_guard: Dict[str, Any] = {
+        "rows_with_both_line_and_prop_value": 0,
+        "mismatch_rows": 0,
+        "mismatch_rate_pct": None,
+        "sample_mismatches": [],
+    }
 
     # Phase 1: score all candidate rows first (no writes yet).
     for row in rows:
@@ -244,6 +289,96 @@ def recompute(
             {"attempted": 0, "scored": 0, "correct": 0, "accuracy_pct": None, "blocked": False},
         )
         gate_bucket["attempted"] += 1
+        if prop_type == "hits":
+            line_val = _n(row.get("line"))
+            prop_val = _n(row.get("prop_value"))
+            if line_val is not None and prop_val is not None:
+                hits_line_semantics_guard["rows_with_both_line_and_prop_value"] += 1
+                if abs(line_val - prop_val) > 1e-9:
+                    hits_line_semantics_guard["mismatch_rows"] += 1
+                    if len(hits_line_semantics_guard["sample_mismatches"]) < 6:
+                        hits_line_semantics_guard["sample_mismatches"].append(
+                            {
+                                "id": str(row.get("id")) if row.get("id") is not None else None,
+                                "game_date": str(row.get("game_date")) if row.get("game_date") is not None else None,
+                                "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
+                                "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
+                                "line": line_val,
+                                "prop_value": prop_val,
+                            }
+                        )
+        if prop_type == "doubles":
+            line_val = _n(row.get("line"))
+            prop_val = _n(row.get("prop_value"))
+            if line_val is not None and prop_val is not None:
+                doubles_line_semantics_guard["rows_with_both_line_and_prop_value"] += 1
+                if abs(line_val - prop_val) > 1e-9:
+                    doubles_line_semantics_guard["mismatch_rows"] += 1
+                    if len(doubles_line_semantics_guard["sample_mismatches"]) < 6:
+                        doubles_line_semantics_guard["sample_mismatches"].append(
+                            {
+                                "id": str(row.get("id")) if row.get("id") is not None else None,
+                                "game_date": str(row.get("game_date")) if row.get("game_date") is not None else None,
+                                "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
+                                "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
+                                "line": line_val,
+                                "prop_value": prop_val,
+                            }
+                        )
+        if prop_type == "runs_scored":
+            line_val = _n(row.get("line"))
+            prop_val = _n(row.get("prop_value"))
+            if line_val is not None and prop_val is not None:
+                runs_scored_line_semantics_guard["rows_with_both_line_and_prop_value"] += 1
+                if abs(line_val - prop_val) > 1e-9:
+                    runs_scored_line_semantics_guard["mismatch_rows"] += 1
+                    if len(runs_scored_line_semantics_guard["sample_mismatches"]) < 6:
+                        runs_scored_line_semantics_guard["sample_mismatches"].append(
+                            {
+                                "id": str(row.get("id")) if row.get("id") is not None else None,
+                                "game_date": str(row.get("game_date")) if row.get("game_date") is not None else None,
+                                "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
+                                "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
+                                "line": line_val,
+                                "prop_value": prop_val,
+                            }
+                        )
+        if prop_type == "runs_rbis":
+            line_val = _n(row.get("line"))
+            prop_val = _n(row.get("prop_value"))
+            if line_val is not None and prop_val is not None:
+                runs_rbis_line_semantics_guard["rows_with_both_line_and_prop_value"] += 1
+                if abs(line_val - prop_val) > 1e-9:
+                    runs_rbis_line_semantics_guard["mismatch_rows"] += 1
+                    if len(runs_rbis_line_semantics_guard["sample_mismatches"]) < 6:
+                        runs_rbis_line_semantics_guard["sample_mismatches"].append(
+                            {
+                                "id": str(row.get("id")) if row.get("id") is not None else None,
+                                "game_date": str(row.get("game_date")) if row.get("game_date") is not None else None,
+                                "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
+                                "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
+                                "line": line_val,
+                                "prop_value": prop_val,
+                            }
+                        )
+        if prop_type == "hits_runs_rbis":
+            line_val = _n(row.get("line"))
+            prop_val = _n(row.get("prop_value"))
+            if line_val is not None and prop_val is not None:
+                hits_runs_rbis_line_semantics_guard["rows_with_both_line_and_prop_value"] += 1
+                if abs(line_val - prop_val) > 1e-9:
+                    hits_runs_rbis_line_semantics_guard["mismatch_rows"] += 1
+                    if len(hits_runs_rbis_line_semantics_guard["sample_mismatches"]) < 6:
+                        hits_runs_rbis_line_semantics_guard["sample_mismatches"].append(
+                            {
+                                "id": str(row.get("id")) if row.get("id") is not None else None,
+                                "game_date": str(row.get("game_date")) if row.get("game_date") is not None else None,
+                                "player_id": str(row.get("player_id")) if row.get("player_id") is not None else None,
+                                "game_id": str(row.get("game_id")) if row.get("game_id") is not None else None,
+                                "line": line_val,
+                                "prop_value": prop_val,
+                            }
+                        )
         try:
             features = _build_features(row)
             p_over, decision_threshold = _score_probability(
@@ -282,6 +417,57 @@ def recompute(
                         "error": err_msg,
                     }
                 )
+
+    rows_with_both = int(hits_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
+    mismatch_rows = int(hits_line_semantics_guard.get("mismatch_rows") or 0)
+    if rows_with_both > 0:
+        hits_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * mismatch_rows) / rows_with_both, 4)
+    if mismatch_rows > 0:
+        print(
+            "[TEMP guard] hits line/prop_value divergence detected in scoring cohort: "
+            f"{mismatch_rows}/{rows_with_both} rows "
+            f"({hits_line_semantics_guard.get('mismatch_rate_pct')}%)."
+        )
+    doubles_rows_with_both = int(doubles_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
+    doubles_mismatch_rows = int(doubles_line_semantics_guard.get("mismatch_rows") or 0)
+    if doubles_rows_with_both > 0:
+        doubles_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * doubles_mismatch_rows) / doubles_rows_with_both, 4)
+    if doubles_mismatch_rows > 0:
+        print(
+            "[TEMP guard] doubles line/prop_value divergence detected in scoring cohort: "
+            f"{doubles_mismatch_rows}/{doubles_rows_with_both} rows "
+            f"({doubles_line_semantics_guard.get('mismatch_rate_pct')}%)."
+        )
+    runs_scored_rows_with_both = int(runs_scored_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
+    runs_scored_mismatch_rows = int(runs_scored_line_semantics_guard.get("mismatch_rows") or 0)
+    if runs_scored_rows_with_both > 0:
+        runs_scored_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * runs_scored_mismatch_rows) / runs_scored_rows_with_both, 4)
+    if runs_scored_mismatch_rows > 0:
+        print(
+            "[TEMP guard] runs_scored line/prop_value divergence detected in scoring cohort: "
+            f"{runs_scored_mismatch_rows}/{runs_scored_rows_with_both} rows "
+            f"({runs_scored_line_semantics_guard.get('mismatch_rate_pct')}%)."
+        )
+    runs_rbis_rows_with_both = int(runs_rbis_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
+    runs_rbis_mismatch_rows = int(runs_rbis_line_semantics_guard.get("mismatch_rows") or 0)
+    if runs_rbis_rows_with_both > 0:
+        runs_rbis_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * runs_rbis_mismatch_rows) / runs_rbis_rows_with_both, 4)
+    if runs_rbis_mismatch_rows > 0:
+        print(
+            "[TEMP guard] runs_rbis line/prop_value divergence detected in scoring cohort: "
+            f"{runs_rbis_mismatch_rows}/{runs_rbis_rows_with_both} rows "
+            f"({runs_rbis_line_semantics_guard.get('mismatch_rate_pct')}%)."
+        )
+    hits_runs_rbis_rows_with_both = int(hits_runs_rbis_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
+    hits_runs_rbis_mismatch_rows = int(hits_runs_rbis_line_semantics_guard.get("mismatch_rows") or 0)
+    if hits_runs_rbis_rows_with_both > 0:
+        hits_runs_rbis_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * hits_runs_rbis_mismatch_rows) / hits_runs_rbis_rows_with_both, 4)
+    if hits_runs_rbis_mismatch_rows > 0:
+        print(
+            "[TEMP guard] hits_runs_rbis line/prop_value divergence detected in scoring cohort: "
+            f"{hits_runs_rbis_mismatch_rows}/{hits_runs_rbis_rows_with_both} rows "
+            f"({hits_runs_rbis_line_semantics_guard.get('mismatch_rate_pct')}%)."
+        )
 
     # Gate decisions: quality threshold + scoring errors.
     for prop_type, gate_bucket in gate_by_prop.items():
@@ -364,6 +550,11 @@ WHERE id = %s
         "failures": failures,
         "by_prop": by_prop,
         "error_samples": error_samples,
+        "hits_line_semantics_guard_temp": hits_line_semantics_guard,
+        "doubles_line_semantics_guard_temp": doubles_line_semantics_guard,
+        "runs_scored_line_semantics_guard_temp": runs_scored_line_semantics_guard,
+        "runs_rbis_line_semantics_guard_temp": runs_rbis_line_semantics_guard,
+        "hits_runs_rbis_line_semantics_guard_temp": hits_runs_rbis_line_semantics_guard,
     }
 
 
