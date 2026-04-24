@@ -119,7 +119,6 @@ Optional history-sync controls:
 Day-to-day local upload build (primary workflow):
 
 ```bash
-MLB_POLICY_PLAN_ENABLED=0 \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
@@ -228,7 +227,6 @@ Brief outputs:
 Optional single-filter variant (emit only sides with model probability >=51%):
 
 ```bash
-MLB_POLICY_PLAN_ENABLED=0 \
 MLB_BOOK_UPLOAD_MIN_SIDE_PROB=0.51 \
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
@@ -273,7 +271,8 @@ Outputs:
 Policy-on variant (optional legacy behavior):
 
 ```bash
-make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
+MLB_POLICY_PLAN_CSV=backend/mlb/config/policy/all11_forward_plan_pass4.csv \
+make mlb-book-upload-policy MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
 Remote sync-only fallback (use only when you intentionally want to pull the remote artifact):
@@ -314,7 +313,7 @@ Contingency: `RED` mode (all eligible props below 0% ROI)
 - Trigger `RED` when every eligible prop has both `7d ROI < 0` and `14d ROI < 0`.
 - Eligible means `graded_rows_7d >= 15` and `graded_rows_14d >= 30`.
 - In `RED`, continue full daily pipeline and reporting, but switch to paper-only execution for at least 3 report days.
-- Keep using full upload build (`MLB_POLICY_PLAN_ENABLED=0 make mlb-book-upload ...`) so discovery/learning still runs.
+- Keep using full upload build (`make mlb-book-upload ...`) so discovery/learning still runs.
 - Exit `RED` only when at least 2 props return to `promote` for 2 consecutive report days.
 - Recovery thresholds to exit `RED`:
   - combined promoted-prop `7d ROI > +2%`

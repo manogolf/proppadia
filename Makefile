@@ -37,12 +37,14 @@ MLB_BOOK_UPLOAD_FILTER_MIN_MODEL_WIN_RATE_PCT ?= 52
 MLB_BOOK_UPLOAD_FILTER_MIN_GRADED_ROWS ?= 8
 MLB_BOOK_UPLOAD_FILTER_GRADED_ROI_FLOOR_PCT ?= -8
 MLB_BOOK_UPLOAD_FILTER_MIN_OVERS ?= 4
+MLB_BOOK_UPLOAD_MIN_SIDE_PROB ?= 0
+MLB_BOOK_UPLOAD_SELECTION_MODE ?= policy
 MLB_ODDS_HISTORY_ROOT ?= backend/mlb/exports/odds_history
 MLB_ODDS_SNAPSHOT_JSON ?= $(MLB_ODDS_HISTORY_ROOT)/$(MLB_DATE)/odds_mlb_playerprops.json
 MLB_ARCHIVE_RUN_TAG ?=
 MLB_ODDS_SNAPSHOT_IN ?=
-MLB_POLICY_PLAN_ENABLED ?= 1
-MLB_POLICY_PLAN_CSV ?= backend/mlb/config/policy/all11_forward_plan_pass4.csv
+MLB_POLICY_PLAN_ENABLED ?= 0
+MLB_POLICY_PLAN_CSV ?=
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED ?= 0
 MLB_POLICY_PLAN_ALLOW_EMPTY ?= 1
 MLB_PREDICT_REQUIRE_TWO_SIDED ?= 1
@@ -268,7 +270,8 @@ MLB_RETRAIN_BROAD_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_RETRAIN_BROAD_DAYS_BACK ?= 540
 MLB_RETRAIN_BROAD_TRAIN_LIMIT ?= 150000
 MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK ?= 30
-MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT ?= 8000
+# Weekly local retrain defaults to full-window recompute; set >0 only if you intentionally cap runtime.
+MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT ?= 0
 MLB_RETRAIN_QUALITY_MIN_TOTAL ?= $(MLB_QUALITY_MIN_TOTAL)
 MLB_FEATURE_WINDOW_MODE ?= games
 MLB_FEATURE_WINDOW_DAYS ?= 120
@@ -509,6 +512,8 @@ help:
 	@echo "  make mlb-all-available-report [resolved all-available summary + by-prop rates from reconcile rows]"
 	@echo "  make mlb-graded-wagers-report MLB_GRADED_IN_CSV=tmp/graded/8rainstation_daily_YYYY-MM-DD_mlb_player_props.csv [placed graded-wager summary + by-prop]"
 	@echo "  make mlb-graded-wagers-report-latest [auto-pick latest split MLB player-props grader csv from tmp/graded]"
+	@echo "  make mlb-book-upload [full base upload CSV; policy filtering disabled by default]"
+	@echo "  make mlb-book-upload-policy MLB_POLICY_PLAN_CSV=<path> [optional policy-filtered upload rows]"
 	@echo "  make mlb-book-upload-top-recommended [adaptive top-N from current book upload + recent post-grade tracker]"
 	@echo "  make mlb-book-upload-side-matrix [one-command side-matrix upload; no EV/gap policy filters]"
 	@echo "  make mlb-daily-bet-sheet [build tool-ready daily sheet from historical lane stats + side-matrix details]"
@@ -1166,12 +1171,24 @@ mlb-slate-output:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_slate_output.py --slate-date $(MLB_DATE) --pred-csv "$(MLB_SLATE_PRED_CSV)" --out-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(strip $(MLB_SLATE_PROP_TYPE)),--prop-type "$(MLB_SLATE_PROP_TYPE)")
 
 # Export MLB book-upload CSV from canonical MLB slate output.
-.PHONY: mlb-book-upload-top-recommended
+.PHONY: mlb-book-upload mlb-book-upload-policy mlb-book-upload-top-recommended
 
 mlb-book-upload:
-	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(filter 1,$(MLB_POLICY_PLAN_ENABLED)),--policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)),--policy-allow-one-sided,) $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_EMPTY)),--policy-allow-empty,),)
+	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --min-side-prob "$(MLB_BOOK_UPLOAD_MIN_SIDE_PROB)" --selection-mode "policy" --policy-plan-csv ""
 	@if [ "$${MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST:-0}" = "1" ] && [ "$${MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND:-book_upload}" = "book_upload" ]; then \
 		echo "mlb-book-upload: remote kind=book_upload sync mode; skipping local mlb-slate-archive"; \
+	else \
+		$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_ARCHIVE_RUN_TAG="$(MLB_ARCHIVE_RUN_TAG)"; \
+	fi
+
+mlb-book-upload-policy:
+	@if [ -z "$(strip $(MLB_POLICY_PLAN_CSV))" ]; then \
+		echo "mlb-book-upload-policy requires MLB_POLICY_PLAN_CSV=<path/to/policy_plan.csv>"; \
+		exit 2; \
+	fi
+	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --min-side-prob "$(MLB_BOOK_UPLOAD_MIN_SIDE_PROB)" --selection-mode "$(MLB_BOOK_UPLOAD_SELECTION_MODE)" --policy-plan-csv "$(MLB_POLICY_PLAN_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_ONE_SIDED)),--policy-allow-one-sided,) $(if $(filter 1,$(MLB_POLICY_PLAN_ALLOW_EMPTY)),--policy-allow-empty,)
+	@if [ "$${MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST:-0}" = "1" ] && [ "$${MLB_BOOK_UPLOAD_REMOTE_FETCH_KIND:-book_upload}" = "book_upload" ]; then \
+		echo "mlb-book-upload-policy: remote kind=book_upload sync mode; skipping local mlb-slate-archive"; \
 	else \
 		$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_ARCHIVE_RUN_TAG="$(MLB_ARCHIVE_RUN_TAG)"; \
 	fi
@@ -1718,27 +1735,40 @@ mlb-retrain-broad-reconcile:
 		exit 2; \
 	fi; \
 	props="$(MLB_RETRAIN_BROAD_PROP_TYPES)"; \
+	failed_props=""; \
 	OLD_IFS="$$IFS"; IFS=','; \
 	for prop in $$props; do \
 		prop=$$(echo "$$prop" | xargs); \
 		if [ -z "$$prop" ]; then continue; fi; \
 		echo "==> broad train prop=$$prop source=$(MLB_TRAIN_FEATURE_SOURCE) rows=$(MLB_TRAIN_RECONCILE_ROWS_CSV) model_root=$$model_root"; \
-		MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" TRAIN_FEATURE_SOURCE="$(MLB_TRAIN_FEATURE_SOURCE)" MLB_TRAIN_PROFILE="$(MLB_TRAIN_PROFILE)" MLB_TRAIN_MARKET_ONLY="$(MLB_TRAIN_MARKET_ONLY)" MLB_TRAIN_RECONCILE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_TRAIN_RECONCILE_BOOKMAKER="$(MLB_TRAIN_RECONCILE_BOOKMAKER)" MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED="$(MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED)" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE="$(MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE)" MIN_CLASS_COUNT="$(MLB_TRAIN_MIN_CLASS_COUNT)" MIN_MINORITY_PCT="$(MLB_TRAIN_MIN_MINORITY_PCT)" $(VENV_PY) backend/mlb/model_trainer.py --prop "$$prop" --days-back "$(MLB_RETRAIN_BROAD_DAYS_BACK)" --limit "$(MLB_RETRAIN_BROAD_TRAIN_LIMIT)" || exit $$?; \
-			if [ ! -f "$$model_root/latest/$$prop.joblib" ]; then \
-				echo "==> broad recompute skipped prop=$$prop (no model artifact at $$model_root/latest/$$prop.joblib)"; \
-				continue; \
-			fi; \
-			echo "==> broad recompute prop=$$prop"; \
-					gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
-					case "$$prop" in \
-						hits_runs_rbis) gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_HITS_RUNS_RBIS_PCT)" ;; \
-					esac; \
-					case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
-					MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG) || exit $$?; \
-		done; \
+		if ! MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" TRAIN_FEATURE_SOURCE="$(MLB_TRAIN_FEATURE_SOURCE)" MLB_TRAIN_PROFILE="$(MLB_TRAIN_PROFILE)" MLB_TRAIN_MARKET_ONLY="$(MLB_TRAIN_MARKET_ONLY)" MLB_TRAIN_RECONCILE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_TRAIN_RECONCILE_BOOKMAKER="$(MLB_TRAIN_RECONCILE_BOOKMAKER)" MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED="$(MLB_TRAIN_RECONCILE_REQUIRE_TWO_SIDED)" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE="$(MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE)" MIN_CLASS_COUNT="$(MLB_TRAIN_MIN_CLASS_COUNT)" MIN_MINORITY_PCT="$(MLB_TRAIN_MIN_MINORITY_PCT)" $(VENV_PY) backend/mlb/model_trainer.py --prop "$$prop" --days-back "$(MLB_RETRAIN_BROAD_DAYS_BACK)" --limit "$(MLB_RETRAIN_BROAD_TRAIN_LIMIT)"; then \
+			echo "==> broad train failed prop=$$prop"; \
+			failed_props="$$failed_props $$prop:train"; \
+			continue; \
+		fi; \
+		if [ ! -f "$$model_root/latest/$$prop.joblib" ]; then \
+			echo "==> broad recompute skipped prop=$$prop (no model artifact at $$model_root/latest/$$prop.joblib)"; \
+			continue; \
+		fi; \
+		echo "==> broad recompute prop=$$prop"; \
+		gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_PCT)"; \
+		case "$$prop" in \
+			hits_runs_rbis) gate_min_acc="$(MLB_RECOMPUTE_GATE_MIN_ACCURACY_HITS_RUNS_RBIS_PCT)" ;; \
+		esac; \
+		case ",$(MLB_RECOMPUTE_NON_BLOCKING_PROPS)," in *,"$$prop",*) gate_min_acc="-1" ;; esac; \
+		if ! MLB_FORCE_INVERT_PROPS="$(MLB_RECOMPUTE_FORCE_INVERT_PROPS)" MODEL_DIR="$$model_root" MODELS_DIR="$$model_root" $(VENV_PY) backend/_legacy/scripts/recompute_mlb_training_predictions.py --days-back "$(MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK)" --prop-types "$$prop" --prop-source "$(MLB_RECOMPUTE_PROP_SOURCE)" --from-date "$(MLB_RECOMPUTE_FROM_DATE)" --to-date "$(MLB_RECOMPUTE_TO_DATE)" --limit "$(MLB_RETRAIN_BROAD_RECOMPUTE_LIMIT)" --gate-min-total-per-prop "$(MLB_RECOMPUTE_GATE_MIN_TOTAL_PER_PROP)" --gate-min-accuracy-pct "$$gate_min_acc" $(MLB_RECOMPUTE_REQUIRE_REGULAR_ARG); then \
+			echo "==> broad recompute failed prop=$$prop"; \
+			failed_props="$$failed_props $$prop:recompute"; \
+			continue; \
+		fi; \
+	done; \
 	IFS="$$OLD_IFS"; \
-		$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_RETRAIN_QUALITY_MIN_TOTAL)"; \
-		$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
+	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_RETRAIN_QUALITY_MIN_TOTAL)"; \
+	$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"; \
+	if [ -n "$$failed_props" ]; then \
+		echo "mlb-retrain-broad-reconcile finished with prop failures:$$failed_props"; \
+		exit 1; \
+	fi
 
 mlb-model-artifact-validate:
 	$(VENV_PY) backend/mlb/scripts/validate_mlb_model_artifacts.py --prop-types "$(MLB_PREDICT_PROP_TYPES)" --min-feature-overlap-pct "$(MLB_MODEL_VALIDATE_MIN_FEATURE_OVERLAP_PCT)"
