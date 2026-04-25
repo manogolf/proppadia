@@ -424,9 +424,10 @@ def recompute(
         hits_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * mismatch_rows) / rows_with_both, 4)
     if mismatch_rows > 0:
         print(
-            "[TEMP guard] hits line/prop_value divergence detected in scoring cohort: "
+            "[TEMP guard][info-only] hits line/prop_value divergence detected in scoring cohort: "
             f"{mismatch_rows}/{rows_with_both} rows "
-            f"({hits_line_semantics_guard.get('mismatch_rate_pct')}%)."
+            f"({hits_line_semantics_guard.get('mismatch_rate_pct')}%). "
+            "This guard is diagnostic only and does not block gate/candidate evaluation."
         )
     doubles_rows_with_both = int(doubles_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
     doubles_mismatch_rows = int(doubles_line_semantics_guard.get("mismatch_rows") or 0)
@@ -434,9 +435,10 @@ def recompute(
         doubles_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * doubles_mismatch_rows) / doubles_rows_with_both, 4)
     if doubles_mismatch_rows > 0:
         print(
-            "[TEMP guard] doubles line/prop_value divergence detected in scoring cohort: "
+            "[TEMP guard][info-only] doubles line/prop_value divergence detected in scoring cohort: "
             f"{doubles_mismatch_rows}/{doubles_rows_with_both} rows "
-            f"({doubles_line_semantics_guard.get('mismatch_rate_pct')}%)."
+            f"({doubles_line_semantics_guard.get('mismatch_rate_pct')}%). "
+            "This guard is diagnostic only and does not block gate/candidate evaluation."
         )
     runs_scored_rows_with_both = int(runs_scored_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
     runs_scored_mismatch_rows = int(runs_scored_line_semantics_guard.get("mismatch_rows") or 0)
@@ -444,9 +446,10 @@ def recompute(
         runs_scored_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * runs_scored_mismatch_rows) / runs_scored_rows_with_both, 4)
     if runs_scored_mismatch_rows > 0:
         print(
-            "[TEMP guard] runs_scored line/prop_value divergence detected in scoring cohort: "
+            "[TEMP guard][info-only] runs_scored line/prop_value divergence detected in scoring cohort: "
             f"{runs_scored_mismatch_rows}/{runs_scored_rows_with_both} rows "
-            f"({runs_scored_line_semantics_guard.get('mismatch_rate_pct')}%)."
+            f"({runs_scored_line_semantics_guard.get('mismatch_rate_pct')}%). "
+            "This guard is diagnostic only and does not block gate/candidate evaluation."
         )
     runs_rbis_rows_with_both = int(runs_rbis_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
     runs_rbis_mismatch_rows = int(runs_rbis_line_semantics_guard.get("mismatch_rows") or 0)
@@ -454,9 +457,10 @@ def recompute(
         runs_rbis_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * runs_rbis_mismatch_rows) / runs_rbis_rows_with_both, 4)
     if runs_rbis_mismatch_rows > 0:
         print(
-            "[TEMP guard] runs_rbis line/prop_value divergence detected in scoring cohort: "
+            "[TEMP guard][info-only] runs_rbis line/prop_value divergence detected in scoring cohort: "
             f"{runs_rbis_mismatch_rows}/{runs_rbis_rows_with_both} rows "
-            f"({runs_rbis_line_semantics_guard.get('mismatch_rate_pct')}%)."
+            f"({runs_rbis_line_semantics_guard.get('mismatch_rate_pct')}%). "
+            "This guard is diagnostic only and does not block gate/candidate evaluation."
         )
     hits_runs_rbis_rows_with_both = int(hits_runs_rbis_line_semantics_guard.get("rows_with_both_line_and_prop_value") or 0)
     hits_runs_rbis_mismatch_rows = int(hits_runs_rbis_line_semantics_guard.get("mismatch_rows") or 0)
@@ -464,9 +468,10 @@ def recompute(
         hits_runs_rbis_line_semantics_guard["mismatch_rate_pct"] = round((100.0 * hits_runs_rbis_mismatch_rows) / hits_runs_rbis_rows_with_both, 4)
     if hits_runs_rbis_mismatch_rows > 0:
         print(
-            "[TEMP guard] hits_runs_rbis line/prop_value divergence detected in scoring cohort: "
+            "[TEMP guard][info-only] hits_runs_rbis line/prop_value divergence detected in scoring cohort: "
             f"{hits_runs_rbis_mismatch_rows}/{hits_runs_rbis_rows_with_both} rows "
-            f"({hits_runs_rbis_line_semantics_guard.get('mismatch_rate_pct')}%)."
+            f"({hits_runs_rbis_line_semantics_guard.get('mismatch_rate_pct')}%). "
+            "This guard is diagnostic only and does not block gate/candidate evaluation."
         )
 
     # Gate decisions: quality threshold + scoring errors.

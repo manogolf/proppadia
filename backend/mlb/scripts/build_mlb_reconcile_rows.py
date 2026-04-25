@@ -28,6 +28,8 @@ from backend.app.services.mlb.market_odds_service import (
 from backend.mlb.shared.team_name_map import teamIdMap
 from backend.shared.db.pg import pg_fetchall
 
+_ZERO_STAT_FALLBACK_PROPS = {"walks", "strikeouts_batting"}
+
 
 def _norm_name(value: object) -> str:
     text = str(value or "").strip().lower()
@@ -236,6 +238,67 @@ def _load_actual_values(
     for r in rows:
         try:
             key = (int(r.get("game_id")), int(r.get("player_id")), str(r.get("prop_type")))
+            out[key] = {
+                "actual_value": float(r.get("actual_value")) if r.get("actual_value") is not None else None,
+                "sample_rows": int(r.get("sample_rows") or 0),
+                "distinct_actual_values": int(r.get("distinct_actual_values") or 0),
+            }
+        except Exception:
+            continue
+
+    # Reconcile fallback for zero-stat batter props where training rows can be sparse:
+    # when model_training_props has no resolved value, use player_stats for rows that
+    # have batter participation evidence on that game.
+    fallback_sql = """
+    WITH ps AS (
+      SELECT
+        game_id::bigint AS game_id,
+        player_id::bigint AS player_id,
+        lower(trim(coalesce(position, ''))) AS position_norm,
+        COALESCE(walks, 0)::float8 AS walks,
+        COALESCE(strikeouts_batting, 0)::float8 AS strikeouts_batting
+      FROM mlb.player_stats
+      WHERE game_date::date BETWEEN %s::date AND %s::date
+        AND game_id IS NOT NULL
+        AND player_id IS NOT NULL
+    ),
+    expanded AS (
+      SELECT
+        game_id,
+        player_id,
+        'walks'::text AS prop_type,
+        walks AS actual_value
+      FROM ps
+      WHERE position_norm <> 'p' OR walks > 0 OR strikeouts_batting > 0
+      UNION ALL
+      SELECT
+        game_id,
+        player_id,
+        'strikeouts_batting'::text AS prop_type,
+        strikeouts_batting AS actual_value
+      FROM ps
+      WHERE position_norm <> 'p' OR walks > 0 OR strikeouts_batting > 0
+    )
+    SELECT
+      game_id,
+      player_id,
+      prop_type,
+      AVG(actual_value)::float8 AS actual_value,
+      COUNT(*)::int AS sample_rows,
+      COUNT(DISTINCT actual_value)::int AS distinct_actual_values
+    FROM expanded
+    GROUP BY 1,2,3
+    """
+    fallback_rows = pg_fetchall(fallback_sql, (from_date, to_date))
+    for r in fallback_rows:
+        try:
+            prop_type = str(r.get("prop_type") or "").strip().lower()
+            if prop_type not in _ZERO_STAT_FALLBACK_PROPS:
+                continue
+            key = (int(r.get("game_id")), int(r.get("player_id")), prop_type)
+            current = out.get(key)
+            if current and current.get("actual_value") is not None:
+                continue
             out[key] = {
                 "actual_value": float(r.get("actual_value")) if r.get("actual_value") is not None else None,
                 "sample_rows": int(r.get("sample_rows") or 0),
