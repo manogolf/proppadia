@@ -62,6 +62,7 @@ def evaluate_candidate(
     min_overall_lift_pct: float,
     max_prop_drop_pct: float,
     min_candidate_total: int,
+    min_baseline_prop_total_for_drop: int,
 ) -> dict[str, Any]:
     base_overall = baseline_payload.get("overall") or {}
     cand_overall = candidate_payload.get("overall") or {}
@@ -83,14 +84,28 @@ def evaluate_candidate(
 
     missing_required_props: list[str] = []
     degraded_required_props: list[dict[str, Any]] = []
+    insufficient_baseline_sample_props: list[dict[str, Any]] = []
     for prop in required:
         c = cand_by_prop.get(prop)
         if not c:
             missing_required_props.append(prop)
             continue
         b = base_by_prop.get(prop) or {}
+        b_total = _to_int(b.get("total"))
+        c_total = _to_int(c.get("total"))
         b_acc = _to_float(b.get("accuracy_pct"))
         c_acc = _to_float(c.get("accuracy_pct"))
+        if b_total < int(min_baseline_prop_total_for_drop):
+            insufficient_baseline_sample_props.append(
+                {
+                    "prop_type": prop,
+                    "baseline_total": b_total,
+                    "candidate_total": c_total,
+                    "baseline_accuracy_pct": b_acc,
+                    "candidate_accuracy_pct": c_acc,
+                }
+            )
+            continue
         delta = None if b_acc is None or c_acc is None else round(c_acc - b_acc, 2)
         if delta is not None and delta < (0.0 - float(max_prop_drop_pct)):
             degraded_required_props.append(
@@ -120,7 +135,9 @@ def evaluate_candidate(
             "required_props": required,
             "missing_required_props": missing_required_props,
             "degraded_required_props": degraded_required_props,
+            "insufficient_baseline_sample_props": insufficient_baseline_sample_props,
             "max_allowed_drop_pct": float(max_prop_drop_pct),
+            "min_baseline_prop_total_for_drop": int(min_baseline_prop_total_for_drop),
         },
     }
 
@@ -175,6 +192,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--min-candidate-total", type=int, default=-1, help="-1 uses baseline overall total.")
     ap.add_argument("--min-overall-lift-pct", type=float, default=0.25)
     ap.add_argument("--max-prop-drop-pct", type=float, default=0.5)
+    ap.add_argument("--min-baseline-prop-total-for-drop", type=int, default=300)
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     try:
@@ -245,6 +263,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         min_overall_lift_pct=float(args.min_overall_lift_pct),
         max_prop_drop_pct=max(0.0, float(args.max_prop_drop_pct)),
         min_candidate_total=max(0, int(min_candidate_total)),
+        min_baseline_prop_total_for_drop=max(0, int(args.min_baseline_prop_total_for_drop)),
     )
     payload = {
         "captured_at": datetime.now(timezone.utc).isoformat(),

@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Sequence, Tuple
 
@@ -91,16 +91,29 @@ def _collect_quality_from_rows_csv(
     if not csv_path.exists():
         raise FileNotFoundError(f"reconcile rows csv not found: {csv_path}")
 
+    captured_at = datetime.now(timezone.utc).isoformat()
     df = pd.read_csv(csv_path, low_memory=False)
     if df.empty:
         return {
+            "captured_at": captured_at,
             "source_table": "reconcile_rows",
             "window_mode": window_mode,
             "window_value": int(window_value),
             "prop_types": list(prop_types),
             "prop_sources": [],
+            "cohort": {
+                "rows_csv": str(csv_path),
+                "require_two_sided": bool(require_two_sided),
+                "scoped_total_rows": 0,
+                "scored_total_rows": 0,
+                "scoped_game_day_min": None,
+                "scoped_game_day_max": None,
+                "scored_game_day_min": None,
+                "scored_game_day_max": None,
+            },
             "overall": {"window_mode": window_mode, "window_value": int(window_value), "total": 0, "correct": 0, "accuracy_pct": None},
             "by_prop": [],
+            "per_prop_diagnostics": [],
             "by_confidence_bucket": [],
             "drift_14d": {
                 "last_14d": {"total": 0, "correct": 0, "accuracy_pct": None},
@@ -109,7 +122,7 @@ def _collect_quality_from_rows_csv(
             },
         }
 
-    for col in ("game_date", "prop_type", "actual_model_pick_outcome", "model_pick_prob"):
+    for col in ("game_date", "prop_type", "actual_model_pick_outcome", "model_pick_prob", "model_pick_side", "actual_over_outcome", "line"):
         if col not in df.columns:
             df[col] = pd.NA
     if require_two_sided:
@@ -130,7 +143,10 @@ def _collect_quality_from_rows_csv(
 
     df["game_day"] = pd.to_datetime(df["game_date"], errors="coerce").dt.date
     df["actual_model_pick_outcome"] = df["actual_model_pick_outcome"].astype(str).str.lower().str.strip()
+    df["model_pick_side"] = df["model_pick_side"].astype(str).str.lower().str.strip()
+    df["actual_over_outcome"] = df["actual_over_outcome"].astype(str).str.lower().str.strip()
     df["model_pick_prob"] = pd.to_numeric(df["model_pick_prob"], errors="coerce")
+    df["line"] = pd.to_numeric(df["line"], errors="coerce")
 
     normalized_rows: list[dict[str, Any]] = []
     for row in df.itertuples(index=False):
@@ -150,6 +166,9 @@ def _collect_quality_from_rows_csv(
                 "game_day": getattr(row, "game_day", None),
                 "model_correct_i": model_correct_i,
                 "confidence_bucket": _confidence_bucket_from_prob(model_pick_prob_val),
+                "model_pick_side": str(getattr(row, "model_pick_side", "") or "").strip().lower(),
+                "actual_over_outcome": str(getattr(row, "actual_over_outcome", "") or "").strip().lower(),
+                "line": _safe_float(getattr(row, "line", None)),
             }
         )
 
@@ -184,6 +203,70 @@ def _collect_quality_from_rows_csv(
                 "total": int(p_total),
                 "correct": int(p_correct),
                 "accuracy_pct": round((100.0 * float(p_correct) / float(p_total)), 2) if p_total > 0 else None,
+            }
+        )
+
+    prop_diag_map: dict[str, dict[str, Any]] = {}
+    for row in scored_rows:
+        prop = str(row.get("prop_type") or "").strip()
+        if not prop:
+            continue
+        diag = prop_diag_map.setdefault(
+            prop,
+            {
+                "total": 0,
+                "pred_over": 0,
+                "actual_over": 0,
+                "line_counts": {},
+                "line_bucket_counts": {"lt_1_0": 0, "1_0_to_lt_2_0": 0, "2_0_to_lt_3_0": 0, "ge_3_0": 0, "missing": 0},
+            },
+        )
+        diag["total"] += 1
+        if str(row.get("model_pick_side") or "").lower() == "over":
+            diag["pred_over"] += 1
+        if str(row.get("actual_over_outcome") or "").lower() == "win":
+            diag["actual_over"] += 1
+        line_val = _safe_float(row.get("line"))
+        if line_val is None:
+            diag["line_bucket_counts"]["missing"] += 1
+        else:
+            line_key = f"{float(line_val):.1f}"
+            diag["line_counts"][line_key] = int(diag["line_counts"].get(line_key, 0)) + 1
+            if line_val < 1.0:
+                diag["line_bucket_counts"]["lt_1_0"] += 1
+            elif line_val < 2.0:
+                diag["line_bucket_counts"]["1_0_to_lt_2_0"] += 1
+            elif line_val < 3.0:
+                diag["line_bucket_counts"]["2_0_to_lt_3_0"] += 1
+            else:
+                diag["line_bucket_counts"]["ge_3_0"] += 1
+
+    per_prop_diagnostics: list[dict[str, Any]] = []
+    for prop in sorted(prop_diag_map.keys(), key=lambda p: (-int(prop_diag_map[p]["total"]), p)):
+        diag = prop_diag_map[prop]
+        d_total = int(diag["total"])
+        line_counts = diag["line_counts"]
+        top_lines = sorted(line_counts.items(), key=lambda kv: (-int(kv[1]), kv[0]))[:8]
+        line_top_values = [
+            {
+                "line": _safe_float(k),
+                "count": int(v),
+                "pct": round((100.0 * float(v) / float(d_total)), 2) if d_total > 0 else None,
+            }
+            for k, v in top_lines
+        ]
+        line_bucket_pct = {
+            bucket: (round((100.0 * float(count) / float(d_total)), 2) if d_total > 0 else None)
+            for bucket, count in diag["line_bucket_counts"].items()
+        }
+        per_prop_diagnostics.append(
+            {
+                "prop_type": prop,
+                "total": d_total,
+                "pred_over_rate_pct": round((100.0 * float(diag["pred_over"]) / float(d_total)), 2) if d_total > 0 else None,
+                "actual_over_rate_pct": round((100.0 * float(diag["actual_over"]) / float(d_total)), 2) if d_total > 0 else None,
+                "line_top_values": line_top_values,
+                "line_bucket_pct": line_bucket_pct,
             }
         )
 
@@ -230,14 +313,29 @@ def _collect_quality_from_rows_csv(
     if last_14.get("accuracy_pct") is not None and prev_14.get("accuracy_pct") is not None:
         delta = round(float(last_14["accuracy_pct"]) - float(prev_14["accuracy_pct"]), 2)
 
+    scoped_days = sorted({r.get("game_day") for r in scoped_rows if r.get("game_day") is not None})
+    scored_days = sorted({r.get("game_day") for r in scored_rows if r.get("game_day") is not None})
+
     return {
+        "captured_at": captured_at,
         "source_table": "reconcile_rows",
         "window_mode": window_mode,
         "window_value": int(window_value),
         "prop_types": list(prop_types),
         "prop_sources": [],
+        "cohort": {
+            "rows_csv": str(csv_path),
+            "require_two_sided": bool(require_two_sided),
+            "scoped_total_rows": int(len(scoped_rows)),
+            "scored_total_rows": int(total),
+            "scoped_game_day_min": str(scoped_days[0]) if scoped_days else None,
+            "scoped_game_day_max": str(scoped_days[-1]) if scoped_days else None,
+            "scored_game_day_min": str(scored_days[0]) if scored_days else None,
+            "scored_game_day_max": str(scored_days[-1]) if scored_days else None,
+        },
         "overall": overall,
         "by_prop": by_prop,
+        "per_prop_diagnostics": per_prop_diagnostics,
         "by_confidence_bucket": by_confidence_bucket,
         "drift_14d": {"last_14d": last_14, "prev_14d": prev_14, "delta_pct": delta},
     }
@@ -588,8 +686,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload = {
         "ok": ok,
         "status": "pass" if ok else "fail",
+        "captured_at": quality.get("captured_at"),
+        "source_table": quality.get("source_table"),
+        "window_mode": quality.get("window_mode"),
+        "window_value": quality.get("window_value"),
+        "prop_types": quality.get("prop_types"),
+        "prop_sources": quality.get("prop_sources"),
+        "cohort": quality.get("cohort"),
         "overall": quality["overall"],
         "by_prop": quality["by_prop"],
+        "per_prop_diagnostics": quality.get("per_prop_diagnostics") or [],
         "by_confidence_bucket": quality["by_confidence_bucket"],
         "drift_14d": quality["drift_14d"],
         "min_total": min_total,

@@ -42,6 +42,7 @@ def collect_phase2_snapshot(
     min_candidate_total: int,
     min_overall_lift_pct: float,
     max_prop_drop_pct: float,
+    min_baseline_prop_total_for_drop: int,
 ) -> dict[str, Any]:
     manifest_payload = _load_json_file(manifest_path)
     replay_payload = _load_json_file(replay_path)
@@ -67,6 +68,8 @@ def collect_phase2_snapshot(
         str(float(min_overall_lift_pct)),
         "--max-prop-drop-pct",
         str(float(max_prop_drop_pct)),
+        "--min-baseline-prop-total-for-drop",
+        str(int(min_baseline_prop_total_for_drop)),
     ]
     if str(rows_csv).strip():
         candidate_args.extend(["--rows-csv", str(rows_csv).strip()])
@@ -125,6 +128,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--min-candidate-total", type=int, default=-1)
     ap.add_argument("--min-overall-lift-pct", type=float, default=0.25)
     ap.add_argument("--max-prop-drop-pct", type=float, default=3.5)
+    ap.add_argument("--min-baseline-prop-total-for-drop", type=int, default=300)
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     payload = collect_phase2_snapshot(
@@ -142,6 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         min_candidate_total=int(args.min_candidate_total),
         min_overall_lift_pct=float(args.min_overall_lift_pct),
         max_prop_drop_pct=float(args.max_prop_drop_pct),
+        min_baseline_prop_total_for_drop=int(args.min_baseline_prop_total_for_drop),
     )
 
     out_path = Path(args.output)
