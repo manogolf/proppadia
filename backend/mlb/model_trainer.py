@@ -16,7 +16,7 @@ Env:
 from __future__ import annotations
 
 
-import os, io, json
+import os, io, json, warnings
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -37,6 +37,16 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score
 from pandas.api.types import is_numeric_dtype
+
+# Temporary fallback only: allow opt-in suppression for known-noisy sklearn
+# all-null imputer warnings while preprocessing fixes are rolled out.
+if str(os.environ.get("MLB_SUPPRESS_BVP_RBI_IMPUTER_WARNING", "0")).strip().lower() in {"1", "true", "yes", "on"}:
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Skipping features without any observed values: \['bvp_rbi'\]\. At least one non-missing value is needed for imputation with strategy='median'\.",
+        category=UserWarning,
+        module=r"sklearn\.impute\._base",
+    )
 
 # ---- .env (optional) ---------------------------------------------------------
 try:
@@ -811,11 +821,15 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         return None
 
     # --- Feature availability policy + pitching-specific trim ---
-    # 1) Drop only truly all-NaN features present in the frame
-    all_nan = [c for c in set(feat_list) if c in df.columns and df[c].isna().all()]
-    if all_nan and not quiet:
-        print(f"ℹ️  {prop_type}: dropping all-NaN features: {sorted(all_nan)}")
-    feat_list = [c for c in feat_list if c not in all_nan]
+    # 1) Coerce candidate numeric features first, then drop true all-null numerics.
+    numeric_candidates = [c for c in feat_list if c not in ALWAYS_CATEGORICAL_FEATURES and c in df.columns]
+    for c in numeric_candidates:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    all_null_numeric = [c for c in numeric_candidates if df[c].isna().all()]
+    if all_null_numeric and not quiet:
+        print(f"[features] dropping all-null numeric features: {', '.join(sorted(all_null_numeric))}")
+    feat_list = [c for c in feat_list if c not in all_null_numeric]
 
     # 2) For pitching props, drop d7* windows (rotation → weak coverage/signal)
     if prop_type in PITCHING_PROPS:
@@ -836,11 +850,6 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
             print("ℹ️  {0}: low-coverage kept → {1}".format(prop_type, ", ".join(low[:12]) + (" ..." if len(low)>12 else "")))
 
     # 3) determine num/cat AFTER pruning
-    for c in feat_list:
-        if c in ALWAYS_CATEGORICAL_FEATURES:
-            continue
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
 
     num_used = [c for c in feat_list if c in df.columns and (is_numeric_dtype(df[c]) and c not in ALWAYS_CATEGORICAL_FEATURES)]
     cat_used = [c for c in feat_list if c in df.columns and (not is_numeric_dtype(df[c]) or c in ALWAYS_CATEGORICAL_FEATURES)]
@@ -885,10 +894,36 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         (train_idx, val_idx), = sss.split(df[cols_used], df["y"])
         train_df, val_df = df.iloc[train_idx], df.iloc[val_idx]
 
+    # 6) drop features that become all-null in the TRAIN split before imputation.
+    # This prevents sklearn "Skipping features without any observed values" warnings
+    # in live runs when sparse columns only have values in validation rows.
+    train_all_null_num = [c for c in num_used if c in train_df.columns and train_df[c].isna().all()]
+    if train_all_null_num and not quiet:
+        print(
+            "[features] dropping all-null numeric features (train split): "
+            + ", ".join(sorted(train_all_null_num))
+        )
+    num_used = [c for c in num_used if c not in train_all_null_num]
+
+    # Keep categorical path robust too: most_frequent imputer also warns when all-null.
+    train_all_null_cat = [c for c in cat_used if c in train_df.columns and train_df[c].isna().all()]
+    if train_all_null_cat and not quiet:
+        print(
+            "[features] dropping all-null categorical features (train split): "
+            + ", ".join(sorted(train_all_null_cat))
+        )
+    cat_used = [c for c in cat_used if c not in train_all_null_cat]
+
+    cols_used = num_used + cat_used
+    if not cols_used:
+        if not quiet:
+            print(f"⏭️  {prop_type}: no usable features after train-split null pruning; skipping.")
+        return None
+
     X_tr, y_tr, w_tr = train_df[cols_used], train_df["y"], train_df["sample_weight"]
     X_v,  y_v,  w_v  =  val_df[cols_used],  val_df["y"],  val_df["sample_weight"]
 
-    # 6) build pipelines (this DEFINES pipe_lr / pipe_rf) and fit
+    # 7) build pipelines (this DEFINES pipe_lr / pipe_rf) and fit
     pipe_lr, pipe_rf = build_pipeline(num_used, cat_used)
 
     pipe_lr.fit(X_tr, y_tr, clf__sample_weight=w_tr)

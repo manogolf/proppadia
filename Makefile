@@ -267,6 +267,11 @@ MLB_RETRAIN_BOL_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_RETRAIN_BOL_DAYS_BACK ?= 540
 MLB_RETRAIN_BOL_TRAIN_LIMIT ?= 150000
 MLB_RETRAIN_BROAD_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
+# Reconcile_csv + two-sided lane currently has no real runs_rbis market rows
+# (odds/slate support missing). Keep runs_rbis excluded from broad reconcile
+# train/eval until two-sided market support is added.
+MLB_PROD12_RECONCILE_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
+MLB_RETRAIN_BROAD_RECONCILE_PROP_TYPES ?= $(MLB_PROD12_RECONCILE_PROP_TYPES)
 MLB_RETRAIN_BROAD_DAYS_BACK ?= 540
 MLB_RETRAIN_BROAD_TRAIN_LIMIT ?= 150000
 MLB_RETRAIN_BROAD_RECOMPUTE_DAYS_BACK ?= 30
@@ -359,6 +364,8 @@ MLB_CANDIDATE_GAMES_BACK ?= 30
 MLB_CANDIDATE_PROP_TYPES ?= $(MLB_CORE_PROP_TYPES)
 MLB_CANDIDATE_REQUIRED_PROPS ?= $(MLB_CORE_PROP_TYPES)
 MLB_PROD12_CANDIDATE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
+# Reconcile candidate eval should mirror the reconcile broad train scope above.
+MLB_PROD12_CANDIDATE_PROP_TYPES_RECONCILE ?= $(MLB_PROD12_RECONCILE_PROP_TYPES)
 # Keep reconcile-required stability set scoped to props with reliable reconcile coverage.
 # runs_rbis is included in prod12 lane/predictions, but excluded from required stability by default.
 MLB_PROD12_CANDIDATE_REQUIRED_PROPS ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
@@ -1686,7 +1693,7 @@ mlb-hybrid-window-refresh:
 		done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_RETRAIN_QUALITY_MIN_TOTAL)"; \
-	$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
+	$(MAKE) mlb-candidate-eval-prod12 MLB_PROD12_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_PROD12_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"
 
 # Brand-new market-native retrain lane:
 # - BetOnline-only
@@ -1734,7 +1741,7 @@ mlb-retrain-broad-reconcile:
 		echo "build it first with make mlb-reconcile-rows MLB_RECONCILE_BOOKMAKER=betonlineag MLB_RECONCILE_REQUIRE_TWO_SIDED=1"; \
 		exit 2; \
 	fi; \
-	props="$(MLB_RETRAIN_BROAD_PROP_TYPES)"; \
+	props="$(MLB_RETRAIN_BROAD_RECONCILE_PROP_TYPES)"; \
 	failed_props=""; \
 	OLD_IFS="$$IFS"; IFS=','; \
 	for prop in $$props; do \
@@ -1764,7 +1771,7 @@ mlb-retrain-broad-reconcile:
 	done; \
 	IFS="$$OLD_IFS"; \
 	$(MAKE) mlb-prediction-quality-prod12 MLB_QUALITY_SOURCE_TABLE="reconcile_rows" MLB_QUALITY_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_QUALITY_WINDOW_MODE=games MLB_QUALITY_GAMES_BACK="$(MLB_QUALITY_GAMES_BACK)" MLB_QUALITY_PROP_SOURCES="" MLB_QUALITY_MIN_TOTAL="$(MLB_RETRAIN_QUALITY_MIN_TOTAL)"; \
-	$(MAKE) mlb-candidate-eval-prod12 MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"; \
+	$(MAKE) mlb-candidate-eval-prod12 MLB_PROD12_CANDIDATE_SOURCE_TABLE="reconcile_rows" MLB_PROD12_CANDIDATE_ROWS_CSV="$(MLB_TRAIN_RECONCILE_ROWS_CSV)" MLB_PROD12_CANDIDATE_PROP_TYPES="$(MLB_PROD12_CANDIDATE_PROP_TYPES_RECONCILE)" MLB_PROD12_MIN_LIFT_PCT="$(MLB_PROD12_MIN_LIFT_PCT)" MLB_PROD12_MAX_PROP_DROP_PCT="$(MLB_PROD12_MAX_PROP_DROP_PCT)"; \
 	if [ -n "$$failed_props" ]; then \
 		echo "mlb-retrain-broad-reconcile finished with prop failures:$$failed_props"; \
 		exit 1; \
