@@ -25,10 +25,11 @@ export default function LoginPage() {
     <div className="min-h-screen pp-page flex items-center justify-center px-4">
       <div className="pp-card pp-reveal p-8 w-full max-w-sm space-y-4">
         <h2 className="text-xl font-semibold text-center text-slate-900">
-          Member Login
+          Member Access
         </h2>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Sign in to access <span className="font-medium">{accessLabel}</span>.
+          Sign in or create an account to access{" "}
+          <span className="font-medium">{accessLabel}</span>.
         </div>
         <MemberLogin />
         <div className="text-center text-sm text-slate-500">

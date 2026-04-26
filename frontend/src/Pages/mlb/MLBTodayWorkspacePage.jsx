@@ -463,6 +463,7 @@ export default function MLBTodayWorkspacePage() {
   const headerScrollRef = useRef(null);
   const tableScrollRef = useRef(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(1500);
+  const isWorkspaceReady = workspaceReady === null ? isReady : workspaceReady;
 
   const slateDate = useMemo(() => todayET(), []);
 
@@ -653,7 +654,6 @@ export default function MLBTodayWorkspacePage() {
       "market_position_label"
     );
   }, [displayedRows]);
-  const isWorkspaceReady = workspaceReady === null ? isReady : workspaceReady;
   const propDisplayCounts = useMemo(() => {
     return bucketCounts(
       displayedRows.map((r) => ({ prop_label: propLabel(r.prop_type) })),
