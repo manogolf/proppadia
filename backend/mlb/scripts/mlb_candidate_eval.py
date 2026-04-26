@@ -9,7 +9,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from backend.mlb.scripts import analyze_mlb_prediction_quality
 
@@ -42,6 +42,73 @@ def _to_int(v: Any) -> int:
         return 0
 
 
+def _safe_ratio(num: int, den: int) -> float | None:
+    if den <= 0:
+        return None
+    return float(num) / float(den)
+
+
+def _baseline_diag_map(payload: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for row in payload.get("per_prop_diagnostics") or []:
+        prop = str((row or {}).get("prop_type") or "").strip()
+        if prop:
+            out[prop] = dict(row or {})
+    return out
+
+
+def _load_prop_tier_config(path_arg: str | None) -> tuple[dict[str, dict[str, Any]], dict[str, Any], str]:
+    path = str(path_arg or "").strip()
+    if not path:
+        return {}, {}, ""
+    cfg_path = Path(path)
+    if not cfg_path.exists():
+        raise FileNotFoundError(f"prop tier config not found: {cfg_path}")
+    raw = _load_json(cfg_path)
+    tier_map: dict[str, dict[str, Any]] = {}
+    default_cfg = raw.get("default") if isinstance(raw.get("default"), dict) else {}
+    for tier in raw.get("tiers") or []:
+        if not isinstance(tier, dict):
+            continue
+        tier_name = str(tier.get("name") or "tier").strip() or "tier"
+        props = [str(p).strip() for p in (tier.get("props") or []) if str(p).strip()]
+        if not props:
+            continue
+        policy = {
+            "tier": tier_name,
+            "enforce": bool(tier.get("enforce", True)),
+            "reason": str(tier.get("reason") or "").strip() or None,
+        }
+        if tier.get("max_drop_pct") is not None:
+            policy["max_drop_pct"] = _to_float(tier.get("max_drop_pct"))
+        if tier.get("min_baseline_total_for_drop") is not None:
+            policy["min_baseline_total_for_drop"] = _to_int(tier.get("min_baseline_total_for_drop"))
+        for prop in props:
+            tier_map[prop] = dict(policy)
+    return tier_map, dict(default_cfg), str(cfg_path)
+
+
+def _policy_for_prop(
+    prop: str,
+    *,
+    tier_map: Mapping[str, Mapping[str, Any]],
+    default_cfg: Mapping[str, Any],
+    fallback_max_drop_pct: float,
+    fallback_min_baseline_total: int,
+) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(default_cfg or {})
+    merged.update(dict(tier_map.get(prop) or {}))
+    max_drop_pct = _to_float(merged.get("max_drop_pct"))
+    min_baseline_total = _to_int(merged.get("min_baseline_total_for_drop"))
+    return {
+        "tier": str(merged.get("tier") or "default").strip() or "default",
+        "enforce": bool(merged.get("enforce", True)),
+        "reason": str(merged.get("reason") or "").strip() or None,
+        "max_drop_pct": float(max_drop_pct if max_drop_pct is not None else fallback_max_drop_pct),
+        "min_baseline_total_for_drop": int(min_baseline_total if min_baseline_total > 0 else fallback_min_baseline_total),
+    }
+
+
 def _pick_baseline(path_arg: str | None, baseline_dir: str) -> Path:
     if path_arg:
         path = Path(path_arg)
@@ -63,6 +130,10 @@ def evaluate_candidate(
     max_prop_drop_pct: float,
     min_candidate_total: int,
     min_baseline_prop_total_for_drop: int,
+    min_coverage_ratio_for_drop: float,
+    prop_tier_map: Mapping[str, Mapping[str, Any]],
+    prop_tier_default: Mapping[str, Any],
+    prop_tier_config_path: str,
 ) -> dict[str, Any]:
     base_overall = baseline_payload.get("overall") or {}
     cand_overall = candidate_payload.get("overall") or {}
@@ -79,41 +150,170 @@ def evaluate_candidate(
     cand_by_prop = {
         str(r.get("prop_type")): r for r in (candidate_payload.get("by_prop") or []) if r.get("prop_type")
     }
+    base_diag_by_prop = _baseline_diag_map(baseline_payload)
+    cand_diag_by_prop = _baseline_diag_map(candidate_payload)
     if not required:
         required = sorted(set(base_by_prop.keys()))
 
     missing_required_props: list[str] = []
     degraded_required_props: list[dict[str, Any]] = []
     insufficient_baseline_sample_props: list[dict[str, Any]] = []
+    insufficient_coverage_props: list[dict[str, Any]] = []
+    report_only_props: list[dict[str, Any]] = []
+    per_prop_checks: list[dict[str, Any]] = []
     for prop in required:
+        policy = _policy_for_prop(
+            prop,
+            tier_map=prop_tier_map,
+            default_cfg=prop_tier_default,
+            fallback_max_drop_pct=float(max_prop_drop_pct),
+            fallback_min_baseline_total=int(min_baseline_prop_total_for_drop),
+        )
         c = cand_by_prop.get(prop)
-        if not c:
-            missing_required_props.append(prop)
-            continue
         b = base_by_prop.get(prop) or {}
         b_total = _to_int(b.get("total"))
-        c_total = _to_int(c.get("total"))
+        c_total = _to_int((c or {}).get("total"))
         b_acc = _to_float(b.get("accuracy_pct"))
-        c_acc = _to_float(c.get("accuracy_pct"))
-        if b_total < int(min_baseline_prop_total_for_drop):
+        c_acc = _to_float((c or {}).get("accuracy_pct"))
+        coverage_ratio = _safe_ratio(c_total, b_total)
+
+        base_diag = base_diag_by_prop.get(prop) or {}
+        cand_diag = cand_diag_by_prop.get(prop) or {}
+        base_pred_over = _to_float(base_diag.get("pred_over_rate_pct"))
+        cand_pred_over = _to_float(cand_diag.get("pred_over_rate_pct"))
+        base_actual_over = _to_float(base_diag.get("actual_over_rate_pct"))
+        cand_actual_over = _to_float(cand_diag.get("actual_over_rate_pct"))
+        base_auc = _to_float(base_diag.get("auc_over"))
+        cand_auc = _to_float(cand_diag.get("auc_over"))
+        base_brier = _to_float(base_diag.get("brier"))
+        cand_brier = _to_float(cand_diag.get("brier"))
+        base_logloss = _to_float(base_diag.get("log_loss"))
+        cand_logloss = _to_float(cand_diag.get("log_loss"))
+
+        prop_check: dict[str, Any] = {
+            "prop_type": prop,
+            "tier": policy.get("tier"),
+            "enforce_drop_gate": bool(policy.get("enforce", True)),
+            "baseline_total": b_total,
+            "candidate_total": c_total,
+            "coverage_ratio": (round(float(coverage_ratio), 4) if coverage_ratio is not None else None),
+            "baseline_accuracy_pct": b_acc,
+            "candidate_accuracy_pct": c_acc,
+            "candidate_minus_baseline_accuracy_pct": (
+                round(float(c_acc) - float(b_acc), 2) if (b_acc is not None and c_acc is not None) else None
+            ),
+            "max_allowed_drop_pct": float(policy.get("max_drop_pct") or max_prop_drop_pct),
+            "min_baseline_total_for_drop": int(policy.get("min_baseline_total_for_drop") or min_baseline_prop_total_for_drop),
+            "baseline_pred_over_rate_pct": base_pred_over,
+            "candidate_pred_over_rate_pct": cand_pred_over,
+            "pred_over_drift_pct": (
+                round(float(cand_pred_over) - float(base_pred_over), 2)
+                if (base_pred_over is not None and cand_pred_over is not None)
+                else None
+            ),
+            "baseline_actual_over_rate_pct": base_actual_over,
+            "candidate_actual_over_rate_pct": cand_actual_over,
+            "actual_over_drift_pct": (
+                round(float(cand_actual_over) - float(base_actual_over), 2)
+                if (base_actual_over is not None and cand_actual_over is not None)
+                else None
+            ),
+            "baseline_auc_over": base_auc,
+            "candidate_auc_over": cand_auc,
+            "auc_over_delta": (
+                round(float(cand_auc) - float(base_auc), 6) if (base_auc is not None and cand_auc is not None) else None
+            ),
+            "baseline_brier": base_brier,
+            "candidate_brier": cand_brier,
+            "brier_delta": (
+                round(float(cand_brier) - float(base_brier), 6)
+                if (base_brier is not None and cand_brier is not None)
+                else None
+            ),
+            "baseline_log_loss": base_logloss,
+            "candidate_log_loss": cand_logloss,
+            "log_loss_delta": (
+                round(float(cand_logloss) - float(base_logloss), 6)
+                if (base_logloss is not None and cand_logloss is not None)
+                else None
+            ),
+            "status": "ok",
+            "status_reason": "",
+        }
+        per_prop_checks.append(prop_check)
+
+        if not bool(policy.get("enforce", True)):
+            prop_check["status"] = "report_only"
+            prop_check["status_reason"] = str(policy.get("reason") or "report_only_tier")
+            report_only_props.append(
+                {
+                    "prop_type": prop,
+                    "tier": policy.get("tier"),
+                    "reason": prop_check["status_reason"],
+                    "baseline_total": b_total,
+                    "candidate_total": c_total,
+                    "coverage_ratio": prop_check.get("coverage_ratio"),
+                }
+            )
+            continue
+
+        if b_total < int(policy.get("min_baseline_total_for_drop") or min_baseline_prop_total_for_drop):
+            prop_check["status"] = "insufficient_baseline_sample"
+            prop_check["status_reason"] = "baseline_total_below_floor"
             insufficient_baseline_sample_props.append(
                 {
                     "prop_type": prop,
+                    "tier": policy.get("tier"),
                     "baseline_total": b_total,
                     "candidate_total": c_total,
+                    "baseline_accuracy_pct": b_acc,
+                    "candidate_accuracy_pct": c_acc,
+                    "min_required_baseline_total": int(
+                        policy.get("min_baseline_total_for_drop") or min_baseline_prop_total_for_drop
+                    ),
+                }
+            )
+            continue
+        if (
+            c is None
+            or (
+                coverage_ratio is not None
+                and float(min_coverage_ratio_for_drop) > 0.0
+                and float(coverage_ratio) < float(min_coverage_ratio_for_drop)
+            )
+        ):
+            prop_check["status"] = "insufficient_coverage"
+            prop_check["status_reason"] = "candidate_vs_baseline_coverage_low"
+            insufficient_coverage_props.append(
+                {
+                    "prop_type": prop,
+                    "tier": policy.get("tier"),
+                    "baseline_total": b_total,
+                    "candidate_total": c_total,
+                    "coverage_ratio": prop_check.get("coverage_ratio"),
+                    "min_coverage_ratio_for_drop": float(min_coverage_ratio_for_drop),
                     "baseline_accuracy_pct": b_acc,
                     "candidate_accuracy_pct": c_acc,
                 }
             )
             continue
+        if not c:
+            prop_check["status"] = "missing_required_prop"
+            prop_check["status_reason"] = "missing_from_candidate_payload"
+            missing_required_props.append(prop)
+            continue
         delta = None if b_acc is None or c_acc is None else round(c_acc - b_acc, 2)
-        if delta is not None and delta < (0.0 - float(max_prop_drop_pct)):
+        if delta is not None and delta < (0.0 - float(policy.get("max_drop_pct") or max_prop_drop_pct)):
+            prop_check["status"] = "degraded"
+            prop_check["status_reason"] = "accuracy_drop_exceeds_threshold"
             degraded_required_props.append(
                 {
                     "prop_type": prop,
+                    "tier": policy.get("tier"),
                     "baseline_accuracy_pct": b_acc,
                     "candidate_accuracy_pct": c_acc,
                     "candidate_minus_baseline_accuracy_pct": delta,
+                    "max_allowed_drop_pct": float(policy.get("max_drop_pct") or max_prop_drop_pct),
                 }
             )
 
@@ -122,6 +322,12 @@ def evaluate_candidate(
             "ok": cand_total >= int(min_candidate_total),
             "candidate_total": cand_total,
             "required_min_total": int(min_candidate_total),
+        },
+        "prop_coverage": {
+            "ok": True,
+            "required_props_evaluated": len(required),
+            "insufficient_coverage_count": len(insufficient_coverage_props),
+            "insufficient_coverage_props": insufficient_coverage_props,
         },
         "overall_lift": {
             "ok": overall_lift is not None and overall_lift >= float(min_overall_lift_pct),
@@ -136,8 +342,13 @@ def evaluate_candidate(
             "missing_required_props": missing_required_props,
             "degraded_required_props": degraded_required_props,
             "insufficient_baseline_sample_props": insufficient_baseline_sample_props,
+            "insufficient_coverage_props": insufficient_coverage_props,
+            "report_only_props": report_only_props,
+            "per_prop_checks": per_prop_checks,
             "max_allowed_drop_pct": float(max_prop_drop_pct),
             "min_baseline_prop_total_for_drop": int(min_baseline_prop_total_for_drop),
+            "min_coverage_ratio_for_drop": float(min_coverage_ratio_for_drop),
+            "prop_tier_config_path": str(prop_tier_config_path or ""),
         },
     }
 
@@ -193,6 +404,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--min-overall-lift-pct", type=float, default=0.25)
     ap.add_argument("--max-prop-drop-pct", type=float, default=0.5)
     ap.add_argument("--min-baseline-prop-total-for-drop", type=int, default=300)
+    ap.add_argument("--min-coverage-ratio-for-drop", type=float, default=0.5)
+    ap.add_argument(
+        "--prop-tier-config",
+        default="",
+        help="Optional JSON config with per-prop tier thresholds/report-only behavior.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     try:
@@ -202,6 +419,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             json.dumps(
                 {"ok": False, "status": "fail", "recommendation": "hold", "error": f"baseline_load_failed: {exc}"},
+                indent=2,
+            )
+        )
+        return 2
+
+    try:
+        prop_tier_map, prop_tier_default, prop_tier_config_path = _load_prop_tier_config(
+            str(args.prop_tier_config).strip() or None
+        )
+    except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "status": "fail",
+                    "recommendation": "hold",
+                    "error": f"prop_tier_config_load_failed: {exc}",
+                },
                 indent=2,
             )
         )
@@ -264,6 +499,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_prop_drop_pct=max(0.0, float(args.max_prop_drop_pct)),
         min_candidate_total=max(0, int(min_candidate_total)),
         min_baseline_prop_total_for_drop=max(0, int(args.min_baseline_prop_total_for_drop)),
+        min_coverage_ratio_for_drop=max(0.0, float(args.min_coverage_ratio_for_drop)),
+        prop_tier_map=prop_tier_map,
+        prop_tier_default=prop_tier_default,
+        prop_tier_config_path=prop_tier_config_path,
     )
     payload = {
         "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -275,13 +514,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "window_value": window_value,
         "prop_types": prop_types,
         "required_props": required_props,
+        "prop_tier_config_path": str(prop_tier_config_path or ""),
         "baseline": {
             "overall": baseline_payload.get("overall"),
             "by_prop": baseline_payload.get("by_prop"),
+            "per_prop_diagnostics": baseline_payload.get("per_prop_diagnostics"),
         },
         "candidate": {
             "overall": candidate_payload.get("overall"),
             "by_prop": candidate_payload.get("by_prop"),
+            "per_prop_diagnostics": candidate_payload.get("per_prop_diagnostics"),
         },
         **result,
     }

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -56,6 +57,44 @@ def _confidence_bucket_from_prob(model_pick_prob: float | None) -> str:
     if diff < 0.10:
         return "medium"
     return "high"
+
+
+def _auc_from_pairs(pairs: Sequence[tuple[float, int]]) -> float | None:
+    values: list[tuple[float, int]] = []
+    for p_raw, y_raw in pairs:
+        p = _safe_float(p_raw)
+        if p is None:
+            continue
+        try:
+            y = int(y_raw)
+        except Exception:
+            continue
+        if y not in (0, 1):
+            continue
+        values.append((float(p), int(y)))
+    n = len(values)
+    if n < 2:
+        return None
+    pos = sum(y for _, y in values)
+    neg = n - pos
+    if pos <= 0 or neg <= 0:
+        return None
+    ordered = sorted(values, key=lambda it: it[0])
+    rank_sum_pos = 0.0
+    i = 0
+    rank = 1
+    while i < n:
+        j = i + 1
+        while j < n and ordered[j][0] == ordered[i][0]:
+            j += 1
+        tie_count = j - i
+        avg_rank = (2.0 * rank + float(tie_count - 1)) / 2.0
+        pos_in_tie = sum(y for _, y in ordered[i:j])
+        rank_sum_pos += avg_rank * float(pos_in_tie)
+        rank += tie_count
+        i = j
+    auc = (rank_sum_pos - (float(pos) * float(pos + 1) / 2.0)) / (float(pos) * float(neg))
+    return float(round(auc, 6))
 
 
 def _window_filter_rows(
@@ -158,6 +197,14 @@ def _collect_quality_from_rows_csv(
             model_correct_i = 0
         else:
             model_correct_i = None
+        actual_over_outcome = str(getattr(row, "actual_over_outcome", "") or "").strip().lower()
+        actual_over_i: int | None
+        if actual_over_outcome == "win":
+            actual_over_i = 1
+        elif actual_over_outcome == "loss":
+            actual_over_i = 0
+        else:
+            actual_over_i = None
 
         model_pick_prob_val = _safe_float(getattr(row, "model_pick_prob", None))
         normalized_rows.append(
@@ -167,7 +214,9 @@ def _collect_quality_from_rows_csv(
                 "model_correct_i": model_correct_i,
                 "confidence_bucket": _confidence_bucket_from_prob(model_pick_prob_val),
                 "model_pick_side": str(getattr(row, "model_pick_side", "") or "").strip().lower(),
-                "actual_over_outcome": str(getattr(row, "actual_over_outcome", "") or "").strip().lower(),
+                "actual_over_outcome": actual_over_outcome,
+                "actual_over_i": actual_over_i,
+                "model_pick_prob": model_pick_prob_val,
                 "line": _safe_float(getattr(row, "line", None)),
             }
         )
@@ -219,6 +268,10 @@ def _collect_quality_from_rows_csv(
                 "actual_over": 0,
                 "line_counts": {},
                 "line_bucket_counts": {"lt_1_0": 0, "1_0_to_lt_2_0": 0, "2_0_to_lt_3_0": 0, "ge_3_0": 0, "missing": 0},
+                "prob_scored_total": 0,
+                "brier_sum": 0.0,
+                "logloss_sum": 0.0,
+                "auc_pairs": [],
             },
         )
         diag["total"] += 1
@@ -226,6 +279,17 @@ def _collect_quality_from_rows_csv(
             diag["pred_over"] += 1
         if str(row.get("actual_over_outcome") or "").lower() == "win":
             diag["actual_over"] += 1
+        prob_over = _safe_float(row.get("model_pick_prob"))
+        actual_over_i = row.get("actual_over_i")
+        if prob_over is not None and actual_over_i in {0, 1}:
+            clipped = min(1.0 - 1e-12, max(1e-12, float(prob_over)))
+            y = int(actual_over_i)
+            diag["prob_scored_total"] += 1
+            diag["brier_sum"] += (clipped - float(y)) ** 2
+            diag["logloss_sum"] += -(
+                float(y) * math.log(clipped) + (1.0 - float(y)) * math.log(1.0 - clipped)
+            )
+            diag["auc_pairs"].append((float(clipped), int(y)))
         line_val = _safe_float(row.get("line"))
         if line_val is None:
             diag["line_bucket_counts"]["missing"] += 1
@@ -265,6 +329,18 @@ def _collect_quality_from_rows_csv(
                 "total": d_total,
                 "pred_over_rate_pct": round((100.0 * float(diag["pred_over"]) / float(d_total)), 2) if d_total > 0 else None,
                 "actual_over_rate_pct": round((100.0 * float(diag["actual_over"]) / float(d_total)), 2) if d_total > 0 else None,
+                "prob_scored_total": int(diag.get("prob_scored_total") or 0),
+                "auc_over": _auc_from_pairs(diag.get("auc_pairs") or []),
+                "brier": (
+                    round(float(diag["brier_sum"]) / float(diag["prob_scored_total"]), 6)
+                    if int(diag.get("prob_scored_total") or 0) > 0
+                    else None
+                ),
+                "log_loss": (
+                    round(float(diag["logloss_sum"]) / float(diag["prob_scored_total"]), 6)
+                    if int(diag.get("prob_scored_total") or 0) > 0
+                    else None
+                ),
                 "line_top_values": line_top_values,
                 "line_bucket_pct": line_bucket_pct,
             }

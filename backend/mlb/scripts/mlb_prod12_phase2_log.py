@@ -43,6 +43,8 @@ def collect_phase2_snapshot(
     min_overall_lift_pct: float,
     max_prop_drop_pct: float,
     min_baseline_prop_total_for_drop: int,
+    min_coverage_ratio_for_drop: float,
+    prop_tier_config: str,
 ) -> dict[str, Any]:
     manifest_payload = _load_json_file(manifest_path)
     replay_payload = _load_json_file(replay_path)
@@ -70,7 +72,11 @@ def collect_phase2_snapshot(
         str(float(max_prop_drop_pct)),
         "--min-baseline-prop-total-for-drop",
         str(int(min_baseline_prop_total_for_drop)),
+        "--min-coverage-ratio-for-drop",
+        str(float(min_coverage_ratio_for_drop)),
     ]
+    if str(prop_tier_config).strip():
+        candidate_args.extend(["--prop-tier-config", str(prop_tier_config).strip()])
     if str(rows_csv).strip():
         candidate_args.extend(["--rows-csv", str(rows_csv).strip()])
     if str(window_mode).strip():
@@ -129,6 +135,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--min-overall-lift-pct", type=float, default=0.25)
     ap.add_argument("--max-prop-drop-pct", type=float, default=3.5)
     ap.add_argument("--min-baseline-prop-total-for-drop", type=int, default=300)
+    ap.add_argument("--min-coverage-ratio-for-drop", type=float, default=0.5)
+    ap.add_argument("--prop-tier-config", default="")
     args = ap.parse_args(list(argv) if argv is not None else sys.argv[1:])
 
     payload = collect_phase2_snapshot(
@@ -147,6 +155,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         min_overall_lift_pct=float(args.min_overall_lift_pct),
         max_prop_drop_pct=float(args.max_prop_drop_pct),
         min_baseline_prop_total_for_drop=int(args.min_baseline_prop_total_for_drop),
+        min_coverage_ratio_for_drop=float(args.min_coverage_ratio_for_drop),
+        prop_tier_config=str(args.prop_tier_config),
     )
 
     out_path = Path(args.output)

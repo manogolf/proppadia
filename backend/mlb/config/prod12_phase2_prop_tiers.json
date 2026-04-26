@@ -1,0 +1,45 @@
+{
+  "default": {
+    "enforce": true,
+    "min_baseline_total_for_drop": 300,
+    "max_drop_pct": 7.0
+  },
+  "tiers": [
+    {
+      "name": "tier1_high_value_high_volume",
+      "props": [
+        "hits",
+        "total_bases",
+        "hits_runs_rbis",
+        "runs_scored",
+        "strikeouts_pitching"
+      ],
+      "enforce": true,
+      "min_baseline_total_for_drop": 500,
+      "max_drop_pct": 4.0
+    },
+    {
+      "name": "tier2_useful_noisier",
+      "props": [
+        "walks",
+        "doubles",
+        "earned_runs",
+        "hits_allowed",
+        "walks_allowed"
+      ],
+      "enforce": true,
+      "min_baseline_total_for_drop": 300,
+      "max_drop_pct": 7.0
+    },
+    {
+      "name": "report_only_low_volume_or_unsupported",
+      "props": [
+        "runs_rbis",
+        "triples",
+        "stolen_bases"
+      ],
+      "enforce": false,
+      "reason": "unsupported_or_low_volume_for_reconcile_phase2_gate"
+    }
+  ]
+}
