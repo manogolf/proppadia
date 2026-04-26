@@ -28,7 +28,8 @@ export default function MemberLogin() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
-  const showGoogleOAuth = AUTH_CONFIG.oauthProviders.includes("google");
+  const showGoogleOAuth =
+    AUTH_CONFIG.oauthProviders.includes("google") || AUTH_CONFIG.oauthProviders.length > 0;
 
   const isSignupMode = mode === "signup";
 
@@ -146,6 +147,18 @@ export default function MemberLogin() {
         </div>
       )}
 
+      {showGoogleOAuth ? (
+        <div className="mb-3 grid gap-2">
+          <button
+            type="button"
+            onClick={() => handleOAuth("google")}
+            className="pp-btn pp-btn-secondary pp-btn-md"
+          >
+            Continue with Google
+          </button>
+        </div>
+      ) : null}
+
       {(AUTH_CONFIG.enablePasswordLogin || AUTH_CONFIG.enableMagicLink) && (
         <div className="space-y-3">
           <input
@@ -207,17 +220,6 @@ export default function MemberLogin() {
           ) : null}
         </div>
       )}
-
-      {showGoogleOAuth ? (
-        <div className="mt-4 grid gap-2">
-          <button
-            onClick={() => handleOAuth("google")}
-            className="pp-btn pp-btn-secondary pp-btn-md"
-          >
-            Continue with Google
-          </button>
-        </div>
-      ) : null}
 
       {!AUTH_CONFIG.enablePasswordLogin &&
       !AUTH_CONFIG.enableMagicLink &&

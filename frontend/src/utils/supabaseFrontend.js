@@ -34,7 +34,7 @@ export const AUTH_CONFIG = Object.freeze({
   enableMagicLink: parseBool(import.meta.env.VITE_AUTH_ENABLE_MAGIC_LINK, true),
   // Safer default for controlled membership: do not auto-create users via magic link.
   magicLinkCreateUser: parseBool(import.meta.env.VITE_AUTH_MAGIC_CREATE_USER, false),
-  oauthProviders: parseCsv(import.meta.env.VITE_AUTH_OAUTH_PROVIDERS, ["github"]),
+  oauthProviders: parseCsv(import.meta.env.VITE_AUTH_OAUTH_PROVIDERS, ["google"]),
 });
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
