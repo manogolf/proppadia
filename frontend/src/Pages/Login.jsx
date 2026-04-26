@@ -8,14 +8,6 @@ export default function LoginPage() {
   const { user, loading } = useAuth();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/props";
-  const accessLabel =
-    from === "/nhl/predictions"
-      ? "NHL Predictions"
-      : from === "/props" || from === "/props/v2"
-      ? "MLB Predictions"
-      : from === "/owner" || from === "/ops"
-      ? "Operations Dashboard"
-      : "member-only features";
 
   if (!loading && user) {
     return <Navigate to={from} replace />;
@@ -28,8 +20,7 @@ export default function LoginPage() {
           Member Access
         </h2>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Sign in or create an account to access{" "}
-          <span className="font-medium">{accessLabel}</span>.
+          Sign in or create an account to access member-only features.
         </div>
         <MemberLogin />
         <div className="text-center text-sm text-slate-500">

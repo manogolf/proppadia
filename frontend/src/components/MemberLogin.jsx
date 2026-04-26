@@ -2,12 +2,6 @@
 import React, { useState } from "react";
 import { AUTH_CONFIG, supabase } from "../utils/supabaseFrontend.js";
 
-const OAUTH_LABELS = {
-  apple: "Apple",
-  github: "GitHub",
-  google: "Google",
-};
-
 function authErrorMessage(err) {
   const msg = String(err?.message || "");
   const lower = msg.toLowerCase();
@@ -34,7 +28,7 @@ export default function MemberLogin() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
-  const oauthProviders = AUTH_CONFIG.oauthProviders.filter((p) => OAUTH_LABELS[p]);
+  const showGoogleOAuth = AUTH_CONFIG.oauthProviders.includes("google");
 
   const isSignupMode = mode === "signup";
 
@@ -214,23 +208,20 @@ export default function MemberLogin() {
         </div>
       )}
 
-      {oauthProviders.length > 0 ? (
+      {showGoogleOAuth ? (
         <div className="mt-4 grid gap-2">
-          {oauthProviders.map((provider) => (
-            <button
-              key={provider}
-              onClick={() => handleOAuth(provider)}
-              className="pp-btn pp-btn-secondary pp-btn-md"
-            >
-              Continue with {OAUTH_LABELS[provider]}
-            </button>
-          ))}
+          <button
+            onClick={() => handleOAuth("google")}
+            className="pp-btn pp-btn-secondary pp-btn-md"
+          >
+            Continue with Google
+          </button>
         </div>
       ) : null}
 
       {!AUTH_CONFIG.enablePasswordLogin &&
       !AUTH_CONFIG.enableMagicLink &&
-      oauthProviders.length === 0 ? (
+      !showGoogleOAuth ? (
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
           No login methods are enabled. Configure auth providers in env/Supabase.
         </div>

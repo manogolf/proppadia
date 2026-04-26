@@ -1,7 +1,7 @@
 import React from "react";
 import { PrefetchLink } from "../components/navigation/PrefetchLink.jsx";
 
-export default function AccessRequiredPage({ requiredPath, requiredLabel }) {
+export default function AccessRequiredPage({ requiredPath }) {
   return (
     <div className="min-h-screen pp-page px-4 py-10">
       <div className="max-w-2xl mx-auto pp-card p-6">
@@ -12,8 +12,7 @@ export default function AccessRequiredPage({ requiredPath, requiredLabel }) {
           Sign in to continue
         </h1>
         <p className="text-sm text-slate-600 mt-2">
-          This page is available to signed-in members. You were trying to open{" "}
-          <span className="font-medium">{requiredLabel}</span>.
+          Sign in or create an account to continue.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -24,22 +23,6 @@ export default function AccessRequiredPage({ requiredPath, requiredLabel }) {
             className="pp-btn pp-btn-primary pp-btn-md"
           >
             Login and Continue
-          </PrefetchLink>
-          <PrefetchLink
-            to="/login"
-            state={{ from: { pathname: "/props" } }}
-            prefetchTo="/login"
-            className="pp-btn pp-btn-secondary pp-btn-md"
-          >
-            Login for MLB Predictions
-          </PrefetchLink>
-          <PrefetchLink
-            to="/login"
-            state={{ from: { pathname: "/nhl/predictions" } }}
-            prefetchTo="/login"
-            className="pp-btn pp-btn-secondary pp-btn-md"
-          >
-            Login for NHL Predictions
           </PrefetchLink>
         </div>
 
