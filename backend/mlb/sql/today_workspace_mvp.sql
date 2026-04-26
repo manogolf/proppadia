@@ -43,25 +43,18 @@ base AS (
   JOIN active_slate a
     ON o.slate_date = a.slate_date
 ),
-latest_ts AS (
-  SELECT
-    player_id,
-    game_id,
-    prop_type,
-    line,
-    max(snapshot_ts) AS last_snapshot_ts
-  FROM base
-  GROUP BY 1,2,3,4
-),
 latest AS (
-  SELECT b.*
+  SELECT DISTINCT ON (b.player_id, b.game_id, b.prop_type, b.line)
+    b.*
   FROM base b
-  JOIN latest_ts l
-    ON b.player_id = l.player_id
-   AND b.game_id = l.game_id
-   AND b.prop_type = l.prop_type
-   AND b.line = l.line
-   AND b.snapshot_ts = l.last_snapshot_ts
+  WHERE b.price_over_american_clean IS NOT NULL
+     OR b.price_under_american_clean IS NOT NULL
+  ORDER BY
+    b.player_id,
+    b.game_id,
+    b.prop_type,
+    b.line,
+    b.snapshot_ts DESC
 ),
 best_over AS (
   SELECT DISTINCT ON (player_id, game_id, prop_type, line)
@@ -107,7 +100,8 @@ agg AS (
     count(*) FILTER (WHERE price_over_american_clean IS NOT NULL) AS book_count_over,
     count(*) FILTER (WHERE price_under_american_clean IS NOT NULL) AS book_count_under,
     stddev_pop(price_over_american_clean) AS price_dispersion_over,
-    stddev_pop(price_under_american_clean) AS price_dispersion_under
+    stddev_pop(price_under_american_clean) AS price_dispersion_under,
+    max(snapshot_ts) AS last_snapshot_ts
   FROM latest
   GROUP BY 1,2,3,8,9
 )
@@ -125,29 +119,16 @@ SELECT
   bu.best_under_price,
   bo.best_over_book,
   bu.best_under_book,
-  CASE
-    WHEN a.market_median_over_price_raw IS NOT NULL AND abs(a.market_median_over_price_raw) >= 100
-    THEN a.market_median_over_price_raw
-    ELSE NULL
-  END AS market_median_over_price,
-  CASE
-    WHEN a.market_median_under_price_raw IS NOT NULL AND abs(a.market_median_under_price_raw) >= 100
-    THEN a.market_median_under_price_raw
-    ELSE NULL
-  END AS market_median_under_price,
+  a.market_median_over_price_raw AS market_median_over_price,
+  a.market_median_under_price_raw AS market_median_under_price,
   (a.market_max_over_price - a.market_min_over_price) AS market_range_over,
   (a.market_max_under_price - a.market_min_under_price) AS market_range_under,
   a.book_count_over,
   a.book_count_under,
   a.price_dispersion_over,
   a.price_dispersion_under,
-  l.last_snapshot_ts
+  a.last_snapshot_ts
 FROM agg a
-JOIN latest_ts l
-  ON a.player_id = l.player_id
- AND a.game_id = l.game_id
- AND a.prop_type = l.prop_type
- AND a.line = l.line
 LEFT JOIN best_over bo
   ON a.player_id = bo.player_id
  AND a.game_id = bo.game_id
