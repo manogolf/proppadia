@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
 from backend.domains.mlb.repository.today_workspace_repository import (
+    fetch_today_prop_availability as repo_fetch_today_prop_availability,
     fetch_today_workspace_last_updated as repo_fetch_today_workspace_last_updated,
     fetch_today_workspace_rows as repo_fetch_today_workspace_rows,
 )
@@ -63,4 +64,25 @@ def fetch_today_workspace_rows(
         "is_ready": is_ready,
         "last_updated": last_updated,
         "rows": cleaned,
+    }
+
+
+def fetch_today_prop_availability(
+    *,
+    slate_date: Optional[str] = None,
+    player_id: int,
+    prop_type: str,
+) -> Dict[str, Any]:
+    requested_slate_date = _resolve_requested_slate_date(slate_date)
+    details = repo_fetch_today_prop_availability(
+        slate_date=requested_slate_date,
+        player_id=int(player_id),
+        prop_type=str(prop_type),
+    )
+    return {
+        "ok": True,
+        "requested_slate_date": requested_slate_date,
+        "player_id": int(player_id),
+        "prop_type": str(prop_type).strip().lower(),
+        **details,
     }

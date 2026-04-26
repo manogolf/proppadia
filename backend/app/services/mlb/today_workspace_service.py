@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from backend.domains.mlb.today_workspace import fetch_today_prop_availability as domain_fetch_today_prop_availability
 from backend.domains.mlb.today_workspace import fetch_today_workspace_rows as domain_fetch_today_workspace_rows
 
 
@@ -27,4 +28,17 @@ def fetch_today_workspace(
         player_query=player_query,
         limit=limit,
         offset=offset,
+    )
+
+
+def fetch_today_workspace_prop_availability(
+    *,
+    slate_date: Optional[str] = None,
+    player_id: int,
+    prop_type: str,
+) -> Dict[str, Any]:
+    return domain_fetch_today_prop_availability(
+        slate_date=slate_date,
+        player_id=player_id,
+        prop_type=prop_type,
     )

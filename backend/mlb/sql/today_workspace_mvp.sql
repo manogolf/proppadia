@@ -44,17 +44,28 @@ base AS (
     ON o.slate_date = a.slate_date
 ),
 latest AS (
-  SELECT DISTINCT ON (b.player_id, b.game_id, b.prop_type, b.line)
+  SELECT
     b.*
   FROM base b
+  JOIN (
+    SELECT
+      player_id,
+      game_id,
+      prop_type,
+      line,
+      max(snapshot_ts) AS last_snapshot_ts
+    FROM base
+    WHERE price_over_american_clean IS NOT NULL
+       OR price_under_american_clean IS NOT NULL
+    GROUP BY 1,2,3,4
+  ) l
+    ON b.player_id = l.player_id
+   AND b.game_id = l.game_id
+   AND b.prop_type = l.prop_type
+   AND b.line = l.line
+   AND b.snapshot_ts = l.last_snapshot_ts
   WHERE b.price_over_american_clean IS NOT NULL
      OR b.price_under_american_clean IS NOT NULL
-  ORDER BY
-    b.player_id,
-    b.game_id,
-    b.prop_type,
-    b.line,
-    b.snapshot_ts DESC
 ),
 best_over AS (
   SELECT DISTINCT ON (player_id, game_id, prop_type, line)
@@ -634,86 +645,119 @@ side_rows AS (
     j.streak_count,
     j.baseline_delta
   FROM joined j
+),
+scored AS (
+  SELECT
+    s.game_date,
+    s.game_id,
+    s.player_id,
+    s.player_name,
+    s.team,
+    s.opponent,
+    s.is_home,
+    s.prop_type,
+    s.line,
+    s.side,
+    s.best_price,
+    s.best_price_book,
+    s.market_median,
+    s.market_range,
+    (s.best_price - s.market_median) AS value_vs_market,
+    s.open_price,
+    s.latest_price,
+    s.minutes_since_open,
+    s.num_snapshots,
+    s.price_change_from_open,
+    s.book_count,
+    s.price_dispersion,
+    CASE
+      WHEN s.best_price IS NULL OR s.market_median IS NULL THEN 'UNRELIABLE'
+      WHEN coalesce(s.book_count, 0) < 2 THEN 'THIN'
+      WHEN coalesce(s.num_snapshots, 0) <= 1 THEN 'LIMITED'
+      WHEN s.market_range IS NULL THEN 'LIMITED'
+      WHEN s.market_range >= 120 THEN 'LIMITED'
+      WHEN coalesce(s.book_count, 0) >= 4
+        AND coalesce(s.num_snapshots, 0) >= 3
+        AND s.market_range <= 40
+        THEN 'STRONG'
+      WHEN coalesce(s.book_count, 0) >= 3
+        AND coalesce(s.num_snapshots, 0) >= 2
+        AND s.market_range <= 80
+        THEN 'GOOD'
+      ELSE 'LIMITED'
+    END AS coverage_quality_label,
+    CASE
+      WHEN s.best_price IS NULL OR s.market_median IS NULL THEN 'No reliable median'
+      WHEN coalesce(s.book_count, 0) < 2 THEN 'Few books available'
+      WHEN coalesce(s.num_snapshots, 0) <= 1 THEN 'Sparse snapshot coverage'
+      WHEN s.market_range IS NULL THEN 'Incomplete market range'
+      WHEN s.market_range >= 120 THEN 'Wide market spread'
+      WHEN coalesce(s.book_count, 0) >= 4
+        AND coalesce(s.num_snapshots, 0) >= 3
+        AND s.market_range <= 40
+        THEN 'Median available across multiple books with tight range'
+      WHEN coalesce(s.book_count, 0) >= 3
+        AND coalesce(s.num_snapshots, 0) >= 2
+        AND s.market_range <= 80
+        THEN 'Median available with solid book and snapshot coverage'
+      ELSE 'Partial market coverage'
+    END AS coverage_quality_reason,
+    CASE
+      WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'VOLATILE'
+      WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'WAIT'
+      WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'EARLY'
+      ELSE 'STABLE'
+    END AS timing_signal,
+    CASE
+      WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'Large intraday movement'
+      WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'Current price better than open'
+      WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'Current price worse than open'
+      ELSE 'Little intraday movement'
+    END AS timing_reason,
+    s.streak_context_label,
+    s.consistency_score,
+    s.last_5_avg,
+    s.last_10_avg,
+    s.season_avg,
+    s.hit_rate_last_5,
+    s.hit_rate_last_10,
+    s.hit_rate_season,
+    s.streak_type,
+    s.streak_count,
+    s.baseline_delta
+  FROM side_rows s
 )
 SELECT
-  s.game_date,
-  s.game_id,
-  s.player_id,
-  s.player_name,
-  s.team,
-  s.opponent,
-  s.is_home,
-  s.prop_type,
-  s.line,
-  s.side,
-  s.best_price,
-  s.best_price_book,
-  s.market_median,
-  s.market_range,
-  (s.best_price - s.market_median) AS value_vs_market,
-  s.open_price,
-  s.latest_price,
-  s.minutes_since_open,
-  s.num_snapshots,
-  s.price_change_from_open,
-  s.book_count,
-  s.price_dispersion,
+  sc.*,
   CASE
-    WHEN s.best_price IS NULL OR s.market_median IS NULL THEN 'UNRELIABLE'
-    WHEN coalesce(s.book_count, 0) < 2 THEN 'THIN'
-    WHEN coalesce(s.num_snapshots, 0) <= 1 THEN 'LIMITED'
-    WHEN s.market_range IS NULL THEN 'LIMITED'
-    WHEN s.market_range >= 120 THEN 'LIMITED'
-    WHEN coalesce(s.book_count, 0) >= 4
-      AND coalesce(s.num_snapshots, 0) >= 3
-      AND s.market_range <= 40
-      THEN 'STRONG'
-    WHEN coalesce(s.book_count, 0) >= 3
-      AND coalesce(s.num_snapshots, 0) >= 2
-      AND s.market_range <= 80
-      THEN 'GOOD'
-    ELSE 'LIMITED'
-  END AS coverage_quality_label,
+    WHEN sc.value_vs_market IS NULL THEN 'Neutral'
+    WHEN abs(sc.value_vs_market) >= 40
+      AND sc.coverage_quality_label IN ('GOOD', 'STRONG')
+      AND sc.timing_signal IN ('STABLE', 'EARLY')
+      THEN 'Strong signal'
+    WHEN abs(sc.value_vs_market) >= 25
+      AND (
+        sc.timing_signal = 'VOLATILE'
+        OR sc.coverage_quality_label IN ('LIMITED', 'THIN')
+      )
+      THEN 'Monitor'
+    ELSE 'Neutral'
+  END AS decision_label,
   CASE
-    WHEN s.best_price IS NULL OR s.market_median IS NULL THEN 'No reliable median'
-    WHEN coalesce(s.book_count, 0) < 2 THEN 'Few books available'
-    WHEN coalesce(s.num_snapshots, 0) <= 1 THEN 'Sparse snapshot coverage'
-    WHEN s.market_range IS NULL THEN 'Incomplete market range'
-    WHEN s.market_range >= 120 THEN 'Wide market spread'
-    WHEN coalesce(s.book_count, 0) >= 4
-      AND coalesce(s.num_snapshots, 0) >= 3
-      AND s.market_range <= 40
-      THEN 'Median available across multiple books with tight range'
-    WHEN coalesce(s.book_count, 0) >= 3
-      AND coalesce(s.num_snapshots, 0) >= 2
-      AND s.market_range <= 80
-      THEN 'Median available with solid book and snapshot coverage'
-    ELSE 'Partial market coverage'
-  END AS coverage_quality_reason,
-  CASE
-    WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'VOLATILE'
-    WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'WAIT'
-    WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'EARLY'
-    ELSE 'STABLE'
-  END AS timing_signal,
-  CASE
-    WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'Large intraday movement'
-    WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'Current price better than open'
-    WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'Current price worse than open'
-    ELSE 'Little intraday movement'
-  END AS timing_reason,
-  s.streak_context_label,
-  s.consistency_score,
-  s.last_5_avg,
-  s.last_10_avg,
-  s.season_avg,
-  s.hit_rate_last_5,
-  s.hit_rate_last_10,
-  s.hit_rate_season,
-  s.streak_type,
-  s.streak_count,
-  s.baseline_delta
-FROM side_rows s;
+    WHEN sc.value_vs_market IS NULL THEN 'Neutral: no clear market signal'
+    WHEN abs(sc.value_vs_market) >= 40
+      AND sc.coverage_quality_label IN ('GOOD', 'STRONG')
+      AND sc.timing_signal IN ('STABLE', 'EARLY')
+      THEN 'Strong market signal: notable price gap with reliable/stable coverage'
+    WHEN abs(sc.value_vs_market) >= 25
+      AND sc.timing_signal = 'VOLATILE'
+      THEN 'Monitor: notable price gap, but market is volatile'
+    WHEN abs(sc.value_vs_market) >= 25
+      AND sc.coverage_quality_label IN ('LIMITED', 'THIN')
+      THEN 'Monitor: notable price gap, but market coverage is limited'
+    ELSE 'Neutral: no clear market signal'
+  END AS decision_reason
+FROM scored sc;
 
 CREATE UNIQUE INDEX idx_today_workspace_mlb_key
   ON mlb.today_workspace_mlb (player_id, game_id, prop_type, line, side);

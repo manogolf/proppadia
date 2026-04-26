@@ -46,7 +46,10 @@ from backend.app.services.mlb.prop_submission_service import (
 )
 from backend.app.services.mlb.schedule_service import fetch_schedule
 from backend.app.services.mlb.standings_service import get_standings
-from backend.app.services.mlb.today_workspace_service import fetch_today_workspace
+from backend.app.services.mlb.today_workspace_service import (
+    fetch_today_workspace,
+    fetch_today_workspace_prop_availability,
+)
 from backend.app.services.mlb.player_service import (
     list_players_mlb,
     list_players,
@@ -178,6 +181,29 @@ def mlb_today_workspace(
             player_query=player_query,
             limit=limit,
             offset=offset,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/today/workspace/prop-availability", summary="MLB today workspace prop availability check")
+def mlb_today_workspace_prop_availability(
+    slate_date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today ET)"),
+    player_id: int = Query(..., ge=1, description="Player id"),
+    prop_type: str = Query(..., description="Canonical prop type"),
+):
+    if not str(prop_type or "").strip():
+        raise HTTPException(status_code=400, detail="prop_type is required")
+    if slate_date:
+        try:
+            date.fromisoformat(slate_date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="slate_date must be YYYY-MM-DD") from e
+    try:
+        return fetch_today_workspace_prop_availability(
+            slate_date=slate_date,
+            player_id=player_id,
+            prop_type=prop_type,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e

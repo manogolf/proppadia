@@ -80,6 +80,10 @@ function withSelected(options, selected) {
   return base.includes(val) ? base : [val, ...base];
 }
 
+function normText(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
 function propLabel(propType) {
   const p = String(propType || "").trim().toLowerCase();
   const map = {
@@ -183,6 +187,34 @@ function coverageReasonForRow(reason, side) {
   const s = sideUpper(side);
   if (!s) return String(reason);
   return `${s}: ${String(reason)}`;
+}
+
+function decisionKey(label) {
+  const s = String(label || "").trim().toUpperCase().replaceAll("_", " ");
+  if (s === "ACT NOW" || s === "STRONG SIGNAL") return "STRONG SIGNAL";
+  if (s === "WATCH" || s === "MONITOR") return "MONITOR";
+  if (s === "PASS" || s === "NEUTRAL") return "NEUTRAL";
+  return "NEUTRAL";
+}
+
+function decisionLabel(label) {
+  return decisionKey(label);
+}
+
+function decisionReason(reason) {
+  if (isMissing(reason)) return "Neutral: no clear market signal";
+  return String(reason);
+}
+
+function decisionPillClasses(label) {
+  const key = decisionKey(label);
+  if (key === "STRONG SIGNAL") {
+    return "border-sky-300 bg-sky-50 text-sky-800";
+  }
+  if (key === "MONITOR") {
+    return "border-amber-300 bg-amber-50 text-amber-800";
+  }
+  return "border-slate-300 bg-slate-100 text-slate-700";
 }
 
 function bucketCounts(rows, field) {
@@ -385,6 +417,13 @@ const VIEW_PRESETS = [
   },
 ];
 
+const DECISION_FILTERS = [
+  { key: "ALL", label: "All" },
+  { key: "STRONG SIGNAL", label: "Strong signal" },
+  { key: "MONITOR", label: "Monitor" },
+  { key: "NEUTRAL", label: "Neutral" },
+];
+
 export default function MLBTodayWorkspacePage() {
   const location = useLocation();
   const { user } = useAuth();
@@ -408,6 +447,9 @@ export default function MLBTodayWorkspacePage() {
   const [lastInteraction, setLastInteraction] = useState("none");
   const [watchlist, setWatchlist] = useState([]);
   const [viewPreset, setViewPreset] = useState("all");
+  const [decisionFilter, setDecisionFilter] = useState("ALL");
+  const [propFilterExplicitSincePlayer, setPropFilterExplicitSincePlayer] = useState(false);
+  const [propAvailability, setPropAvailability] = useState(null);
   const [filters, setFilters] = useState({
     prop_type: "",
     team: "",
@@ -420,7 +462,7 @@ export default function MLBTodayWorkspacePage() {
   const topScrollRef = useRef(null);
   const headerScrollRef = useRef(null);
   const tableScrollRef = useRef(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState(1320);
+  const [tableScrollWidth, setTableScrollWidth] = useState(1500);
 
   const slateDate = useMemo(() => todayET(), []);
 
@@ -453,34 +495,104 @@ export default function MLBTodayWorkspacePage() {
 
   const sortedRows = useMemo(() => [...rows].sort(compareDefaultRows), [rows]);
   const watchIdSet = useMemo(() => new Set(watchlist.map((w) => String(w.id))), [watchlist]);
+  const hasPlayerQuery = useMemo(() => Boolean(String(filters.player_query || "").trim()), [filters.player_query]);
+  const shouldApplyPropFilter = useMemo(() => {
+    if (!filters.prop_type) return false;
+    if (!hasPlayerQuery) return true;
+    return propFilterExplicitSincePlayer;
+  }, [filters.prop_type, hasPlayerQuery, propFilterExplicitSincePlayer]);
+  const effectivePropFilter = useMemo(
+    () => (shouldApplyPropFilter ? String(filters.prop_type || "").trim() : ""),
+    [shouldApplyPropFilter, filters.prop_type]
+  );
+  const decisionCounts = useMemo(() => {
+    const counts = { "STRONG SIGNAL": 0, MONITOR: 0, NEUTRAL: 0 };
+    for (const r of sortedRows) {
+      const key = decisionKey(r?.decision_label);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [sortedRows]);
 
   const displayedRows = useMemo(() => {
-    if (viewPreset === "all") return sortedRows;
+    let out = sortedRows;
     if (viewPreset === "best_covered") {
-      return sortedRows.filter((r) => {
+      out = out.filter((r) => {
         const c = String(r.coverage_quality_label || "").trim().toUpperCase();
         return c === "STRONG" || c === "GOOD";
       });
     }
     if (viewPreset === "wide_markets") {
-      return sortedRows.filter((r) => {
+      out = out.filter((r) => {
         const range = asNumber(r.market_range);
         return range !== null && range >= 80;
       });
     }
     if (viewPreset === "sparse_markets") {
-      return sortedRows.filter((r) => {
+      out = out.filter((r) => {
         const c = String(r.coverage_quality_label || "").trim().toUpperCase();
         return c === "LIMITED" || c === "THIN" || c === "UNRELIABLE";
       });
     }
-    return sortedRows;
-  }, [sortedRows, viewPreset]);
+    if (decisionFilter !== "ALL") {
+      out = out.filter((r) => decisionKey(r?.decision_label) === decisionFilter);
+    }
+    return out;
+  }, [sortedRows, viewPreset, decisionFilter]);
+
+  const selectedPlayer = useMemo(() => {
+    const query = normText(filters.player_query);
+    if (!query) return null;
+    const base = optionRows.length ? optionRows : rows;
+    if (!base.length) return null;
+
+    const byPlayer = new Map();
+    for (const r of base) {
+      const pid = asNumber(r?.player_id);
+      const name = String(r?.player_name || "").trim();
+      if (pid === null || !name) continue;
+      const key = String(Math.trunc(pid));
+      if (!byPlayer.has(key)) {
+        byPlayer.set(key, {
+          player_id: Math.trunc(pid),
+          player_name: name,
+          player_name_norm: normText(name),
+        });
+      }
+    }
+    const candidates = Array.from(byPlayer.values()).filter((p) => p.player_name_norm.includes(query));
+    if (!candidates.length) return null;
+    const exact = candidates.filter((p) => p.player_name_norm === query);
+    if (exact.length === 1) return exact[0];
+    if (candidates.length === 1) return candidates[0];
+    return null;
+  }, [filters.player_query, optionRows, rows]);
+
+  const availablePropsForSelectedPlayer = useMemo(() => {
+    if (!selectedPlayer) return [];
+    const base = optionRows.length ? optionRows : rows;
+    const values = new Set();
+    for (const r of base) {
+      if (String(r?.player_id) !== String(selectedPlayer.player_id)) continue;
+      const p = String(r?.prop_type || "").trim();
+      if (p) values.add(p);
+    }
+    return Array.from(values).sort((a, b) => propLabel(a).localeCompare(propLabel(b)));
+  }, [selectedPlayer, optionRows, rows]);
+
+  const shouldCheckPropAvailability = useMemo(() => {
+    return Boolean(
+      !loading &&
+        isWorkspaceReady &&
+        displayedRows.length === 0 &&
+        selectedPlayer?.player_id &&
+        effectivePropFilter
+    );
+  }, [loading, isWorkspaceReady, displayedRows.length, selectedPlayer, effectivePropFilter]);
 
   const compareMode = useMemo(() => {
-    const hasPlayerQuery = Boolean(filters.player_query && filters.player_query.trim());
     return hasPlayerQuery || displayedRows.length <= 12;
-  }, [filters.player_query, displayedRows.length]);
+  }, [hasPlayerQuery, displayedRows.length]);
 
   const expandedRowCount = expandedRowKeys.size;
   const expandedRowKeyList = useMemo(() => Array.from(expandedRowKeys), [expandedRowKeys]);
@@ -489,35 +601,39 @@ export default function MLBTodayWorkspacePage() {
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
-      filters.prop_type ||
+      effectivePropFilter ||
       filters.team ||
       filters.side ||
       filters.timing_signal ||
+      decisionFilter !== "ALL" ||
       (filters.player_query && filters.player_query.trim())
     );
-  }, [filters]);
+  }, [filters, decisionFilter, effectivePropFilter]);
 
   const activeStateTokens = useMemo(() => {
     const out = [];
     const selectedPreset = VIEW_PRESETS.find((p) => p.key === viewPreset);
     if (selectedPreset && selectedPreset.key !== "all") out.push(selectedPreset.label);
-    if (filters.prop_type) out.push(propLabel(filters.prop_type));
+    if (decisionFilter !== "ALL") out.push(`Decision: ${decisionLabel(decisionFilter)}`);
+    if (effectivePropFilter) out.push(propLabel(effectivePropFilter));
+    if (!effectivePropFilter && hasPlayerQuery && filters.prop_type) out.push(`Prop pending: ${propLabel(filters.prop_type)}`);
     if (filters.team) out.push(filters.team);
     if (filters.side) out.push(sideLabel(filters.side));
     if (filters.timing_signal) out.push(timingLabel(filters.timing_signal));
     if (filters.player_query && filters.player_query.trim()) out.push(`Player: ${filters.player_query.trim()}`);
     return out;
-  }, [viewPreset, filters]);
+  }, [viewPreset, decisionFilter, filters, effectivePropFilter, hasPlayerQuery]);
 
   const activeFilterTokens = useMemo(() => {
     const out = [];
-    if (filters.prop_type) out.push(propLabel(filters.prop_type));
+    if (effectivePropFilter) out.push(propLabel(effectivePropFilter));
+    if (!effectivePropFilter && hasPlayerQuery && filters.prop_type) out.push(`Prop pending: ${propLabel(filters.prop_type)}`);
     if (filters.team) out.push(filters.team);
     if (filters.side) out.push(sideLabel(filters.side));
     if (filters.timing_signal) out.push(timingLabel(filters.timing_signal));
     if (filters.player_query && filters.player_query.trim()) out.push(`Player: ${filters.player_query.trim()}`);
     return out;
-  }, [filters]);
+  }, [filters, effectivePropFilter, hasPlayerQuery]);
 
   const timingCounts = useMemo(() => bucketCounts(displayedRows, "timing_signal"), [displayedRows]);
   const streakCounts = useMemo(() => bucketCounts(displayedRows, "streak_context_label"), [displayedRows]);
@@ -738,6 +854,36 @@ export default function MLBTodayWorkspacePage() {
   useEffect(() => {
     let isMounted = true;
     async function run() {
+      if (!shouldCheckPropAvailability) {
+        setPropAvailability(null);
+        return;
+      }
+      setPropAvailability({ loading: true, data: null });
+      try {
+        const qs = new URLSearchParams();
+        qs.set("slate_date", requestedSlateDate || slateDate);
+        qs.set("player_id", String(selectedPlayer.player_id));
+        qs.set("prop_type", String(effectivePropFilter));
+        const url = `${getBaseURL()}/api/mlb/today/workspace/prop-availability?${qs.toString()}`;
+        const res = await fetch(url, { credentials: "include" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.detail || `${res.status} ${res.statusText}`);
+        if (!isMounted) return;
+        setPropAvailability({ loading: false, data });
+      } catch (_e) {
+        if (!isMounted) return;
+        setPropAvailability({ loading: false, data: null });
+      }
+    }
+    run();
+    return () => {
+      isMounted = false;
+    };
+  }, [shouldCheckPropAvailability, requestedSlateDate, slateDate, selectedPlayer, effectivePropFilter]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function run() {
       setLoading(true);
       setError("");
       try {
@@ -745,7 +891,7 @@ export default function MLBTodayWorkspacePage() {
         qs.set("slate_date", slateDate);
         qs.set("limit", "1000");
         qs.set("offset", "0");
-        if (filters.prop_type) qs.set("prop_type", filters.prop_type);
+        if (effectivePropFilter) qs.set("prop_type", effectivePropFilter);
         if (filters.team) qs.set("team", filters.team);
         if (filters.side) qs.set("side", filters.side);
         if (filters.timing_signal) qs.set("timing_signal", filters.timing_signal);
@@ -780,7 +926,7 @@ export default function MLBTodayWorkspacePage() {
     return () => {
       isMounted = false;
     };
-  }, [filters.prop_type, filters.team, filters.side, filters.timing_signal, filters.player_query]);
+  }, [effectivePropFilter, filters.team, filters.side, filters.timing_signal, filters.player_query, slateDate]);
 
   useEffect(() => {
     rowRefs.current = rowRefs.current.slice(0, displayedRows.length);
@@ -794,7 +940,7 @@ export default function MLBTodayWorkspacePage() {
     if (!tableWrap) return;
 
     const syncWidth = () => {
-      const measured = Number(tableWrap.scrollWidth) || 1320;
+      const measured = Number(tableWrap.scrollWidth) || 1500;
       setTableScrollWidth(Math.max(1, measured));
     };
 
@@ -870,7 +1016,7 @@ export default function MLBTodayWorkspacePage() {
     setExpandedRowKeys(new Set());
     setFocusedRowIndex(-1);
     setLastInteraction("collapse:controls-change");
-  }, [viewPreset, filters.prop_type, filters.team, filters.side, filters.timing_signal, filters.player_query]);
+  }, [viewPreset, decisionFilter, effectivePropFilter, filters.team, filters.side, filters.timing_signal, filters.player_query]);
 
   function toggleRow(key, source = "row") {
     setExpandedRowKeys((prev) => {
@@ -949,6 +1095,9 @@ export default function MLBTodayWorkspacePage() {
 
   function clearAllReviewControls() {
     setViewPreset("all");
+    setDecisionFilter("ALL");
+    setPropFilterExplicitSincePlayer(false);
+    setPropAvailability(null);
     setExpandedRowKeys(new Set());
     setFocusedRowIndex(-1);
     setLastInteraction("reset-view");
@@ -1008,7 +1157,11 @@ export default function MLBTodayWorkspacePage() {
             <input
               className="border rounded px-2 py-1 text-sm min-w-[180px]"
               value={filters.player_query}
-              onChange={(e) => setFilters((f) => ({ ...f, player_query: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFilters((f) => ({ ...f, player_query: value }));
+                setPropFilterExplicitSincePlayer(false);
+              }}
               placeholder="Search player"
             />
           </div>
@@ -1017,7 +1170,11 @@ export default function MLBTodayWorkspacePage() {
             <select
               className="border rounded px-2 py-1 text-sm"
               value={filters.prop_type}
-              onChange={(e) => setFilters((f) => ({ ...f, prop_type: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFilters((f) => ({ ...f, prop_type: value }));
+                setPropFilterExplicitSincePlayer(Boolean(String(value || "").trim()));
+              }}
             >
               <option value="">All</option>
               {propOptions.map((p) => (
@@ -1108,6 +1265,24 @@ export default function MLBTodayWorkspacePage() {
               {preset.label}
             </button>
           ))}
+          <div className="text-xs text-slate-500 ml-3 mr-1">Decision:</div>
+          {DECISION_FILTERS.map((opt) => {
+            const count = opt.key === "ALL" ? sortedRows.length : decisionCounts[opt.key] || 0;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setDecisionFilter(opt.key)}
+                className={`text-xs px-2 py-1 rounded border ${
+                  decisionFilter === opt.key
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {opt.label} ({count})
+              </button>
+            );
+          })}
           <div className="text-xs text-slate-500 ml-auto">
             Default sort: non-null Δ vs Side Median, then strongest Δ
           </div>
@@ -1125,6 +1300,28 @@ export default function MLBTodayWorkspacePage() {
             ))
           )}
         </div>
+
+        {selectedPlayer ? (
+          <div className="pp-card p-3 mb-4 flex flex-wrap gap-2 items-center">
+            <div className="text-xs text-slate-500">
+              Available today for <span className="font-semibold text-slate-700">{selectedPlayer.player_name}</span>:
+            </div>
+            {availablePropsForSelectedPlayer.length ? (
+              availablePropsForSelectedPlayer.map((p) => (
+                <span key={`available-prop-${p}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
+                  {propLabel(p)}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-slate-500">No workspace props found for this player.</span>
+            )}
+            {!effectivePropFilter && hasPlayerQuery && filters.prop_type ? (
+              <div className="w-full text-xs text-amber-700">
+                Prop filter is currently ignored while searching player. Select a prop again to apply it.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {compareMode ? (
           <div className="text-xs text-slate-500 mb-2 px-1">Multiple rows can be opened for comparison.</div>
@@ -1444,9 +1641,10 @@ export default function MLBTodayWorkspacePage() {
             className="sticky top-4 z-[54] overflow-x-auto overflow-y-hidden border-b border-slate-200 bg-slate-50/95"
             aria-label="Sticky table header scroll"
           >
-            <table className="min-w-[1320px] w-full text-sm text-slate-800 table-fixed">
+            <table className="min-w-[1500px] w-full text-sm text-slate-800 table-fixed">
               <colgroup>
                 <col style={{ width: "230px" }} />
+                <col style={{ width: "130px" }} />
                 <col style={{ width: "170px" }} />
                 <col style={{ width: "82px" }} />
                 <col style={{ width: "76px" }} />
@@ -1460,6 +1658,7 @@ export default function MLBTodayWorkspacePage() {
               <thead>
                 <tr className="text-left border-b border-slate-200">
                   <th className="sticky left-0 z-[56] bg-slate-50 py-2.5 px-3 border-r border-slate-200 shadow-[inset_-1px_0_0_0_rgba(148,163,184,0.45)]">Player</th>
+                  <th className="bg-slate-50 py-2.5 px-3">Decision</th>
                   <th className="bg-slate-50 py-2.5 px-3">Prop</th>
                   <th className="bg-slate-50 py-2.5 px-3">Side</th>
                   <th className="bg-slate-50 py-2.5 px-3 text-right whitespace-nowrap">Line</th>
@@ -1484,13 +1683,29 @@ export default function MLBTodayWorkspacePage() {
             </div>
           ) : displayedRows.length === 0 ? (
             <div className="p-4 text-slate-600 text-sm">
-              <div>No rows match the current filters.</div>
-              <div className="mt-1">Try clearing one or more filters.</div>
+              {shouldCheckPropAvailability ? (
+                <>
+                  {propAvailability?.loading ? (
+                    <div>Checking prop availability…</div>
+                  ) : propAvailability?.data?.exists_in_odds === false ? (
+                    <div>No sportsbooks are offering this prop today.</div>
+                  ) : (
+                    <div>This prop is available but filtered out or has limited coverage.</div>
+                  )}
+                  <div className="mt-1">Try clearing team/side/timing/decision filters or choosing another prop.</div>
+                </>
+              ) : (
+                <>
+                  <div>No rows match the current filters.</div>
+                  <div className="mt-1">Try clearing one or more filters.</div>
+                </>
+              )}
             </div>
           ) : (
-            <table className="min-w-[1320px] w-full text-sm text-slate-800 table-fixed">
+            <table className="min-w-[1500px] w-full text-sm text-slate-800 table-fixed">
               <colgroup>
                 <col style={{ width: "230px" }} />
+                <col style={{ width: "130px" }} />
                 <col style={{ width: "170px" }} />
                 <col style={{ width: "82px" }} />
                 <col style={{ width: "76px" }} />
@@ -1571,6 +1786,16 @@ export default function MLBTodayWorkspacePage() {
                             </div>
                           </div>
                         </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide ${decisionPillClasses(
+                              r.decision_label
+                            )}`}
+                            title={decisionReason(r.decision_reason)}
+                          >
+                            {decisionLabel(r.decision_label)}
+                          </span>
+                        </td>
                         <td className="py-2.5 px-3 font-medium">{propLabel(r.prop_type)}</td>
                         <td className="py-2.5 px-3 text-slate-700">
                           <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
@@ -1617,7 +1842,7 @@ export default function MLBTodayWorkspacePage() {
                       </tr>
                       {isOpen ? (
                         <tr className="border-b border-slate-200 bg-slate-100/70">
-                          <td colSpan={10} className="py-2 px-3 border-l-2 border-slate-300">
+                          <td colSpan={11} className="py-2 px-3 border-l-2 border-slate-300">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                               <div className="space-y-1.5">
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Market</div>
@@ -1652,6 +1877,8 @@ export default function MLBTodayWorkspacePage() {
                               </div>
                               <div className="space-y-1.5">
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Context</div>
+                                <div><span className="text-slate-500">Decision:</span> <strong>{decisionLabel(r.decision_label)}</strong></div>
+                                <div><span className="text-slate-500">Decision detail:</span> <strong>{decisionReason(r.decision_reason)}</strong></div>
                                 <div><span className="text-slate-500">Streak:</span> <strong>{streakLabel(r.streak_context_label)}</strong></div>
                                 <div><span className="text-slate-500">Streak count:</span> <strong>{fmtNumber(r.streak_count, 0)}</strong></div>
                                 <div><span className="text-slate-500">Baseline delta:</span> <strong>{fmtPctSigned(r.baseline_delta)}</strong></div>

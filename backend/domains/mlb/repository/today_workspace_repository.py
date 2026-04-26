@@ -66,6 +66,8 @@ def fetch_today_workspace_rows(
       coverage_quality_reason,
       timing_signal,
       timing_reason,
+      decision_label,
+      decision_reason,
       streak_context_label,
       streak_count,
       baseline_delta,
@@ -114,3 +116,57 @@ def fetch_today_workspace_last_updated(*, slate_date: str) -> Optional[Any]:
     if not row:
         return None
     return row.get("last_updated")
+
+
+def fetch_today_prop_availability(
+    *,
+    slate_date: str,
+    player_id: int,
+    prop_type: str,
+) -> Dict[str, Any]:
+    row = pg_fetchone(
+        """
+        WITH params AS (
+          SELECT
+            %s::date AS slate_date,
+            %s::bigint AS player_id,
+            lower(trim(%s)) AS prop_type
+        )
+        SELECT
+          EXISTS(
+            SELECT 1
+            FROM mlb.today_odds_book_rows o, params p
+            WHERE o.slate_date = p.slate_date
+              AND o.player_id = p.player_id
+              AND lower(trim(o.prop_type)) = p.prop_type
+          ) AS exists_in_odds,
+          EXISTS(
+            SELECT 1
+            FROM mlb.today_workspace_mlb w, params p
+            WHERE w.game_date = p.slate_date
+              AND w.player_id = p.player_id
+              AND lower(trim(w.prop_type)) = p.prop_type
+          ) AS exists_in_workspace,
+          (
+            SELECT count(*)::int
+            FROM mlb.today_odds_book_rows o, params p
+            WHERE o.slate_date = p.slate_date
+              AND o.player_id = p.player_id
+              AND lower(trim(o.prop_type)) = p.prop_type
+          ) AS odds_rows,
+          (
+            SELECT count(*)::int
+            FROM mlb.today_workspace_mlb w, params p
+            WHERE w.game_date = p.slate_date
+              AND w.player_id = p.player_id
+              AND lower(trim(w.prop_type)) = p.prop_type
+          ) AS workspace_rows
+        """,
+        (str(slate_date).strip(), int(player_id), str(prop_type).strip()),
+    ) or {}
+    return {
+        "exists_in_odds": bool(row.get("exists_in_odds")),
+        "exists_in_workspace": bool(row.get("exists_in_workspace")),
+        "odds_rows": int(row.get("odds_rows") or 0),
+        "workspace_rows": int(row.get("workspace_rows") or 0),
+    }
