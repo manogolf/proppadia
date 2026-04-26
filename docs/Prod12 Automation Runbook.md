@@ -1384,6 +1384,8 @@ Optional pre-prune local compaction (removes raw intermediates where `odds_lates
 make mlb-odds-history-prune-intermediate
 ```
 
+/Users/jerrystrain/bin/proppadia_mlb_retrain_weekly.sh
+
 LaunchAgent Scheduled Run Settings:
 
 plutil -p "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" | rg '"Hour"|"Minute"|StartCalendarInterval|RunAtLoad|KeepAlive|Label'
