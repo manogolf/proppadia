@@ -27,6 +27,11 @@ MLB_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated
 MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
 MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
+MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_weighted.csv
+MLB_WEIGHTED_MODEL_DIR ?= $(CURDIR)/models_out/overlays/weighted540_hl90_full
+MLB_WEIGHTED_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated_weighted.csv
+MLB_WEIGHTED_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output_weighted.csv
+MLB_UPLOAD_VARIANTS_BUILD_BASE ?= 1
 MLB_BOOK_UPLOAD_FILTER_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv
 MLB_BOOK_UPLOAD_FILTER_OUT_JSON ?= tmp/analysis/mlb_book_upload_filter_recommendation.json
 MLB_BOOK_UPLOAD_FILTER_LOOKBACK_DAYS ?= 5
@@ -528,6 +533,7 @@ help:
 	@echo "  make mlb-graded-wagers-report MLB_GRADED_IN_CSV=tmp/graded/8rainstation_daily_YYYY-MM-DD_mlb_player_props.csv [placed graded-wager summary + by-prop]"
 	@echo "  make mlb-graded-wagers-report-latest [auto-pick latest split MLB player-props grader csv from tmp/graded]"
 	@echo "  make mlb-book-upload [full base upload CSV; policy filtering disabled by default]"
+	@echo "  make mlb-book-upload-variants [build base + weighted upload CSVs and package both into dated mlb_uploads folder]"
 	@echo "  make mlb-book-upload-policy MLB_POLICY_PLAN_CSV=<path> [optional policy-filtered upload rows]"
 	@echo "  make mlb-book-upload-top-recommended [adaptive top-N from current book upload + recent post-grade tracker]"
 	@echo "  make mlb-book-upload-side-matrix [one-command side-matrix upload; no EV/gap policy filters]"
@@ -1202,7 +1208,7 @@ mlb-slate-output:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_slate_output.py --slate-date $(MLB_DATE) --pred-csv "$(MLB_SLATE_PRED_CSV)" --out-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(strip $(MLB_SLATE_PROP_TYPE)),--prop-type "$(MLB_SLATE_PROP_TYPE)")
 
 # Export MLB book-upload CSV from canonical MLB slate output.
-.PHONY: mlb-book-upload mlb-book-upload-policy mlb-book-upload-top-recommended
+.PHONY: mlb-book-upload mlb-book-upload-variants mlb-book-upload-policy mlb-book-upload-top-recommended
 
 mlb-book-upload:
 	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" $(VENV_PY) backend/mlb/scripts/export_mlb_book_upload.py --slate-date $(MLB_DATE) --use-slate-output --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --min-side-prob "$(MLB_BOOK_UPLOAD_MIN_SIDE_PROB)" --selection-mode "policy" --policy-plan-csv ""
@@ -1211,6 +1217,20 @@ mlb-book-upload:
 	else \
 		$(MAKE) mlb-slate-archive MLB_DATE="$(MLB_DATE)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_ARCHIVE_RUN_TAG="$(MLB_ARCHIVE_RUN_TAG)"; \
 	fi
+
+mlb-book-upload-variants:
+	MLB_DATE="$(MLB_DATE)" \
+	MLB_TMP_FOCUS_ROOT="$(MLB_TMP_FOCUS_ROOT)" \
+	MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" \
+	MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" \
+	MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" \
+	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" \
+	MLB_WEIGHTED_MODEL_DIR="$(MLB_WEIGHTED_MODEL_DIR)" \
+	MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV="$(MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV)" \
+	MLB_WEIGHTED_SLATE_PRED_CSV="$(MLB_WEIGHTED_SLATE_PRED_CSV)" \
+	MLB_WEIGHTED_SLATE_OUTPUT_CSV="$(MLB_WEIGHTED_SLATE_OUTPUT_CSV)" \
+	MLB_UPLOAD_VARIANTS_BUILD_BASE="$(MLB_UPLOAD_VARIANTS_BUILD_BASE)" \
+	bin/mlb_build_upload_variants.sh build "$(MLB_DATE)"
 
 mlb-book-upload-policy:
 	@if [ -z "$(strip $(MLB_POLICY_PLAN_CSV))" ]; then \

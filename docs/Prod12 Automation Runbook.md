@@ -122,6 +122,21 @@ Day-to-day local upload build (primary workflow):
 make mlb-book-upload MLB_DATE="$(TZ=America/New_York date +%F)"
 ```
 
+Durable base + weighted variant build/package (manual-upload comparison workflow):
+
+```bash
+make mlb-book-upload-variants MLB_DATE="$(TZ=America/New_York date +%F)" \
+  MLB_WEIGHTED_MODEL_DIR="$(pwd)/models_out/overlays/weighted540_hl90_full"
+```
+
+Notes:
+
+- Keep weighted overlay models in durable storage (not `tmp`), for example:
+  - `models_out/overlays/weighted540_hl90_full`
+- This flow validates and packages both:
+  - `05_book_upload_base.csv`
+  - `05_book_upload_weighted.csv`
+
 Daily upload hub (recommended to avoid hunting through `tmp/analysis`):
 
 ```bash
@@ -135,6 +150,7 @@ This copies key upload CSVs into one folder with stable file names:
 - `backend/mlb/data/processed/mlb_uploads/03_bet_sheet_balanced.csv`
 - `backend/mlb/data/processed/mlb_uploads/04_bet_sheet_default.csv`
 - `backend/mlb/data/processed/mlb_uploads/05_book_upload_base.csv`
+- `backend/mlb/data/processed/mlb_uploads/05_book_upload_weighted.csv` (when present)
 - `backend/mlb/data/processed/mlb_uploads/06_top40_recommended.csv`
 
 Manifest:
