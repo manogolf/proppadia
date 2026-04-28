@@ -480,6 +480,7 @@ def _flatten_market_snapshot(
     prop_filter: Optional[set[str]],
     require_two_sided: bool = False,
     two_sided_bookmaker: Optional[str] = None,
+    optional_target_book_props: Optional[set[str]] = None,
 ) -> tuple[List[Offer], Dict[str, int]]:
     counts: Dict[str, int] = defaultdict(int)
     grouped_book_sides: Dict[Tuple[str, str, str, str, str, float], Dict[str, set[str]]] = defaultdict(
@@ -492,6 +493,7 @@ def _flatten_market_snapshot(
     event_meta: Dict[str, Dict[str, Any]] = {}
     target_book = _clean_str(two_sided_bookmaker)
     target_book = str(target_book).strip().lower() if target_book else None
+    optional_target_book_props = {str(p).strip().lower() for p in (optional_target_book_props or set()) if str(p).strip()}
 
     for ev in events:
         event_id = _clean_str(ev.get("id"))
@@ -573,12 +575,20 @@ def _flatten_market_snapshot(
         if require_two_sided:
             if target_book:
                 target_sides = by_book.get(target_book) or set()
-                if not target_sides:
-                    counts["skip_two_sided_missing_target_book"] += 1
-                    continue
-                if not {"over", "under"}.issubset(target_sides):
-                    counts["skip_two_sided_target_book_one_sided"] += 1
-                    continue
+                target_has_pair = {"over", "under"}.issubset(target_sides)
+                if not target_has_pair:
+                    allow_any_book_fallback = str(prop_type).strip().lower() in optional_target_book_props
+                    if allow_any_book_fallback:
+                        if not books_two_sided:
+                            counts["skip_two_sided_no_book_pair_optional_prop"] += 1
+                            continue
+                        counts["info_two_sided_target_book_fallback_optional_prop"] += 1
+                    else:
+                        if not target_sides:
+                            counts["skip_two_sided_missing_target_book"] += 1
+                        else:
+                            counts["skip_two_sided_target_book_one_sided"] += 1
+                        continue
             elif not books_two_sided:
                 counts["skip_two_sided_no_book_pair"] += 1
                 continue
@@ -1126,6 +1136,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     odds_snapshot_out = Path(str(args.odds_snapshot_out)).expanduser() if str(args.odds_snapshot_out or "").strip() else None
     prop_filter = _parse_prop_types_csv(str(args.prop_types or ""))
+    optional_target_book_props = _parse_prop_types_csv(
+        str(os.environ.get("MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS", "singles") or "")
+    ) or set()
 
     print(f"[mlb-wide-pred] slate_date (ET) = {slate_date}")
     print(f"[mlb-wide-pred] output = {out_csv}")
@@ -1140,6 +1153,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"[mlb-wide-pred] require_two_sided = true bookmaker={str(args.two_sided_bookmaker).strip()}")
         else:
             print("[mlb-wide-pred] require_two_sided = true bookmaker=any")
+        if optional_target_book_props:
+            print(
+                "[mlb-wide-pred] two_sided optional target-book fallback props = "
+                f"{sorted(optional_target_book_props)}"
+            )
 
     pitcher_min_starter_games = max(0, _int_env("MLB_PITCHER_STARTER_MIN_GAMES", 5))
     pitcher_min_starter_outs = max(1, _int_env("MLB_PITCHER_STARTER_MIN_OUTS", 1))
@@ -1187,6 +1205,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             prop_filter=prop_filter,
             require_two_sided=bool(args.require_two_sided),
             two_sided_bookmaker=str(args.two_sided_bookmaker or ""),
+            optional_target_book_props=optional_target_book_props,
         )
         print(f"[mlb-wide-pred] offers_unique={len(offers)} flatten_counts={flatten_counts}")
 

@@ -305,8 +305,10 @@ def _cohort_slices(df_scored_all: pd.DataFrame, *, gate_from: str, gate_to: str,
     return out
 
 
-def _parse_candidates(items: Iterable[str]) -> List[Tuple[str, Path]]:
+def _parse_candidates(items: Iterable[str], *, prop_type: str) -> List[Tuple[str, Path]]:
     out: List[Tuple[str, Path]] = []
+    prop_key = str(prop_type or "").strip().lower()
+    artifact_name = f"{prop_key}.joblib"
     for raw in items:
         s = str(raw or "").strip()
         if not s or "=" not in s:
@@ -314,8 +316,9 @@ def _parse_candidates(items: Iterable[str]) -> List[Tuple[str, Path]]:
         name, path = s.split("=", 1)
         name = name.strip()
         root = Path(path.strip()).expanduser().resolve()
-        if not (root / "latest" / "hits.joblib").exists():
-            raise FileNotFoundError(f"candidate '{name}' missing artifact: {(root / 'latest' / 'hits.joblib')}")
+        artifact_path = root / "latest" / artifact_name
+        if not artifact_path.exists():
+            raise FileNotFoundError(f"candidate '{name}' missing artifact: {artifact_path}")
         out.append((name, root))
     if not out:
         raise ValueError("at least one --candidate is required")
@@ -337,7 +340,8 @@ def main() -> int:
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    candidates = _parse_candidates(args.candidate)
+    prop_key = str(args.prop_type).strip().lower()
+    candidates = _parse_candidates(args.candidate, prop_type=prop_key)
     print(json.dumps({"candidates": [{"name": n, "root": str(p)} for n, p in candidates]}, indent=2))
 
     # Fetch once across all requested cohorts.
@@ -379,7 +383,7 @@ def main() -> int:
         candidate_manifest: Dict[str, Any] = {
             "name": model_name,
             "model_root": str(model_root),
-            "artifact_path": str((model_root / "latest" / "hits.joblib").resolve()),
+            "artifact_path": str((model_root / "latest" / f"{prop_key}.joblib").resolve()),
             "score_meta": model_meta,
             "decile_files": {},
             "threshold_files": {},

@@ -28,6 +28,20 @@ MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
 MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
 MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_weighted.csv
+MLB_UPLOAD_COMPARE_BASE_CSV ?= backend/mlb/data/processed/mlb_uploads/$(MLB_DATE)/05_book_upload_base.csv
+MLB_UPLOAD_COMPARE_WEIGHTED_CSV ?= backend/mlb/data/processed/mlb_uploads/$(MLB_DATE)/05_book_upload_weighted.csv
+MLB_UPLOAD_COMPARE_OUT_DIR ?= artifacts/analysis/mlb/upload_variant_compare/$(MLB_DATE)
+MLB_UPLOAD_COMPARE_GRADED_ROWS_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
+MLB_SINGLES_SHADOW_BASE_CSV ?= backend/mlb/data/processed/mlb_uploads/$(MLB_DATE)/05_book_upload_base.csv
+MLB_SINGLES_SHADOW_OUT_CSV ?= backend/mlb/data/processed/mlb_uploads/$(MLB_DATE)/05_book_upload_singles_shadow.csv
+MLB_SINGLES_SHADOW_OUT_DIR ?= tmp/experiments/singles_shadow/$(MLB_DATE)
+MLB_SINGLES_SHADOW_ODDS_SNAPSHOT ?= backend/mlb/exports/odds_history/$(MLB_DATE)/odds_latest_compatible.json
+MLB_SINGLES_SHADOW_GRADED_ROWS_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
+MLB_SINGLES_SHADOW_THRESHOLD ?= 0.55
+MLB_SINGLES_SHADOW_TOP_N ?= 25
+MLB_SINGLES_SHADOW_MAX_PER_PLAYER ?= 2
+MLB_SINGLES_SHADOW_MAX_ABS_WIN_PCT ?= 500
+MLB_SINGLES_SHADOW_MODEL_PATH ?=
 MLB_WEIGHTED_MODEL_DIR ?= $(CURDIR)/models_out/overlays/weighted540_hl90_full
 MLB_WEIGHTED_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated_weighted.csv
 MLB_WEIGHTED_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output_weighted.csv
@@ -54,6 +68,9 @@ MLB_POLICY_PLAN_ALLOW_ONE_SIDED ?= 0
 MLB_POLICY_PLAN_ALLOW_EMPTY ?= 1
 MLB_PREDICT_REQUIRE_TWO_SIDED ?= 1
 MLB_PREDICT_TWO_SIDED_BOOKMAKER ?= betonlineag
+# Props allowed to fall back to any two-sided bookmaker when MLB_PREDICT_TWO_SIDED_BOOKMAKER
+# is missing/one-sided for that prop. Keep narrow (default singles only).
+MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS ?= singles
 MLB_ODDS_BACKFILL_SEASON ?= 2025
 MLB_ODDS_BACKFILL_FROM_DATE ?=
 MLB_ODDS_BACKFILL_TO_DATE ?=
@@ -275,7 +292,7 @@ MLB_RETRAIN_BROAD_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 # Reconcile_csv + two-sided lane currently has no real runs_rbis market rows
 # (odds/slate support missing). Keep runs_rbis excluded from broad reconcile
 # train/eval until two-sided market support is added.
-MLB_PROD12_RECONCILE_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
+MLB_PROD12_RECONCILE_PROP_TYPES ?= hits,singles,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
 MLB_RETRAIN_BROAD_RECONCILE_PROP_TYPES ?= $(MLB_PROD12_RECONCILE_PROP_TYPES)
 MLB_RETRAIN_BROAD_DAYS_BACK ?= 540
 MLB_RETRAIN_BROAD_TRAIN_LIMIT ?= 150000
@@ -534,6 +551,8 @@ help:
 	@echo "  make mlb-graded-wagers-report-latest [auto-pick latest split MLB player-props grader csv from tmp/graded]"
 	@echo "  make mlb-book-upload [full base upload CSV; policy filtering disabled by default]"
 	@echo "  make mlb-book-upload-variants [build base + weighted upload CSVs and package both into dated mlb_uploads folder]"
+	@echo "  make mlb-compare-upload-variants-postgame MLB_DATE=YYYY-MM-DD [postgame base-vs-weighted comparison report]"
+	@echo "  make mlb-singles-shadow MLB_DATE=YYYY-MM-DD [build isolated singles-threshold shadow CSV and summary artifacts]"
 	@echo "  make mlb-book-upload-policy MLB_POLICY_PLAN_CSV=<path> [optional policy-filtered upload rows]"
 	@echo "  make mlb-book-upload-top-recommended [adaptive top-N from current book upload + recent post-grade tracker]"
 	@echo "  make mlb-book-upload-side-matrix [one-command side-matrix upload; no EV/gap policy filters]"
@@ -1199,9 +1218,17 @@ mlb-hits-environment-report:
 mlb-daily-ops-brief:
 	$(VENV_PY) backend/mlb/scripts/report_mlb_daily_ops_brief.py --report-date "$(MLB_DAILY_BRIEF_REPORT_DATE)" --postgrade-alerts-json "$(MLB_DAILY_BRIEF_POSTGRADE_ALERTS_JSON)" --model-vs-fade-json "$(MLB_DAILY_BRIEF_MODEL_VS_FADE_JSON)" --bvp-impact-json "$(MLB_DAILY_BRIEF_BVP_IMPACT_JSON)" --hits-environment-json "$(MLB_DAILY_BRIEF_HITS_ENV_JSON)" --pipeline-history-jsonl "$(MLB_DAILY_BRIEF_PIPELINE_HISTORY_JSONL)" --ops-history-jsonl "$(MLB_DAILY_BRIEF_OPS_HISTORY_JSONL)" --out-md "$(MLB_DAILY_BRIEF_OUT_MD)" --dated-out-md "$(MLB_DAILY_BRIEF_DATED_OUT_MD)" --out-json "$(MLB_DAILY_BRIEF_OUT_JSON)" --history-jsonl "$(MLB_DAILY_BRIEF_HISTORY_JSONL)"
 
+.PHONY: mlb-compare-upload-variants-postgame
+mlb-compare-upload-variants-postgame:
+	$(VENV_PY) backend/mlb/scripts/compare_upload_variants_postgame.py --date "$(MLB_DATE)" --base-csv "$(MLB_UPLOAD_COMPARE_BASE_CSV)" --weighted-csv "$(MLB_UPLOAD_COMPARE_WEIGHTED_CSV)" --out-dir "$(MLB_UPLOAD_COMPARE_OUT_DIR)" --graded-rows-csv "$(MLB_UPLOAD_COMPARE_GRADED_ROWS_CSV)"
+
+.PHONY: mlb-singles-shadow
+mlb-singles-shadow:
+	$(VENV_PY) backend/mlb/scripts/generate_singles_shadow_upload.py --date "$(MLB_DATE)" --base-csv "$(MLB_SINGLES_SHADOW_BASE_CSV)" --shadow-csv "$(MLB_SINGLES_SHADOW_OUT_CSV)" --out-dir "$(MLB_SINGLES_SHADOW_OUT_DIR)" --odds-snapshot-in "$(MLB_SINGLES_SHADOW_ODDS_SNAPSHOT)" --graded-rows-csv "$(MLB_SINGLES_SHADOW_GRADED_ROWS_CSV)" --threshold "$(MLB_SINGLES_SHADOW_THRESHOLD)" --top-n "$(MLB_SINGLES_SHADOW_TOP_N)" --max-rows-per-player "$(MLB_SINGLES_SHADOW_MAX_PER_PLAYER)" --max-abs-win-pct "$(MLB_SINGLES_SHADOW_MAX_ABS_WIN_PCT)" $(if $(strip $(MLB_SINGLES_SHADOW_MODEL_PATH)),--singles-model-path "$(MLB_SINGLES_SHADOW_MODEL_PATH)",)
+
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
-	$(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",) $(if $(strip $(MLB_ODDS_SNAPSHOT_IN)),--odds-snapshot-in "$(MLB_ODDS_SNAPSHOT_IN)",) $(if $(filter 1 true TRUE yes YES,$(MLB_PREDICT_REQUIRE_TWO_SIDED)),--require-two-sided,) $(if $(strip $(MLB_PREDICT_TWO_SIDED_BOOKMAKER)),--two-sided-bookmaker "$(MLB_PREDICT_TWO_SIDED_BOOKMAKER)",)
+	MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS="$(MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS)" $(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",) $(if $(strip $(MLB_ODDS_SNAPSHOT_IN)),--odds-snapshot-in "$(MLB_ODDS_SNAPSHOT_IN)",) $(if $(filter 1 true TRUE yes YES,$(MLB_PREDICT_REQUIRE_TWO_SIDED)),--require-two-sided,) $(if $(strip $(MLB_PREDICT_TWO_SIDED_BOOKMAKER)),--two-sided-bookmaker "$(MLB_PREDICT_TWO_SIDED_BOOKMAKER)",)
 
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:
@@ -1465,6 +1492,7 @@ mlb-show-config:
 	@echo "MLB_POLICY_PLAN_ALLOW_EMPTY=$(MLB_POLICY_PLAN_ALLOW_EMPTY)"
 	@echo "MLB_PREDICT_REQUIRE_TWO_SIDED=$(MLB_PREDICT_REQUIRE_TWO_SIDED)"
 	@echo "MLB_PREDICT_TWO_SIDED_BOOKMAKER=$(MLB_PREDICT_TWO_SIDED_BOOKMAKER)"
+	@echo "MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS=$(MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS)"
 	@echo "MLB_RECONCILE_FROM_DATE=$(MLB_RECONCILE_FROM_DATE)"
 	@echo "MLB_RECONCILE_TO_DATE=$(MLB_RECONCILE_TO_DATE)"
 	@echo "MLB_RECONCILE_BOOKMAKER=$(MLB_RECONCILE_BOOKMAKER)"

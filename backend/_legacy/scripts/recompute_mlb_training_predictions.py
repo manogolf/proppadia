@@ -155,7 +155,7 @@ def _build_features(row: Dict[str, Any]) -> Dict[str, Any]:
     raw_prop_value = _n(row.get("prop_value"))
     # TEMP semantic alignment for lane scoring:
     # weekly recompute should evaluate against the market line used in training semantics.
-    if prop_type in {"hits", "doubles", "runs_scored", "runs_rbis", "hits_runs_rbis"} and raw_line is not None:
+    if prop_type in {"hits", "singles", "doubles", "runs_scored", "runs_rbis", "hits_runs_rbis"} and raw_line is not None:
         scoring_line = raw_line
     else:
         scoring_line = raw_prop_value if raw_prop_value is not None else 0.0

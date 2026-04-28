@@ -16,7 +16,7 @@ Env:
 from __future__ import annotations
 
 
-import os, io, json, warnings
+import os, io, json
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -37,16 +37,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score
 from pandas.api.types import is_numeric_dtype
-
-# Temporary fallback only: allow opt-in suppression for known-noisy sklearn
-# all-null imputer warnings while preprocessing fixes are rolled out.
-if str(os.environ.get("MLB_SUPPRESS_BVP_RBI_IMPUTER_WARNING", "0")).strip().lower() in {"1", "true", "yes", "on"}:
-    warnings.filterwarnings(
-        "ignore",
-        message=r"Skipping features without any observed values: \['bvp_rbi'\]\. At least one non-missing value is needed for imputation with strategy='median'\.",
-        category=UserWarning,
-        module=r"sklearn\.impute\._base",
-    )
 
 # ---- .env (optional) ---------------------------------------------------------
 try:
@@ -215,6 +205,35 @@ TRAIN_HITS_WEIGHTING_LINE_GE_2_5 = float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_LIN
 TRAIN_HITS_WEIGHTING_LINE_GE_1_5 = float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_LINE_GE_1_5", "1.5"))
 TRAIN_HITS_WEIGHTING_LINE_LT_1_5 = float(os.getenv("MLB_TRAIN_HITS_WEIGHTING_LINE_LT_1_5", "1.0"))
 
+TB_COMPONENT_FEATURES = [
+    "d7_at_bats",
+    "d15_at_bats",
+    "d30_at_bats",
+    "d7_extra_base_hits",
+    "d15_extra_base_hits",
+    "d30_extra_base_hits",
+    "tb_per_ab_d7",
+    "tb_per_ab_d15",
+    "tb_per_ab_d30",
+    "hits_per_ab_d7",
+    "extra_base_per_ab_d7",
+    "avg_ab_per_game_d7",
+    "avg_ab_per_game_d15",
+    "avg_ab_per_game_d30",
+    "high_opportunity_games_last_10",
+    "tb_opportunity_interaction",
+    "power_opportunity_interaction",
+    "tb_per_hit_d7",
+    "tb_per_hit_d15",
+    "tb_per_hit_d30",
+    "extra_base_rate_d7",
+    "d7_doubles",
+    "d15_doubles",
+    "d30_doubles",
+    "high_tb_games_last_10",
+    "rolling_tb_std_dev",
+]
+
 
 # ---- Utilities ---------------------------------------------------------------
 def _atomic_write_bytes(path: Path, blob: bytes):
@@ -255,6 +274,21 @@ def _pg_data(resp):
     if isinstance(resp, list):
         return resp
     return []
+
+
+def _table_has_column(table_name: str, column_name: str) -> bool:
+    rows = pg_fetchall(
+        """
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'mlb'
+          AND table_name = %s
+          AND column_name = %s
+        LIMIT 1
+        """,
+        (str(table_name), str(column_name)),
+    )
+    return bool(rows)
 
 
 def _normalize_pfp_features_blob(features: Any) -> Dict[str, float]:
@@ -526,6 +560,208 @@ def _merge_derived_features(sb: Optional[Client], df: pd.DataFrame, feat_cols: L
     return out
 
 
+def _fetch_player_stats_tb_history(
+    player_ids: List[int],
+    *,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    if not player_ids:
+        return pd.DataFrame(columns=["player_id", "game_id", "game_date", "total_bases", "at_bats"])
+    has_at_bats = _table_has_column("player_stats", "at_bats")
+    at_bats_expr = "COALESCE(ps.at_bats, 0)::numeric AS at_bats" if has_at_bats else "NULL::numeric AS at_bats"
+    frames: List[pd.DataFrame] = []
+    unique_ids = sorted({int(pid) for pid in player_ids})
+    for chunk in _chunked(unique_ids, 500):
+        placeholders = ",".join(["%s"] * len(chunk))
+        sql = f"""
+            SELECT
+                ps.player_id,
+                ps.game_id,
+                ps.game_date::date AS game_date,
+                COALESCE(ps.total_bases, 0)::numeric AS total_bases,
+                {at_bats_expr}
+            FROM mlb.player_stats ps
+            WHERE ps.player_id IN ({placeholders})
+              AND ps.game_date >= %s::date
+              AND ps.game_date <= %s::date
+            ORDER BY ps.player_id, ps.game_date, ps.game_id
+        """
+        params = tuple(chunk) + (start_date, end_date)
+        rows = pg_fetchall(sql, params)
+        if rows:
+            frames.append(pd.DataFrame(rows))
+    if not frames:
+        return pd.DataFrame(columns=["player_id", "game_id", "game_date", "total_bases", "at_bats"])
+    out = pd.concat(frames, ignore_index=True)
+    out["player_id"] = pd.to_numeric(out["player_id"], errors="coerce")
+    out["game_id"] = pd.to_numeric(out["game_id"], errors="coerce")
+    out["game_date"] = pd.to_datetime(out["game_date"], errors="coerce")
+    out["total_bases"] = pd.to_numeric(out["total_bases"], errors="coerce")
+    out["at_bats"] = pd.to_numeric(out.get("at_bats"), errors="coerce")
+    out = out.dropna(subset=["player_id", "game_id", "game_date"]).copy()
+    return out
+
+
+def _add_total_bases_component_features(
+    df: pd.DataFrame,
+    *,
+    quiet: bool = True,
+) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    out = df.copy()
+
+    for window in (7, 15, 30):
+        ab_col = f"d{window}_at_bats"
+        out[ab_col] = pd.to_numeric(out.get(ab_col), errors="coerce")
+        out[f"avg_ab_per_game_d{window}"] = out[ab_col]
+
+    # Core rolling component features from existing derived windows.
+    for window in (7, 15, 30):
+        tb_col = f"d{window}_total_bases"
+        hits_col = f"d{window}_hits"
+        ab_col = f"d{window}_at_bats"
+        extra_col = f"d{window}_extra_base_hits"
+        ratio_col = f"tb_per_hit_d{window}"
+        tb_ab_col = f"tb_per_ab_d{window}"
+
+        tb = pd.to_numeric(out.get(tb_col), errors="coerce")
+        hits = pd.to_numeric(out.get(hits_col), errors="coerce")
+        at_bats = pd.to_numeric(out.get(ab_col), errors="coerce")
+        out[extra_col] = tb - hits
+        out[ratio_col] = np.where(hits > 0, tb / hits, np.nan)
+        out[tb_ab_col] = np.where(at_bats > 0, tb / at_bats, np.nan)
+
+    d7_hits = pd.to_numeric(out.get("d7_hits"), errors="coerce")
+    d7_extra = pd.to_numeric(out.get("d7_extra_base_hits"), errors="coerce")
+    d7_at_bats = pd.to_numeric(out.get("d7_at_bats"), errors="coerce")
+    out["extra_base_rate_d7"] = np.where(d7_hits > 0, d7_extra / d7_hits, np.nan)
+    out["hits_per_ab_d7"] = np.where(d7_at_bats > 0, d7_hits / d7_at_bats, np.nan)
+    out["extra_base_per_ab_d7"] = np.where(d7_at_bats > 0, d7_extra / d7_at_bats, np.nan)
+
+    # Optional rolling doubles windows are direct pass-throughs when present.
+    for col in ("d7_doubles", "d15_doubles", "d30_doubles"):
+        out[col] = pd.to_numeric(out.get(col), errors="coerce")
+
+    # Appearance-level distribution proxies from prior player game logs.
+    out["high_tb_games_last_10"] = np.nan
+    out["high_opportunity_games_last_10"] = np.nan
+    out["rolling_tb_std_dev"] = np.nan
+    if {"player_id", "game_id", "game_date"}.issubset(out.columns):
+        keys = out[["player_id", "game_id", "game_date"]].copy()
+        keys["player_id"] = pd.to_numeric(keys["player_id"], errors="coerce")
+        keys["game_id"] = pd.to_numeric(keys["game_id"], errors="coerce")
+        keys["game_date"] = pd.to_datetime(keys["game_date"], errors="coerce")
+        keys = keys.dropna(subset=["player_id", "game_id", "game_date"]).drop_duplicates()
+
+        if not keys.empty:
+            min_hist = (keys["game_date"].min() - pd.Timedelta(days=90)).date().isoformat()
+            max_hist = keys["game_date"].max().date().isoformat()
+            try:
+                hist = _fetch_player_stats_tb_history(
+                    keys["player_id"].astype(int).tolist(),
+                    start_date=min_hist,
+                    end_date=max_hist,
+                )
+            except Exception as exc:
+                if not quiet:
+                    print(f"[features] TB component history fetch skipped: {exc}")
+                hist = pd.DataFrame(
+                    columns=["player_id", "game_id", "game_date", "total_bases"]
+                )
+            if not hist.empty:
+                hist = hist.sort_values(["player_id", "game_date", "game_id"]).copy()
+                hist["tb_ge_2"] = (hist["total_bases"] >= 2).astype(float)
+                hist["ab_ge_4"] = (pd.to_numeric(hist["at_bats"], errors="coerce") >= 4).astype(float)
+                by_player = hist.groupby("player_id", sort=False)
+                hist["d7_at_bats"] = by_player["at_bats"].transform(
+                    lambda s: s.shift(1).rolling(7, min_periods=1).mean()
+                )
+                hist["d15_at_bats"] = by_player["at_bats"].transform(
+                    lambda s: s.shift(1).rolling(15, min_periods=1).mean()
+                )
+                hist["d30_at_bats"] = by_player["at_bats"].transform(
+                    lambda s: s.shift(1).rolling(30, min_periods=1).mean()
+                )
+                hist["high_tb_games_last_10"] = by_player["tb_ge_2"].transform(
+                    lambda s: s.shift(1).rolling(10, min_periods=1).sum()
+                )
+                hist["high_opportunity_games_last_10"] = by_player["ab_ge_4"].transform(
+                    lambda s: s.shift(1).rolling(10, min_periods=1).sum()
+                )
+                hist["rolling_tb_std_dev"] = by_player["total_bases"].transform(
+                    lambda s: s.shift(1).rolling(10, min_periods=2).std(ddof=0)
+                )
+                hist_features = hist[
+                    [
+                        "player_id",
+                        "game_id",
+                        "d7_at_bats",
+                        "d15_at_bats",
+                        "d30_at_bats",
+                        "high_tb_games_last_10",
+                        "high_opportunity_games_last_10",
+                        "rolling_tb_std_dev",
+                    ]
+                ].drop_duplicates(subset=["player_id", "game_id"], keep="last")
+                out = out.merge(
+                    hist_features,
+                    on=["player_id", "game_id"],
+                    how="left",
+                    suffixes=("", "_tbhist"),
+                )
+                for col in (
+                    "d7_at_bats",
+                    "d15_at_bats",
+                    "d30_at_bats",
+                    "high_tb_games_last_10",
+                    "high_opportunity_games_last_10",
+                    "rolling_tb_std_dev",
+                ):
+                    alias = f"{col}_tbhist"
+                    if alias in out.columns:
+                        base = pd.to_numeric(out[col], errors="coerce")
+                        fill = pd.to_numeric(out[alias], errors="coerce")
+                        out[col] = base.where(base.notna(), fill)
+                        out.drop(columns=[alias], inplace=True)
+
+    # Recompute AB-normalized features after history fallback filled at-bats.
+    for window in (7, 15, 30):
+        tb = pd.to_numeric(out.get(f"d{window}_total_bases"), errors="coerce")
+        ab = pd.to_numeric(out.get(f"d{window}_at_bats"), errors="coerce")
+        out[f"avg_ab_per_game_d{window}"] = ab
+        out[f"tb_per_ab_d{window}"] = np.where(ab > 0, tb / ab, np.nan)
+
+    d7_hits = pd.to_numeric(out.get("d7_hits"), errors="coerce")
+    d7_extra = pd.to_numeric(out.get("d7_extra_base_hits"), errors="coerce")
+    d7_at_bats = pd.to_numeric(out.get("d7_at_bats"), errors="coerce")
+    out["hits_per_ab_d7"] = np.where(d7_at_bats > 0, d7_hits / d7_at_bats, np.nan)
+    out["extra_base_per_ab_d7"] = np.where(d7_at_bats > 0, d7_extra / d7_at_bats, np.nan)
+    out["tb_opportunity_interaction"] = pd.to_numeric(out.get("tb_per_ab_d7"), errors="coerce") * pd.to_numeric(
+        out.get("avg_ab_per_game_d7"),
+        errors="coerce",
+    )
+    out["power_opportunity_interaction"] = pd.to_numeric(
+        out.get("extra_base_rate_d7"),
+        errors="coerce",
+    ) * pd.to_numeric(
+        out.get("avg_ab_per_game_d7"),
+        errors="coerce",
+    )
+
+    if not quiet:
+        coverage_parts: List[str] = []
+        for col in TB_COMPONENT_FEATURES:
+            if col not in out.columns:
+                coverage_parts.append(f"{col}=missing")
+                continue
+            cov = float(pd.to_numeric(out[col], errors="coerce").notna().mean())
+            coverage_parts.append(f"{col}={cov:.1%}")
+        print("[features] added TB at-bat/opportunity features: " + ", ".join(coverage_parts))
+    return out
+
+
 def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
     """
     Preferred source: row-level reconcile CSV (market lines + realized outcomes),
@@ -612,9 +848,20 @@ def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: 
     return out
 
 
-def fetch_training_rows(sb: Optional[Client], prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
+def fetch_training_rows(
+    sb: Optional[Client],
+    prop_type: str,
+    days_back: int,
+    limit: int,
+    feat_cols: List[str],
+    *,
+    quiet: bool = True,
+) -> pd.DataFrame:
+    prop_key = str(prop_type).strip().lower()
     if TRAIN_FEATURE_SOURCE in {"reconcile", "reconcile_csv"}:
         df = _fetch_reconcile_and_merge(sb, prop_type, days_back, limit, feat_cols)
+        if not df.empty and prop_key == "total_bases":
+            df = _add_total_bases_component_features(df, quiet=quiet)
         if not df.empty:
             return df
         if not RECONCILE_FALLBACK_BASE_MERGE:
@@ -623,9 +870,14 @@ def fetch_training_rows(sb: Optional[Client], prop_type: str, days_back: int, li
         print(f"[trainer] source=reconcile_csv fallback->base_merge prop={prop_type}")
     if TRAIN_FEATURE_SOURCE == "view":
         df = _fetch_from_view(sb, prop_type, days_back, limit, feat_cols)
+        if isinstance(df, pd.DataFrame) and not df.empty and prop_key == "total_bases":
+            df = _add_total_bases_component_features(df, quiet=quiet)
         if df is not None:
             return df
-    return _fetch_base_and_merge(sb, prop_type, days_back, limit, feat_cols)
+    df = _fetch_base_and_merge(sb, prop_type, days_back, limit, feat_cols)
+    if not df.empty and prop_key == "total_bases":
+        df = _add_total_bases_component_features(df, quiet=quiet)
+    return df
 
 
 # ---- Preprocessing / pipelines ----------------------------------------------
@@ -733,6 +985,51 @@ def _prep_frame(df: pd.DataFrame, *, prop_type: str | None = None, quiet: bool =
     return df
 
 
+def drop_all_null_fit_features(
+    df_fit: pd.DataFrame,
+    numeric_features: List[str],
+    categorical_features: List[str],
+    *,
+    quiet: bool = True,
+) -> tuple[pd.DataFrame, List[str], List[str], List[str]]:
+    """
+    Prune columns that are entirely missing in the actual fit frame.
+    This runs immediately before any sklearn imputer fit.
+    """
+    out = df_fit.copy()
+    dropped: List[str] = []
+    keep_num: List[str] = []
+    keep_cat: List[str] = []
+
+    for col in numeric_features:
+        if col not in out.columns:
+            continue
+        # Coerce at fit-time to match downstream median-imputer semantics.
+        coerced = pd.to_numeric(out[col], errors="coerce")
+        out[col] = coerced
+        if coerced.isna().all():
+            dropped.append(col)
+            continue
+        keep_num.append(col)
+
+    for col in categorical_features:
+        if col not in out.columns:
+            continue
+        vals = out[col]
+        if vals.dtype == object:
+            vals = vals.replace("", np.nan)
+            out[col] = vals
+        if vals.isna().all():
+            dropped.append(col)
+            continue
+        keep_cat.append(col)
+
+    if dropped and not quiet:
+        print("[features] dropping all-null fit features: " + ", ".join(sorted(set(dropped))))
+
+    return out, keep_num, keep_cat, dropped
+
+
 def build_pipeline(num_cols: List[str], cat_cols: List[str]):
     num_transform = Pipeline([("imputer", SimpleImputer(strategy="median"))])
     cat_transform = Pipeline([
@@ -786,7 +1083,7 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         return None
 
     # 2) fetch rows (view or fallback merge)
-    df = fetch_training_rows(sb, prop_type, days_back, limit, feat_list)
+    df = fetch_training_rows(sb, prop_type, days_back, limit, feat_list, quiet=quiet)
     if df.empty:
         if not quiet:
             print(f"⏭️  {prop_type}: no training rows.")
@@ -894,25 +1191,13 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         (train_idx, val_idx), = sss.split(df[cols_used], df["y"])
         train_df, val_df = df.iloc[train_idx], df.iloc[val_idx]
 
-    # 6) drop features that become all-null in the TRAIN split before imputation.
-    # This prevents sklearn "Skipping features without any observed values" warnings
-    # in live runs when sparse columns only have values in validation rows.
-    train_all_null_num = [c for c in num_used if c in train_df.columns and train_df[c].isna().all()]
-    if train_all_null_num and not quiet:
-        print(
-            "[features] dropping all-null numeric features (train split): "
-            + ", ".join(sorted(train_all_null_num))
-        )
-    num_used = [c for c in num_used if c not in train_all_null_num]
-
-    # Keep categorical path robust too: most_frequent imputer also warns when all-null.
-    train_all_null_cat = [c for c in cat_used if c in train_df.columns and train_df[c].isna().all()]
-    if train_all_null_cat and not quiet:
-        print(
-            "[features] dropping all-null categorical features (train split): "
-            + ", ".join(sorted(train_all_null_cat))
-        )
-    cat_used = [c for c in cat_used if c not in train_all_null_cat]
+    # 6) drop all-null features in the actual fit frame before any imputer fit.
+    train_df, num_used, cat_used, _ = drop_all_null_fit_features(
+        train_df,
+        num_used,
+        cat_used,
+        quiet=quiet,
+    )
 
     cols_used = num_used + cat_used
     if not cols_used:
