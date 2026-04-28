@@ -49,6 +49,7 @@ PITCHER_PROP_TYPES = [
 ]
 
 ROLLING_METRICS = [
+    "at_bats",
     "hits",
     "runs_scored",
     "rbis",
@@ -251,6 +252,7 @@ def _extract_player_stats_row(
         "opponent": normalizeTeamAbbreviation(opponent_abbr),
         "is_home": bool(is_home),
         "position": (str(position).upper() if position else None),
+        "at_bats": _stat_int(bat.get("atBats") or bat.get("at_bats")),
         "hits": hits,
         "total_bases": _stat_int(bat.get("totalBases") or bat.get("total_bases")),
         "rbis": _stat_int(bat.get("rbi") or bat.get("rbis")),
@@ -445,12 +447,12 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
             """
             INSERT INTO mlb.player_stats (
                 player_id, game_id, game_date, team, opponent, is_home, position,
-                hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
+                at_bats, hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
                 singles, doubles, triples, home_runs, stolen_bases,
                 strikeouts_pitching, walks_allowed, hits_allowed, outs_recorded, earned_runs, is_starter
             ) VALUES (
                 %(player_id)s, %(game_id)s, %(game_date)s, %(team)s, %(opponent)s, %(is_home)s, %(position)s,
-                %(hits)s, %(total_bases)s, %(rbis)s, %(runs_scored)s, %(strikeouts_batting)s, %(walks)s,
+                %(at_bats)s, %(hits)s, %(total_bases)s, %(rbis)s, %(runs_scored)s, %(strikeouts_batting)s, %(walks)s,
                 %(singles)s, %(doubles)s, %(triples)s, %(home_runs)s, %(stolen_bases)s,
                 %(strikeouts_pitching)s, %(walks_allowed)s, %(hits_allowed)s, %(outs_recorded)s, %(earned_runs)s, %(is_starter)s
             )
@@ -461,6 +463,7 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
                 opponent = EXCLUDED.opponent,
                 is_home = EXCLUDED.is_home,
                 position = COALESCE(EXCLUDED.position, player_stats.position),
+                at_bats = EXCLUDED.at_bats,
                 hits = EXCLUDED.hits,
                 total_bases = EXCLUDED.total_bases,
                 rbis = EXCLUDED.rbis,
@@ -480,6 +483,34 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
                 is_starter = EXCLUDED.is_starter
             """,
             row,
+        )
+        return int(cur.rowcount or 0)
+
+
+def _backfill_player_stats_at_bats(
+    conn,
+    *,
+    player_id: int,
+    game_id: int,
+    at_bats: int,
+) -> int:
+    """
+    Targeted AB repair for existing batter rows only.
+    - Leaves unrelated stat columns untouched.
+    - Avoids pitcher contamination.
+    - Only fills when current AB is missing/zero.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE mlb.player_stats
+               SET at_bats = %s
+             WHERE player_id = %s
+               AND game_id = %s
+               AND COALESCE(position, '') <> 'P'
+               AND COALESCE(at_bats, 0) = 0
+            """,
+            (int(at_bats), int(player_id), int(game_id)),
         )
         return int(cur.rowcount or 0)
 
@@ -1023,6 +1054,7 @@ def run(
     max_games_per_date: int = 0,
     skip_existing_dates: bool = False,
     require_regular_season: bool = False,
+    at_bats_only: bool = False,
 ) -> int:
     start = _parse_date(from_date)
     end = _parse_date(to_date)
@@ -1042,6 +1074,7 @@ def run(
     over_count = 0
     under_count = 0
     starter_inferred_flags = 0
+    at_bats_backfilled = 0
 
     with pg_connect() as conn:
         mtp_has_game_type = _table_has_column(conn, "model_training_props", "game_type")
@@ -1188,6 +1221,20 @@ def run(
                             if not (has_bat or is_pitch):
                                 continue
 
+                            if at_bats_only:
+                                raw_ab = bat.get("atBats")
+                                if raw_ab is None:
+                                    raw_ab = bat.get("at_bats")
+                                if raw_ab is None:
+                                    continue
+                                at_bats_backfilled += _backfill_player_stats_at_bats(
+                                    conn,
+                                    player_id=pid,
+                                    game_id=game_id,
+                                    at_bats=_stat_int(raw_ab),
+                                )
+                                continue
+
                             # Ensure FK parent exists before writing player_stats rows.
                             player_id_upserts += _upsert_player_id_min(
                                 conn,
@@ -1325,7 +1372,8 @@ def run(
                     f"| applied: {applied_upserts - before_applied} "
                     f"| player_stats: {player_stats_upserts - before_player_stats} "
                     f"| player_derived: {player_derived_upserts - before_player_derived} "
-                    f"| rolling_sync: {rolling_sync_updates - before_rolling_sync}"
+                    f"| rolling_sync: {rolling_sync_updates - before_rolling_sync} "
+                    f"| at_bats_backfilled: {at_bats_backfilled}"
                 )
             except Exception as e:
                 failed_dates += 1
@@ -1342,6 +1390,7 @@ def run(
     print(f"📊 player_stats upserts: {player_stats_upserts}")
     print(f"📈 player_derived upserts: {player_derived_upserts}")
     print(f"🔄 rolling_result_avg_7 sync updates: {rolling_sync_updates}")
+    print(f"🧮 at_bats backfilled: {at_bats_backfilled}")
     if starter_inferred_flags:
         print(f"🪄 starter flags inferred (fallback): {starter_inferred_flags}")
     if skipped_dates:
@@ -1383,6 +1432,11 @@ def main() -> int:
         action="store_true",
         help="Only process final in-season games (R + postseason gameType codes).",
     )
+    ap.add_argument(
+        "--at-bats-only",
+        action="store_true",
+        help="Only backfill player_stats.at_bats for existing batter rows; skip full stat/training upserts.",
+    )
     args = ap.parse_args()
 
     if args.from_date or args.to_date:
@@ -1403,6 +1457,7 @@ def main() -> int:
         max_games_per_date=max(0, int(args.max_games_per_date)),
         skip_existing_dates=bool(args.skip_existing_dates),
         require_regular_season=bool(args.require_regular_season),
+        at_bats_only=bool(args.at_bats_only),
     )
 
 
