@@ -1265,6 +1265,13 @@ chmod +x "$HOME/bin/proppadia_mlb_retrain_weekly.sh"
 
 Notes:
 
+- Before weekly cron, run:
+
+  ```bash
+  make mlb-pre-cron-check
+  ```
+
+  It is report-only and should print `PRE-CRON CHECK: GO` before the LaunchAgent runs.
 - Because the script runs with `set -e`, publish and phase2 weekly logging only run if prior retrain/eval steps pass.
 - Weekly cadence now refreshes BvP/PvB first (`mlb-bvp-pvb-refresh`) before reconcile/retrain.
 - Ensure publish credentials are present in `backend/.env` (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`).
