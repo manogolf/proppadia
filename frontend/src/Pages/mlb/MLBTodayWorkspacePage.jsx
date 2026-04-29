@@ -191,9 +191,15 @@ function coverageReasonForRow(reason, side) {
 
 function decisionKey(label) {
   const s = String(label || "").trim().toUpperCase().replaceAll("_", " ");
-  if (s === "ACT NOW" || s === "STRONG SIGNAL") return "STRONG SIGNAL";
-  if (s === "WATCH" || s === "MONITOR") return "MONITOR";
-  if (s === "PASS" || s === "NEUTRAL") return "NEUTRAL";
+  if (s === "FAVORABLE" || s === "STRONG ENVIRONMENT" || s === "FAVORABLE ENVIRONMENT") {
+    return "FAVORABLE";
+  }
+  if (s === "MIXED / NEUTRAL ENVIRONMENT" || s === "MIXED NEUTRAL ENVIRONMENT" || s === "NEUTRAL") {
+    return "NEUTRAL";
+  }
+  if (s === "UNSTABLE ENVIRONMENT" || s === "UNFAVORABLE ENVIRONMENT" || s === "WATCH" || s === "MONITOR") {
+    return "MONITOR";
+  }
   return "NEUTRAL";
 }
 
@@ -202,14 +208,14 @@ function decisionLabel(label) {
 }
 
 function decisionReason(reason) {
-  if (isMissing(reason)) return "Neutral: no clear market signal";
+  if (isMissing(reason)) return "Regime context is unavailable for this prop.";
   return String(reason);
 }
 
 function decisionPillClasses(label) {
   const key = decisionKey(label);
-  if (key === "STRONG SIGNAL") {
-    return "border-sky-300 bg-sky-50 text-sky-800";
+  if (key === "FAVORABLE") {
+    return "border-emerald-300 bg-emerald-50 text-emerald-800";
   }
   if (key === "MONITOR") {
     return "border-amber-300 bg-amber-50 text-amber-800";
@@ -419,7 +425,7 @@ const VIEW_PRESETS = [
 
 const DECISION_FILTERS = [
   { key: "ALL", label: "All" },
-  { key: "STRONG SIGNAL", label: "Strong signal" },
+  { key: "FAVORABLE", label: "Favorable" },
   { key: "MONITOR", label: "Monitor" },
   { key: "NEUTRAL", label: "Neutral" },
 ];
@@ -507,7 +513,7 @@ export default function MLBTodayWorkspacePage() {
     [shouldApplyPropFilter, filters.prop_type]
   );
   const decisionCounts = useMemo(() => {
-    const counts = { "STRONG SIGNAL": 0, MONITOR: 0, NEUTRAL: 0 };
+    const counts = { FAVORABLE: 0, MONITOR: 0, NEUTRAL: 0 };
     for (const r of sortedRows) {
       const key = decisionKey(r?.decision_label);
       counts[key] = (counts[key] || 0) + 1;
@@ -1879,6 +1885,8 @@ export default function MLBTodayWorkspacePage() {
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Context</div>
                                 <div><span className="text-slate-500">Decision:</span> <strong>{decisionLabel(r.decision_label)}</strong></div>
                                 <div><span className="text-slate-500">Decision detail:</span> <strong>{decisionReason(r.decision_reason)}</strong></div>
+                                <div><span className="text-slate-500">Regime Context:</span> <strong>{isMissing(r.regime_context_label) ? DASH : r.regime_context_label}</strong></div>
+                                <div><span className="text-slate-500">Regime detail:</span> <strong>{decisionReason(r.regime_context_explanation)}</strong></div>
                                 <div><span className="text-slate-500">Streak:</span> <strong>{streakLabel(r.streak_context_label)}</strong></div>
                                 <div><span className="text-slate-500">Streak count:</span> <strong>{fmtNumber(r.streak_count, 0)}</strong></div>
                                 <div><span className="text-slate-500">Baseline delta:</span> <strong>{fmtPctSigned(r.baseline_delta)}</strong></div>
