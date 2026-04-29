@@ -28,6 +28,7 @@ MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
 MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
 MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_weighted.csv
+MLB_BOOK_UPLOAD_HYBRID_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload_hybrid.csv
 MLB_UPLOAD_COMPARE_BASE_CSV ?= backend/mlb/data/processed/mlb_uploads/$(MLB_DATE)/05_book_upload_base.csv
 MLB_UPLOAD_COMPARE_WEIGHTED_CSV ?= backend/mlb/data/processed/mlb_uploads/$(MLB_DATE)/05_book_upload_weighted.csv
 MLB_UPLOAD_COMPARE_OUT_DIR ?= artifacts/analysis/mlb/upload_variant_compare/$(MLB_DATE)
@@ -42,6 +43,23 @@ MLB_SINGLES_SHADOW_TOP_N ?= 25
 MLB_SINGLES_SHADOW_MAX_PER_PLAYER ?= 2
 MLB_SINGLES_SHADOW_MAX_ABS_WIN_PCT ?= 500
 MLB_SINGLES_SHADOW_MODEL_PATH ?=
+MLB_EXEC_TOOL_RESULTS_CSV ?=
+MLB_EXEC_RECONCILE_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
+MLB_EXEC_OUT_DIR ?= artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)
+MLB_EXEC_OUT_CSV ?= $(MLB_EXEC_OUT_DIR)/execution_vs_model.csv
+MLB_EXEC_OUT_JSON ?= $(MLB_EXEC_OUT_DIR)/summary.json
+MLB_EXEC_OUT_MD ?= $(MLB_EXEC_OUT_DIR)/summary.md
+MLB_PROBABILITY_CALIBRATION_JSON ?= artifacts/analysis/mlb/calibration/mlb_probability_calibrator.json
+MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD ?= 0
+MLB_CALIBRATION_TRAIN_CSV ?= tmp/mlb_base_vs_market_rows_anybook_window.csv
+MLB_CALIBRATION_PROP_TYPES ?= hits,singles,total_bases,hits_runs_rbis,strikeouts_pitching,outs_recorded
+MLB_CALIBRATION_FROM_DATE ?=
+MLB_CALIBRATION_TO_DATE ?=
+MLB_CALIBRATION_MIN_PROP_SAMPLES ?= 200
+MLB_CALIBRATION_TRAINING_SCOPE ?= model_picks
+MLB_CALIBRATION_OUT_DIR ?= artifacts/analysis/mlb/calibration
+MLB_CALIBRATION_COMPARISON_CSV ?= $(MLB_CALIBRATION_OUT_DIR)/raw_vs_calibrated.csv
+MLB_CALIBRATION_CURVE_CSV ?= $(MLB_CALIBRATION_OUT_DIR)/calibration_curve.csv
 MLB_WEIGHTED_MODEL_DIR ?= $(CURDIR)/models_out/overlays/weighted540_hl90_full
 MLB_WEIGHTED_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated_weighted.csv
 MLB_WEIGHTED_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output_weighted.csv
@@ -1226,13 +1244,24 @@ mlb-compare-upload-variants-postgame:
 mlb-singles-shadow:
 	$(VENV_PY) backend/mlb/scripts/generate_singles_shadow_upload.py --date "$(MLB_DATE)" --base-csv "$(MLB_SINGLES_SHADOW_BASE_CSV)" --shadow-csv "$(MLB_SINGLES_SHADOW_OUT_CSV)" --out-dir "$(MLB_SINGLES_SHADOW_OUT_DIR)" --odds-snapshot-in "$(MLB_SINGLES_SHADOW_ODDS_SNAPSHOT)" --graded-rows-csv "$(MLB_SINGLES_SHADOW_GRADED_ROWS_CSV)" --threshold "$(MLB_SINGLES_SHADOW_THRESHOLD)" --top-n "$(MLB_SINGLES_SHADOW_TOP_N)" --max-rows-per-player "$(MLB_SINGLES_SHADOW_MAX_PER_PLAYER)" --max-abs-win-pct "$(MLB_SINGLES_SHADOW_MAX_ABS_WIN_PCT)" $(if $(strip $(MLB_SINGLES_SHADOW_MODEL_PATH)),--singles-model-path "$(MLB_SINGLES_SHADOW_MODEL_PATH)",)
 
+.PHONY: mlb-train-probability-calibration mlb-execution-vs-model
+mlb-train-probability-calibration:
+	$(VENV_PY) backend/mlb/scripts/train_mlb_probability_calibration.py --rows-csv "$(MLB_CALIBRATION_TRAIN_CSV)" --out-json "$(MLB_PROBABILITY_CALIBRATION_JSON)" --comparison-csv "$(MLB_CALIBRATION_COMPARISON_CSV)" --curve-csv "$(MLB_CALIBRATION_CURVE_CSV)" --prop-types "$(MLB_CALIBRATION_PROP_TYPES)" --min-prop-samples "$(MLB_CALIBRATION_MIN_PROP_SAMPLES)" --training-scope "$(MLB_CALIBRATION_TRAINING_SCOPE)" $(if $(strip $(MLB_CALIBRATION_FROM_DATE)),--from-date "$(MLB_CALIBRATION_FROM_DATE)",) $(if $(strip $(MLB_CALIBRATION_TO_DATE)),--to-date "$(MLB_CALIBRATION_TO_DATE)",)
+
+mlb-execution-vs-model:
+	@if [ -z "$(strip $(MLB_EXEC_TOOL_RESULTS_CSV))" ]; then \
+		echo "mlb-execution-vs-model requires MLB_EXEC_TOOL_RESULTS_CSV=<daily_tool_results.csv>"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/mlb/scripts/compare_execution_vs_model.py --date "$(MLB_DATE)" --tool-results-csv "$(MLB_EXEC_TOOL_RESULTS_CSV)" --reconcile-csv "$(MLB_EXEC_RECONCILE_CSV)" --out-csv "$(MLB_EXEC_OUT_CSV)" --out-json "$(MLB_EXEC_OUT_JSON)" --out-md "$(MLB_EXEC_OUT_MD)" $(if $(wildcard $(MLB_PROBABILITY_CALIBRATION_JSON)),--calibration-json "$(MLB_PROBABILITY_CALIBRATION_JSON)",)
+
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
 	MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS="$(MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS)" $(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",) $(if $(strip $(MLB_ODDS_SNAPSHOT_IN)),--odds-snapshot-in "$(MLB_ODDS_SNAPSHOT_IN)",) $(if $(filter 1 true TRUE yes YES,$(MLB_PREDICT_REQUIRE_TWO_SIDED)),--require-two-sided,) $(if $(strip $(MLB_PREDICT_TWO_SIDED_BOOKMAKER)),--two-sided-bookmaker "$(MLB_PREDICT_TWO_SIDED_BOOKMAKER)",)
 
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:
-	$(VENV_PY) backend/mlb/scripts/build_mlb_slate_output.py --slate-date $(MLB_DATE) --pred-csv "$(MLB_SLATE_PRED_CSV)" --out-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(strip $(MLB_SLATE_PROP_TYPE)),--prop-type "$(MLB_SLATE_PROP_TYPE)")
+	MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD="$(MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD)" $(VENV_PY) backend/mlb/scripts/build_mlb_slate_output.py --slate-date $(MLB_DATE) --pred-csv "$(MLB_SLATE_PRED_CSV)" --out-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(strip $(MLB_SLATE_PROP_TYPE)),--prop-type "$(MLB_SLATE_PROP_TYPE)") $(if $(and $(filter 1 true TRUE yes YES,$(MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD)),$(wildcard $(MLB_PROBABILITY_CALIBRATION_JSON))),--calibration-json "$(MLB_PROBABILITY_CALIBRATION_JSON)",)
 
 # Export MLB book-upload CSV from canonical MLB slate output.
 .PHONY: mlb-book-upload mlb-book-upload-variants mlb-book-upload-policy mlb-book-upload-top-recommended
@@ -1254,6 +1283,7 @@ mlb-book-upload-variants:
 	MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" \
 	MLB_WEIGHTED_MODEL_DIR="$(MLB_WEIGHTED_MODEL_DIR)" \
 	MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV="$(MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV)" \
+	MLB_BOOK_UPLOAD_HYBRID_OUT_CSV="$(MLB_BOOK_UPLOAD_HYBRID_OUT_CSV)" \
 	MLB_WEIGHTED_SLATE_PRED_CSV="$(MLB_WEIGHTED_SLATE_PRED_CSV)" \
 	MLB_WEIGHTED_SLATE_OUTPUT_CSV="$(MLB_WEIGHTED_SLATE_OUTPUT_CSV)" \
 	MLB_UPLOAD_VARIANTS_BUILD_BASE="$(MLB_UPLOAD_VARIANTS_BUILD_BASE)" \

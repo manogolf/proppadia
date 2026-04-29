@@ -133,9 +133,15 @@ Notes:
 
 - Keep weighted overlay models in durable storage (not `tmp`), for example:
   - `models_out/overlays/weighted540_hl90_full`
-- This flow validates and packages both:
+- This flow validates and packages all parallel upload variants:
   - `05_book_upload_base.csv`
   - `05_book_upload_weighted.csv`
+  - `05_book_upload_hybrid.csv`
+- Hybrid policy is prop-specific and currently keeps the base row universe:
+  - `total_bases` uses matching weighted rows
+  - `hits` uses base
+  - `singles` uses base
+  - all other props use base
 
 Daily upload hub (recommended to avoid hunting through `tmp/analysis`):
 
@@ -151,11 +157,32 @@ This copies key upload CSVs into one folder with stable file names:
 - `backend/mlb/data/processed/mlb_uploads/04_bet_sheet_default.csv`
 - `backend/mlb/data/processed/mlb_uploads/05_book_upload_base.csv`
 - `backend/mlb/data/processed/mlb_uploads/05_book_upload_weighted.csv` (when present)
+- `backend/mlb/data/processed/mlb_uploads/05_book_upload_hybrid.csv` (when present)
 - `backend/mlb/data/processed/mlb_uploads/06_top40_recommended.csv`
 
 Manifest:
 
 - `backend/mlb/data/processed/mlb_uploads/MANIFEST.md`
+
+Execution-layer postgame comparison from the daily tool-result download:
+
+```bash
+make mlb-execution-vs-model MLB_DATE=YYYY-MM-DD \
+  MLB_EXEC_TOOL_RESULTS_CSV=/path/to/daily_tool_results.csv
+```
+
+This leaves reconcile untouched and writes:
+
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/execution_vs_model.csv`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.json`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.md`
+
+Use this report to separate model signal from execution/pricing:
+
+- `model_correct` comes from reconcile model-pick outcome
+- `bet_win` and `pnl` come from the tool result download
+- `model_correct_bet_lost` points at execution/side/pricing mismatch
+- `model_wrong_bet_won` points at favorable execution or model/market disagreement
 
 Two-sided market enforcement is now the default for `mlb-predictions-wide`, `mlb-reconcile-rows`, quality/candidate eval on `reconcile_rows`, and red-mode bucket reports. Use these toggles only if you intentionally need old one-sided behavior:
 

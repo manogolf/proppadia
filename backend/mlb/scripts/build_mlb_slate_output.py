@@ -27,6 +27,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
+from backend.mlb.shared.probability_calibration import calibrate_probability, load_calibrator
+
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # .../backend
 DEFAULT_PRED_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv"
@@ -106,6 +108,13 @@ def _load_market_map(arg_json: str, env_json: str) -> Dict[str, str]:
         if prop and val:
             out[prop] = val
     return out
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _get_db_conn():
@@ -351,8 +360,22 @@ def build_slate_output(
     drop_line_0_5: bool,
     market_map: Dict[str, str],
     pred_csv_path: Path,
+    calibration_json: str = "",
+    apply_upload_calibration: bool = False,
 ) -> pd.DataFrame:
     merged = _enrich_with_db(df_long)
+    calibrator = load_calibrator(calibration_json) if apply_upload_calibration else None
+    min_prop_samples = int((calibrator or {}).get("min_prop_samples") or 200)
+    if calibrator:
+        print(
+            "[calibration] upload calibration enabled: "
+            f"{calibrator.get('method')} path={calibration_json}"
+        )
+    else:
+        if str(calibration_json or "").strip() and not apply_upload_calibration:
+            print("[calibration] upload calibration disabled; using raw probabilities")
+        elif not str(calibration_json or "").strip():
+            print("[calibration] upload calibration disabled; using raw probabilities")
 
     merged["game_date"] = pd.to_datetime(merged["game_date"]).dt.date
     target_date = pd.to_datetime(slate_date).date()
@@ -389,10 +412,21 @@ def build_slate_output(
         )
 
     for _, row in merged.iterrows():
-        p_over = float(row["prob_over"])
+        raw_p_over = float(row["prob_over"])
+        p_over = raw_p_over
+        if calibrator:
+            calibrated = calibrate_probability(
+                calibrator,
+                prop_type=row.get("prop_type"),
+                raw_prob=raw_p_over,
+                min_prop_samples=min_prop_samples,
+            )
+            if calibrated is not None:
+                p_over = float(calibrated)
         if not (0.0 < p_over < 1.0):
             continue
         p_under = 1.0 - p_over
+        raw_p_under = 1.0 - raw_p_over
         odds_over = _prob_to_fair_american(p_over)
         odds_under = _prob_to_fair_american(p_under)
         if odds_over is None or odds_under is None:
@@ -416,12 +450,15 @@ def build_slate_output(
                 "prop_type": prop_type,
                 "market_key": market_map[prop_type],
                 "line": float(row["line"]),
+                "raw_prob_over": round(raw_p_over, 6),
+                "raw_prob_under": round(raw_p_under, 6),
                 "prob_over": round(p_over, 6),
                 "prob_under": round(p_under, 6),
                 "fair_odds_over_american": int(odds_over),
                 "fair_odds_under_american": int(odds_under),
                 "model_pick_side": pick_side,
                 "model_pick_prob": round(float(pick_prob), 6),
+                "calibration_method": str((calibrator or {}).get("method") or ""),
                 "prediction_source_file": str(pred_csv_path),
                 "generated_at_utc": generated_at_utc,
             }
@@ -450,6 +487,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--prop-type", default=os.environ.get("MLB_SLATE_PROP_TYPE", ""), help="Fallback prop_type when wide CSV omits prop_type column.")
     ap.add_argument("--market-map-json", default="", help="Optional JSON object prop_type->market_key overrides.")
     ap.add_argument("--drop-line-0-5", action="store_true", help="Drop line 0.5 rows (default keeps them).")
+    ap.add_argument(
+        "--calibration-json",
+        default="",
+        help=(
+            "Optional isotonic probability calibration JSON to apply to prob_over. "
+            "Ignored unless MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD=1."
+        ),
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     et = pytz.timezone("America/New_York")
@@ -458,6 +503,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     pred_csv = Path(str(args.pred_csv)).expanduser()
     out_csv = Path(str(args.out_csv)).expanduser()
     prop_type_arg = _canonical_prop_type(args.prop_type)
+    apply_upload_calibration = _env_flag("MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD", False)
+    calibration_json = str(args.calibration_json or "").strip()
+    if apply_upload_calibration and not calibration_json:
+        calibration_json = str(os.environ.get("MLB_PROBABILITY_CALIBRATION_JSON", "") or "").strip()
     market_map = _load_market_map(
         arg_json=str(args.market_map_json),
         env_json=str(os.environ.get("MLB_BOOK_UPLOAD_MARKET_MAP_JSON", "")),
@@ -477,6 +526,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             drop_line_0_5=bool(args.drop_line_0_5),
             market_map=market_map,
             pred_csv_path=pred_csv,
+            calibration_json=calibration_json,
+            apply_upload_calibration=apply_upload_calibration,
         )
     except Exception as exc:
         print(f"[mlb-slate-output] ERROR: {exc}", file=sys.stderr)

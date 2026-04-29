@@ -189,7 +189,7 @@ build_variants() {
   base_model_dir="${MODEL_DIR:-/var/data/proppadia/models}"
 
   local base_pred_rel base_slate_rel base_upload_rel
-  local weighted_pred_rel weighted_slate_rel weighted_upload_rel
+  local weighted_pred_rel weighted_slate_rel weighted_upload_rel hybrid_upload_rel
   local weighted_model_dir focus_root_rel odds_snapshot_rel
 
   base_pred_rel="${MLB_SLATE_PRED_CSV:-backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv}"
@@ -199,6 +199,7 @@ build_variants() {
   weighted_pred_rel="${MLB_WEIGHTED_SLATE_PRED_CSV:-backend/mlb/data/processed/mlb_predictions_wide_calibrated_weighted.csv}"
   weighted_slate_rel="${MLB_WEIGHTED_SLATE_OUTPUT_CSV:-backend/mlb/data/processed/mlb_slate_output_weighted.csv}"
   weighted_upload_rel="${MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV:-backend/mlb/data/processed/mlb_book_upload_weighted.csv}"
+  hybrid_upload_rel="${MLB_BOOK_UPLOAD_HYBRID_OUT_CSV:-backend/mlb/data/processed/mlb_book_upload_hybrid.csv}"
 
   weighted_model_dir="$(resolve_path "${MLB_WEIGHTED_MODEL_DIR:-${REPO_ROOT}/models_out/overlays/weighted540_hl90_full}")"
   focus_root_rel="${MLB_TMP_FOCUS_ROOT:-backend/mlb/data/processed/mlb_uploads}"
@@ -265,15 +266,23 @@ build_variants() {
   log_file_fingerprint "weighted book upload" "$(resolve_path "${weighted_upload_rel}")"
   compare_stage_hashes "book-upload" "$(resolve_path "${base_upload_rel}")" "$(resolve_path "${weighted_upload_rel}")"
 
+  run_make "build hybrid book upload" \
+    "${REPO_ROOT}/.venv/bin/python" "${REPO_ROOT}/backend/mlb/scripts/build_mlb_upload_hybrid.py" \
+    --base-csv "$(resolve_path "${base_upload_rel}")" \
+    --weighted-csv "$(resolve_path "${weighted_upload_rel}")" \
+    --out-csv "$(resolve_path "${hybrid_upload_rel}")"
+  log_file_fingerprint "hybrid book upload" "$(resolve_path "${hybrid_upload_rel}")"
+
   run_make "package dated upload folder" \
     "${make_bin}" mlb-tmp-focus \
     MLB_TMP_FOCUS_ROOT="${focus_root_rel}" \
     MLB_TMP_FOCUS_DATE="${mlb_date}"
 
-  local focus_root_abs base_dated weighted_dated base_rows weighted_rows
+  local focus_root_abs base_dated weighted_dated hybrid_dated base_rows weighted_rows hybrid_rows
   focus_root_abs="$(resolve_path "${focus_root_rel}")"
   base_dated="${focus_root_abs}/${mlb_date}/05_book_upload_base.csv"
   weighted_dated="${focus_root_abs}/${mlb_date}/05_book_upload_weighted.csv"
+  hybrid_dated="${focus_root_abs}/${mlb_date}/05_book_upload_hybrid.csv"
 
   if [[ ! -f "${base_dated}" ]]; then
     echo "[mlb-upload-variants] ERROR: missing base upload CSV in dated folder: ${base_dated}" >&2
@@ -283,18 +292,29 @@ build_variants() {
     echo "[mlb-upload-variants] ERROR: missing weighted upload CSV in dated folder: ${weighted_dated}" >&2
     exit 4
   fi
+  if [[ ! -f "${hybrid_dated}" ]]; then
+    echo "[mlb-upload-variants] ERROR: missing hybrid upload CSV in dated folder: ${hybrid_dated}" >&2
+    exit 7
+  fi
 
-  local base_hash weighted_hash
+  local base_hash weighted_hash hybrid_hash
   base_hash="$(sha1_file "${base_dated}")"
   weighted_hash="$(sha1_file "${weighted_dated}")"
+  hybrid_hash="$(sha1_file "${hybrid_dated}")"
   base_rows="$(csv_rows "${base_dated}")"
   weighted_rows="$(csv_rows "${weighted_dated}")"
+  hybrid_rows="$(csv_rows "${hybrid_dated}")"
 
   echo "[mlb-upload-variants] validated base_csv=${base_dated} rows=${base_rows} sha1=${base_hash}"
   echo "[mlb-upload-variants] validated weighted_csv=${weighted_dated} rows=${weighted_rows} sha1=${weighted_hash}"
+  echo "[mlb-upload-variants] validated hybrid_csv=${hybrid_dated} rows=${hybrid_rows} sha1=${hybrid_hash}"
   if [[ "${base_hash}" = "${weighted_hash}" ]]; then
     echo "[mlb-upload-variants] ERROR: base and weighted upload CSV hashes are identical; weighted variant is not distinct." >&2
     exit 6
+  fi
+  if [[ "${base_rows}" != "${hybrid_rows}" ]]; then
+    echo "[mlb-upload-variants] ERROR: hybrid row count differs from base row target: base=${base_rows} hybrid=${hybrid_rows}" >&2
+    exit 8
   fi
 }
 
@@ -306,6 +326,7 @@ Usage:
 Environment overrides:
   MLB_WEIGHTED_MODEL_DIR            (default: models_out/overlays/weighted540_hl90_full)
   MLB_BOOK_UPLOAD_WEIGHTED_OUT_CSV  (default: backend/mlb/data/processed/mlb_book_upload_weighted.csv)
+  MLB_BOOK_UPLOAD_HYBRID_OUT_CSV    (default: backend/mlb/data/processed/mlb_book_upload_hybrid.csv)
   MLB_WEIGHTED_SLATE_PRED_CSV       (default: backend/mlb/data/processed/mlb_predictions_wide_calibrated_weighted.csv)
   MLB_WEIGHTED_SLATE_OUTPUT_CSV     (default: backend/mlb/data/processed/mlb_slate_output_weighted.csv)
   MLB_UPLOAD_VARIANTS_BUILD_BASE    (default: 1; set 0 to skip base rebuild)

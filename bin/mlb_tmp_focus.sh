@@ -38,6 +38,7 @@ build_focus() {
   rm -f "${focus_dir}/03_bet_sheet_balanced.csv"
   rm -f "${focus_dir}/04_bet_sheet_default.csv"
   rm -f "${focus_dir}/05_book_upload_base.csv"
+  rm -f "${focus_dir}/05_book_upload_hybrid.csv"
   rm -f "${focus_dir}/06_top40_recommended.csv"
   rm -f "${focus_dir}/07_side_matrix_dated.csv"
 
@@ -117,20 +118,26 @@ build_focus() {
   copy_if_exists "04_bet_sheet_default.csv" "backend/mlb/data/processed/mlb_book_upload_daily_bet_sheet.csv"
   copy_if_exists "05_book_upload_base.csv" "backend/mlb/data/processed/mlb_book_upload.csv"
   copy_if_exists "05_book_upload_weighted.csv" "backend/mlb/data/processed/mlb_book_upload_weighted.csv"
+  copy_if_exists "05_book_upload_hybrid.csv" "backend/mlb/data/processed/mlb_book_upload_hybrid.csv"
   copy_if_exists "06_top40_recommended.csv" "backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv"
   copy_if_exists "07_side_matrix_dated.csv" "tmp/analysis/mlb_book_upload_side_matrix_${date_compact}.csv"
   append_preserved_if_present "05_book_upload_weighted.csv" "backend/mlb/data/processed/mlb_book_upload_weighted.csv (preserved dated file)"
+  append_preserved_if_present "05_book_upload_hybrid.csv" "backend/mlb/data/processed/mlb_book_upload_hybrid.csv (preserved dated file)"
 
   cp -f "${manifest_file}" "${focus_root}/MANIFEST.md"
 
-  local base_rows weighted_rows
+  local base_rows weighted_rows hybrid_rows
   base_rows="$(csv_rows "${focus_dir}/05_book_upload_base.csv")"
   weighted_rows="$(csv_rows "${focus_dir}/05_book_upload_weighted.csv")"
+  hybrid_rows="$(csv_rows "${focus_dir}/05_book_upload_hybrid.csv")"
 
   echo "[mlb-tmp-focus] date=${date_et} copied_files=${copied}"
   echo "[mlb-tmp-focus] base_rows=${base_rows} (${focus_dir}/05_book_upload_base.csv)"
   if [[ -f "${focus_dir}/05_book_upload_weighted.csv" ]]; then
     echo "[mlb-tmp-focus] weighted_rows=${weighted_rows} (${focus_dir}/05_book_upload_weighted.csv)"
+  fi
+  if [[ -f "${focus_dir}/05_book_upload_hybrid.csv" ]]; then
+    echo "[mlb-tmp-focus] hybrid_rows=${hybrid_rows} (${focus_dir}/05_book_upload_hybrid.csv)"
   fi
   echo "[mlb-tmp-focus] upload_folder=${focus_root}"
   echo "[mlb-tmp-focus] dated_folder=${focus_dir}"

@@ -28,7 +28,25 @@ from backend.app.services.mlb.market_odds_service import (
 from backend.mlb.shared.team_name_map import teamIdMap
 from backend.shared.db.pg import pg_fetchall
 
-_ZERO_STAT_FALLBACK_PROPS = {"walks", "strikeouts_batting"}
+_PLAYER_STATS_FALLBACK_PROPS = {
+    "hits",
+    "singles",
+    "doubles",
+    "triples",
+    "home_runs",
+    "total_bases",
+    "hits_runs_rbis",
+    "runs_scored",
+    "rbis",
+    "walks",
+    "strikeouts_batting",
+    "stolen_bases",
+    "strikeouts_pitching",
+    "outs_recorded",
+    "walks_allowed",
+    "hits_allowed",
+    "earned_runs",
+}
 
 
 def _norm_name(value: object) -> str:
@@ -246,38 +264,103 @@ def _load_actual_values(
         except Exception:
             continue
 
-    # Reconcile fallback for zero-stat batter props where training rows can be sparse:
-    # when model_training_props has no resolved value, use player_stats for rows that
-    # have batter participation evidence on that game.
+    # Reconcile fallback for stat props where training rows can be sparse:
+    # when model_training_props has no resolved value, use player_stats for rows with
+    # batter or pitcher participation evidence on that game.
     fallback_sql = """
     WITH ps AS (
       SELECT
         game_id::bigint AS game_id,
         player_id::bigint AS player_id,
         lower(trim(coalesce(position, ''))) AS position_norm,
+        COALESCE(hits, 0)::float8 AS hits,
+        COALESCE(singles, 0)::float8 AS singles,
+        COALESCE(doubles, 0)::float8 AS doubles,
+        COALESCE(triples, 0)::float8 AS triples,
+        COALESCE(home_runs, 0)::float8 AS home_runs,
+        COALESCE(total_bases, 0)::float8 AS total_bases,
+        COALESCE(runs_scored, 0)::float8 AS runs_scored,
+        COALESCE(rbis, 0)::float8 AS rbis,
         COALESCE(walks, 0)::float8 AS walks,
-        COALESCE(strikeouts_batting, 0)::float8 AS strikeouts_batting
+        COALESCE(strikeouts_batting, 0)::float8 AS strikeouts_batting,
+        COALESCE(stolen_bases, 0)::float8 AS stolen_bases,
+        COALESCE(strikeouts_pitching, 0)::float8 AS strikeouts_pitching,
+        COALESCE(outs_recorded, 0)::float8 AS outs_recorded,
+        COALESCE(walks_allowed, 0)::float8 AS walks_allowed,
+        COALESCE(hits_allowed, 0)::float8 AS hits_allowed,
+        COALESCE(earned_runs, 0)::float8 AS earned_runs,
+        COALESCE(at_bats, 0)::float8 AS at_bats
       FROM mlb.player_stats
       WHERE game_date::date BETWEEN %s::date AND %s::date
         AND game_id IS NOT NULL
         AND player_id IS NOT NULL
     ),
+    batter AS (
+      SELECT *
+      FROM ps
+      WHERE position_norm <> 'p'
+         OR at_bats > 0
+         OR hits > 0
+         OR walks > 0
+         OR strikeouts_batting > 0
+         OR runs_scored > 0
+         OR rbis > 0
+         OR stolen_bases > 0
+    ),
+    pitcher AS (
+      SELECT *
+      FROM ps
+      WHERE position_norm = 'p'
+         OR outs_recorded > 0
+         OR strikeouts_pitching > 0
+         OR walks_allowed > 0
+         OR hits_allowed > 0
+         OR earned_runs > 0
+    ),
     expanded AS (
+      SELECT game_id, player_id, 'hits'::text AS prop_type, hits AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'singles'::text AS prop_type, singles AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'doubles'::text AS prop_type, doubles AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'triples'::text AS prop_type, triples AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'home_runs'::text AS prop_type, home_runs AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'total_bases'::text AS prop_type, total_bases AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'hits_runs_rbis'::text AS prop_type, hits + runs_scored + rbis AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'runs_scored'::text AS prop_type, runs_scored AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'rbis'::text AS prop_type, rbis AS actual_value FROM batter
+      UNION ALL
       SELECT
         game_id,
         player_id,
         'walks'::text AS prop_type,
         walks AS actual_value
-      FROM ps
-      WHERE position_norm <> 'p' OR walks > 0 OR strikeouts_batting > 0
+      FROM batter
       UNION ALL
       SELECT
         game_id,
         player_id,
         'strikeouts_batting'::text AS prop_type,
         strikeouts_batting AS actual_value
-      FROM ps
-      WHERE position_norm <> 'p' OR walks > 0 OR strikeouts_batting > 0
+      FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'stolen_bases'::text AS prop_type, stolen_bases AS actual_value FROM batter
+      UNION ALL
+      SELECT game_id, player_id, 'strikeouts_pitching'::text AS prop_type, strikeouts_pitching AS actual_value FROM pitcher
+      UNION ALL
+      SELECT game_id, player_id, 'outs_recorded'::text AS prop_type, outs_recorded AS actual_value FROM pitcher
+      UNION ALL
+      SELECT game_id, player_id, 'walks_allowed'::text AS prop_type, walks_allowed AS actual_value FROM pitcher
+      UNION ALL
+      SELECT game_id, player_id, 'hits_allowed'::text AS prop_type, hits_allowed AS actual_value FROM pitcher
+      UNION ALL
+      SELECT game_id, player_id, 'earned_runs'::text AS prop_type, earned_runs AS actual_value FROM pitcher
     )
     SELECT
       game_id,
@@ -293,7 +376,7 @@ def _load_actual_values(
     for r in fallback_rows:
         try:
             prop_type = str(r.get("prop_type") or "").strip().lower()
-            if prop_type not in _ZERO_STAT_FALLBACK_PROPS:
+            if prop_type not in _PLAYER_STATS_FALLBACK_PROPS:
                 continue
             key = (int(r.get("game_id")), int(r.get("player_id")), prop_type)
             current = out.get(key)
