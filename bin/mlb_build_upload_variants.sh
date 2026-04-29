@@ -276,6 +276,7 @@ build_variants() {
   run_make "package dated upload folder" \
     "${make_bin}" mlb-tmp-focus \
     MLB_TMP_FOCUS_ROOT="${focus_root_rel}" \
+    MLB_TMP_FOCUS_INCLUDE_VARIANTS=1 \
     MLB_TMP_FOCUS_DATE="${mlb_date}"
 
   local focus_root_abs base_dated weighted_dated hybrid_dated base_rows weighted_rows hybrid_rows

@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cmd="${1:-build}"
 date_arg="${2:-}"
 focus_root="${MLB_TMP_FOCUS_ROOT:-${REPO_ROOT}/backend/mlb/data/processed/mlb_uploads}"
+include_variants="${MLB_TMP_FOCUS_INCLUDE_VARIANTS:-0}"
 
 today_et() {
   TZ=America/New_York date +%F
@@ -32,15 +33,13 @@ build_focus() {
 
   mkdir -p "${focus_root}"
   mkdir -p "${focus_dir}"
-  # Refresh standard slot files, but preserve custom dated files (for example weighted variants).
-  rm -f "${focus_dir}/01_side_matrix.csv"
-  rm -f "${focus_dir}/02_bet_sheet_core.csv"
-  rm -f "${focus_dir}/03_bet_sheet_balanced.csv"
-  rm -f "${focus_dir}/04_bet_sheet_default.csv"
+  # Refresh only currently managed daily slots. Do not remove historical legacy
+  # files here; this target no longer propagates them into new daily folders.
   rm -f "${focus_dir}/05_book_upload_base.csv"
-  rm -f "${focus_dir}/05_book_upload_hybrid.csv"
-  rm -f "${focus_dir}/06_top40_recommended.csv"
-  rm -f "${focus_dir}/07_side_matrix_dated.csv"
+  if [[ "${include_variants}" == "1" ]]; then
+    rm -f "${focus_dir}/05_book_upload_weighted.csv"
+    rm -f "${focus_dir}/05_book_upload_hybrid.csv"
+  fi
 
   local manifest_file
   manifest_file="${focus_dir}/MANIFEST.md"
@@ -79,21 +78,54 @@ build_focus() {
     copied=$((copied + 1))
   }
 
-  append_preserved_if_present() {
+  csv_has_date() {
+    local csv_path="$1"
+    local expected_yyyymmdd="$2"
+    [[ -f "${csv_path}" ]] || return 1
+    awk -F',' -v want="${expected_yyyymmdd}" '
+      NR == 1 {
+        for (i = 1; i <= NF; i++) {
+          h = $i
+          gsub(/^"|"$/, "", h)
+          if (h == "DATE") {
+            date_col = i
+            break
+          }
+        }
+        if (!date_col) {
+          exit 2
+        }
+        next
+      }
+      NR > 1 {
+        v = $date_col
+        gsub(/^"|"$/, "", v)
+        gsub(/[^0-9]/, "", v)
+        if (v != want) {
+          exit 3
+        }
+        seen = 1
+      }
+      END {
+        if (!date_col || !seen) {
+          exit 4
+        }
+      }
+    ' "${csv_path}"
+  }
+
+  copy_if_current_date() {
     local slot_file="$1"
-    local rel_hint="$2"
-    local abs="${focus_dir}/${slot_file}"
+    local rel="$2"
+    local abs="${REPO_ROOT}/${rel}"
     if [[ ! -f "${abs}" ]]; then
       return 0
     fi
-    if manifest_has_file "${slot_file}"; then
+    if ! csv_has_date "${abs}" "${date_compact}"; then
+      echo "[mlb-tmp-focus] WARN skipping stale/non-dated CSV for ${slot_file}: ${rel} expected_DATE=${date_compact}" >&2
       return 0
     fi
-    local size_bytes size_h mtime
-    size_bytes="$(stat -f '%z' "${abs}" 2>/dev/null || echo 0)"
-    size_h="$(to_human_size "${size_bytes}")"
-    mtime="$(stat -f '%Sm' -t '%Y-%m-%d %H:%M' "${abs}" 2>/dev/null || echo '-')"
-    printf '| `%s` | `%s` | `%s` | %s | %s |\n' "${slot_file%%_*}" "${slot_file}" "${rel_hint}" "${size_h}" "${mtime}" >> "${manifest_file}"
+    copy_if_exists "${slot_file}" "${rel}"
   }
 
   csv_rows() {
@@ -111,18 +143,13 @@ build_focus() {
     echo $((lines - 1))
   }
 
-  # Stable upload slots (easy to find in tool file picker).
-  copy_if_exists "01_side_matrix.csv" "backend/mlb/data/processed/mlb_book_upload_side_matrix.csv"
-  copy_if_exists "02_bet_sheet_core.csv" "backend/mlb/data/processed/mlb_book_upload_daily_bet_sheet_core.csv"
-  copy_if_exists "03_bet_sheet_balanced.csv" "backend/mlb/data/processed/mlb_book_upload_daily_bet_sheet_balanced.csv"
-  copy_if_exists "04_bet_sheet_default.csv" "backend/mlb/data/processed/mlb_book_upload_daily_bet_sheet.csv"
-  copy_if_exists "05_book_upload_base.csv" "backend/mlb/data/processed/mlb_book_upload.csv"
-  copy_if_exists "05_book_upload_weighted.csv" "backend/mlb/data/processed/mlb_book_upload_weighted.csv"
-  copy_if_exists "05_book_upload_hybrid.csv" "backend/mlb/data/processed/mlb_book_upload_hybrid.csv"
-  copy_if_exists "06_top40_recommended.csv" "backend/mlb/data/processed/mlb_book_upload_top40_recommended.csv"
-  copy_if_exists "07_side_matrix_dated.csv" "tmp/analysis/mlb_book_upload_side_matrix_${date_compact}.csv"
-  append_preserved_if_present "05_book_upload_weighted.csv" "backend/mlb/data/processed/mlb_book_upload_weighted.csv (preserved dated file)"
-  append_preserved_if_present "05_book_upload_hybrid.csv" "backend/mlb/data/processed/mlb_book_upload_hybrid.csv (preserved dated file)"
+  # Current daily slot. Legacy/manual slots are intentionally not propagated:
+  # 01_side_matrix, 02/03/04_bet_sheet_*, 06_top40_recommended.
+  copy_if_current_date "05_book_upload_base.csv" "backend/mlb/data/processed/mlb_book_upload.csv"
+  if [[ "${include_variants}" == "1" ]]; then
+    copy_if_current_date "05_book_upload_weighted.csv" "backend/mlb/data/processed/mlb_book_upload_weighted.csv"
+    copy_if_current_date "05_book_upload_hybrid.csv" "backend/mlb/data/processed/mlb_book_upload_hybrid.csv"
+  fi
 
   cp -f "${manifest_file}" "${focus_root}/MANIFEST.md"
 
@@ -140,6 +167,7 @@ build_focus() {
     echo "[mlb-tmp-focus] hybrid_rows=${hybrid_rows} (${focus_dir}/05_book_upload_hybrid.csv)"
   fi
   echo "[mlb-tmp-focus] upload_folder=${focus_root}"
+  echo "[mlb-tmp-focus] include_variants=${include_variants}"
   echo "[mlb-tmp-focus] dated_folder=${focus_dir}"
   echo "[mlb-tmp-focus] manifest=${focus_root}/MANIFEST.md"
 }
@@ -152,6 +180,9 @@ Usage:
 Examples:
   bin/mlb_tmp_focus.sh build
   bin/mlb_tmp_focus.sh build 2026-04-15
+
+Environment:
+  MLB_TMP_FOCUS_INCLUDE_VARIANTS=1  Also package current-date weighted/hybrid upload variants.
 EOF
 }
 
