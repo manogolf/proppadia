@@ -21,6 +21,28 @@ PROP_REGIME_CONTEXT_CSV = (
 )
 
 
+def _display_prop(prop_type: Any) -> str:
+    prop = str(prop_type or "").strip().lower()
+    labels = {
+        "hits": "Hits",
+        "total_bases": "Total Bases",
+        "hits_runs_rbis": "HRRBI",
+        "strikeouts_pitching": "Pitcher Ks",
+        "strikeouts_batting": "Batter Ks",
+        "outs_recorded": "Outs Recorded",
+        "earned_runs": "Earned Runs",
+        "walks_allowed": "Walks Allowed",
+        "hits_allowed": "Hits Allowed",
+        "runs_scored": "Runs",
+        "rbis": "RBIs",
+        "rbi": "RBIs",
+        "home_runs": "Home Runs",
+        "walks": "Walks",
+        "doubles": "Doubles",
+    }
+    return labels.get(prop, prop.replace("_", " ").title() if prop else "")
+
+
 def _resolve_requested_slate_date(slate_date: Optional[str]) -> str:
     if slate_date:
         # Router validates format; keep this as a defensive guard.
@@ -40,40 +62,57 @@ def _load_prop_regime_context() -> Dict[str, Dict[str, Any]]:
             if not prop_type:
                 continue
             out[prop_type] = {
+                "prop_type": prop_type,
+                "display_prop": _display_prop(prop_type),
                 "regime_context_score": row.get("regime_context_score"),
                 "regime_context_label": row.get("regime_context_label"),
                 "regime_context_explanation": row.get("regime_context_explanation"),
+                "long_term_regime": row.get("long_term_regime"),
+                "recent_db_regime": row.get("recent_db_regime") or row.get("recent_regime"),
+                "execution_regime": row.get("execution_regime"),
             }
     return out
-
-
-def _decision_ui_from_regime_context(regime_context_label: Any) -> str:
-    label = str(regime_context_label or "").strip()
-    if label in {"Strong environment", "Favorable environment"}:
-        return "FAVORABLE"
-    if label == "Mixed / neutral environment":
-        return "NEUTRAL"
-    return "MONITOR"
 
 
 def _apply_regime_context(row: Dict[str, Any], context_by_prop: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     out = dict(row)
     prop_type = str(out.get("prop_type") or "").strip().lower()
     context = context_by_prop.get(prop_type, {})
-    regime_label = context.get("regime_context_label")
-    regime_explanation = context.get("regime_context_explanation")
 
-    out["market_decision_label"] = out.get("decision_label")
-    out["market_decision_reason"] = out.get("decision_reason")
     out["regime_context_score"] = context.get("regime_context_score")
-    out["regime_context_label"] = regime_label
-    out["regime_context_explanation"] = regime_explanation
-    out["decision_label"] = _decision_ui_from_regime_context(regime_label)
-    out["decision_reason"] = (
-        str(regime_explanation).strip()
-        if regime_explanation is not None and str(regime_explanation).strip()
-        else "Regime context is unavailable for this prop."
-    )
+    out["regime_context_label"] = context.get("regime_context_label")
+    out["regime_context_explanation"] = context.get("regime_context_explanation")
+    out["long_term_regime"] = context.get("long_term_regime")
+    out["recent_db_regime"] = context.get("recent_db_regime")
+    out["execution_regime"] = context.get("execution_regime")
+    return out
+
+
+def _build_regime_context_by_prop(
+    rows: list[Dict[str, Any]], context_by_prop: Dict[str, Dict[str, Any]]
+) -> list[Dict[str, Any]]:
+    counts: Dict[str, int] = {}
+    for row in rows:
+        prop_type = str(row.get("prop_type") or "").strip().lower()
+        if prop_type:
+            counts[prop_type] = counts.get(prop_type, 0) + 1
+
+    out = []
+    for prop_type in sorted(counts, key=lambda p: (_display_prop(p).lower(), p)):
+        context = context_by_prop.get(prop_type, {})
+        out.append(
+            {
+                "prop_type": prop_type,
+                "display_prop": context.get("display_prop") or _display_prop(prop_type),
+                "regime_context_score": context.get("regime_context_score"),
+                "regime_context_label": context.get("regime_context_label"),
+                "regime_context_explanation": context.get("regime_context_explanation"),
+                "long_term_regime": context.get("long_term_regime"),
+                "recent_db_regime": context.get("recent_db_regime"),
+                "execution_regime": context.get("execution_regime"),
+                "row_count": counts[prop_type],
+            }
+        )
     return out
 
 
@@ -118,6 +157,7 @@ def fetch_today_workspace_rows(
         "active_slate_date": requested_slate_date if is_ready else None,
         "is_ready": is_ready,
         "last_updated": last_updated,
+        "regime_context_by_prop": _build_regime_context_by_prop(cleaned, context_by_prop),
         "rows": cleaned,
     }
 

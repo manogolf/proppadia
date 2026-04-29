@@ -189,36 +189,33 @@ function coverageReasonForRow(reason, side) {
   return `${s}: ${String(reason)}`;
 }
 
-function decisionKey(label) {
-  const s = String(label || "").trim().toUpperCase().replaceAll("_", " ");
-  if (s === "FAVORABLE" || s === "STRONG ENVIRONMENT" || s === "FAVORABLE ENVIRONMENT") {
-    return "FAVORABLE";
-  }
-  if (s === "MIXED / NEUTRAL ENVIRONMENT" || s === "MIXED NEUTRAL ENVIRONMENT" || s === "NEUTRAL") {
-    return "NEUTRAL";
-  }
-  if (s === "UNSTABLE ENVIRONMENT" || s === "UNFAVORABLE ENVIRONMENT" || s === "WATCH" || s === "MONITOR") {
-    return "MONITOR";
-  }
-  return "NEUTRAL";
+function regimeShortLabel(label) {
+  const s = String(label || "").trim();
+  const map = {
+    "Strong environment": "Strong",
+    "Favorable environment": "Favorable",
+    "Mixed / neutral environment": "Mixed / neutral",
+    "Unstable environment": "Unstable",
+    "Unfavorable environment": "Unfavorable",
+  };
+  return map[s] || (s ? s.replace(/\s*environment$/i, "") : DASH);
 }
 
-function decisionLabel(label) {
-  return decisionKey(label);
-}
-
-function decisionReason(reason) {
+function regimeReason(reason) {
   if (isMissing(reason)) return "Regime context is unavailable for this prop.";
   return String(reason);
 }
 
-function decisionPillClasses(label) {
-  const key = decisionKey(label);
-  if (key === "FAVORABLE") {
+function regimePillClasses(label) {
+  const key = regimeShortLabel(label).toLowerCase();
+  if (key === "strong" || key === "favorable") {
     return "border-emerald-300 bg-emerald-50 text-emerald-800";
   }
-  if (key === "MONITOR") {
+  if (key === "unstable") {
     return "border-amber-300 bg-amber-50 text-amber-800";
+  }
+  if (key === "unfavorable") {
+    return "border-rose-300 bg-rose-50 text-rose-800";
   }
   return "border-slate-300 bg-slate-100 text-slate-700";
 }
@@ -423,13 +420,6 @@ const VIEW_PRESETS = [
   },
 ];
 
-const DECISION_FILTERS = [
-  { key: "ALL", label: "All" },
-  { key: "FAVORABLE", label: "Favorable" },
-  { key: "MONITOR", label: "Monitor" },
-  { key: "NEUTRAL", label: "Neutral" },
-];
-
 export default function MLBTodayWorkspacePage() {
   const location = useLocation();
   const { user } = useAuth();
@@ -442,6 +432,7 @@ export default function MLBTodayWorkspacePage() {
   const [optionRows, setOptionRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [regimeContextByProp, setRegimeContextByProp] = useState([]);
   const [requestedSlateDate, setRequestedSlateDate] = useState(null);
   const [activeSlateDate, setActiveSlateDate] = useState(null);
   const [isReady, setIsReady] = useState(false);
@@ -453,7 +444,6 @@ export default function MLBTodayWorkspacePage() {
   const [lastInteraction, setLastInteraction] = useState("none");
   const [watchlist, setWatchlist] = useState([]);
   const [viewPreset, setViewPreset] = useState("all");
-  const [decisionFilter, setDecisionFilter] = useState("ALL");
   const [propFilterExplicitSincePlayer, setPropFilterExplicitSincePlayer] = useState(false);
   const [propAvailability, setPropAvailability] = useState(null);
   const [filters, setFilters] = useState({
@@ -468,7 +458,7 @@ export default function MLBTodayWorkspacePage() {
   const topScrollRef = useRef(null);
   const headerScrollRef = useRef(null);
   const tableScrollRef = useRef(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState(1500);
+  const [tableScrollWidth, setTableScrollWidth] = useState(1370);
   const isWorkspaceReady = workspaceReady === null ? isReady : workspaceReady;
 
   const slateDate = useMemo(() => todayET(), []);
@@ -512,15 +502,6 @@ export default function MLBTodayWorkspacePage() {
     () => (shouldApplyPropFilter ? String(filters.prop_type || "").trim() : ""),
     [shouldApplyPropFilter, filters.prop_type]
   );
-  const decisionCounts = useMemo(() => {
-    const counts = { FAVORABLE: 0, MONITOR: 0, NEUTRAL: 0 };
-    for (const r of sortedRows) {
-      const key = decisionKey(r?.decision_label);
-      counts[key] = (counts[key] || 0) + 1;
-    }
-    return counts;
-  }, [sortedRows]);
-
   const displayedRows = useMemo(() => {
     let out = sortedRows;
     if (viewPreset === "best_covered") {
@@ -541,11 +522,22 @@ export default function MLBTodayWorkspacePage() {
         return c === "LIMITED" || c === "THIN" || c === "UNRELIABLE";
       });
     }
-    if (decisionFilter !== "ALL") {
-      out = out.filter((r) => decisionKey(r?.decision_label) === decisionFilter);
-    }
     return out;
-  }, [sortedRows, viewPreset, decisionFilter]);
+  }, [sortedRows, viewPreset]);
+
+  const propOutlookRows = useMemo(() => {
+    const source = Array.isArray(regimeContextByProp) && regimeContextByProp.length ? regimeContextByProp : [];
+    const activeProps = new Set((optionRows.length ? optionRows : rows).map((r) => String(r.prop_type || "").trim()).filter(Boolean));
+    return source
+      .filter((item) => !activeProps.size || activeProps.has(String(item?.prop_type || "").trim()))
+      .slice()
+      .sort((a, b) => {
+        const ac = Number(a?.row_count) || 0;
+        const bc = Number(b?.row_count) || 0;
+        if (bc !== ac) return bc - ac;
+        return propLabel(a?.prop_type).localeCompare(propLabel(b?.prop_type));
+      });
+  }, [regimeContextByProp, optionRows, rows]);
 
   const selectedPlayer = useMemo(() => {
     const query = normText(filters.player_query);
@@ -612,16 +604,14 @@ export default function MLBTodayWorkspacePage() {
       filters.team ||
       filters.side ||
       filters.timing_signal ||
-      decisionFilter !== "ALL" ||
       (filters.player_query && filters.player_query.trim())
     );
-  }, [filters, decisionFilter, effectivePropFilter]);
+  }, [filters, effectivePropFilter]);
 
   const activeStateTokens = useMemo(() => {
     const out = [];
     const selectedPreset = VIEW_PRESETS.find((p) => p.key === viewPreset);
     if (selectedPreset && selectedPreset.key !== "all") out.push(selectedPreset.label);
-    if (decisionFilter !== "ALL") out.push(`Decision: ${decisionLabel(decisionFilter)}`);
     if (effectivePropFilter) out.push(propLabel(effectivePropFilter));
     if (!effectivePropFilter && hasPlayerQuery && filters.prop_type) out.push(`Prop pending: ${propLabel(filters.prop_type)}`);
     if (filters.team) out.push(filters.team);
@@ -629,7 +619,7 @@ export default function MLBTodayWorkspacePage() {
     if (filters.timing_signal) out.push(timingLabel(filters.timing_signal));
     if (filters.player_query && filters.player_query.trim()) out.push(`Player: ${filters.player_query.trim()}`);
     return out;
-  }, [viewPreset, decisionFilter, filters, effectivePropFilter, hasPlayerQuery]);
+  }, [viewPreset, filters, effectivePropFilter, hasPlayerQuery]);
 
   const activeFilterTokens = useMemo(() => {
     const out = [];
@@ -844,10 +834,12 @@ export default function MLBTodayWorkspacePage() {
         setRequestedSlateDate(data?.requested_slate_date ?? slateDate);
         setActiveSlateDate(data?.active_slate_date ?? null);
         setLastUpdated(data?.last_updated ?? null);
+        setRegimeContextByProp(Array.isArray(data?.regime_context_by_prop) ? data.regime_context_by_prop : []);
         setTotal(Number(data?.total) || nextRows.length);
       } catch (_e) {
         if (!isMounted) return;
         setOptionRows([]);
+        setRegimeContextByProp([]);
         setWorkspaceReady(null);
       }
     }
@@ -946,7 +938,7 @@ export default function MLBTodayWorkspacePage() {
     if (!tableWrap) return;
 
     const syncWidth = () => {
-      const measured = Number(tableWrap.scrollWidth) || 1500;
+      const measured = Number(tableWrap.scrollWidth) || 1370;
       setTableScrollWidth(Math.max(1, measured));
     };
 
@@ -1022,7 +1014,7 @@ export default function MLBTodayWorkspacePage() {
     setExpandedRowKeys(new Set());
     setFocusedRowIndex(-1);
     setLastInteraction("collapse:controls-change");
-  }, [viewPreset, decisionFilter, effectivePropFilter, filters.team, filters.side, filters.timing_signal, filters.player_query]);
+  }, [viewPreset, effectivePropFilter, filters.team, filters.side, filters.timing_signal, filters.player_query]);
 
   function toggleRow(key, source = "row") {
     setExpandedRowKeys((prev) => {
@@ -1101,7 +1093,6 @@ export default function MLBTodayWorkspacePage() {
 
   function clearAllReviewControls() {
     setViewPreset("all");
-    setDecisionFilter("ALL");
     setPropFilterExplicitSincePlayer(false);
     setPropAvailability(null);
     setExpandedRowKeys(new Set());
@@ -1271,27 +1262,56 @@ export default function MLBTodayWorkspacePage() {
               {preset.label}
             </button>
           ))}
-          <div className="text-xs text-slate-500 ml-3 mr-1">Decision:</div>
-          {DECISION_FILTERS.map((opt) => {
-            const count = opt.key === "ALL" ? sortedRows.length : decisionCounts[opt.key] || 0;
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setDecisionFilter(opt.key)}
-                className={`text-xs px-2 py-1 rounded border ${
-                  decisionFilter === opt.key
-                    ? "bg-slate-800 text-white border-slate-800"
-                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-                }`}
-              >
-                {opt.label} ({count})
-              </button>
-            );
-          })}
           <div className="text-xs text-slate-500 ml-auto">
             Default sort: non-null Δ vs Side Median, then strongest Δ
           </div>
+        </div>
+
+        <div className="pp-card p-3 mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Prop Outlook</div>
+              <div className="text-xs text-slate-500">Current prop-level environment context for today&apos;s slate.</div>
+            </div>
+            <div className="text-xs text-slate-500">{propOutlookRows.length} props</div>
+          </div>
+          {propOutlookRows.length ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+              {propOutlookRows.map((item) => (
+                <button
+                  key={`prop-outlook-${item.prop_type}`}
+                  type="button"
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, prop_type: item.prop_type }));
+                    setPropFilterExplicitSincePlayer(true);
+                  }}
+                  className="text-left border border-slate-200 rounded-md bg-white hover:bg-slate-50 px-3 py-2"
+                  title={regimeReason(item.regime_context_explanation)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 font-medium text-sm text-slate-900 truncate">
+                      {item.display_prop || propLabel(item.prop_type)}
+                    </div>
+                    <span
+                      className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${regimePillClasses(
+                        item.regime_context_label
+                      )}`}
+                    >
+                      {regimeShortLabel(item.regime_context_label)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500 truncate">
+                    LT {isMissing(item.long_term_regime) ? DASH : item.long_term_regime} · Recent{" "}
+                    {isMissing(item.recent_db_regime) ? DASH : item.recent_db_regime} · Exec{" "}
+                    {isMissing(item.execution_regime) ? DASH : item.execution_regime}
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-400">{fmtNumber(item.row_count, 0)} rows</div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-slate-500">Prop regime context is not available for this slate yet.</div>
+          )}
         </div>
 
         <div className="pp-card p-3 mb-4 flex flex-wrap gap-2 items-center">
@@ -1647,10 +1667,9 @@ export default function MLBTodayWorkspacePage() {
             className="sticky top-4 z-[54] overflow-x-auto overflow-y-hidden border-b border-slate-200 bg-slate-50/95"
             aria-label="Sticky table header scroll"
           >
-            <table className="min-w-[1500px] w-full text-sm text-slate-800 table-fixed">
+            <table className="min-w-[1370px] w-full text-sm text-slate-800 table-fixed">
               <colgroup>
                 <col style={{ width: "230px" }} />
-                <col style={{ width: "130px" }} />
                 <col style={{ width: "170px" }} />
                 <col style={{ width: "82px" }} />
                 <col style={{ width: "76px" }} />
@@ -1664,7 +1683,6 @@ export default function MLBTodayWorkspacePage() {
               <thead>
                 <tr className="text-left border-b border-slate-200">
                   <th className="sticky left-0 z-[56] bg-slate-50 py-2.5 px-3 border-r border-slate-200 shadow-[inset_-1px_0_0_0_rgba(148,163,184,0.45)]">Player</th>
-                  <th className="bg-slate-50 py-2.5 px-3">Decision</th>
                   <th className="bg-slate-50 py-2.5 px-3">Prop</th>
                   <th className="bg-slate-50 py-2.5 px-3">Side</th>
                   <th className="bg-slate-50 py-2.5 px-3 text-right whitespace-nowrap">Line</th>
@@ -1698,7 +1716,7 @@ export default function MLBTodayWorkspacePage() {
                   ) : (
                     <div>This prop is available but filtered out or has limited coverage.</div>
                   )}
-                  <div className="mt-1">Try clearing team/side/timing/decision filters or choosing another prop.</div>
+                  <div className="mt-1">Try clearing team/side/timing filters or choosing another prop.</div>
                 </>
               ) : (
                 <>
@@ -1708,10 +1726,9 @@ export default function MLBTodayWorkspacePage() {
               )}
             </div>
           ) : (
-            <table className="min-w-[1500px] w-full text-sm text-slate-800 table-fixed">
+            <table className="min-w-[1370px] w-full text-sm text-slate-800 table-fixed">
               <colgroup>
                 <col style={{ width: "230px" }} />
-                <col style={{ width: "130px" }} />
                 <col style={{ width: "170px" }} />
                 <col style={{ width: "82px" }} />
                 <col style={{ width: "76px" }} />
@@ -1792,16 +1809,6 @@ export default function MLBTodayWorkspacePage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide ${decisionPillClasses(
-                              r.decision_label
-                            )}`}
-                            title={decisionReason(r.decision_reason)}
-                          >
-                            {decisionLabel(r.decision_label)}
-                          </span>
-                        </td>
                         <td className="py-2.5 px-3 font-medium">{propLabel(r.prop_type)}</td>
                         <td className="py-2.5 px-3 text-slate-700">
                           <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
@@ -1848,7 +1855,7 @@ export default function MLBTodayWorkspacePage() {
                       </tr>
                       {isOpen ? (
                         <tr className="border-b border-slate-200 bg-slate-100/70">
-                          <td colSpan={11} className="py-2 px-3 border-l-2 border-slate-300">
+                          <td colSpan={10} className="py-2 px-3 border-l-2 border-slate-300">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                               <div className="space-y-1.5">
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Market</div>
@@ -1883,10 +1890,11 @@ export default function MLBTodayWorkspacePage() {
                               </div>
                               <div className="space-y-1.5">
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Context</div>
-                                <div><span className="text-slate-500">Decision:</span> <strong>{decisionLabel(r.decision_label)}</strong></div>
-                                <div><span className="text-slate-500">Decision detail:</span> <strong>{decisionReason(r.decision_reason)}</strong></div>
-                                <div><span className="text-slate-500">Regime Context:</span> <strong>{isMissing(r.regime_context_label) ? DASH : r.regime_context_label}</strong></div>
-                                <div><span className="text-slate-500">Regime detail:</span> <strong>{decisionReason(r.regime_context_explanation)}</strong></div>
+                                <div><span className="text-slate-500">Prop outlook:</span> <strong>{isMissing(r.regime_context_label) ? DASH : regimeShortLabel(r.regime_context_label)}</strong></div>
+                                <div><span className="text-slate-500">Outlook detail:</span> <strong>{regimeReason(r.regime_context_explanation)}</strong></div>
+                                <div><span className="text-slate-500">Long-term regime:</span> <strong>{isMissing(r.long_term_regime) ? DASH : r.long_term_regime}</strong></div>
+                                <div><span className="text-slate-500">Recent DB regime:</span> <strong>{isMissing(r.recent_db_regime) ? DASH : r.recent_db_regime}</strong></div>
+                                <div><span className="text-slate-500">Execution regime:</span> <strong>{isMissing(r.execution_regime) ? DASH : r.execution_regime}</strong></div>
                                 <div><span className="text-slate-500">Streak:</span> <strong>{streakLabel(r.streak_context_label)}</strong></div>
                                 <div><span className="text-slate-500">Streak count:</span> <strong>{fmtNumber(r.streak_count, 0)}</strong></div>
                                 <div><span className="text-slate-500">Baseline delta:</span> <strong>{fmtPctSigned(r.baseline_delta)}</strong></div>
