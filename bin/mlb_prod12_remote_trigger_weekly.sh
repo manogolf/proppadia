@@ -10,7 +10,7 @@ export MLB_WEEKLY_PHASE2_ENABLED="${MLB_WEEKLY_PHASE2_ENABLED:-1}"
 export MLB_WEEKLY_PROP_SEQUENCE_ENABLED="${MLB_WEEKLY_PROP_SEQUENCE_ENABLED:-1}"
 export MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR="${MLB_WEEKLY_PROP_SEQUENCE_CONTINUE_ON_ERROR:-1}"
 export MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC="${MLB_WEEKLY_PROP_SEQUENCE_SLEEP_SEC:-8}"
-export MLB_WEEKLY_PROP_SEQUENCE="${MLB_WEEKLY_PROP_SEQUENCE:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
+export MLB_WEEKLY_PROP_SEQUENCE="${MLB_WEEKLY_PROP_SEQUENCE:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis}"
 # Keep retrain/recompute off by default on Render weekly triggers.
 # Preferred workflow: run cadence locally, then publish bundle.
 export MLB_WEEKLY_RETRAIN_CADENCE_ENABLED="${MLB_WEEKLY_RETRAIN_CADENCE_ENABLED:-0}"

@@ -16,7 +16,7 @@ from backend.shared.scripts.api_client_utils import ClientAdapter, HttpClient, I
 
 DEFAULT_PROP_TYPES = (
     "hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,"
-    "strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis"
+    "strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis"
 )
 FALLBACK_PLAYER_IDS: tuple[int, ...] = (660271, 592450, 545361)
 

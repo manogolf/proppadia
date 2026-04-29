@@ -31,7 +31,7 @@ payload = {
 DEFAULT_PROD12_PROP_TYPES = (
     "hits,total_bases,strikeouts_batting,earned_runs,doubles,"
     "hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,"
-    "runs_scored,walks_allowed,runs_rbis"
+    "runs_scored,walks_allowed,rbis"
 )
 
 # Default to running the daily gate unless explicitly disabled by env.

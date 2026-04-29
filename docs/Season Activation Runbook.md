@@ -212,7 +212,7 @@ If any step fails:
 ### Production-12 lane policy (active)
 
 - Active production lane set:
-  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis`
 - Use these operational targets:
   - `make mlb-prediction-quality-prod12`
   - `make mlb-pipeline-check-prod12`
@@ -222,7 +222,7 @@ If any step fails:
 - Current watchlist lane set (as of 2026-02-17):
   - `outs_recorded,home_runs`
 - Current promoted underserved set (as of 2026-02-17):
-  - `runs_scored,walks_allowed,runs_rbis`
+  - `runs_scored,walks_allowed,rbis`
 - Working rule:
   - Do not promote threshold-only relabel updates that collapse to one-sided predictions.
 - Required remediation sequence:

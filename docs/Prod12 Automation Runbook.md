@@ -7,8 +7,8 @@ Date reference: this runbook was aligned on February 17, 2026.
 ## Scope
 
 - Prop lane set (`prod12`):
-  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
-  - Candidate required-props stability gate remains scoped to 11 props (excludes `runs_rbis`) by design.
+  - `hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis`
+  - `runs_rbis` remains supported historically, but it is not active daily market-backed coverage unless a compatible OddsAPI market alias is present.
 - Gate posture:
   - Daily health + logging strict gate (`mlb-prod12-daily-gate`)
   - Weekly promotion/readiness strict gate (`mlb-prod12-phase2-weekly-gate`)
@@ -65,6 +65,8 @@ Default behavior:
   - `MLB_ODDS_MARKETS` scoped to prod12 lane markets only
   - `MLB_ODDS_BOOKMAKERS` defaults to `betonlineag,mybookieag,betopenly,draftkings,betmgm,espnbet,fanatics,williamhill_us,superbook,rebet`
   - `MLB_WIDE_PROP_TYPES` pinned to `MLB_PROD12_PROP_TYPES` unless explicitly overridden
+  - wide predictions require a two-sided price from any bookmaker by default; set `MLB_PREDICT_TWO_SIDED_BOOKMAKER` only for target-book/offshore experiments
+  - use `rbis` for standalone RBI props; `runs_rbis` is the combined R+RBI prop and only appears in market-backed wide output when a compatible OddsAPI alias is present
 
 Optional extra lean setting (if memory pressure persists):
 
@@ -171,11 +173,27 @@ make mlb-execution-vs-model MLB_DATE=YYYY-MM-DD \
   MLB_EXEC_TOOL_RESULTS_CSV=/path/to/daily_tool_results.csv
 ```
 
-This leaves reconcile untouched and writes:
+This target first rebuilds date-scoped reconcile rows for `MLB_DATE` and passes that fresh file into the execution comparison. Do not point this workflow at shared scratch files such as `tmp/mlb_base_vs_market_rows_anybook_full.csv` unless you intentionally produced that file in the same run.
 
+The command always prints raw loaded rows plus MLB / BetOnline / non-push graded-wager counts. For one-off validation against a known export, optional expected-count guardrails can be supplied; when omitted, counts are diagnostic only and the comparison continues:
+
+```bash
+make mlb-execution-vs-model MLB_DATE=YYYY-MM-DD \
+  MLB_EXEC_TOOL_RESULTS_CSV=/path/to/daily_tool_results.csv \
+  MLB_EXEC_EXPECTED_RAW_TOOL_ROWS=<known_export_rows> \
+  MLB_EXEC_EXPECTED_MLB_BETONLINE_ROWS=<known_mlb_betonline_rows> \
+  MLB_EXEC_EXPECTED_MLB_BETONLINE_NON_PUSH_ROWS=<known_non_push_rows>
+```
+
+This writes:
+
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_rows.csv`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_summary.json`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/execution_vs_model.csv`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.json`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.md`
+
+The comparison also validates that the reconcile CSV contains `MLB_DATE`, is fresh relative to the source slate artifact, and does not have empty outcome columns when upstream MLB outcomes exist.
 
 Use this report to separate model signal from execution/pricing:
 
@@ -865,7 +883,7 @@ make mlb-candidate-eval-prod12 \
   MLB_CANDIDATE_SOURCE_TABLE="reconcile_rows" \
   MLB_CANDIDATE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" \
   MLB_PROD12_CANDIDATE_PROP_TYPES="$(MLB_PROD12_PROP_TYPES)" \
-  MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed"
+  MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis"
 ```
 
 Default prod12 weekly tracking now reads reconcile rows:
@@ -1233,9 +1251,9 @@ make mlb-retrain-prereq-check
 MLB_BVP_DATE="$(TZ=America/New_York date +%F)" \
 make mlb-bvp-pvb-refresh
 make mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="2025-03-01" MLB_RECONCILE_TO_DATE="$(date -u +%F)" MLB_RECONCILE_BOOKMAKER=betonlineag MLB_RECONCILE_REQUIRE_TWO_SIDED=1 MLB_RECONCILE_ODDS_FILENAME="odds_latest_compatible.json" MLB_RECONCILE_ROWS_OUT_CSV="tmp/mlb_base_vs_market_rows.csv"
-make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0 MLB_RETRAIN_QUALITY_MIN_TOTAL=600 MLB_CANDIDATE_MIN_TOTAL=1000 MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
+make mlb-retrain-broad-reconcile MLB_TRAIN_RECONCILE_ROWS_CSV="tmp/mlb_base_vs_market_rows.csv" MLB_TRAIN_RECONCILE_FALLBACK_BASE_MERGE=0 MLB_RETRAIN_QUALITY_MIN_TOTAL=600 MLB_CANDIDATE_MIN_TOTAL=1000 MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis" MLB_PROD12_MAX_PROP_DROP_PCT=12
 make mlb-prod12-model-bundle-publish
-make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL="${MLB_BASE_URL:-}" MLB_DATE="$(date -u +%F)" MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed" MLB_PROD12_MAX_PROP_DROP_PCT=12
+make mlb-prod12-phase2-weekly-cycle MLB_BASE_URL="${MLB_BASE_URL:-}" MLB_DATE="$(date -u +%F)" MLB_PROD12_CANDIDATE_REQUIRED_PROPS="hits,total_bases,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis" MLB_PROD12_MAX_PROP_DROP_PCT=12
 echo "[$(date -u +%FT%TZ)] DONE weekly retrain cadence"
 EOF
 

@@ -44,11 +44,19 @@ MLB_SINGLES_SHADOW_MAX_PER_PLAYER ?= 2
 MLB_SINGLES_SHADOW_MAX_ABS_WIN_PCT ?= 500
 MLB_SINGLES_SHADOW_MODEL_PATH ?=
 MLB_EXEC_TOOL_RESULTS_CSV ?=
-MLB_EXEC_RECONCILE_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
 MLB_EXEC_OUT_DIR ?= artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)
+MLB_EXEC_RECONCILE_CSV ?= $(MLB_EXEC_OUT_DIR)/reconcile_rows.csv
+MLB_EXEC_RECONCILE_SUMMARY_JSON ?= $(MLB_EXEC_OUT_DIR)/reconcile_summary.json
+MLB_EXEC_RECONCILE_BOOKMAKER ?=
+MLB_EXEC_RECONCILE_REQUIRE_TWO_SIDED ?= 1
+MLB_EXEC_RECONCILE_REQUIRE_OUTCOMES ?= 1
+MLB_EXEC_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN ?= 1
 MLB_EXEC_OUT_CSV ?= $(MLB_EXEC_OUT_DIR)/execution_vs_model.csv
 MLB_EXEC_OUT_JSON ?= $(MLB_EXEC_OUT_DIR)/summary.json
 MLB_EXEC_OUT_MD ?= $(MLB_EXEC_OUT_DIR)/summary.md
+MLB_EXEC_EXPECTED_RAW_TOOL_ROWS ?=
+MLB_EXEC_EXPECTED_MLB_BETONLINE_ROWS ?=
+MLB_EXEC_EXPECTED_MLB_BETONLINE_NON_PUSH_ROWS ?=
 MLB_PROBABILITY_CALIBRATION_JSON ?= artifacts/analysis/mlb/calibration/mlb_probability_calibrator.json
 MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD ?= 0
 MLB_CALIBRATION_TRAIN_CSV ?= tmp/mlb_base_vs_market_rows_anybook_window.csv
@@ -85,9 +93,10 @@ MLB_POLICY_PLAN_CSV ?=
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED ?= 0
 MLB_POLICY_PLAN_ALLOW_EMPTY ?= 1
 MLB_PREDICT_REQUIRE_TWO_SIDED ?= 1
-MLB_PREDICT_TWO_SIDED_BOOKMAKER ?= betonlineag
+MLB_PREDICT_TWO_SIDED_BOOKMAKER ?=
 # Props allowed to fall back to any two-sided bookmaker when MLB_PREDICT_TWO_SIDED_BOOKMAKER
-# is missing/one-sided for that prop. Keep narrow (default singles only).
+# is explicitly set and missing/one-sided for that prop. Wide production output defaults
+# to any two-sided book so full market-backed prop coverage is preserved.
 MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS ?= singles
 MLB_ODDS_BACKFILL_SEASON ?= 2025
 MLB_ODDS_BACKFILL_FROM_DATE ?=
@@ -205,7 +214,7 @@ MLB_POLICY_REPLAY_ROWS_CSV ?= tmp/mlb_reconcile_rows_2024_2025_prod11_allbooks_n
 MLB_POLICY_REPLAY_OUT_DIR ?= tmp/analysis/mlb_baseline_readiness_pack/pass4_execution_replay
 MLB_POLICY_MONITOR_PROPS ?= doubles,walks_allowed
 MLB_POLICY_MONITOR_MIN_BETS_ALERT ?= 30
-MLB_WIDE_PROP_TYPES ?=
+MLB_WIDE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_WIDE_REQUIRE_MIN_ROWS ?= 1
 MLB_DAILY_INCLUDE_CAPTURE ?= 1
 MLB_DAILY_BVP_IMPACT_ENABLED ?= 1
@@ -307,10 +316,9 @@ MLB_RETRAIN_BOL_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_RETRAIN_BOL_DAYS_BACK ?= 540
 MLB_RETRAIN_BOL_TRAIN_LIMIT ?= 150000
 MLB_RETRAIN_BROAD_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
-# Reconcile_csv + two-sided lane currently has no real runs_rbis market rows
-# (odds/slate support missing). Keep runs_rbis excluded from broad reconcile
-# train/eval until two-sided market support is added.
-MLB_PROD12_RECONCILE_PROP_TYPES ?= hits,singles,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
+# Reconcile_csv + two-sided lane uses market-backed active props. Keep runs_rbis
+# out of the active lane unless a compatible market-backed source returns.
+MLB_PROD12_RECONCILE_PROP_TYPES ?= hits,singles,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis
 MLB_RETRAIN_BROAD_RECONCILE_PROP_TYPES ?= $(MLB_PROD12_RECONCILE_PROP_TYPES)
 MLB_RETRAIN_BROAD_DAYS_BACK ?= 540
 MLB_RETRAIN_BROAD_TRAIN_LIMIT ?= 150000
@@ -406,9 +414,8 @@ MLB_CANDIDATE_REQUIRED_PROPS ?= $(MLB_CORE_PROP_TYPES)
 MLB_PROD12_CANDIDATE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 # Reconcile candidate eval should mirror the reconcile broad train scope above.
 MLB_PROD12_CANDIDATE_PROP_TYPES_RECONCILE ?= $(MLB_PROD12_RECONCILE_PROP_TYPES)
-# Keep reconcile-required stability set scoped to props with reliable reconcile coverage.
-# runs_rbis is included in prod12 lane/predictions, but excluded from required stability by default.
-MLB_PROD12_CANDIDATE_REQUIRED_PROPS ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed
+# Keep reconcile-required stability set scoped to active market-backed props.
+MLB_PROD12_CANDIDATE_REQUIRED_PROPS ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis
 MLB_PROD12_CANDIDATE_SOURCE_TABLE ?= reconcile_rows
 MLB_PROD12_CANDIDATE_ROWS_CSV ?= tmp/mlb_base_vs_market_rows_anybook.csv
 MLB_CANDIDATE_MIN_TOTAL ?= -1
@@ -455,10 +462,10 @@ MLB_PROP_COVERAGE_TRAINING_SOURCES ?= mlb_api
 MLB_INCLUDE_COVERAGE ?= 0
 MLB_CORE_PROP_TYPES ?= hits,total_bases,hits_runs_rbis,runs_rbis,rbis,runs_scored,strikeouts_batting,walks,singles,doubles,strikeouts_pitching,outs_recorded
 MLB_PROD8_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks
-MLB_UNDERSERVED_PROMOTED_PROP_TYPES ?= runs_scored,walks_allowed,runs_rbis
+MLB_UNDERSERVED_PROMOTED_PROP_TYPES ?= runs_scored,walks_allowed,rbis
 MLB_UNDERSERVED_WATCHLIST_PROP_TYPES ?= outs_recorded,home_runs
-# Keep prod12 default lane aligned with cron/runbook (12 props; runs_rbis re-enabled).
-MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed,runs_rbis
+# Keep prod12 default lane aligned with cron/runbook (12 market-backed props).
+MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed,rbis
 # Full daily prod12 eval is always all-12. Use MLB_PROD12_WATERLINE_PROP_TYPES for optional narrowed experiments.
 MLB_PROD12_DAILY_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_PROD12_WATERLINE_PROP_TYPES ?= hits,total_bases,strikeouts_batting
@@ -1253,7 +1260,8 @@ mlb-execution-vs-model:
 		echo "mlb-execution-vs-model requires MLB_EXEC_TOOL_RESULTS_CSV=<daily_tool_results.csv>"; \
 		exit 2; \
 	fi
-	$(VENV_PY) backend/mlb/scripts/compare_execution_vs_model.py --date "$(MLB_DATE)" --tool-results-csv "$(MLB_EXEC_TOOL_RESULTS_CSV)" --reconcile-csv "$(MLB_EXEC_RECONCILE_CSV)" --out-csv "$(MLB_EXEC_OUT_CSV)" --out-json "$(MLB_EXEC_OUT_JSON)" --out-md "$(MLB_EXEC_OUT_MD)" $(if $(wildcard $(MLB_PROBABILITY_CALIBRATION_JSON)),--calibration-json "$(MLB_PROBABILITY_CALIBRATION_JSON)",)
+	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_EXEC_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_EXEC_RECONCILE_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_EXEC_RECONCILE_SUMMARY_JSON)" MLB_RECONCILE_REQUIRE_TWO_SIDED="$(MLB_EXEC_RECONCILE_REQUIRE_TWO_SIDED)" MLB_RECONCILE_REQUIRE_OUTCOMES="$(MLB_EXEC_RECONCILE_REQUIRE_OUTCOMES)" MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN="$(MLB_EXEC_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN)"
+	$(VENV_PY) backend/mlb/scripts/compare_execution_vs_model.py --date "$(MLB_DATE)" --tool-results-csv "$(MLB_EXEC_TOOL_RESULTS_CSV)" --reconcile-csv "$(MLB_EXEC_RECONCILE_CSV)" --out-csv "$(MLB_EXEC_OUT_CSV)" --out-json "$(MLB_EXEC_OUT_JSON)" --out-md "$(MLB_EXEC_OUT_MD)" $(if $(wildcard $(MLB_PROBABILITY_CALIBRATION_JSON)),--calibration-json "$(MLB_PROBABILITY_CALIBRATION_JSON)",) $(if $(strip $(MLB_EXEC_EXPECTED_RAW_TOOL_ROWS)),--expected-raw-tool-rows "$(MLB_EXEC_EXPECTED_RAW_TOOL_ROWS)",) $(if $(strip $(MLB_EXEC_EXPECTED_MLB_BETONLINE_ROWS)),--expected-mlb-betonline-rows "$(MLB_EXEC_EXPECTED_MLB_BETONLINE_ROWS)",) $(if $(strip $(MLB_EXEC_EXPECTED_MLB_BETONLINE_NON_PUSH_ROWS)),--expected-mlb-betonline-non-push-rows "$(MLB_EXEC_EXPECTED_MLB_BETONLINE_NON_PUSH_ROWS)",)
 
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:

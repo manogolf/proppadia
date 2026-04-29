@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--baseline-path", default="", help="Optional explicit baseline JSON path.")
     ap.add_argument("--baseline-dir", default="artifacts/season_baselines")
     ap.add_argument("--pipeline-history", default="artifacts/mlb_pipeline_history.jsonl")
-    ap.add_argument("--prop-types", default="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis")
+    ap.add_argument("--prop-types", default="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis")
     ap.add_argument("--quality-games-back", type=int, default=30)
     ap.add_argument("--quality-min-total", type=int, default=1000)
     ap.add_argument("--quality-min-accuracy", type=float, default=48.0)

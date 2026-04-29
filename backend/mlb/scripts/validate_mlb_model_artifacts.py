@@ -157,7 +157,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Validate MLB model artifacts for runtime compatibility.")
     ap.add_argument(
         "--prop-types",
-        default="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis",
+        default="hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis",
     )
     ap.add_argument("--min-feature-overlap-pct", type=float, default=70.0)
     ap.add_argument("--allow-unfitted", action="store_true")

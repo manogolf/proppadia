@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import unicodedata
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -351,6 +352,208 @@ def _normalize_tool_results(raw: pd.DataFrame, *, default_date: str) -> Tuple[pd
     return out.loc[complete].copy(), meta
 
 
+def _book_is_betonline(value: Any) -> bool:
+    text = re.sub(r"[^a-z0-9]+", "", _norm_text(value).lower())
+    return text in {"betonline", "betonlineag"} or "betonline" in text
+
+
+def _wager_export_counts(raw: pd.DataFrame) -> Dict[str, Any]:
+    sport_col = _resolve_col(raw, ["Sport", "sport"])
+    league_col = _resolve_col(raw, ["League", "league"])
+    book_col = _resolve_col(raw, ["Book", "book", "bookmaker", "bookmaker_key"])
+    grade_col = _resolve_col(raw, ["Grade", "grade", "Result", "result", "outcome", "Outcome"])
+
+    mlb_mask = pd.Series(True, index=raw.index)
+    if sport_col is not None:
+        mlb_mask &= raw[sport_col].map(lambda v: _norm_text(v).lower()).eq("baseball")
+    if league_col is not None:
+        mlb_mask &= raw[league_col].map(lambda v: _norm_text(v).upper()).eq("MLB")
+
+    betonline_mask = mlb_mask.copy()
+    if book_col is not None:
+        betonline_mask &= raw[book_col].map(_book_is_betonline)
+
+    non_push_mask = betonline_mask.copy()
+    if grade_col is not None:
+        non_push_mask &= raw[grade_col].map(_norm_result).ne("push")
+
+    return {
+        "raw_rows_loaded": int(len(raw)),
+        "mlb_rows": int(mlb_mask.sum()),
+        "mlb_betonline_rows": int(betonline_mask.sum()),
+        "mlb_betonline_non_push_rows": int(non_push_mask.sum()),
+        "wager_guard_columns": {
+            "sport": sport_col,
+            "league": league_col,
+            "book": book_col,
+            "grade": grade_col,
+        },
+    }
+
+
+def _guard_expected_count(*, label: str, actual: int, expected: int) -> None:
+    if expected <= 0:
+        return
+    if actual != expected:
+        raise RuntimeError(
+            f"{label} count mismatch: loaded {actual}, expected {expected}. "
+            "Stopping before reconciliation to avoid partial coverage."
+        )
+
+
+def _nonblank_count(series: pd.Series) -> int:
+    return int(series.notna().sum() and series.fillna("").astype(str).str.strip().ne("").sum())
+
+
+def _reconcile_source_mtime_guard(*, rec_path: Path, rec_raw: pd.DataFrame, target_date: str) -> Dict[str, Any]:
+    if not rec_path.exists():
+        raise FileNotFoundError(f"reconcile csv not found: {rec_path}")
+
+    rec_mtime = datetime.fromtimestamp(rec_path.stat().st_mtime)
+    today = datetime.now().date()
+    if rec_mtime.date() == today:
+        return {
+            "reconcile_mtime": rec_mtime.isoformat(),
+            "reconcile_mtime_guard": "same_day_as_run",
+            "source_slate_mtime": None,
+        }
+
+    date_col = _resolve_col(rec_raw, ["game_date", "date", "slate_date"])
+    source_col = _resolve_col(rec_raw, ["slate_source_file"])
+    source_paths: List[Path] = []
+    if date_col is not None and source_col is not None:
+        dates = rec_raw[date_col].map(_parse_date)
+        for raw_path in rec_raw.loc[dates.eq(target_date), source_col].dropna().astype(str).unique().tolist():
+            p = Path(raw_path).expanduser()
+            if p.exists():
+                source_paths.append(p)
+
+    default_slate = Path(f"backend/mlb/exports/odds_history/{target_date}/mlb_slate_output.csv")
+    if default_slate.exists() and default_slate not in source_paths:
+        source_paths.append(default_slate)
+
+    if not source_paths:
+        raise RuntimeError(
+            f"Could not verify reconcile freshness for {rec_path}: no source slate artifact paths were found "
+            f"for date {target_date}, and the reconcile file was not produced today."
+        )
+
+    newest_source_mtime = max(datetime.fromtimestamp(p.stat().st_mtime) for p in source_paths)
+    if rec_mtime < newest_source_mtime:
+        raise RuntimeError(
+            f"Stale reconcile artifact: {rec_path} mtime={rec_mtime.isoformat()} is older than source slate "
+            f"artifact mtime={newest_source_mtime.isoformat()} for {target_date}. Rebuild date-scoped reconcile rows "
+            "before execution comparison."
+        )
+
+    return {
+        "reconcile_mtime": rec_mtime.isoformat(),
+        "reconcile_mtime_guard": "newer_than_source_slate",
+        "source_slate_mtime": newest_source_mtime.isoformat(),
+    }
+
+
+def _upstream_outcome_counts(target_date: str) -> Dict[str, Any]:
+    try:
+        from backend.shared.db.pg import pg_fetchone
+
+        row = pg_fetchone(
+            """
+            SELECT
+              (
+                SELECT count(*)::int
+                FROM mlb.model_training_props
+                WHERE game_date::date = %s::date
+                  AND lower(trim(coalesce(prop_source, ''))) = 'mlb_api'
+                  AND NULLIF(btrim(prop_value::text), '') IS NOT NULL
+              ) AS model_training_props_values,
+              (
+                SELECT count(*)::int
+                FROM mlb.player_stats
+                WHERE game_date::date = %s::date
+                  AND (
+                    coalesce(at_bats,0) > 0
+                    OR coalesce(hits,0) > 0
+                    OR coalesce(walks,0) > 0
+                    OR coalesce(runs_scored,0) > 0
+                    OR coalesce(rbis,0) > 0
+                    OR coalesce(outs_recorded,0) > 0
+                    OR coalesce(strikeouts_pitching,0) > 0
+                    OR coalesce(hits_allowed,0) > 0
+                    OR coalesce(earned_runs,0) > 0
+                  )
+              ) AS player_stats_participation_rows
+            """,
+            (target_date, target_date),
+        ) or {}
+        mtp = int(row.get("model_training_props_values") or 0)
+        ps = int(row.get("player_stats_participation_rows") or 0)
+        return {
+            "checked": True,
+            "model_training_props_values": mtp,
+            "player_stats_participation_rows": ps,
+            "upstream_outcomes_exist": bool(mtp > 0 or ps > 0),
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "checked": False,
+            "model_training_props_values": None,
+            "player_stats_participation_rows": None,
+            "upstream_outcomes_exist": False,
+            "error": f"{type(e).__name__}: {e}",
+        }
+
+
+def _validate_reconcile_input(rec_raw: pd.DataFrame, *, rec_path: Path, target_date: str) -> Dict[str, Any]:
+    date_col = _resolve_col(rec_raw, ["game_date", "date", "slate_date"])
+    if date_col is None:
+        raise RuntimeError("reconcile csv missing a date column (expected game_date/date/slate_date)")
+    dates = rec_raw[date_col].map(_parse_date)
+    target_mask = dates.eq(target_date)
+    if not bool(target_mask.any()):
+        observed = sorted(set(x for x in dates.dropna().astype(str).tolist() if x))[:10]
+        raise RuntimeError(
+            f"reconcile csv does not contain MLB_DATE={target_date}; observed_dates_sample={observed}. "
+            "Use a fresh date-scoped reconcile file."
+        )
+
+    target_rows = rec_raw.loc[target_mask].copy()
+    freshness = _reconcile_source_mtime_guard(rec_path=rec_path, rec_raw=rec_raw, target_date=target_date)
+
+    outcome_cols = [
+        c
+        for c in ["actual_value", "actual_over_outcome", "actual_under_outcome", "actual_model_pick_outcome"]
+        if c in target_rows.columns
+    ]
+    outcome_nonblank = {c: _nonblank_count(target_rows[c]) for c in outcome_cols}
+    all_outcomes_empty = bool(outcome_cols) and all(v == 0 for v in outcome_nonblank.values())
+    upstream_counts = _upstream_outcome_counts(target_date) if all_outcomes_empty else {
+        "checked": False,
+        "model_training_props_values": None,
+        "player_stats_participation_rows": None,
+        "upstream_outcomes_exist": False,
+        "error": None,
+    }
+    if all_outcomes_empty and upstream_counts.get("upstream_outcomes_exist"):
+        raise RuntimeError(
+            f"Stale reconcile artifact: {rec_path} has {len(target_rows)} rows for {target_date} but all outcome "
+            "columns are empty, while upstream outcomes exist "
+            f"(model_training_props_values={upstream_counts.get('model_training_props_values')}, "
+            f"player_stats_participation_rows={upstream_counts.get('player_stats_participation_rows')}). "
+            "Rebuild date-scoped reconcile rows before execution comparison."
+        )
+
+    return {
+        **freshness,
+        "reconcile_date_col": date_col,
+        "reconcile_target_rows": int(len(target_rows)),
+        "reconcile_outcome_nonblank": outcome_nonblank,
+        "reconcile_all_outcomes_empty": all_outcomes_empty,
+        "upstream_outcome_check": upstream_counts,
+    }
+
+
 def _normalize_reconcile(raw: pd.DataFrame, *, target_date: str, calibration_json: str = "") -> pd.DataFrame:
     required = [
         "game_date",
@@ -609,9 +812,19 @@ def _bucket_summary(df: pd.DataFrame) -> pd.DataFrame:
     )
     bet_wl = g["bet_wins"] + g["bet_losses"]
     model_wl = g["model_correct"] + g["model_wrong"]
-    g["bet_win_rate"] = np.where(bet_wl > 0, g["bet_wins"] / bet_wl, np.nan)
+    g["bet_win_rate"] = np.divide(
+        g["bet_wins"].to_numpy(dtype=float),
+        bet_wl.to_numpy(dtype=float),
+        out=np.full(len(g), np.nan, dtype=float),
+        where=bet_wl.to_numpy() > 0,
+    )
     g["roi"] = np.where(g["bets"] > 0, g["pnl"] / g["bets"], np.nan)
-    g["model_accuracy"] = np.where(model_wl > 0, g["model_correct"] / model_wl, np.nan)
+    g["model_accuracy"] = np.divide(
+        g["model_correct"].to_numpy(dtype=float),
+        model_wl.to_numpy(dtype=float),
+        out=np.full(len(g), np.nan, dtype=float),
+        where=model_wl.to_numpy() > 0,
+    )
     order = ["< -10pp", "-10 to -5pp", "-5 to 0pp", "0 to +5pp", "+5 to +10pp", ">= +10pp", "unknown"]
     g["__order"] = g["edge_bucket"].map(lambda v: order.index(v) if v in order else len(order))
     return g.sort_values(["__order", "edge_bucket"]).drop(columns=["__order"])
@@ -755,6 +968,24 @@ def main() -> int:
         default="",
         help="Optional MLB probability calibration JSON. When set, edge/model_prob use calibrated probabilities.",
     )
+    ap.add_argument(
+        "--expected-raw-tool-rows",
+        type=int,
+        default=0,
+        help="Optional guardrail: stop if the loaded wager export row count does not match this value.",
+    )
+    ap.add_argument(
+        "--expected-mlb-betonline-rows",
+        type=int,
+        default=0,
+        help="Optional guardrail: stop if MLB/BetOnline wager rows do not match this value.",
+    )
+    ap.add_argument(
+        "--expected-mlb-betonline-non-push-rows",
+        type=int,
+        default=0,
+        help="Optional guardrail: stop if MLB/BetOnline non-push rows do not match this value.",
+    )
     args = ap.parse_args()
 
     target_date = _parse_date(args.date)
@@ -766,26 +997,45 @@ def main() -> int:
     out_csv = Path(args.out_csv or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/execution_vs_model.csv").expanduser()
     out_json = Path(args.out_json or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/summary.json").expanduser()
     out_md = Path(args.out_md or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/summary.md").expanduser()
-    unmatched_tool_csv = Path(
-        args.unmatched_tool_csv or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/unmatched_tool_rows.csv"
-    ).expanduser()
-    unmatched_reconcile_csv = Path(
-        args.unmatched_reconcile_csv or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/unmatched_reconcile_rows.csv"
-    ).expanduser()
-    edge_bucket_csv = Path(
-        args.edge_bucket_csv or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/edge_bucket_summary.csv"
-    ).expanduser()
+    default_out_dir = out_csv.parent
+    unmatched_tool_csv = Path(args.unmatched_tool_csv or default_out_dir / "unmatched_tool_rows.csv").expanduser()
+    unmatched_reconcile_csv = Path(args.unmatched_reconcile_csv or default_out_dir / "unmatched_reconcile_rows.csv").expanduser()
+    edge_bucket_csv = Path(args.edge_bucket_csv or default_out_dir / "edge_bucket_summary.csv").expanduser()
     calibrated_edge_bucket_csv = Path(
-        args.calibrated_edge_bucket_csv
-        or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/edge_bucket_summary_calibrated.csv"
+        args.calibrated_edge_bucket_csv or default_out_dir / "edge_bucket_summary_calibrated.csv"
     ).expanduser()
-    odds_distribution_csv = Path(
-        args.odds_distribution_csv or f"artifacts/analysis/mlb/execution_vs_model/{target_date}/odds_distribution.csv"
-    ).expanduser()
+    odds_distribution_csv = Path(args.odds_distribution_csv or default_out_dir / "odds_distribution.csv").expanduser()
 
     tool_raw = pd.read_csv(tool_path)
+    wager_counts = _wager_export_counts(tool_raw)
+    print(f"[execution-vs-model] raw_rows_loaded={wager_counts['raw_rows_loaded']}")
+    print(
+        "[execution-vs-model] graded_wager_rows "
+        f"mlb={wager_counts['mlb_rows']} "
+        f"mlb_betonline={wager_counts['mlb_betonline_rows']} "
+        f"mlb_betonline_non_push={wager_counts['mlb_betonline_non_push_rows']} "
+        f"columns={wager_counts['wager_guard_columns']}"
+    )
+    _guard_expected_count(
+        label="raw tool/wager export",
+        actual=int(wager_counts["raw_rows_loaded"]),
+        expected=int(args.expected_raw_tool_rows or 0),
+    )
+    _guard_expected_count(
+        label="MLB BetOnline wager",
+        actual=int(wager_counts["mlb_betonline_rows"]),
+        expected=int(args.expected_mlb_betonline_rows or 0),
+    )
+    _guard_expected_count(
+        label="MLB BetOnline non-push wager",
+        actual=int(wager_counts["mlb_betonline_non_push_rows"]),
+        expected=int(args.expected_mlb_betonline_non_push_rows or 0),
+    )
     rec_raw = pd.read_csv(rec_path)
+    reconcile_input_meta = _validate_reconcile_input(rec_raw, rec_path=rec_path, target_date=target_date)
     tool, meta = _normalize_tool_results(tool_raw, default_date=target_date)
+    meta.update(wager_counts)
+    meta.update(reconcile_input_meta)
     rec = _normalize_reconcile(rec_raw, target_date=target_date, calibration_json=str(args.calibration_json or ""))
     merged, join_diag = _join_execution_to_model(tool, rec)
     meta.update(join_diag)
@@ -882,6 +1132,14 @@ def main() -> int:
     _write_summary_md(out_md, summary)
 
     print(f"[execution-vs-model] date={target_date}")
+    print(
+        "[execution-vs-model] reconcile_input "
+        f"path={rec_path} "
+        f"target_rows={summary.get('reconcile_target_rows')} "
+        f"mtime={summary.get('reconcile_mtime')} "
+        f"freshness={summary.get('reconcile_mtime_guard')} "
+        f"outcome_nonblank={summary.get('reconcile_outcome_nonblank')}"
+    )
     print(f"[execution-vs-model] tool_columns={meta.get('tool_columns')}")
     print(f"[execution-vs-model] tool_sample_values={meta.get('tool_sample_values')}")
     print(f"[execution-vs-model] unique_tool_prop_names={meta.get('unique_tool_prop_names')}")

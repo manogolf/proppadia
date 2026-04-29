@@ -203,7 +203,7 @@ MLB_REPLAY_RETRY_BACKOFF_MS="${MLB_REPLAY_RETRY_BACKOFF_MS:-1500}"
 MLB_REPLAY_MAX_PREDICT_P95_MS="${MLB_REPLAY_MAX_PREDICT_P95_MS:-12000}"
 MLB_REPLAY_SAMPLE="${MLB_REPLAY_SAMPLE:-3}"
 MLB_REPLAY_MIN_SUCCESS="${MLB_REPLAY_MIN_SUCCESS:-1}"
-MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis}"
+MLB_PROD12_PROP_TYPES="${MLB_PROD12_PROP_TYPES:-hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis}"
 MLB_PROD12_DAILY_PROP_TYPES="${MLB_PROD12_DAILY_PROP_TYPES:-${MLB_PROD12_PROP_TYPES}}"
 # Guardrail: full daily prod12 eval must always run the full prop set.
 if [[ "${MLB_PROD12_DAILY_PROP_TYPES}" != "${MLB_PROD12_PROP_TYPES}" ]]; then
@@ -259,7 +259,7 @@ MLB_ARCHIVE_RUN_TAG="${MLB_ARCHIVE_RUN_TAG:-${MLB_PROD12_RUN_ID:-${RUN_ID:-}}}"
 if [[ -z "${MLB_ARCHIVE_RUN_TAG}" ]]; then
   MLB_ARCHIVE_RUN_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
 fi
-MLB_ODDS_MARKETS="${MLB_ODDS_MARKETS:-batter_hits,batter_total_bases,batter_strikeouts,pitcher_earned_runs,batter_doubles,pitcher_hits_allowed,pitcher_strikeouts,batter_walks,batter_hits_runs_rbis,batter_runs_scored,pitcher_walks}"
+MLB_ODDS_MARKETS="${MLB_ODDS_MARKETS:-batter_hits,batter_total_bases,batter_strikeouts,pitcher_earned_runs,batter_doubles,pitcher_hits_allowed,pitcher_strikeouts,batter_walks,batter_hits_runs_rbis,batter_runs_scored,pitcher_walks,batter_rbis}"
 # Bookmaker scope for daily automation.
 # Override MLB_ODDS_BOOKMAKERS in env as needed.
 MLB_ODDS_BOOKMAKERS="${MLB_ODDS_BOOKMAKERS:-betonlineag,mybookieag,betopenly,draftkings,betmgm,espnbet,fanatics,williamhill_us,superbook,rebet}"
@@ -268,7 +268,9 @@ MLB_POLICY_PLAN_CSV="${MLB_POLICY_PLAN_CSV:-}"
 MLB_POLICY_PLAN_ALLOW_ONE_SIDED="${MLB_POLICY_PLAN_ALLOW_ONE_SIDED:-0}"
 MLB_POLICY_PLAN_ALLOW_EMPTY="${MLB_POLICY_PLAN_ALLOW_EMPTY:-1}"
 MLB_PREDICT_REQUIRE_TWO_SIDED="${MLB_PREDICT_REQUIRE_TWO_SIDED:-1}"
-MLB_PREDICT_TWO_SIDED_BOOKMAKER="${MLB_PREDICT_TWO_SIDED_BOOKMAKER:-betonlineag}"
+# Wide production predictions should preserve full anybook market coverage. Set this
+# explicitly for target-book/offshore experiments.
+MLB_PREDICT_TWO_SIDED_BOOKMAKER="${MLB_PREDICT_TWO_SIDED_BOOKMAKER:-}"
 MLB_WIDE_PROP_TYPES="${MLB_WIDE_PROP_TYPES:-${MLB_PROD12_PROP_TYPES}}"
 MLB_WIDE_REQUIRE_MIN_ROWS="${MLB_WIDE_REQUIRE_MIN_ROWS:-1}"
 

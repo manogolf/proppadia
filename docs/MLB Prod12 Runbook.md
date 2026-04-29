@@ -4,9 +4,9 @@ This runbook defines the operating plan for the active MLB prediction lane with 
 
 ## Active Lane (Prod12)
 
-`hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,runs_rbis`
+`hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks,hits_runs_rbis,runs_scored,walks_allowed,rbis`
 
-Watchlist-only props (not in active lane): `outs_recorded,home_runs`
+Watchlist-only props (not in active lane): `outs_recorded,home_runs,runs_rbis`
 
 ## Daily Loop (Required)
 
@@ -61,7 +61,7 @@ make mlb-balance-guard \
 Run once per week:
 
 ```bash
-for p in hits total_bases strikeouts_batting earned_runs doubles hits_allowed strikeouts_pitching walks hits_runs_rbis runs_scored walks_allowed runs_rbis; do
+for p in hits total_bases strikeouts_batting earned_runs doubles hits_allowed strikeouts_pitching walks hits_runs_rbis runs_scored walks_allowed rbis; do
   .venv/bin/python backend/mlb/model_trainer.py --prop "$p" --days-back 1095 --limit 150000
 done
 ```
