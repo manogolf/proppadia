@@ -171,12 +171,11 @@ export default function PlayerProfileDashboard() {
   const latestDerivedDate =
     effectiveProfileData?.stat_derived?.map((p) => p?.game_date).find((d) => d) || null;
   const freshnessDate = latestRecentPropDate || latestDerivedDate;
-  const freshnessSource = String(effectiveProfileData?.freshness_metadata?.source || "").trim();
   const freshnessMaxDate = String(effectiveProfileData?.freshness_metadata?.max_game_date || "").trim();
   const freshnessLabel = freshnessDate || freshnessMaxDate;
-  const historicalFreshnessLabel = freshnessLabel
-    ? `Historical profile data through ${freshnessLabel}`
-    : "Historical profile data pending";
+  const profileFreshnessLabel = freshnessLabel
+    ? `Profile data through ${freshnessLabel} · based on past performance`
+    : "Profile data pending";
   const todayMarketRows = Array.isArray(todayMarketData?.rows) ? todayMarketData.rows : [];
   const todayMarketDate = todayMarketData?.active_slate_date || todayMarketData?.requested_slate_date || null;
   const PLAYABLE_ODDS_LIMIT = 500;
@@ -392,17 +391,16 @@ export default function PlayerProfileDashboard() {
       <div className="flex justify-between items-center mb-4">
         <div>
           {displayPlayerName ? (
-            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500 mb-1">
+            <h1 className="text-2xl font-bold text-slate-900 leading-tight">
               {displayPlayerName}
               {displayTeam ? ` · ${displayTeam}` : ""}
-            </div>
-          ) : null}
-          <h1 className="text-2xl font-bold text-slate-900">
-            Player Profile: {playerId}
-          </h1>
+            </h1>
+          ) : (
+            <h1 className="text-2xl font-bold text-slate-900 leading-tight">Player Profile</h1>
+          )}
+          <div className="text-sm font-normal text-slate-500 mt-0.5">Player ID: {playerId}</div>
           <div className="text-sm text-slate-600 mt-1">
-            {historicalFreshnessLabel}
-            {freshnessSource ? ` · source: ${freshnessSource}` : ""}
+            {profileFreshnessLabel}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 text-sm">
