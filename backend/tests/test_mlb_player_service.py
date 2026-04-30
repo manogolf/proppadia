@@ -45,7 +45,7 @@ class TestMlbPlayerService(unittest.TestCase):
         mock_profile.return_value = {"player_info": {"player_id": 660271}}
         out = svc.player_profile(player_id=660271)
         self.assertEqual(out, {"player_info": {"player_id": 660271}})
-        mock_profile.assert_called_once_with(player_id=660271)
+        mock_profile.assert_called_once_with(player_id=660271, sections=None)
 
 
 if __name__ == "__main__":

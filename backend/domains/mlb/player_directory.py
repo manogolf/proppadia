@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from backend.domains.mlb.repository.player_repository import (
     _decorate as repo_decorate,
@@ -35,9 +35,9 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
     return repo_list_players_mlb(limit=limit)
 
 
-def player_profile(player_id: int) -> Dict[str, Any]:
+def player_profile(player_id: int, sections: Optional[Set[str]] = None) -> Dict[str, Any]:
     info = lookup_player(player_id) or {"player_id": player_id}
-    rows = fetch_player_profile_rows(player_id)
+    rows = fetch_player_profile_rows(player_id, sections=sections)
 
     return {
         "player_info": {

@@ -7,6 +7,8 @@ export default function MemberAccessCard({
   loginFrom,
   ctas = [],
   singleLabel = "Predictions",
+  title = "Prediction Workspace",
+  description = "Member access is required for MLB/NHL prediction pages.",
 }) {
   const { user } = useAuth();
   const links =
@@ -19,10 +21,10 @@ export default function MemberAccessCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-slate-900">
-            Prediction Workspace
+            {title}
           </h2>
           <p className="text-sm text-slate-600 mt-1">
-            Member access is required for MLB/NHL prediction pages.
+            {description}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

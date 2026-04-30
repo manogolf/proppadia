@@ -370,9 +370,20 @@ def players_list(
     response_model=PlayerProfileResponse,
     response_model_exclude_none=True,
 )
-def get_player_profile(player_id: int):
+def get_player_profile(
+    player_id: int,
+    sections: Optional[str] = Query(
+        None,
+        description="Comma-separated profile sections: summary,streaks,recent_props,stat_derived,training_summary,history,all",
+    ),
+):
+    requested_sections = (
+        {part.strip().lower() for part in sections.split(",") if part.strip()}
+        if sections
+        else None
+    )
     try:
-        payload = player_profile(player_id=player_id)
+        payload = player_profile(player_id=player_id, sections=requested_sections)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:

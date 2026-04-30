@@ -116,7 +116,7 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         self.assertEqual((body.get("player_info") or {}).get("player_name"), "Shohei Ohtani")
         self.assertIn("recent_props", body)
         self.assertIn("training_summary", body)
-        mock_profile.assert_called_once_with(player_id=660271)
+        mock_profile.assert_called_once_with(player_id=660271, sections=None)
 
     def test_players_resolve_requires_identifier(self):
         resp = self.client.get("/api/players/resolve")
@@ -248,6 +248,21 @@ class TestMlbPlayersEndpoint(unittest.TestCase):
         resp = self.client.get("/api/player-profile/660271")
         self.assertEqual(resp.status_code, 503)
         self.assertIn("profile cache down", str(resp.json().get("detail")))
+
+    @patch("backend.app.routers.mlb.player_profile")
+    def test_player_profile_accepts_section_filter(self, mock_profile):
+        mock_profile.return_value = {
+            "player_info": {"player_id": 660271},
+            "streaks": [],
+            "recent_props": [],
+            "stat_derived": [],
+            "training_summary": [],
+            "season_stats": {},
+            "career_stats": {},
+        }
+        resp = self.client.get("/api/player-profile/660271?sections=summary,streaks")
+        self.assertEqual(resp.status_code, 200)
+        mock_profile.assert_called_once_with(player_id=660271, sections={"summary", "streaks"})
 
 
 if __name__ == "__main__":

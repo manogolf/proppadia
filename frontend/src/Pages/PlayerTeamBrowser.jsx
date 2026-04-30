@@ -14,6 +14,7 @@ import {
 
 const PLAYER_BROWSER_PREFS_KEY = "proppadia_player_browser_prefs_v2";
 const UNKNOWN_TEAM = "Unknown";
+const MLB_UNASSIGNED_TEAM = "Unassigned / Minors / Unknown";
 const PLAYER_SUGGESTION_MIN_CHARS = 1;
 
 const NHL_ACTIVE_TEAM_ABBRS = new Set([
@@ -57,9 +58,54 @@ const NHL_TEAM_ALIASES = {
   UTAH: "UTA",
 };
 
+const MLB_ACTIVE_TEAM_ABBRS = new Set([
+  "ARI",
+  "ATL",
+  "BAL",
+  "BOS",
+  "CHC",
+  "CIN",
+  "CLE",
+  "COL",
+  "CWS",
+  "DET",
+  "HOU",
+  "KC",
+  "LAA",
+  "LAD",
+  "MIA",
+  "MIL",
+  "MIN",
+  "NYM",
+  "NYY",
+  "OAK",
+  "PHI",
+  "PIT",
+  "SD",
+  "SEA",
+  "SF",
+  "STL",
+  "TB",
+  "TEX",
+  "TOR",
+  "WSH",
+]);
+
+const MLB_TEAM_ALIASES = {
+  ATH: "OAK",
+  AZ: "ARI",
+  LV: "OAK",
+  VIL: "OAK",
+};
+
 function normalizeTeamLabelBySport(rawValue, sport) {
   const raw = String(rawValue || "").trim();
-  if (!raw) return UNKNOWN_TEAM;
+  if (!raw) return sport === "mlb" ? MLB_UNASSIGNED_TEAM : UNKNOWN_TEAM;
+  if (sport === "mlb") {
+    const upper = raw.toUpperCase();
+    const mapped = MLB_TEAM_ALIASES[upper] || upper;
+    return MLB_ACTIVE_TEAM_ABBRS.has(mapped) ? mapped : MLB_UNASSIGNED_TEAM;
+  }
   if (sport !== "nhl") return raw;
   const upper = raw.toUpperCase();
   const mapped = NHL_TEAM_ALIASES[upper] || upper;
@@ -154,6 +200,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   const teamRefs = useRef(new Map());
   const playerRefs = useRef(new Map());
   const searchWrapRef = useRef(null);
+  const inactiveTeamLabel = sport === "mlb" ? MLB_UNASSIGNED_TEAM : UNKNOWN_TEAM;
 
   useEffect(() => {
     if (forcedSport) return;
@@ -484,7 +531,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   function selectPlayerSuggestion(player) {
     if (!player) return;
     const name = getPlayerName(player);
-    const team = player.teamLabel || UNKNOWN_TEAM;
+    const team = player.teamLabel || inactiveTeamLabel;
     const key = playerSuggestionKey(player);
     const isVisibleInCurrentView = candidatePlayers.some((p) => playerSuggestionKey(p) === key);
     setQuery(name);
@@ -543,7 +590,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
 
   const groupedByTeam = useMemo(() => {
     const grouped = filteredPlayers.reduce((acc, player) => {
-      const team = player.teamLabel || "Unknown";
+      const team = player.teamLabel || inactiveTeamLabel;
       if (!acc[team]) acc[team] = [];
       acc[team].push(player);
       return acc;
@@ -562,14 +609,14 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       if (watchedCount > 0) filtered[team] = rows;
     }
     return filtered;
-  }, [filteredPlayers, watchedTeamsOnly, watchIdSet]);
+  }, [filteredPlayers, inactiveTeamLabel, watchedTeamsOnly, watchIdSet]);
 
-  const unknownTeamRows = groupedByTeam[UNKNOWN_TEAM] || [];
+  const unknownTeamRows = groupedByTeam[inactiveTeamLabel] || [];
   const unknownTeamCount = unknownTeamRows.length;
 
   const teamNames = useMemo(() => {
     const names = Object.keys(groupedByTeam).filter((name) =>
-      showUnknownTeam ? true : name !== UNKNOWN_TEAM
+      showUnknownTeam ? true : name !== inactiveTeamLabel
     );
     if (teamSort === "players") {
       return names.sort(
@@ -594,8 +641,11 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       });
     }
     return names.sort();
-  }, [UNKNOWN_TEAM, groupedByTeam, showUnknownTeam, teamSort, watchIdSet]);
-  const visiblePlayerCount = filteredPlayers.length;
+  }, [groupedByTeam, inactiveTeamLabel, showUnknownTeam, teamSort, watchIdSet]);
+  const visiblePlayerCount = teamNames.reduce(
+    (count, team) => count + (groupedByTeam[team]?.length || 0),
+    0
+  );
   const totalPlayerCount = normalizedPlayers.length;
   const hasSearchText = Boolean(query.trim());
   const emptyStateTitle = hasSearchText
@@ -614,17 +664,17 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           recentOnly ? "recent only" : null,
         ].filter(Boolean).join(", ") || "none active"}).`;
   const visibleTeamCount = useMemo(
-    () => teamNames.filter((name) => name !== UNKNOWN_TEAM).length,
-    [UNKNOWN_TEAM, teamNames]
+    () => teamNames.filter((name) => name !== inactiveTeamLabel).length,
+    [inactiveTeamLabel, teamNames]
   );
   const totalTeamCount = useMemo(
     () =>
       new Set(
         normalizedPlayers
-          .map((p) => p.teamLabel || UNKNOWN_TEAM)
-          .filter((name) => name !== UNKNOWN_TEAM)
+          .map((p) => p.teamLabel || inactiveTeamLabel)
+          .filter((name) => name !== inactiveTeamLabel)
       ).size,
-    [UNKNOWN_TEAM, normalizedPlayers]
+    [inactiveTeamLabel, normalizedPlayers]
   );
 
   useEffect(() => {
@@ -809,7 +859,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                     {playerSuggestions.length > 0 ? (
                       <div className="max-h-80 overflow-auto py-1">
                         {playerSuggestions.map((player, index) => {
-                          const team = player.teamLabel || UNKNOWN_TEAM;
+                          const team = player.teamLabel || inactiveTeamLabel;
                           const position = playerPositionLabel(player);
                           const isHighlighted = index === highlightedSuggestionIndex;
                           return (
@@ -1021,9 +1071,9 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                 type="button"
                 className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs hover:bg-slate-200"
                 onClick={() => setShowUnknownTeam((prev) => !prev)}
-                title={showUnknownTeam ? "Hide Unknown team bucket" : "Show Unknown team bucket"}
+                title={showUnknownTeam ? `Hide ${inactiveTeamLabel} bucket` : `Show ${inactiveTeamLabel} bucket`}
               >
-                Unknown <strong>{unknownTeamCount}</strong> {showUnknownTeam ? "hide" : "show"}
+                {inactiveTeamLabel} <strong>{unknownTeamCount}</strong> {showUnknownTeam ? "hide" : "show"}
               </button>
             ) : null}
             {watchlistOnly ? (
@@ -1049,7 +1099,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           </div>
           <div className="mt-2 text-xs text-slate-500">
             Team header counts reflect player rows currently in this view (after filters), not official game-day roster size.
-            {unknownTeamCount > 0 ? " Unknown-team rows are excluded unless Unknown is shown." : ""}
+            {unknownTeamCount > 0 ? ` ${inactiveTeamLabel} rows are excluded unless shown.` : ""}
           </div>
           {notice ? (
             <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 rounded-md px-3 py-2">

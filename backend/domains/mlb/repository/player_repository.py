@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import logging
+import time
+from typing import Any, Dict, List, Optional, Set
 
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
+    isValidMLBTeam,
     normalizeTeamAbbreviation,
 )
 from backend.shared.db import pg_fetchall
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _normalize_team(team_abbr: Optional[str]) -> Optional[str]:
@@ -21,6 +26,26 @@ def _normalize_team(team_abbr: Optional[str]) -> Optional[str]:
     if s.isdigit():
         return normalizeTeamAbbreviation(getFullTeamAbbreviationFromID(int(s)))
     return normalizeTeamAbbreviation(s)
+
+
+def _is_known_player_name(value: Any) -> bool:
+    name = str(value or "").strip()
+    return bool(name) and name.lower() != "unknown"
+
+
+def _first_known_name(*values: Any) -> Optional[str]:
+    for value in values:
+        if _is_known_player_name(value):
+            return str(value).strip()
+    return None
+
+
+def _first_valid_mlb_team(*values: Any) -> Optional[str]:
+    for value in values:
+        team = _normalize_team(value)
+        if team and (isValidMLBTeam(team) or team_abbr_to_team_id(team) is not None):
+            return team
+    return None
 
 
 def _to_int(v: Any) -> Optional[int]:
@@ -54,12 +79,16 @@ def _decorate(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:
 
 
 def lookup_player(player_id: int) -> Optional[Dict[str, Any]]:
+    pid = _to_int(player_id)
+    if pid is None:
+        return None
+    fallback: Optional[Dict[str, Any]] = None
     queries = [
         (
             """
             SELECT player_id, player_name, team
             FROM mlb.player_ids
-            WHERE CAST(player_id AS TEXT) = %s
+            WHERE player_id = %s
             LIMIT 1
             """,
             "player_ids",
@@ -68,7 +97,7 @@ def lookup_player(player_id: int) -> Optional[Dict[str, Any]]:
             """
             SELECT player_id, player_name, team
             FROM mlb.model_training_props
-            WHERE CAST(player_id AS TEXT) = %s
+            WHERE player_id = %s
             ORDER BY game_date DESC NULLS LAST
             LIMIT 1
             """,
@@ -77,15 +106,19 @@ def lookup_player(player_id: int) -> Optional[Dict[str, Any]]:
     ]
     for sql, source in queries:
         try:
-            rows = pg_fetchall(sql, (str(player_id),))
+            rows = pg_fetchall(sql, (pid,))
         except Exception:
             continue
         if not rows:
             continue
         out = _decorate(rows[0], source)
-        if out:
+        if not out:
+            continue
+        if _is_known_player_name(out.get("player_name")):
             return out
-    return None
+        if fallback is None:
+            fallback = out
+    return fallback
 
 
 def search_players(q: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -222,30 +255,51 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
     """
     lim = max(1, min(int(limit), 5000))
     sql = """
-        WITH players AS (
+        WITH player_ids_rows AS (
           SELECT
             CAST(player_id AS TEXT) AS player_id,
-            MIN(player_name) AS player_name,
-            MIN(team) AS team
+            MIN(player_name) FILTER (
+              WHERE player_name IS NOT NULL
+                AND BTRIM(CAST(player_name AS TEXT)) <> ''
+                AND lower(BTRIM(CAST(player_name AS TEXT))) <> 'unknown'
+            ) AS player_ids_name,
+            MIN(player_name) AS fallback_player_ids_name,
+            MIN(team) AS player_ids_team
           FROM mlb.player_ids
           GROUP BY CAST(player_id AS TEXT)
         ),
         latest_team AS (
           SELECT DISTINCT ON (CAST(player_id AS TEXT))
             CAST(player_id AS TEXT) AS player_id,
+            player_name AS latest_training_name,
             team
           FROM mlb.model_training_props
-          WHERE team IS NOT NULL
-            AND BTRIM(CAST(team AS TEXT)) <> ''
+          WHERE (
+              team IS NOT NULL
+              AND BTRIM(CAST(team AS TEXT)) <> ''
+            )
+            OR (
+              player_name IS NOT NULL
+              AND BTRIM(CAST(player_name AS TEXT)) <> ''
+              AND lower(BTRIM(CAST(player_name AS TEXT))) <> 'unknown'
+            )
           ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
         ),
         latest_prop_team AS (
           SELECT DISTINCT ON (CAST(player_id AS TEXT))
             CAST(player_id AS TEXT) AS player_id,
+            player_name AS latest_prop_name,
             team
           FROM mlb.player_props
-          WHERE team IS NOT NULL
-            AND BTRIM(CAST(team AS TEXT)) <> ''
+          WHERE (
+              team IS NOT NULL
+              AND BTRIM(CAST(team AS TEXT)) <> ''
+            )
+            OR (
+              player_name IS NOT NULL
+              AND BTRIM(CAST(player_name AS TEXT)) <> ''
+              AND lower(BTRIM(CAST(player_name AS TEXT))) <> 'unknown'
+            )
             AND (prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%%')
           ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
         ),
@@ -253,23 +307,28 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
           SELECT
             CAST(player_id AS TEXT) AS player_id,
             MAX(game_date)::date AS last_prop_date
-          FROM mlb.player_props
-          WHERE prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%%'
+          FROM mlb.model_training_props
+          WHERE prop_source = 'mlb_api'
           GROUP BY CAST(player_id AS TEXT)
         )
         SELECT
           p.player_id,
-          p.player_name,
-          COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team, lpt.team) AS team,
+          p.player_ids_name,
+          p.fallback_player_ids_name,
+          p.player_ids_team,
+          lt.latest_training_name,
+          lt.team AS latest_training_team,
+          lpt.latest_prop_name,
+          lpt.team AS latest_prop_team,
           r.last_prop_date
-        FROM players p
+        FROM player_ids_rows p
         LEFT JOIN latest_team lt
           ON lt.player_id = p.player_id
         LEFT JOIN latest_prop_team lpt
           ON lpt.player_id = p.player_id
         LEFT JOIN recent r
           ON r.player_id = p.player_id
-        ORDER BY COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team, lpt.team) ASC NULLS LAST, p.player_name ASC
+        ORDER BY r.last_prop_date DESC NULLS LAST, p.player_ids_name ASC NULLS LAST, p.player_id ASC
         LIMIT %s
     """
     try:
@@ -282,15 +341,34 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
         pid = _to_int(row.get("player_id"))
         if pid is None:
             continue
+        team = _first_valid_mlb_team(
+            row.get("latest_training_team"),
+            row.get("player_ids_team"),
+            row.get("latest_prop_team"),
+        )
+        name = _first_known_name(
+            row.get("player_ids_name"),
+            row.get("latest_training_name"),
+            row.get("latest_prop_name"),
+            row.get("fallback_player_ids_name"),
+        )
+        last_prop_date_raw = row.get("last_prop_date")
+        if team:
+            player_status = "recent_mlb" if last_prop_date_raw else "active_mlb"
+        elif last_prop_date_raw:
+            player_status = "unknown_team"
+        else:
+            player_status = "minor_affiliate"
         out.append(
             {
                 "player_id": pid,
-                "player_name": row.get("player_name"),
-                "team": _normalize_team(row.get("team")),
+                "player_name": name,
+                "team": team,
+                "player_status": player_status,
                 "last_prop_date": (
-                    row.get("last_prop_date").isoformat()
-                    if hasattr(row.get("last_prop_date"), "isoformat")
-                    else (str(row.get("last_prop_date")) if row.get("last_prop_date") else None)
+                    last_prop_date_raw.isoformat()
+                    if hasattr(last_prop_date_raw, "isoformat")
+                    else (str(last_prop_date_raw) if last_prop_date_raw else None)
                 ),
             }
         )
@@ -363,8 +441,31 @@ def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, A
     return None
 
 
-def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
-    pid_txt = str(player_id)
+def _normalize_profile_sections(sections: Optional[Set[str]]) -> Set[str]:
+    allowed = {"recent_props", "streaks", "stat_derived", "training_summary", "freshness_metadata"}
+    if not sections:
+        return allowed
+    normalized = {str(section or "").strip().lower() for section in sections}
+    if "summary" in normalized:
+        normalized.add("freshness_metadata")
+    if "history" in normalized:
+        normalized.update({"recent_props", "stat_derived", "training_summary"})
+    if "all" in normalized:
+        return allowed
+    return {section for section in normalized if section in allowed}
+
+
+def fetch_player_profile_rows(player_id: int, sections: Optional[Set[str]] = None) -> Dict[str, Any]:
+    pid = _to_int(player_id)
+    if pid is None:
+        return {
+            "recent_props": [],
+            "streaks": [],
+            "stat_derived": [],
+            "training_summary": [],
+            "freshness_metadata": {},
+        }
+    selected_sections = _normalize_profile_sections(sections)
     recent_props_sql = """
         SELECT
           game_date,
@@ -377,7 +478,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
           prop_source,
           'model_training_props'::text AS source
         FROM mlb.model_training_props
-        WHERE CAST(player_id AS TEXT) = %s
+        WHERE player_id = %s
           AND prop_source = 'mlb_api'
         ORDER BY game_date DESC NULLS LAST
         LIMIT 14
@@ -394,7 +495,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
               ORDER BY game_date DESC NULLS LAST, game_id DESC NULLS LAST
             ) AS rn
           FROM mlb.model_training_props
-          WHERE CAST(player_id AS TEXT) = %s
+          WHERE player_id = %s
             AND prop_source = 'mlb_api'
             AND lower(trim(coalesce(outcome, ''))) IN ('win', 'loss')
             AND prop_type IS NOT NULL
@@ -435,7 +536,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
     stat_derived_sql = """
         SELECT game_date, prop_type, result, outcome
         FROM mlb.model_training_props
-        WHERE CAST(player_id AS TEXT) = %s
+        WHERE player_id = %s
           AND prop_source = 'mlb_api'
         ORDER BY game_date DESC NULLS LAST
         LIMIT 20
@@ -443,7 +544,7 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
     training_summary_sql = """
         SELECT prop_type, COUNT(*)::int AS count
         FROM mlb.model_training_props
-        WHERE CAST(player_id AS TEXT) = %s
+        WHERE player_id = %s
         GROUP BY prop_type
         ORDER BY count DESC
         LIMIT 20
@@ -455,24 +556,47 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
           MAX(game_date)::date AS max_game_date,
           MAX(created_at) AS max_created_at
         FROM mlb.model_training_props
-        WHERE CAST(player_id AS TEXT) = %s
+        WHERE player_id = %s
           AND prop_source = 'mlb_api'
     """
 
-    def run_or_empty(sql: str) -> List[Dict[str, Any]]:
-        try:
-            return pg_fetchall(sql, (pid_txt,))
-        except Exception:
-            return []
+    timings: List[tuple[str, float, int]] = []
 
-    def run_one_or_empty(sql: str) -> Dict[str, Any]:
-        rows = run_or_empty(sql)
+    def run_or_empty(name: str, sql: str) -> List[Dict[str, Any]]:
+        start = time.perf_counter()
+        rows: List[Dict[str, Any]] = []
+        try:
+            rows = pg_fetchall(sql, (pid,))
+        except Exception:
+            pass
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        timings.append((name, elapsed_ms, len(rows)))
+        return rows
+
+    def run_one_or_empty(name: str, sql: str) -> Dict[str, Any]:
+        rows = run_or_empty(name, sql)
         return rows[0] if rows else {}
 
-    return {
-        "recent_props": run_or_empty(recent_props_sql),
-        "streaks": run_or_empty(streaks_sql),
-        "stat_derived": run_or_empty(stat_derived_sql),
-        "training_summary": run_or_empty(training_summary_sql),
-        "freshness_metadata": run_one_or_empty(freshness_sql),
+    payload = {
+        "recent_props": run_or_empty("recent_props", recent_props_sql)
+        if "recent_props" in selected_sections
+        else [],
+        "streaks": run_or_empty("streaks", streaks_sql) if "streaks" in selected_sections else [],
+        "stat_derived": run_or_empty("stat_derived", stat_derived_sql)
+        if "stat_derived" in selected_sections
+        else [],
+        "training_summary": run_or_empty("training_summary", training_summary_sql)
+        if "training_summary" in selected_sections
+        else [],
+        "freshness_metadata": run_one_or_empty("freshness_metadata", freshness_sql)
+        if "freshness_metadata" in selected_sections
+        else {},
     }
+    if timings:
+        LOGGER.info(
+            "MLB player profile timings player_id=%s sections=%s %s",
+            pid,
+            ",".join(sorted(selected_sections)),
+            " ".join(f"{name}={elapsed_ms:.1f}ms/{rows}" for name, elapsed_ms, rows in timings),
+        )
+    return payload

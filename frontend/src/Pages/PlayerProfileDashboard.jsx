@@ -14,6 +14,8 @@ export default function PlayerProfileDashboard() {
   const [todayMarketLoading, setTodayMarketLoading] = useState(false);
   const [todayMarketError, setTodayMarketError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [profileDetailsLoading, setProfileDetailsLoading] = useState(false);
+  const [profileDetailsError, setProfileDetailsError] = useState("");
   const [error, setError] = useState("");
 
   const routedPlayerName = String(location.state?.player_name || "").trim();
@@ -32,28 +34,68 @@ export default function PlayerProfileDashboard() {
   const displayTeam = routedTeam || profileTeam || "";
 
   useEffect(() => {
+    let isMounted = true;
     async function fetchProfile() {
+      const baseEndpoint =
+        profileSport === "nhl"
+          ? `${getBaseURL()}/api/nhl/player-profile/${playerId}`
+          : `${getBaseURL()}/api/player-profile/${playerId}`;
       try {
+        setLoading(true);
         setError("");
-        const endpoint =
-          profileSport === "nhl"
-            ? `${getBaseURL()}/api/nhl/player-profile/${playerId}`
-            : `${getBaseURL()}/api/player-profile/${playerId}`;
-        const res = await fetch(endpoint);
+        setProfileDetailsError("");
+        setProfileData(null);
+        const summaryEndpoint =
+          profileSport === "mlb" ? `${baseEndpoint}?sections=summary` : baseEndpoint;
+        const res = await fetch(summaryEndpoint);
         if (!res.ok) {
           const txt = await res.text();
           throw new Error(`${res.status}: ${txt}`);
         }
         const data = await res.json();
+        if (!isMounted) return;
         setProfileData(data);
-      } catch (err) {
-        setProfileData(null);
-        setError(err?.message || "Failed to load player profile.");
-      } finally {
         setLoading(false);
+      } catch (err) {
+        if (isMounted) {
+          setProfileData(null);
+          setError(err?.message || "Failed to load player profile.");
+          setLoading(false);
+        }
+        return;
+      } finally {
+        if (isMounted && profileSport !== "mlb") setLoading(false);
+      }
+
+      if (profileSport !== "mlb") return;
+      try {
+        if (isMounted) setProfileDetailsLoading(true);
+        const detailsEndpoint = `${baseEndpoint}?sections=streaks,recent_props,stat_derived,training_summary`;
+        const detailsRes = await fetch(detailsEndpoint);
+        if (!detailsRes.ok) {
+          const txt = await detailsRes.text();
+          throw new Error(`${detailsRes.status}: ${txt}`);
+        }
+        const details = await detailsRes.json();
+        if (!isMounted) return;
+        setProfileData((prev) => ({
+          ...(prev || {}),
+          ...details,
+          player_info: details?.player_info || prev?.player_info || {},
+          freshness_metadata: prev?.freshness_metadata || details?.freshness_metadata || {},
+        }));
+      } catch (err) {
+        if (isMounted) {
+          setProfileDetailsError(err?.message || "Unable to load recent profile history.");
+        }
+      } finally {
+        if (isMounted) setProfileDetailsLoading(false);
       }
     }
     fetchProfile();
+    return () => {
+      isMounted = false;
+    };
   }, [playerId, profileSport]);
 
   useEffect(() => {
@@ -95,35 +137,41 @@ export default function PlayerProfileDashboard() {
     };
   }, [playerId, profileSport]);
 
-  if (loading) {
-    return (
-      <div className="p-6 max-w-5xl mx-auto">
-        <Skeleton height={36} width={300} />
-        <Skeleton count={10} height={20} style={{ marginTop: 12 }} />
-      </div>
-    );
-  }
-
-  if (error)
+  if (error && !profileData)
     return (
       <div className="p-4 text-rose-600">
         Failed to load player profile: {error}
       </div>
     );
 
-  if (!profileData)
+  if (!profileData && !loading)
     return (
       <div className="p-4 text-rose-600">Failed to load player profile</div>
     );
 
+  const effectiveProfileData = profileData || {
+    player_info: {
+      player_id: playerId,
+      player_name: routedPlayerName || "",
+      team: routedTeam || "",
+    },
+    streaks: [],
+    recent_props: [],
+    stat_derived: [],
+    training_summary: [],
+    freshness_metadata: {},
+  };
   const latestRecentPropDate =
-    profileData?.recent_props?.map((p) => p?.game_date).find((d) => d) || null;
+    effectiveProfileData?.recent_props?.map((p) => p?.game_date).find((d) => d) || null;
   const latestDerivedDate =
-    profileData?.stat_derived?.map((p) => p?.game_date).find((d) => d) || null;
+    effectiveProfileData?.stat_derived?.map((p) => p?.game_date).find((d) => d) || null;
   const freshnessDate = latestRecentPropDate || latestDerivedDate;
-  const freshnessSource = String(profileData?.freshness_metadata?.source || "").trim();
-  const freshnessMaxDate = String(profileData?.freshness_metadata?.max_game_date || "").trim();
+  const freshnessSource = String(effectiveProfileData?.freshness_metadata?.source || "").trim();
+  const freshnessMaxDate = String(effectiveProfileData?.freshness_metadata?.max_game_date || "").trim();
   const freshnessLabel = freshnessDate || freshnessMaxDate;
+  const historicalFreshnessLabel = freshnessLabel
+    ? `Historical profile data through ${freshnessLabel}`
+    : "Historical profile data pending";
   const todayMarketRows = Array.isArray(todayMarketData?.rows) ? todayMarketData.rows : [];
   const todayMarketDate = todayMarketData?.active_slate_date || todayMarketData?.requested_slate_date || null;
   const PLAYABLE_ODDS_LIMIT = 500;
@@ -348,8 +396,7 @@ export default function PlayerProfileDashboard() {
             Player Profile: {playerId}
           </h1>
           <div className="text-sm text-slate-600 mt-1">
-            Data freshness:{" "}
-            {freshnessLabel ? `last prop date ${freshnessLabel}` : "no recent prop history"}
+            {historicalFreshnessLabel}
             {freshnessSource ? ` · source: ${freshnessSource}` : ""}
           </div>
         </div>
@@ -363,7 +410,7 @@ export default function PlayerProfileDashboard() {
             <div className="flex items-baseline justify-between gap-3 mb-2">
               <h2 className="text-xl font-semibold text-slate-900">Today&apos;s Market</h2>
               {todayMarketDate ? (
-                <span className="text-xs text-slate-500">Slate {todayMarketDate}</span>
+                <span className="text-xs text-slate-500">Current slate {todayMarketDate}</span>
               ) : null}
             </div>
             {todayMarketLoading ? (
@@ -431,12 +478,34 @@ export default function PlayerProfileDashboard() {
           </div>
         </section>
       ) : null}
+      {loading ? (
+        <section className="mb-6">
+          <div className="pp-card p-3 text-slate-600">
+            <div className="font-medium text-slate-800">Building player context...</div>
+            <div className="mt-1 text-sm">
+              Gathering today&apos;s market, streaks, and recent history.
+            </div>
+            <div className="mt-3">
+              <Skeleton count={3} height={18} />
+            </div>
+          </div>
+        </section>
+      ) : null}
+      {profileDetailsError ? (
+        <section className="mb-6">
+          <div className="pp-card p-3 text-sm text-rose-600">
+            {profileDetailsError}
+          </div>
+        </section>
+      ) : null}
       <section className="mb-6">
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Current Streaks</h2>
-          {profileData.streaks?.length > 0 ? (
+          {profileDetailsLoading ? (
+            <div className="text-sm text-slate-500">Loading streak context...</div>
+          ) : effectiveProfileData.streaks?.length > 0 ? (
             <ul className="space-y-2">
-              {profileData.streaks.map((s, i) => (
+              {effectiveProfileData.streaks.map((s, i) => (
                 <li key={i} className="pp-chip p-2">
                   <span className="font-semibold">
                     {getPropDisplayLabel(s.prop_type)}
@@ -453,9 +522,11 @@ export default function PlayerProfileDashboard() {
       <section className="mb-6">
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Recent Props</h2>
-          {profileData.recent_props?.length > 0 ? (
+          {profileDetailsLoading ? (
+            <div className="text-sm text-slate-500">Loading recent prop history...</div>
+          ) : effectiveProfileData.recent_props?.length > 0 ? (
             <ul className="space-y-1">
-              {profileData.recent_props.map((prop, i) => (
+              {effectiveProfileData.recent_props.map((prop, i) => (
                 <li key={i} className="pp-chip p-2 text-sm">
                   <div>
                     <span className="font-semibold text-slate-800">
@@ -484,9 +555,11 @@ export default function PlayerProfileDashboard() {
       <section className="mb-6">
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Stat-Derived Props</h2>
-          {profileData.stat_derived?.length > 0 ? (
+          {profileDetailsLoading ? (
+            <div className="text-sm text-slate-500">Loading stat-derived context...</div>
+          ) : effectiveProfileData.stat_derived?.length > 0 ? (
             <ul className="space-y-2">
-              {profileData.stat_derived.map((prop, i) => (
+              {effectiveProfileData.stat_derived.map((prop, i) => (
                 <li key={i} className="pp-chip p-2">
                   <div>
                     <span className="font-semibold">{prop.game_date}</span>:{" "}
@@ -508,9 +581,11 @@ export default function PlayerProfileDashboard() {
       <section className="mb-6">
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Training Summary</h2>
-          {profileData.training_summary?.length > 0 ? (
+          {profileDetailsLoading ? (
+            <div className="text-sm text-slate-500">Loading training summary...</div>
+          ) : effectiveProfileData.training_summary?.length > 0 ? (
             <ul className="space-y-1">
-              {profileData.training_summary.map((entry, i) => (
+              {effectiveProfileData.training_summary.map((entry, i) => (
                 <li key={i} className="pp-chip px-2 py-1 text-sm">
                   {getPropDisplayLabel(entry.prop_type)}: {entry.count} props
                   used in training
@@ -523,9 +598,9 @@ export default function PlayerProfileDashboard() {
         </div>
       </section>
       <div className="flex mb-6 gap-4 items-stretch">
-        {profileData.season_stats?.hitting &&
+        {effectiveProfileData.season_stats?.hitting &&
           (() => {
-            const s = profileData.season_stats.hitting;
+            const s = effectiveProfileData.season_stats.hitting;
             return (
               <div className="flex-1 flex flex-col">
                 <div className="flex flex-col flex-grow p-4 pp-card">
@@ -572,9 +647,9 @@ export default function PlayerProfileDashboard() {
             );
           })()}
 
-        {profileData.career_stats?.hitting &&
+        {effectiveProfileData.career_stats?.hitting &&
           (() => {
-            const c = profileData.career_stats.hitting;
+            const c = effectiveProfileData.career_stats.hitting;
             return (
               <div className="flex-1 flex flex-col">
                 <div className="flex flex-col flex-grow p-4 pp-card">

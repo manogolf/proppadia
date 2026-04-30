@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from backend.domains.mlb.player_directory import (
     list_players_mlb as list_players_mlb_directory,
@@ -44,5 +44,5 @@ def list_players_mlb(*, limit: int = 2000) -> List[Dict[str, Any]]:
     return list_players_mlb_directory(limit=limit)
 
 
-def player_profile(*, player_id: int) -> Dict[str, Any]:
-    return player_profile_directory(player_id=player_id)
+def player_profile(*, player_id: int, sections: Optional[Set[str]] = None) -> Dict[str, Any]:
+    return player_profile_directory(player_id=player_id, sections=sections)

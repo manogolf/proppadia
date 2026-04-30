@@ -53,6 +53,9 @@ export default function MLBHome() {
           <MemberAccessCard
             openTo="/mlb/predictions"
             loginFrom="/mlb/predictions"
+            singleLabel="Research"
+            title="Research Workspace"
+            description="Explore player context, market movement, and decision signals."
           />
         </div>
       </div>
