@@ -458,6 +458,43 @@ const VIEW_PRESETS = [
   },
 ];
 
+const EMPTY_MIX_FILTERS = {
+  timing: "",
+  streak: "",
+  coverage: "",
+  side: "",
+  market_position: "",
+};
+
+function mixFilterDisplayLabel(group, value) {
+  if (isMissing(value)) return "";
+  if (group === "timing") return timingLabel(value);
+  if (group === "streak") return streakLabel(value);
+  if (group === "coverage") return coverageLabel(value);
+  if (group === "side") return sideLabel(value);
+  return String(value);
+}
+
+function rowMatchesMixFilter(row, group, value) {
+  if (isMissing(value)) return true;
+  const target = String(value).trim();
+  if (group === "timing") return String(row?.timing_signal || "").trim() === target;
+  if (group === "streak") return String(row?.streak_context_label || "").trim() === target;
+  if (group === "coverage") return String(row?.coverage_quality_label || "").trim() === target;
+  if (group === "side") return String(row?.side || "").trim() === target;
+  if (group === "market_position") return marketPositionInfo(row).label === target;
+  return true;
+}
+
+function applyMixFilters(rows, mixFilters, exceptGroup = "") {
+  return rows.filter((row) =>
+    Object.entries(mixFilters || {}).every(([group, value]) => {
+      if (group === exceptGroup) return true;
+      return rowMatchesMixFilter(row, group, value);
+    })
+  );
+}
+
 export default function MLBTodayWorkspacePage() {
   const location = useLocation();
   const { user } = useAuth();
@@ -482,6 +519,7 @@ export default function MLBTodayWorkspacePage() {
   const [lastInteraction, setLastInteraction] = useState("none");
   const [watchlist, setWatchlist] = useState([]);
   const [viewPreset, setViewPreset] = useState("all");
+  const [mixFilters, setMixFilters] = useState(EMPTY_MIX_FILTERS);
   const [propFilterExplicitSincePlayer, setPropFilterExplicitSincePlayer] = useState(false);
   const [propAvailability, setPropAvailability] = useState(null);
   const [filters, setFilters] = useState({
@@ -540,7 +578,7 @@ export default function MLBTodayWorkspacePage() {
     () => (shouldApplyPropFilter ? String(filters.prop_type || "").trim() : ""),
     [shouldApplyPropFilter, filters.prop_type]
   );
-  const displayedRows = useMemo(() => {
+  const presetRows = useMemo(() => {
     let out = sortedRows;
     if (viewPreset === "best_covered") {
       out = out.filter((r) => {
@@ -562,6 +600,7 @@ export default function MLBTodayWorkspacePage() {
     }
     return out;
   }, [sortedRows, viewPreset]);
+  const displayedRows = useMemo(() => applyMixFilters(presetRows, mixFilters), [presetRows, mixFilters]);
 
   const propOutlookRows = useMemo(() => {
     const source = Array.isArray(regimeContextByProp) && regimeContextByProp.length ? regimeContextByProp : [];
@@ -637,14 +676,16 @@ export default function MLBTodayWorkspacePage() {
     focusedRowIndex >= 0 && focusedRowIndex < displayedRows.length ? rowKeyForRow(displayedRows[focusedRowIndex]) : null;
 
   const hasActiveFilters = useMemo(() => {
+    const hasMixFilter = Object.values(mixFilters).some((v) => !isMissing(v));
     return Boolean(
       effectivePropFilter ||
       filters.team ||
       filters.side ||
       filters.timing_signal ||
-      (filters.player_query && filters.player_query.trim())
+      (filters.player_query && filters.player_query.trim()) ||
+      hasMixFilter
     );
-  }, [filters, effectivePropFilter]);
+  }, [filters, effectivePropFilter, mixFilters]);
 
   const activeStateTokens = useMemo(() => {
     const out = [];
@@ -655,9 +696,12 @@ export default function MLBTodayWorkspacePage() {
     if (filters.team) out.push(filters.team);
     if (filters.side) out.push(sideLabel(filters.side));
     if (filters.timing_signal) out.push(timingLabel(filters.timing_signal));
+    for (const [group, value] of Object.entries(mixFilters)) {
+      if (!isMissing(value)) out.push(mixFilterDisplayLabel(group, value));
+    }
     if (filters.player_query && filters.player_query.trim()) out.push(`Player: ${filters.player_query.trim()}`);
     return out;
-  }, [viewPreset, filters, effectivePropFilter, hasPlayerQuery]);
+  }, [viewPreset, filters, effectivePropFilter, hasPlayerQuery, mixFilters]);
 
   const activeFilterTokens = useMemo(() => {
     const out = [];
@@ -666,14 +710,17 @@ export default function MLBTodayWorkspacePage() {
     if (filters.team) out.push(filters.team);
     if (filters.side) out.push(sideLabel(filters.side));
     if (filters.timing_signal) out.push(timingLabel(filters.timing_signal));
+    for (const [group, value] of Object.entries(mixFilters)) {
+      if (!isMissing(value)) out.push(mixFilterDisplayLabel(group, value));
+    }
     if (filters.player_query && filters.player_query.trim()) out.push(`Player: ${filters.player_query.trim()}`);
     return out;
-  }, [filters, effectivePropFilter, hasPlayerQuery]);
+  }, [filters, effectivePropFilter, hasPlayerQuery, mixFilters]);
 
-  const timingCounts = useMemo(() => bucketCounts(displayedRows, "timing_signal"), [displayedRows]);
-  const streakCounts = useMemo(() => bucketCounts(displayedRows, "streak_context_label"), [displayedRows]);
-  const coverageCounts = useMemo(() => bucketCounts(displayedRows, "coverage_quality_label"), [displayedRows]);
-  const sideCounts = useMemo(() => bucketCounts(displayedRows, "side"), [displayedRows]);
+  const timingCounts = useMemo(() => bucketCounts(applyMixFilters(presetRows, mixFilters, "timing"), "timing_signal"), [presetRows, mixFilters]);
+  const streakCounts = useMemo(() => bucketCounts(applyMixFilters(presetRows, mixFilters, "streak"), "streak_context_label"), [presetRows, mixFilters]);
+  const coverageCounts = useMemo(() => bucketCounts(applyMixFilters(presetRows, mixFilters, "coverage"), "coverage_quality_label"), [presetRows, mixFilters]);
+  const sideCounts = useMemo(() => bucketCounts(applyMixFilters(presetRows, mixFilters, "side"), "side"), [presetRows, mixFilters]);
   const propSideCounts = useMemo(() => {
     const counts = {};
     for (const r of displayedRows) {
@@ -684,10 +731,10 @@ export default function MLBTodayWorkspacePage() {
   }, [displayedRows]);
   const marketPositionCounts = useMemo(() => {
     return bucketCounts(
-      displayedRows.map((r) => ({ market_position_label: marketPositionInfo(r).label })),
+      applyMixFilters(presetRows, mixFilters, "market_position").map((r) => ({ market_position_label: marketPositionInfo(r).label })),
       "market_position_label"
     );
-  }, [displayedRows]);
+  }, [presetRows, mixFilters]);
   const propDisplayCounts = useMemo(() => {
     return bucketCounts(
       displayedRows.map((r) => ({ prop_label: propLabel(r.prop_type) })),
@@ -1131,6 +1178,7 @@ export default function MLBTodayWorkspacePage() {
 
   function clearAllReviewControls() {
     setViewPreset("all");
+    setMixFilters(EMPTY_MIX_FILTERS);
     setPropFilterExplicitSincePlayer(false);
     setPropAvailability(null);
     setExpandedRowKeys(new Set());
@@ -1143,6 +1191,37 @@ export default function MLBTodayWorkspacePage() {
       timing_signal: "",
       player_query: "",
     });
+  }
+
+  function toggleMixFilter(group, value) {
+    setMixFilters((current) => ({
+      ...current,
+      [group]: String(current?.[group] || "").trim() === String(value || "").trim() ? "" : value,
+    }));
+  }
+
+  function mixChipClass(group, value) {
+    const active = String(mixFilters?.[group] || "").trim() === String(value || "").trim();
+    return [
+      "text-xs px-2 py-1 rounded border transition",
+      active
+        ? "bg-slate-900 border-slate-900 text-white"
+        : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200",
+    ].join(" ");
+  }
+
+  function renderMixChip(group, value, count, label) {
+    return (
+      <button
+        key={`${group}-${value}`}
+        type="button"
+        className={mixChipClass(group, value)}
+        onClick={() => toggleMixFilter(group, value)}
+        aria-pressed={String(mixFilters?.[group] || "").trim() === String(value || "").trim()}
+      >
+        {label}: {count}
+      </button>
+    );
   }
 
   function watchEntryFromWorkspaceRow(row) {
@@ -1408,37 +1487,27 @@ export default function MLBTodayWorkspacePage() {
         <div className="pp-card p-3 mb-4 flex flex-wrap gap-2">
           <div className="text-xs text-slate-500 mr-1">Timing mix:</div>
           {timingCounts.map(([label, count]) => (
-            <span key={`timing-${label}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
-              {timingLabel(label)}: {count}
-            </span>
+            renderMixChip("timing", label, count, timingLabel(label))
           ))}
           <div className="w-full" />
           <div className="text-xs text-slate-500 mr-1">Streak mix:</div>
           {streakCounts.map(([label, count]) => (
-            <span key={`streak-${label}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
-              {streakLabel(label)}: {count}
-            </span>
+            renderMixChip("streak", label, count, streakLabel(label))
           ))}
           <div className="w-full" />
           <div className="text-xs text-slate-500 mr-1">Coverage mix:</div>
           {coverageCounts.map(([label, count]) => (
-            <span key={`coverage-${label}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
-              {coverageLabel(label)}: {count}
-            </span>
+            renderMixChip("coverage", label, count, coverageLabel(label))
           ))}
           <div className="w-full" />
           <div className="text-xs text-slate-500 mr-1">Side mix:</div>
           {sideCounts.map(([label, count]) => (
-            <span key={`side-${label}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
-              {sideLabel(label)}: {count}
-            </span>
+            renderMixChip("side", label, count, sideLabel(label))
           ))}
           <div className="w-full" />
           <div className="text-xs text-slate-500 mr-1">Market Position mix:</div>
           {marketPositionCounts.map(([label, count]) => (
-            <span key={`market-position-${label}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
-              {label}: {count}
-            </span>
+            renderMixChip("market_position", label, count, label)
           ))}
         </div>
 
