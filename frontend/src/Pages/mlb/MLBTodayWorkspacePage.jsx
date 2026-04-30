@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
 import {
@@ -437,6 +437,12 @@ function compareDefaultRows(a, b) {
 
 function rowKeyForRow(row) {
   return `${row?.player_id}:${row?.game_id}:${row?.prop_type}:${row?.line}:${row?.side}`;
+}
+
+function playerProfilePath(row) {
+  const playerId = row?.player_id;
+  if (playerId === null || playerId === undefined || playerId === "") return null;
+  return `/mlb/players/${encodeURIComponent(String(playerId))}`;
 }
 
 const VIEW_PRESETS = [
@@ -1870,6 +1876,7 @@ export default function MLBTodayWorkspacePage() {
                   const marketPosition = marketPositionInfo(r);
                   const watchId = toWatchlistId(watchEntryFromWorkspaceRow(r));
                   const isWatched = Boolean(watchId && watchIdSet.has(String(watchId)));
+                  const profilePath = playerProfilePath(r);
                   return (
                     <React.Fragment key={key}>
                       <tr
@@ -1893,11 +1900,42 @@ export default function MLBTodayWorkspacePage() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="font-semibold text-slate-900 truncate" title={r.player_name || ""}>
-                                {r.player_name || DASH}
+                                {profilePath ? (
+                                  <Link
+                                    to={profilePath}
+                                    state={{
+                                      player_name: r.player_name || "",
+                                      team: r.team || "",
+                                      sport: "mlb",
+                                    }}
+                                    className="hover:text-blue-700 hover:underline"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    {r.player_name || DASH}
+                                  </Link>
+                                ) : (
+                                  r.player_name || DASH
+                                )}
                               </div>
                               <div className="text-xs text-slate-500 truncate" title={`${r.team || DASH} vs ${r.opponent || DASH}`}>
                                 {(r.team || DASH)} vs {(r.opponent || DASH)}
                               </div>
+                              {profilePath ? (
+                                <Link
+                                  to={profilePath}
+                                  state={{
+                                    player_name: r.player_name || "",
+                                    team: r.team || "",
+                                    sport: "mlb",
+                                  }}
+                                  className="mt-0.5 inline-flex text-[11px] font-medium text-slate-500 hover:text-blue-700 hover:underline"
+                                  onClick={(event) => event.stopPropagation()}
+                                  aria-label={`View profile for ${r.player_name || "player"}`}
+                                  title="View player profile"
+                                >
+                                  Research
+                                </Link>
+                              ) : null}
                             </div>
                             <div className="shrink-0 flex flex-col items-end gap-1">
                               <button

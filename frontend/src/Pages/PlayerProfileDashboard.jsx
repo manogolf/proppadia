@@ -405,9 +405,16 @@ export default function PlayerProfileDashboard() {
             {freshnessSource ? ` · source: ${freshnessSource}` : ""}
           </div>
         </div>
-        <Link to={playerListPath} className="text-slate-700 hover:underline text-sm">
-          ← Back to Player List
-        </Link>
+        <div className="flex flex-col items-end gap-1 text-sm">
+          {profileSport === "mlb" ? (
+            <Link to="/mlb/today" className="text-slate-700 hover:underline">
+              ← Back to MLB Today
+            </Link>
+          ) : null}
+          <Link to={playerListPath} className="text-slate-700 hover:underline">
+            ← Back to Player List
+          </Link>
+        </div>
       </div>
       {profileSport === "mlb" ? (
         <section className="mb-6" style={{ overflowAnchor: "none" }}>
