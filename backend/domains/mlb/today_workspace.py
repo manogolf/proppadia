@@ -21,6 +21,16 @@ PROP_REGIME_CONTEXT_CSV = (
 )
 
 
+def _int_or_none(value: Any) -> Optional[int]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return None
+
+
 def _display_prop(prop_type: Any) -> str:
     prop = str(prop_type or "").strip().lower()
     labels = {
@@ -72,6 +82,18 @@ def _load_prop_regime_context() -> Dict[str, Dict[str, Any]]:
                 "long_term_regime": row.get("long_term_regime"),
                 "recent_db_regime": row.get("recent_db_regime") or row.get("recent_regime"),
                 "execution_regime": row.get("execution_regime"),
+                "latest_regime_date": row.get("latest_usable_date"),
+                "long_term_sample_rows": _int_or_none(row.get("long_term_30d_rows")),
+                "recent_sample_rows": _int_or_none(row.get("recent_window_rows")),
+                "trend_sample_rows": _int_or_none(row.get("trend_window_rows")),
+                "recent_window_days": _int_or_none(row.get("recent_window_days")),
+                "trend_window_days": _int_or_none(row.get("trend_window_days")),
+                "trend_direction": row.get("trend_direction") or row.get("execution_regime"),
+                "trend_metric_recent": row.get("trend_metric_recent"),
+                "trend_metric_prior": row.get("trend_metric_prior"),
+                "trend_metric_delta": row.get("trend_metric_delta"),
+                "trend_prior_window_days": _int_or_none(row.get("trend_prior_window_days")),
+                "trend_prior_sample_rows": _int_or_none(row.get("trend_prior_sample_rows")),
                 "regime_context_available": has_regime_context,
             }
     return out
@@ -88,6 +110,18 @@ def _apply_regime_context(row: Dict[str, Any], context_by_prop: Dict[str, Dict[s
     out["long_term_regime"] = context.get("long_term_regime")
     out["recent_db_regime"] = context.get("recent_db_regime")
     out["execution_regime"] = context.get("execution_regime")
+    out["latest_regime_date"] = context.get("latest_regime_date")
+    out["long_term_sample_rows"] = context.get("long_term_sample_rows")
+    out["recent_sample_rows"] = context.get("recent_sample_rows")
+    out["trend_sample_rows"] = context.get("trend_sample_rows")
+    out["recent_window_days"] = context.get("recent_window_days")
+    out["trend_window_days"] = context.get("trend_window_days")
+    out["trend_direction"] = context.get("trend_direction")
+    out["trend_metric_recent"] = context.get("trend_metric_recent")
+    out["trend_metric_prior"] = context.get("trend_metric_prior")
+    out["trend_metric_delta"] = context.get("trend_metric_delta")
+    out["trend_prior_window_days"] = context.get("trend_prior_window_days")
+    out["trend_prior_sample_rows"] = context.get("trend_prior_sample_rows")
     out["regime_context_available"] = bool(context.get("regime_context_available"))
     out["regime_context_missing_reason"] = None if context else f"No regime context row found for prop_type={prop_type}."
     return out
@@ -116,6 +150,19 @@ def _build_regime_context_by_prop(
                 "long_term_regime": context.get("long_term_regime"),
                 "recent_db_regime": context.get("recent_db_regime"),
                 "execution_regime": context.get("execution_regime"),
+                "latest_regime_date": context.get("latest_regime_date"),
+                "today_rows": counts[prop_type],
+                "long_term_sample_rows": context.get("long_term_sample_rows"),
+                "recent_sample_rows": context.get("recent_sample_rows"),
+                "trend_sample_rows": context.get("trend_sample_rows"),
+                "recent_window_days": context.get("recent_window_days"),
+                "trend_window_days": context.get("trend_window_days"),
+                "trend_direction": context.get("trend_direction"),
+                "trend_metric_recent": context.get("trend_metric_recent"),
+                "trend_metric_prior": context.get("trend_metric_prior"),
+                "trend_metric_delta": context.get("trend_metric_delta"),
+                "trend_prior_window_days": context.get("trend_prior_window_days"),
+                "trend_prior_sample_rows": context.get("trend_prior_sample_rows"),
                 "regime_context_available": has_context,
                 "regime_context_missing_reason": None
                 if context

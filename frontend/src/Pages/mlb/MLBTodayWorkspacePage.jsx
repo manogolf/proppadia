@@ -45,6 +45,13 @@ function fmtPctSigned(v) {
   return `${sign}${(n * 100).toFixed(1)}%`;
 }
 
+function fmtPctPointSigned(v) {
+  const n = asNumber(v);
+  if (n === null) return DASH;
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${(n * 100).toFixed(1)}pp`;
+}
+
 function fmtPrice(v, { forceSign = false } = {}) {
   const n = asNumber(v);
   if (n === null) return DASH;
@@ -217,9 +224,23 @@ function regimeReason(reason) {
 
 function regimeDetailLine(item) {
   const parts = [];
-  if (!isMissing(item?.long_term_regime)) parts.push(`Long Term: ${item.long_term_regime}`);
-  if (!isMissing(item?.recent_db_regime)) parts.push(`Recent: ${item.recent_db_regime}`);
-  if (!isMissing(item?.execution_regime)) parts.push(`Trend: ${item.execution_regime}`);
+  if (!isMissing(item?.long_term_regime)) {
+    const n = isMissing(item?.long_term_sample_rows) ? "" : ` n=${fmtNumber(item.long_term_sample_rows, 0)}`;
+    parts.push(`Long Term: ${item.long_term_regime}${n}`);
+  }
+  if (!isMissing(item?.recent_db_regime)) {
+    const window = isMissing(item?.recent_window_days) ? "" : `${fmtNumber(item.recent_window_days, 0)}d `;
+    const n = isMissing(item?.recent_sample_rows) ? "" : `n=${fmtNumber(item.recent_sample_rows, 0)}`;
+    parts.push(`Recent: ${item.recent_db_regime} ${window}${n}`.trim());
+  }
+  if (!isMissing(item?.execution_regime)) {
+    const priorWindow = isMissing(item?.trend_prior_window_days)
+      ? item?.trend_window_days
+      : item.trend_prior_window_days;
+    const prior = isMissing(priorWindow) ? "" : `vs prior ${fmtNumber(priorWindow, 0)}d`;
+    const delta = isMissing(item?.trend_metric_delta) ? "" : `Δ=${fmtPctPointSigned(item.trend_metric_delta)}`;
+    parts.push(`Trend: ${item.execution_regime} ${prior} ${delta}`.trim());
+  }
   return parts.join(" · ");
 }
 
@@ -549,8 +570,8 @@ export default function MLBTodayWorkspacePage() {
       .filter((item) => !activeProps.size || activeProps.has(String(item?.prop_type || "").trim()))
       .slice()
       .sort((a, b) => {
-        const ac = Number(a?.row_count) || 0;
-        const bc = Number(b?.row_count) || 0;
+        const ac = Number(a?.today_rows ?? a?.row_count) || 0;
+        const bc = Number(b?.today_rows ?? b?.row_count) || 0;
         if (bc !== ac) return bc - ac;
         return propLabel(a?.prop_type).localeCompare(propLabel(b?.prop_type));
       });
@@ -1300,6 +1321,7 @@ export default function MLBTodayWorkspacePage() {
                 const reason = hasContext
                   ? regimeReason(item.regime_context_explanation)
                   : item.regime_context_missing_reason || "Regime context is not available for this prop yet.";
+                const todayRows = item.today_rows ?? item.row_count;
                 return (
                   <button
                     key={`prop-outlook-${item.prop_type}`}
@@ -1316,8 +1338,7 @@ export default function MLBTodayWorkspacePage() {
                         {item.display_prop || propLabel(item.prop_type)}
                       </div>
                       <div className="min-w-0 flex-1 text-xs text-slate-500 truncate">
-                        {hasContext ? regimeFullLabel(item.regime_context_label) : "Regime data pending"} ·{" "}
-                        {fmtNumber(item.row_count, 0)} rows
+                        {hasContext ? regimeFullLabel(item.regime_context_label) : "Regime data pending"}
                       </div>
                       <span
                         className={`shrink-0 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${regimePillClasses(
@@ -1326,6 +1347,12 @@ export default function MLBTodayWorkspacePage() {
                       >
                         {hasContext ? regimeShortLabel(item.regime_context_label) : "Pending"}
                       </span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+                      Today {fmtNumber(todayRows, 0)} · LT n={fmtNumber(item.long_term_sample_rows, 0)} · Recent{" "}
+                      {fmtNumber(item.recent_window_days, 0)}d n={fmtNumber(item.recent_sample_rows, 0)} · Trend{" "}
+                      {item.execution_regime || DASH} vs prior {fmtNumber(item.trend_prior_window_days, 0)}d Δ=
+                      {fmtPctPointSigned(item.trend_metric_delta)}
                     </div>
                     {hasContext && detail ? (
                       <div className="mt-0.5 text-[11px] text-slate-500 truncate">{detail}</div>
@@ -1920,8 +1947,11 @@ export default function MLBTodayWorkspacePage() {
                                     <div><span className="text-slate-500">Prop outlook:</span> <strong>{regimeShortLabel(r.regime_context_label)}</strong></div>
                                     <div><span className="text-slate-500">Outlook detail:</span> <strong>{regimeReason(r.regime_context_explanation)}</strong></div>
                                     <div><span className="text-slate-500">Long Term:</span> <strong>{r.long_term_regime}</strong></div>
-                                    <div><span className="text-slate-500">Recent DB regime:</span> <strong>{r.recent_db_regime}</strong></div>
-                                    <div><span className="text-slate-500">Trend:</span> <strong>{r.execution_regime}</strong></div>
+                                    <div><span className="text-slate-500">Long Term sample:</span> <strong>n={fmtNumber(r.long_term_sample_rows, 0)}</strong></div>
+                                    <div><span className="text-slate-500">Recent:</span> <strong>{r.recent_db_regime} ({fmtNumber(r.recent_window_days, 0)}d, n={fmtNumber(r.recent_sample_rows, 0)})</strong></div>
+                                    <div><span className="text-slate-500">Trend:</span> <strong>{r.execution_regime} vs prior {fmtNumber(r.trend_prior_window_days, 0)}d</strong></div>
+                                    <div><span className="text-slate-500">Trend sample:</span> <strong>recent n={fmtNumber(r.trend_sample_rows, 0)}, prior n={fmtNumber(r.trend_prior_sample_rows, 0)}, Δ={fmtPctPointSigned(r.trend_metric_delta)}</strong></div>
+                                    <div><span className="text-slate-500">Latest regime date:</span> <strong>{r.latest_regime_date || DASH}</strong></div>
                                   </>
                                 ) : (
                                   <>

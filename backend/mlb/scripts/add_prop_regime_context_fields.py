@@ -36,8 +36,11 @@ RECENT_DB_SCORE = {
 EXECUTION_SCORE = {
     "HOT": 1.0,
     "SOFT HOT": 0.5,
+    "IMPROVING": 0.5,
     "NEUTRAL": 0.0,
+    "FLAT": 0.0,
     "COOLING": -0.5,
+    "DETERIORATING": -1.0,
     "COLD": -1.0,
 }
 
@@ -86,16 +89,14 @@ def _phrase_recent(regime: str) -> str:
 
 
 def _phrase_execution(regime: str) -> str:
-    if regime == "HOT":
-        return "rolling model-pick trend is positive"
-    if regime == "SOFT HOT":
-        return "rolling model-pick trend has improved recently"
+    if regime == "IMPROVING":
+        return "rolling model-pick trend is improving"
+    if regime == "FLAT":
+        return "rolling model-pick trend is flat"
     if regime == "COOLING":
         return "rolling model-pick trend has cooled"
-    if regime == "COLD":
-        return "rolling model-pick trend is negative"
-    if regime == "NEUTRAL":
-        return "rolling model-pick trend is neutral"
+    if regime == "DETERIORATING":
+        return "rolling model-pick trend is deteriorating"
     return "rolling model-pick trend sample is limited"
 
 

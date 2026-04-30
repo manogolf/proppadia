@@ -130,18 +130,21 @@ def _regime_from_roi(roi: object, rows: object, min_rows: int = 25) -> str:
     return "NEUTRAL"
 
 
-def _trend_regime(roi: object, rows: object, rolling_3d_roi: object = np.nan) -> str:
-    rows = float(rows or 0)
-    if rows < REGIME_MIN_ROWS or pd.isna(roi):
+def _trend_direction(recent_roi: object, prior_roi: object, recent_rows: object, prior_rows: object) -> str:
+    recent_rows = float(recent_rows or 0)
+    prior_rows = float(prior_rows or 0)
+    if recent_rows < REGIME_MIN_ROWS or prior_rows < REGIME_MIN_ROWS or pd.isna(recent_roi) or pd.isna(prior_roi):
         return "INSUFFICIENT"
-    roi = float(roi)
-    if roi > 0.05:
-        return "HOT" if rows >= 50 else "SOFT HOT"
-    if roi < -0.05:
-        return "COLD"
-    if roi < 0 and not pd.isna(rolling_3d_roi) and float(rolling_3d_roi) < 0:
+    recent_roi = float(recent_roi)
+    prior_roi = float(prior_roi)
+    delta = recent_roi - prior_roi
+    if delta >= 0.05:
+        return "IMPROVING"
+    if delta <= -0.05 and recent_roi < 0 and prior_roi < 0:
+        return "DETERIORATING"
+    if delta <= -0.05:
         return "COOLING"
-    return "NEUTRAL"
+    return "FLAT"
 
 
 def _execution_regime(roi: object, bets: object, rolling_3d_roi: object = np.nan) -> str:
@@ -173,8 +176,14 @@ def _select_adaptive_window(row: pd.Series, prefix: str = "rolling") -> dict[str
         rows = row.get(f"{prefix}_{window}d_rows", 0.0)
         roi = row.get(f"{prefix}_{window}d_roi_proxy", np.nan)
         if float(rows or 0) >= REGIME_MIN_ROWS and not pd.isna(roi):
-            return {"window_days": window, "rows": rows, "roi": roi}
-    return {"window_days": np.nan, "rows": 0.0, "roi": np.nan}
+            return {
+                "window_days": window,
+                "rows": rows,
+                "roi": roi,
+                "prior_rows": row.get(f"prior_{window}d_rows", 0.0),
+                "prior_roi": row.get(f"prior_{window}d_roi_proxy", np.nan),
+            }
+    return {"window_days": np.nan, "rows": 0.0, "roi": np.nan, "prior_rows": 0.0, "prior_roi": np.nan}
 
 
 def _read_reconcile_metrics(paths: list[Path]) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, object]]:
@@ -337,6 +346,13 @@ def _build_rolling(daily: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             group[f"{prefix}_avg_edge"] = group["avg_edge"].rolling(window, min_periods=1).mean()
             group[f"{prefix}_false_over"] = group["false_over"].rolling(window, min_periods=1).sum()
             group[f"{prefix}_false_under"] = group["false_under"].rolling(window, min_periods=1).sum()
+            group[f"prior_{window}d_rows"] = group[f"{prefix}_rows"].shift(window)
+            group[f"prior_{window}d_wins"] = group[f"{prefix}_wins"].shift(window)
+            group[f"prior_{window}d_losses"] = group[f"{prefix}_losses"].shift(window)
+            group[f"prior_{window}d_pnl"] = group[f"{prefix}_pnl"].shift(window)
+            group[f"prior_{window}d_roi_proxy"] = group[f"{prefix}_roi_proxy"].shift(window)
+            prior_decided = group[f"prior_{window}d_wins"] + group[f"prior_{window}d_losses"]
+            group[f"prior_{window}d_model_pick_win_rate"] = group[f"prior_{window}d_wins"] / prior_decided.replace(0, np.nan)
         parts.append(group)
     rolling = pd.concat(parts, ignore_index=True)
     latest_usable = (
@@ -480,13 +496,22 @@ def _build_outputs(
         long_rows = row.get("rolling_30d_rows", 0.0)
         long_roi = row.get("rolling_30d_roi_proxy", np.nan)
         recent = _select_adaptive_window(row)
-        trend = _select_adaptive_window(row)
         user_exec_bets_7d = row.get("rolling_7d_bets", np.nan)
         user_exec_roi_7d = row.get("rolling_7d_roi", np.nan)
         user_exec_roi_3d = row.get("rolling_3d_roi", np.nan)
         long_regime = _regime_from_roi(long_roi, long_rows, min_rows=25)
         recent_regime = _regime_from_roi(recent["roi"], recent["rows"], min_rows=REGIME_MIN_ROWS)
-        trend_regime = _trend_regime(trend["roi"], trend["rows"], row.get("rolling_3d_roi_proxy", np.nan))
+        trend_metric_delta = (
+            float(recent["roi"]) - float(recent["prior_roi"])
+            if not pd.isna(recent["roi"]) and not pd.isna(recent["prior_roi"])
+            else np.nan
+        )
+        trend_direction = _trend_direction(
+            recent_roi=recent["roi"],
+            prior_roi=recent["prior_roi"],
+            recent_rows=recent["rows"],
+            prior_rows=recent["prior_rows"],
+        )
         user_execution_regime = _execution_regime(user_exec_roi_7d, user_exec_bets_7d, user_exec_roi_3d)
         combined_rows.append(
             {
@@ -510,11 +535,17 @@ def _build_outputs(
                 "recent_window_roi": recent["roi"],
                 "recent_regime": recent_regime,
                 "recent_confidence": _sample_confidence(recent["rows"]),
-                "trend_regime": trend_regime,
-                "trend_window_days": trend["window_days"],
-                "trend_window_rows": trend["rows"],
-                "trend_window_roi": trend["roi"],
-                "execution_regime": trend_regime,
+                "trend_regime": trend_direction,
+                "trend_direction": trend_direction,
+                "trend_window_days": recent["window_days"],
+                "trend_window_rows": recent["rows"],
+                "trend_window_roi": recent["roi"],
+                "trend_metric_recent": recent["roi"],
+                "trend_metric_prior": recent["prior_roi"],
+                "trend_metric_delta": trend_metric_delta,
+                "trend_prior_window_days": recent["window_days"],
+                "trend_prior_sample_rows": recent["prior_rows"],
+                "execution_regime": trend_direction,
                 "user_execution_regime": user_execution_regime,
                 "confidence_score": (float(long_rows or 0) / 50.0) * min(1.0, abs(float(long_roi)) / 0.10)
                 if not pd.isna(long_roi)
@@ -537,7 +568,7 @@ def _build_outputs(
                 "db_overlap_regime": row.get("db_overlap_regime", "INSUFFICIENT"),
                 "exec_overlap_regime": row.get("exec_overlap_regime", "INSUFFICIENT"),
                 "user_exec_overlap_regime": row.get("exec_overlap_regime", "INSUFFICIENT"),
-                "recommended_board_usage": _board_usage(long_regime, recent_regime, trend_regime),
+                "recommended_board_usage": _board_usage(long_regime, recent_regime, trend_direction),
             }
         )
     combined = add_context_fields(pd.DataFrame(combined_rows))
@@ -558,6 +589,11 @@ def _build_outputs(
             "trend_window_days",
             "trend_window_rows",
             "trend_window_roi",
+            "trend_metric_recent",
+            "trend_metric_prior",
+            "trend_metric_delta",
+            "trend_prior_window_days",
+            "trend_prior_sample_rows",
         ]
     ].copy()
 
@@ -594,6 +630,9 @@ def _build_outputs(
                     "db_recent_30d_roi",
                     "recent_window_roi",
                     "trend_window_roi",
+                    "trend_metric_recent",
+                    "trend_metric_prior",
+                    "trend_metric_delta",
                 },
             ),
             "",
@@ -636,6 +675,9 @@ def _build_outputs(
                         "trend_window_days",
                         "trend_window_rows",
                         "trend_window_roi",
+                        "trend_metric_prior",
+                        "trend_metric_delta",
+                        "trend_prior_sample_rows",
                         "db_recent_7d_roi",
                         "execution_7d_bets",
                         "execution_7d_roi",
@@ -650,6 +692,8 @@ def _build_outputs(
                     "long_term_30d_roi",
                     "recent_window_roi",
                     "trend_window_roi",
+                    "trend_metric_prior",
+                    "trend_metric_delta",
                     "db_recent_7d_roi",
                     "execution_7d_roi",
                     "db_roi",
@@ -709,6 +753,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         "recent_window_rows",
         "trend_window_days",
         "trend_window_rows",
+        "trend_prior_window_days",
+        "trend_prior_sample_rows",
+        "trend_metric_recent",
+        "trend_metric_prior",
+        "trend_metric_delta",
         "regime_context_score",
         "regime_context_label",
         "regime_context_explanation",
