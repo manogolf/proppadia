@@ -40,6 +40,7 @@ from backend.app.services.mlb.market_odds_service import (
 )
 from backend.app.services.mlb.prop_submission_service import (
     add_prop,
+    get_model_training_prop_history,
     get_prop_history,
     predict_prepared_prop,
     prepare_prop_submission,
@@ -162,6 +163,7 @@ def mlb_today_workspace(
     team: Optional[str] = Query(None, description="Optional team abbreviation filter"),
     side: Optional[str] = Query(None, description="Optional side filter (OVER|UNDER)"),
     timing_signal: Optional[str] = Query(None, description="Optional timing signal filter"),
+    player_id: Optional[int] = Query(None, description="Optional player_id filter"),
     player_query: Optional[str] = Query(None, description="Optional player-name text search"),
     limit: int = Query(500, ge=1, le=5000),
     offset: int = Query(0, ge=0),
@@ -178,6 +180,7 @@ def mlb_today_workspace(
             team=team,
             side=side,
             timing_signal=timing_signal,
+            player_id=player_id,
             player_query=player_query,
             limit=limit,
             offset=offset,
@@ -457,6 +460,47 @@ def props_history_endpoint(
                 "limit": limit,
                 "offset": offset,
                 "user_id": user_id,
+                "from_date": from_date,
+                "to_date": to_date,
+                "prop_source": prop_source,
+                "status": status,
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get(
+    "/mlb/streak-history",
+    summary="Read current MLB model-backed prop history rows for streak context",
+    response_model=PropHistoryResponse,
+    response_model_exclude_none=True,
+)
+def mlb_streak_history_endpoint(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    from_date: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    to_date: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    prop_source: Optional[str] = Query("mlb_api"),
+    status: Optional[str] = Query(None, description="pending|win|loss|push|resolved|dnp"),
+):
+    for label, raw in (("from_date", from_date), ("to_date", to_date)):
+        if not raw:
+            continue
+        try:
+            date.fromisoformat(raw)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"{label} must be YYYY-MM-DD") from e
+
+    try:
+        return get_model_training_prop_history(
+            {
+                "limit": limit,
+                "offset": offset,
                 "from_date": from_date,
                 "to_date": to_date,
                 "prop_source": prop_source,

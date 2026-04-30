@@ -74,6 +74,7 @@ class PlayerProfileResponse(BaseModel):
     recent_props: List[Dict[str, Any]]
     stat_derived: List[Dict[str, Any]]
     training_summary: List[Dict[str, Any]]
+    freshness_metadata: Optional[Dict[str, Any]] = None
     season_stats: Dict[str, Any]
     career_stats: Dict[str, Any]
 
@@ -159,6 +160,7 @@ class PropHistoryResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    source: Optional[str] = None
     rows: List[PropHistoryRow]
 
 

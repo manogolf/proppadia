@@ -6,7 +6,12 @@ from datetime import date, datetime
 from typing import Any, Dict, List
 
 from backend.domains.mlb.prop_workflow import add_prop_from_commit, predict_prop, prepare_prop
-from backend.domains.mlb.repository.prop_repository import count_prop_history_rows, fetch_prop_history_rows
+from backend.domains.mlb.repository.prop_repository import (
+    count_model_training_prop_history_rows,
+    count_prop_history_rows,
+    fetch_model_training_prop_history_rows,
+    fetch_prop_history_rows,
+)
 
 
 def prepare_prop_submission(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -82,5 +87,45 @@ def get_prop_history(payload: Dict[str, Any]) -> Dict[str, Any]:
         "total": int(total),
         "limit": int(limit),
         "offset": int(offset),
+        "rows": out_rows,
+    }
+
+
+def get_model_training_prop_history(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Current DB-backed MLB prop history sourced from model_training_props."""
+    limit = int(payload.get("limit") or 50)
+    offset = int(payload.get("offset") or 0)
+    from_date = str(payload.get("from_date") or "").strip() or None
+    to_date = str(payload.get("to_date") or "").strip() or None
+    prop_source = str(payload.get("prop_source") or "").strip() or "mlb_api"
+    status = str(payload.get("status") or "").strip() or None
+
+    rows = fetch_model_training_prop_history_rows(
+        limit=limit,
+        offset=offset,
+        from_date=from_date,
+        to_date=to_date,
+        prop_source=prop_source,
+        status=status,
+    )
+    total = count_model_training_prop_history_rows(
+        from_date=from_date,
+        to_date=to_date,
+        prop_source=prop_source,
+        status=status,
+    )
+    out_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized = {k: _to_json_scalar(v) for k, v in row.items()}
+        if normalized.get("id") is not None:
+            normalized["id"] = str(normalized["id"])
+        out_rows.append(normalized)
+    return {
+        "ok": True,
+        "count": len(out_rows),
+        "total": int(total),
+        "limit": int(limit),
+        "offset": int(offset),
+        "source": "mlb.model_training_props",
         "rows": out_rows,
     }

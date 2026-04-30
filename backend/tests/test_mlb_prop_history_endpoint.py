@@ -38,6 +38,26 @@ class TestMlbPropHistoryEndpoint(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("from_date must be YYYY-MM-DD", str(resp.json().get("detail")))
 
+    @patch("backend.app.routers.mlb.get_model_training_prop_history")
+    def test_streak_history_uses_model_training_history(self, mock_history):
+        mock_history.return_value = {
+            "ok": True,
+            "count": 1,
+            "total": 3,
+            "limit": 10,
+            "offset": 0,
+            "rows": [{"id": "mtp-1", "prop_source": "mlb_api"}],
+        }
+        resp = self.client.get("/api/mlb/streak-history?limit=10&from_date=2026-04-20")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body.get("ok"), True)
+        self.assertEqual(body.get("rows", [{}])[0].get("prop_source"), "mlb_api")
+        kwargs = mock_history.call_args.args[0]
+        self.assertEqual(kwargs.get("limit"), 10)
+        self.assertEqual(kwargs.get("from_date"), "2026-04-20")
+        self.assertEqual(kwargs.get("prop_source"), "mlb_api")
+
 
 if __name__ == "__main__":
     unittest.main()

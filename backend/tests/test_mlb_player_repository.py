@@ -68,7 +68,7 @@ class TestMlbPlayerRepository(unittest.TestCase):
         sql = captured.get("sql", "")
         self.assertIn("latest_prop_team", sql)
         self.assertIn("COALESCE(NULLIF(BTRIM(CAST(p.team AS TEXT)), ''), lt.team, lpt.team)", sql)
-        self.assertIn("prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%'", sql)
+        self.assertIn("prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%%'", sql)
         self.assertEqual(captured.get("params"), (5,))
 
     def test_resolve_by_name_matches_numeric_team_storage(self):
@@ -130,24 +130,27 @@ class TestMlbPlayerRepository(unittest.TestCase):
 
         def _fetchall(sql, params=()):
             calls["n"] += 1
-            if "FROM mlb.player_props" in sql:
+            if "COALESCE(prop_value, line) AS prop_value" in sql:
                 return [{"prop_type": "hits"}]
-            if "FROM mlb.player_streak_profiles" in sql:
+            if "WITH hist AS" in sql:
                 raise RuntimeError("streaks unavailable")
-            if "AND prop_source = 'mlb_api'" in sql:
+            if "SELECT game_date, prop_type, result, outcome" in sql:
                 return [{"prop_type": "hits", "outcome": "win"}]
             if "GROUP BY prop_type" in sql:
                 raise RuntimeError("summary unavailable")
+            if "'model_training_props'::text AS source" in sql:
+                return [{"source": "model_training_props", "max_game_date": "2026-04-28"}]
             return []
 
         with patch.object(repo, "pg_fetchall", side_effect=_fetchall):
             out = repo.fetch_player_profile_rows(player_id=660271)
 
-        self.assertEqual(calls["n"], 4)
+        self.assertEqual(calls["n"], 5)
         self.assertEqual(out["recent_props"], [{"prop_type": "hits"}])
         self.assertEqual(out["streaks"], [])
         self.assertEqual(out["stat_derived"], [{"prop_type": "hits", "outcome": "win"}])
         self.assertEqual(out["training_summary"], [])
+        self.assertEqual(out["freshness_metadata"]["source"], "model_training_props")
 
     def test_resolve_by_name_handles_team_alias_input(self):
         captured = {}

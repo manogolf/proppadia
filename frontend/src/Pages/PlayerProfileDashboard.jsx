@@ -10,6 +10,9 @@ export default function PlayerProfileDashboard() {
   const { playerId } = useParams();
   const location = useLocation();
   const [profileData, setProfileData] = useState(null);
+  const [todayMarketData, setTodayMarketData] = useState(null);
+  const [todayMarketLoading, setTodayMarketLoading] = useState(false);
+  const [todayMarketError, setTodayMarketError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -53,6 +56,45 @@ export default function PlayerProfileDashboard() {
     fetchProfile();
   }, [playerId, profileSport]);
 
+  useEffect(() => {
+    if (profileSport !== "mlb") {
+      setTodayMarketData(null);
+      setTodayMarketError("");
+      setTodayMarketLoading(false);
+      return;
+    }
+    let isMounted = true;
+    async function fetchTodayMarket() {
+      try {
+        setTodayMarketLoading(true);
+        setTodayMarketError("");
+        const params = new URLSearchParams({
+          player_id: String(playerId),
+          limit: "200",
+          offset: "0",
+        });
+        const res = await fetch(`${getBaseURL()}/api/mlb/today/workspace?${params.toString()}`);
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`${res.status}: ${txt}`);
+        }
+        const data = await res.json();
+        if (isMounted) setTodayMarketData(data);
+      } catch (err) {
+        if (isMounted) {
+          setTodayMarketData(null);
+          setTodayMarketError(err?.message || "Unable to load today's market.");
+        }
+      } finally {
+        if (isMounted) setTodayMarketLoading(false);
+      }
+    }
+    fetchTodayMarket();
+    return () => {
+      isMounted = false;
+    };
+  }, [playerId, profileSport]);
+
   if (loading) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
@@ -79,6 +121,192 @@ export default function PlayerProfileDashboard() {
   const latestDerivedDate =
     profileData?.stat_derived?.map((p) => p?.game_date).find((d) => d) || null;
   const freshnessDate = latestRecentPropDate || latestDerivedDate;
+  const freshnessSource = String(profileData?.freshness_metadata?.source || "").trim();
+  const freshnessMaxDate = String(profileData?.freshness_metadata?.max_game_date || "").trim();
+  const freshnessLabel = freshnessDate || freshnessMaxDate;
+  const todayMarketRows = Array.isArray(todayMarketData?.rows) ? todayMarketData.rows : [];
+  const todayMarketDate = todayMarketData?.active_slate_date || todayMarketData?.requested_slate_date || null;
+  const PLAYABLE_ODDS_LIMIT = 500;
+
+  const fmtMarketPrice = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return n > 0 ? `+${Math.round(n)}` : String(Math.round(n));
+  };
+
+  const fmtLine = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  };
+
+  const isPlayableOdds = (value) => {
+    if (value === null || value === undefined || value === "") return false;
+    const n = Number(value);
+    return Number.isFinite(n) && Math.abs(n) <= PLAYABLE_ODDS_LIMIT;
+  };
+
+  const pricePointsFromRow = (row) => {
+    const best = Number(row?.best_price);
+    const span = Number(row?.market_range);
+    if (!Number.isFinite(best)) return [];
+    const points = [best];
+    if (Number.isFinite(span) && span > 0) {
+      points.push(best - span);
+    }
+    return points;
+  };
+
+  const playableSummaryFromRow = (row) => {
+    const rawPoints = pricePointsFromRow(row);
+    const playablePoints = rawPoints.filter((price) => isPlayableOdds(price));
+    if (!playablePoints.length) {
+      return {
+        best: null,
+        range: null,
+        rawCount: rawPoints.length,
+        playableCount: 0,
+        filteredOut: rawPoints.length > 0,
+      };
+    }
+    return {
+      best: Math.max(...playablePoints),
+      range: {
+        min: Math.min(...playablePoints),
+        max: Math.max(...playablePoints),
+      },
+      rawCount: rawPoints.length,
+      playableCount: playablePoints.length,
+      filteredOut: rawPoints.length > playablePoints.length,
+    };
+  };
+
+  const mergeRange = (current, next) => {
+    if (!next) return current || null;
+    if (!current) return next;
+    return {
+      min: Math.min(current.min, next.min),
+      max: Math.max(current.max, next.max),
+    };
+  };
+
+  const fmtRange = (range) => {
+    if (!range) return "";
+    const min = Number(range.min);
+    const max = Number(range.max);
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return "";
+    if (Math.round(min) === Math.round(max)) return fmtMarketPrice(max);
+    return `${fmtMarketPrice(min)} to ${fmtMarketPrice(max)}`;
+  };
+
+  const mergeSideSummary = (existing, summary) => {
+    const currentBest = Number(existing.best);
+    const nextBest = Number(summary.best);
+    return {
+      best:
+        Number.isFinite(nextBest) && (!Number.isFinite(currentBest) || nextBest > currentBest)
+          ? nextBest
+          : existing.best,
+      range: mergeRange(existing.range, summary.range),
+      filteredOut: Boolean(existing.filteredOut || summary.filteredOut),
+      playableCount: (Number(existing.playableCount) || 0) + (Number(summary.playableCount) || 0),
+      rawCount: (Number(existing.rawCount) || 0) + (Number(summary.rawCount) || 0),
+    };
+  };
+
+  const todayMarketGroups = Array.from(
+    todayMarketRows.reduce((acc, row) => {
+      const key = `${row.player_id || playerId}|${row.prop_type || ""}|${fmtLine(row.line)}`;
+      const side = String(row.side || "").trim().toUpperCase();
+      const existing = acc.get(key) || {
+        player_id: row.player_id || playerId,
+        prop_type: row.prop_type,
+        line: row.line,
+        best_over_price: null,
+        best_under_price: null,
+        over_price_range: null,
+        under_price_range: null,
+        over_book_count: null,
+        under_book_count: null,
+        over_filtered_out: false,
+        under_filtered_out: false,
+        over_playable_count: 0,
+        under_playable_count: 0,
+        coverage_quality_label: row.coverage_quality_label,
+        timing_signal: row.timing_signal,
+        regime_context_label: row.regime_context_label,
+      };
+
+      if (!existing.coverage_quality_label && row.coverage_quality_label) {
+        existing.coverage_quality_label = row.coverage_quality_label;
+      }
+      if (!existing.timing_signal && row.timing_signal) {
+        existing.timing_signal = row.timing_signal;
+      }
+      if (!existing.regime_context_label && row.regime_context_label) {
+        existing.regime_context_label = row.regime_context_label;
+      }
+
+      if (side === "OVER") {
+        const summary = mergeSideSummary(
+          {
+            best: existing.best_over_price,
+            range: existing.over_price_range,
+            filteredOut: existing.over_filtered_out,
+            playableCount: existing.over_playable_count,
+            rawCount: existing.over_raw_count,
+          },
+          playableSummaryFromRow(row)
+        );
+        existing.best_over_price = summary.best;
+        existing.over_price_range = summary.range;
+        existing.over_filtered_out = summary.filteredOut;
+        existing.over_playable_count = summary.playableCount;
+        existing.over_raw_count = summary.rawCount;
+        existing.over_book_count = Math.max(
+          Number(existing.over_book_count) || 0,
+          Number(row.book_count) || 0
+        );
+      } else if (side === "UNDER") {
+        const summary = mergeSideSummary(
+          {
+            best: existing.best_under_price,
+            range: existing.under_price_range,
+            filteredOut: existing.under_filtered_out,
+            playableCount: existing.under_playable_count,
+            rawCount: existing.under_raw_count,
+          },
+          playableSummaryFromRow(row)
+        );
+        existing.best_under_price = summary.best;
+        existing.under_price_range = summary.range;
+        existing.under_filtered_out = summary.filteredOut;
+        existing.under_playable_count = summary.playableCount;
+        existing.under_raw_count = summary.rawCount;
+        existing.under_book_count = Math.max(
+          Number(existing.under_book_count) || 0,
+          Number(row.book_count) || 0
+        );
+      }
+
+      acc.set(key, existing);
+      return acc;
+    }, new Map()).values()
+  ).sort((a, b) => {
+    const propCmp = getPropDisplayLabel(a.prop_type).localeCompare(getPropDisplayLabel(b.prop_type));
+    if (propCmp !== 0) return propCmp;
+    return Number(a.line || 0) - Number(b.line || 0);
+  });
+
+  const fmtMarketRange = (row) => {
+    const over = fmtRange(row.over_price_range);
+    const under = fmtRange(row.under_price_range);
+    if (over && under) return `O ${over} · U ${under}`;
+    if (over) return `O ${over}`;
+    if (under) return `U ${under}`;
+    return "—";
+  };
 
   const renderStatGroup = (title, stats) => {
     if (!stats || Object.keys(stats).length === 0) return null;
@@ -119,13 +347,92 @@ export default function PlayerProfileDashboard() {
           </h1>
           <div className="text-sm text-slate-600 mt-1">
             Data freshness:{" "}
-            {freshnessDate ? `last prop date ${freshnessDate}` : "no recent prop history"}
+            {freshnessLabel ? `last prop date ${freshnessLabel}` : "no recent prop history"}
+            {freshnessSource ? ` · source: ${freshnessSource}` : ""}
           </div>
         </div>
         <Link to="/players" className="text-slate-700 hover:underline text-sm">
           ← Back to Player List
         </Link>
       </div>
+      {profileSport === "mlb" ? (
+        <section className="mb-6">
+          <div className="pp-card p-3">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <h2 className="text-xl font-semibold text-slate-900">Today&apos;s Market</h2>
+              {todayMarketDate ? (
+                <span className="text-xs text-slate-500">Slate {todayMarketDate}</span>
+              ) : null}
+            </div>
+            {todayMarketLoading ? (
+              <div className="text-sm text-slate-500">Loading today&apos;s market...</div>
+            ) : todayMarketError ? (
+              <div className="text-sm text-rose-600">{todayMarketError}</div>
+            ) : todayMarketGroups.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
+                      <th className="py-2 pr-3 font-medium">Prop</th>
+                      <th className="py-2 pr-3 font-medium">Line</th>
+                      <th className="py-2 pr-3 font-medium">Best Over</th>
+                      <th className="py-2 pr-3 font-medium">Best Under</th>
+                      <th className="py-2 pr-3 font-medium">Range</th>
+                      <th className="py-2 pr-3 font-medium">Context</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todayMarketGroups.map((row) => {
+                      const contextParts = [
+                        row.coverage_quality_label,
+                        row.timing_signal,
+                        row.regime_context_label,
+                        (row.over_filtered_out && !row.over_playable_count) ||
+                        (row.under_filtered_out && !row.under_playable_count)
+                          ? "Thin market"
+                          : null,
+                      ].filter(Boolean);
+                      return (
+                        <tr
+                          key={`${row.player_id}-${row.prop_type}-${fmtLine(row.line)}`}
+                          className="border-b border-slate-100 last:border-0"
+                        >
+                          <td className="py-2 pr-3 text-slate-800 font-medium">
+                            {getPropDisplayLabel(row.prop_type)}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">{fmtLine(row.line)}</td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {fmtMarketPrice(row.best_over_price)}
+                            {row.best_over_price !== null && row.over_book_count ? (
+                              <span className="ml-1 text-xs text-slate-400">({row.over_book_count})</span>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {fmtMarketPrice(row.best_under_price)}
+                            {row.best_under_price !== null && row.under_book_count ? (
+                              <span className="ml-1 text-xs text-slate-400">({row.under_book_count})</span>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {fmtMarketRange(row)}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-600">
+                            {contextParts.length ? contextParts.join(" · ") : "Context pending"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">
+                No current market lines available for today&apos;s slate.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
       <section className="mb-6">
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Current Streaks</h2>

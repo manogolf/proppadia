@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { fetchMlbPropHistoryAll } from "../lib/mlbPropsApi.js";
+import { fetchMlbCurrentPropHistoryAll } from "../lib/mlbPropsApi.js";
 import { todayET, nowET } from "../shared/timeUtils.js";
 
 const StreaksCard = () => {
@@ -12,9 +12,10 @@ const StreaksCard = () => {
       try {
         const today = todayET();
         const sevenDaysAgo = nowET().minus({ days: 7 }).toISODate();
-        const data = await fetchMlbPropHistoryAll({
+        const data = await fetchMlbCurrentPropHistoryAll({
           fromDate: sevenDaysAgo,
           toDate: today,
+          propSource: "mlb_api",
         });
 
         const playerStreaks = {};

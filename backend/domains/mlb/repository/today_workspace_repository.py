@@ -14,6 +14,7 @@ def fetch_today_workspace_rows(
     team: Optional[str] = None,
     side: Optional[str] = None,
     timing_signal: Optional[str] = None,
+    player_id: Optional[int] = None,
     player_query: Optional[str] = None,
     limit: int = 500,
     offset: int = 0,
@@ -39,6 +40,9 @@ def fetch_today_workspace_rows(
     if timing_signal:
         where.append("upper(trim(timing_signal)) = upper(trim(%s))")
         params.append(str(timing_signal).strip())
+    if player_id is not None:
+        where.append("CAST(player_id AS TEXT) = %s")
+        params.append(str(player_id))
     if player_query:
         where.append("player_name ILIKE %s")
         params.append(f"%{str(player_query).strip()}%")

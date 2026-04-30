@@ -50,6 +50,7 @@ def player_profile(player_id: int) -> Dict[str, Any]:
         "recent_props": rows["recent_props"],
         "stat_derived": rows["stat_derived"],
         "training_summary": rows["training_summary"],
+        "freshness_metadata": rows.get("freshness_metadata") or {},
         # Kept for frontend shape compatibility; can be filled in later.
         "season_stats": {},
         "career_stats": {},

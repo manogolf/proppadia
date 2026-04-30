@@ -47,7 +47,7 @@ export default function Header() {
         {/* RIGHT: Tagline + auth */}
         <div className="flex flex-col items-end text-right space-y-1 min-w-0">
           <div className="text-med text-slate-700 font-medium">
-            Player Prop Perspective
+            Player Prop Perspectives
           </div>
           <div className="text-xs text-slate-500">Powered by Momentum</div>
 

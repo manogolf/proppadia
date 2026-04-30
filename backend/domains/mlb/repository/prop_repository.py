@@ -242,6 +242,85 @@ def count_prop_history_rows(
         return 0
 
 
+def fetch_model_training_prop_history_rows(
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    prop_source: Optional[str] = "mlb_api",
+    status: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Read current model-backed MLB prop history for dashboard context.
+
+    This intentionally does not read mlb.player_props, which is the legacy
+    user-added/current-prop table and is no longer refreshed for broad MLB data.
+    """
+    lim = max(1, min(int(limit), 200))
+    off = max(0, int(offset))
+    where_sql, params = _build_model_training_history_where(
+        from_date=from_date,
+        to_date=to_date,
+        prop_source=prop_source,
+        status=status,
+    )
+    sql = f"""
+        SELECT
+          CAST(id AS TEXT) AS id,
+          player_id,
+          player_name,
+          team,
+          team_id,
+          game_id,
+          game_date,
+          prop_type,
+          COALESCE(prop_value, line) AS prop_value,
+          over_under,
+          status,
+          outcome,
+          prop_source,
+          confidence_score,
+          predicted_outcome,
+          prediction_timestamp,
+          created_at,
+          updated_at
+        FROM mlb.model_training_props
+        WHERE {where_sql}
+        ORDER BY game_date DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT %s OFFSET %s
+    """
+    params.extend([lim, off])
+    return pg_fetchall(sql, tuple(params))
+
+
+def count_model_training_prop_history_rows(
+    *,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    prop_source: Optional[str] = "mlb_api",
+    status: Optional[str] = None,
+) -> int:
+    where_sql, params = _build_model_training_history_where(
+        from_date=from_date,
+        to_date=to_date,
+        prop_source=prop_source,
+        status=status,
+    )
+    row = pg_fetchone(
+        f"""
+        SELECT COUNT(*) AS total
+        FROM mlb.model_training_props
+        WHERE {where_sql}
+        """,
+        tuple(params),
+    )
+    total = (row or {}).get("total", 0)
+    try:
+        return int(total)
+    except Exception:
+        return 0
+
+
 def _build_prop_history_where(
     *,
     user_id: Optional[str],
@@ -282,4 +361,39 @@ def _build_prop_history_where(
     if user_id and _has_user_id_column():
         where.append("CAST(user_id AS TEXT) = %s")
         params.append(str(user_id))
+    return " AND ".join(where), params
+
+
+def _build_model_training_history_where(
+    *,
+    from_date: Optional[str],
+    to_date: Optional[str],
+    prop_source: Optional[str],
+    status: Optional[str],
+) -> Tuple[str, List[Any]]:
+    where = ["1=1"]
+    params: List[Any] = []
+
+    if from_date:
+        where.append("game_date >= %s")
+        params.append(from_date)
+    if to_date:
+        where.append("game_date <= %s")
+        params.append(to_date)
+    if prop_source:
+        where.append("prop_source = %s")
+        params.append(prop_source)
+    if status:
+        where.append(
+            """
+            (
+              CASE
+                WHEN LOWER(COALESCE(outcome, '')) IN ('win', 'loss', 'push')
+                  THEN LOWER(outcome)
+                ELSE LOWER(COALESCE(status, 'pending'))
+              END
+            ) = %s
+            """
+        )
+        params.append(str(status).strip().lower())
     return " AND ".join(where), params

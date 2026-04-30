@@ -246,7 +246,7 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
           FROM mlb.player_props
           WHERE team IS NOT NULL
             AND BTRIM(CAST(team AS TEXT)) <> ''
-            AND (prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%')
+            AND (prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%%')
           ORDER BY CAST(player_id AS TEXT), game_date DESC NULLS LAST
         ),
         recent AS (
@@ -254,7 +254,7 @@ def list_players_mlb(limit: int = 2000) -> List[Dict[str, Any]]:
             CAST(player_id AS TEXT) AS player_id,
             MAX(game_date)::date AS last_prop_date
           FROM mlb.player_props
-          WHERE prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%'
+          WHERE prop_source IS NULL OR prop_source NOT ILIKE 'nhl_%%'
           GROUP BY CAST(player_id AS TEXT)
         )
         SELECT
@@ -363,20 +363,73 @@ def resolve_by_name(name: str, team_abbr: Optional[str]) -> Optional[Dict[str, A
     return None
 
 
-def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]:
+def fetch_player_profile_rows(player_id: int) -> Dict[str, Any]:
     pid_txt = str(player_id)
     recent_props_sql = """
-        SELECT game_date, prop_type, result, outcome, over_under, prop_value, confidence_score
-        FROM mlb.player_props
+        SELECT
+          game_date,
+          prop_type,
+          result,
+          outcome,
+          over_under,
+          COALESCE(prop_value, line) AS prop_value,
+          confidence_score,
+          prop_source,
+          'model_training_props'::text AS source
+        FROM mlb.model_training_props
         WHERE CAST(player_id AS TEXT) = %s
+          AND prop_source = 'mlb_api'
         ORDER BY game_date DESC NULLS LAST
         LIMIT 14
     """
     streaks_sql = """
-        SELECT prop_type, streak_type, streak_count
-        FROM mlb.player_streak_profiles
-        WHERE CAST(player_id AS TEXT) = %s
-        ORDER BY streak_count DESC NULLS LAST
+        WITH hist AS (
+          SELECT
+            lower(trim(prop_type)) AS prop_type,
+            lower(trim(outcome)) AS outcome,
+            game_date::date AS game_date,
+            game_id,
+            row_number() OVER (
+              PARTITION BY lower(trim(prop_type))
+              ORDER BY game_date DESC NULLS LAST, game_id DESC NULLS LAST
+            ) AS rn
+          FROM mlb.model_training_props
+          WHERE CAST(player_id AS TEXT) = %s
+            AND prop_source = 'mlb_api'
+            AND lower(trim(coalesce(outcome, ''))) IN ('win', 'loss')
+            AND prop_type IS NOT NULL
+            AND game_date IS NOT NULL
+        ),
+        latest AS (
+          SELECT prop_type, outcome AS latest_outcome
+          FROM hist
+          WHERE rn = 1
+        ),
+        breaks AS (
+          SELECT h.prop_type, min(h.rn) AS break_rn
+          FROM hist h
+          JOIN latest l
+            ON l.prop_type = h.prop_type
+          WHERE h.outcome <> l.latest_outcome
+          GROUP BY h.prop_type
+        )
+        SELECT
+          l.prop_type,
+          CASE
+            WHEN l.latest_outcome = 'win' THEN 'hot'
+            WHEN l.latest_outcome = 'loss' THEN 'cold'
+            ELSE 'neutral'
+          END AS streak_type,
+          count(*)::int AS streak_count
+        FROM hist h
+        JOIN latest l
+          ON l.prop_type = h.prop_type
+        LEFT JOIN breaks b
+          ON b.prop_type = h.prop_type
+        WHERE h.outcome = l.latest_outcome
+          AND (b.break_rn IS NULL OR h.rn < b.break_rn)
+        GROUP BY l.prop_type, l.latest_outcome
+        ORDER BY count(*) DESC NULLS LAST
         LIMIT 10
     """
     stat_derived_sql = """
@@ -395,6 +448,16 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]
         ORDER BY count DESC
         LIMIT 20
     """
+    freshness_sql = """
+        SELECT
+          'model_training_props'::text AS source,
+          COUNT(*)::int AS rows,
+          MAX(game_date)::date AS max_game_date,
+          MAX(created_at) AS max_created_at
+        FROM mlb.model_training_props
+        WHERE CAST(player_id AS TEXT) = %s
+          AND prop_source = 'mlb_api'
+    """
 
     def run_or_empty(sql: str) -> List[Dict[str, Any]]:
         try:
@@ -402,9 +465,14 @@ def fetch_player_profile_rows(player_id: int) -> Dict[str, List[Dict[str, Any]]]
         except Exception:
             return []
 
+    def run_one_or_empty(sql: str) -> Dict[str, Any]:
+        rows = run_or_empty(sql)
+        return rows[0] if rows else {}
+
     return {
         "recent_props": run_or_empty(recent_props_sql),
         "streaks": run_or_empty(streaks_sql),
         "stat_derived": run_or_empty(stat_derived_sql),
         "training_summary": run_or_empty(training_summary_sql),
+        "freshness_metadata": run_one_or_empty(freshness_sql),
     }

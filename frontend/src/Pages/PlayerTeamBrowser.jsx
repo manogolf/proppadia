@@ -14,6 +14,7 @@ import {
 
 const PLAYER_BROWSER_PREFS_KEY = "proppadia_player_browser_prefs_v2";
 const UNKNOWN_TEAM = "Unknown";
+const PLAYER_SUGGESTION_MIN_CHARS = 1;
 
 const NHL_ACTIVE_TEAM_ABBRS = new Set([
   "ANA",
@@ -69,6 +70,54 @@ function playerQuery(value) {
   return encodeURIComponent(String(value || "").trim());
 }
 
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function compactSearchValue(value) {
+  return normalizeSearchValue(value).replace(/\s+/g, "");
+}
+
+function getPlayerName(player) {
+  const direct = String(player?.player_name || player?.name || player?.full_name || "").trim();
+  if (direct) return direct;
+  const firstLast = [player?.first_name, player?.last_name]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return firstLast || String(player?.player_id || "").trim();
+}
+
+function playerSuggestionKey(player) {
+  const id = player?.player_id != null ? String(player.player_id) : "";
+  if (id) return id;
+  return `${normalizeSearchValue(getPlayerName(player))}:${normalizeSearchValue(player?.teamLabel)}`;
+}
+
+function playerSearchText(player) {
+  const values = [
+    getPlayerName(player),
+    player?.player_id,
+    player?.teamLabel,
+    player?.team,
+    player?.team_abbr,
+    player?.team_abbreviation,
+  ];
+  const normalized = values.map(normalizeSearchValue).filter(Boolean).join(" ");
+  const compactName = compactSearchValue(getPlayerName(player));
+  return `${normalized} ${compactName}`.trim();
+}
+
+function playerPositionLabel(player) {
+  return String(player?.position || player?.primary_position || player?.pos || "").trim();
+}
+
 function toUtcDay(value) {
   const raw = String(value || "").trim();
   if (!raw) return null;
@@ -100,7 +149,11 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
   const [nhlSlatePlayerIds, setNhlSlatePlayerIds] = useState(new Set());
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0);
   const teamRefs = useRef(new Map());
+  const playerRefs = useRef(new Map());
+  const searchWrapRef = useRef(null);
 
   useEffect(() => {
     if (forcedSport) return;
@@ -351,15 +404,18 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
 
   const normalizedPlayers = useMemo(
     () =>
-      (players || []).map((p) => ({
-        ...p,
-        teamLabel: normalizeTeamLabelBySport(p.team || p.team_abbr, sport),
-      })),
+      (players || []).map((p) => {
+        const playerName = getPlayerName(p);
+        return {
+          ...p,
+          player_name: playerName,
+          teamLabel: normalizeTeamLabelBySport(p.team || p.team_abbr || p.team_abbreviation, sport),
+        };
+      }),
     [players, sport]
   );
 
-  const filteredPlayers = useMemo(() => {
-    const q = query.trim().toLowerCase();
+  const candidatePlayers = useMemo(() => {
     const baseRows = watchlistOnly
       ? normalizedPlayers.filter((p) => {
           const id = toWatchlistId({
@@ -387,18 +443,103 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           return d >= cutoff;
         })
       : slateRows;
-    if (!q) return recencyRows;
-    return recencyRows.filter((p) => {
-      const haystack = [
-        p.player_name,
-        p.player_id,
-        p.teamLabel,
-      ]
-        .map((v) => String(v || "").toLowerCase())
-        .join(" ");
-      return haystack.includes(q);
+    return recencyRows;
+  }, [nhlSlateOnly, nhlSlatePlayerIds, normalizedPlayers, recentDays, recentOnly, sport, watchIdSet, watchlistOnly]);
+
+  const filteredPlayers = useMemo(() => {
+    const q = normalizeSearchValue(query);
+    const compactQ = compactSearchValue(query);
+    if (!q) return candidatePlayers;
+    return candidatePlayers.filter((p) => {
+      const searchText = playerSearchText(p);
+      return searchText.includes(q) || Boolean(compactQ && searchText.includes(compactQ));
     });
-  }, [nhlSlateOnly, nhlSlatePlayerIds, normalizedPlayers, query, recentDays, recentOnly, sport, watchIdSet, watchlistOnly]);
+  }, [candidatePlayers, query]);
+
+  const playerSuggestions = useMemo(() => {
+    const q = normalizeSearchValue(query);
+    const compactQ = compactSearchValue(query);
+    if (q.length < PLAYER_SUGGESTION_MIN_CHARS) return [];
+    return normalizedPlayers
+      .filter((p) => {
+        const searchText = playerSearchText(p);
+        return searchText.includes(q) || Boolean(compactQ && searchText.includes(compactQ));
+      })
+      .slice(0, 10);
+  }, [normalizedPlayers, query]);
+
+  useEffect(() => {
+    setHighlightedSuggestionIndex(0);
+  }, [playerSuggestions.length, query]);
+
+  useEffect(() => {
+    function handleDocumentPointerDown(e) {
+      if (!searchWrapRef.current) return;
+      if (!searchWrapRef.current.contains(e.target)) setSuggestionsOpen(false);
+    }
+    document.addEventListener("mousedown", handleDocumentPointerDown);
+    return () => document.removeEventListener("mousedown", handleDocumentPointerDown);
+  }, []);
+
+  function selectPlayerSuggestion(player) {
+    if (!player) return;
+    const name = getPlayerName(player);
+    const team = player.teamLabel || UNKNOWN_TEAM;
+    const key = playerSuggestionKey(player);
+    const isVisibleInCurrentView = candidatePlayers.some((p) => playerSuggestionKey(p) === key);
+    setQuery(name);
+    setSuggestionsOpen(false);
+    setHighlightedSuggestionIndex(0);
+    if (!isVisibleInCurrentView) {
+      setWatchlistOnly(false);
+      setWatchedTeamsOnly(false);
+      setNhlSlateOnly(false);
+      setRecentOnly(false);
+      setRecentDays("any");
+    }
+    setOpenTeams((prev) => ({ ...prev, [team]: true }));
+    window.setTimeout(() => {
+      const row = playerRefs.current.get(key);
+      if (row && typeof row.scrollIntoView === "function") {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+        if (typeof row.focus === "function") row.focus({ preventScroll: true });
+        return;
+      }
+      const teamEl = teamRefs.current.get(team);
+      if (teamEl && typeof teamEl.scrollIntoView === "function") {
+        teamEl.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }, 0);
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key === "Escape") {
+      setSuggestionsOpen(false);
+      return;
+    }
+    if (normalizeSearchValue(query).length < PLAYER_SUGGESTION_MIN_CHARS || playerSuggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSuggestionsOpen(true);
+      setHighlightedSuggestionIndex((prev) =>
+        Math.min(prev + 1, playerSuggestions.length - 1)
+      );
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSuggestionsOpen(true);
+      setHighlightedSuggestionIndex((prev) => Math.max(prev - 1, 0));
+      return;
+    }
+    if (e.key === "Enter" && suggestionsOpen) {
+      const selected = playerSuggestions[highlightedSuggestionIndex] || playerSuggestions[0];
+      if (selected) {
+        e.preventDefault();
+        selectPlayerSuggestion(selected);
+      }
+    }
+  }
 
   const groupedByTeam = useMemo(() => {
     const grouped = filteredPlayers.reduce((acc, player) => {
@@ -456,6 +597,22 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   }, [UNKNOWN_TEAM, groupedByTeam, showUnknownTeam, teamSort, watchIdSet]);
   const visiblePlayerCount = filteredPlayers.length;
   const totalPlayerCount = normalizedPlayers.length;
+  const hasSearchText = Boolean(query.trim());
+  const emptyStateTitle = hasSearchText
+    ? "No matching players."
+    : totalPlayerCount === 0
+      ? "No player data loaded."
+      : "No players match this view.";
+  const emptyStateDetail = hasSearchText
+    ? "Try a different player name, team abbreviation, or player id."
+    : totalPlayerCount === 0
+      ? "Refresh the player list or try again shortly."
+      : `Try clearing one or more filters (${[
+          watchlistOnly ? "watchlist only" : null,
+          watchedTeamsOnly ? "watched teams only" : null,
+          sport === "nhl" && nhlSlateOnly ? "in today's slate" : null,
+          recentOnly ? "recent only" : null,
+        ].filter(Boolean).join(", ") || "none active"}).`;
   const visibleTeamCount = useMemo(
     () => teamNames.filter((name) => name !== UNKNOWN_TEAM).length,
     [UNKNOWN_TEAM, teamNames]
@@ -629,12 +786,70 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div className="md:col-span-2">
               <div className="text-xs text-slate-500 mb-1">Search</div>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Player name, team, or player id..."
-                className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
-              />
+              <div className="relative" ref={searchWrapRef}>
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setQuery(next);
+                    setSuggestionsOpen(normalizeSearchValue(next).length >= PLAYER_SUGGESTION_MIN_CHARS);
+                    setHighlightedSuggestionIndex(0);
+                  }}
+                  onFocus={() => {
+                    if (normalizeSearchValue(query).length >= PLAYER_SUGGESTION_MIN_CHARS) setSuggestionsOpen(true);
+                  }}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Player name, team, or player id..."
+                  className="w-full pp-chip px-3 py-2 text-sm text-slate-800"
+                  aria-autocomplete="list"
+                  aria-expanded={suggestionsOpen && normalizeSearchValue(query).length >= PLAYER_SUGGESTION_MIN_CHARS}
+                />
+                {suggestionsOpen && normalizeSearchValue(query).length >= PLAYER_SUGGESTION_MIN_CHARS ? (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                    {playerSuggestions.length > 0 ? (
+                      <div className="max-h-80 overflow-auto py-1">
+                        {playerSuggestions.map((player, index) => {
+                          const team = player.teamLabel || UNKNOWN_TEAM;
+                          const position = playerPositionLabel(player);
+                          const isHighlighted = index === highlightedSuggestionIndex;
+                          return (
+                            <button
+                              key={`suggestion-${playerSuggestionKey(player)}`}
+                              type="button"
+                              className={`w-full px-3 py-2 text-left text-sm ${
+                                isHighlighted ? "bg-slate-100" : "bg-white hover:bg-slate-50"
+                              }`}
+                              onMouseEnter={() => setHighlightedSuggestionIndex(index)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                selectPlayerSuggestion(player);
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="min-w-0 truncate font-medium text-slate-800">
+                                  {getPlayerName(player)}
+                                </span>
+                                <span className="shrink-0 text-xs text-slate-500">
+                                  {team}{position ? ` · ${position}` : ""}
+                                </span>
+                              </div>
+                              {player.player_id != null ? (
+                                <div className="mt-0.5 text-xs text-slate-400">
+                                  ID {player.player_id}
+                                </div>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-slate-500">
+                        No matching players.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
               <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
@@ -731,7 +946,10 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
               <button
                 type="button"
                 className="pp-btn pp-btn-secondary pp-btn-sm"
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  setQuery("");
+                  setSuggestionsOpen(false);
+                }}
                 disabled={!query.trim()}
               >
                 Clear Search
@@ -741,6 +959,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                 className="pp-btn pp-btn-secondary pp-btn-sm"
                 onClick={() => {
                   setQuery("");
+                  setSuggestionsOpen(false);
                   setWatchlistOnly(false);
                   setWatchedTeamsOnly(false);
                   setNhlSlateOnly(false);
@@ -841,21 +1060,16 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
 
         {teamNames.length === 0 ? (
           <div className="pp-card p-4 text-slate-600">
-            <div className="font-medium text-slate-800">No players match this view.</div>
-            <div className="mt-1 text-sm">
-              Try clearing one or more filters ({[
-                query.trim() ? "search" : null,
-                watchlistOnly ? "watchlist only" : null,
-                watchedTeamsOnly ? "watched teams only" : null,
-                sport === "nhl" && nhlSlateOnly ? "in today's slate" : null,
-                recentOnly ? "recent only" : null,
-              ].filter(Boolean).join(", ") || "none active"}).
-            </div>
+            <div className="font-medium text-slate-800">{emptyStateTitle}</div>
+            <div className="mt-1 text-sm">{emptyStateDetail}</div>
             <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
                 className="pp-btn pp-btn-secondary pp-btn-sm"
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  setQuery("");
+                  setSuggestionsOpen(false);
+                }}
                 disabled={!query.trim()}
               >
                 Clear Search
@@ -865,6 +1079,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                 className="pp-btn pp-btn-secondary pp-btn-sm"
                 onClick={() => {
                   setQuery("");
+                  setSuggestionsOpen(false);
                   setWatchlistOnly(false);
                   setWatchedTeamsOnly(false);
                   setNhlSlateOnly(false);
@@ -982,34 +1197,40 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
                       });
                       const isWatched = Boolean(id && watchIdSet.has(String(id)));
                       const freshness = freshnessLabel(p.last_prop_date);
+                      const rowKey = playerSuggestionKey(p);
                       return (
                         <li
-                          key={p.player_id}
+                          key={rowKey}
+                          ref={(el) => {
+                            if (el) playerRefs.current.set(rowKey, el);
+                            else playerRefs.current.delete(rowKey);
+                          }}
+                          tabIndex={-1}
                           className={`flex items-center justify-between gap-3 pp-chip px-2 py-1 ${
                             isWatched ? "bg-emerald-50 border border-emerald-200" : ""
-                          }`}
+                          } focus:outline-none focus:ring-2 focus:ring-slate-300`}
                         >
                           <div className="min-w-0">
                             <Link
                               to={sport === "nhl" ? `/nhl/players/${p.player_id}` : `/mlb/players/${p.player_id}`}
                               state={{
                                 sport,
-                                player_name: p.player_name || null,
+                                player_name: getPlayerName(p) || null,
                                 team: p.teamLabel || null,
                               }}
                               className="text-slate-700 hover:underline"
                             >
-                              {p.player_name || p.player_id}
+                              {getPlayerName(p)}
                             </Link>
                             <div className="mt-0.5">
                               <Link
                                 to={
                                   sport === "mlb"
                                     ? `/props?mode=research&player=${playerQuery(
-                                        p.player_name || p.player_id
+                                        getPlayerName(p)
                                       )}&team=${playerQuery(p.teamLabel || "")}`
                                     : `/nhl/predictions?mode=board&player=${playerQuery(
-                                        p.player_name || p.player_id
+                                        getPlayerName(p)
                                       )}`
                                 }
                                 className="text-xs text-slate-500 hover:underline"
