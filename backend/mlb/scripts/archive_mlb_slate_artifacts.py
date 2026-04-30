@@ -142,6 +142,14 @@ def main() -> int:
         (slate_csv, archive_dir / slate_csv.name),
         (book_csv, archive_dir / book_csv.name),
     ]
+    if run_tag:
+        copy_plan.extend(
+            [
+                (pred_csv, archive_dir / f"{pred_csv.stem}__{run_tag}{pred_csv.suffix}"),
+                (slate_csv, archive_dir / f"{slate_csv.stem}__{run_tag}{slate_csv.suffix}"),
+                (book_csv, archive_dir / f"{book_csv.stem}__{run_tag}{book_csv.suffix}"),
+            ]
+        )
     if odds_snapshot_src is not None:
         copy_plan.append((odds_snapshot_src, archive_dir / "odds_mlb_playerprops.json"))
         # Keep legacy-compatible filename in sync for reconcile/report defaults.

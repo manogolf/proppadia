@@ -153,6 +153,47 @@ def _load_events(path: Path) -> List[Dict[str, Any]]:
     return []
 
 
+def _snapshot_sort_key(path: Path) -> Tuple[str, str]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        captured = str(raw.get("captured_at_utc") or "") if isinstance(raw, dict) else ""
+    except Exception:
+        captured = ""
+    return captured, path.name
+
+
+def _resolve_odds_files(
+    *,
+    day_dir: Path,
+    odds_filename: str,
+    fallback_filename: str,
+    mode: str,
+    glob_pattern: str,
+) -> Tuple[List[Path], bool]:
+    requested = day_dir / odds_filename
+    fallback_used = False
+    if str(mode or "").strip().lower() == "all":
+        candidates: Dict[str, Path] = {}
+        for pattern in [glob_pattern, odds_filename, fallback_filename]:
+            pattern = str(pattern or "").strip()
+            if not pattern:
+                continue
+            for p in day_dir.glob(pattern):
+                if p.is_file() and p.suffix.lower() == ".json":
+                    candidates[str(p.resolve())] = p
+        files = sorted(candidates.values(), key=_snapshot_sort_key)
+        if files:
+            return files, False
+
+    if requested.exists():
+        return [requested], False
+    if fallback_filename:
+        fallback = day_dir / fallback_filename
+        if fallback.exists():
+            return [fallback], True
+    return [], False
+
+
 def _build_market_index(
     *,
     events: Iterable[Dict[str, Any]],
@@ -447,6 +488,20 @@ def main() -> int:
     ap.add_argument("--slate-filename", default="mlb_slate_output.csv")
     ap.add_argument("--odds-filename", default="odds_latest_compatible.json")
     ap.add_argument(
+        "--odds-filename-mode",
+        choices=["single", "all"],
+        default="single",
+        help=(
+            "single: use --odds-filename plus fallback. "
+            "all: scan archived odds snapshot files for each date, useful for execution reconcile across scheduled captures."
+        ),
+    )
+    ap.add_argument(
+        "--odds-filename-glob",
+        default="odds_mlb_playerprops*.json",
+        help="Glob used when --odds-filename-mode=all.",
+    )
+    ap.add_argument(
         "--odds-filename-fallback",
         default="",
         help=(
@@ -579,14 +634,17 @@ def main() -> int:
     for day in dates:
         day_dir = odds_root / day
         slate_csv = day_dir / str(args.slate_filename)
-        odds_json = day_dir / odds_filename
-        if not odds_json.exists() and fallback_filename:
-            fallback_path = day_dir / fallback_filename
-            if fallback_path.exists():
-                odds_json = fallback_path
-                fallback_dates_used.append(day)
+        odds_files, used_fallback = _resolve_odds_files(
+            day_dir=day_dir,
+            odds_filename=odds_filename,
+            fallback_filename=fallback_filename,
+            mode=str(args.odds_filename_mode),
+            glob_pattern=str(args.odds_filename_glob),
+        )
+        if used_fallback:
+            fallback_dates_used.append(day)
 
-        if not slate_csv.exists() or not odds_json.exists():
+        if not slate_csv.exists() or not odds_files:
             skipped_missing_artifacts += 1
             continue
 
@@ -601,109 +659,111 @@ def main() -> int:
             skipped_missing_columns += 1
             continue
 
-        events = _load_events(odds_json)
-        market_idx = _build_market_index(events=events, team_name_rev=team_name_rev)
         processed_dates += 1
 
-        for _, row in slate_df.iterrows():
-            prop_type = str(row.get("prop_type") or "").strip().lower()
-            market_key_raw = str(row.get("market_key") or "").strip()
+        for odds_json in odds_files:
+            events = _load_events(odds_json)
+            market_idx = _build_market_index(events=events, team_name_rev=team_name_rev)
 
-            home = str(row.get("home_team_code") or "").strip().upper()
-            away = str(row.get("away_team_code") or "").strip().upper()
-            player_name = str(row.get("player_name") or "").strip()
-            line = _line_key(row.get("line"))
-            if not home or not away or not player_name or line is None:
-                continue
+            for _, row in slate_df.iterrows():
+                prop_type = str(row.get("prop_type") or "").strip().lower()
+                market_key_raw = str(row.get("market_key") or "").strip()
 
-            prop_market_candidates = prop_market_candidates_cache.get(prop_type)
-            if prop_market_candidates is None:
-                prop_market_candidates = get_prop_market_candidates(prop_type=prop_type, include_aliases=True)
-                prop_market_candidates_cache[prop_type] = list(prop_market_candidates)
+                home = str(row.get("home_team_code") or "").strip().upper()
+                away = str(row.get("away_team_code") or "").strip().upper()
+                player_name = str(row.get("player_name") or "").strip()
+                line = _line_key(row.get("line"))
+                if not home or not away or not player_name or line is None:
+                    continue
 
-            market_key_candidates: List[str] = []
-            if market_key_raw:
-                market_key_candidates.append(market_key_raw)
-            for mk in prop_market_candidates:
-                k = str(mk or "").strip()
-                if k and k not in market_key_candidates:
-                    market_key_candidates.append(k)
-            if not market_key_candidates:
-                continue
+                prop_market_candidates = prop_market_candidates_cache.get(prop_type)
+                if prop_market_candidates is None:
+                    prop_market_candidates = get_prop_market_candidates(prop_type=prop_type, include_aliases=True)
+                    prop_market_candidates_cache[prop_type] = list(prop_market_candidates)
 
-            market_key = market_key_candidates[0]
-            by_book: Dict[str, Dict[str, Any]] = {}
-            for candidate_market_key in market_key_candidates:
-                key = (home, away, candidate_market_key, _norm_name(player_name), float(line))
-                maybe_by_book = market_idx.get(key, {})
-                if maybe_by_book:
-                    market_key = candidate_market_key
-                    by_book = maybe_by_book
-                    break
+                market_key_candidates: List[str] = []
+                if market_key_raw:
+                    market_key_candidates.append(market_key_raw)
+                for mk in prop_market_candidates:
+                    k = str(mk or "").strip()
+                    if k and k not in market_key_candidates:
+                        market_key_candidates.append(k)
+                if not market_key_candidates:
+                    continue
 
-            used_book, over_price, under_price, market_player_name = _choose_book(by_book=by_book, bookmaker=bookmaker)
+                market_key = market_key_candidates[0]
+                by_book: Dict[str, Dict[str, Any]] = {}
+                for candidate_market_key in market_key_candidates:
+                    key = (home, away, candidate_market_key, _norm_name(player_name), float(line))
+                    maybe_by_book = market_idx.get(key, {})
+                    if maybe_by_book:
+                        market_key = candidate_market_key
+                        by_book = maybe_by_book
+                        break
 
-            over_implied = _american_to_implied_probability(over_price)
-            under_implied = _american_to_implied_probability(under_price)
-            hold = None
-            over_implied_novig = None
-            under_implied_novig = None
-            if over_implied is not None and under_implied is not None and (over_implied + under_implied) > 0:
-                hold = (over_implied + under_implied) - 1.0
-                denom = over_implied + under_implied
-                over_implied_novig = over_implied / denom
-                under_implied_novig = under_implied / denom
+                used_book, over_price, under_price, market_player_name = _choose_book(by_book=by_book, bookmaker=bookmaker)
 
-            game_id = int(row.get("game_id"))
-            player_id = int(row.get("player_id"))
-            actual_payload = actual_by_key.get((game_id, player_id, prop_type), {})
-            actual_value = actual_payload.get("actual_value")
-            over_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="over")
-            under_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="under")
-            model_pick_side = str(row.get("model_pick_side") or "").strip().lower()
-            model_pick_outcome = over_outcome if model_pick_side == "over" else under_outcome if model_pick_side == "under" else None
-            model_pick_price = over_price if model_pick_side == "over" else under_price if model_pick_side == "under" else None
+                over_implied = _american_to_implied_probability(over_price)
+                under_implied = _american_to_implied_probability(under_price)
+                hold = None
+                over_implied_novig = None
+                under_implied_novig = None
+                if over_implied is not None and under_implied is not None and (over_implied + under_implied) > 0:
+                    hold = (over_implied + under_implied) - 1.0
+                    denom = over_implied + under_implied
+                    over_implied_novig = over_implied / denom
+                    under_implied_novig = under_implied / denom
 
-            row_payload = {
-                "game_date": str(row.get("game_date")),
-                "slate_date": str(row.get("slate_date")),
-                "game_id": game_id,
-                "home_team_code": home,
-                "away_team_code": away,
-                "player_id": player_id,
-                "player_name": player_name,
-                "prop_type": prop_type,
-                "market_key": market_key,
-                "line": float(line),
-                "bookmaker_key": used_book,
-                "market_player_name": market_player_name,
-                "price_over_american": over_price,
-                "price_under_american": under_price,
-                "implied_over": over_implied,
-                "implied_under": under_implied,
-                "implied_over_novig": over_implied_novig,
-                "implied_under_novig": under_implied_novig,
-                "market_hold": hold,
-                "model_prob_over": float(row.get("prob_over")),
-                "model_prob_under": float(row.get("prob_under")),
-                "model_fair_over_american": int(row.get("fair_odds_over_american")),
-                "model_fair_under_american": int(row.get("fair_odds_under_american")),
-                "model_pick_side": model_pick_side,
-                "model_pick_prob": float(row.get("model_pick_prob")) if row.get("model_pick_prob") is not None else None,
-                "actual_value": actual_value,
-                "actual_over_outcome": over_outcome,
-                "actual_under_outcome": under_outcome,
-                "actual_model_pick_outcome": model_pick_outcome,
-                "pnl_over_1u": _profit_per_1u(outcome=over_outcome, price_american=over_price),
-                "pnl_under_1u": _profit_per_1u(outcome=under_outcome, price_american=under_price),
-                "pnl_model_pick_1u": _profit_per_1u(outcome=model_pick_outcome, price_american=model_pick_price),
-                "actual_sample_rows": actual_payload.get("sample_rows"),
-                "actual_distinct_values": actual_payload.get("distinct_actual_values"),
-                "odds_snapshot_file": str(odds_json),
-                "slate_source_file": str(slate_csv),
-            }
-            rows.append(row_payload)
-            rows_by_key.add((game_id, player_id, prop_type, float(line)))
+                game_id = int(row.get("game_id"))
+                player_id = int(row.get("player_id"))
+                actual_payload = actual_by_key.get((game_id, player_id, prop_type), {})
+                actual_value = actual_payload.get("actual_value")
+                over_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="over")
+                under_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="under")
+                model_pick_side = str(row.get("model_pick_side") or "").strip().lower()
+                model_pick_outcome = over_outcome if model_pick_side == "over" else under_outcome if model_pick_side == "under" else None
+                model_pick_price = over_price if model_pick_side == "over" else under_price if model_pick_side == "under" else None
+
+                row_payload = {
+                    "game_date": str(row.get("game_date")),
+                    "slate_date": str(row.get("slate_date")),
+                    "game_id": game_id,
+                    "home_team_code": home,
+                    "away_team_code": away,
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "prop_type": prop_type,
+                    "market_key": market_key,
+                    "line": float(line),
+                    "bookmaker_key": used_book,
+                    "market_player_name": market_player_name,
+                    "price_over_american": over_price,
+                    "price_under_american": under_price,
+                    "implied_over": over_implied,
+                    "implied_under": under_implied,
+                    "implied_over_novig": over_implied_novig,
+                    "implied_under_novig": under_implied_novig,
+                    "market_hold": hold,
+                    "model_prob_over": float(row.get("prob_over")),
+                    "model_prob_under": float(row.get("prob_under")),
+                    "model_fair_over_american": int(row.get("fair_odds_over_american")),
+                    "model_fair_under_american": int(row.get("fair_odds_under_american")),
+                    "model_pick_side": model_pick_side,
+                    "model_pick_prob": float(row.get("model_pick_prob")) if row.get("model_pick_prob") is not None else None,
+                    "actual_value": actual_value,
+                    "actual_over_outcome": over_outcome,
+                    "actual_under_outcome": under_outcome,
+                    "actual_model_pick_outcome": model_pick_outcome,
+                    "pnl_over_1u": _profit_per_1u(outcome=over_outcome, price_american=over_price),
+                    "pnl_under_1u": _profit_per_1u(outcome=under_outcome, price_american=under_price),
+                    "pnl_model_pick_1u": _profit_per_1u(outcome=model_pick_outcome, price_american=model_pick_price),
+                    "actual_sample_rows": actual_payload.get("sample_rows"),
+                    "actual_distinct_values": actual_payload.get("distinct_actual_values"),
+                    "odds_snapshot_file": str(odds_json),
+                    "slate_source_file": str(slate_csv),
+                }
+                rows.append(row_payload)
+                rows_by_key.add((game_id, player_id, prop_type, float(line)))
 
     derive_props = [str(p).strip().lower() for p in str(args.derive_props_from_mtp or "").split(",") if str(p).strip()]
     if derive_props:
@@ -815,6 +875,8 @@ def main() -> int:
         "derived_props_from_mtp": derive_props,
         "odds_filename_requested": odds_filename,
         "odds_filename_fallback": fallback_filename or None,
+        "odds_filename_mode": str(args.odds_filename_mode),
+        "odds_filename_glob": str(args.odds_filename_glob),
         "odds_fallback_dates_used": fallback_dates_used,
         "odds_fallback_dates_used_count": int(len(fallback_dates_used)),
     }

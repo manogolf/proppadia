@@ -173,6 +173,12 @@ make mlb-execution-vs-model MLB_DATE=YYYY-MM-DD \
   MLB_EXEC_TOOL_RESULTS_CSV=/path/to/daily_tool_results.csv
 ```
 
+For local shells that do not already export the Supabase DB variables, load them first:
+
+```bash
+set -a; source backend/.env; set +a
+```
+
 This target first rebuilds date-scoped reconcile rows for `MLB_DATE` and passes that fresh file into the execution comparison. Do not point this workflow at shared scratch files such as `tmp/mlb_base_vs_market_rows_anybook_full.csv` unless you intentionally produced that file in the same run.
 
 The command always prints raw loaded rows plus MLB / BetOnline / non-push graded-wager counts. For one-off validation against a known export, optional expected-count guardrails can be supplied; when omitted, counts are diagnostic only and the comparison continues:
@@ -187,13 +193,14 @@ make mlb-execution-vs-model MLB_DATE=YYYY-MM-DD \
 
 This writes:
 
-- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_rows.csv`
-- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_summary.json`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/execution_reconcile_rows.csv`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/execution_reconcile_summary.json`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/execution_vs_model.csv`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.json`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.md`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/unmatched_tool_rows.csv`
 
-The comparison also validates that the reconcile CSV contains `MLB_DATE`, is fresh relative to the source slate artifact, and does not have empty outcome columns when upstream MLB outcomes exist.
+The execution comparison scans all archived scheduled OddsAPI captures for the date (`odds_mlb_playerprops*.json`) because a graded wager may come from prewarm, morning, or later daily runs. The comparison also validates that the reconcile CSV contains `MLB_DATE`, is fresh relative to the source slate artifact, and does not have empty outcome columns when upstream MLB outcomes exist.
 
 Use this report to separate model signal from execution/pricing:
 
@@ -201,6 +208,24 @@ Use this report to separate model signal from execution/pricing:
 - `bet_win` and `pnl` come from the tool result download
 - `model_correct_bet_lost` points at execution/side/pricing mismatch
 - `model_wrong_bet_won` points at favorable execution or model/market disagreement
+
+Full-slate model-pick performance from the same fresh date-scoped reconcile rows:
+
+```bash
+make mlb-full-slate-performance MLB_DATE=YYYY-MM-DD
+```
+
+This target rebuilds its own canonical single-snapshot date-scoped reconcile file before summarizing:
+
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_rows.csv`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_summary.json`
+
+This writes the all-predictions slate performance layer:
+
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/full_slate_summary.md`
+- `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/full_slate_by_prop.csv`
+
+This is intentionally separate from the graded-wager execution report: it evaluates every resolved model pick on the slate with its represented book odds, not just the wagers placed in the tool export.
 
 Two-sided market enforcement is now the default for `mlb-predictions-wide`, `mlb-reconcile-rows`, quality/candidate eval on `reconcile_rows`, and red-mode bucket reports. Use these toggles only if you intentionally need old one-sided behavior:
 
