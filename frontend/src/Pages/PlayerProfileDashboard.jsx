@@ -1,5 +1,5 @@
 // PlayerProfileDashboard.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { useParams, Link, useLocation } from "react-router-dom";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -32,6 +32,11 @@ export default function PlayerProfileDashboard() {
   const profileTeam = String(profileData?.player_info?.team || "").trim();
   const displayPlayerName = routedPlayerName || profilePlayerName || "";
   const displayTeam = routedTeam || profileTeam || "";
+  const playerListPath = profileSport === "nhl" ? "/players/nhl" : "/players/mlb";
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [playerId, profileSport]);
 
   useEffect(() => {
     let isMounted = true;
@@ -383,7 +388,7 @@ export default function PlayerProfileDashboard() {
   };
 
   return (
-    <div className="min-h-screen pp-page p-6 max-w-5xl mx-auto">
+    <div className="min-h-screen pp-page p-6 max-w-5xl mx-auto" style={{ overflowAnchor: "none" }}>
       <div className="flex justify-between items-center mb-4">
         <div>
           {displayPlayerName ? (
@@ -400,12 +405,12 @@ export default function PlayerProfileDashboard() {
             {freshnessSource ? ` · source: ${freshnessSource}` : ""}
           </div>
         </div>
-        <Link to="/players" className="text-slate-700 hover:underline text-sm">
+        <Link to={playerListPath} className="text-slate-700 hover:underline text-sm">
           ← Back to Player List
         </Link>
       </div>
       {profileSport === "mlb" ? (
-        <section className="mb-6">
+        <section className="mb-6" style={{ overflowAnchor: "none" }}>
           <div className="pp-card p-3">
             <div className="flex items-baseline justify-between gap-3 mb-2">
               <h2 className="text-xl font-semibold text-slate-900">Today&apos;s Market</h2>
@@ -479,7 +484,7 @@ export default function PlayerProfileDashboard() {
         </section>
       ) : null}
       {loading ? (
-        <section className="mb-6">
+        <section className="mb-6" style={{ overflowAnchor: "none" }}>
           <div className="pp-card p-3 text-slate-600">
             <div className="font-medium text-slate-800">Building player context...</div>
             <div className="mt-1 text-sm">
@@ -492,13 +497,13 @@ export default function PlayerProfileDashboard() {
         </section>
       ) : null}
       {profileDetailsError ? (
-        <section className="mb-6">
+        <section className="mb-6" style={{ overflowAnchor: "none" }}>
           <div className="pp-card p-3 text-sm text-rose-600">
             {profileDetailsError}
           </div>
         </section>
       ) : null}
-      <section className="mb-6">
+      <section className="mb-6" style={{ overflowAnchor: "none" }}>
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Current Streaks</h2>
           {profileDetailsLoading ? (
@@ -519,7 +524,7 @@ export default function PlayerProfileDashboard() {
           )}
         </div>
       </section>
-      <section className="mb-6">
+      <section className="mb-6" style={{ overflowAnchor: "none" }}>
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Recent Props</h2>
           {profileDetailsLoading ? (
@@ -552,7 +557,7 @@ export default function PlayerProfileDashboard() {
           )}
         </div>
       </section>
-      <section className="mb-6">
+      <section className="mb-6" style={{ overflowAnchor: "none" }}>
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Stat-Derived Props</h2>
           {profileDetailsLoading ? (
@@ -578,7 +583,7 @@ export default function PlayerProfileDashboard() {
           )}
         </div>
       </section>
-      <section className="mb-6">
+      <section className="mb-6" style={{ overflowAnchor: "none" }}>
         <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Training Summary</h2>
           {profileDetailsLoading ? (
