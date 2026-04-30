@@ -201,9 +201,26 @@ function regimeShortLabel(label) {
   return map[s] || (s ? s.replace(/\s*environment$/i, "") : DASH);
 }
 
+function regimeFullLabel(label) {
+  if (isMissing(label)) return "Regime data pending";
+  return String(label).trim();
+}
+
+function hasRegimeContext(item) {
+  return Boolean(item?.regime_context_available && !isMissing(item?.regime_context_label));
+}
+
 function regimeReason(reason) {
   if (isMissing(reason)) return "Regime context is unavailable for this prop.";
   return String(reason);
+}
+
+function regimeDetailLine(item) {
+  const parts = [];
+  if (!isMissing(item?.long_term_regime)) parts.push(`Long Term: ${item.long_term_regime}`);
+  if (!isMissing(item?.recent_db_regime)) parts.push(`Recent: ${item.recent_db_regime}`);
+  if (!isMissing(item?.execution_regime)) parts.push(`Trend: ${item.execution_regime}`);
+  return parts.join(" · ");
 }
 
 function regimePillClasses(label) {
@@ -1271,43 +1288,51 @@ export default function MLBTodayWorkspacePage() {
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div>
               <div className="text-sm font-semibold text-slate-900">Prop Outlook</div>
-              <div className="text-xs text-slate-500">Current prop-level environment context for today&apos;s slate.</div>
+              <div className="text-xs text-slate-500">Prop-level environment context for today&apos;s slate.</div>
             </div>
             <div className="text-xs text-slate-500">{propOutlookRows.length} props</div>
           </div>
           {propOutlookRows.length ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-              {propOutlookRows.map((item) => (
-                <button
-                  key={`prop-outlook-${item.prop_type}`}
-                  type="button"
-                  onClick={() => {
-                    setFilters((f) => ({ ...f, prop_type: item.prop_type }));
-                    setPropFilterExplicitSincePlayer(true);
-                  }}
-                  className="text-left border border-slate-200 rounded-md bg-white hover:bg-slate-50 px-3 py-2"
-                  title={regimeReason(item.regime_context_explanation)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 font-medium text-sm text-slate-900 truncate">
-                      {item.display_prop || propLabel(item.prop_type)}
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-1.5">
+              {propOutlookRows.map((item) => {
+                const hasContext = hasRegimeContext(item);
+                const detail = regimeDetailLine(item);
+                const reason = hasContext
+                  ? regimeReason(item.regime_context_explanation)
+                  : item.regime_context_missing_reason || "Regime context is not available for this prop yet.";
+                return (
+                  <button
+                    key={`prop-outlook-${item.prop_type}`}
+                    type="button"
+                    onClick={() => {
+                      setFilters((f) => ({ ...f, prop_type: item.prop_type }));
+                      setPropFilterExplicitSincePlayer(true);
+                    }}
+                    className="text-left border border-slate-200 rounded bg-white hover:bg-slate-50 px-2.5 py-1.5"
+                    title={reason}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="shrink-0 font-medium text-sm text-slate-900">
+                        {item.display_prop || propLabel(item.prop_type)}
+                      </div>
+                      <div className="min-w-0 flex-1 text-xs text-slate-500 truncate">
+                        {hasContext ? regimeFullLabel(item.regime_context_label) : "Regime data pending"} ·{" "}
+                        {fmtNumber(item.row_count, 0)} rows
+                      </div>
+                      <span
+                        className={`shrink-0 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${regimePillClasses(
+                          item.regime_context_label
+                        )}`}
+                      >
+                        {hasContext ? regimeShortLabel(item.regime_context_label) : "Pending"}
+                      </span>
                     </div>
-                    <span
-                      className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${regimePillClasses(
-                        item.regime_context_label
-                      )}`}
-                    >
-                      {regimeShortLabel(item.regime_context_label)}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500 truncate">
-                    LT {isMissing(item.long_term_regime) ? DASH : item.long_term_regime} · Recent{" "}
-                    {isMissing(item.recent_db_regime) ? DASH : item.recent_db_regime} · Exec{" "}
-                    {isMissing(item.execution_regime) ? DASH : item.execution_regime}
-                  </div>
-                  <div className="mt-1 text-[11px] text-slate-400">{fmtNumber(item.row_count, 0)} rows</div>
-                </button>
-              ))}
+                    {hasContext && detail ? (
+                      <div className="mt-0.5 text-[11px] text-slate-500 truncate">{detail}</div>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="text-sm text-slate-500">Prop regime context is not available for this slate yet.</div>
@@ -1890,11 +1915,23 @@ export default function MLBTodayWorkspacePage() {
                               </div>
                               <div className="space-y-1.5">
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">Context</div>
-                                <div><span className="text-slate-500">Prop outlook:</span> <strong>{isMissing(r.regime_context_label) ? DASH : regimeShortLabel(r.regime_context_label)}</strong></div>
-                                <div><span className="text-slate-500">Outlook detail:</span> <strong>{regimeReason(r.regime_context_explanation)}</strong></div>
-                                <div><span className="text-slate-500">Long-term regime:</span> <strong>{isMissing(r.long_term_regime) ? DASH : r.long_term_regime}</strong></div>
-                                <div><span className="text-slate-500">Recent DB regime:</span> <strong>{isMissing(r.recent_db_regime) ? DASH : r.recent_db_regime}</strong></div>
-                                <div><span className="text-slate-500">Execution regime:</span> <strong>{isMissing(r.execution_regime) ? DASH : r.execution_regime}</strong></div>
+                                {hasRegimeContext(r) ? (
+                                  <>
+                                    <div><span className="text-slate-500">Prop outlook:</span> <strong>{regimeShortLabel(r.regime_context_label)}</strong></div>
+                                    <div><span className="text-slate-500">Outlook detail:</span> <strong>{regimeReason(r.regime_context_explanation)}</strong></div>
+                                    <div><span className="text-slate-500">Long Term:</span> <strong>{r.long_term_regime}</strong></div>
+                                    <div><span className="text-slate-500">Recent DB regime:</span> <strong>{r.recent_db_regime}</strong></div>
+                                    <div><span className="text-slate-500">Trend:</span> <strong>{r.execution_regime}</strong></div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div><span className="text-slate-500">Prop outlook:</span> <strong>Regime data pending</strong></div>
+                                    <div>
+                                      <span className="text-slate-500">Outlook detail:</span>{" "}
+                                      <strong>{r.regime_context_missing_reason || "Regime context is not available for this prop yet."}</strong>
+                                    </div>
+                                  </>
+                                )}
                                 <div><span className="text-slate-500">Streak:</span> <strong>{streakLabel(r.streak_context_label)}</strong></div>
                                 <div><span className="text-slate-500">Streak count:</span> <strong>{fmtNumber(r.streak_count, 0)}</strong></div>
                                 <div><span className="text-slate-500">Baseline delta:</span> <strong>{fmtPctSigned(r.baseline_delta)}</strong></div>

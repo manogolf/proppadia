@@ -87,16 +87,16 @@ def _phrase_recent(regime: str) -> str:
 
 def _phrase_execution(regime: str) -> str:
     if regime == "HOT":
-        return "execution trend is positive"
+        return "rolling model-pick trend is positive"
     if regime == "SOFT HOT":
-        return "execution trend has improved recently"
+        return "rolling model-pick trend has improved recently"
     if regime == "COOLING":
-        return "execution trend has cooled"
+        return "rolling model-pick trend has cooled"
     if regime == "COLD":
-        return "execution trend is negative"
+        return "rolling model-pick trend is negative"
     if regime == "NEUTRAL":
-        return "execution trend is neutral"
-    return "execution sample is limited"
+        return "rolling model-pick trend is neutral"
+    return "rolling model-pick trend sample is limited"
 
 
 def _explanation(row: pd.Series) -> str:

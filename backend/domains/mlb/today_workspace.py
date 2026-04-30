@@ -61,15 +61,18 @@ def _load_prop_regime_context() -> Dict[str, Dict[str, Any]]:
             prop_type = str(row.get("prop_type") or "").strip().lower()
             if not prop_type:
                 continue
+            regime_label = row.get("regime_context_label")
+            has_regime_context = bool(str(regime_label or "").strip())
             out[prop_type] = {
                 "prop_type": prop_type,
                 "display_prop": _display_prop(prop_type),
                 "regime_context_score": row.get("regime_context_score"),
-                "regime_context_label": row.get("regime_context_label"),
+                "regime_context_label": regime_label,
                 "regime_context_explanation": row.get("regime_context_explanation"),
                 "long_term_regime": row.get("long_term_regime"),
                 "recent_db_regime": row.get("recent_db_regime") or row.get("recent_regime"),
                 "execution_regime": row.get("execution_regime"),
+                "regime_context_available": has_regime_context,
             }
     return out
 
@@ -85,6 +88,8 @@ def _apply_regime_context(row: Dict[str, Any], context_by_prop: Dict[str, Dict[s
     out["long_term_regime"] = context.get("long_term_regime")
     out["recent_db_regime"] = context.get("recent_db_regime")
     out["execution_regime"] = context.get("execution_regime")
+    out["regime_context_available"] = bool(context.get("regime_context_available"))
+    out["regime_context_missing_reason"] = None if context else f"No regime context row found for prop_type={prop_type}."
     return out
 
 
@@ -100,6 +105,7 @@ def _build_regime_context_by_prop(
     out = []
     for prop_type in sorted(counts, key=lambda p: (_display_prop(p).lower(), p)):
         context = context_by_prop.get(prop_type, {})
+        has_context = bool(context.get("regime_context_available"))
         out.append(
             {
                 "prop_type": prop_type,
@@ -110,6 +116,10 @@ def _build_regime_context_by_prop(
                 "long_term_regime": context.get("long_term_regime"),
                 "recent_db_regime": context.get("recent_db_regime"),
                 "execution_regime": context.get("execution_regime"),
+                "regime_context_available": has_context,
+                "regime_context_missing_reason": None
+                if context
+                else f"No regime context row found for prop_type={prop_type}.",
                 "row_count": counts[prop_type],
             }
         )
