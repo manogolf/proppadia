@@ -13,9 +13,48 @@ import {
 } from "../shared/watchlistStorage.js";
 
 const PLAYER_BROWSER_PREFS_KEY = "proppadia_player_browser_prefs_v2";
+const PLAYER_BROWSER_SESSION_CACHE_PREFIX = "proppadia_player_browser_session_v1";
 const UNKNOWN_TEAM = "Unknown";
 const MLB_UNASSIGNED_TEAM = "Unassigned / Minors / Unknown";
 const PLAYER_SUGGESTION_MIN_CHARS = 1;
+const playerBrowserSessionCache = new Map();
+
+function playerBrowserCacheDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function playerBrowserCacheKey(sport) {
+  return `${PLAYER_BROWSER_SESSION_CACHE_PREFIX}:${sport}:${playerBrowserCacheDate()}`;
+}
+
+function readPlayerBrowserCache(sport) {
+  const key = playerBrowserCacheKey(sport);
+  if (playerBrowserSessionCache.has(key)) return playerBrowserSessionCache.get(key);
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    playerBrowserSessionCache.set(key, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writePlayerBrowserCache(sport, payload) {
+  const key = playerBrowserCacheKey(sport);
+  const safePayload = {
+    ...payload,
+    cachedAt: new Date().toISOString(),
+    cacheDate: playerBrowserCacheDate(),
+  };
+  playerBrowserSessionCache.set(key, safePayload);
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(safePayload));
+  } catch {
+    // ignore session cache write errors
+  }
+}
 
 const NHL_ACTIVE_TEAM_ABBRS = new Set([
   "ANA",
@@ -200,6 +239,7 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   const teamRefs = useRef(new Map());
   const playerRefs = useRef(new Map());
   const searchWrapRef = useRef(null);
+  const restoredCacheKeyRef = useRef("");
   const inactiveTeamLabel = sport === "mlb" ? MLB_UNASSIGNED_TEAM : UNKNOWN_TEAM;
 
   useEffect(() => {
@@ -324,6 +364,8 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
       if (!silent) setLoading(true);
       else setRefreshing(true);
       setError(null);
+      let nextPlayers = [];
+      let nextNhlSlatePlayerIds = new Set();
       if (sport === "mlb") {
         const res = await fetch(`${getBaseURL()}/api/mlb/players?limit=5000`);
         if (!res.ok) throw new Error("Failed to fetch MLB player list");
@@ -333,8 +375,9 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           : Array.isArray(payload?.rows)
             ? payload.rows
             : [];
-        setPlayers(data);
-        setNhlSlatePlayerIds(new Set());
+        nextPlayers = data;
+        setPlayers(nextPlayers);
+        setNhlSlatePlayerIds(nextNhlSlatePlayerIds);
       } else {
         const res = await fetch(`${getBaseURL()}/api/nhl/players?limit=5000&offset=0`);
         const payload = await res.json().catch(() => []);
@@ -361,7 +404,8 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
             });
           }
         }
-        setPlayers(Array.from(dedup.values()));
+        nextPlayers = Array.from(dedup.values());
+        setPlayers(nextPlayers);
         const ids = new Set();
         let offset = 0;
         const pageLimit = 200;
@@ -382,9 +426,29 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
           if (slatePayload.rows.length < pageLimit) break;
           offset += pageLimit;
         }
-        setNhlSlatePlayerIds(ids);
+        nextNhlSlatePlayerIds = ids;
+        setNhlSlatePlayerIds(nextNhlSlatePlayerIds);
       }
-      setLoadedAt(new Date().toISOString());
+      const nextLoadedAt = new Date().toISOString();
+      setLoadedAt(nextLoadedAt);
+      writePlayerBrowserCache(sport, {
+        players: nextPlayers,
+        nhlSlatePlayerIds: Array.from(nextNhlSlatePlayerIds),
+        loadedAt: nextLoadedAt,
+        viewState: {
+          query,
+          watchlistOnly,
+          watchedTeamsOnly,
+          nhlSlateOnly,
+          recentOnly,
+          recentDays,
+          openTeams,
+          teamSort,
+          rowSort,
+          showUnknownTeam,
+          scrollY: window.scrollY || 0,
+        },
+      });
       if (silent) {
         setNotice(`${sport.toUpperCase()} player list refreshed.`);
         window.setTimeout(() => setNotice(""), 1400);
@@ -400,8 +464,92 @@ export default function PlayerTeamBrowser({ forcedSport = null }) {
   }, [sport]);
 
   useEffect(() => {
+    const key = playerBrowserCacheKey(sport);
+    const cached = readPlayerBrowserCache(sport);
+    if (cached && Array.isArray(cached.players) && cached.players.length > 0) {
+      setPlayers(cached.players);
+      setNhlSlatePlayerIds(new Set(cached.nhlSlatePlayerIds || []));
+      setLoadedAt(cached.loadedAt || cached.cachedAt || null);
+      setError(null);
+      setLoading(false);
+      const view = cached.viewState || {};
+      if (typeof view.query === "string") setQuery(view.query);
+      if (typeof view.watchlistOnly === "boolean") setWatchlistOnly(view.watchlistOnly);
+      if (typeof view.watchedTeamsOnly === "boolean") setWatchedTeamsOnly(view.watchedTeamsOnly);
+      if (typeof view.nhlSlateOnly === "boolean") setNhlSlateOnly(view.nhlSlateOnly);
+      if (typeof view.recentOnly === "boolean") setRecentOnly(view.recentOnly);
+      if (view.recentDays === "any" || view.recentDays === "7" || view.recentDays === "30" || view.recentDays === "90") {
+        setRecentDays(view.recentDays);
+      }
+      if (view.openTeams && typeof view.openTeams === "object") setOpenTeams(view.openTeams);
+      if (view.teamSort === "alpha" || view.teamSort === "players" || view.teamSort === "watched") {
+        setTeamSort(view.teamSort);
+      }
+      if (view.rowSort === "recent" || view.rowSort === "name" || view.rowSort === "watched") {
+        setRowSort(view.rowSort);
+      }
+      if (typeof view.showUnknownTeam === "boolean") setShowUnknownTeam(view.showUnknownTeam);
+      if (restoredCacheKeyRef.current !== key) {
+        restoredCacheKeyRef.current = key;
+        window.requestAnimationFrame(() => {
+          const scrollY = Number(view.scrollY);
+          if (Number.isFinite(scrollY) && scrollY > 0) {
+            window.scrollTo({ top: scrollY, behavior: "auto" });
+          }
+        });
+      }
+      return;
+    }
     fetchPlayers();
-  }, [fetchPlayers]);
+  }, [fetchPlayers, sport]);
+
+  const savePlayerBrowserCache = useCallback(() => {
+    if (!Array.isArray(players) || players.length === 0) return;
+    writePlayerBrowserCache(sport, {
+      players,
+      nhlSlatePlayerIds: Array.from(nhlSlatePlayerIds || []),
+      loadedAt,
+      viewState: {
+        query,
+        watchlistOnly,
+        watchedTeamsOnly,
+        nhlSlateOnly,
+        recentOnly,
+        recentDays,
+        openTeams,
+        teamSort,
+        rowSort,
+        showUnknownTeam,
+        scrollY: window.scrollY || 0,
+      },
+    });
+  }, [
+    loadedAt,
+    nhlSlateOnly,
+    nhlSlatePlayerIds,
+    openTeams,
+    players,
+    query,
+    recentDays,
+    recentOnly,
+    rowSort,
+    showUnknownTeam,
+    sport,
+    teamSort,
+    watchedTeamsOnly,
+    watchlistOnly,
+  ]);
+
+  useEffect(() => {
+    function onPageHide() {
+      savePlayerBrowserCache();
+    }
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      savePlayerBrowserCache();
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [savePlayerBrowserCache]);
 
   useEffect(() => {
     if (!user?.id) {

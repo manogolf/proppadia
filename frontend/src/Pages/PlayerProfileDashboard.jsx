@@ -559,32 +559,6 @@ export default function PlayerProfileDashboard() {
       </section>
       <section className="mb-6" style={{ overflowAnchor: "none" }}>
         <div className="pp-card p-3">
-          <h2 className="text-xl font-semibold mb-2 text-slate-900">Stat-Derived Props</h2>
-          {profileDetailsLoading ? (
-            <div className="text-sm text-slate-500">Loading stat-derived context...</div>
-          ) : effectiveProfileData.stat_derived?.length > 0 ? (
-            <ul className="space-y-2">
-              {effectiveProfileData.stat_derived.map((prop, i) => (
-                <li key={i} className="pp-chip p-2">
-                  <div>
-                    <span className="font-semibold">{prop.game_date}</span>:{" "}
-                    {getPropDisplayLabel(prop.prop_type)} → {prop.result}
-                    {prop.outcome && (
-                      <span className="ml-2 text-sm text-slate-600">
-                        ({prop.outcome})
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No stat-derived props recorded.</p>
-          )}
-        </div>
-      </section>
-      <section className="mb-6" style={{ overflowAnchor: "none" }}>
-        <div className="pp-card p-3">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Training Summary</h2>
           {profileDetailsLoading ? (
             <div className="text-sm text-slate-500">Loading training summary...</div>
