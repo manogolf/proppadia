@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from datetime import date, datetime
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
@@ -15,9 +16,13 @@ from backend.domains.mlb.repository.today_workspace_repository import (
 )
 
 ET = ZoneInfo("America/New_York")
+logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROP_REGIME_CONTEXT_CSV = (
     REPO_ROOT / "artifacts/analysis/mlb/prop_regime_validation/prop_regime_combined_signal.csv"
+)
+DEPLOYED_PROP_REGIME_CONTEXT_CSV = (
+    REPO_ROOT / "backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv"
 )
 
 
@@ -62,11 +67,29 @@ def _resolve_requested_slate_date(slate_date: Optional[str]) -> str:
 
 
 def _load_prop_regime_context() -> Dict[str, Dict[str, Any]]:
-    if not PROP_REGIME_CONTEXT_CSV.exists():
+    source_path = PROP_REGIME_CONTEXT_CSV
+    if not source_path.exists():
+        logger.warning(
+            "MLB prop regime context source missing at %s; cwd=%s; trying deployed fallback %s",
+            source_path,
+            Path.cwd(),
+            DEPLOYED_PROP_REGIME_CONTEXT_CSV,
+        )
+        source_path = DEPLOYED_PROP_REGIME_CONTEXT_CSV
+    if not source_path.exists():
+        logger.warning(
+            "MLB prop regime context unavailable; missing primary=%s fallback=%s cwd=%s",
+            PROP_REGIME_CONTEXT_CSV,
+            DEPLOYED_PROP_REGIME_CONTEXT_CSV,
+            Path.cwd(),
+        )
+        return {}
+    if source_path.stat().st_size <= 0:
+        logger.warning("MLB prop regime context source is empty: %s", source_path)
         return {}
 
     out: Dict[str, Dict[str, Any]] = {}
-    with PROP_REGIME_CONTEXT_CSV.open("r", encoding="utf-8", newline="") as f:
+    with source_path.open("r", encoding="utf-8", newline="") as f:
         for row in csv.DictReader(f):
             prop_type = str(row.get("prop_type") or "").strip().lower()
             if not prop_type:
@@ -96,6 +119,10 @@ def _load_prop_regime_context() -> Dict[str, Dict[str, Any]]:
                 "trend_prior_sample_rows": _int_or_none(row.get("trend_prior_sample_rows")),
                 "regime_context_available": has_regime_context,
             }
+    if not out:
+        logger.warning("MLB prop regime context source loaded zero rows from %s", source_path)
+    else:
+        logger.info("MLB prop regime context loaded %s rows from %s", len(out), source_path)
     return out
 
 

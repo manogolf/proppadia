@@ -59,6 +59,7 @@ DEFAULT_RECONCILE_CSVS = [
 ]
 DEFAULT_EXECUTION_CSV = Path("artifacts/analysis/mlb/execution_vs_model/extended_clean/execution_vs_model.csv")
 DEFAULT_OUT_DIR = Path("artifacts/analysis/mlb/prop_regime_validation")
+DEFAULT_DEPLOY_CSV = Path("backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv")
 
 WIN_LOSS_PUSH = {"win", "loss", "push"}
 CHUNK_SIZE = 150_000
@@ -720,6 +721,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--reconcile-csv", action="append", dest="reconcile_csvs")
     parser.add_argument("--execution-csv", default=str(DEFAULT_EXECUTION_CSV))
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
+    parser.add_argument("--deploy-csv", default=str(DEFAULT_DEPLOY_CSV))
     args = parser.parse_args(argv)
 
     reconcile_csvs = [Path(p) for p in args.reconcile_csvs] if args.reconcile_csvs else DEFAULT_RECONCILE_CSVS
@@ -740,6 +742,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     db_vs_exec.to_csv(out_dir / "prop_regime_db_vs_execution.csv", index=False)
     combined.to_csv(out_dir / "prop_regime_combined_signal.csv", index=False)
+    deploy_csv = Path(args.deploy_csv)
+    deploy_csv.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_csv(deploy_csv, index=False)
     freshness.to_csv(out_dir / "prop_regime_source_freshness.csv", index=False)
     (out_dir / "prop_regime_validation.md").write_text(validation_md, encoding="utf-8")
 
@@ -778,6 +783,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     props = sorted(combined["prop_type"].astype(str).tolist())
     print(f"[prop-regime-validation] wrote {out_dir / 'prop_regime_combined_signal.csv'}")
+    print(f"[prop-regime-validation] wrote {deploy_csv}")
     print(f"[prop-regime-validation] active props: {','.join(props)}")
     return 0
 
