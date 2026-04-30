@@ -30,12 +30,12 @@ base AS (
   SELECT
     o.*,
     CASE
-      WHEN o.price_over_american IS NOT NULL AND abs(o.price_over_american) >= 100
+      WHEN o.price_over_american IS NOT NULL AND abs(o.price_over_american) BETWEEN 100 AND 500
       THEN o.price_over_american
       ELSE NULL
     END AS price_over_american_clean,
     CASE
-      WHEN o.price_under_american IS NOT NULL AND abs(o.price_under_american) >= 100
+      WHEN o.price_under_american IS NOT NULL AND abs(o.price_under_american) BETWEEN 100 AND 500
       THEN o.price_under_american
       ELSE NULL
     END AS price_under_american_clean
@@ -115,6 +115,8 @@ agg AS (
     max(snapshot_ts) AS last_snapshot_ts
   FROM latest
   GROUP BY 1,2,3,8,9
+  HAVING count(*) FILTER (WHERE price_over_american_clean IS NOT NULL) > 0
+     AND count(*) FILTER (WHERE price_under_american_clean IS NOT NULL) > 0
 )
 SELECT
   a.game_date,
@@ -167,12 +169,12 @@ base AS (
   SELECT
     o.*,
     CASE
-      WHEN o.price_over_american IS NOT NULL AND abs(o.price_over_american) >= 100
+      WHEN o.price_over_american IS NOT NULL AND abs(o.price_over_american) BETWEEN 100 AND 500
       THEN o.price_over_american
       ELSE NULL
     END AS price_over_american_clean,
     CASE
-      WHEN o.price_under_american IS NOT NULL AND abs(o.price_under_american) >= 100
+      WHEN o.price_under_american IS NOT NULL AND abs(o.price_under_american) BETWEEN 100 AND 500
       THEN o.price_under_american
       ELSE NULL
     END AS price_under_american_clean
@@ -193,6 +195,8 @@ snap AS (
     max(price_under_american_clean) AS snap_best_under
   FROM base
   GROUP BY 1,2,3,4,5
+  HAVING count(*) FILTER (WHERE price_over_american_clean IS NOT NULL) > 0
+     AND count(*) FILTER (WHERE price_under_american_clean IS NOT NULL) > 0
 ),
 ranked AS (
   SELECT
@@ -225,22 +229,22 @@ SELECT
   l.prop_type,
   l.line,
   CASE
-    WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+    WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) BETWEEN 100 AND 500
     THEN o.snap_over_median_raw
     ELSE NULL
   END AS open_over_price,
   CASE
-    WHEN o.snap_under_median_raw IS NOT NULL AND abs(o.snap_under_median_raw) >= 100
+    WHEN o.snap_under_median_raw IS NOT NULL AND abs(o.snap_under_median_raw) BETWEEN 100 AND 500
     THEN o.snap_under_median_raw
     ELSE NULL
   END AS open_under_price,
   CASE
-    WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+    WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) BETWEEN 100 AND 500
     THEN l.snap_over_median_raw
     ELSE NULL
   END AS latest_over_price,
   CASE
-    WHEN l.snap_under_median_raw IS NOT NULL AND abs(l.snap_under_median_raw) >= 100
+    WHEN l.snap_under_median_raw IS NOT NULL AND abs(l.snap_under_median_raw) BETWEEN 100 AND 500
     THEN l.snap_under_median_raw
     ELSE NULL
   END AS latest_under_price,
@@ -250,26 +254,26 @@ SELECT
   l.num_snapshots,
   (
     CASE
-      WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+      WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) BETWEEN 100 AND 500
       THEN l.snap_over_median_raw
       ELSE NULL
     END
     -
     CASE
-      WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+      WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) BETWEEN 100 AND 500
       THEN o.snap_over_median_raw
       ELSE NULL
     END
   ) AS over_price_change_from_open,
   (
     CASE
-      WHEN l.snap_under_median_raw IS NOT NULL AND abs(l.snap_under_median_raw) >= 100
+      WHEN l.snap_under_median_raw IS NOT NULL AND abs(l.snap_under_median_raw) BETWEEN 100 AND 500
       THEN l.snap_under_median_raw
       ELSE NULL
     END
     -
     CASE
-      WHEN o.snap_under_median_raw IS NOT NULL AND abs(o.snap_under_median_raw) >= 100
+      WHEN o.snap_under_median_raw IS NOT NULL AND abs(o.snap_under_median_raw) BETWEEN 100 AND 500
       THEN o.snap_under_median_raw
       ELSE NULL
     END
@@ -283,13 +287,13 @@ SELECT
     WHEN coalesce(
       (
         CASE
-          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) BETWEEN 100 AND 500
           THEN l.snap_over_median_raw
           ELSE NULL
         END
         -
         CASE
-          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) BETWEEN 100 AND 500
           THEN o.snap_over_median_raw
           ELSE NULL
         END
@@ -299,13 +303,13 @@ SELECT
     WHEN coalesce(
       (
         CASE
-          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) BETWEEN 100 AND 500
           THEN l.snap_over_median_raw
           ELSE NULL
         END
         -
         CASE
-          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) BETWEEN 100 AND 500
           THEN o.snap_over_median_raw
           ELSE NULL
         END
@@ -319,13 +323,13 @@ SELECT
     WHEN coalesce(
       (
         CASE
-          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) BETWEEN 100 AND 500
           THEN l.snap_over_median_raw
           ELSE NULL
         END
         -
         CASE
-          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) BETWEEN 100 AND 500
           THEN o.snap_over_median_raw
           ELSE NULL
         END
@@ -335,13 +339,13 @@ SELECT
     WHEN coalesce(
       (
         CASE
-          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) >= 100
+          WHEN l.snap_over_median_raw IS NOT NULL AND abs(l.snap_over_median_raw) BETWEEN 100 AND 500
           THEN l.snap_over_median_raw
           ELSE NULL
         END
         -
         CASE
-          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) >= 100
+          WHEN o.snap_over_median_raw IS NOT NULL AND abs(o.snap_over_median_raw) BETWEEN 100 AND 500
           THEN o.snap_over_median_raw
           ELSE NULL
         END

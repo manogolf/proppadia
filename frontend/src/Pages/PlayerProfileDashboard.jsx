@@ -215,8 +215,7 @@ export default function PlayerProfileDashboard() {
     };
   };
 
-  const todayMarketGroups = Array.from(
-    todayMarketRows.reduce((acc, row) => {
+  const groupedTodayMarket = todayMarketRows.reduce((acc, row) => {
       const key = `${row.player_id || playerId}|${row.prop_type || ""}|${fmtLine(row.line)}`;
       const side = String(row.side || "").trim().toUpperCase();
       const existing = acc.get(key) || {
@@ -292,8 +291,11 @@ export default function PlayerProfileDashboard() {
 
       acc.set(key, existing);
       return acc;
-    }, new Map()).values()
-  ).sort((a, b) => {
+    }, new Map());
+
+  const todayMarketGroups = Array.from(groupedTodayMarket.values()).filter((row) => {
+    return Number(row.over_playable_count) > 0 && Number(row.under_playable_count) > 0;
+  }).sort((a, b) => {
     const propCmp = getPropDisplayLabel(a.prop_type).localeCompare(getPropDisplayLabel(b.prop_type));
     if (propCmp !== 0) return propCmp;
     return Number(a.line || 0) - Number(b.line || 0);
@@ -387,10 +389,6 @@ export default function PlayerProfileDashboard() {
                         row.coverage_quality_label,
                         row.timing_signal,
                         row.regime_context_label,
-                        (row.over_filtered_out && !row.over_playable_count) ||
-                        (row.under_filtered_out && !row.under_playable_count)
-                          ? "Thin market"
-                          : null,
                       ].filter(Boolean);
                       return (
                         <tr

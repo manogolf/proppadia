@@ -24,27 +24,62 @@ def fetch_today_workspace_rows(
 
     where = []
     params: List[Any] = []
+    where.append(
+        """
+        abs(w.best_price) <= 500
+        AND w.market_median IS NOT NULL
+        AND abs(w.market_median) <= 500
+        AND EXISTS (
+          SELECT 1
+          FROM mlb.today_workspace_mlb w_over
+          WHERE w_over.game_date = w.game_date
+            AND w_over.game_id = w.game_id
+            AND w_over.player_id = w.player_id
+            AND lower(trim(w_over.prop_type)) = lower(trim(w.prop_type))
+            AND w_over.line = w.line
+            AND upper(trim(w_over.side)) = 'OVER'
+            AND w_over.best_price IS NOT NULL
+            AND abs(w_over.best_price) <= 500
+            AND w_over.market_median IS NOT NULL
+            AND abs(w_over.market_median) <= 500
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM mlb.today_workspace_mlb w_under
+          WHERE w_under.game_date = w.game_date
+            AND w_under.game_id = w.game_id
+            AND w_under.player_id = w.player_id
+            AND lower(trim(w_under.prop_type)) = lower(trim(w.prop_type))
+            AND w_under.line = w.line
+            AND upper(trim(w_under.side)) = 'UNDER'
+            AND w_under.best_price IS NOT NULL
+            AND abs(w_under.best_price) <= 500
+            AND w_under.market_median IS NOT NULL
+            AND abs(w_under.market_median) <= 500
+        )
+        """
+    )
 
     if slate_date:
-        where.append("game_date = %s::date")
+        where.append("w.game_date = %s::date")
         params.append(str(slate_date).strip())
     if prop_type:
-        where.append("lower(trim(prop_type)) = lower(trim(%s))")
+        where.append("lower(trim(w.prop_type)) = lower(trim(%s))")
         params.append(str(prop_type).strip())
     if team:
-        where.append("upper(trim(team)) = upper(trim(%s))")
+        where.append("upper(trim(w.team)) = upper(trim(%s))")
         params.append(str(team).strip())
     if side:
-        where.append("upper(trim(side)) = upper(trim(%s))")
+        where.append("upper(trim(w.side)) = upper(trim(%s))")
         params.append(str(side).strip())
     if timing_signal:
-        where.append("upper(trim(timing_signal)) = upper(trim(%s))")
+        where.append("upper(trim(w.timing_signal)) = upper(trim(%s))")
         params.append(str(timing_signal).strip())
     if player_id is not None:
-        where.append("CAST(player_id AS TEXT) = %s")
+        where.append("CAST(w.player_id AS TEXT) = %s")
         params.append(str(player_id))
     if player_query:
-        where.append("player_name ILIKE %s")
+        where.append("w.player_name ILIKE %s")
         params.append(f"%{str(player_query).strip()}%")
 
     where_sql = ""
@@ -89,7 +124,7 @@ def fetch_today_workspace_rows(
       last_10_avg,
       season_avg,
       COUNT(*) OVER()::int AS total_rows
-    FROM mlb.today_workspace_mlb
+    FROM mlb.today_workspace_mlb w
     {where_sql}
     ORDER BY abs(value_vs_market) DESC NULLS LAST, player_name ASC, prop_type ASC, line ASC, side ASC
     LIMIT %s::int
