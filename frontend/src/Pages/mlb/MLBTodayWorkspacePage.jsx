@@ -1451,7 +1451,10 @@ export default function MLBTodayWorkspacePage() {
             <span className="text-xs text-slate-600">All rows</span>
           ) : (
             activeStateTokens.map((t) => (
-              <span key={`active-token-${t}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
+              <span
+                key={`active-token-${t}`}
+                className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700 border border-slate-300 shadow-[0_0_0_1px_rgba(0,0,0,0.02)]"
+              >
                 {t}
               </span>
             ))

@@ -207,11 +207,12 @@ export default function HomeGateway() {
                 Decision Workspace
               </span>
               <h1 className="mt-3 text-4xl md:text-5xl font-bold text-slate-900 leading-tight">
-                Understand line movement before you act.
+                The line tells a story.
+                <br />
+                We help you read it.
               </h1>
               <p className="mt-4 text-[1.05rem] text-slate-700 leading-8">
-                See where prices sit, how they move, and what makes those moves
-                meaningful.
+                See where prices sit, how they move, and what it means.
               </p>
               <div className="mt-4 rounded-xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-sky-50 px-4 py-3 text-slate-700">
                 <ul className="space-y-1.5 text-[0.95rem] leading-7">
@@ -341,7 +342,10 @@ export default function HomeGateway() {
             timing, and player context.
           </p>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <PrefetchLink
+              to="/mlb/today"
+              className="block rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 cursor-pointer transition hover:border-slate-300 hover:shadow-sm"
+            >
               <div className="font-semibold text-slate-900">
                 Market Workspace
               </div>
@@ -351,8 +355,11 @@ export default function HomeGateway() {
               <div className="mt-2 text-[11px] text-slate-500">
                 MLB Today
               </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            </PrefetchLink>
+            <PrefetchLink
+              to="/players/mlb"
+              className="block rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 cursor-pointer transition hover:border-slate-300 hover:shadow-sm"
+            >
               <div className="font-semibold text-slate-900">
                 Player Research
               </div>
@@ -362,18 +369,21 @@ export default function HomeGateway() {
               <div className="mt-2 text-[11px] text-slate-500">
                 Research tools
               </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            </PrefetchLink>
+            <PrefetchLink
+              to="/watchlist"
+              className="block rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 cursor-pointer transition hover:border-slate-300 hover:shadow-sm"
+            >
               <div className="font-semibold text-slate-900">
-                Watchlist + Archive
+                Watchlist
               </div>
               <div className="mt-1 text-xs text-slate-600">
-                Track players you follow and review historical model reference pages.
+                Track players you follow and jump back into their research context.
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
                 Ongoing review
               </div>
-            </div>
+            </PrefetchLink>
           </div>
         </section>
 
