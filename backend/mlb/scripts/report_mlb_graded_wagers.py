@@ -114,7 +114,7 @@ def _infer_prop_type(prop_label: str, market: str) -> str:
         return "total_bases"
     if "earned runs" in text:
         return "earned_runs"
-    if "outs recorded" in text:
+    if "outs recorded" in text or "pitcher outs" in text or "pitching outs" in text:
         return "outs_recorded"
     if "walks allowed" in text:
         return "walks_allowed"

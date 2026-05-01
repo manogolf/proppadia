@@ -61,6 +61,7 @@ nhl/data/processed/*.csv
 mlb/data/raw/
 mlb/data/interim/
 mlb/data/processed/*.csv
+backend/mlb/data/raw/
 data/**
 !data/import_templates/**
 !data/README.md
@@ -101,4 +102,3 @@ backend/nhl/data/external/roster_names.csv
 backend/nhl/site/data/raw/gamecenter/*.json
 nhl_daily_LAST_FAIL.txt
 nhl_daily_STATUS.txt
-

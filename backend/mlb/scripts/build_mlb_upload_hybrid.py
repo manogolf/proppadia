@@ -33,6 +33,10 @@ MARKET_TO_PROP: Dict[str, str] = {
     "batter_h+r+rbi": "hits_runs_rbis",
     "pitcher_strikeouts": "strikeouts_pitching",
     "pitcher_outs": "outs_recorded",
+    "outs_recorded": "outs_recorded",
+    "outs recorded": "outs_recorded",
+    "pitcher outs": "outs_recorded",
+    "pitching outs": "outs_recorded",
 }
 
 PROP_POLICY: Dict[str, str] = {

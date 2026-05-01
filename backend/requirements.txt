@@ -9,6 +9,7 @@ joblib==1.4.2
 MLB-StatsAPI==1.9.0
 numpy==2.2.5
 pandas==2.2.3
+pybaseball>=2.2,<3
 postgrest>=0.14
 psycopg[binary]>=3.1
 python-dateutil==2.9.0.post0

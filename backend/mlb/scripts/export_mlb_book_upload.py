@@ -173,6 +173,10 @@ UPLOAD_MARKET_ALIASES: Dict[str, str] = {
     "batter_total_bases": "batter_bases",
     "batter_runs_scored": "batter_runs",
     "pitcher_hits_allowed": "pitcher_hits",
+    "outs_recorded": "pitcher_outs",
+    "outs recorded": "pitcher_outs",
+    "pitcher outs": "pitcher_outs",
+    "pitching outs": "pitcher_outs",
 }
 
 UPLOAD_TEAM_CODE_ALIASES: Dict[str, str] = {

@@ -174,6 +174,24 @@ MLB_EARLY_STEAM_PITCHER_CANDIDATES_OUT_CSV ?= tmp/mlb_early_steam_pitcher_candid
 MLB_EARLY_STEAM_PITCHER_CANDIDATES_SUMMARY_OUT_CSV ?= tmp/mlb_early_steam_pitcher_candidates_$(MLB_DATE)_summary.csv
 MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE ?= 0.02
 MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE ?= 0.05
+MLB_EARLY_STEAM_PITCHER_PROFILE_LOGS_CSV ?= tmp/pitcher_game_logs_pybaseball_2026-04-16_to_2026-05-01.csv
+MLB_EARLY_STEAM_PITCHER_PROFILE_OUT_CSV ?= tmp/mlb_early_steam_pitcher_profile_analysis.csv
+MLB_EARLY_STEAM_PITCHER_PROFILE_SUMMARY_OUT_CSV ?= tmp/mlb_early_steam_pitcher_profile_summary.csv
+MLB_EARLY_STEAM_PITCHER_PROFILE_STABLE_SUMMARY_OUT_CSV ?= tmp/mlb_early_steam_pitcher_profile_stable_summary.csv
+MLB_EARLY_STEAM_PITCHER_PROFILE_STABLE_MIN_BETS ?= 5
+MLB_EARLY_STEAM_V1_PITCHING_LOGS_CSV ?= tmp/pitcher_game_logs_pybaseball_2026-03-15_to_2026-05-01.csv
+MLB_EARLY_STEAM_V1_PITCHING_OUT_CSV ?= tmp/mlb_early_steam_v1_pitching_candidates_$(MLB_DATE).csv
+MLB_EARLY_STEAM_V1_MIN_OUTS_STD ?= 2.0
+MLB_RETROSHEET_RAW_DIR ?= backend/mlb/data/raw/retrosheet
+MLB_RETROSHEET_SEASON ?=
+MLB_RETROSHEET_FORCE_DOWNLOAD ?= 0
+MLB_CHADWICK_REGISTER_CSV ?= $(MLB_RETROSHEET_RAW_DIR)/chadwick_register/people.csv
+MLB_CHADWICK_AUDIT_OUT_CSV ?= tmp/chadwick_register_mapping_audit.csv
+START_DATE ?=
+END_DATE ?=
+MLB_PITCHER_GAME_LOGS_PYBASEBALL_OUT_CSV ?= tmp/pitcher_game_logs_pybaseball.csv
+MLB_PITCHER_GAME_LOGS_PYBASEBALL_AUDIT_OUT_CSV ?= tmp/pitcher_game_logs_pybaseball_audit.csv
+MLB_PITCHER_GAME_LOGS_PYBASEBALL_CHUNK_DAYS ?= 7
 MLB_ONE_SIDED_CLEANUP_SCHEMA ?= mlb
 MLB_ONE_SIDED_CLEANUP_TABLES ?=
 MLB_ONE_SIDED_CLEANUP_OUT_JSON ?= artifacts/ops/mlb_one_sided_cleanup_latest.json
@@ -491,8 +509,8 @@ MLB_CORE_PROP_TYPES ?= hits,total_bases,hits_runs_rbis,runs_rbis,rbis,runs_score
 MLB_PROD8_PROP_TYPES ?= hits,total_bases,strikeouts_batting,earned_runs,doubles,hits_allowed,strikeouts_pitching,walks
 MLB_UNDERSERVED_PROMOTED_PROP_TYPES ?= runs_scored,walks_allowed,rbis
 MLB_UNDERSERVED_WATCHLIST_PROP_TYPES ?= outs_recorded,home_runs
-# Keep prod12 default lane aligned with cron/runbook (12 market-backed props).
-MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed,rbis
+# Keep prod12 default lane aligned with cron/runbook plus pitcher outs for upload coverage.
+MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walks_allowed,rbis,outs_recorded
 # Full daily prod12 eval is always all-12. Use MLB_PROD12_WATERLINE_PROP_TYPES for optional narrowed experiments.
 MLB_PROD12_DAILY_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_PROD12_WATERLINE_PROP_TYPES ?= hits,total_bases,strikeouts_batting
@@ -1421,6 +1439,34 @@ mlb-early-steam-results:
 mlb-early-steam-pitcher-candidates:
 	$(VENV_PY) backend/mlb/scripts/export_mlb_early_steam_pitcher_candidates.py --rows-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --date "$(MLB_DATE)" --out-csv "$(MLB_EARLY_STEAM_PITCHER_CANDIDATES_OUT_CSV)" --out-summary-csv "$(MLB_EARLY_STEAM_PITCHER_CANDIDATES_SUMMARY_OUT_CSV)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)"
 
+# Join early-steam pitcher candidates to recent pitcher profiles and emit coarse stability segments.
+mlb-early-steam-pitcher-profiles:
+	$(VENV_PY) backend/mlb/scripts/analyze_early_steam_pitcher_profiles.py --early-steam-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --pitcher-logs-csv "$(MLB_EARLY_STEAM_PITCHER_PROFILE_LOGS_CSV)" --out-csv "$(MLB_EARLY_STEAM_PITCHER_PROFILE_OUT_CSV)" --summary-csv "$(MLB_EARLY_STEAM_PITCHER_PROFILE_SUMMARY_OUT_CSV)" --stable-summary-csv "$(MLB_EARLY_STEAM_PITCHER_PROFILE_STABLE_SUMMARY_OUT_CSV)" --stable-min-bets "$(MLB_EARLY_STEAM_PITCHER_PROFILE_STABLE_MIN_BETS)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)"
+
+# Export V1 early-steam pitching candidates using workload-volatility threshold.
+mlb-early-steam-v1-pitching-candidates:
+	$(VENV_PY) backend/mlb/scripts/export_mlb_early_steam_v1_pitching_candidates.py --rows-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --pitcher-logs-csv "$(MLB_EARLY_STEAM_V1_PITCHING_LOGS_CSV)" --out-csv "$(MLB_EARLY_STEAM_V1_PITCHING_OUT_CSV)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)" --min-outs-std "$(MLB_EARLY_STEAM_V1_MIN_OUTS_STD)"
+
+# Download local source files for Retrosheet/Chadwick pitcher historical backfill.
+mlb-download-retrosheet-sources:
+	$(VENV_PY) backend/mlb/scripts/download_retrosheet_pitcher_sources.py --out-dir "$(MLB_RETROSHEET_RAW_DIR)" --download-chadwick-register $(if $(strip $(MLB_RETROSHEET_SEASON)),--season "$(MLB_RETROSHEET_SEASON)",) $(if $(filter 1 true TRUE yes YES,$(MLB_RETROSHEET_FORCE_DOWNLOAD)),--force,)
+
+# Audit Chadwick Register Retrosheet -> MLBAM mapping coverage.
+mlb-audit-chadwick-register:
+	$(VENV_PY) backend/mlb/scripts/audit_chadwick_register_mapping.py --register-csv "$(MLB_CHADWICK_REGISTER_CSV)" --out-csv "$(MLB_CHADWICK_AUDIT_OUT_CSV)"
+
+# Build CSV-only pybaseball pitcher game logs for a date range.
+mlb-build-pitcher-game-logs-pybaseball:
+	@if [ -z "$(START_DATE)" ] || [ -z "$(END_DATE)" ]; then \
+		echo "mlb-build-pitcher-game-logs-pybaseball requires START_DATE=YYYY-MM-DD END_DATE=YYYY-MM-DD"; \
+		exit 2; \
+	fi
+	$(VENV_PY) backend/mlb/scripts/build_pitcher_game_logs_pybaseball.py --start-date "$(START_DATE)" --end-date "$(END_DATE)" --chunk-days "$(MLB_PITCHER_GAME_LOGS_PYBASEBALL_CHUNK_DAYS)" --chadwick-register-csv "$(MLB_CHADWICK_REGISTER_CSV)" --out-csv "$(MLB_PITCHER_GAME_LOGS_PYBASEBALL_OUT_CSV)"
+
+# Audit CSV-only pybaseball pitcher game logs.
+mlb-audit-pitcher-game-logs-pybaseball:
+	$(VENV_PY) backend/mlb/scripts/audit_pitcher_game_logs_pybaseball.py --csv "$(MLB_PITCHER_GAME_LOGS_PYBASEBALL_OUT_CSV)" --out-csv "$(MLB_PITCHER_GAME_LOGS_PYBASEBALL_AUDIT_OUT_CSV)"
+
 # Post-grade routine: rebuild reconcile rows then report model-vs-fade for that window.
 mlb-post-grade-fade-check:
 	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_RECONCILE_FROM_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_RECONCILE_TO_DATE)" MLB_RECONCILE_BOOKMAKER="$(MLB_RECONCILE_BOOKMAKER)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_RECONCILE_ROWS_OUT_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RECONCILE_SUMMARY_OUT_JSON)" MLB_RECONCILE_REQUIRE_OUTCOMES="$(MLB_POST_GRADE_REQUIRE_OUTCOMES)" MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN="$(MLB_POST_GRADE_REQUIRE_OUTCOME_ROWS_MIN)"
@@ -2283,6 +2329,9 @@ mlb-daily-capture:
 	$(MAKE) mlb-predictions-wide MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_WIDE_PROP_TYPES="$(MLB_WIDE_PROP_TYPES)" MLB_WIDE_REQUIRE_MIN_ROWS="$(MLB_WIDE_REQUIRE_MIN_ROWS)"
 	$(MAKE) mlb-slate-output MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_SLATE_PROP_TYPE="$(MLB_SLATE_PROP_TYPE)"
 	$(MAKE) mlb-book-upload MLB_DATE="$(MLB_DATE)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)"
+
+mlb-build-upload-only:
+	$(MAKE) mlb-daily-capture MLB_DATE="$(MLB_DATE)" MLB_SLATE_PRED_CSV="$(MLB_SLATE_PRED_CSV)" MLB_ODDS_SNAPSHOT_JSON="$(MLB_ODDS_SNAPSHOT_JSON)" MLB_WIDE_PROP_TYPES="$(MLB_WIDE_PROP_TYPES)" MLB_WIDE_REQUIRE_MIN_ROWS="$(MLB_WIDE_REQUIRE_MIN_ROWS)" MLB_SLATE_OUTPUT_CSV="$(MLB_SLATE_OUTPUT_CSV)" MLB_BOOK_UPLOAD_OUT_CSV="$(MLB_BOOK_UPLOAD_OUT_CSV)" MLB_ODDS_HISTORY_ROOT="$(MLB_ODDS_HISTORY_ROOT)"
 
 # One-command MLB daily refresh baseline (cache + rosters + bvp/pvb + stat-derived + guard + optional capture).
 mlb-daily-refresh:

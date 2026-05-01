@@ -60,6 +60,10 @@ MARKET_ALIASES: Dict[str, str] = {
     "pitcher_hits_allowed": "pitcher_hits",
     "pitcher_ks": "pitcher_strikeouts",
     "pitcher_k": "pitcher_strikeouts",
+    "outs_recorded": "pitcher_outs",
+    "outs recorded": "pitcher_outs",
+    "pitcher outs": "pitcher_outs",
+    "pitching outs": "pitcher_outs",
 }
 
 PROP_TO_MARKET: Dict[str, str] = {v: k for k, v in MARKET_TO_PROP.items()}

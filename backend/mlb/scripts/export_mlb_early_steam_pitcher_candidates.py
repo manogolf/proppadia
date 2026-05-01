@@ -23,6 +23,22 @@ import pandas as pd
 
 
 PITCHER_MARKETS = {"pitcher_outs", "pitcher_strikeouts"}
+MARKET_ALIASES = {
+    "outs_recorded": "pitcher_outs",
+    "outs recorded": "pitcher_outs",
+    "pitcher outs": "pitcher_outs",
+    "pitching outs": "pitcher_outs",
+    "strikeouts_pitching": "pitcher_strikeouts",
+    "pitcher strikeouts": "pitcher_strikeouts",
+}
+PROP_ALIASES = {
+    "pitcher_outs": "outs_recorded",
+    "outs recorded": "outs_recorded",
+    "pitcher outs": "outs_recorded",
+    "pitching outs": "outs_recorded",
+    "pitcher_strikeouts": "strikeouts_pitching",
+    "pitcher strikeouts": "strikeouts_pitching",
+}
 DEFAULT_MIN_IMP_MOVE = 0.02
 DEFAULT_MAX_IMP_MOVE = 0.05
 
@@ -50,6 +66,18 @@ def _norm_text(value: Any) -> str:
 
 def _norm_lower(value: Any) -> str:
     return _norm_text(value).lower()
+
+
+def _norm_market_key(value: Any) -> str:
+    text = _norm_lower(value).replace("_", " ")
+    return MARKET_ALIASES.get(text, MARKET_ALIASES.get(_norm_lower(value), _norm_lower(value)))
+
+
+def _norm_prop_type(value: Any, market_key: Any = "") -> str:
+    text = _norm_lower(value).replace("_", " ")
+    if text:
+        return PROP_ALIASES.get(text, PROP_ALIASES.get(_norm_lower(value), _norm_lower(value)))
+    return PROP_ALIASES.get(_norm_lower(market_key), _norm_lower(market_key))
 
 
 def _resolve_col(df: pd.DataFrame, names: Sequence[str]) -> str:
@@ -132,7 +160,7 @@ def _source_metrics(
     _, dates = _date_series(df)
     market_col = _resolve_col(df, ["market_key", "market"])
     date_mask = dates.astype(str).eq(str(export_date))
-    markets = df[market_col].map(_norm_lower) if market_col else pd.Series([""] * len(df), index=df.index)
+    markets = df[market_col].map(_norm_market_key) if market_col else pd.Series([""] * len(df), index=df.index)
     source_rows = int(date_mask.sum())
     pitcher_market_source_rows = int((date_mask & markets.isin(PITCHER_MARKETS)).sum())
     return {
@@ -162,7 +190,7 @@ def _build_candidates(
     if not imp_col:
         raise SystemExit("Input rows must include imp_move_early.")
 
-    work["market_key"] = work[market_col].map(_norm_lower)
+    work["market_key"] = work[market_col].map(_norm_market_key)
     work["side"] = work[side_col].map(_norm_lower)
     work["imp_move_early"] = pd.to_numeric(work[imp_col], errors="coerce")
     work["line"] = pd.to_numeric(work[_resolve_col(work, ["line"])], errors="coerce") if _resolve_col(work, ["line"]) else np.nan
@@ -173,7 +201,7 @@ def _build_candidates(
     book_col = _resolve_col(work, ["bookmaker_key", "book"])
     game_col = _resolve_col(work, ["game_id"])
     player_col = _resolve_col(work, ["player_name", "player"])
-    work["prop_type"] = work[prop_col].map(_norm_lower) if prop_col else ""
+    work["prop_type"] = work.apply(lambda r: _norm_prop_type(r.get(prop_col) if prop_col else "", r.get("market_key")), axis=1)
     work["bookmaker_key"] = work[book_col].map(_norm_lower) if book_col else ""
     work["game_id"] = work[game_col] if game_col else ""
     work["player_name"] = work[player_col].map(_norm_text) if player_col else ""
