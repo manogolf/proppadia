@@ -167,6 +167,13 @@ MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV ?= tmp/analysis/mlb_red_mode_fade_odds_buc
 MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV ?= tmp/analysis/mlb_red_mode_fade_odds_bucket_focus.csv
 MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT ?= 0
 MLB_RED_SIDE_MATRIX_OUT_CSV ?= tmp/analysis/mlb_red_mode_side_matrix.csv
+MLB_EARLY_STEAM_MOVEMENT_CSV ?= tmp/mlb_line_movement_*_imp.csv
+MLB_EARLY_STEAM_RECONCILE_CSV ?= tmp/mlb_reconcile_rows_*_full_slate_mixedbook.csv
+MLB_EARLY_STEAM_ROWS_CSV ?= tmp/mlb_early_steam_multiday_results.csv
+MLB_EARLY_STEAM_PITCHER_CANDIDATES_OUT_CSV ?= tmp/mlb_early_steam_pitcher_candidates_$(MLB_DATE).csv
+MLB_EARLY_STEAM_PITCHER_CANDIDATES_SUMMARY_OUT_CSV ?= tmp/mlb_early_steam_pitcher_candidates_$(MLB_DATE)_summary.csv
+MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE ?= 0.02
+MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE ?= 0.05
 MLB_ONE_SIDED_CLEANUP_SCHEMA ?= mlb
 MLB_ONE_SIDED_CLEANUP_TABLES ?=
 MLB_ONE_SIDED_CLEANUP_OUT_JSON ?= artifacts/ops/mlb_one_sided_cleanup_latest.json
@@ -1405,6 +1412,14 @@ mlb-red-mode-fade-bucket-report:
 mlb-red-mode-bucket-report-combined:
 	$(MAKE) mlb-red-mode-bucket-report MLB_RED_BUCKET_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RED_BUCKET_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RED_BUCKET_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RED_BUCKET_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RED_BUCKET_ROWS_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_BY_BUCKET_OUT_CSV="$(MLB_RED_BUCKET_BY_BUCKET_OUT_CSV)" MLB_RED_BUCKET_FOCUS_OUT_CSV="$(MLB_RED_BUCKET_FOCUS_OUT_CSV)" MLB_RED_BUCKET_LAYOUT="$(MLB_RED_BUCKET_LAYOUT)" MLB_RED_BUCKET_FOCUS_BUCKETS="$(MLB_RED_BUCKET_FOCUS_BUCKETS)"
 	$(MAKE) mlb-red-mode-fade-bucket-report MLB_RED_BUCKET_FROM_DATE="$(MLB_RED_BUCKET_FROM_DATE)" MLB_RED_BUCKET_TO_DATE="$(MLB_RED_BUCKET_TO_DATE)" MLB_RED_BUCKET_BOOKMAKER="$(MLB_RED_BUCKET_BOOKMAKER)" MLB_RED_BUCKET_ODDS_FILENAME="$(MLB_RED_BUCKET_ODDS_FILENAME)" MLB_RED_BUCKET_ROWS_CSV="$(MLB_RED_BUCKET_ROWS_CSV)" MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_RECONCILE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON="$(MLB_RED_BUCKET_FADE_SUMMARY_OUT_JSON)" MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV="$(MLB_RED_BUCKET_FADE_BY_BUCKET_OUT_CSV)" MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV="$(MLB_RED_BUCKET_FADE_FOCUS_OUT_CSV)" MLB_RED_BUCKET_LAYOUT="$(MLB_RED_BUCKET_LAYOUT)" MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT="$(MLB_RED_BUCKET_FADE_MIN_PRINT_ROI_PCT)"
+
+# Join daily/multiday early movement rows to reconcile outcomes while preserving movement snapshots.
+mlb-early-steam-results:
+	$(VENV_PY) backend/mlb/scripts/build_mlb_early_steam_results.py --movement-csv "$(MLB_EARLY_STEAM_MOVEMENT_CSV)" --reconcile-csv "$(MLB_EARLY_STEAM_RECONCILE_CSV)" --out-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)"
+
+# Export daily early-steam pitcher-market candidates from joined movement results.
+mlb-early-steam-pitcher-candidates:
+	$(VENV_PY) backend/mlb/scripts/export_mlb_early_steam_pitcher_candidates.py --rows-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --date "$(MLB_DATE)" --out-csv "$(MLB_EARLY_STEAM_PITCHER_CANDIDATES_OUT_CSV)" --out-summary-csv "$(MLB_EARLY_STEAM_PITCHER_CANDIDATES_SUMMARY_OUT_CSV)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)"
 
 # Post-grade routine: rebuild reconcile rows then report model-vs-fade for that window.
 mlb-post-grade-fade-check:
