@@ -98,7 +98,8 @@ def fetch_today_workspace_rows(
             + CASE upper(trim(coalesce(w.timing_signal, '')))
                 WHEN 'STABLE' THEN 18
                 WHEN 'EARLY' THEN 10
-                WHEN 'WAIT' THEN -5
+                WHEN 'LOW CONFIDENCE' THEN -12
+                WHEN 'WAIT' THEN -12
                 WHEN 'VOLATILE' THEN -20
                 ELSE 0
               END
@@ -129,6 +130,16 @@ def fetch_today_workspace_rows(
         )::int AS signal_quality_score
       FROM mlb.today_workspace_mlb w
       {where_sql}
+    ),
+    quality AS (
+      SELECT
+        scored.*,
+        CASE
+          WHEN signal_quality_score >= 75 THEN 'HIGH'
+          WHEN signal_quality_score >= 50 THEN 'MEDIUM'
+          ELSE 'LOW'
+        END AS signal_quality_tier
+      FROM scored
     )
     SELECT
       player_id,
@@ -146,10 +157,39 @@ def fetch_today_workspace_rows(
       value_vs_market,
       coverage_quality_label,
       coverage_quality_reason,
-      timing_signal,
+      CASE
+        WHEN upper(trim(coalesce(timing_signal, ''))) = 'WAIT' THEN 'LOW CONFIDENCE'
+        ELSE timing_signal
+      END AS timing_signal,
       timing_reason,
-      decision_label,
-      decision_reason,
+      decision_label AS market_signal_label,
+      decision_reason AS market_signal_reason,
+      CASE
+        WHEN signal_quality_tier = 'HIGH'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'STABLE'
+          AND abs(coalesce(value_vs_market, 0)) >= 100
+          THEN 'ACTIONABLE'
+        WHEN signal_quality_tier = 'HIGH'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'EARLY'
+          THEN 'MONITOR'
+        WHEN signal_quality_tier = 'MEDIUM'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'STABLE'
+          THEN 'CONSIDER'
+        ELSE 'IGNORE'
+      END AS decision_label,
+      CASE
+        WHEN signal_quality_tier = 'HIGH'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'STABLE'
+          AND abs(coalesce(value_vs_market, 0)) >= 100
+          THEN 'High-quality stable signal with a large market gap.'
+        WHEN signal_quality_tier = 'HIGH'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'EARLY'
+          THEN 'High-quality signal, but the market is still early.'
+        WHEN signal_quality_tier = 'MEDIUM'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'STABLE'
+          THEN 'Stable signal with medium market quality.'
+        ELSE 'Signal quality, timing, or market gap does not clear the decision screen.'
+      END AS decision_reason,
       streak_context_label,
       streak_count,
       baseline_delta,
@@ -167,14 +207,23 @@ def fetch_today_workspace_rows(
       last_10_avg,
       season_avg,
       signal_quality_score,
-      CASE
-        WHEN signal_quality_score >= 75 THEN 'HIGH'
-        WHEN signal_quality_score >= 50 THEN 'MEDIUM'
-        ELSE 'LOW'
-      END AS signal_quality_tier,
+      signal_quality_tier,
       COUNT(*) OVER()::int AS total_rows
-    FROM scored
-    ORDER BY signal_quality_score DESC NULLS LAST,
+    FROM quality
+    ORDER BY CASE
+        WHEN signal_quality_tier = 'HIGH'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'STABLE'
+          AND abs(coalesce(value_vs_market, 0)) >= 100
+          THEN 1
+        WHEN signal_quality_tier = 'HIGH'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'EARLY'
+          THEN 2
+        WHEN signal_quality_tier = 'MEDIUM'
+          AND upper(trim(coalesce(timing_signal, ''))) = 'STABLE'
+          THEN 3
+        ELSE 4
+      END ASC,
+      signal_quality_score DESC NULLS LAST,
       abs(value_vs_market) DESC NULLS LAST,
       player_name ASC,
       prop_type ASC,

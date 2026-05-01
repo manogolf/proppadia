@@ -158,7 +158,7 @@ CREATE UNIQUE INDEX idx_today_market_snapshot_key
 
 -- ---------------------------------------------------------------------------
 -- STAGE 2: Intraday timing signal
--- Descriptive label only (EARLY/WAIT/VOLATILE/STABLE).
+-- Descriptive label only (EARLY/LOW CONFIDENCE/VOLATILE/STABLE).
 -- ---------------------------------------------------------------------------
 CREATE MATERIALIZED VIEW mlb.today_market_timing_signal AS
 WITH active_slate AS (
@@ -299,7 +299,7 @@ SELECT
         END
       ),
       0
-    ) >= 10 THEN 'WAIT'
+    ) >= 10 THEN 'LOW CONFIDENCE'
     WHEN coalesce(
       (
         CASE
@@ -335,7 +335,7 @@ SELECT
         END
       ),
       0
-    ) >= 10 THEN 'Current price better than open'
+    ) >= 10 THEN 'Market has moved materially from the open'
     WHEN coalesce(
       (
         CASE
@@ -351,7 +351,7 @@ SELECT
         END
       ),
       0
-    ) <= -10 THEN 'Current price worse than open'
+    ) <= -10 THEN 'Market is still forming'
     ELSE 'Little intraday movement'
   END AS timing_reason
 FROM latest_rows l
@@ -708,14 +708,14 @@ scored AS (
     END AS coverage_quality_reason,
     CASE
       WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'VOLATILE'
-      WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'WAIT'
+      WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'LOW CONFIDENCE'
       WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'EARLY'
       ELSE 'STABLE'
     END AS timing_signal,
     CASE
       WHEN coalesce(s.intraday_span, 0) >= 25 THEN 'Large intraday movement'
-      WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'Current price better than open'
-      WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'Current price worse than open'
+      WHEN coalesce(s.price_change_from_open, 0) >= 10 THEN 'Market has moved materially from the open'
+      WHEN coalesce(s.price_change_from_open, 0) <= -10 THEN 'Market is still forming'
       ELSE 'Little intraday movement'
     END AS timing_reason,
     s.streak_context_label,

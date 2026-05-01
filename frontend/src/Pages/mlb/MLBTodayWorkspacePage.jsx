@@ -116,8 +116,8 @@ function propLabel(propType) {
 function timingLabel(signal) {
   const s = String(signal || "").trim().toUpperCase();
   const map = {
-    EARLY: "Earlier price was better",
-    WAIT: "Price has improved",
+    EARLY: "Early market",
+    "LOW CONFIDENCE": "Low confidence market",
     VOLATILE: "Volatile market",
     STABLE: "Stable market",
   };
@@ -142,8 +142,8 @@ function timingLabelForRow(signal, side) {
   if (!s) return timingLabel(signal);
   const sig = String(signal || "").trim().toUpperCase();
   const map = {
-    EARLY: `Earlier ${s} price was better`,
-    WAIT: `${s} price has improved`,
+    EARLY: `Early ${s} market`,
+    "LOW CONFIDENCE": `Low confidence ${s} market`,
     VOLATILE: `${s} market is volatile`,
     STABLE: `${s} market is stable`,
   };
@@ -411,7 +411,19 @@ function deltaExplanationForRow(row) {
   return `Δ compares best available ${s} price to the current ${s} market median.`;
 }
 
+function decisionRank(label) {
+  const normalized = String(label || "").trim().toUpperCase();
+  if (normalized === "ACTIONABLE") return 1;
+  if (normalized === "MONITOR") return 2;
+  if (normalized === "CONSIDER") return 3;
+  return 4;
+}
+
 function compareDefaultRows(a, b) {
+  const ad = decisionRank(a?.decision_label);
+  const bd = decisionRank(b?.decision_label);
+  if (ad !== bd) return ad - bd;
+
   const aq = asNumber(a?.signal_quality_score);
   const bq = asNumber(b?.signal_quality_score);
   if (aq === null && bq !== null) return 1;

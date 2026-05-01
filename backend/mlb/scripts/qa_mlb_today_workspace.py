@@ -149,8 +149,8 @@ def _validate_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     reason_map = {
         "VOLATILE": "Large intraday movement",
-        "WAIT": "Current price better than open",
-        "EARLY": "Current price worse than open",
+        "LOW CONFIDENCE": "Market has moved materially from the open",
+        "EARLY": "Market is still forming",
         "STABLE": "Little intraday movement",
     }
 
@@ -204,7 +204,7 @@ def _validate_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         signal = str(r.get("timing_signal") or "").strip().upper()
         timing_ok = True
-        if signal == "WAIT":
+        if signal == "LOW CONFIDENCE":
             timing_ok = delta_calc is not None and delta_calc >= 10
         elif signal == "EARLY":
             timing_ok = delta_calc is not None and delta_calc <= -10
