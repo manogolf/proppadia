@@ -87,6 +87,49 @@ def fetch_today_workspace_rows(
         where_sql = "WHERE " + " AND ".join(where)
 
     sql = f"""
+    WITH scored AS (
+      SELECT
+        w.*,
+        LEAST(
+          100,
+          GREATEST(
+            0,
+            50
+            + CASE upper(trim(coalesce(w.timing_signal, '')))
+                WHEN 'STABLE' THEN 18
+                WHEN 'EARLY' THEN 10
+                WHEN 'WAIT' THEN -5
+                WHEN 'VOLATILE' THEN -20
+                ELSE 0
+              END
+            + CASE upper(trim(coalesce(w.coverage_quality_label, '')))
+                WHEN 'STRONG' THEN 18
+                WHEN 'GOOD' THEN 10
+                WHEN 'LIMITED' THEN -14
+                WHEN 'THIN' THEN -20
+                WHEN 'UNRELIABLE' THEN -25
+                ELSE 0
+              END
+            + CASE
+                WHEN w.market_range IS NULL THEN -8
+                WHEN w.market_range <= 20 THEN 12
+                WHEN w.market_range <= 40 THEN 8
+                WHEN w.market_range <= 80 THEN 2
+                WHEN w.market_range <= 120 THEN -8
+                ELSE -18
+              END
+            + CASE
+                WHEN coalesce(w.book_count, 0) >= 5 THEN 10
+                WHEN coalesce(w.book_count, 0) >= 4 THEN 7
+                WHEN coalesce(w.book_count, 0) >= 3 THEN 4
+                WHEN coalesce(w.book_count, 0) >= 2 THEN 0
+                ELSE -12
+              END
+          )
+        )::int AS signal_quality_score
+      FROM mlb.today_workspace_mlb w
+      {where_sql}
+    )
     SELECT
       player_id,
       player_name,
@@ -123,10 +166,20 @@ def fetch_today_workspace_rows(
       last_5_avg,
       last_10_avg,
       season_avg,
+      signal_quality_score,
+      CASE
+        WHEN signal_quality_score >= 75 THEN 'HIGH'
+        WHEN signal_quality_score >= 50 THEN 'MEDIUM'
+        ELSE 'LOW'
+      END AS signal_quality_tier,
       COUNT(*) OVER()::int AS total_rows
-    FROM mlb.today_workspace_mlb w
-    {where_sql}
-    ORDER BY abs(value_vs_market) DESC NULLS LAST, player_name ASC, prop_type ASC, line ASC, side ASC
+    FROM scored
+    ORDER BY signal_quality_score DESC NULLS LAST,
+      abs(value_vs_market) DESC NULLS LAST,
+      player_name ASC,
+      prop_type ASC,
+      line ASC,
+      side ASC
     LIMIT %s::int
     OFFSET %s::int
     """

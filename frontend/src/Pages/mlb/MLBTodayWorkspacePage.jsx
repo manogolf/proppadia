@@ -412,11 +412,17 @@ function deltaExplanationForRow(row) {
 }
 
 function compareDefaultRows(a, b) {
+  const aq = asNumber(a?.signal_quality_score);
+  const bq = asNumber(b?.signal_quality_score);
+  if (aq === null && bq !== null) return 1;
+  if (aq !== null && bq === null) return -1;
+  if (aq !== null && bq !== null && aq !== bq) return bq - aq;
+
   const av = asNumber(a?.value_vs_market);
   const bv = asNumber(b?.value_vs_market);
   if (av === null && bv !== null) return 1;
   if (av !== null && bv === null) return -1;
-  if (av !== null && bv !== null && av !== bv) return bv - av;
+  if (av !== null && bv !== null && Math.abs(av) !== Math.abs(bv)) return Math.abs(bv) - Math.abs(av);
 
   const an = String(a?.player_name || "");
   const bn = String(b?.player_name || "");
@@ -1386,7 +1392,7 @@ export default function MLBTodayWorkspacePage() {
             </button>
           ))}
           <div className="text-xs text-slate-500 ml-auto">
-            Default sort: non-null Δ vs Side Median, then strongest Δ
+            Default sort: signal quality, then strongest Δ
           </div>
         </div>
 
