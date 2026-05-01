@@ -62,6 +62,10 @@ mlb/data/raw/
 mlb/data/interim/
 mlb/data/processed/*.csv
 backend/mlb/data/raw/
+backend/mlb/data/processed/mlb_uploads/**/*book_upload*.csv
+backend/mlb/data/processed/mlb_uploads/*book_upload*.csv
+backend/mlb/data/processed/upload_hub/**/*book_upload*.csv
+backend/mlb/data/processed/upload_hub/*book_upload*.csv
 data/**
 !data/import_templates/**
 !data/README.md
