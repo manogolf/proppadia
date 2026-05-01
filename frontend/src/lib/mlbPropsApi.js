@@ -41,6 +41,20 @@ function buildCurrentHistoryQuery({
   return `/api/mlb/streak-history?${params.toString()}`;
 }
 
+function buildStreakDashboardQuery({
+  fromDate,
+  toDate,
+  propSource,
+  limitPerSide,
+}) {
+  const params = new URLSearchParams();
+  if (fromDate) params.set("from_date", String(fromDate));
+  if (toDate) params.set("to_date", String(toDate));
+  if (propSource) params.set("prop_source", String(propSource));
+  if (limitPerSide != null) params.set("limit_per_side", String(limitPerSide));
+  return `/api/mlb/streak-dashboard?${params.toString()}`;
+}
+
 export async function fetchMlbPropHistoryPage(params) {
   const payload = await api(buildHistoryQuery(params || {}));
   return {
@@ -119,6 +133,10 @@ export async function fetchMlbCurrentPropHistoryAll({
   }
 
   return allRows;
+}
+
+export async function fetchMlbStreakDashboard(params = {}) {
+  return api(buildStreakDashboardQuery(params));
 }
 
 export async function fetchMlbPropsForDate(gameDate, opts = {}) {

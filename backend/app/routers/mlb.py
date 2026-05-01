@@ -42,6 +42,7 @@ from backend.app.services.mlb.prop_submission_service import (
     add_prop,
     get_model_training_prop_history,
     get_prop_history,
+    get_streak_dashboard,
     predict_prepared_prop,
     prepare_prop_submission,
 )
@@ -520,6 +521,39 @@ def mlb_streak_history_endpoint(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get(
+    "/mlb/streak-dashboard",
+    summary="Read player-level MLB streak dashboard context",
+)
+def mlb_streak_dashboard_endpoint(
+    from_date: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    to_date: Optional[str] = Query(None, description="YYYY-MM-DD inclusive"),
+    prop_source: Optional[str] = Query("mlb_api"),
+    limit_per_side: int = Query(5, ge=1, le=20),
+):
+    for label, raw in (("from_date", from_date), ("to_date", to_date)):
+        if not raw:
+            continue
+        try:
+            date.fromisoformat(raw)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"{label} must be YYYY-MM-DD") from e
+
+    try:
+        return get_streak_dashboard(
+            {
+                "from_date": from_date,
+                "to_date": to_date,
+                "prop_source": prop_source,
+                "limit_per_side": limit_per_side,
+            }
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:

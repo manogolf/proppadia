@@ -1,6 +1,54 @@
 import React, { useState, useEffect } from "react";
-import { fetchMlbCurrentPropHistoryAll } from "../lib/mlbPropsApi.js";
+import { fetchMlbStreakDashboard } from "../lib/mlbPropsApi.js";
 import { todayET, nowET } from "../shared/timeUtils.js";
+
+let streakDashboardCache = null;
+
+function formatPropType(propType) {
+  const prop = String(propType || "").trim();
+  const labels = {
+    hits: "Hits",
+    total_bases: "Total Bases",
+    hits_runs_rbis: "Hits + Runs + RBIs",
+    rbis: "RBIs",
+    runs_scored: "Runs",
+    walks: "Plate discipline",
+    strikeouts_batting: "Batter Ks",
+  };
+  return labels[prop] || "Player prop";
+}
+
+function streakCacheKey({ fromDate, toDate, propSource, limitPerSide }) {
+  return [fromDate || "", toDate || "", propSource || "", limitPerSide || ""].join("|");
+}
+
+function streakLabel(player, fallbackSide) {
+  const side = String(player?.streak_side || fallbackSide || "").toUpperCase();
+  const prefix = side === "COLD" ? "L" : "W";
+  return `${prefix}${Number(player?.primary_streak_count || 0)}`;
+}
+
+function streakReason(player, fallbackSide) {
+  const side = String(player?.streak_side || fallbackSide || "").toUpperCase();
+  const propKey = String(player?.primary_prop || "").trim();
+  const prop = formatPropType(player?.primary_prop);
+  const count = Number(player?.primary_streak_count || 0);
+  const games = count === 1 ? "game" : "games";
+  if (propKey === "strikeouts_batting") {
+    return side === "COLD"
+      ? `${prop} over in ${count} straight ${games}`
+      : `${prop} under in ${count} straight ${games}`;
+  }
+  if (["total_bases", "hits_runs_rbis", "walks"].includes(propKey)) {
+    return side === "COLD"
+      ? `${prop} cold for ${count} straight ${games}`
+      : `${prop} over in ${count} straight ${games}`;
+  }
+  if (side === "COLD") {
+    return `${prop} cold for ${count} straight ${games}`;
+  }
+  return `${prop} in ${count} straight ${games}`;
+}
 
 const StreaksCard = () => {
   const [hotStreaks, setHotStreaks] = useState([]);
@@ -11,52 +59,21 @@ const StreaksCard = () => {
     const fetchStreaks = async () => {
       try {
         const today = todayET();
-        const sevenDaysAgo = nowET().minus({ days: 7 }).toISODate();
-        const data = await fetchMlbCurrentPropHistoryAll({
-          fromDate: sevenDaysAgo,
+        const fourteenDaysAgo = nowET().minus({ days: 14 }).toISODate();
+        const request = {
+          fromDate: fourteenDaysAgo,
           toDate: today,
           propSource: "mlb_api",
-        });
-
-        const playerStreaks = {};
-
-        data.forEach((prop) => {
-          const key = `${prop.player_name}-${prop.prop_type}`;
-
-          if (!playerStreaks[key]) {
-            playerStreaks[key] = {
-              player_name: prop.player_name,
-              team: prop.team,
-              prop_type: prop.prop_type,
-              streak: 0,
-              lastOutcome: null,
-            };
-          }
-
-          const currentOutcome = prop.outcome;
-
-          if (playerStreaks[key].lastOutcome === currentOutcome) {
-            playerStreaks[key].streak += 1;
-          } else {
-            playerStreaks[key].streak = 1;
-          }
-
-          playerStreaks[key].lastOutcome = currentOutcome;
-        });
-
-        const hot = [];
-        const cold = [];
-
-        Object.values(playerStreaks).forEach((streak) => {
-          if (streak.lastOutcome === "win" && streak.streak >= 2) {
-            hot.push(streak);
-          } else if (streak.lastOutcome === "loss" && streak.streak >= 2) {
-            cold.push(streak);
-          }
-        });
-
-        setHotStreaks(hot.sort((a, b) => b.streak - a.streak).slice(0, 5));
-        setColdStreaks(cold.sort((a, b) => b.streak - a.streak).slice(0, 5));
+          limitPerSide: 5,
+        };
+        const cacheKey = streakCacheKey(request);
+        const payload =
+          streakDashboardCache?.key === cacheKey
+            ? streakDashboardCache.payload
+            : await fetchMlbStreakDashboard(request);
+        streakDashboardCache = { key: cacheKey, payload };
+        setHotStreaks(Array.isArray(payload?.hot) ? payload.hot : []);
+        setColdStreaks(Array.isArray(payload?.cold) ? payload.cold : []);
       } catch (error) {
         console.error("Error in fetchStreaks:", error);
       } finally {
@@ -89,17 +106,20 @@ const StreaksCard = () => {
               <ul className="space-y-2">
                 {hotStreaks.map((player) => (
                   <li
-                    key={`${player.player_name}-${player.prop_type}`}
+                    key={`hot-${player.player_id || player.player_name}`}
                     className="pp-chip p-3 grid grid-cols-[1fr_auto] items-center"
                   >
                     <div>
                       <div className="font-medium truncate">
                         {player.player_name} ({player.team})
                       </div>
-                      <div className="text-sm text-slate-600">{player.prop_type}</div>
+                      <div className="text-sm text-slate-600">{formatPropType(player.primary_prop)}</div>
+                      <div className="text-xs text-slate-500 mt-1">{streakReason(player, "HOT")}</div>
                     </div>
-                    <div className="text-emerald-600 font-bold pl-4">
-                      W{player.streak}
+                    <div className="text-right pl-4">
+                      <div className="text-emerald-600 font-bold">
+                        {streakLabel(player, "HOT")}
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -118,17 +138,20 @@ const StreaksCard = () => {
               <ul className="space-y-2">
                 {coldStreaks.map((player) => (
                   <li
-                    key={`${player.player_name}-${player.prop_type}`}
+                    key={`cold-${player.player_id || player.player_name}`}
                     className="pp-chip p-3 grid grid-cols-[1fr_auto] items-center"
                   >
                     <div>
                       <div className="font-medium truncate">
                         {player.player_name} ({player.team})
                       </div>
-                      <div className="text-sm text-slate-600">{player.prop_type}</div>
+                      <div className="text-sm text-slate-600">{formatPropType(player.primary_prop)}</div>
+                      <div className="text-xs text-slate-500 mt-1">{streakReason(player, "COLD")}</div>
                     </div>
-                    <div className="text-sky-600 font-bold pl-4">
-                      L{player.streak}
+                    <div className="text-right pl-4">
+                      <div className="text-sky-600 font-bold">
+                        {streakLabel(player, "COLD")}
+                      </div>
                     </div>
                   </li>
                 ))}
