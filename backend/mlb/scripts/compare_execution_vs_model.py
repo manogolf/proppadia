@@ -10,6 +10,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -22,7 +23,18 @@ RESOLVED = {"win", "loss", "push"}
 PROP_LABEL_TO_TYPE: Dict[str, str] = {
     "hits + runs + rbis": "hits_runs_rbis",
     "hits + runs + rbi": "hits_runs_rbis",
+    "hits runs rbis": "hits_runs_rbis",
+    "hits runs rbi": "hits_runs_rbis",
     "total bases": "total_bases",
+    "earned runs": "earned_runs",
+    "hits allowed": "hits_allowed",
+    "walks allowed": "walks_allowed",
+    "runs scored": "runs_scored",
+    "rbis": "rbis",
+    "rbi": "rbis",
+    "walks": "walks",
+    "batter strikeouts": "strikeouts_batting",
+    "pitcher strikeouts": "strikeouts_pitching",
     "singles": "singles",
     "strikeouts": "strikeouts_pitching",
     "ks": "strikeouts_pitching",
@@ -74,6 +86,19 @@ def _parse_date(v: Any) -> str:
     if pd.isna(dt):
         return ""
     return pd.Timestamp(dt).date().isoformat()
+
+
+def _parse_wager_timestamp_utc(v: Any) -> str:
+    text = _norm_text(v)
+    if not text:
+        return ""
+    dt = pd.to_datetime(text, errors="coerce")
+    if pd.isna(dt):
+        return ""
+    ts = pd.Timestamp(dt)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize(ZoneInfo("America/Los_Angeles"))
+    return ts.tz_convert("UTC").isoformat()
 
 
 def _to_float(v: Any) -> Optional[float]:
@@ -243,6 +268,7 @@ def _normalize_tool_results(raw: pd.DataFrame, *, default_date: str) -> Tuple[pd
 
     colmap = {
         "date": _resolve_col(out, ["date", "DATE", "game_date", "event_date", "Event Date"]),
+        "wager_date": _resolve_col(out, ["wager_date", "Wager Date", "placed_at", "Placed At"]),
         "player_id": _resolve_col(out, ["player_id", "PLAYER_ID", "selector", "SELECTOR", "Player ID"]),
         "player": _resolve_col(out, ["player", "Player", "player_name", "PLAYER", "Name"]),
         "prop_type": _resolve_col(out, ["prop_type", "propType", "PROP_TYPE"]),
@@ -271,6 +297,7 @@ def _normalize_tool_results(raw: pd.DataFrame, *, default_date: str) -> Tuple[pd
     if default_date:
         date_series = date_series.where(date_series.astype(str).str.len() > 0, default_date)
     out["date_norm"] = date_series
+    out["wager_timestamp_utc"] = _series_or_blank(out, colmap["wager_date"]).map(_parse_wager_timestamp_utc)
 
     player_base = _series_or_blank(out, colmap["player"]).map(_norm_text)
     out["player_name_norm"] = np.where(player_base.astype(str).str.len() > 0, player_base, parsed_player).astype(str)
@@ -635,6 +662,8 @@ def _normalize_reconcile(raw: pd.DataFrame, *, target_date: str, calibration_jso
 
     rec["player_join_key_id"] = np.where(rec["player_id_norm"].notna(), "id:" + rec["player_id_norm"].astype(str), "")
     rec["player_join_key_name"] = "name:" + rec["player_name_key"]
+    rec["snapshot_run_tag"] = _series_or_blank(rec, _resolve_col(rec, ["snapshot_run_tag"])).map(_norm_text)
+    rec["snapshot_time_utc"] = _series_or_blank(rec, _resolve_col(rec, ["snapshot_time_utc"])).map(_norm_text)
     return rec
 
 
@@ -652,7 +681,6 @@ def _reconcile_join_frame(rec: pd.DataFrame) -> pd.DataFrame:
 
 
 def _join_on(tool: pd.DataFrame, rec_join: pd.DataFrame, join_cols: List[str], *, join_label: str) -> pd.DataFrame:
-    rec_join = rec_join.drop_duplicates(subset=join_cols, keep="first")
     rec_cols = join_cols + [
         "line_norm",
         "game_id",
@@ -671,12 +699,16 @@ def _join_on(tool: pd.DataFrame, rec_join: pd.DataFrame, join_cols: List[str], *
         "model_pick_prob",
         "model_pick_prob_raw",
         "bet_side_actual_outcome",
+        "snapshot_run_tag",
+        "snapshot_time_utc",
     ]
     rec_cols = list(dict.fromkeys(rec_cols))
     merged = tool.merge(rec_join[rec_cols], on=join_cols, how="left", indicator=True, suffixes=("", "_reconcile"))
     merged["matched_reconcile"] = merged["_merge"].eq("both")
     merged["join_strategy"] = np.where(merged["matched_reconcile"], join_label, "")
     merged = merged.drop(columns=["_merge"])
+    if "tool_row_id" in merged.columns:
+        merged = _select_snapshot_match_per_wager(merged)
     merged["edge"] = pd.to_numeric(merged.get("model_prob"), errors="coerce") - pd.to_numeric(
         merged.get("implied_prob_from_bet_odds"), errors="coerce"
     )
@@ -689,6 +721,44 @@ def _join_on(tool: pd.DataFrame, rec_join: pd.DataFrame, join_cols: List[str], *
     merged["model_correct_bet_lost"] = merged["model_correct"].eq(True) & merged["bet_loss"].eq(True)
     merged["model_wrong_bet_won"] = merged["model_wrong"].eq(True) & merged["bet_win"].eq(True)
     return merged
+
+
+def _select_snapshot_match_per_wager(merged: pd.DataFrame) -> pd.DataFrame:
+    selected: List[pd.Series] = []
+    for _, group in merged.groupby("tool_row_id", sort=False, dropna=False):
+        matches = group[group["matched_reconcile"]].copy()
+        if matches.empty:
+            row = group.iloc[0].copy()
+            row["snapshot_match_policy"] = ""
+            row["snapshot_age_minutes"] = np.nan
+            selected.append(row)
+            continue
+
+        wager_ts = pd.to_datetime(matches.get("wager_timestamp_utc"), errors="coerce", utc=True)
+        snap_ts = pd.to_datetime(matches.get("snapshot_time_utc"), errors="coerce", utc=True)
+        matches["__wager_ts"] = wager_ts
+        matches["__snap_ts"] = snap_ts
+        matches["__age_min"] = (matches["__wager_ts"] - matches["__snap_ts"]).dt.total_seconds() / 60.0
+        valid_time = matches["__wager_ts"].notna() & matches["__snap_ts"].notna()
+
+        if bool(valid_time.any()):
+            prior = matches[valid_time & matches["__age_min"].ge(0)].copy()
+            if not prior.empty:
+                pick = prior.sort_values(["__age_min"]).iloc[0].copy()
+                pick["snapshot_match_policy"] = "latest_prior"
+            else:
+                later = matches[valid_time].copy()
+                pick = later.sort_values(["__age_min"], ascending=False).iloc[0].copy()
+                pick["snapshot_match_policy"] = "fallback_next"
+        else:
+            pick = matches.iloc[0].copy()
+            pick["snapshot_match_policy"] = "unknown_snapshot_time"
+            pick["__age_min"] = np.nan
+
+        pick["snapshot_age_minutes"] = pick.get("__age_min", np.nan)
+        selected.append(pick.drop(labels=[c for c in ["__wager_ts", "__snap_ts", "__age_min"] if c in pick.index]))
+
+    return pd.DataFrame(selected).reset_index(drop=True)
 
 
 def _join_execution_to_model(tool: pd.DataFrame, rec: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
@@ -1051,6 +1121,7 @@ def main() -> int:
 
     output_cols = [
         "date_norm",
+        "wager_timestamp_utc",
         "player_name_norm",
         "player_id_norm",
         "prop_type_norm",
@@ -1084,6 +1155,10 @@ def main() -> int:
         "model_wrong_bet_won",
         "matched_reconcile",
         "join_strategy",
+        "snapshot_run_tag",
+        "snapshot_time_utc",
+        "snapshot_age_minutes",
+        "snapshot_match_policy",
         "tool_row_id",
     ]
     passthrough_cols = [c for c in merged.columns if c.startswith("tool__")]
@@ -1117,6 +1192,13 @@ def main() -> int:
     summary = _summary(merged, meta={**meta, "date": target_date, "tool_results_csv": str(tool_path), "reconcile_csv": str(rec_path)})
     summary.update(calibrated_edge_diag)
     summary["unmatched_reconcile_rows"] = int(len(rec_unmatched))
+    if "snapshot_match_policy" in merged.columns:
+        summary["snapshot_match_policy_counts"] = (
+            merged["snapshot_match_policy"].fillna("").astype(str).value_counts().to_dict()
+        )
+    if "snapshot_age_minutes" in merged.columns:
+        ages = pd.to_numeric(merged.loc[merged["matched_reconcile"], "snapshot_age_minutes"], errors="coerce")
+        summary["avg_snapshot_age_minutes"] = float(ages.mean()) if ages.notna().any() else None
     summary["outputs"] = {
         "execution_vs_model_csv": str(out_csv),
         "summary_json": str(out_json),

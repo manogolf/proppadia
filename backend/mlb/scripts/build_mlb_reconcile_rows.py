@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -479,6 +480,91 @@ def _side_outcome(*, actual_value: Optional[float], line: float, side: str) -> O
     return "win" if str(side).lower() == win_side else "loss"
 
 
+def _resolve_slate_files(*, day_dir: Path, slate_filename: str, mode: str, glob_pattern: str) -> List[Path]:
+    if mode == "all":
+        files = sorted(p for p in day_dir.glob(glob_pattern) if p.is_file())
+        canonical = day_dir / slate_filename
+        if canonical.exists() and canonical not in files:
+            files.append(canonical)
+        return files
+    return [day_dir / slate_filename]
+
+
+def _run_tag(path: Path, *, canonical_name: str) -> str:
+    name = path.name
+    suffix = path.suffix
+    stem = name[: -len(suffix)] if suffix else path.stem
+    if "__" in stem:
+        return stem.split("__", 1)[1]
+    if name == canonical_name:
+        return "canonical"
+    return stem
+
+
+def _snapshot_time_utc_from_tag(tag: str) -> Optional[str]:
+    m = re.search(r"(\d{8}T\d{6})Z?", str(tag or ""))
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=ZoneInfo("UTC")).isoformat()
+    except Exception:
+        return None
+
+
+def _paired_snapshot_files(
+    *,
+    day_dir: Path,
+    slate_files: List[Path],
+    odds_files: List[Path],
+    slate_filename: str,
+    odds_filename: str,
+) -> List[Tuple[Path, Path, str, Optional[str]]]:
+    odds_by_tag: Dict[str, Path] = {}
+    for odds in odds_files:
+        tag = _run_tag(odds, canonical_name=odds_filename)
+        odds_by_tag.setdefault(tag, odds)
+
+    pairs: List[Tuple[Path, Path, str, Optional[str]]] = []
+    for slate in slate_files:
+        tag = _run_tag(slate, canonical_name=slate_filename)
+        odds = odds_by_tag.get(tag)
+        if odds is None and tag == "canonical":
+            odds = day_dir / odds_filename
+        if odds is None or not odds.exists():
+            continue
+        pairs.append((slate, odds, tag, _snapshot_time_utc_from_tag(tag)))
+    return pairs
+
+
+def _select_snapshot_pairs(
+    pairs: List[Tuple[Path, Path, str, Optional[str]]],
+    *,
+    policy: str,
+    explicit_run_tag: str,
+) -> List[Tuple[Path, Path, str, Optional[str]]]:
+    if policy == "all":
+        return pairs
+    if policy == "explicit_run_tag":
+        return [p for p in pairs if p[2] == explicit_run_tag]
+    if policy in {"largest_rows", "largest_resolved", "latest_full"}:
+        if not pairs:
+            return []
+        counts: List[Tuple[int, Optional[str], Tuple[Path, Path, str, Optional[str]]]] = []
+        for pair in pairs:
+            slate = pair[0]
+            try:
+                row_count = int(sum(1 for _ in slate.open("r", encoding="utf-8", errors="ignore")) - 1)
+            except Exception:
+                row_count = -1
+            counts.append((row_count, pair[3], pair))
+        if policy == "latest_full":
+            max_rows = max(c[0] for c in counts)
+            candidates = [c for c in counts if c[0] >= max_rows * 0.9]
+            return [max(candidates, key=lambda c: c[1] or "")[2]]
+        return [max(counts, key=lambda c: (c[0], c[1] or ""))[2]]
+    return pairs
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build MLB row-level reconcile dataset from archived slate artifacts.")
     ap.add_argument("--odds-root", default="backend/mlb/exports/odds_history")
@@ -486,6 +572,17 @@ def main() -> int:
     ap.add_argument("--to-date", required=True, help="YYYY-MM-DD")
     ap.add_argument("--bookmaker", default="betonlineag", help="Bookmaker key to use (empty = best available per row)")
     ap.add_argument("--slate-filename", default="mlb_slate_output.csv")
+    ap.add_argument(
+        "--slate-filename-mode",
+        choices=["single", "all"],
+        default="single",
+        help="single: use --slate-filename. all: scan archived tagged slate CSVs for the date.",
+    )
+    ap.add_argument(
+        "--slate-filename-glob",
+        default="mlb_slate_output*.csv",
+        help="Glob used when --slate-filename-mode=all.",
+    )
     ap.add_argument("--odds-filename", default="odds_latest_compatible.json")
     ap.add_argument(
         "--odds-filename-mode",
@@ -509,6 +606,13 @@ def main() -> int:
             "Default auto-maps between odds_latest_compatible.json and odds_mlb_playerprops.json."
         ),
     )
+    ap.add_argument(
+        "--snapshot-policy",
+        choices=["all", "largest_resolved", "largest_rows", "latest_full", "explicit_run_tag"],
+        default="all",
+        help="When using tagged slate snapshots, choose which run-tagged bundle(s) to reconcile.",
+    )
+    ap.add_argument("--snapshot-run-tag", default="", help="Run tag used when --snapshot-policy=explicit_run_tag.")
     ap.add_argument(
         "--derive-props-from-mtp",
         default="runs_rbis",
@@ -595,6 +699,8 @@ def main() -> int:
         "actual_distinct_values",
         "odds_snapshot_file",
         "slate_source_file",
+        "snapshot_run_tag",
+        "snapshot_time_utc",
     ]
 
     rows: List[Dict[str, Any]] = []
@@ -633,7 +739,12 @@ def main() -> int:
 
     for day in dates:
         day_dir = odds_root / day
-        slate_csv = day_dir / str(args.slate_filename)
+        slate_files = _resolve_slate_files(
+            day_dir=day_dir,
+            slate_filename=str(args.slate_filename),
+            mode=str(args.slate_filename_mode),
+            glob_pattern=str(args.slate_filename_glob),
+        )
         odds_files, used_fallback = _resolve_odds_files(
             day_dir=day_dir,
             odds_filename=odds_filename,
@@ -644,126 +755,159 @@ def main() -> int:
         if used_fallback:
             fallback_dates_used.append(day)
 
-        if not slate_csv.exists() or not odds_files:
+        if not slate_files or not odds_files:
             skipped_missing_artifacts += 1
             continue
 
-        try:
-            slate_df = pd.read_csv(slate_csv)
-        except Exception:
+        snapshot_pairs: List[Tuple[Path, Path, str, Optional[str]]]
+        if str(args.slate_filename_mode) == "all":
+            snapshot_pairs = _paired_snapshot_files(
+                day_dir=day_dir,
+                slate_files=slate_files,
+                odds_files=odds_files,
+                slate_filename=str(args.slate_filename),
+                odds_filename=str(args.odds_filename),
+            )
+            snapshot_pairs = _select_snapshot_pairs(
+                snapshot_pairs,
+                policy=str(args.snapshot_policy),
+                explicit_run_tag=str(args.snapshot_run_tag or ""),
+            )
+        else:
+            snapshot_pairs = [
+                (slate_csv, odds_json, _run_tag(slate_csv, canonical_name=str(args.slate_filename)), None)
+                for slate_csv in slate_files
+                for odds_json in odds_files
+            ]
+
+        if not snapshot_pairs:
             skipped_missing_artifacts += 1
             continue
 
-        missing_cols = sorted(required_cols - set(slate_df.columns))
-        if missing_cols:
-            skipped_missing_columns += 1
-            continue
+        processed_any_slate = False
+        for slate_csv, odds_json, snapshot_run_tag, snapshot_time_utc in snapshot_pairs:
+            if not slate_csv.exists():
+                continue
+            try:
+                slate_df = pd.read_csv(slate_csv)
+            except Exception:
+                skipped_missing_artifacts += 1
+                continue
 
-        processed_dates += 1
+            missing_cols = sorted(required_cols - set(slate_df.columns))
+            if missing_cols:
+                skipped_missing_columns += 1
+                continue
 
-        for odds_json in odds_files:
+            processed_any_slate = True
+
             events = _load_events(odds_json)
             market_idx = _build_market_index(events=events, team_name_rev=team_name_rev)
 
             for _, row in slate_df.iterrows():
-                prop_type = str(row.get("prop_type") or "").strip().lower()
-                market_key_raw = str(row.get("market_key") or "").strip()
+                    prop_type = str(row.get("prop_type") or "").strip().lower()
+                    market_key_raw = str(row.get("market_key") or "").strip()
 
-                home = str(row.get("home_team_code") or "").strip().upper()
-                away = str(row.get("away_team_code") or "").strip().upper()
-                player_name = str(row.get("player_name") or "").strip()
-                line = _line_key(row.get("line"))
-                if not home or not away or not player_name or line is None:
-                    continue
+                    home = str(row.get("home_team_code") or "").strip().upper()
+                    away = str(row.get("away_team_code") or "").strip().upper()
+                    player_name = str(row.get("player_name") or "").strip()
+                    line = _line_key(row.get("line"))
+                    if not home or not away or not player_name or line is None:
+                        continue
 
-                prop_market_candidates = prop_market_candidates_cache.get(prop_type)
-                if prop_market_candidates is None:
-                    prop_market_candidates = get_prop_market_candidates(prop_type=prop_type, include_aliases=True)
-                    prop_market_candidates_cache[prop_type] = list(prop_market_candidates)
+                    prop_market_candidates = prop_market_candidates_cache.get(prop_type)
+                    if prop_market_candidates is None:
+                        prop_market_candidates = get_prop_market_candidates(prop_type=prop_type, include_aliases=True)
+                        prop_market_candidates_cache[prop_type] = list(prop_market_candidates)
 
-                market_key_candidates: List[str] = []
-                if market_key_raw:
-                    market_key_candidates.append(market_key_raw)
-                for mk in prop_market_candidates:
-                    k = str(mk or "").strip()
-                    if k and k not in market_key_candidates:
-                        market_key_candidates.append(k)
-                if not market_key_candidates:
-                    continue
+                    market_key_candidates: List[str] = []
+                    if market_key_raw:
+                        market_key_candidates.append(market_key_raw)
+                    for mk in prop_market_candidates:
+                        k = str(mk or "").strip()
+                        if k and k not in market_key_candidates:
+                            market_key_candidates.append(k)
+                    if not market_key_candidates:
+                        continue
 
-                market_key = market_key_candidates[0]
-                by_book: Dict[str, Dict[str, Any]] = {}
-                for candidate_market_key in market_key_candidates:
-                    key = (home, away, candidate_market_key, _norm_name(player_name), float(line))
-                    maybe_by_book = market_idx.get(key, {})
-                    if maybe_by_book:
-                        market_key = candidate_market_key
-                        by_book = maybe_by_book
-                        break
+                    market_key = market_key_candidates[0]
+                    by_book: Dict[str, Dict[str, Any]] = {}
+                    for candidate_market_key in market_key_candidates:
+                        key = (home, away, candidate_market_key, _norm_name(player_name), float(line))
+                        maybe_by_book = market_idx.get(key, {})
+                        if maybe_by_book:
+                            market_key = candidate_market_key
+                            by_book = maybe_by_book
+                            break
 
-                used_book, over_price, under_price, market_player_name = _choose_book(by_book=by_book, bookmaker=bookmaker)
+                    used_book, over_price, under_price, market_player_name = _choose_book(by_book=by_book, bookmaker=bookmaker)
 
-                over_implied = _american_to_implied_probability(over_price)
-                under_implied = _american_to_implied_probability(under_price)
-                hold = None
-                over_implied_novig = None
-                under_implied_novig = None
-                if over_implied is not None and under_implied is not None and (over_implied + under_implied) > 0:
-                    hold = (over_implied + under_implied) - 1.0
-                    denom = over_implied + under_implied
-                    over_implied_novig = over_implied / denom
-                    under_implied_novig = under_implied / denom
+                    over_implied = _american_to_implied_probability(over_price)
+                    under_implied = _american_to_implied_probability(under_price)
+                    hold = None
+                    over_implied_novig = None
+                    under_implied_novig = None
+                    if over_implied is not None and under_implied is not None and (over_implied + under_implied) > 0:
+                        hold = (over_implied + under_implied) - 1.0
+                        denom = over_implied + under_implied
+                        over_implied_novig = over_implied / denom
+                        under_implied_novig = under_implied / denom
 
-                game_id = int(row.get("game_id"))
-                player_id = int(row.get("player_id"))
-                actual_payload = actual_by_key.get((game_id, player_id, prop_type), {})
-                actual_value = actual_payload.get("actual_value")
-                over_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="over")
-                under_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="under")
-                model_pick_side = str(row.get("model_pick_side") or "").strip().lower()
-                model_pick_outcome = over_outcome if model_pick_side == "over" else under_outcome if model_pick_side == "under" else None
-                model_pick_price = over_price if model_pick_side == "over" else under_price if model_pick_side == "under" else None
+                    game_id = int(row.get("game_id"))
+                    player_id = int(row.get("player_id"))
+                    actual_payload = actual_by_key.get((game_id, player_id, prop_type), {})
+                    actual_value = actual_payload.get("actual_value")
+                    over_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="over")
+                    under_outcome = _side_outcome(actual_value=actual_value, line=float(line), side="under")
+                    model_pick_side = str(row.get("model_pick_side") or "").strip().lower()
+                    model_pick_outcome = over_outcome if model_pick_side == "over" else under_outcome if model_pick_side == "under" else None
+                    model_pick_price = over_price if model_pick_side == "over" else under_price if model_pick_side == "under" else None
 
-                row_payload = {
-                    "game_date": str(row.get("game_date")),
-                    "slate_date": str(row.get("slate_date")),
-                    "game_id": game_id,
-                    "home_team_code": home,
-                    "away_team_code": away,
-                    "player_id": player_id,
-                    "player_name": player_name,
-                    "prop_type": prop_type,
-                    "market_key": market_key,
-                    "line": float(line),
-                    "bookmaker_key": used_book,
-                    "market_player_name": market_player_name,
-                    "price_over_american": over_price,
-                    "price_under_american": under_price,
-                    "implied_over": over_implied,
-                    "implied_under": under_implied,
-                    "implied_over_novig": over_implied_novig,
-                    "implied_under_novig": under_implied_novig,
-                    "market_hold": hold,
-                    "model_prob_over": float(row.get("prob_over")),
-                    "model_prob_under": float(row.get("prob_under")),
-                    "model_fair_over_american": int(row.get("fair_odds_over_american")),
-                    "model_fair_under_american": int(row.get("fair_odds_under_american")),
-                    "model_pick_side": model_pick_side,
-                    "model_pick_prob": float(row.get("model_pick_prob")) if row.get("model_pick_prob") is not None else None,
-                    "actual_value": actual_value,
-                    "actual_over_outcome": over_outcome,
-                    "actual_under_outcome": under_outcome,
-                    "actual_model_pick_outcome": model_pick_outcome,
-                    "pnl_over_1u": _profit_per_1u(outcome=over_outcome, price_american=over_price),
-                    "pnl_under_1u": _profit_per_1u(outcome=under_outcome, price_american=under_price),
-                    "pnl_model_pick_1u": _profit_per_1u(outcome=model_pick_outcome, price_american=model_pick_price),
-                    "actual_sample_rows": actual_payload.get("sample_rows"),
-                    "actual_distinct_values": actual_payload.get("distinct_actual_values"),
-                    "odds_snapshot_file": str(odds_json),
-                    "slate_source_file": str(slate_csv),
-                }
-                rows.append(row_payload)
-                rows_by_key.add((game_id, player_id, prop_type, float(line)))
+                    row_payload = {
+                        "game_date": str(row.get("game_date")),
+                        "slate_date": str(row.get("slate_date")),
+                        "game_id": game_id,
+                        "home_team_code": home,
+                        "away_team_code": away,
+                        "player_id": player_id,
+                        "player_name": player_name,
+                        "prop_type": prop_type,
+                        "market_key": market_key,
+                        "line": float(line),
+                        "bookmaker_key": used_book,
+                        "market_player_name": market_player_name,
+                        "price_over_american": over_price,
+                        "price_under_american": under_price,
+                        "implied_over": over_implied,
+                        "implied_under": under_implied,
+                        "implied_over_novig": over_implied_novig,
+                        "implied_under_novig": under_implied_novig,
+                        "market_hold": hold,
+                        "model_prob_over": float(row.get("prob_over")),
+                        "model_prob_under": float(row.get("prob_under")),
+                        "model_fair_over_american": int(row.get("fair_odds_over_american")),
+                        "model_fair_under_american": int(row.get("fair_odds_under_american")),
+                        "model_pick_side": model_pick_side,
+                        "model_pick_prob": float(row.get("model_pick_prob")) if row.get("model_pick_prob") is not None else None,
+                        "actual_value": actual_value,
+                        "actual_over_outcome": over_outcome,
+                        "actual_under_outcome": under_outcome,
+                        "actual_model_pick_outcome": model_pick_outcome,
+                        "pnl_over_1u": _profit_per_1u(outcome=over_outcome, price_american=over_price),
+                        "pnl_under_1u": _profit_per_1u(outcome=under_outcome, price_american=under_price),
+                        "pnl_model_pick_1u": _profit_per_1u(outcome=model_pick_outcome, price_american=model_pick_price),
+                        "actual_sample_rows": actual_payload.get("sample_rows"),
+                        "actual_distinct_values": actual_payload.get("distinct_actual_values"),
+                        "odds_snapshot_file": str(odds_json),
+                        "slate_source_file": str(slate_csv),
+                        "snapshot_run_tag": snapshot_run_tag,
+                        "snapshot_time_utc": snapshot_time_utc,
+                    }
+                    rows.append(row_payload)
+                    rows_by_key.add((game_id, player_id, prop_type, float(line)))
+
+        if processed_any_slate:
+            processed_dates += 1
 
     derive_props = [str(p).strip().lower() for p in str(args.derive_props_from_mtp or "").split(",") if str(p).strip()]
     if derive_props:
@@ -826,6 +970,8 @@ def main() -> int:
                         "actual_distinct_values": actual_payload.get("distinct_actual_values"),
                         "odds_snapshot_file": None,
                         "slate_source_file": "derived_from_mtp",
+                        "snapshot_run_tag": "derived_from_mtp",
+                        "snapshot_time_utc": None,
                     }
                 )
                 rows_by_key.add(dedupe_key)
@@ -877,6 +1023,11 @@ def main() -> int:
         "odds_filename_fallback": fallback_filename or None,
         "odds_filename_mode": str(args.odds_filename_mode),
         "odds_filename_glob": str(args.odds_filename_glob),
+        "slate_filename": str(args.slate_filename),
+        "slate_filename_mode": str(args.slate_filename_mode),
+        "slate_filename_glob": str(args.slate_filename_glob),
+        "snapshot_policy": str(args.snapshot_policy),
+        "snapshot_run_tag": str(args.snapshot_run_tag or ""),
         "odds_fallback_dates_used": fallback_dates_used,
         "odds_fallback_dates_used_count": int(len(fallback_dates_used)),
     }
@@ -893,9 +1044,17 @@ def main() -> int:
             .sort_values("rows", ascending=False)
             .to_dict(orient="records")
         )
+        if "snapshot_run_tag" in out_df.columns:
+            summary["by_snapshot_run_tag"] = (
+                out_df.groupby(["snapshot_run_tag", "snapshot_time_utc", "slate_source_file", "odds_snapshot_file"], dropna=False, as_index=False)
+                .agg(rows=("game_id", "count"))
+                .sort_values("rows", ascending=False)
+                .to_dict(orient="records")
+            )
     else:
         summary["by_date"] = []
         summary["by_prop_type"] = []
+        summary["by_snapshot_run_tag"] = []
 
     out_summary_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 

@@ -200,7 +200,7 @@ This writes:
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/summary.md`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/unmatched_tool_rows.csv`
 
-The execution comparison scans all archived scheduled OddsAPI captures for the date (`odds_mlb_playerprops*.json`) because a graded wager may come from prewarm, morning, or later daily runs. The comparison also validates that the reconcile CSV contains `MLB_DATE`, is fresh relative to the source slate artifact, and does not have empty outcome columns when upstream MLB outcomes exist.
+The execution comparison scans archived run-tagged snapshot bundles for the date, pairing each `mlb_slate_output__<run_tag>.csv` with `odds_mlb_playerprops__<run_tag>.json`, because a graded wager may come from prewarm, morning, or later daily runs. Each wager is matched to the latest available snapshot at or before its `Wager Date`; if no prior snapshot exists, the nearest later snapshot is used and the row is marked `snapshot_match_policy=fallback_next`. Output rows include `wager_timestamp_utc`, `snapshot_run_tag`, `snapshot_time_utc`, `snapshot_age_minutes`, and `snapshot_match_policy`.
 
 Use this report to separate model signal from execution/pricing:
 
@@ -215,7 +215,7 @@ Full-slate model-pick performance from the same fresh date-scoped reconcile rows
 make mlb-full-slate-performance MLB_DATE=YYYY-MM-DD
 ```
 
-This target rebuilds its own canonical single-snapshot date-scoped reconcile file before summarizing:
+This target rebuilds its own date-scoped reconcile file before summarizing. By default it uses `MLB_FULL_SLATE_SNAPSHOT_POLICY=largest_rows`, selecting the largest same-day run-tagged slate/odds bundle rather than blindly using a late-window canonical file:
 
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_rows.csv`
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/reconcile_summary.json`
@@ -226,6 +226,16 @@ This writes the all-predictions slate performance layer:
 - `artifacts/analysis/mlb/execution_vs_model/YYYY-MM-DD/full_slate_by_prop.csv`
 
 This is intentionally separate from the graded-wager execution report: it evaluates every resolved model pick on the slate with its represented book odds, not just the wagers placed in the tool export.
+
+To force a specific run-tagged bundle, use:
+
+```bash
+make mlb-full-slate-performance MLB_DATE=YYYY-MM-DD \
+  MLB_FULL_SLATE_SNAPSHOT_POLICY=explicit_run_tag \
+  MLB_FULL_SLATE_SNAPSHOT_RUN_TAG=local_daily_<RUN_TAG>
+```
+
+`MLB_FULL_SLATE_MIN_RESOLVED_ROWS` is optional and defaults to `0`; snapshot policy is the primary guard against late-window partial artifacts being treated as a full-slate performance report.
 
 Two-sided market enforcement is now the default for `mlb-predictions-wide`, `mlb-reconcile-rows`, quality/candidate eval on `reconcile_rows`, and red-mode bucket reports. Use these toggles only if you intentionally need old one-sided behavior:
 

@@ -131,6 +131,12 @@ def main() -> None:
     ap.add_argument("--rows-csv", required=True)
     ap.add_argument("--out-md", required=True)
     ap.add_argument("--out-by-prop-csv", required=True)
+    ap.add_argument(
+        "--min-resolved-rows",
+        type=int,
+        default=0,
+        help="Fail if resolved full-slate rows are below this count. Use 0 to disable.",
+    )
     args = ap.parse_args()
 
     rows_csv = Path(args.rows_csv).expanduser()
@@ -138,6 +144,12 @@ def main() -> None:
     out_by_prop = Path(args.out_by_prop_csv).expanduser()
 
     by_prop, overall = build_summary(rows_csv)
+    if int(args.min_resolved_rows or 0) > 0 and int(overall["rows"]) < int(args.min_resolved_rows):
+        raise SystemExit(
+            f"full-slate resolved rows below guard: resolved_rows={overall['rows']} "
+            f"min_resolved_rows={args.min_resolved_rows}. Check that the reconcile input uses a full-slate "
+            "artifact, not a late-window canonical slate after games rolled off."
+        )
     out_by_prop.parent.mkdir(parents=True, exist_ok=True)
     by_prop.to_csv(out_by_prop, index=False)
     write_markdown(out_md=out_md, rows_csv=rows_csv, by_prop=by_prop, overall=overall)
