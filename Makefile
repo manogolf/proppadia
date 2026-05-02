@@ -1445,7 +1445,7 @@ mlb-early-steam-pitcher-profiles:
 
 # Export V1 early-steam pitching candidates using workload-volatility threshold.
 mlb-early-steam-v1-pitching-candidates:
-	$(VENV_PY) backend/mlb/scripts/export_mlb_early_steam_v1_pitching_candidates.py --rows-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --pitcher-logs-csv "$(MLB_EARLY_STEAM_V1_PITCHING_LOGS_CSV)" --out-csv "$(MLB_EARLY_STEAM_V1_PITCHING_OUT_CSV)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)" --min-outs-std "$(MLB_EARLY_STEAM_V1_MIN_OUTS_STD)"
+	$(VENV_PY) backend/mlb/scripts/export_mlb_early_steam_v1_pitching_candidates.py --rows-csv "$(MLB_EARLY_STEAM_ROWS_CSV)" --pitcher-logs-csv "$(MLB_EARLY_STEAM_V1_PITCHING_LOGS_CSV)" --date "$(MLB_DATE)" --out-csv "$(MLB_EARLY_STEAM_V1_PITCHING_OUT_CSV)" --min-imp-move "$(MLB_EARLY_STEAM_PITCHER_MIN_IMP_MOVE)" --max-imp-move "$(MLB_EARLY_STEAM_PITCHER_MAX_IMP_MOVE)" --min-outs-std "$(MLB_EARLY_STEAM_V1_MIN_OUTS_STD)"
 
 # Download local source files for Retrosheet/Chadwick pitcher historical backfill.
 mlb-download-retrosheet-sources:
