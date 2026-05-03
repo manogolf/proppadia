@@ -29,6 +29,7 @@ ACTIVE_PROPS = [
     "earned_runs",
     "doubles",
     "hits_allowed",
+    "outs_recorded",
     "strikeouts_pitching",
     "walks",
     "hits_runs_rbis",
@@ -49,6 +50,7 @@ PROP_FAMILY = {
     "strikeouts_pitching": "pitching",
     "earned_runs": "pitching",
     "hits_allowed": "pitching",
+    "outs_recorded": "pitching",
     "walks_allowed": "pitching",
 }
 

@@ -960,11 +960,20 @@ This LaunchAgent runs the local daily chain end-to-end:
 - `mlb-predictions-wide`
 - `mlb-slate-output`
 - `mlb-book-upload` (forced local build; remote fetch flags are set to `0`)
+- `mlb-prop-regime-validation` (refreshes Prop Outlook context before `/mlb/today` workspace load)
 - `mlb-hits-environment-report` (league hits/game regime + `hits_allowed` opponent-form history)
 - `mlb-daily-ops-brief` (human-readable daily consolidated summary)
 - `mlb-prod12-track-daily` + `mlb-prod12-ops-log` (local daily history snapshots; best effort)
 
 `mlb-bvp-pvb-refresh` + `mlb-bvp-impact-report` run in a separate prewarm LaunchAgent 90 minutes before the first daily run so core daily build latency stays predictable.
+
+Prop Outlook context refresh command:
+
+```bash
+make mlb-prop-regime-validation
+```
+
+This target runs `backend/mlb/scripts/build_prop_regime_validation.py`, writes `artifacts/analysis/mlb/prop_regime_validation/prop_regime_combined_signal.csv`, and updates the deployed copy at `backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv`.
 
 Create/update runner script:
 
@@ -1025,6 +1034,9 @@ MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=0 \
 MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY=0 \
 MLB_ARCHIVE_RUN_TAG="$MLB_RUN_TAG" \
 make mlb-book-upload MLB_DATE="$MLB_DATE_ET"
+
+echo "[$(date -u +%FT%TZ)] START mlb-prop-regime-validation"
+make mlb-prop-regime-validation
 
 MLB_HITS_ENV_AS_OF_DATE="$MLB_DATE_ET" \
 MLB_HITS_ENV_SLATE_DATE="$MLB_DATE_ET" \

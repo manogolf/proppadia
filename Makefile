@@ -96,6 +96,10 @@ MLB_BOOK_UPLOAD_FILTER_MIN_GRADED_ROWS ?= 8
 MLB_BOOK_UPLOAD_FILTER_GRADED_ROI_FLOOR_PCT ?= -8
 MLB_BOOK_UPLOAD_FILTER_MIN_OVERS ?= 4
 MLB_BOOK_UPLOAD_MIN_SIDE_PROB ?= 0
+MLB_PROP_REGIME_RECONCILE_CSVS ?= tmp/mlb_reconcile_rows_historical_bestbook_2024.csv tmp/mlb_reconcile_rows_historical_bestbook_2025.csv tmp/mlb_base_vs_market_rows_anybook_full.csv
+MLB_PROP_REGIME_EXECUTION_CSV ?= artifacts/analysis/mlb/execution_vs_model/extended_clean/execution_vs_model.csv
+MLB_PROP_REGIME_OUT_DIR ?= artifacts/analysis/mlb/prop_regime_validation
+MLB_PROP_REGIME_DEPLOY_CSV ?= backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv
 MLB_BOOK_UPLOAD_SELECTION_MODE ?= policy
 MLB_ODDS_HISTORY_ROOT ?= backend/mlb/exports/odds_history
 MLB_ODDS_SNAPSHOT_JSON ?= $(MLB_ODDS_HISTORY_ROOT)/$(MLB_DATE)/odds_mlb_playerprops.json
@@ -1300,6 +1304,10 @@ mlb-singles-shadow:
 .PHONY: mlb-train-probability-calibration mlb-check-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance
 mlb-train-probability-calibration:
 	$(VENV_PY) backend/mlb/scripts/train_mlb_probability_calibration.py --rows-csv "$(MLB_CALIBRATION_TRAIN_CSV)" --out-json "$(MLB_PROBABILITY_CALIBRATION_JSON)" --comparison-csv "$(MLB_CALIBRATION_COMPARISON_CSV)" --curve-csv "$(MLB_CALIBRATION_CURVE_CSV)" --prop-types "$(MLB_CALIBRATION_PROP_TYPES)" --min-prop-samples "$(MLB_CALIBRATION_MIN_PROP_SAMPLES)" --training-scope "$(MLB_CALIBRATION_TRAINING_SCOPE)" $(if $(strip $(MLB_CALIBRATION_FROM_DATE)),--from-date "$(MLB_CALIBRATION_FROM_DATE)",) $(if $(strip $(MLB_CALIBRATION_TO_DATE)),--to-date "$(MLB_CALIBRATION_TO_DATE)",)
+
+.PHONY: mlb-prop-regime-validation
+mlb-prop-regime-validation:
+	$(VENV_PY) backend/mlb/scripts/build_prop_regime_validation.py $(foreach csv,$(MLB_PROP_REGIME_RECONCILE_CSVS),--reconcile-csv "$(csv)") --execution-csv "$(MLB_PROP_REGIME_EXECUTION_CSV)" --out-dir "$(MLB_PROP_REGIME_OUT_DIR)" --deploy-csv "$(MLB_PROP_REGIME_DEPLOY_CSV)"
 
 mlb-check-finalized-training-data:
 	$(VENV_PY) backend/mlb/scripts/check_mlb_finalized_training_data.py --date "$(MLB_DATE)" $(if $(filter 1 true TRUE yes YES,$(MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS)),--check-player-stats,)
