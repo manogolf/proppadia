@@ -54,6 +54,10 @@ Trigger command:
 bin/mlb_prod12_remote_trigger.sh
 ```
 
+```bash
+/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+```
+
 Default behavior:
 
 - Trigger defaults to `run_mode=daily` (lighter resource profile).
@@ -1319,6 +1323,7 @@ Notes:
   ```
 
   It is report-only and should print `PRE-CRON CHECK: GO` before the LaunchAgent runs.
+
 - Because the script runs with `set -e`, publish and phase2 weekly logging only run if prior retrain/eval steps pass.
 - Weekly cadence now refreshes BvP/PvB first (`mlb-bvp-pvb-refresh`) before reconcile/retrain.
 - Ensure publish credentials are present in `backend/.env` (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY`).

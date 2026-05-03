@@ -283,7 +283,7 @@ def load_candidates(paths: list[Path]) -> pd.DataFrame:
         side_col = _first_col(df, ["side", "selected_side"])
         line_col = _first_col(df, ["line", "point"])
         book_col = _first_col(df, ["bookmaker_key", "bookmaker", "book"])
-        price_col = _first_col(df, ["price", "odds", "selected_american_odds", "second_price", "second_odds"])
+        price_col = _first_col(df, ["price", "current_price", "odds", "selected_american_odds", "second_price", "second_odds"])
         required = {
             "date": date_col,
             "player": player_col,
@@ -305,17 +305,17 @@ def load_candidates(paths: list[Path]) -> pd.DataFrame:
                 "line": pd.to_numeric(df[line_col], errors="coerce"),
                 "candidate_bookmaker_key": df[book_col].map(_clean_text) if book_col else "",
                 "price": pd.to_numeric(df[price_col], errors="coerce") if price_col else np.nan,
-                "first_price": pd.to_numeric(df[_first_col(df, ["first_price", "first_odds"])], errors="coerce")
-                if _first_col(df, ["first_price", "first_odds"])
+                "first_price": pd.to_numeric(df[_first_col(df, ["first_price", "early_price", "first_odds"])], errors="coerce")
+                if _first_col(df, ["first_price", "early_price", "first_odds"])
                 else np.nan,
-                "second_price": pd.to_numeric(df[_first_col(df, ["second_price", "second_odds", "current_price", "odds"])], errors="coerce")
-                if _first_col(df, ["second_price", "second_odds", "current_price", "odds"])
+                "second_price": pd.to_numeric(df[_first_col(df, ["second_price", "signal_price", "second_odds", "current_price", "odds"])], errors="coerce")
+                if _first_col(df, ["second_price", "signal_price", "second_odds", "current_price", "odds"])
                 else np.nan,
-                "imp_move_early": pd.to_numeric(df[_first_col(df, ["imp_move_early"])], errors="coerce")
-                if _first_col(df, ["imp_move_early"])
+                "imp_move_early": pd.to_numeric(df[_first_col(df, ["imp_move_early", "implied_move"])], errors="coerce")
+                if _first_col(df, ["imp_move_early", "implied_move"])
                 else np.nan,
-                "last_3_starts_outs_std": pd.to_numeric(df[_first_col(df, ["last_3_starts_outs_std"])], errors="coerce")
-                if _first_col(df, ["last_3_starts_outs_std"])
+                "last_3_starts_outs_std": pd.to_numeric(df[_first_col(df, ["last_3_starts_outs_std", "workload_volatility"])], errors="coerce")
+                if _first_col(df, ["last_3_starts_outs_std", "workload_volatility"])
                 else np.nan,
                 "outcome": df[_first_col(df, ["outcome", "grade", "result"])].map(_grade)
                 if _first_col(df, ["outcome", "grade", "result"])
