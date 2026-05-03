@@ -20,7 +20,7 @@ PITCHER_MARKETS = {"pitcher_strikeouts", "pitcher_outs"}
 DEFAULT_ROWS_CSV = "tmp/mlb_early_steam_multiday_results.csv"
 DEFAULT_PITCHER_LOGS_CSV = "tmp/pitcher_game_logs_pybaseball_2026-03-15_to_2026-05-01.csv"
 DEFAULT_OUT_CSV = "tmp/mlb_early_steam_v1_pitching_candidates.csv"
-OUT_COLUMNS = [
+RAW_OUT_COLUMNS = [
     "date",
     "player_name",
     "market_key",
@@ -33,6 +33,27 @@ OUT_COLUMNS = [
     "imp_move_early",
     "last_3_starts_outs_std",
 ]
+RENAME_COLUMNS = {
+    "price": "current_price",
+    "first_price": "early_price",
+    "second_price": "signal_price",
+    "imp_move_early": "implied_move",
+    "last_3_starts_outs_std": "workload_volatility",
+}
+OUT_COLUMNS = [
+    "date",
+    "player_name",
+    "market_key",
+    "side",
+    "line",
+    "bookmaker_key",
+    "current_price",
+    "early_price",
+    "signal_price",
+    "implied_move",
+    "workload_volatility",
+]
+DEDUP_COLUMNS = ["date", "player_name", "market_key", "side", "line"]
 
 
 def _clean_text(value: Any) -> str:
@@ -162,10 +183,10 @@ def build_candidates(
     ].copy()
 
     if work.empty:
-        for col in OUT_COLUMNS:
+        for col in RAW_OUT_COLUMNS:
             if col not in work.columns:
                 work[col] = np.nan
-        return work[OUT_COLUMNS], work
+        return work[RAW_OUT_COLUMNS], work
 
     if "player_id" in work.columns:
         work["candidate_mlbam_id"] = pd.to_numeric(work["player_id"], errors="coerce").astype("Int64")
@@ -181,7 +202,42 @@ def build_candidates(
     work["last_3_starts_outs_std"] = work.apply(lambda row: _lookup_outs_std(lookup, row), axis=1)
 
     filtered = work[pd.to_numeric(work["last_3_starts_outs_std"], errors="coerce").ge(float(min_outs_std))].copy()
-    return filtered[OUT_COLUMNS].sort_values(["date", "market_key", "side", "line", "player_name"]), filtered
+    return filtered[RAW_OUT_COLUMNS].sort_values(["date", "market_key", "side", "line", "player_name"]), filtered
+
+
+def finalize_export(candidates: pd.DataFrame) -> pd.DataFrame:
+    out = candidates.copy()
+    for col in RAW_OUT_COLUMNS:
+        if col not in out.columns:
+            out[col] = np.nan
+    for col in ["line", "price", "first_price", "second_price", "imp_move_early", "last_3_starts_outs_std"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+
+    out = (
+        out.sort_values(
+            ["date", "player_name", "market_key", "side", "line", "price", "bookmaker_key"],
+            ascending=[True, True, True, True, True, False, True],
+            na_position="last",
+        )
+        .drop_duplicates(subset=DEDUP_COLUMNS, keep="first")
+        .rename(columns=RENAME_COLUMNS)
+        .sort_values(["market_key", "player_name", "side", "line"], na_position="last")
+        .reset_index(drop=True)
+    )
+    return out[OUT_COLUMNS]
+
+
+def canonical_wagers_path(export_date: str) -> Path | None:
+    if not export_date:
+        return None
+    return Path("backend/mlb/exports/v1_wagers") / str(export_date) / "wagers.csv"
+
+
+def dated_rows_fallback_path(export_date: str) -> Path | None:
+    if not export_date:
+        return None
+    path = Path("tmp") / f"mlb_early_steam_rows_{export_date}.csv"
+    return path if path.exists() else None
 
 
 def main() -> int:
@@ -204,31 +260,54 @@ def main() -> int:
 
     rows = pd.read_csv(rows_path, low_memory=False)
     lookup = _load_pitcher_logs(logs_path)
-    out, filtered = build_candidates(
+    export_date = str(args.date or "")
+    rows_source = rows_path
+    candidates, filtered = build_candidates(
         rows,
         lookup=lookup,
-        export_date=str(args.date or ""),
+        export_date=export_date,
         min_imp_move=float(args.min_imp_move),
         max_imp_move=float(args.max_imp_move),
         min_outs_std=float(args.min_outs_std),
     )
+    fallback_rows_path = dated_rows_fallback_path(export_date)
+    if candidates.empty and fallback_rows_path is not None and fallback_rows_path != rows_path:
+        rows_source = fallback_rows_path
+        rows = pd.read_csv(fallback_rows_path, low_memory=False)
+        candidates, filtered = build_candidates(
+            rows,
+            lookup=lookup,
+            export_date=export_date,
+            min_imp_move=float(args.min_imp_move),
+            max_imp_move=float(args.max_imp_move),
+            min_outs_std=float(args.min_outs_std),
+        )
+    out = finalize_export(candidates)
 
     out_csv = Path(args.out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_csv, index=False)
 
-    bets = int(len(filtered))
+    canonical_csv = canonical_wagers_path(str(args.date or ""))
+    if canonical_csv is not None and canonical_csv != out_csv:
+        canonical_csv.parent.mkdir(parents=True, exist_ok=True)
+        out.to_csv(canonical_csv, index=False)
+
+    bets = int(len(out))
+    raw_bets = int(len(filtered))
     win_rate = np.nan
-    if "outcome" in filtered.columns and bets:
+    if "outcome" in filtered.columns and raw_bets:
         outcome = filtered["outcome"].map(lambda v: _clean_text(v).lower())
         resolved = outcome.isin(["win", "loss"])
         if int(resolved.sum()) > 0:
             win_rate = float(outcome.eq("win").sum() / resolved.sum())
     print(
         "[early-steam-v1-pitching-candidates] "
-        f"date={args.date or 'all'} bets={bets} "
+        f"date={args.date or 'all'} bets={bets} raw_candidates={raw_bets} "
         f"win_rate={'NA' if pd.isna(win_rate) else f'{win_rate:.3f}'} "
+        f"rows_csv={rows_source} "
         f"out_csv={out_csv}"
+        + (f" canonical_csv={canonical_csv}" if canonical_csv is not None and canonical_csv != out_csv else "")
     )
     return 0
 
