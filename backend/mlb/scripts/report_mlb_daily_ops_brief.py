@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -159,6 +160,77 @@ def _extract_model_vs_fade(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _load_csv_rows(path: Path) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    try:
+        if not path.exists():
+            return [], "missing"
+        with path.open("r", encoding="utf-8", newline="") as fh:
+            return list(csv.DictReader(fh)), None
+    except Exception as exc:
+        return [], f"error:{type(exc).__name__}"
+
+
+def _extract_prop_regime(rows: Sequence[Dict[str, Any]], path: Path) -> Dict[str, Any]:
+    props = [str(r.get("prop_type") or "").strip().lower() for r in rows if str(r.get("prop_type") or "").strip()]
+    dates = [str(r.get("latest_usable_date") or "").strip() for r in rows if str(r.get("latest_usable_date") or "").strip()]
+    return {
+        "path": str(path),
+        "prop_count": len(set(props)),
+        "max_latest_usable_date": max(dates) if dates else None,
+        "outs_recorded_present": "outs_recorded" in set(props),
+    }
+
+
+def _extract_reporting_alignment(rows: Sequence[Dict[str, Any]], path: Path) -> Dict[str, Any]:
+    statuses = [str(r.get("alignment_status") or "").strip() for r in rows]
+    return {
+        "path": str(path),
+        "rows": len(rows),
+        "stale_outlook_source_count": sum(1 for s in statuses if s == "stale_outlook_source"),
+    }
+
+
+def _extract_model_performance(
+    summary_rows: Sequence[Dict[str, Any]],
+    daily_rows: Sequence[Dict[str, Any]],
+    *,
+    summary_path: Path,
+    daily_path: Path,
+) -> Dict[str, Any]:
+    props = [str(r.get("prop_type") or "").strip().lower() for r in summary_rows if str(r.get("prop_type") or "").strip()]
+    source_types = sorted(
+        {
+            str(r.get("source_type") or "").strip()
+            for r in list(summary_rows) + list(daily_rows)
+            if str(r.get("source_type") or "").strip()
+        }
+    )
+    missing_reason_count = sum(
+        1
+        for r in list(summary_rows) + list(daily_rows)
+        if str(r.get("missing_reason") or "").strip()
+    )
+    critical = sorted(
+        str(r.get("prop_type") or "").strip().lower()
+        for r in summary_rows
+        if str(r.get("status") or "").strip().lower() == "critical" and str(r.get("prop_type") or "").strip()
+    )
+    watch = sorted(
+        str(r.get("prop_type") or "").strip().lower()
+        for r in summary_rows
+        if str(r.get("status") or "").strip().lower() == "watch" and str(r.get("prop_type") or "").strip()
+    )
+    return {
+        "summary_path": str(summary_path),
+        "daily_path": str(daily_path),
+        "source_type": ",".join(source_types) if source_types else None,
+        "active_prop_count": len(set(props)),
+        "missing_reason_count": missing_reason_count,
+        "critical_props": critical,
+        "watch_props": watch,
+    }
+
+
 def _extract_bvp_impact(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not isinstance(js, dict):
         return {}
@@ -184,6 +256,28 @@ def _extract_bvp_impact(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "props_using_bvp": js.get("props_using_bvp") or [],
         "top_prop_impact": top_prop,
     }
+
+
+def _validate_bvp_impact_freshness(
+    *,
+    bvp_impact: Dict[str, Any],
+    bvp_err: Optional[str],
+    report_date: str,
+    require_fresh: bool,
+) -> Tuple[str, List[str]]:
+    if bvp_err:
+        return bvp_err, [f"bvp_impact_json={bvp_err}"] if require_fresh else []
+
+    label_date = str(bvp_impact.get("label_date") or "").strip()
+    if not label_date:
+        state = "missing_label_date"
+        return state, [f"bvp_impact_{state}"] if require_fresh else []
+
+    if label_date != str(report_date).strip():
+        state = f"stale_label_date:{label_date}"
+        return state, [f"bvp_impact_label_date={label_date} expected={report_date}"] if require_fresh else []
+
+    return "ok", []
 
 
 def _extract_hits_env(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -289,9 +383,13 @@ def _derive_overall_status(
     ops: Dict[str, Any],
     postgrade: Dict[str, Any],
     hits_env: Dict[str, Any],
+    source_issues: Optional[Sequence[str]] = None,
 ) -> Tuple[str, List[str]]:
     issues: List[str] = []
     fatal = False
+    if source_issues:
+        fatal = True
+        issues.extend(str(issue) for issue in source_issues if str(issue).strip())
 
     if pipeline and pipeline.get("status") not in {"pass", "ok"}:
         fatal = True
@@ -487,6 +585,9 @@ def build_markdown(
     model_vs_fade: Dict[str, Any],
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
+    prop_regime: Dict[str, Any],
+    model_performance: Dict[str, Any],
+    reporting_alignment: Dict[str, Any],
     today_workspace: Dict[str, Any],
     path_forward: Sequence[Dict[str, str]],
     source_states: Dict[str, Any],
@@ -573,6 +674,33 @@ def build_markdown(
         f"- Delta (fade - model): `{_pct(model_vs_fade.get('delta_fade_minus_model_1u'))}` | "
         f"fade_beating_model_alert `{model_vs_fade.get('fade_beating_model_alert')}`"
     )
+    lines.append("")
+
+    lines.append("## Prop Outlook Freshness")
+    lines.append(f"- Regime CSV: `{prop_regime.get('path','n/a')}`")
+    lines.append(
+        f"- Max latest_usable_date: `{prop_regime.get('max_latest_usable_date','n/a')}` | "
+        f"prop count `{prop_regime.get('prop_count','n/a')}` | "
+        f"outs_recorded present `{prop_regime.get('outs_recorded_present')}`"
+    )
+    lines.append(
+        f"- Reporting alignment CSV: `{reporting_alignment.get('path','n/a')}` | "
+        f"stale_outlook_source count `{reporting_alignment.get('stale_outlook_source_count','n/a')}`"
+    )
+    lines.append("")
+
+    lines.append("## Model Performance By Prop")
+    lines.append(f"- Rolling summary CSV: `{model_performance.get('summary_path','n/a')}`")
+    lines.append(f"- Daily performance CSV: `{model_performance.get('daily_path','n/a')}`")
+    lines.append(
+        f"- source_type `{model_performance.get('source_type','n/a')}` | "
+        f"active prop count `{model_performance.get('active_prop_count','n/a')}` | "
+        f"missing_reason count `{model_performance.get('missing_reason_count','n/a')}`"
+    )
+    lines.append(
+        f"- Critical props: `{', '.join(model_performance.get('critical_props') or []) or 'none'}`"
+    )
+    lines.append(f"- Watch props: `{', '.join(model_performance.get('watch_props') or []) or 'none'}`")
     lines.append("")
 
     lines.append("## Path Forward")
@@ -697,7 +825,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--report-date", default=date.today().isoformat(), help="Label date (YYYY-MM-DD)")
     ap.add_argument("--postgrade-alerts-json", default="artifacts/analysis/mlb/mlb_postgrade_alerts_latest.json")
     ap.add_argument("--model-vs-fade-json", default="tmp/analysis/mlb_model_vs_fade_summary.json")
+    ap.add_argument(
+        "--prop-regime-csv",
+        default="backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv",
+    )
+    ap.add_argument(
+        "--model-performance-summary-csv",
+        default="backend/mlb/exports/model_performance/prop_rolling_summary.csv",
+    )
+    ap.add_argument(
+        "--model-performance-daily-csv",
+        default="backend/mlb/exports/model_performance/prop_daily_performance.csv",
+    )
+    ap.add_argument(
+        "--reporting-alignment-csv",
+        default="backend/mlb/exports/reporting_alignment/reporting_alignment_{report_date}.csv",
+    )
     ap.add_argument("--bvp-impact-json", default="artifacts/analysis/mlb/mlb_bvp_impact_latest.json")
+    ap.add_argument(
+        "--require-fresh-bvp-impact",
+        type=int,
+        default=1,
+        help="Fail the brief when BvP impact label_date does not match report-date (default: 1).",
+    )
     ap.add_argument("--hits-environment-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
     ap.add_argument("--pipeline-history-jsonl", default="artifacts/mlb_pipeline_history.jsonl")
     ap.add_argument("--ops-history-jsonl", default="artifacts/mlb_prod12_ops_history.jsonl")
@@ -712,16 +862,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     postgrade_raw, postgrade_err = _load_json(Path(args.postgrade_alerts_json))
     model_raw, model_err = _load_json(Path(args.model_vs_fade_json))
+    prop_regime_rows, prop_regime_err = _load_csv_rows(Path(args.prop_regime_csv))
+    model_perf_summary_rows, model_perf_summary_err = _load_csv_rows(Path(args.model_performance_summary_csv))
+    model_perf_daily_rows, model_perf_daily_err = _load_csv_rows(Path(args.model_performance_daily_csv))
+    reporting_alignment_path = Path(str(args.reporting_alignment_csv).format(report_date=report_date))
+    reporting_alignment_rows, reporting_alignment_err = _load_csv_rows(reporting_alignment_path)
     bvp_raw, bvp_err = _load_json(Path(args.bvp_impact_json))
     hits_raw, hits_err = _load_json(Path(args.hits_environment_json))
     pipeline_raw, pipeline_err = _load_last_jsonl(Path(args.pipeline_history_jsonl))
     ops_raw, ops_err = _load_last_jsonl(Path(args.ops_history_jsonl))
     today_workspace, today_workspace_err = _fetch_today_workspace_status(report_date)
 
+    bvp_state, bvp_source_issues = _validate_bvp_impact_freshness(
+        bvp_impact=_extract_bvp_impact(bvp_raw if isinstance(bvp_raw, dict) else None),
+        bvp_err=bvp_err,
+        report_date=report_date,
+        require_fresh=int(args.require_fresh_bvp_impact) == 1,
+    )
+
     source_states = {
         "postgrade_alerts_json": postgrade_err or "ok",
         "model_vs_fade_json": model_err or "ok",
-        "bvp_impact_json": bvp_err or "ok",
+        "prop_regime_csv": prop_regime_err or "ok",
+        "model_performance_summary_csv": model_perf_summary_err or "ok",
+        "model_performance_daily_csv": model_perf_daily_err or "ok",
+        "reporting_alignment_csv": reporting_alignment_err or "ok",
+        "bvp_impact_json": bvp_state,
         "hits_environment_json": hits_err or "ok",
         "pipeline_history_jsonl": pipeline_err or "ok",
         "ops_history_jsonl": ops_err or "ok",
@@ -730,6 +896,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     postgrade = _extract_postgrade(postgrade_raw if isinstance(postgrade_raw, dict) else None)
     model_vs_fade = _extract_model_vs_fade(model_raw if isinstance(model_raw, dict) else None)
+    prop_regime = _extract_prop_regime(prop_regime_rows, Path(args.prop_regime_csv))
+    model_performance = _extract_model_performance(
+        model_perf_summary_rows,
+        model_perf_daily_rows,
+        summary_path=Path(args.model_performance_summary_csv),
+        daily_path=Path(args.model_performance_daily_csv),
+    )
+    reporting_alignment = _extract_reporting_alignment(reporting_alignment_rows, reporting_alignment_path)
     bvp_impact = _extract_bvp_impact(bvp_raw if isinstance(bvp_raw, dict) else None)
     hits_env = _extract_hits_env(hits_raw if isinstance(hits_raw, dict) else None)
     pipeline = _extract_pipeline(pipeline_raw)
@@ -740,6 +914,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ops=ops,
         postgrade=postgrade,
         hits_env=hits_env,
+        source_issues=bvp_source_issues,
     )
     path_forward = _derive_path_forward(
         report_date=report_date,
@@ -763,6 +938,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_vs_fade=model_vs_fade,
         bvp_impact=bvp_impact,
         hits_env=hits_env,
+        prop_regime=prop_regime,
+        model_performance=model_performance,
+        reporting_alignment=reporting_alignment,
         today_workspace=today_workspace,
         path_forward=path_forward,
         source_states=source_states,
@@ -779,6 +957,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "ops": ops,
         "postgrade": postgrade,
         "model_vs_fade": model_vs_fade,
+        "prop_regime": prop_regime,
+        "model_performance": model_performance,
+        "reporting_alignment": reporting_alignment,
         "bvp_impact": bvp_impact,
         "hits_environment": hits_env,
         "today_workspace": today_workspace,

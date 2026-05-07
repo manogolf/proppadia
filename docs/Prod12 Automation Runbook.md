@@ -260,14 +260,29 @@ Daily BvP/PvB prediction impact check (watch whether BvP is moving probabilities
 ```bash
 source backend/.env
 MLB_BVP_IMPACT_LABEL_DATE="$(TZ=America/New_York date +%F)" \
+make mlb-bvp-impact-preflight
+```
+
+Run the full impact report only after checking the preflight row count/runtime risk:
+
+```bash
+source backend/.env
+MLB_BVP_IMPACT_LABEL_DATE="$(TZ=America/New_York date +%F)" \
 make mlb-bvp-impact-report
 ```
+
+Codex should run the preflight before launching this report. If `runtime_risk=HIGH`, Codex should provide the local command and wait for the operator to report completion instead of consuming a long-running session by default.
 
 `make mlb-daily-refresh` now runs this monitor automatically by default.
 Controls:
 
 - `MLB_DAILY_BVP_IMPACT_ENABLED=1` (default on)
 - `MLB_DAILY_BVP_IMPACT_REQUIRED=0` (warn-only on failure; set `1` to fail the daily run)
+- `MLB_BVP_IMPACT_PREFLIGHT_MEDIUM_ROWS=700`
+- `MLB_BVP_IMPACT_PREFLIGHT_HIGH_ROWS=1500`
+- `MLB_BVP_IMPACT_PREFLIGHT_FAIL_HIGH=0` (set `1` when you want preflight to exit non-zero on high-risk runs)
+- `mlb-daily-ops-brief` also refreshes this artifact by default before rendering the brief.
+- The brief requires `bvp_impact.label_date` to match `MLB_DAILY_BRIEF_REPORT_DATE` by default, so stale BvP impact artifacts fail visibly instead of being printed as current.
 
 Daily hits-environment monitor (league hits/game regime + `hits_allowed` opponent-team form):
 
@@ -316,6 +331,8 @@ Controls:
 
 - `MLB_DAILY_OPS_BRIEF_ENABLED=1` (default on)
 - `MLB_DAILY_OPS_BRIEF_REQUIRED=0` (warn-only on failure; set `1` to fail the daily run)
+- `MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT=1` (default on; rebuild BvP impact before rendering)
+- `MLB_DAILY_BRIEF_REQUIRE_FRESH_BVP_IMPACT=1` (default on; fail the brief if BvP impact `label_date` is stale)
 
 Brief outputs:
 
