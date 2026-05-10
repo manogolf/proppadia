@@ -248,6 +248,7 @@ def _extract_bvp_impact(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "generated_at_utc": js.get("generated_at_utc"),
         "label_date": js.get("label_date"),
+        "requested_slate_date": js.get("requested_slate_date"),
         "rows_total_slate": _as_int(js.get("rows_total_slate")),
         "rows_evaluated": _as_int(js.get("rows_evaluated")),
         "rows_nonzero_delta": _as_int(js.get("rows_nonzero_delta")),
@@ -269,13 +270,18 @@ def _validate_bvp_impact_freshness(
         return bvp_err, [f"bvp_impact_json={bvp_err}"] if require_fresh else []
 
     label_date = str(bvp_impact.get("label_date") or "").strip()
+    requested_slate_date = str(bvp_impact.get("requested_slate_date") or "").strip()
     if not label_date:
         state = "missing_label_date"
-        return state, [f"bvp_impact_{state}"] if require_fresh else []
+        return state, [f"stale_bvp_impact:{state}"] if require_fresh else []
 
     if label_date != str(report_date).strip():
-        state = f"stale_label_date:{label_date}"
-        return state, [f"bvp_impact_label_date={label_date} expected={report_date}"] if require_fresh else []
+        state = f"stale_bvp_impact:label_date:{label_date}"
+        return state, [f"{state} expected={report_date}"] if require_fresh else []
+
+    if requested_slate_date and requested_slate_date != str(report_date).strip():
+        state = f"stale_bvp_impact:requested_slate_date:{requested_slate_date}"
+        return state, [f"{state} expected={report_date}"] if require_fresh else []
 
     return "ok", []
 
@@ -721,7 +727,9 @@ def build_markdown(
 
     lines.append("## BvP Impact")
     lines.append(
-        f"- Label date: `{bvp_impact.get('label_date','n/a')}` | rows evaluated `{bvp_impact.get('rows_evaluated','n/a')}` "
+        f"- Label date: `{bvp_impact.get('label_date','n/a')}` | requested slate date: "
+        f"`{bvp_impact.get('requested_slate_date') or bvp_impact.get('label_date','n/a')}` | "
+        f"rows evaluated `{bvp_impact.get('rows_evaluated','n/a')}` "
         f"of `{bvp_impact.get('rows_total_slate','n/a')}`"
     )
     lines.append(

@@ -1314,7 +1314,15 @@ mlb-hits-environment-report:
 mlb-daily-ops-brief:
 	@if [ "$(MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT)" = "1" ]; then \
 		echo "mlb-daily-ops-brief: refreshing bvp/pvb impact for $(MLB_DAILY_BRIEF_REPORT_DATE)"; \
-		$(MAKE) mlb-bvp-impact-report MLB_BVP_IMPACT_LABEL_DATE="$(MLB_DAILY_BRIEF_REPORT_DATE)" MLB_BVP_IMPACT_OUT_JSON="$(MLB_DAILY_BRIEF_BVP_IMPACT_JSON)" MLB_BVP_IMPACT_SLATE_CSV="$(MLB_BVP_IMPACT_SLATE_CSV)" MLB_BVP_IMPACT_WIDE_CSV="$(MLB_BVP_IMPACT_WIDE_CSV)"; \
+		set +e; \
+		$(MAKE) mlb-bvp-impact-report MLB_BVP_IMPACT_LABEL_DATE="$(MLB_DAILY_BRIEF_REPORT_DATE)" MLB_BVP_IMPACT_OUT_JSON="$(MLB_DAILY_BRIEF_BVP_IMPACT_JSON)" MLB_BVP_IMPACT_SLATE_CSV="$(MLB_BVP_IMPACT_SLATE_CSV)" MLB_BVP_IMPACT_WIDE_CSV="$(MLB_BVP_IMPACT_WIDE_CSV)" MLB_BVP_IMPACT_REQUIRE_DB="$(MLB_BVP_IMPACT_REQUIRE_DB)"; \
+		bvp_rc=$$?; \
+		set -e; \
+		if [ "$$bvp_rc" -ne 0 ]; then \
+			echo "mlb-daily-ops-brief: ERROR bvp/pvb impact refresh failed rc=$$bvp_rc for $(MLB_DAILY_BRIEF_REPORT_DATE)" >&2; \
+			exit "$$bvp_rc"; \
+		fi; \
+		echo "mlb-daily-ops-brief: refreshed bvp/pvb impact for $(MLB_DAILY_BRIEF_REPORT_DATE)"; \
 	else \
 		echo "mlb-daily-ops-brief: using existing bvp/pvb impact artifact (MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT=$(MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT))"; \
 	fi

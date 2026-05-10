@@ -44,6 +44,28 @@ PROP_ALIASES = [
     ("hits", ["hits"]),
 ]
 BET_TAIL_RE = re.compile(r"^(?P<head>.+?)\s+(?P<side>over|under)\s+(?P<line>-?\d+(?:\.\d+)?)\s*$", re.I)
+TRACKING_COLUMNS = [
+    "date",
+    "player_name",
+    "player_id",
+    "market_key",
+    "prop_type",
+    "side",
+    "line",
+    "bookmaker",
+    "price_taken",
+    "candidate_bookmaker_key",
+    "first_price",
+    "second_price",
+    "imp_move_early",
+    "last_3_starts_outs_std",
+    "graded_result",
+    "graded_profit",
+    "matched_candidate",
+    "join_strategy",
+    "source_graded_file",
+    "source_candidate_file",
+]
 
 
 def _clean_text(value: Any) -> str:
@@ -450,7 +472,7 @@ def reconcile(graded: pd.DataFrame, candidates: pd.DataFrame) -> tuple[pd.DataFr
             )
         rows.append(row)
     unmatched_candidates = candidates.drop(index=list(matched_candidate_indices), errors="ignore").copy()
-    return pd.DataFrame(rows), unmatched_candidates
+    return pd.DataFrame(rows, columns=TRACKING_COLUMNS), unmatched_candidates
 
 
 def build_missed_candidates(unmatched_candidates: pd.DataFrame) -> pd.DataFrame:
@@ -494,7 +516,7 @@ def build_missed_candidates(unmatched_candidates: pd.DataFrame) -> pd.DataFrame:
 
 
 def _summary_block(rows: pd.DataFrame, group_cols: list[str], scope: str) -> pd.DataFrame:
-    matched = rows[rows["matched_candidate"]].copy()
+    matched = rows.loc[rows["matched_candidate"].fillna(False).astype(bool)].copy()
     if matched.empty:
         return pd.DataFrame(columns=["scope", *group_cols, "rows", "wins", "losses", "pushes", "profit_units", "roi", "win_rate"])
     matched["is_win"] = matched["graded_result"].eq("win")
@@ -520,7 +542,7 @@ def _summary_block(rows: pd.DataFrame, group_cols: list[str], scope: str) -> pd.
 
 def build_summary(rows: pd.DataFrame, candidates: pd.DataFrame, unmatched_candidates: pd.DataFrame) -> pd.DataFrame:
     total = int(len(rows))
-    matched = rows[rows["matched_candidate"]].copy()
+    matched = rows.loc[rows["matched_candidate"].fillna(False).astype(bool)].copy()
     v1_candidate_rows = int(len(candidates))
     missed_candidate_count = int(len(unmatched_candidates))
     wins = int(matched["graded_result"].eq("win").sum())

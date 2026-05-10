@@ -241,6 +241,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
         print(f"{msg}; continuing in best-effort mode")
 
+    for label, raw_path in (("slate_csv", args.slate_csv), ("wide_csv", args.wide_csv)):
+        path = Path(raw_path)
+        if not path.exists():
+            print(f"[bvp-impact] ERROR missing {label}={path}")
+            return 2
+
     wide_ctx = _load_wide_context(args.wide_csv)
 
     rows_out: List[Dict[str, Any]] = []
@@ -379,6 +385,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     summary = {
         "generated_at_utc": generated_at_utc,
         "label_date": label_date,
+        "requested_slate_date": label_date,
         "slate_csv": args.slate_csv,
         "wide_csv": args.wide_csv,
         "out_csv": args.out_csv,
