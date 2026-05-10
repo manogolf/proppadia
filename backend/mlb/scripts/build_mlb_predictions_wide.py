@@ -54,6 +54,7 @@ from backend.shared.db.pg import pg_connect
 ET = ZoneInfo("America/New_York")
 BASE_DIR = Path(__file__).resolve().parents[2]  # .../backend
 DEFAULT_OUT_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv"
+DEFAULT_FEATURE_DEBUG_ROOT = BASE_DIR / "mlb" / "exports" / "model_diagnostics" / "prepared_feature_vectors"
 
 _ALLOWED_LINE_FRAC = {0.0, 0.5}
 _NAME_RE = re.compile(r"[^a-z0-9 ]+")
@@ -201,6 +202,98 @@ def _parse_prop_types_csv(raw: str) -> Optional[set[str]]:
     vals = [prop_workflow.normalize_prop_type(x) for x in str(raw or "").split(",")]
     vals = [v for v in vals if v]
     return set(vals) if vals else None
+
+
+def _safe_feature_value(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    if isinstance(value, (list, tuple, dict)):
+        try:
+            return json.dumps(value, sort_keys=True, ensure_ascii=False)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _feature_debug_out_dir(raw: str, slate_date: str) -> Optional[Path]:
+    text = str(raw or "").strip()
+    if text.lower() in {"0", "false", "no", "off", "none", "null"}:
+        return None
+    if text:
+        return Path(text).expanduser()
+    return DEFAULT_FEATURE_DEBUG_ROOT / str(slate_date)
+
+
+def _load_feature_metadata_order() -> Dict[str, List[str]]:
+    path = BASE_DIR / "mlb" / "modeling" / "feature_metadata.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    out: Dict[str, List[str]] = {}
+    if not isinstance(payload, dict):
+        return out
+    for prop_type, spec in payload.items():
+        if not isinstance(spec, dict):
+            continue
+        cols: List[str] = []
+        for key in ("random_forest", "logistic_regression", "features"):
+            vals = spec.get(key)
+            if not isinstance(vals, list):
+                continue
+            for val in vals:
+                name = str(val or "").strip()
+                if name and name not in cols:
+                    cols.append(name)
+        out[str(prop_type).strip().lower()] = cols
+    return out
+
+
+def _write_feature_debug_exports(
+    feature_rows: Sequence[Dict[str, Any]],
+    *,
+    out_dir: Optional[Path],
+) -> None:
+    if out_dir is None or not feature_rows:
+        return
+    out_dir.mkdir(parents=True, exist_ok=True)
+    metadata_order = _load_feature_metadata_order()
+    base_cols = ["date", "player_name", "player_id", "game_id", "prop_type", "line", "side"]
+    frame = pd.DataFrame(feature_rows)
+    if frame.empty or "prop_type" not in frame.columns:
+        return
+    for prop_type, group in frame.groupby("prop_type", dropna=False, sort=True):
+        prop = str(prop_type or "").strip().lower() or "unknown"
+        feature_cols = [c for c in metadata_order.get(prop, []) if c in group.columns and c not in base_cols]
+        remaining = sorted(c for c in group.columns if c not in base_cols and c not in feature_cols)
+        # Make the hits parity alias impossible to miss, even if one side is absent.
+        if prop == "hits":
+            for required in ("rolling_result_avg_7", "d7_hits"):
+                if required not in group.columns:
+                    group = group.copy()
+                    group[required] = None
+                if required not in feature_cols and required not in base_cols:
+                    feature_cols.append(required)
+                    if required in remaining:
+                        remaining.remove(required)
+        ordered = [c for c in base_cols if c in group.columns] + feature_cols + remaining
+        out_path = out_dir / f"{prop}_features.csv"
+        group[ordered].sort_values(
+            by=[c for c in ("date", "game_id", "prop_type", "player_name", "line", "side") if c in group.columns],
+            kind="stable",
+        ).to_csv(out_path, index=False)
+    note_path = out_dir / "README.md"
+    if not note_path.exists():
+        note_path.write_text(
+            "# Prepared Feature Vector Diagnostics\n\n"
+            "Debug export only. These CSVs are written after `prepare_prop()` applies runtime hydration, aliases, and fallbacks, "
+            "and before prediction is called. They do not change model logic or predictions.\n\n"
+            "For hits, `rolling_result_avg_7` is currently equivalent to `d7_hits` at runtime when the payload does not provide "
+            "`rolling_result_avg_7` directly.\n",
+            encoding="utf-8",
+        )
 
 
 @dataclass
@@ -855,9 +948,10 @@ def _predict_rows(
     *,
     by_team_ctx: Dict[int, Dict[str, Any]],
     by_player_id: Dict[int, PlayerRow],
-) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
+) -> tuple[List[Dict[str, Any]], Dict[str, int], List[Dict[str, Any]]]:
     counts: Dict[str, int] = defaultdict(int)
     rows: List[Dict[str, Any]] = []
+    feature_rows: List[Dict[str, Any]] = []
 
     def _clear_prediction_caches() -> None:
         """Release per-prop model caches to keep peak RSS bounded on small instances."""
@@ -925,6 +1019,25 @@ def _predict_rows(
                 }
                 try:
                     prepared = prop_workflow.prepare_prop(payload)
+                    feature_row = {
+                        "date": str(g.game_date),
+                        "player_name": item.player.player_name,
+                        "player_id": int(item.player.player_id),
+                        "game_id": int(g.game_id),
+                        "prop_type": off.prop_type,
+                        "line": float(off.line),
+                        "side": str(prepared.get("over_under") or payload.get("over_under") or "over").strip().lower(),
+                    }
+                    for key, value in prepared.items():
+                        if str(key).startswith("_"):
+                            continue
+                        if key in {"date", "player_name", "player_id", "game_id", "prop_type", "line", "side"}:
+                            continue
+                        feature_row[str(key)] = _safe_feature_value(value)
+                    if str(off.prop_type).strip().lower() == "hits":
+                        feature_row.setdefault("rolling_result_avg_7", None)
+                        feature_row.setdefault("d7_hits", None)
+                    feature_rows.append(feature_row)
                     pred = prop_workflow.predict_prop(off.prop_type, prepared)
                 except Exception:
                     counts["skip_predict_error"] += 1
@@ -971,7 +1084,7 @@ def _predict_rows(
     finally:
         restore()
 
-    return rows, dict(counts)
+    return rows, dict(counts), feature_rows
 
 
 def _to_wide(pred_rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
@@ -1113,6 +1226,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=os.environ.get("MLB_ODDS_SNAPSHOT_JSON", ""),
         help="Optional JSON path to persist the exact OddsAPI snapshot used for this slate.",
     )
+    ap.add_argument(
+        "--feature-debug-out-dir",
+        default=os.environ.get("MLB_PREPARED_FEATURE_DEBUG_OUT_DIR", ""),
+        help=(
+            "Optional diagnostics output directory for prepared prediction-time feature vectors. "
+            "Default: backend/mlb/exports/model_diagnostics/prepared_feature_vectors/<slate-date>. "
+            "Set to 0/false/off to disable."
+        ),
+    )
     ap.add_argument("--include-inactive", action="store_true", help="Include inactive player_ids rows in name resolution.")
     ap.add_argument("--require-min-rows", type=int, default=1, help="Fail if fewer than N wide rows are produced.")
     ap.add_argument(
@@ -1146,6 +1268,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"[mlb-wide-pred] odds snapshot in = {odds_snapshot_in}")
     if odds_snapshot_out:
         print(f"[mlb-wide-pred] odds snapshot out = {odds_snapshot_out}")
+    feature_debug_out_dir = _feature_debug_out_dir(str(args.feature_debug_out_dir or ""), str(slate_date))
+    if feature_debug_out_dir:
+        print(f"[mlb-wide-pred] feature debug out = {feature_debug_out_dir}")
     if prop_filter:
         print(f"[mlb-wide-pred] prop filter = {sorted(prop_filter)}")
     if bool(args.require_two_sided):
@@ -1226,12 +1351,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 resolve_counts[k] = int(resolve_counts.get(k, 0)) + int(v)
         print(f"[mlb-wide-pred] resolved_offers={len(resolved_offers)} resolve_counts={resolve_counts}")
 
-        pred_rows, pred_counts = _predict_rows(
+        pred_rows, pred_counts, feature_rows = _predict_rows(
             resolved_offers,
             by_team_ctx=by_team_ctx,
             by_player_id=by_player_id,
         )
         print(f"[mlb-wide-pred] predicted_rows={len(pred_rows)} pred_counts={pred_counts}")
+        _write_feature_debug_exports(feature_rows, out_dir=feature_debug_out_dir)
+        if feature_debug_out_dir and feature_rows:
+            print(f"[mlb-wide-pred] wrote prepared feature debug rows={len(feature_rows)} dir={feature_debug_out_dir}")
 
         wide = _to_wide(pred_rows)
         if wide.empty:
