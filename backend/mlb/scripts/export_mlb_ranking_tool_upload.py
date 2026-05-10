@@ -1,0 +1,395 @@
+#!/usr/bin/env python3
+"""Convert rank-model MLB output into external price-finding tool upload rows.
+
+The upload probability is an empirical historical win rate by rank bucket, not
+the raw rank score. Reporting/export only; no model logic changes and no DB
+writes.
+"""
+
+from __future__ import annotations
+
+import argparse
+import math
+import re
+from pathlib import Path
+from typing import Any, Iterable
+
+import numpy as np
+import pandas as pd
+
+from backend.mlb.scripts import export_mlb_book_upload as book_upload
+
+
+DEFAULT_HISTORY_ROOT = Path("artifacts/analysis/mlb/execution_vs_model")
+DEFAULT_OUT_ROOT = Path("backend/mlb/exports/model_v2/upload")
+
+UPLOAD_COLUMNS = [
+    "LEAGUE",
+    "DATE",
+    "HOME",
+    "AWAY",
+    "DOUBLEHEADER",
+    "SECTION",
+    "MARKET",
+    "SELECTOR",
+    "POINT",
+    "SIDE",
+    "WIN %",
+]
+
+
+def _clean(value: Any) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    text = str(value).strip()
+    if text.lower() in {"", "nan", "none", "null", "<na>"}:
+        return ""
+    return text
+
+
+def _date_key(value: Any) -> str:
+    dt = pd.to_datetime(value, errors="coerce")
+    if pd.isna(dt):
+        return ""
+    return dt.date().isoformat()
+
+
+def _compact_date(value: Any) -> str:
+    key = _date_key(value)
+    return key.replace("-", "") if key else ""
+
+
+def _norm_prop(value: Any) -> str:
+    text = _clean(value).lower().replace(" ", "_")
+    aliases = {
+        "pitcher_outs": "outs_recorded",
+        "pitching_outs": "outs_recorded",
+        "outs_recorded": "outs_recorded",
+        "pitcher_strikeouts": "strikeouts_pitching",
+        "strikeouts_pitching": "strikeouts_pitching",
+    }
+    return aliases.get(text, text)
+
+
+def _upload_market(value: Any) -> str:
+    prop_type = _norm_prop(value)
+    return book_upload._normalize_upload_market(
+        raw_market="",
+        prop_type=prop_type,
+        market_map=book_upload.DEFAULT_MARKET_BY_PROP,
+    )
+
+
+def _norm_side(value: Any) -> str:
+    text = _clean(value).lower()
+    if text.startswith("o"):
+        return "over"
+    if text.startswith("u"):
+        return "under"
+    return text
+
+
+def _num(value: Any) -> float:
+    val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    return float(val) if pd.notna(val) else np.nan
+
+
+def _line_key(value: Any) -> str:
+    val = _num(value)
+    if pd.isna(val):
+        return ""
+    return f"{val:.3f}".rstrip("0").rstrip(".")
+
+
+def _format_point(value: Any) -> Any:
+    val = _num(value)
+    if pd.isna(val):
+        return ""
+    if abs(val - round(val)) < 1e-9:
+        return int(round(val))
+    return val
+
+
+def _rank_percentile_0_1(series: pd.Series) -> pd.Series:
+    vals = pd.to_numeric(series, errors="coerce")
+    # Accept either 0-1 or 0-100 input.
+    if vals.dropna().gt(1.0).any():
+        vals = vals / 100.0
+    return vals.clip(0.0, 1.0)
+
+
+def _rank_bucket(value: Any, bucket_size: float) -> str:
+    p = _num(value)
+    if pd.isna(p):
+        return ""
+    if p > 1.0:
+        p = p / 100.0
+    p = min(max(p, 0.0), 1.0)
+    size = float(bucket_size)
+    low = math.floor(p / size) * size
+    high = min(low + size, 1.0)
+    if p >= 1.0:
+        low = max(0.0, 1.0 - size)
+        high = 1.0
+    return f"{low:.2f}-{high:.2f}"
+
+
+def _line_bucket(value: Any) -> str:
+    return _line_key(value)
+
+
+def _discover_history_files(root: Path, from_date: str | None, to_date: str | None) -> list[Path]:
+    files: list[tuple[str, Path]] = []
+    for path in root.glob("*/reconcile_rows.csv"):
+        date = path.parent.name
+        if not _date_key(date):
+            continue
+        if from_date and date < from_date:
+            continue
+        if to_date and date > to_date:
+            continue
+        files.append((date, path))
+    return [p for _, p in sorted(files)]
+
+
+def _load_rank_csv(path: Path, date_arg: str | None) -> tuple[pd.DataFrame, str]:
+    if not path.exists():
+        raise SystemExit(f"missing ranking CSV: {path}")
+    df = pd.read_csv(path, low_memory=False)
+    required = {"player_name", "prop_type", "side", "line", "rank_score", "rank_position", "rank_percentile"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise SystemExit(f"{path} missing required columns: {missing}")
+    out = df.copy()
+    if "date" not in out.columns:
+        if not date_arg:
+            raise SystemExit("ranking CSV lacks date column; pass --date YYYY-MM-DD")
+        out["date"] = date_arg
+    out["date"] = out["date"].map(_date_key)
+    if date_arg:
+        out = out[out["date"].eq(_date_key(date_arg))].copy()
+    if out.empty:
+        raise SystemExit("ranking CSV has no rows after date filter")
+    date_value = sorted(out["date"].dropna().unique())[-1]
+    out["prop_type"] = out["prop_type"].map(_norm_prop)
+    out["side"] = out["side"].map(_norm_side)
+    out["line"] = pd.to_numeric(out["line"], errors="coerce")
+    out["rank_percentile"] = _rank_percentile_0_1(out["rank_percentile"])
+    out["rank_bucket"] = out["rank_percentile"].map(lambda v: _rank_bucket(v, 0.10))
+    out["line_bucket"] = out["line"].map(_line_bucket)
+    return out, str(date_value)
+
+
+def _load_history(paths: Iterable[Path]) -> pd.DataFrame:
+    frames = []
+    required = {
+        "game_date",
+        "player_name",
+        "prop_type",
+        "line",
+        "model_pick_side",
+        "model_pick_prob",
+        "actual_over_outcome",
+        "actual_under_outcome",
+    }
+    for path in paths:
+        df = pd.read_csv(path, low_memory=False)
+        missing = sorted(required - set(df.columns))
+        if missing:
+            print(f"[ranking-upload] skip {path}: missing {missing}")
+            continue
+        df["source_reconcile_file"] = str(path)
+        frames.append(df)
+    if not frames:
+        raise SystemExit("No compatible historical reconcile rows found.")
+    return pd.concat(frames, ignore_index=True)
+
+
+def _history_to_rank_rows(history: pd.DataFrame, bucket_size: float) -> pd.DataFrame:
+    out = history.copy()
+    out["date"] = out["game_date"].map(_date_key)
+    out["prop_type"] = out["prop_type"].map(_norm_prop)
+    out["side"] = out["model_pick_side"].map(_norm_side)
+    out["line"] = pd.to_numeric(out["line"], errors="coerce")
+    out["line_bucket"] = out["line"].map(_line_bucket)
+    if "rank_score" in out.columns:
+        out["rank_score_hist"] = pd.to_numeric(out["rank_score"], errors="coerce")
+    else:
+        out["rank_score_hist"] = pd.to_numeric(out["model_pick_prob"], errors="coerce")
+    if "rank_percentile" in out.columns:
+        out["rank_percentile_hist"] = _rank_percentile_0_1(out["rank_percentile"])
+    else:
+        # Percentile by slate, high score = better rank. pct=True gives ascending percentile,
+        # so rank descending and invert to make strongest rows approach 1.0.
+        out["rank_percentile_hist"] = out.groupby("date")["rank_score_hist"].rank(pct=True, method="average")
+    out["rank_bucket"] = out["rank_percentile_hist"].map(lambda v: _rank_bucket(v, bucket_size))
+    outcome = np.where(
+        out["side"].eq("over"),
+        out["actual_over_outcome"].map(lambda v: _clean(v).lower()),
+        out["actual_under_outcome"].map(lambda v: _clean(v).lower()),
+    )
+    out["outcome_norm"] = pd.Series(outcome, index=out.index)
+    out = out[out["outcome_norm"].isin(["win", "loss"])].copy()
+    out["win"] = out["outcome_norm"].eq("win").astype(float)
+    out = out[out["prop_type"].ne("") & out["side"].isin(["over", "under"]) & out["line_bucket"].ne("") & out["rank_bucket"].ne("")]
+    return out
+
+
+def _build_lookup(history_rows: pd.DataFrame) -> pd.DataFrame:
+    group_cols = ["prop_type", "side", "line_bucket", "rank_bucket"]
+    lookup = (
+        history_rows.groupby(group_cols, dropna=False, observed=True)
+        .agg(bets=("win", "size"), actual_win_rate=("win", "mean"))
+        .reset_index()
+    )
+    lookup = lookup.rename(columns={"bets": "sample_size"})
+    return lookup
+
+
+def _fair_american(prob: float) -> int | None:
+    if pd.isna(prob) or prob <= 0.0 or prob >= 1.0:
+        return None
+    if prob > 0.5:
+        return int(round(-(prob / (1.0 - prob)) * 100.0))
+    return int(round(((1.0 - prob) / prob) * 100.0))
+
+
+def _format_win_value(prob: Any, win_format: str) -> Any:
+    p = _num(prob)
+    if pd.isna(p):
+        return ""
+    if win_format == "american":
+        odds = _fair_american(p)
+        return "" if odds is None else int(odds)
+    if win_format == "pct":
+        return round(p * 100.0, 4)
+    return round(p, 6)
+
+
+def _merge_lookup(current: pd.DataFrame, lookup: pd.DataFrame) -> pd.DataFrame:
+    keys = ["prop_type", "side", "line_bucket", "rank_bucket"]
+    merged = current.merge(lookup, on=keys, how="left")
+    return merged.rename(columns={"actual_win_rate": "empirical_win_pct"})
+
+
+def _write_outputs(
+    rows: pd.DataFrame,
+    *,
+    date_value: str,
+    out_csv: Path,
+    diagnostics_csv: Path,
+    win_format: str,
+    allow_low_sample: bool,
+) -> None:
+    work = rows.copy()
+    work["uploaded_win_value"] = work["empirical_win_pct"].map(lambda p: _format_win_value(p, win_format))
+    work["win_format"] = win_format
+    work["mapped_bucket_win_rate"] = work["empirical_win_pct"]
+    work["mapper_sample_size"] = work["sample_size"]
+
+    diag_cols = [
+        "date",
+        "player_id",
+        "player_name",
+        "prop_type",
+        "side",
+        "line",
+        "source_lane",
+        "rank_score",
+        "rank_position",
+        "rank_percentile",
+        "rank_bucket",
+        "mapped_bucket_win_rate",
+        "mapper_sample_size",
+        "empirical_win_pct",
+        "sample_size",
+        "win_format",
+        "uploaded_win_value",
+    ]
+    diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
+    work[[c for c in diag_cols if c in work.columns]].to_csv(diagnostics_csv, index=False)
+
+    upload_work = work[work["empirical_win_pct"].notna()].copy()
+    if not allow_low_sample:
+        upload_work = upload_work[pd.to_numeric(upload_work["sample_size"], errors="coerce").ge(50)].copy()
+    home_col = "home_upload" if "home_upload" in upload_work.columns else "home_team_code"
+    away_col = "away_upload" if "away_upload" in upload_work.columns else "away_team_code"
+
+    upload = pd.DataFrame(
+        {
+            "LEAGUE": "MLB",
+            "DATE": _compact_date(date_value),
+            "HOME": upload_work[home_col].map(book_upload._normalize_upload_team_code) if home_col in upload_work.columns else "",
+            "AWAY": upload_work[away_col].map(book_upload._normalize_upload_team_code) if away_col in upload_work.columns else "",
+            "DOUBLEHEADER": "",
+            "SECTION": "player_prop",
+            "MARKET": upload_work["prop_type"].map(_upload_market),
+            "SELECTOR": (
+                pd.to_numeric(upload_work["player_id"], errors="coerce").astype("Int64")
+                if "player_id" in upload_work.columns
+                else upload_work["player_name"]
+            ),
+            "POINT": upload_work["line"].map(_format_point),
+            "SIDE": upload_work["side"].str.lower(),
+            "WIN %": upload_work["uploaded_win_value"],
+        }
+    )
+    upload = upload[UPLOAD_COLUMNS]
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    upload.to_csv(out_csv, index=False)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Export rank-model MLB rows for external price-finding tool.")
+    parser.add_argument("--rank-csv", type=Path, required=True, help="Daily ranking model CSV.")
+    parser.add_argument("--date", default="", help="Slate date YYYY-MM-DD; optional if rank CSV has date.")
+    parser.add_argument("--history-root", type=Path, default=DEFAULT_HISTORY_ROOT)
+    parser.add_argument("--from-date", default="", help="Historical reconcile start date.")
+    parser.add_argument("--to-date", default="", help="Historical reconcile end date. Defaults to day before --date when provided.")
+    parser.add_argument("--out-csv", type=Path, default=None)
+    parser.add_argument("--diagnostics-csv", type=Path, default=None)
+    parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="pct")
+    parser.add_argument("--allow-low-sample", action="store_true")
+    parser.add_argument("--rank-bucket-size", type=float, default=0.10)
+    args = parser.parse_args()
+
+    current, date_value = _load_rank_csv(args.rank_csv, args.date or None)
+    to_date = args.to_date or ""
+    if not to_date and date_value:
+        to_date = (pd.Timestamp(date_value) - pd.Timedelta(days=1)).date().isoformat()
+
+    history_paths = _discover_history_files(args.history_root, args.from_date or None, to_date or None)
+    history = _load_history(history_paths)
+    history_rows = _history_to_rank_rows(history, float(args.rank_bucket_size))
+    lookup = _build_lookup(history_rows)
+
+    current["rank_bucket"] = current["rank_percentile"].map(lambda v: _rank_bucket(v, float(args.rank_bucket_size)))
+    current["line_bucket"] = current["line"].map(_line_bucket)
+    merged = _merge_lookup(current, lookup)
+
+    default_out = DEFAULT_OUT_ROOT / f"ranking_tool_upload_{date_value}.csv"
+    default_diag = DEFAULT_OUT_ROOT / f"ranking_tool_upload_diagnostics_{date_value}.csv"
+    out_csv = args.out_csv or default_out
+    diagnostics_csv = args.diagnostics_csv or default_diag
+    _write_outputs(
+        merged,
+        date_value=date_value,
+        out_csv=out_csv,
+        diagnostics_csv=diagnostics_csv,
+        win_format=args.win_format,
+        allow_low_sample=bool(args.allow_low_sample),
+    )
+
+    kept = merged if args.allow_low_sample else merged[pd.to_numeric(merged["sample_size"], errors="coerce").ge(50)]
+    print(f"Wrote {out_csv}")
+    print(f"Wrote {diagnostics_csv}")
+    print(
+        "summary "
+        f"input_rows={len(current)} matched_buckets={int(merged['empirical_win_pct'].notna().sum())} "
+        f"uploaded_rows={len(kept)} win_format={args.win_format}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
