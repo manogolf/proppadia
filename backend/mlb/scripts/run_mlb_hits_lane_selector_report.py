@@ -21,6 +21,28 @@ RESULTS_SCRIPT = Path("backend/mlb/scripts/compare_hits_lane_selector_to_results
 QUICK_CARD_UPLOAD_SCRIPT = Path("backend/mlb/scripts/export_quick_card_hits_tool_upload.py")
 
 
+def _lane_date_dir(date_value: str) -> Path:
+    return LANE_ROOT / date_value
+
+
+def _upload_date_dir(date_value: str) -> Path:
+    return UPLOAD_ROOT / date_value
+
+
+def _dated_or_legacy(date_value: str, filename: str) -> Path:
+    dated = _lane_date_dir(date_value) / filename
+    if dated.exists():
+        return dated
+    return LANE_ROOT / filename
+
+
+def _upload_dated_or_legacy(date_value: str, filename: str) -> Path:
+    dated = _upload_date_dir(date_value) / filename
+    if dated.exists():
+        return dated
+    return UPLOAD_ROOT / filename
+
+
 def _date_key(value: Any) -> str:
     dt = pd.to_datetime(value, errors="coerce")
     if pd.isna(dt):
@@ -172,14 +194,16 @@ def _write_md(
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     date_value = _date_key(args.date)
-    selector_csv = LANE_ROOT / f"hits_lane_selector_{date_value}.csv"
-    selector_summary_json = LANE_ROOT / f"hits_lane_selector_{date_value}_summary.json"
-    upload_diag_json = LANE_ROOT / f"hits_lane_selector_{date_value}_upload_diagnostics.json"
-    quick_card_csv = LANE_ROOT / f"quick_card_hits_{date_value}.csv"
-    upload_csv = UPLOAD_ROOT / f"ranking_tool_upload_{date_value}.csv"
-    quick_upload_csv = UPLOAD_ROOT / f"quick_card_tool_upload_{date_value}.csv"
-    results_json = LANE_ROOT / f"hits_lane_selector_{date_value}_results_summary.json"
-    md_path = LANE_ROOT / f"hits_lane_selector_{date_value}_daily_report.md"
+    date_dir = _lane_date_dir(date_value)
+    selector_csv = _dated_or_legacy(date_value, f"hits_lane_selector_{date_value}.csv")
+    selector_summary_json = _dated_or_legacy(date_value, f"hits_lane_selector_{date_value}_summary.json")
+    upload_diag_json = _dated_or_legacy(date_value, f"hits_lane_selector_{date_value}_upload_diagnostics.json")
+    quick_card_csv = _dated_or_legacy(date_value, f"quick_card_hits_{date_value}.csv")
+    upload_csv = _upload_dated_or_legacy(date_value, f"ranking_tool_upload_{date_value}.csv")
+    quick_upload_csv = _upload_date_dir(date_value) / f"quick_card_tool_upload_{date_value}.csv"
+    quick_upload_diag_csv = _upload_date_dir(date_value) / f"quick_card_tool_upload_diagnostics_{date_value}.csv"
+    results_json = _dated_or_legacy(date_value, f"hits_lane_selector_{date_value}_results_summary.json")
+    md_path = date_dir / f"hits_lane_selector_{date_value}_daily_report.md"
 
     selector_proc: subprocess.CompletedProcess[str] | None = None
     if not args.skip_run_selector:
@@ -193,6 +217,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             print(selector_proc.stdout)
             print(selector_proc.stderr, file=sys.stderr)
             raise SystemExit(selector_proc.returncode)
+        selector_csv = date_dir / f"hits_lane_selector_{date_value}.csv"
+        selector_summary_json = date_dir / f"hits_lane_selector_{date_value}_summary.json"
+        upload_diag_json = date_dir / f"hits_lane_selector_{date_value}_upload_diagnostics.json"
+        quick_card_csv = date_dir / f"quick_card_hits_{date_value}.csv"
+        results_json = date_dir / f"hits_lane_selector_{date_value}_results_summary.json"
+        upload_csv = _upload_date_dir(date_value) / f"ranking_tool_upload_{date_value}.csv"
 
     selector_summary = _load_json(selector_summary_json)
     upload_diag = _load_json(upload_diag_json)
@@ -208,6 +238,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             str(quick_card_csv),
             "--out-csv",
             str(quick_upload_csv),
+            "--diagnostics-csv",
+            str(quick_upload_diag_csv),
         ]
     )
     if quick_upload_proc.returncode != 0:

@@ -63,11 +63,14 @@ def _metric(df: pd.DataFrame, group: str, value: str) -> dict[str, Any]:
 
 
 def _default_input(date_value: str) -> Path:
+    dated = DEFAULT_ROOT / date_value / f"hits_lane_selector_{date_value}.csv"
+    if dated.exists():
+        return dated
     return DEFAULT_ROOT / f"hits_lane_selector_{date_value}.csv"
 
 
 def _default_out(date_value: str) -> Path:
-    return DEFAULT_ROOT / f"hits_lane_selector_{date_value}_results_summary.json"
+    return DEFAULT_ROOT / date_value / f"hits_lane_selector_{date_value}_results_summary.json"
 
 
 def _profit_from_price(price: Any, win: Any) -> float | None:

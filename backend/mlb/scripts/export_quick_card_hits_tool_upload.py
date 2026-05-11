@@ -15,6 +15,10 @@ from typing import Any
 
 import pandas as pd
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
 
 
@@ -112,14 +116,13 @@ def _format_win_value(value: Any) -> Any:
     val = _num(value)
     if val is None:
         return ""
-    # Quick Card scores are currently stored as probabilities; keep raw pct
-    # semantics for the external tool's WIN % field.
     if 0.0 <= val <= 1.0:
-        return round(val * 100.0, 4)
-    return round(val, 4)
+        return round(val, 6)
+    # Historical Quick Card variants may already carry 0-100 percentages.
+    return round(val / 100.0, 6)
 
 
-def export_quick_card(input_csv: Path, out_csv: Path, date_value: str) -> dict[str, Any]:
+def export_quick_card(input_csv: Path, out_csv: Path, date_value: str, diagnostics_csv: Path | None = None) -> dict[str, Any]:
     if not input_csv.exists():
         raise SystemExit(f"missing Quick Card hits input: {input_csv}")
     df = pd.read_csv(input_csv, low_memory=False)
@@ -154,6 +157,7 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str) -> dict[s
         df = df[date_series.eq(date_value)].copy()
         date_series = df["date"].map(_date_key)
 
+    exported_decimal = df[win_col].map(_format_win_value)
     upload = pd.DataFrame(
         {
             "LEAGUE": "MLB",
@@ -166,9 +170,14 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str) -> dict[s
             "SELECTOR": pd.to_numeric(df["player_id"], errors="coerce").astype("Int64"),
             "POINT": df["line"].map(_format_point),
             "SIDE": df["side"].astype(str).str.strip().str.lower(),
-            "WIN %": df[win_col].map(_format_win_value),
+            "WIN %": exported_decimal,
         }
     )[UPLOAD_COLUMNS]
+    diagnostics = df.copy()
+    diagnostics["win_pct_raw_source"] = pd.to_numeric(df[win_col], errors="coerce")
+    diagnostics["win_pct_exported_decimal"] = pd.to_numeric(exported_decimal, errors="coerce")
+    diagnostics["exported_side"] = upload["SIDE"].values
+    diagnostics["probability_semantics"] = "P(exported SIDE wins)"
 
     home_missing = upload["HOME"].isna() | upload["HOME"].astype(str).str.strip().eq("")
     away_missing = upload["AWAY"].isna() | upload["AWAY"].astype(str).str.strip().eq("")
@@ -181,6 +190,23 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str) -> dict[s
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     upload.to_csv(out_csv, index=False)
+    if diagnostics_csv is not None:
+        diag_cols = [
+            "date",
+            "player_id",
+            "player_name",
+            "prop_type",
+            "side",
+            "line",
+            "score",
+            "rank_score",
+            "win_pct_raw_source",
+            "win_pct_exported_decimal",
+            "exported_side",
+            "probability_semantics",
+        ]
+        diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
+        diagnostics[[c for c in diag_cols if c in diagnostics.columns]].to_csv(diagnostics_csv, index=False)
     return {
         "rows": int(len(upload)),
         "win_column": win_col,
@@ -196,6 +222,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date", required=True, help="Slate date YYYY-MM-DD.")
     parser.add_argument("--in-csv", type=Path, default=None)
     parser.add_argument("--out-csv", type=Path, default=None)
+    parser.add_argument("--diagnostics-csv", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -204,9 +231,16 @@ def main() -> None:
     date_value = _date_key(args.date)
     if not date_value:
         raise SystemExit("--date YYYY-MM-DD is required")
-    in_csv = args.in_csv or Path(f"backend/mlb/exports/model_v2/lanes/today/quick_card_hits_{date_value}.csv")
-    out_csv = args.out_csv or Path(f"backend/mlb/exports/model_v2/upload/quick_card_tool_upload_{date_value}.csv")
-    summary = export_quick_card(in_csv, out_csv, date_value)
+    if args.in_csv:
+        in_csv = args.in_csv
+    else:
+        dated_in = Path(f"backend/mlb/exports/model_v2/lanes/today/{date_value}/quick_card_hits_{date_value}.csv")
+        legacy_in = Path(f"backend/mlb/exports/model_v2/lanes/today/quick_card_hits_{date_value}.csv")
+        in_csv = dated_in if dated_in.exists() else legacy_in
+    upload_dir = Path(f"backend/mlb/exports/model_v2/upload/{date_value}")
+    out_csv = args.out_csv or upload_dir / f"quick_card_tool_upload_{date_value}.csv"
+    diagnostics_csv = args.diagnostics_csv or upload_dir / f"quick_card_tool_upload_diagnostics_{date_value}.csv"
+    summary = export_quick_card(in_csv, out_csv, date_value, diagnostics_csv)
     if summary.get("skipped"):
         return
     print(f"Wrote {out_csv}")

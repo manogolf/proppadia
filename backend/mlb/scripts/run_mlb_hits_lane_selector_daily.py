@@ -149,14 +149,15 @@ def _line_key(value: Any) -> float | None:
 
 
 def _today_paths(date_value: str) -> tuple[Path, Path, Path]:
-    out_csv = DEFAULT_OUT_DIR / f"hits_lane_selector_{date_value}.csv"
-    summary_json = DEFAULT_OUT_DIR / f"hits_lane_selector_{date_value}_summary.json"
-    upload_csv = DEFAULT_UPLOAD_DIR / f"ranking_tool_upload_{date_value}.csv"
+    dated_dir = DEFAULT_OUT_DIR / date_value
+    out_csv = dated_dir / f"hits_lane_selector_{date_value}.csv"
+    summary_json = dated_dir / f"hits_lane_selector_{date_value}_summary.json"
+    upload_csv = DEFAULT_UPLOAD_DIR / date_value / f"ranking_tool_upload_{date_value}.csv"
     return out_csv, summary_json, upload_csv
 
 
 def _quick_card_hits_path(date_value: str) -> Path:
-    return DEFAULT_OUT_DIR / f"quick_card_hits_{date_value}.csv"
+    return DEFAULT_OUT_DIR / date_value / f"quick_card_hits_{date_value}.csv"
 
 
 def _default_input_csv(date_value: str) -> Path:
@@ -1072,7 +1073,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--export-upload", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--allow-low-sample-upload", action="store_true")
     parser.add_argument("--drop-team-mismatch-upload", action="store_true")
-    parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="pct")
+    parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="decimal")
     parser.add_argument("--upload-history-from-date", default="")
     parser.add_argument("--upload-history-to-date", default="")
     parser.add_argument("--chunk-size", type=int, default=1000)

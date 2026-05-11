@@ -286,6 +286,10 @@ def _write_outputs(
     work["win_format"] = win_format
     work["mapped_bucket_win_rate"] = work["empirical_win_pct"]
     work["mapper_sample_size"] = work["sample_size"]
+    work["win_pct_raw_source"] = work["empirical_win_pct"]
+    work["win_pct_exported_decimal"] = pd.to_numeric(work["empirical_win_pct"], errors="coerce").round(6)
+    work["exported_side"] = work["side"].astype(str).str.strip().str.lower()
+    work["probability_semantics"] = "P(exported SIDE wins)"
 
     diag_cols = [
         "date",
@@ -301,6 +305,10 @@ def _write_outputs(
         "rank_bucket",
         "mapped_bucket_win_rate",
         "mapper_sample_size",
+        "win_pct_raw_source",
+        "win_pct_exported_decimal",
+        "exported_side",
+        "probability_semantics",
         "empirical_win_pct",
         "sample_size",
         "win_format",
@@ -348,7 +356,7 @@ def main() -> int:
     parser.add_argument("--to-date", default="", help="Historical reconcile end date. Defaults to day before --date when provided.")
     parser.add_argument("--out-csv", type=Path, default=None)
     parser.add_argument("--diagnostics-csv", type=Path, default=None)
-    parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="pct")
+    parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="decimal")
     parser.add_argument("--allow-low-sample", action="store_true")
     parser.add_argument("--rank-bucket-size", type=float, default=0.10)
     args = parser.parse_args()
@@ -367,8 +375,9 @@ def main() -> int:
     current["line_bucket"] = current["line"].map(_line_bucket)
     merged = _merge_lookup(current, lookup)
 
-    default_out = DEFAULT_OUT_ROOT / f"ranking_tool_upload_{date_value}.csv"
-    default_diag = DEFAULT_OUT_ROOT / f"ranking_tool_upload_diagnostics_{date_value}.csv"
+    default_out_root = DEFAULT_OUT_ROOT / date_value
+    default_out = default_out_root / f"ranking_tool_upload_{date_value}.csv"
+    default_diag = default_out_root / f"ranking_tool_upload_diagnostics_{date_value}.csv"
     out_csv = args.out_csv or default_out
     diagnostics_csv = args.diagnostics_csv or default_diag
     _write_outputs(
