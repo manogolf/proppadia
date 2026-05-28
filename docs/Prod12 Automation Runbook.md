@@ -241,6 +241,30 @@ make mlb-full-slate-performance MLB_DATE=YYYY-MM-DD \
 
 `MLB_FULL_SLATE_MIN_RESOLVED_ROWS` is optional and defaults to `0`; snapshot policy is the primary guard against late-window partial artifacts being treated as a full-slate performance report.
 
+Standard daily reconcile workflow:
+
+```bash
+make mlb-daily-reconcile
+```
+
+By default this reconciles yesterday in Eastern time. For a specific date:
+
+```bash
+make mlb-daily-reconcile MLB_DAILY_RECONCILE_DATE=YYYY-MM-DD
+```
+
+This daily target runs the full-slate reconcile, lane selector report, actual wagers by source reconcile, and then refreshes both environment interaction reports:
+
+- `artifacts/analysis/mlb/v2_environment_interactions/v2_by_environment_regime.csv`
+- `artifacts/analysis/mlb/v2_environment_interactions/v2_environment_interaction_rows.csv`
+- `artifacts/analysis/mlb/v2_environment_interactions/summary.json`
+- `artifacts/analysis/mlb/v2_environment_interactions/summary.md`
+- `artifacts/analysis/mlb/hits_environment_persistence/v2_favorites_environment_breakdown.csv`
+- `artifacts/analysis/mlb/hits_environment_persistence/v2_favorites_environment_breakdown_summary.json`
+- `artifacts/analysis/mlb/hits_environment_persistence/v2_favorites_environment_breakdown_summary.md`
+
+The interaction summary includes a freshness section showing the latest available `actual_wagers_by_source` date, the latest interaction date included, total rows loaded, and a warning if the analysis is stale relative to available reconcile outputs.
+
 Two-sided market enforcement is now the default for `mlb-predictions-wide`, `mlb-reconcile-rows`, quality/candidate eval on `reconcile_rows`, and red-mode bucket reports. Use these toggles only if you intentionally need old one-sided behavior:
 
 - `MLB_PREDICT_REQUIRE_TWO_SIDED=0`

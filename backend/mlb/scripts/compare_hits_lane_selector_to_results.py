@@ -88,6 +88,18 @@ def _profit_from_price(price: Any, win: Any) -> float | None:
     return None
 
 
+def _filter_two_sided_valid_prices(df: pd.DataFrame) -> pd.DataFrame:
+    required = {"price_over_american", "price_under_american"}
+    if df.empty or not required.issubset(df.columns):
+        return df
+    over = pd.to_numeric(df["price_over_american"], errors="coerce")
+    under = pd.to_numeric(df["price_under_american"], errors="coerce")
+    mask = over.notna() & under.notna() & over.abs().ge(100) & under.abs().ge(100)
+    if "book_count_two_sided" in df.columns:
+        mask &= pd.to_numeric(df["book_count_two_sided"], errors="coerce").fillna(0).ge(2)
+    return df.loc[mask].copy()
+
+
 def _attach_reconcile_results(work: pd.DataFrame, date_value: str, reconcile_root: Path) -> pd.DataFrame:
     if work["pnl"].notna().all():
         return work
@@ -98,6 +110,7 @@ def _attach_reconcile_results(work: pd.DataFrame, date_value: str, reconcile_roo
     required = {"game_date", "player_name", "prop_type", "line", "actual_over_outcome", "actual_under_outcome"}
     if not required.issubset(rec.columns):
         return work
+    rec = _filter_two_sided_valid_prices(rec)
     for df in (work, rec):
         date_col = "date" if df is work else "game_date"
         df["date_norm"] = df[date_col].map(_date_key)

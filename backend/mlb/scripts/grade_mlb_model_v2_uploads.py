@@ -11,6 +11,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from backend.mlb.scripts.tool_upload_8rain import TEAM_CODE_BY_ABBR
+
 
 MARKET_TO_PROP = {
     "batter_hits": "hits",
@@ -32,6 +34,9 @@ MARKET_TO_PROP = {
 
 TEAM_ALIASES = {
     "AZ": "ARI",
+    "ARI": "ARI",
+    "ATH": "OAK",
+    "OAK": "OAK",
     "CHW": "CWS",
     "CWS": "CWS",
     "SF": "SF",
@@ -45,6 +50,7 @@ TEAM_ALIASES = {
     "WAS": "WSH",
     "WSH": "WSH",
 }
+TEAM_ALIASES.update({slug.upper(): TEAM_ALIASES.get(abbr.upper(), abbr.upper()) for abbr, slug in TEAM_CODE_BY_ABBR.items()})
 
 
 def _norm_text(v: Any) -> str:
@@ -167,7 +173,19 @@ def _prepare_reconcile(path: Path) -> pd.DataFrame:
     rec["line_norm"] = pd.to_numeric(rec["line"], errors="coerce").round(4)
     rec["home_norm"] = rec.get("home_team_code", "").map(_norm_team)
     rec["away_norm"] = rec.get("away_team_code", "").map(_norm_team)
-    return rec
+    return _filter_two_sided_valid_prices(rec)
+
+
+def _filter_two_sided_valid_prices(df: pd.DataFrame) -> pd.DataFrame:
+    required = {"price_over_american", "price_under_american"}
+    if df.empty or not required.issubset(df.columns):
+        return df
+    over = pd.to_numeric(df["price_over_american"], errors="coerce")
+    under = pd.to_numeric(df["price_under_american"], errors="coerce")
+    mask = over.notna() & under.notna() & over.abs().ge(100) & under.abs().ge(100)
+    if "book_count_two_sided" in df.columns:
+        mask &= pd.to_numeric(df["book_count_two_sided"], errors="coerce").fillna(0).ge(2)
+    return df.loc[mask].copy()
 
 
 def _grade_uploads(upload: pd.DataFrame, rec: pd.DataFrame) -> pd.DataFrame:

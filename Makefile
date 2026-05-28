@@ -8,6 +8,7 @@ BASE_URL ?= http://127.0.0.1:8001
 MLB_BASE_URL ?=
 MLB_DATE ?= $(shell date -u +%F)
 MLB_DATE_ET ?= $(shell TZ=America/New_York date +%F)
+MLB_DAILY_RECONCILE_DATE ?= $(shell TZ=America/New_York date -v-1d +%F 2>/dev/null || TZ=America/New_York date -d "yesterday" +%F)
 MLB_POST_GRADE_DATE ?= $(MLB_DATE_ET)
 NHL_DATE ?= 2025-11-20
 NHL_MODEL_VS_FADE_GRADED_GLOB ?= tmp/graded/nhl_sog_graded_*.csv
@@ -63,6 +64,8 @@ MLB_EXEC_EXPECTED_RAW_TOOL_ROWS ?=
 MLB_EXEC_EXPECTED_MLB_BETONLINE_ROWS ?=
 MLB_EXEC_EXPECTED_MLB_BETONLINE_NON_PUSH_ROWS ?=
 MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS ?= 1
+MLB_RECONCILE_INCLUDE_ONE_SIDED ?= 0
+MLB_RECONCILE_INCLUDE_SINGLE_BOOK ?= 0
 MLB_FULL_SLATE_RECONCILE_CSV ?= $(MLB_EXEC_OUT_DIR)/reconcile_rows.csv
 MLB_FULL_SLATE_RECONCILE_SUMMARY_JSON ?= $(MLB_EXEC_OUT_DIR)/reconcile_summary.json
 MLB_FULL_SLATE_SUMMARY_MD ?= $(MLB_EXEC_OUT_DIR)/full_slate_summary.md
@@ -1336,7 +1339,7 @@ mlb-compare-upload-variants-postgame:
 mlb-singles-shadow:
 	$(VENV_PY) backend/mlb/scripts/generate_singles_shadow_upload.py --date "$(MLB_DATE)" --base-csv "$(MLB_SINGLES_SHADOW_BASE_CSV)" --shadow-csv "$(MLB_SINGLES_SHADOW_OUT_CSV)" --out-dir "$(MLB_SINGLES_SHADOW_OUT_DIR)" --odds-snapshot-in "$(MLB_SINGLES_SHADOW_ODDS_SNAPSHOT)" --graded-rows-csv "$(MLB_SINGLES_SHADOW_GRADED_ROWS_CSV)" --threshold "$(MLB_SINGLES_SHADOW_THRESHOLD)" --top-n "$(MLB_SINGLES_SHADOW_TOP_N)" --max-rows-per-player "$(MLB_SINGLES_SHADOW_MAX_PER_PLAYER)" --max-abs-win-pct "$(MLB_SINGLES_SHADOW_MAX_ABS_WIN_PCT)" $(if $(strip $(MLB_SINGLES_SHADOW_MODEL_PATH)),--singles-model-path "$(MLB_SINGLES_SHADOW_MODEL_PATH)",)
 
-.PHONY: mlb-train-probability-calibration mlb-check-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance
+.PHONY: mlb-train-probability-calibration mlb-check-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance mlb-daily-reconcile mlb-refresh-v2-environment-interactions
 mlb-train-probability-calibration:
 	$(VENV_PY) backend/mlb/scripts/train_mlb_probability_calibration.py --rows-csv "$(MLB_CALIBRATION_TRAIN_CSV)" --out-json "$(MLB_PROBABILITY_CALIBRATION_JSON)" --comparison-csv "$(MLB_CALIBRATION_COMPARISON_CSV)" --curve-csv "$(MLB_CALIBRATION_CURVE_CSV)" --prop-types "$(MLB_CALIBRATION_PROP_TYPES)" --min-prop-samples "$(MLB_CALIBRATION_MIN_PROP_SAMPLES)" --training-scope "$(MLB_CALIBRATION_TRAINING_SCOPE)" $(if $(strip $(MLB_CALIBRATION_FROM_DATE)),--from-date "$(MLB_CALIBRATION_FROM_DATE)",) $(if $(strip $(MLB_CALIBRATION_TO_DATE)),--to-date "$(MLB_CALIBRATION_TO_DATE)",)
 
@@ -1366,6 +1369,21 @@ mlb-full-slate-performance:
 	$(MAKE) mlb-check-finalized-training-data MLB_DATE="$(MLB_DATE)" MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS="$(MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS)"
 	$(MAKE) mlb-reconcile-rows MLB_RECONCILE_FROM_DATE="$(MLB_DATE)" MLB_RECONCILE_TO_DATE="$(MLB_DATE)" MLB_RECONCILE_BOOKMAKER="" MLB_RECONCILE_SLATE_FILENAME="$(MLB_RECONCILE_SLATE_FILENAME)" MLB_RECONCILE_SLATE_FILENAME_MODE="all" MLB_RECONCILE_SLATE_FILENAME_GLOB="$(MLB_RECONCILE_SLATE_FILENAME_GLOB)" MLB_RECONCILE_SNAPSHOT_POLICY="$(MLB_FULL_SLATE_SNAPSHOT_POLICY)" MLB_RECONCILE_SNAPSHOT_RUN_TAG="$(MLB_FULL_SLATE_SNAPSHOT_RUN_TAG)" MLB_RECONCILE_ODDS_FILENAME="$(MLB_RECONCILE_ODDS_FILENAME)" MLB_RECONCILE_ODDS_FILENAME_MODE="all" MLB_RECONCILE_ODDS_FILENAME_GLOB="$(MLB_RECONCILE_ODDS_FILENAME_GLOB)" MLB_RECONCILE_ROWS_OUT_CSV="$(MLB_FULL_SLATE_RECONCILE_CSV)" MLB_RECONCILE_SUMMARY_OUT_JSON="$(MLB_FULL_SLATE_RECONCILE_SUMMARY_JSON)" MLB_RECONCILE_REQUIRE_TWO_SIDED="$(MLB_RECONCILE_REQUIRE_TWO_SIDED)" MLB_RECONCILE_REQUIRE_OUTCOMES=1 MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN=1
 	$(VENV_PY) backend/mlb/scripts/report_mlb_full_slate_performance.py --rows-csv "$(MLB_FULL_SLATE_RECONCILE_CSV)" --out-md "$(MLB_FULL_SLATE_SUMMARY_MD)" --out-by-prop-csv "$(MLB_FULL_SLATE_BY_PROP_CSV)" --min-resolved-rows "$(MLB_FULL_SLATE_MIN_RESOLVED_ROWS)"
+
+mlb-refresh-v2-environment-interactions:
+	@echo "Refreshing v2 environment interactions"
+	$(VENV_PY) backend/mlb/scripts/analyze_mlb_v2_environment_interactions.py
+	@echo "Refreshing v2 favorites environment breakdown"
+	$(VENV_PY) backend/mlb/scripts/analyze_mlb_v2_favorites_environment_breakdown.py
+
+mlb-daily-reconcile:
+	@echo "Building full-slate reconcile for $(MLB_DAILY_RECONCILE_DATE)"
+	$(MAKE) mlb-full-slate-performance MLB_DATE="$(MLB_DAILY_RECONCILE_DATE)" MLB_FULL_SLATE_MIN_RESOLVED_ROWS=1
+	@echo "Running lane selector reconcile for $(MLB_DAILY_RECONCILE_DATE)"
+	$(VENV_PY) -m backend.mlb.scripts.run_mlb_hits_lane_selector_report --date "$(MLB_DAILY_RECONCILE_DATE)"
+	@echo "Running actual wagers by source reconcile for $(MLB_DAILY_RECONCILE_DATE)"
+	$(VENV_PY) -m backend.mlb.scripts.compare_mlb_model_v2_upload_vs_actual --date "$(MLB_DAILY_RECONCILE_DATE)"
+	$(MAKE) mlb-refresh-v2-environment-interactions
 
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
@@ -1451,7 +1469,7 @@ mlb-slate-archive:
 
 # Build row-level MLB reconcile dataset from archived odds history artifacts.
 mlb-reconcile-rows:
-	$(VENV_PY) backend/mlb/scripts/build_mlb_reconcile_rows.py --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --from-date "$(MLB_RECONCILE_FROM_DATE)" --to-date "$(MLB_RECONCILE_TO_DATE)" --bookmaker "$(MLB_RECONCILE_BOOKMAKER)" --slate-filename "$(MLB_RECONCILE_SLATE_FILENAME)" --slate-filename-mode "$(MLB_RECONCILE_SLATE_FILENAME_MODE)" --slate-filename-glob "$(MLB_RECONCILE_SLATE_FILENAME_GLOB)" --snapshot-policy "$(MLB_RECONCILE_SNAPSHOT_POLICY)" --snapshot-run-tag "$(MLB_RECONCILE_SNAPSHOT_RUN_TAG)" --odds-filename "$(MLB_RECONCILE_ODDS_FILENAME)" --odds-filename-mode "$(MLB_RECONCILE_ODDS_FILENAME_MODE)" --odds-filename-glob "$(MLB_RECONCILE_ODDS_FILENAME_GLOB)" --out-csv "$(MLB_RECONCILE_ROWS_OUT_CSV)" --out-summary-json "$(MLB_RECONCILE_SUMMARY_OUT_JSON)" $(if $(filter 1 true TRUE yes YES,$(MLB_RECONCILE_REQUIRE_TWO_SIDED)),--require-two-sided,) $(if $(filter 1,$(MLB_RECONCILE_REQUIRE_OUTCOMES)),--require-outcomes,) --require-outcome-rows-min "$(MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN)"
+	$(VENV_PY) backend/mlb/scripts/build_mlb_reconcile_rows.py --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --from-date "$(MLB_RECONCILE_FROM_DATE)" --to-date "$(MLB_RECONCILE_TO_DATE)" --bookmaker "$(MLB_RECONCILE_BOOKMAKER)" --slate-filename "$(MLB_RECONCILE_SLATE_FILENAME)" --slate-filename-mode "$(MLB_RECONCILE_SLATE_FILENAME_MODE)" --slate-filename-glob "$(MLB_RECONCILE_SLATE_FILENAME_GLOB)" --snapshot-policy "$(MLB_RECONCILE_SNAPSHOT_POLICY)" --snapshot-run-tag "$(MLB_RECONCILE_SNAPSHOT_RUN_TAG)" --odds-filename "$(MLB_RECONCILE_ODDS_FILENAME)" --odds-filename-mode "$(MLB_RECONCILE_ODDS_FILENAME_MODE)" --odds-filename-glob "$(MLB_RECONCILE_ODDS_FILENAME_GLOB)" --out-csv "$(MLB_RECONCILE_ROWS_OUT_CSV)" --out-summary-json "$(MLB_RECONCILE_SUMMARY_OUT_JSON)" $(if $(filter 1 true TRUE yes YES,$(MLB_RECONCILE_REQUIRE_TWO_SIDED)),--require-two-sided,) $(if $(filter 1 true TRUE yes YES,$(MLB_RECONCILE_INCLUDE_ONE_SIDED)),--include-one-sided,) $(if $(filter 1 true TRUE yes YES,$(MLB_RECONCILE_INCLUDE_SINGLE_BOOK)),--include-single-book,) $(if $(filter 1,$(MLB_RECONCILE_REQUIRE_OUTCOMES)),--require-outcomes,) --require-outcome-rows-min "$(MLB_RECONCILE_REQUIRE_OUTCOME_ROWS_MIN)"
 
 # Compare model-picked side performance vs opposite-side fade from reconcile rows.
 mlb-model-vs-fade:

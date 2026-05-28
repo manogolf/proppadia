@@ -11,6 +11,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from backend.mlb.scripts.tool_upload_8rain import TEAM_CODE_BY_ABBR
+
 
 MARKET_TO_PROP = {
     "batter_hits": "hits",
@@ -33,6 +35,8 @@ MARKET_TO_PROP = {
 TEAM_ALIASES = {
     "AZ": "ARI",
     "ARI": "ARI",
+    "ATH": "OAK",
+    "OAK": "OAK",
     "CHW": "CWS",
     "CWS": "CWS",
     "SF": "SF",
@@ -46,6 +50,7 @@ TEAM_ALIASES = {
     "WAS": "WSH",
     "WSH": "WSH",
 }
+TEAM_ALIASES.update({slug.upper(): TEAM_ALIASES.get(abbr.upper(), abbr.upper()) for abbr, slug in TEAM_CODE_BY_ABBR.items()})
 
 
 def _norm_text(value: Any) -> str:
@@ -318,8 +323,9 @@ def main() -> None:
         legacy_lane = Path(f"backend/mlb/exports/model_v2/lanes/today/hits_lane_selector_{date_value}.csv")
         lane_path = dated_lane if dated_lane.exists() else legacy_lane
     slate_path = Path(args.slate_csv or f"backend/mlb/exports/odds_history/{date_value}/mlb_slate_output.csv")
-    out_csv = Path(args.out_csv or f"backend/mlb/exports/model_v2/reconcile/upload_integrity_{date_value}.csv")
-    summary_json = Path(args.summary_json or f"backend/mlb/exports/model_v2/reconcile/upload_integrity_{date_value}_summary.json")
+    reconcile_date_root = Path("backend/mlb/exports/model_v2/reconcile") / date_value
+    out_csv = Path(args.out_csv or reconcile_date_root / f"upload_integrity_{date_value}.csv")
+    summary_json = Path(args.summary_json or reconcile_date_root / f"upload_integrity_{date_value}_summary.json")
 
     for path in [ranking_path, quick_path, lane_path, slate_path]:
         if not path.exists():

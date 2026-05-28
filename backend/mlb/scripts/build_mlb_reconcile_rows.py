@@ -110,6 +110,32 @@ def _profit_per_1u(*, outcome: Optional[str], price_american: Optional[float]) -
     return None
 
 
+def _valid_american_price_series(series: pd.Series) -> pd.Series:
+    prices = pd.to_numeric(series, errors="coerce")
+    return prices.notna() & prices.abs().ge(100)
+
+
+def _valid_american_price(value: Any) -> bool:
+    try:
+        price = float(value)
+    except Exception:
+        return False
+    return abs(price) >= 100
+
+
+def _book_coverage_counts(by_book: Dict[str, Dict[str, Any]]) -> Tuple[int, int]:
+    any_valid_side = 0
+    two_sided = 0
+    for row in by_book.values():
+        over_valid = _valid_american_price(row.get("over"))
+        under_valid = _valid_american_price(row.get("under"))
+        if over_valid or under_valid:
+            any_valid_side += 1
+        if over_valid and under_valid:
+            two_sided += 1
+    return any_valid_side, two_sided
+
+
 def _date_range(from_date: str, to_date: str) -> List[str]:
     start = date.fromisoformat(str(from_date))
     end = date.fromisoformat(str(to_date))
@@ -639,13 +665,35 @@ def main() -> int:
         "--require-two-sided",
         action="store_true",
         default=str(os.environ.get("MLB_RECONCILE_REQUIRE_TWO_SIDED", "1")).strip().lower() in {"1", "true", "yes", "on"},
-        help="Keep only rows where both over and under market prices are present.",
+        help="Keep only rows where both over and under market prices are present. Default is on.",
     )
+    ap.add_argument(
+        "--include-one-sided",
+        action="store_true",
+        help="Disable the default two-sided/valid-price reconcile analysis filter.",
+    )
+    ap.add_argument(
+        "--include-single-book",
+        action="store_true",
+        help="Keep valid two-sided rows where fewer than two books offered both sides.",
+    )
+    ap.add_argument("--one-sided-out-csv", default="", help="Optional audit CSV for one-sided/invalid-price rows.")
+    ap.add_argument("--single-book-out-csv", default="", help="Optional audit CSV for single-book two-sided rows.")
     args = ap.parse_args()
 
     odds_root = Path(str(args.odds_root)).expanduser()
     out_csv = Path(str(args.out_csv)).expanduser()
     out_summary_json = Path(str(args.out_summary_json)).expanduser()
+    one_sided_out_csv = (
+        Path(str(args.one_sided_out_csv)).expanduser()
+        if str(args.one_sided_out_csv or "").strip()
+        else out_csv.with_name(f"{out_csv.stem}_one_sided_rows.csv")
+    )
+    single_book_out_csv = (
+        Path(str(args.single_book_out_csv)).expanduser()
+        if str(args.single_book_out_csv or "").strip()
+        else out_csv.with_name(f"{out_csv.stem}_single_book_two_sided_rows.csv")
+    )
     bookmaker = str(args.bookmaker or "").strip() or None
 
     dates = _date_range(args.from_date, args.to_date)
@@ -677,6 +725,8 @@ def main() -> int:
         "market_player_name",
         "price_over_american",
         "price_under_american",
+        "book_count_any_valid_side",
+        "book_count_two_sided",
         "implied_over",
         "implied_under",
         "implied_over_novig",
@@ -841,6 +891,7 @@ def main() -> int:
                             break
 
                     used_book, over_price, under_price, market_player_name = _choose_book(by_book=by_book, bookmaker=bookmaker)
+                    book_count_any_valid_side, book_count_two_sided = _book_coverage_counts(by_book)
 
                     over_implied = _american_to_implied_probability(over_price)
                     under_implied = _american_to_implied_probability(under_price)
@@ -878,6 +929,8 @@ def main() -> int:
                         "market_player_name": market_player_name,
                         "price_over_american": over_price,
                         "price_under_american": under_price,
+                        "book_count_any_valid_side": book_count_any_valid_side,
+                        "book_count_two_sided": book_count_two_sided,
                         "implied_over": over_implied,
                         "implied_under": under_implied,
                         "implied_over_novig": over_implied_novig,
@@ -948,6 +1001,8 @@ def main() -> int:
                         "market_player_name": None,
                         "price_over_american": None,
                         "price_under_american": None,
+                        "book_count_any_valid_side": 0,
+                        "book_count_two_sided": 0,
                         "implied_over": None,
                         "implied_under": None,
                         "implied_over_novig": None,
@@ -982,14 +1037,41 @@ def main() -> int:
     # Keep a stable header even when no rows are produced, so downstream reads do
     # not fail with pandas EmptyDataError.
     out_df = pd.DataFrame(rows, columns=output_columns)
-    rows_filtered_non_two_sided = 0
-    if bool(args.require_two_sided) and not out_df.empty:
-        two_sided_mask = out_df[["price_over_american", "price_under_american"]].notna().all(axis=1)
-        rows_filtered_non_two_sided = int((~two_sided_mask).sum())
-        out_df = out_df.loc[two_sided_mask].copy()
+    rows_before_price_filter = int(len(out_df))
+    rows_removed_one_sided = 0
+    rows_removed_invalid_price = 0
+    rows_removed_single_book_two_sided = 0
+    rows_retained_two_sided = int(len(out_df))
+    one_sided_df = out_df.iloc[0:0].copy()
+    single_book_df = out_df.iloc[0:0].copy()
+    apply_two_sided_filter = bool(args.require_two_sided) and not bool(args.include_one_sided)
+    if apply_two_sided_filter and not out_df.empty:
+        over_valid = _valid_american_price_series(out_df["price_over_american"])
+        under_valid = _valid_american_price_series(out_df["price_under_american"])
+        over_present = pd.to_numeric(out_df["price_over_american"], errors="coerce").notna()
+        under_present = pd.to_numeric(out_df["price_under_american"], errors="coerce").notna()
+        two_sided_mask = over_present & under_present
+        valid_price_mask = over_valid & under_valid
+        rows_removed_one_sided = int((~two_sided_mask).sum())
+        rows_removed_invalid_price = int((two_sided_mask & ~valid_price_mask).sum())
+        one_sided_df = out_df.loc[~two_sided_mask | (two_sided_mask & ~valid_price_mask)].copy()
+        valid_two_sided_mask = two_sided_mask & valid_price_mask
+        book_count_two_sided = pd.to_numeric(out_df.get("book_count_two_sided"), errors="coerce").fillna(0)
+        single_book_mask = valid_two_sided_mask & book_count_two_sided.lt(2)
+        if not bool(args.include_single_book):
+            rows_removed_single_book_two_sided = int(single_book_mask.sum())
+            single_book_df = out_df.loc[single_book_mask].copy()
+            out_df = out_df.loc[valid_two_sided_mask & book_count_two_sided.ge(2)].copy()
+        else:
+            out_df = out_df.loc[valid_two_sided_mask].copy()
+        rows_retained_two_sided = int(len(out_df))
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     out_summary_json.parent.mkdir(parents=True, exist_ok=True)
+    one_sided_out_csv.parent.mkdir(parents=True, exist_ok=True)
+    single_book_out_csv.parent.mkdir(parents=True, exist_ok=True)
     out_df.to_csv(out_csv, index=False)
+    one_sided_df.to_csv(one_sided_out_csv, index=False)
+    single_book_df.to_csv(single_book_out_csv, index=False)
 
     summary = {
         "from_date": str(args.from_date),
@@ -997,6 +1079,7 @@ def main() -> int:
         "odds_root": str(odds_root),
         "bookmaker": bookmaker,
         "rows": int(len(out_df)),
+        "rows_before_price_filter": int(rows_before_price_filter),
         "processed_dates": int(processed_dates),
         "requested_dates": int(len(dates)),
         "skipped_missing_artifacts": int(skipped_missing_artifacts),
@@ -1015,7 +1098,16 @@ def main() -> int:
         "outcomes_loaded": bool(outcomes_loaded),
         "outcomes_error": outcomes_error,
         "require_two_sided": bool(args.require_two_sided),
-        "rows_filtered_non_two_sided": int(rows_filtered_non_two_sided),
+        "include_one_sided": bool(args.include_one_sided),
+        "include_single_book": bool(args.include_single_book),
+        "two_sided_price_filter_applied": bool(apply_two_sided_filter),
+        "rows_filtered_non_two_sided": int(rows_removed_one_sided),
+        "rows_removed_one_sided": int(rows_removed_one_sided),
+        "rows_removed_invalid_price": int(rows_removed_invalid_price),
+        "rows_removed_single_book_two_sided": int(rows_removed_single_book_two_sided),
+        "rows_retained_two_sided": int(rows_retained_two_sided),
+        "one_sided_out_csv": str(one_sided_out_csv),
+        "single_book_out_csv": str(single_book_out_csv),
         "generated_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
         "derived_rows_added": int(derived_rows_added),
         "derived_props_from_mtp": derive_props,

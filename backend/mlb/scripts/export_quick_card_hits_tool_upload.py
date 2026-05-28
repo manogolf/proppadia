@@ -9,7 +9,11 @@ MLB book-upload formatting helpers for market and team codes.
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +24,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
+from backend.mlb.scripts import tool_upload_8rain
 
 
 UPLOAD_COLUMNS = [
@@ -44,6 +49,18 @@ WIN_VALUE_COLUMNS = [
     "score",
     "rank_score",
 ]
+
+
+def _archive_versioned_csv(path: Path) -> Path:
+    tag = (
+        os.getenv("MLB_UPLOAD_RUN_TAG")
+        or os.getenv("MLB_RUN_TAG")
+        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    )
+    archived = path.with_name(f"{path.stem}__{tag}{path.suffix}")
+    if archived != path:
+        shutil.copy2(path, archived)
+    return archived
 
 
 def _clean(value: Any) -> str:
@@ -122,7 +139,13 @@ def _format_win_value(value: Any) -> Any:
     return round(val / 100.0, 6)
 
 
-def export_quick_card(input_csv: Path, out_csv: Path, date_value: str, diagnostics_csv: Path | None = None) -> dict[str, Any]:
+def export_quick_card(
+    input_csv: Path,
+    out_csv: Path,
+    date_value: str,
+    diagnostics_csv: Path | None = None,
+    known_unresolved_players_csv: Path | None = None,
+) -> dict[str, Any]:
     if not input_csv.exists():
         raise SystemExit(f"missing Quick Card hits input: {input_csv}")
     df = pd.read_csv(input_csv, low_memory=False)
@@ -142,6 +165,8 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str, diagnosti
 
     home_col = "home_upload" if "home_upload" in df.columns else "home_team_code"
     away_col = "away_upload" if "away_upload" in df.columns else "away_team_code"
+    home_source_col = "home_team_code" if "home_team_code" in df.columns else home_col
+    away_source_col = "away_team_code" if "away_team_code" in df.columns else away_col
     if home_col not in df.columns or away_col not in df.columns:
         raise SystemExit(
             f"{input_csv} missing HOME/AWAY source columns. Available columns: {list(df.columns)}"
@@ -160,23 +185,31 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str, diagnosti
     exported_decimal = df[win_col].map(_format_win_value)
     upload = pd.DataFrame(
         {
-            "LEAGUE": "MLB",
-            "DATE": date_series.map(_compact_date),
+            "LEAGUE": "mlb",
+            "DATE": date_series,
             "HOME": df[home_col].map(book_upload._normalize_upload_team_code),
             "AWAY": df[away_col].map(book_upload._normalize_upload_team_code),
-            "DOUBLEHEADER": "",
+            "DOUBLEHEADER": 0,
             "SECTION": "player_prop",
             "MARKET": df["prop_type"].map(_upload_market),
             "SELECTOR": pd.to_numeric(df["player_id"], errors="coerce").astype("Int64"),
             "POINT": df["line"].map(_format_point),
             "SIDE": df["side"].astype(str).str.strip().str.lower(),
             "WIN %": exported_decimal,
+            "HOME_SOURCE": df[home_source_col] if home_source_col in df.columns else "",
+            "AWAY_SOURCE": df[away_source_col] if away_source_col in df.columns else "",
         }
-    )[UPLOAD_COLUMNS]
+    )
+    catalog = tool_upload_8rain.load_catalog()
+    upload, validation_summary = tool_upload_8rain.prepare_player_prop_upload(
+        upload,
+        catalog=catalog,
+        source_rows_before=len(df),
+    )
     diagnostics = df.copy()
     diagnostics["win_pct_raw_source"] = pd.to_numeric(df[win_col], errors="coerce")
     diagnostics["win_pct_exported_decimal"] = pd.to_numeric(exported_decimal, errors="coerce")
-    diagnostics["exported_side"] = upload["SIDE"].values
+    diagnostics["exported_side"] = df["side"].astype(str).str.strip().str.lower()
     diagnostics["probability_semantics"] = "P(exported SIDE wins)"
 
     home_missing = upload["HOME"].isna() | upload["HOME"].astype(str).str.strip().eq("")
@@ -190,6 +223,7 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str, diagnosti
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     upload.to_csv(out_csv, index=False)
+    archived_upload_csv = _archive_versioned_csv(out_csv)
     if diagnostics_csv is not None:
         diag_cols = [
             "date",
@@ -207,12 +241,41 @@ def export_quick_card(input_csv: Path, out_csv: Path, date_value: str, diagnosti
         ]
         diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
         diagnostics[[c for c in diag_cols if c in diagnostics.columns]].to_csv(diagnostics_csv, index=False)
+        archived_diagnostics_csv = _archive_versioned_csv(diagnostics_csv)
+        summary_json = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_summary.json")
+        event_diag = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_event_diagnostics.csv")
+        pd.DataFrame(validation_summary.get("event_diagnostics_rows", [])).to_csv(event_diag, index=False)
+        unresolved_csv = out_csv.parent / f"unresolved_player_candidates_{date_value}.csv"
+        player_summary = tool_upload_8rain.write_unresolved_player_candidates(
+            source_rows=df,
+            source_name="quick_card_tool_upload",
+            out_csv=unresolved_csv,
+            player_map=tool_upload_8rain.build_player_map(catalog),
+        )
+        known_ids = tool_upload_8rain._known_unresolved_player_ids(known_unresolved_players_csv)
+        validation_summary.update(
+            {
+                "total_upload_rows": int(len(upload)),
+                "expected_paired_rows": int(len(df) * 2),
+                "players_using_mlbam_selector": int(player_summary["players_using_mlbam_selector"]),
+                "known_tool_unresolved_players": int(len(known_ids)),
+                "rows_likely_to_fail_selector_resolution": int(player_summary["rows_likely_to_fail_selector_resolution"]),
+                "unresolved_player_candidates_csv": str(unresolved_csv),
+            }
+        )
+        summary_json.write_text(json.dumps(validation_summary, indent=2) + "\n", encoding="utf-8")
+    else:
+        archived_diagnostics_csv = None
+        summary_json = None
     return {
         "rows": int(len(upload)),
         "win_column": win_col,
         "missing_home": int(home_missing.sum()),
         "missing_away": int(away_missing.sum()),
         "missing_win": int(win_missing.sum()),
+        "archived_upload_csv": str(archived_upload_csv),
+        "archived_diagnostics_csv": str(archived_diagnostics_csv) if archived_diagnostics_csv else "",
+        "validation_summary_json": str(summary_json) if summary_json else "",
         "skipped": False,
     }
 
@@ -223,6 +286,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--in-csv", type=Path, default=None)
     parser.add_argument("--out-csv", type=Path, default=None)
     parser.add_argument("--diagnostics-csv", type=Path, default=None)
+    parser.add_argument("--known-unresolved-players-csv", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -240,7 +304,7 @@ def main() -> None:
     upload_dir = Path(f"backend/mlb/exports/model_v2/upload/{date_value}")
     out_csv = args.out_csv or upload_dir / f"quick_card_tool_upload_{date_value}.csv"
     diagnostics_csv = args.diagnostics_csv or upload_dir / f"quick_card_tool_upload_diagnostics_{date_value}.csv"
-    summary = export_quick_card(in_csv, out_csv, date_value, diagnostics_csv)
+    summary = export_quick_card(in_csv, out_csv, date_value, diagnostics_csv, args.known_unresolved_players_csv)
     if summary.get("skipped"):
         return
     print(f"Wrote {out_csv}")

@@ -9,8 +9,12 @@ writes.
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import os
 import re
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -18,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
+from backend.mlb.scripts import tool_upload_8rain
 
 
 DEFAULT_HISTORY_ROOT = Path("artifacts/analysis/mlb/execution_vs_model")
@@ -36,6 +41,18 @@ UPLOAD_COLUMNS = [
     "SIDE",
     "WIN %",
 ]
+
+
+def _archive_versioned_csv(path: Path) -> Path:
+    tag = (
+        os.getenv("MLB_UPLOAD_RUN_TAG")
+        or os.getenv("MLB_RUN_TAG")
+        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    )
+    archived = path.with_name(f"{path.stem}__{tag}{path.suffix}")
+    if archived != path:
+        shutil.copy2(path, archived)
+    return archived
 
 
 def _clean(value: Any) -> str:
@@ -280,7 +297,8 @@ def _write_outputs(
     diagnostics_csv: Path,
     win_format: str,
     allow_low_sample: bool,
-) -> None:
+    known_unresolved_players_csv: Path | None = None,
+) -> dict[str, Any]:
     work = rows.copy()
     work["uploaded_win_value"] = work["empirical_win_pct"].map(lambda p: _format_win_value(p, win_format))
     work["win_format"] = win_format
@@ -322,14 +340,16 @@ def _write_outputs(
         upload_work = upload_work[pd.to_numeric(upload_work["sample_size"], errors="coerce").ge(50)].copy()
     home_col = "home_upload" if "home_upload" in upload_work.columns else "home_team_code"
     away_col = "away_upload" if "away_upload" in upload_work.columns else "away_team_code"
+    home_source_col = "home_team_code" if "home_team_code" in upload_work.columns else home_col
+    away_source_col = "away_team_code" if "away_team_code" in upload_work.columns else away_col
 
     upload = pd.DataFrame(
         {
-            "LEAGUE": "MLB",
-            "DATE": _compact_date(date_value),
+            "LEAGUE": "mlb",
+            "DATE": _date_key(date_value),
             "HOME": upload_work[home_col].map(book_upload._normalize_upload_team_code) if home_col in upload_work.columns else "",
             "AWAY": upload_work[away_col].map(book_upload._normalize_upload_team_code) if away_col in upload_work.columns else "",
-            "DOUBLEHEADER": "",
+            "DOUBLEHEADER": 0,
             "SECTION": "player_prop",
             "MARKET": upload_work["prop_type"].map(_upload_market),
             "SELECTOR": (
@@ -340,11 +360,43 @@ def _write_outputs(
             "POINT": upload_work["line"].map(_format_point),
             "SIDE": upload_work["side"].str.lower(),
             "WIN %": upload_work["uploaded_win_value"],
+            "HOME_SOURCE": upload_work[home_source_col] if home_source_col in upload_work.columns else "",
+            "AWAY_SOURCE": upload_work[away_source_col] if away_source_col in upload_work.columns else "",
         }
     )
-    upload = upload[UPLOAD_COLUMNS]
+    catalog = tool_upload_8rain.load_catalog()
+    upload, validation_summary = tool_upload_8rain.prepare_player_prop_upload(
+        upload[UPLOAD_COLUMNS],
+        catalog=catalog,
+        source_rows_before=len(upload_work),
+    )
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     upload.to_csv(out_csv, index=False)
+    _archive_versioned_csv(out_csv)
+    summary_json = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_summary.json")
+    summary_json.write_text(json.dumps(validation_summary, indent=2) + "\n", encoding="utf-8")
+    event_diag = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_event_diagnostics.csv")
+    pd.DataFrame(validation_summary.get("event_diagnostics_rows", [])).to_csv(event_diag, index=False)
+    unresolved_csv = out_csv.parent / f"unresolved_player_candidates_{date_value}.csv"
+    player_summary = tool_upload_8rain.write_unresolved_player_candidates(
+        source_rows=upload_work,
+        source_name="ranking_tool_upload",
+        out_csv=unresolved_csv,
+        player_map=tool_upload_8rain.build_player_map(catalog),
+    )
+    known_ids = tool_upload_8rain._known_unresolved_player_ids(known_unresolved_players_csv)
+    validation_summary.update(
+        {
+            "total_upload_rows": int(len(upload)),
+            "expected_paired_rows": int(len(upload_work) * 2),
+            "players_using_mlbam_selector": int(player_summary["players_using_mlbam_selector"]),
+            "known_tool_unresolved_players": int(len(known_ids)),
+            "rows_likely_to_fail_selector_resolution": int(player_summary["rows_likely_to_fail_selector_resolution"]),
+            "unresolved_player_candidates_csv": str(unresolved_csv),
+        }
+    )
+    summary_json.write_text(json.dumps(validation_summary, indent=2) + "\n", encoding="utf-8")
+    return validation_summary
 
 
 def main() -> int:
@@ -359,6 +411,7 @@ def main() -> int:
     parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="decimal")
     parser.add_argument("--allow-low-sample", action="store_true")
     parser.add_argument("--rank-bucket-size", type=float, default=0.10)
+    parser.add_argument("--known-unresolved-players-csv", type=Path, default=None)
     args = parser.parse_args()
 
     current, date_value = _load_rank_csv(args.rank_csv, args.date or None)
@@ -380,13 +433,14 @@ def main() -> int:
     default_diag = default_out_root / f"ranking_tool_upload_diagnostics_{date_value}.csv"
     out_csv = args.out_csv or default_out
     diagnostics_csv = args.diagnostics_csv or default_diag
-    _write_outputs(
+    validation_summary = _write_outputs(
         merged,
         date_value=date_value,
         out_csv=out_csv,
         diagnostics_csv=diagnostics_csv,
         win_format=args.win_format,
         allow_low_sample=bool(args.allow_low_sample),
+        known_unresolved_players_csv=args.known_unresolved_players_csv,
     )
 
     kept = merged if args.allow_low_sample else merged[pd.to_numeric(merged["sample_size"], errors="coerce").ge(50)]
@@ -395,7 +449,8 @@ def main() -> int:
     print(
         "summary "
         f"input_rows={len(current)} matched_buckets={int(merged['empirical_win_pct'].notna().sum())} "
-        f"uploaded_rows={len(kept)} win_format={args.win_format}"
+        f"selected_rows={len(kept)} uploaded_rows={validation_summary['rows_after_pairing']} "
+        f"win_format={args.win_format}"
     )
     return 0
 

@@ -147,7 +147,11 @@ def _extract_model_vs_fade(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         return {}
     overall = js.get("overall") or {}
     counts = js.get("counts") or {}
+    window = js.get("window") or {}
     return {
+        "rows_csv": js.get("rows_csv"),
+        "window_game_date_min": window.get("game_date_min"),
+        "window_game_date_max": window.get("game_date_max"),
         "paired_bets": _as_int(overall.get("paired_bets")),
         "model_roi_1u": _as_float(overall.get("model_roi_1u")),
         "fade_roi_1u": _as_float(overall.get("fade_roi_1u")),
@@ -612,7 +616,8 @@ def build_markdown(
         f"Postgrade alerts: `{postgrade.get('critical_count',0)} critical / {postgrade.get('warning_count',0)} warning`"
     )
     lines.append(
-        f"- Model vs Fade (paired={model_vs_fade.get('paired_bets','n/a')}): "
+        f"- Model vs Fade ({model_vs_fade.get('window_game_date_min') or 'n/a'} to "
+        f"{model_vs_fade.get('window_game_date_max') or 'n/a'}, paired={model_vs_fade.get('paired_bets','n/a')}): "
         f"model ROI `{_pct(model_vs_fade.get('model_roi_1u'))}` vs fade ROI `{_pct(model_vs_fade.get('fade_roi_1u'))}`"
     )
     lines.append(
@@ -669,6 +674,11 @@ def build_markdown(
     lines.append("")
 
     lines.append("## Model vs Fade")
+    lines.append(
+        f"- Source window: `{model_vs_fade.get('window_game_date_min') or 'n/a'}` to "
+        f"`{model_vs_fade.get('window_game_date_max') or 'n/a'}`"
+    )
+    lines.append(f"- Rows CSV: `{model_vs_fade.get('rows_csv') or 'n/a'}`")
     lines.append(f"- Paired bets: `{model_vs_fade.get('paired_bets','n/a')}`")
     lines.append(
         f"- Model: win rate `{_pct(model_vs_fade.get('model_win_rate'))}`, ROI `{_pct(model_vs_fade.get('model_roi_1u'))}`"
