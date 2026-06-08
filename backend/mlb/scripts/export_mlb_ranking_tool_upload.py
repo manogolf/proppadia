@@ -43,12 +43,8 @@ UPLOAD_COLUMNS = [
 ]
 
 
-def _archive_versioned_csv(path: Path) -> Path:
-    tag = (
-        os.getenv("MLB_UPLOAD_RUN_TAG")
-        or os.getenv("MLB_RUN_TAG")
-        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    )
+def _archive_versioned_csv(path: Path, run_tag: str | None = None) -> Path:
+    tag = run_tag or tool_upload_8rain.upload_run_tag()
     archived = path.with_name(f"{path.stem}__{tag}{path.suffix}")
     if archived != path:
         shutil.copy2(path, archived)
@@ -298,6 +294,7 @@ def _write_outputs(
     win_format: str,
     allow_low_sample: bool,
     known_unresolved_players_csv: Path | None = None,
+    allow_8rain_public_catalog_fetch: bool = False,
 ) -> dict[str, Any]:
     work = rows.copy()
     work["uploaded_win_value"] = work["empirical_win_pct"].map(lambda p: _format_win_value(p, win_format))
@@ -365,14 +362,28 @@ def _write_outputs(
         }
     )
     catalog = tool_upload_8rain.load_catalog()
-    upload, validation_summary = tool_upload_8rain.prepare_player_prop_upload(
-        upload[UPLOAD_COLUMNS],
-        catalog=catalog,
-        source_rows_before=len(upload_work),
+    run_tag = tool_upload_8rain.upload_run_tag()
+    generated_at = tool_upload_8rain.generated_at_utc()
+    try:
+        upload, validation_summary = tool_upload_8rain.prepare_player_prop_upload(
+            upload,
+            catalog=catalog,
+            source_rows_before=len(upload_work),
+            allow_public_catalog_fetch=allow_8rain_public_catalog_fetch,
+        )
+    except ValueError as exc:
+        tool_upload_8rain.write_prepare_failure_diagnostics(exc, diagnostics_csv)
+        raise
+    tool_upload_8rain.write_unknown_event_exclusions(validation_summary, diagnostics_csv)
+    validation_summary = tool_upload_8rain.with_artifact_status(
+        validation_summary,
+        status=str(validation_summary.get("upload_status") or "success"),
+        run_tag=run_tag,
+        generated_at=generated_at,
     )
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     upload.to_csv(out_csv, index=False)
-    _archive_versioned_csv(out_csv)
+    _archive_versioned_csv(out_csv, run_tag=run_tag)
     summary_json = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_summary.json")
     summary_json.write_text(json.dumps(validation_summary, indent=2) + "\n", encoding="utf-8")
     event_diag = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_event_diagnostics.csv")
@@ -410,6 +421,12 @@ def main() -> int:
     parser.add_argument("--diagnostics-csv", type=Path, default=None)
     parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="decimal")
     parser.add_argument("--allow-low-sample", action="store_true")
+    parser.add_argument(
+        "--allow-8rain-public-catalog-fetch",
+        action="store_true",
+        default=tool_upload_8rain.public_catalog_fetch_allowed(),
+        help="Opt in to documented public 8rain catalog GET requests. Default is cache-only.",
+    )
     parser.add_argument("--rank-bucket-size", type=float, default=0.10)
     parser.add_argument("--known-unresolved-players-csv", type=Path, default=None)
     args = parser.parse_args()
@@ -441,6 +458,7 @@ def main() -> int:
         win_format=args.win_format,
         allow_low_sample=bool(args.allow_low_sample),
         known_unresolved_players_csv=args.known_unresolved_players_csv,
+        allow_8rain_public_catalog_fetch=bool(args.allow_8rain_public_catalog_fetch),
     )
 
     kept = merged if args.allow_low_sample else merged[pd.to_numeric(merged["sample_size"], errors="coerce").ge(50)]
@@ -450,7 +468,11 @@ def main() -> int:
         "summary "
         f"input_rows={len(current)} matched_buckets={int(merged['empirical_win_pct'].notna().sum())} "
         f"selected_rows={len(kept)} uploaded_rows={validation_summary['rows_after_pairing']} "
-        f"win_format={args.win_format}"
+        f"win_format={args.win_format} "
+        f"public_catalog_fetch_allowed={str(bool(validation_summary.get('public_catalog_fetch_allowed'))).lower()} "
+        f"public_catalog_fetch_attempted={str(bool(validation_summary.get('public_catalog_fetch_attempted'))).lower()} "
+        f"public_catalog_fetch_succeeded={str(bool(validation_summary.get('public_catalog_fetch_succeeded'))).lower()} "
+        f"cache_only_mode={str(bool(validation_summary.get('cache_only_mode'))).lower()}"
     )
     return 0
 

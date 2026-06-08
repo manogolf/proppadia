@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
+import unicodedata
 from datetime import date, datetime, timedelta
 from math import sqrt
 from pathlib import Path
@@ -16,6 +18,8 @@ from backend.shared.db.pg import pg_fetchall
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     normalizeTeamAbbreviation,
+    teamIdMap,
+    teamNameMap,
 )
 
 
@@ -60,6 +64,34 @@ def _canonical_team_code(value: Any) -> str:
         abbr = getFullTeamAbbreviationFromID(int(text))
         return str(normalizeTeamAbbreviation(abbr) or "").strip()
     return str(normalizeTeamAbbreviation(text) or "").strip()
+
+
+def _norm_player_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^a-z0-9 ]+", "", text)
+    return " ".join(text.split())
+
+
+def _team_name_reverse() -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for abbr, full_name in teamNameMap.items():
+        norm_abbr = _canonical_team_code(abbr)
+        if norm_abbr:
+            out[str(abbr).strip().lower()] = norm_abbr
+            out[str(norm_abbr).strip().lower()] = norm_abbr
+        if full_name:
+            out[str(full_name).strip().lower()] = norm_abbr
+    for info in teamIdMap.values():
+        abbr = _canonical_team_code(info.get("abbr"))
+        full_name = str(info.get("fullName") or "").strip()
+        if abbr:
+            out[str(abbr).strip().lower()] = abbr
+        if full_name:
+            out[full_name.lower()] = abbr
+    out["athletics"] = "OAK"
+    return out
 
 
 def _blend_weighted(
@@ -890,14 +922,256 @@ def _load_wide_pitcher_context(path: Path, slate_date: str) -> Dict[Tuple[int, i
     return out
 
 
+def _load_odds_pitcher_hits_allowed_rows(path: Path, slate_date: str) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    events = raw.get("events") if isinstance(raw, dict) else raw
+    if not isinstance(events, list):
+        return []
+    team_rev = _team_name_reverse()
+    out: Dict[Tuple[str, str, str, str], Dict[str, Any]] = {}
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        commence = str(ev.get("commence_time") or "")
+        if slate_date and commence[:10] and commence[:10] not in {slate_date, str(_parse_date(slate_date) + timedelta(days=1))}:
+            # Keep this broad enough for UTC late games, but avoid unrelated archive data.
+            continue
+        home = team_rev.get(str(ev.get("home_team") or "").strip().lower()) or _canonical_team_code(ev.get("home_team"))
+        away = team_rev.get(str(ev.get("away_team") or "").strip().lower()) or _canonical_team_code(ev.get("away_team"))
+        if not home or not away:
+            continue
+        for bm in ev.get("bookmakers") or []:
+            for market in bm.get("markets") or []:
+                if str(market.get("key") or "").strip() != "pitcher_hits_allowed":
+                    continue
+                for outcome in market.get("outcomes") or []:
+                    name = str(outcome.get("description") or "").strip()
+                    if not name:
+                        continue
+                    line = _as_float(outcome.get("point"))
+                    key = (_norm_player_name(name), home, away)
+                    cur = out.setdefault(
+                        key,
+                        {
+                            "player_name": name,
+                            "home_team_code": home,
+                            "away_team_code": away,
+                            "odds_lines": set(),
+                            "odds_books_seen": set(),
+                        },
+                    )
+                    if line is not None:
+                        cur["odds_lines"].add(line)
+                    book = str(bm.get("key") or "").strip()
+                    if book:
+                        cur["odds_books_seen"].add(book)
+    rows: List[Dict[str, Any]] = []
+    for row in out.values():
+        books = row.get("odds_books_seen")
+        lines = row.get("odds_lines")
+        row["odds_books_seen"] = len(books) if isinstance(books, set) else 0
+        if isinstance(lines, set):
+            row["line"] = ",".join(str(x).rstrip("0").rstrip(".") if isinstance(x, float) else str(x) for x in sorted(lines))
+        else:
+            row["line"] = ""
+        row.pop("odds_lines", None)
+        rows.append(row)
+    return rows
+
+
+def _resolve_odds_pitcher_rows(rows: Sequence[Dict[str, Any]], slate_date: str) -> List[Dict[str, Any]]:
+    if not rows:
+        return []
+    player_rows = pg_fetchall(
+        """
+        SELECT player_id, player_name, team, team_id
+        FROM mlb.player_ids
+        WHERE player_name IS NOT NULL
+        """
+    )
+    by_name: Dict[str, List[Dict[str, Any]]] = {}
+    for raw in player_rows or []:
+        row = dict(raw)
+        key = _norm_player_name(row.get("player_name"))
+        if not key:
+            continue
+        by_name.setdefault(key, []).append(row)
+
+    resolved_player_ids: List[int] = []
+    resolved: List[Dict[str, Any]] = []
+    for row in rows:
+        key = _norm_player_name(row.get("player_name"))
+        candidates = by_name.get(key, [])
+        if not candidates:
+            item = dict(row)
+            item.update({"player_id": None, "pitcher_team": "", "offense_team": "", "resolve_status": "unresolved_player_name"})
+            resolved.append(item)
+            continue
+        if len(candidates) > 1:
+            home = _canonical_team_code(row.get("home_team_code"))
+            away = _canonical_team_code(row.get("away_team_code"))
+            filtered = []
+            for cand in candidates:
+                cand_team = _canonical_team_code(cand.get("team_id") or cand.get("team"))
+                if cand_team in {home, away}:
+                    filtered.append(cand)
+            candidates = filtered or candidates
+        if len(candidates) > 1:
+            item = dict(row)
+            item.update({"player_id": None, "pitcher_team": "", "offense_team": "", "resolve_status": "ambiguous_player_name"})
+            resolved.append(item)
+            continue
+        cand = candidates[0]
+        player_id = _as_int(cand.get("player_id"))
+        pitcher_team = _canonical_team_code(cand.get("team_id") or cand.get("team"))
+        home = _canonical_team_code(row.get("home_team_code"))
+        away = _canonical_team_code(row.get("away_team_code"))
+        offense_team = away if pitcher_team == home else home if pitcher_team == away else ""
+        item = dict(row)
+        item.update(
+            {
+                "player_id": player_id,
+                "pitcher_team": pitcher_team,
+                "offense_team": offense_team,
+                "resolve_status": "resolved",
+            }
+        )
+        if player_id is not None:
+            resolved_player_ids.append(int(player_id))
+        resolved.append(item)
+
+    if resolved_player_ids:
+        starter_rows = pg_fetchall(
+            """
+            SELECT player_id,
+                   COUNT(DISTINCT game_id)::int AS starter_games
+            FROM mlb.player_stats
+            WHERE player_id = ANY(%s::bigint[])
+              AND game_date < %s::date
+              AND COALESCE(is_starter, 0) = 1
+              AND COALESCE(outs_recorded, 0) >= 1
+            GROUP BY player_id
+            """,
+            (sorted(set(resolved_player_ids)), slate_date),
+        )
+        starts = {int(r.get("player_id")): int(r.get("starter_games") or 0) for r in starter_rows or []}
+    else:
+        starts = {}
+    for row in resolved:
+        player_id = _as_int(row.get("player_id"))
+        row["prior_starter_games"] = starts.get(int(player_id), 0) if player_id is not None else None
+    return resolved
+
+
+def _append_odds_pitcher_coverage_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    odds_snapshot: Path,
+    slate_date: str,
+    starter_baseline_min_starts: int,
+    team_form: Dict[str, Dict[str, Any]],
+    bullpen_form: Dict[str, Dict[str, Any]],
+) -> None:
+    odds_rows = _resolve_odds_pitcher_rows(
+        _load_odds_pitcher_hits_allowed_rows(odds_snapshot, slate_date),
+        slate_date,
+    )
+    if not odds_rows:
+        return
+    existing_player_ids = {
+        int(r.get("player_id"))
+        for r in rows
+        if _as_int(r.get("player_id")) is not None
+    }
+    existing_names = {
+        (_norm_player_name(r.get("player_name")), _canonical_team_code(r.get("pitcher_team")))
+        for r in rows
+    }
+    for odds in odds_rows:
+        player_id = _as_int(odds.get("player_id"))
+        pitcher_team = _canonical_team_code(odds.get("pitcher_team"))
+        player_key = (_norm_player_name(odds.get("player_name")), pitcher_team)
+        if (player_id is not None and int(player_id) in existing_player_ids) or player_key in existing_names:
+            continue
+        resolve_status = str(odds.get("resolve_status") or "")
+        prior_starts = _as_int(odds.get("prior_starter_games"))
+        if resolve_status != "resolved":
+            forecast_note = resolve_status
+        elif prior_starts is not None and prior_starts < int(starter_baseline_min_starts):
+            forecast_note = "insufficient_pitcher_history"
+        else:
+            forecast_note = "present_in_odds_but_missing_from_slate_output"
+        offense_team = _canonical_team_code(odds.get("offense_team"))
+        form = team_form.get(offense_team, {})
+        bullpen = bullpen_form.get(pitcher_team, {})
+        rows.append(
+            {
+                "slate_date": slate_date,
+                "game_date": slate_date,
+                "game_id": None,
+                "player_id": player_id,
+                "player_name": str(odds.get("player_name") or "").strip(),
+                "prop_type": "hits_allowed",
+                "line": str(odds.get("line") or "").strip(),
+                "model_pick_side": "",
+                "model_pick_prob": None,
+                "pitcher_team": pitcher_team,
+                "offense_team": offense_team,
+                "offense_hits_pg_last7": form.get("hits_pg_last7"),
+                "offense_hits_pg_last15": form.get("hits_pg_last15"),
+                "offense_hits_pg_last30": form.get("hits_pg_last30"),
+                "offense_hits_samples_last7": form.get("n7"),
+                "offense_hits_samples_last15": form.get("n15"),
+                "offense_hits_samples_last30": form.get("n30"),
+                "offense_hits_form_blended": None,
+                "league_offense_hits_pg_last7": None,
+                "league_offense_hits_pg_last15": None,
+                "league_offense_hits_pg_last30": None,
+                "league_offense_hits_form_blended": None,
+                "bullpen_hits_allowed_pg_last7": bullpen.get("bullpen_hits_allowed_pg_last7"),
+                "bullpen_hits_allowed_pg_last15": bullpen.get("bullpen_hits_allowed_pg_last15"),
+                "bullpen_hits_allowed_pg_last30": bullpen.get("bullpen_hits_allowed_pg_last30"),
+                "bullpen_hits_allowed_samples_last7": bullpen.get("n7"),
+                "bullpen_hits_allowed_samples_last15": bullpen.get("n15"),
+                "bullpen_hits_allowed_samples_last30": bullpen.get("n30"),
+                "bullpen_hits_allowed_form_blended": None,
+                "league_bullpen_hits_allowed_pg_last7": None,
+                "league_bullpen_hits_allowed_pg_last15": None,
+                "league_bullpen_hits_allowed_pg_last30": None,
+                "league_bullpen_hits_allowed_form_blended": None,
+                "offense_factor_vs_league": None,
+                "offense_factor_vs_league_clamped": None,
+                "pitcher_baseline_total_starts": prior_starts,
+                "pitcher_baseline_seasons_used": None,
+                "pitcher_expected_hits_allowed_weighted": None,
+                "expected_hits_allowed_matchup": None,
+                "expected_team_hits_allowed_matchup": None,
+                "expected_hits_allowed_delta_vs_pitcher_baseline": None,
+                "line_minus_expected_hits_allowed_matchup": None,
+                "forecast_status": "unavailable",
+                "forecast_note": forecast_note,
+                "odds_market_present": True,
+                "prior_starter_games": prior_starts,
+                "odds_books_seen": _as_int(odds.get("odds_books_seen")),
+            }
+        )
+
+
 def _build_slate_hits_allowed_rows(
     *,
     slate_csv: Path,
     wide_csv: Path,
+    odds_snapshot: Path,
     slate_date: str,
     team_form: Dict[str, Dict[str, Any]],
     bullpen_form: Dict[str, Dict[str, Any]],
     starter_baseline_by_player: Dict[int, Dict[str, Any]],
+    starter_baseline_min_starts: int,
     offense_weight_last7: float,
     offense_weight_last15: float,
     offense_weight_last30: float,
@@ -1089,9 +1363,22 @@ def _build_slate_hits_allowed_rows(
                     "expected_team_hits_allowed_matchup": expected_team_hits_allowed_matchup,
                     "expected_hits_allowed_delta_vs_pitcher_baseline": expected_hits_allowed_delta_vs_pitcher_baseline,
                     "line_minus_expected_hits_allowed_matchup": line_minus_expected_hits_allowed_matchup,
+                    "forecast_status": "available",
+                    "forecast_note": "",
+                    "odds_market_present": "",
+                    "prior_starter_games": starter_baseline.get("total_starts"),
+                    "odds_books_seen": "",
                 }
             )
     if out:
+        _append_odds_pitcher_coverage_rows(
+            out,
+            odds_snapshot=odds_snapshot,
+            slate_date=slate_date,
+            starter_baseline_min_starts=starter_baseline_min_starts,
+            team_form=team_form,
+            bullpen_form=bullpen_form,
+        )
         return out
 
     # Fallback: if slate has no hits_allowed rows, synthesize matchup context
@@ -1205,8 +1492,21 @@ def _build_slate_hits_allowed_rows(
                 "expected_team_hits_allowed_matchup": expected_team_hits_allowed_matchup,
                 "expected_hits_allowed_delta_vs_pitcher_baseline": expected_hits_allowed_delta_vs_pitcher_baseline,
                 "line_minus_expected_hits_allowed_matchup": None,
+                "forecast_status": "available",
+                "forecast_note": "fallback_from_wide_pitcher_prop",
+                "odds_market_present": "",
+                "prior_starter_games": starter_baseline.get("total_starts"),
+                "odds_books_seen": "",
             }
         )
+    _append_odds_pitcher_coverage_rows(
+        out,
+        odds_snapshot=odds_snapshot,
+        slate_date=slate_date,
+        starter_baseline_min_starts=starter_baseline_min_starts,
+        team_form=team_form,
+        bullpen_form=bullpen_form,
+    )
     return out
 
 
@@ -1246,6 +1546,24 @@ def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, A
         float(r.get("expected_team_hits_allowed_matchup"))
         for r in rows
         if r.get("expected_team_hits_allowed_matchup") is not None
+    ]
+    forecast_unavailable_rows = [r for r in rows if str(r.get("forecast_status") or "") == "unavailable"]
+    unavailable_by_reason = {}
+    for r in forecast_unavailable_rows:
+        reason = str(r.get("forecast_note") or "unknown")
+        unavailable_by_reason[reason] = int(unavailable_by_reason.get(reason, 0)) + 1
+    unavailable_pitchers = [
+        {
+            "player_id": r.get("player_id"),
+            "player_name": r.get("player_name"),
+            "pitcher_team": r.get("pitcher_team"),
+            "offense_team": r.get("offense_team"),
+            "line": r.get("line"),
+            "prior_starter_games": r.get("prior_starter_games"),
+            "forecast_note": r.get("forecast_note"),
+            "odds_books_seen": r.get("odds_books_seen"),
+        }
+        for r in forecast_unavailable_rows
     ]
 
     unique_matchup_rows: Dict[Tuple[Any, Any], Dict[str, Any]] = {}
@@ -1329,6 +1647,10 @@ def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, A
         "lowest_expected_hits_allowed_matchups": lowest_expected_rows,
         "top_expected_team_hits_allowed_matchups": highest_team_expected_rows,
         "lowest_expected_team_hits_allowed_matchups": lowest_team_expected_rows,
+        "forecast_available_rows": len([r for r in rows if str(r.get("forecast_status") or "available") == "available"]),
+        "forecast_unavailable_rows": len(forecast_unavailable_rows),
+        "forecast_unavailable_by_reason": unavailable_by_reason,
+        "forecast_unavailable_pitchers": unavailable_pitchers,
     }
 
 
@@ -1376,6 +1698,11 @@ def _write_rows_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
         "expected_team_hits_allowed_matchup",
         "expected_hits_allowed_delta_vs_pitcher_baseline",
         "line_minus_expected_hits_allowed_matchup",
+        "forecast_status",
+        "forecast_note",
+        "odds_market_present",
+        "prior_starter_games",
+        "odds_books_seen",
     ]
     _ensure_parent(path)
     with path.open("w", encoding="utf-8", newline="") as fh:
@@ -1543,6 +1870,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--slate-date", default="", help="Slate date for hits_allowed context (defaults to as-of-date).")
     ap.add_argument("--slate-csv", default="backend/mlb/data/processed/mlb_slate_output.csv")
     ap.add_argument("--wide-csv", default="backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv")
+    ap.add_argument(
+        "--odds-snapshot",
+        default="",
+        help="Local odds snapshot used only to surface pitcher coverage gaps; no network fetch is performed.",
+    )
     ap.add_argument("--out-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
     ap.add_argument("--out-csv", default="tmp/analysis/mlb_hits_environment_hits_allowed_rows.csv")
     ap.add_argument("--history-jsonl", default="artifacts/analysis/mlb/mlb_hits_environment_history.jsonl")
@@ -1677,13 +2009,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         warnings.append(str(exc))
         bullpen_form = {}
     slate_date = str(args.slate_date or "").strip() or _to_iso(as_of)
+    odds_snapshot = Path(str(args.odds_snapshot or "").strip()) if str(args.odds_snapshot or "").strip() else (
+        Path("backend/mlb/exports/odds_history") / slate_date / "odds_latest_compatible.json"
+    )
     slate_rows = _build_slate_hits_allowed_rows(
         slate_csv=Path(args.slate_csv),
         wide_csv=Path(args.wide_csv),
+        odds_snapshot=odds_snapshot,
         slate_date=slate_date,
         team_form=team_form,
         bullpen_form=bullpen_form,
         starter_baseline_by_player=starter_baseline_by_player,
+        starter_baseline_min_starts=starter_baseline_min_starts,
         offense_weight_last7=slate_offense_weight_last7,
         offense_weight_last15=slate_offense_weight_last15,
         offense_weight_last30=slate_offense_weight_last30,
@@ -1719,10 +2056,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         eval_rows = _build_slate_hits_allowed_rows(
             slate_csv=eval_slate_csv,
             wide_csv=eval_wide_csv,
+            odds_snapshot=eval_snapshot_root / "odds_latest_compatible.json",
             slate_date=eval_date,
             team_form=eval_team_form,
             bullpen_form=eval_bullpen_form,
             starter_baseline_by_player=starter_baseline_by_player,
+            starter_baseline_min_starts=starter_baseline_min_starts,
             offense_weight_last7=slate_offense_weight_last7,
             offense_weight_last15=slate_offense_weight_last15,
             offense_weight_last30=slate_offense_weight_last30,
@@ -1791,6 +2130,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "out_csv": str(Path(args.out_csv)),
             "history_jsonl": str(Path(args.history_jsonl)),
             "eval_tracker_csv": str(Path(args.eval_tracker_csv)),
+            "odds_snapshot": str(odds_snapshot),
         },
         "ok": ok,
         "status": "pass" if ok else "fail",

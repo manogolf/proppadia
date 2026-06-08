@@ -51,12 +51,8 @@ WIN_VALUE_COLUMNS = [
 ]
 
 
-def _archive_versioned_csv(path: Path) -> Path:
-    tag = (
-        os.getenv("MLB_UPLOAD_RUN_TAG")
-        or os.getenv("MLB_RUN_TAG")
-        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    )
+def _archive_versioned_csv(path: Path, run_tag: str | None = None) -> Path:
+    tag = run_tag or tool_upload_8rain.upload_run_tag()
     archived = path.with_name(f"{path.stem}__{tag}{path.suffix}")
     if archived != path:
         shutil.copy2(path, archived)
@@ -145,6 +141,7 @@ def export_quick_card(
     date_value: str,
     diagnostics_csv: Path | None = None,
     known_unresolved_players_csv: Path | None = None,
+    allow_8rain_public_catalog_fetch: bool = False,
 ) -> dict[str, Any]:
     if not input_csv.exists():
         raise SystemExit(f"missing Quick Card hits input: {input_csv}")
@@ -201,10 +198,27 @@ def export_quick_card(
         }
     )
     catalog = tool_upload_8rain.load_catalog()
-    upload, validation_summary = tool_upload_8rain.prepare_player_prop_upload(
-        upload,
-        catalog=catalog,
-        source_rows_before=len(df),
+    run_tag = tool_upload_8rain.upload_run_tag()
+    generated_at = tool_upload_8rain.generated_at_utc()
+    try:
+        upload, validation_summary = tool_upload_8rain.prepare_player_prop_upload(
+            upload,
+            catalog=catalog,
+            source_rows_before=len(df),
+            allow_public_catalog_fetch=allow_8rain_public_catalog_fetch,
+        )
+    except ValueError as exc:
+        tool_upload_8rain.write_prepare_failure_diagnostics(exc, diagnostics_csv or out_csv.with_name(f"{out_csv.stem}_diagnostics.csv"))
+        raise
+    if diagnostics_csv is not None:
+        tool_upload_8rain.write_unknown_event_exclusions(validation_summary, diagnostics_csv)
+    else:
+        validation_summary["unknown_event_exclusions_csv"] = ""
+    validation_summary = tool_upload_8rain.with_artifact_status(
+        validation_summary,
+        status=str(validation_summary.get("upload_status") or "success"),
+        run_tag=run_tag,
+        generated_at=generated_at,
     )
     diagnostics = df.copy()
     diagnostics["win_pct_raw_source"] = pd.to_numeric(df[win_col], errors="coerce")
@@ -223,7 +237,7 @@ def export_quick_card(
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     upload.to_csv(out_csv, index=False)
-    archived_upload_csv = _archive_versioned_csv(out_csv)
+    archived_upload_csv = _archive_versioned_csv(out_csv, run_tag=run_tag)
     if diagnostics_csv is not None:
         diag_cols = [
             "date",
@@ -241,7 +255,7 @@ def export_quick_card(
         ]
         diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
         diagnostics[[c for c in diag_cols if c in diagnostics.columns]].to_csv(diagnostics_csv, index=False)
-        archived_diagnostics_csv = _archive_versioned_csv(diagnostics_csv)
+        archived_diagnostics_csv = _archive_versioned_csv(diagnostics_csv, run_tag=run_tag)
         summary_json = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_summary.json")
         event_diag = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_event_diagnostics.csv")
         pd.DataFrame(validation_summary.get("event_diagnostics_rows", [])).to_csv(event_diag, index=False)
@@ -276,6 +290,11 @@ def export_quick_card(
         "archived_upload_csv": str(archived_upload_csv),
         "archived_diagnostics_csv": str(archived_diagnostics_csv) if archived_diagnostics_csv else "",
         "validation_summary_json": str(summary_json) if summary_json else "",
+        "public_catalog_fetch_allowed": bool(validation_summary.get("public_catalog_fetch_allowed")),
+        "public_catalog_fetch_attempted": bool(validation_summary.get("public_catalog_fetch_attempted")),
+        "public_catalog_fetch_succeeded": bool(validation_summary.get("public_catalog_fetch_succeeded")),
+        "public_catalog_endpoint_used": str(validation_summary.get("public_catalog_endpoint_used") or ""),
+        "cache_only_mode": bool(validation_summary.get("cache_only_mode")),
         "skipped": False,
     }
 
@@ -287,6 +306,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-csv", type=Path, default=None)
     parser.add_argument("--diagnostics-csv", type=Path, default=None)
     parser.add_argument("--known-unresolved-players-csv", type=Path, default=None)
+    parser.add_argument(
+        "--allow-8rain-public-catalog-fetch",
+        action="store_true",
+        default=tool_upload_8rain.public_catalog_fetch_allowed(),
+        help="Opt in to documented public 8rain catalog GET requests. Default is cache-only.",
+    )
     return parser.parse_args()
 
 
@@ -304,7 +329,14 @@ def main() -> None:
     upload_dir = Path(f"backend/mlb/exports/model_v2/upload/{date_value}")
     out_csv = args.out_csv or upload_dir / f"quick_card_tool_upload_{date_value}.csv"
     diagnostics_csv = args.diagnostics_csv or upload_dir / f"quick_card_tool_upload_diagnostics_{date_value}.csv"
-    summary = export_quick_card(in_csv, out_csv, date_value, diagnostics_csv, args.known_unresolved_players_csv)
+    summary = export_quick_card(
+        in_csv,
+        out_csv,
+        date_value,
+        diagnostics_csv,
+        args.known_unresolved_players_csv,
+        bool(args.allow_8rain_public_catalog_fetch),
+    )
     if summary.get("skipped"):
         return
     print(f"Wrote {out_csv}")
@@ -312,7 +344,11 @@ def main() -> None:
         "summary "
         f"rows={summary['rows']} win_column={summary['win_column']} "
         f"missing_home={summary['missing_home']} missing_away={summary['missing_away']} "
-        f"missing_win={summary['missing_win']}"
+        f"missing_win={summary['missing_win']} "
+        f"public_catalog_fetch_allowed={str(bool(summary.get('public_catalog_fetch_allowed'))).lower()} "
+        f"public_catalog_fetch_attempted={str(bool(summary.get('public_catalog_fetch_attempted'))).lower()} "
+        f"public_catalog_fetch_succeeded={str(bool(summary.get('public_catalog_fetch_succeeded'))).lower()} "
+        f"cache_only_mode={str(bool(summary.get('cache_only_mode'))).lower()}"
     )
 
 

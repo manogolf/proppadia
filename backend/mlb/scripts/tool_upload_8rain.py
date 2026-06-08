@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
 
 import numpy as np
 import pandas as pd
@@ -32,6 +34,18 @@ UPLOAD_COLUMNS = [
 CATALOG_CACHE_DIR = Path("backend/mlb/exports/model_v2/catalog")
 CATALOG_CACHE_JSON = CATALOG_CACHE_DIR / "8rain_mlb_catalog.json"
 PUBLIC_CATALOG_BASE_URL = "https://app.8rainstation.com"
+PUBLIC_CATALOG_HOST = "app.8rainstation.com"
+PUBLIC_CATALOG_PATH_PREFIX = "/public/api/catalog/"
+PUBLIC_CATALOG_FETCH_ENV = "MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH"
+PUBLIC_CATALOG_TIMEOUT_SEC = 12.0
+PUBLIC_CATALOG_ENDPOINTS = {
+    "model_spec": "/public/api/catalog/model-spec",
+    "teams": "/public/api/catalog/teams",
+    "players": "/public/api/catalog/players",
+    "events": "/public/api/catalog/events",
+    "stats": "/public/api/catalog/stats",
+    "market_definitions": "/public/api/catalog/market-definitions",
+}
 
 TEAM_ABBR_ALIASES = {
     "ARI": "AZ",
@@ -113,6 +127,34 @@ PUBLIC_SPEC_PLAYER_PROP_MARKETS = {
     "pitcher_strikeouts",
     "pitcher_win",
 }
+
+
+def upload_run_tag() -> str:
+    return (
+        os.getenv("MLB_UPLOAD_RUN_TAG")
+        or os.getenv("MLB_RUN_TAG")
+        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    )
+
+
+def generated_at_utc() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def with_artifact_status(
+    diagnostics: dict[str, Any],
+    *,
+    status: str,
+    failure_stage: str = "",
+    run_tag: str | None = None,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    out = dict(diagnostics)
+    out["status"] = status
+    out["failure_stage"] = failure_stage
+    out["generated_at"] = generated_at or generated_at_utc()
+    out["run_tag"] = run_tag or upload_run_tag()
+    return out
 
 
 def _clean(value: Any) -> str:
@@ -201,70 +243,188 @@ def _extract_records(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _fetch_json(url: str, timeout: float = 8.0) -> tuple[Any | None, str]:
+def _truthy(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def public_catalog_fetch_allowed(value: bool | None = None) -> bool:
+    if value is not None:
+        return bool(value)
+    return _truthy(os.getenv(PUBLIC_CATALOG_FETCH_ENV))
+
+
+def _public_catalog_fetch_metadata(
+    *,
+    allowed: bool,
+    attempted: bool = False,
+    succeeded: bool = False,
+    endpoint_used: str = "",
+    error: str = "",
+) -> dict[str, Any]:
+    parsed = urlparse(endpoint_used) if endpoint_used else None
+    return {
+        "public_catalog_fetch_allowed": bool(allowed),
+        "public_catalog_fetch_attempted": bool(attempted),
+        "public_catalog_fetch_succeeded": bool(succeeded),
+        "public_catalog_endpoint_used": endpoint_used,
+        "public_catalog_endpoint_path": parsed.path if parsed else "",
+        "public_catalog_fetch_error": error,
+        "cache_only_mode": not bool(allowed),
+    }
+
+
+def _public_catalog_url(endpoint: str, params: dict[str, Any] | None = None) -> str:
+    path = endpoint.strip()
+    if path.startswith("http://") or path.startswith("https://"):
+        url = path
+    elif not path.startswith("/"):
+        path = PUBLIC_CATALOG_ENDPOINTS.get(path, path)
+        url = PUBLIC_CATALOG_BASE_URL.rstrip("/") + path
+    else:
+        url = PUBLIC_CATALOG_BASE_URL.rstrip("/") + path
+    if params:
+        clean_params = {str(k): str(v) for k, v in params.items() if v is not None and str(v) != ""}
+        if clean_params:
+            url = f"{url}?{urlencode(clean_params)}"
+    _validate_public_catalog_url(url)
+    return url
+
+
+def _validate_public_catalog_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError("8rain public catalog fetch requires https")
+    if parsed.hostname != PUBLIC_CATALOG_HOST:
+        raise ValueError("8rain public catalog fetch host is not allowlisted")
+    if not parsed.path.startswith(PUBLIC_CATALOG_PATH_PREFIX):
+        raise ValueError("8rain public catalog fetch path is not allowlisted")
+
+
+def fetch_public_8rain_catalog(
+    endpoint: str,
+    *,
+    params: dict[str, Any] | None = None,
+    timeout: float = PUBLIC_CATALOG_TIMEOUT_SEC,
+    allow_public_catalog_fetch: bool | None = None,
+) -> tuple[Any | None, dict[str, Any]]:
+    """Fetch a documented public 8rain catalog endpoint when explicitly enabled."""
+    allowed = public_catalog_fetch_allowed(allow_public_catalog_fetch)
+    url = _public_catalog_url(endpoint, params)
+    if not allowed:
+        return None, _public_catalog_fetch_metadata(
+            allowed=False,
+            attempted=False,
+            succeeded=False,
+            endpoint_used=url,
+            error="public_catalog_fetch_not_allowed",
+        )
+
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8")), ""
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        return None, str(exc)
+        # Deliberately no Authorization, Cookie, session, or user-token headers.
+        request = Request(url, headers={"Accept": "application/json"})
+        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - allowlisted public catalog URL.
+            raw = response.read().decode("utf-8")
+        return json.loads(raw), _public_catalog_fetch_metadata(
+            allowed=True,
+            attempted=True,
+            succeeded=True,
+            endpoint_used=url,
+        )
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        return None, _public_catalog_fetch_metadata(
+            allowed=True,
+            attempted=True,
+            succeeded=False,
+            endpoint_used=url,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
 
 def refresh_catalog_cache(
     *,
-    base_url: str = "https://app.8rainstation.com",
+    base_url: str = "",
     cache_json: Path = CATALOG_CACHE_JSON,
+    allow_public_catalog_fetch: bool | None = None,
 ) -> dict[str, Any]:
-    base = base_url.rstrip("/")
-    endpoints = {
-        "model_spec": f"{base}/catalog/model-spec?league=mlb",
-        "teams": f"{base}/catalog/teams?league=mlb",
-        "players": f"{base}/catalog/players?league=mlb",
-    }
-    payload: dict[str, Any] = {
-        "league": "mlb",
-        "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
-        "base_url": base,
-        "endpoints": endpoints,
-        "responses": {},
-        "errors": {},
-    }
-    for key, url in endpoints.items():
-        data, err = _fetch_json(url)
-        if err:
-            payload["errors"][key] = err
+    allowed = public_catalog_fetch_allowed(allow_public_catalog_fetch)
+    if base_url and base_url.rstrip("/") != PUBLIC_CATALOG_BASE_URL:
+        raise ValueError("Only documented 8rain public catalog base URL is supported")
+    catalog = load_catalog(cache_json)
+    responses = dict(catalog.get("responses") or {}) if isinstance(catalog, dict) else {}
+    errors = dict(catalog.get("errors") or {}) if isinstance(catalog, dict) else {}
+    fetch_metadata = _public_catalog_fetch_metadata(allowed=allowed)
+    for key in ("model_spec", "teams", "players", "stats", "market_definitions"):
+        payload, metadata = fetch_public_8rain_catalog(
+            PUBLIC_CATALOG_ENDPOINTS[key],
+            params={"league": "mlb"},
+            allow_public_catalog_fetch=allowed,
+        )
+        fetch_metadata = metadata
+        if not metadata.get("public_catalog_fetch_attempted"):
+            break
+        if metadata.get("public_catalog_fetch_succeeded"):
+            responses[key] = payload
+            errors.pop(key, None)
         else:
-            payload["responses"][key] = data
-    cache_json.parent.mkdir(parents=True, exist_ok=True)
-    cache_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    return payload
+            errors[key] = metadata.get("public_catalog_fetch_error", "public_catalog_fetch_failed")
+    out = {
+        "generated_at": generated_at_utc(),
+        "source": "8rain_public_catalog" if fetch_metadata.get("public_catalog_fetch_succeeded") else "cache",
+        "responses": responses,
+        "errors": errors,
+        "public_catalog_fetch": fetch_metadata,
+    }
+    if fetch_metadata.get("public_catalog_fetch_attempted") and fetch_metadata.get("public_catalog_fetch_succeeded"):
+        cache_json.parent.mkdir(parents=True, exist_ok=True)
+        cache_json.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return out
 
 
 def refresh_event_catalog(
     *,
     from_date: str,
     to_date: str,
-    base_url: str = PUBLIC_CATALOG_BASE_URL,
+    base_url: str = "",
     cache_json: Path = CATALOG_CACHE_JSON,
+    allow_public_catalog_fetch: bool | None = None,
 ) -> dict[str, Any]:
+    allowed = public_catalog_fetch_allowed(allow_public_catalog_fetch)
+    if base_url and base_url.rstrip("/") != PUBLIC_CATALOG_BASE_URL:
+        raise ValueError("Only documented 8rain public catalog base URL is supported")
     catalog = load_catalog(cache_json)
-    if not catalog:
-        catalog = {"league": "mlb", "responses": {}, "errors": {}}
-    catalog.setdefault("responses", {})
-    catalog.setdefault("errors", {})
-    base = base_url.rstrip("/")
-    url = f"{base}/public/api/catalog/events?league=mlb&from={from_date}&to={to_date}"
-    data, err = _fetch_json(url)
-    catalog["event_catalog_url"] = url
-    catalog["event_catalog_fetched_at_utc"] = datetime.now(timezone.utc).isoformat()
-    if err:
-        catalog["errors"]["events"] = err
-    else:
-        catalog["responses"]["events"] = data
-        catalog["errors"].pop("events", None)
-    cache_json.parent.mkdir(parents=True, exist_ok=True)
-    cache_json.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
-    return catalog
+    responses = dict(catalog.get("responses") or {}) if isinstance(catalog, dict) else {}
+    errors = dict(catalog.get("errors") or {}) if isinstance(catalog, dict) else {}
+    payload, metadata = fetch_public_8rain_catalog(
+        PUBLIC_CATALOG_ENDPOINTS["events"],
+        params={"league": "mlb", "from": from_date, "to": to_date},
+        allow_public_catalog_fetch=allowed,
+    )
+    fetched_events = _extract_records(payload)
+    metadata["raw_fetched_event_count"] = int(len(fetched_events))
+    metadata["raw_fetched_event_dates"] = sorted(
+        {date for date in (_date_key(row.get("date")) for row in fetched_events) if date}
+    )
+    if metadata.get("public_catalog_fetch_succeeded"):
+        responses["events"] = payload
+        errors.pop("events", None)
+    elif metadata.get("public_catalog_fetch_attempted"):
+        errors["events"] = metadata.get("public_catalog_fetch_error", "public_catalog_fetch_failed")
+    current_events_payload = payload if metadata.get("public_catalog_fetch_succeeded") else responses.get("events")
+    metadata["written_cache_event_count"] = int(len(_extract_records(current_events_payload)))
+    metadata["written_cache_event_dates"] = sorted(
+        {date for date in (_date_key(row.get("date")) for row in _extract_records(current_events_payload)) if date}
+    )
+    out = {
+        "generated_at": generated_at_utc(),
+        "source": "8rain_public_catalog" if metadata.get("public_catalog_fetch_succeeded") else "cache",
+        "responses": responses,
+        "errors": errors,
+        "public_catalog_fetch": metadata,
+    }
+    if metadata.get("public_catalog_fetch_attempted") and metadata.get("public_catalog_fetch_succeeded"):
+        cache_json.parent.mkdir(parents=True, exist_ok=True)
+        cache_json.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return out
 
 
 def load_catalog(cache_json: Path = CATALOG_CACHE_JSON) -> dict[str, Any]:
@@ -294,14 +454,127 @@ def _event_date_window(dates: list[str]) -> tuple[str, str]:
     return start, end
 
 
-def ensure_event_catalog(catalog: dict[str, Any] | None, dates: list[str]) -> tuple[dict[str, Any], bool]:
+def _event_dates(catalog: dict[str, Any] | None) -> list[str]:
+    return sorted(
+        {
+            date
+            for date in (_date_key(row.get("date")) for row in _catalog_records(catalog or {}, "events"))
+            if date
+        }
+    )
+
+
+def _requested_event_dates(dates: list[str]) -> list[str]:
+    return sorted({_date_key(date) for date in dates if _date_key(date)})
+
+
+def _event_catalog_covers_requested_dates(requested_dates: list[str], cached_dates: list[str]) -> bool:
+    cached = set(cached_dates)
+    if not requested_dates:
+        return False
+    for date in requested_dates:
+        next_date = (pd.Timestamp(date) + pd.Timedelta(days=1)).date().isoformat()
+        if date not in cached and next_date not in cached:
+            return False
+    return True
+
+
+def _allowed_event_dates(requested_dates: list[str]) -> list[str]:
+    allowed: set[str] = set()
+    for date in requested_dates:
+        if not date:
+            continue
+        allowed.add(date)
+        allowed.add((pd.Timestamp(date) + pd.Timedelta(days=1)).date().isoformat())
+    return sorted(allowed)
+
+
+def ensure_event_catalog(
+    catalog: dict[str, Any] | None,
+    dates: list[str],
+    *,
+    force_refresh: bool = False,
+    refresh_reason: str = "",
+    allow_public_catalog_fetch: bool | None = None,
+) -> tuple[dict[str, Any], bool, dict[str, Any]]:
     out = dict(catalog or {})
-    events = _catalog_records(out, "events")
-    if events:
-        return out, False
-    start, end = _event_date_window(dates)
-    out = refresh_event_catalog(from_date=start, to_date=end)
-    return out, not bool(_catalog_records(out, "events"))
+    fetch_allowed = public_catalog_fetch_allowed(allow_public_catalog_fetch)
+    requested_dates = _requested_event_dates(dates)
+    allowed_dates = _allowed_event_dates(requested_dates)
+    cached_dates = _event_dates(out)
+    cache_covers_requested = _event_catalog_covers_requested_dates(requested_dates, cached_dates)
+    catalog_events_loaded = len(_catalog_records(out, "events"))
+    catalog_refetched = False
+    fetch_metadata = _public_catalog_fetch_metadata(allowed=fetch_allowed)
+    catalog_unavailable = False
+
+    needs_refresh = bool(force_refresh or fetch_allowed or catalog_events_loaded == 0 or not cache_covers_requested)
+    if needs_refresh:
+        if not cache_covers_requested and "responses" in out:
+            # Cache-only mode must not silently match against stale events from a different slate date.
+            out.setdefault("responses", {})["events"] = {"data": []}
+            catalog_events_loaded = 0
+            cached_dates = []
+            cache_covers_requested = False
+        catalog_unavailable = catalog_events_loaded == 0
+        if not refresh_reason:
+            if fetch_allowed and not force_refresh:
+                refresh_reason = "public_catalog_fetch_explicitly_allowed"
+            elif force_refresh:
+                refresh_reason = "force_refresh_requested"
+            elif catalog_events_loaded == 0:
+                refresh_reason = "catalog_events_loaded_zero"
+            else:
+                refresh_reason = "catalog_dates_missing_allowed_window"
+        if fetch_allowed:
+            from_date, to_date = _event_date_window(requested_dates)
+            refreshed = refresh_event_catalog(
+                from_date=from_date,
+                to_date=to_date,
+                allow_public_catalog_fetch=True,
+            )
+            fetch_metadata = dict(refreshed.get("public_catalog_fetch") or fetch_metadata)
+            if fetch_metadata.get("public_catalog_fetch_succeeded"):
+                out = refreshed
+                catalog_refetched = True
+                cached_dates = _event_dates(out)
+                cache_covers_requested = _event_catalog_covers_requested_dates(requested_dates, cached_dates)
+                catalog_events_loaded = len(_catalog_records(out, "events"))
+                catalog_unavailable = catalog_events_loaded == 0
+            else:
+                out.setdefault("errors", {})["events"] = fetch_metadata.get(
+                    "public_catalog_fetch_error",
+                    "public_catalog_fetch_failed",
+                )
+
+    metadata = {
+        "requested_event_date_from": requested_dates[0] if requested_dates else "",
+        "requested_event_date_to": requested_dates[-1] if requested_dates else "",
+        "requested_slate_date": requested_dates[0] if len(requested_dates) == 1 else requested_dates,
+        "allowed_catalog_dates": allowed_dates,
+        "cached_event_dates": cached_dates,
+        "catalog_dates_present": cached_dates,
+        "cache_covers_requested_dates": bool(cache_covers_requested),
+        "catalog_refetched": bool(catalog_refetched),
+        "refresh_attempted": bool(fetch_metadata.get("public_catalog_fetch_attempted")),
+        "refresh_succeeded": bool(catalog_refetched and not bool(out.get("errors", {}).get("events")) and catalog_events_loaded > 0),
+        "public_catalog_fetch_allowed": bool(fetch_allowed),
+        "public_catalog_fetch_attempted": bool(fetch_metadata.get("public_catalog_fetch_attempted")),
+        "public_catalog_fetch_succeeded": bool(fetch_metadata.get("public_catalog_fetch_succeeded")),
+        "public_catalog_endpoint_used": fetch_metadata.get("public_catalog_endpoint_used", ""),
+        "public_catalog_endpoint_path": fetch_metadata.get("public_catalog_endpoint_path", ""),
+        "public_catalog_fetch_error": fetch_metadata.get("public_catalog_fetch_error", ""),
+        "raw_fetched_event_count": int(fetch_metadata.get("raw_fetched_event_count") or 0),
+        "raw_fetched_event_dates": fetch_metadata.get("raw_fetched_event_dates", []),
+        "written_cache_event_count": int(fetch_metadata.get("written_cache_event_count") or 0),
+        "written_cache_event_dates": fetch_metadata.get("written_cache_event_dates", []),
+        "refresh_reason": refresh_reason,
+        "catalog_refresh_reason": refresh_reason,
+        "cache_only_mode": not bool(fetch_allowed),
+        "catalog_cache": str(CATALOG_CACHE_JSON),
+        "catalog_cache_source": str(CATALOG_CACHE_JSON),
+    }
+    return out, bool(catalog_unavailable), metadata
 
 
 def build_event_map(catalog: dict[str, Any] | None = None) -> dict[tuple[str, str], list[dict[str, Any]]]:
@@ -336,14 +609,40 @@ def build_event_map(catalog: dict[str, Any] | None = None) -> dict[tuple[str, st
     return out
 
 
-def select_event(
-    event_map: dict[tuple[str, str], list[dict[str, Any]]],
-    *,
-    away_abbr: str,
-    home_abbr: str,
-    source_date: str,
-) -> dict[str, Any]:
-    rows = event_map.get((away_abbr, home_abbr), [])
+def build_event_slug_map(catalog: dict[str, Any] | None = None) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in _catalog_records(catalog or {}, "events"):
+        home = _norm_code(row.get("home"))
+        away = _norm_code(row.get("away"))
+        if not home or not away:
+            continue
+        code = _clean(row.get("code")).lower()
+        parts = code.split("-")
+        away_abbr = ""
+        home_abbr = ""
+        if len(parts) >= 6 and parts[0] == "mlb":
+            away_abbr = _team_abbr(parts[-2])
+            home_abbr = _team_abbr(parts[-1])
+        if not away_abbr:
+            away_abbr = _team_abbr(row.get("away"))
+        if not home_abbr:
+            home_abbr = _team_abbr(row.get("home"))
+        out.setdefault((away, home), []).append(
+            {
+                "event_code": _clean(row.get("code")),
+                "catalog_date": _clean(row.get("date")),
+                "home": home,
+                "away": away,
+                "home_abbr": home_abbr,
+                "away_abbr": away_abbr,
+            }
+        )
+    for rows in out.values():
+        rows.sort(key=lambda row: str(row.get("catalog_date") or ""))
+    return out
+
+
+def _select_event_from_rows(rows: list[dict[str, Any]], source_date: str) -> dict[str, Any]:
     if not rows:
         return {}
     for row in rows:
@@ -353,7 +652,25 @@ def select_event(
     for row in rows:
         if row.get("catalog_date") == next_date:
             return row
-    return rows[0]
+    return {}
+
+
+def select_event(
+    event_map: dict[tuple[str, str], list[dict[str, Any]]],
+    *,
+    away_abbr: str,
+    home_abbr: str,
+    source_date: str,
+    slug_event_map: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
+    away_slug: str = "",
+    home_slug: str = "",
+) -> dict[str, Any]:
+    rows = event_map.get((away_abbr, home_abbr), [])
+    if rows:
+        return _select_event_from_rows(rows, source_date)
+    if slug_event_map is not None and away_slug and home_slug:
+        return _select_event_from_rows(slug_event_map.get((away_slug, home_slug), []), source_date)
+    return {}
 
 
 def build_team_map(catalog: dict[str, Any] | None = None) -> dict[str, str]:
@@ -481,14 +798,15 @@ def prepare_player_prop_upload(
     *,
     catalog: dict[str, Any] | None = None,
     source_rows_before: int | None = None,
+    allow_public_catalog_fetch: bool | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     work = upload.copy()
     initial_dates = work["DATE"].map(_date_key).dropna().astype(str).tolist() if "DATE" in work else []
-    catalog, catalog_unavailable = ensure_event_catalog(catalog, initial_dates)
-    team_map = build_team_map(catalog)
-    player_map = build_player_map(catalog)
-    valid_markets = valid_player_prop_markets(catalog)
-    event_map = build_event_map(catalog)
+    catalog, catalog_unavailable, catalog_metadata = ensure_event_catalog(
+        catalog,
+        initial_dates,
+        allow_public_catalog_fetch=allow_public_catalog_fetch,
+    )
 
     rows_before = int(source_rows_before if source_rows_before is not None else len(work))
     work["LEAGUE"] = "mlb"
@@ -496,73 +814,230 @@ def prepare_player_prop_upload(
     work["DOUBLEHEADER"] = pd.to_numeric(work["DOUBLEHEADER"], errors="coerce").fillna(0).astype(int)
     work["SECTION"] = work["SECTION"].map(lambda v: _clean(v).lower() or "player_prop")
     work["MARKET"] = work["MARKET"].map(_norm_market)
+    work["home_upload_input"] = work["HOME"].map(_clean)
+    work["away_upload_input"] = work["AWAY"].map(_clean)
     home_source = work["HOME_SOURCE"] if "HOME_SOURCE" in work.columns else work["HOME"]
     away_source = work["AWAY_SOURCE"] if "AWAY_SOURCE" in work.columns else work["AWAY"]
     work["home_source_abbr"] = home_source.map(_team_abbr)
     work["away_source_abbr"] = away_source.map(_team_abbr)
-    event_matches = work.apply(
-        lambda row: select_event(
-            event_map,
-            away_abbr=row["away_source_abbr"],
-            home_abbr=row["home_source_abbr"],
-            source_date=row["DATE"],
-        ),
-        axis=1,
-    )
-    work["event_code"] = event_matches.map(lambda row: row.get("event_code", ""))
-    work["event_catalog_date"] = event_matches.map(lambda row: row.get("catalog_date", ""))
-    work["home_source_code"] = event_matches.map(lambda row: row.get("home", ""))
-    work["away_source_code"] = event_matches.map(lambda row: row.get("away", ""))
-    work["HOME"] = work["home_source_code"]
-    work["AWAY"] = work["away_source_code"]
     work["POINT"] = work["POINT"].map(_line_key)
     work["SIDE"] = work["SIDE"].map(lambda v: _clean(v).lower())
     work["WIN %"] = pd.to_numeric(work["WIN %"], errors="coerce").round(6)
+
+    def apply_catalog(current_catalog: dict[str, Any], current_work: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+        mapped = current_work.copy()
+        current_team_map = build_team_map(current_catalog)
+        current_player_map = build_player_map(current_catalog)
+        current_valid_markets = valid_player_prop_markets(current_catalog)
+        current_event_map = build_event_map(current_catalog)
+        current_slug_event_map = build_event_slug_map(current_catalog)
+        mapped["home_upload_input_slug"] = mapped["home_upload_input"].map(lambda v: normalize_team_code(v, current_team_map))
+        mapped["away_upload_input_slug"] = mapped["away_upload_input"].map(lambda v: normalize_team_code(v, current_team_map))
+        event_matches_local = mapped.apply(
+            lambda row: select_event(
+                current_event_map,
+                away_abbr=row["away_source_abbr"],
+                home_abbr=row["home_source_abbr"],
+                source_date=row["DATE"],
+                slug_event_map=current_slug_event_map,
+                away_slug=row["away_upload_input_slug"],
+                home_slug=row["home_upload_input_slug"],
+            ),
+            axis=1,
+        )
+        mapped["event_code"] = event_matches_local.map(lambda row: row.get("event_code", ""))
+        mapped["event_catalog_date"] = event_matches_local.map(lambda row: row.get("catalog_date", ""))
+        mapped["home_source_code"] = event_matches_local.map(lambda row: row.get("home", ""))
+        mapped["away_source_code"] = event_matches_local.map(lambda row: row.get("away", ""))
+        mapped["HOME"] = mapped["home_source_code"]
+        mapped["AWAY"] = mapped["away_source_code"]
+        return mapped, {
+            "team_map": current_team_map,
+            "player_map": current_player_map,
+            "valid_markets": current_valid_markets,
+            "event_map": current_event_map,
+            "slug_event_map": current_slug_event_map,
+        }
+
+    work, catalog_indexes = apply_catalog(catalog, work)
+    refresh_reason = ""
+    raw_event_count = len(_catalog_records(catalog, "events"))
+    unknown_event_initial = work["event_code"].eq("")
+    allowed_dates = set(catalog_metadata.get("allowed_catalog_dates", []))
+    catalog_dates = set(catalog_metadata.get("catalog_dates_present", []))
+    missing_allowed_date_coverage = bool(allowed_dates and catalog_dates.isdisjoint(allowed_dates))
+    if (
+        (raw_event_count == 0 or missing_allowed_date_coverage or (len(work) > 0 and bool(unknown_event_initial.all())))
+        and not catalog_metadata.get("refresh_attempted")
+    ):
+        if raw_event_count == 0:
+            refresh_reason = "catalog_events_loaded_zero"
+        elif missing_allowed_date_coverage:
+            refresh_reason = "catalog_dates_missing_allowed_window"
+        else:
+            refresh_reason = "all_requested_games_failed_initial_lookup"
+        refreshed_catalog, refreshed_unavailable, refreshed_metadata = ensure_event_catalog(
+            catalog,
+            initial_dates,
+            force_refresh=True,
+            refresh_reason=refresh_reason,
+            allow_public_catalog_fetch=allow_public_catalog_fetch,
+        )
+        catalog = refreshed_catalog
+        catalog_unavailable = bool(refreshed_unavailable)
+        catalog_metadata.update(refreshed_metadata)
+        catalog_metadata["catalog_refresh_reason"] = refresh_reason
+        catalog_metadata["refresh_reason"] = refresh_reason
+        work, catalog_indexes = apply_catalog(catalog, work)
+
+    team_map = catalog_indexes["team_map"]
+    player_map = catalog_indexes["player_map"]
+    valid_markets = catalog_indexes["valid_markets"]
+    event_map = catalog_indexes["event_map"]
+    slug_event_map = catalog_indexes["slug_event_map"]
+    catalog_event_records = _catalog_records(catalog, "events")
+    first_catalog_event_keys = [
+        f"mlb/{row.get('catalog_date', '')}/{row.get('away_abbr', '')}@{row.get('home_abbr', '')}"
+        for rows in event_map.values()
+        for row in rows[:1]
+    ][:10]
 
     selectors = work["SELECTOR"].map(lambda v: normalize_player_selector(v, player_map))
     work["SELECTOR"] = selectors.map(lambda pair: pair[0])
     used_catalog_player = selectors.map(lambda pair: pair[1])
 
-    missing_team = work["HOME"].eq("") | work["AWAY"].eq("")
     unknown_event = work["event_code"].eq("")
+    valid_event_work = work[~unknown_event].copy()
+    excluded_unknown_event_rows = work[unknown_event].copy()
+    missing_team = valid_event_work["HOME"].eq("") | valid_event_work["AWAY"].eq("")
     reversed_home_away = (
-        work["home_source_code"].ne("")
-        & work["away_source_code"].ne("")
-        & work["HOME"].eq(work["away_source_code"])
-        & work["AWAY"].eq(work["home_source_code"])
+        valid_event_work["home_source_code"].ne("")
+        & valid_event_work["away_source_code"].ne("")
+        & valid_event_work["HOME"].eq(valid_event_work["away_source_code"])
+        & valid_event_work["AWAY"].eq(valid_event_work["home_source_code"])
     )
-    missing_market = ~work["MARKET"].isin(valid_markets)
-    missing_selector = work["SELECTOR"].eq("")
-    invalid_win = work["WIN %"].isna() | ~work["WIN %"].between(0.0, 1.0, inclusive="both")
+    missing_market = ~valid_event_work["MARKET"].isin(valid_markets)
+    missing_selector = valid_event_work["SELECTOR"].eq("")
+    invalid_win = valid_event_work["WIN %"].isna() | ~valid_event_work["WIN %"].between(0.0, 1.0, inclusive="both")
 
-    paired, skipped_pairing = pair_over_under_rows(work[UPLOAD_COLUMNS])
+    paired, skipped_pairing = pair_over_under_rows(valid_event_work[UPLOAD_COLUMNS])
     validation = validate_upload(paired)
+    event_key_home = work["home_source_code"].where(work["home_source_code"].ne(""), work["home_upload_input"])
+    event_key_away = work["away_source_code"].where(work["away_source_code"].ne(""), work["away_upload_input"])
+    requested_input_key = "mlb/" + work["DATE"].astype(str) + "/" + work["away_upload_input"].astype(str) + "@" + work["home_upload_input"].astype(str)
+    requested_slug_key = "mlb/" + work["DATE"].astype(str) + "/" + work["away_upload_input_slug"].astype(str) + "@" + work["home_upload_input_slug"].astype(str)
+    failed_games = (
+        work.loc[unknown_event, ["DATE", "away_upload_input", "home_upload_input"]]
+        .drop_duplicates()
+        .assign(game=lambda df: df["away_upload_input"].astype(str) + "@" + df["home_upload_input"].astype(str))
+        .sort_values(["DATE", "game"], kind="stable")
+    )
+    unknown_event_exclusion_rows = excluded_unknown_event_rows.assign(
+        event_key_input_away_at_home=lambda df: (
+            "mlb/" + df["DATE"].astype(str) + "/" + df["away_upload_input"].astype(str) + "@" + df["home_upload_input"].astype(str)
+        ),
+        requested_slug_key=lambda df: (
+            "mlb/" + df["DATE"].astype(str) + "/" + df["away_upload_input_slug"].astype(str) + "@" + df["home_upload_input_slug"].astype(str)
+        ),
+        exclusion_reason="unknown_8rain_event",
+    )[
+        [
+            "DATE",
+            "event_key_input_away_at_home",
+            "requested_slug_key",
+            "home_upload_input",
+            "away_upload_input",
+            "home_upload_input_slug",
+            "away_upload_input_slug",
+            "home_source_abbr",
+            "away_source_abbr",
+            "SELECTOR",
+            "MARKET",
+            "POINT",
+            "SIDE",
+            "WIN %",
+            "exclusion_reason",
+        ]
+    ]
+    if len(paired) == 0:
+        upload_status = "failed"
+    elif int(unknown_event.sum()) > 0:
+        upload_status = "partial_success"
+    else:
+        upload_status = "success"
     diagnostics = {
         "rows_before": rows_before,
         "rows_after_pairing": int(len(paired)),
         "missing_team_code": int(missing_team.sum()),
         "catalog_unavailable": bool(catalog_unavailable),
-        "catalog_events_loaded": int(len(event_map)),
+        **catalog_metadata,
+        "catalog_events_loaded": int(len(catalog_event_records)),
+        "usable_catalog_event_count": int(len(event_map)),
+        "event_abbr_index_count": int(len(event_map)),
+        "event_slug_index_count": int(len(slug_event_map)),
+        "upload_rows_attempting_event_lookup": int(len(work)),
+        "catalog_event_found_false_rows": int(unknown_event.sum()),
         "unknown_event_rows": int(unknown_event.sum()),
+        "excluded_unknown_event_candidates": int(unknown_event.sum()),
+        "excluded_unknown_event_games": failed_games["game"].tolist(),
+        "valid_event_candidates": int(len(valid_event_work)),
+        "valid_paired_upload_rows": int(len(paired)),
+        "upload_status": upload_status,
+        "unique_failed_games": failed_games["game"].tolist(),
+        "unique_failed_game_count": int(failed_games["game"].nunique()),
+        "catalog_coverage_dates": catalog_metadata.get("catalog_dates_present", []),
         "home_away_reversed_rows": int(reversed_home_away.sum()),
         "missing_player_code": int(missing_selector.sum()),
         "missing_player_catalog_code": int((~used_catalog_player).sum()),
         "missing_market_code": int(missing_market.sum()),
         "unpaired_market_rows": int(validation["unpaired_market_rows"] + skipped_pairing),
         "invalid_win_pct_rows": int(invalid_win.sum() + validation["invalid_win_pct_rows"]),
-        "catalog_cache": str(CATALOG_CACHE_JSON),
         "catalog_loaded": bool(catalog),
         "team_catalog_codes_loaded": int(len(team_map)),
         "player_catalog_codes_loaded": int(len(player_map)),
         "market_codes_loaded": int(len(valid_markets)),
+        "first_5_catalog_event_keys": first_catalog_event_keys[:5],
+        "first_10_catalog_event_keys": first_catalog_event_keys,
+        "catalog_lookup_failures": work.loc[unknown_event].assign(
+            requested_input_key=requested_input_key[unknown_event],
+            requested_slug_key=requested_slug_key[unknown_event],
+        )[
+            [
+                "DATE",
+                "requested_input_key",
+                "requested_slug_key",
+                "home_upload_input",
+                "away_upload_input",
+                "home_upload_input_slug",
+                "away_upload_input_slug",
+                "home_source_abbr",
+                "away_source_abbr",
+            ]
+        ]
+        .drop_duplicates()
+        .head(25)
+        .to_dict(orient="records"),
+        "unknown_event_exclusion_rows": unknown_event_exclusion_rows.to_dict(orient="records"),
         "validation": validation,
         "sample_output_rows": paired.head(10).to_dict(orient="records"),
         "event_diagnostics_rows": work.assign(
             event_key_expected_away_at_home=lambda df: (
+                "mlb/" + df["DATE"].astype(str) + "/" + event_key_away.astype(str) + "@" + event_key_home.astype(str)
+            ),
+            event_key_catalog_away_at_home=lambda df: (
                 "mlb/" + df["DATE"].astype(str) + "/" + df["away_source_code"].astype(str) + "@" + df["home_source_code"].astype(str)
+            ),
+            event_key_input_away_at_home=lambda df: (
+                "mlb/" + df["DATE"].astype(str) + "/" + df["away_upload_input"].astype(str) + "@" + df["home_upload_input"].astype(str)
             ),
             home_upload=work["HOME"],
             away_upload=work["AWAY"],
+            home_upload_input=work["home_upload_input"],
+            away_upload_input=work["away_upload_input"],
+            home_upload_input_slug=work["home_upload_input_slug"],
+            away_upload_input_slug=work["away_upload_input_slug"],
+            requested_input_key=requested_input_key,
+            requested_slug_key=requested_slug_key,
             home_source=work["home_source_code"],
             away_source=work["away_source_code"],
             source_home_abbr=work["home_source_abbr"],
@@ -574,11 +1049,19 @@ def prepare_player_prop_upload(
         )[
             [
                 "event_key_expected_away_at_home",
+                "event_key_catalog_away_at_home",
+                "event_key_input_away_at_home",
                 "event_code",
                 "event_catalog_date",
                 "catalog_event_found",
                 "home_upload",
                 "away_upload",
+                "home_upload_input",
+                "away_upload_input",
+                "home_upload_input_slug",
+                "away_upload_input_slug",
+                "requested_input_key",
+                "requested_slug_key",
                 "home_source",
                 "away_source",
                 "source_home_abbr",
@@ -597,7 +1080,8 @@ def prepare_player_prop_upload(
 
     hard_fail = (
         diagnostics["catalog_unavailable"]
-        or diagnostics["unknown_event_rows"]
+        or diagnostics["valid_event_candidates"] == 0
+        or diagnostics["valid_paired_upload_rows"] == 0
         or diagnostics["missing_team_code"]
         or diagnostics["home_away_reversed_rows"]
         or diagnostics["missing_player_code"]
@@ -610,6 +1094,83 @@ def prepare_player_prop_upload(
     if hard_fail:
         raise ValueError(json.dumps(diagnostics, indent=2))
     return paired, diagnostics
+
+
+def write_unknown_event_exclusions(diagnostics: dict[str, Any], diagnostics_csv: Path) -> Path:
+    exclusions_csv = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_unknown_event_exclusions.csv")
+    columns = [
+        "DATE",
+        "event_key_input_away_at_home",
+        "requested_slug_key",
+        "home_upload_input",
+        "away_upload_input",
+        "home_upload_input_slug",
+        "away_upload_input_slug",
+        "home_source_abbr",
+        "away_source_abbr",
+        "SELECTOR",
+        "MARKET",
+        "POINT",
+        "SIDE",
+        "WIN %",
+        "exclusion_reason",
+    ]
+    rows = pd.DataFrame(diagnostics.get("unknown_event_exclusion_rows", []), columns=columns)
+    exclusions_csv.parent.mkdir(parents=True, exist_ok=True)
+    rows.to_csv(exclusions_csv, index=False)
+    diagnostics["unknown_event_exclusions_csv"] = str(exclusions_csv)
+    return exclusions_csv
+
+
+def write_prepare_failure_diagnostics(exc: Exception, diagnostics_csv: Path) -> dict[str, Any]:
+    """Persist upload-preparation diagnostics before the exporter exits."""
+    text = str(exc)
+    try:
+        diagnostics = json.loads(text)
+    except json.JSONDecodeError:
+        diagnostics = {"error": text}
+    run_tag = upload_run_tag()
+    diagnostics = with_artifact_status(
+        diagnostics,
+        status="failed",
+        failure_stage="prepare_player_prop_upload",
+        run_tag=run_tag,
+    )
+    diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
+    write_unknown_event_exclusions(diagnostics, diagnostics_csv)
+    summary_json = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_summary.json")
+    event_diag = diagnostics_csv.with_name(f"{diagnostics_csv.stem}_event_diagnostics.csv")
+    timestamped_summary_json = summary_json.with_name(f"{summary_json.stem}__{run_tag}{summary_json.suffix}")
+    timestamped_event_diag = event_diag.with_name(f"{event_diag.stem}__{run_tag}{event_diag.suffix}")
+    if diagnostics_csv.exists():
+        timestamped_diagnostics_csv = diagnostics_csv.with_name(
+            f"{diagnostics_csv.stem}__{run_tag}{diagnostics_csv.suffix}"
+        )
+        try:
+            diagnostics_rows = pd.read_csv(diagnostics_csv)
+            diagnostics_rows["artifact_status"] = "failed"
+            diagnostics_rows["failure_stage"] = "prepare_player_prop_upload"
+            diagnostics_rows["generated_at"] = diagnostics["generated_at"]
+            diagnostics_rows["run_tag"] = run_tag
+            diagnostics_rows.to_csv(diagnostics_csv, index=False)
+            diagnostics_rows.to_csv(timestamped_diagnostics_csv, index=False)
+        except Exception:
+            failure_csv = (
+                "artifact_status,failure_stage,generated_at,run_tag\n"
+                f"failed,prepare_player_prop_upload,{diagnostics['generated_at']},{run_tag}\n"
+            )
+            diagnostics_csv.write_text(failure_csv, encoding="utf-8")
+            timestamped_diagnostics_csv.write_text(failure_csv, encoding="utf-8")
+    summary_json.write_text(json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
+    timestamped_summary_json.write_text(json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
+    event_rows = pd.DataFrame(diagnostics.get("event_diagnostics_rows", []))
+    event_rows["artifact_status"] = "failed"
+    event_rows["failure_stage"] = "prepare_player_prop_upload"
+    event_rows["generated_at"] = diagnostics["generated_at"]
+    event_rows["run_tag"] = run_tag
+    event_rows.to_csv(event_diag, index=False)
+    event_rows.to_csv(timestamped_event_diag, index=False)
+    return diagnostics
 
 
 def write_unresolved_player_candidates(

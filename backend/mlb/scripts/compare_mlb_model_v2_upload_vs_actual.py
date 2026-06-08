@@ -81,10 +81,18 @@ UPLOAD_TO_CANON_TEAM.update(
     }
 )
 
-BET_RE = re.compile(
+OLD_SIDE_MIDDLE_BET_RE = re.compile(
     r"^(?P<player>.+?)\s+"
     r"(?P<label>Hits Allowed|Hits|Total Bases|Runs|RBIs?)\s+"
     r"(?P<side>Over|Under)\s+"
+    r"(?P<line>-?\d+(?:\.\d+)?)$",
+    re.IGNORECASE,
+)
+NEW_SIDE_FIRST_OVER_UNDER_BET_RE = re.compile(
+    r"^(?P<side>Over|Under)\s+"
+    r"(?P<player>.+?)\s+"
+    r"(?P<label>Hits Allowed|Hits|Total Bases|Runs|RBIs?)\s+"
+    r"Over/Under\s+"
     r"(?P<line>-?\d+(?:\.\d+)?)$",
     re.IGNORECASE,
 )
@@ -194,11 +202,11 @@ def _prop_from_bet_label(value: Any) -> str:
 
 def _result_from_grade(value: Any) -> str:
     grade = _norm_key(value)
-    if grade == "win":
+    if grade in {"w", "win", "won"}:
         return "win"
-    if grade == "loss":
+    if grade in {"l", "loss", "lost"}:
         return "loss"
-    if grade in {"push", "void"}:
+    if grade in {"p", "push", "void", "refund"}:
         return "push"
     return "unresolved"
 
@@ -307,6 +315,38 @@ def _load_upload_many(paths: list[Path], date_value: str, source_category: str) 
         "upload_source_category",
     ]
     return combined.drop_duplicates(subset=[c for c in dedupe_cols if c in combined.columns]).copy()
+
+
+def _load_timestamped_upload_many(paths: list[Path], date_value: str, source_category: str) -> pd.DataFrame:
+    frames = []
+    for path in paths:
+        if "__" not in path.stem:
+            continue
+        try:
+            frame = _load_upload(path, date_value, source_category)
+        except Exception:
+            continue
+        frame["matched_upload_run_tag"] = _upload_run_tag_from_path(path)
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+def _upload_run_tag_from_path(path: Path | str) -> str:
+    stem = Path(path).stem
+    if "__" not in stem:
+        return ""
+    return stem.rsplit("__", 1)[-1]
+
+
+def _upload_source_from_path(path: Path | str) -> str:
+    name = Path(path).name
+    if name.startswith("ranking_tool_upload"):
+        return "ranking_tool"
+    if name.startswith("quick_card_tool_upload"):
+        return "quick_card_tool"
+    return ""
 
 
 def _load_v1_steam_upload(path: Path, date_value: str) -> pd.DataFrame:
@@ -422,6 +462,8 @@ def _load_actual(path: Path, date_value: str, rec: pd.DataFrame) -> pd.DataFrame
     parsed_df = pd.DataFrame(list(parsed), index=actual.index)
     actual = pd.concat([actual, parsed_df], axis=1)
     actual["actual_wager_result"] = actual["Grade"].map(_result_from_grade)
+    actual["raw_grade"] = actual.get("Grade", pd.Series("", index=actual.index)).map(_norm_text)
+    actual["parsed_result"] = actual["actual_wager_result"]
     actual["actual_pnl"] = pd.to_numeric(actual.get("$ W/L"), errors="coerce")
     actual["actual_amount"] = pd.to_numeric(actual.get("Amount"), errors="coerce")
     actual["actual_pnl_units"] = actual["actual_pnl"] / actual["actual_amount"].replace(0, np.nan)
@@ -433,23 +475,40 @@ def _load_actual(path: Path, date_value: str, rec: pd.DataFrame) -> pd.DataFrame
 
 def _parse_bet(value: Any) -> dict[str, Any]:
     text = _norm_text(value)
-    match = BET_RE.match(text)
+    match = NEW_SIDE_FIRST_OVER_UNDER_BET_RE.match(text)
+    pattern_used = "new_side_first_over_under" if match else ""
+    if not match:
+        match = OLD_SIDE_MIDDLE_BET_RE.match(text)
+        pattern_used = "old_side_middle" if match else ""
     if not match:
         return {
+            "bet_raw": text,
+            "parse_pattern_used": "failed",
             "parsed_player_name": "",
             "parsed_player_name_norm": "",
+            "parsed_side": "",
+            "parsed_line": np.nan,
+            "parsed_prop_type": "",
             "prop_type_norm": "",
             "side_norm": "",
             "line_norm": np.nan,
             "parse_ok": False,
         }
     player = match.group("player")
+    prop_type = _prop_from_bet_label(match.group("label"))
+    side = _norm_side(match.group("side"))
+    line = _line(match.group("line"))
     return {
+        "bet_raw": text,
+        "parse_pattern_used": pattern_used,
         "parsed_player_name": player,
         "parsed_player_name_norm": _norm_name(player),
-        "prop_type_norm": _prop_from_bet_label(match.group("label")),
-        "side_norm": _norm_side(match.group("side")),
-        "line_norm": _line(match.group("line")),
+        "parsed_side": side,
+        "parsed_line": line,
+        "parsed_prop_type": prop_type,
+        "prop_type_norm": prop_type,
+        "side_norm": side,
+        "line_norm": line,
         "parse_ok": True,
     }
 
@@ -573,6 +632,38 @@ def _name_key(df: pd.DataFrame) -> pd.Series:
     )
 
 
+def _name_side_line_key(df: pd.DataFrame) -> pd.Series:
+    return (
+        df["date_norm"].astype(str)
+        + "|"
+        + df["player_name_norm"].astype(str)
+        + "|"
+        + df["side_norm"].astype(str)
+        + "|"
+        + df["line_norm"].astype(str)
+    )
+
+
+def _name_line_key(df: pd.DataFrame) -> pd.Series:
+    return (
+        df["date_norm"].astype(str)
+        + "|"
+        + df["player_name_norm"].astype(str)
+        + "|"
+        + df["line_norm"].astype(str)
+    )
+
+
+def _name_prop_key(df: pd.DataFrame) -> pd.Series:
+    return (
+        df["date_norm"].astype(str)
+        + "|"
+        + df["player_name_norm"].astype(str)
+        + "|"
+        + df["prop_type_norm"].astype(str)
+    )
+
+
 def _build_upload_index(upload: pd.DataFrame) -> dict[str, dict[str, list[dict[str, Any]]]]:
     index: dict[str, dict[str, list[dict[str, Any]]]] = {}
     if upload.empty:
@@ -663,6 +754,15 @@ def _build_comparison(upload: pd.DataFrame, actual: pd.DataFrame) -> pd.DataFram
             "matched_upload_row_id": best.get("upload_row_id", ""),
             "matched_upload_source_file": best.get("upload_source_file", ""),
             "bet": row.get("Bet"),
+            "bet_raw": row.get("bet_raw"),
+            "parse_pattern_used": row.get("parse_pattern_used"),
+            "parse_ok": row.get("parse_ok"),
+            "parsed_player_name": row.get("parsed_player_name"),
+            "parsed_side": row.get("parsed_side"),
+            "parsed_line": row.get("parsed_line"),
+            "parsed_prop_type": row.get("parsed_prop_type"),
+            "raw_grade": row.get("raw_grade"),
+            "parsed_result": row.get("parsed_result"),
             "book": row.get("Book"),
             "player_name": row.get("player_name") or row.get("parsed_player_name"),
             "player_id": row.get("player_id_norm"),
@@ -698,6 +798,15 @@ def _build_comparison(upload: pd.DataFrame, actual: pd.DataFrame) -> pd.DataFram
                     "matched_upload_row_id": row.get("upload_row_id"),
                     "matched_upload_source_file": row.get("upload_source_file"),
                     "bet": "",
+                    "bet_raw": "",
+                    "parse_pattern_used": "",
+                    "parse_ok": np.nan,
+                    "parsed_player_name": "",
+                    "parsed_side": "",
+                    "parsed_line": np.nan,
+                    "parsed_prop_type": "",
+                    "raw_grade": "",
+                    "parsed_result": row.get("upload_result"),
                     "book": "",
                     "player_name": row.get("player_name"),
                     "player_id": row.get("player_id_norm"),
@@ -741,6 +850,548 @@ def _records_for_json(df: pd.DataFrame, limit: int = 25) -> list[dict[str, Any]]
     if df.empty:
         return []
     return json.loads(df.head(limit).to_json(orient="records"))
+
+
+def _load_overlap_snapshot(path: Path, date_value: str) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    snap = pd.read_csv(path, low_memory=False)
+    if snap.empty:
+        return snap
+    out = snap.copy()
+    out["date_norm"] = out.get("snapshot_date", pd.Series("", index=out.index)).map(_date_key)
+    out = out[out["date_norm"].eq(date_value)].copy()
+    if out.empty:
+        return out
+    out["player_id_norm"] = out.get("player_id", pd.Series("", index=out.index)).map(_to_id_text)
+    out["player_name_norm"] = out.get("player_name", pd.Series("", index=out.index)).map(_norm_name)
+    out["prop_type_norm"] = out.get("prop_type", pd.Series("", index=out.index)).map(_market_to_prop)
+    out["line_norm"] = out.get("line", pd.Series("", index=out.index)).map(_line)
+    out["side_norm"] = out.get("side", pd.Series("", index=out.index)).map(_norm_side)
+    out["snapshot_common_key"] = _key(out)
+    out.loc[out["player_id_norm"].astype(str).eq(""), "snapshot_common_key"] = ""
+    out["snapshot_name_key"] = _name_key(out)
+    keep = [
+        "snapshot_common_key",
+        "snapshot_name_key",
+        "overlap_flag",
+        "formation_bucket",
+    ]
+    out = out[[c for c in keep if c in out.columns]].copy()
+    out["formation_bucket"] = out.get("formation_bucket", pd.Series("unmatched_snapshot", index=out.index)).map(_norm_key)
+    raw_overlap = out.get("overlap_flag", pd.Series(False, index=out.index)).astype(str).str.lower()
+    out["overlap_flag"] = raw_overlap.isin({"1", "1.0", "true", "yes"}) | out["formation_bucket"].eq("overlap")
+    return out.drop_duplicates(["snapshot_common_key", "formation_bucket"], keep="last")
+
+
+def _candidate_field(df: pd.DataFrame, *names: str) -> pd.Series:
+    for name in names:
+        if name in df.columns:
+            return df[name]
+    return pd.Series("", index=df.index)
+
+
+def _prepare_candidate_frame(df: pd.DataFrame, date_value: str, source: str, date_col: str = "date") -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    out["candidate_source"] = source
+    out["date_norm"] = _candidate_field(out, date_col, "snapshot_date", "date").map(_date_key)
+    out = out[out["date_norm"].eq(date_value)].copy()
+    if out.empty:
+        return out
+    out["player_id_norm"] = _candidate_field(out, "player_id", "SELECTOR").map(_to_id_text)
+    out["player_name"] = _candidate_field(out, "player_name", "player", "parsed_player_name", "SELECTOR").map(_norm_text)
+    out["player_name_norm"] = out["player_name"].map(_norm_name)
+    out["prop_type_norm"] = _candidate_field(out, "prop_type", "MARKET").map(_market_to_prop)
+    out["side_norm"] = _candidate_field(out, "side", "SIDE").map(_norm_side)
+    out["line_norm"] = _candidate_field(out, "line", "POINT").map(_line)
+    out["formation_bucket"] = _candidate_field(out, "formation_bucket").map(_norm_key)
+    out["common_key"] = _key(out)
+    out.loc[out["player_id_norm"].astype(str).eq(""), "common_key"] = ""
+    out["name_key"] = _name_key(out)
+    out["name_line_key"] = _name_line_key(out)
+    out["name_prop_key"] = _name_prop_key(out)
+    out["name_side_line_key"] = _name_side_line_key(out)
+    return out
+
+
+def _load_snapshot_candidates(snapshot_csv: Path, date_value: str) -> pd.DataFrame:
+    if not snapshot_csv.exists():
+        return pd.DataFrame()
+    try:
+        snap = pd.read_csv(snapshot_csv, low_memory=False)
+    except Exception:
+        return pd.DataFrame()
+    return _prepare_candidate_frame(snap, date_value, "snapshot", date_col="snapshot_date")
+
+
+def _load_registry_candidates(date_value: str) -> pd.DataFrame:
+    paths = [
+        Path(f"artifacts/analysis/mlb/research_gap_analysis/daily_candidate_registry/mlb_v2_daily_candidate_registry_{date_value}.csv"),
+        Path("artifacts/analysis/mlb/research_gap_analysis/mlb_v2_daily_candidate_registry.csv"),
+    ]
+    frames: list[pd.DataFrame] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        prepared = _prepare_candidate_frame(df, date_value, f"registry:{path.name}", date_col="date")
+        if not prepared.empty:
+            frames.append(prepared)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True).drop_duplicates(["common_key", "name_key", "formation_bucket"], keep="last")
+
+
+def _load_lane_candidates(date_value: str) -> pd.DataFrame:
+    lane_root = Path("backend/mlb/exports/model_v2/lanes/today") / date_value
+    paths = [
+        (lane_root / f"hits_lane_selector_{date_value}_ranking_upload_input.csv", "lane:ranking_upload_input"),
+        (lane_root / f"quick_card_hits_{date_value}.csv", "lane:quick_card_hits"),
+        (lane_root / f"hits_lane_selector_{date_value}.csv", "lane:selector"),
+    ]
+    frames: list[pd.DataFrame] = []
+    for path, source in paths:
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        prepared = _prepare_candidate_frame(df, date_value, source, date_col="date")
+        if not prepared.empty:
+            frames.append(prepared)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True).drop_duplicates(["common_key", "name_key", "candidate_source"], keep="last")
+
+
+def _upload_candidates_for_diagnostics(comp: pd.DataFrame, date_value: str) -> pd.DataFrame:
+    upload = comp[comp.get("row_type", pd.Series("", index=comp.index)).eq("upload_not_wagered")].copy()
+    actual_upload_matches = comp[
+        comp.get("row_type", pd.Series("", index=comp.index)).eq("actual_wager")
+        & comp.get("matched_any_upload", pd.Series(False, index=comp.index)).astype(bool)
+    ].copy()
+    if not actual_upload_matches.empty:
+        actual_upload_matches["upload_source_category"] = actual_upload_matches.get("matched_upload_categories", "")
+        actual_upload_matches["upload_source_file"] = actual_upload_matches.get("matched_upload_source_file", "")
+    frames = [df for df in [upload, actual_upload_matches] if not df.empty]
+    if not frames:
+        return pd.DataFrame()
+    candidates = pd.concat(frames, ignore_index=True, sort=False)
+    prepared = _prepare_candidate_frame(candidates, date_value, "upload", date_col="date")
+    if prepared.empty:
+        return prepared
+    prepared["candidate_source"] = prepared.get("upload_source_file", pd.Series("upload", index=prepared.index)).fillna("upload").astype(str)
+    return prepared.drop_duplicates(["common_key", "name_key", "candidate_source"], keep="last")
+
+
+def _find_candidate(actual: pd.Series, candidates: pd.DataFrame) -> tuple[pd.Series | None, str]:
+    if candidates.empty:
+        return None, ""
+    checks = [
+        ("exact_primary_id", "common_key"),
+        ("exact_secondary_name", "name_key"),
+        ("same_date_player_id", "player_id_norm"),
+        ("same_date_name_line", "name_line_key"),
+        ("same_date_name_prop", "name_prop_key"),
+        ("same_date_name_side_line_ignore_prop", "name_side_line_key"),
+        ("same_date_name", "player_name_norm"),
+    ]
+    for strategy, col in checks:
+        if col not in candidates.columns:
+            continue
+        if col == "player_id_norm":
+            key = str(actual.get("player_id_norm") or "")
+            mask = candidates["date_norm"].astype(str).eq(str(actual.get("date_norm") or "")) & candidates[col].astype(str).eq(key)
+            mask &= key != ""
+        elif col == "player_name_norm":
+            key = str(actual.get("player_name_norm") or "")
+            mask = candidates["date_norm"].astype(str).eq(str(actual.get("date_norm") or "")) & candidates[col].astype(str).eq(key)
+            mask &= key != ""
+        else:
+            key = str(actual.get(col) or "")
+            if col in {"name_key", "name_line_key", "name_prop_key", "name_side_line_key"} and not str(actual.get("player_name_norm") or ""):
+                continue
+            mask = candidates[col].astype(str).eq(key) & (key != "") & (~pd.Series([key]).astype(str).str.contains("nan", case=False).iloc[0])
+        found = candidates.loc[mask]
+        if not found.empty:
+            return found.iloc[0], strategy
+    return None, ""
+
+
+def _candidate_payload(candidate: pd.Series | None, strategy: str, prefix: str) -> dict[str, Any]:
+    if candidate is None:
+        return {
+            f"closest_{prefix}_match_strategy": "",
+            f"closest_{prefix}_player_id": "",
+            f"closest_{prefix}_player_name": "",
+            f"closest_{prefix}_prop_type": "",
+            f"closest_{prefix}_side": "",
+            f"closest_{prefix}_line": "",
+            f"closest_{prefix}_formation_bucket": "",
+            f"closest_{prefix}_source": "",
+        }
+    return {
+        f"closest_{prefix}_match_strategy": strategy,
+        f"closest_{prefix}_player_id": candidate.get("player_id_norm", ""),
+        f"closest_{prefix}_player_name": candidate.get("player_name", ""),
+        f"closest_{prefix}_prop_type": candidate.get("prop_type_norm", ""),
+        f"closest_{prefix}_side": candidate.get("side_norm", ""),
+        f"closest_{prefix}_line": candidate.get("line_norm", ""),
+        f"closest_{prefix}_formation_bucket": candidate.get("formation_bucket", ""),
+        f"closest_{prefix}_source": candidate.get("candidate_source", ""),
+    }
+
+
+def _mismatch_reason(actual: pd.Series, snap: pd.Series | None, snap_strategy: str, registry: pd.Series | None, lane: pd.Series | None, upload: pd.Series | None) -> tuple[str, str]:
+    source_category = _norm_key(actual.get("source_category"))
+    if source_category not in {"v2_ranking", "quick_card"}:
+        return "actual wager source category not represented in snapshot", "No overlap formation bucket is expected for this source category."
+    if not _norm_text(actual.get("player_id_norm")) and not _norm_text(actual.get("player_name_norm")):
+        return "player_id missing on actual wager row", "Attach player identity from graded wager/reconcile parser before snapshot enrichment."
+    if snap is not None:
+        if snap_strategy == "same_date_player_id":
+            fields = []
+            for label, col in [("prop_type", "prop_type_norm"), ("side", "side_norm"), ("line", "line_norm")]:
+                if str(actual.get(col)) != str(snap.get(col)):
+                    fields.append(label)
+            reason = f"{'/'.join(fields)} mismatch" if fields else "player_id mismatch but player_name matches"
+            return reason, "Exact snapshot enrichment requires date + player_id/name + prop_type + side + line."
+        if snap_strategy in {"same_date_name_line", "same_date_name_prop"}:
+            return "player_name normalization mismatch", "Inspect player identity/name normalization or prop/side/line differences against snapshot."
+    if registry is not None:
+        return "candidate exists in registry but not snapshot", "Refresh overlap snapshot capture before reconcile or investigate registry/snapshot drift."
+    if lane is not None:
+        return "candidate exists in selected-side lane artifact but not snapshot", "Refresh overlap snapshot capture from selected-side formation artifacts."
+    if upload is not None:
+        return "candidate exists only in upload file", "This wager matched a timestamped upload but was not present in formation snapshot."
+    return "formation snapshot missing candidate", "No matching selected-side formation candidate was found in snapshot, registry, lane, or upload diagnostics."
+
+
+def _build_overlap_unmatched_diagnostics(
+    enriched: pd.DataFrame,
+    snapshot_csv: Path,
+    date_value: str,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    empty_columns = [
+        "date",
+        "wager_id",
+        "note",
+        "source_category",
+        "actual_player_id",
+        "actual_player_name",
+        "actual_prop_type",
+        "actual_side",
+        "actual_line",
+        "bet",
+        "mismatch_reason",
+        "suggested_fix",
+    ]
+    unmatched_mask = (
+        enriched.get("_trace_source", pd.Series("unmatched", index=enriched.index)).astype(str).eq("unmatched")
+        if "_trace_source" in enriched.columns
+        else enriched.get("formation_bucket", pd.Series("", index=enriched.index)).eq("unmatched_snapshot")
+    )
+    actual = enriched[
+        enriched.get("row_type", pd.Series("", index=enriched.index)).eq("actual_wager")
+        & unmatched_mask
+    ].copy()
+    if actual.empty:
+        return pd.DataFrame(columns=empty_columns), {
+            "unmatched_by_reason": {},
+            "registry_candidate_matches": 0,
+            "upload_candidate_matches": 0,
+            "lane_candidate_matches": 0,
+        }
+
+    actual["date_norm"] = actual.get("date", pd.Series("", index=actual.index)).map(_date_key)
+    actual["player_id_norm"] = actual.get("player_id", pd.Series("", index=actual.index)).map(_to_id_text)
+    actual["player_name_norm"] = actual.get("player_name", pd.Series("", index=actual.index)).map(_norm_name)
+    actual["prop_type_norm"] = actual.get("prop_type", pd.Series("", index=actual.index)).map(_market_to_prop)
+    actual["side_norm"] = actual.get("side", pd.Series("", index=actual.index)).map(_norm_side)
+    actual["line_norm"] = actual.get("line", pd.Series("", index=actual.index)).map(_line)
+    actual["common_key"] = _key(actual)
+    actual.loc[actual["player_id_norm"].astype(str).eq(""), "common_key"] = ""
+    actual["name_key"] = _name_key(actual)
+    actual["name_line_key"] = _name_line_key(actual)
+    actual["name_prop_key"] = _name_prop_key(actual)
+    actual["name_side_line_key"] = _name_side_line_key(actual)
+
+    snapshot_candidates = _load_snapshot_candidates(snapshot_csv, date_value)
+    registry_candidates = _load_registry_candidates(date_value)
+    lane_candidates = _load_lane_candidates(date_value)
+    upload_candidates = _upload_candidates_for_diagnostics(enriched, date_value)
+
+    rows: list[dict[str, Any]] = []
+    registry_matches = 0
+    lane_matches = 0
+    upload_matches = 0
+    for _, row in actual.iterrows():
+        snap_candidate, snap_strategy = _find_candidate(row, snapshot_candidates)
+        registry_candidate, registry_strategy = _find_candidate(row, registry_candidates)
+        lane_candidate, lane_strategy = _find_candidate(row, lane_candidates)
+        upload_candidate, upload_strategy = _find_candidate(row, upload_candidates)
+        registry_matches += int(registry_candidate is not None)
+        lane_matches += int(lane_candidate is not None)
+        upload_matches += int(upload_candidate is not None)
+        reason, suggested_fix = _mismatch_reason(row, snap_candidate, snap_strategy, registry_candidate, lane_candidate, upload_candidate)
+        payload = {
+            "date": row.get("date", ""),
+            "wager_id": row.get("wager_id", ""),
+            "note": row.get("note", ""),
+            "source_category": row.get("source_category", ""),
+            "actual_player_id": row.get("player_id", ""),
+            "actual_player_name": row.get("player_name", ""),
+            "actual_player_name_norm": row.get("player_name_norm", ""),
+            "actual_prop_type": row.get("prop_type", ""),
+            "actual_side": row.get("side", ""),
+            "actual_line": row.get("line", ""),
+            "bet": row.get("bet", ""),
+            "matched_any_upload": row.get("matched_any_upload", False),
+            "matched_upload_categories": row.get("matched_upload_categories", ""),
+            "matched_upload_source_file": row.get("matched_upload_source_file", ""),
+            "mismatch_reason": reason,
+            "suggested_fix": suggested_fix,
+        }
+        payload.update(_candidate_payload(snap_candidate, snap_strategy, "snapshot"))
+        payload.update(_candidate_payload(registry_candidate, registry_strategy, "registry"))
+        payload.update(_candidate_payload(lane_candidate, lane_strategy, "lane"))
+        payload.update(_candidate_payload(upload_candidate, upload_strategy, "upload"))
+        rows.append(payload)
+
+    diag = pd.DataFrame(rows)
+    return diag, {
+        "unmatched_by_reason": {str(k): int(v) for k, v in diag["mismatch_reason"].value_counts(dropna=False).to_dict().items()},
+        "registry_candidate_matches": int(registry_matches),
+        "upload_candidate_matches": int(upload_matches),
+        "lane_candidate_matches": int(lane_matches),
+    }
+
+
+def _build_timestamped_upload_index(timestamped_upload: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    index: dict[str, list[dict[str, Any]]] = {}
+    if timestamped_upload.empty:
+        return index
+    work = timestamped_upload.copy()
+    work["common_key"] = _key(work)
+    work.loc[work["player_id_norm"].astype(str).eq(""), "common_key"] = ""
+    work["name_key"] = _name_key(work)
+    for _, row in work.iterrows():
+        payload = row.to_dict()
+        for key_col in ("common_key", "name_key"):
+            key = str(row.get(key_col) or "")
+            if key and "nan" not in key.lower():
+                index.setdefault(key, []).append(payload)
+    return index
+
+
+def _upload_bucket_from_categories(categories: set[str]) -> str:
+    has_ranking = "v2_ranking" in categories
+    has_quick = "quick_card" in categories
+    if has_ranking and has_quick:
+        return "overlap_upload"
+    if has_ranking:
+        return "ranking_only_upload"
+    if has_quick:
+        return "quick_card_only_upload"
+    return "unmatched_snapshot"
+
+
+def _apply_timestamped_upload_provenance(
+    comp: pd.DataFrame,
+    timestamped_upload: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    out = comp.copy()
+    out["matched_upload_file"] = out.get("matched_upload_source_file", pd.Series("", index=out.index)).fillna("")
+    out["matched_upload_run_tag"] = out["matched_upload_file"].map(_upload_run_tag_from_path)
+    formation = out.get("formation_bucket", pd.Series("unmatched_snapshot", index=out.index)).astype(str)
+    out["_trace_source"] = np.where(formation.ne("unmatched_snapshot"), "upload_match", "unmatched")
+    actual_mask = out.get("row_type", pd.Series("", index=out.index)).eq("actual_wager")
+    external_mask = actual_mask & out.get("source_category", pd.Series("", index=out.index)).astype(str).isin(
+        ["eight_r", "8r"]
+    )
+    if external_mask.any():
+        out.loc[external_mask, "formation_bucket"] = "eight_r"
+        out.loc[external_mask, "_trace_source"] = "external_source"
+        out.loc[external_mask, "overlap_flag"] = False
+
+    summary = {
+        "external_source_rows": int(external_mask.sum()),
+        "eight_r_external_rows": int(external_mask.sum()),
+        "truly_unmatched_rows": 0,
+        "still_unmatched_rows": 0,
+        "overlap_upload_rows": 0,
+        "ranking_only_upload_rows": 0,
+        "quick_card_only_upload_rows": 0,
+    }
+    if timestamped_upload.empty or not actual_mask.any():
+        truly_unmatched = int((actual_mask & out["_trace_source"].eq("unmatched")).sum())
+        summary["truly_unmatched_rows"] = truly_unmatched
+        summary["still_unmatched_rows"] = truly_unmatched
+        return out, summary
+
+    work = out.loc[actual_mask].copy()
+    work["date_norm"] = work.get("date", pd.Series("", index=work.index)).map(_date_key)
+    work["player_id_norm"] = work.get("player_id", pd.Series("", index=work.index)).map(_to_id_text)
+    work["player_name_norm"] = work.get("player_name", pd.Series("", index=work.index)).map(_norm_name)
+    work["prop_type_norm"] = work.get("prop_type", pd.Series("", index=work.index)).map(_market_to_prop)
+    work["side_norm"] = work.get("side", pd.Series("", index=work.index)).map(_norm_side)
+    work["line_norm"] = work.get("line", pd.Series("", index=work.index)).map(_line)
+    work["common_key"] = _key(work)
+    work.loc[work["player_id_norm"].astype(str).eq(""), "common_key"] = ""
+    work["name_key"] = _name_key(work)
+
+    upload_index = _build_timestamped_upload_index(timestamped_upload)
+    for idx, row in work.iterrows():
+        if str(out.loc[idx, "_trace_source"]) == "upload_match":
+            continue
+        matches: list[dict[str, Any]] = []
+        for key in [str(row.get("common_key") or ""), str(row.get("name_key") or "")]:
+            if not key or "nan" in key.lower():
+                continue
+            matches.extend(upload_index.get(key, []))
+            if matches:
+                break
+        if not matches:
+            continue
+        categories = {str(m.get("upload_source_category") or "") for m in matches if m.get("upload_source_category")}
+        bucket = _upload_bucket_from_categories(categories)
+        if bucket == "unmatched_snapshot":
+            continue
+        files = sorted({str(m.get("upload_source_file") or "") for m in matches if m.get("upload_source_file")})
+        run_tags = sorted({_upload_run_tag_from_path(file) for file in files if _upload_run_tag_from_path(file)})
+        out.loc[idx, "formation_bucket"] = bucket
+        out.loc[idx, "_trace_source"] = "upload_match"
+        out.loc[idx, "matched_upload_file"] = ",".join(files)
+        out.loc[idx, "matched_upload_run_tag"] = ",".join(run_tags)
+        out.loc[idx, "overlap_flag"] = False
+
+    actual = out.loc[actual_mask].copy()
+    summary.update(
+        {
+            "external_source_rows": int(actual["_trace_source"].eq("external_source").sum()),
+            "eight_r_external_rows": int((
+                actual["_trace_source"].eq("external_source")
+                & actual.get("source_category", pd.Series("", index=actual.index)).astype(str).eq("eight_r")
+            ).sum()),
+            "truly_unmatched_rows": int(actual["_trace_source"].eq("unmatched").sum()),
+            "still_unmatched_rows": int(actual["_trace_source"].eq("unmatched").sum()),
+            "overlap_upload_rows": int(actual["formation_bucket"].eq("overlap_upload").sum()),
+            "ranking_only_upload_rows": int(actual["formation_bucket"].eq("ranking_only_upload").sum()),
+            "quick_card_only_upload_rows": int(actual["formation_bucket"].eq("quick_card_only_upload").sum()),
+        }
+    )
+    return out, summary
+
+
+def _apply_reconcile_trace_bucket(comp: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+    out = comp.copy()
+    out["reconcile_trace_bucket"] = ""
+    actual_mask = out.get("row_type", pd.Series("", index=out.index)).eq("actual_wager")
+    source = out.get("_trace_source", pd.Series("unmatched", index=out.index)).astype(str)
+    upload_match = actual_mask & source.eq("upload_match")
+    external = actual_mask & source.eq("external_source")
+    unmatched = actual_mask & ~(upload_match | external)
+    out.loc[upload_match, "reconcile_trace_bucket"] = "upload_match"
+    out.loc[external, "reconcile_trace_bucket"] = "external_source"
+    out.loc[unmatched, "reconcile_trace_bucket"] = "unmatched"
+    return out, {
+        "upload_match_rows": int(upload_match.sum()),
+        "external_source_rows": int(external.sum()),
+        "truly_unmatched_rows": int(unmatched.sum()),
+    }
+
+
+def _enrich_with_overlap_snapshot(comp: pd.DataFrame, snapshot_csv: Path, date_value: str) -> tuple[pd.DataFrame, dict[str, Any]]:
+    out = comp.copy()
+    out["overlap_flag"] = False
+    out["formation_bucket"] = "unmatched_snapshot"
+
+    actual_mask = out["row_type"].eq("actual_wager") if "row_type" in out.columns else pd.Series(False, index=out.index)
+    diagnostics: dict[str, Any] = {
+        "snapshot_csv": str(snapshot_csv),
+        "snapshot_available": bool(snapshot_csv.exists()),
+        "actual_wager_rows": int(actual_mask.sum()),
+        "snapshot_matched_rows": 0,
+        "rows_matched_to_snapshot": 0,
+        "rows_unmatched_to_snapshot": int(actual_mask.sum()),
+        "overlap_rows_among_actual_wagers": 0,
+        "ranking_only_rows_among_actual_wagers": 0,
+        "quick_card_only_rows_among_actual_wagers": 0,
+    }
+
+    snapshot = _load_overlap_snapshot(snapshot_csv, date_value)
+    diagnostics["snapshot_rows_for_date"] = int(len(snapshot))
+    if snapshot.empty or not actual_mask.any():
+        diagnostics["reason"] = "missing_or_empty_snapshot" if snapshot.empty else "no_actual_wager_rows"
+        return out, diagnostics
+
+    work = out.loc[actual_mask].copy()
+    work["date_norm"] = work.get("date", pd.Series("", index=work.index)).map(_date_key)
+    work["player_id_norm"] = work.get("player_id", pd.Series("", index=work.index)).map(_to_id_text)
+    work["player_name_norm"] = work.get("player_name", pd.Series("", index=work.index)).map(_norm_name)
+    work["prop_type_norm"] = work.get("prop_type", pd.Series("", index=work.index)).map(_market_to_prop)
+    work["line_norm"] = work.get("line", pd.Series("", index=work.index)).map(_line)
+    work["side_norm"] = work.get("side", pd.Series("", index=work.index)).map(_norm_side)
+    work["_comp_index"] = work.index
+    work["common_key"] = _key(work)
+    work.loc[work["player_id_norm"].astype(str).eq(""), "common_key"] = ""
+    work["name_key"] = _name_key(work)
+
+    by_id = snapshot[["snapshot_common_key", "overlap_flag", "formation_bucket"]].rename(
+        columns={
+            "snapshot_common_key": "common_key",
+            "overlap_flag": "snapshot_overlap_flag",
+            "formation_bucket": "snapshot_formation_bucket",
+        }
+    )
+    matched = work.merge(by_id, on="common_key", how="left")
+    missing = matched["snapshot_formation_bucket"].isna()
+    if missing.any():
+        by_name = snapshot[["snapshot_name_key", "overlap_flag", "formation_bucket"]].rename(
+            columns={
+                "snapshot_name_key": "name_key",
+                "overlap_flag": "snapshot_overlap_flag",
+                "formation_bucket": "snapshot_formation_bucket",
+            }
+        )
+        fallback = work.loc[work["_comp_index"].isin(matched.loc[missing, "_comp_index"])].merge(
+            by_name,
+            on="name_key",
+            how="left",
+        )
+        fallback = fallback.dropna(subset=["snapshot_formation_bucket"]).drop_duplicates("_comp_index", keep="last")
+        if not fallback.empty:
+            fill_map = fallback.set_index("_comp_index")
+            idx = matched["_comp_index"].isin(fill_map.index) & matched["snapshot_formation_bucket"].isna()
+            matched.loc[idx, "snapshot_formation_bucket"] = matched.loc[idx, "_comp_index"].map(fill_map["snapshot_formation_bucket"])
+            matched.loc[idx, "snapshot_overlap_flag"] = matched.loc[idx, "_comp_index"].map(fill_map["snapshot_overlap_flag"])
+
+    matched = matched.drop_duplicates("_comp_index", keep="last").set_index("_comp_index")
+    hit = matched["snapshot_formation_bucket"].notna()
+    if hit.any():
+        out.loc[matched.index[hit], "formation_bucket"] = matched.loc[hit, "snapshot_formation_bucket"].astype(str)
+        out.loc[matched.index[hit], "overlap_flag"] = matched.loc[hit, "snapshot_overlap_flag"].map(bool)
+
+    actual = out.loc[actual_mask].copy()
+    matched_actual = actual[actual["formation_bucket"].ne("unmatched_snapshot")]
+    diagnostics.update(
+        {
+            "rows_matched_to_snapshot": int(len(matched_actual)),
+            "snapshot_matched_rows": int(len(matched_actual)),
+            "rows_unmatched_to_snapshot": int(len(actual) - len(matched_actual)),
+            "overlap_rows_among_actual_wagers": int(actual["formation_bucket"].eq("overlap").sum()),
+            "ranking_only_rows_among_actual_wagers": int(actual["formation_bucket"].eq("ranking_only").sum()),
+            "quick_card_only_rows_among_actual_wagers": int(actual["formation_bucket"].eq("quick_card_only").sum()),
+            "source": "overlap_daily_snapshot",
+        }
+    )
+    return out, diagnostics
 
 
 def _build_summary(comp: pd.DataFrame, upload: pd.DataFrame, actual: pd.DataFrame, date_value: str) -> dict[str, Any]:
@@ -830,6 +1481,12 @@ def _write_md(path: Path, summary: dict[str, Any]) -> None:
             f"- Upload rows not wagered: `{summary['upload_rows_not_wagered']}`",
             f"- Duplicate/ambiguous matches: `{summary['duplicate_or_ambiguous_matches']}`",
             "",
+            "## Reconcile Trace",
+            f"- Actual wager rows: `{summary.get('overlap_enrichment', {}).get('actual_wager_rows', 0)}`",
+            f"- Upload matches: `{summary.get('overlap_enrichment', {}).get('upload_match_rows', 0)}`",
+            f"- External source rows: `{summary.get('overlap_enrichment', {}).get('external_source_rows', 0)}`",
+            f"- Truly unmatched rows: `{summary.get('overlap_enrichment', {}).get('truly_unmatched_rows', 0)}`",
+            "",
             "## Upload Rows Not Wagered By Source",
         ]
     )
@@ -850,6 +1507,8 @@ def main() -> None:
     parser.add_argument("--out-csv", default="")
     parser.add_argument("--summary-json", default="")
     parser.add_argument("--summary-md", default="")
+    parser.add_argument("--overlap-snapshot-csv", default="artifacts/analysis/mlb/research_gap_analysis/overlap_daily_snapshot.csv")
+    parser.add_argument("--overlap-enrichment-diagnostics-json", default="")
     args = parser.parse_args()
 
     date_value = _date_key(args.date)
@@ -882,6 +1541,14 @@ def main() -> None:
     out_csv = Path(args.out_csv or reconcile_date_root / f"actual_wagers_by_source_{date_value}.csv")
     summary_json = Path(args.summary_json or reconcile_date_root / f"actual_wagers_by_source_{date_value}_summary.json")
     summary_md = Path(args.summary_md or reconcile_date_root / f"actual_wagers_by_source_{date_value}_summary.md")
+    overlap_snapshot_csv = Path(args.overlap_snapshot_csv)
+    overlap_enrichment_diagnostics_json = Path(
+        args.overlap_enrichment_diagnostics_json
+        or reconcile_date_root / f"actual_wagers_by_source_{date_value}_overlap_enrichment.json"
+    )
+    overlap_unmatched_diagnostics_csv = (
+        reconcile_date_root / f"actual_wagers_by_source_{date_value}_overlap_unmatched_diagnostics.csv"
+    )
 
     if not ranking_upload_paths:
         raise SystemExit(f"Missing required input: {upload_root / date_value / f'ranking_tool_upload_{date_value}.csv'}")
@@ -896,6 +1563,10 @@ def main() -> None:
         _attach_upload_outcomes(_load_upload_many(ranking_upload_paths, date_value, "v2_ranking"), rec),
         _attach_upload_outcomes(_load_upload_many(quick_card_upload_paths, date_value, "quick_card"), rec),
     ]
+    timestamped_upload_frames = [
+        _load_timestamped_upload_many(ranking_upload_paths, date_value, "v2_ranking"),
+        _load_timestamped_upload_many(quick_card_upload_paths, date_value, "quick_card"),
+    ]
     if v1_steam_upload_csv.exists():
         v1_upload = _load_v1_steam_upload(v1_steam_upload_csv, date_value)
         v1_upload["parsed_player_name"] = v1_upload["player_name"]
@@ -904,8 +1575,31 @@ def main() -> None:
         v1_upload["player_name"] = v1_upload.get("parsed_player_name", "")
         upload_frames.append(v1_upload)
     upload = pd.concat(upload_frames, ignore_index=True)
+    timestamped_upload = pd.concat(
+        [frame for frame in timestamped_upload_frames if not frame.empty],
+        ignore_index=True,
+    ) if any(not frame.empty for frame in timestamped_upload_frames) else pd.DataFrame()
     actual = _load_actual(graded_csv, date_value, rec)
     comp = _build_comparison(upload, actual)
+    comp, overlap_enrichment = _enrich_with_overlap_snapshot(comp, overlap_snapshot_csv, date_value)
+    comp, timestamped_upload_summary = _apply_timestamped_upload_provenance(comp, timestamped_upload)
+    overlap_enrichment.update(timestamped_upload_summary)
+    comp, trace_summary = _apply_reconcile_trace_bucket(comp)
+    overlap_enrichment.update(trace_summary)
+    unmatched_diagnostics, unmatched_summary = _build_overlap_unmatched_diagnostics(comp, overlap_snapshot_csv, date_value)
+    overlap_enrichment.update(unmatched_summary)
+    overlap_enrichment["overlap_unmatched_diagnostics_csv"] = str(overlap_unmatched_diagnostics_csv)
+    public_enrichment_keys = [
+        "actual_wager_rows",
+        "upload_match_rows",
+        "external_source_rows",
+        "eight_r_external_rows",
+        "truly_unmatched_rows",
+        "still_unmatched_rows",
+        "unmatched_by_reason",
+        "overlap_unmatched_diagnostics_csv",
+    ]
+    overlap_enrichment = {key: overlap_enrichment.get(key) for key in public_enrichment_keys if key in overlap_enrichment}
     summary = _build_summary(comp, upload, actual, date_value)
     summary.update(
         {
@@ -917,15 +1611,21 @@ def main() -> None:
             "graded_csv": str(graded_csv),
             "reconcile_csv": str(reconcile_csv),
             "out_csv": str(out_csv),
+            "overlap_enrichment": overlap_enrichment,
+            "overlap_enrichment_diagnostics_json": str(overlap_enrichment_diagnostics_json),
         }
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
-    comp.to_csv(out_csv, index=False)
+    comp.drop(columns=["_trace_source", "matched_upload_source", "upload_only_match_flag", "formation_bucket_source"], errors="ignore").to_csv(out_csv, index=False)
+    unmatched_diagnostics.to_csv(overlap_unmatched_diagnostics_csv, index=False)
+    overlap_enrichment_diagnostics_json.write_text(json.dumps(overlap_enrichment, indent=2, sort_keys=True) + "\n")
     summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     _write_md(summary_md, summary)
 
     print(f"Wrote {out_csv}")
+    print(f"Wrote {overlap_unmatched_diagnostics_csv}")
+    print(f"Wrote {overlap_enrichment_diagnostics_json}")
     print(f"Wrote {summary_json}")
     print(f"Wrote {summary_md}")
     print(json.dumps(summary, indent=2, sort_keys=True))

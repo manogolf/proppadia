@@ -5,12 +5,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+from backend.mlb.scripts import tool_upload_8rain
 
 
 LANE_ROOT = Path("backend/mlb/exports/model_v2/lanes/today")
@@ -80,8 +83,11 @@ def _date_key(value: Any) -> str:
     return dt.date().isoformat()
 
 
-def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, check=False, capture_output=True, text=True)
+def _run(cmd: list[str], *, run_tag: str | None = None) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    if run_tag:
+        env["MLB_UPLOAD_RUN_TAG"] = run_tag
+    return subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -133,6 +139,13 @@ def _norm_side(value: Any) -> str:
         return "over"
     if text in {"u", "under"}:
         return "under"
+    return text
+
+
+def _norm_text(value: Any) -> str:
+    text = str(value if value is not None else "").strip()
+    if text.lower() in {"", "nan", "none", "null", "<na>"}:
+        return ""
     return text
 
 
@@ -661,6 +674,218 @@ def _metric_by_group(results: dict[str, Any], group: str) -> list[dict[str, Any]
     return [m for m in results.get("metrics", []) if m.get("group") == group]
 
 
+def _selector_overlap_summary(date_value: str, ranking_csv: Path, quick_card_csv: Path) -> dict[str, Any]:
+    def _line_key(value: Any) -> str:
+        val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        if pd.isna(val):
+            return ""
+        return f"{float(val):.3f}".rstrip("0").rstrip(".")
+
+    def _id_key(value: Any) -> str:
+        val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        return str(int(val)) if pd.notna(val) else ""
+
+    def _prep(path: Path, source: str) -> pd.DataFrame:
+        if not path.exists():
+            return pd.DataFrame()
+        df = pd.read_csv(path, low_memory=False)
+        if df.empty:
+            return df
+        out = df.copy()
+        out["selection_source"] = source
+        out["date_key"] = out["date"].map(_date_key)
+        out["player_id_key"] = out.get("player_id", pd.Series("", index=out.index)).map(_id_key)
+        out["player_name_key"] = out.get("player_name", out.get("player", pd.Series("", index=out.index))).map(_norm_text).str.lower()
+        out["player_key"] = out["player_id_key"].where(out["player_id_key"].ne(""), out["player_name_key"])
+        out["market_key"] = out.get("prop_type", pd.Series("", index=out.index)).map(_norm_text).str.lower()
+        out["line_key"] = out.get("line", pd.Series("", index=out.index)).map(_line_key)
+        out["side_key"] = out.get("side", pd.Series("", index=out.index)).map(_norm_text).str.lower()
+        out["home_key"] = out.get("home_team_code", out.get("home_upload", pd.Series("", index=out.index))).map(_norm_text).str.lower()
+        out["away_key"] = out.get("away_team_code", out.get("away_upload", pd.Series("", index=out.index))).map(_norm_text).str.lower()
+        out["game_key"] = out["away_key"] + "@" + out["home_key"]
+        keys = ["date_key", "player_key", "market_key", "line_key", "side_key", "game_key", "selection_source"]
+        return out[out["date_key"].eq(date_value)].drop_duplicates(keys, keep="last")
+
+    ranking = _prep(ranking_csv, "ranking")
+    quick = _prep(quick_card_csv, "quick_card")
+    if ranking.empty and quick.empty:
+        return {"available": False, "reason": "missing_or_empty_selection_files"}
+
+    exact_keys = ["date_key", "player_key", "market_key", "line_key", "side_key", "game_key"]
+    prop_keys = ["date_key", "player_key", "market_key", "line_key"]
+    exact = ranking[exact_keys].drop_duplicates().merge(quick[exact_keys].drop_duplicates(), on=exact_keys, how="inner")
+    exact_rows = ranking.merge(exact, on=exact_keys, how="inner") if not exact.empty else pd.DataFrame()
+    q_prop = quick[prop_keys + ["side_key"]].drop_duplicates().rename(columns={"side_key": "quick_side"})
+    conflicts = ranking.merge(q_prop, on=prop_keys, how="left")
+    conflicts = conflicts[conflicts["quick_side"].notna() & conflicts["quick_side"].ne(conflicts["side_key"])].copy()
+    sample_cols = [c for c in ["player_name", "player_id", "prop_type", "line", "side", "home_team_code", "away_team_code", "source_lane"] if c in exact_rows.columns]
+    return {
+        "available": True,
+        "ranking_selected_count": int(len(ranking)),
+        "quick_card_selected_count": int(len(quick)),
+        "exact_overlap_count": int(len(exact)),
+        "ranking_only_count": int(len(ranking) - len(exact)),
+        "quick_card_only_count": int(len(quick) - len(exact)),
+        "opposite_side_conflict_count": int(len(conflicts.drop_duplicates(prop_keys))),
+        "exact_overlap_rows": exact_rows[sample_cols].head(25).to_dict(orient="records") if sample_cols else [],
+        "opposite_side_conflict_rows": conflicts[[c for c in sample_cols if c in conflicts.columns]].head(25).to_dict(orient="records") if sample_cols else [],
+    }
+
+
+def _selector_overlap_role_profile_summary(date_value: str, overlap_summary: dict[str, Any], ranking_csv: Path, quick_card_csv: Path) -> dict[str, Any]:
+    if not overlap_summary.get("available"):
+        return {"available": False, "reason": overlap_summary.get("reason", "overlap_unavailable")}
+
+    def _line_key(value: Any) -> str:
+        val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        if pd.isna(val):
+            return ""
+        return f"{float(val):.3f}".rstrip("0").rstrip(".")
+
+    def _id_key(value: Any) -> str:
+        val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        return str(int(val)) if pd.notna(val) else ""
+
+    def _prep(path: Path, source: str) -> pd.DataFrame:
+        if not path.exists():
+            return pd.DataFrame()
+        df = pd.read_csv(path, low_memory=False)
+        if df.empty:
+            return df
+        out = df.copy()
+        out["selection_source"] = source
+        out["date_key"] = out["date"].map(_date_key)
+        out["player_id_key"] = out.get("player_id", pd.Series("", index=out.index)).map(_id_key)
+        out["player_name_key"] = out.get("player_name", out.get("player", pd.Series("", index=out.index))).map(_norm_text).str.lower()
+        out["player_key"] = out["player_id_key"].where(out["player_id_key"].ne(""), out["player_name_key"])
+        out["market_key"] = out.get("prop_type", pd.Series("", index=out.index)).map(_norm_text).str.lower()
+        out["line_key"] = out.get("line", pd.Series("", index=out.index)).map(_line_key)
+        out["side_key"] = out.get("side", pd.Series("", index=out.index)).map(_norm_text).str.lower()
+        out["home_key"] = out.get("home_team_code", out.get("home_upload", pd.Series("", index=out.index))).map(_norm_text).str.lower()
+        out["away_key"] = out.get("away_team_code", out.get("away_upload", pd.Series("", index=out.index))).map(_norm_text).str.lower()
+        out["game_key"] = out["away_key"] + "@" + out["home_key"]
+        keys = ["date_key", "player_key", "market_key", "line_key", "side_key", "game_key", "selection_source"]
+        return out[out["date_key"].eq(date_value)].drop_duplicates(keys, keep="last")
+
+    ranking = _prep(ranking_csv, "ranking")
+    quick = _prep(quick_card_csv, "quick_card")
+    if ranking.empty or quick.empty:
+        return {"available": False, "reason": "missing_ranking_or_quick_card_selection_file"}
+    exact_keys = ["date_key", "player_key", "market_key", "line_key", "side_key", "game_key"]
+    exact = ranking[exact_keys].drop_duplicates().merge(quick[exact_keys].drop_duplicates(), on=exact_keys, how="inner")
+    exact_rows = ranking.merge(exact, on=exact_keys, how="inner") if not exact.empty else pd.DataFrame()
+    if exact_rows.empty:
+        return {
+            "available": True,
+            "exact_overlap_count": 0,
+            "under_0_5_count": 0,
+            "under_0_5_low_d15_ab_unstable_role_count": 0,
+            "context_status": "no_exact_overlaps",
+        }
+
+    url = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL") or ""
+    if not url:
+        return {
+            "available": True,
+            "exact_overlap_count": int(len(exact_rows)),
+            "under_0_5_count": int((exact_rows["side_key"].eq("under") & exact_rows["line_key"].eq("0.5")).sum()),
+            "under_0_5_low_d15_ab_unstable_role_count": 0,
+            "context_status": "db_url_missing",
+        }
+    try:
+        from sqlalchemy import create_engine, text
+
+        player_ids = sorted({int(v) for v in pd.to_numeric(exact_rows.get("player_id"), errors="coerce").dropna().unique()})
+        engine = create_engine(url)
+        with engine.connect() as conn:
+            pds = pd.read_sql(
+                text(
+                    """
+                    SELECT player_id, game_date, d15_at_bats
+                    FROM mlb.player_derived_stats
+                    WHERE player_id = ANY(:player_ids)
+                      AND game_date = CAST(:game_date AS date)
+                    """
+                ),
+                conn,
+                params={"player_ids": player_ids, "game_date": date_value},
+            )
+            start_date = (pd.Timestamp(date_value) - pd.Timedelta(days=45)).date().isoformat()
+            hist = pd.read_sql(
+                text(
+                    """
+                    SELECT player_id, game_date, position, at_bats
+                    FROM mlb.player_stats
+                    WHERE player_id = ANY(:player_ids)
+                      AND game_date BETWEEN CAST(:start_date AS date) AND CAST(:game_date AS date)
+                      AND COALESCE(position, '') <> 'P'
+                    """
+                ),
+                conn,
+                params={"player_ids": player_ids, "start_date": start_date, "game_date": date_value},
+            )
+    except Exception as exc:
+        return {
+            "available": True,
+            "exact_overlap_count": int(len(exact_rows)),
+            "under_0_5_count": int((exact_rows["side_key"].eq("under") & exact_rows["line_key"].eq("0.5")).sum()),
+            "under_0_5_low_d15_ab_unstable_role_count": 0,
+            "context_status": f"db_query_failed:{type(exc).__name__}",
+        }
+
+    pds["player_id_key"] = pds.get("player_id", pd.Series("", index=pds.index)).map(_id_key)
+    pds["d15_at_bats"] = pd.to_numeric(pds.get("d15_at_bats"), errors="coerce")
+    pds = pds.drop_duplicates(["player_id_key"], keep="last")
+    exact_rows = exact_rows.merge(pds[["player_id_key", "d15_at_bats"]], on="player_id_key", how="left")
+    exact_rows["low_d15_ab"] = pd.to_numeric(exact_rows["d15_at_bats"], errors="coerce").le(3)
+
+    hist["game_date"] = pd.to_datetime(hist.get("game_date"), errors="coerce")
+    hist["player_id_key"] = hist.get("player_id", pd.Series("", index=hist.index)).map(_id_key)
+    hist["at_bats"] = pd.to_numeric(hist.get("at_bats"), errors="coerce").fillna(0)
+    hist["start_proxy"] = hist["at_bats"].ge(3)
+    hist["pinch_hit_proxy"] = hist["at_bats"].between(0, 1, inclusive="both")
+    grouped = {pid: grp for pid, grp in hist.dropna(subset=["game_date"]).groupby("player_id_key", sort=False)}
+    current_date = pd.Timestamp(date_value)
+    unstable_flags = []
+    for _, row in exact_rows.iterrows():
+        grp = grouped.get(row.get("player_id_key", ""))
+        if grp is None or grp.empty:
+            unstable_flags.append(True)
+            continue
+        prior = grp[grp["game_date"] < current_date]
+        window15 = prior[prior["game_date"] >= current_date - pd.Timedelta(days=15)]
+        window30 = prior[prior["game_date"] >= current_date - pd.Timedelta(days=30)]
+        apps30 = len(window30)
+        ab30 = float(window30["at_bats"].sum()) if apps30 else 0.0
+        starts30 = int(window30["start_proxy"].sum()) if apps30 else 0
+        start_rate15 = float(window15["start_proxy"].mean()) if len(window15) else np.nan
+        start_rate30 = float(window30["start_proxy"].mean()) if apps30 else np.nan
+        pinch_rate15 = float(window15["pinch_hit_proxy"].mean()) if len(window15) else np.nan
+        unstable = (
+            apps30 <= 5
+            or ab30 <= 15
+            or starts30 <= 2
+            or (pd.notna(start_rate15) and start_rate15 < 0.35)
+            or (pd.notna(start_rate30) and start_rate30 < 0.65)
+            or (pd.notna(pinch_rate15) and pinch_rate15 >= 0.35)
+        )
+        unstable_flags.append(bool(unstable))
+    exact_rows["unstable_role"] = unstable_flags
+    exact_rows["under_0_5"] = exact_rows["side_key"].eq("under") & exact_rows["line_key"].eq("0.5")
+    profile = exact_rows["under_0_5"] & exact_rows["low_d15_ab"] & exact_rows["unstable_role"]
+    sample_cols = [c for c in ["player_name", "player_id", "prop_type", "line", "side", "source_lane", "d15_at_bats", "unstable_role"] if c in exact_rows.columns]
+    return {
+        "available": True,
+        "exact_overlap_count": int(len(exact_rows)),
+        "under_0_5_count": int(exact_rows["under_0_5"].sum()),
+        "under_0_5_low_d15_ab_unstable_role_count": int(profile.sum()),
+        "low_d15_ab_count": int(exact_rows["low_d15_ab"].sum()),
+        "unstable_role_count": int(exact_rows["unstable_role"].sum()),
+        "context_status": "db_query_ok",
+        "profile_rows": exact_rows.loc[profile, sample_cols].head(25).to_dict(orient="records") if sample_cols else [],
+    }
+
+
 def _write_md(
     *,
     path: Path,
@@ -674,6 +899,8 @@ def _write_md(
     selector_proc: subprocess.CompletedProcess[str] | None,
     results_proc: subprocess.CompletedProcess[str] | None,
     environment_summary: dict[str, Any] | None = None,
+    overlap_summary: dict[str, Any] | None = None,
+    overlap_role_summary: dict[str, Any] | None = None,
 ) -> None:
     counts = selector_summary.get("counts_by_lane", {})
     identity = selector_summary.get("upload_identity_validation", {})
@@ -725,6 +952,40 @@ def _write_md(
             )
     elif environment_summary:
         lines.extend(["", "## Environment Regime Diagnostics", f"- Unavailable: `{environment_summary.get('reason', 'unknown')}`"])
+
+    overlap_summary = overlap_summary or {}
+    if overlap_summary.get("available"):
+        lines.extend(
+            [
+                "",
+                "## Ranking vs Quick Card Overlap",
+                f"- Ranking selected count: `{overlap_summary.get('ranking_selected_count', 0)}`",
+                f"- Quick Card selected count: `{overlap_summary.get('quick_card_selected_count', 0)}`",
+                f"- Exact overlap count: `{overlap_summary.get('exact_overlap_count', 0)}`",
+                f"- Ranking-only count: `{overlap_summary.get('ranking_only_count', 0)}`",
+                f"- Quick-Card-only count: `{overlap_summary.get('quick_card_only_count', 0)}`",
+                f"- Opposite-side same player/market/line conflicts: `{overlap_summary.get('opposite_side_conflict_count', 0)}`",
+                f"- Exact overlap rows: `{overlap_summary.get('exact_overlap_rows', [])}`",
+                f"- Opposite-side conflict rows: `{overlap_summary.get('opposite_side_conflict_rows', [])}`",
+            ]
+        )
+    elif overlap_summary:
+        lines.extend(["", "## Ranking vs Quick Card Overlap", f"- Unavailable: `{overlap_summary.get('reason', 'unknown')}`"])
+
+    overlap_role_summary = overlap_role_summary or {}
+    if overlap_role_summary.get("available"):
+        lines.extend(
+            [
+                "",
+                "## Overlap Role Profile Watch",
+                f"- Today's exact overlaps: `{overlap_role_summary.get('exact_overlap_count', 0)}`",
+                f"- Today's overlap + under 0.5: `{overlap_role_summary.get('under_0_5_count', 0)}`",
+                f"- Today's overlap + under 0.5 + low d15 AB + unstable role: `{overlap_role_summary.get('under_0_5_low_d15_ab_unstable_role_count', 0)}`",
+                f"- Context status: `{overlap_role_summary.get('context_status', '')}`",
+            ]
+        )
+    elif overlap_role_summary:
+        lines.extend(["", "## Overlap Role Profile Watch", f"- Unavailable: `{overlap_role_summary.get('reason', 'unknown')}`"])
 
     lines.extend(
         [
@@ -785,6 +1046,7 @@ def _write_md(
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     date_value = _date_key(args.date)
+    run_tag = tool_upload_8rain.upload_run_tag()
     date_dir = _lane_date_dir(date_value)
     selector_csv = _dated_or_legacy(date_value, f"hits_lane_selector_{date_value}.csv")
     selector_summary_json = _dated_or_legacy(date_value, f"hits_lane_selector_{date_value}_summary.json")
@@ -799,11 +1061,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     selector_proc: subprocess.CompletedProcess[str] | None = None
     if not args.skip_run_selector:
         cmd = [sys.executable, str(DAILY_SCRIPT), "--date", date_value]
+        if args.skip_upload_prep:
+            cmd.append("--no-export-upload")
         if args.allow_low_sample_upload:
             cmd.append("--allow-low-sample-upload")
+        if args.allow_8rain_public_catalog_fetch and not args.skip_upload_prep:
+            cmd.append("--allow-8rain-public-catalog-fetch")
         if args.drop_team_mismatch_upload:
             cmd.append("--drop-team-mismatch-upload")
-        selector_proc = _run(cmd)
+        selector_proc = _run(cmd, run_tag=run_tag)
         if selector_proc.returncode != 0:
             print(selector_proc.stdout)
             print(selector_proc.stderr, file=sys.stderr)
@@ -819,23 +1085,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     upload_diag = _load_json(upload_diag_json)
     upload_rows = _csv_rows(upload_csv)
     quick_rows = _csv_rows(quick_card_csv)
-    if args.skip_quick_card_upload:
+    if args.skip_upload_prep or args.skip_quick_card_upload:
         quick_upload_proc = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
     else:
-        quick_upload_proc = _run(
-            [
-                sys.executable,
-                str(QUICK_CARD_UPLOAD_SCRIPT),
-                "--date",
-                date_value,
-                "--in-csv",
-                str(quick_card_csv),
-                "--out-csv",
-                str(quick_upload_csv),
-                "--diagnostics-csv",
-                str(quick_upload_diag_csv),
-            ]
-        )
+        quick_upload_cmd = [
+            sys.executable,
+            str(QUICK_CARD_UPLOAD_SCRIPT),
+            "--date",
+            date_value,
+            "--in-csv",
+            str(quick_card_csv),
+            "--out-csv",
+            str(quick_upload_csv),
+            "--diagnostics-csv",
+            str(quick_upload_diag_csv),
+        ]
+        if args.allow_8rain_public_catalog_fetch:
+            quick_upload_cmd.append("--allow-8rain-public-catalog-fetch")
+        quick_upload_proc = _run(quick_upload_cmd, run_tag=run_tag)
         if quick_upload_proc.returncode != 0:
             print(quick_upload_proc.stdout)
             print(quick_upload_proc.stderr, file=sys.stderr)
@@ -859,6 +1126,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             environment_summary=environment_summary,
         )
 
+    ranking_input_csv = date_dir / f"hits_lane_selector_{date_value}_ranking_upload_input.csv"
+    overlap_summary = _selector_overlap_summary(date_value, ranking_input_csv, quick_card_csv)
+    overlap_role_summary = _selector_overlap_role_profile_summary(date_value, overlap_summary, ranking_input_csv, quick_card_csv)
+
     results_proc: subprocess.CompletedProcess[str] | None = None
     if mode != "pregame" and (RECONCILE_ROOT / date_value / "reconcile_rows.csv").exists():
         results_proc = _run([sys.executable, str(RESULTS_SCRIPT), "--date", date_value])
@@ -881,10 +1152,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         selector_proc=selector_proc,
         results_proc=results_proc,
         environment_summary=environment_summary,
+        overlap_summary=overlap_summary,
+        overlap_role_summary=overlap_role_summary,
     )
 
     overall = next(iter(_metric_by_group(results_summary, "overall")), {})
     print(f"Hits lane selector report: {date_value}")
+    print(f"run_tag={run_tag}")
     print(f"mode={mode}")
     if mode == "pregame":
         print("note=no outcomes available")
@@ -901,6 +1175,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     print(f"quick_card_builder_ran={selector_summary.get('quick_card_builder_ran')}")
     print(f"quick_card_source_exists_after={selector_summary.get('quick_card_source_exists_after')}")
     print(f"quick_card_hits_rows={selector_summary.get('quick_card_hits_rows', quick_rows)}")
+    print(
+        "timestamped_lane_artifacts="
+        + json.dumps(selector_summary.get("timestamped_lane_artifacts_written", []), sort_keys=True)
+    )
     if selector_summary.get("quick_card_warning"):
         print(f"quick_card_warning={selector_summary.get('quick_card_warning')}")
     print(f"quick_card_sent_to_ranking_upload={upload_diag.get('quick_card_lane', {}).get('sent_to_ranking_upload')}")
@@ -921,6 +1199,31 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         print(f"hostile_environment_watch_json={HOSTILE_WATCH_JSON}")
     elif environment_summary:
         print(f"environment_diagnostics_unavailable={environment_summary.get('reason')}")
+    if overlap_summary.get("available"):
+        print(
+            "ranking_quick_card_overlap "
+            f"ranking={overlap_summary.get('ranking_selected_count', 0)} "
+            f"quick_card={overlap_summary.get('quick_card_selected_count', 0)} "
+            f"exact={overlap_summary.get('exact_overlap_count', 0)} "
+            f"opposite_side_conflicts={overlap_summary.get('opposite_side_conflict_count', 0)}"
+        )
+        print(f"ranking_quick_card_overlap_rows={json.dumps(overlap_summary.get('exact_overlap_rows', []), sort_keys=True)}")
+        print(
+            "ranking_quick_card_opposite_side_conflict_rows="
+            + json.dumps(overlap_summary.get("opposite_side_conflict_rows", []), sort_keys=True)
+        )
+    elif overlap_summary:
+        print(f"ranking_quick_card_overlap_unavailable={overlap_summary.get('reason')}")
+    if overlap_role_summary.get("available"):
+        print(
+            "overlap_role_profile "
+            f"exact={overlap_role_summary.get('exact_overlap_count', 0)} "
+            f"under_0_5={overlap_role_summary.get('under_0_5_count', 0)} "
+            f"profile={overlap_role_summary.get('under_0_5_low_d15_ab_unstable_role_count', 0)} "
+            f"context={overlap_role_summary.get('context_status', '')}"
+        )
+    elif overlap_role_summary:
+        print(f"overlap_role_profile_unavailable={overlap_role_summary.get('reason')}")
     identity = selector_summary.get("upload_identity_validation", {})
     print(f"raw_home_away_teams={json.dumps(identity.get('raw_teams', []))}")
     print(f"normalized_home_away_teams={json.dumps(identity.get('upload_teams', []))}")
@@ -963,6 +1266,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "combined_tool_upload_rows": upload_rows + quick_upload_rows,
         "environment_diagnostics_csv": environment_summary.get("out_csv"),
         "environment_summary": environment_summary,
+        "overlap_role_profile_summary": overlap_role_summary,
         "hostile_environment_watch": {
             "md": str(HOSTILE_WATCH_MD),
             "csv": str(HOSTILE_WATCH_CSV),
@@ -980,8 +1284,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run/report MLB hits lane selector in one command.")
     parser.add_argument("--date", required=True)
     parser.add_argument("--skip-run-selector", action="store_true")
+    parser.add_argument("--skip-upload-prep", action="store_true")
     parser.add_argument("--skip-quick-card-upload", action="store_true")
     parser.add_argument("--allow-low-sample-upload", action="store_true")
+    parser.add_argument(
+        "--allow-8rain-public-catalog-fetch",
+        action="store_true",
+        default=tool_upload_8rain.public_catalog_fetch_allowed(),
+        help="Opt in to documented public 8rain catalog GET requests. Default is cache-only.",
+    )
     parser.add_argument("--drop-team-mismatch-upload", action="store_true")
     parser.add_argument("--environment-regimes-csv", default="")
     parser.add_argument("--environment-source", choices=["", "production_history", "backfill_2026"], default="")

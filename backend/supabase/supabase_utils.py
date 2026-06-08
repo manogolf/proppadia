@@ -11,9 +11,13 @@ except Exception:  # pragma: no cover - runtime fallback for minimal envs
     def load_dotenv(*_args, **_kwargs):
         return False
 
-# Load the repo-root .env (…/backend/supabase -> …/.. -> repo root)
+# Load the repo-root .env and backend/.env explicitly. Some Make/Codex
+# commands run from the repo root where python-dotenv will not discover
+# backend/.env on its own.
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+BACKEND_ENV = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(ROOT_ENV, override=False)
+load_dotenv(BACKEND_ENV, override=False)
 
 # Optional: load .env locally (ignored on CI)
 try:

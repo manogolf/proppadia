@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +27,7 @@ from sklearn.pipeline import Pipeline
 from sqlalchemy import create_engine, text
 
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
+from backend.mlb.scripts import tool_upload_8rain
 
 
 DEFAULT_TRAIN_AUDIT = Path("backend/mlb/exports/model_v2/ranking/audits/hits_residual_feature_audit.csv")
@@ -158,6 +160,22 @@ def _today_paths(date_value: str) -> tuple[Path, Path, Path]:
 
 def _quick_card_hits_path(date_value: str) -> Path:
     return DEFAULT_OUT_DIR / date_value / f"quick_card_hits_{date_value}.csv"
+
+
+def _timestamped_artifact_path(path: Path, run_tag: str) -> Path:
+    return path.with_name(f"{path.stem}__{run_tag}{path.suffix}")
+
+
+def _archive_lane_artifacts(paths: list[Path], run_tag: str) -> list[str]:
+    archived: list[str] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        timestamped = _timestamped_artifact_path(path, run_tag)
+        timestamped.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, timestamped)
+        archived.append(str(timestamped))
+    return archived
 
 
 def _default_input_csv(date_value: str) -> Path:
@@ -714,7 +732,14 @@ def _counts_summary(selected: pd.DataFrame, empty_lanes: dict[str, bool], model_
     }
 
 
-def _run_upload_export(selected_csv: Path, date_value: str, upload_csv: Path, diagnostics_csv: Path, args: argparse.Namespace) -> dict[str, Any]:
+def _run_upload_export(
+    selected_csv: Path,
+    date_value: str,
+    upload_csv: Path,
+    diagnostics_csv: Path,
+    args: argparse.Namespace,
+    run_tag: str,
+) -> dict[str, Any]:
     cmd = [
         sys.executable,
         "backend/mlb/scripts/export_mlb_ranking_tool_upload.py",
@@ -731,11 +756,15 @@ def _run_upload_export(selected_csv: Path, date_value: str, upload_csv: Path, di
     ]
     if args.allow_low_sample_upload:
         cmd.append("--allow-low-sample")
+    if args.allow_8rain_public_catalog_fetch:
+        cmd.append("--allow-8rain-public-catalog-fetch")
     if args.upload_history_from_date:
         cmd.extend(["--from-date", args.upload_history_from_date])
     if args.upload_history_to_date:
         cmd.extend(["--to-date", args.upload_history_to_date])
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    env = os.environ.copy()
+    env["MLB_UPLOAD_RUN_TAG"] = run_tag
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
     return {
         "command": cmd,
         "returncode": int(proc.returncode),
@@ -935,6 +964,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     date_value = _date_key(args.date)
     if not date_value:
         raise SystemExit("--date YYYY-MM-DD is required")
+    run_tag = tool_upload_8rain.upload_run_tag()
     input_csv, mode = _resolve_input_and_mode(args, date_value)
     out_csv = Path(args.out_csv) if args.out_csv else _today_paths(date_value)[0]
     summary_json = Path(args.summary_json) if args.summary_json else _today_paths(date_value)[1]
@@ -1009,6 +1039,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     summary.update(
         {
             "date": date_value,
+            "run_tag": run_tag,
             "mode": mode,
             "note": "no outcomes available" if mode == "pregame" else "",
             "input_csv": str(input_csv),
@@ -1033,7 +1064,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     if args.export_upload:
-        summary["upload_export"] = _run_upload_export(ranking_upload_input_csv, date_value, upload_csv, diagnostics_csv, args)
+        summary["upload_export"] = _run_upload_export(
+            ranking_upload_input_csv,
+            date_value,
+            upload_csv,
+            diagnostics_csv,
+            args,
+            run_tag,
+        )
         summary["upload_home_away_validation"] = _validate_upload_home_away(upload_csv)
         if not summary["upload_home_away_validation"].get("ok"):
             print("Ranking upload has blank HOME/AWAY rows; sample affected rows:")
@@ -1051,7 +1089,21 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         summary["upload_export"] = {"skipped": True}
         summary["upload_mapping_diagnostics"] = {"skipped": True}
 
+    archive_candidates = [
+        out_csv,
+        ranking_upload_input_csv,
+        quick_card_hits_csv,
+        summary_json,
+        upload_mapping_diagnostics_json,
+    ]
+    summary["timestamped_lane_artifacts"] = [
+        str(_timestamped_artifact_path(path, run_tag)) for path in archive_candidates
+    ]
     summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    archived = _archive_lane_artifacts(archive_candidates, run_tag)
+    summary["timestamped_lane_artifacts_written"] = archived
+    summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    _archive_lane_artifacts([summary_json], run_tag)
     return summary
 
 
@@ -1072,6 +1124,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quick-card-hits-csv", default="")
     parser.add_argument("--export-upload", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--allow-low-sample-upload", action="store_true")
+    parser.add_argument(
+        "--allow-8rain-public-catalog-fetch",
+        action="store_true",
+        default=tool_upload_8rain.public_catalog_fetch_allowed(),
+        help="Opt in to documented public 8rain catalog GET requests. Default is cache-only.",
+    )
     parser.add_argument("--drop-team-mismatch-upload", action="store_true")
     parser.add_argument("--win-format", choices=["pct", "decimal", "american"], default="decimal")
     parser.add_argument("--upload-history-from-date", default="")
@@ -1088,8 +1146,13 @@ def main() -> None:
     print(f"Wrote {summary['upload_csv']}")
     print("counts_by_lane=" + json.dumps(summary["counts_by_lane"], sort_keys=True))
     if summary.get("upload_export", {}).get("returncode") not in (None, 0):
+        if summary["upload_export"].get("stdout"):
+            print(summary["upload_export"]["stdout"])
+        if summary["upload_export"].get("stderr"):
+            print(summary["upload_export"]["stderr"], file=sys.stderr)
         raise SystemExit(int(summary["upload_export"]["returncode"]))
     if summary.get("upload_home_away_validation", {}).get("ok") is False:
+        print(json.dumps(summary["upload_home_away_validation"], indent=2), file=sys.stderr)
         raise SystemExit(2)
 
 
