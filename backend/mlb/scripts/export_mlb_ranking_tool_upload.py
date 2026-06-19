@@ -21,6 +21,7 @@ from typing import Any, Iterable
 import numpy as np
 import pandas as pd
 
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
 from backend.mlb.scripts import tool_upload_8rain
 
@@ -41,6 +42,58 @@ UPLOAD_COLUMNS = [
     "SIDE",
     "WIN %",
 ]
+
+PATCH_1A_CONTEXT_COLUMNS = [
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "is_home",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+]
+BVP_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+]
+ROLLING_CONTEXT_COLUMNS = [
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+]
+PASSIVE_CONTEXT_COLUMNS = [
+    *PATCH_1A_CONTEXT_COLUMNS,
+    *BVP_CONTEXT_COLUMNS,
+    *ROLLING_CONTEXT_COLUMNS,
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
+]
+BVP_DIRECT_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+]
+BVP_DEFAULT_SOURCE = "prop_features_precomputed"
 
 
 def _archive_versioned_csv(path: Path, run_tag: str | None = None) -> Path:
@@ -279,6 +332,27 @@ def _format_win_value(prob: Any, win_format: str) -> Any:
     return round(p, 6)
 
 
+def _fill_bvp_lineage_wrappers(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if not all(col in out.columns for col in BVP_DIRECT_CONTEXT_COLUMNS):
+        return out
+    direct_present = out[BVP_DIRECT_CONTEXT_COLUMNS].notna().any(axis=1)
+    for col in ("bvp_payload_present", "bvp_source", "bvp_avg", "bvp_slg"):
+        if col not in out.columns:
+            out[col] = pd.NA
+
+    ab = pd.to_numeric(out["bvp_at_bats"], errors="coerce")
+    hits = pd.to_numeric(out["bvp_hits"], errors="coerce")
+    total_bases = pd.to_numeric(out["bvp_total_bases"], errors="coerce")
+    valid_ab = direct_present & ab.gt(0)
+    out.loc[valid_ab & out["bvp_avg"].isna(), "bvp_avg"] = hits.loc[valid_ab] / ab.loc[valid_ab]
+    out.loc[valid_ab & out["bvp_slg"].isna(), "bvp_slg"] = total_bases.loc[valid_ab] / ab.loc[valid_ab]
+    out.loc[direct_present, "bvp_payload_present"] = True
+    out.loc[~direct_present & out["bvp_payload_present"].isna(), "bvp_payload_present"] = False
+    out.loc[direct_present & out["bvp_source"].isna(), "bvp_source"] = BVP_DEFAULT_SOURCE
+    return out
+
+
 def _merge_lookup(current: pd.DataFrame, lookup: pd.DataFrame) -> pd.DataFrame:
     keys = ["prop_type", "side", "line_bucket", "rank_bucket"]
     merged = current.merge(lookup, on=keys, how="left")
@@ -305,6 +379,8 @@ def _write_outputs(
     work["win_pct_exported_decimal"] = pd.to_numeric(work["empirical_win_pct"], errors="coerce").round(6)
     work["exported_side"] = work["side"].astype(str).str.strip().str.lower()
     work["probability_semantics"] = "P(exported SIDE wins)"
+    work = _fill_bvp_lineage_wrappers(work)
+    work = add_market_audit_context(work, side_col="exported_side", probability_col="win_pct_exported_decimal")
 
     diag_cols = [
         "date",
@@ -328,6 +404,7 @@ def _write_outputs(
         "sample_size",
         "win_format",
         "uploaded_win_value",
+        *PASSIVE_CONTEXT_COLUMNS,
     ]
     diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
     work[[c for c in diag_cols if c in work.columns]].to_csv(diagnostics_csv, index=False)
@@ -361,6 +438,9 @@ def _write_outputs(
             "AWAY_SOURCE": upload_work[away_source_col] if away_source_col in upload_work.columns else "",
         }
     )
+    for col in PASSIVE_CONTEXT_COLUMNS:
+        if col in upload_work.columns:
+            upload[col] = upload_work[col].to_numpy()
     catalog = tool_upload_8rain.load_catalog()
     run_tag = tool_upload_8rain.upload_run_tag()
     generated_at = tool_upload_8rain.generated_at_utc()

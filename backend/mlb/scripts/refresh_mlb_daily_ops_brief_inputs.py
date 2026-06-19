@@ -160,7 +160,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--prop-regime-csv", required=True)
     ap.add_argument("--hits-environment-json", required=True)
     ap.add_argument("--bvp-impact-json", required=True)
+    ap.add_argument("--overlap-watch-json", required=True)
     ap.add_argument("--qc-bottom-order-watch-json", required=True)
+    ap.add_argument("--user-over-15-watch-json", required=True)
+    ap.add_argument(
+        "--hits-15-tier-backtest-json",
+        default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json",
+    )
+    ap.add_argument(
+        "--total-bases-shadow-summary-json",
+        default="artifacts/analysis/mlb/model_quality/total_bases_shadow/{current_slate_date}/total_bases_shadow_summary_{current_slate_date}.json",
+    )
+    ap.add_argument(
+        "--total-bases-shadow-evaluation-json",
+        default="artifacts/analysis/mlb/model_quality/total_bases_shadow/evaluation/total_bases_shadow_evaluation_summary.json",
+    )
     ap.add_argument("--brief-output-md", required=True)
     ap.add_argument(
         "--status-json",
@@ -377,6 +391,22 @@ def main(argv: Optional[list[str]] = None) -> int:
             detail=detail,
         )
 
+    overlap_watch_cmd = [
+        py,
+        "backend/mlb/scripts/build_mlb_ranking_qc_overlap_watch.py",
+    ]
+    ok, detail = _run("ranking_qc_overlap_watch", overlap_watch_cmd, allow_fail=True)
+    _record(
+        results,
+        name="ranking_qc_overlap_watch",
+        artifact=Path(args.overlap_watch_json),
+        expected_date=completed,
+        actual_date=_json_date(Path(args.overlap_watch_json), ("composition_diagnostics", "latest_completed_slate")),
+        command=overlap_watch_cmd,
+        refresh_ok=ok,
+        detail=detail,
+    )
+
     qc_watch_cmd = [
         py,
         "tmp/analysis/run_mlb_qc_bottom_order_under_watch.py",
@@ -392,6 +422,82 @@ def main(argv: Optional[list[str]] = None) -> int:
         actual_date=_json_date(Path(args.qc_bottom_order_watch_json), ("latest_reconcile_date",)),
         command=qc_watch_cmd,
         refresh_ok=ok,
+        detail=detail,
+    )
+
+    user_over_15_cmd = [
+        py,
+        "tmp/analysis/run_mlb_user_over_15_filter_watch.py",
+        "--out-json",
+        args.user_over_15_watch_json,
+        "--out-csv",
+        "artifacts/analysis/mlb/user_over_15_filter_watch.csv",
+        "--out-md",
+        "artifacts/analysis/mlb/user_over_15_filter_watch.md",
+    ]
+    ok, detail = _run("user_over_15_filter_watch", user_over_15_cmd, allow_fail=True)
+    _record(
+        results,
+        name="user_over_15_filter_watch",
+        artifact=Path(args.user_over_15_watch_json),
+        expected_date=completed,
+        actual_date=_json_date(Path(args.user_over_15_watch_json), ("latest_completed_slate",)),
+        command=user_over_15_cmd,
+        refresh_ok=ok,
+        detail=detail,
+    )
+
+    hits_15_tier_cmd = ["make", "mlb-refresh-hits-15-tier-backtest"]
+    ok, detail = _run("hits_15_tier_backtest", hits_15_tier_cmd, allow_fail=True)
+    hits_15_tier_path = Path(args.hits_15_tier_backtest_json)
+    _record(
+        results,
+        name="hits_15_tier_backtest",
+        artifact=hits_15_tier_path,
+        expected_date=completed,
+        actual_date=_json_date(hits_15_tier_path, ("latest_completed_slate",)),
+        command=hits_15_tier_cmd,
+        refresh_ok=ok,
+        required=False,
+        detail=detail,
+    )
+
+    shadow_summary_path = Path(
+        str(args.total_bases_shadow_summary_json).format(
+            completed_slate_date=completed,
+            current_slate_date=current,
+        )
+    )
+    shadow_score_cmd = [
+        "make",
+        "mlb-total-bases-shadow-candidate",
+        f"MLB_TOTAL_BASES_SHADOW_DATE={current}",
+    ]
+    ok, detail = _run("total_bases_shadow_scoring", shadow_score_cmd, allow_fail=True)
+    _record(
+        results,
+        name="total_bases_shadow_scoring",
+        artifact=shadow_summary_path,
+        expected_date=current,
+        actual_date=_json_date(shadow_summary_path, ("slate_date",)),
+        command=shadow_score_cmd,
+        refresh_ok=ok,
+        required=False,
+        detail=detail,
+    )
+
+    shadow_eval_path = Path(args.total_bases_shadow_evaluation_json)
+    shadow_eval_cmd = ["make", "mlb-total-bases-shadow-evaluation"]
+    ok, detail = _run("total_bases_shadow_evaluation", shadow_eval_cmd, allow_fail=True)
+    _record(
+        results,
+        name="total_bases_shadow_evaluation",
+        artifact=shadow_eval_path,
+        expected_date=current,
+        actual_date=max(_load_json(shadow_eval_path).get("shadow_dates_scanned") or [""])[:10],
+        command=shadow_eval_cmd,
+        refresh_ok=ok,
+        required=False,
         detail=detail,
     )
 

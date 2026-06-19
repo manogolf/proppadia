@@ -26,6 +26,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sqlalchemy import create_engine, text
 
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
 from backend.mlb.scripts import tool_upload_8rain
 
@@ -69,6 +70,42 @@ EXCLUDE_SUBSTRINGS = (
     "bookmaker",
     "market",
 )
+
+AUDIT_CONTEXT_COLUMNS = [
+    "game_time",
+    "game_day_of_week",
+    "time_of_day_bucket",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+    "is_home",
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
+]
 
 
 def _db_url() -> str:
@@ -666,7 +703,39 @@ def _format_selection(rows: pd.DataFrame) -> pd.DataFrame:
             "selected_flag": True,
         }
     )
+    for col in AUDIT_CONTEXT_COLUMNS:
+        if col in rows.columns and col not in out.columns:
+            out[col] = rows[col].to_numpy()
+    out = add_market_audit_context(out, side_col="side", probability_col="score")
     return out.sort_values(["source_lane", "rank_bucket", "rank_position", "player_name"], ascending=[True, False, True, True])
+
+
+def _truthy_rate(series: pd.Series) -> float:
+    return float(
+        series.map(lambda v: str(v).strip().lower() in {"1", "true", "yes", "on"} if pd.notna(v) else False).mean()
+    )
+
+
+def _context_field_diagnostics(df: pd.DataFrame, *, stage: str) -> dict[str, Any]:
+    row_count = int(len(df))
+    fields: dict[str, Any] = {}
+    for col in AUDIT_CONTEXT_COLUMNS:
+        present = col in df.columns
+        null_rate = None
+        if present and row_count:
+            null_rate = float(df[col].isna().mean())
+        fields[col] = {
+            "present": bool(present),
+            "null_rate": null_rate,
+            "payload_present_rate": (
+                _truthy_rate(df[col])
+                if col == "bvp_payload_present" and present and row_count
+                else None
+            ),
+            "row_count": row_count,
+            "missing_stage": "" if present else stage,
+        }
+    return {"stage": stage, "row_count": row_count, "fields": fields}
 
 
 def _upload_identity_summary(rows: pd.DataFrame) -> dict[str, Any]:
@@ -1053,6 +1122,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             **quick_card_status,
             "quick_card_hits_rows": int(len(quick_card_rows)),
             "upload_identity_validation": upload_identity,
+            "feature_lineage_patch_1a_diagnostics": {
+                "selected": _context_field_diagnostics(selected, stage="lane_selector_output"),
+                "ranking_upload_input": _context_field_diagnostics(ranking_upload_input, stage="ranking_upload_input"),
+                "quick_card_hits": _context_field_diagnostics(quick_card_rows, stage="quick_card_hits"),
+            },
             "pds_join_rows": int(today_pds["joined_to_player_derived_stats"].sum()) if "joined_to_player_derived_stats" in today_pds else 0,
             "candidate_hits_rows": int(len(today)),
             "rules": {

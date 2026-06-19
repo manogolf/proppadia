@@ -13,6 +13,74 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS
+
+
+AUDIT_CONTEXT_COLUMNS = [
+    "game_time",
+    "game_day_of_week",
+    "time_of_day_bucket",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+    "is_home",
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
+]
+
+
+def _truthy_rate(series: pd.Series) -> float:
+    return float(
+        series.map(lambda v: str(v).strip().lower() in {"1", "true", "yes", "on"} if pd.notna(v) else False).mean()
+    )
+
+
+def _context_field_diagnostics(df: pd.DataFrame, *, stage: str) -> dict[str, Any]:
+    row_count = int(len(df))
+    fields: dict[str, Any] = {}
+    for col in AUDIT_CONTEXT_COLUMNS:
+        present = col in df.columns
+        null_rate = None
+        if present and row_count:
+            null_rate = float(df[col].isna().mean())
+        fields[col] = {
+            "present": bool(present),
+            "null_rate": null_rate,
+            "payload_present_rate": (
+                _truthy_rate(df[col])
+                if col == "bvp_payload_present" and present and row_count
+                else None
+            ),
+            "row_count": row_count,
+            "missing_stage": "" if present else stage,
+        }
+    return {"stage": stage, "row_count": row_count, "fields": fields}
+
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -444,6 +512,9 @@ def _attach_upload_outcomes(upload: pd.DataFrame, rec: pd.DataFrame) -> pd.DataF
                 "actual_value": match.get("actual_value", np.nan),
             }
         )
+        for col in AUDIT_CONTEXT_COLUMNS:
+            if col in matches.columns:
+                enriched[col] = match.get(col, np.nan)
         rows.append(enriched)
     return pd.DataFrame(rows)
 
@@ -776,12 +847,13 @@ def _build_comparison(upload: pd.DataFrame, actual: pd.DataFrame) -> pd.DataFram
             "amount": row.get("actual_amount"),
             "price": row.get("price_actually_bet"),
         }
+        for col in AUDIT_CONTEXT_COLUMNS:
+            out[col] = best.get(col, row.get(col, ""))
         rows.append(out)
 
     if not upload.empty:
         for _, row in upload[~upload["upload_row_id"].astype(str).isin(matched_upload_ids)].iterrows():
-            rows.append(
-                {
+            out = {
                     "row_type": "upload_not_wagered",
                     "date": row.get("date_norm"),
                     "wager_id": "",
@@ -820,7 +892,9 @@ def _build_comparison(upload: pd.DataFrame, actual: pd.DataFrame) -> pd.DataFram
                     "amount": np.nan,
                     "price": row.get("price_uploaded_or_reconcile"),
                 }
-            )
+            for col in AUDIT_CONTEXT_COLUMNS:
+                out[col] = row.get(col, "")
+            rows.append(out)
     return pd.DataFrame(rows)
 
 
@@ -968,6 +1042,46 @@ def _load_lane_candidates(date_value: str) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True).drop_duplicates(["common_key", "name_key", "candidate_source"], keep="last")
+
+
+def _enrich_upload_context_from_lane(upload: pd.DataFrame, date_value: str) -> pd.DataFrame:
+    if upload.empty:
+        return upload
+    lanes = _load_lane_candidates(date_value)
+    if lanes.empty:
+        return upload
+    available_context = [col for col in AUDIT_CONTEXT_COLUMNS if col in lanes.columns]
+    if not available_context:
+        return upload
+
+    out = upload.copy()
+    if "common_key" not in out.columns:
+        out["common_key"] = _key(out)
+    if "name_key" not in out.columns:
+        out["name_key"] = _name_key(out)
+    for col in AUDIT_CONTEXT_COLUMNS:
+        if col not in out.columns:
+            out[col] = ""
+
+    for key_col in ("common_key", "name_key"):
+        lookup = (
+            lanes[[key_col, *available_context]]
+            .dropna(subset=[key_col])
+            .drop_duplicates(key_col, keep="last")
+        )
+        if lookup.empty:
+            continue
+        merged = out.merge(lookup, how="left", on=key_col, suffixes=("", "_lane"))
+        for col in available_context:
+            lane_col = f"{col}_lane"
+            if lane_col not in merged.columns:
+                continue
+            missing = merged[col].isna() | merged[col].astype(str).str.strip().isin(["", "nan", "None", "<NA>"])
+            source_present = ~(merged[lane_col].isna() | merged[lane_col].astype(str).str.strip().isin(["", "nan", "None", "<NA>"]))
+            merged.loc[missing & source_present, col] = merged.loc[missing & source_present, lane_col]
+            merged = merged.drop(columns=[lane_col])
+        out = merged
+    return out
 
 
 def _upload_candidates_for_diagnostics(comp: pd.DataFrame, date_value: str) -> pd.DataFrame:
@@ -1270,6 +1384,16 @@ def _apply_timestamped_upload_provenance(
         out.loc[idx, "matched_upload_file"] = ",".join(files)
         out.loc[idx, "matched_upload_run_tag"] = ",".join(run_tags)
         out.loc[idx, "overlap_flag"] = False
+        best = matches[0]
+        for col in AUDIT_CONTEXT_COLUMNS:
+            if col not in out.columns:
+                out[col] = ""
+            current = out.loc[idx, col]
+            current_missing = pd.isna(current) or str(current).strip() in {"", "nan", "None", "<NA>"}
+            replacement = best.get(col, "")
+            replacement_present = not (pd.isna(replacement) or str(replacement).strip() in {"", "nan", "None", "<NA>"})
+            if current_missing and replacement_present:
+                out.loc[idx, col] = replacement
 
     actual = out.loc[actual_mask].copy()
     summary.update(
@@ -1575,10 +1699,12 @@ def main() -> None:
         v1_upload["player_name"] = v1_upload.get("parsed_player_name", "")
         upload_frames.append(v1_upload)
     upload = pd.concat(upload_frames, ignore_index=True)
+    upload = _enrich_upload_context_from_lane(upload, date_value)
     timestamped_upload = pd.concat(
         [frame for frame in timestamped_upload_frames if not frame.empty],
         ignore_index=True,
     ) if any(not frame.empty for frame in timestamped_upload_frames) else pd.DataFrame()
+    timestamped_upload = _enrich_upload_context_from_lane(timestamped_upload, date_value)
     actual = _load_actual(graded_csv, date_value, rec)
     comp = _build_comparison(upload, actual)
     comp, overlap_enrichment = _enrich_with_overlap_snapshot(comp, overlap_snapshot_csv, date_value)
@@ -1613,6 +1739,10 @@ def main() -> None:
             "out_csv": str(out_csv),
             "overlap_enrichment": overlap_enrichment,
             "overlap_enrichment_diagnostics_json": str(overlap_enrichment_diagnostics_json),
+            "feature_lineage_patch_1a_diagnostics": _context_field_diagnostics(
+                comp,
+                stage="actual_wager_source_reconcile",
+            ),
         }
     )
 

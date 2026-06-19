@@ -18,6 +18,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -77,17 +79,36 @@ def _to_float(v: Any, default: float = 0.0) -> float:
         return default
 
 
-def _fetch_json(url: str, *, timeout_sec: int) -> Dict[str, Any]:
-    resp = requests.get(url, timeout=timeout_sec)
-    resp.raise_for_status()
-    data = resp.json()
-    return data if isinstance(data, dict) else {}
+def _fetch_json(url: str, *, timeout_sec: int, retries: int) -> Dict[str, Any]:
+    attempts = max(1, int(retries))
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = requests.get(url, timeout=timeout_sec)
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, dict) else {}
+        except requests.RequestException as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                break
+            sleep_sec = min(10.0, 1.5 * attempt)
+            print(
+                f"[bvp-refresh] statsapi fetch retry attempt={attempt + 1}/{attempts} "
+                f"sleep_sec={sleep_sec:.1f} url={url} error={type(exc).__name__}:{exc}",
+                file=sys.stderr,
+            )
+            time.sleep(sleep_sec)
+    if last_exc is not None:
+        raise last_exc
+    return {}
 
 
-def _fetch_schedule_games(game_date: str, *, timeout_sec: int) -> List[GameRow]:
+def _fetch_schedule_games(game_date: str, *, timeout_sec: int, retries: int) -> List[GameRow]:
     data = _fetch_json(
         f"{STATS_BASE}/schedule?sportId=1&date={game_date}&hydrate=probablePitcher",
         timeout_sec=timeout_sec,
+        retries=retries,
     )
     out: List[GameRow] = []
     for day in data.get("dates") or []:
@@ -266,10 +287,11 @@ WHERE game_date = %s::date
     return mapped, counters
 
 
-def _active_hitters(team_id: int, game_date: str, *, timeout_sec: int) -> List[int]:
+def _active_hitters(team_id: int, game_date: str, *, timeout_sec: int, retries: int) -> List[int]:
     data = _fetch_json(
         f"{STATS_BASE}/teams/{int(team_id)}/roster?rosterType=active&date={game_date}",
         timeout_sec=timeout_sec,
+        retries=retries,
     )
     out: List[int] = []
     for row in data.get("roster") or []:
@@ -343,12 +365,12 @@ def _extract_vs_player_stats(payload: Dict[str, Any]) -> Dict[str, float]:
     return out
 
 
-def _bvp_stats(hitter_id: int, pitcher_id: int, *, timeout_sec: int) -> Dict[str, float]:
+def _bvp_stats(hitter_id: int, pitcher_id: int, *, timeout_sec: int, retries: int) -> Dict[str, float]:
     url = (
         f"{STATS_BASE}/people/{int(hitter_id)}/stats"
         f"?group=hitting&stats=vsPlayer&opposingPlayerId={int(pitcher_id)}"
     )
-    payload = _fetch_json(url, timeout_sec=timeout_sec)
+    payload = _fetch_json(url, timeout_sec=timeout_sec, retries=retries)
     return _extract_vs_player_stats(payload)
 
 
@@ -412,11 +434,12 @@ def _build_rows_for_date(
     feature_set_tag: str,
     model_tag: str,
     timeout_sec: int,
+    retries: int,
 ) -> Tuple[List[Tuple[str, int, int, str, Dict[str, float], str, str]], Dict[str, int]]:
     counters: Dict[str, int] = defaultdict(int)
     rows: List[Tuple[str, int, int, str, Dict[str, float], str, str]] = []
 
-    games = _fetch_schedule_games(game_date, timeout_sec=timeout_sec)
+    games = _fetch_schedule_games(game_date, timeout_sec=timeout_sec, retries=retries)
     games, local_id_counters = _map_games_to_local_game_ids(games, game_date)
     for k, v in local_id_counters.items():
         counters[k] += int(v)
@@ -440,7 +463,12 @@ def _build_rows_for_date(
             roster_key = (team_id, game_date)
             if roster_key not in roster_cache:
                 try:
-                    roster_cache[roster_key] = _active_hitters(team_id, game_date, timeout_sec=timeout_sec)
+                    roster_cache[roster_key] = _active_hitters(
+                        team_id,
+                        game_date,
+                        timeout_sec=timeout_sec,
+                        retries=retries,
+                    )
                     counters["roster_fetches"] += 1
                 except Exception:
                     counters["roster_fetch_errors"] += 1
@@ -450,7 +478,12 @@ def _build_rows_for_date(
                 bvp_key = (hitter_id, int(opp_sp))
                 if bvp_key not in bvp_cache:
                     try:
-                        bvp_cache[bvp_key] = _bvp_stats(hitter_id, int(opp_sp), timeout_sec=timeout_sec)
+                        bvp_cache[bvp_key] = _bvp_stats(
+                            hitter_id,
+                            int(opp_sp),
+                            timeout_sec=timeout_sec,
+                            retries=retries,
+                        )
                         counters["bvp_fetches"] += 1
                     except Exception:
                         counters["bvp_fetch_errors"] += 1
@@ -484,6 +517,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--model-tag", default="bvp_pvb_refresh_v1", help="model_tag marker (default: bvp_pvb_refresh_v1).")
     ap.add_argument("--batch-size", type=int, default=1000)
     ap.add_argument("--request-timeout-sec", type=int, default=20)
+    ap.add_argument("--request-retries", type=int, default=3)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(list(argv) if argv is not None else None)
 
@@ -508,6 +542,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             feature_set_tag=str(args.feature_set_tag),
             model_tag=str(args.model_tag),
             timeout_sec=int(args.request_timeout_sec),
+            retries=int(args.request_retries),
         )
         all_rows.extend(rows)
         for k, v in counters.items():

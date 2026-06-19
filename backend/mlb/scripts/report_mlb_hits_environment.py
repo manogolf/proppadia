@@ -7,7 +7,6 @@ import argparse
 import csv
 import json
 import re
-import unicodedata
 from datetime import date, datetime, timedelta
 from math import sqrt
 from pathlib import Path
@@ -21,6 +20,7 @@ from backend.mlb.shared.team_name_map import (
     teamIdMap,
     teamNameMap,
 )
+from backend.mlb.shared.name_normalization import normalize_player_name_key
 
 
 def _parse_date(value: str) -> date:
@@ -67,11 +67,7 @@ def _canonical_team_code(value: Any) -> str:
 
 
 def _norm_player_name(value: Any) -> str:
-    text = str(value or "").strip().lower()
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = re.sub(r"[^a-z0-9 ]+", "", text)
-    return " ".join(text.split())
+    return normalize_player_name_key(value)
 
 
 def _team_name_reverse() -> Dict[str, str]:
@@ -1712,6 +1708,24 @@ def _write_rows_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
             writer.writerow(row)
 
 
+def _archive_rows_csv(
+    *,
+    out_csv: Path,
+    rows: Sequence[Dict[str, Any]],
+    snapshot_dir: Path,
+    slate_date: str,
+    generated_at_utc: str,
+) -> Path | None:
+    if not rows:
+        return None
+    stamp = re.sub(r"[^0-9A-Za-z]+", "", generated_at_utc.replace("Z", "Z"))
+    if not stamp:
+        stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    path = snapshot_dir / slate_date / f"mlb_hits_environment_hits_allowed_rows_{slate_date}__{stamp}.csv"
+    _write_rows_csv(path, rows)
+    return path
+
+
 def _append_history(path: Path, payload: Dict[str, Any]) -> None:
     _ensure_parent(path)
     with path.open("a", encoding="utf-8") as fh:
@@ -1877,6 +1891,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     ap.add_argument("--out-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
     ap.add_argument("--out-csv", default="tmp/analysis/mlb_hits_environment_hits_allowed_rows.csv")
+    ap.add_argument(
+        "--snapshot-dir",
+        default="artifacts/analysis/mlb/hits_environment_snapshots",
+        help="Directory for timestamped full-row hits-environment snapshots.",
+    )
     ap.add_argument("--history-jsonl", default="artifacts/analysis/mlb/mlb_hits_environment_history.jsonl")
     ap.add_argument(
         "--eval-tracker-csv",
@@ -2094,11 +2113,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     elif int(team_hits_allowed_eval.get("rows_with_actual") or 0) == 0:
         warnings.append("no_team_eval_rows_with_actual_for_evaluation_date")
 
+    generated_at_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     _write_rows_csv(Path(args.out_csv), slate_rows)
+    snapshot_csv = _archive_rows_csv(
+        out_csv=Path(args.out_csv),
+        rows=slate_rows,
+        snapshot_dir=Path(args.snapshot_dir),
+        slate_date=slate_date,
+        generated_at_utc=generated_at_utc,
+    )
 
     ok = len(failures) == 0
     payload: Dict[str, Any] = {
-        "generated_at_utc": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at_utc": generated_at_utc,
         "requested_as_of_date": _to_iso(as_of),
         "evaluation_date": eval_date,
         "window": {
@@ -2128,6 +2155,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "outputs": {
             "out_json": str(Path(args.out_json)),
             "out_csv": str(Path(args.out_csv)),
+            "snapshot_csv": str(snapshot_csv) if snapshot_csv else "",
+            "snapshot_dir": str(Path(args.snapshot_dir)),
             "history_jsonl": str(Path(args.history_jsonl)),
             "eval_tracker_csv": str(Path(args.eval_tracker_csv)),
             "odds_snapshot": str(odds_snapshot),

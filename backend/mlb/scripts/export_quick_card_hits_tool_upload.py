@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
 from backend.mlb.scripts import tool_upload_8rain
 
@@ -40,6 +41,58 @@ UPLOAD_COLUMNS = [
     "SIDE",
     "WIN %",
 ]
+
+PATCH_1A_CONTEXT_COLUMNS = [
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "is_home",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+]
+BVP_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+]
+ROLLING_CONTEXT_COLUMNS = [
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+]
+PASSIVE_CONTEXT_COLUMNS = [
+    *PATCH_1A_CONTEXT_COLUMNS,
+    *BVP_CONTEXT_COLUMNS,
+    *ROLLING_CONTEXT_COLUMNS,
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
+]
+BVP_DIRECT_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+]
+BVP_DEFAULT_SOURCE = "prop_features_precomputed"
 
 WIN_VALUE_COLUMNS = [
     "quick_card_win_pct",
@@ -135,6 +188,27 @@ def _format_win_value(value: Any) -> Any:
     return round(val / 100.0, 6)
 
 
+def _fill_bvp_lineage_wrappers(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    if not all(col in out.columns for col in BVP_DIRECT_CONTEXT_COLUMNS):
+        return out
+    direct_present = out[BVP_DIRECT_CONTEXT_COLUMNS].notna().any(axis=1)
+    for col in ("bvp_payload_present", "bvp_source", "bvp_avg", "bvp_slg"):
+        if col not in out.columns:
+            out[col] = pd.NA
+
+    ab = pd.to_numeric(out["bvp_at_bats"], errors="coerce")
+    hits = pd.to_numeric(out["bvp_hits"], errors="coerce")
+    total_bases = pd.to_numeric(out["bvp_total_bases"], errors="coerce")
+    valid_ab = direct_present & ab.gt(0)
+    out.loc[valid_ab & out["bvp_avg"].isna(), "bvp_avg"] = hits.loc[valid_ab] / ab.loc[valid_ab]
+    out.loc[valid_ab & out["bvp_slg"].isna(), "bvp_slg"] = total_bases.loc[valid_ab] / ab.loc[valid_ab]
+    out.loc[direct_present, "bvp_payload_present"] = True
+    out.loc[~direct_present & out["bvp_payload_present"].isna(), "bvp_payload_present"] = False
+    out.loc[direct_present & out["bvp_source"].isna(), "bvp_source"] = BVP_DEFAULT_SOURCE
+    return out
+
+
 def export_quick_card(
     input_csv: Path,
     out_csv: Path,
@@ -178,6 +252,7 @@ def export_quick_card(
     if date_value:
         df = df[date_series.eq(date_value)].copy()
         date_series = df["date"].map(_date_key)
+    df = add_market_audit_context(df, side_col="side", probability_col="score")
 
     exported_decimal = df[win_col].map(_format_win_value)
     upload = pd.DataFrame(
@@ -197,6 +272,9 @@ def export_quick_card(
             "AWAY_SOURCE": df[away_source_col] if away_source_col in df.columns else "",
         }
     )
+    for col in PASSIVE_CONTEXT_COLUMNS:
+        if col in df.columns:
+            upload[col] = df[col].to_numpy()
     catalog = tool_upload_8rain.load_catalog()
     run_tag = tool_upload_8rain.upload_run_tag()
     generated_at = tool_upload_8rain.generated_at_utc()
@@ -225,6 +303,12 @@ def export_quick_card(
     diagnostics["win_pct_exported_decimal"] = pd.to_numeric(exported_decimal, errors="coerce")
     diagnostics["exported_side"] = df["side"].astype(str).str.strip().str.lower()
     diagnostics["probability_semantics"] = "P(exported SIDE wins)"
+    diagnostics = _fill_bvp_lineage_wrappers(diagnostics)
+    diagnostics = add_market_audit_context(
+        diagnostics,
+        side_col="exported_side",
+        probability_col="win_pct_exported_decimal",
+    )
 
     home_missing = upload["HOME"].isna() | upload["HOME"].astype(str).str.strip().eq("")
     away_missing = upload["AWAY"].isna() | upload["AWAY"].astype(str).str.strip().eq("")
@@ -252,6 +336,7 @@ def export_quick_card(
             "win_pct_exported_decimal",
             "exported_side",
             "probability_semantics",
+            *PASSIVE_CONTEXT_COLUMNS,
         ]
         diagnostics_csv.parent.mkdir(parents=True, exist_ok=True)
         diagnostics[[c for c in diag_cols if c in diagnostics.columns]].to_csv(diagnostics_csv, index=False)

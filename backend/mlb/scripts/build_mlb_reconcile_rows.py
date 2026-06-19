@@ -26,6 +26,7 @@ import pandas as pd
 from backend.app.services.mlb.market_odds_service import (
     get_prop_market_candidates,
 )
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.shared.team_name_map import teamIdMap
 from backend.shared.db.pg import pg_fetchall
 
@@ -48,6 +49,50 @@ _PLAYER_STATS_FALLBACK_PROPS = {
     "hits_allowed",
     "earned_runs",
 }
+PATCH_1A_CONTEXT_COLUMNS = [
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "is_home",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+]
+BVP_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+]
+ROLLING_CONTEXT_COLUMNS = [
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+]
+PASSIVE_CONTEXT_COLUMNS = [
+    *PATCH_1A_CONTEXT_COLUMNS,
+    *BVP_CONTEXT_COLUMNS,
+    *ROLLING_CONTEXT_COLUMNS,
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
+]
 
 
 def _norm_name(value: object) -> str:
@@ -66,6 +111,55 @@ def _clean_str(value: object) -> Optional[str]:
     if not text or text.lower() == "nan":
         return None
     return text
+
+
+def _game_day_of_week(value: object) -> Optional[str]:
+    dt = pd.to_datetime(value, errors="coerce")
+    if pd.isna(dt):
+        return None
+    return str(dt.day_name()).lower()
+
+
+def _time_of_day_bucket(value: object) -> Optional[str]:
+    dt = pd.to_datetime(value, errors="coerce")
+    if pd.isna(dt):
+        return None
+    hour = int(dt.hour)
+    if hour < 12:
+        return "morning"
+    if hour < 16:
+        return "afternoon"
+    if hour < 20:
+        return "evening"
+    return "late"
+
+
+def _truthy_rate(series: pd.Series) -> float:
+    return float(
+        series.map(lambda v: str(v).strip().lower() in {"1", "true", "yes", "on"} if pd.notna(v) else False).mean()
+    )
+
+
+def _context_field_diagnostics(df: pd.DataFrame, *, stage: str) -> Dict[str, object]:
+    row_count = int(len(df))
+    fields: Dict[str, object] = {}
+    for col in PASSIVE_CONTEXT_COLUMNS:
+        present = col in df.columns
+        null_rate = None
+        if present and row_count:
+            null_rate = float(df[col].isna().mean())
+        fields[col] = {
+            "present": bool(present),
+            "null_rate": null_rate,
+            "payload_present_rate": (
+                _truthy_rate(df[col])
+                if col == "bvp_payload_present" and present and row_count
+                else None
+            ),
+            "row_count": row_count,
+            "missing_stage": "" if present else stage,
+        }
+    return {"stage": stage, "row_count": row_count, "fields": fields}
 
 
 def _line_key(v: object) -> Optional[float]:
@@ -716,8 +810,25 @@ def main() -> int:
         "game_id",
         "home_team_code",
         "away_team_code",
+        "game_time",
+        "game_day_of_week",
+        "time_of_day_bucket",
         "player_id",
         "player_name",
+        "team",
+        "team_id",
+        "opponent",
+        "opponent_id",
+        "is_home",
+        "bvp_plate_appearances",
+        "bvp_at_bats",
+        "bvp_hits",
+        "bvp_total_bases",
+        "bvp_avg",
+        "bvp_slg",
+        "bvp_payload_present",
+        "bvp_source",
+        *ROLLING_CONTEXT_COLUMNS,
         "prop_type",
         "market_key",
         "line",
@@ -732,6 +843,12 @@ def main() -> int:
         "implied_over_novig",
         "implied_under_novig",
         "market_hold",
+        "market_price_over",
+        "market_price_under",
+        "market_no_vig_implied_over",
+        "market_no_vig_implied_under",
+        "market_book_count_two_sided",
+        "market_bookmaker_key",
         "model_prob_over",
         "model_prob_under",
         "model_fair_over_american",
@@ -751,6 +868,12 @@ def main() -> int:
         "slate_source_file",
         "snapshot_run_tag",
         "snapshot_time_utc",
+        "market_odds_snapshot_file",
+        "market_snapshot_run_tag",
+        "market_snapshot_time_utc",
+        "selected_side_price",
+        "selected_side_no_vig_implied",
+        "model_vs_market_gap",
     ]
 
     rows: List[Dict[str, Any]] = []
@@ -920,8 +1043,25 @@ def main() -> int:
                         "game_id": game_id,
                         "home_team_code": home,
                         "away_team_code": away,
+                        "game_time": _clean_str(row.get("game_time")),
+                        "game_day_of_week": _clean_str(row.get("game_day_of_week")) or _game_day_of_week(row.get("game_date")),
+                        "time_of_day_bucket": _clean_str(row.get("time_of_day_bucket")) or _time_of_day_bucket(row.get("game_time")),
                         "player_id": player_id,
                         "player_name": player_name,
+                        "team": _clean_str(row.get("team")),
+                        "team_id": row.get("team_id"),
+                        "opponent": _clean_str(row.get("opponent")),
+                        "opponent_id": row.get("opponent_id"),
+                        "is_home": row.get("is_home"),
+                        "bvp_plate_appearances": row.get("bvp_plate_appearances"),
+                        "bvp_at_bats": row.get("bvp_at_bats"),
+                        "bvp_hits": row.get("bvp_hits"),
+                        "bvp_total_bases": row.get("bvp_total_bases"),
+                        "bvp_avg": row.get("bvp_avg"),
+                        "bvp_slg": row.get("bvp_slg"),
+                        "bvp_payload_present": row.get("bvp_payload_present"),
+                        "bvp_source": _clean_str(row.get("bvp_source")),
+                        **{col: row.get(col) for col in ROLLING_CONTEXT_COLUMNS},
                         "prop_type": prop_type,
                         "market_key": market_key,
                         "line": float(line),
@@ -936,6 +1076,12 @@ def main() -> int:
                         "implied_over_novig": over_implied_novig,
                         "implied_under_novig": under_implied_novig,
                         "market_hold": hold,
+                        "market_price_over": over_price,
+                        "market_price_under": under_price,
+                        "market_no_vig_implied_over": over_implied_novig,
+                        "market_no_vig_implied_under": under_implied_novig,
+                        "market_book_count_two_sided": book_count_two_sided,
+                        "market_bookmaker_key": used_book,
                         "model_prob_over": float(row.get("prob_over")),
                         "model_prob_under": float(row.get("prob_under")),
                         "model_fair_over_american": int(row.get("fair_odds_over_american")),
@@ -955,6 +1101,9 @@ def main() -> int:
                         "slate_source_file": str(slate_csv),
                         "snapshot_run_tag": snapshot_run_tag,
                         "snapshot_time_utc": snapshot_time_utc,
+                        "market_odds_snapshot_file": str(odds_json),
+                        "market_snapshot_run_tag": snapshot_run_tag,
+                        "market_snapshot_time_utc": snapshot_time_utc,
                     }
                     rows.append(row_payload)
                     rows_by_key.add((game_id, player_id, prop_type, float(line)))
@@ -992,8 +1141,25 @@ def main() -> int:
                         "game_id": game_id,
                         "home_team_code": _clean_str(r.get("home_team_code")),
                         "away_team_code": _clean_str(r.get("away_team_code")),
+                        "game_time": None,
+                        "game_day_of_week": _game_day_of_week(game_date),
+                        "time_of_day_bucket": None,
                         "player_id": player_id,
                         "player_name": _clean_str(r.get("player_name")),
+                        "team": None,
+                        "team_id": None,
+                        "opponent": None,
+                        "opponent_id": None,
+                        "is_home": None,
+                        "bvp_plate_appearances": None,
+                        "bvp_at_bats": None,
+                        "bvp_hits": None,
+                        "bvp_total_bases": None,
+                        "bvp_avg": None,
+                        "bvp_slg": None,
+                        "bvp_payload_present": None,
+                        "bvp_source": None,
+                        **{col: None for col in ROLLING_CONTEXT_COLUMNS},
                         "prop_type": prop_type,
                         "market_key": f"derived:{prop_type}",
                         "line": float(line),
@@ -1008,6 +1174,12 @@ def main() -> int:
                         "implied_over_novig": None,
                         "implied_under_novig": None,
                         "market_hold": None,
+                        "market_price_over": None,
+                        "market_price_under": None,
+                        "market_no_vig_implied_over": None,
+                        "market_no_vig_implied_under": None,
+                        "market_book_count_two_sided": None,
+                        "market_bookmaker_key": None,
                         "model_prob_over": None,
                         "model_prob_under": None,
                         "model_fair_over_american": None,
@@ -1027,6 +1199,9 @@ def main() -> int:
                         "slate_source_file": "derived_from_mtp",
                         "snapshot_run_tag": "derived_from_mtp",
                         "snapshot_time_utc": None,
+                        "market_odds_snapshot_file": None,
+                        "market_snapshot_run_tag": "derived_from_mtp",
+                        "market_snapshot_time_utc": None,
                     }
                 )
                 rows_by_key.add(dedupe_key)
@@ -1036,7 +1211,11 @@ def main() -> int:
 
     # Keep a stable header even when no rows are produced, so downstream reads do
     # not fail with pandas EmptyDataError.
-    out_df = pd.DataFrame(rows, columns=output_columns)
+    out_df = add_market_audit_context(
+        pd.DataFrame(rows, columns=output_columns),
+        side_col="model_pick_side",
+        probability_col="model_pick_prob",
+    )
     rows_before_price_filter = int(len(out_df))
     rows_removed_one_sided = 0
     rows_removed_invalid_price = 0
@@ -1122,6 +1301,10 @@ def main() -> int:
         "snapshot_run_tag": str(args.snapshot_run_tag or ""),
         "odds_fallback_dates_used": fallback_dates_used,
         "odds_fallback_dates_used_count": int(len(fallback_dates_used)),
+        "feature_lineage_patch_1a_diagnostics": _context_field_diagnostics(
+            out_df,
+            stage="execution_vs_model_reconcile",
+        ),
     }
     if not out_df.empty:
         summary["by_date"] = (

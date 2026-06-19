@@ -27,12 +27,16 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.shared.probability_calibration import calibrate_probability, load_calibrator
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # .../backend
 DEFAULT_PRED_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wide_calibrated.csv"
 DEFAULT_OUT_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_slate_output.csv"
+DEFAULT_PREPARED_FEATURE_DEBUG_ROOT = (
+    BASE_DIR / "mlb" / "exports" / "model_diagnostics" / "prepared_feature_vectors"
+)
 
 # External book-upload taxonomy (MARKET key) doubles as a stable cross-tool prop mapping.
 DEFAULT_MARKET_BY_PROP: Dict[str, str] = {
@@ -57,6 +61,50 @@ DEFAULT_MARKET_BY_PROP: Dict[str, str] = {
 }
 
 _PCOL_RE = re.compile(r"^p_over_(\d+)_([05])$")
+PATCH_1A_CONTEXT_COLUMNS = [
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "is_home",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+]
+BVP_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+]
+ROLLING_CONTEXT_COLUMNS = [
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+]
+PASSIVE_CONTEXT_COLUMNS = [
+    *PATCH_1A_CONTEXT_COLUMNS,
+    *BVP_CONTEXT_COLUMNS,
+    *ROLLING_CONTEXT_COLUMNS,
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
+]
 
 
 def _canonical_prop_type(value: object) -> str:
@@ -70,6 +118,230 @@ def _clean_optional_str(value: object) -> Optional[str]:
     if not text or text.lower() == "nan":
         return None
     return text
+
+
+def _game_day_of_week(value: object) -> Optional[str]:
+    dt = pd.to_datetime(value, errors="coerce")
+    if pd.isna(dt):
+        return None
+    return str(dt.day_name()).lower()
+
+
+def _time_of_day_bucket(value: object) -> Optional[str]:
+    dt = pd.to_datetime(value, errors="coerce")
+    if pd.isna(dt):
+        return None
+    hour = int(dt.hour)
+    if hour < 12:
+        return "morning"
+    if hour < 16:
+        return "afternoon"
+    if hour < 20:
+        return "evening"
+    return "late"
+
+
+def _truthy_rate(series: pd.Series) -> float:
+    return float(
+        series.map(lambda v: str(v).strip().lower() in {"1", "true", "yes", "on"} if pd.notna(v) else False).mean()
+    )
+
+
+def _context_field_diagnostics(df: pd.DataFrame, *, stage: str) -> Dict[str, object]:
+    fields: Dict[str, object] = {}
+    row_count = int(len(df))
+    for col in PASSIVE_CONTEXT_COLUMNS:
+        present = col in df.columns
+        null_rate = None
+        if present and row_count:
+            null_rate = float(df[col].isna().mean())
+        fields[col] = {
+            "present": bool(present),
+            "null_rate": null_rate,
+            "payload_present_rate": (
+                _truthy_rate(df[col])
+                if col == "bvp_payload_present" and present and row_count
+                else None
+            ),
+            "row_count": row_count,
+            "missing_stage": "" if present else stage,
+        }
+    return {"stage": stage, "row_count": row_count, "fields": fields}
+
+
+def _prepared_feature_dir(raw: str, slate_date: str) -> Optional[Path]:
+    text = str(raw or "").strip()
+    if text.lower() in {"0", "false", "no", "off", "none", "null"}:
+        return None
+    if text:
+        return Path(text).expanduser()
+    return DEFAULT_PREPARED_FEATURE_DEBUG_ROOT / str(slate_date)
+
+
+def _load_prepared_feature_context(feature_dir: Optional[Path]) -> pd.DataFrame:
+    market_source_columns = [
+        "price_over_american",
+        "price_under_american",
+        "implied_over_novig",
+        "implied_under_novig",
+        "market_hold",
+        "book_count_two_sided",
+        "bookmaker_key",
+        "odds_snapshot_file",
+        "snapshot_time_utc",
+        "snapshot_run_tag",
+    ]
+    context_columns = [
+        *BVP_CONTEXT_COLUMNS,
+        *ROLLING_CONTEXT_COLUMNS,
+        *MARKET_AUDIT_CONTEXT_COLUMNS,
+    ]
+    columns = ["game_id", "player_id", "prop_type", "line", *context_columns]
+    if feature_dir is None or not feature_dir.exists():
+        return pd.DataFrame(columns=columns)
+
+    frames: List[pd.DataFrame] = []
+    for path in sorted(feature_dir.glob("*_features.csv")):
+        try:
+            frame = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        if frame.empty:
+            continue
+        for key in ("game_id", "player_id", "prop_type", "line"):
+            if key not in frame.columns:
+                frame[key] = pd.NA
+        for col in [*BVP_CONTEXT_COLUMNS, *ROLLING_CONTEXT_COLUMNS, *market_source_columns, *MARKET_AUDIT_CONTEXT_COLUMNS]:
+            if col not in frame.columns:
+                frame[col] = pd.NA
+        frame = add_market_audit_context(frame)
+        frames.append(frame[columns].copy())
+    if not frames:
+        return pd.DataFrame(columns=columns)
+
+    out = pd.concat(frames, ignore_index=True)
+    out["game_id"] = pd.to_numeric(out["game_id"], errors="coerce")
+    out["player_id"] = pd.to_numeric(out["player_id"], errors="coerce")
+    out["line"] = pd.to_numeric(out["line"], errors="coerce")
+    out["prop_type"] = out["prop_type"].map(_canonical_prop_type)
+    out = out.dropna(subset=["game_id", "player_id", "line"])
+    out = out[out["prop_type"].astype(str).str.len() > 0].copy()
+    if out.empty:
+        return pd.DataFrame(columns=columns)
+
+    out["game_id"] = out["game_id"].astype(int)
+    out["player_id"] = out["player_id"].astype(int)
+    for col in [
+        "bvp_plate_appearances",
+        "bvp_at_bats",
+        "bvp_hits",
+        "bvp_total_bases",
+        "bvp_avg",
+        "bvp_slg",
+        *ROLLING_CONTEXT_COLUMNS,
+        "market_price_over",
+        "market_price_under",
+        "market_no_vig_implied_over",
+        "market_no_vig_implied_under",
+        "market_hold",
+        "market_book_count_two_sided",
+        "selected_side_price",
+        "selected_side_no_vig_implied",
+        "model_vs_market_gap",
+    ]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+    if out["bvp_avg"].isna().any():
+        ab = pd.to_numeric(out["bvp_at_bats"], errors="coerce")
+        hits = pd.to_numeric(out["bvp_hits"], errors="coerce")
+        derived = hits / ab.where(ab.gt(0))
+        out["bvp_avg"] = out["bvp_avg"].where(out["bvp_avg"].notna(), derived)
+    if out["bvp_slg"].isna().any():
+        ab = pd.to_numeric(out["bvp_at_bats"], errors="coerce")
+        tb = pd.to_numeric(out["bvp_total_bases"], errors="coerce")
+        derived = tb / ab.where(ab.gt(0))
+        out["bvp_slg"] = out["bvp_slg"].where(out["bvp_slg"].notna(), derived)
+    if "bvp_payload_present" in out.columns:
+        payload_from_counts = out[
+            ["bvp_plate_appearances", "bvp_at_bats", "bvp_hits", "bvp_total_bases"]
+        ].notna().any(axis=1)
+        out["bvp_payload_present"] = out["bvp_payload_present"].map(
+            lambda v: (
+                True
+                if str(v).strip().lower() in {"1", "true", "yes", "on"}
+                else False
+                if str(v).strip().lower() in {"0", "false", "no", "off"}
+                else pd.NA
+            )
+        )
+        out["bvp_payload_present"] = out["bvp_payload_present"].where(
+            out["bvp_payload_present"].notna(),
+            payload_from_counts,
+        )
+    if "bvp_source" in out.columns:
+        out["bvp_source"] = out["bvp_source"].where(
+            out["bvp_source"].notna(),
+            out["bvp_payload_present"].map(lambda v: "prop_features_precomputed" if bool(v) else pd.NA),
+        )
+    out = out.drop_duplicates(subset=["game_id", "player_id", "prop_type", "line"], keep="first")
+    return out[columns]
+
+
+def _merge_prepared_feature_context(df_long: pd.DataFrame, feature_dir: Optional[Path]) -> pd.DataFrame:
+    out = df_long.copy()
+    before_rows = len(out)
+    for col in [*BVP_CONTEXT_COLUMNS, *ROLLING_CONTEXT_COLUMNS, *MARKET_AUDIT_CONTEXT_COLUMNS]:
+        if col not in out.columns:
+            out[col] = pd.NA
+    context = _load_prepared_feature_context(feature_dir)
+    if context.empty:
+        print(
+            "[feature-lineage-prepared-context] "
+            + json.dumps(
+                {
+                    "stage": "prepared_feature_context",
+                    "feature_dir": str(feature_dir) if feature_dir else "",
+                    "context_rows": 0,
+                    "merged_rows": 0,
+                    "row_count": before_rows,
+                },
+                sort_keys=True,
+            )
+        )
+        return out
+
+    key_cols = ["game_id", "player_id", "prop_type", "line"]
+    prepared_context_columns = [*BVP_CONTEXT_COLUMNS, *ROLLING_CONTEXT_COLUMNS, *MARKET_AUDIT_CONTEXT_COLUMNS]
+    merge_cols = key_cols + [f"{col}_prepared_ctx" for col in prepared_context_columns]
+    context = context.rename(columns={col: f"{col}_prepared_ctx" for col in prepared_context_columns})
+    out = out.merge(context[merge_cols], on=key_cols, how="left", sort=False, validate="many_to_one")
+    for col in prepared_context_columns:
+        src_col = f"{col}_prepared_ctx"
+        out[col] = out[col].where(out[col].notna(), out[src_col])
+        out = out.drop(columns=[src_col])
+
+    merged_rows = int(
+        out["bvp_payload_present"].map(
+            lambda v: str(v).strip().lower() in {"1", "true", "yes", "on"} if pd.notna(v) else False
+        ).sum()
+    )
+    rolling_rows = int(out[ROLLING_CONTEXT_COLUMNS].notna().any(axis=1).sum())
+    if len(out) != before_rows:
+        raise RuntimeError("prepared feature context merge changed slate row count")
+    print(
+        "[feature-lineage-prepared-context] "
+        + json.dumps(
+            {
+                "stage": "prepared_feature_context",
+                "feature_dir": str(feature_dir) if feature_dir else "",
+                "context_rows": int(len(context)),
+                "bvp_merged_rows": merged_rows,
+                "rolling_merged_rows": rolling_rows,
+                "row_count": before_rows,
+            },
+            sort_keys=True,
+        )
+    )
+    return out
 
 
 def _parse_lines_from_cols(cols: Iterable[str]) -> List[Tuple[str, float]]:
@@ -360,9 +632,11 @@ def build_slate_output(
     drop_line_0_5: bool,
     market_map: Dict[str, str],
     pred_csv_path: Path,
+    prepared_feature_dir: Optional[Path] = None,
     calibration_json: str = "",
     apply_upload_calibration: bool = False,
 ) -> pd.DataFrame:
+    df_long = _merge_prepared_feature_context(df_long, prepared_feature_dir)
     merged = _enrich_with_db(df_long)
     calibrator = load_calibrator(calibration_json) if apply_upload_calibration else None
     min_prop_samples = int((calibrator or {}).get("min_prop_samples") or 200)
@@ -443,10 +717,27 @@ def build_slate_output(
                 "game_date": pd.to_datetime(row["game_date"]).strftime("%Y-%m-%d"),
                 "game_id": int(row["game_id"]),
                 "game_type": _clean_optional_str(row.get("game_type")),
+                "game_time": _clean_optional_str(row.get("game_time")),
+                "game_day_of_week": _game_day_of_week(row.get("game_date")),
+                "time_of_day_bucket": _time_of_day_bucket(row.get("game_time")),
                 "home_team_code": str(row["home_team_code"]).strip(),
                 "away_team_code": str(row["away_team_code"]).strip(),
                 "player_id": int(row["player_id"]),
                 "player_name": _clean_optional_str(row.get("player_name")),
+                "team": _clean_optional_str(row.get("team")),
+                "team_id": row.get("team_id"),
+                "opponent": _clean_optional_str(row.get("opponent")),
+                "opponent_id": row.get("opponent_id"),
+                "is_home": row.get("is_home"),
+                "bvp_plate_appearances": row.get("bvp_plate_appearances"),
+                "bvp_at_bats": row.get("bvp_at_bats"),
+                "bvp_hits": row.get("bvp_hits"),
+                "bvp_total_bases": row.get("bvp_total_bases"),
+                "bvp_avg": row.get("bvp_avg"),
+                "bvp_slg": row.get("bvp_slg"),
+                "bvp_payload_present": row.get("bvp_payload_present"),
+                "bvp_source": _clean_optional_str(row.get("bvp_source")),
+                **{col: row.get(col) for col in ROLLING_CONTEXT_COLUMNS},
                 "prop_type": prop_type,
                 "market_key": market_map[prop_type],
                 "line": float(row["line"]),
@@ -458,6 +749,25 @@ def build_slate_output(
                 "fair_odds_under_american": int(odds_under),
                 "model_pick_side": pick_side,
                 "model_pick_prob": round(float(pick_prob), 6),
+                "market_price_over": row.get("market_price_over", row.get("price_over_american")),
+                "market_price_under": row.get("market_price_under", row.get("price_under_american")),
+                "market_no_vig_implied_over": row.get(
+                    "market_no_vig_implied_over",
+                    row.get("implied_over_novig"),
+                ),
+                "market_no_vig_implied_under": row.get(
+                    "market_no_vig_implied_under",
+                    row.get("implied_under_novig"),
+                ),
+                "market_hold": row.get("market_hold"),
+                "market_book_count_two_sided": row.get(
+                    "market_book_count_two_sided",
+                    row.get("book_count_two_sided", row.get("books_two_sided")),
+                ),
+                "market_bookmaker_key": row.get("market_bookmaker_key", row.get("bookmaker_key")),
+                "market_odds_snapshot_file": row.get("market_odds_snapshot_file", row.get("odds_snapshot_file")),
+                "market_snapshot_time_utc": row.get("market_snapshot_time_utc", row.get("snapshot_time_utc")),
+                "market_snapshot_run_tag": row.get("market_snapshot_run_tag", row.get("snapshot_run_tag")),
                 "calibration_method": str((calibrator or {}).get("method") or ""),
                 "prediction_source_file": str(pred_csv_path),
                 "generated_at_utc": generated_at_utc,
@@ -467,7 +777,12 @@ def build_slate_output(
     if not rows:
         raise RuntimeError("no output rows generated")
 
-    out = pd.DataFrame(rows)
+    out = add_market_audit_context(
+        pd.DataFrame(rows),
+        side_col="model_pick_side",
+        probability_col="model_pick_prob",
+    )
+    print("[feature-lineage-1a] " + json.dumps(_context_field_diagnostics(out, stage="slate_output"), sort_keys=True))
     out = out.sort_values(
         by=["game_date", "game_id", "player_name", "player_id", "prop_type", "line"],
         kind="stable",
@@ -483,6 +798,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--slate-date", default=None, help="YYYY-MM-DD (ET). Defaults to SLATE_DATE or ET today.")
     ap.add_argument("--pred-csv", default=os.environ.get("MLB_PRED_CSV", str(DEFAULT_PRED_CSV)))
     ap.add_argument("--out-csv", default=os.environ.get("MLB_SLATE_OUTPUT_CSV", str(DEFAULT_OUT_CSV)))
+    ap.add_argument(
+        "--prepared-feature-dir",
+        default=os.environ.get("MLB_PREPARED_FEATURE_DEBUG_OUT_DIR", ""),
+        help=(
+            "Directory of prepared prediction-time feature diagnostics used for passive context. "
+            "Defaults to backend/mlb/exports/model_diagnostics/prepared_feature_vectors/<slate-date>. "
+            "Set to 0/false/off to disable."
+        ),
+    )
     ap.add_argument("--strict", action="store_true", help="Fail if source includes rows from non-slate dates.")
     ap.add_argument("--prop-type", default=os.environ.get("MLB_SLATE_PROP_TYPE", ""), help="Fallback prop_type when wide CSV omits prop_type column.")
     ap.add_argument("--market-map-json", default="", help="Optional JSON object prop_type->market_key overrides.")
@@ -502,6 +826,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     slate_date = (args.slate_date or os.environ.get("SLATE_DATE") or et_today).strip()
     pred_csv = Path(str(args.pred_csv)).expanduser()
     out_csv = Path(str(args.out_csv)).expanduser()
+    prepared_feature_dir = _prepared_feature_dir(str(args.prepared_feature_dir or ""), slate_date)
     prop_type_arg = _canonical_prop_type(args.prop_type)
     apply_upload_calibration = _env_flag("MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD", False)
     calibration_json = str(args.calibration_json or "").strip()
@@ -515,6 +840,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"[mlb-slate-output] slate_date (ET) = {slate_date}")
     print(f"[mlb-slate-output] pred_csv = {pred_csv}")
     print(f"[mlb-slate-output] out_csv = {out_csv}")
+    if prepared_feature_dir:
+        print(f"[mlb-slate-output] prepared_feature_dir = {prepared_feature_dir}")
+    else:
+        print("[mlb-slate-output] prepared_feature_dir = <disabled>")
 
     try:
         df_wide = _load_predictions(pred_csv)
@@ -526,6 +855,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             drop_line_0_5=bool(args.drop_line_0_5),
             market_map=market_map,
             pred_csv_path=pred_csv,
+            prepared_feature_dir=prepared_feature_dir,
             calibration_json=calibration_json,
             apply_upload_calibration=apply_upload_calibration,
         )

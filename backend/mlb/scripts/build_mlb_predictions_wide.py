@@ -47,6 +47,7 @@ from backend.mlb.shared.team_name_map import (
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
+from backend.mlb.shared.name_normalization import normalize_player_name_key
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 from backend.shared.db.pg import pg_connect
 
@@ -57,7 +58,6 @@ DEFAULT_OUT_CSV = BASE_DIR / "mlb" / "data" / "processed" / "mlb_predictions_wid
 DEFAULT_FEATURE_DEBUG_ROOT = BASE_DIR / "mlb" / "exports" / "model_diagnostics" / "prepared_feature_vectors"
 
 _ALLOWED_LINE_FRAC = {0.0, 0.5}
-_NAME_RE = re.compile(r"[^a-z0-9 ]+")
 _SNAPSHOT_TS_RE = re.compile(r"^(.+?)_(\d{8}T\d{6})(?:_(\d+))?\.json$")
 _PITCHER_PROP_TYPES = {
     "earned_runs",
@@ -69,10 +69,7 @@ _PITCHER_PROP_TYPES = {
 
 
 def _norm_name(value: object) -> str:
-    text = str(value or "").strip().lower()
-    text = _NAME_RE.sub("", text)
-    text = " ".join(text.split())
-    return text
+    return normalize_player_name_key(value)
 
 
 def _clean_str(value: object) -> Optional[str]:
@@ -215,6 +212,58 @@ def _safe_feature_value(value: Any) -> Any:
         except Exception:
             return str(value)
     return str(value)
+
+
+BVP_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+]
+
+
+def _bvp_source_label() -> str:
+    tag = (
+        os.getenv("MLB_BVP_FEATURE_SET_TAG")
+        or os.getenv("MLB_PFP_OVERLAP_FEATURE_SET_TAG")
+        or "v1"
+    )
+    return f"prop_features_precomputed:{tag}"
+
+
+def _add_compact_bvp_context(row: Dict[str, Any]) -> None:
+    keys = [
+        "bvp_plate_appearances",
+        "bvp_at_bats",
+        "bvp_hits",
+        "bvp_total_bases",
+    ]
+    present = any(row.get(k) is not None and str(row.get(k)).strip() != "" for k in keys)
+    row["bvp_payload_present"] = bool(present)
+    row["bvp_source"] = _bvp_source_label() if present else None
+
+    try:
+        ab = float(row.get("bvp_at_bats"))
+    except Exception:
+        ab = 0.0
+    if ab > 0:
+        try:
+            hits = float(row.get("bvp_hits"))
+            row["bvp_avg"] = hits / ab
+        except Exception:
+            row["bvp_avg"] = None
+        try:
+            tb = float(row.get("bvp_total_bases"))
+            row["bvp_slg"] = tb / ab
+        except Exception:
+            row["bvp_slg"] = None
+    else:
+        row["bvp_avg"] = None
+        row["bvp_slg"] = None
 
 
 def _feature_debug_out_dir(raw: str, slate_date: str) -> Optional[Path]:
@@ -1034,6 +1083,7 @@ def _predict_rows(
                         if key in {"date", "player_name", "player_id", "game_id", "prop_type", "line", "side"}:
                             continue
                         feature_row[str(key)] = _safe_feature_value(value)
+                    _add_compact_bvp_context(feature_row)
                     if str(off.prop_type).strip().lower() == "hits":
                         feature_row.setdefault("rolling_result_avg_7", None)
                         feature_row.setdefault("d7_hits", None)

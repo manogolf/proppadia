@@ -16,6 +16,8 @@ from urllib.request import Request, urlopen
 import numpy as np
 import pandas as pd
 
+from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS
+
 
 UPLOAD_COLUMNS = [
     "LEAGUE",
@@ -29,6 +31,50 @@ UPLOAD_COLUMNS = [
     "POINT",
     "SIDE",
     "WIN %",
+]
+PATCH_1A_CONTEXT_COLUMNS = [
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "is_home",
+    "team",
+    "team_id",
+    "opponent",
+    "opponent_id",
+]
+BVP_CONTEXT_COLUMNS = [
+    "bvp_plate_appearances",
+    "bvp_at_bats",
+    "bvp_hits",
+    "bvp_total_bases",
+    "bvp_avg",
+    "bvp_slg",
+    "bvp_payload_present",
+    "bvp_source",
+]
+ROLLING_CONTEXT_COLUMNS = [
+    "rolling_result_avg_7",
+    "d7_hits",
+    "d15_hits",
+    "d30_hits",
+    "d7_total_bases",
+    "d15_total_bases",
+    "d30_total_bases",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "d7_strikeouts_batting",
+    "d15_strikeouts_batting",
+    "d30_strikeouts_batting",
+    "d7_hits_allowed",
+    "d15_hits_allowed",
+    "d30_hits_allowed",
+]
+PASSIVE_CONTEXT_COLUMNS = [
+    *PATCH_1A_CONTEXT_COLUMNS,
+    *BVP_CONTEXT_COLUMNS,
+    *ROLLING_CONTEXT_COLUMNS,
+    *MARKET_AUDIT_CONTEXT_COLUMNS,
 ]
 
 CATALOG_CACHE_DIR = Path("backend/mlb/exports/model_v2/catalog")
@@ -155,6 +201,33 @@ def with_artifact_status(
     out["generated_at"] = generated_at or generated_at_utc()
     out["run_tag"] = run_tag or upload_run_tag()
     return out
+
+
+def _passive_context_field_diagnostics(df: pd.DataFrame, *, stage: str) -> dict[str, Any]:
+    def truthy_rate(series: pd.Series) -> float:
+        return float(
+            series.map(lambda v: str(v).strip().lower() in {"1", "true", "yes", "on"} if pd.notna(v) else False).mean()
+        )
+
+    row_count = int(len(df))
+    fields: dict[str, Any] = {}
+    for col in PASSIVE_CONTEXT_COLUMNS:
+        present = col in df.columns
+        null_rate = None
+        if present and row_count:
+            null_rate = float(df[col].isna().mean())
+        fields[col] = {
+            "present": bool(present),
+            "null_rate": null_rate,
+            "payload_present_rate": (
+                truthy_rate(df[col])
+                if col == "bvp_payload_present" and present and row_count
+                else None
+            ),
+            "row_count": row_count,
+            "missing_stage": "" if present else stage,
+        }
+    return {"stage": stage, "row_count": row_count, "fields": fields}
 
 
 def _clean(value: Any) -> str:
@@ -957,8 +1030,36 @@ def prepare_player_prop_upload(
             "SIDE",
             "WIN %",
             "exclusion_reason",
+            *[col for col in PASSIVE_CONTEXT_COLUMNS if col in excluded_unknown_event_rows.columns],
         ]
     ]
+    event_diagnostics_columns = [
+        "event_key_expected_away_at_home",
+        "event_key_catalog_away_at_home",
+        "event_key_input_away_at_home",
+        "event_code",
+        "event_catalog_date",
+        "catalog_event_found",
+        "home_upload",
+        "away_upload",
+        "home_upload_input",
+        "away_upload_input",
+        "home_upload_input_slug",
+        "away_upload_input_slug",
+        "requested_input_key",
+        "requested_slug_key",
+        "home_source",
+        "away_source",
+        "source_home_abbr",
+        "source_away_abbr",
+        "home_away_reversed_flag",
+        "SELECTOR",
+        "MARKET",
+        "POINT",
+        "SIDE",
+        "WIN %",
+    ]
+    event_diagnostics_columns.extend(col for col in PASSIVE_CONTEXT_COLUMNS if col in work.columns)
     if len(paired) == 0:
         upload_status = "failed"
     elif int(unknown_event.sum()) > 0:
@@ -1047,35 +1148,14 @@ def prepare_player_prop_upload(
             catalog_event_found=~unknown_event,
             home_away_reversed_flag=reversed_home_away,
         )[
-            [
-                "event_key_expected_away_at_home",
-                "event_key_catalog_away_at_home",
-                "event_key_input_away_at_home",
-                "event_code",
-                "event_catalog_date",
-                "catalog_event_found",
-                "home_upload",
-                "away_upload",
-                "home_upload_input",
-                "away_upload_input",
-                "home_upload_input_slug",
-                "away_upload_input_slug",
-                "requested_input_key",
-                "requested_slug_key",
-                "home_source",
-                "away_source",
-                "source_home_abbr",
-                "source_away_abbr",
-                "home_away_reversed_flag",
-                "SELECTOR",
-                "MARKET",
-                "POINT",
-                "SIDE",
-                "WIN %",
-            ]
+            event_diagnostics_columns
         ]
         .drop_duplicates()
         .to_dict(orient="records"),
+        "passive_context_diagnostics": _passive_context_field_diagnostics(
+            work,
+            stage="tool_upload_prepare",
+        ),
     }
 
     hard_fail = (
@@ -1114,6 +1194,7 @@ def write_unknown_event_exclusions(diagnostics: dict[str, Any], diagnostics_csv:
         "SIDE",
         "WIN %",
         "exclusion_reason",
+        *PASSIVE_CONTEXT_COLUMNS,
     ]
     rows = pd.DataFrame(diagnostics.get("unknown_event_exclusion_rows", []), columns=columns)
     exclusions_csv.parent.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,10 @@ import pandas as pd
 DEFAULT_LANE_ROOT = Path("backend/mlb/exports/model_v2/lanes/today")
 DEFAULT_RECON_ROOT = Path("backend/mlb/exports/model_v2/reconcile")
 DEFAULT_OUT_DIR = Path("artifacts/analysis/mlb/v2_qc_diagnostics")
+ROOT = Path(__file__).resolve().parents[3]
+TMP_ANALYSIS = ROOT / "tmp/analysis"
+if TMP_ANALYSIS.exists() and str(TMP_ANALYSIS) not in sys.path:
+    sys.path.insert(0, str(TMP_ANALYSIS))
 
 
 def _date_key(value: Any) -> str:
@@ -47,6 +52,10 @@ def _fmt_pct(value: Any) -> str:
 def _fmt_num(value: Any) -> str:
     val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     return "n/a" if pd.isna(val) else f"{val:.2f}"
+
+
+def _as_num(value: Any) -> float:
+    return pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
 
 
 def _md_table(df: pd.DataFrame, cols: list[str], n: int | None = None) -> str:
@@ -239,6 +248,147 @@ def _perf_summary(rows: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(summaries)
 
 
+def _bool_series(rows: pd.DataFrame, col: str) -> pd.Series:
+    if col not in rows.columns:
+        return pd.Series(False, index=rows.index)
+    raw = rows[col]
+    if raw.dtype == bool:
+        return raw.fillna(False).astype(bool)
+    return raw.fillna(False).astype(str).str.lower().isin({"true", "1", "yes"})
+
+
+def _latest_completed_from_reconcile(recon_root: Path) -> str:
+    dates = [_date_key(path.parent.name) for path in recon_root.glob("*/actual_wagers_by_source_*.csv")]
+    return max([d for d in dates if d], default="")
+
+
+def _composition_metrics(rows: pd.DataFrame) -> dict[str, Any]:
+    total = int(len(rows))
+    resolved = rows[rows["resolved_bool"]].copy() if total else rows.copy()
+    wins = int(resolved["win_bool"].sum()) if total else 0
+    losses = int(resolved["loss_bool"].sum()) if total else 0
+    decisions = wins + losses
+    units = float(resolved["units_num"].sum()) if total else 0.0
+    odds = pd.to_numeric(rows.get("price_num"), errors="coerce")
+    qc_score = pd.to_numeric(rows.get("quick_card_score_num"), errors="coerce")
+    v2_score = pd.to_numeric(rows.get("ranking_score_num"), errors="coerce")
+    odds_denom = int(odds.notna().sum())
+    qc_denom = int(qc_score.notna().sum())
+    odds_150_120 = float((odds.ge(-150) & odds.lt(-120)).sum()) / odds_denom if odds_denom else np.nan
+    qc_55_60 = float((qc_score.ge(0.55) & qc_score.lt(0.60)).sum()) / qc_denom if qc_denom else np.nan
+    return {
+        "rows": total,
+        "resolved_rows": int(len(resolved)),
+        "wins": wins,
+        "losses": losses,
+        "wr": wins / decisions if decisions else np.nan,
+        "roi": units / len(resolved) if len(resolved) else np.nan,
+        "units": units,
+        "avg_odds": float(odds.mean(skipna=True)) if total else np.nan,
+        "bottom_order_share": float(rows["bottom_order_bool"].mean()) if total else np.nan,
+        "under_0_5_share": float(rows["under_0_5_bool"].mean()) if total else np.nan,
+        "avg_v2_ranking_score": float(v2_score.mean(skipna=True)) if total else np.nan,
+        "avg_qc_score": float(qc_score.mean(skipna=True)) if total else np.nan,
+        "qc_probability_55_60_share": qc_55_60,
+        "odds_minus_150_to_minus_120_share": odds_150_120,
+    }
+
+
+def _composition_period(rows: pd.DataFrame, period: str, latest: str) -> pd.DataFrame:
+    dates = pd.to_datetime(rows["date_key"], errors="coerce")
+    latest_ts = pd.Timestamp(latest or rows["date_key"].max())
+    if period == "full_history":
+        return rows.copy()
+    if period == "pre_2026_05_29":
+        return rows[dates.le(pd.Timestamp("2026-05-28"))].copy()
+    if period == "from_2026_05_29_onward":
+        return rows[dates.ge(pd.Timestamp("2026-05-29"))].copy()
+    if period == "last_30":
+        return rows[dates.ge(latest_ts - pd.Timedelta(days=29)) & dates.le(latest_ts)].copy()
+    if period == "last_14":
+        return rows[dates.ge(latest_ts - pd.Timedelta(days=13)) & dates.le(latest_ts)].copy()
+    if period == "last_7":
+        return rows[dates.ge(latest_ts - pd.Timedelta(days=6)) & dates.le(latest_ts)].copy()
+    raise ValueError(period)
+
+
+def _build_composition_diagnostics(recon_root: Path) -> dict[str, Any]:
+    try:
+        import run_overlap_formation_audit as formation
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "reason": f"formation_import_failed:{type(exc).__name__}:{exc}",
+            "action_annotation": "monitor",
+        }
+    try:
+        rows, meta = formation._build_rows()
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "reason": f"formation_build_failed:{type(exc).__name__}:{exc}",
+            "action_annotation": "monitor",
+        }
+    if rows.empty:
+        return {"status": "empty", "reason": "no_formation_rows", "action_annotation": "monitor"}
+    latest_completed = _latest_completed_from_reconcile(recon_root) or max(rows.get("date_key", pd.Series(dtype=str)).astype(str), default="")
+    out = rows[rows.get("formation_bucket", pd.Series("", index=rows.index)).astype(str).eq("overlap")].copy()
+    out["date_key"] = pd.to_datetime(out["date_key"], errors="coerce").dt.date.astype(str)
+    if latest_completed:
+        out = out[pd.to_datetime(out["date_key"], errors="coerce").le(pd.Timestamp(latest_completed))]
+    out["result_key"] = out.get("result_key", pd.Series("", index=out.index)).astype(str).str.lower()
+    out["resolved_bool"] = out["result_key"].isin(["win", "loss", "push"])
+    out["win_bool"] = out["result_key"].eq("win")
+    out["loss_bool"] = out["result_key"].eq("loss")
+    out["units_num"] = pd.to_numeric(out.get("units_num"), errors="coerce").fillna(0.0)
+    out["price_num"] = pd.to_numeric(out.get("price_num"), errors="coerce")
+    out["line_num"] = pd.to_numeric(out.get("line"), errors="coerce").combine_first(pd.to_numeric(out.get("line_key"), errors="coerce"))
+    out["side_norm"] = out.get("side_key", pd.Series("", index=out.index)).astype(str).str.lower()
+    out["bottom_order_bool"] = _bool_series(out, "bottom_order_flag")
+    out["under_0_5_bool"] = out["side_norm"].eq("under") & out["line_num"].eq(0.5)
+    out["ranking_score_num"] = pd.to_numeric(out.get("ranking_score"), errors="coerce")
+    out["quick_card_score_num"] = pd.to_numeric(out.get("quick_card_score"), errors="coerce")
+
+    periods = {}
+    for period in ("full_history", "pre_2026_05_29", "from_2026_05_29_onward", "last_30", "last_14", "last_7"):
+        periods[period] = _composition_metrics(_composition_period(out, period, latest_completed))
+
+    full = periods.get("full_history", {})
+    last7 = periods.get("last_7", {})
+    drift_reasons: list[str] = []
+    if pd.notna(_as_num(last7.get("roi"))) and pd.notna(_as_num(full.get("roi"))) and _as_num(last7.get("roi")) < _as_num(full.get("roi")) - 0.20:
+        drift_reasons.append("last_7_roi_materially_below_full_history")
+    if pd.notna(_as_num(last7.get("bottom_order_share"))) and pd.notna(_as_num(full.get("bottom_order_share"))) and _as_num(last7.get("bottom_order_share")) < _as_num(full.get("bottom_order_share")) - 0.20:
+        drift_reasons.append("bottom_order_share_materially_lower")
+    if pd.notna(_as_num(last7.get("avg_qc_score"))) and pd.notna(_as_num(full.get("avg_qc_score"))) and _as_num(last7.get("avg_qc_score")) < _as_num(full.get("avg_qc_score")) - 0.02:
+        drift_reasons.append("qc_score_lower")
+    if _as_num(last7.get("resolved_rows")) < 10:
+        drift_reasons.append("last_7_small_sample")
+
+    if "last_7_roi_materially_below_full_history" in drift_reasons and "bottom_order_share_materially_lower" in drift_reasons:
+        flag = "composition_drift"
+    elif "last_7_roi_materially_below_full_history" in drift_reasons:
+        flag = "performance_cooling"
+    else:
+        flag = "none"
+    if flag == "composition_drift" and int(last7.get("resolved_rows") or 0) >= 25:
+        action = "investigate"
+    elif flag in {"composition_drift", "performance_cooling"}:
+        action = "monitor"
+    else:
+        action = "monitor"
+    return {
+        "status": "ok",
+        "source": "run_overlap_formation_audit_enriched_rows",
+        "latest_completed_slate": latest_completed,
+        "composition_drift_flag": flag,
+        "composition_drift_reasons": drift_reasons,
+        "action_annotation": action,
+        "periods": periods,
+        "meta": meta,
+    }
+
+
 def build_watch(args: argparse.Namespace) -> dict[str, Any]:
     lane_root = Path(args.lane_root)
     recon_root = Path(args.reconcile_root)
@@ -268,6 +418,7 @@ def build_watch(args: argparse.Namespace) -> dict[str, Any]:
 
     perf = _selection_perf(_load_perf(recon_root), ranking, quick)
     perf_summary = _perf_summary(perf)
+    composition = _build_composition_diagnostics(recon_root)
 
     latest_reconcile = max([_date_key(path.parent.name) for path in recon_root.glob("*/actual_wagers_by_source_*.csv")], default="")
     latest_overlap = max(dates, default="")
@@ -284,6 +435,7 @@ def build_watch(args: argparse.Namespace) -> dict[str, Any]:
         "stale": stale,
         "totals": daily.sum(numeric_only=True).to_dict() if not daily.empty else {},
         "performance": perf_summary.to_dict(orient="records"),
+        "composition_diagnostics": composition,
         "outputs": {"csv": str(csv_path), "json": str(json_path), "md": str(md_path)},
     }
     json_path.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
@@ -305,6 +457,29 @@ def build_watch(args: argparse.Namespace) -> dict[str, Any]:
         "",
         _md_table(perf_summary, ["bucket", "bets", "wins", "losses", "pushes", "wr", "roi", "units", "avg_odds", "median_odds", "best_day", "best_day_units", "worst_day", "worst_day_units", "roi_without_best_day", "roi_without_best_2_days"]) if not perf_summary.empty else "No resolved performance rows.",
     ]
+    comp_periods = composition.get("periods") or {}
+    full = comp_periods.get("full_history") or {}
+    last30 = comp_periods.get("last_30") or {}
+    last14 = comp_periods.get("last_14") or {}
+    last7 = comp_periods.get("last_7") or {}
+    lines.extend(
+        [
+            "",
+            "## Composition Deterioration Diagnostics",
+            "",
+            f"- Status: `{composition.get('status', 'unknown')}`",
+            f"- Latest completed slate: `{composition.get('latest_completed_slate', 'n/a')}`",
+            f"- Action annotation: `{composition.get('action_annotation', 'monitor')}`",
+            f"- Composition drift flag: `{composition.get('composition_drift_flag', 'unknown')}`",
+            f"- Drift reasons: `{', '.join(composition.get('composition_drift_reasons') or []) or 'none'}`",
+            f"- Overlap ROI: full history `{_fmt_pct(full.get('roi'))}`, last 30 `{_fmt_pct(last30.get('roi'))}`, last 14 `{_fmt_pct(last14.get('roi'))}`, last 7 `{_fmt_pct(last7.get('roi'))}`.",
+            f"- Last-7 overlap rows: `{last7.get('rows', 'n/a')}` / resolved `{last7.get('resolved_rows', 'n/a')}`.",
+            f"- Bottom-order share: full history `{_fmt_pct(full.get('bottom_order_share'))}`, last 7 `{_fmt_pct(last7.get('bottom_order_share'))}`.",
+            f"- Avg QC score: full history `{_fmt_num(full.get('avg_qc_score'))}`, last 7 `{_fmt_num(last7.get('avg_qc_score'))}`.",
+            f"- Avg V2 ranking score: full history `{_fmt_num(full.get('avg_v2_ranking_score'))}`, last 7 `{_fmt_num(last7.get('avg_v2_ranking_score'))}`.",
+            f"- Last-7 concentration: QC probability 55-60 share `{_fmt_pct(last7.get('qc_probability_55_60_share'))}`, odds -150 to -120 share `{_fmt_pct(last7.get('odds_minus_150_to_minus_120_share'))}`.",
+        ]
+    )
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return payload
 

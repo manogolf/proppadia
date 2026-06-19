@@ -309,6 +309,7 @@ def _extract_postgrade(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             continue
         alert_rows.append(
             {
+                "code": a.get("code"),
                 "severity": a.get("severity"),
                 "type": a.get("type"),
                 "message": a.get("message"),
@@ -539,7 +540,13 @@ def _build_freshness_audit(
     reporting_alignment: Dict[str, Any],
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
+    overlap_watch: Dict[str, Any],
     qc_bottom_order_watch: Dict[str, Any],
+    user_over_15_watch: Dict[str, Any],
+    hits_15_tier_backtest: Dict[str, Any],
+    total_bases_shadow_summary: Dict[str, Any],
+    total_bases_shadow_evaluation: Dict[str, Any],
+    feature_lineage_health: Dict[str, Any],
     today_workspace: Dict[str, Any],
     input_refresh_status: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
@@ -673,6 +680,13 @@ def _build_freshness_audit(
     elif bvp_label:
         bvp_status = "stale-unexpected"
         bvp_note = "BvP impact is older than the accepted current/prior completed lifecycle."
+    bvp_prewarm_note = _bvp_prewarm_failure_note(
+        current_slate_date=current_slate_date,
+        completed_slate_date=completed_slate_date,
+    )
+    if bvp_status == "stale-unexpected" and bvp_prewarm_note:
+        bvp_status = "refresh_failed"
+        bvp_note = bvp_prewarm_note
     rows.append(
         _freshness_row(
             section="BvP Impact",
@@ -715,6 +729,22 @@ def _build_freshness_audit(
     )
     rows.append(
         _freshness_row(
+            section="Ranking/QC Overlap Watch",
+            source_file=str(paths["overlap_watch_json"]),
+            source_date=_date_key(overlap_watch.get("latest_completed_slate")),
+            expected_date=completed_slate_date,
+            generated_at_utc=str(overlap_watch.get("generated_at") or ""),
+            mtime_utc=_path_mtime_utc(paths["overlap_watch_json"]),
+            load_status=str(source_states.get("overlap_watch_json") or "ok"),
+            cadence="daily after completed-slate reconcile and actual wager matching",
+            note=(
+                f"composition_drift_flag={overlap_watch.get('composition_drift_flag') or 'n/a'}; "
+                f"action={overlap_watch.get('action_annotation') or 'n/a'}"
+            ),
+        )
+    )
+    rows.append(
+        _freshness_row(
             section="QC Bottom-Order Under Watch",
             source_file=str(paths["qc_bottom_order_watch_json"]),
             source_date=_date_key(qc_bottom_order_watch.get("latest_reconcile_date")),
@@ -726,6 +756,101 @@ def _build_freshness_audit(
             note=(
                 f"recommendation={qc_bottom_order_watch.get('recommendation') or 'n/a'}; "
                 f"reason={qc_bottom_order_watch.get('recommendation_reason') or 'n/a'}"
+            ),
+        )
+    )
+    rows.append(
+        _freshness_row(
+            section="User Over 1.5 Filter Watch",
+            source_file=str(paths["user_over_15_watch_json"]),
+            source_date=_date_key(user_over_15_watch.get("latest_completed_slate")),
+            expected_date=completed_slate_date,
+            generated_at_utc=str(user_over_15_watch.get("generated_at") or ""),
+            mtime_utc=_path_mtime_utc(paths["user_over_15_watch_json"]),
+            load_status=str(source_states.get("user_over_15_watch_json") or "ok"),
+            cadence="daily after completed-slate reconcile and hits environment refresh",
+            note=(
+                f"recommendation={user_over_15_watch.get('recommendation') or 'n/a'}; "
+                f"reason={user_over_15_watch.get('recommendation_reason') or 'n/a'}"
+            ),
+        )
+    )
+    rows.append(
+        _freshness_row(
+            section="Total Bases Shadow Candidate",
+            source_file=str(paths["total_bases_shadow_summary_json"]),
+            source_date=_date_key(total_bases_shadow_summary.get("slate_date")),
+            expected_date=current_slate_date,
+            generated_at_utc=str(total_bases_shadow_summary.get("generated_at") or ""),
+            mtime_utc=_path_mtime_utc(paths["total_bases_shadow_summary_json"]),
+            load_status=str(source_states.get("total_bases_shadow_summary_json") or "ok"),
+            cadence="daily current-slate shadow scoring; analysis-only",
+            freshness_status=(
+                "fresh"
+                if _date_key(total_bases_shadow_summary.get("slate_date")) == current_slate_date
+                else ("missing-unexpected" if not total_bases_shadow_summary else "stale-unexpected")
+            ),
+            note=(
+                f"rows={total_bases_shadow_summary.get('shadow_rows', 0)}; "
+                f"side_changed={total_bases_shadow_summary.get('side_changed_rows', 0)}; "
+                f"production_outputs_changed={total_bases_shadow_summary.get('production_outputs_changed', False)}"
+            ),
+        )
+    )
+    scanned = total_bases_shadow_evaluation.get("shadow_dates_scanned") or []
+    eval_source_date = max([_date_key(x) for x in scanned if _date_key(x)] or [""])
+    rows.append(
+        _freshness_row(
+            section="Total Bases Shadow Evaluation",
+            source_file=str(paths["total_bases_shadow_evaluation_json"]),
+            source_date=eval_source_date,
+            expected_date=current_slate_date,
+            generated_at_utc=str(total_bases_shadow_evaluation.get("generated_at") or ""),
+            mtime_utc=_path_mtime_utc(paths["total_bases_shadow_evaluation_json"]),
+            load_status=str(source_states.get("total_bases_shadow_evaluation_json") or "ok"),
+            cadence="daily cumulative read-only evaluation after shadow scoring",
+            freshness_status=(
+                "fresh"
+                if eval_source_date == current_slate_date
+                else ("missing-unexpected" if not total_bases_shadow_evaluation else "stale-unexpected")
+            ),
+            note=(
+                f"rows_scored={total_bases_shadow_evaluation.get('rows_scored', 0)}; "
+                f"rows_with_outcomes={total_bases_shadow_evaluation.get('rows_with_outcomes', 0)}; "
+                f"side_changed={total_bases_shadow_evaluation.get('side_changed_rows', 0)}"
+            ),
+        )
+    )
+    lineage_status_raw = str(feature_lineage_health.get("status") or "").lower()
+    if lineage_status_raw == "pass":
+        lineage_freshness = "fresh"
+    elif lineage_status_raw == "warn":
+        lineage_freshness = "feature-lineage-warn"
+    elif lineage_status_raw == "fail":
+        lineage_freshness = "feature-lineage-fail"
+    elif source_states.get("feature_lineage_health_json") == "missing":
+        lineage_freshness = "missing-unexpected"
+    else:
+        lineage_freshness = "missing-unexpected" if not feature_lineage_health else "feature-lineage-warn"
+    lineage_summary = feature_lineage_health.get("summary") if isinstance(feature_lineage_health.get("summary"), dict) else {}
+    rows.append(
+        _freshness_row(
+            section="Feature Lineage Health",
+            source_file=str(paths["feature_lineage_health_json"]),
+            source_date=_date_key(feature_lineage_health.get("slate_date")),
+            expected_date=current_slate_date,
+            generated_at_utc=str(feature_lineage_health.get("generated_at_utc") or ""),
+            mtime_utc=_path_mtime_utc(paths["feature_lineage_health_json"]),
+            load_status=str(source_states.get("feature_lineage_health_json") or "ok"),
+            cadence="daily after current-slate selector/upload diagnostics are written",
+            freshness_status=lineage_freshness,
+            note=(
+                f"status={feature_lineage_health.get('status') or 'missing'}; "
+                f"pass={lineage_summary.get('pass_count', 0)}; "
+                f"warn={lineage_summary.get('warn_count', 0)}; "
+                f"fail={lineage_summary.get('fail_count', 0)}; "
+                f"bvp_payload_artifacts={lineage_summary.get('bvp_artifacts_with_payload', 0)}; "
+                f"bvp_missing_required={len(lineage_summary.get('bvp_missing_required_columns') or [])}"
             ),
         )
     )
@@ -747,7 +872,13 @@ def _build_freshness_audit(
             note=align_note,
         )
     )
-    ws_status = "fresh" if today_workspace.get("status") == "pass" else "refresh_failed"
+    workspace_status = str(today_workspace.get("status") or "")
+    if workspace_status == "pass":
+        ws_status = "fresh"
+    elif workspace_status == "not_refreshed":
+        ws_status = "not-refreshed"
+    else:
+        ws_status = "refresh_failed"
     rows.append(
         _freshness_row(
             section="MLB Today Workspace",
@@ -842,6 +973,7 @@ def _extract_qc_bottom_order_watch(js: Optional[Dict[str, Any]]) -> Dict[str, An
         "latest_reconcile_date": js.get("latest_reconcile_date"),
         "recommendation": js.get("recommendation") or "",
         "recommendation_reason": js.get("recommendation_reason") or "",
+        "group_diagnostics": js.get("group_diagnostics") or {},
         "target_group": target,
         "comparison_group": comparison,
         "overlap_group": overlap,
@@ -850,6 +982,116 @@ def _extract_qc_bottom_order_watch(js: Optional[Dict[str, Any]]) -> Dict[str, An
         "overlap_full_history": overlap_full,
         "windows": rows,
     }
+
+
+def _extract_overlap_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(js, dict):
+        return {}
+    comp = js.get("composition_diagnostics") or {}
+    periods = comp.get("periods") or {}
+
+    def period(name: str) -> Dict[str, Any]:
+        row = periods.get(name) or {}
+        return dict(row) if isinstance(row, dict) else {}
+
+    last7 = period("last_7")
+    full = period("full_history")
+    return {
+        "latest_reconcile_date_found": js.get("latest_reconcile_date_found") or "",
+        "latest_overlap_date_included": js.get("latest_overlap_date_included") or "",
+        "stale": bool(js.get("stale")),
+        "latest_completed_slate": comp.get("latest_completed_slate") or "",
+        "composition_drift_flag": comp.get("composition_drift_flag") or "",
+        "composition_drift_reasons": comp.get("composition_drift_reasons") or [],
+        "action_annotation": comp.get("action_annotation") or "",
+        "status": comp.get("status") or "",
+        "full_history": full,
+        "pre_2026_05_29": period("pre_2026_05_29"),
+        "from_2026_05_29_onward": period("from_2026_05_29_onward"),
+        "last_30": period("last_30"),
+        "last_14": period("last_14"),
+        "last_7": last7,
+        "last_7_row_count": last7.get("rows"),
+        "bottom_order_share_full_history": full.get("bottom_order_share"),
+        "bottom_order_share_last_7": last7.get("bottom_order_share"),
+        "avg_qc_score_full_history": full.get("avg_qc_score"),
+        "avg_qc_score_last_7": last7.get("avg_qc_score"),
+        "avg_v2_ranking_score_full_history": full.get("avg_v2_ranking_score"),
+        "avg_v2_ranking_score_last_7": last7.get("avg_v2_ranking_score"),
+        "qc_probability_55_60_share_last_7": last7.get("qc_probability_55_60_share"),
+        "odds_minus_150_to_minus_120_share_last_7": last7.get("odds_minus_150_to_minus_120_share"),
+        "performance": js.get("performance") or [],
+        "totals": js.get("totals") or {},
+    }
+
+
+def _extract_user_over_15_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(js, dict):
+        return {}
+    rows = [row for row in (js.get("rows") or []) if isinstance(row, dict)]
+
+    def find(population: str, window: str) -> Dict[str, Any]:
+        for row in rows:
+            if str(row.get("population") or "") == population and str(row.get("window") or "") == window:
+                return dict(row)
+        return {}
+
+    def annotate(row: Dict[str, Any], full_row: Dict[str, Any]) -> Dict[str, Any]:
+        out = dict(row or {})
+        resolved = _as_int(out.get("resolved_rows")) or 0
+        roi = _as_float(out.get("roi"))
+        full_roi = _as_float(full_row.get("roi"))
+        if resolved < 10:
+            sample_warning = "small_sample_lt_10"
+        elif resolved < 25:
+            sample_warning = "small_sample_lt_25"
+        else:
+            sample_warning = "ok"
+        if roi is None:
+            drift_flag = "unknown"
+        elif full_roi is not None and roi < full_roi - 0.15:
+            drift_flag = "negative_vs_full_history"
+        elif roi < 0:
+            drift_flag = "negative_roi"
+        else:
+            drift_flag = "ok"
+        out["sample_warning"] = sample_warning
+        out["drift_flag"] = drift_flag
+        return out
+
+    proxy = "user_filter_proxy_segment"
+    outside = "outside_user_filter_proxy"
+    placed = "qc_placed_over_1.5"
+    windows = ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate")
+    proxy_full = find(proxy, "full_history")
+    proxy_windows = {window: annotate(find(proxy, window), proxy_full) for window in windows}
+    outside_windows = {window: annotate(find(outside, window), find(outside, "full_history")) for window in windows}
+    placed_windows = {window: annotate(find(placed, window), find(placed, "full_history")) for window in windows}
+    return {
+        "generated_at": js.get("generated_at"),
+        "latest_completed_slate": js.get("latest_completed_slate"),
+        "segment_name": js.get("segment_name") or "user_over_15_expected_hits_hot_hitter_proxy",
+        "starter_expected_hits_allowed_min": js.get("starter_expected_hits_allowed_min"),
+        "d7_hits_per_game_min_exclusive": js.get("d7_hits_per_game_min_exclusive"),
+        "recommendation": js.get("recommendation") or "",
+        "recommendation_reason": js.get("recommendation_reason") or "",
+        "proxy_windows": proxy_windows,
+        "outside_windows": outside_windows,
+        "placed_windows": placed_windows,
+        "rows": rows,
+    }
+
+
+def _extract_total_bases_shadow_summary(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(js, dict):
+        return {}
+    return dict(js)
+
+
+def _extract_total_bases_shadow_evaluation(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(js, dict):
+        return {}
+    return dict(js)
 
 
 def _fetch_today_workspace_status(slate_date: str) -> Tuple[Dict[str, Any], Optional[str]]:
@@ -977,6 +1219,124 @@ def _fetch_today_workspace_status(slate_date: str) -> Tuple[Dict[str, Any], Opti
         return status, f"error:{type(exc).__name__}"
 
 
+def _bvp_prewarm_failure_note(*, current_slate_date: str, completed_slate_date: str) -> str:
+    out_log = Path("artifacts/ops/mlb_bvp_prewarm_daily.out.log")
+    err_log = Path("artifacts/ops/mlb_bvp_prewarm_daily.err.log")
+    try:
+        out_text = out_log.read_text(encoding="utf-8") if out_log.exists() else ""
+        err_text = err_log.read_text(encoding="utf-8") if err_log.exists() else ""
+    except Exception:
+        return ""
+
+    candidates = [d for d in (current_slate_date, completed_slate_date) if d]
+    started = [d for d in candidates if f"MLB_DATE_ET={d}" in out_text]
+    failed = [d for d in candidates if f"date={d}" in err_text or f"/date={d}" in err_text or f"MLB_DATE_ET={d}" in err_text]
+    if not started and not failed:
+        return ""
+
+    err_lower = err_text.lower()
+    if "nodename nor servname provided" in err_lower or "failed to resolve" in err_lower:
+        reason = "DNS/name resolution failure contacting statsapi.mlb.com"
+    elif "certificate verify failed" in err_lower or "sslcertverificationerror" in err_lower:
+        reason = "TLS certificate verification failure contacting statsapi.mlb.com"
+    elif "connectionerror" in err_lower or "maxretryerror" in err_lower:
+        reason = "network/API connection failure contacting statsapi.mlb.com"
+    else:
+        reason = "prewarm producer failed; inspect BvP prewarm logs"
+
+    attempted = ",".join(started or failed)
+    return (
+        f"BvP prewarm producer attempted date(s) {attempted} but failed before impact refresh: {reason}. "
+        f"logs: {out_log}; {err_log}"
+    )
+
+
+def _workspace_matches_slate(workspace: Dict[str, Any], slate_date: str) -> bool:
+    requested = _date_key(workspace.get("requested_slate_date"))
+    active = _date_key(workspace.get("active_slate_date"))
+    return slate_date in {requested, active}
+
+
+def _cached_today_workspace_status(
+    *,
+    slate_date: str,
+    out_json_path: Path,
+    history_jsonl_path: Path,
+    generated_at_utc: str,
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Reuse a previous workspace status during render-only brief passes.
+
+    The final LaunchAgent render runs after current-slate artifacts are produced
+    and should not re-open DB/API dependencies. Prefer the most recent same-slate
+    passing workspace status from brief history, since a local render may already
+    have overwritten latest.json with an environment-specific failure.
+    """
+
+    def _decorate_cached(payload: Dict[str, Any], source: str, source_generated_at: str = "") -> Dict[str, Any]:
+        cached = json.loads(json.dumps(payload))
+        diagnostics = cached.setdefault("diagnostics", {})
+        diagnostics.update(
+            {
+                "workspace_fetch_skipped": True,
+                "workspace_cache_reused": True,
+                "workspace_cache_source": source,
+                "workspace_cached_generated_at": source_generated_at,
+                "refresh_mode": "render_only",
+            }
+        )
+        return cached
+
+    history_rows = _load_jsonl_objects(history_jsonl_path)
+    for row in reversed(history_rows):
+        if _date_key(row.get("current_slate_date")) != slate_date:
+            continue
+        workspace = row.get("today_workspace")
+        if not isinstance(workspace, dict):
+            continue
+        if workspace.get("status") != "pass" or not _workspace_matches_slate(workspace, slate_date):
+            continue
+        return _decorate_cached(
+            workspace,
+            str(history_jsonl_path),
+            str(row.get("generated_at_utc") or ""),
+        ), None
+
+    latest_raw, _ = _load_json(out_json_path)
+    if isinstance(latest_raw, dict):
+        workspace = latest_raw.get("today_workspace")
+        if (
+            isinstance(workspace, dict)
+            and workspace.get("status") == "pass"
+            and _workspace_matches_slate(workspace, slate_date)
+        ):
+            return _decorate_cached(
+                workspace,
+                str(out_json_path),
+                str(latest_raw.get("generated_at_utc") or ""),
+            ), None
+
+    status: Dict[str, Any] = {
+        "requested_slate_date": slate_date,
+        "active_slate_date": None,
+        "is_ready": None,
+        "row_count": 0,
+        "last_updated": None,
+        "status": "not_refreshed",
+        "reason": "not refreshed in final render",
+        "diagnostics": {
+            "workspace_fetch_skipped": True,
+            "workspace_cache_reused": False,
+            "workspace_cache_source": "",
+            "refresh_mode": "render_only",
+            "generated_at_utc": generated_at_utc,
+            "failure_classification": "not refreshed in final render",
+            "retry_attempted": False,
+            "retry_succeeded": False,
+        },
+    }
+    return status, "not_refreshed"
+
+
 def _derive_overall_status(
     *,
     pipeline: Dict[str, Any],
@@ -992,7 +1352,14 @@ def _derive_overall_status(
         row
         for row in (freshness_audit or [])
         if str(row.get("freshness_status") or "")
-        in {"stale-unexpected", "missing-unexpected", "refresh_failed", "dependency_missing"}
+        in {
+            "stale-unexpected",
+            "missing-unexpected",
+            "refresh_failed",
+            "dependency_missing",
+            "feature-lineage-warn",
+            "feature-lineage-fail",
+        }
     ]
     if actionable_freshness:
         issues.append(
@@ -1021,7 +1388,7 @@ def _derive_overall_status(
         fatal = True
         issues.append(f"new_critical_alerts={new_critical_count}")
     if persistent_critical_count > 0:
-        issues.append(f"persistent_critical_alerts={persistent_critical_count}")
+        issues.append(f"persistent_actionable_critical_alerts={persistent_critical_count}")
     if int(postgrade.get("warning_count") or 0) > 0:
         issues.append(f"warning_alerts={postgrade.get('warning_count')}")
     model_alert = (model_vs_fade or {}).get("alert_state") or {}
@@ -1030,7 +1397,7 @@ def _derive_overall_status(
         if model_alert.get("alert_is_new_today"):
             issues.append("new_model_vs_fade_alert=1")
         else:
-            issues.append(f"persistent_model_vs_fade_alert_age_days={age}")
+            issues.append(f"persistent_actionable_model_vs_fade_alert_age_days={age}")
     if hits_env and hits_env.get("warnings"):
         issues.append(f"hits_env_warnings={len(hits_env.get('warnings') or [])}")
 
@@ -1220,7 +1587,13 @@ def build_markdown(
     model_vs_fade: Dict[str, Any],
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
+    overlap_watch: Dict[str, Any],
     qc_bottom_order_watch: Dict[str, Any],
+    user_over_15_watch: Dict[str, Any],
+    hits_15_tier_backtest: Dict[str, Any],
+    total_bases_shadow_summary: Dict[str, Any],
+    total_bases_shadow_evaluation: Dict[str, Any],
+    feature_lineage_health: Dict[str, Any],
     prop_regime: Dict[str, Any],
     model_performance: Dict[str, Any],
     reporting_alignment: Dict[str, Any],
@@ -1300,8 +1673,9 @@ def build_markdown(
     alerts = postgrade.get("alerts") or []
     if alerts:
         for a in alerts[:8]:
+            alert_label = a.get("code") or a.get("type") or "n/a"
             lines.append(
-                f"- [{a.get('severity','n/a')}] `{a.get('type','n/a')}`: {a.get('message') or 'n/a'}"
+                f"- [{a.get('severity','n/a')}] `{alert_label}`: {a.get('message') or 'n/a'}"
             )
             lines.append(
                 f"  - Alert state: source_date `{a.get('alert_source_date','n/a')}`, "
@@ -1376,6 +1750,51 @@ def build_markdown(
     lines.append(f"- Watch props: `{', '.join(model_performance.get('watch_props') or []) or 'none'}`")
     lines.append("")
 
+    lines.append("## Ranking/QC Overlap Watch")
+    lines.append(provenance("Ranking/QC Overlap Watch"))
+    full_overlap = overlap_watch.get("full_history") or {}
+    last30_overlap = overlap_watch.get("last_30") or {}
+    last14_overlap = overlap_watch.get("last_14") or {}
+    last7_overlap = overlap_watch.get("last_7") or {}
+    lines.append(
+        f"- Action annotation: `{overlap_watch.get('action_annotation') or 'n/a'}` | "
+        f"composition_drift_flag `{overlap_watch.get('composition_drift_flag') or 'n/a'}` | "
+        f"reasons `{', '.join(overlap_watch.get('composition_drift_reasons') or []) or 'none'}`"
+    )
+    lines.append(
+        f"- Latest completed slate `{overlap_watch.get('latest_completed_slate') or 'n/a'}` | "
+        f"latest overlap date `{overlap_watch.get('latest_overlap_date_included') or 'n/a'}` | "
+        f"stale `{overlap_watch.get('stale')}`"
+    )
+    lines.append(
+        f"- Overlap ROI: full history `{_pct(full_overlap.get('roi'))}`, "
+        f"last 30 `{_pct(last30_overlap.get('roi'))}`, "
+        f"last 14 `{_pct(last14_overlap.get('roi'))}`, "
+        f"last 7 `{_pct(last7_overlap.get('roi'))}`."
+    )
+    lines.append(
+        f"- Last-7 rows `{last7_overlap.get('rows','n/a')}` / resolved `{last7_overlap.get('resolved_rows','n/a')}` | "
+        f"WR `{_pct(last7_overlap.get('wr'))}` | units `{_num_fmt(last7_overlap.get('units'))}`."
+    )
+    lines.append(
+        f"- Bottom-order share: full history `{_pct(overlap_watch.get('bottom_order_share_full_history'))}`, "
+        f"last 7 `{_pct(overlap_watch.get('bottom_order_share_last_7'))}`."
+    )
+    lines.append(
+        f"- Avg QC score: full history `{_num_fmt(overlap_watch.get('avg_qc_score_full_history'))}`, "
+        f"last 7 `{_num_fmt(overlap_watch.get('avg_qc_score_last_7'))}`."
+    )
+    lines.append(
+        f"- Avg V2 ranking score: full history `{_num_fmt(overlap_watch.get('avg_v2_ranking_score_full_history'))}`, "
+        f"last 7 `{_num_fmt(overlap_watch.get('avg_v2_ranking_score_last_7'))}`."
+    )
+    lines.append(
+        f"- Last-7 concentration: QC probability 55-60 share "
+        f"`{_pct(overlap_watch.get('qc_probability_55_60_share_last_7'))}`; "
+        f"odds -150 to -120 share `{_pct(overlap_watch.get('odds_minus_150_to_minus_120_share_last_7'))}`."
+    )
+    lines.append("")
+
     lines.append("## QC Bottom-Order Under Watch")
     lines.append(provenance("QC Bottom-Order Under Watch"))
     target_windows = qc_bottom_order_watch.get("target_windows") or {}
@@ -1398,9 +1817,21 @@ def build_markdown(
         f"- Segment: `QC-only + bottom-order hitter + under 0.5` | "
         f"latest_reconcile_date `{qc_bottom_order_watch.get('latest_reconcile_date') or 'n/a'}`"
     )
+    qc_diag = qc_bottom_order_watch.get("group_diagnostics") or {}
+    qc_group_diag = qc_diag.get("groups") or {}
     lines.append(
         f"- Action annotation: `{qc_bottom_order_watch.get('recommendation') or 'n/a'}` | "
         f"{qc_bottom_order_watch.get('recommendation_reason') or 'n/a'}"
+    )
+    lines.append(
+        f"- Qualifying-row cadence: latest target date `{qc_diag.get('target_latest_qualifying_date') or 'n/a'}`; "
+        f"latest comparison date `{qc_diag.get('comparison_latest_qualifying_date') or 'n/a'}`; "
+        f"new rows on latest completed slate target `{qc_diag.get('target_new_rows_latest_completed_slate', 0)}`, "
+        f"comparisons `{qc_diag.get('comparison_new_rows_latest_completed_slate', 0)}`."
+    )
+    lines.append(
+        f"- Last 7 qualifying rows: target `{qc_diag.get('target_last_7_rows', 0)}`, "
+        f"comparisons `{qc_diag.get('comparison_last_7_rows', 0)}`."
     )
     lines.append("| window | bets | WR | ROI | units | avg odds | sample warning | drift flag |")
     lines.append("|---|---:|---:|---:|---:|---:|---|---|")
@@ -1412,10 +1843,130 @@ def build_markdown(
     comp = qc_bottom_order_watch.get("comparison_full_history") or {}
     ov = qc_bottom_order_watch.get("overlap_full_history") or {}
     lines.append(
-        f"- Full-history comparisons: QC-only non-bottom-order ROI `{_pct(comp.get('roi'))}` "
+        f"- Full-history baseline comparisons: QC-only non-bottom-order ROI `{_pct(comp.get('roi'))}` "
         f"(bets `{comp.get('bets','n/a')}`); overlap same-profile ROI `{_pct(ov.get('roi'))}` "
         f"(bets `{ov.get('bets','n/a')}`)."
     )
+    comp_diag = qc_group_diag.get("qc_only_non_bottom_order_under_0.5") or {}
+    ov_diag = qc_group_diag.get("overlap_bottom_order_under_0.5") or {}
+    lines.append(
+        f"- Baseline update note: these full-history values only change when new qualifying rows enter the comparison groups. "
+        f"QC-only non-bottom latest qualifying date `{comp_diag.get('latest_qualifying_date') or 'n/a'}`, "
+        f"latest-slate rows `{comp_diag.get('new_rows_latest_completed_slate', 0)}`, last-7 rows `{comp_diag.get('last_7_rows', 0)}`; "
+        f"overlap same-profile latest qualifying date `{ov_diag.get('latest_qualifying_date') or 'n/a'}`, "
+        f"latest-slate rows `{ov_diag.get('new_rows_latest_completed_slate', 0)}`, last-7 rows `{ov_diag.get('last_7_rows', 0)}`."
+    )
+    lines.append("")
+
+    lines.append("## User Over 1.5 Filter Watch")
+    lines.append(provenance("User Over 1.5 Filter Watch"))
+    proxy_windows = user_over_15_watch.get("proxy_windows") or {}
+    placed_windows = user_over_15_watch.get("placed_windows") or {}
+    outside_windows = user_over_15_watch.get("outside_windows") or {}
+    lines.append(
+        f"- Segment: `hits over 1.5 + starter_expected_hits_allowed >= "
+        f"{user_over_15_watch.get('starter_expected_hits_allowed_min', 'n/a')} + "
+        f"d7_hits_per_game > {user_over_15_watch.get('d7_hits_per_game_min_exclusive', 'n/a')}` | "
+        f"latest_completed_slate `{user_over_15_watch.get('latest_completed_slate') or 'n/a'}`"
+    )
+    lines.append(
+        f"- Action annotation: `{user_over_15_watch.get('recommendation') or 'n/a'}` | "
+        f"{user_over_15_watch.get('recommendation_reason') or 'n/a'}"
+    )
+    lines.append(
+        f"- Placed over 1.5 ROI `{_pct((placed_windows.get('full_history') or {}).get('roi'))}` "
+        f"(rows `{(placed_windows.get('full_history') or {}).get('rows','n/a')}`); "
+        f"outside-proxy QC candidate ROI `{_pct((outside_windows.get('full_history') or {}).get('roi'))}` "
+        f"(rows `{(outside_windows.get('full_history') or {}).get('rows','n/a')}`)."
+    )
+    lines.append("| window | rows | resolved | WR | ROI | units | avg odds | avg starter expected hits allowed | avg d7 hits/game | placed capture | sample warning | drift flag |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|")
+    for window in ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate"):
+        row = proxy_windows.get(window) or {}
+        lines.append(
+            f"| {window} | `{row.get('rows','n/a')}` | `{row.get('resolved_rows','n/a')}` | "
+            f"`{_pct(row.get('wr'))}` | `{_pct(row.get('roi'))}` | `{_num_fmt(row.get('units'))}` | "
+            f"`{_num_fmt(row.get('avg_odds'))}` | `{_num_fmt(row.get('avg_expected_hits_allowed'))}` | "
+            f"`{_num_fmt(row.get('avg_d7_hits_per_game'))}` | `{_pct(row.get('placed_wager_capture_rate'))}` | "
+            f"`{row.get('sample_warning','n/a')}` | `{row.get('drift_flag','n/a')}` |"
+        )
+    lines.append("")
+
+    tier_top_o15 = [
+        row for row in (hits_15_tier_backtest.get("o15_top_recent_combined_tiers") or []) if isinstance(row, dict)
+    ][:3]
+    tier_top_u15 = [
+        row for row in (hits_15_tier_backtest.get("u15_top_recent_combined_tiers") or []) if isinstance(row, dict)
+    ][:3]
+    if tier_top_o15 or tier_top_u15:
+        lines.append("## Hits 1.5 Tier Review Backtest")
+        lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
+        lines.append(
+            f"- Latest completed slate: `{hits_15_tier_backtest.get('latest_completed_slate') or 'n/a'}` | "
+            f"source `artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json`."
+        )
+        lines.append("| board | window | tier | resolved | WR | ROI | sample |")
+        lines.append("|---|---|---:|---:|---:|---:|---|")
+        for board, rows in (("o1.5", tier_top_o15), ("u1.5", tier_top_u15)):
+            for row in rows:
+                lines.append(
+                    f"| {board} | `{row.get('window')}` | `{row.get('tier')}` | `{row.get('resolved', 0)}` | "
+                    f"`{_pct(row.get('wr'))}` | `{_pct(row.get('roi'))}` | `{row.get('sample_warning') or 'n/a'}` |"
+                )
+        lines.append("")
+
+    lines.append("## Total Bases Shadow Candidate")
+    lines.append(provenance("Total Bases Shadow Candidate"))
+    eval_note = str(total_bases_shadow_evaluation.get("interpretation_note") or "").strip()
+    lines.append(
+        f"- Shadow scoring ran: `{bool(total_bases_shadow_summary)}` | "
+        f"slate `{total_bases_shadow_summary.get('slate_date') or 'n/a'}` | "
+        f"rows scored `{total_bases_shadow_summary.get('shadow_rows', 0)}` | "
+        f"balanced side changes `{total_bases_shadow_summary.get('tb_rolling_balanced_side_changed_rows', total_bases_shadow_summary.get('side_changed_rows', 0))}` "
+        f"(`{_pct(total_bases_shadow_summary.get('tb_rolling_balanced_side_changed_rate', total_bases_shadow_summary.get('side_changed_rate')))}`) | "
+        f"unweighted side changes `{total_bases_shadow_summary.get('tb_rolling_unweighted_side_changed_rows', 0)}` "
+        f"(`{_pct(total_bases_shadow_summary.get('tb_rolling_unweighted_side_changed_rate'))}`)."
+    )
+    lines.append(
+        f"- Avg probability: production over `{_num_fmt(total_bases_shadow_summary.get('avg_production_prob_over'), 4)}` | "
+        f"balanced shadow over `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_balanced_prob_over', total_bases_shadow_summary.get('avg_shadow_prob_over')), 4)}` "
+        f"(delta `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_balanced_probability_delta_over', total_bases_shadow_summary.get('avg_probability_delta_over')), 4)}`) | "
+        f"unweighted shadow over `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_unweighted_prob_over'), 4)}` "
+        f"(delta `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_unweighted_probability_delta_over'), 4)}`)."
+    )
+    lines.append(
+        f"- Coverage: rolling present `{_pct(total_bases_shadow_summary.get('rolling_context_present_rate'))}` | "
+        f"rolling complete `{_pct(total_bases_shadow_summary.get('rolling_context_complete_rate'))}` | "
+        f"training rows `{total_bases_shadow_summary.get('training_rows', 'n/a')}` through "
+        f"`{total_bases_shadow_summary.get('training_train_through') or 'n/a'}`."
+    )
+    lines.append(provenance("Total Bases Shadow Evaluation"))
+    lines.append(
+        f"- Cumulative rows scored `{total_bases_shadow_evaluation.get('rows_scored', 0)}` | "
+        f"rows with outcomes `{total_bases_shadow_evaluation.get('rows_with_outcomes', 0)}` | "
+        f"outcome coverage `{_pct(total_bases_shadow_evaluation.get('outcome_coverage'))}`."
+    )
+    metric_rows = [
+        row
+        for row in (total_bases_shadow_evaluation.get("cumulative_metrics") or [])
+        if isinstance(row, dict)
+    ]
+    if metric_rows:
+        lines.append("| model | rows | Brier | log loss | AUC | avg over prob | actual over rate | overconfidence gap |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        for row in metric_rows:
+            lines.append(
+                f"| {row.get('model','n/a')} | `{row.get('rows', 0)}` | `{_num_fmt(row.get('brier'), 4)}` | "
+                f"`{_num_fmt(row.get('log_loss'), 4)}` | `{_num_fmt(row.get('auc'), 4)}` | "
+                f"`{_num_fmt(row.get('avg_prob'), 4)}` | `{_num_fmt(row.get('actual_over_rate'), 4)}` | "
+                f"`{_num_fmt(row.get('overconfidence_gap'), 4)}` |"
+            )
+    else:
+        lines.append("- Cumulative metrics unavailable until at least one shadow slate has resolved outcomes.")
+    if eval_note:
+        lines.append(f"- Interpretation note: {eval_note}")
+    lines.append("- Status: balanced shadow is research-only and not promotion-ready; unweighted shadow is research-only pending a larger live sample.")
+    lines.append("- Guardrail: shadow-only; production predictions/uploads/selectors remain unchanged.")
     lines.append("")
 
     lines.append("## Path Forward")
@@ -1559,6 +2110,36 @@ def build_markdown(
     lines.append(provenance("Source Health"))
     for name, state in source_states.items():
         lines.append(f"- {name}: `{state}`")
+    if feature_lineage_health:
+        summary = feature_lineage_health.get("summary") if isinstance(feature_lineage_health.get("summary"), dict) else {}
+        lines.append(
+            f"- Feature lineage health: status `{feature_lineage_health.get('status') or 'unknown'}` | "
+            f"slate_date `{feature_lineage_health.get('slate_date') or 'n/a'}` | "
+            f"pass `{summary.get('pass_count', 0)}` warn `{summary.get('warn_count', 0)}` fail `{summary.get('fail_count', 0)}` | "
+            f"BvP payload artifacts `{summary.get('bvp_artifacts_with_payload', 0)}` | "
+            f"BvP missing required `{len(summary.get('bvp_missing_required_columns') or [])}`"
+        )
+        bvp_rates = summary.get("bvp_payload_rates") if isinstance(summary.get("bvp_payload_rates"), dict) else {}
+        if bvp_rates:
+            rate_parts = []
+            for artifact_name, rate in sorted(bvp_rates.items()):
+                if rate is None:
+                    rate_parts.append(f"{artifact_name}=n/a")
+                else:
+                    try:
+                        rate_parts.append(f"{artifact_name}={float(rate):.1%}")
+                    except Exception:
+                        rate_parts.append(f"{artifact_name}=n/a")
+            lines.append(f"  - BvP compact payload rates: {'; '.join(rate_parts)}")
+        for artifact in (feature_lineage_health.get("artifacts") or [])[:8]:
+            if not isinstance(artifact, dict):
+                continue
+            if artifact.get("status") == "pass":
+                continue
+            lines.append(
+                f"  - {artifact.get('artifact')}: `{artifact.get('status')}` rows `{artifact.get('row_count')}` "
+                f"path `{artifact.get('path')}` issues `{'; '.join(str(x) for x in artifact.get('issues') or []) or 'n/a'}`"
+            )
     lines.append("")
 
     lines.append("## MLB Today Workspace")
@@ -1616,7 +2197,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Fail the brief when BvP impact label_date does not match report-date (default: 1).",
     )
     ap.add_argument("--hits-environment-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
+    ap.add_argument("--overlap-watch-json", default="artifacts/analysis/mlb/v2_qc_diagnostics/ranking_vs_quick_card_overlap_watch.json")
     ap.add_argument("--qc-bottom-order-watch-json", default="artifacts/analysis/mlb/qc_bottom_order_under_watch.json")
+    ap.add_argument("--user-over-15-watch-json", default="artifacts/analysis/mlb/user_over_15_filter_watch.json")
+    ap.add_argument("--hits-15-tier-backtest-json", default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json")
+    ap.add_argument(
+        "--total-bases-shadow-summary-json",
+        default="artifacts/analysis/mlb/model_quality/total_bases_shadow/{current_slate_date}/total_bases_shadow_summary_{current_slate_date}.json",
+    )
+    ap.add_argument(
+        "--total-bases-shadow-evaluation-json",
+        default="artifacts/analysis/mlb/model_quality/total_bases_shadow/evaluation/total_bases_shadow_evaluation_summary.json",
+    )
+    ap.add_argument(
+        "--feature-lineage-health-json",
+        default="artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_latest.json",
+    )
     ap.add_argument(
         "--input-refresh-status-json",
         default="artifacts/analysis/mlb/mlb_daily_ops_brief_input_refresh_latest.json",
@@ -1627,6 +2223,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--dated-out-md", default="", help="Optional dated markdown output path")
     ap.add_argument("--out-json", default="artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json")
     ap.add_argument("--history-jsonl", default="artifacts/analysis/mlb/mlb_daily_ops_brief_history.jsonl")
+    ap.add_argument(
+        "--skip-today-workspace-fetch",
+        action="store_true",
+        help="Render from cached Today Workspace status instead of opening DB/API dependencies.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     generated_at_utc = _utc_now_iso()
@@ -1642,11 +2243,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "model_performance_daily_csv": Path(args.model_performance_daily_csv),
         "bvp_impact_json": Path(args.bvp_impact_json),
         "hits_environment_json": Path(args.hits_environment_json),
+        "overlap_watch_json": Path(args.overlap_watch_json),
         "qc_bottom_order_watch_json": Path(args.qc_bottom_order_watch_json),
+        "user_over_15_watch_json": Path(args.user_over_15_watch_json),
+        "hits_15_tier_backtest_json": Path(args.hits_15_tier_backtest_json),
+        "total_bases_shadow_evaluation_json": Path(args.total_bases_shadow_evaluation_json),
+        "feature_lineage_health_json": Path(args.feature_lineage_health_json),
         "input_refresh_status_json": Path(args.input_refresh_status_json),
         "pipeline_history_jsonl": Path(args.pipeline_history_jsonl),
         "ops_history_jsonl": Path(args.ops_history_jsonl),
     }
+    paths["total_bases_shadow_summary_json"] = Path(
+        str(args.total_bases_shadow_summary_json).format(
+            report_date=report_date,
+            completed_slate_date=completed_slate_date,
+            current_slate_date=current_slate_date,
+        )
+    )
     reporting_alignment_path = Path(
         str(args.reporting_alignment_csv).format(
             report_date=report_date,
@@ -1664,11 +2277,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     reporting_alignment_rows, reporting_alignment_err = _load_csv_rows(reporting_alignment_path)
     bvp_raw, bvp_err = _load_json(paths["bvp_impact_json"])
     hits_raw, hits_err = _load_json(paths["hits_environment_json"])
+    overlap_watch_raw, overlap_watch_err = _load_json(paths["overlap_watch_json"])
     qc_watch_raw, qc_watch_err = _load_json(paths["qc_bottom_order_watch_json"])
+    user_over_15_raw, user_over_15_err = _load_json(paths["user_over_15_watch_json"])
+    hits_15_tier_raw, hits_15_tier_err = _load_json(paths["hits_15_tier_backtest_json"])
+    total_bases_shadow_summary_raw, total_bases_shadow_summary_err = _load_json(paths["total_bases_shadow_summary_json"])
+    total_bases_shadow_evaluation_raw, total_bases_shadow_evaluation_err = _load_json(paths["total_bases_shadow_evaluation_json"])
+    feature_lineage_health_raw, feature_lineage_health_err = _load_json(paths["feature_lineage_health_json"])
     input_refresh_status, input_refresh_err = _load_json(paths["input_refresh_status_json"])
     pipeline_raw, pipeline_err = _load_last_jsonl(paths["pipeline_history_jsonl"])
     ops_raw, ops_err = _load_last_jsonl(paths["ops_history_jsonl"])
-    today_workspace, today_workspace_err = _fetch_today_workspace_status(current_slate_date)
+    if args.skip_today_workspace_fetch:
+        today_workspace, today_workspace_err = _cached_today_workspace_status(
+            slate_date=current_slate_date,
+            out_json_path=Path(args.out_json),
+            history_jsonl_path=Path(args.history_jsonl),
+            generated_at_utc=generated_at_utc,
+        )
+    else:
+        today_workspace, today_workspace_err = _fetch_today_workspace_status(current_slate_date)
     history_rows = _load_jsonl_objects(Path(args.history_jsonl))
 
     source_states = {
@@ -1680,7 +2307,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "reporting_alignment_csv": reporting_alignment_err or "ok",
         "bvp_impact_json": bvp_err or "ok",
         "hits_environment_json": hits_err or "ok",
+        "overlap_watch_json": overlap_watch_err or "ok",
         "qc_bottom_order_watch_json": qc_watch_err or "ok",
+        "user_over_15_watch_json": user_over_15_err or "ok",
+        "hits_15_tier_backtest_json": hits_15_tier_err or "ok",
+        "total_bases_shadow_summary_json": total_bases_shadow_summary_err or "ok",
+        "total_bases_shadow_evaluation_json": total_bases_shadow_evaluation_err or "ok",
+        "feature_lineage_health_json": feature_lineage_health_err or "ok",
         "input_refresh_status_json": input_refresh_err or "ok",
         "pipeline_history_jsonl": pipeline_err or "ok",
         "ops_history_jsonl": ops_err or "ok",
@@ -1707,7 +2340,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     reporting_alignment = _extract_reporting_alignment(reporting_alignment_rows, reporting_alignment_path)
     bvp_impact = _extract_bvp_impact(bvp_raw if isinstance(bvp_raw, dict) else None)
     hits_env = _extract_hits_env(hits_raw if isinstance(hits_raw, dict) else None)
+    overlap_watch = _extract_overlap_watch(overlap_watch_raw if isinstance(overlap_watch_raw, dict) else None)
     qc_bottom_order_watch = _extract_qc_bottom_order_watch(qc_watch_raw if isinstance(qc_watch_raw, dict) else None)
+    user_over_15_watch = _extract_user_over_15_watch(user_over_15_raw if isinstance(user_over_15_raw, dict) else None)
+    hits_15_tier_backtest = hits_15_tier_raw if isinstance(hits_15_tier_raw, dict) else {}
+    total_bases_shadow_summary = _extract_total_bases_shadow_summary(
+        total_bases_shadow_summary_raw if isinstance(total_bases_shadow_summary_raw, dict) else None
+    )
+    total_bases_shadow_evaluation = _extract_total_bases_shadow_evaluation(
+        total_bases_shadow_evaluation_raw if isinstance(total_bases_shadow_evaluation_raw, dict) else None
+    )
+    feature_lineage_health = feature_lineage_health_raw if isinstance(feature_lineage_health_raw, dict) else {}
     pipeline = _extract_pipeline(pipeline_raw)
     ops = _extract_ops(ops_raw)
     freshness_audit = _build_freshness_audit(
@@ -1726,7 +2369,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         reporting_alignment=reporting_alignment,
         bvp_impact=bvp_impact,
         hits_env=hits_env,
+        overlap_watch=overlap_watch,
         qc_bottom_order_watch=qc_bottom_order_watch,
+        user_over_15_watch=user_over_15_watch,
+        hits_15_tier_backtest=hits_15_tier_backtest,
+        total_bases_shadow_summary=total_bases_shadow_summary,
+        total_bases_shadow_evaluation=total_bases_shadow_evaluation,
+        feature_lineage_health=feature_lineage_health,
         today_workspace=today_workspace,
         input_refresh_status=input_refresh_status,
     )
@@ -1763,7 +2412,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_vs_fade=model_vs_fade,
         bvp_impact=bvp_impact,
         hits_env=hits_env,
+        overlap_watch=overlap_watch,
         qc_bottom_order_watch=qc_bottom_order_watch,
+        user_over_15_watch=user_over_15_watch,
+        hits_15_tier_backtest=hits_15_tier_backtest,
+        total_bases_shadow_summary=total_bases_shadow_summary,
+        total_bases_shadow_evaluation=total_bases_shadow_evaluation,
+        feature_lineage_health=feature_lineage_health,
         prop_regime=prop_regime,
         model_performance=model_performance,
         reporting_alignment=reporting_alignment,
@@ -1792,7 +2447,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "reporting_alignment": reporting_alignment,
         "bvp_impact": bvp_impact,
         "hits_environment": hits_env,
+        "ranking_qc_overlap_watch": overlap_watch,
         "qc_bottom_order_watch": qc_bottom_order_watch,
+        "user_over_15_filter_watch": user_over_15_watch,
+        "hits_15_tier_backtest": hits_15_tier_backtest,
+        "total_bases_shadow_summary": total_bases_shadow_summary,
+        "total_bases_shadow_evaluation": total_bases_shadow_evaluation,
+        "feature_lineage_health": feature_lineage_health,
         "today_workspace": today_workspace,
         "input_refresh_status": input_refresh_status,
         "path_forward": path_forward,

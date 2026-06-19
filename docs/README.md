@@ -68,6 +68,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/MLB Smoke Testing.md`: runbooks for `make mlb-checks-*`.
 - Includes scheduled market-cache warm command: `make mlb-market-cache-refresh`.
 - `docs/MLB Prediction Flow Audit.md`: prepare->predict->add->grade integrity checks and source-of-truth joins.
+- `docs/MLB Daily Workflow Status.md`: current MLB daily workflow handoff/status, including Patch 1B BvP and Patch 1C rolling-context lineage restoration baselines.
 - `docs/MLB Season Kickoff Checklist.md`: one-command opening-day readiness bundle and execution order.
 - `docs/MLB Slate Output Contract.md`: canonical model-only MLB daily slate artifact for market board + book upload consumers.
 - `docs/MLB Metrics Validation.md`: metrics API-vs-DB validation details.
