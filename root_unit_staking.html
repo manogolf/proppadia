@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Root-Unit Staking — Dan Abrams</title>
+    <style>
+      :root {
+        --ink: #0d1017;
+        --ink-2: #11151e;
+        --panel: #161b25;
+        --panel-2: #1b2230;
+        --line: #283041;
+        --line-soft: #1f2733;
+        --chalk: #ece8df;
+        --muted: #8b94a6;
+        --dim: #5a6276;
+        --brass: #d8a24a;
+        --brass-soft: #b98c46;
+        --steel: #7fa6cf;
+        --pos: #62cf8c;
+        --neg: #e3645f;
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo,
+          Consolas, monospace;
+        --sans: "Helvetica Neue", Arial, system-ui, -apple-system, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        background: #07090d;
+        color: var(--chalk);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 26px 16px 48px;
+        min-height: 100vh;
+      }
+      .wrap {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: linear-gradient(180deg, #10141d, #0d1017);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 30px 80px -40px #000, 0 0 0 1px #00000040;
+      }
+      .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 22px 26px 20px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, #171d28, #12161f);
+      }
+      .brand {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .radical {
+        font-family: var(--mono);
+        font-size: 34px;
+        line-height: 0.8;
+        color: var(--brass);
+        font-weight: 600;
+        padding-top: 6px;
+      }
+      .ttl h1 {
+        margin: 0;
+        font-size: 21px;
+        font-weight: 650;
+        letter-spacing: 0.4px;
+        border-top: 2px solid var(--brass);
+        padding-top: 5px;
+      }
+      .ttl p {
+        margin: 5px 0 0;
+        font-size: 11px;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--brass-soft);
+        font-family: var(--mono);
+      }
+      .attrib {
+        text-align: right;
+        font-size: 11px;
+        color: var(--dim);
+        line-height: 1.6;
+        font-family: var(--mono);
+        padding-top: 4px;
+      }
+      .attrib b {
+        color: var(--brass-soft);
+        font-weight: 600;
+        display: block;
+        font-size: 12px;
+      }
+      .attrib i {
+        font-style: italic;
+        color: var(--muted);
+      }
+      .body {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 0;
+      }
+      .inputs {
+        padding: 22px 22px 24px;
+        border-right: 1px solid var(--line);
+        background: var(--ink-2);
+      }
+      .output {
+        padding: 22px 24px 24px;
+        min-width: 0;
+      }
+      .seg {
+        display: flex;
+        background: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 3px;
+        margin-bottom: 18px;
+      }
+      .seg button {
+        flex: 1;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.3px;
+        padding: 8px 6px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: 0.15s;
+      }
+      .seg button.on {
+        background: var(--panel-2);
+        color: var(--brass);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .seg button:focus-visible {
+        outline: 2px solid var(--steel);
+        outline-offset: 1px;
+      }
+      .field {
+        margin-bottom: 14px;
+      }
+      .field label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-bottom: 6px;
+        letter-spacing: 0.2px;
+      }
+      .field label .hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .field input[type="number"] {
+        width: 100%;
+        background: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--chalk);
+        font-family: var(--mono);
+        font-size: 16px;
+        font-weight: 500;
+        padding: 10px 12px;
+        transition: 0.15s;
+      }
+      .field input[type="number"]:focus {
+        outline: 0;
+        border-color: var(--brass-soft);
+        background: #0a0d13;
+      }
+      .field input::-webkit-outer-spin-button,
+      .field input::-webkit-inner-spin-button {
+        opacity: 0.35;
+      }
+      .divider {
+        height: 1px;
+        background: var(--line-soft);
+        margin: 20px 0 16px;
+        position: relative;
+      }
+      .divider span {
+        position: absolute;
+        top: -7px;
+        left: 0;
+        background: var(--ink-2);
+        padding-right: 9px;
+        font-family: var(--mono);
+        font-size: 9.5px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .srow .label {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-bottom: 7px;
+      }
+      .srow .val {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--brass);
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 3px;
+        background: var(--line);
+        border-radius: 3px;
+        outline: 0;
+        margin: 2px 0 16px;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: var(--brass);
+        cursor: pointer;
+        border: 2px solid #0d1017;
+        box-shadow: 0 0 0 1px var(--brass-soft);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: var(--brass);
+        cursor: pointer;
+        border: 2px solid #0d1017;
+      }
+      input[type="range"]:focus-visible {
+        outline: 2px solid var(--steel);
+        outline-offset: 4px;
+        border-radius: 6px;
+      }
+      .reco {
+        display: flex;
+        border: 1px solid var(--brass-soft);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 14px;
+        background: linear-gradient(180deg, #1c1a12, #15140d);
+      }
+      .reco .seg-u,
+      .reco .seg-d {
+        flex: 1;
+        padding: 16px 20px;
+      }
+      .reco .seg-d {
+        border-left: 1px solid #3a3320;
+      }
+      .reco .k {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        color: var(--brass-soft);
+        margin-bottom: 6px;
+      }
+      .reco .v {
+        font-family: var(--mono);
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--brass);
+        line-height: 1;
+      }
+      .reco .v small {
+        font-size: 14px;
+        color: var(--brass-soft);
+        font-weight: 500;
+      }
+      .reco.flat-zero {
+        border-color: var(--line);
+        background: var(--panel);
+      }
+      .reco.flat-zero .v,
+      .reco.flat-zero .k {
+        color: var(--muted);
+      }
+      .capflag {
+        display: inline-block;
+        margin-left: 8px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.5px;
+        color: var(--neg);
+        border: 1px solid var(--neg);
+        border-radius: 4px;
+        padding: 1px 5px;
+        vertical-align: middle;
+      }
+      .diag {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 22px;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      .diag .cell {
+        flex: 1;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 10px 12px;
+      }
+      .diag .cell .k {
+        color: var(--dim);
+        font-size: 9.5px;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+      }
+      .diag .cell .v {
+        font-size: 15px;
+        color: var(--chalk);
+      }
+      .diag .cell .v.pos {
+        color: var(--pos);
+      }
+      .diag .cell .v.neg {
+        color: var(--neg);
+      }
+      .diag .cell .sub {
+        font-size: 9.5px;
+        color: var(--dim);
+        margin-top: 3px;
+      }
+      .chartwrap {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 14px 14px 8px;
+        margin-bottom: 22px;
+      }
+      .chart-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 6px;
+        padding: 0 4px;
+      }
+      .chart-top h3 {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        color: var(--chalk);
+      }
+      .chart-top .sub {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--dim);
+      }
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .legend {
+        display: flex;
+        gap: 16px;
+        padding: 6px 4px 2px;
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 16px;
+        height: 0;
+        border-top-width: 2px;
+        border-top-style: solid;
+        display: inline-block;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+      }
+      @media (max-width: 860px) {
+        .cols {
+          grid-template-columns: 1fr;
+        }
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+      }
+      .tcap {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--chalk);
+        margin: 0 0 10px;
+        letter-spacing: 0.3px;
+        font-family: var(--sans);
+      }
+      th {
+        text-align: right;
+        font-size: 9.5px;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+        color: var(--dim);
+        font-weight: 500;
+        padding: 0 0 9px;
+        border-bottom: 1px solid var(--line);
+      }
+      th:first-child {
+        text-align: left;
+      }
+      td {
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 12.5px;
+        text-align: right;
+        color: var(--chalk);
+      }
+      td:first-child {
+        text-align: left;
+        color: var(--muted);
+      }
+      tr.root td {
+        color: var(--brass);
+      }
+      tr.root td:first-child {
+        color: var(--brass);
+        font-weight: 600;
+      }
+      tr.root {
+        background: linear-gradient(90deg, #1a1810, transparent);
+      }
+      tr.here td {
+        color: var(--steel);
+      }
+      .units {
+        color: var(--dim);
+      }
+      .pos {
+        color: var(--pos);
+      }
+      .neg {
+        color: var(--neg);
+      }
+      .note {
+        font-size: 11px;
+        color: var(--dim);
+        line-height: 1.7;
+        padding: 16px 26px 20px;
+        border-top: 1px solid var(--line);
+        background: var(--ink-2);
+      }
+      .note b {
+        color: var(--muted);
+      }
+      .note code {
+        font-family: var(--mono);
+        color: var(--brass-soft);
+        font-size: 11px;
+      }
+      @media (max-width: 720px) {
+        .body {
+          grid-template-columns: 1fr;
+        }
+        .inputs {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .head {
+          flex-direction: column;
+          gap: 14px;
+        }
+        .attrib {
+          text-align: left;
+        }
+        .diag {
+          flex-direction: column;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="head">
+        <div class="brand">
+          <div class="radical">&radic;</div>
+          <div class="ttl">
+            <h1>Root-Unit Staking</h1>
+            <p>f = f&#8320; &divide; &radic;b</p>
+          </div>
+        </div>
+        <div class="attrib">
+          method&nbsp;<b>Dan Abrams</b
+          ><i>&ldquo;But How Much Did You Lose?&rdquo;</i>
+        </div>
+      </div>
+
+      <div class="body">
+        <div class="inputs">
+          <div class="field">
+            <label for="bankroll">Bankroll <span class="hint">$</span></label>
+            <input
+              type="number"
+              id="bankroll"
+              value="10000"
+              step="100"
+              min="0"
+            />
+          </div>
+          <div class="field">
+            <label for="odds">Price <span class="hint">American</span></label>
+            <input type="number" id="odds" value="-110" step="5" />
+          </div>
+          <div class="srow">
+            <div class="label">
+              <span
+                >Even-money unit
+                <i style="color: var(--dim); font-style: normal"
+                  >f&#8320;</i
+                ></span
+              ><span class="val" id="unitLbl">1.0% &middot; $100</span>
+            </div>
+            <input
+              type="range"
+              id="unitpct"
+              min="0.25"
+              max="5"
+              step="0.25"
+              value="1"
+            />
+          </div>
+          <div class="srow">
+            <div class="label">
+              <span>Kelly fraction</span
+              ><span class="val" id="kLbl">1.00&times;</span>
+            </div>
+            <input
+              type="range"
+              id="kfrac"
+              min="0.05"
+              max="1.00"
+              step="0.05"
+              value="1.00"
+            />
+          </div>
+          <div class="srow">
+            <div class="label">
+              <span>Unit cap</span><span class="val" id="capLbl">5.0 u</span>
+            </div>
+            <input type="range" id="cap" min="1" max="8" step="0.5" value="5" />
+          </div>
+
+          <div class="divider"><span>compare &middot; optional</span></div>
+          <div
+            class="seg"
+            id="modeSeg"
+            role="tablist"
+            aria-label="Edge input mode"
+          >
+            <button data-mode="prob" class="on" role="tab" aria-selected="true">
+              Win %
+            </button>
+            <button data-mode="edge" role="tab" aria-selected="false">
+              Edge %
+            </button>
+          </div>
+          <div class="field" id="probField">
+            <label for="winprob"
+              >Your win probability <span class="hint">%</span></label
+            >
+            <input
+              type="number"
+              id="winprob"
+              value="55"
+              step="0.5"
+              min="0.5"
+              max="99.5"
+            />
+          </div>
+          <div class="field" id="edgeField" style="display: none">
+            <label for="edgein"
+              >Your edge / EV <span class="hint">%</span></label
+            >
+            <input type="number" id="edgein" value="5" step="0.25" />
+          </div>
+        </div>
+
+        <div class="output">
+          <div class="reco" id="reco">
+            <div class="seg-u">
+              <div class="k">Root-Unit stake</div>
+              <div class="v">
+                <span id="recoUnits">0.00</span> <small>u</small
+                ><span id="capFlag"></span>
+              </div>
+            </div>
+            <div class="seg-d">
+              <div class="k">Wager</div>
+              <div class="v">
+                <small>$</small><span id="recoDollars">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="diag" id="diag">
+            <div class="cell">
+              <div class="k">Odds multiplier 1/&radic;b</div>
+              <div class="v" id="multV">1.00&times;</div>
+              <div class="sub" id="multSub">at even money you bet 1u</div>
+            </div>
+            <div class="cell">
+              <div class="k">Even-money edge your bet implies</div>
+              <div class="v" id="e0V">&mdash;</div>
+              <div class="sub" id="e0Sub">
+                e&#8320; = edge &divide; &radic;b
+              </div>
+            </div>
+            <div class="cell">
+              <div class="k">MEG &asymp; e&sup2; / 2b</div>
+              <div class="v" id="megV">&mdash;</div>
+              <div class="sub">median growth / bet</div>
+            </div>
+          </div>
+
+          <div class="chartwrap">
+            <div class="chart-top">
+              <h3>Units staked vs price</h3>
+              <div class="sub" id="chartSub"></div>
+            </div>
+            <svg
+              id="curve"
+              viewBox="0 0 560 220"
+              preserveAspectRatio="xMidYMid meet"
+              aria-label="Units vs price curve"
+            ></svg>
+            <div class="legend">
+              <span
+                ><i style="border-color: var(--brass)"></i>Root-Unit
+                1/&radic;b</span
+              >
+              <span
+                ><i
+                  style="border-color: var(--steel); border-top-style: dashed"
+                ></i
+                >Full Kelly (your edge)</span
+              >
+              <span
+                ><i
+                  style="border-color: var(--muted); border-top-style: dotted"
+                ></i
+                >Flat 1u</span
+              >
+            </div>
+          </div>
+
+          <div class="cols">
+            <div>
+              <p class="tcap">Comparison &mdash; this bet</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Method</th>
+                    <th>Units</th>
+                    <th>Stake</th>
+                    <th>Log-grow</th>
+                  </tr>
+                </thead>
+                <tbody id="ledgerBody"></tbody>
+              </table>
+            </div>
+            <div>
+              <p class="tcap">Reference card &mdash; tape it up</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Price</th>
+                    <th>b</th>
+                    <th>1/&radic;b</th>
+                    <th>$</th>
+                  </tr>
+                </thead>
+                <tbody id="cardBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>The method.</b> Root-Unit stakes
+        <code>f = f&#8320; / &radic;b</code> &mdash; your even-money unit
+        divided by the square root of the net fractional odds
+        <code>b</code> (decimal price &minus; 1). It follows from Kelly's
+        edge-over-odds once you assume the edge available at any price tracks
+        <code>e = e&#8320;&radic;b</code> (Abrams' LOCO-EG curve, fit to
+        Buchdahl's unit-z data): then
+        <code>f = e/b = e&#8320;&radic;b / b = f&#8320;/&radic;b</code>. So you
+        size off the <b>price alone</b> &mdash; favorites get a bigger multiple,
+        longshots a smaller one, all earning the same expected growth if your
+        edge follows the curve. The optional edge inputs don't change the
+        Root-Unit stake; they drive the Kelly comparison and show the
+        even-money-equivalent edge <code>e&#8320; = edge/&radic;b</code> your
+        bet implies, so you can see when a specific edge runs ahead of or behind
+        your baseline. Works for any Kelly fraction. Abrams notes it adds little
+        on ~50/50 spread and total markets, where both sides sit near &minus;110
+        and <code>b</code> barely moves.
+        <b>This is a sizing tool, not betting or financial advice.</b>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+        var mode = "prob";
+        function amToDec(a) {
+          a = +a;
+          if (!a) return NaN;
+          return a > 0 ? a / 100 + 1 : 100 / -a + 1;
+        }
+        function clamp(x, lo, hi) {
+          return Math.max(lo, Math.min(hi, x));
+        }
+        function logGrowth(f, d, p) {
+          if (f <= 0) return 0;
+          if (f >= 1) return -Infinity;
+          return p * Math.log(1 + f * (d - 1)) + (1 - p) * Math.log(1 - f);
+        }
+        function money(x) {
+          if (!isFinite(x)) return "0";
+          return Math.round(x).toLocaleString("en-US");
+        }
+
+        function read() {
+          var bankroll = Math.max(0, +$("bankroll").value || 0);
+          var d = amToDec($("odds").value);
+          var f0 = +$("unitpct").value / 100;
+          var kf = +$("kfrac").value;
+          var capU = +$("cap").value;
+          var unit$ = f0 * bankroll;
+          var p = null,
+            ev = null;
+          if (mode === "prob") {
+            var wp = +$("winprob").value;
+            if (isFinite(wp)) {
+              p = clamp(wp / 100, 0.0001, 0.9999);
+              if (isFinite(d) && d > 1) ev = p * d - 1;
+            }
+          } else {
+            var e = +$("edgein").value;
+            if (isFinite(e)) {
+              ev = e / 100;
+              if (isFinite(d) && d > 1) p = clamp((1 + ev) / d, 0.0001, 0.9999);
+            }
+          }
+          return {
+            bankroll: bankroll,
+            d: d,
+            f0: f0,
+            kf: kf,
+            capU: capU,
+            unit$: unit$,
+            p: p,
+            ev: ev,
+          };
+        }
+
+        function render() {
+          var s = read();
+          var valid = isFinite(s.d) && s.d > 1;
+          var b = valid ? s.d - 1 : NaN;
+          var mult = valid ? 1 / Math.sqrt(b) : 0; // 1/√b
+          var multCap = Math.min(mult, s.capU);
+          var capped = mult > s.capU;
+          var units = multCap * s.kf; // staked units after Kelly fraction
+          var $stake = units * s.unit$;
+
+          $("recoUnits").textContent = (valid ? units : 0).toFixed(2);
+          $("recoDollars").textContent = money(valid ? $stake : 0);
+          $("capFlag").innerHTML = capped
+            ? '<span class="capflag">CAPPED</span>'
+            : "";
+          $("reco").classList.toggle("flat-zero", !valid);
+
+          $("unitLbl").innerHTML =
+            (s.f0 * 100).toFixed(1) + "% &middot; $" + money(s.unit$);
+          $("kLbl").innerHTML = s.kf.toFixed(2) + "&times;";
+          $("capLbl").textContent = s.capU.toFixed(1) + " u";
+
+          // diagnostics
+          $("multV").innerHTML = (valid ? mult : 0).toFixed(2) + "&times;";
+          $("multSub").textContent = valid
+            ? "b = " + b.toFixed(3)
+            : "enter a valid price";
+          if (s.ev != null && valid && s.ev > 0) {
+            var e0 = s.ev / Math.sqrt(b); // even-money-equivalent edge
+            var ahead = e0 > s.f0;
+            $("e0V").className = "v " + (ahead ? "pos" : "neg");
+            $("e0V").textContent = (e0 * 100).toFixed(2) + "%";
+            $("e0Sub").textContent =
+              (ahead ? "beats" : "trails") +
+              " baseline f\u2080 " +
+              (s.f0 * 100).toFixed(2) +
+              "%";
+            var meg = (s.ev * s.ev) / (2 * b);
+            $("megV").textContent = (meg * 10000).toFixed(1) + " bp";
+          } else {
+            $("e0V").className = "v";
+            $("e0V").innerHTML = "&mdash;";
+            $("e0Sub").textContent = "add win % or edge %";
+            $("megV").innerHTML = "&mdash;";
+          }
+          $("chartSub").textContent = valid
+            ? ($("odds").value > 0 ? "+" : "") +
+              +$("odds").value +
+              "  \u00b7  " +
+              s.d.toFixed(2) +
+              "  \u00b7  " +
+              (s.ev != null && s.ev > 0
+                ? "edge " + (s.ev * 100).toFixed(2) + "%"
+                : "no edge set")
+            : "";
+
+          // comparison ledger (this bet)
+          var fullF = s.ev != null && valid && s.ev > 0 ? s.ev / b : 0; // full Kelly fraction
+          var rows = [
+            { n: "Flat", u: 1, doll: s.unit$ },
+            {
+              n: "Full Kelly",
+              u: s.unit$ > 0 ? (fullF * s.bankroll) / s.unit$ : 0,
+              doll: fullF * s.bankroll,
+              need: true,
+            },
+            {
+              n: "Fractional Kelly",
+              u: s.unit$ > 0 ? (s.kf * fullF * s.bankroll) / s.unit$ : 0,
+              doll: s.kf * fullF * s.bankroll,
+              need: true,
+            },
+            { n: "Root-Unit", u: units, doll: $stake, root: true },
+          ];
+          var lb = "";
+          rows.forEach(function (r) {
+            var hasEdge = s.ev != null && valid && s.ev > 0;
+            var doll = valid ? Math.max(0, r.doll) : 0;
+            var f = s.bankroll > 0 ? doll / s.bankroll : 0;
+            var g = hasEdge ? logGrowth(f, s.d, s.p) * 10000 : 0;
+            var uT =
+              r.need && !hasEdge ? "\u2014" : (valid ? r.u : 0).toFixed(2);
+            var dT = r.need && !hasEdge ? "\u2014" : "$" + money(doll);
+            var gT = hasEdge
+              ? (g > 0 ? "+" : "") +
+                (isFinite(g) ? g.toFixed(1) : "\u2014") +
+                " bp"
+              : "\u2014";
+            var gC = g > 0 ? "pos" : g < 0 ? "neg" : "";
+            lb +=
+              '<tr class="' +
+              (r.root ? "root" : "") +
+              '"><td>' +
+              r.n +
+              '</td><td class="units">' +
+              uT +
+              "</td><td>" +
+              dT +
+              '</td><td class="' +
+              gC +
+              '">' +
+              gT +
+              "</td></tr>";
+          });
+          $("ledgerBody").innerHTML = lb;
+
+          // reference card
+          var card = [
+            -1000, -600, -400, -200, -110, 100, 200, 300, 400, 600, 1000,
+          ];
+          var cur = +$("odds").value;
+          var cb = "";
+          card.forEach(function (a) {
+            var dd = amToDec(a),
+              bb = dd - 1,
+              m = 1 / Math.sqrt(bb);
+            var dollHere = Math.min(m, s.capU) * s.kf * s.unit$;
+            var here = a === cur;
+            cb +=
+              '<tr class="' +
+              (here ? "here" : "") +
+              '"><td>' +
+              (a > 0 ? "+" : "") +
+              a +
+              '</td><td class="units">' +
+              bb.toFixed(2) +
+              "</td><td>" +
+              m.toFixed(2) +
+              "</td><td>$" +
+              money(dollHere) +
+              "</td></tr>";
+          });
+          $("cardBody").innerHTML = cb;
+
+          drawCurve(s, b, units, valid);
+        }
+
+        function drawCurve(s, b, units, valid) {
+          var W = 560,
+            H = 220,
+            L = 40,
+            R = 14,
+            T = 14,
+            B = 30;
+          var curD = valid ? s.d : 1.91;
+          var dMin = 1.04,
+            dMax = clamp(Math.max(curD * 1.7, 6), 4, 12);
+          function rootMult(d) {
+            var bb = d - 1;
+            return bb > 0 ? Math.min(1 / Math.sqrt(bb), s.capU) * s.kf : 0;
+          }
+          function kellyU(d) {
+            if (s.p == null) return null;
+            var ev = s.p * d - 1,
+              bb = d - 1;
+            return ev > 0 && bb > 0 && s.unit$ > 0
+              ? ((ev / bb) * s.bankroll) / s.unit$
+              : 0;
+          }
+          var peak = 0;
+          for (var i = 0; i <= 120; i++) {
+            var d = dMin + (i / 120) * (dMax - dMin);
+            peak = Math.max(peak, rootMult(d));
+          }
+          var yMax = Math.max(s.capU * s.kf * 1.15, peak * 1.3, 1.6);
+          function X(d) {
+            return L + ((d - dMin) / (dMax - dMin)) * (W - L - R);
+          }
+          function Y(u) {
+            return H - B - (Math.min(u, yMax) / yMax) * (H - T - B);
+          }
+          var svg = "";
+          [0, 0.25, 0.5, 0.75, 1].forEach(function (t) {
+            var u = t * yMax,
+              y = Y(u);
+            svg +=
+              '<line x1="' +
+              L +
+              '" y1="' +
+              y +
+              '" x2="' +
+              (W - R) +
+              '" y2="' +
+              y +
+              '" stroke="#1f2733" stroke-width="1"/>';
+            svg +=
+              '<text x="' +
+              (L - 6) +
+              '" y="' +
+              (y + 3) +
+              '" text-anchor="end" font-family="ui-monospace,monospace" font-size="9" fill="#5a6276">' +
+              u.toFixed(1) +
+              "</text>";
+          });
+          for (var d2 = Math.ceil(dMin * 2) / 2; d2 <= dMax + 1e-9; d2 += 0.5) {
+            if (d2 < dMin) continue;
+            var x = X(d2);
+            svg +=
+              '<line x1="' +
+              x +
+              '" y1="' +
+              T +
+              '" x2="' +
+              x +
+              '" y2="' +
+              (H - B) +
+              '" stroke="#161d28" stroke-width="1"/>';
+            svg +=
+              '<text x="' +
+              x +
+              '" y="' +
+              (H - B + 14) +
+              '" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#5a6276">' +
+              d2.toFixed(1) +
+              "</text>";
+          }
+          // flat 1u
+          var y1 = Y(1);
+          svg +=
+            '<line x1="' +
+            L +
+            '" y1="' +
+            y1 +
+            '" x2="' +
+            (W - R) +
+            '" y2="' +
+            y1 +
+            '" stroke="#8b94a6" stroke-width="1" stroke-dasharray="1 3" opacity="0.7"/>';
+          // even money marker
+          if (2 >= dMin && 2 <= dMax) {
+            var xe = X(2);
+            svg +=
+              '<line x1="' +
+              xe +
+              '" y1="' +
+              T +
+              '" x2="' +
+              xe +
+              '" y2="' +
+              (H - B) +
+              '" stroke="#39404f" stroke-width="1"/><text x="' +
+              xe +
+              '" y="' +
+              (T + 9) +
+              '" text-anchor="middle" font-family="ui-monospace,monospace" font-size="8.5" fill="#8b94a6">even</text>';
+          }
+          function path(fn) {
+            var ds = "",
+              first = true,
+              started = false;
+            for (var i = 0; i <= 140; i++) {
+              var d = dMin + (i / 140) * (dMax - dMin);
+              var u = fn(d);
+              if (u == null) return "";
+              ds +=
+                (first ? "M" : "L") + X(d).toFixed(1) + " " + Y(u).toFixed(1);
+              first = false;
+            }
+            return ds;
+          }
+          var kp = path(kellyU);
+          if (kp)
+            svg +=
+              '<path d="' +
+              kp +
+              '" fill="none" stroke="#7fa6cf" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.8"/>';
+          svg +=
+            '<path d="' +
+            path(rootMult) +
+            '" fill="none" stroke="#d8a24a" stroke-width="2.5"/>';
+          // reference dots
+          [-400, -200, -110, 200, 400, 600].forEach(function (a) {
+            var dd = a > 0 ? a / 100 + 1 : 100 / -a + 1;
+            if (dd < dMin || dd > dMax) return;
+            svg +=
+              '<circle cx="' +
+              X(dd) +
+              '" cy="' +
+              Y(rootMult(dd)) +
+              '" r="2.5" fill="#b98c46"/>';
+          });
+          if (valid) {
+            var cx = X(s.d),
+              cy = Y(units);
+            svg +=
+              '<circle cx="' +
+              cx +
+              '" cy="' +
+              cy +
+              '" r="9" fill="#d8a24a" opacity="0.14"/><circle cx="' +
+              cx +
+              '" cy="' +
+              cy +
+              '" r="4" fill="#d8a24a" stroke="#0d1017" stroke-width="1.5"/>';
+          }
+          $("curve").innerHTML = svg;
+        }
+
+        [
+          "bankroll",
+          "odds",
+          "winprob",
+          "edgein",
+          "unitpct",
+          "kfrac",
+          "cap",
+        ].forEach(function (id) {
+          $(id).addEventListener("input", render);
+        });
+        document.querySelectorAll("#modeSeg button").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            mode = btn.getAttribute("data-mode");
+            document.querySelectorAll("#modeSeg button").forEach(function (b) {
+              var on = b === btn;
+              b.classList.toggle("on", on);
+              b.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            $("probField").style.display = mode === "prob" ? "block" : "none";
+            $("edgeField").style.display = mode === "edge" ? "block" : "none";
+            render();
+          });
+        });
+        render();
+      })();
+    </script>
+  </body>
+</html>
