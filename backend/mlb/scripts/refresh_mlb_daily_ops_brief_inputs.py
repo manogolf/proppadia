@@ -168,6 +168,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json",
     )
     ap.add_argument(
+        "--review-aid-performance-json",
+        default="artifacts/analysis/mlb/review_aids/performance/review_aid_performance_summary.json",
+    )
+    ap.add_argument(
         "--total-bases-shadow-summary-json",
         default="artifacts/analysis/mlb/model_quality/total_bases_shadow/{current_slate_date}/total_bases_shadow_summary_{current_slate_date}.json",
     )
@@ -457,6 +461,25 @@ def main(argv: Optional[list[str]] = None) -> int:
         expected_date=completed,
         actual_date=_json_date(hits_15_tier_path, ("latest_completed_slate",)),
         command=hits_15_tier_cmd,
+        refresh_ok=ok,
+        required=False,
+        detail=detail,
+    )
+
+    review_aid_performance_cmd = [
+        "make",
+        "mlb-review-aid-performance",
+        f"MLB_DAILY_RECONCILE_DATE={completed}",
+    ]
+    ok, detail = _run("review_aid_performance", review_aid_performance_cmd, allow_fail=True)
+    review_aid_performance_path = Path(args.review_aid_performance_json)
+    _record(
+        results,
+        name="review_aid_performance",
+        artifact=review_aid_performance_path,
+        expected_date=completed,
+        actual_date=_json_date(review_aid_performance_path, ("latest_completed_slate",)),
+        command=review_aid_performance_cmd,
         refresh_ok=ok,
         required=False,
         detail=detail,

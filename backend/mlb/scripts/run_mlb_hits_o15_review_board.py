@@ -5,7 +5,8 @@ import argparse
 import csv
 import json
 import math
-from collections import defaultdict
+import os
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 OUTPUT_COLUMNS = [
     "date",
+    "player_id",
     "player_name",
     "team",
     "opponent",
@@ -21,11 +23,16 @@ OUTPUT_COLUMNS = [
     "side",
     "model_prob",
     "market_price",
+    "selected_side_implied_probability",
     "d7_hits_rate",
     "d15_hits_rate",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
     "starter_expected_hits_allowed",
+    "team_expected_hits_allowed",
     "opposing_starter",
     "opposing_starter_id",
     "starter_context_status",
@@ -42,6 +49,120 @@ OUTPUT_COLUMNS = [
     "pitcher_tier",
     "combined_tier",
     "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+]
+WATCH_OUTPUT_COLUMNS = OUTPUT_COLUMNS + [
+    "qc_score",
+    "qc_selected_side",
+    "qc_source_file",
+    "ranking_score",
+    "ranking_source_lane",
+]
+U15_OUTPUT_COLUMNS = OUTPUT_COLUMNS + [
+    "qc_candidate",
+    "qc_score",
+    "qc_selected_side",
+    "qc_source_file",
+    "ranking_score",
+    "ranking_source_lane",
+    "d7_cold_candidate",
+    "d15_cold_consistent_candidate",
+    "tough_starter_candidate",
+    "watch_candidate",
+    "layer_label",
+]
+LAYERED_OUTPUT_COLUMNS = [
+    "date",
+    "player",
+    "player_name",
+    "player_id",
+    "team",
+    "opponent",
+    "line",
+    "side",
+    "market_price",
+    "selected_side_implied_probability",
+    "model_prob",
+    "d7_hits_rate",
+    "d15_hits_rate",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "raw_d7_hits_calendar",
+    "raw_d15_hits_calendar",
+    "starter_expected_hits_allowed",
+    "team_expected_hits_allowed",
+    "hitter_tier",
+    "pitcher_tier",
+    "combined_tier",
+    "qc_candidate",
+    "qc_score",
+    "qc_selected_side",
+    "ranking_score",
+    "d7_hot_candidate",
+    "d15_consistent_candidate",
+    "favorable_starter_candidate",
+    "watch_candidate",
+    "layer_label",
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "opposing_starter",
+    "opposing_starter_id",
+    "starter_context_status",
+    "starter_context_source",
+    "starter_context_updated_at",
+    "starter_context_unavailable_reason",
+    "starter_min_start_policy_applied",
+    "starter_starts_count",
+    "starter_required_min_starts",
+    "environment_artifact_timestamp",
+    "environment_artifact_row_count",
+    "environment_snapshot_policy",
+]
+ALTERNATE_DISCOVERY_COLUMNS = [
+    "date",
+    "player",
+    "player_name",
+    "player_id",
+    "team",
+    "opponent",
+    "bookmaker_list",
+    "best_over_price",
+    "selected_side_implied_probability",
+    "line",
+    "d7_hits_rate",
+    "d15_hits_rate",
+    "d7_hits_runs_rbis",
+    "d15_hits_runs_rbis",
+    "d30_hits_runs_rbis",
+    "raw_d7_hits_calendar",
+    "raw_d15_hits_calendar",
+    "starter_expected_hits_allowed",
+    "team_expected_hits_allowed",
+    "hitter_tier",
+    "pitcher_tier",
+    "combined_tier",
+    "d7_hot_candidate",
+    "d15_consistent_candidate",
+    "favorable_starter_candidate",
+    "alternate_layer",
+    "game_time",
+    "time_of_day_bucket",
+    "game_day_of_week",
+    "opposing_starter",
+    "opposing_starter_id",
+    "starter_context_status",
+    "starter_context_source",
+    "starter_context_updated_at",
+    "starter_context_unavailable_reason",
+    "starter_min_start_policy_applied",
+    "starter_starts_count",
+    "starter_required_min_starts",
+    "environment_artifact_timestamp",
+    "environment_artifact_row_count",
+    "environment_snapshot_policy",
 ]
 
 HITTER_TIER_RANK = {"A": 0, "B": 1, "C": 2}
@@ -66,6 +187,56 @@ def _today_et() -> str:
     return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
 
+def _parse_game_time(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        return datetime.fromisoformat(text)
+    except Exception:
+        return None
+
+
+def _derive_time_of_day_bucket(game_time: Any) -> str:
+    dt = _parse_game_time(game_time)
+    if dt is None:
+        return ""
+    hour = int(dt.hour)
+    if hour < 12:
+        return "morning"
+    if hour < 16:
+        return "afternoon"
+    if hour < 20:
+        return "evening"
+    return "late"
+
+
+def _derive_game_day_of_week(date_value: Any, game_time: Any = "") -> str:
+    text = str(date_value or "").strip()
+    if text:
+        try:
+            return datetime.fromisoformat(text[:10]).strftime("%A").lower()
+        except Exception:
+            pass
+    dt = _parse_game_time(game_time)
+    if dt is None:
+        return ""
+    return dt.strftime("%A").lower()
+
+
+def _time_context(row: dict[str, Any], *, fallback_date: Any = "") -> dict[str, str]:
+    game_time = str(row.get("game_time") or "").strip()
+    bucket = str(row.get("time_of_day_bucket") or "").strip().lower()
+    day = str(row.get("game_day_of_week") or "").strip().lower()
+    if not bucket:
+        bucket = _derive_time_of_day_bucket(game_time)
+    if not day:
+        day = _derive_game_day_of_week(row.get("game_date") or row.get("slate_date") or fallback_date, game_time)
+    return {"game_time": game_time, "time_of_day_bucket": bucket, "game_day_of_week": day}
+
+
 def _f(value: Any) -> float | None:
     try:
         if value is None or value == "":
@@ -77,8 +248,22 @@ def _f(value: Any) -> float | None:
         return None
 
 
+def _american_implied_probability(value: Any) -> float | None:
+    price = _f(value)
+    if price is None:
+        return None
+    if price < 0:
+        return abs(price) / (abs(price) + 100.0)
+    return 100.0 / (price + 100.0)
+
+
 def _clean_team(value: Any) -> str:
-    return str(value or "").strip().upper()
+    raw = str(value or "").strip().upper()
+    if raw in {"AZ"}:
+        return "ARI"
+    if raw in {"ATH", "LV", "VIL"}:
+        return "OAK"
+    return raw
 
 
 def _read_csv(path: Path) -> list[dict[str, Any]]:
@@ -88,13 +273,14 @@ def _read_csv(path: Path) -> list[dict[str, Any]]:
         return [dict(row) for row in csv.DictReader(fh)]
 
 
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = columns or OUTPUT_COLUMNS
     with path.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=OUTPUT_COLUMNS)
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            writer.writerow({col: row.get(col, "") for col in OUTPUT_COLUMNS})
+            writer.writerow({col: row.get(col, "") for col in fieldnames})
 
 
 def _iter_matchup_rows(value: Any) -> list[dict[str, Any]]:
@@ -123,6 +309,14 @@ def _starter_status(
 
 def _generated_sort_key(value: Any) -> str:
     return str(value or "")
+
+
+def _copy_context_row(row: dict[str, Any], *, policy_suffix: str) -> dict[str, Any]:
+    out = dict(row)
+    base_policy = str(out.get("environment_snapshot_policy") or "fullest_valid_projected_starter_artifact")
+    if policy_suffix and policy_suffix not in base_policy:
+        out["environment_snapshot_policy"] = f"{base_policy}+{policy_suffix}"
+    return out
 
 
 def _starter_identity(row: dict[str, Any]) -> str:
@@ -155,6 +349,7 @@ def _context_from_matchup_rows(
             note = str(row.get("forecast_note") or "").strip()
             by_team_pair[key] = {
                 "starter_expected_hits_allowed": expected,
+                "team_expected_hits_allowed": _f(row.get("expected_team_hits_allowed_matchup")),
                 "opposing_starter": row.get("pitcher_name") or row.get("starter_name") or row.get("player_name") or "",
                 "opposing_starter_id": row.get("player_id") or "",
                 "starter_context_status": _starter_status(
@@ -416,6 +611,57 @@ def _apply_starter_conflict_rejections(candidates: list[dict[str, Any]]) -> None
             candidate["conflict_count"] = conflicts
 
 
+def _overlay_later_snapshot_context(
+    *,
+    selected: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[tuple[str, str], dict[str, Any]], dict[str, Any]]:
+    selected_generated = _generated_sort_key(selected.get("generated_at"))
+    by_team_pair = {
+        key: dict(value)
+        for key, value in (selected.get("context") or {}).items()
+        if isinstance(key, tuple) and isinstance(value, dict)
+    }
+    unavailable_by_team_pair = {
+        key: dict(value)
+        for key, value in (selected.get("unavailable_context") or {}).items()
+        if isinstance(key, tuple) and isinstance(value, dict)
+    }
+    overlay_expected_pairs: list[str] = []
+    overlay_unavailable_pairs: list[str] = []
+
+    for candidate in sorted(candidates, key=lambda c: _generated_sort_key(c.get("generated_at"))):
+        if not candidate.get("valid"):
+            continue
+        candidate_generated = _generated_sort_key(candidate.get("generated_at"))
+        if candidate_generated <= selected_generated:
+            continue
+        for key, row in (candidate.get("context") or {}).items():
+            if not isinstance(key, tuple) or not isinstance(row, dict):
+                continue
+            if key in by_team_pair:
+                continue
+            by_team_pair[key] = _copy_context_row(row, policy_suffix="later_snapshot_context_overlay")
+            overlay_expected_pairs.append(f"{key[0]}@{key[1]}")
+        for key, row in (candidate.get("unavailable_context") or {}).items():
+            if not isinstance(key, tuple) or not isinstance(row, dict):
+                continue
+            if key in by_team_pair or key in unavailable_by_team_pair:
+                continue
+            unavailable_by_team_pair[key] = _copy_context_row(
+                row,
+                policy_suffix="later_snapshot_unavailable_overlay",
+            )
+            overlay_unavailable_pairs.append(f"{key[0]}@{key[1]}")
+
+    return by_team_pair, unavailable_by_team_pair, {
+        "later_snapshot_expected_overlay_count": len(overlay_expected_pairs),
+        "later_snapshot_expected_overlay_pairs": sorted(overlay_expected_pairs),
+        "later_snapshot_unavailable_overlay_count": len(overlay_unavailable_pairs),
+        "later_snapshot_unavailable_overlay_pairs": sorted(overlay_unavailable_pairs),
+    }
+
+
 def _load_starter_context(
     path: Path,
     slate_date: str,
@@ -458,9 +704,9 @@ def _load_starter_context(
             ),
         )
     latest = max(candidates, key=lambda c: _generated_sort_key(c.get("generated_at")))
-    by_team_pair = selected.get("context") if isinstance(selected.get("context"), dict) else {}
-    unavailable_by_team_pair = (
-        selected.get("unavailable_context") if isinstance(selected.get("unavailable_context"), dict) else {}
+    by_team_pair, unavailable_by_team_pair, overlay_meta = _overlay_later_snapshot_context(
+        selected=selected,
+        candidates=candidates,
     )
     recovered_pairs = sorted(set(by_team_pair) - set((latest.get("context") or {})))
     meta = {
@@ -482,6 +728,8 @@ def _load_starter_context(
         "latest_artifact_coverage": int(latest.get("coverage") or 0),
         "latest_artifact_team_pair_count": int(latest.get("team_pair_count") or 0),
         "selected_artifact_team_pair_count": int(selected.get("team_pair_count") or 0),
+        "post_overlay_team_pair_count": len(by_team_pair),
+        "post_overlay_unavailable_team_pair_count": len(unavailable_by_team_pair),
         "candidate_artifact_count": len(candidates),
         "valid_candidate_artifact_count": len(valid),
         "recovered_team_pair_count": len(recovered_pairs),
@@ -498,6 +746,7 @@ def _load_starter_context(
             if not c.get("valid")
         ],
     }
+    meta.update(overlay_meta)
     return by_team_pair, unavailable_by_team_pair, meta
 
 
@@ -573,6 +822,125 @@ ORDER BY player_id, game_date
     }
 
 
+def _team_abbr_from_schedule_team(team: dict[str, Any]) -> str:
+    abbr = _clean_team(team.get("abbreviation"))
+    if abbr:
+        return abbr
+    team_id = _f(team.get("id"))
+    if team_id is None:
+        return ""
+    try:
+        from backend.mlb.shared.team_name_map import getFullTeamAbbreviationFromID
+
+        return _clean_team(getFullTeamAbbreviationFromID(int(team_id)))
+    except Exception:
+        return ""
+
+
+def _probable_starter_display_row(
+    *,
+    slate_date: str,
+    offense_team: str,
+    pitcher_team: str,
+    pitcher: dict[str, Any],
+    source_url: str,
+    required_min_starts: int | None,
+) -> dict[str, Any] | None:
+    pitcher_id = _f(pitcher.get("id"))
+    pitcher_name = str(pitcher.get("fullName") or pitcher.get("name") or "").strip()
+    if pitcher_id is None and not pitcher_name:
+        return None
+    return {
+        "starter_expected_hits_allowed": None,
+        "opposing_starter": pitcher_name,
+        "opposing_starter_id": int(pitcher_id) if pitcher_id is not None else "",
+        "starter_context_status": "projected",
+        "starter_context_source": f"{source_url}:mlb_probable_starter_display_fallback",
+        "starter_context_updated_at": "",
+        "starter_context_unavailable_reason": "starter projected but missing source stats",
+        "starter_min_start_policy_applied": False,
+        "starter_starts_count": "",
+        "starter_required_min_starts": required_min_starts if required_min_starts is not None else "",
+        "environment_artifact_timestamp": "",
+        "environment_artifact_row_count": "",
+        "environment_snapshot_policy": "mlb_probable_starter_display_fallback",
+    }
+
+
+def _load_probable_starter_display_fallback(
+    *,
+    slate_date: str,
+    starter_context: dict[tuple[str, str], dict[str, Any]],
+    unavailable_starter_context: dict[tuple[str, str], dict[str, Any]],
+    required_min_starts: int | None,
+) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, Any]]:
+    """Display-only probable starter fallback for review boards.
+
+    This intentionally does not produce expected_hits_allowed and therefore cannot
+    assign a trusted pitcher tier. Hits-environment remains the only trusted
+    source for expected hits allowed.
+    """
+    source_url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={slate_date}&hydrate=probablePitcher"
+    if str(os.getenv("MLB_HITS_REVIEW_DISABLE_PROBABLE_STARTER_FALLBACK", "0")).strip() == "1":
+        return {}, {
+            "probable_starter_display_fallback_status": "disabled",
+            "probable_starter_display_fallback_source": source_url,
+            "probable_starter_display_fallback_rows": 0,
+        }
+    try:
+        import requests
+
+        response = requests.get(source_url, timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        return {}, {
+            "probable_starter_display_fallback_status": "error",
+            "probable_starter_display_fallback_source": source_url,
+            "probable_starter_display_fallback_error": f"{type(exc).__name__}: {exc}",
+            "probable_starter_display_fallback_rows": 0,
+        }
+
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for date_block in payload.get("dates") or []:
+        for game in date_block.get("games") or []:
+            teams = game.get("teams") or {}
+            home = teams.get("home") or {}
+            away = teams.get("away") or {}
+            home_team = home.get("team") or {}
+            away_team = away.get("team") or {}
+            home_abbr = _team_abbr_from_schedule_team(home_team)
+            away_abbr = _team_abbr_from_schedule_team(away_team)
+            if not home_abbr or not away_abbr:
+                continue
+            home_pitcher = home.get("probablePitcher") or {}
+            away_pitcher = away.get("probablePitcher") or {}
+            candidates = [
+                ((away_abbr, home_abbr), home_pitcher),
+                ((home_abbr, away_abbr), away_pitcher),
+            ]
+            for key, pitcher in candidates:
+                if key in starter_context or key in unavailable_starter_context:
+                    continue
+                row = _probable_starter_display_row(
+                    slate_date=slate_date,
+                    offense_team=key[0],
+                    pitcher_team=key[1],
+                    pitcher=pitcher,
+                    source_url=source_url,
+                    required_min_starts=required_min_starts,
+                )
+                if row is not None:
+                    out[key] = row
+
+    return out, {
+        "probable_starter_display_fallback_status": "ok",
+        "probable_starter_display_fallback_source": source_url,
+        "probable_starter_display_fallback_rows": len(out),
+        "probable_starter_display_fallback_pairs": [f"{a}@{h}" for a, h in sorted(out)],
+    }
+
+
 def _o15_hitter_tier(d7_hits_rate: float | None, d15_hits_rate: float | None) -> str:
     if d7_hits_rate is not None and d15_hits_rate is not None:
         if d7_hits_rate > 1.30 and d15_hits_rate > 1.20:
@@ -619,13 +987,52 @@ def _u15_pitcher_tier(starter_expected_hits_allowed: float | None, status: Any =
     return "D"
 
 
-def _tier_sort_key(row: dict[str, Any], board: str = "o15") -> tuple[int, int, int, float, str]:
+def _tier_sort_key(row: dict[str, Any], board: str = "o15") -> tuple[Any, ...]:
     hitter_rank = HITTER_TIER_RANK.get(str(row.get("hitter_tier") or "C"), 9)
     pitcher_rank = PITCHER_TIER_RANK.get(str(row.get("pitcher_tier") or "U"), 9)
     model_prob = _f(row.get("model_prob"))
+    qc_score = _f(row.get("qc_score"))
+    if board == "watch_o15":
+        return (
+            hitter_rank,
+            pitcher_rank,
+            0,
+            -(qc_score if qc_score is not None else -1.0),
+            str(row.get("player_name") or ""),
+        )
+    if board == "layered_o15":
+        layer_rank = {
+            "layer_4_qc_d7_d15_starter": 0,
+            "layer_3_d7_d15_starter_non_qc": 1,
+            "layer_2_d7_d15_no_favorable_starter": 2,
+            "layer_1_d7_hot_not_d15_consistent": 3,
+            "all_o15_other": 4,
+        }.get(str(row.get("layer_label") or ""), 9)
+        d7_hits = _f(row.get("d7_hits_rate"))
+        d15_hits = _f(row.get("d15_hits_rate"))
+        starter_expected = _f(row.get("starter_expected_hits_allowed"))
+        market_price = _f(row.get("market_price"))
+        return (
+            layer_rank,
+            hitter_rank,
+            pitcher_rank,
+            -(d7_hits if d7_hits is not None else -1.0),
+            -(d15_hits if d15_hits is not None else -1.0),
+            -(starter_expected if starter_expected is not None else -1.0),
+            -(market_price if market_price is not None else -9999.0),
+            str(row.get("player_name") or ""),
+        )
     if board == "u15":
+        layer_rank = {
+            "layer_4_qc_d7_d15_tough_starter": 0,
+            "layer_3_d7_d15_tough_starter_non_qc": 1,
+            "layer_2_d7_d15_no_tough_starter": 2,
+            "layer_1_d7_cold_not_d15_consistent": 3,
+            "all_u15_other": 4,
+        }.get(str(row.get("layer_label") or ""), 9)
         combined = str(row.get("combined_tier") or "")
         return (
+            layer_rank,
             U15_COMBINED_TIER_ORDER.get(combined, 100 + hitter_rank * 10 + pitcher_rank),
             hitter_rank,
             pitcher_rank,
@@ -641,6 +1048,71 @@ def _tier_sort_key(row: dict[str, Any], board: str = "o15") -> tuple[int, int, i
     )
 
 
+def _line_key(value: Any) -> str:
+    line = _f(value)
+    return f"{line:.1f}" if line is not None else ""
+
+
+def _player_line_key(row: dict[str, Any]) -> tuple[str, str]:
+    player_id = _f(row.get("player_id"))
+    player_key = str(int(player_id)) if player_id is not None else ""
+    return player_key, _line_key(row.get("line"))
+
+
+def _norm_player_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = "".join(ch for ch in text if ch.isalnum() or ch.isspace())
+    return " ".join(text.split())
+
+
+def _load_qc_watch_context(date_text: str, lanes_root: Path | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    root = lanes_root or Path("backend/mlb/exports/model_v2/lanes")
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for path in sorted((root / "today" / date_text).glob("quick_card_hits_*.csv")):
+        if not path.exists() or path.stat().st_size == 0:
+            continue
+        for row in _read_csv(path):
+            if str(row.get("prop_type") or "").strip().lower() != "hits":
+                continue
+            if _line_key(row.get("line")) != "1.5":
+                continue
+            key = _player_line_key(row)
+            if not key[0]:
+                continue
+            out[key] = {
+                "qc_score": _f(row.get("score") or row.get("rank_score")),
+                "qc_selected_side": str(row.get("side") or "").strip().lower(),
+                "qc_source_file": str(path),
+            }
+    return out
+
+
+def _load_ranking_context(date_text: str, lanes_root: Path | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    root = lanes_root or Path("backend/mlb/exports/model_v2/lanes")
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for path in sorted((root / "today" / date_text).glob(f"hits_lane_selector_{date_text}.csv")):
+        if not path.exists() or path.stat().st_size == 0:
+            continue
+        for row in _read_csv(path):
+            if str(row.get("prop_type") or "").strip().lower() != "hits":
+                continue
+            if str(row.get("side") or "").strip().lower() != "over":
+                continue
+            if _line_key(row.get("line")) != "1.5":
+                continue
+            source_lane = str(row.get("source_lane") or "").strip()
+            if source_lane == "quick_card_hits":
+                continue
+            key = _player_line_key(row)
+            if not key[0]:
+                continue
+            out[key] = {
+                "ranking_score": _f(row.get("rank_score") or row.get("score")),
+                "ranking_source_lane": source_lane,
+            }
+    return out
+
+
 def _filter_rows(
     *,
     slate_rows: list[dict[str, Any]],
@@ -648,6 +1120,8 @@ def _filter_rows(
     unavailable_starter_context: dict[tuple[str, str], dict[str, Any]],
     starter_meta: dict[str, Any],
     raw_hit_totals: dict[tuple[str, str], dict[str, float]],
+    qc_context: dict[tuple[str, str], dict[str, Any]] | None = None,
+    ranking_context: dict[tuple[str, str], dict[str, Any]] | None = None,
     slate_date: str,
     board: str,
     source_artifact_exists: bool,
@@ -664,6 +1138,11 @@ def _filter_rows(
         line = _f(row.get("line"))
         if line is None or abs(line - 1.5) > 1e-9:
             continue
+        player_line_key = _player_line_key(row)
+        qc_item = (qc_context or {}).get(player_line_key, {})
+        ranking_item = (ranking_context or {}).get(player_line_key, {})
+        if board == "watch_o15" and not qc_item:
+            continue
 
         team = _clean_team(row.get("team"))
         opponent = _clean_team(row.get("opponent"))
@@ -672,6 +1151,7 @@ def _filter_rows(
         starter_expected = _f(context.get("starter_expected_hits_allowed"))
         if starter_expected is not None:
             starter_context_rows += 1
+        team_expected = _f(context.get("team_expected_hits_allowed"))
         starter_status = str(context.get("starter_context_status") or "missing")
         if not context and unavailable_context:
             context = unavailable_context
@@ -694,21 +1174,31 @@ def _filter_rows(
         raw = raw_hit_totals.get((row_date, str(int(player_id)))) if player_id is not None else {}
         if raw is None:
             raw = {}
+        time_context = _time_context(row, fallback_date=row_date)
 
         item = {
             "date": row_date,
+            "player": row.get("player_name") or "",
             "player_name": row.get("player_name") or "",
+            "player_id": int(player_id) if player_id is not None else "",
             "team": team,
             "opponent": opponent,
             "line": 1.5,
             "side": "under" if board == "u15" else "over",
             "model_prob": _f(row.get("prob_under" if board == "u15" else "prob_over")),
             "market_price": _f(row.get("market_price_under" if board == "u15" else "market_price_over")),
+            "selected_side_implied_probability": _american_implied_probability(
+                row.get("market_price_under" if board == "u15" else "market_price_over")
+            ),
             "d7_hits_rate": _f(row.get("d7_hits")),
             "d15_hits_rate": _f(row.get("d15_hits")),
+            "d7_hits_runs_rbis": _f(row.get("d7_hits_runs_rbis")),
+            "d15_hits_runs_rbis": _f(row.get("d15_hits_runs_rbis")),
+            "d30_hits_runs_rbis": _f(row.get("d30_hits_runs_rbis")),
             "raw_d7_hits_calendar": _f(raw.get("raw_d7_hits")),
             "raw_d15_hits_calendar": _f(raw.get("raw_d15_hits")),
             "starter_expected_hits_allowed": starter_expected,
+            "team_expected_hits_allowed": team_expected,
             "opposing_starter": context.get("opposing_starter") or "",
             "opposing_starter_id": context.get("opposing_starter_id") or "",
             "starter_context_status": starter_status,
@@ -724,8 +1214,67 @@ def _filter_rows(
             "environment_artifact_row_count": context.get("environment_artifact_row_count")
             or selected_artifact_row_count,
             "environment_snapshot_policy": context.get("environment_snapshot_policy") or selected_snapshot_policy,
-            "game_time": row.get("game_time") or "",
+            "game_time": time_context["game_time"],
+            "time_of_day_bucket": time_context["time_of_day_bucket"],
+            "game_day_of_week": time_context["game_day_of_week"],
+            "qc_score": qc_item.get("qc_score", ""),
+            "qc_selected_side": qc_item.get("qc_selected_side", ""),
+            "qc_source_file": qc_item.get("qc_source_file", ""),
+            "ranking_score": ranking_item.get("ranking_score", ""),
+            "ranking_source_lane": ranking_item.get("ranking_source_lane", ""),
         }
+        if board == "watch_o15":
+            d7 = _f(item.get("d7_hits_rate"))
+            if d7 is None or d7 <= 1.0:
+                continue
+            if starter_expected is None or starter_expected < 5.0:
+                continue
+        if board == "u15":
+            d7 = _f(item.get("d7_hits_rate"))
+            d15 = _f(item.get("d15_hits_rate"))
+            d7_cold = d7 is not None and d7 < 1.0
+            d15_cold_consistent = d15 is not None and d15 < 1.0
+            tough_starter = starter_expected is not None and starter_expected < 4.5
+            qc_candidate = bool(qc_item) and str(qc_item.get("qc_selected_side") or "").strip().lower() == "under"
+            watch_candidate = qc_candidate and d7_cold and d15_cold_consistent and tough_starter
+            item["d7_cold_candidate"] = d7_cold
+            item["d15_cold_consistent_candidate"] = d15_cold_consistent
+            item["tough_starter_candidate"] = tough_starter
+            item["qc_candidate"] = qc_candidate
+            item["watch_candidate"] = watch_candidate
+            if watch_candidate:
+                item["layer_label"] = "layer_4_qc_d7_d15_tough_starter"
+            elif d7_cold and d15_cold_consistent and tough_starter:
+                item["layer_label"] = "layer_3_d7_d15_tough_starter_non_qc"
+            elif d7_cold and d15_cold_consistent:
+                item["layer_label"] = "layer_2_d7_d15_no_tough_starter"
+            elif d7_cold and not d15_cold_consistent:
+                item["layer_label"] = "layer_1_d7_cold_not_d15_consistent"
+            else:
+                item["layer_label"] = "all_u15_other"
+        if board == "layered_o15":
+            d7 = _f(item.get("d7_hits_rate"))
+            d15 = _f(item.get("d15_hits_rate"))
+            d7_hot = d7 is not None and d7 > 1.0
+            d15_consistent = d15 is not None and d15 > 1.0
+            favorable_starter = starter_expected is not None and starter_expected >= 5.0
+            qc_candidate = bool(qc_item)
+            watch_candidate = qc_candidate and d7_hot and d15_consistent and favorable_starter
+            item["d7_hot_candidate"] = d7_hot
+            item["d15_consistent_candidate"] = d15_consistent
+            item["favorable_starter_candidate"] = favorable_starter
+            item["qc_candidate"] = qc_candidate
+            item["watch_candidate"] = watch_candidate
+            if watch_candidate:
+                item["layer_label"] = "layer_4_qc_d7_d15_starter"
+            elif d7_hot and d15_consistent and favorable_starter:
+                item["layer_label"] = "layer_3_d7_d15_starter_non_qc"
+            elif d7_hot and d15_consistent:
+                item["layer_label"] = "layer_2_d7_d15_no_favorable_starter"
+            elif d7_hot and not d15_consistent:
+                item["layer_label"] = "layer_1_d7_hot_not_d15_consistent"
+            else:
+                item["layer_label"] = "all_o15_other"
         considered.append(item)
 
     for row in considered:
@@ -778,6 +1327,229 @@ def _filter_rows(
         ),
     }
     return considered, diagnostics
+
+
+def _slate_context_by_player(slate_rows: list[dict[str, Any]], slate_date: str) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for row in slate_rows:
+        row_date = str(row.get("slate_date") or row.get("game_date") or "")[:10]
+        if row_date != slate_date:
+            continue
+        if str(row.get("prop_type") or "").strip().lower() != "hits":
+            continue
+        keys: list[str] = []
+        player_id = _f(row.get("player_id"))
+        if player_id is not None:
+            keys.append(str(int(player_id)))
+        name_key = _norm_player_name(row.get("player_name"))
+        if name_key:
+            keys.append(f"name:{name_key}")
+        for key in keys:
+            existing = out.get(key)
+            if existing is None or _line_key(row.get("line")) == "1.5":
+                out[key] = row
+    return out
+
+
+def _context_lookup_key(row: dict[str, Any]) -> str:
+    player_id = _f(row.get("player_id"))
+    if player_id is not None:
+        return str(int(player_id))
+    name_key = _norm_player_name(row.get("player_name") or row.get("player"))
+    return f"name:{name_key}" if name_key else ""
+
+
+def _aggregate_alternate_rows(path: Path) -> list[dict[str, Any]]:
+    rows = _read_csv(path)
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        if str(row.get("market_key") or "").strip() != "batter_hits_alternate":
+            continue
+        if str(row.get("side") or "").strip().lower() != "over":
+            continue
+        if _line_key(row.get("line")) != "1.5":
+            continue
+        player_id = str(row.get("player_id") or "").strip()
+        player_name = str(row.get("player_name") or "").strip()
+        name_key = _norm_player_name(player_name)
+        event_id = str(row.get("event_id") or "").strip()
+        key = (event_id, player_id or name_key, "1.5")
+        item = grouped.setdefault(
+            key,
+            {
+                "player_id": player_id,
+                "player_name": player_name,
+                "team": _clean_team(row.get("team")),
+                "opponent": _clean_team(row.get("opponent")),
+                "line": 1.5,
+                "game_time": str(row.get("commence_time") or "").strip(),
+                "bookmakers": set(),
+                "best_over_price": None,
+            },
+        )
+        if not item.get("game_time"):
+            item["game_time"] = str(row.get("commence_time") or "").strip()
+        book = str(row.get("bookmaker_key") or "").strip()
+        if book:
+            item["bookmakers"].add(book)
+        price = _f(row.get("price"))
+        current = _f(item.get("best_over_price"))
+        if price is not None and (current is None or price > current):
+            item["best_over_price"] = price
+    out: list[dict[str, Any]] = []
+    for item in grouped.values():
+        cp = dict(item)
+        books = cp.pop("bookmakers", set())
+        cp["bookmaker_list"] = ",".join(sorted(str(book) for book in books if str(book).strip()))
+        out.append(cp)
+    return out
+
+
+def _alternate_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    layer_rank = {
+        "alternate_layer_a_d7_d15_starter": 0,
+        "alternate_layer_b_d7_d15": 1,
+        "alternate_layer_c_d7_hot": 2,
+        "alternate_other": 3,
+    }.get(str(row.get("alternate_layer") or ""), 9)
+    hitter_rank = HITTER_TIER_RANK.get(str(row.get("hitter_tier") or "C"), 9)
+    pitcher_rank = PITCHER_TIER_RANK.get(str(row.get("pitcher_tier") or "U"), 9)
+    d7 = _f(row.get("d7_hits_rate"))
+    d15 = _f(row.get("d15_hits_rate"))
+    price = _f(row.get("best_over_price"))
+    return (
+        layer_rank,
+        hitter_rank,
+        pitcher_rank,
+        -(d7 if d7 is not None else -1.0),
+        -(d15 if d15 is not None else -1.0),
+        -(price if price is not None else -9999.0),
+        str(row.get("player_name") or ""),
+    )
+
+
+def _build_alternate_discovery_rows(
+    *,
+    alternate_book_level_csv: Path,
+    slate_rows: list[dict[str, Any]],
+    starter_context: dict[tuple[str, str], dict[str, Any]],
+    unavailable_starter_context: dict[tuple[str, str], dict[str, Any]],
+    starter_meta: dict[str, Any],
+    raw_hit_totals: dict[tuple[str, str], dict[str, float]],
+    slate_date: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not alternate_book_level_csv.exists() or alternate_book_level_csv.stat().st_size == 0:
+        raise SystemExit(
+            "Missing alternate discovery source CSV. Run the OddsAPI batter_hits_alternate discovery first: "
+            f"{alternate_book_level_csv}"
+        )
+    alt_rows = _aggregate_alternate_rows(alternate_book_level_csv)
+    slate_by_player = _slate_context_by_player(slate_rows, slate_date)
+    selected_artifact_path = str(starter_meta.get("selected_artifact_path") or "")
+    selected_artifact_timestamp = str(starter_meta.get("environment_artifact_timestamp") or "")
+    selected_artifact_row_count = starter_meta.get("environment_artifact_row_count") or ""
+    selected_snapshot_policy = str(starter_meta.get("environment_snapshot_policy") or "")
+    out: list[dict[str, Any]] = []
+    for alt in alt_rows:
+        lookup = _context_lookup_key(alt)
+        slate = slate_by_player.get(lookup, {})
+        if not slate:
+            name_key = _norm_player_name(alt.get("player_name"))
+            slate = slate_by_player.get(f"name:{name_key}", {})
+        team = _clean_team(alt.get("team") or slate.get("team"))
+        opponent = _clean_team(alt.get("opponent") or slate.get("opponent"))
+        context = starter_context.get((team, opponent), {})
+        unavailable_context = unavailable_starter_context.get((team, opponent), {})
+        starter_expected = _f(context.get("starter_expected_hits_allowed"))
+        team_expected = _f(context.get("team_expected_hits_allowed"))
+        starter_status = str(context.get("starter_context_status") or "missing")
+        if not context and unavailable_context:
+            context = unavailable_context
+            starter_status = str(context.get("starter_context_status") or "missing")
+        if not selected_artifact_path:
+            default_unavailable_reason = "source artifact missing"
+        elif starter_status == "stale":
+            default_unavailable_reason = "stale starter context"
+        elif starter_status == "unknown":
+            default_unavailable_reason = "unknown"
+        elif starter_expected is None:
+            default_unavailable_reason = "no projected starter"
+        else:
+            default_unavailable_reason = ""
+        player_id = _f(alt.get("player_id") or slate.get("player_id"))
+        raw = raw_hit_totals.get((slate_date, str(int(player_id)))) if player_id is not None else {}
+        time_context = _time_context({**slate, **alt}, fallback_date=slate_date)
+        d7 = _f(slate.get("d7_hits"))
+        d15 = _f(slate.get("d15_hits"))
+        d7_hot = d7 is not None and d7 > 1.0
+        d15_consistent = d15 is not None and d15 > 1.0
+        favorable_starter = starter_expected is not None and starter_expected >= 5.0
+        if d7_hot and d15_consistent and favorable_starter:
+            layer = "alternate_layer_a_d7_d15_starter"
+        elif d7_hot and d15_consistent:
+            layer = "alternate_layer_b_d7_d15"
+        elif d7_hot:
+            layer = "alternate_layer_c_d7_hot"
+        else:
+            layer = "alternate_other"
+        hitter_tier = _o15_hitter_tier(d7, d15)
+        pitcher_tier = _o15_pitcher_tier(starter_expected, starter_status)
+        out.append(
+            {
+                "date": slate_date,
+                "player": alt.get("player_name") or slate.get("player_name") or "",
+                "player_name": alt.get("player_name") or slate.get("player_name") or "",
+                "player_id": int(player_id) if player_id is not None else "",
+                "team": team,
+                "opponent": opponent,
+                "bookmaker_list": alt.get("bookmaker_list") or "",
+                "best_over_price": _f(alt.get("best_over_price")),
+                "selected_side_implied_probability": _american_implied_probability(alt.get("best_over_price")),
+                "line": 1.5,
+                "d7_hits_rate": d7,
+                "d15_hits_rate": d15,
+                "d7_hits_runs_rbis": _f(slate.get("d7_hits_runs_rbis")),
+                "d15_hits_runs_rbis": _f(slate.get("d15_hits_runs_rbis")),
+                "d30_hits_runs_rbis": _f(slate.get("d30_hits_runs_rbis")),
+                "raw_d7_hits_calendar": _f((raw or {}).get("raw_d7_hits")),
+                "raw_d15_hits_calendar": _f((raw or {}).get("raw_d15_hits")),
+                "starter_expected_hits_allowed": starter_expected,
+                "team_expected_hits_allowed": team_expected,
+                "hitter_tier": hitter_tier,
+                "pitcher_tier": pitcher_tier,
+                "combined_tier": f"{hitter_tier}/{pitcher_tier}",
+                "d7_hot_candidate": d7_hot,
+                "d15_consistent_candidate": d15_consistent,
+                "favorable_starter_candidate": favorable_starter,
+                "alternate_layer": layer,
+                "game_time": time_context["game_time"],
+                "time_of_day_bucket": time_context["time_of_day_bucket"],
+                "game_day_of_week": time_context["game_day_of_week"],
+                "opposing_starter": context.get("opposing_starter") or "",
+                "opposing_starter_id": context.get("opposing_starter_id") or "",
+                "starter_context_status": starter_status,
+                "starter_context_source": context.get("starter_context_source") or "",
+                "starter_context_updated_at": context.get("starter_context_updated_at") or "",
+                "starter_context_unavailable_reason": context.get("starter_context_unavailable_reason")
+                or default_unavailable_reason,
+                "starter_min_start_policy_applied": context.get("starter_min_start_policy_applied") or False,
+                "starter_starts_count": context.get("starter_starts_count") or "",
+                "starter_required_min_starts": context.get("starter_required_min_starts") or "",
+                "environment_artifact_timestamp": context.get("environment_artifact_timestamp")
+                or selected_artifact_timestamp,
+                "environment_artifact_row_count": context.get("environment_artifact_row_count")
+                or selected_artifact_row_count,
+                "environment_snapshot_policy": context.get("environment_snapshot_policy") or selected_snapshot_policy,
+            }
+        )
+    out.sort(key=_alternate_sort_key)
+    return out, {
+        "alternate_book_level_csv": str(alternate_book_level_csv),
+        "alternate_total_rows": len(out),
+        "alternate_layer_a": sum(1 for row in out if row.get("alternate_layer") == "alternate_layer_a_d7_d15_starter"),
+        "alternate_layer_b": sum(1 for row in out if row.get("alternate_layer") == "alternate_layer_b_d7_d15"),
+        "alternate_layer_c": sum(1 for row in out if row.get("alternate_layer") == "alternate_layer_c_d7_hot"),
+    }
 
 
 def _fmt(value: Any) -> str:
@@ -902,7 +1674,10 @@ def _write_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any], boar
     statuses = _status_counts(rows)
     reason_counts = _starter_reason_counts(rows)
     u_summary = _u_reason_summary(rows)
-    title = "Hits Under 1.5 Favorite Audit Board" if board == "u15" else "Hits Over 1.5 Tiered Review Aid"
+    if board == "watch_o15":
+        title = "Hits Over 1.5 Watch Candidate Board"
+    else:
+        title = "Hits Under 1.5 Favorite Audit Board" if board == "u15" else "Hits Over 1.5 Tiered Review Aid"
     side = "under" if board == "u15" else "over"
     hitter_lines = (
         [
@@ -940,6 +1715,14 @@ def _write_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any], boar
         f"- Date: `{meta.get('date')}`",
         "- Scope: review aid only; no production selector/upload/threshold/grading changes.",
         f"- Candidate universe: `prop_type = hits`, `side = {side}`, `line = 1.5`.",
+        *(
+            [
+                "- Watch subset: Quick Card candidate + `d7_hits_rate > 1.0` + `starter_expected_hits_allowed >= 5.0`.",
+                "- Purpose: historically positive, outcome-backed subset; keep separate from the broader discovery board.",
+            ]
+            if board == "watch_o15"
+            else []
+        ),
         *hitter_lines,
         *pitcher_lines,
         f"- Candidate rows: `{len(rows)}`",
@@ -1010,8 +1793,8 @@ def _write_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any], boar
                 [
                     f"### {tier}",
                     "",
-                    "| player | team | opp | model_prob | market_price | d7_hits_rate | d15_hits_rate | raw_d7_hits_calendar | raw_d15_hits_calendar | starter_expected_hits_allowed | starter_status | starter_unavailable_reason | starts/min | game_time | opposing_starter |",
-                    "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|---|",
+                    "| player | player_id | team | opp | model_prob | market_price | implied | d7 | d15 | d7 HRR | d15 HRR | raw_d7 | raw_d15 | starter exp | team exp | qc_score | ranking_score | starter_status | starter_unavailable_reason | starts/min | tod | dow | game_time | opposing_starter |",
+                    "|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---|---|",
                 ]
             )
             for row in grouped.get(tier, []):
@@ -1022,18 +1805,27 @@ def _write_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any], boar
                     + " | ".join(
                         [
                             str(row.get("player_name") or ""),
+                            str(row.get("player_id") or ""),
                             str(row.get("team") or ""),
                             str(row.get("opponent") or ""),
                             _fmt(row.get("model_prob")),
                             _fmt(row.get("market_price")),
+                            _fmt(row.get("selected_side_implied_probability")),
                             _fmt(row.get("d7_hits_rate")),
                             _fmt(row.get("d15_hits_rate")),
+                            _fmt(row.get("d7_hits_runs_rbis")),
+                            _fmt(row.get("d15_hits_runs_rbis")),
                             _fmt(row.get("raw_d7_hits_calendar")),
                             _fmt(row.get("raw_d15_hits_calendar")),
                             _fmt(row.get("starter_expected_hits_allowed")),
+                            _fmt(row.get("team_expected_hits_allowed")),
+                            _fmt(row.get("qc_score")),
+                            _fmt(row.get("ranking_score")),
                             str(row.get("starter_context_status") or ""),
                             str(row.get("starter_context_unavailable_reason") or ""),
                             f"{starts}/{required}" if starts or required else "",
+                            str(row.get("time_of_day_bucket") or ""),
+                            str(row.get("game_day_of_week") or ""),
                             str(row.get("game_time") or ""),
                             str(row.get("opposing_starter") or ""),
                         ]
@@ -1043,6 +1835,363 @@ def _write_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any], boar
             lines.append("")
     else:
         lines.append("No hits over 1.5 rows were available for tiering.")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _boolish(row: dict[str, Any], key: str) -> bool:
+    value = row.get(key)
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _layered_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    layers = {
+        "all_o15": len(rows),
+        "d7_hot": sum(1 for row in rows if _boolish(row, "d7_hot_candidate")),
+        "d7_d15": sum(
+            1
+            for row in rows
+            if _boolish(row, "d7_hot_candidate") and _boolish(row, "d15_consistent_candidate")
+        ),
+        "d7_d15_plus_favorable_starter": sum(
+            1
+            for row in rows
+            if _boolish(row, "d7_hot_candidate")
+            and _boolish(row, "d15_consistent_candidate")
+            and _boolish(row, "favorable_starter_candidate")
+        ),
+        "qc_watch_candidate": sum(1 for row in rows if _boolish(row, "watch_candidate")),
+    }
+    tier_by_layer: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for row in rows:
+        layer = str(row.get("layer_label") or "all_o15_other")
+        tier = str(row.get("combined_tier") or "missing")
+        tier_by_layer[layer][tier] += 1
+    return {
+        **layers,
+        "tier_by_layer": {layer: dict(sorted(counts.items())) for layer, counts in tier_by_layer.items()},
+    }
+
+
+def _u15_layered_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    layers = {
+        "all_u15": len(rows),
+        "d7_cold": sum(1 for row in rows if _boolish(row, "d7_cold_candidate")),
+        "d7_d15_cold": sum(
+            1
+            for row in rows
+            if _boolish(row, "d7_cold_candidate") and _boolish(row, "d15_cold_consistent_candidate")
+        ),
+        "d7_d15_tough_starter": sum(
+            1
+            for row in rows
+            if _boolish(row, "d7_cold_candidate")
+            and _boolish(row, "d15_cold_consistent_candidate")
+            and _boolish(row, "tough_starter_candidate")
+        ),
+        "qc_watch_candidate": sum(1 for row in rows if _boolish(row, "watch_candidate")),
+    }
+    tier_by_layer: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for row in rows:
+        layer = str(row.get("layer_label") or "all_u15_other")
+        tier = str(row.get("combined_tier") or "missing")
+        tier_by_layer[layer][tier] += 1
+    return {
+        **layers,
+        "tier_by_layer": {layer: dict(sorted(counts.items())) for layer, counts in tier_by_layer.items()},
+    }
+
+
+def _write_layered_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    counts = _layered_counts(rows)
+    ordered_layers = [
+        ("layer_4_qc_d7_d15_starter", "Layer 4: QC + d7 + d15 + Favorable Starter"),
+        ("layer_3_d7_d15_starter_non_qc", "Layer 3: d7 + d15 + Favorable Starter, Not Layer 4"),
+        ("layer_2_d7_d15_no_favorable_starter", "Layer 2: d7 + d15, Not Favorable Starter"),
+        ("layer_1_d7_hot_not_d15_consistent", "Layer 1: d7 Hot, Not d15 Consistent"),
+    ]
+    lines = [
+        "# Hits Over 1.5 Layered Candidate Board",
+        "",
+        f"- Date: `{meta.get('date')}`",
+        "- Scope: review aid only; no production selector/upload/threshold/grading changes.",
+        "- Candidate universe: `prop_type = hits`, `side = over`, `line = 1.5`.",
+        "- Layer 4: Quick Card candidate + `d7_hits_rate > 1.0` + `d15_hits_rate > 1.0` + `starter_expected_hits_allowed >= 5.0`.",
+        "- Layer 3: `d7_hits_rate > 1.0` + `d15_hits_rate > 1.0` + `starter_expected_hits_allowed >= 5.0`, excluding Layer 4.",
+        "- Layer 2: `d7_hits_rate > 1.0` + `d15_hits_rate > 1.0`, without favorable starter context.",
+        "- Layer 1: `d7_hits_rate > 1.0` but `d15_hits_rate <= 1.0` or unavailable.",
+        "",
+        "## Summary Counts",
+        "",
+        f"- All o1.5 rows: `{counts.get('all_o15', 0)}`",
+        f"- d7_hot rows: `{counts.get('d7_hot', 0)}`",
+        f"- d7 + d15 rows: `{counts.get('d7_d15', 0)}`",
+        f"- d7 + d15 + favorable starter rows: `{counts.get('d7_d15_plus_favorable_starter', 0)}`",
+        f"- QC + d7 + d15 + favorable starter watch candidates: `{counts.get('qc_watch_candidate', 0)}`",
+        f"- Excluded all-o1.5 rows outside useful layers: `{sum(1 for row in rows if row.get('layer_label') == 'all_o15_other')}`",
+        f"- Environment snapshot policy: `{meta.get('environment_snapshot_policy')}`",
+        f"- Selected environment artifact: `{meta.get('selected_artifact_path')}`",
+        f"- Selected environment coverage: `{meta.get('selected_artifact_coverage')}` rows / `{meta.get('selected_artifact_team_pair_count')}` team pairs",
+        f"- Latest environment coverage: `{meta.get('latest_artifact_coverage')}` rows / `{meta.get('latest_artifact_team_pair_count')}` team pairs",
+        "",
+        "## A/A And A/B Counts By Layer",
+        "",
+    ]
+    tier_by_layer = counts.get("tier_by_layer") if isinstance(counts.get("tier_by_layer"), dict) else {}
+    for layer, title in ordered_layers:
+        layer_counts = tier_by_layer.get(layer, {}) if isinstance(tier_by_layer.get(layer), dict) else {}
+        lines.append(
+            f"- {title}: A/A `{layer_counts.get('A/A', 0)}`, A/B `{layer_counts.get('A/B', 0)}`"
+        )
+    lines.append("")
+
+    for layer, title in ordered_layers:
+        layer_rows = [row for row in rows if str(row.get("layer_label") or "") == layer]
+        lines.extend([f"## {title}", ""])
+        if not layer_rows:
+            lines.extend(["- None", ""])
+            continue
+        lines.append("| player | player_id | team | opp | tier | odds | implied | model_prob | d7 | d15 | d7 HRR | d15 HRR | starter exp | team exp | QC | QC score | ranking score | starter status | tod | dow | game_time | opposing starter |")
+        lines.append("|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|---|---|---|")
+        for row in layer_rows:
+            lines.append(
+                f"| {row.get('player') or row.get('player_name') or ''} | {row.get('player_id') or ''} | "
+                f"{row.get('team') or ''} | "
+                f"{row.get('opponent') or ''} | `{row.get('combined_tier') or ''}` | "
+                f"`{_fmt(row.get('market_price'))}` | `{_fmt(row.get('selected_side_implied_probability'))}` | "
+                f"`{_fmt(row.get('model_prob'))}` | "
+                f"`{_fmt(row.get('d7_hits_rate'))}` | `{_fmt(row.get('d15_hits_rate'))}` | "
+                f"`{_fmt(row.get('d7_hits_runs_rbis'))}` | `{_fmt(row.get('d15_hits_runs_rbis'))}` | "
+                f"`{_fmt(row.get('starter_expected_hits_allowed'))}` | `{_fmt(row.get('team_expected_hits_allowed'))}` | "
+                f"`{str(row.get('qc_candidate')).lower()}` | `{_fmt(row.get('qc_score'))}` | "
+                f"`{_fmt(row.get('ranking_score'))}` | `{row.get('starter_context_status') or ''}` | "
+                f"{row.get('time_of_day_bucket') or ''} | {row.get('game_day_of_week') or ''} | "
+                f"{row.get('game_time') or ''} | {row.get('opposing_starter') or ''} |"
+            )
+        lines.append("")
+
+    lines.extend(["## Excluded All-o1.5 Summary", ""])
+    excluded = [row for row in rows if str(row.get("layer_label") or "") == "all_o15_other"]
+    lines.append(f"- Rows outside the four listed layers: `{len(excluded)}`")
+    lines.append("- These rows remain in the CSV with `layer_label = all_o15_other` for auditability.")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_u15_layered_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    counts = _u15_layered_counts(rows)
+    ordered_layers = [
+        ("layer_4_qc_d7_d15_tough_starter", "Layer 4: QC + d7 + d15 + Starter Expected Hits Allowed < 4.5"),
+        (
+            "layer_3_d7_d15_tough_starter_non_qc",
+            "Layer 3: d7 + d15 + Starter Expected Hits Allowed < 4.5, Not Layer 4",
+        ),
+        (
+            "layer_2_d7_d15_no_tough_starter",
+            "Layer 2: d7 + d15, Starter Expected Hits Allowed >= 4.5 or Unavailable",
+        ),
+        ("layer_1_d7_cold_not_d15_consistent", "Layer 1: d7 Cold, Not d15 Consistent"),
+    ]
+    tier_by_layer = counts.get("tier_by_layer") if isinstance(counts.get("tier_by_layer"), dict) else {}
+
+    def combined_tier_sort_key(tier: str) -> tuple[int, int, str]:
+        hitter, _, pitcher = str(tier or "missing").partition("/")
+        return (
+            HITTER_TIER_RANK.get(hitter or "missing", 9),
+            PITCHER_TIER_RANK.get(pitcher or "missing", 9),
+            str(tier or "missing"),
+        )
+
+    def append_player_table(table_rows: list[dict[str, Any]], *, layer_label: str = "") -> None:
+        if layer_label:
+            lines.append(
+                "| layer | player | player_id | team | opp | tier | odds | model_prob | d7 | d15 | raw_d7 | raw_d15 | starter exp | QC | QC score | ranking score | starter status | tod | dow | game_time | opposing starter |"
+            )
+            lines.append("|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|---|---|---|")
+        else:
+            lines.append(
+                "| player | player_id | team | opp | tier | odds | model_prob | d7 | d15 | raw_d7 | raw_d15 | starter exp | QC | QC score | ranking score | starter status | tod | dow | game_time | opposing starter |"
+            )
+            lines.append("|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|---|---|---|")
+        for row in table_rows:
+            prefix = f"| {layer_label} | " if layer_label else "| "
+            lines.append(
+                prefix
+                + f"{row.get('player') or row.get('player_name') or ''} | {row.get('player_id') or ''} | "
+                f"{row.get('team') or ''} | "
+                f"{row.get('opponent') or ''} | `{row.get('combined_tier') or ''}` | "
+                f"`{_fmt(row.get('market_price'))}` | `{_fmt(row.get('model_prob'))}` | "
+                f"`{_fmt(row.get('d7_hits_rate'))}` | `{_fmt(row.get('d15_hits_rate'))}` | "
+                f"`{_fmt(row.get('raw_d7_hits_calendar'))}` | `{_fmt(row.get('raw_d15_hits_calendar'))}` | "
+                f"`{_fmt(row.get('starter_expected_hits_allowed'))}` | "
+                f"`{str(row.get('qc_candidate')).lower()}` | `{_fmt(row.get('qc_score'))}` | "
+                f"`{_fmt(row.get('ranking_score'))}` | `{row.get('starter_context_status') or ''}` | "
+                f"{row.get('time_of_day_bucket') or ''} | {row.get('game_day_of_week') or ''} | "
+                f"{row.get('game_time') or ''} | {row.get('opposing_starter') or ''} |"
+            )
+
+    def append_grouped_by_combined_tier(table_rows: list[dict[str, Any]], *, layer_label: str = "") -> None:
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in table_rows:
+            grouped[str(row.get("combined_tier") or "missing")].append(row)
+        for tier in sorted(grouped, key=combined_tier_sort_key):
+            lines.extend([f"### Combined Tier {tier}", ""])
+            append_player_table(grouped[tier], layer_label=layer_label)
+            lines.append("")
+
+    lines = [
+        "# Hits Under 1.5 Favorite Audit Board",
+        "",
+        f"- Date: `{meta.get('date')}`",
+        "- Scope: review aid only; no production selector/upload/threshold/grading changes.",
+        "- Candidate universe: `prop_type = hits`, `side = under`, `line = 1.5`.",
+        "- Layer 4: Quick Card candidate + `d7_hits_rate < 1.0` + `d15_hits_rate < 1.0` + `starter_expected_hits_allowed < 4.5`.",
+        "- Layer 3: `d7_hits_rate < 1.0` + `d15_hits_rate < 1.0` + `starter_expected_hits_allowed < 4.5`, excluding Layer 4.",
+        "- Tough starter definition: `starter_expected_hits_allowed < 4.5`.",
+        "- Layer 2: `d7_hits_rate < 1.0` + `d15_hits_rate < 1.0`, with `starter_expected_hits_allowed >= 4.5` or unavailable/untrusted starter context.",
+        "- Layer 4 and Layer 3 are Pitcher Tier `A` by definition; Layer 2 can contain Pitcher Tier `B`, `C`, `D`, or `U` and is grouped below by actual combined tier.",
+        "- Layer 1: `d7_hits_rate < 1.0` but `d15_hits_rate >= 1.0` or unavailable.",
+        "- Pitcher tier `U` means starter context was unavailable or untrusted at this run.",
+        "",
+        "## Summary Counts",
+        "",
+        f"- All u1.5 rows: `{counts.get('all_u15', 0)}`",
+        f"- d7 cold rows: `{counts.get('d7_cold', 0)}`",
+        f"- d7 + d15 cold rows: `{counts.get('d7_d15_cold', 0)}`",
+        f"- d7 + d15 + starter_expected_hits_allowed < 4.5 rows: `{counts.get('d7_d15_tough_starter', 0)}`",
+        f"- QC + d7 + d15 + starter_expected_hits_allowed < 4.5 watch candidates: `{counts.get('qc_watch_candidate', 0)}`",
+        f"- Excluded all-u1.5 rows outside useful layers: `{sum(1 for row in rows if row.get('layer_label') == 'all_u15_other')}`",
+        f"- Rows with starter context: `{meta.get('rows_with_starter_context')}`",
+        f"- Environment snapshot policy: `{meta.get('environment_snapshot_policy')}`",
+        f"- Selected environment artifact: `{meta.get('selected_artifact_path')}`",
+        f"- Selected environment coverage: `{meta.get('selected_artifact_coverage')}` rows / `{meta.get('selected_artifact_team_pair_count')}` team pairs",
+        f"- Latest environment coverage: `{meta.get('latest_artifact_coverage')}` rows / `{meta.get('latest_artifact_team_pair_count')}` team pairs",
+        "",
+        "## A/A And A/B Counts By Layer",
+        "",
+    ]
+    for layer, title in ordered_layers:
+        layer_counts = tier_by_layer.get(layer, {}) if isinstance(tier_by_layer.get(layer), dict) else {}
+        lines.append(
+            f"- {title}: A/A `{layer_counts.get('A/A', 0)}`, A/B `{layer_counts.get('A/B', 0)}`"
+        )
+    lines.append("")
+
+    for layer, title in ordered_layers:
+        layer_rows = [row for row in rows if str(row.get("layer_label") or "") == layer]
+        lines.extend([f"## {title}", ""])
+        if layer == "layer_2_d7_d15_no_tough_starter":
+            lines.append("- This layer is not a single pitcher bucket; rows are grouped by their actual combined hitter/pitcher tier.")
+            lines.append("")
+        elif layer in {"layer_4_qc_d7_d15_tough_starter", "layer_3_d7_d15_tough_starter_non_qc"}:
+            lines.append("- Pitcher Tier `A` is required for this layer by definition.")
+            lines.append("")
+        if not layer_rows:
+            lines.extend(["- None", ""])
+            continue
+        append_grouped_by_combined_tier(layer_rows)
+
+    lines.extend(["## Excluded All-u1.5 Summary", ""])
+    excluded = [row for row in rows if str(row.get("layer_label") or "") == "all_u15_other"]
+    lines.append(f"- Rows outside the four listed layers: `{len(excluded)}`")
+    lines.append("- These rows remain in the CSV with `layer_label = all_u15_other` for auditability.")
+    lines.append("- Display label: `Layer X: all other u1.5`.")
+    lines.append("")
+    if not excluded:
+        lines.extend(["- None", ""])
+    else:
+        append_grouped_by_combined_tier(excluded, layer_label="Layer X")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_alternate_discovery_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    layer_counts = Counter(str(row.get("alternate_layer") or "alternate_other") for row in rows)
+    d7_count = sum(1 for row in rows if row.get("d7_hot_candidate") is True)
+    d7_d15_count = sum(
+        1 for row in rows if row.get("d7_hot_candidate") is True and row.get("d15_consistent_candidate") is True
+    )
+    d7_d15_starter_count = sum(
+        1
+        for row in rows
+        if row.get("d7_hot_candidate") is True
+        and row.get("d15_consistent_candidate") is True
+        and row.get("favorable_starter_candidate") is True
+    )
+    ordered_layers = [
+        ("alternate_layer_a_d7_d15_starter", "Alternate Layer A: d7 + d15 + Starter >= 5.0"),
+        ("alternate_layer_b_d7_d15", "Alternate Layer B: d7 + d15"),
+        ("alternate_layer_c_d7_hot", "Alternate Layer C: d7 Hot"),
+    ]
+    lines = [
+        "# Hits Over 1.5 Alternate Discovery",
+        "",
+        "**DISCOVERY ONLY**",
+        "",
+        "**ALTERNATE MARKET**",
+        "",
+        "**OVER-ONLY FEED**",
+        "",
+        "**NOT INCLUDED IN PRODUCTION SCORING**",
+        "",
+        "**NOT INCLUDED IN UPLOADS**",
+        "",
+        "**NOT INCLUDED IN GRADING**",
+        "",
+        f"- Date: `{meta.get('date')}`",
+        "- Source: OddsAPI `batter_hits_alternate` only.",
+        f"- Alternate source CSV: `{meta.get('alternate_book_level_csv')}`",
+        f"- Environment snapshot policy: `{meta.get('environment_snapshot_policy')}`",
+        f"- Selected environment artifact: `{meta.get('selected_artifact_path')}`",
+        "",
+        "## Summary Counts",
+        "",
+        f"- Total alternate rows: `{len(rows)}`",
+        f"- d7 rows: `{d7_count}`",
+        f"- d7+d15 rows: `{d7_d15_count}`",
+        f"- d7+d15+starter rows: `{d7_d15_starter_count}`",
+        f"- Layer A: `{layer_counts.get('alternate_layer_a_d7_d15_starter', 0)}`",
+        f"- Layer B: `{layer_counts.get('alternate_layer_b_d7_d15', 0)}`",
+        f"- Layer C: `{layer_counts.get('alternate_layer_c_d7_hot', 0)}`",
+        "",
+    ]
+    for layer, title in ordered_layers:
+        layer_rows = [row for row in rows if str(row.get("alternate_layer") or "") == layer]
+        lines.extend([f"## {title}", ""])
+        if not layer_rows:
+            lines.extend(["- None", ""])
+            continue
+        lines.append(
+            "| player | team | opp | tier | best over | implied | d7 | d15 | d7 HRR | d15 HRR | starter exp | team exp | tod | dow | books | starter status | opposing starter |"
+        )
+        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|---|")
+        for row in layer_rows:
+            lines.append(
+                f"| {row.get('player_name') or row.get('player') or ''} | {row.get('team') or ''} | "
+                f"{row.get('opponent') or ''} | `{row.get('combined_tier') or ''}` | "
+                f"`{_fmt(row.get('best_over_price'))}` | `{_fmt(row.get('selected_side_implied_probability'))}` | "
+                f"`{_fmt(row.get('d7_hits_rate'))}` | "
+                f"`{_fmt(row.get('d15_hits_rate'))}` | `{_fmt(row.get('d7_hits_runs_rbis'))}` | "
+                f"`{_fmt(row.get('d15_hits_runs_rbis'))}` | "
+                f"`{_fmt(row.get('starter_expected_hits_allowed'))}` | `{_fmt(row.get('team_expected_hits_allowed'))}` | "
+                f"{row.get('time_of_day_bucket') or ''} | {row.get('game_day_of_week') or ''} | "
+                f"{row.get('bookmaker_list') or ''} | `{row.get('starter_context_status') or ''}` | "
+                f"{row.get('opposing_starter') or ''} |"
+            )
+        lines.append("")
+    lines.extend(
+        [
+            "## Recommendation",
+            "",
+            "- Use this board for manual discovery/research only.",
+            "- Because the captured alternate market is Over-only, it should remain outside production scoring and uploads.",
+            "- Daily generation is justified if Layer A keeps producing a meaningful number of candidates; today's Layer A count is "
+            f"`{layer_counts.get('alternate_layer_a_d7_d15_starter', 0)}`.",
+            "",
+        ]
+    )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -1125,11 +2274,15 @@ def _write_policy_audit(path: Path, meta: dict[str, Any], rows: list[dict[str, A
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build hits 1.5 review-aid artifacts.")
     ap.add_argument("--date", default=_today_et(), help="Slate date to review, YYYY-MM-DD.")
-    ap.add_argument("--board", choices=("o15", "u15"), default="o15")
+    ap.add_argument("--board", choices=("o15", "u15", "watch_o15", "layered_o15", "alternate_o15"), default="o15")
     ap.add_argument("--slate-output-csv", default="backend/mlb/data/processed/mlb_slate_output.csv")
     ap.add_argument("--hits-environment-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
     ap.add_argument("--hits-environment-history-jsonl", default="artifacts/analysis/mlb/mlb_hits_environment_history.jsonl")
     ap.add_argument("--hits-environment-snapshot-dir", default="artifacts/analysis/mlb/hits_environment_snapshots")
+    ap.add_argument(
+        "--alternate-book-level-csv",
+        default="artifacts/analysis/mlb/review_aids/oddsapi_batter_hits_alternate_live_discovery/{date}/live_alternate_book_level_rows.csv",
+    )
     ap.add_argument("--starter-required-min-starts", type=int, default=5)
     ap.add_argument(
         "--environment-snapshot-policy",
@@ -1153,32 +2306,98 @@ def main() -> int:
         policy=args.environment_snapshot_policy,
         required_min_starts=int(args.starter_required_min_starts),
     )
-    candidate_rows = [
-        {
-            "date": str(row.get("slate_date") or row.get("game_date") or "")[:10],
-            "player_id": row.get("player_id"),
-        }
-        for row in slate_rows
-        if str(row.get("slate_date") or row.get("game_date") or "")[:10] == date_text
-        and str(row.get("prop_type") or "").strip().lower() == "hits"
-        and (_f(row.get("line")) is not None and abs((_f(row.get("line")) or 0.0) - 1.5) <= 1e-9)
-    ]
-    raw_hit_totals, raw_meta = _fetch_raw_hit_totals(candidate_rows)
-    rows, diagnostics = _filter_rows(
-        slate_rows=slate_rows,
+    probable_fallback_context, probable_fallback_meta = _load_probable_starter_display_fallback(
+        slate_date=date_text,
         starter_context=starter_context,
         unavailable_starter_context=unavailable_starter_context,
-        starter_meta=starter_meta,
-        raw_hit_totals=raw_hit_totals,
-        slate_date=date_text,
-        board=args.board,
-        source_artifact_exists=bool(starter_meta.get("exists")),
+        required_min_starts=int(args.starter_required_min_starts),
     )
+    for key, value in probable_fallback_context.items():
+        if key not in starter_context and key not in unavailable_starter_context:
+            unavailable_starter_context[key] = value
+    starter_meta.update(probable_fallback_meta)
+    alternate_book_level_csv = Path(str(args.alternate_book_level_csv).format(date=date_text))
+    if args.board == "alternate_o15":
+        alt_source_rows = _aggregate_alternate_rows(alternate_book_level_csv) if alternate_book_level_csv.exists() else []
+        candidate_rows = [
+            {"date": date_text, "player_id": int(_f(row.get("player_id")) or 0)}
+            for row in alt_source_rows
+            if _f(row.get("player_id")) is not None
+        ]
+    else:
+        candidate_rows = [
+            {
+                "date": str(row.get("slate_date") or row.get("game_date") or "")[:10],
+                "player_id": row.get("player_id"),
+            }
+            for row in slate_rows
+            if str(row.get("slate_date") or row.get("game_date") or "")[:10] == date_text
+            and str(row.get("prop_type") or "").strip().lower() == "hits"
+            and (_f(row.get("line")) is not None and abs((_f(row.get("line")) or 0.0) - 1.5) <= 1e-9)
+        ]
+    raw_hit_totals, raw_meta = _fetch_raw_hit_totals(candidate_rows)
+    qc_context = _load_qc_watch_context(date_text) if args.board in {"watch_o15", "layered_o15", "u15"} else {}
+    ranking_context = _load_ranking_context(date_text) if args.board in {"watch_o15", "layered_o15", "u15"} else {}
+    if args.board == "alternate_o15":
+        rows, diagnostics = _build_alternate_discovery_rows(
+            alternate_book_level_csv=alternate_book_level_csv,
+            slate_rows=slate_rows,
+            starter_context=starter_context,
+            unavailable_starter_context=unavailable_starter_context,
+            starter_meta=starter_meta,
+            raw_hit_totals=raw_hit_totals,
+            slate_date=date_text,
+        )
+        diagnostics.update(
+            {
+                "slate_hits_o15_rows_considered": len(rows),
+                "rows_with_starter_context": sum(
+                    1 for row in rows if _f(row.get("starter_expected_hits_allowed")) is not None
+                ),
+                "rows_with_raw_hit_totals": sum(
+                    1
+                    for row in rows
+                    if _f(row.get("raw_d7_hits_calendar")) is not None
+                    and _f(row.get("raw_d15_hits_calendar")) is not None
+                ),
+                "d7_d15_unit_note": "alternate board uses slate d7_hits/d15_hits as rates; raw calendar totals are context only",
+            }
+        )
+    else:
+        rows, diagnostics = _filter_rows(
+            slate_rows=slate_rows,
+            starter_context=starter_context,
+            unavailable_starter_context=unavailable_starter_context,
+            starter_meta=starter_meta,
+            raw_hit_totals=raw_hit_totals,
+            qc_context=qc_context,
+            ranking_context=ranking_context,
+            slate_date=date_text,
+            board=args.board,
+            source_artifact_exists=bool(starter_meta.get("exists")),
+        )
 
-    prefix = "hits_u15_favorite_audit" if args.board == "u15" else "hits_o15_simple_filter"
+    if args.board == "watch_o15":
+        prefix = "hits_o15_watch_candidates"
+    elif args.board == "layered_o15":
+        prefix = "hits_o15_layered_candidates"
+    elif args.board == "alternate_o15":
+        prefix = "hits_o15_alternate_discovery"
+    else:
+        prefix = "hits_u15_favorite_audit" if args.board == "u15" else "hits_o15_simple_filter"
     out_csv = out_dir / f"{prefix}_{date_text}.csv"
     out_md = out_dir / f"{prefix}_{date_text}.md"
-    _write_csv(out_csv, rows)
+    if args.board == "watch_o15":
+        columns = WATCH_OUTPUT_COLUMNS
+    elif args.board == "layered_o15":
+        columns = LAYERED_OUTPUT_COLUMNS
+    elif args.board == "u15":
+        columns = U15_OUTPUT_COLUMNS
+    elif args.board == "alternate_o15":
+        columns = ALTERNATE_DISCOVERY_COLUMNS
+    else:
+        columns = OUTPUT_COLUMNS
+    _write_csv(out_csv, rows, columns=columns)
 
     meta = {
         "date": date_text,
@@ -1190,7 +2409,14 @@ def main() -> int:
         **raw_meta,
         **diagnostics,
     }
-    _write_md(out_md, rows, meta, board=args.board)
+    if args.board == "layered_o15":
+        _write_layered_md(out_md, rows, meta)
+    elif args.board == "u15":
+        _write_u15_layered_md(out_md, rows, meta)
+    elif args.board == "alternate_o15":
+        _write_alternate_discovery_md(out_md, rows, meta)
+    else:
+        _write_md(out_md, rows, meta, board=args.board)
     _write_policy_doc(out_dir / "hits_environment_snapshot_policy.md")
     _write_policy_audit(out_dir / f"hits_environment_snapshot_policy_audit_{date_text}_{args.board}.md", meta, rows, args.board)
 
@@ -1198,10 +2424,55 @@ def main() -> int:
     statuses = _status_counts(rows)
     u_reason_counts = _u_reason_counts(rows)
     starter_reason_counts = _starter_reason_counts(rows)
-    print("hits_u15_favorite_audit" if args.board == "u15" else "hits_o15_tiered_review_aid")
+    if args.board == "watch_o15":
+        print("hits_o15_watch_candidates")
+    elif args.board == "layered_o15":
+        print("hits_o15_layered_candidates")
+    elif args.board == "alternate_o15":
+        print("hits_o15_alternate_discovery")
+    else:
+        print("hits_u15_favorite_audit" if args.board == "u15" else "hits_o15_tiered_review_aid")
     print(f"date={date_text}")
     print(f"candidate_rows={len(rows)}")
     print("tier_counts=" + ",".join(f"{tier}:{count}" for tier, count in counts.items()))
+    if args.board == "layered_o15":
+        layer_counts = _layered_counts(rows)
+        print(
+            "layer_counts="
+            + ",".join(
+                f"{key}:{layer_counts.get(key, 0)}"
+                for key in (
+                    "all_o15",
+                    "d7_hot",
+                    "d7_d15",
+                    "d7_d15_plus_favorable_starter",
+                    "qc_watch_candidate",
+                )
+            )
+        )
+    if args.board == "u15":
+        layer_counts = _u15_layered_counts(rows)
+        print(
+            "layer_counts="
+            + ",".join(
+                f"{key}:{layer_counts.get(key, 0)}"
+                for key in (
+                    "all_u15",
+                    "d7_cold",
+                    "d7_d15_cold",
+                    "d7_d15_tough_starter",
+                    "qc_watch_candidate",
+                )
+            )
+        )
+    if args.board == "alternate_o15":
+        print(
+            "alternate_layer_counts="
+            + ",".join(
+                f"{key}:{diagnostics.get(key, 0)}"
+                for key in ("alternate_total_rows", "alternate_layer_a", "alternate_layer_b", "alternate_layer_c")
+            )
+        )
     print("starter_context_status_counts=" + ",".join(f"{status}:{count}" for status, count in statuses.items()))
     print(
         "starter_context_reason_counts="

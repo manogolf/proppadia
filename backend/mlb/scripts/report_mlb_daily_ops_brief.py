@@ -544,6 +544,7 @@ def _build_freshness_audit(
     qc_bottom_order_watch: Dict[str, Any],
     user_over_15_watch: Dict[str, Any],
     hits_15_tier_backtest: Dict[str, Any],
+    review_aid_performance: Dict[str, Any],
     total_bases_shadow_summary: Dict[str, Any],
     total_bases_shadow_evaluation: Dict[str, Any],
     feature_lineage_health: Dict[str, Any],
@@ -772,6 +773,25 @@ def _build_freshness_audit(
             note=(
                 f"recommendation={user_over_15_watch.get('recommendation') or 'n/a'}; "
                 f"reason={user_over_15_watch.get('recommendation_reason') or 'n/a'}"
+            ),
+        )
+    )
+    perf_status = str(review_aid_performance.get("status") or "")
+    rows.append(
+        _freshness_row(
+            section="Review Aid Performance",
+            source_file=str(paths["review_aid_performance_json"]),
+            source_date=_date_key(review_aid_performance.get("latest_completed_slate")),
+            expected_date=completed_slate_date,
+            generated_at_utc=str(review_aid_performance.get("generated_at") or ""),
+            mtime_utc=_path_mtime_utc(paths["review_aid_performance_json"]),
+            load_status=str(source_states.get("review_aid_performance_json") or "ok"),
+            cadence="daily after completed-slate reconcile; review aid reporting only",
+            freshness_status=("source_not_ready" if perf_status == "source_not_ready" else ""),
+            note=(
+                f"status={perf_status or 'n/a'}; "
+                f"board_rows={review_aid_performance.get('board_rows_loaded', 'n/a')}; "
+                f"matched={review_aid_performance.get('matched_rows', 'n/a')}"
             ),
         )
     )
@@ -1080,6 +1100,231 @@ def _extract_user_over_15_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "placed_windows": placed_windows,
         "rows": rows,
     }
+
+
+def _extract_hits_o15_watch_candidates(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    items = [dict(row) for row in rows if isinstance(row, dict)]
+    tier_counts: Dict[str, int] = {}
+    for row in items:
+        tier = str(row.get("combined_tier") or "missing")
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+    def sort_key(row: Dict[str, Any]) -> tuple[int, int, float, str]:
+        hitter_rank = {"A": 0, "B": 1, "C": 2}.get(str(row.get("hitter_tier") or "C"), 9)
+        pitcher_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "U": 4}.get(str(row.get("pitcher_tier") or "U"), 9)
+        qc_score = _as_float(row.get("qc_score"))
+        return (
+            hitter_rank,
+            pitcher_rank,
+            -(qc_score if qc_score is not None else -1.0),
+            str(row.get("player_name") or ""),
+        )
+
+    return {
+        "row_count": len(items),
+        "tier_counts": dict(sorted(tier_counts.items())),
+        "aa_count": tier_counts.get("A/A", 0),
+        "ab_count": tier_counts.get("A/B", 0),
+        "top_candidates": sorted(items, key=sort_key)[:5],
+    }
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _extract_hits_o15_layered_candidates(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    items = [dict(row) for row in rows if isinstance(row, dict)]
+
+    def sort_key(row: Dict[str, Any]) -> tuple[int, int, float, float, float, float, str]:
+        hitter_rank = {"A": 0, "B": 1, "C": 2}.get(str(row.get("hitter_tier") or "C"), 9)
+        pitcher_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "U": 4}.get(str(row.get("pitcher_tier") or "U"), 9)
+        d7 = _as_float(row.get("d7_hits_rate"))
+        d15 = _as_float(row.get("d15_hits_rate"))
+        starter = _as_float(row.get("starter_expected_hits_allowed"))
+        market = _as_float(row.get("market_price"))
+        return (
+            hitter_rank,
+            pitcher_rank,
+            -(d7 if d7 is not None else -1.0),
+            -(d15 if d15 is not None else -1.0),
+            -(starter if starter is not None else -1.0),
+            -(market if market is not None else -9999.0),
+            str(row.get("player") or row.get("player_name") or ""),
+        )
+
+    def top(layer: str, limit: int = 3) -> List[Dict[str, Any]]:
+        return sorted(
+            [row for row in items if str(row.get("layer_label") or "") == layer],
+            key=sort_key,
+        )[:limit]
+
+    def tier_count(layer: str, tier: str) -> int:
+        return sum(
+            1
+            for row in items
+            if str(row.get("layer_label") or "") == layer and str(row.get("combined_tier") or "") == tier
+        )
+
+    return {
+        "row_count": len(items),
+        "d7_hot_count": sum(1 for row in items if _truthy(row.get("d7_hot_candidate"))),
+        "d7_d15_count": sum(
+            1
+            for row in items
+            if _truthy(row.get("d7_hot_candidate")) and _truthy(row.get("d15_consistent_candidate"))
+        ),
+        "d7_d15_favorable_starter_count": sum(
+            1
+            for row in items
+            if _truthy(row.get("d7_hot_candidate"))
+            and _truthy(row.get("d15_consistent_candidate"))
+            and _truthy(row.get("favorable_starter_candidate"))
+        ),
+        "qc_watch_count": sum(1 for row in items if _truthy(row.get("watch_candidate"))),
+        "aa_counts": {
+            "layer_4_qc_d7_d15_starter": tier_count("layer_4_qc_d7_d15_starter", "A/A"),
+            "layer_3_d7_d15_starter_non_qc": tier_count("layer_3_d7_d15_starter_non_qc", "A/A"),
+            "layer_2_d7_d15_no_favorable_starter": tier_count("layer_2_d7_d15_no_favorable_starter", "A/A"),
+            "layer_1_d7_hot_not_d15_consistent": tier_count("layer_1_d7_hot_not_d15_consistent", "A/A"),
+        },
+        "ab_counts": {
+            "layer_4_qc_d7_d15_starter": tier_count("layer_4_qc_d7_d15_starter", "A/B"),
+            "layer_3_d7_d15_starter_non_qc": tier_count("layer_3_d7_d15_starter_non_qc", "A/B"),
+            "layer_2_d7_d15_no_favorable_starter": tier_count("layer_2_d7_d15_no_favorable_starter", "A/B"),
+            "layer_1_d7_hot_not_d15_consistent": tier_count("layer_1_d7_hot_not_d15_consistent", "A/B"),
+        },
+        "top_qc_watch_candidates": top("layer_4_qc_d7_d15_starter", 3),
+        "top_non_qc_d7_d15_favorable_starter": top("layer_3_d7_d15_starter_non_qc", 3),
+    }
+
+
+def _extract_hits_u15_favorite_audit(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    items = [dict(row) for row in rows if isinstance(row, dict)]
+
+    def sort_key(row: Dict[str, Any]) -> tuple[int, int, float, float, float, float, str]:
+        layer_rank = {
+            "layer_4_qc_d7_d15_tough_starter": 0,
+            "layer_3_d7_d15_tough_starter_non_qc": 1,
+            "layer_2_d7_d15_no_tough_starter": 2,
+            "layer_1_d7_cold_not_d15_consistent": 3,
+            "all_u15_other": 4,
+        }.get(str(row.get("layer_label") or ""), 9)
+        hitter_rank = {"A": 0, "B": 1, "C": 2}.get(str(row.get("hitter_tier") or "C"), 9)
+        pitcher_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "U": 4}.get(str(row.get("pitcher_tier") or "U"), 9)
+        d7 = _as_float(row.get("d7_hits_rate"))
+        d15 = _as_float(row.get("d15_hits_rate"))
+        starter = _as_float(row.get("starter_expected_hits_allowed"))
+        model_prob = _as_float(row.get("model_prob"))
+        return (
+            layer_rank,
+            hitter_rank,
+            pitcher_rank,
+            d7 if d7 is not None else 999.0,
+            d15 if d15 is not None else 999.0,
+            starter if starter is not None else 999.0,
+            -(model_prob if model_prob is not None else -1.0),
+            str(row.get("player") or row.get("player_name") or ""),
+        )
+
+    def top(layer: str, limit: int = 3) -> List[Dict[str, Any]]:
+        return sorted(
+            [row for row in items if str(row.get("layer_label") or "") == layer],
+            key=sort_key,
+        )[:limit]
+
+    def tier_count(layer: str, tier: str) -> int:
+        return sum(
+            1
+            for row in items
+            if str(row.get("layer_label") or "") == layer and str(row.get("combined_tier") or "") == tier
+        )
+
+    return {
+        "row_count": len(items),
+        "d7_cold_count": sum(1 for row in items if _truthy(row.get("d7_cold_candidate"))),
+        "d7_d15_cold_count": sum(
+            1
+            for row in items
+            if _truthy(row.get("d7_cold_candidate")) and _truthy(row.get("d15_cold_consistent_candidate"))
+        ),
+        "d7_d15_tough_starter_count": sum(
+            1
+            for row in items
+            if _truthy(row.get("d7_cold_candidate"))
+            and _truthy(row.get("d15_cold_consistent_candidate"))
+            and _truthy(row.get("tough_starter_candidate"))
+        ),
+        "qc_watch_count": sum(1 for row in items if _truthy(row.get("watch_candidate"))),
+        "aa_counts": {
+            "layer_4_qc_d7_d15_tough_starter": tier_count("layer_4_qc_d7_d15_tough_starter", "A/A"),
+            "layer_3_d7_d15_tough_starter_non_qc": tier_count("layer_3_d7_d15_tough_starter_non_qc", "A/A"),
+            "layer_2_d7_d15_no_tough_starter": tier_count("layer_2_d7_d15_no_tough_starter", "A/A"),
+            "layer_1_d7_cold_not_d15_consistent": tier_count("layer_1_d7_cold_not_d15_consistent", "A/A"),
+        },
+        "ab_counts": {
+            "layer_4_qc_d7_d15_tough_starter": tier_count("layer_4_qc_d7_d15_tough_starter", "A/B"),
+            "layer_3_d7_d15_tough_starter_non_qc": tier_count("layer_3_d7_d15_tough_starter_non_qc", "A/B"),
+            "layer_2_d7_d15_no_tough_starter": tier_count("layer_2_d7_d15_no_tough_starter", "A/B"),
+            "layer_1_d7_cold_not_d15_consistent": tier_count("layer_1_d7_cold_not_d15_consistent", "A/B"),
+        },
+        "top_qc_watch_candidates": top("layer_4_qc_d7_d15_tough_starter", 3),
+        "top_non_qc_d7_d15_tough_starter": top("layer_3_d7_d15_tough_starter_non_qc", 3),
+    }
+
+
+def _extract_hits_o15_alternate_discovery(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    items = [dict(row) for row in rows if isinstance(row, dict)]
+
+    def sort_key(row: Dict[str, Any]) -> tuple[int, int, float, float, float, float, str]:
+        layer_rank = {
+            "alternate_layer_a_d7_d15_starter": 0,
+            "alternate_layer_b_d7_d15": 1,
+            "alternate_layer_c_d7_hot": 2,
+            "alternate_other": 3,
+        }.get(str(row.get("alternate_layer") or ""), 9)
+        hitter_rank = {"A": 0, "B": 1, "C": 2}.get(str(row.get("hitter_tier") or "C"), 9)
+        pitcher_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "U": 4}.get(str(row.get("pitcher_tier") or "U"), 9)
+        d7 = _as_float(row.get("d7_hits_rate"))
+        d15 = _as_float(row.get("d15_hits_rate"))
+        starter = _as_float(row.get("starter_expected_hits_allowed"))
+        price = _as_float(row.get("best_over_price"))
+        return (
+            layer_rank,
+            hitter_rank,
+            pitcher_rank,
+            -(d7 if d7 is not None else -1.0),
+            -(d15 if d15 is not None else -1.0),
+            -(starter if starter is not None else -1.0),
+            -(price if price is not None else -9999.0),
+            str(row.get("player") or row.get("player_name") or ""),
+        )
+
+    return {
+        "row_count": len(items),
+        "d7_hot_count": sum(1 for row in items if _truthy(row.get("d7_hot_candidate"))),
+        "d7_d15_count": sum(
+            1
+            for row in items
+            if _truthy(row.get("d7_hot_candidate")) and _truthy(row.get("d15_consistent_candidate"))
+        ),
+        "d7_d15_starter_count": sum(
+            1
+            for row in items
+            if _truthy(row.get("d7_hot_candidate"))
+            and _truthy(row.get("d15_consistent_candidate"))
+            and _truthy(row.get("favorable_starter_candidate"))
+        ),
+        "top_candidates": sorted(items, key=sort_key)[:3],
+    }
+
+
+def _extract_review_aid_performance(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(js, dict):
+        return {}
+    return dict(js)
 
 
 def _extract_total_bases_shadow_summary(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1590,7 +1835,12 @@ def build_markdown(
     overlap_watch: Dict[str, Any],
     qc_bottom_order_watch: Dict[str, Any],
     user_over_15_watch: Dict[str, Any],
+    hits_o15_watch_candidates: Dict[str, Any],
+    hits_o15_layered_candidates: Dict[str, Any],
+    hits_u15_favorite_audit: Dict[str, Any],
+    hits_o15_alternate_discovery: Dict[str, Any],
     hits_15_tier_backtest: Dict[str, Any],
+    review_aid_performance: Dict[str, Any],
     total_bases_shadow_summary: Dict[str, Any],
     total_bases_shadow_evaluation: Dict[str, Any],
     feature_lineage_health: Dict[str, Any],
@@ -1890,6 +2140,208 @@ def build_markdown(
             f"`{_num_fmt(row.get('avg_d7_hits_per_game'))}` | `{_pct(row.get('placed_wager_capture_rate'))}` | "
             f"`{row.get('sample_warning','n/a')}` | `{row.get('drift_flag','n/a')}` |"
         )
+    lines.append("")
+
+    lines.append("## Hits Over 1.5 Watch Candidates")
+    lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
+    lines.append(
+        f"- Candidate definition: Quick Card candidate + hits over 1.5 + `d7_hits_per_game > 1.0` + "
+        f"`starter_expected_hits_allowed >= 5.0`."
+    )
+    lines.append(
+        f"- Row count: `{hits_o15_watch_candidates.get('row_count', 0)}` | "
+        f"A/A `{hits_o15_watch_candidates.get('aa_count', 0)}` | "
+        f"A/B `{hits_o15_watch_candidates.get('ab_count', 0)}`"
+    )
+    top_candidates = [
+        row for row in (hits_o15_watch_candidates.get("top_candidates") or []) if isinstance(row, dict)
+    ][:5]
+    if top_candidates:
+        lines.append("| player | team | opp | tier | odds | d7 | d15 | starter exp | QC score | ranking score |")
+        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
+        for row in top_candidates:
+            lines.append(
+                f"| {row.get('player_name') or row.get('player') or ''} | {row.get('team') or ''} | "
+                f"{row.get('opponent') or ''} | `{row.get('combined_tier') or ''}` | "
+                f"`{_num_fmt(row.get('market_price'))}` | `{_num_fmt(row.get('d7_hits_rate'))}` | "
+                f"`{_num_fmt(row.get('d15_hits_rate'))}` | "
+                f"`{_num_fmt(row.get('starter_expected_hits_allowed'))}` | "
+                f"`{_num_fmt(row.get('qc_score'))}` | `{_num_fmt(row.get('ranking_score'))}` |"
+            )
+    else:
+        lines.append("- Top candidates: none available from the current-slate watch candidate artifact.")
+    lines.append("")
+
+    lines.append("## Hits Over 1.5 Layered Candidates")
+    lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
+    lines.append(
+        f"- Counts: d7_hot `{hits_o15_layered_candidates.get('d7_hot_count', 0)}` | "
+        f"d7+d15 `{hits_o15_layered_candidates.get('d7_d15_count', 0)}` | "
+        f"d7+d15+starter `{hits_o15_layered_candidates.get('d7_d15_favorable_starter_count', 0)}` | "
+        f"QC watch `{hits_o15_layered_candidates.get('qc_watch_count', 0)}`"
+    )
+    aa_counts = hits_o15_layered_candidates.get("aa_counts") if isinstance(hits_o15_layered_candidates.get("aa_counts"), dict) else {}
+    ab_counts = hits_o15_layered_candidates.get("ab_counts") if isinstance(hits_o15_layered_candidates.get("ab_counts"), dict) else {}
+    lines.append(
+        f"- A/A counts: QC watch `{aa_counts.get('layer_4_qc_d7_d15_starter', 0)}` | "
+        f"d7+d15+starter non-QC `{aa_counts.get('layer_3_d7_d15_starter_non_qc', 0)}` | "
+        f"d7+d15 no-starter `{aa_counts.get('layer_2_d7_d15_no_favorable_starter', 0)}` | "
+        f"d7-only discovery `{aa_counts.get('layer_1_d7_hot_not_d15_consistent', 0)}`"
+    )
+    lines.append(
+        f"- A/B counts: QC watch `{ab_counts.get('layer_4_qc_d7_d15_starter', 0)}` | "
+        f"d7+d15+starter non-QC `{ab_counts.get('layer_3_d7_d15_starter_non_qc', 0)}` | "
+        f"d7+d15 no-starter `{ab_counts.get('layer_2_d7_d15_no_favorable_starter', 0)}` | "
+        f"d7-only discovery `{ab_counts.get('layer_1_d7_hot_not_d15_consistent', 0)}`"
+    )
+
+    def layered_candidate_line(row: Dict[str, Any]) -> str:
+        return (
+            f"{row.get('player') or row.get('player_name') or ''} "
+            f"({row.get('team') or ''} vs {row.get('opponent') or ''}, "
+            f"{row.get('combined_tier') or ''}, odds `{_num_fmt(row.get('market_price'))}`, "
+            f"d7 `{_num_fmt(row.get('d7_hits_rate'))}`, d15 `{_num_fmt(row.get('d15_hits_rate'))}`, "
+            f"starter `{_num_fmt(row.get('starter_expected_hits_allowed'))}`)"
+        )
+
+    top_layered_qc = [
+        row for row in (hits_o15_layered_candidates.get("top_qc_watch_candidates") or []) if isinstance(row, dict)
+    ][:3]
+    top_layered_non_qc = [
+        row
+        for row in (hits_o15_layered_candidates.get("top_non_qc_d7_d15_favorable_starter") or [])
+        if isinstance(row, dict)
+    ][:3]
+    if top_layered_qc:
+        lines.append("- Top QC watch candidates: " + "; ".join(layered_candidate_line(row) for row in top_layered_qc))
+    else:
+        lines.append("- Top QC watch candidates: none available.")
+    if top_layered_non_qc:
+        lines.append(
+            "- Top non-QC d7+d15+favorable starter candidates: "
+            + "; ".join(layered_candidate_line(row) for row in top_layered_non_qc)
+        )
+    else:
+        lines.append("- Top non-QC d7+d15+favorable starter candidates: none available.")
+    lines.append("")
+
+    lines.append("## Hits Under 1.5 Favorite Audit")
+    lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
+    lines.append(
+        f"- Counts: all u1.5 `{hits_u15_favorite_audit.get('row_count', 0)}` | "
+        f"d7 cold `{hits_u15_favorite_audit.get('d7_cold_count', 0)}` | "
+        f"d7+d15 cold `{hits_u15_favorite_audit.get('d7_d15_cold_count', 0)}` | "
+        f"d7+d15+tough starter `{hits_u15_favorite_audit.get('d7_d15_tough_starter_count', 0)}` | "
+        f"QC watch `{hits_u15_favorite_audit.get('qc_watch_count', 0)}`"
+    )
+    u15_aa_counts = (
+        hits_u15_favorite_audit.get("aa_counts")
+        if isinstance(hits_u15_favorite_audit.get("aa_counts"), dict)
+        else {}
+    )
+    u15_ab_counts = (
+        hits_u15_favorite_audit.get("ab_counts")
+        if isinstance(hits_u15_favorite_audit.get("ab_counts"), dict)
+        else {}
+    )
+    lines.append(
+        f"- A/A counts: QC watch `{u15_aa_counts.get('layer_4_qc_d7_d15_tough_starter', 0)}` | "
+        f"d7+d15+tough starter non-QC `{u15_aa_counts.get('layer_3_d7_d15_tough_starter_non_qc', 0)}` | "
+        f"d7+d15 no-tough-starter `{u15_aa_counts.get('layer_2_d7_d15_no_tough_starter', 0)}` | "
+        f"d7-only discovery `{u15_aa_counts.get('layer_1_d7_cold_not_d15_consistent', 0)}`"
+    )
+    lines.append(
+        f"- A/B counts: QC watch `{u15_ab_counts.get('layer_4_qc_d7_d15_tough_starter', 0)}` | "
+        f"d7+d15+tough starter non-QC `{u15_ab_counts.get('layer_3_d7_d15_tough_starter_non_qc', 0)}` | "
+        f"d7+d15 no-tough-starter `{u15_ab_counts.get('layer_2_d7_d15_no_tough_starter', 0)}` | "
+        f"d7-only discovery `{u15_ab_counts.get('layer_1_d7_cold_not_d15_consistent', 0)}`"
+    )
+
+    def u15_candidate_line(row: Dict[str, Any]) -> str:
+        return (
+            f"{row.get('player') or row.get('player_name') or ''} "
+            f"({row.get('team') or ''} vs {row.get('opponent') or ''}, "
+            f"{row.get('combined_tier') or ''}, odds `{_num_fmt(row.get('market_price'))}`, "
+            f"d7 `{_num_fmt(row.get('d7_hits_rate'))}`, d15 `{_num_fmt(row.get('d15_hits_rate'))}`, "
+            f"starter `{_num_fmt(row.get('starter_expected_hits_allowed'))}`)"
+        )
+
+    top_u15_qc = [
+        row for row in (hits_u15_favorite_audit.get("top_qc_watch_candidates") or []) if isinstance(row, dict)
+    ][:3]
+    top_u15_non_qc = [
+        row
+        for row in (hits_u15_favorite_audit.get("top_non_qc_d7_d15_tough_starter") or [])
+        if isinstance(row, dict)
+    ][:3]
+    if top_u15_qc:
+        lines.append("- Top QC watch candidates: " + "; ".join(u15_candidate_line(row) for row in top_u15_qc))
+    else:
+        lines.append("- Top QC watch candidates: none available.")
+    if top_u15_non_qc:
+        lines.append(
+            "- Top non-QC d7+d15+tough starter candidates: "
+            + "; ".join(u15_candidate_line(row) for row in top_u15_non_qc)
+        )
+    else:
+        lines.append("- Top non-QC d7+d15+tough starter candidates: none available.")
+    lines.append("")
+
+    lines.append("## Hits 1.5 Alternate Discovery")
+    lines.append("- Scope: DISCOVERY ONLY; alternate market; Over-only feed; not production scoring, uploads, or grading.")
+    lines.append(
+        f"- Counts: total `{hits_o15_alternate_discovery.get('row_count', 0)}` | "
+        f"d7+d15 `{hits_o15_alternate_discovery.get('d7_d15_count', 0)}` | "
+        f"d7+d15+starter `{hits_o15_alternate_discovery.get('d7_d15_starter_count', 0)}`"
+    )
+
+    def alternate_candidate_line(row: Dict[str, Any]) -> str:
+        return (
+            f"{row.get('player') or row.get('player_name') or ''} "
+            f"({row.get('team') or ''} vs {row.get('opponent') or ''}, "
+            f"{row.get('combined_tier') or ''}, best over `{_num_fmt(row.get('best_over_price'))}`, "
+            f"d7 `{_num_fmt(row.get('d7_hits_rate'))}`, d15 `{_num_fmt(row.get('d15_hits_rate'))}`, "
+            f"starter `{_num_fmt(row.get('starter_expected_hits_allowed'))}`)"
+        )
+
+    top_alternate = [
+        row for row in (hits_o15_alternate_discovery.get("top_candidates") or []) if isinstance(row, dict)
+    ][:3]
+    if top_alternate:
+        lines.append("- Top alternate candidates: " + "; ".join(alternate_candidate_line(row) for row in top_alternate))
+    else:
+        lines.append("- Top alternate candidates: none available.")
+    lines.append("")
+
+    lines.append("## Review Aid Performance")
+    lines.append(provenance("Review Aid Performance"))
+    lines.append("- Scope: review aid outcome tracking only; not a production rule, selector, upload filter, or threshold change.")
+    lines.append(
+        f"- Status: `{review_aid_performance.get('status') or 'n/a'}` | "
+        f"latest completed slate `{review_aid_performance.get('latest_completed_slate') or 'n/a'}` | "
+        f"board rows `{review_aid_performance.get('board_rows_loaded', 'n/a')}` | "
+        f"matched `{review_aid_performance.get('matched_rows', 'n/a')}`"
+    )
+
+    def perf_line(label: str, row: Dict[str, Any]) -> str:
+        if not row:
+            return f"- {label}: no latest completed slate rows."
+        return (
+            f"- {label}: `{row.get('wins', 0)}-{row.get('losses', 0)}-{row.get('pushes', 0)}` "
+            f"ROI `{_pct(row.get('roi'))}` over `{row.get('resolved', 0)}` resolved "
+            f"(rows `{row.get('rows', 0)}`)."
+        )
+
+    callouts = review_aid_performance.get("callouts") if isinstance(review_aid_performance.get("callouts"), dict) else {}
+    lines.append(perf_line("o1.5 Layer 4", callouts.get("o15_layer_4_latest") or {}))
+    lines.append(perf_line("o1.5 Layer 3", callouts.get("o15_layer_3_latest") or {}))
+    lines.append(perf_line("o1.5 alternate Layer A", callouts.get("o15_alternate_layer_a_latest") or {}))
+    lines.append(perf_line("u1.5 Layer 4", callouts.get("u15_layer_4_latest") or {}))
+    lines.append(perf_line("u1.5 Layer 3", callouts.get("u15_layer_3_latest") or {}))
+    lines.append(perf_line("u1.5 Layer 2", callouts.get("u15_layer_2_latest") or {}))
+    lines.append(perf_line("u1.5 A/A", callouts.get("u15_aa_latest") or {}))
+    if str(review_aid_performance.get("status") or "") == "source_not_ready":
+        lines.append(f"- Source-not-ready detail: {review_aid_performance.get('status_detail') or 'n/a'}")
     lines.append("")
 
     tier_top_o15 = [
@@ -2200,7 +2652,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--overlap-watch-json", default="artifacts/analysis/mlb/v2_qc_diagnostics/ranking_vs_quick_card_overlap_watch.json")
     ap.add_argument("--qc-bottom-order-watch-json", default="artifacts/analysis/mlb/qc_bottom_order_under_watch.json")
     ap.add_argument("--user-over-15-watch-json", default="artifacts/analysis/mlb/user_over_15_filter_watch.json")
+    ap.add_argument(
+        "--hits-o15-watch-candidates-csv",
+        default="artifacts/analysis/mlb/review_aids/hits_o15_watch_candidates_{current_slate_date}.csv",
+    )
+    ap.add_argument(
+        "--hits-o15-layered-candidates-csv",
+        default="artifacts/analysis/mlb/review_aids/hits_o15_layered_candidates_{current_slate_date}.csv",
+    )
+    ap.add_argument(
+        "--hits-u15-favorite-audit-csv",
+        default="artifacts/analysis/mlb/review_aids/hits_u15_favorite_audit_{current_slate_date}.csv",
+    )
+    ap.add_argument(
+        "--hits-o15-alternate-discovery-csv",
+        default="artifacts/analysis/mlb/review_aids/hits_o15_alternate_discovery_{current_slate_date}.csv",
+    )
     ap.add_argument("--hits-15-tier-backtest-json", default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json")
+    ap.add_argument(
+        "--review-aid-performance-json",
+        default="artifacts/analysis/mlb/review_aids/performance/review_aid_performance_summary.json",
+    )
     ap.add_argument(
         "--total-bases-shadow-summary-json",
         default="artifacts/analysis/mlb/model_quality/total_bases_shadow/{current_slate_date}/total_bases_shadow_summary_{current_slate_date}.json",
@@ -2247,6 +2719,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "qc_bottom_order_watch_json": Path(args.qc_bottom_order_watch_json),
         "user_over_15_watch_json": Path(args.user_over_15_watch_json),
         "hits_15_tier_backtest_json": Path(args.hits_15_tier_backtest_json),
+        "review_aid_performance_json": Path(args.review_aid_performance_json),
         "total_bases_shadow_evaluation_json": Path(args.total_bases_shadow_evaluation_json),
         "feature_lineage_health_json": Path(args.feature_lineage_health_json),
         "input_refresh_status_json": Path(args.input_refresh_status_json),
@@ -2255,6 +2728,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     }
     paths["total_bases_shadow_summary_json"] = Path(
         str(args.total_bases_shadow_summary_json).format(
+            report_date=report_date,
+            completed_slate_date=completed_slate_date,
+            current_slate_date=current_slate_date,
+        )
+    )
+    paths["hits_o15_watch_candidates_csv"] = Path(
+        str(args.hits_o15_watch_candidates_csv).format(
+            report_date=report_date,
+            completed_slate_date=completed_slate_date,
+            current_slate_date=current_slate_date,
+        )
+    )
+    paths["hits_o15_layered_candidates_csv"] = Path(
+        str(args.hits_o15_layered_candidates_csv).format(
+            report_date=report_date,
+            completed_slate_date=completed_slate_date,
+            current_slate_date=current_slate_date,
+        )
+    )
+    paths["hits_u15_favorite_audit_csv"] = Path(
+        str(args.hits_u15_favorite_audit_csv).format(
+            report_date=report_date,
+            completed_slate_date=completed_slate_date,
+            current_slate_date=current_slate_date,
+        )
+    )
+    paths["hits_o15_alternate_discovery_csv"] = Path(
+        str(args.hits_o15_alternate_discovery_csv).format(
             report_date=report_date,
             completed_slate_date=completed_slate_date,
             current_slate_date=current_slate_date,
@@ -2280,7 +2781,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     overlap_watch_raw, overlap_watch_err = _load_json(paths["overlap_watch_json"])
     qc_watch_raw, qc_watch_err = _load_json(paths["qc_bottom_order_watch_json"])
     user_over_15_raw, user_over_15_err = _load_json(paths["user_over_15_watch_json"])
+    hits_o15_watch_candidate_rows, hits_o15_watch_candidates_err = _load_csv_rows(
+        paths["hits_o15_watch_candidates_csv"]
+    )
+    hits_o15_layered_candidate_rows, hits_o15_layered_candidates_err = _load_csv_rows(
+        paths["hits_o15_layered_candidates_csv"]
+    )
+    hits_u15_favorite_audit_rows, hits_u15_favorite_audit_err = _load_csv_rows(
+        paths["hits_u15_favorite_audit_csv"]
+    )
+    hits_o15_alternate_discovery_rows, hits_o15_alternate_discovery_err = _load_csv_rows(
+        paths["hits_o15_alternate_discovery_csv"]
+    )
     hits_15_tier_raw, hits_15_tier_err = _load_json(paths["hits_15_tier_backtest_json"])
+    review_aid_performance_raw, review_aid_performance_err = _load_json(paths["review_aid_performance_json"])
     total_bases_shadow_summary_raw, total_bases_shadow_summary_err = _load_json(paths["total_bases_shadow_summary_json"])
     total_bases_shadow_evaluation_raw, total_bases_shadow_evaluation_err = _load_json(paths["total_bases_shadow_evaluation_json"])
     feature_lineage_health_raw, feature_lineage_health_err = _load_json(paths["feature_lineage_health_json"])
@@ -2310,7 +2824,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "overlap_watch_json": overlap_watch_err or "ok",
         "qc_bottom_order_watch_json": qc_watch_err or "ok",
         "user_over_15_watch_json": user_over_15_err or "ok",
+        "hits_o15_watch_candidates_csv": hits_o15_watch_candidates_err or "ok",
+        "hits_o15_layered_candidates_csv": hits_o15_layered_candidates_err or "ok",
+        "hits_u15_favorite_audit_csv": hits_u15_favorite_audit_err or "ok",
+        "hits_o15_alternate_discovery_csv": hits_o15_alternate_discovery_err or "ok",
         "hits_15_tier_backtest_json": hits_15_tier_err or "ok",
+        "review_aid_performance_json": review_aid_performance_err or "ok",
         "total_bases_shadow_summary_json": total_bases_shadow_summary_err or "ok",
         "total_bases_shadow_evaluation_json": total_bases_shadow_evaluation_err or "ok",
         "feature_lineage_health_json": feature_lineage_health_err or "ok",
@@ -2343,7 +2862,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     overlap_watch = _extract_overlap_watch(overlap_watch_raw if isinstance(overlap_watch_raw, dict) else None)
     qc_bottom_order_watch = _extract_qc_bottom_order_watch(qc_watch_raw if isinstance(qc_watch_raw, dict) else None)
     user_over_15_watch = _extract_user_over_15_watch(user_over_15_raw if isinstance(user_over_15_raw, dict) else None)
+    hits_o15_watch_candidates = _extract_hits_o15_watch_candidates(hits_o15_watch_candidate_rows)
+    hits_o15_layered_candidates = _extract_hits_o15_layered_candidates(hits_o15_layered_candidate_rows)
+    hits_u15_favorite_audit = _extract_hits_u15_favorite_audit(hits_u15_favorite_audit_rows)
+    hits_o15_alternate_discovery = _extract_hits_o15_alternate_discovery(hits_o15_alternate_discovery_rows)
     hits_15_tier_backtest = hits_15_tier_raw if isinstance(hits_15_tier_raw, dict) else {}
+    review_aid_performance = _extract_review_aid_performance(
+        review_aid_performance_raw if isinstance(review_aid_performance_raw, dict) else None
+    )
     total_bases_shadow_summary = _extract_total_bases_shadow_summary(
         total_bases_shadow_summary_raw if isinstance(total_bases_shadow_summary_raw, dict) else None
     )
@@ -2373,6 +2899,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         qc_bottom_order_watch=qc_bottom_order_watch,
         user_over_15_watch=user_over_15_watch,
         hits_15_tier_backtest=hits_15_tier_backtest,
+        review_aid_performance=review_aid_performance,
         total_bases_shadow_summary=total_bases_shadow_summary,
         total_bases_shadow_evaluation=total_bases_shadow_evaluation,
         feature_lineage_health=feature_lineage_health,
@@ -2415,7 +2942,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         overlap_watch=overlap_watch,
         qc_bottom_order_watch=qc_bottom_order_watch,
         user_over_15_watch=user_over_15_watch,
+        hits_o15_watch_candidates=hits_o15_watch_candidates,
+        hits_o15_layered_candidates=hits_o15_layered_candidates,
+        hits_u15_favorite_audit=hits_u15_favorite_audit,
+        hits_o15_alternate_discovery=hits_o15_alternate_discovery,
         hits_15_tier_backtest=hits_15_tier_backtest,
+        review_aid_performance=review_aid_performance,
         total_bases_shadow_summary=total_bases_shadow_summary,
         total_bases_shadow_evaluation=total_bases_shadow_evaluation,
         feature_lineage_health=feature_lineage_health,
@@ -2450,7 +2982,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "ranking_qc_overlap_watch": overlap_watch,
         "qc_bottom_order_watch": qc_bottom_order_watch,
         "user_over_15_filter_watch": user_over_15_watch,
+        "hits_o15_watch_candidates": hits_o15_watch_candidates,
+        "hits_o15_layered_candidates": hits_o15_layered_candidates,
+        "hits_u15_favorite_audit": hits_u15_favorite_audit,
+        "hits_o15_alternate_discovery": hits_o15_alternate_discovery,
         "hits_15_tier_backtest": hits_15_tier_backtest,
+        "review_aid_performance": review_aid_performance,
         "total_bases_shadow_summary": total_bases_shadow_summary,
         "total_bases_shadow_evaluation": total_bases_shadow_evaluation,
         "feature_lineage_health": feature_lineage_health,
