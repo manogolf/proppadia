@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import re
+import urllib.request
 from datetime import date, datetime, timedelta
 from math import sqrt
 from pathlib import Path
@@ -14,6 +15,15 @@ from statistics import mean, pstdev
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from backend.shared.db.pg import pg_fetchall
+from backend.mlb.identity import (
+    GameIdentityInput,
+    GameIdentityResolver,
+    MarketIdentityInput,
+    PlayerIdentityInput,
+    PlayerIdentityResolver,
+    canonical_team_code as resolve_canonical_team_code,
+    resolve_market_identity,
+)
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     normalizeTeamAbbreviation,
@@ -54,6 +64,16 @@ def _ensure_parent(path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _write_generic_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
+    _ensure_parent(path)
+    fieldnames = list(rows[0].keys()) if rows else []
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
 def _canonical_team_code(value: Any) -> str:
     if value is None:
         return ""
@@ -64,6 +84,10 @@ def _canonical_team_code(value: Any) -> str:
         abbr = getFullTeamAbbreviationFromID(int(text))
         return str(normalizeTeamAbbreviation(abbr) or "").strip()
     return str(normalizeTeamAbbreviation(text) or "").strip()
+
+
+def _identity_team_code(value: Any) -> str:
+    return resolve_canonical_team_code(value).canonical_team
 
 
 def _norm_player_name(value: Any) -> str:
@@ -88,6 +112,13 @@ def _team_name_reverse() -> Dict[str, str]:
             out[full_name.lower()] = abbr
     out["athletics"] = "OAK"
     return out
+
+
+def _team_abbr_from_schedule_team(team: Dict[str, Any]) -> str:
+    raw_id = _as_int(team.get("id"))
+    if raw_id is not None:
+        return _canonical_team_code(raw_id)
+    return _canonical_team_code(team.get("abbreviation") or team.get("name"))
 
 
 def _blend_weighted(
@@ -980,9 +1011,99 @@ def _load_odds_pitcher_hits_allowed_rows(path: Path, slate_date: str) -> List[Di
     return rows
 
 
-def _resolve_odds_pitcher_rows(rows: Sequence[Dict[str, Any]], slate_date: str) -> List[Dict[str, Any]]:
+def _load_probable_starter_rows(slate_date: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    source_url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={slate_date}&hydrate=probablePitcher"
+    try:
+        with urllib.request.urlopen(source_url, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        return [], {
+            "probable_starter_source": source_url,
+            "probable_starter_status": "error",
+            "probable_starter_error": f"{type(exc).__name__}: {exc}",
+            "probable_starters_total": 0,
+        }
+
+    out: List[Dict[str, Any]] = []
+    for date_block in payload.get("dates") or []:
+        for game in date_block.get("games") or []:
+            if str(game.get("officialDate") or "")[:10] != slate_date:
+                continue
+            teams = game.get("teams") or {}
+            home = teams.get("home") or {}
+            away = teams.get("away") or {}
+            home_team = _team_abbr_from_schedule_team(home.get("team") or {})
+            away_team = _team_abbr_from_schedule_team(away.get("team") or {})
+            if not home_team or not away_team:
+                continue
+            for pitcher_team, offense_team, side in (
+                (away_team, home_team, away),
+                (home_team, away_team, home),
+            ):
+                pitcher = side.get("probablePitcher") or {}
+                player_id = _as_int(pitcher.get("id"))
+                player_name = str(pitcher.get("fullName") or pitcher.get("name") or "").strip()
+                if player_id is None and not player_name:
+                    continue
+                out.append(
+                    {
+                        "game_id": _as_int(game.get("gamePk")),
+                        "game_date": slate_date,
+                        "home_team_code": home_team,
+                        "away_team_code": away_team,
+                        "pitcher_team": pitcher_team,
+                        "offense_team": offense_team,
+                        "player_id": player_id,
+                        "player_name": player_name,
+                        "probable_starter_source": source_url,
+                    }
+                )
+    return out, {
+        "probable_starter_source": source_url,
+        "probable_starter_status": "ok",
+        "probable_starters_total": len(out),
+    }
+
+
+def _probable_by_name_game(probable_rows: Sequence[Dict[str, Any]]) -> Dict[Tuple[str, str, str], Dict[str, Any]]:
+    out: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    for row in probable_rows:
+        name = _norm_player_name(row.get("player_name"))
+        home = _canonical_team_code(row.get("home_team_code"))
+        away = _canonical_team_code(row.get("away_team_code"))
+        if name and home and away:
+            out[(name, home, away)] = dict(row)
+    return out
+
+
+def _fetch_prior_starter_counts(player_ids: Sequence[int], slate_date: str) -> Dict[int, int]:
+    ids = sorted({int(pid) for pid in player_ids if _as_int(pid) is not None})
+    if not ids:
+        return {}
+    starter_rows = pg_fetchall(
+        """
+        SELECT player_id,
+               COUNT(DISTINCT game_id)::int AS starter_games
+        FROM mlb.player_stats
+        WHERE player_id = ANY(%s::bigint[])
+          AND game_date < %s::date
+          AND COALESCE(is_starter, 0) = 1
+          AND COALESCE(outs_recorded, 0) >= 1
+        GROUP BY player_id
+        """,
+        (ids, slate_date),
+    )
+    return {int(r.get("player_id")): int(r.get("starter_games") or 0) for r in starter_rows or []}
+
+
+def _resolve_odds_pitcher_rows(
+    rows: Sequence[Dict[str, Any]],
+    slate_date: str,
+    probable_rows: Sequence[Dict[str, Any]] | None = None,
+) -> List[Dict[str, Any]]:
     if not rows:
         return []
+    probable_lookup = _probable_by_name_game(probable_rows or [])
     player_rows = pg_fetchall(
         """
         SELECT player_id, player_name, team, team_id
@@ -1003,20 +1124,39 @@ def _resolve_odds_pitcher_rows(rows: Sequence[Dict[str, Any]], slate_date: str) 
     for row in rows:
         key = _norm_player_name(row.get("player_name"))
         candidates = by_name.get(key, [])
+        home = _canonical_team_code(row.get("home_team_code"))
+        away = _canonical_team_code(row.get("away_team_code"))
+        probable = probable_lookup.get((key, home, away))
         if not candidates:
             item = dict(row)
-            item.update({"player_id": None, "pitcher_team": "", "offense_team": "", "resolve_status": "unresolved_player_name"})
+            if probable is not None:
+                item.update(
+                    {
+                        "game_id": probable.get("game_id"),
+                        "player_id": _as_int(probable.get("player_id")),
+                        "pitcher_team": _canonical_team_code(probable.get("pitcher_team")),
+                        "offense_team": _canonical_team_code(probable.get("offense_team")),
+                        "resolve_status": "resolved_by_probable_starter",
+                    }
+                )
+                if _as_int(item.get("player_id")) is not None:
+                    resolved_player_ids.append(int(item["player_id"]))
+            else:
+                item.update({"player_id": None, "pitcher_team": "", "offense_team": "", "resolve_status": "unresolved_player_name"})
             resolved.append(item)
             continue
         if len(candidates) > 1:
-            home = _canonical_team_code(row.get("home_team_code"))
-            away = _canonical_team_code(row.get("away_team_code"))
             filtered = []
             for cand in candidates:
                 cand_team = _canonical_team_code(cand.get("team_id") or cand.get("team"))
                 if cand_team in {home, away}:
                     filtered.append(cand)
             candidates = filtered or candidates
+        if len(candidates) > 1 and probable is not None and _as_int(probable.get("player_id")) is not None:
+            probable_id = int(probable.get("player_id"))
+            id_filtered = [cand for cand in candidates if _as_int(cand.get("player_id")) == probable_id]
+            if id_filtered:
+                candidates = id_filtered
         if len(candidates) > 1:
             item = dict(row)
             item.update({"player_id": None, "pitcher_team": "", "offense_team": "", "resolve_status": "ambiguous_player_name"})
@@ -1025,39 +1165,28 @@ def _resolve_odds_pitcher_rows(rows: Sequence[Dict[str, Any]], slate_date: str) 
         cand = candidates[0]
         player_id = _as_int(cand.get("player_id"))
         pitcher_team = _canonical_team_code(cand.get("team_id") or cand.get("team"))
-        home = _canonical_team_code(row.get("home_team_code"))
-        away = _canonical_team_code(row.get("away_team_code"))
+        resolve_status = "resolved"
+        if probable is not None and player_id == _as_int(probable.get("player_id")):
+            pitcher_team = _canonical_team_code(probable.get("pitcher_team")) or pitcher_team
+            resolve_status = "resolved_by_probable_starter" if len(by_name.get(key, [])) > 1 else "resolved"
         offense_team = away if pitcher_team == home else home if pitcher_team == away else ""
+        if probable is not None:
+            offense_team = _canonical_team_code(probable.get("offense_team")) or offense_team
         item = dict(row)
         item.update(
             {
+                "game_id": probable.get("game_id") if probable is not None else None,
                 "player_id": player_id,
                 "pitcher_team": pitcher_team,
                 "offense_team": offense_team,
-                "resolve_status": "resolved",
+                "resolve_status": resolve_status,
             }
         )
         if player_id is not None:
             resolved_player_ids.append(int(player_id))
         resolved.append(item)
 
-    if resolved_player_ids:
-        starter_rows = pg_fetchall(
-            """
-            SELECT player_id,
-                   COUNT(DISTINCT game_id)::int AS starter_games
-            FROM mlb.player_stats
-            WHERE player_id = ANY(%s::bigint[])
-              AND game_date < %s::date
-              AND COALESCE(is_starter, 0) = 1
-              AND COALESCE(outs_recorded, 0) >= 1
-            GROUP BY player_id
-            """,
-            (sorted(set(resolved_player_ids)), slate_date),
-        )
-        starts = {int(r.get("player_id")): int(r.get("starter_games") or 0) for r in starter_rows or []}
-    else:
-        starts = {}
+    starts = _fetch_prior_starter_counts(resolved_player_ids, slate_date)
     for row in resolved:
         player_id = _as_int(row.get("player_id"))
         row["prior_starter_games"] = starts.get(int(player_id), 0) if player_id is not None else None
@@ -1234,160 +1363,36 @@ def _build_slate_hits_allowed_rows(
             (league_bullpen_hits_allowed_pg_last30, offense_weight_last30),
         ]
     )
-    out: List[Dict[str, Any]] = []
-    with slate_csv.open("r", encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh)
-        for row in reader:
-            prop_type = str(row.get("prop_type") or "").strip().lower()
-            if prop_type != "hits_allowed":
-                continue
-            game_date = str(row.get("game_date") or "").strip()
-            if slate_date and game_date != slate_date:
-                continue
-            game_id = _as_int(row.get("game_id"))
-            player_id = _as_int(row.get("player_id"))
-            if game_id is None or player_id is None:
-                continue
-            wide = wide_ctx.get((game_id, player_id, prop_type), {})
-            offense_team = _canonical_team_code(wide.get("opponent"))
-            pitcher_team = _canonical_team_code(wide.get("team"))
-            if not offense_team:
-                offense_team = _canonical_team_code(wide.get("opponent_id"))
-            if not pitcher_team:
-                pitcher_team = _canonical_team_code(wide.get("team_id"))
-            form = team_form.get(offense_team, {})
-            bullpen = bullpen_form.get(pitcher_team, {})
-            offense_hits_pg_last7 = form.get("hits_pg_last7")
-            offense_hits_pg_last15 = form.get("hits_pg_last15")
-            offense_hits_pg_last30 = form.get("hits_pg_last30")
-            offense_hits_form_blended = _blend_weighted(
-                [
-                    (offense_hits_pg_last7, offense_weight_last7),
-                    (offense_hits_pg_last15, offense_weight_last15),
-                    (offense_hits_pg_last30, offense_weight_last30),
-                ]
-            )
-            offense_factor_vs_league = None
-            if (
-                offense_hits_form_blended is not None
-                and league_offense_hits_form_blended is not None
-                and league_offense_hits_form_blended > 0
-            ):
-                offense_factor_vs_league = offense_hits_form_blended / league_offense_hits_form_blended
-            offense_factor_clamped = _clamp(
-                offense_factor_vs_league,
-                float(offense_factor_min),
-                float(offense_factor_max),
-            )
-            starter_baseline = starter_baseline_by_player.get(int(player_id), {})
-            pitcher_expected_hits_allowed_weighted = _as_float(
-                starter_baseline.get("expected_hits_allowed_weighted")
-            )
-            expected_hits_allowed_matchup = None
-            expected_hits_allowed_delta_vs_pitcher_baseline = None
-            if (
-                pitcher_expected_hits_allowed_weighted is not None
-                and offense_factor_clamped is not None
-            ):
-                expected_hits_allowed_matchup = pitcher_expected_hits_allowed_weighted * offense_factor_clamped
-                expected_hits_allowed_delta_vs_pitcher_baseline = (
-                    expected_hits_allowed_matchup - pitcher_expected_hits_allowed_weighted
-                )
-            bullpen_hits_allowed_pg_last7 = bullpen.get("bullpen_hits_allowed_pg_last7")
-            bullpen_hits_allowed_pg_last15 = bullpen.get("bullpen_hits_allowed_pg_last15")
-            bullpen_hits_allowed_pg_last30 = bullpen.get("bullpen_hits_allowed_pg_last30")
-            bullpen_hits_allowed_form_blended = _blend_weighted(
-                [
-                    (bullpen_hits_allowed_pg_last7, offense_weight_last7),
-                    (bullpen_hits_allowed_pg_last15, offense_weight_last15),
-                    (bullpen_hits_allowed_pg_last30, offense_weight_last30),
-                ]
-            )
-            expected_team_hits_allowed_matchup = None
-            if (
-                expected_hits_allowed_matchup is not None
-                and bullpen_hits_allowed_form_blended is not None
-            ):
-                expected_team_hits_allowed_matchup = (
-                    expected_hits_allowed_matchup + bullpen_hits_allowed_form_blended
-                )
-            line = _as_float(row.get("line"))
-            line_minus_expected_hits_allowed_matchup = None
-            if line is not None and expected_hits_allowed_matchup is not None:
-                line_minus_expected_hits_allowed_matchup = line - expected_hits_allowed_matchup
-            out.append(
-                {
-                    "slate_date": slate_date,
-                    "game_date": game_date,
-                    "game_id": game_id,
-                    "player_id": player_id,
-                    "player_name": str(row.get("player_name") or "").strip(),
-                    "prop_type": prop_type,
-                    "line": line,
-                    "model_pick_side": str(row.get("model_pick_side") or "").strip().lower(),
-                    "model_pick_prob": _as_float(row.get("model_pick_prob")),
-                    "pitcher_team": pitcher_team,
-                    "offense_team": offense_team,
-                    "offense_hits_pg_last7": offense_hits_pg_last7,
-                    "offense_hits_pg_last15": offense_hits_pg_last15,
-                    "offense_hits_pg_last30": offense_hits_pg_last30,
-                    "offense_hits_samples_last7": form.get("n7"),
-                    "offense_hits_samples_last15": form.get("n15"),
-                    "offense_hits_samples_last30": form.get("n30"),
-                    "offense_hits_form_blended": offense_hits_form_blended,
-                    "league_offense_hits_pg_last7": league_offense_hits_pg_last7,
-                    "league_offense_hits_pg_last15": league_offense_hits_pg_last15,
-                    "league_offense_hits_pg_last30": league_offense_hits_pg_last30,
-                    "league_offense_hits_form_blended": league_offense_hits_form_blended,
-                    "bullpen_hits_allowed_pg_last7": bullpen_hits_allowed_pg_last7,
-                    "bullpen_hits_allowed_pg_last15": bullpen_hits_allowed_pg_last15,
-                    "bullpen_hits_allowed_pg_last30": bullpen_hits_allowed_pg_last30,
-                    "bullpen_hits_allowed_samples_last7": bullpen.get("n7"),
-                    "bullpen_hits_allowed_samples_last15": bullpen.get("n15"),
-                    "bullpen_hits_allowed_samples_last30": bullpen.get("n30"),
-                    "bullpen_hits_allowed_form_blended": bullpen_hits_allowed_form_blended,
-                    "league_bullpen_hits_allowed_pg_last7": league_bullpen_hits_allowed_pg_last7,
-                    "league_bullpen_hits_allowed_pg_last15": league_bullpen_hits_allowed_pg_last15,
-                    "league_bullpen_hits_allowed_pg_last30": league_bullpen_hits_allowed_pg_last30,
-                    "league_bullpen_hits_allowed_form_blended": league_bullpen_hits_allowed_form_blended,
-                    "offense_factor_vs_league": offense_factor_vs_league,
-                    "offense_factor_vs_league_clamped": offense_factor_clamped,
-                    "pitcher_baseline_total_starts": starter_baseline.get("total_starts"),
-                    "pitcher_baseline_seasons_used": starter_baseline.get("seasons_used"),
-                    "pitcher_expected_hits_allowed_weighted": pitcher_expected_hits_allowed_weighted,
-                    "expected_hits_allowed_matchup": expected_hits_allowed_matchup,
-                    "expected_team_hits_allowed_matchup": expected_team_hits_allowed_matchup,
-                    "expected_hits_allowed_delta_vs_pitcher_baseline": expected_hits_allowed_delta_vs_pitcher_baseline,
-                    "line_minus_expected_hits_allowed_matchup": line_minus_expected_hits_allowed_matchup,
-                    "forecast_status": "available",
-                    "forecast_note": "",
-                    "odds_market_present": "",
-                    "prior_starter_games": starter_baseline.get("total_starts"),
-                    "odds_books_seen": "",
-                }
-            )
-    if out:
-        _append_odds_pitcher_coverage_rows(
-            out,
-            odds_snapshot=odds_snapshot,
-            slate_date=slate_date,
-            starter_baseline_min_starts=starter_baseline_min_starts,
-            team_form=team_form,
-            bullpen_form=bullpen_form,
-        )
-        return out
 
-    # Fallback: if slate has no hits_allowed rows, synthesize matchup context
-    # from available pitcher props in the wide file for the same slate date.
-    for (game_id, player_id), wide in sorted(wide_pitcher_ctx.items()):
-        game_date = str(wide.get("game_date") or "").strip() or slate_date
-        prop_type = str(wide.get("prop_type") or "").strip().lower() or "hits_allowed"
-        offense_team = _canonical_team_code(wide.get("opponent"))
-        pitcher_team = _canonical_team_code(wide.get("team"))
-        if not offense_team:
-            offense_team = _canonical_team_code(wide.get("opponent_id"))
-        if not pitcher_team:
-            pitcher_team = _canonical_team_code(wide.get("team_id"))
+    probable_rows, _probable_meta = _load_probable_starter_rows(slate_date)
+    probable_player_ids = [
+        int(row["player_id"])
+        for row in probable_rows
+        if _as_int(row.get("player_id")) is not None
+    ]
+    probable_starts = _fetch_prior_starter_counts(probable_player_ids, slate_date)
+
+    def make_context_row(
+        *,
+        game_date: str,
+        game_id: Optional[int],
+        player_id: Optional[int],
+        player_name: str,
+        line: Any,
+        model_pick_side: str = "",
+        model_pick_prob: Any = None,
+        pitcher_team: str,
+        offense_team: str,
+        forecast_source: str,
+        forecast_note: str = "",
+        odds_market_present: Any = "",
+        odds_books_seen: Any = "",
+        hits_allowed_market_present: bool = False,
+        probable_starter_context_present: bool = False,
+        prior_starter_games: Any = None,
+    ) -> Dict[str, Any]:
+        pitcher_team = _canonical_team_code(pitcher_team)
+        offense_team = _canonical_team_code(offense_team)
         form = team_form.get(offense_team, {})
         bullpen = bullpen_form.get(pitcher_team, {})
         offense_hits_pg_last7 = form.get("hits_pg_last7")
@@ -1412,7 +1417,12 @@ def _build_slate_hits_allowed_rows(
             float(offense_factor_min),
             float(offense_factor_max),
         )
-        starter_baseline = starter_baseline_by_player.get(int(player_id), {})
+        starter_baseline = starter_baseline_by_player.get(int(player_id), {}) if player_id is not None else {}
+        prior_starts = starter_baseline.get("total_starts")
+        if prior_starts is None:
+            prior_starts = _as_int(prior_starter_games)
+        if prior_starts is None and player_id is not None:
+            prior_starts = probable_starts.get(int(player_id))
         pitcher_expected_hits_allowed_weighted = _as_float(
             starter_baseline.get("expected_hits_allowed_weighted")
         )
@@ -1444,66 +1454,587 @@ def _build_slate_hits_allowed_rows(
             expected_team_hits_allowed_matchup = (
                 expected_hits_allowed_matchup + bullpen_hits_allowed_form_blended
             )
+        line_float = _as_float(line)
+        line_minus_expected_hits_allowed_matchup = None
+        if line_float is not None and expected_hits_allowed_matchup is not None:
+            line_minus_expected_hits_allowed_matchup = line_float - expected_hits_allowed_matchup
+        note = str(forecast_note or "").strip()
+        status = "available" if expected_hits_allowed_matchup is not None else "unavailable"
+        if status == "unavailable":
+            if prior_starts is not None and int(prior_starts) < int(starter_baseline_min_starts):
+                note = "insufficient_pitcher_history"
+            elif not note:
+                if not hits_allowed_market_present:
+                    note = "no_hits_allowed_market_context_only"
+                elif probable_starter_context_present:
+                    note = "probable_starter_market_missing_source_stats"
+                else:
+                    note = "odds_market_without_probable_starter_match"
+        return {
+            "slate_date": slate_date,
+            "game_date": game_date,
+            "game_id": game_id,
+            "player_id": player_id,
+            "player_name": str(player_name or "").strip(),
+            "prop_type": "hits_allowed",
+            "line": line_float if line_float is not None else str(line or "").strip(),
+            "model_pick_side": str(model_pick_side or "").strip().lower(),
+            "model_pick_prob": _as_float(model_pick_prob),
+            "pitcher_team": pitcher_team,
+            "offense_team": offense_team,
+            "offense_hits_pg_last7": offense_hits_pg_last7,
+            "offense_hits_pg_last15": offense_hits_pg_last15,
+            "offense_hits_pg_last30": offense_hits_pg_last30,
+            "offense_hits_samples_last7": form.get("n7"),
+            "offense_hits_samples_last15": form.get("n15"),
+            "offense_hits_samples_last30": form.get("n30"),
+            "offense_hits_form_blended": offense_hits_form_blended,
+            "league_offense_hits_pg_last7": league_offense_hits_pg_last7,
+            "league_offense_hits_pg_last15": league_offense_hits_pg_last15,
+            "league_offense_hits_pg_last30": league_offense_hits_pg_last30,
+            "league_offense_hits_form_blended": league_offense_hits_form_blended,
+            "bullpen_hits_allowed_pg_last7": bullpen_hits_allowed_pg_last7,
+            "bullpen_hits_allowed_pg_last15": bullpen_hits_allowed_pg_last15,
+            "bullpen_hits_allowed_pg_last30": bullpen_hits_allowed_pg_last30,
+            "bullpen_hits_allowed_samples_last7": bullpen.get("n7"),
+            "bullpen_hits_allowed_samples_last15": bullpen.get("n15"),
+            "bullpen_hits_allowed_samples_last30": bullpen.get("n30"),
+            "bullpen_hits_allowed_form_blended": bullpen_hits_allowed_form_blended,
+            "league_bullpen_hits_allowed_pg_last7": league_bullpen_hits_allowed_pg_last7,
+            "league_bullpen_hits_allowed_pg_last15": league_bullpen_hits_allowed_pg_last15,
+            "league_bullpen_hits_allowed_pg_last30": league_bullpen_hits_allowed_pg_last30,
+            "league_bullpen_hits_allowed_form_blended": league_bullpen_hits_allowed_form_blended,
+            "offense_factor_vs_league": offense_factor_vs_league,
+            "offense_factor_vs_league_clamped": offense_factor_clamped,
+            "pitcher_baseline_total_starts": starter_baseline.get("total_starts"),
+            "pitcher_baseline_seasons_used": starter_baseline.get("seasons_used"),
+            "pitcher_expected_hits_allowed_weighted": pitcher_expected_hits_allowed_weighted,
+            "expected_hits_allowed_matchup": expected_hits_allowed_matchup,
+            "expected_team_hits_allowed_matchup": expected_team_hits_allowed_matchup,
+            "expected_hits_allowed_delta_vs_pitcher_baseline": expected_hits_allowed_delta_vs_pitcher_baseline,
+            "line_minus_expected_hits_allowed_matchup": line_minus_expected_hits_allowed_matchup,
+            "forecast_status": status,
+            "forecast_note": note,
+            "forecast_source": forecast_source,
+            "odds_market_present": bool(odds_market_present) if isinstance(odds_market_present, bool) else odds_market_present,
+            "hits_allowed_market_present": bool(hits_allowed_market_present),
+            "trusted_forecast": bool(expected_hits_allowed_matchup is not None),
+            "probable_starter_context_present": bool(probable_starter_context_present),
+            "prior_starter_games": prior_starts,
+            "odds_books_seen": _as_int(odds_books_seen),
+        }
+
+    out: List[Dict[str, Any]] = []
+    with slate_csv.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            prop_type = str(row.get("prop_type") or "").strip().lower()
+            if prop_type != "hits_allowed":
+                continue
+            game_date = str(row.get("game_date") or "").strip()
+            if slate_date and game_date != slate_date:
+                continue
+            game_id = _as_int(row.get("game_id"))
+            player_id = _as_int(row.get("player_id"))
+            if game_id is None or player_id is None:
+                continue
+            wide = wide_ctx.get((game_id, player_id, prop_type), {})
+            offense_team = _canonical_team_code(wide.get("opponent"))
+            pitcher_team = _canonical_team_code(wide.get("team"))
+            if not offense_team:
+                offense_team = _canonical_team_code(wide.get("opponent_id"))
+            if not pitcher_team:
+                pitcher_team = _canonical_team_code(wide.get("team_id"))
+            out.append(
+                make_context_row(
+                    game_date=game_date,
+                    game_id=game_id,
+                    player_id=player_id,
+                    player_name=str(row.get("player_name") or "").strip(),
+                    line=row.get("line"),
+                    model_pick_side=str(row.get("model_pick_side") or "").strip().lower(),
+                    model_pick_prob=row.get("model_pick_prob"),
+                    pitcher_team=pitcher_team,
+                    offense_team=offense_team,
+                    forecast_source="slate_hits_allowed_market",
+                    odds_market_present=True,
+                    hits_allowed_market_present=True,
+                )
+            )
+
+    existing_player_ids = {
+        int(r.get("player_id"))
+        for r in out
+        if _as_int(r.get("player_id")) is not None
+    }
+    existing_pairs = {
+        (_canonical_team_code(r.get("pitcher_team")), _canonical_team_code(r.get("offense_team")))
+        for r in out
+        if _canonical_team_code(r.get("pitcher_team")) and _canonical_team_code(r.get("offense_team"))
+    }
+
+    odds_rows = _resolve_odds_pitcher_rows(
+        _load_odds_pitcher_hits_allowed_rows(odds_snapshot, slate_date),
+        slate_date,
+        probable_rows=probable_rows,
+    )
+    for odds in odds_rows:
+        player_id = _as_int(odds.get("player_id"))
+        pitcher_team = _canonical_team_code(odds.get("pitcher_team"))
+        offense_team = _canonical_team_code(odds.get("offense_team"))
+        pair_key = (pitcher_team, offense_team)
+        if (
+            (player_id is not None and int(player_id) in existing_player_ids)
+            or (pitcher_team and offense_team and pair_key in existing_pairs)
+        ):
+            for existing in out:
+                if player_id is not None and _as_int(existing.get("player_id")) == player_id:
+                    existing["hits_allowed_market_present"] = True
+                    existing["odds_market_present"] = True
+                    existing["odds_books_seen"] = _as_int(odds.get("odds_books_seen"))
+                    if not existing.get("line"):
+                        existing["line"] = str(odds.get("line") or "").strip()
+                    break
+            continue
         out.append(
+            make_context_row(
+                game_date=slate_date,
+                game_id=_as_int(odds.get("game_id")),
+                player_id=player_id,
+                player_name=str(odds.get("player_name") or "").strip(),
+                line=str(odds.get("line") or "").strip(),
+                pitcher_team=pitcher_team,
+                offense_team=offense_team,
+                forecast_source="odds_pitcher_hits_allowed_market",
+                forecast_note="" if str(odds.get("resolve_status") or "") in {"resolved", "resolved_by_probable_starter"} else str(odds.get("resolve_status") or ""),
+                odds_market_present=True,
+                odds_books_seen=_as_int(odds.get("odds_books_seen")),
+                hits_allowed_market_present=True,
+                probable_starter_context_present=str(odds.get("resolve_status") or "") == "resolved_by_probable_starter",
+                prior_starter_games=_as_int(odds.get("prior_starter_games")),
+            )
+        )
+        if player_id is not None:
+            existing_player_ids.add(int(player_id))
+        if pitcher_team and offense_team:
+            existing_pairs.add(pair_key)
+
+    for probable in probable_rows:
+        player_id = _as_int(probable.get("player_id"))
+        pitcher_team = _canonical_team_code(probable.get("pitcher_team"))
+        offense_team = _canonical_team_code(probable.get("offense_team"))
+        pair_key = (pitcher_team, offense_team)
+        matched_existing = False
+        for existing in out:
+            if (
+                (player_id is not None and _as_int(existing.get("player_id")) == player_id)
+                or (
+                    pitcher_team
+                    and offense_team
+                    and _canonical_team_code(existing.get("pitcher_team")) == pitcher_team
+                    and _canonical_team_code(existing.get("offense_team")) == offense_team
+                )
+            ):
+                existing["probable_starter_context_present"] = True
+                if not existing.get("game_id"):
+                    existing["game_id"] = _as_int(probable.get("game_id"))
+                if not existing.get("pitcher_team"):
+                    existing["pitcher_team"] = pitcher_team
+                if not existing.get("offense_team"):
+                    existing["offense_team"] = offense_team
+                matched_existing = True
+                break
+        if matched_existing:
+            continue
+
+        # Add same-date probable starters that had no hits_allowed market row.
+        # This is context visibility only unless the existing baseline/source-stat
+        # policy can compute expected_hits_allowed_matchup.
+        out.append(
+            make_context_row(
+                game_date=slate_date,
+                game_id=_as_int(probable.get("game_id")),
+                player_id=player_id,
+                player_name=str(probable.get("player_name") or "").strip(),
+                line="",
+                pitcher_team=pitcher_team,
+                offense_team=offense_team,
+                forecast_source="probable_starter_context",
+                forecast_note="no_hits_allowed_market_context_only",
+                odds_market_present=False,
+                odds_books_seen="",
+                hits_allowed_market_present=False,
+                probable_starter_context_present=True,
+            )
+        )
+        if player_id is not None:
+            existing_player_ids.add(int(player_id))
+        if pitcher_team and offense_team:
+            existing_pairs.add(pair_key)
+
+    return out
+
+
+IDENTITY_FIELDNAMES = [
+    "canonical_player_id",
+    "canonical_game_id",
+    "canonical_team",
+    "canonical_opponent",
+    "canonical_market_key",
+    "canonical_game_key",
+    "identity_status",
+    "identity_method",
+    "fallback_used",
+    "identity_warning",
+    "identity_confidence",
+    "forecast_diagnostic",
+]
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    return text in {"1", "true", "yes", "y", "market", "available"}
+
+
+def _build_hits_environment_player_resolver(rows: Sequence[Dict[str, Any]]) -> PlayerIdentityResolver:
+    refs: List[Dict[str, Any]] = []
+    seen: set[Tuple[str, str]] = set()
+    for row in rows:
+        player_id = _as_int(row.get("player_id"))
+        player_name = str(row.get("player_name") or "").strip()
+        team = _identity_team_code(row.get("pitcher_team"))
+        if player_id is None or not player_name:
+            continue
+        key = (str(player_id), team)
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(
             {
-                "slate_date": slate_date,
-                "game_date": game_date,
-                "game_id": game_id,
                 "player_id": player_id,
-                "player_name": str(wide.get("player_name") or "").strip(),
-                "prop_type": prop_type,
-                "line": None,
-                "model_pick_side": "",
-                "model_pick_prob": None,
-                "pitcher_team": pitcher_team,
-                "offense_team": offense_team,
-                "offense_hits_pg_last7": offense_hits_pg_last7,
-                "offense_hits_pg_last15": offense_hits_pg_last15,
-                "offense_hits_pg_last30": offense_hits_pg_last30,
-                "offense_hits_samples_last7": form.get("n7"),
-                "offense_hits_samples_last15": form.get("n15"),
-                "offense_hits_samples_last30": form.get("n30"),
-                "offense_hits_form_blended": offense_hits_form_blended,
-                "league_offense_hits_pg_last7": league_offense_hits_pg_last7,
-                "league_offense_hits_pg_last15": league_offense_hits_pg_last15,
-                "league_offense_hits_pg_last30": league_offense_hits_pg_last30,
-                "league_offense_hits_form_blended": league_offense_hits_form_blended,
-                "bullpen_hits_allowed_pg_last7": bullpen_hits_allowed_pg_last7,
-                "bullpen_hits_allowed_pg_last15": bullpen_hits_allowed_pg_last15,
-                "bullpen_hits_allowed_pg_last30": bullpen_hits_allowed_pg_last30,
-                "bullpen_hits_allowed_samples_last7": bullpen.get("n7"),
-                "bullpen_hits_allowed_samples_last15": bullpen.get("n15"),
-                "bullpen_hits_allowed_samples_last30": bullpen.get("n30"),
-                "bullpen_hits_allowed_form_blended": bullpen_hits_allowed_form_blended,
-                "league_bullpen_hits_allowed_pg_last7": league_bullpen_hits_allowed_pg_last7,
-                "league_bullpen_hits_allowed_pg_last15": league_bullpen_hits_allowed_pg_last15,
-                "league_bullpen_hits_allowed_pg_last30": league_bullpen_hits_allowed_pg_last30,
-                "league_bullpen_hits_allowed_form_blended": league_bullpen_hits_allowed_form_blended,
-                "offense_factor_vs_league": offense_factor_vs_league,
-                "offense_factor_vs_league_clamped": offense_factor_clamped,
-                "pitcher_baseline_total_starts": starter_baseline.get("total_starts"),
-                "pitcher_baseline_seasons_used": starter_baseline.get("seasons_used"),
-                "pitcher_expected_hits_allowed_weighted": pitcher_expected_hits_allowed_weighted,
-                "expected_hits_allowed_matchup": expected_hits_allowed_matchup,
-                "expected_team_hits_allowed_matchup": expected_team_hits_allowed_matchup,
-                "expected_hits_allowed_delta_vs_pitcher_baseline": expected_hits_allowed_delta_vs_pitcher_baseline,
-                "line_minus_expected_hits_allowed_matchup": None,
-                "forecast_status": "available",
-                "forecast_note": "fallback_from_wide_pitcher_prop",
-                "odds_market_present": "",
-                "prior_starter_games": starter_baseline.get("total_starts"),
-                "odds_books_seen": "",
+                "player_name": player_name,
+                "team": team,
             }
         )
-    _append_odds_pitcher_coverage_rows(
-        out,
-        odds_snapshot=odds_snapshot,
-        slate_date=slate_date,
-        starter_baseline_min_starts=starter_baseline_min_starts,
-        team_form=team_form,
-        bullpen_form=bullpen_form,
-    )
-    return out
+    return PlayerIdentityResolver(refs)
+
+
+def _forecast_diagnostic(row: Dict[str, Any]) -> str:
+    identity_status = str(row.get("identity_status") or "").strip()
+    note = str(row.get("forecast_note") or "").strip()
+    status = str(row.get("forecast_status") or "").strip()
+    source = str(row.get("forecast_source") or "").strip()
+    has_market = _truthy(row.get("hits_allowed_market_present")) or _truthy(row.get("odds_market_present"))
+    if identity_status == "ambiguous":
+        return "ambiguous_identity"
+    if identity_status == "unresolved":
+        return "unresolved_identity"
+    if note == "insufficient_pitcher_history":
+        return "resolved_identity_insufficient_history"
+    if note in {"no_hits_allowed_market", "no_hits_allowed_market_context_only"}:
+        return "resolved_identity_no_market"
+    if source == "probable_starter_context" and not has_market:
+        return "context_only_forecast"
+    if note == "present_in_odds_but_missing_from_slate_output":
+        return "provider_market_no_probable_match"
+    if note == "odds_market_without_probable_starter_match":
+        return "provider_market_no_probable_match"
+    if status == "unavailable" and not has_market:
+        return "context_only_forecast"
+    if status == "available":
+        return "trusted_forecast"
+    return note or "unknown"
+
+
+def _combine_identity_status(
+    player_status: str,
+    game_status: str,
+    market_status: str,
+    market_required: bool,
+) -> str:
+    statuses = [player_status, game_status]
+    if market_required:
+        statuses.append(market_status)
+    if any(status == "ambiguous" for status in statuses):
+        return "ambiguous"
+    if any(status == "unresolved" for status in statuses):
+        return "unresolved"
+    if any(status in {"resolved_by_name_fallback", "resolved_by_game", "resolved_by_provider_id"} for status in statuses):
+        return "fallback_identity"
+    return "resolved_by_id"
+
+
+def _apply_hits_environment_identity(rows: List[Dict[str, Any]], slate_date: str) -> Dict[str, Any]:
+    player_resolver = _build_hits_environment_player_resolver(rows)
+    game_resolver = GameIdentityResolver()
+    for row in rows:
+        team = _identity_team_code(row.get("pitcher_team"))
+        opponent = _identity_team_code(row.get("offense_team"))
+        row["canonical_team"] = team
+        row["canonical_opponent"] = opponent
+
+        player = player_resolver.resolve(
+            PlayerIdentityInput(
+                player_id=row.get("player_id"),
+                player_name=str(row.get("player_name") or "").strip(),
+                team=team,
+                opponent=opponent,
+                game_id=row.get("game_id"),
+            )
+        )
+        game = game_resolver.resolve(
+            GameIdentityInput(
+                date=slate_date,
+                game_id=row.get("game_id"),
+                team=team,
+                opponent=opponent,
+            )
+        )
+        market_required = _truthy(row.get("hits_allowed_market_present")) or _truthy(row.get("odds_market_present"))
+        market = resolve_market_identity(
+            MarketIdentityInput(
+                date=slate_date,
+                game_id=game.canonical_game_id or row.get("game_id"),
+                player_id=player.canonical_player_id or row.get("player_id"),
+                player_name=str(row.get("player_name") or "").strip(),
+                team=team,
+                opponent=opponent,
+                prop_type="hits_allowed",
+                side="market",
+                line=row.get("line"),
+            )
+        )
+        row["canonical_player_id"] = player.canonical_player_id
+        row["canonical_game_id"] = game.canonical_game_id
+        row["canonical_game_key"] = game.canonical_game_key
+        row["canonical_market_key"] = (market.canonical_market_key or market.fallback_market_key) if market_required else ""
+        row["identity_status"] = _combine_identity_status(
+            player.identity_status,
+            game.identity_status,
+            market.identity_status,
+            market_required,
+        )
+        methods = [player.identity_method, game.identity_method]
+        if market_required:
+            methods.append(market.identity_method)
+        row["identity_method"] = "+".join([m for m in methods if m])
+        row["fallback_used"] = bool(player.fallback_used or game.fallback_used or (market_required and market.fallback_used))
+        warnings = [
+            reason
+            for reason in (
+                player.ambiguity_reason,
+                game.ambiguity_reason,
+                market.ambiguity_reason if market_required else "",
+            )
+            if reason
+        ]
+        row["identity_warning"] = ";".join(warnings)
+        confidences = [player.identity_confidence, game.identity_confidence]
+        if market_required:
+            confidences.append(market.identity_confidence)
+        row["identity_confidence"] = min(confidences) if confidences else 0.0
+        row["forecast_diagnostic"] = _forecast_diagnostic(row)
+        if str(row.get("forecast_note") or "") == "present_in_odds_but_missing_from_slate_output":
+            row["forecast_note"] = row["forecast_diagnostic"]
+
+    return _hits_environment_identity_health(rows)
+
+
+def _pct(num: int, den: int) -> float:
+    return round((float(num) / float(den) * 100.0), 2) if den else 0.0
+
+
+def _hits_environment_identity_health(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    total = len(rows)
+    market_rows = [r for r in rows if _truthy(r.get("hits_allowed_market_present")) or _truthy(r.get("odds_market_present"))]
+    status_counts: Dict[str, int] = {}
+    for row in rows:
+        status = str(row.get("identity_status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    blank_team = len([r for r in rows if not str(r.get("canonical_team") or r.get("pitcher_team") or "").strip()])
+    blank_opponent = len([r for r in rows if not str(r.get("canonical_opponent") or r.get("offense_team") or "").strip()])
+    blank_starter = len([r for r in rows if not str(r.get("player_name") or "").strip()])
+    blank_game_id = len([r for r in rows if not str(r.get("canonical_game_id") or r.get("game_id") or "").strip()])
+    player_id_rows = len([r for r in rows if str(r.get("canonical_player_id") or "").strip()])
+    game_id_rows = len([r for r in rows if str(r.get("canonical_game_id") or "").strip()])
+    market_key_rows = len([r for r in market_rows if str(r.get("canonical_market_key") or "").strip()])
+    context_only_rows = len([r for r in rows if not (_truthy(r.get("hits_allowed_market_present")) or _truthy(r.get("odds_market_present")))])
+    trusted_forecast_rows = len([r for r in rows if _truthy(r.get("trusted_forecast"))])
+    player_pct = _pct(player_id_rows, total)
+    game_pct = _pct(game_id_rows, total)
+    market_pct = _pct(market_key_rows, len(market_rows))
+    warnings = []
+    if player_pct < 95:
+        warnings.append("player_id_coverage_below_95")
+    if game_pct < 95:
+        warnings.append("game_id_coverage_below_95")
+    if blank_team:
+        warnings.append("blank_teams_present")
+    if blank_opponent:
+        warnings.append("blank_opponents_present")
+    if blank_starter:
+        warnings.append("blank_starters_present")
+    if blank_game_id:
+        warnings.append("blank_game_ids_present")
+    return {
+        "rows": total,
+        "player_id_rows": player_id_rows,
+        "player_id_coverage_pct": player_pct,
+        "game_id_rows": game_id_rows,
+        "game_id_coverage_pct": game_pct,
+        "market_rows": len(market_rows),
+        "market_key_rows": market_key_rows,
+        "market_key_coverage_pct": market_pct,
+        "resolved_identity_rows": status_counts.get("resolved_by_id", 0),
+        "fallback_identity_rows": status_counts.get("fallback_identity", 0),
+        "ambiguous_identity_rows": status_counts.get("ambiguous", 0),
+        "unresolved_identity_rows": status_counts.get("unresolved", 0),
+        "context_only_rows": context_only_rows,
+        "trusted_forecast_rows": trusted_forecast_rows,
+        "blank_team_rows": blank_team,
+        "blank_opponent_rows": blank_opponent,
+        "blank_starter_rows": blank_starter,
+        "blank_game_id_rows": blank_game_id,
+        "status": "warn" if warnings else "pass",
+        "warnings": warnings,
+        "identity_status_counts": status_counts,
+    }
+
+
+def _write_hits_environment_identity_artifacts(
+    *,
+    rows: Sequence[Dict[str, Any]],
+    slate_date: str,
+    generated_at_utc: str,
+    out_dir: Path = Path("artifacts/analysis/mlb/identity"),
+) -> Dict[str, str]:
+    health = _hits_environment_identity_health(rows)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    health_csv = out_dir / "hits_environment_identity_health.csv"
+    health_md = out_dir / "hits_environment_identity_health.md"
+    examples_csv = out_dir / "hits_environment_identity_examples.csv"
+    migration_md = out_dir / "hits_environment_identity_migration.md"
+
+    health_row = {
+        "generated_at_utc": generated_at_utc,
+        "slate_date": slate_date,
+        **{k: v for k, v in health.items() if k not in {"warnings", "identity_status_counts"}},
+        "warnings": ";".join(health.get("warnings") or []),
+        "identity_status_counts_json": json.dumps(health.get("identity_status_counts") or {}, sort_keys=True),
+    }
+    _write_generic_csv(health_csv, [health_row])
+
+    example_names = {"jared jones", "chase burns", "alan rangel"}
+    examples = [
+        {
+            "slate_date": slate_date,
+            "player_name": row.get("player_name"),
+            "player_id": row.get("player_id"),
+            "canonical_player_id": row.get("canonical_player_id"),
+            "game_id": row.get("game_id"),
+            "canonical_game_id": row.get("canonical_game_id"),
+            "pitcher_team": row.get("pitcher_team"),
+            "offense_team": row.get("offense_team"),
+            "canonical_team": row.get("canonical_team"),
+            "canonical_opponent": row.get("canonical_opponent"),
+            "canonical_market_key": row.get("canonical_market_key"),
+            "identity_status": row.get("identity_status"),
+            "identity_method": row.get("identity_method"),
+            "fallback_used": row.get("fallback_used"),
+            "identity_warning": row.get("identity_warning"),
+            "identity_confidence": row.get("identity_confidence"),
+            "forecast_status": row.get("forecast_status"),
+            "forecast_note": row.get("forecast_note"),
+            "forecast_diagnostic": row.get("forecast_diagnostic"),
+            "forecast_source": row.get("forecast_source"),
+            "hits_allowed_market_present": row.get("hits_allowed_market_present"),
+            "probable_starter_context_present": row.get("probable_starter_context_present"),
+        }
+        for row in rows
+        if _norm_player_name(row.get("player_name")) in example_names
+    ]
+    _write_generic_csv(examples_csv, examples)
+
+    lines = [
+        "# Hits Environment Identity Health",
+        "",
+        f"- Generated UTC: `{generated_at_utc}`",
+        f"- Slate date: `{slate_date}`",
+        f"- Status: `{health['status']}`",
+        "- Scope: identity/provenance only; forecast behavior is unchanged.",
+        "",
+        "## Coverage",
+        "",
+        f"- Rows: `{health['rows']}`",
+        f"- Canonical player ID coverage: `{health['player_id_rows']}/{health['rows']}` = `{health['player_id_coverage_pct']}%`",
+        f"- Canonical game ID coverage: `{health['game_id_rows']}/{health['rows']}` = `{health['game_id_coverage_pct']}%`",
+        f"- Market key coverage on market rows: `{health['market_key_rows']}/{health['market_rows']}` = `{health['market_key_coverage_pct']}%`",
+        f"- Fallback identity rows: `{health['fallback_identity_rows']}`",
+        f"- Ambiguous identity rows: `{health['ambiguous_identity_rows']}`",
+        f"- Unresolved identity rows: `{health['unresolved_identity_rows']}`",
+        f"- Context-only rows: `{health['context_only_rows']}`",
+        f"- Trusted forecast rows: `{health['trusted_forecast_rows']}`",
+        "",
+        "## Blank Context Gates",
+        "",
+        f"- Blank teams: `{health['blank_team_rows']}`",
+        f"- Blank opponents: `{health['blank_opponent_rows']}`",
+        f"- Blank starters: `{health['blank_starter_rows']}`",
+        f"- Blank game IDs: `{health['blank_game_id_rows']}`",
+        "",
+        "## Diagnostics",
+        "",
+        "| diagnostic | rows |",
+        "|---|---:|",
+    ]
+    diag_counts: Dict[str, int] = {}
+    for row in rows:
+        diag = str(row.get("forecast_diagnostic") or "unknown")
+        diag_counts[diag] = diag_counts.get(diag, 0) + 1
+    for key, value in sorted(diag_counts.items()):
+        lines.append(f"| `{key}` | `{value}` |")
+    if examples:
+        lines.extend(["", "## Named Examples", "", "| player | identity | forecast diagnostic | teams | game |", "|---|---|---|---|---|"])
+        for row in examples:
+            lines.append(
+                f"| {row['player_name']} | `{row['identity_status']}` | `{row['forecast_diagnostic']}` | `{row['canonical_team']} vs {row['canonical_opponent']}` | `{row['canonical_game_id']}` |"
+            )
+    health_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    migration_lines = [
+        "# Hits Environment Identity Migration",
+        "",
+        f"- Date validated: `{slate_date}`",
+        "- Migrated caller: `backend/mlb/scripts/report_mlb_hits_environment.py`.",
+        "- Shared resolver package: `backend/mlb/identity/`.",
+        "- Forecast behavior changed: `no`.",
+        "- Candidate inclusion changed: `no`.",
+        "",
+        "## What Changed",
+        "",
+        "Hits-environment row outputs now preserve canonical player, game, team, opponent, market, identity status, identity method, fallback usage, warning, confidence, and structured forecast diagnostic fields.",
+        "",
+        "Identity and forecast are intentionally separate. A row can have resolved identity with an unavailable forecast, context-only forecast, or insufficient starter history. Conversely, fallback identity does not change forecast calculations.",
+        "",
+        "## Current Health",
+        "",
+        f"- Rows: `{health['rows']}`",
+        f"- Canonical player ID coverage: `{health['player_id_coverage_pct']}%`",
+        f"- Canonical game ID coverage: `{health['game_id_coverage_pct']}%`",
+        f"- Market key coverage on market rows: `{health['market_key_coverage_pct']}%`",
+        f"- Status: `{health['status']}`",
+        "",
+    ]
+    migration_md.write_text("\n".join(migration_lines), encoding="utf-8")
+
+    return {
+        "hits_environment_identity_health_md": str(health_md),
+        "hits_environment_identity_health_csv": str(health_csv),
+        "hits_environment_identity_examples_csv": str(examples_csv),
+        "hits_environment_identity_migration_md": str(migration_md),
+    }
 
 
 def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1546,8 +2077,72 @@ def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, A
     forecast_unavailable_rows = [r for r in rows if str(r.get("forecast_status") or "") == "unavailable"]
     unavailable_by_reason = {}
     for r in forecast_unavailable_rows:
-        reason = str(r.get("forecast_note") or "unknown")
+        reason = str(r.get("forecast_diagnostic") or r.get("forecast_note") or "unknown")
         unavailable_by_reason[reason] = int(unavailable_by_reason.get(reason, 0)) + 1
+    probable_rows = [r for r in rows if bool(r.get("probable_starter_context_present"))]
+    probable_total = len(
+        {
+            (
+                r.get("game_id"),
+                r.get("player_id"),
+                _canonical_team_code(r.get("pitcher_team")),
+                _canonical_team_code(r.get("offense_team")),
+            )
+            for r in probable_rows
+        }
+    )
+    probable_with_market = len(
+        {
+            (
+                r.get("game_id"),
+                r.get("player_id"),
+                _canonical_team_code(r.get("pitcher_team")),
+                _canonical_team_code(r.get("offense_team")),
+            )
+            for r in probable_rows
+            if bool(r.get("hits_allowed_market_present") or r.get("odds_market_present"))
+        }
+    )
+    probable_context_only = len(
+        {
+            (
+                r.get("game_id"),
+                r.get("player_id"),
+                _canonical_team_code(r.get("pitcher_team")),
+                _canonical_team_code(r.get("offense_team")),
+            )
+            for r in probable_rows
+            if not bool(r.get("hits_allowed_market_present") or r.get("odds_market_present"))
+        }
+    )
+    probable_missing_forecast = len(
+        {
+            (
+                r.get("game_id"),
+                r.get("player_id"),
+                _canonical_team_code(r.get("pitcher_team")),
+                _canonical_team_code(r.get("offense_team")),
+            )
+            for r in probable_rows
+            if r.get("expected_hits_allowed_matchup") is None
+        }
+    )
+    ambiguous_resolved = len(
+        [
+            r
+            for r in rows
+            if str(r.get("forecast_source") or "") == "odds_pitcher_hits_allowed_market"
+            and bool(r.get("probable_starter_context_present"))
+            and r.get("player_id") is not None
+        ]
+    )
+    ambiguous_remaining = len(
+        [
+            r
+            for r in rows
+            if str(r.get("forecast_note") or "") == "ambiguous_player_name"
+        ]
+    )
     unavailable_pitchers = [
         {
             "player_id": r.get("player_id"),
@@ -1557,6 +2152,18 @@ def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, A
             "line": r.get("line"),
             "prior_starter_games": r.get("prior_starter_games"),
             "forecast_note": r.get("forecast_note"),
+            "forecast_diagnostic": r.get("forecast_diagnostic"),
+            "forecast_source": r.get("forecast_source"),
+            "canonical_player_id": r.get("canonical_player_id"),
+            "canonical_game_id": r.get("canonical_game_id"),
+            "canonical_team": r.get("canonical_team"),
+            "canonical_opponent": r.get("canonical_opponent"),
+            "identity_status": r.get("identity_status"),
+            "identity_method": r.get("identity_method"),
+            "fallback_used": r.get("fallback_used"),
+            "identity_warning": r.get("identity_warning"),
+            "hits_allowed_market_present": r.get("hits_allowed_market_present"),
+            "probable_starter_context_present": r.get("probable_starter_context_present"),
             "odds_books_seen": r.get("odds_books_seen"),
         }
         for r in forecast_unavailable_rows
@@ -1647,6 +2254,12 @@ def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, A
         "forecast_unavailable_rows": len(forecast_unavailable_rows),
         "forecast_unavailable_by_reason": unavailable_by_reason,
         "forecast_unavailable_pitchers": unavailable_pitchers,
+        "probable_starters_total": probable_total,
+        "probable_starters_with_hits_allowed_market": probable_with_market,
+        "probable_starters_context_only": probable_context_only,
+        "probable_starters_missing_forecast": probable_missing_forecast,
+        "ambiguous_names_resolved_by_probable_starter": ambiguous_resolved,
+        "ambiguous_names_remaining": ambiguous_remaining,
     }
 
 
@@ -1696,9 +2309,14 @@ def _write_rows_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
         "line_minus_expected_hits_allowed_matchup",
         "forecast_status",
         "forecast_note",
+        "forecast_source",
         "odds_market_present",
+        "hits_allowed_market_present",
+        "trusted_forecast",
+        "probable_starter_context_present",
         "prior_starter_games",
         "odds_books_seen",
+        *IDENTITY_FIELDNAMES,
     ]
     _ensure_parent(path)
     with path.open("w", encoding="utf-8", newline="") as fh:
@@ -2046,7 +2664,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         offense_factor_min=slate_offense_factor_min,
         offense_factor_max=slate_offense_factor_max,
     )
+    slate_identity_health = _apply_hits_environment_identity(slate_rows, slate_date)
     slate_summary = _summarize_slate_hits_allowed(slate_rows)
+    slate_summary["identity_health"] = slate_identity_health
     if int(slate_summary.get("rows") or 0) == 0:
         warnings.append("no_hits_allowed_rows_found_in_slate_csv")
 
@@ -2122,6 +2742,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slate_date=slate_date,
         generated_at_utc=generated_at_utc,
     )
+    identity_outputs = _write_hits_environment_identity_artifacts(
+        rows=slate_rows,
+        slate_date=slate_date,
+        generated_at_utc=generated_at_utc,
+    )
 
     ok = len(failures) == 0
     payload: Dict[str, Any] = {
@@ -2160,6 +2785,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "history_jsonl": str(Path(args.history_jsonl)),
             "eval_tracker_csv": str(Path(args.eval_tracker_csv)),
             "odds_snapshot": str(odds_snapshot),
+            **identity_outputs,
         },
         "ok": ok,
         "status": "pass" if ok else "fail",

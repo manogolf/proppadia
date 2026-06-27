@@ -28,6 +28,7 @@ from backend.app.services.mlb.market_odds_service import (
 )
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.shared.team_name_map import teamIdMap
+from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 from backend.shared.db.pg import pg_fetchall
 
 _PLAYER_STATS_FALLBACK_PROPS = {
@@ -121,17 +122,12 @@ def _game_day_of_week(value: object) -> Optional[str]:
 
 
 def _time_of_day_bucket(value: object) -> Optional[str]:
-    dt = pd.to_datetime(value, errors="coerce")
-    if pd.isna(dt):
+    if value is None or pd.isna(value):
         return None
-    hour = int(dt.hour)
-    if hour < 12:
-        return "morning"
-    if hour < 16:
-        return "afternoon"
-    if hour < 20:
-        return "evening"
-    return "late"
+    try:
+        return get_time_of_day_bucket_et(value)
+    except Exception:
+        return None
 
 
 def _truthy_rate(series: pd.Series) -> float:
@@ -662,7 +658,7 @@ def _select_snapshot_pairs(
     policy: str,
     explicit_run_tag: str,
 ) -> List[Tuple[Path, Path, str, Optional[str]]]:
-    if policy == "all":
+    if policy in {"all", "deduped_union"}:
         return pairs
     if policy == "explicit_run_tag":
         return [p for p in pairs if p[2] == explicit_run_tag]
@@ -683,6 +679,62 @@ def _select_snapshot_pairs(
             return [max(candidates, key=lambda c: c[1] or "")[2]]
         return [max(counts, key=lambda c: (c[0], c[1] or ""))[2]]
     return pairs
+
+
+def _dedupe_snapshot_union(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, int]]:
+    """Select one reconcile row per market identity from multiple same-day snapshots."""
+    diagnostics = {
+        "rows_before_snapshot_union_dedupe": int(len(df)),
+        "rows_after_snapshot_union_dedupe": int(len(df)),
+        "snapshot_union_duplicate_rows_removed": 0,
+    }
+    if df.empty:
+        return df, diagnostics
+
+    key_cols = ["game_id", "player_id", "prop_type", "line"]
+    if any(col not in df.columns for col in key_cols):
+        return df, diagnostics
+
+    work = df.copy()
+    over_valid = _valid_american_price_series(work.get("price_over_american", pd.Series(index=work.index, dtype=object)))
+    under_valid = _valid_american_price_series(work.get("price_under_american", pd.Series(index=work.index, dtype=object)))
+    over_present = pd.to_numeric(work.get("price_over_american", pd.Series(index=work.index, dtype=object)), errors="coerce").notna()
+    under_present = pd.to_numeric(work.get("price_under_american", pd.Series(index=work.index, dtype=object)), errors="coerce").notna()
+    book_count_two_sided = pd.to_numeric(work.get("book_count_two_sided", pd.Series(index=work.index, dtype=object)), errors="coerce").fillna(0)
+
+    valid_two_sided = over_valid & under_valid
+    market_quality_rank = pd.Series(0, index=work.index, dtype="int64")
+    market_quality_rank.loc[over_present | under_present] = 1
+    market_quality_rank.loc[valid_two_sided] = 2
+    market_quality_rank.loc[valid_two_sided & book_count_two_sided.ge(2)] = 3
+    work["_snapshot_union_market_quality_rank"] = market_quality_rank
+    work["_snapshot_union_time"] = pd.to_datetime(work.get("snapshot_time_utc"), errors="coerce", utc=True)
+    work["_snapshot_union_original_order"] = range(len(work))
+
+    work = work.sort_values(
+        by=[
+            *key_cols,
+            "_snapshot_union_market_quality_rank",
+            "book_count_two_sided",
+            "_snapshot_union_time",
+            "_snapshot_union_original_order",
+        ],
+        ascending=[True, True, True, True, False, False, False, False],
+        kind="mergesort",
+    )
+    deduped = work.drop_duplicates(subset=key_cols, keep="first").copy()
+    deduped = deduped.sort_values("_snapshot_union_original_order", kind="mergesort")
+    deduped = deduped.drop(
+        columns=[
+            "_snapshot_union_market_quality_rank",
+            "_snapshot_union_time",
+            "_snapshot_union_original_order",
+        ],
+        errors="ignore",
+    )
+    diagnostics["rows_after_snapshot_union_dedupe"] = int(len(deduped))
+    diagnostics["snapshot_union_duplicate_rows_removed"] = int(len(df) - len(deduped))
+    return deduped, diagnostics
 
 
 def main() -> int:
@@ -728,9 +780,12 @@ def main() -> int:
     )
     ap.add_argument(
         "--snapshot-policy",
-        choices=["all", "largest_resolved", "largest_rows", "latest_full", "explicit_run_tag"],
+        choices=["all", "deduped_union", "largest_resolved", "largest_rows", "latest_full", "explicit_run_tag"],
         default="all",
-        help="When using tagged slate snapshots, choose which run-tagged bundle(s) to reconcile.",
+        help=(
+            "When using tagged slate snapshots, choose which run-tagged bundle(s) to reconcile. "
+            "deduped_union scans all paired snapshots and keeps one best market-quality row per game/player/prop/line."
+        ),
     )
     ap.add_argument("--snapshot-run-tag", default="", help="Run tag used when --snapshot-policy=explicit_run_tag.")
     ap.add_argument(
@@ -1216,6 +1271,13 @@ def main() -> int:
         side_col="model_pick_side",
         probability_col="model_pick_prob",
     )
+    snapshot_union_diagnostics = {
+        "rows_before_snapshot_union_dedupe": int(len(out_df)),
+        "rows_after_snapshot_union_dedupe": int(len(out_df)),
+        "snapshot_union_duplicate_rows_removed": 0,
+    }
+    if str(args.snapshot_policy) == "deduped_union":
+        out_df, snapshot_union_diagnostics = _dedupe_snapshot_union(out_df)
     rows_before_price_filter = int(len(out_df))
     rows_removed_one_sided = 0
     rows_removed_invalid_price = 0
@@ -1234,12 +1296,16 @@ def main() -> int:
         rows_removed_one_sided = int((~two_sided_mask).sum())
         rows_removed_invalid_price = int((two_sided_mask & ~valid_price_mask).sum())
         one_sided_df = out_df.loc[~two_sided_mask | (two_sided_mask & ~valid_price_mask)].copy()
+        if not one_sided_df.empty:
+            one_sided_df["reconcile_exclusion_reason"] = "one_sided_or_invalid_price"
         valid_two_sided_mask = two_sided_mask & valid_price_mask
         book_count_two_sided = pd.to_numeric(out_df.get("book_count_two_sided"), errors="coerce").fillna(0)
         single_book_mask = valid_two_sided_mask & book_count_two_sided.lt(2)
         if not bool(args.include_single_book):
             rows_removed_single_book_two_sided = int(single_book_mask.sum())
             single_book_df = out_df.loc[single_book_mask].copy()
+            if not single_book_df.empty:
+                single_book_df["reconcile_exclusion_reason"] = "book_count_two_sided_lt_2"
             out_df = out_df.loc[valid_two_sided_mask & book_count_two_sided.ge(2)].copy()
         else:
             out_df = out_df.loc[valid_two_sided_mask].copy()
@@ -1259,6 +1325,7 @@ def main() -> int:
         "bookmaker": bookmaker,
         "rows": int(len(out_df)),
         "rows_before_price_filter": int(rows_before_price_filter),
+        **snapshot_union_diagnostics,
         "processed_dates": int(processed_dates),
         "requested_dates": int(len(dates)),
         "skipped_missing_artifacts": int(skipped_missing_artifacts),

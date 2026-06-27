@@ -1,12 +1,19 @@
 # File: backend/scripts/shared/time_utils_backend.py
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from pytz import timezone
 import requests
 from dateutil import parser
 
 ET = timezone("US/Eastern")
+TIME_OF_DAY_BUCKETS = ("morning", "afternoon", "evening", "late")
+TIME_OF_DAY_BUCKET_DEFINITIONS = {
+    "morning": "00:00 <= ET hour < 12:00",
+    "afternoon": "12:00 <= ET hour < 16:00",
+    "evening": "16:00 <= ET hour < 20:00",
+    "late": "20:00 <= ET hour < 24:00",
+}
 
 def now_et() -> datetime:
     return datetime.now(ET)
@@ -45,12 +52,21 @@ def get_time_of_day_bucket_et(iso_datetime):
 
     if hour < 12:
         return "morning"
-    elif hour < 17:
+    elif hour < 16:
         return "afternoon"
     elif hour < 20:
         return "evening"
     else:
-        return "night"
+        return "late"
+
+
+def get_time_of_day_bucket_definition_rows() -> list[dict[str, str]]:
+    return [
+        {"label": label, "hour_boundaries": TIME_OF_DAY_BUCKET_DEFINITIONS[label], "timezone": "America/New_York"}
+        for label in TIME_OF_DAY_BUCKETS
+    ]
+
+
 def get_game_start_time_et(game_id: int) -> Optional[str]:
     try:
         sched_url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePk={game_id}"

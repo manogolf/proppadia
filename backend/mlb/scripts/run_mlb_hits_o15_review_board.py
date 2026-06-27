@@ -12,6 +12,31 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from backend.mlb.identity import (
+    GameIdentityInput,
+    GameIdentityResolver,
+    MarketIdentityInput,
+    PlayerIdentityInput,
+    PlayerIdentityResolver,
+    canonical_team_code,
+    resolve_market_identity,
+)
+from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
+
+
+IDENTITY_OUTPUT_COLUMNS = [
+    "game_id",
+    "canonical_player_id",
+    "canonical_game_id",
+    "canonical_team",
+    "canonical_opponent",
+    "canonical_market_key",
+    "fallback_market_key",
+    "identity_status",
+    "identity_method",
+    "fallback_used",
+    "identity_warning",
+]
 
 OUTPUT_COLUMNS = [
     "date",
@@ -19,6 +44,7 @@ OUTPUT_COLUMNS = [
     "player_name",
     "team",
     "opponent",
+    *IDENTITY_OUTPUT_COLUMNS,
     "line",
     "side",
     "model_prob",
@@ -79,6 +105,7 @@ LAYERED_OUTPUT_COLUMNS = [
     "player_id",
     "team",
     "opponent",
+    *IDENTITY_OUTPUT_COLUMNS,
     "line",
     "side",
     "market_price",
@@ -128,10 +155,12 @@ ALTERNATE_DISCOVERY_COLUMNS = [
     "player_id",
     "team",
     "opponent",
+    *IDENTITY_OUTPUT_COLUMNS,
     "bookmaker_list",
     "best_over_price",
     "selected_side_implied_probability",
     "line",
+    "side",
     "d7_hits_rate",
     "d15_hits_rate",
     "d7_hits_runs_rbis",
@@ -203,14 +232,10 @@ def _derive_time_of_day_bucket(game_time: Any) -> str:
     dt = _parse_game_time(game_time)
     if dt is None:
         return ""
-    hour = int(dt.hour)
-    if hour < 12:
-        return "morning"
-    if hour < 16:
-        return "afternoon"
-    if hour < 20:
-        return "evening"
-    return "late"
+    try:
+        return get_time_of_day_bucket_et(dt)
+    except Exception:
+        return ""
 
 
 def _derive_game_day_of_week(date_value: Any, game_time: Any = "") -> str:
@@ -281,6 +306,264 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str] | None
         writer.writeheader()
         for row in rows:
             writer.writerow({col: row.get(col, "") for col in fieldnames})
+
+
+def _canonical_team(value: Any) -> str:
+    return canonical_team_code(value).canonical_team
+
+
+def _id_text(value: Any) -> str:
+    number = _f(value)
+    if number is not None:
+        return str(int(number))
+    return str(value or "").strip()
+
+
+def _slate_identity_indexes(slate_rows: list[dict[str, Any]], slate_date: str) -> tuple[dict[tuple[str, str, str], dict[str, Any]], dict[tuple[str, str], dict[str, Any]], list[dict[str, Any]]]:
+    by_player_team: dict[tuple[str, str, str], dict[str, Any]] = {}
+    by_name_team: dict[tuple[str, str], dict[str, Any]] = {}
+    refs: list[dict[str, Any]] = []
+    for row in slate_rows:
+        row_date = str(row.get("slate_date") or row.get("game_date") or "")[:10]
+        if row_date != slate_date:
+            continue
+        player_id = _id_text(row.get("player_id"))
+        name_key = _norm_player_name(row.get("player_name"))
+        team = _canonical_team(row.get("team"))
+        opponent = _canonical_team(row.get("opponent"))
+        if player_id or row.get("player_name"):
+            refs.append(
+                {
+                    "player_id": player_id,
+                    "player_name": row.get("player_name") or "",
+                    "team": team,
+                    "opponent": opponent,
+                }
+            )
+        if not team or not opponent:
+            continue
+        current_line = _line_key(row.get("line"))
+        if player_id:
+            key = (player_id, team, opponent)
+            existing = by_player_team.get(key)
+            if existing is None or current_line == "1.5":
+                by_player_team[key] = row
+        if name_key:
+            key2 = (name_key, team)
+            existing = by_name_team.get(key2)
+            if existing is None or current_line == "1.5":
+                by_name_team[key2] = row
+    return by_player_team, by_name_team, refs
+
+
+def _find_slate_identity_row(
+    row: dict[str, Any],
+    by_player_team: dict[tuple[str, str, str], dict[str, Any]],
+    by_name_team: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    player_id = _id_text(row.get("player_id"))
+    team = _canonical_team(row.get("team"))
+    opponent = _canonical_team(row.get("opponent"))
+    if player_id and team and opponent:
+        found = by_player_team.get((player_id, team, opponent))
+        if found:
+            return found
+    name_key = _norm_player_name(row.get("player_name") or row.get("player"))
+    if name_key and team:
+        found = by_name_team.get((name_key, team))
+        if found:
+            return found
+    return {}
+
+
+def _apply_canonical_identity(rows: list[dict[str, Any]], slate_rows: list[dict[str, Any]], slate_date: str) -> dict[str, Any]:
+    by_player_team, by_name_team, refs = _slate_identity_indexes(slate_rows, slate_date)
+    player_resolver = PlayerIdentityResolver(refs)
+    game_resolver = GameIdentityResolver()
+    status_counts: Counter[str] = Counter()
+    method_counts: Counter[str] = Counter()
+    rows_with_fallback = 0
+    rows_unresolved = 0
+    rows_ambiguous = 0
+    rows_with_market_key = 0
+    for row in rows:
+        slate = _find_slate_identity_row(row, by_player_team, by_name_team)
+        team = _canonical_team(row.get("team") or slate.get("team"))
+        opponent = _canonical_team(row.get("opponent") or slate.get("opponent"))
+        player_result = player_resolver.resolve(
+            PlayerIdentityInput(
+                player_id=row.get("player_id") or slate.get("player_id"),
+                player_name=str(row.get("player_name") or row.get("player") or slate.get("player_name") or ""),
+                team=team,
+                opponent=opponent,
+                game_id=row.get("game_id") or slate.get("game_id"),
+            )
+        )
+        game_result = game_resolver.resolve(
+            GameIdentityInput(
+                date=slate_date,
+                game_id=row.get("game_id") or slate.get("game_id"),
+                home_team=slate.get("home_team_code") or "",
+                away_team=slate.get("away_team_code") or "",
+                team=team,
+                opponent=opponent,
+            )
+        )
+        canonical_player_id = player_result.canonical_player_id or _id_text(row.get("player_id"))
+        canonical_game_id = game_result.canonical_game_id or _id_text(row.get("game_id") or slate.get("game_id"))
+        market_result = resolve_market_identity(
+            MarketIdentityInput(
+                date=slate_date,
+                game_id=canonical_game_id,
+                player_id=canonical_player_id,
+                player_name=str(row.get("player_name") or row.get("player") or ""),
+                team=team,
+                opponent=opponent,
+                prop_type="hits",
+                side=row.get("side"),
+                line=row.get("line"),
+            )
+        )
+        statuses = [player_result.identity_status, game_result.identity_status, market_result.identity_status]
+        fallback_used = player_result.fallback_used or game_result.fallback_used or market_result.fallback_used
+        warning_parts = [
+            part
+            for part in [
+                player_result.ambiguity_reason,
+                game_result.ambiguity_reason,
+                market_result.ambiguity_reason,
+            ]
+            if part
+        ]
+        if any(status == "ambiguous" for status in statuses):
+            identity_status = "ambiguous"
+        elif any(status == "unresolved" for status in statuses):
+            identity_status = "unresolved"
+        elif fallback_used:
+            identity_status = "fallback_identity"
+        else:
+            identity_status = "resolved_by_id"
+        method = "+".join([player_result.identity_method, game_result.identity_method, market_result.identity_method])
+        row["game_id"] = canonical_game_id or row.get("game_id") or slate.get("game_id") or ""
+        row["canonical_player_id"] = canonical_player_id
+        row["canonical_game_id"] = canonical_game_id
+        row["canonical_team"] = team
+        row["canonical_opponent"] = opponent
+        row["canonical_market_key"] = market_result.canonical_market_key
+        row["fallback_market_key"] = market_result.fallback_market_key
+        row["identity_status"] = identity_status
+        row["identity_method"] = method
+        row["fallback_used"] = bool(fallback_used)
+        row["identity_warning"] = ";".join(warning_parts)
+        status_counts[identity_status] += 1
+        method_counts[method] += 1
+        rows_with_fallback += int(bool(fallback_used))
+        rows_unresolved += int(identity_status == "unresolved")
+        rows_ambiguous += int(identity_status == "ambiguous")
+        rows_with_market_key += int(bool(market_result.canonical_market_key))
+    return {
+        "identity_rows": len(rows),
+        "identity_rows_with_canonical_player_id": sum(1 for row in rows if row.get("canonical_player_id")),
+        "identity_rows_with_canonical_game_id": sum(1 for row in rows if row.get("canonical_game_id")),
+        "identity_rows_with_canonical_market_key": rows_with_market_key,
+        "identity_rows_using_fallback": rows_with_fallback,
+        "identity_rows_unresolved": rows_unresolved,
+        "identity_rows_ambiguous": rows_ambiguous,
+        "identity_status_counts": dict(status_counts),
+        "identity_method_counts": dict(method_counts),
+    }
+
+
+def _identity_coverage(rows: list[dict[str, Any]], label: str) -> dict[str, Any]:
+    total = len(rows)
+    def count(col: str) -> int:
+        return sum(1 for row in rows if str(row.get(col) or "").strip())
+
+    fallback = sum(1 for row in rows if str(row.get("fallback_used") or "").strip().lower() in {"1", "true", "yes"})
+    ambiguous = sum(1 for row in rows if str(row.get("identity_status") or "").strip() == "ambiguous")
+    unresolved = sum(1 for row in rows if str(row.get("identity_status") or "").strip() == "unresolved")
+    return {
+        "label": label,
+        "rows": total,
+        "player_id_rows": count("player_id"),
+        "game_id_rows": count("game_id") or count("canonical_game_id"),
+        "canonical_player_id_rows": count("canonical_player_id"),
+        "canonical_game_id_rows": count("canonical_game_id"),
+        "canonical_market_key_rows": count("canonical_market_key"),
+        "fallback_rows": fallback,
+        "ambiguous_rows": ambiguous,
+        "unresolved_rows": unresolved,
+        "player_id_coverage_pct": round((count("player_id") / total * 100.0) if total else 0.0, 2),
+        "game_id_coverage_pct": round(((count("game_id") or count("canonical_game_id")) / total * 100.0) if total else 0.0, 2),
+        "canonical_market_key_coverage_pct": round((count("canonical_market_key") / total * 100.0) if total else 0.0, 2),
+    }
+
+
+def _append_identity_migration_report(
+    *,
+    out_dir: Path,
+    date_text: str,
+    board: str,
+    out_csv: Path,
+    before_rows: list[dict[str, Any]],
+    after_rows: list[dict[str, Any]],
+    identity_meta: dict[str, Any],
+) -> None:
+    report_csv = out_dir.parent / "identity" / f"review_board_identity_coverage_{date_text}.csv"
+    report_md = out_dir.parent / "identity" / f"review_board_identity_migration_{date_text}.md"
+    report_csv.parent.mkdir(parents=True, exist_ok=True)
+    before = _identity_coverage(before_rows, "before")
+    after = _identity_coverage(after_rows, "after")
+    row = {
+        "date": date_text,
+        "board": board,
+        "artifact": out_csv.as_posix(),
+        "rows_before": before["rows"],
+        "rows_after": after["rows"],
+        "row_count_changed": before["rows"] != after["rows"],
+        "player_id_coverage_before_pct": before["player_id_coverage_pct"],
+        "player_id_coverage_after_pct": after["player_id_coverage_pct"],
+        "game_id_coverage_before_pct": before["game_id_coverage_pct"],
+        "game_id_coverage_after_pct": after["game_id_coverage_pct"],
+        "canonical_market_key_coverage_before_pct": before["canonical_market_key_coverage_pct"],
+        "canonical_market_key_coverage_after_pct": after["canonical_market_key_coverage_pct"],
+        "fallback_rows_after": after["fallback_rows"],
+        "ambiguous_rows_after": after["ambiguous_rows"],
+        "unresolved_rows_after": after["unresolved_rows"],
+        "identity_status_counts": json.dumps(identity_meta.get("identity_status_counts") or {}, sort_keys=True),
+        "identity_method_counts": json.dumps(identity_meta.get("identity_method_counts") or {}, sort_keys=True),
+    }
+    rows = []
+    if report_csv.exists() and report_csv.stat().st_size > 0:
+        rows = _read_csv(report_csv)
+        rows = [existing for existing in rows if not (existing.get("date") == date_text and existing.get("board") == board)]
+    rows.append(row)
+    rows.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("board") or "")))
+    with report_csv.open("w", encoding="utf-8", newline="") as fh:
+        fieldnames = list(row.keys())
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in rows:
+            writer.writerow({col: item.get(col, "") for col in fieldnames})
+    date_rows = [r for r in rows if r.get("date") == date_text]
+    lines = [
+        f"# Review Board Identity Migration - {date_text}",
+        "",
+        "- Scope: review-board output identity columns only.",
+        "- Production/model/selector/upload/grading behavior changed: `no`.",
+        "",
+        "| board | rows before | rows after | player ID before | player ID after | game ID before | game ID after | market key after | fallback | ambiguous | unresolved |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for item in date_rows:
+        lines.append(
+            f"| `{item.get('board')}` | `{item.get('rows_before')}` | `{item.get('rows_after')}` | "
+            f"`{item.get('player_id_coverage_before_pct')}` | `{item.get('player_id_coverage_after_pct')}` | "
+            f"`{item.get('game_id_coverage_before_pct')}` | `{item.get('game_id_coverage_after_pct')}` | "
+            f"`{item.get('canonical_market_key_coverage_after_pct')}` | `{item.get('fallback_rows_after')}` | "
+            f"`{item.get('ambiguous_rows_after')}` | `{item.get('unresolved_rows_after')}` |"
+        )
+    report_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _iter_matchup_rows(value: Any) -> list[dict[str, Any]]:
@@ -375,6 +658,8 @@ def _unavailable_reason_from_note(note: Any) -> str:
         return "starter projected but missing source stats"
     if text in {"unresolved_player_name", "ambiguous_player_name", "unresolved"}:
         return "no projected starter"
+    if text in {"no_hits_allowed_market", "no_hits_allowed_market_context_only"}:
+        return "no hits-allowed market context only"
     if text:
         return "unknown"
     return "no projected starter"
@@ -1440,8 +1725,10 @@ def _build_alternate_discovery_rows(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not alternate_book_level_csv.exists() or alternate_book_level_csv.stat().st_size == 0:
         raise SystemExit(
-            "Missing alternate discovery source CSV. Run the OddsAPI batter_hits_alternate discovery first: "
-            f"{alternate_book_level_csv}"
+            "Missing alternate discovery source CSV. Build the live OddsAPI batter_hits_alternate source first.\n"
+            f"Expected source CSV: {alternate_book_level_csv}\n"
+            f"Run source-only: make mlb-oddsapi-batter-hits-alternate-live-discovery DATE={slate_date}\n"
+            f"Or run full workflow: make mlb-hits-o15-alternate-discovery-full DATE={slate_date}"
         )
     alt_rows = _aggregate_alternate_rows(alternate_book_level_csv)
     slate_by_player = _slate_context_by_player(slate_rows, slate_date)
@@ -1506,6 +1793,7 @@ def _build_alternate_discovery_rows(
                 "best_over_price": _f(alt.get("best_over_price")),
                 "selected_side_implied_probability": _american_implied_probability(alt.get("best_over_price")),
                 "line": 1.5,
+                "side": "over",
                 "d7_hits_rate": d7,
                 "d15_hits_rate": d15,
                 "d7_hits_runs_rbis": _f(slate.get("d7_hits_runs_rbis")),
@@ -1981,65 +2269,24 @@ def _write_layered_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, An
 
 def _write_u15_layered_md(path: Path, rows: list[dict[str, Any]], meta: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    counts = _u15_layered_counts(rows)
+    layer_counts = _u15_layered_counts(rows)
+    tier_counts = _tier_counts(rows, board="u15")
+    statuses = _status_counts(rows)
+    reason_counts = _starter_reason_counts(rows)
+    u_summary = _u_reason_summary(rows)
     ordered_layers = [
-        ("layer_4_qc_d7_d15_tough_starter", "Layer 4: QC + d7 + d15 + Starter Expected Hits Allowed < 4.5"),
+        ("layer_4_qc_d7_d15_tough_starter", "Layer 4: QC + d7 + d15 + starter_expected_hits_allowed < 4.5"),
         (
             "layer_3_d7_d15_tough_starter_non_qc",
-            "Layer 3: d7 + d15 + Starter Expected Hits Allowed < 4.5, Not Layer 4",
+            "Layer 3: d7 + d15 + starter_expected_hits_allowed < 4.5, excluding Layer 4",
         ),
         (
             "layer_2_d7_d15_no_tough_starter",
-            "Layer 2: d7 + d15, Starter Expected Hits Allowed >= 4.5 or Unavailable",
+            "Layer 2: d7 + d15, without tough starter",
         ),
         ("layer_1_d7_cold_not_d15_consistent", "Layer 1: d7 Cold, Not d15 Consistent"),
+        ("all_u15_other", "all_u15_other"),
     ]
-    tier_by_layer = counts.get("tier_by_layer") if isinstance(counts.get("tier_by_layer"), dict) else {}
-
-    def combined_tier_sort_key(tier: str) -> tuple[int, int, str]:
-        hitter, _, pitcher = str(tier or "missing").partition("/")
-        return (
-            HITTER_TIER_RANK.get(hitter or "missing", 9),
-            PITCHER_TIER_RANK.get(pitcher or "missing", 9),
-            str(tier or "missing"),
-        )
-
-    def append_player_table(table_rows: list[dict[str, Any]], *, layer_label: str = "") -> None:
-        if layer_label:
-            lines.append(
-                "| layer | player | player_id | team | opp | tier | odds | model_prob | d7 | d15 | raw_d7 | raw_d15 | starter exp | QC | QC score | ranking score | starter status | tod | dow | game_time | opposing starter |"
-            )
-            lines.append("|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|---|---|---|")
-        else:
-            lines.append(
-                "| player | player_id | team | opp | tier | odds | model_prob | d7 | d15 | raw_d7 | raw_d15 | starter exp | QC | QC score | ranking score | starter status | tod | dow | game_time | opposing starter |"
-            )
-            lines.append("|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|---|---|---|")
-        for row in table_rows:
-            prefix = f"| {layer_label} | " if layer_label else "| "
-            lines.append(
-                prefix
-                + f"{row.get('player') or row.get('player_name') or ''} | {row.get('player_id') or ''} | "
-                f"{row.get('team') or ''} | "
-                f"{row.get('opponent') or ''} | `{row.get('combined_tier') or ''}` | "
-                f"`{_fmt(row.get('market_price'))}` | `{_fmt(row.get('model_prob'))}` | "
-                f"`{_fmt(row.get('d7_hits_rate'))}` | `{_fmt(row.get('d15_hits_rate'))}` | "
-                f"`{_fmt(row.get('raw_d7_hits_calendar'))}` | `{_fmt(row.get('raw_d15_hits_calendar'))}` | "
-                f"`{_fmt(row.get('starter_expected_hits_allowed'))}` | "
-                f"`{str(row.get('qc_candidate')).lower()}` | `{_fmt(row.get('qc_score'))}` | "
-                f"`{_fmt(row.get('ranking_score'))}` | `{row.get('starter_context_status') or ''}` | "
-                f"{row.get('time_of_day_bucket') or ''} | {row.get('game_day_of_week') or ''} | "
-                f"{row.get('game_time') or ''} | {row.get('opposing_starter') or ''} |"
-            )
-
-    def append_grouped_by_combined_tier(table_rows: list[dict[str, Any]], *, layer_label: str = "") -> None:
-        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in table_rows:
-            grouped[str(row.get("combined_tier") or "missing")].append(row)
-        for tier in sorted(grouped, key=combined_tier_sort_key):
-            lines.extend([f"### Combined Tier {tier}", ""])
-            append_player_table(grouped[tier], layer_label=layer_label)
-            lines.append("")
 
     lines = [
         "# Hits Under 1.5 Favorite Audit Board",
@@ -2047,62 +2294,141 @@ def _write_u15_layered_md(path: Path, rows: list[dict[str, Any]], meta: dict[str
         f"- Date: `{meta.get('date')}`",
         "- Scope: review aid only; no production selector/upload/threshold/grading changes.",
         "- Candidate universe: `prop_type = hits`, `side = under`, `line = 1.5`.",
-        "- Layer 4: Quick Card candidate + `d7_hits_rate < 1.0` + `d15_hits_rate < 1.0` + `starter_expected_hits_allowed < 4.5`.",
-        "- Layer 3: `d7_hits_rate < 1.0` + `d15_hits_rate < 1.0` + `starter_expected_hits_allowed < 4.5`, excluding Layer 4.",
-        "- Tough starter definition: `starter_expected_hits_allowed < 4.5`.",
-        "- Layer 2: `d7_hits_rate < 1.0` + `d15_hits_rate < 1.0`, with `starter_expected_hits_allowed >= 4.5` or unavailable/untrusted starter context.",
-        "- Layer 4 and Layer 3 are Pitcher Tier `A` by definition; Layer 2 can contain Pitcher Tier `B`, `C`, `D`, or `U` and is grouped below by actual combined tier.",
-        "- Layer 1: `d7_hits_rate < 1.0` but `d15_hits_rate >= 1.0` or unavailable.",
-        "- Pitcher tier `U` means starter context was unavailable or untrusted at this run.",
+        "- Hitter tier A: `d7_hits_rate < 1.0` and `d15_hits_rate < 1.0`.",
+        "- Hitter tier B: `d7_hits_rate < 1.1` and `d15_hits_rate < 1.1`.",
+        "- Hitter tier C: all remaining candidates.",
+        "- Pitcher tier A: `starter_expected_hits_allowed < 4.5`.",
+        "- Pitcher tier B: `4.5 <= starter_expected_hits_allowed < 5.0`.",
+        "- Pitcher tier C: `5.0 <= starter_expected_hits_allowed < 5.5`.",
+        "- Pitcher tier D: `starter_expected_hits_allowed >= 5.5`.",
+        "- Pitcher tier U: starter context unavailable/untrusted.",
         "",
         "## Summary Counts",
         "",
-        f"- All u1.5 rows: `{counts.get('all_u15', 0)}`",
-        f"- d7 cold rows: `{counts.get('d7_cold', 0)}`",
-        f"- d7 + d15 cold rows: `{counts.get('d7_d15_cold', 0)}`",
-        f"- d7 + d15 + starter_expected_hits_allowed < 4.5 rows: `{counts.get('d7_d15_tough_starter', 0)}`",
-        f"- QC + d7 + d15 + starter_expected_hits_allowed < 4.5 watch candidates: `{counts.get('qc_watch_candidate', 0)}`",
+        f"- All u1.5 rows: `{layer_counts.get('all_u15', 0)}`",
+        f"- d7 cold rows: `{layer_counts.get('d7_cold', 0)}`",
+        f"- d7 + d15 cold rows: `{layer_counts.get('d7_d15_cold', 0)}`",
+        f"- d7 + d15 + starter_expected_hits_allowed < 4.5 rows: `{layer_counts.get('d7_d15_tough_starter', 0)}`",
+        f"- QC + d7 + d15 + starter_expected_hits_allowed < 4.5 watch candidates: `{layer_counts.get('qc_watch_candidate', 0)}`",
         f"- Excluded all-u1.5 rows outside useful layers: `{sum(1 for row in rows if row.get('layer_label') == 'all_u15_other')}`",
         f"- Rows with starter context: `{meta.get('rows_with_starter_context')}`",
+        f"- Confirmed starter rows: `{statuses.get('confirmed', 0)}`",
+        f"- Projected starter rows: `{statuses.get('projected', 0)}`",
+        f"- Unavailable/untrusted starter rows: `{len(rows) - statuses.get('confirmed', 0) - statuses.get('projected', 0)}`",
+        f"- Pitcher tier U due to missing starter: `{u_summary.get('missing_starter', 0)}`",
+        f"- Pitcher tier U due to min-start policy: `{u_summary.get('min_start_policy', 0)}`",
+        f"- Pitcher tier U due to stale/unknown: `{u_summary.get('stale_unknown', 0)}`",
+        f"- Pitcher tier U due to other: `{u_summary.get('other', 0)}`",
+        f"- Rows with raw hit totals: `{meta.get('rows_with_raw_hit_totals')}`",
+        f"- Raw calendar hit total source: `{meta.get('raw_hit_total_source')}` | status `{meta.get('raw_hit_total_status')}`",
+        *(
+            [f"- Raw hit total error: `{meta.get('raw_hit_total_error')}`"]
+            if meta.get("raw_hit_total_error")
+            else []
+        ),
+        f"- Hits environment latest source: `{meta.get('hits_environment_json')}`",
         f"- Environment snapshot policy: `{meta.get('environment_snapshot_policy')}`",
         f"- Selected environment artifact: `{meta.get('selected_artifact_path')}`",
         f"- Selected environment coverage: `{meta.get('selected_artifact_coverage')}` rows / `{meta.get('selected_artifact_team_pair_count')}` team pairs",
         f"- Latest environment coverage: `{meta.get('latest_artifact_coverage')}` rows / `{meta.get('latest_artifact_team_pair_count')}` team pairs",
+        f"- Slate output source: `{meta.get('slate_output_csv')}`",
+        f"- Note: {meta.get('d7_d15_unit_note')}",
         "",
-        "## A/A And A/B Counts By Layer",
+        "## Count By Combined Tier",
         "",
     ]
-    for layer, title in ordered_layers:
-        layer_counts = tier_by_layer.get(layer, {}) if isinstance(tier_by_layer.get(layer), dict) else {}
-        lines.append(
-            f"- {title}: A/A `{layer_counts.get('A/A', 0)}`, A/B `{layer_counts.get('A/B', 0)}`"
-        )
-    lines.append("")
+    if rows:
+        for tier, count in tier_counts.items():
+            lines.append(f"- `{tier}`: `{count}`")
+        lines.append("")
 
-    for layer, title in ordered_layers:
-        layer_rows = [row for row in rows if str(row.get("layer_label") or "") == layer]
-        lines.extend([f"## {title}", ""])
-        if layer == "layer_2_d7_d15_no_tough_starter":
-            lines.append("- This layer is not a single pitcher bucket; rows are grouped by their actual combined hitter/pitcher tier.")
-            lines.append("")
-        elif layer in {"layer_4_qc_d7_d15_tough_starter", "layer_3_d7_d15_tough_starter_non_qc"}:
-            lines.append("- Pitcher Tier `A` is required for this layer by definition.")
-            lines.append("")
-        if not layer_rows:
-            lines.extend(["- None", ""])
-            continue
-        append_grouped_by_combined_tier(layer_rows)
+        lines.extend(["## Starter Context Status", ""])
+        for status, count in statuses.items():
+            lines.append(f"- `{status}`: `{count}`")
+        lines.append("")
 
-    lines.extend(["## Excluded All-u1.5 Summary", ""])
-    excluded = [row for row in rows if str(row.get("layer_label") or "") == "all_u15_other"]
-    lines.append(f"- Rows outside the four listed layers: `{len(excluded)}`")
-    lines.append("- These rows remain in the CSV with `layer_label = all_u15_other` for auditability.")
-    lines.append("- Display label: `Layer X: all other u1.5`.")
-    lines.append("")
-    if not excluded:
-        lines.extend(["- None", ""])
+        lines.extend(["## Starter Context Reason Counts", ""])
+        for reason, count in reason_counts.items():
+            lines.append(f"- `{reason}`: `{count}`")
+        lines.append("")
+
+        lines.extend(["## Tier Counts By Starter Context Status", ""])
+        for status, tier, count in _tier_counts_by_status(rows, board="u15"):
+            lines.append(f"- `{status}` / `{tier}`: `{count}`")
+        lines.append("")
+
+        lines.extend(["## Pitcher Tier U Reasons", ""])
+        u_reason_counts = _u_reason_counts(rows)
+        if u_reason_counts:
+            for reason, count in u_reason_counts.items():
+                lines.append(f"- `{reason}`: `{count}`")
+        else:
+            lines.append("- None")
+        lines.append("")
+
+        lines.extend(["## Layer Summary", ""])
+        for layer, title in ordered_layers:
+            layer_total = sum(1 for row in rows if str(row.get("layer_label") or "") == layer)
+            lines.append(f"- {title}: `{layer_total}`")
+        lines.append("")
+        lines.append("- Layer labels remain in the CSV for tracking and performance aggregation.")
+        lines.append("- Layer 4/3 are Pitcher Tier `A` by definition; Layer 2 can contain Pitcher Tier `B`, `C`, `D`, or `U`.")
+        lines.append("")
+
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            grouped[str(row.get("combined_tier") or "U/U")].append(row)
+
+        lines.extend(["## Players By Combined Tier", ""])
+        for tier in tier_counts:
+            lines.extend(
+                [
+                    f"### {tier}",
+                    "",
+                    "| player | player_id | team | opp | model_prob | market_price | implied | d7 | d15 | d7 HRR | d15 HRR | raw_d7 | raw_d15 | starter exp | team exp | qc_score | ranking_score | starter_status | starter_unavailable_reason | starts/min | layer | watch | tod | dow | game_time | opposing_starter |",
+                    "|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---|---|---|---|",
+                ]
+            )
+            for row in grouped.get(tier, []):
+                starts = _fmt(row.get("starter_starts_count"))
+                required = _fmt(row.get("starter_required_min_starts"))
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            str(row.get("player_name") or row.get("player") or ""),
+                            str(row.get("player_id") or ""),
+                            str(row.get("team") or ""),
+                            str(row.get("opponent") or ""),
+                            _fmt(row.get("model_prob")),
+                            _fmt(row.get("market_price")),
+                            _fmt(row.get("selected_side_implied_probability")),
+                            _fmt(row.get("d7_hits_rate")),
+                            _fmt(row.get("d15_hits_rate")),
+                            _fmt(row.get("d7_hits_runs_rbis")),
+                            _fmt(row.get("d15_hits_runs_rbis")),
+                            _fmt(row.get("raw_d7_hits_calendar")),
+                            _fmt(row.get("raw_d15_hits_calendar")),
+                            _fmt(row.get("starter_expected_hits_allowed")),
+                            _fmt(row.get("team_expected_hits_allowed")),
+                            _fmt(row.get("qc_score")),
+                            _fmt(row.get("ranking_score")),
+                            str(row.get("starter_context_status") or ""),
+                            str(row.get("starter_context_unavailable_reason") or ""),
+                            f"{starts}/{required}" if starts or required else "",
+                            str(row.get("layer_label") or ""),
+                            str(row.get("watch_candidate") or "").lower(),
+                            str(row.get("time_of_day_bucket") or ""),
+                            str(row.get("game_day_of_week") or ""),
+                            str(row.get("game_time") or ""),
+                            str(row.get("opposing_starter") or ""),
+                        ]
+                    )
+                    + " |"
+                )
+            lines.append("")
     else:
-        append_grouped_by_combined_tier(excluded, layer_label="Layer X")
+        lines.append("No hits under 1.5 rows were available for tiering.")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -2387,6 +2713,8 @@ def main() -> int:
         prefix = "hits_u15_favorite_audit" if args.board == "u15" else "hits_o15_simple_filter"
     out_csv = out_dir / f"{prefix}_{date_text}.csv"
     out_md = out_dir / f"{prefix}_{date_text}.md"
+    before_rows = _read_csv(out_csv)
+    identity_meta = _apply_canonical_identity(rows, slate_rows, date_text)
     if args.board == "watch_o15":
         columns = WATCH_OUTPUT_COLUMNS
     elif args.board == "layered_o15":
@@ -2398,6 +2726,15 @@ def main() -> int:
     else:
         columns = OUTPUT_COLUMNS
     _write_csv(out_csv, rows, columns=columns)
+    _append_identity_migration_report(
+        out_dir=out_dir,
+        date_text=date_text,
+        board=args.board,
+        out_csv=out_csv,
+        before_rows=before_rows,
+        after_rows=rows,
+        identity_meta=identity_meta,
+    )
 
     meta = {
         "date": date_text,
@@ -2408,6 +2745,7 @@ def main() -> int:
         **starter_meta,
         **raw_meta,
         **diagnostics,
+        **identity_meta,
     }
     if args.board == "layered_o15":
         _write_layered_md(out_md, rows, meta)

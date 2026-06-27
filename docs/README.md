@@ -27,6 +27,8 @@ If the question is “what is the active runtime path right now?”:
 
 ## Architecture
 
+- `docs/PROJECT_DOCTRINE.md`: permanent engineering doctrine for durable features, backfills, daily sustainability, visibility, and regression monitoring.
+- `docs/FEATURE_COMPLETION_CHECKLIST.md`: copyable checklist for marking any feature complete.
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.
 - `docs/Execution Plan.md`: forward execution plan derived from as-built baseline.
 - `docs/As Built Snapshot.md`: current deployed/runtime as-built summary.
@@ -86,6 +88,7 @@ If the question is “what is the active runtime path right now?”:
 
 ## NHL UX and Validation
 
+- `docs/NHL_PROJECT_BOOTSTRAP.md`: NHL startup standard requiring the Project Doctrine from day one.
 - `docs/NHL UX Contract.md`: canonical NHL v1 front-facing UX contract (research + board modes).
 - `docs/NHL Smoke Testing.md`: runbooks for `make nhl-checks-*`.
 - `docs/NHL Prediction Quality Baseline.md`: fixed-window NHL backtest report command and output contract.

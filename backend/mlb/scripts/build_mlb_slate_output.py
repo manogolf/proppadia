@@ -29,6 +29,7 @@ import pandas as pd
 
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.shared.probability_calibration import calibrate_probability, load_calibrator
+from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # .../backend
@@ -128,17 +129,12 @@ def _game_day_of_week(value: object) -> Optional[str]:
 
 
 def _time_of_day_bucket(value: object) -> Optional[str]:
-    dt = pd.to_datetime(value, errors="coerce")
-    if pd.isna(dt):
+    if value is None or pd.isna(value):
         return None
-    hour = int(dt.hour)
-    if hour < 12:
-        return "morning"
-    if hour < 16:
-        return "afternoon"
-    if hour < 20:
-        return "evening"
-    return "late"
+    try:
+        return get_time_of_day_bucket_et(value)
+    except Exception:
+        return None
 
 
 def _truthy_rate(series: pd.Series) -> float:

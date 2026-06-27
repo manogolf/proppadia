@@ -494,10 +494,11 @@ def _write_report(path: Path, rows: list[dict[str, Any]], board: str, latest: st
     path.parent.mkdir(parents=True, exist_ok=True)
     top = _top_recent(rows, board)
     lines = [
-        f"# Hits {'Over' if board == 'o15' else 'Under'} 1.5 Tier Backtest",
+        f"# Reconstructed Hits {'Over' if board == 'o15' else 'Under'} 1.5 All-Market Tier Audit",
         "",
         f"- Latest completed slate: `{latest or 'n/a'}`",
-        "- Scope: review aid only; no selector, upload, threshold, grading, or matching changes.",
+        "- Source: reconstructed all-market population from execution reconcile rows, not actual generated board artifacts.",
+        "- Scope: review aid research only; no selector, upload, threshold, grading, or matching changes.",
         "",
         "## Top Recent Combined Tiers",
         "",
