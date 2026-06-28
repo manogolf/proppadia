@@ -2037,6 +2037,262 @@ def _write_hits_environment_identity_artifacts(
     }
 
 
+def _load_hits_environment_snapshot_rows(snapshot_dir: Path, slate_date: str) -> List[Dict[str, Any]]:
+    date_dir = snapshot_dir / slate_date
+    if not date_dir.exists():
+        return []
+    rows: List[Dict[str, Any]] = []
+    for path in sorted(date_dir.glob(f"mlb_hits_environment_hits_allowed_rows_{slate_date}__*.csv")):
+        stamp_match = re.search(r"__(.+)\.csv$", path.name)
+        stamp = stamp_match.group(1) if stamp_match else ""
+        try:
+            with path.open("r", encoding="utf-8", newline="") as fh:
+                reader = csv.DictReader(fh)
+                for row in reader:
+                    item = dict(row)
+                    item["_snapshot_path"] = str(path)
+                    item["_snapshot_stamp"] = stamp
+                    rows.append(item)
+        except Exception:
+            continue
+    return rows
+
+
+def _fetch_actual_pitcher_usage(slate_date: str, player_ids: Sequence[Any]) -> Dict[int, Dict[str, Any]]:
+    ids = sorted({int(pid) for pid in (_as_int(pid) for pid in player_ids) if pid is not None})
+    if not ids:
+        return {}
+    rows = pg_fetchall(
+        """
+        SELECT player_id,
+               game_id,
+               game_date,
+               team,
+               opponent,
+               COALESCE(is_starter, 0)::int AS is_starter,
+               COALESCE(outs_recorded, 0)::int AS outs_recorded,
+               COALESCE(hits_allowed, 0)::int AS hits_allowed,
+               COALESCE(earned_runs, 0)::int AS earned_runs,
+               COALESCE(strikeouts_pitching, 0)::int AS strikeouts_pitching
+        FROM mlb.player_stats
+        WHERE game_date = %s::date
+          AND player_id = ANY(%s::bigint[])
+        """,
+        (slate_date, ids),
+    )
+    out: Dict[int, Dict[str, Any]] = {}
+    for row in rows or []:
+        player_id = _as_int(row.get("player_id"))
+        if player_id is None:
+            continue
+        out[int(player_id)] = dict(row)
+    return out
+
+
+def _role_from_usage(row: Dict[str, Any] | None) -> str:
+    if not row:
+        return "unknown"
+    outs = _as_int(row.get("outs_recorded")) or 0
+    if outs <= 0:
+        return "did_not_appear"
+    if _as_int(row.get("is_starter")) == 1:
+        return "actual_starter"
+    return "reliever"
+
+
+def _known_lifecycle_usage_observation(slate_date: str, player_id: str, player_name: str) -> Dict[str, Any]:
+    if slate_date == "2026-06-27" and (player_id == "660604" or _norm_player_name(player_name) == "alan rangel"):
+        return {
+            "actual_usage_status": "reliever",
+            "actual_usage_source": "user_reported_lifecycle_fact",
+            "actual_usage_note": "Rain delay changed probable-starter role; replacement starter lasted 1.1 innings; Alan Rangel later entered as reliever.",
+        }
+    return {}
+
+
+def _build_starter_market_lifecycle_audit(
+    *,
+    current_rows: Sequence[Dict[str, Any]],
+    snapshot_rows: Sequence[Dict[str, Any]],
+    slate_date: str,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    current_keys = {
+        (
+            str(row.get("canonical_player_id") or row.get("player_id") or "").strip(),
+            str(row.get("canonical_game_id") or row.get("game_id") or "").strip(),
+        )
+        for row in current_rows
+    }
+    historical_by_key: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for row in snapshot_rows:
+        player_id = str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+        game_id = str(row.get("canonical_game_id") or row.get("game_id") or "").strip()
+        if not player_id:
+            continue
+        historical_by_key.setdefault((player_id, game_id), []).append(row)
+
+    player_ids = [key[0] for key in historical_by_key.keys()]
+    try:
+        usage_by_player = _fetch_actual_pitcher_usage(slate_date, player_ids)
+    except Exception:
+        usage_by_player = {}
+
+    audit_rows: List[Dict[str, Any]] = []
+    for key, history in sorted(historical_by_key.items(), key=lambda item: (item[0][1], item[0][0])):
+        player_id_text, game_id_text = key
+        latest = sorted(history, key=lambda row: str(row.get("_snapshot_stamp") or ""))[-1]
+        earliest = sorted(history, key=lambda row: str(row.get("_snapshot_stamp") or ""))[0]
+        in_current = key in current_keys or any(k[0] == player_id_text and k[1] == game_id_text for k in current_keys)
+        player_id = _as_int(player_id_text)
+        usage = usage_by_player.get(int(player_id)) if player_id is not None else None
+        actual_usage_status = _role_from_usage(usage)
+        actual_usage_source = "player_stats" if usage else ""
+        known_usage = _known_lifecycle_usage_observation(slate_date, player_id_text, str(latest.get("player_name") or earliest.get("player_name") or ""))
+        if known_usage and actual_usage_status == "unknown":
+            actual_usage_status = str(known_usage.get("actual_usage_status") or actual_usage_status)
+            actual_usage_source = str(known_usage.get("actual_usage_source") or actual_usage_source)
+        had_market = any(_truthy(row.get("hits_allowed_market_present")) or _truthy(row.get("odds_market_present")) for row in history)
+        had_probable = any(_truthy(row.get("probable_starter_context_present")) for row in history)
+        forecast_status = str(latest.get("forecast_status") or "")
+        forecast_diag = str(latest.get("forecast_diagnostic") or latest.get("forecast_note") or "")
+        identity_status = str(latest.get("identity_status") or ("resolved_by_id" if player_id_text else "unresolved"))
+        role_status = "probable_starter" if had_probable and in_current else "unknown"
+        lifecycle_warning = ""
+        if had_probable and not in_current:
+            role_status = "replaced_probable"
+            lifecycle_warning = "probable_starter_removed_after_market_or_context"
+        if actual_usage_status == "reliever" and had_probable:
+            role_status = "reliever"
+            lifecycle_warning = "probable_starter_later_used_as_reliever"
+        elif actual_usage_status == "actual_starter":
+            role_status = "actual_starter"
+        elif actual_usage_status == "did_not_appear" and had_probable:
+            role_status = "did_not_appear"
+            lifecycle_warning = lifecycle_warning or "probable_starter_did_not_appear"
+        if lifecycle_warning or not in_current:
+            audit_rows.append(
+                {
+                    "slate_date": slate_date,
+                    "player_id": player_id_text,
+                    "player_name": latest.get("player_name") or earliest.get("player_name"),
+                    "game_id": game_id_text or latest.get("game_id") or earliest.get("game_id"),
+                    "pitcher_team": latest.get("pitcher_team") or earliest.get("pitcher_team"),
+                    "offense_team": latest.get("offense_team") or earliest.get("offense_team"),
+                    "identity_status": identity_status,
+                    "role_status": role_status,
+                    "starter_status": "not_active_trusted_starter_forecast" if lifecycle_warning else str(latest.get("forecast_status") or ""),
+                    "market_status": "prior_market_existed" if had_market and not in_current else "market_current" if had_market else "no_market",
+                    "forecast_status": forecast_status,
+                    "forecast_diagnostic": forecast_diag,
+                    "actual_usage_status": actual_usage_status,
+                    "actual_usage_source": actual_usage_source,
+                    "actual_usage_note": known_usage.get("actual_usage_note", "") if known_usage else "",
+                    "game_status": "role_changed_after_probable_context" if lifecycle_warning else "normal",
+                    "lifecycle_warning": lifecycle_warning,
+                    "line": latest.get("line") or earliest.get("line"),
+                    "odds_books_seen": latest.get("odds_books_seen") or earliest.get("odds_books_seen"),
+                    "earliest_snapshot": earliest.get("_snapshot_stamp"),
+                    "latest_snapshot": latest.get("_snapshot_stamp"),
+                    "earliest_snapshot_path": earliest.get("_snapshot_path"),
+                    "latest_snapshot_path": latest.get("_snapshot_path"),
+                    "current_hits_environment_row_present": bool(in_current),
+                    "actual_outs_recorded": usage.get("outs_recorded") if usage else "",
+                    "actual_is_starter": usage.get("is_starter") if usage else "",
+                    "actual_hits_allowed": usage.get("hits_allowed") if usage else "",
+                    "actual_earned_runs": usage.get("earned_runs") if usage else "",
+                    "actual_strikeouts": usage.get("strikeouts_pitching") if usage else "",
+                }
+            )
+
+    meta = {
+        "rows": len(audit_rows),
+        "warnings": len([row for row in audit_rows if row.get("lifecycle_warning")]),
+        "players_with_prior_context": len(historical_by_key),
+        "players_in_current_context": len(current_keys),
+    }
+    return audit_rows, meta
+
+
+def _write_starter_market_lifecycle_audit(
+    *,
+    rows: Sequence[Dict[str, Any]],
+    meta: Dict[str, Any],
+    slate_date: str,
+    out_dir: Path = Path("artifacts/analysis/mlb/pitcher_expectations"),
+) -> Dict[str, str]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_dir / f"starter_market_lifecycle_audit_{slate_date}.csv"
+    md_path = out_dir / f"starter_market_lifecycle_audit_{slate_date}.md"
+    _write_generic_csv(csv_path, list(rows))
+
+    lines = [
+        f"# Starter / Market Lifecycle Audit - {slate_date}",
+        "",
+        "Scope: diagnostic only. Identity, role, market availability, forecast trust, and actual usage are separate lifecycle layers.",
+        "",
+        "## Doctrine",
+        "",
+        "- Identity is stable.",
+        "- Role is transient.",
+        "- Market availability is transient.",
+        "- Forecast trust is separate.",
+        "- Actual usage may differ from probable role.",
+        "",
+        "## Summary",
+        "",
+        f"- Prior-context players inspected: `{meta.get('players_with_prior_context', 0)}`",
+        f"- Current-context players: `{meta.get('players_in_current_context', 0)}`",
+        f"- Lifecycle warning rows: `{meta.get('warnings', 0)}`",
+        "",
+    ]
+    warning_rows = [row for row in rows if row.get("lifecycle_warning")]
+    rangel_rows = [row for row in warning_rows if _norm_player_name(row.get("player_name")) == "alan rangel"]
+    if not rangel_rows:
+        rangel_rows = [row for row in rows if _norm_player_name(row.get("player_name")) == "alan rangel"]
+    if rangel_rows:
+        r = rangel_rows[0]
+        lines.extend(
+            [
+                "## Alan Rangel Timeline",
+                "",
+                "- Originally probable starter for `PHI vs NYM` on `2026-06-27`.",
+                "- OddsAPI had `pitcher_hits_allowed` markets for him.",
+                "- Rain delay occurred before first pitch.",
+                "- Rangel was no longer the active proposed starter after the delay.",
+                "- Game resumed with a replacement starter.",
+                "- Replacement starter lasted 1.1 innings.",
+                "- Rangel later entered as a reliever.",
+                "",
+                "## Alan Rangel Lifecycle Classification",
+                "",
+                f"- Identity: `{r.get('identity_status')}` (`player_id={r.get('player_id')}`, `game_id={r.get('game_id')}`)",
+                f"- Role: `{r.get('role_status')}`",
+                f"- Market: `{r.get('market_status')}`",
+                f"- Forecast: `{r.get('forecast_status')}` / `{r.get('forecast_diagnostic')}`",
+                f"- Actual usage: `{r.get('actual_usage_status')}` (`outs_recorded={r.get('actual_outs_recorded')}`)",
+                f"- Lifecycle warning: `{r.get('lifecycle_warning')}`",
+                "",
+                "Display expectation: Alan Rangel should not appear as an active trusted starter forecast after the role change, but his identity/game/team/market history should remain visible with a lifecycle warning.",
+                "",
+            ]
+        )
+    if warning_rows:
+        lines.extend(["## Warning Rows", "", "| player | teams | role | market | forecast | actual usage | warning |", "|---|---|---|---|---|---|---|"])
+        for row in warning_rows:
+            lines.append(
+                f"| {row.get('player_name')} | {row.get('pitcher_team')} vs {row.get('offense_team')} | `{row.get('role_status')}` | `{row.get('market_status')}` | `{row.get('forecast_status')}` / `{row.get('forecast_diagnostic')}` | `{row.get('actual_usage_status')}` | `{row.get('lifecycle_warning')}` |"
+            )
+    elif rows:
+        lines.append("No active lifecycle warnings were detected; historical lifecycle trace rows are preserved in the CSV.")
+    else:
+        lines.append("No starter/market lifecycle warnings were detected.")
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {
+        "starter_market_lifecycle_audit_md": str(md_path),
+        "starter_market_lifecycle_audit_csv": str(csv_path),
+    }
+
+
 def _summarize_slate_hits_allowed(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     if not rows:
         return {"rows": 0}
@@ -2742,6 +2998,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slate_date=slate_date,
         generated_at_utc=generated_at_utc,
     )
+    lifecycle_rows, lifecycle_meta = _build_starter_market_lifecycle_audit(
+        current_rows=slate_rows,
+        snapshot_rows=_load_hits_environment_snapshot_rows(Path(args.snapshot_dir), slate_date),
+        slate_date=slate_date,
+    )
+    lifecycle_outputs = _write_starter_market_lifecycle_audit(
+        rows=lifecycle_rows,
+        meta=lifecycle_meta,
+        slate_date=slate_date,
+    )
     identity_outputs = _write_hits_environment_identity_artifacts(
         rows=slate_rows,
         slate_date=slate_date,
@@ -2776,6 +3042,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "starter_hits_allowed_residual": starter_summary,
         "starter_flag_diagnostics": starter_flag_diag,
         "slate_hits_allowed_context": slate_summary,
+        "starter_market_lifecycle": {
+            "summary": lifecycle_meta,
+        "warnings": [row for row in lifecycle_rows if row.get("lifecycle_warning")],
+        },
         "team_hits_allowed_matchup_evaluation": team_hits_allowed_eval,
         "outputs": {
             "out_json": str(Path(args.out_json)),
@@ -2786,6 +3056,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "eval_tracker_csv": str(Path(args.eval_tracker_csv)),
             "odds_snapshot": str(odds_snapshot),
             **identity_outputs,
+            **lifecycle_outputs,
         },
         "ok": ok,
         "status": "pass" if ok else "fail",

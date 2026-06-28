@@ -109,6 +109,20 @@ Rows that cannot graduate must keep a visible status such as:
 - `provider_event_unmapped`
 - `probable_starter_context_only`
 
+## Identity, Role, Market, Forecast, Outcome
+
+Identity is not role. Role is not market availability. Market availability is not forecast trust. Forecast trust is not actual usage.
+
+Every player-prop lifecycle should preserve these layers separately:
+
+1. Identity Layer: stable canonical player, team, and game identity.
+2. Role Layer: transient pregame/current role, such as probable starter, replaced probable, actual starter, reliever, did not appear, or unknown.
+3. Market Layer: transient sportsbook availability, line, book count, selected price, disappeared market, or provider-only market.
+4. Forecast Layer: model/research trust status, such as trusted forecast, insufficient history, context-only forecast, no market, or unavailable source stats.
+5. Outcome Layer: actual game usage and result, such as starter innings, relief appearance, no appearance, resolved outcome, or grading status.
+
+Canonical identity must remain stable even when role, market, forecast, or outcome changes. For example, a probable starter can have a valid pitcher market in the morning, be replaced after a weather delay, later enter as a reliever, and still retain the same canonical player/game identity with a lifecycle warning rather than being treated as an identity failure.
+
 ## Health Standard
 
 Durable artifacts should report:

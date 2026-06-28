@@ -968,6 +968,7 @@ def _extract_hits_env(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     weighted = starter.get("weighted_baseline") or {}
     slate_ctx = js.get("slate_hits_allowed_context") or {}
     team_eval = js.get("team_hits_allowed_matchup_evaluation") or {}
+    lifecycle = js.get("starter_market_lifecycle") or {}
     return {
         "generated_at_utc": js.get("generated_at_utc"),
         "requested_as_of_date": js.get("requested_as_of_date"),
@@ -997,6 +998,8 @@ def _extract_hits_env(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "forecast_unavailable_rows": _as_int(slate_ctx.get("forecast_unavailable_rows")),
         "forecast_unavailable_by_reason": slate_ctx.get("forecast_unavailable_by_reason") or {},
         "forecast_unavailable_pitchers": slate_ctx.get("forecast_unavailable_pitchers") or [],
+        "starter_market_lifecycle_summary": lifecycle.get("summary") or {},
+        "starter_market_lifecycle_warnings": lifecycle.get("warnings") or [],
         "team_eval_context_as_of_date": team_eval.get("context_as_of_date"),
         "team_eval_rows_with_expected": _as_int(team_eval.get("rows_with_expected")),
         "team_eval_rows_with_actual": _as_int(team_eval.get("rows_with_actual")),
@@ -2572,10 +2575,20 @@ def build_markdown(
             books = r.get("odds_books_seen")
             lines.append(
                 f"- {r.get('player_name')} ({r.get('pitcher_team')} vs {r.get('offense_team')}): "
-                f"reason `{r.get('forecast_note')}`"
+                f"reason `{r.get('forecast_diagnostic') or r.get('forecast_note')}`"
                 f"{f', prior starts `{prior}`' if prior is not None else ''}"
                 f"{f', line `{line}`' if line is not None else ''}"
                 f"{f', books `{books}`' if books is not None else ''}"
+            )
+    lifecycle_warnings = hits_env.get("starter_market_lifecycle_warnings") or []
+    if lifecycle_warnings:
+        lines.append(_format_category_separator(f"Starter / Market Lifecycle Warnings (n={len(lifecycle_warnings)})"))
+        for r in lifecycle_warnings[:10]:
+            lines.append(
+                f"- {r.get('player_name')} ({r.get('pitcher_team')} vs {r.get('offense_team')}): "
+                f"identity `{r.get('identity_status')}`, role `{r.get('role_status')}`, "
+                f"market `{r.get('market_status')}`, forecast `{r.get('forecast_status')}` / `{r.get('forecast_diagnostic')}`, "
+                f"actual `{r.get('actual_usage_status')}`, warning `{r.get('lifecycle_warning')}`"
             )
     top_rows = hits_env.get("top_expected_matchups") or []
     low_rows = hits_env.get("lowest_expected_matchups") or []
