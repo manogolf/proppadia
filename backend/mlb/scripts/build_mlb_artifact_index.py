@@ -290,6 +290,11 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     expanded_health_json = out_root / "expanded_o15_universe" / f"expanded_o15_context_health_{date}.json"
     identity_health_md = out_root / "identity" / "mlb_identity_health.md"
     identity_health_json = out_root / "identity" / "mlb_identity_health_summary.json"
+    project_invariants_md = out_root / "invariants" / f"mlb_project_invariants_{date}.md"
+    project_invariants_json = out_root / "invariants" / f"mlb_project_invariants_{date}.json"
+    invariant_backlog_md = out_root / "invariants" / "invariant_backlog.md"
+    invariant_backlog_csv = out_root / "invariants" / "invariant_backlog.csv"
+    invariant_backlog_json = out_root / "invariants" / "invariant_backlog_summary.json"
     reconcile = out_root / "execution_vs_model" / completed_date / "reconcile_rows.csv"
     review_perf = out_root / "review_aids" / "performance" / "review_aid_performance_report.md"
     review_perf_json = out_root / "review_aids" / "performance" / "review_aid_performance_summary.json"
@@ -329,6 +334,23 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
             )
     else:
         warnings.append(f"MLB canonical identity health missing: `{identity_health_json.as_posix()}`.")
+    project_invariants = _safe_read_json(project_invariants_json)
+    if project_invariants:
+        status = str(project_invariants.get("status") or "unknown")
+        if status != "pass":
+            warnings.append(
+                f"MLB project invariants are `{status}`; fail={project_invariants.get('fail_count', '')}, warn={project_invariants.get('warn_count', '')}."
+            )
+    else:
+        warnings.append(f"MLB project invariants missing: `{project_invariants_json.as_posix()}`.")
+    invariant_backlog = _safe_read_json(invariant_backlog_json)
+    if invariant_backlog:
+        if int(invariant_backlog.get("accepted_without_target_check") or 0) > 0:
+            warnings.append(
+                "MLB invariant backlog has accepted invariant(s) without automated target checks."
+            )
+    else:
+        warnings.append(f"MLB invariant backlog summary missing: `{invariant_backlog_json.as_posix()}`.")
     for board in boards:
         if board["status"] != "available":
             if board["required"]:
@@ -340,6 +362,8 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     open_first = [
         ("Ops Brief", ops_dated if ops_dated.exists() else ops_latest, True),
         ("Preflight", preflight, True),
+        ("Project Invariants", project_invariants_md, True),
+        ("Invariant Backlog", invariant_backlog_md, True),
         ("Review Aid Performance", review_perf, False),
         ("Daily Feature Lineage Health", out_root / "feature_lineage" / f"daily_feature_lineage_health_{date}.md", False),
     ]
@@ -379,7 +403,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
             [
                 "| week | date | status | open | repo path |",
                 "|---|---|---|---|---|",
-                f"| `{snapshot_week}` | `{snapshot_date}` | `{snapshot_status}` | {_dashboard_link(index_path, snapshot_readme, 'Latest Research Snapshot', False, link_items, notes='weekly research snapshot')} | `{_repo_path(snapshot_readme)}` |",
+        f"| `{snapshot_week}` | `{snapshot_date}` | `{snapshot_status}` | {_dashboard_link(index_path, snapshot_readme, 'Latest Research Snapshot', False, link_items, notes='weekly research snapshot')} | `{_repo_path(snapshot_readme)}` |",
                 "",
             ]
         )
@@ -419,8 +443,23 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
         [
             "",
             "Retired/historical audits are intentionally not listed here. Use the MLB artifact map and manifest for archive navigation.",
+            "",
+            "### Invariant Intake",
+            "",
+            "| proposed | accepted not implemented | implemented | open | repo path |",
+            "|---:|---:|---:|---|---|",
         ]
     )
+    if invariant_backlog:
+        lines.append(
+            f"| `{invariant_backlog.get('proposed', 0)}` | `{invariant_backlog.get('accepted_not_implemented', 0)}` | "
+            f"`{invariant_backlog.get('implemented', 0)}` | "
+            f"{_dashboard_link(index_path, invariant_backlog_md, 'Invariant Backlog', True, link_items)} | `{_repo_path(invariant_backlog_md)}` |"
+        )
+    else:
+        lines.append(
+            f"| `n/a` | `n/a` | `n/a` | {_dashboard_link(index_path, invariant_backlog_md, 'Invariant Backlog', True, link_items)} | `{_repo_path(invariant_backlog_md)}` |"
+        )
     lines.extend(
         [
             "",
@@ -508,6 +547,10 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
         ("Expanded O1.5 Context Health JSON", expanded_health_json, True),
         ("MLB Identity Health", identity_health_md, True),
         ("MLB Identity Health JSON", identity_health_json, True),
+        ("MLB Project Invariants", project_invariants_md, True),
+        ("MLB Project Invariants JSON", project_invariants_json, True),
+        ("MLB Invariant Backlog", invariant_backlog_md, True),
+        ("MLB Invariant Backlog CSV", invariant_backlog_csv, True),
         ("Expanded O1.5 Variable Importance", out_root / "expanded_o15_universe" / "expanded_o15_variable_importance.md", False),
         ("Expanded O1.5 Universe Rows", out_root / "expanded_o15_universe" / "expanded_o15_universe_rows.csv", False),
         ("Alternate Source Rows", out_root / "review_aids" / "oddsapi_batter_hits_alternate_live_discovery" / date / "live_alternate_book_level_rows.csv", False),

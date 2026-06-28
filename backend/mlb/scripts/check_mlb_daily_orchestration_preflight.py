@@ -175,10 +175,11 @@ def _check_json_health(name: str, path: Path, *, expected_date: str, required: b
         )
     if status not in {"pass", "ok"}:
         failed = [
-            str(item.get("field_group") or item.get("name") or "")
+            str(item.get("field_group") or item.get("name") or item.get("invariant") or "")
             for item in (data.get("checks") or [])
             if str(item.get("status") or "").lower() == "fail"
         ]
+        check_status = "warn" if status == "warn" else ("fail" if required else "warn")
         return ArtifactCheck(
             name=name,
             path=str(path),
@@ -186,8 +187,8 @@ def _check_json_health(name: str, path: Path, *, expected_date: str, required: b
             exists=True,
             row_count=len(data.get("checks") or []),
             date_values=[date_value] if date_value else [],
-            status="fail" if required else "warn",
-            detail="health_failed:" + ",".join(failed[:8]),
+            status=check_status,
+            detail=f"health_status:{status or 'unknown'}:" + ",".join(failed[:8]),
             mtime_utc=mtime,
         )
     return ArtifactCheck(
@@ -234,6 +235,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--hits-u15-favorite-csv", required=True)
     ap.add_argument("--hits-o15-alternate-csv", required=True)
     ap.add_argument("--expanded-o15-context-health-json", required=True)
+    ap.add_argument("--project-invariants-json", required=True)
     ap.add_argument("--out-json", default="artifacts/analysis/mlb/orchestration/mlb_daily_preflight_latest.json")
     ap.add_argument("--out-md", default="artifacts/analysis/mlb/orchestration/mlb_daily_preflight_latest.md")
     args = ap.parse_args(argv)
@@ -257,6 +259,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         _check_json_health(
             "expanded_o15_context_health",
             Path(args.expanded_o15_context_health_json),
+            expected_date=date_value,
+            required=True,
+        )
+    )
+    checks.append(
+        _check_json_health(
+            "mlb_project_invariants",
+            Path(args.project_invariants_json),
             expected_date=date_value,
             required=True,
         )

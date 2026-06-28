@@ -10,6 +10,7 @@ This is a lane-selection layer only. It uses frozen rules:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -26,6 +27,10 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sqlalchemy import create_engine, text
 
+from backend.mlb.identity.canonical_game_identity import GameIdentityInput, GameIdentityResolver
+from backend.mlb.identity.canonical_market_identity import MarketIdentityInput, resolve_market_identity
+from backend.mlb.identity.canonical_player_identity import PlayerIdentityInput, PlayerIdentityResolver
+from backend.mlb.identity.canonical_team_identity import canonical_team_code
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.scripts import export_mlb_book_upload as book_upload
 from backend.mlb.scripts import tool_upload_8rain
@@ -781,6 +786,246 @@ def _upload_identity_summary(rows: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _file_sha256(path: Path) -> str:
+    if not path.exists():
+        return ""
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _upload_hub_dir(date_value: str) -> Path:
+    return Path("backend/mlb/data/processed/mlb_uploads") / date_value
+
+
+def _load_slate_identity_reference(date_value: str) -> pd.DataFrame:
+    candidates = [
+        Path("backend/mlb/data/processed/mlb_slate_output.csv"),
+        DEFAULT_ODDS_HISTORY_ROOT / date_value / "mlb_slate_output.csv",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        date_col = "slate_date" if "slate_date" in df.columns else "date" if "date" in df.columns else "game_date"
+        if date_col in df.columns:
+            work = df[df[date_col].map(_date_key).eq(date_value)].copy()
+        else:
+            work = df.copy()
+        if not work.empty:
+            work["_identity_source_path"] = str(path)
+            return work
+    return pd.DataFrame()
+
+
+def _identity_slate_lookup(slate: pd.DataFrame) -> dict[tuple[str, str, str], dict[str, Any]]:
+    if slate.empty:
+        return {}
+    work = slate.copy()
+    work["_player_id_key"] = work.get("player_id", pd.Series("", index=work.index)).map(lambda v: str(int(float(v))) if _is_int_like(v) else _clean(v))
+    work["_prop_type_key"] = work.get("prop_type", pd.Series("", index=work.index)).astype(str).str.strip().str.lower()
+    work["_line_key"] = work.get("line", pd.Series("", index=work.index)).map(_line_key).map(lambda v: "" if v is None else f"{v:g}")
+    lookup: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for _, row in work.drop_duplicates(["_player_id_key", "_prop_type_key", "_line_key"], keep="first").iterrows():
+        key = (str(row.get("_player_id_key") or ""), str(row.get("_prop_type_key") or ""), str(row.get("_line_key") or ""))
+        if all(key):
+            lookup[key] = row.to_dict()
+    return lookup
+
+
+def _line_text(value: Any) -> str:
+    key = _line_key(value)
+    return "" if key is None else f"{key:g}"
+
+
+def _write_upload_identity_diagnostics(
+    *,
+    date_value: str,
+    ranking_upload_input: pd.DataFrame,
+    upload_csv: Path,
+) -> dict[str, Any]:
+    slate = _load_slate_identity_reference(date_value)
+    slate_lookup = _identity_slate_lookup(slate)
+    player_refs = slate.to_dict(orient="records") if not slate.empty else ranking_upload_input.to_dict(orient="records")
+    player_resolver = PlayerIdentityResolver(player_refs)
+    game_resolver = GameIdentityResolver()
+    rows: list[dict[str, Any]] = []
+    work = ranking_upload_input.copy()
+    if work.empty:
+        out_dir = _upload_hub_dir(date_value)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_csv = out_dir / f"upload_identity_diagnostics_{date_value}.csv"
+        pd.DataFrame().to_csv(out_csv, index=False)
+        return {
+            "rows": 0,
+            "diagnostics_csv": str(out_csv),
+            "lane_diagnostics_csv": "",
+            "upload_schema_columns": [],
+            "upload_schema_unchanged": True,
+            "upload_sha256": _file_sha256(upload_csv),
+        }
+
+    upload_columns: list[str] = []
+    upload_rows = 0
+    if upload_csv.exists():
+        try:
+            upload_df = pd.read_csv(upload_csv, nrows=0)
+            upload_columns = list(upload_df.columns)
+            upload_rows = int(len(pd.read_csv(upload_csv, low_memory=False)))
+        except Exception:
+            upload_columns = []
+
+    for idx, row in work.reset_index(drop=True).iterrows():
+        player_id_text = str(int(float(row.get("player_id")))) if _is_int_like(row.get("player_id")) else _clean(row.get("player_id"))
+        prop_type = _clean(row.get("prop_type")).lower()
+        line = _line_text(row.get("line"))
+        slate_row = slate_lookup.get((player_id_text, prop_type, line), {})
+        team_value = slate_row.get("team") or row.get("team") or row.get("player_team")
+        opponent_value = slate_row.get("opponent") or row.get("opponent")
+        if not opponent_value:
+            home = _upload_team_code(row.get("home_upload") or row.get("home_raw"))
+            away = _upload_team_code(row.get("away_upload") or row.get("away_raw"))
+            team = _upload_team_code(team_value)
+            if team and home and away:
+                opponent_value = away if team == home else home if team == away else ""
+        team_result = canonical_team_code(team_value)
+        opponent_result = canonical_team_code(opponent_value)
+        player_result = player_resolver.resolve(
+            PlayerIdentityInput(
+                player_id=player_id_text,
+                player_name=str(row.get("player_name") or row.get("player") or ""),
+                team=team_result.canonical_team,
+                opponent=opponent_result.canonical_team,
+                game_id=slate_row.get("game_id"),
+            )
+        )
+        game_result = game_resolver.resolve(
+            GameIdentityInput(
+                date=date_value,
+                game_id=slate_row.get("game_id"),
+                home_team=slate_row.get("home_team_code") or row.get("home_raw") or row.get("home_upload"),
+                away_team=slate_row.get("away_team_code") or row.get("away_raw") or row.get("away_upload"),
+                team=team_result.canonical_team,
+                opponent=opponent_result.canonical_team,
+            )
+        )
+        market_result = resolve_market_identity(
+            MarketIdentityInput(
+                date=date_value,
+                game_id=game_result.canonical_game_id,
+                player_id=player_result.canonical_player_id,
+                player_name=str(row.get("player_name") or row.get("player") or ""),
+                team=team_result.canonical_team,
+                opponent=opponent_result.canonical_team,
+                prop_type=prop_type,
+                side=row.get("side"),
+                line=line,
+            )
+        )
+        warning_parts = [
+            part
+            for part in [
+                player_result.ambiguity_reason,
+                game_result.ambiguity_reason,
+                market_result.ambiguity_reason,
+            ]
+            if part
+        ]
+        rows.append(
+            {
+                "date": date_value,
+                "upload_input_row_index": idx,
+                "player_id": row.get("player_id"),
+                "player_name": row.get("player_name") or row.get("player"),
+                "prop_type": prop_type,
+                "side": row.get("side"),
+                "line": line,
+                "source_lane": row.get("source_lane"),
+                "player_team": row.get("player_team"),
+                "home_raw": row.get("home_raw"),
+                "away_raw": row.get("away_raw"),
+                "home_upload": row.get("home_upload"),
+                "away_upload": row.get("away_upload"),
+                "canonical_player_id": player_result.canonical_player_id,
+                "canonical_game_id": game_result.canonical_game_id,
+                "canonical_team": team_result.canonical_team,
+                "canonical_opponent": opponent_result.canonical_team,
+                "canonical_market_key": market_result.canonical_market_key,
+                "fallback_market_key": market_result.fallback_market_key,
+                "identity_status": market_result.identity_status if market_result.identity_status != "resolved_by_id" else player_result.identity_status,
+                "identity_method": "+".join(
+                    part
+                    for part in [
+                        player_result.identity_method,
+                        game_result.identity_method,
+                        market_result.identity_method,
+                    ]
+                    if part
+                ),
+                "fallback_used": bool(player_result.fallback_used or game_result.fallback_used or market_result.fallback_used),
+                "identity_warning": ";".join(warning_parts),
+                "identity_confidence": min(player_result.identity_confidence, game_result.identity_confidence, market_result.identity_confidence),
+                "source_context_path": slate_row.get("_identity_source_path", ""),
+            }
+        )
+
+    diag = pd.DataFrame(rows)
+    out_dir = _upload_hub_dir(date_value)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_csv = out_dir / f"upload_identity_diagnostics_{date_value}.csv"
+    lane_csv = DEFAULT_OUT_DIR / date_value / f"upload_identity_diagnostics_{date_value}.csv"
+    diag.to_csv(out_csv, index=False)
+    lane_csv.parent.mkdir(parents=True, exist_ok=True)
+    diag.to_csv(lane_csv, index=False)
+
+    row_count = int(len(diag))
+    def coverage(col: str) -> float:
+        if row_count == 0 or col not in diag.columns:
+            return 0.0
+        return float(diag[col].astype(str).str.strip().ne("").mean() * 100.0)
+
+    unresolved = diag["identity_status"].astype(str).str.contains("unresolved", case=False, na=False) if row_count else pd.Series([], dtype=bool)
+    ambiguous = diag["identity_status"].astype(str).str.contains("ambiguous", case=False, na=False) if row_count else pd.Series([], dtype=bool)
+    fallback = diag["fallback_used"].astype(bool) if row_count else pd.Series([], dtype=bool)
+    expected_upload_columns = [
+        "LEAGUE",
+        "DATE",
+        "HOME",
+        "AWAY",
+        "DOUBLEHEADER",
+        "SECTION",
+        "MARKET",
+        "SELECTOR",
+        "POINT",
+        "SIDE",
+        "WIN %",
+    ]
+    return {
+        "rows": row_count,
+        "upload_rows": upload_rows,
+        "diagnostics_csv": str(out_csv),
+        "lane_diagnostics_csv": str(lane_csv),
+        "player_id_coverage_pct": coverage("canonical_player_id"),
+        "game_id_coverage_pct": coverage("canonical_game_id"),
+        "canonical_team_coverage_pct": coverage("canonical_team"),
+        "canonical_opponent_coverage_pct": coverage("canonical_opponent"),
+        "canonical_market_key_coverage_pct": coverage("canonical_market_key"),
+        "fallback_rows": int(fallback.sum()) if row_count else 0,
+        "unresolved_rows": int(unresolved.sum()) if row_count else 0,
+        "ambiguous_rows": int(ambiguous.sum()) if row_count else 0,
+        "upload_schema_columns": upload_columns,
+        "upload_schema_expected_columns": expected_upload_columns,
+        "upload_schema_unchanged": upload_columns == expected_upload_columns,
+        "upload_sha256": _file_sha256(upload_csv),
+        "slate_identity_source": str(slate["_identity_source_path"].iloc[0]) if not slate.empty and "_identity_source_path" in slate else "",
+    }
+
+
 def _counts_summary(selected: pd.DataFrame, empty_lanes: dict[str, bool], model_sources: dict[str, str]) -> dict[str, Any]:
     by_lane = {}
     for lane, group in selected.groupby("source_lane", dropna=False):
@@ -1162,6 +1407,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     else:
         summary["upload_export"] = {"skipped": True}
         summary["upload_mapping_diagnostics"] = {"skipped": True}
+    summary["upload_identity_diagnostics"] = _write_upload_identity_diagnostics(
+        date_value=date_value,
+        ranking_upload_input=ranking_upload_export_input,
+        upload_csv=upload_csv,
+    )
 
     archive_candidates = [
         out_csv,
@@ -1170,6 +1420,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         summary_json,
         upload_mapping_diagnostics_json,
     ]
+    identity_lane_diag = str(summary["upload_identity_diagnostics"].get("lane_diagnostics_csv") or "")
+    if identity_lane_diag:
+        archive_candidates.append(Path(identity_lane_diag))
     summary["timestamped_lane_artifacts"] = [
         str(_timestamped_artifact_path(path, run_tag)) for path in archive_candidates
     ]

@@ -102,6 +102,21 @@ Common regression checks:
 
 Regression checks should fail loudly enough that the next daily run cannot quietly publish misleading confidence.
 
+## Invariant Intake Rule
+
+Every resolved bug, repair, and doctrine lesson must answer:
+
+Should this become an invariant?
+
+If yes, the invariant must either be implemented in an automated audit or added to the invariant backlog:
+
+- `artifacts/analysis/mlb/invariants/invariant_backlog.csv`
+- `artifacts/analysis/mlb/invariants/invariant_backlog.md`
+
+If no, the reason should be documented in the fix notes, owner notes, or related audit. The goal is not to automate every observation immediately; the goal is to prevent lessons from evaporating after the immediate bug is fixed.
+
+Accepted invariants must name a target automated check. An accepted invariant with no target check is itself an operational warning.
+
 ## Time-Derived Fields
 
 Time-derived fields must name their timezone and bucket boundaries in code and documentation.
@@ -167,6 +182,8 @@ the reviewer must check:
 - What is the canonical identity for every durable row?
 - Did any name/team fallback replace an available numeric ID?
 - Are fallback joins visible as diagnostics instead of hidden foundations?
+- Was an invariant considered for the bug, repair, or doctrine lesson?
+- If accepted, is it implemented or added to the invariant backlog with a target check?
 
 The mandatory review question is:
 

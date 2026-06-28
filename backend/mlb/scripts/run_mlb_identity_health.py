@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from collections import Counter
 from datetime import datetime, timezone
@@ -29,6 +30,16 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _file_sha256(path: Path) -> str:
+    if not path.exists():
+        return ""
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _health_rows(coverage: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -129,6 +140,163 @@ def _load_hits_environment_health(out_dir: Path) -> dict[str, Any] | None:
         "blank_game_id_rows": as_int("blank_game_id_rows"),
         "identity_status": status,
     }
+
+
+def _latest_upload_identity_diagnostics() -> Path | None:
+    paths = [p for p in Path("backend/mlb/data/processed/mlb_uploads").glob("*/upload_identity_diagnostics_*.csv") if p.is_file()]
+    if not paths:
+        return None
+    paths.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return paths[0]
+
+
+def _load_upload_prep_health() -> dict[str, Any] | None:
+    path = _latest_upload_identity_diagnostics()
+    if path is None:
+        return None
+    try:
+        with path.open("r", newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+    except Exception:
+        return None
+    rows_total = len(rows)
+
+    def present_count(key: str) -> int:
+        return sum(1 for row in rows if str(row.get(key) or "").strip())
+
+    def pct(key: str) -> float:
+        return round((present_count(key) / rows_total * 100.0), 2) if rows_total else 0.0
+
+    fallback = sum(1 for row in rows if str(row.get("fallback_used") or "").strip().lower() in {"1", "true", "yes"})
+    unresolved = sum(1 for row in rows if "unresolved" in str(row.get("identity_status") or "").lower())
+    ambiguous = sum(1 for row in rows if "ambiguous" in str(row.get("identity_status") or "").lower())
+    status = "pass"
+    if rows_total and (pct("canonical_player_id") < 95 or pct("canonical_game_id") < 90 or pct("canonical_market_key") < 90 or unresolved > 0):
+        status = "warn"
+    if rows_total and unresolved / rows_total > 0.05:
+        status = "fail"
+    return {
+        "artifact": "upload prep",
+        "path": path.as_posix(),
+        "classification": "D. derived artifact that should preserve canonical IDs",
+        "rows": rows_total,
+        "rows_using_ids": min(present_count("canonical_player_id"), present_count("canonical_game_id")),
+        "rows_using_fallback": fallback,
+        "rows_ambiguous": ambiguous,
+        "rows_unresolved": unresolved,
+        "player_id_coverage_pct": pct("canonical_player_id"),
+        "game_id_coverage_pct": pct("canonical_game_id"),
+        "canonical_team_coverage_pct": pct("canonical_team"),
+        "provider_event_id_coverage_pct": 0.0,
+        "canonical_market_key_coverage_pct": pct("canonical_market_key"),
+        "identity_status": status,
+    }
+
+
+def _date_from_upload_diag_path(path_text: str) -> str:
+    path = Path(path_text)
+    if path.parent.name:
+        return path.parent.name
+    return ""
+
+
+def _upload_schema_info(date_value: str) -> dict[str, Any]:
+    upload_path = Path("backend/mlb/data/processed/mlb_uploads") / date_value / "05_book_upload_base.csv"
+    if not upload_path.exists():
+        upload_path = Path("backend/mlb/data/processed/mlb_book_upload.csv")
+    columns: list[str] = []
+    rows = 0
+    if upload_path.exists():
+        try:
+            with upload_path.open("r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                columns = next(reader, [])
+                rows = sum(1 for _ in reader)
+        except Exception:
+            columns = []
+            rows = 0
+    expected = ["LEAGUE", "DATE", "HOME", "AWAY", "DOUBLEHEADER", "SECTION", "MARKET", "SELECTOR", "POINT", "SIDE", "WIN %"]
+    return {
+        "upload_path": upload_path.as_posix(),
+        "upload_rows": rows,
+        "upload_schema_columns": "|".join(columns),
+        "upload_schema_unchanged": columns == expected,
+        "upload_sha256": _file_sha256(upload_path),
+    }
+
+
+def _write_upload_prep_migration_report(out_dir: Path, upload_health: dict[str, Any] | None) -> None:
+    if not upload_health:
+        return
+    date_value = _date_from_upload_diag_path(str(upload_health.get("path") or "")) or "unknown"
+    schema = _upload_schema_info(date_value)
+    coverage_row = {
+        "date": date_value,
+        "phase": "after_phase3c",
+        "rows": upload_health.get("rows", 0),
+        "rows_using_ids": upload_health.get("rows_using_ids", 0),
+        "player_id_coverage_pct": upload_health.get("player_id_coverage_pct", 0),
+        "game_id_coverage_pct": upload_health.get("game_id_coverage_pct", 0),
+        "canonical_market_key_coverage_pct": upload_health.get("canonical_market_key_coverage_pct", 0),
+        "fallback_rows": upload_health.get("rows_using_fallback", 0),
+        "unresolved_rows": upload_health.get("rows_unresolved", 0),
+        "ambiguous_rows": upload_health.get("rows_ambiguous", 0),
+        "identity_status": upload_health.get("identity_status", ""),
+        "diagnostics_csv": upload_health.get("path", ""),
+        **schema,
+    }
+    before_row = {
+        "date": date_value,
+        "phase": "before_phase3c_baseline",
+        "rows": 22850,
+        "rows_using_ids": 0,
+        "player_id_coverage_pct": 0,
+        "game_id_coverage_pct": 0,
+        "canonical_market_key_coverage_pct": 0,
+        "fallback_rows": "",
+        "unresolved_rows": "",
+        "ambiguous_rows": "",
+        "identity_status": "baseline",
+        "diagnostics_csv": "",
+        "upload_path": "",
+        "upload_rows": "",
+        "upload_schema_columns": "",
+        "upload_schema_unchanged": "",
+        "upload_sha256": "",
+    }
+    coverage_csv = out_dir / f"upload_prep_identity_coverage_{date_value}.csv"
+    _write_csv(coverage_csv, [before_row, coverage_row])
+    report_md = out_dir / f"upload_prep_identity_migration_{date_value}.md"
+    lines = [
+        f"# Upload Prep Identity Migration - {date_value}",
+        "",
+        "- Phase: `3C`",
+        "- Scope: upload-prep identity preservation diagnostics only.",
+        "- Production behavior changed: `no`.",
+        "- Final external upload schema changed: `" + str(schema.get("upload_schema_unchanged") is False).lower() + "`.",
+        "",
+        "## Before / After",
+        "",
+        "| phase | rows | rows using IDs | player ID % | game ID % | market key % | fallback | unresolved | ambiguous | status |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        f"| before baseline | `22850` | `0` | `0` | `0` | `0` |  |  |  | `baseline` |",
+        f"| after diagnostics | `{coverage_row['rows']}` | `{coverage_row['rows_using_ids']}` | `{coverage_row['player_id_coverage_pct']}` | `{coverage_row['game_id_coverage_pct']}` | `{coverage_row['canonical_market_key_coverage_pct']}` | `{coverage_row['fallback_rows']}` | `{coverage_row['unresolved_rows']}` | `{coverage_row['ambiguous_rows']}` | `{coverage_row['identity_status']}` |",
+        "",
+        "## Artifacts",
+        "",
+        f"- Diagnostics CSV: `{coverage_row['diagnostics_csv']}`",
+        f"- Coverage CSV: `{coverage_csv.as_posix()}`",
+        f"- Final upload CSV checked: `{schema.get('upload_path', '')}`",
+        f"- Final upload rows: `{schema.get('upload_rows', '')}`",
+        f"- Final upload schema unchanged: `{schema.get('upload_schema_unchanged')}`",
+        f"- Final upload SHA256: `{schema.get('upload_sha256', '')}`",
+        "",
+        "## Notes",
+        "",
+        "Canonical identity is preserved in a parallel diagnostic artifact so the external upload schema remains stable.",
+        "This migration does not change row inclusion, pricing, ranking, thresholds, matching, or grading.",
+    ]
+    report_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _write_health_report(out_dir: Path, health: list[dict[str, Any]], risks: list[dict[str, Any]]) -> None:
@@ -241,7 +409,11 @@ def _write_progress_report(out_dir: Path, health: list[dict[str, Any]], risks: l
             for row in health
             if any(term in str(row.get("artifact", "")).lower() or term in str(row.get("path", "")).lower() for term in terms)
         ]
-        migrated_labels = {"review boards": "phase3a_review_boards_migrated", "hits environment": "phase3b_hits_environment_migrated"}
+        migrated_labels = {
+            "review boards": "phase3a_review_boards_migrated",
+            "hits environment": "phase3b_hits_environment_migrated",
+            "upload prep": "phase3c_upload_prep_diagnostics_migrated",
+        }
         priority_rows.append(
             {
                 "priority": label,
@@ -264,9 +436,9 @@ def _write_progress_report(out_dir: Path, health: list[dict[str, Any]], risks: l
         "- Shared resolver layer added: `backend/mlb/identity/`.",
         "- Health target added: `make mlb-identity-health`.",
         "- Production behavior changed: `no`.",
-        "- Caller migrations completed: `review boards`, `hits environment`.",
+        "- Caller migrations completed: `review boards`, `hits environment`, `upload prep diagnostics`.",
         "",
-        "Review-board CSVs and hits-environment row outputs now carry canonical player/game/team/opponent/market identity fields. Other priority callers remain baseline-only. The next safe step is to migrate one additional caller at a time and compare before/after ID coverage, fallback usage, ambiguous rows, unresolved rows, and bugs eliminated.",
+        "Review-board CSVs and hits-environment row outputs now carry canonical player/game/team/opponent/market identity fields. Upload prep now emits a parallel identity diagnostics artifact while preserving external upload schema. Other priority callers remain baseline-only. The next safe step is to migrate one additional caller at a time and compare before/after ID coverage, fallback usage, ambiguous rows, unresolved rows, and bugs eliminated.",
         "",
         "## Priority Baseline",
         "",
@@ -286,7 +458,7 @@ def _write_progress_report(out_dir: Path, health: list[dict[str, Any]], risks: l
             "2. Review boards: manual decision surfaces should show canonical identity/provenance clearly.",
             "3. Expanded universe: canonical research universe should retain resolver status for every row.",
             "4. Reconcile: already strong on IDs, but fallback/sidecar semantics should call shared identity helpers.",
-            "5. Upload prep: current samples lack visible canonical IDs and should regain lineage columns before deeper use.",
+            "5. Upload prep: diagnostics are migrated; keep final external upload schema stable while monitoring lineage coverage.",
             "6. Prediction outputs: mostly ID-complete; migrate after higher-risk artifacts to avoid needless churn.",
             "",
             "## Join Risk Baseline",
@@ -316,10 +488,15 @@ def main() -> int:
         row
         for row in _health_rows(coverage)
         if "mlb_hits_environment_latest.json" not in str(row.get("path") or "")
+        and str(row.get("artifact") or "") != "upload prep artifacts"
     ]
     hits_environment_health = _load_hits_environment_health(out_dir)
     if hits_environment_health is not None:
         health.append(hits_environment_health)
+    upload_prep_health = _load_upload_prep_health()
+    if upload_prep_health is not None:
+        health.append(upload_prep_health)
+    _write_upload_prep_migration_report(out_dir, upload_prep_health)
     _write_health_report(out_dir, health, risks)
     _write_progress_report(out_dir, health, risks)
     print(

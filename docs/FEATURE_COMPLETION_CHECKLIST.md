@@ -31,6 +31,9 @@ Use `[x]` only when the item is actually implemented and validated.
 - [ ] Regression detection exists for stale, missing, zero-row, low-coverage, duplicate, or future-leak cases.
 - [ ] Canonical identity fields are present where available.
 - [ ] Identity provenance/fallback fields are present when canonical IDs are unavailable.
+- [ ] Invariant considered.
+- [ ] If yes, invariant added to backlog or implemented.
+- [ ] If no, reason documented.
 - [ ] Documentation names the source, producer command, output artifacts, cadence, downstream consumers, and repair command.
 - [ ] Historical validation passed.
 - [ ] Current-slate/current-day validation passed.
@@ -70,6 +73,12 @@ Fallback used, if any:
 
 Fallback visibility:
 
+Invariant considered:
+
+Invariant backlog row or implemented check:
+
+If no invariant, reason:
+
 Known limitations:
 
 ## Code Review Gate
@@ -82,6 +91,8 @@ Reviewer must confirm:
 - [ ] The health check distinguishes source-not-ready from real failure.
 - [ ] The change does not silently join by name when player/game IDs are available.
 - [ ] Alias/name fallbacks are diagnostic and visible.
+- [ ] Every resolved bug answers: should this become an invariant?
+- [ ] Accepted invariants have an automated target check or a documented backlog row.
 - [ ] Documentation includes the repair path.
 - [ ] No production behavior changed unless the change explicitly requested it.
 
