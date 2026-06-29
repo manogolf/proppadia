@@ -65,6 +65,55 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _norm_player_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    return " ".join(text.split())
+
+
+def _name_alias_compatible(left: Any, right: Any) -> bool:
+    left_tokens = _norm_player_name(left).split()
+    right_tokens = _norm_player_name(right).split()
+    if not left_tokens or not right_tokens:
+        return False
+    left_first, left_last = left_tokens[0], left_tokens[-1]
+    right_first, right_last = right_tokens[0], right_tokens[-1]
+    if not left_first or not right_first or left_last != right_last:
+        return False
+    return left_first == right_first or left_first.startswith(right_first) or right_first.startswith(left_first)
+
+
+def _likely_duplicate_identity_alias_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    resolved = [
+        row
+        for row in rows
+        if str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+        and str(row.get("player_name") or "").strip()
+    ]
+    unresolved = [
+        row
+        for row in rows
+        if not str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+        and str(row.get("player_name") or "").strip()
+        and (
+            "unresolved" in str(row.get("identity_status") or row.get("forecast_diagnostic") or "").lower()
+            or "ambiguous" in str(row.get("identity_status") or row.get("forecast_diagnostic") or "").lower()
+        )
+    ]
+    out: list[dict[str, str]] = []
+    for bad in unresolved:
+        bad_date = str(bad.get("slate_date") or bad.get("game_date") or "").strip()
+        for good in resolved:
+            good_date = str(good.get("slate_date") or good.get("game_date") or "").strip()
+            if bad_date and good_date and bad_date != good_date:
+                continue
+            if not _name_alias_compatible(bad.get("player_name"), good.get("player_name")):
+                continue
+            out.append(bad)
+            break
+    return out
+
+
 def _write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     rows = list(rows)
     fieldnames: list[str] = []
@@ -265,6 +314,18 @@ def _hits_environment_invariants(results: list[InvariantResult], hits_env_csv: P
         artifact=str(hits_env_csv),
     )
 
+    duplicate_alias_rows = _likely_duplicate_identity_alias_rows(rows)
+    _add(
+        results,
+        category="identity",
+        invariant="hits-environment has no unresolved provider-name row beside compatible resolved canonical row",
+        status="PASS" if not duplicate_alias_rows else "FAIL",
+        rows_checked=len(rows),
+        rows_failed=len(duplicate_alias_rows),
+        detail="ok" if not duplicate_alias_rows else "likely provider/canonical duplicate identity alias split",
+        artifact=str(hits_env_csv),
+    )
+
     identity_equals_forecast = [
         row
         for row in rows
@@ -409,6 +470,66 @@ def _daily_durability_invariants(results: list[InvariantResult], audit_date: str
         rows_checked=int(identity_payload.get("artifact_samples") or 0),
         detail=f"status={identity_status or 'missing'}",
         artifact=str(identity_health),
+    )
+
+    ontology_health = out_root / "ontology" / "ontology_health.json"
+    ontology_payload = _read_json(ontology_health)
+    ontology_status = str(ontology_payload.get("status") or "").lower()
+    if not ontology_health.exists():
+        status = "FAIL"
+        detail = "missing O1.5 ontology health"
+    elif ontology_status not in {"pass", "warn"}:
+        status = "FAIL"
+        detail = f"O1.5 ontology health status={ontology_status or 'unknown'}"
+    else:
+        status = "PASS"
+        detail = f"status={ontology_status}; rows_checked={ontology_payload.get('rows_checked', '')}"
+    _add(
+        results,
+        category="daily_durability",
+        invariant="O1.5 ontology health exists and passes",
+        status=status,
+        rows_checked=int(ontology_payload.get("artifact_count") or 0),
+        rows_failed=int(ontology_payload.get("invalid_rows") or 0),
+        detail=detail,
+        artifact=str(ontology_health),
+    )
+
+    morning_workflow = out_root / "morning_workflow" / "morning_workflow_audit_latest.json"
+    workflow_payload = _read_json(morning_workflow)
+    workflow_status = str(workflow_payload.get("status") or "").lower()
+    workflow_date = str(workflow_payload.get("date") or "")
+    workflow_blockers = int(workflow_payload.get("workflow_blockers") or 0)
+    broken_links = int(workflow_payload.get("broken_links") or 0)
+    missing_artifacts = int(workflow_payload.get("missing_artifacts") or 0)
+    root_failures = int(workflow_payload.get("root_failures") or workflow_blockers or 0)
+    if not morning_workflow.exists():
+        status = "FAIL"
+        detail = "missing morning workflow audit"
+    elif workflow_date != audit_date:
+        status = "FAIL"
+        detail = f"morning workflow audit date mismatch: {workflow_date} != {audit_date}"
+    elif root_failures or broken_links or missing_artifacts:
+        status = "FAIL"
+        detail = (
+            f"status={workflow_status}; score={workflow_payload.get('workflow_health_score', '')}; "
+            f"root_failures={root_failures}; broken_links={broken_links}; missing_artifacts={missing_artifacts}"
+        )
+    else:
+        status = "PASS"
+        detail = (
+            f"status={workflow_status}; score={workflow_payload.get('workflow_health_score', '')}; "
+            f"root_failures={root_failures}; broken_links={broken_links}; missing_artifacts={missing_artifacts}"
+        )
+    _add(
+        results,
+        category="daily_durability",
+        invariant="morning workflow audit exists and has no structural blockers for today",
+        status=status,
+        rows_checked=1 if workflow_payload else 0,
+        rows_failed=0 if status == "PASS" else 1,
+        detail=detail,
+        artifact=str(morning_workflow),
     )
 
     manifest = out_root / "research_snapshots" / "snapshot_manifest.csv"

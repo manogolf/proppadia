@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from backend.mlb.ontology import apply_expanded_o15_ontology
 from backend.mlb.scripts import build_mlb_o15_manual_unified_board_universe as manual
 
 
@@ -159,7 +160,7 @@ def _expanded_row(row: dict[str, Any]) -> dict[str, Any]:
     else:
         source_bucket = "main_only"
     book_list = str(row.get("bookmaker_list") or "").strip()
-    return {
+    expanded = {
         **row,
         "expanded_universe": True,
         "from_main": from_main,
@@ -173,6 +174,7 @@ def _expanded_row(row: dict[str, Any]) -> dict[str, Any]:
         "production_board_is_source": from_main,
         "research_note": "Expanded O1.5 Universe research row; not production selection/upload/grading.",
     }
+    return apply_expanded_o15_ontology(expanded)
 
 
 def _bvp_present(row: dict[str, Any]) -> bool:

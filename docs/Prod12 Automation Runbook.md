@@ -1313,6 +1313,12 @@ Check state:
 launchctl print gui/$(id -u)/com.proppadia.mlb.refresh.daily | rg "state = |runs = |last exit code"
 ```
 
+Daily wrapper invariant:
+
+- The deployed wrapper must produce both the dated Ops Brief and `artifacts/analysis/mlb/daily/<DATE>/INDEX.md`.
+- `proppadia_mlb_refresh_daily.sh --check` must fail when the current Daily Index is missing.
+- A daily run that renders only the Ops Brief is incomplete and should exit nonzero after writing wrapper diagnostics.
+
 Manual rolling integrity check (on demand):
 
 ```bash

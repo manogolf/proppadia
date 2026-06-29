@@ -1925,6 +1925,19 @@ def build_markdown(
     if overall_issues:
         lines.append(f"- Issues: `{', '.join(overall_issues)}`")
     lines.append("")
+    lines.append("## Morning Workflow Handoff")
+    lines.append("")
+    lines.append("- Real Ops Brief status: existing section order is preserved; full three-phase body rewrite remains prototype-only.")
+    lines.append("- Phase 1 intent: System Readiness — can I trust today's platform?")
+    lines.append(f"- Operational status: `{overall_status.upper()}`")
+    lines.append("- Review Pipeline & Ops, source health, identity, freshness, feature lineage, invariants, and critical warnings before candidate review.")
+    lines.append("")
+    lines.append("- Phase 2 intent: Today's Baseball — what kind of baseball day is today?")
+    lines.append("- Continue through the baseball context sections below before opening candidate CSVs.")
+    lines.append("")
+    lines.append("- Phase 3 handoff: Begin Candidate Review — transition from observation to decision.")
+    lines.append("- Open Morning Workbench: [Morning Workbench](review_aids/performance/o15_morning_workbench.md)")
+    lines.append("")
     lines.append("## Snapshot")
     lines.append(
         f"- Pipeline: `{pipeline.get('status','n/a')}` | Ops: `{ops.get('status','n/a')}` | "

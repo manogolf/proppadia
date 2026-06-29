@@ -17,6 +17,23 @@ from backend.mlb.scripts import run_mlb_review_aid_performance_tracker as tracke
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "Makefile").exists())
 WINDOWS = ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate")
 BOARD_ORDER = ("o15_watch", "o15_layered", "o15_simple_filter", "o15_alternate_discovery")
+ENVIRONMENT_COMPONENT_COLUMNS = [
+    "pitcher_expected_hits_allowed_weighted",
+    "pitcher_base",
+    "offense_hits_pg_last7",
+    "offense_hits_pg_last15",
+    "offense_hits_pg_last30",
+    "offense_hits_form_blended",
+    "league_offense_hits_form_blended",
+    "offense_factor_vs_league",
+    "offense_factor_vs_league_clamped",
+    "bullpen_hits_allowed_pg_last7",
+    "bullpen_hits_allowed_pg_last15",
+    "bullpen_hits_allowed_pg_last30",
+    "bullpen_hits_allowed_form_blended",
+    "starter_expected_hits_allowed",
+    "team_expected_hits_allowed",
+]
 
 
 def _now() -> str:
@@ -187,8 +204,7 @@ def _merge_rows(board_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "d7_hits_runs_rbis",
                 "d15_hits_runs_rbis",
                 "d30_hits_runs_rbis",
-                "starter_expected_hits_allowed",
-                "team_expected_hits_allowed",
+                *ENVIRONMENT_COMPONENT_COLUMNS,
                 "hitter_tier",
                 "pitcher_tier",
                 "combined_tier",

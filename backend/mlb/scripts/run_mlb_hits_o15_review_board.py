@@ -21,6 +21,7 @@ from backend.mlb.identity import (
     canonical_team_code,
     resolve_market_identity,
 )
+from backend.mlb.ontology import ONTOLOGY_FIELDS, apply_o15_board_ontology
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 
 
@@ -38,6 +39,26 @@ IDENTITY_OUTPUT_COLUMNS = [
     "identity_warning",
 ]
 
+O15_ONTOLOGY_OUTPUT_COLUMNS = [
+    *ONTOLOGY_FIELDS,
+]
+
+ENVIRONMENT_COMPONENT_COLUMNS = [
+    "pitcher_expected_hits_allowed_weighted",
+    "pitcher_base",
+    "offense_hits_pg_last7",
+    "offense_hits_pg_last15",
+    "offense_hits_pg_last30",
+    "offense_hits_form_blended",
+    "league_offense_hits_form_blended",
+    "offense_factor_vs_league",
+    "offense_factor_vs_league_clamped",
+    "bullpen_hits_allowed_pg_last7",
+    "bullpen_hits_allowed_pg_last15",
+    "bullpen_hits_allowed_pg_last30",
+    "bullpen_hits_allowed_form_blended",
+]
+
 OUTPUT_COLUMNS = [
     "date",
     "player_id",
@@ -45,6 +66,7 @@ OUTPUT_COLUMNS = [
     "team",
     "opponent",
     *IDENTITY_OUTPUT_COLUMNS,
+    *O15_ONTOLOGY_OUTPUT_COLUMNS,
     "line",
     "side",
     "model_prob",
@@ -57,6 +79,7 @@ OUTPUT_COLUMNS = [
     "d30_hits_runs_rbis",
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
+    *ENVIRONMENT_COMPONENT_COLUMNS,
     "starter_expected_hits_allowed",
     "team_expected_hits_allowed",
     "opposing_starter",
@@ -85,7 +108,8 @@ WATCH_OUTPUT_COLUMNS = OUTPUT_COLUMNS + [
     "ranking_score",
     "ranking_source_lane",
 ]
-U15_OUTPUT_COLUMNS = OUTPUT_COLUMNS + [
+U15_BASE_OUTPUT_COLUMNS = [col for col in OUTPUT_COLUMNS if col not in set(O15_ONTOLOGY_OUTPUT_COLUMNS)]
+U15_OUTPUT_COLUMNS = U15_BASE_OUTPUT_COLUMNS + [
     "qc_candidate",
     "qc_score",
     "qc_selected_side",
@@ -106,6 +130,7 @@ LAYERED_OUTPUT_COLUMNS = [
     "team",
     "opponent",
     *IDENTITY_OUTPUT_COLUMNS,
+    *O15_ONTOLOGY_OUTPUT_COLUMNS,
     "line",
     "side",
     "market_price",
@@ -118,6 +143,7 @@ LAYERED_OUTPUT_COLUMNS = [
     "d30_hits_runs_rbis",
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
+    *ENVIRONMENT_COMPONENT_COLUMNS,
     "starter_expected_hits_allowed",
     "team_expected_hits_allowed",
     "hitter_tier",
@@ -156,6 +182,7 @@ ALTERNATE_DISCOVERY_COLUMNS = [
     "team",
     "opponent",
     *IDENTITY_OUTPUT_COLUMNS,
+    *O15_ONTOLOGY_OUTPUT_COLUMNS,
     "bookmaker_list",
     "best_over_price",
     "selected_side_implied_probability",
@@ -168,6 +195,7 @@ ALTERNATE_DISCOVERY_COLUMNS = [
     "d30_hits_runs_rbis",
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
+    *ENVIRONMENT_COMPONENT_COLUMNS,
     "starter_expected_hits_allowed",
     "team_expected_hits_allowed",
     "hitter_tier",
@@ -609,6 +637,25 @@ def _starter_identity(row: dict[str, Any]) -> str:
     return "name:" + str(row.get("opposing_starter") or "").strip().lower()
 
 
+def _environment_component_context(row: dict[str, Any]) -> dict[str, Any]:
+    pitcher_base = _f(row.get("pitcher_expected_hits_allowed_weighted"))
+    return {
+        "pitcher_expected_hits_allowed_weighted": pitcher_base,
+        "pitcher_base": pitcher_base,
+        "offense_hits_pg_last7": _f(row.get("offense_hits_pg_last7")),
+        "offense_hits_pg_last15": _f(row.get("offense_hits_pg_last15")),
+        "offense_hits_pg_last30": _f(row.get("offense_hits_pg_last30")),
+        "offense_hits_form_blended": _f(row.get("offense_hits_form_blended")),
+        "league_offense_hits_form_blended": _f(row.get("league_offense_hits_form_blended")),
+        "offense_factor_vs_league": _f(row.get("offense_factor_vs_league")),
+        "offense_factor_vs_league_clamped": _f(row.get("offense_factor_vs_league_clamped")),
+        "bullpen_hits_allowed_pg_last7": _f(row.get("bullpen_hits_allowed_pg_last7")),
+        "bullpen_hits_allowed_pg_last15": _f(row.get("bullpen_hits_allowed_pg_last15")),
+        "bullpen_hits_allowed_pg_last30": _f(row.get("bullpen_hits_allowed_pg_last30")),
+        "bullpen_hits_allowed_form_blended": _f(row.get("bullpen_hits_allowed_form_blended")),
+    }
+
+
 def _context_from_matchup_rows(
     *,
     rows: list[dict[str, Any]],
@@ -631,6 +678,7 @@ def _context_from_matchup_rows(
         if current is None or expected > (_f(current.get("starter_expected_hits_allowed")) or -1.0):
             note = str(row.get("forecast_note") or "").strip()
             by_team_pair[key] = {
+                **_environment_component_context(row),
                 "starter_expected_hits_allowed": expected,
                 "team_expected_hits_allowed": _f(row.get("expected_team_hits_allowed_matchup")),
                 "opposing_starter": row.get("pitcher_name") or row.get("starter_name") or row.get("player_name") or "",
@@ -696,7 +744,9 @@ def _unavailable_context_from_rows(
         if current is not None and min_applied is False:
             continue
         by_team_pair[key] = {
+            **_environment_component_context(row),
             "starter_expected_hits_allowed": None,
+            "team_expected_hits_allowed": _f(row.get("expected_team_hits_allowed_matchup")),
             "opposing_starter": row.get("pitcher_name") or row.get("starter_name") or row.get("player_name") or "",
             "opposing_starter_id": row.get("player_id") or "",
             "starter_context_status": _starter_status(
@@ -1482,6 +1532,7 @@ def _filter_rows(
             "d30_hits_runs_rbis": _f(row.get("d30_hits_runs_rbis")),
             "raw_d7_hits_calendar": _f(raw.get("raw_d7_hits")),
             "raw_d15_hits_calendar": _f(raw.get("raw_d15_hits")),
+            **{field: context.get(field) for field in ENVIRONMENT_COMPONENT_COLUMNS},
             "starter_expected_hits_allowed": starter_expected,
             "team_expected_hits_allowed": team_expected,
             "opposing_starter": context.get("opposing_starter") or "",
@@ -1801,6 +1852,7 @@ def _build_alternate_discovery_rows(
                 "d30_hits_runs_rbis": _f(slate.get("d30_hits_runs_rbis")),
                 "raw_d7_hits_calendar": _f((raw or {}).get("raw_d7_hits")),
                 "raw_d15_hits_calendar": _f((raw or {}).get("raw_d15_hits")),
+                **{field: context.get(field) for field in ENVIRONMENT_COMPONENT_COLUMNS},
                 "starter_expected_hits_allowed": starter_expected,
                 "team_expected_hits_allowed": team_expected,
                 "hitter_tier": hitter_tier,
@@ -2715,6 +2767,7 @@ def main() -> int:
     out_md = out_dir / f"{prefix}_{date_text}.md"
     before_rows = _read_csv(out_csv)
     identity_meta = _apply_canonical_identity(rows, slate_rows, date_text)
+    apply_o15_board_ontology(rows, args.board)
     if args.board == "watch_o15":
         columns = WATCH_OUTPUT_COLUMNS
     elif args.board == "layered_o15":

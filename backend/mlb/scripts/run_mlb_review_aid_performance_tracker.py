@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from backend.mlb.ontology import ONTOLOGY_FIELDS, infer_o15_opportunity_type
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "Makefile").exists())
 WINDOWS = ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate")
@@ -23,6 +24,10 @@ BOARD_CONFIGS = {
         "price_col": "market_price",
         "layer_col": "layer_label",
         "discovery_only": False,
+        "universe": "main",
+        "population": "expanded_review",
+        "board_name": "hits_o15_layered_candidates",
+        "research_status": "operational_research",
     },
     "o15_watch": {
         "label": "Hits o1.5 Watch Candidates",
@@ -31,6 +36,10 @@ BOARD_CONFIGS = {
         "price_col": "market_price",
         "layer_col": "",
         "discovery_only": False,
+        "universe": "main",
+        "population": "watch",
+        "board_name": "hits_o15_watch_candidates",
+        "research_status": "operational_research",
     },
     "o15_alternate_discovery": {
         "label": "Hits o1.5 Alternate Discovery",
@@ -39,6 +48,10 @@ BOARD_CONFIGS = {
         "price_col": "best_over_price",
         "layer_col": "alternate_layer",
         "discovery_only": True,
+        "universe": "alternate",
+        "population": "alternate_discovery",
+        "board_name": "hits_o15_alternate_discovery",
+        "research_status": "manual_research",
     },
     "u15_favorite_audit": {
         "label": "Hits u1.5 Favorite Audit",
@@ -47,6 +60,10 @@ BOARD_CONFIGS = {
         "price_col": "market_price",
         "layer_col": "layer_label",
         "discovery_only": False,
+        "universe": "main",
+        "population": "favorite_audit",
+        "board_name": "hits_u15_favorite_audit",
+        "research_status": "operational_research",
     },
 }
 
@@ -357,6 +374,12 @@ def _load_board_rows(review_aids_dir: Path, lanes_root: Path) -> list[dict[str, 
                     layer_value = derived_layer
                     row["watch_candidate"] = derived_watch
                     row["qc_candidate"] = _is_qc_candidate(row, qc_by_id, qc_by_name)
+                provenance_layer = row.get("provenance_layer") or LAYER_LABELS.get(layer_value, layer_value)
+                classification_value = row.get("classification_value") or row.get("combined_tier") or "unclassified"
+                if side != "over":
+                    opportunity_type = row.get("opportunity_type") or "unclassified"
+                else:
+                    opportunity_type = row.get("opportunity_type") or infer_o15_opportunity_type(row)
                 row.update(
                     {
                         "board": board_key,
@@ -374,8 +397,18 @@ def _load_board_rows(review_aids_dir: Path, lanes_root: Path) -> list[dict[str, 
                             layer_value,
                         ),
                         "discovery_only": bool(config["discovery_only"]),
+                        "universe": row.get("universe") or config.get("universe") or "",
+                        "population": row.get("population") or config.get("population") or "",
+                        "classification_type": row.get("classification_type") or "tier",
+                        "classification_value": classification_value,
+                        "opportunity_type": opportunity_type,
+                        "provenance_layer": provenance_layer or "none",
+                        "board_name": row.get("board_name") or config.get("board_name") or board_key,
+                        "research_status": row.get("research_status") or config.get("research_status") or "",
                     }
                 )
+                for field in ONTOLOGY_FIELDS:
+                    row.setdefault(field, "")
                 out.append(row)
     return out
 
@@ -614,6 +647,242 @@ def _build_aggregates(joined: list[dict[str, Any]], latest: str) -> tuple[list[d
     return by_board, by_layer, by_tier
 
 
+def _is_o15_row(row: dict[str, Any]) -> bool:
+    return str(row.get("side") or "").strip().lower() == "over" and _line_key(row.get("line")) == "1.5"
+
+
+def _decision_key(row: dict[str, Any]) -> str:
+    key = str(row.get("canonical_market_key") or "").strip()
+    if key:
+        return key
+    date_text = str(row.get("board_date") or row.get("date") or "")[:10]
+    player_id = str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+    if player_id:
+        return "|".join([date_text, player_id, _line_key(row.get("line")), str(row.get("side") or "").lower()])
+    name = _norm_name(row.get("player_name") or row.get("player"))
+    team = _team(row.get("team"))
+    opp = _team(row.get("opponent"))
+    return "|".join([date_text, name, team, opp, _line_key(row.get("line")), str(row.get("side") or "").lower()])
+
+
+def _price_bucket(value: Any) -> str:
+    price = _f(value)
+    if price is None:
+        return "missing"
+    if price <= 150:
+        return "<=150"
+    if price <= 200:
+        return "151-200"
+    if price <= 250:
+        return "201-250"
+    if price <= 300:
+        return "251-300"
+    if price <= 400:
+        return "301-400"
+    return "401+"
+
+
+def _dedupe_decision_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    priority = {
+        "o15_alternate_discovery": 0,
+        "o15_watch": 1,
+        "o15_layered": 2,
+        "o15": 3,
+    }
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = _decision_key(row)
+        if not key:
+            continue
+        current = out.get(key)
+        if current is None:
+            out[key] = row
+            continue
+        current_resolved = current.get("resolved") is True
+        row_resolved = row.get("resolved") is True
+        if row_resolved and not current_resolved:
+            out[key] = row
+            continue
+        if row_resolved == current_resolved:
+            current_price = _f(current.get("board_price"))
+            row_price = _f(row.get("board_price"))
+            if row_price is not None and (current_price is None or row_price > current_price):
+                out[key] = row
+                continue
+            if row_price == current_price and priority.get(str(row.get("board") or ""), 99) < priority.get(str(current.get("board") or ""), 99):
+                out[key] = row
+    return list(out.values())
+
+
+def _window_rows(rows: list[dict[str, Any]], window: str, latest: str) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if window in _window_labels(str(row.get("board_date") or "")[:10], latest)
+        and str(row.get("board_date") or "")[:10] <= latest
+    ]
+
+
+def _ontology_source_note(rows: list[dict[str, Any]]) -> str:
+    boards = sorted({str(row.get("board_name") or row.get("board") or "") for row in rows if row.get("board_name") or row.get("board")})
+    layers = sorted({str(row.get("provenance_layer") or "") for row in rows if row.get("provenance_layer")})
+    statuses = sorted({str(row.get("research_status") or "") for row in rows if row.get("research_status")})
+    bits = []
+    if boards:
+        bits.append("boards=" + ";".join(boards[:5]))
+    if layers:
+        bits.append("provenance=" + ";".join(layers[:5]))
+    if statuses:
+        bits.append("research_status=" + ";".join(statuses[:5]))
+    return " | ".join(bits)
+
+
+def _build_decision_performance(
+    joined: list[dict[str, Any]],
+    latest: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    o15 = [row for row in joined if _is_o15_row(row)]
+    universe_rows: list[dict[str, Any]] = []
+    population_rows: list[dict[str, Any]] = []
+    classification_rows: list[dict[str, Any]] = []
+    provenance_rows: list[dict[str, Any]] = []
+    mapping_rows = [
+        {
+            "legacy_term": "Hits o1.5 Watch Candidates",
+            "ontology_term": "Population: Watch",
+            "notes": "actual generated watch candidate artifact",
+        },
+        {
+            "legacy_term": "Hits o1.5 Layered Candidates / Layered Board",
+            "ontology_term": "Population: Expanded Review",
+            "notes": "layers are retained as provenance, not headline decision hierarchy",
+        },
+        {
+            "legacy_term": "Hits 1.5 Alternate Discovery",
+            "ontology_term": "Universe: Alternate; Population: Alternate Discovery",
+            "notes": "manual/research-only, over-only source",
+        },
+        {
+            "legacy_term": "Layer A / Layer 3 / Layer 4",
+            "ontology_term": "Provenance Layer",
+            "notes": "qualification metadata appendix",
+        },
+        {
+            "legacy_term": "Combined Tier A/A",
+            "ontology_term": "Classification: Tier = A/A",
+            "notes": "classification applied to candidates",
+        },
+    ]
+
+    for window in WINDOWS:
+        rows = _window_rows(o15, window, latest)
+        main = _dedupe_decision_rows([row for row in rows if str(row.get("universe") or "") == "main"])
+        alternate = _dedupe_decision_rows([row for row in rows if str(row.get("universe") or "") == "alternate"])
+        expanded = _dedupe_decision_rows(rows)
+        for universe, group_rows, source_note in (
+            ("main", main, "deduped main O1.5 board populations"),
+            ("alternate", alternate, "deduped alternate O1.5 discovery universe"),
+            ("expanded", expanded, "deduped union of main + alternate O1.5 decision rows"),
+        ):
+            if group_rows:
+                universe_rows.append(
+                    _aggregate(
+                        group_rows,
+                        group={
+                            "window": window,
+                            "universe": universe,
+                            "population": "all",
+                            "source_note": source_note,
+                        },
+                        latest=latest,
+                    )
+                )
+
+        for (universe, population, board_name, research_status), grouped in sorted(
+            _group_rows(
+                rows,
+                lambda row: (
+                    str(row.get("universe") or "missing"),
+                    str(row.get("population") or "missing"),
+                    str(row.get("board_name") or row.get("board") or "missing"),
+                    str(row.get("research_status") or "missing"),
+                ),
+            ).items()
+        ):
+            if grouped:
+                population_rows.append(
+                    _aggregate(
+                        grouped,
+                        group={
+                            "window": window,
+                            "universe": universe,
+                            "population": population,
+                            "board_name": board_name,
+                            "research_status": research_status,
+                            "source_note": _ontology_source_note(grouped),
+                        },
+                        latest=latest,
+                    )
+                )
+
+        classification_base = expanded
+        classification_specs: list[tuple[str, str, list[dict[str, Any]]]] = []
+        for value, grouped in _group_rows(classification_base, lambda row: str(row.get("classification_value") or row.get("combined_tier") or "unclassified")).items():
+            classification_specs.append(("tier", value, grouped))
+        for value, grouped in _group_rows(classification_base, lambda row: str(row.get("opportunity_type") or "unclassified")).items():
+            classification_specs.append(("opportunity_type", value, grouped))
+        for value, grouped in _group_rows(classification_base, lambda row: _price_bucket(row.get("board_price"))).items():
+            classification_specs.append(("price_bucket", value, grouped))
+        for classification_type, value, grouped in sorted(classification_specs, key=lambda item: (item[0], item[1])):
+            if grouped:
+                classification_rows.append(
+                    _aggregate(
+                        grouped,
+                        group={
+                            "window": window,
+                            "universe": "expanded",
+                            "classification_type": classification_type,
+                            "classification_value": value,
+                            "source_note": "deduped expanded O1.5 decision universe",
+                        },
+                        latest=latest,
+                    )
+                )
+
+        for (board_name, layer, research_status), grouped in sorted(
+            _group_rows(
+                rows,
+                lambda row: (
+                    str(row.get("board_name") or row.get("board") or "missing"),
+                    str(row.get("provenance_layer") or "missing"),
+                    str(row.get("research_status") or "missing"),
+                ),
+            ).items()
+        ):
+            if grouped:
+                provenance_rows.append(
+                    _aggregate(
+                        grouped,
+                        group={
+                            "window": window,
+                            "board_name": board_name,
+                            "provenance_layer": layer,
+                            "research_status": research_status,
+                            "source_note": "layer/provenance appendix; not decision hierarchy",
+                        },
+                        latest=latest,
+                    )
+                )
+    return universe_rows, population_rows, classification_rows, provenance_rows, mapping_rows
+
+
+def _group_rows(rows: list[dict[str, Any]], key_fn: Any) -> dict[Any, list[dict[str, Any]]]:
+    grouped: dict[Any, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[key_fn(row)].append(row)
+    return grouped
+
+
 def _fmt_pct(value: Any) -> str:
     number = _f(value)
     return "n/a" if number is None else f"{number * 100.0:.2f}%"
@@ -633,6 +902,7 @@ def _row_for(rows: list[dict[str, Any]], **conds: str) -> dict[str, Any]:
 
 def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, Any]], by_layer: list[dict[str, Any]], by_tier: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    report_windows = ["full_history", "last_30", "last_14", "last_7", "latest_completed_slate"]
     lines: list[str] = []
     lines.append("# MLB Review Aid Performance")
     lines.append("")
@@ -647,17 +917,36 @@ def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, 
     lines.append("")
     lines.append("## Board Summary")
     lines.append("")
-    lines.append("| board | window | rows | resolved | W-L-P | WR | ROI | units | avg odds |")
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|")
+    board_order: list[str] = []
+    rows_by_board: dict[str, list[dict[str, Any]]] = {}
     for row in by_board:
-        if row.get("window") not in {"full_history", "last_30", "last_14", "last_7", "latest_completed_slate"}:
+        if row.get("window") not in report_windows:
             continue
-        lines.append(
-            f"| {row.get('board_label') or row.get('board')} | {row.get('window')} | `{row.get('rows')}` | "
-            f"`{row.get('resolved')}` | `{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` | "
-            f"`{_fmt_pct(row.get('wr'))}` | `{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | "
-            f"`{_fmt_num(row.get('avg_odds'))}` |"
-        )
+        board = str(row.get("board") or "")
+        if board and board not in rows_by_board:
+            board_order.append(board)
+            rows_by_board[board] = []
+        if board:
+            rows_by_board[board].append(row)
+    for board in board_order:
+        board_rows = rows_by_board.get(board, [])
+        label = board_rows[0].get("board_label") or board if board_rows else board
+        lines.append(f"### {label}")
+        lines.append("")
+        lines.append("| window | rows | resolved | W-L-P | WR | ROI | units | avg odds |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        rows_by_window = {str(row.get("window") or ""): row for row in board_rows}
+        for window in report_windows:
+            row = rows_by_window.get(window)
+            if not row:
+                continue
+            lines.append(
+                f"| {window} | `{row.get('rows')}` | "
+                f"`{row.get('resolved')}` | `{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` | "
+                f"`{_fmt_pct(row.get('wr'))}` | `{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | "
+                f"`{_fmt_num(row.get('avg_odds'))}` |"
+            )
+        lines.append("")
     lines.append("")
     lines.append("## Requested Daily Callouts")
     lines.append("")
@@ -683,6 +972,200 @@ def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, 
     lines.append("")
     lines.append("- Alternate discovery is discovery-only / Over-only / not production-safe.")
     lines.append("- Rows are joined to execution reconcile by date+player_id+line when possible, then date+player name+team+opponent+line, then unique date+player name+line.")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _record(row: dict[str, Any]) -> str:
+    return f"{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}"
+
+
+def _perf_table(lines: list[str], rows: list[dict[str, Any]], columns: list[str], label_col: str) -> None:
+    lines.append("| " + " | ".join(columns) + " |")
+    lines.append("|" + "|".join("---" for _ in columns) + "|")
+    for row in rows:
+        values: list[str] = []
+        for column in columns:
+            if column == label_col:
+                values.append(str(row.get(column) or ""))
+            elif column == "W-L-P":
+                values.append(f"`{_record(row)}`")
+            elif column in {"WR", "ROI"}:
+                key = "wr" if column == "WR" else "roi"
+                values.append(f"`{_fmt_pct(row.get(key))}`")
+            elif column == "units":
+                values.append(f"`{_fmt_num(row.get('units'))}`")
+            elif column == "avg odds":
+                values.append(f"`{_fmt_num(row.get('avg_odds'))}`")
+            elif column == "rows":
+                values.append(f"`{row.get('rows')}`")
+            elif column == "resolved":
+                values.append(f"`{row.get('resolved')}`")
+            else:
+                values.append(str(row.get(column.lower().replace(" ", "_")) or ""))
+        lines.append("| " + " | ".join(values) + " |")
+
+
+def _window_section_rows(rows: list[dict[str, Any]], window: str, sort_key: str) -> list[dict[str, Any]]:
+    subset = [row for row in rows if str(row.get("window") or "") == window]
+    return sorted(subset, key=lambda row: str(row.get(sort_key) or ""))
+
+
+def _top_bottom(rows: list[dict[str, Any]], *, window: str, min_resolved: int = 20) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    subset = [
+        row
+        for row in rows
+        if str(row.get("window") or "") == window
+        and _i(row.get("resolved")) is not None
+        and (_i(row.get("resolved")) or 0) >= min_resolved
+        and _f(row.get("roi")) is not None
+    ]
+    positive = sorted(subset, key=lambda row: _f(row.get("roi")) or -999, reverse=True)[:5]
+    negative = sorted(subset, key=lambda row: _f(row.get("roi")) or 999)[:5]
+    return positive, negative
+
+
+def _write_decision_performance_report(
+    path: Path,
+    *,
+    summary: dict[str, Any],
+    universe_rows: list[dict[str, Any]],
+    population_rows: list[dict[str, Any]],
+    classification_rows: list[dict[str, Any]],
+    provenance_rows: list[dict[str, Any]],
+    mapping_rows: list[dict[str, Any]],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    report_windows = ["full_history", "last_30", "last_14", "last_7", "latest_completed_slate"]
+    lines: list[str] = [
+        "# O1.5 Decision Performance",
+        "",
+        "This is the canonical O1.5 decision-performance report. It is organized by the Analytics Ontology:",
+        "",
+        "`Universe -> Population -> Classification -> Candidate -> Outcome -> Provenance`",
+        "",
+        f"- Generated at: `{summary.get('generated_at')}`",
+        f"- Status: `{summary.get('status')}`",
+        f"- Latest completed slate: `{summary.get('latest_completed_slate') or 'n/a'}`",
+        f"- Board rows loaded: `{summary.get('board_rows_loaded')}`",
+        f"- Rows matched to reconcile: `{summary.get('matched_rows')}`",
+        "",
+        "Layer names are provenance metadata in this report. They are intentionally moved to the appendix.",
+        "",
+        "## Universe Summary",
+        "",
+    ]
+    for window in report_windows:
+        rows = _window_section_rows(universe_rows, window, "universe")
+        if not rows:
+            continue
+        lines.extend([f"### {window}", ""])
+        _perf_table(lines, rows, ["universe", "rows", "resolved", "W-L-P", "WR", "ROI", "units", "avg odds"], "universe")
+        lines.append("")
+
+    lines.extend(["## Population Performance", ""])
+    for window in report_windows:
+        rows = _window_section_rows(population_rows, window, "population")
+        if not rows:
+            continue
+        lines.extend([f"### {window}", ""])
+        lines.append("| universe | population | source board | research status | rows | resolved | W-L-P | WR | ROI | units | avg odds |")
+        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|")
+        for row in rows:
+            lines.append(
+                f"| {row.get('universe')} | {row.get('population')} | {row.get('board_name')} | {row.get('research_status')} | "
+                f"`{row.get('rows')}` | `{row.get('resolved')}` | `{_record(row)}` | `{_fmt_pct(row.get('wr'))}` | "
+                f"`{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | `{_fmt_num(row.get('avg_odds'))}` |"
+            )
+        lines.append("")
+
+    lines.extend(["## Classification Performance", ""])
+    for window in report_windows:
+        rows = [row for row in classification_rows if row.get("window") == window]
+        if not rows:
+            continue
+        lines.extend([f"### {window}", ""])
+        for classification_type in ("tier", "opportunity_type", "price_bucket"):
+            typed = sorted(
+                [row for row in rows if row.get("classification_type") == classification_type],
+                key=lambda row: str(row.get("classification_value") or ""),
+            )
+            if not typed:
+                continue
+            lines.extend([f"#### {classification_type}", ""])
+            lines.append("| classification | rows | resolved | W-L-P | WR | ROI | units | avg odds |")
+            lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+            for row in typed:
+                lines.append(
+                    f"| {row.get('classification_value')} | `{row.get('rows')}` | `{row.get('resolved')}` | `{_record(row)}` | "
+                    f"`{_fmt_pct(row.get('wr'))}` | `{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | `{_fmt_num(row.get('avg_odds'))}` |"
+                )
+            lines.append("")
+
+    lines.extend(["## Candidate Highlights", ""])
+    for label, source_rows in (("Population", population_rows), ("Classification", classification_rows)):
+        positive, negative = _top_bottom(source_rows, window="full_history", min_resolved=20)
+        lines.extend([f"### Strongest {label} Groups", ""])
+        if positive:
+            for row in positive:
+                name = row.get("population") or row.get("classification_value") or row.get("universe")
+                context = row.get("board_name") or row.get("classification_type") or row.get("universe")
+                lines.append(
+                    f"- {context} / {name}: `{_record(row)}`, ROI `{_fmt_pct(row.get('roi'))}`, resolved `{row.get('resolved')}`."
+                )
+        else:
+            lines.append("- No groups met the minimum resolved threshold.")
+        lines.extend(["", f"### Weakest {label} Groups", ""])
+        if negative:
+            for row in negative:
+                name = row.get("population") or row.get("classification_value") or row.get("universe")
+                context = row.get("board_name") or row.get("classification_type") or row.get("universe")
+                lines.append(
+                    f"- {context} / {name}: `{_record(row)}`, ROI `{_fmt_pct(row.get('roi'))}`, resolved `{row.get('resolved')}`."
+                )
+        else:
+            lines.append("- No groups met the minimum resolved threshold.")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Provenance Appendix",
+            "",
+            "Provenance explains where a row came from or which qualification layer it passed. It is not the headline decision hierarchy.",
+            "",
+        ]
+    )
+    for window in report_windows:
+        rows = _window_section_rows(provenance_rows, window, "provenance_layer")
+        if not rows:
+            continue
+        lines.extend([f"### {window}", ""])
+        lines.append("| source board | provenance layer | research status | rows | resolved | W-L-P | WR | ROI | units |")
+        lines.append("|---|---|---|---:|---:|---:|---:|---:|---:|")
+        for row in rows:
+            lines.append(
+                f"| {row.get('board_name')} | {row.get('provenance_layer')} | {row.get('research_status')} | "
+                f"`{row.get('rows')}` | `{row.get('resolved')}` | `{_record(row)}` | `{_fmt_pct(row.get('wr'))}` | "
+                f"`{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` |"
+            )
+        lines.append("")
+
+    lines.extend(["## Legacy To Ontology Mapping", ""])
+    lines.append("| legacy term | ontology term | notes |")
+    lines.append("|---|---|---|")
+    for row in mapping_rows:
+        lines.append(f"| {row.get('legacy_term')} | {row.get('ontology_term')} | {row.get('notes')} |")
+    lines.extend(
+        [
+            "",
+            "## Recommendations",
+            "",
+            "- Ops Brief should consume the ontology-first population and classification summaries from this report, not maintain separate O1.5 vocabulary.",
+            "- Daily Index should link this report as the canonical historical O1.5 decision-performance surface, while retaining the legacy Review Aid Performance link during transition.",
+            "- Expanded O1.5 variable/archetype research remains research-only until promoted through a separate doctrine-complete lifecycle.",
+            "- Layer/provenance summaries should remain in appendices or drilldowns unless a layer is explicitly promoted to a named population.",
+            "",
+        ]
+    )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -796,6 +1279,12 @@ def main() -> int:
     by_tier_path = out_dir / "review_aid_performance_by_tier.csv"
     latest_path = out_dir / "review_aid_performance_latest_slate.csv"
     report_path = out_dir / "review_aid_performance_report.md"
+    decision_report_path = out_dir / "review_aid_decision_performance_report.md"
+    decision_universe_path = out_dir / "decision_performance_universe.csv"
+    decision_population_path = out_dir / "decision_performance_population.csv"
+    decision_classification_path = out_dir / "decision_performance_classification.csv"
+    decision_provenance_path = out_dir / "decision_performance_provenance.csv"
+    legacy_mapping_path = out_dir / "legacy_to_ontology_mapping.csv"
     u15_parity_path = out_dir / "u15_review_aid_history_parity_report.md"
     u15_unmatched_path = out_dir / "u15_review_aid_unmatched_rows.csv"
 
@@ -818,6 +1307,13 @@ def main() -> int:
     joined = _join_board_rows(board_rows, indexes)
     latest_rows = [row for row in joined if str(row.get("board_date") or "")[:10] == latest]
     by_board, by_layer, by_tier = _build_aggregates(joined, latest) if latest else ([], [], [])
+    (
+        decision_universe,
+        decision_population,
+        decision_classification,
+        decision_provenance,
+        legacy_mapping,
+    ) = _build_decision_performance(joined, latest) if latest else ([], [], [], [], [])
 
     summary = {
         "generated_at": _now(),
@@ -839,6 +1335,12 @@ def main() -> int:
             "by_tier_csv": _rel(by_tier_path),
             "latest_slate_csv": _rel(latest_path),
             "report_md": _rel(report_path),
+            "decision_report_md": _rel(decision_report_path),
+            "decision_universe_csv": _rel(decision_universe_path),
+            "decision_population_csv": _rel(decision_population_path),
+            "decision_classification_csv": _rel(decision_classification_path),
+            "decision_provenance_csv": _rel(decision_provenance_path),
+            "legacy_to_ontology_mapping_csv": _rel(legacy_mapping_path),
             "u15_parity_report_md": _rel(u15_parity_path),
             "u15_unmatched_rows_csv": _rel(u15_unmatched_path),
         },
@@ -859,6 +1361,11 @@ def main() -> int:
     _write_csv(by_layer_path, by_layer)
     _write_csv(by_tier_path, by_tier)
     _write_csv(latest_path, latest_rows)
+    _write_csv(decision_universe_path, decision_universe)
+    _write_csv(decision_population_path, decision_population)
+    _write_csv(decision_classification_path, decision_classification)
+    _write_csv(decision_provenance_path, decision_provenance)
+    _write_csv(legacy_mapping_path, legacy_mapping)
     _write_csv_with_fields(
         u15_unmatched_path,
         u15_unmatched,
@@ -879,6 +1386,15 @@ def main() -> int:
         ],
     )
     _write_report(report_path, summary, by_board, by_layer, by_tier)
+    _write_decision_performance_report(
+        decision_report_path,
+        summary=summary,
+        universe_rows=decision_universe,
+        population_rows=decision_population,
+        classification_rows=decision_classification,
+        provenance_rows=decision_provenance,
+        mapping_rows=legacy_mapping,
+    )
     _write_u15_parity_report(
         u15_parity_path,
         summary=summary,

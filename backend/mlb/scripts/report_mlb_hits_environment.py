@@ -1076,6 +1076,53 @@ def _probable_by_name_game(probable_rows: Sequence[Dict[str, Any]]) -> Dict[Tupl
     return out
 
 
+def _name_tokens_for_identity(value: Any) -> Tuple[str, str]:
+    tokens = _norm_player_name(value).split()
+    if not tokens:
+        return "", ""
+    return tokens[0], tokens[-1]
+
+
+def _probable_name_alias_compatible(provider_name: Any, probable_name: Any) -> bool:
+    provider_first, provider_last = _name_tokens_for_identity(provider_name)
+    probable_first, probable_last = _name_tokens_for_identity(probable_name)
+    if not provider_first or not probable_first or not provider_last or not probable_last:
+        return False
+    if provider_last != probable_last:
+        return False
+    if provider_first == probable_first:
+        return True
+    return provider_first.startswith(probable_first) or probable_first.startswith(provider_first)
+
+
+def _find_probable_by_name_alias_game(
+    *,
+    player_name: Any,
+    home_team: Any,
+    away_team: Any,
+    probable_rows: Sequence[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    home = _canonical_team_code(home_team)
+    away = _canonical_team_code(away_team)
+    matches: List[Dict[str, Any]] = []
+    for row in probable_rows:
+        row_home = _canonical_team_code(row.get("home_team_code"))
+        row_away = _canonical_team_code(row.get("away_team_code"))
+        if home and away and {row_home, row_away} != {home, away}:
+            continue
+        if _probable_name_alias_compatible(player_name, row.get("player_name")):
+            matches.append(dict(row))
+    unique_by_id: Dict[str, Dict[str, Any]] = {}
+    for row in matches:
+        player_id = str(_as_int(row.get("player_id")) or "")
+        key = player_id or _norm_player_name(row.get("player_name"))
+        if key:
+            unique_by_id[key] = row
+    if len(unique_by_id) == 1:
+        return next(iter(unique_by_id.values()))
+    return None
+
+
 def _fetch_prior_starter_counts(player_ids: Sequence[int], slate_date: str) -> Dict[int, int]:
     ids = sorted({int(pid) for pid in player_ids if _as_int(pid) is not None})
     if not ids:
@@ -1127,6 +1174,13 @@ def _resolve_odds_pitcher_rows(
         home = _canonical_team_code(row.get("home_team_code"))
         away = _canonical_team_code(row.get("away_team_code"))
         probable = probable_lookup.get((key, home, away))
+        if probable is None:
+            probable = _find_probable_by_name_alias_game(
+                player_name=row.get("player_name"),
+                home_team=home,
+                away_team=away,
+                probable_rows=probable_rows or [],
+            )
         if not candidates:
             item = dict(row)
             if probable is not None:
@@ -1134,6 +1188,8 @@ def _resolve_odds_pitcher_rows(
                     {
                         "game_id": probable.get("game_id"),
                         "player_id": _as_int(probable.get("player_id")),
+                        "raw_provider_player_name": str(row.get("player_name") or "").strip(),
+                        "player_name": str(probable.get("player_name") or row.get("player_name") or "").strip(),
                         "pitcher_team": _canonical_team_code(probable.get("pitcher_team")),
                         "offense_team": _canonical_team_code(probable.get("offense_team")),
                         "resolve_status": "resolved_by_probable_starter",
@@ -1390,6 +1446,7 @@ def _build_slate_hits_allowed_rows(
         hits_allowed_market_present: bool = False,
         probable_starter_context_present: bool = False,
         prior_starter_games: Any = None,
+        raw_provider_player_name: Any = "",
     ) -> Dict[str, Any]:
         pitcher_team = _canonical_team_code(pitcher_team)
         offense_team = _canonical_team_code(offense_team)
@@ -1476,6 +1533,7 @@ def _build_slate_hits_allowed_rows(
             "game_id": game_id,
             "player_id": player_id,
             "player_name": str(player_name or "").strip(),
+            "raw_provider_player_name": str(raw_provider_player_name or "").strip(),
             "prop_type": "hits_allowed",
             "line": line_float if line_float is not None else str(line or "").strip(),
             "model_pick_side": str(model_pick_side or "").strip().lower(),
@@ -1612,6 +1670,7 @@ def _build_slate_hits_allowed_rows(
                 hits_allowed_market_present=True,
                 probable_starter_context_present=str(odds.get("resolve_status") or "") == "resolved_by_probable_starter",
                 prior_starter_games=_as_int(odds.get("prior_starter_games")),
+                raw_provider_player_name=str(odds.get("raw_provider_player_name") or "").strip(),
             )
         )
         if player_id is not None:
@@ -1862,6 +1921,7 @@ def _hits_environment_identity_health(rows: Sequence[Dict[str, Any]]) -> Dict[st
     market_key_rows = len([r for r in market_rows if str(r.get("canonical_market_key") or "").strip()])
     context_only_rows = len([r for r in rows if not (_truthy(r.get("hits_allowed_market_present")) or _truthy(r.get("odds_market_present")))])
     trusted_forecast_rows = len([r for r in rows if _truthy(r.get("trusted_forecast"))])
+    likely_duplicate_alias_rows = _likely_duplicate_identity_alias_rows(rows)
     player_pct = _pct(player_id_rows, total)
     game_pct = _pct(game_id_rows, total)
     market_pct = _pct(market_key_rows, len(market_rows))
@@ -1878,6 +1938,8 @@ def _hits_environment_identity_health(rows: Sequence[Dict[str, Any]]) -> Dict[st
         warnings.append("blank_starters_present")
     if blank_game_id:
         warnings.append("blank_game_ids_present")
+    if likely_duplicate_alias_rows:
+        warnings.append("likely_duplicate_identity_alias_rows_present")
     return {
         "rows": total,
         "player_id_rows": player_id_rows,
@@ -1893,6 +1955,7 @@ def _hits_environment_identity_health(rows: Sequence[Dict[str, Any]]) -> Dict[st
         "unresolved_identity_rows": status_counts.get("unresolved", 0),
         "context_only_rows": context_only_rows,
         "trusted_forecast_rows": trusted_forecast_rows,
+        "likely_duplicate_identity_alias_rows": len(likely_duplicate_alias_rows),
         "blank_team_rows": blank_team,
         "blank_opponent_rows": blank_opponent,
         "blank_starter_rows": blank_starter,
@@ -1901,6 +1964,47 @@ def _hits_environment_identity_health(rows: Sequence[Dict[str, Any]]) -> Dict[st
         "warnings": warnings,
         "identity_status_counts": status_counts,
     }
+
+
+def _likely_duplicate_identity_alias_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    resolved = [
+        row
+        for row in rows
+        if str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+        and str(row.get("player_name") or "").strip()
+    ]
+    unresolved = [
+        row
+        for row in rows
+        if not str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+        and str(row.get("player_name") or "").strip()
+        and (
+            "unresolved" in str(row.get("identity_status") or row.get("forecast_diagnostic") or "").lower()
+            or "ambiguous" in str(row.get("identity_status") or row.get("forecast_diagnostic") or "").lower()
+        )
+    ]
+    out: List[Dict[str, Any]] = []
+    for bad in unresolved:
+        bad_date = str(bad.get("slate_date") or bad.get("game_date") or "").strip()
+        for good in resolved:
+            good_date = str(good.get("slate_date") or good.get("game_date") or "").strip()
+            if bad_date and good_date and bad_date != good_date:
+                continue
+            if not _probable_name_alias_compatible(bad.get("player_name"), good.get("player_name")):
+                continue
+            out.append(
+                {
+                    "unresolved_player_name": bad.get("player_name"),
+                    "resolved_player_name": good.get("player_name"),
+                    "resolved_player_id": good.get("canonical_player_id") or good.get("player_id"),
+                    "resolved_game_id": good.get("canonical_game_id") or good.get("game_id"),
+                    "line": bad.get("line"),
+                    "books": bad.get("odds_books_seen"),
+                    "unresolved_status": bad.get("identity_status") or bad.get("forecast_diagnostic"),
+                }
+            )
+            break
+    return out
 
 
 def _write_hits_environment_identity_artifacts(
@@ -1926,7 +2030,7 @@ def _write_hits_environment_identity_artifacts(
     }
     _write_generic_csv(health_csv, [health_row])
 
-    example_names = {"jared jones", "chase burns", "alan rangel"}
+    example_names = {"jared jones", "chase burns", "alan rangel", "sam aldegheri", "samuel aldegheri"}
     examples = [
         {
             "slate_date": slate_date,
@@ -1976,6 +2080,7 @@ def _write_hits_environment_identity_artifacts(
         f"- Unresolved identity rows: `{health['unresolved_identity_rows']}`",
         f"- Context-only rows: `{health['context_only_rows']}`",
         f"- Trusted forecast rows: `{health['trusted_forecast_rows']}`",
+        f"- Likely duplicate alias rows: `{health['likely_duplicate_identity_alias_rows']}`",
         "",
         "## Blank Context Gates",
         "",
@@ -2526,6 +2631,7 @@ def _write_rows_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
         "game_id",
         "player_id",
         "player_name",
+        "raw_provider_player_name",
         "prop_type",
         "line",
         "model_pick_side",

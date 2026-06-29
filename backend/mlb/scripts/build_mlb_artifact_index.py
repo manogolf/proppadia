@@ -41,6 +41,16 @@ def _safe_read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _safe_read_csv(path: Path) -> list[dict[str, Any]]:
+    if not path.exists() or path.stat().st_size == 0:
+        return []
+    try:
+        with path.open(newline="", encoding="utf-8") as f:
+            return [dict(row) for row in csv.DictReader(f)]
+    except Exception:
+        return []
+
+
 def _row_count(path: Path) -> int | None:
     if not path.exists() or path.stat().st_size == 0:
         return None
@@ -68,6 +78,19 @@ def _mtime(path: Path) -> str:
 
 def _repo_path(path: Path) -> str:
     return path.as_posix()
+
+
+def _gate_summary(path: Path) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    out = {"status": "UNKNOWN", "safe_to_begin": "UNKNOWN", "reason": "Morning gate summary missing."}
+    for line in text.splitlines():
+        if line.startswith("- Operational Gate:"):
+            out["status"] = line.split("`")[1] if "`" in line else line.split(":", 1)[-1].strip()
+        elif line.startswith("- Safe to begin candidate review:"):
+            out["safe_to_begin"] = line.split("`")[1] if "`" in line else line.split(":", 1)[-1].strip()
+        elif line.startswith("- Reason:"):
+            out["reason"] = line.split(":", 1)[-1].strip()
+    return out
 
 
 def _relative_link(from_file: Path, target: Path, label: str | None = None) -> str:
@@ -290,13 +313,27 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     expanded_health_json = out_root / "expanded_o15_universe" / f"expanded_o15_context_health_{date}.json"
     identity_health_md = out_root / "identity" / "mlb_identity_health.md"
     identity_health_json = out_root / "identity" / "mlb_identity_health_summary.json"
+    ontology_health_md = out_root / "ontology" / "ontology_health.md"
+    ontology_health_json = out_root / "ontology" / "ontology_health.json"
     project_invariants_md = out_root / "invariants" / f"mlb_project_invariants_{date}.md"
     project_invariants_json = out_root / "invariants" / f"mlb_project_invariants_{date}.json"
     invariant_backlog_md = out_root / "invariants" / "invariant_backlog.md"
     invariant_backlog_csv = out_root / "invariants" / "invariant_backlog.csv"
     invariant_backlog_json = out_root / "invariants" / "invariant_backlog_summary.json"
     reconcile = out_root / "execution_vs_model" / completed_date / "reconcile_rows.csv"
+    morning_os = out_root / "morning_operating_system.md"
+    morning_gate = out_root / "morning_gate_summary.md"
+    morning_gate_warnings = out_root / "morning_gate_warnings.csv"
+    morning_workflow_md = out_root / "morning_workflow_audit.md"
+    morning_workflow_json = out_root / "morning_workflow" / "morning_workflow_audit_latest.json"
+    morning_workbench = out_root / "review_aids" / "performance" / "o15_morning_workbench.md"
+    morning_workbench_links = out_root / "review_aids" / "performance" / "o15_morning_workbench_links.csv"
+    morning_timing_template = out_root / "morning_timing_template.md"
+    morning_timing_log = out_root / "morning_timing_log.csv"
+    morning_timing_plan = out_root / "morning_time_to_first_insight_plan.md"
     review_perf = out_root / "review_aids" / "performance" / "review_aid_performance_report.md"
+    decision_perf = out_root / "review_aids" / "performance" / "review_aid_decision_performance_report.md"
+    expanded_rows = out_root / "expanded_o15_universe" / "expanded_o15_universe_rows.csv"
     review_perf_json = out_root / "review_aids" / "performance" / "review_aid_performance_summary.json"
     upload_dir = Path("backend/mlb/data/processed/mlb_uploads") / date
     lane_dir = Path("backend/mlb/exports/model_v2/lanes/today") / date
@@ -334,6 +371,15 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
             )
     else:
         warnings.append(f"MLB canonical identity health missing: `{identity_health_json.as_posix()}`.")
+    ontology_health = _safe_read_json(ontology_health_json)
+    if ontology_health:
+        status = str(ontology_health.get("status") or "unknown")
+        if status not in {"pass", "warn"}:
+            warnings.append(
+                f"O1.5 ontology health is `{status}`; invalid rows={ontology_health.get('invalid_rows', '')}."
+            )
+    else:
+        warnings.append(f"O1.5 ontology health missing: `{ontology_health_json.as_posix()}`.")
     project_invariants = _safe_read_json(project_invariants_json)
     if project_invariants:
         status = str(project_invariants.get("status") or "unknown")
@@ -359,40 +405,158 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
                 warnings.append(
                     f"{board['name']}: `{board['status']}`. Run `make mlb-hits-o15-alternate-discovery-full DATE={date}` to refresh it."
                 )
-    open_first = [
-        ("Ops Brief", ops_dated if ops_dated.exists() else ops_latest, True),
-        ("Preflight", preflight, True),
-        ("Project Invariants", project_invariants_md, True),
-        ("Invariant Backlog", invariant_backlog_md, True),
-        ("Review Aid Performance", review_perf, False),
-        ("Daily Feature Lineage Health", out_root / "feature_lineage" / f"daily_feature_lineage_health_{date}.md", False),
-    ]
-    lines = [
-        f"# MLB Daily Index - {date}",
-        "",
-        f"- Current slate date: `{date}`",
-        f"- Completed slate date: `{completed_date}`",
-        f"- Generated (UTC): `{generated}`",
-        "",
-        "## Open First",
-        "",
-        "| item | status | open | repo path |",
-        "|---|---|---|---|",
-    ]
-    for label, path, required in open_first:
-        status = "available" if path.exists() else ("MISSING_INPUT" if required else "optional_missing")
-        lines.append(
-            f"| {label} | `{status}` | {_dashboard_link(index_path, path, label, required, link_items)} | `{_repo_path(path)}` |"
+    gate = _gate_summary(morning_gate)
+    workflow_health = _safe_read_json(morning_workflow_json)
+    workflow_status = str(workflow_health.get("status") or "missing").upper()
+    workflow_score = workflow_health.get("workflow_health_score", "n/a")
+    gate_warnings = _safe_read_csv(morning_gate_warnings)
+    warning_counts = defaultdict(int)
+    for row in gate_warnings:
+        warning_counts[str(row.get("severity") or "INFO")] += 1
+    if not morning_timing_template.exists():
+        morning_timing_template.write_text(
+            "\n".join(
+                [
+                    "# Morning Timing Template",
+                    "",
+                    "Use this manually while the morning workflow is still being observed. Do not optimize from memory; write down where the time actually goes.",
+                    "",
+                    "- date:",
+                    "- start_home_time:",
+                    "- ops_brief_open_time:",
+                    "- ops_brief_done_time:",
+                    "- workbench_open_time:",
+                    "- first_csv_open_time:",
+                    "- first_pivot_done_time:",
+                    "- first_candidate_shortlist_time:",
+                    "- final_decision_done_time:",
+                    "- blockers_encountered:",
+                    "- hesitation_notes:",
+                    "- sections_skipped:",
+                    "- duplicate_or_unhelpful_sections:",
+                    "- what_slowed_me_down:",
+                    "- what_helped:",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
         )
-    lines.extend(
-        [
-            "",
-            "## Current Research / Active Questions",
-            "",
-            "### Latest Snapshot",
-            "",
-        ]
+    if not morning_timing_log.exists():
+        morning_timing_log.write_text(
+            "date,start_home_time,ops_brief_open_time,ops_brief_done_time,workbench_open_time,first_csv_open_time,first_pivot_done_time,first_candidate_shortlist_time,final_decision_done_time,blockers_encountered,hesitation_notes,sections_skipped,duplicate_or_unhelpful_sections,what_slowed_me_down,what_helped\n",
+            encoding="utf-8",
+        )
+    morning_timing_plan.write_text(
+        "\n".join(
+            [
+                "# Morning Time-to-First-Insight Plan",
+                "",
+                "Goal: observe how long it takes to move from Home Screen to the first useful candidate insight.",
+                "",
+                "This is manual instrumentation only. It does not enforce timing, change automation, or alter production behavior.",
+                "",
+                "## What To Measure",
+                "",
+                "- Home Screen open time",
+                "- Ops Brief open and completion time",
+                "- Morning Workbench open time",
+                "- First candidate CSV open time",
+                "- First pivot completion time",
+                "- First shortlist time",
+                "- Final decision completion time",
+                "",
+                "## What To Learn",
+                "",
+                "- Which sections are skipped because they are not useful in the morning",
+                "- Which sections duplicate another surface",
+                "- Which warnings block trust versus merely add noise",
+                "- Which CSV produces the first real baseball insight fastest",
+                "",
+                "## Current Doctrine",
+                "",
+                "- Home Screen answers: can I begin?",
+                "- Ops Brief answers: can I trust the system and what kind of baseball day is today?",
+                "- Morning Workbench answers: where should I spend attention?",
+                "- Candidate CSV answers: what exists today?",
+                "- Pivot answers: what is worth considering?",
+                "",
+            ]
+        ),
+        encoding="utf-8",
     )
+    lines = [
+        f"# MLB Morning Home - {date}",
+        "",
+        "## Good Morning",
+        "",
+        f"- Current Slate: `{date}`",
+        f"- Completed Slate: `{completed_date}`",
+        f"- Generated (UTC): `{generated}`",
+        f"- System Ready? `{gate['status']}`",
+        f"- Safe to Begin? `{gate['safe_to_begin']}`",
+        f"- Reason: {gate['reason']}",
+        "",
+        f"▶ {_dashboard_link(index_path, ops_dated if ops_dated.exists() else ops_latest, 'Start Morning Review', True, link_items)}",
+        "",
+        f"{_dashboard_link(index_path, morning_timing_template, 'Log Morning Timing', False, link_items)}",
+        "",
+        "## Morning Gate",
+        "",
+        f"- Operational Gate: `{gate['status']}`",
+        f"- Morning Workflow Health: `{workflow_status}` (`{workflow_score}%`)",
+        f"- Warnings: `{warning_counts.get('BLOCKER', 0)}` blocker, `{warning_counts.get('MAJOR', 0)}` major, `{warning_counts.get('MINOR', 0)}` minor",
+        f"- {_dashboard_link(index_path, ops_dated if ops_dated.exists() else ops_latest, 'View Ops Brief', True, link_items)}",
+        f"- {_dashboard_link(index_path, morning_gate, 'View Morning Gate Summary', False, link_items)}",
+        f"- {_dashboard_link(index_path, morning_workflow_md, 'View Morning Workflow Audit', False, link_items)}",
+        "",
+        "## Doctrine",
+        "",
+        "- Home Screen answers: can I begin?",
+        "- Ops Brief answers: can I trust the system and what kind of baseball day is today?",
+        "- Morning Workbench answers: where should I spend attention?",
+        "- Candidate CSV answers: what exists today?",
+        "- Pivot answers: what is worth considering?",
+        "",
+        "## Today's Workflow",
+        "",
+        "- [ ] System healthy",
+        "- [ ] Ops Brief reviewed",
+        "- [ ] Baseball context calibrated",
+        "- [ ] Open Morning Workbench",
+        "- [ ] Open candidate CSV",
+        "- [ ] Pivot",
+        "- [ ] Record conclusions",
+        "- [ ] Production upload (future)",
+        "",
+        "## Supporting Evidence",
+        "",
+        "| item | open |",
+        "|---|---|",
+        f"| Decision Performance | {_dashboard_link(index_path, decision_perf, 'open', False, link_items)} |",
+        f"| Expanded Research | {_dashboard_link(index_path, expanded_rows, 'open', False, link_items)} |",
+        f"| Analytics Ontology | {_dashboard_link(index_path, Path('docs/ANALYTICS_ONTOLOGY.md'), 'open', False, link_items)} |",
+        f"| Research Snapshot | {_dashboard_link(index_path, Path(str((latest_snapshot or {}).get('snapshot_path') or '')) / 'README.md' if latest_snapshot else Path(''), 'open', False, link_items)} |",
+        f"| Review Aid Performance | {_dashboard_link(index_path, review_perf, 'open', False, link_items)} |",
+        f"| Morning Timing Plan | {_dashboard_link(index_path, morning_timing_plan, 'open', False, link_items)} |",
+        f"| Morning Timing Log | {_dashboard_link(index_path, morning_timing_log, 'open', False, link_items)} |",
+        "",
+        "## Operations",
+        "",
+        "| item | open |",
+        "|---|---|",
+        f"| Ops Brief | {_dashboard_link(index_path, ops_dated if ops_dated.exists() else ops_latest, 'open', True, link_items)} |",
+        f"| Preflight | {_dashboard_link(index_path, preflight, 'open', True, link_items)} |",
+        f"| Identity | {_dashboard_link(index_path, identity_health_md, 'open', True, link_items)} |",
+        f"| Invariants | {_dashboard_link(index_path, project_invariants_md, 'open', True, link_items)} |",
+            f"| Morning Gate | {_dashboard_link(index_path, morning_gate, 'open', False, link_items)} |",
+            f"| Morning Workflow Audit | {_dashboard_link(index_path, morning_workflow_md, 'open', False, link_items)} |",
+            f"| Feature Lineage | {_dashboard_link(index_path, out_root / 'feature_lineage' / f'daily_feature_lineage_health_{date}.md', 'open', False, link_items)} |",
+        "",
+        "## Research",
+        "",
+        "### Latest Snapshot",
+        "",
+    ]
     if latest_snapshot:
         snapshot_dir = Path(str(latest_snapshot.get("snapshot_path") or ""))
         snapshot_readme = snapshot_dir / "README.md" if snapshot_dir else Path("")
@@ -463,7 +627,11 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     lines.extend(
         [
             "",
-            "## Routine Review Boards",
+            "## Archives",
+            "",
+            "These links preserve the old directory-style index for deeper navigation. They are not the morning workflow.",
+            "",
+            "### Routine Review Board Files",
             "",
             "| board | status | rows | mtime UTC | open | repo path |",
             "|---|---|---:|---|---|---|",
@@ -489,7 +657,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     lines.extend(
         [
             "",
-            "## Production / Upload",
+            "### Production / Upload Files",
             "",
             "| item | status | rows | open | repo path |",
             "|---|---|---:|---|---|",
@@ -513,7 +681,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     lines.extend(
         [
             "",
-            "## Completed-Slate Performance",
+            "### Completed-Slate Performance Files",
             "",
             "| item | status | rows | open | repo path |",
             "|---|---|---:|---|---|",
@@ -521,6 +689,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     )
     performance_specs = [
         ("Reconcile Rows", reconcile, False),
+        ("O1.5 Decision Performance", decision_perf, False),
         ("Review Aid Performance", review_perf, False),
         ("Review Aid Performance JSON", review_perf_json, False),
         ("Full Slate Summary", out_root / "execution_vs_model" / completed_date / "full_slate_summary.md", False),
@@ -536,7 +705,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     lines.extend(
         [
             "",
-            "## Optional / Research",
+            "### Optional / Research Files",
             "",
             "| item | status | rows | open | repo path |",
             "|---|---|---:|---|---|",
@@ -547,6 +716,8 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
         ("Expanded O1.5 Context Health JSON", expanded_health_json, True),
         ("MLB Identity Health", identity_health_md, True),
         ("MLB Identity Health JSON", identity_health_json, True),
+        ("O1.5 Ontology Health", ontology_health_md, True),
+        ("O1.5 Ontology Health JSON", ontology_health_json, True),
         ("MLB Project Invariants", project_invariants_md, True),
         ("MLB Project Invariants JSON", project_invariants_json, True),
         ("MLB Invariant Backlog", invariant_backlog_md, True),
@@ -572,7 +743,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     lines.extend(
         [
             "",
-            "## Warnings / Missing Inputs",
+            "### Warnings / Missing Inputs",
             "",
         ]
     )
@@ -585,7 +756,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
     lines.extend(
         [
             "",
-            "## Navigation / Maps",
+            "### Navigation / Maps",
             "",
             "| item | open | repo path |",
             "|---|---|---|",
@@ -617,7 +788,34 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
         lines.append("## Link Check")
         lines.append("")
         lines.append(f"- Broken required links: `{len(broken_required)}`")
-    (daily_dir / "INDEX.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    index_body = "\n".join(lines) + "\n"
+    (daily_dir / "INDEX.md").write_text(index_body, encoding="utf-8")
+    (out_root / "home_screen_prototype.md").write_text(index_body, encoding="utf-8")
+    comparison = [
+        "# MLB Home Screen Workflow Comparison",
+        "",
+        "## Before",
+        "",
+        "- INDEX behaved like a directory listing.",
+        "- The first question was: where are all the files?",
+        "- Operational, research, and archive links appeared with similar weight.",
+        "- The user had to infer the next action.",
+        "",
+        "## After",
+        "",
+        "- INDEX behaves as the MLB Morning Operating System home screen.",
+        "- The first question is: is today safe for decision making?",
+        "- The primary action is Start Morning Review, which opens the Ops Brief.",
+        "- Candidate priorities are no longer previewed on the Home Screen; they belong in the Morning Workbench.",
+        "- Ops Brief verifies platform trust and calibrates the baseball day; Morning Workbench directs attention; CSVs are the work surface.",
+        "- File-directory links remain available under Archives.",
+        "",
+        "## Workflow",
+        "",
+        "Automation -> Home Screen -> Ops Brief -> Morning Workbench -> Today's Candidate CSV -> Pivot -> Decision -> Production Upload",
+        "",
+    ]
+    (out_root / "home_screen_workflow_comparison.md").write_text("\n".join(comparison), encoding="utf-8")
 
 
 README_CONTENT = {

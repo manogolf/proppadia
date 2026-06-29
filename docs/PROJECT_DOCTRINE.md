@@ -84,6 +84,19 @@ Required visibility depends on scope:
 
 Zero rows must not silently masquerade as normal when input artifacts are missing or stale.
 
+## Generated Artifact Commit Policy
+
+Generated artifacts should not dirty the repository during normal daily operation.
+
+Use this split:
+
+- Source code, Make targets, durable docs, doctrine, and reusable scripts should be committed.
+- Immutable evidence reports may live under `artifacts/analysis/...`; these are ignored by default unless deliberately force-added for a specific milestone.
+- Daily upload/runtime products under `backend/mlb/data/processed/...` should generally be generated locally and ignored unless they are existing tracked baselines or explicitly required fixtures.
+- Fixed-schema operational files may use parallel diagnostics for lineage, but those diagnostics should feed health checks and reports without requiring a daily commit.
+
+If a generated file must be committed as a milestone artifact, document why in the related report. Otherwise preserve audit evidence in ignored analysis artifacts and keep the worktree clean.
+
 ## Regression Rule
 
 Every durable feature must define what regression looks like.
@@ -172,6 +185,8 @@ When reviewing any change that adds or modifies one of these:
 
 the reviewer must check:
 
+- What ontology level is this: universe, population, classification, candidate, outcome, provenance, health, orchestration, invariant, or snapshot?
+- Who is the primary audience: ops, research, upload, diagnostics, or archive?
 - How is historical data populated?
 - How is tomorrow's data populated?
 - Where is the automation wired?
@@ -190,6 +205,63 @@ The mandatory review question is:
 Does this remain correct tomorrow?
 
 If not, the feature is incomplete.
+
+## Analytics Ontology Rule
+
+Reference: `docs/ANALYTICS_ONTOLOGY.md`
+
+Before creating a new report, board, audit, universe, derived CSV, or recurring research artifact, identify:
+
+- ontology level;
+- sport;
+- prop/lane;
+- source universe;
+- population definition, if any;
+- classification fields, if any;
+- candidate identity;
+- outcome source, if any;
+- primary audience;
+- expected cadence;
+- Ops Brief and Daily Index visibility.
+
+If the artifact overlaps an existing report, name the overlap explicitly and explain why a new artifact is needed.
+
+Vocabulary standards:
+
+- `Universe` is a broad opportunity source boundary.
+- `Population` is a saved subset within a universe.
+- `Classification` is a grouping applied to candidates or outcomes.
+- `Candidate` is one player-market opportunity row.
+- `Outcome` is resolved performance or quality measurement.
+- `Provenance` explains source and lineage.
+
+`Layer` should generally be treated as provenance or qualification metadata, not a primary decision category, unless a report explicitly promotes a layer into a named population.
+
+## Morning Workflow Rule
+
+The morning routine is a production system.
+
+Every new morning artifact must answer:
+
+- Where in the workflow does this belong?
+- What step produces it?
+- What step consumes it?
+- What handoff does it enable?
+- What health check proves the handoff still works tomorrow?
+
+Canonical morning flow:
+
+`Home Screen -> Ops Brief -> Morning Workbench -> Today's Candidate CSV -> Pivot -> Decision -> Production Upload`
+
+Workflow roles:
+
+- Home Screen answers: can I begin?
+- Ops Brief answers: can I trust today's platform, and what kind of baseball day is today?
+- Morning Workbench answers: where should I spend attention?
+- Candidate CSV answers: what exists today?
+- Pivot answers: what is worth considering?
+
+If a morning artifact does not fit this flow, it belongs in supporting evidence, research, operations, or archive, not in the primary morning path.
 
 ## Done Definition
 

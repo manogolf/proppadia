@@ -25,6 +25,23 @@ from backend.shared.db.pg import pg_fetchall
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "Makefile").exists())
 WINDOWS = ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate")
 OUTPUT_DIR = ROOT / "artifacts/analysis/mlb/review_aids"
+ENVIRONMENT_COMPONENT_COLUMNS = [
+    "pitcher_expected_hits_allowed_weighted",
+    "pitcher_base",
+    "offense_hits_pg_last7",
+    "offense_hits_pg_last15",
+    "offense_hits_pg_last30",
+    "offense_hits_form_blended",
+    "league_offense_hits_form_blended",
+    "offense_factor_vs_league",
+    "offense_factor_vs_league_clamped",
+    "bullpen_hits_allowed_pg_last7",
+    "bullpen_hits_allowed_pg_last15",
+    "bullpen_hits_allowed_pg_last30",
+    "bullpen_hits_allowed_form_blended",
+    "starter_expected_hits_allowed",
+    "team_expected_hits_allowed",
+]
 
 
 def _f(value: Any) -> float | None:
@@ -267,21 +284,41 @@ def _enrich_rows(rows: list[dict[str, Any]]) -> None:
             ]
         )
         offense_factor = offense_hits / league_offense if offense_hits is not None and league_offense else None
-        offense_factor = _clamp(offense_factor, 0.70, 1.30)
+        offense_factor_clamped = _clamp(offense_factor, 0.70, 1.30)
         baseline = starter_baselines.get(int(starter_id or 0), {})
         starter_expected = _f(baseline.get("expected_hits_allowed_weighted"))
-        matchup_expected = starter_expected * offense_factor if starter_expected is not None and offense_factor is not None else None
+        matchup_expected = (
+            starter_expected * offense_factor_clamped
+            if starter_expected is not None and offense_factor_clamped is not None
+            else None
+        )
         bullpen = bullpen_form.get(pitcher_team, {})
+        bullpen_hits_allowed_pg_last7 = bullpen.get("bullpen_hits_allowed_pg_last7")
+        bullpen_hits_allowed_pg_last15 = bullpen.get("bullpen_hits_allowed_pg_last15")
+        bullpen_hits_allowed_pg_last30 = bullpen.get("bullpen_hits_allowed_pg_last30")
         bullpen_expected = _blend_weighted(
             [
-                (bullpen.get("bullpen_hits_allowed_pg_last7"), 0.50),
-                (bullpen.get("bullpen_hits_allowed_pg_last15"), 0.30),
-                (bullpen.get("bullpen_hits_allowed_pg_last30"), 0.20),
+                (bullpen_hits_allowed_pg_last7, 0.50),
+                (bullpen_hits_allowed_pg_last15, 0.30),
+                (bullpen_hits_allowed_pg_last30, 0.20),
             ]
         )
         row.update(
             {
                 "opposing_starter_player_id": starter_id,
+                "pitcher_expected_hits_allowed_weighted": starter_expected,
+                "pitcher_base": starter_expected,
+                "offense_hits_pg_last7": _f(offense_form.get("hits_pg_last7")),
+                "offense_hits_pg_last15": _f(offense_form.get("hits_pg_last15")),
+                "offense_hits_pg_last30": _f(offense_form.get("hits_pg_last30")),
+                "offense_hits_form_blended": offense_hits,
+                "league_offense_hits_form_blended": league_offense,
+                "offense_factor_vs_league": offense_factor,
+                "offense_factor_vs_league_clamped": offense_factor_clamped,
+                "bullpen_hits_allowed_pg_last7": _f(bullpen_hits_allowed_pg_last7),
+                "bullpen_hits_allowed_pg_last15": _f(bullpen_hits_allowed_pg_last15),
+                "bullpen_hits_allowed_pg_last30": _f(bullpen_hits_allowed_pg_last30),
+                "bullpen_hits_allowed_form_blended": bullpen_expected,
                 "starter_expected_hits_allowed": matchup_expected,
                 "starter_context_status": "projected" if matchup_expected is not None else "missing",
                 "team_expected_hits_allowed": (
@@ -571,6 +608,8 @@ def main() -> int:
     json_path = out_dir / "hits_15_tier_backtest_summary.json"
     _write_csv(o15_csv, o15_summary)
     _write_csv(u15_csv, u15_summary)
+    _write_csv(out_dir / "hits_o15_tier_backtest_rows.csv", o15_rows)
+    _write_csv(out_dir / "hits_u15_tier_backtest_rows.csv", u15_rows)
     _write_report(o15_md, o15_summary, "o15", latest)
     _write_report(u15_md, u15_summary, "u15", latest)
     payload = {
