@@ -1,0 +1,44 @@
+{
+  "component_fields": [
+    "offense_factor_vs_league_clamped",
+    "offense_hits_form_blended",
+    "pitcher_expected_hits_allowed_weighted",
+    "pitcher_base",
+    "starter_expected_hits_allowed",
+    "bullpen_hits_allowed_form_blended",
+    "team_expected_hits_allowed"
+  ],
+  "dashboard_fields": [
+    "env_v2_alpha_research_status",
+    "env_v2_alpha_bucket_schema",
+    "env_v2_alpha_offense_strength_bucket",
+    "env_v2_alpha_offense_form_bucket",
+    "env_v2_alpha_pitcher_base_bucket",
+    "env_v2_alpha_starter_matchup_bucket",
+    "env_v2_alpha_bullpen_support_bucket",
+    "env_v2_alpha_team_rollup_bucket",
+    "env_v2_alpha_agreement_profile",
+    "env_v2_alpha_offense_high_starter_high_bullpen_high",
+    "env_v2_alpha_offense_high_starter_high_bullpen_low",
+    "env_v2_alpha_offense_high_starter_low_bullpen_high",
+    "env_v2_alpha_offense_low_starter_high_bullpen_high",
+    "env_v2_alpha_team_expected_high_starter_mediocre",
+    "env_v2_alpha_starter_high_team_expected_mediocre",
+    "env_v2_alpha_component_missing_count",
+    "env_v2_alpha_component_coverage"
+  ],
+  "dashboard_rows": 1777,
+  "formula_or_score_introduced": false,
+  "generated_at": "2026-06-29T23:00:12.965831+00:00",
+  "outputs": {
+    "health_csv": "artifacts/analysis/mlb/review_aids/offensive_environment_v2_alpha_dashboard_health_2026-06-29.csv",
+    "health_md": "artifacts/analysis/mlb/review_aids/offensive_environment_v2_alpha_dashboard_health_2026-06-29.md",
+    "report_md": "artifacts/analysis/mlb/review_aids/offensive_environment_v2_alpha_component_dashboard_2026-06-29.md",
+    "rows_csv": "artifacts/analysis/mlb/review_aids/offensive_environment_v2_alpha_dashboard_rows_2026-06-29.csv",
+    "summary_csv": "artifacts/analysis/mlb/review_aids/offensive_environment_v2_alpha_dashboard_summary_2026-06-29.csv"
+  },
+  "research_only": true,
+  "source_rows": 1777,
+  "status": "pass",
+  "tier_replacement": false
+}

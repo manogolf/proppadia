@@ -94,10 +94,14 @@ MLB_EXPANDED_O15_UNIVERSE_OUT_DIR ?= artifacts/analysis/mlb/expanded_o15_univers
 MLB_EXPANDED_O15_UNIVERSE_ROWS_CSV ?= $(MLB_EXPANDED_O15_UNIVERSE_OUT_DIR)/expanded_o15_universe_rows.csv
 MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DATE_ET))
 MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON ?= $(MLB_EXPANDED_O15_UNIVERSE_OUT_DIR)/expanded_o15_context_health_$(MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE).json
+MLB_O15_ONTOLOGY_HEALTH_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DATE_ET))
+MLB_O15_ONTOLOGY_HEALTH_OUT_DIR ?= artifacts/analysis/mlb/ontology
 MLB_PROJECT_INVARIANTS_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DATE_ET))
 MLB_PROJECT_INVARIANTS_OUT_DIR ?= artifacts/analysis/mlb/invariants
 MLB_INVARIANT_BACKLOG_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DATE_ET))
 MLB_INVARIANT_BACKLOG_OUT_DIR ?= artifacts/analysis/mlb/invariants
+MLB_MORNING_WORKFLOW_AUDIT_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DATE_ET))
+MLB_MORNING_WORKFLOW_AUDIT_OUT_ROOT ?= artifacts/analysis/mlb
 MAX_ODDSAPI_CALLS ?= 0
 MAX_ODDSAPI_CREDITS ?= 0
 MIN_ODDSAPI_REMAINING_CREDITS ?= 0
@@ -375,6 +379,9 @@ MLB_HITS_ENV_OUT_CSV ?= tmp/analysis/mlb_hits_environment_hits_allowed_rows.csv
 MLB_HITS_ENV_SNAPSHOT_DIR ?= artifacts/analysis/mlb/hits_environment_snapshots
 MLB_HITS_ENV_HISTORY_JSONL ?= artifacts/analysis/mlb/mlb_hits_environment_history.jsonl
 MLB_HITS_ENV_EVAL_TRACKER_CSV ?= artifacts/analysis/mlb/mlb_hits_environment_team_eval_daily_tracker.csv
+MLB_HITS15_ENV_LINEAGE_DATE ?= $(if $(strip $(DATE)),$(DATE),$(shell date +%F))
+MLB_HITS15_ENV_LINEAGE_OUT_DIR ?= artifacts/analysis/mlb/review_aids
+MLB_HITS15_ENV_V2_ALPHA_OUT_DIR ?= artifacts/analysis/mlb/review_aids
 MLB_DAILY_BRIEF_REPORT_DATE ?= $(MLB_DATE_ET)
 MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE ?= $(MLB_DAILY_RECONCILE_DATE)
 MLB_DAILY_BRIEF_CURRENT_SLATE_DATE ?= $(MLB_DATE_ET)
@@ -412,6 +419,10 @@ MLB_DAILY_PREFLIGHT_OUT_MD ?= artifacts/analysis/mlb/orchestration/mlb_daily_pre
 MLB_DAILY_INDEX_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE))
 MLB_DAILY_INDEX_COMPLETED_SLATE_DATE ?= $(MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE)
 MLB_DAILY_INDEX_OUT_ROOT ?= artifacts/analysis/mlb
+MLB_MORNING_OPERATING_SYSTEM_DATE ?= $(MLB_DAILY_INDEX_DATE)
+MLB_MORNING_OPERATING_SYSTEM_OUT_ROOT ?= artifacts/analysis/mlb
+MLB_O15_MORNING_WORKBENCH_DATE ?= $(MLB_DAILY_INDEX_DATE)
+MLB_O15_MORNING_WORKBENCH_OUT_DIR ?= artifacts/analysis/mlb/review_aids/performance
 MLB_ROSTER_DATE ?= $(shell date +%F)
 NHL_ROSTER_DATE ?= $(shell date +%F)
 MLB_STAT_DERIVED_DAYS ?= 7
@@ -723,7 +734,7 @@ SEASON_CUTOVER_HISTORY_INPUT ?= artifacts/season_cutover_history.jsonl
 .PHONY: mlb-prod12-model-bundle-publish
 .PHONY: mlb-odds-backfill-history
 .PHONY: mlb-db-env-check
-.PHONY: mlb-red-mode-bucket-report mlb-red-mode-bucket-report-positive mlb-red-mode-fade-bucket-report mlb-red-mode-bucket-report-combined mlb-book-upload-side-matrix mlb-daily-bet-sheet mlb-rebuild-lane-test mlb-bvp-impact-preflight mlb-bvp-impact-report mlb-hits-environment-report mlb-daily-feature-lineage-health mlb-refresh-daily-ops-brief-inputs mlb-daily-preflight mlb-daily-index mlb-daily-index-check mlb-daily-ops-brief mlb-cleanup-one-sided-price-rows mlb-project-invariants mlb-invariant-backlog
+.PHONY: mlb-red-mode-bucket-report mlb-red-mode-bucket-report-positive mlb-red-mode-fade-bucket-report mlb-red-mode-bucket-report-combined mlb-book-upload-side-matrix mlb-daily-bet-sheet mlb-rebuild-lane-test mlb-bvp-impact-preflight mlb-bvp-impact-report mlb-hits-environment-report mlb-daily-feature-lineage-health mlb-daily-health-gates mlb-refresh-daily-ops-brief-inputs mlb-daily-preflight mlb-daily-index mlb-daily-index-check mlb-daily-ops-brief mlb-cleanup-one-sided-price-rows mlb-project-invariants mlb-invariant-backlog
 
 mlb-db-env-check:
 	$(VENV_PY) backend/scripts/check_db_env.py --check-connection
@@ -922,6 +933,7 @@ help:
 	@echo "  make mlb-expanded-o15-low-attention-signpost-audit [research: audit low-attention +200s O1.5 signpost profile]"
 	@echo "  make mlb-research-snapshot DATE=YYYY-MM-DD [weekly immutable MLB research checkpoint]"
 	@echo "  make mlb-identity-health [canonical identity coverage/fallback/ambiguity diagnostics]"
+	@echo "  make mlb-o15-ontology-health DATE=YYYY-MM-DD [O1.5 ontology metadata coverage diagnostics]"
 	@echo "  make mlb-project-invariants DATE=YYYY-MM-DD [project doctrine invariant audit]"
 	@echo "  make mlb-invariant-backlog DATE=YYYY-MM-DD [invariant intake backlog summary]"
 	@echo "  make mlb-hits-u15-favorite-audit DATE=YYYY-MM-DD [review aid: hits under 1.5 favorite audit board]"
@@ -1436,7 +1448,7 @@ mlb-bvp-pvb-refresh:
 		$(VENV_PY) backend/mlb/scripts/refresh_mlb_bvp_pvb.py --date "$(MLB_BVP_DATE)" --feature-set-tag "$(MLB_BVP_FEATURE_SET_TAG)" --model-tag "$(MLB_BVP_MODEL_TAG)" --batch-size "$(MLB_BVP_BATCH_SIZE)" --request-timeout-sec "$(MLB_BVP_REQUEST_TIMEOUT_SEC)" --request-retries "$(MLB_BVP_REQUEST_RETRIES)" $(if $(filter 1,$(MLB_BVP_DRY_RUN)),--dry-run,); \
 	fi
 
-.PHONY: mlb-bvp-impact-preflight mlb-bvp-impact-report
+.PHONY: mlb-bvp-impact-preflight mlb-bvp-impact-report mlb-morning-workflow-audit
 
 # Estimate BvP/PvB impact runtime before launching the expensive row-by-row comparison.
 mlb-bvp-impact-preflight:
@@ -1454,15 +1466,33 @@ mlb-hits-environment-report:
 mlb-daily-feature-lineage-health:
 	$(VENV_PY) backend/mlb/scripts/check_mlb_daily_feature_lineage_health.py --date "$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE)" --slate-output-csv "$(MLB_SLATE_OUTPUT_CSV)" --warn-null-threshold "$(MLB_DAILY_FEATURE_LINEAGE_HEALTH_NULL_WARN_THRESHOLD)" --out-json "$(MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON)" --latest-json "$(MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON)" --out-md "$(MLB_DAILY_FEATURE_LINEAGE_HEALTH_MD)"
 
+mlb-daily-health-gates:
+	$(MAKE) mlb-expanded-o15-universe MLB_EXPANDED_O15_UNIVERSE_DATE="" MLB_EXPANDED_O15_UNIVERSE_DATE_FROM="" MLB_EXPANDED_O15_UNIVERSE_DATE_TO=""
+	$(MAKE) mlb-expanded-o15-context-health MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE="$(MLB_DAILY_PREFLIGHT_DATE)"
+	$(MAKE) mlb-identity-health
+	$(MAKE) mlb-o15-ontology-health MLB_O15_ONTOLOGY_HEALTH_DATE="$(MLB_DAILY_PREFLIGHT_DATE)"
+	$(MAKE) mlb-project-invariants MLB_PROJECT_INVARIANTS_DATE="$(MLB_DAILY_PREFLIGHT_DATE)"
+
 # Verify current-slate artifacts that must exist before the Ops Brief renders review-board counts.
 mlb-daily-preflight:
 	$(VENV_PY) backend/mlb/scripts/check_mlb_daily_orchestration_preflight.py --date "$(MLB_DAILY_PREFLIGHT_DATE)" --slate-output-csv "$(MLB_SLATE_OUTPUT_CSV)" --lane-selector-csv "backend/mlb/exports/model_v2/lanes/today/$(MLB_DAILY_PREFLIGHT_DATE)/hits_lane_selector_$(MLB_DAILY_PREFLIGHT_DATE).csv" --quick-card-csv "backend/mlb/exports/model_v2/lanes/today/$(MLB_DAILY_PREFLIGHT_DATE)/quick_card_hits_$(MLB_DAILY_PREFLIGHT_DATE).csv" --hits-o15-simple-csv "$(MLB_HITS_O15_SIMPLE_FILTER_OUT_DIR)/hits_o15_simple_filter_$(MLB_DAILY_PREFLIGHT_DATE).csv" --hits-o15-watch-csv "$(MLB_HITS_O15_WATCH_CANDIDATES_OUT_DIR)/hits_o15_watch_candidates_$(MLB_DAILY_PREFLIGHT_DATE).csv" --hits-o15-layered-csv "$(MLB_HITS_O15_LAYERED_CANDIDATES_OUT_DIR)/hits_o15_layered_candidates_$(MLB_DAILY_PREFLIGHT_DATE).csv" --hits-u15-favorite-csv "$(MLB_HITS_U15_FAVORITE_AUDIT_OUT_DIR)/hits_u15_favorite_audit_$(MLB_DAILY_PREFLIGHT_DATE).csv" --hits-o15-alternate-csv "$(MLB_HITS_O15_ALTERNATE_DISCOVERY_OUT_DIR)/hits_o15_alternate_discovery_$(MLB_DAILY_PREFLIGHT_DATE).csv" --expanded-o15-context-health-json "$(MLB_EXPANDED_O15_UNIVERSE_OUT_DIR)/expanded_o15_context_health_$(MLB_DAILY_PREFLIGHT_DATE).json" --project-invariants-json "$(MLB_PROJECT_INVARIANTS_OUT_DIR)/mlb_project_invariants_$(MLB_DAILY_PREFLIGHT_DATE).json" --out-json "$(MLB_DAILY_PREFLIGHT_OUT_JSON)" --out-md "$(MLB_DAILY_PREFLIGHT_OUT_MD)"
 
+mlb-morning-operating-system:
+	$(VENV_PY) backend/mlb/scripts/build_mlb_morning_operating_system.py --date "$(MLB_MORNING_OPERATING_SYSTEM_DATE)" --out-root "$(MLB_MORNING_OPERATING_SYSTEM_OUT_ROOT)"
+
+mlb-o15-morning-workbench:
+	$(VENV_PY) backend/mlb/scripts/build_o15_morning_workbench.py --date "$(MLB_O15_MORNING_WORKBENCH_DATE)" --out-dir "$(MLB_O15_MORNING_WORKBENCH_OUT_DIR)"
+
 mlb-daily-index:
+	$(MAKE) mlb-morning-operating-system MLB_MORNING_OPERATING_SYSTEM_DATE="$(MLB_DAILY_INDEX_DATE)"
+	$(MAKE) mlb-o15-morning-workbench MLB_O15_MORNING_WORKBENCH_DATE="$(MLB_DAILY_INDEX_DATE)"
 	$(VENV_PY) backend/mlb/scripts/build_mlb_artifact_index.py --date "$(MLB_DAILY_INDEX_DATE)" --completed-slate-date "$(MLB_DAILY_INDEX_COMPLETED_SLATE_DATE)" --out-root "$(MLB_DAILY_INDEX_OUT_ROOT)"
 
 mlb-daily-index-check:
 	$(VENV_PY) backend/mlb/scripts/build_mlb_artifact_index.py --date "$(MLB_DAILY_INDEX_DATE)" --out-root "$(MLB_DAILY_INDEX_OUT_ROOT)" --check-only
+
+mlb-morning-workflow-audit:
+	$(VENV_PY) backend/mlb/scripts/audit_mlb_morning_workflow.py --date "$(MLB_MORNING_WORKFLOW_AUDIT_DATE)" --out-root "$(MLB_MORNING_WORKFLOW_AUDIT_OUT_ROOT)"
 
 # Refresh all local/date-owned artifacts consumed by the daily ops brief.
 mlb-refresh-daily-ops-brief-inputs:
@@ -1556,7 +1586,7 @@ mlb-o15-alternate-history-backfill-and-build:
 mlb-hits-u15-favorite-audit:
 	$(VENV_PY) backend/mlb/scripts/run_mlb_hits_o15_review_board.py --board u15 --date "$(MLB_HITS_U15_FAVORITE_AUDIT_DATE)" --slate-output-csv "$(MLB_SLATE_OUTPUT_CSV)" --hits-environment-json "$(MLB_HITS_ENV_OUT_JSON)" --hits-environment-history-jsonl "$(MLB_HITS_ENV_HISTORY_JSONL)" --hits-environment-snapshot-dir "$(MLB_HITS_ENV_SNAPSHOT_DIR)" --starter-required-min-starts "$(MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS)" --out-dir "$(MLB_HITS_U15_FAVORITE_AUDIT_OUT_DIR)"
 
-.PHONY: mlb-daily-review-boards mlb-train-probability-calibration mlb-check-finalized-training-data mlb-ensure-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance mlb-daily-reconcile mlb-daily-upload-prep mlb-current-upload-prep mlb-daily-review-and-upload mlb-refresh-v2-environment-interactions mlb-refresh-v2-qc-candidate-watch mlb-refresh-ranking-qc-overlap-watch mlb-refresh-overlap-role-profile-watch mlb-refresh-qc-bottom-order-under-watch mlb-refresh-user-over-15-filter-watch mlb-capture-overlap-snapshot mlb-v2-candidate-registry mlb-overlap-monitor mlb-review-aid-performance mlb-expanded-o15-universe mlb-expanded-o15-context-health mlb-expanded-o15-universe-slice-analysis mlb-expanded-o15-universe-betonline-audit mlb-expanded-o15-hidden-matchup-support-audit mlb-expanded-o15-agreement-score-audit mlb-expanded-o15-variable-importance-survey mlb-expanded-o15-feature-centrality-audit mlb-time-of-day-bucket-audit mlb-expanded-o15-late-game-proxy-audit mlb-expanded-o15-low-attention-signpost-audit mlb-research-snapshot mlb-weekly-research-snapshot mlb-identity-health mlb-rehydrate-reconcile-rolling-context
+.PHONY: mlb-daily-review-boards mlb-train-probability-calibration mlb-check-finalized-training-data mlb-ensure-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance mlb-daily-reconcile mlb-daily-upload-prep mlb-current-upload-prep mlb-daily-review-and-upload mlb-refresh-v2-environment-interactions mlb-refresh-v2-qc-candidate-watch mlb-refresh-ranking-qc-overlap-watch mlb-refresh-overlap-role-profile-watch mlb-refresh-qc-bottom-order-under-watch mlb-refresh-user-over-15-filter-watch mlb-capture-overlap-snapshot mlb-v2-candidate-registry mlb-overlap-monitor mlb-review-aid-performance mlb-expanded-o15-universe mlb-expanded-o15-context-health mlb-expanded-o15-universe-slice-analysis mlb-expanded-o15-universe-betonline-audit mlb-expanded-o15-hidden-matchup-support-audit mlb-expanded-o15-agreement-score-audit mlb-expanded-o15-variable-importance-survey mlb-expanded-o15-feature-centrality-audit mlb-time-of-day-bucket-audit mlb-expanded-o15-late-game-proxy-audit mlb-expanded-o15-low-attention-signpost-audit mlb-research-snapshot mlb-weekly-research-snapshot mlb-identity-health mlb-o15-ontology-health ontology-health mlb-hits15-environment-lineage-health mlb-hits15-environment-v2-alpha-dashboard mlb-rehydrate-reconcile-rolling-context
 mlb-daily-review-boards:
 	$(MAKE) mlb-hits-o15-simple-filter MLB_HITS_O15_SIMPLE_FILTER_DATE="$(MLB_DAILY_REVIEW_BOARDS_DATE)"
 	$(MAKE) mlb-hits-o15-watch-candidates MLB_HITS_O15_WATCH_CANDIDATES_DATE="$(MLB_DAILY_REVIEW_BOARDS_DATE)"
@@ -1648,6 +1678,14 @@ mlb-expanded-o15-context-health:
 	@echo "Checking expanded o1.5 context health for $(MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE)"
 	$(VENV_PY) backend/mlb/scripts/check_expanded_o15_context_health.py --date "$(MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE)" --rows-csv "$(MLB_EXPANDED_O15_UNIVERSE_ROWS_CSV)" --out-dir "$(MLB_EXPANDED_O15_UNIVERSE_OUT_DIR)"
 
+mlb-hits15-environment-lineage-health:
+	@echo "Checking hits 1.5 environment v1.1 lineage retention for $(MLB_HITS15_ENV_LINEAGE_DATE)"
+	$(VENV_PY) backend/mlb/scripts/check_mlb_hits15_environment_lineage_health.py --date "$(MLB_HITS15_ENV_LINEAGE_DATE)" --out-dir "$(MLB_HITS15_ENV_LINEAGE_OUT_DIR)"
+
+mlb-hits15-environment-v2-alpha-dashboard:
+	@echo "Building hits 1.5 Environment v2-alpha component dashboard"
+	$(VENV_PY) backend/mlb/scripts/build_mlb_hits15_environment_v2_alpha_dashboard.py --out-dir "$(MLB_HITS15_ENV_V2_ALPHA_OUT_DIR)"
+
 mlb-expanded-o15-universe-slice-analysis:
 	@echo "Analyzing expanded o1.5 universe slices"
 	$(VENV_PY) backend/mlb/scripts/analyze_expanded_o15_universe_slices.py --rows-csv "$(MLB_EXPANDED_O15_UNIVERSE_ROWS_CSV)" --out-dir "$(MLB_EXPANDED_O15_UNIVERSE_OUT_DIR)" --backfill-root "$(MLB_ODDSAPI_ALTERNATE_HISTORY_BACKFILL_OUT_ROOT)"
@@ -1699,6 +1737,12 @@ mlb-weekly-research-snapshot:
 mlb-identity-health:
 	@echo "Running MLB canonical identity health diagnostics"
 	$(VENV_PY) backend/mlb/scripts/run_mlb_identity_health.py
+
+mlb-o15-ontology-health:
+	@echo "Checking O1.5 ontology metadata health for $(MLB_O15_ONTOLOGY_HEALTH_DATE)"
+	$(VENV_PY) backend/mlb/scripts/check_mlb_o15_ontology_health.py --date "$(MLB_O15_ONTOLOGY_HEALTH_DATE)" --out-dir "$(MLB_O15_ONTOLOGY_HEALTH_OUT_DIR)"
+
+ontology-health: mlb-o15-ontology-health
 
 mlb-project-invariants:
 	@echo "Auditing MLB project invariants for $(MLB_PROJECT_INVARIANTS_DATE)"
@@ -1768,6 +1812,7 @@ mlb-daily-review-and-upload:
 	$(MAKE) mlb-expanded-o15-context-health MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE="$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-expanded-o15-variable-importance-survey
 	$(MAKE) mlb-identity-health
+	$(MAKE) mlb-o15-ontology-health MLB_O15_ONTOLOGY_HEALTH_DATE="$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-project-invariants MLB_PROJECT_INVARIANTS_DATE="$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-invariant-backlog MLB_INVARIANT_BACKLOG_DATE="$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-daily-preflight MLB_DAILY_PREFLIGHT_DATE="$(MLB_UPLOAD_PREP_DATE)"
