@@ -84,6 +84,15 @@ LAYER_LABELS = {
     "all_u15_other": "All other u1.5",
 }
 
+LAYER_CALLOUT_DESCRIPTIONS = {
+    "o1.5 Layer 4": "QC + d7/d15 + starter context",
+    "o1.5 Layer 3": "d7/d15 + starter context",
+    "o1.5 alternate Layer A": "alternate d7/d15 + favorable starter, no QC",
+    "u1.5 Layer 4": "QC + d7/d15 + starter context",
+    "u1.5 Layer 3": "d7/d15 + starter context",
+    "u1.5 Layer 2": "d7/d15 form only",
+}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -950,6 +959,8 @@ def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, 
     lines.append("")
     lines.append("## Requested Daily Callouts")
     lines.append("")
+    lines.append("Layer = review-aid provenance, not A/A-style hitter/starter tier.")
+    lines.append("")
     callouts = [
         ("o1.5 Layer 4", _row_for(by_layer, window="latest_completed_slate", board="o15_layered", layer="layer_4_qc_d7_d15_starter")),
         ("o1.5 Layer 3", _row_for(by_layer, window="latest_completed_slate", board="o15_layered", layer="layer_3_d7_d15_starter_non_qc")),
@@ -960,13 +971,16 @@ def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, 
         ("u1.5 A/A", _row_for(by_tier, window="latest_completed_slate", board="u15_favorite_audit", tier_type="combined_tier", tier="A/A")),
     ]
     for label, row in callouts:
+        display_label = label
+        if label in LAYER_CALLOUT_DESCRIPTIONS:
+            display_label = f"{label} ({LAYER_CALLOUT_DESCRIPTIONS[label]})"
         if row:
             lines.append(
-                f"- {label}: `{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` "
+                f"- {display_label}: `{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` "
                 f"ROI `{_fmt_pct(row.get('roi'))}` over `{row.get('resolved')}` resolved rows."
             )
         else:
-            lines.append(f"- {label}: no rows for latest completed slate.")
+            lines.append(f"- {display_label}: no rows for latest completed slate.")
     lines.append("")
     lines.append("## Notes")
     lines.append("")

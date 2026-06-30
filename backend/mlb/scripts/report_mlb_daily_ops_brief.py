@@ -2415,15 +2415,25 @@ def build_markdown(
     )
 
     def perf_line(label: str, row: Dict[str, Any]) -> str:
+        descriptions = {
+            "o1.5 Layer 4": "QC + d7/d15 + starter context",
+            "o1.5 Layer 3": "d7/d15 + starter context",
+            "o1.5 alternate Layer A": "alternate d7/d15 + favorable starter, no QC",
+            "u1.5 Layer 4": "QC + d7/d15 + starter context",
+            "u1.5 Layer 3": "d7/d15 + starter context",
+            "u1.5 Layer 2": "d7/d15 form only",
+        }
+        display_label = f"{label} ({descriptions[label]})" if label in descriptions else label
         if not row:
-            return f"- {label}: no latest completed slate rows."
+            return f"- {display_label}: no latest completed slate rows."
         return (
-            f"- {label}: `{row.get('wins', 0)}-{row.get('losses', 0)}-{row.get('pushes', 0)}` "
+            f"- {display_label}: `{row.get('wins', 0)}-{row.get('losses', 0)}-{row.get('pushes', 0)}` "
             f"ROI `{_pct(row.get('roi'))}` over `{row.get('resolved', 0)}` resolved "
             f"(rows `{row.get('rows', 0)}`)."
         )
 
     callouts = review_aid_performance.get("callouts") if isinstance(review_aid_performance.get("callouts"), dict) else {}
+    lines.append("- Layer = review-aid provenance, not A/A-style hitter/starter tier.")
     lines.append(perf_line("o1.5 Layer 4", callouts.get("o15_layer_4_latest") or {}))
     lines.append(perf_line("o1.5 Layer 3", callouts.get("o15_layer_3_latest") or {}))
     lines.append(perf_line("o1.5 alternate Layer A", callouts.get("o15_alternate_layer_a_latest") or {}))
