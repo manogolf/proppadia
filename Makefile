@@ -382,6 +382,12 @@ MLB_HITS_ENV_EVAL_TRACKER_CSV ?= artifacts/analysis/mlb/mlb_hits_environment_tea
 MLB_HITS15_ENV_LINEAGE_DATE ?= $(if $(strip $(DATE)),$(DATE),$(shell date +%F))
 MLB_HITS15_ENV_LINEAGE_OUT_DIR ?= artifacts/analysis/mlb/review_aids
 MLB_HITS15_ENV_V2_ALPHA_OUT_DIR ?= artifacts/analysis/mlb/review_aids
+MLB_ENVIRONMENT_V2_BETA_DAILY_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DATE_ET))
+MLB_ENVIRONMENT_V2_BETA_DAILY_OUT_ROOT ?= artifacts/analysis/mlb/environment_v2/daily
+MLB_ENVIRONMENT_V2_BETA_DAILY_WRAPPER_MODE ?= manual_target_only
+MLB_ENVIRONMENT_V2_BETA_RECONCILE_DATE ?= $(if $(strip $(DATE)),$(DATE),$(MLB_DAILY_RECONCILE_DATE))
+MLB_ENVIRONMENT_V2_BETA_RECONCILE_ROOT ?= artifacts/analysis/mlb/execution_vs_model
+MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV ?= artifacts/analysis/mlb/environment_v2/ledger/environment_v2_beta_profile_ledger.csv
 MLB_DAILY_BRIEF_REPORT_DATE ?= $(MLB_DATE_ET)
 MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE ?= $(MLB_DAILY_RECONCILE_DATE)
 MLB_DAILY_BRIEF_CURRENT_SLATE_DATE ?= $(MLB_DATE_ET)
@@ -1586,7 +1592,7 @@ mlb-o15-alternate-history-backfill-and-build:
 mlb-hits-u15-favorite-audit:
 	$(VENV_PY) backend/mlb/scripts/run_mlb_hits_o15_review_board.py --board u15 --date "$(MLB_HITS_U15_FAVORITE_AUDIT_DATE)" --slate-output-csv "$(MLB_SLATE_OUTPUT_CSV)" --hits-environment-json "$(MLB_HITS_ENV_OUT_JSON)" --hits-environment-history-jsonl "$(MLB_HITS_ENV_HISTORY_JSONL)" --hits-environment-snapshot-dir "$(MLB_HITS_ENV_SNAPSHOT_DIR)" --starter-required-min-starts "$(MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS)" --out-dir "$(MLB_HITS_U15_FAVORITE_AUDIT_OUT_DIR)"
 
-.PHONY: mlb-daily-review-boards mlb-train-probability-calibration mlb-check-finalized-training-data mlb-ensure-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance mlb-daily-reconcile mlb-daily-upload-prep mlb-current-upload-prep mlb-daily-review-and-upload mlb-refresh-v2-environment-interactions mlb-refresh-v2-qc-candidate-watch mlb-refresh-ranking-qc-overlap-watch mlb-refresh-overlap-role-profile-watch mlb-refresh-qc-bottom-order-under-watch mlb-refresh-user-over-15-filter-watch mlb-capture-overlap-snapshot mlb-v2-candidate-registry mlb-overlap-monitor mlb-review-aid-performance mlb-expanded-o15-universe mlb-expanded-o15-context-health mlb-expanded-o15-universe-slice-analysis mlb-expanded-o15-universe-betonline-audit mlb-expanded-o15-hidden-matchup-support-audit mlb-expanded-o15-agreement-score-audit mlb-expanded-o15-variable-importance-survey mlb-expanded-o15-feature-centrality-audit mlb-time-of-day-bucket-audit mlb-expanded-o15-late-game-proxy-audit mlb-expanded-o15-low-attention-signpost-audit mlb-research-snapshot mlb-weekly-research-snapshot mlb-identity-health mlb-o15-ontology-health ontology-health mlb-hits15-environment-lineage-health mlb-hits15-environment-v2-alpha-dashboard mlb-rehydrate-reconcile-rolling-context
+.PHONY: mlb-daily-review-boards mlb-train-probability-calibration mlb-check-finalized-training-data mlb-ensure-finalized-training-data mlb-execution-vs-model mlb-full-slate-performance mlb-daily-reconcile mlb-daily-upload-prep mlb-current-upload-prep mlb-daily-review-and-upload mlb-refresh-v2-environment-interactions mlb-refresh-v2-qc-candidate-watch mlb-refresh-ranking-qc-overlap-watch mlb-refresh-overlap-role-profile-watch mlb-refresh-qc-bottom-order-under-watch mlb-refresh-user-over-15-filter-watch mlb-capture-overlap-snapshot mlb-v2-candidate-registry mlb-overlap-monitor mlb-review-aid-performance mlb-expanded-o15-universe mlb-expanded-o15-context-health mlb-expanded-o15-universe-slice-analysis mlb-expanded-o15-universe-betonline-audit mlb-expanded-o15-hidden-matchup-support-audit mlb-expanded-o15-agreement-score-audit mlb-expanded-o15-variable-importance-survey mlb-expanded-o15-feature-centrality-audit mlb-time-of-day-bucket-audit mlb-expanded-o15-late-game-proxy-audit mlb-expanded-o15-low-attention-signpost-audit mlb-research-snapshot mlb-weekly-research-snapshot mlb-identity-health mlb-o15-ontology-health ontology-health mlb-hits15-environment-lineage-health mlb-hits15-environment-v2-alpha-dashboard mlb-environment-v2-beta-daily mlb-environment-v2-beta-reconcile mlb-rehydrate-reconcile-rolling-context
 mlb-daily-review-boards:
 	$(MAKE) mlb-hits-o15-simple-filter MLB_HITS_O15_SIMPLE_FILTER_DATE="$(MLB_DAILY_REVIEW_BOARDS_DATE)"
 	$(MAKE) mlb-hits-o15-watch-candidates MLB_HITS_O15_WATCH_CANDIDATES_DATE="$(MLB_DAILY_REVIEW_BOARDS_DATE)"
@@ -1685,6 +1691,14 @@ mlb-hits15-environment-lineage-health:
 mlb-hits15-environment-v2-alpha-dashboard:
 	@echo "Building hits 1.5 Environment v2-alpha component dashboard"
 	$(VENV_PY) backend/mlb/scripts/build_mlb_hits15_environment_v2_alpha_dashboard.py --out-dir "$(MLB_HITS15_ENV_V2_ALPHA_OUT_DIR)"
+
+mlb-environment-v2-beta-daily:
+	@echo "Capturing Environment v2-beta daily research profiles for $(MLB_ENVIRONMENT_V2_BETA_DAILY_DATE)"
+	$(VENV_PY) backend/mlb/scripts/build_mlb_environment_v2_beta_daily_lane.py --date "$(MLB_ENVIRONMENT_V2_BETA_DAILY_DATE)" --out-root "$(MLB_ENVIRONMENT_V2_BETA_DAILY_OUT_ROOT)" --wrapper-mode "$(MLB_ENVIRONMENT_V2_BETA_DAILY_WRAPPER_MODE)"
+
+mlb-environment-v2-beta-reconcile:
+	@echo "Reconciling Environment v2-beta daily research profiles for $(MLB_ENVIRONMENT_V2_BETA_RECONCILE_DATE)"
+	$(VENV_PY) backend/mlb/scripts/reconcile_mlb_environment_v2_beta_daily.py --date "$(MLB_ENVIRONMENT_V2_BETA_RECONCILE_DATE)" --daily-root "$(MLB_ENVIRONMENT_V2_BETA_DAILY_OUT_ROOT)" --reconcile-root "$(MLB_ENVIRONMENT_V2_BETA_RECONCILE_ROOT)" --ledger-csv "$(MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV)"
 
 mlb-expanded-o15-universe-slice-analysis:
 	@echo "Analyzing expanded o1.5 universe slices"

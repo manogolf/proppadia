@@ -643,6 +643,28 @@ def _mtime_date(path: Path) -> str:
 def _write_markdown(path: Path, results: list[InvariantResult], audit_date: str, generated: str) -> None:
     counts = {status: sum(1 for r in results if r.status == status) for status in ("PASS", "WARN", "FAIL")}
     overall = "FAIL" if counts["FAIL"] else "WARN" if counts["WARN"] else "PASS"
+    failing = [row for row in results if row.status == "FAIL"]
+    warning = [row for row in results if row.status == "WARN"]
+    passing = [row for row in results if row.status == "PASS"]
+
+    def append_rows(title: str, rows: list[InvariantResult], symbol: str) -> None:
+        lines.extend([f"## {title}", ""])
+        if not rows:
+            lines.extend([f"- {symbol} None", ""])
+            return
+        lines.extend(
+            [
+                "| category | invariant | status | checked | failed | reason | evidence |",
+                "|---|---|---|---:|---:|---|---|",
+            ]
+        )
+        for row in rows:
+            detail = str(row.detail or "").replace("|", "\\|")
+            lines.append(
+                f"| {row.category} | {row.invariant} | `{row.status}` | `{row.rows_checked}` | `{row.rows_failed}` | {detail} | `{row.artifact}` |"
+            )
+        lines.append("")
+
     lines = [
         f"# MLB Project Invariants - {audit_date}",
         "",
@@ -651,11 +673,18 @@ def _write_markdown(path: Path, results: list[InvariantResult], audit_date: str,
         f"- PASS/WARN/FAIL: `{counts['PASS']}` / `{counts['WARN']}` / `{counts['FAIL']}`",
         "- Scope: audit and visibility only; no production behavior changed.",
         "",
-        "## Checks",
-        "",
-        "| category | invariant | status | checked | failed | detail | artifact |",
-        "|---|---|---|---:|---:|---|---|",
     ]
+    append_rows("Failing Invariants", failing, "✗")
+    append_rows("Warning Invariants", warning, "!")
+    append_rows("Passing Invariants", passing, "✓")
+    lines.extend(
+        [
+            "## Full Check Table",
+            "",
+            "| category | invariant | status | checked | failed | detail | artifact |",
+            "|---|---|---|---:|---:|---|---|",
+        ]
+    )
     for row in results:
         detail = str(row.detail or "").replace("|", "\\|")
         lines.append(
@@ -702,6 +731,9 @@ def main() -> int:
         "pass_count": counts["PASS"],
         "warn_count": counts["WARN"],
         "fail_count": counts["FAIL"],
+        "passing_invariants": [asdict(row) for row in results if row.status == "PASS"],
+        "warning_invariants": [asdict(row) for row in results if row.status == "WARN"],
+        "failing_invariants": [asdict(row) for row in results if row.status == "FAIL"],
         "checks": [asdict(row) for row in results],
         "csv": str(csv_path),
         "md": str(md_path),
