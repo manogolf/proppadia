@@ -162,7 +162,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--bvp-impact-json", required=True)
     ap.add_argument("--overlap-watch-json", required=True)
     ap.add_argument("--qc-bottom-order-watch-json", required=True)
-    ap.add_argument("--user-over-15-watch-json", required=True)
     ap.add_argument(
         "--hits-15-tier-backtest-json",
         default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json",
@@ -425,28 +424,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         expected_date=completed,
         actual_date=_json_date(Path(args.qc_bottom_order_watch_json), ("latest_reconcile_date",)),
         command=qc_watch_cmd,
-        refresh_ok=ok,
-        detail=detail,
-    )
-
-    user_over_15_cmd = [
-        py,
-        "tmp/analysis/run_mlb_user_over_15_filter_watch.py",
-        "--out-json",
-        args.user_over_15_watch_json,
-        "--out-csv",
-        "artifacts/analysis/mlb/user_over_15_filter_watch.csv",
-        "--out-md",
-        "artifacts/analysis/mlb/user_over_15_filter_watch.md",
-    ]
-    ok, detail = _run("user_over_15_filter_watch", user_over_15_cmd, allow_fail=True)
-    _record(
-        results,
-        name="user_over_15_filter_watch",
-        artifact=Path(args.user_over_15_watch_json),
-        expected_date=completed,
-        actual_date=_json_date(Path(args.user_over_15_watch_json), ("latest_completed_slate",)),
-        command=user_over_15_cmd,
         refresh_ok=ok,
         detail=detail,
     )

@@ -542,7 +542,6 @@ def _build_freshness_audit(
     hits_env: Dict[str, Any],
     overlap_watch: Dict[str, Any],
     qc_bottom_order_watch: Dict[str, Any],
-    user_over_15_watch: Dict[str, Any],
     hits_15_tier_backtest: Dict[str, Any],
     review_aid_performance: Dict[str, Any],
     total_bases_shadow_summary: Dict[str, Any],
@@ -714,6 +713,17 @@ def _build_freshness_audit(
         failures = ",".join(str(x) for x in (hits_env.get("failures") or []) if str(x).strip())
         warnings = ",".join(str(x) for x in (hits_env.get("warnings") or []) if str(x).strip())
         hits_note = f"Refresh failed: {failures or warnings or 'unknown'}"
+    if hits_env.get("fallback_used"):
+        hits_note = (
+            f"{hits_note} | display fallback={hits_env.get('fallback_source_file')} "
+            f"({hits_env.get('fallback_reason')})"
+        )
+    if hits_env.get("team_eval_fallback_used"):
+        hits_note = (
+            f"{hits_note} | team eval fallback={hits_env.get('team_eval_fallback_source_file')} "
+            f"generated={hits_env.get('team_eval_fallback_generated_at_utc') or 'n/a'} "
+            f"({hits_env.get('team_eval_fallback_reason')})"
+        )
     rows.append(
         _freshness_row(
             section="Hits Environment & Matchups",
@@ -757,22 +767,6 @@ def _build_freshness_audit(
             note=(
                 f"recommendation={qc_bottom_order_watch.get('recommendation') or 'n/a'}; "
                 f"reason={qc_bottom_order_watch.get('recommendation_reason') or 'n/a'}"
-            ),
-        )
-    )
-    rows.append(
-        _freshness_row(
-            section="User Over 1.5 Filter Watch",
-            source_file=str(paths["user_over_15_watch_json"]),
-            source_date=_date_key(user_over_15_watch.get("latest_completed_slate")),
-            expected_date=completed_slate_date,
-            generated_at_utc=str(user_over_15_watch.get("generated_at") or ""),
-            mtime_utc=_path_mtime_utc(paths["user_over_15_watch_json"]),
-            load_status=str(source_states.get("user_over_15_watch_json") or "ok"),
-            cadence="daily after completed-slate reconcile and hits environment refresh",
-            note=(
-                f"recommendation={user_over_15_watch.get('recommendation') or 'n/a'}; "
-                f"reason={user_over_15_watch.get('recommendation_reason') or 'n/a'}"
             ),
         )
     )
@@ -975,6 +969,7 @@ def _extract_hits_env(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "evaluation_date": js.get("evaluation_date"),
         "status": js.get("status"),
         "ok": bool(js.get("ok")),
+        "failures": js.get("failures") or [],
         "warnings": js.get("warnings") or [],
         "league_signal": league.get("signal"),
         "league_hits_per_game": _as_float(league.get("hits_per_game")),
@@ -1013,6 +1008,150 @@ def _extract_hits_env(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "team_eval_top_over": team_eval.get("top_over_expected_matchups") or [],
         "team_eval_top_under": team_eval.get("top_under_expected_matchups") or [],
     }
+
+
+def _avg_float(rows: Sequence[Dict[str, Any]], key: str) -> Optional[float]:
+    values = [_as_float(row.get(key)) for row in rows]
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    return sum(nums) / len(nums)
+
+
+def _latest_hits_environment_snapshot(date_value: str) -> Optional[Path]:
+    date_key = _date_key(date_value)
+    if not date_key:
+        return None
+    root = Path("artifacts/analysis/mlb/hits_environment_snapshots") / date_key
+    paths = sorted(root.glob(f"mlb_hits_environment_hits_allowed_rows_{date_key}__*.csv"))
+    return paths[-1] if paths else None
+
+
+def _load_hits_environment_snapshot_summary(path: Path) -> Dict[str, Any]:
+    rows, err = _load_csv_rows(path)
+    if err or not rows:
+        return {}
+    starter_rows = [row for row in rows if _as_float(row.get("expected_hits_allowed_matchup")) is not None]
+    team_rows = [row for row in rows if _as_float(row.get("expected_team_hits_allowed_matchup")) is not None]
+    bullpen_rows = [row for row in rows if _as_float(row.get("bullpen_hits_allowed_form_blended")) is not None]
+    unavailable_pitchers = [
+        dict(row)
+        for row in rows
+        if str(row.get("forecast_diagnostic") or row.get("forecast_note") or "").strip()
+        and _as_float(row.get("expected_hits_allowed_matchup")) is None
+    ]
+    unavailable_reasons: Dict[str, int] = {}
+    for row in unavailable_pitchers:
+        reason = str(row.get("forecast_diagnostic") or row.get("forecast_note") or "unknown").strip() or "unknown"
+        unavailable_reasons[reason] = unavailable_reasons.get(reason, 0) + 1
+
+    def sort_rows(items: Sequence[Dict[str, Any]], key: str, reverse: bool) -> List[Dict[str, Any]]:
+        return sorted(
+            (dict(row) for row in items),
+            key=lambda row: _as_float(row.get(key)) if _as_float(row.get(key)) is not None else float("-inf"),
+            reverse=reverse,
+        )
+
+    return {
+        "fallback_snapshot_path": str(path),
+        "slate_rows": len(rows),
+        "slate_rows_with_expected": len(starter_rows),
+        "slate_avg_expected_matchup": _avg_float(starter_rows, "expected_hits_allowed_matchup"),
+        "slate_avg_line_minus_expected": _avg_float(starter_rows, "line_minus_expected_hits_allowed_matchup"),
+        "slate_rows_with_bullpen_blended": len(bullpen_rows),
+        "slate_avg_bullpen_blended": _avg_float(bullpen_rows, "bullpen_hits_allowed_form_blended"),
+        "slate_rows_with_team_expected": len(team_rows),
+        "slate_avg_team_expected": _avg_float(team_rows, "expected_team_hits_allowed_matchup"),
+        "top_expected_matchups": sort_rows(starter_rows, "expected_hits_allowed_matchup", True),
+        "lowest_expected_matchups": sort_rows(starter_rows, "expected_hits_allowed_matchup", False),
+        "top_expected_team_matchups": sort_rows(team_rows, "expected_team_hits_allowed_matchup", True),
+        "lowest_expected_team_matchups": sort_rows(team_rows, "expected_team_hits_allowed_matchup", False),
+        "forecast_unavailable_rows": len(unavailable_pitchers),
+        "forecast_unavailable_by_reason": unavailable_reasons,
+        "forecast_unavailable_pitchers": unavailable_pitchers,
+    }
+
+
+def _apply_hits_environment_snapshot_fallback(hits_env: Dict[str, Any], current_slate_date: str) -> Dict[str, Any]:
+    if hits_env.get("top_expected_matchups") or hits_env.get("slate_rows_with_expected"):
+        return hits_env
+    if str(hits_env.get("status") or "").lower() != "fail":
+        return hits_env
+    snapshot = _latest_hits_environment_snapshot(current_slate_date)
+    if not snapshot:
+        return hits_env
+    fallback = _load_hits_environment_snapshot_summary(snapshot)
+    if not fallback or not fallback.get("slate_rows_with_expected"):
+        return hits_env
+    out = dict(hits_env)
+    out.update({k: v for k, v in fallback.items() if k != "fallback_snapshot_path"})
+    out["fallback_used"] = True
+    out["fallback_source_file"] = fallback["fallback_snapshot_path"]
+    out["fallback_reason"] = "latest hits environment JSON failed without slate_hits_allowed_context"
+    out["warnings"] = list(out.get("warnings") or []) + ["using_current_date_hits_environment_snapshot_fallback"]
+    return out
+
+
+def _extract_hits_environment_team_eval(team_eval: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "team_eval_context_as_of_date": team_eval.get("context_as_of_date"),
+        "team_eval_rows_with_expected": _as_int(team_eval.get("rows_with_expected")),
+        "team_eval_rows_with_actual": _as_int(team_eval.get("rows_with_actual")),
+        "team_eval_coverage_pct": _as_float(team_eval.get("coverage_pct")),
+        "team_eval_expected_avg": _as_float(team_eval.get("expected_team_hits_allowed_avg")),
+        "team_eval_actual_avg": _as_float(team_eval.get("actual_offense_hits_avg")),
+        "team_eval_residual_avg": _as_float(team_eval.get("residual_avg")),
+        "team_eval_residual_total": _as_float(team_eval.get("residual_total")),
+        "team_eval_mae": _as_float(team_eval.get("mae")),
+        "team_eval_rmse": _as_float(team_eval.get("rmse")),
+        "team_eval_top_over": team_eval.get("top_over_expected_matchups") or [],
+        "team_eval_top_under": team_eval.get("top_under_expected_matchups") or [],
+    }
+
+
+def _apply_hits_environment_team_eval_history_fallback(
+    hits_env: Dict[str, Any],
+    *,
+    current_slate_date: str,
+    completed_slate_date: str,
+    history_jsonl: Path = Path("artifacts/analysis/mlb/mlb_hits_environment_history.jsonl"),
+) -> Dict[str, Any]:
+    if hits_env.get("team_eval_top_over") or hits_env.get("team_eval_top_under"):
+        return hits_env
+    if str(hits_env.get("status") or "").lower() != "fail":
+        return hits_env
+
+    current_key = _date_key(current_slate_date)
+    completed_key = _date_key(completed_slate_date)
+    if not current_key or not completed_key:
+        return hits_env
+
+    for payload in reversed(_load_jsonl_objects(history_jsonl)):
+        if str(payload.get("status") or "").lower() != "pass":
+            continue
+        if _date_key(payload.get("requested_as_of_date")) != current_key:
+            continue
+        if _date_key(payload.get("evaluation_date")) != completed_key:
+            continue
+        team_eval = payload.get("team_hits_allowed_matchup_evaluation") or {}
+        if not isinstance(team_eval, dict):
+            continue
+        top_over = team_eval.get("top_over_expected_matchups") or []
+        top_under = team_eval.get("top_under_expected_matchups") or []
+        if not top_over and not top_under:
+            continue
+
+        out = dict(hits_env)
+        out.update(_extract_hits_environment_team_eval(team_eval))
+        out["team_eval_fallback_used"] = True
+        out["team_eval_fallback_source_file"] = str(history_jsonl)
+        out["team_eval_fallback_generated_at_utc"] = str(payload.get("generated_at_utc") or "")
+        out["team_eval_fallback_reason"] = (
+            "latest hits environment JSON failed without team_hits_allowed_matchup_evaluation"
+        )
+        out["warnings"] = list(out.get("warnings") or []) + ["using_hits_environment_history_team_eval_fallback"]
+        return out
+    return hits_env
 
 
 def _extract_qc_bottom_order_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1086,63 +1225,6 @@ def _extract_overlap_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "odds_minus_150_to_minus_120_share_last_7": last7.get("odds_minus_150_to_minus_120_share"),
         "performance": js.get("performance") or [],
         "totals": js.get("totals") or {},
-    }
-
-
-def _extract_user_over_15_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not isinstance(js, dict):
-        return {}
-    rows = [row for row in (js.get("rows") or []) if isinstance(row, dict)]
-
-    def find(population: str, window: str) -> Dict[str, Any]:
-        for row in rows:
-            if str(row.get("population") or "") == population and str(row.get("window") or "") == window:
-                return dict(row)
-        return {}
-
-    def annotate(row: Dict[str, Any], full_row: Dict[str, Any]) -> Dict[str, Any]:
-        out = dict(row or {})
-        resolved = _as_int(out.get("resolved_rows")) or 0
-        roi = _as_float(out.get("roi"))
-        full_roi = _as_float(full_row.get("roi"))
-        if resolved < 10:
-            sample_warning = "small_sample_lt_10"
-        elif resolved < 25:
-            sample_warning = "small_sample_lt_25"
-        else:
-            sample_warning = "ok"
-        if roi is None:
-            drift_flag = "unknown"
-        elif full_roi is not None and roi < full_roi - 0.15:
-            drift_flag = "negative_vs_full_history"
-        elif roi < 0:
-            drift_flag = "negative_roi"
-        else:
-            drift_flag = "ok"
-        out["sample_warning"] = sample_warning
-        out["drift_flag"] = drift_flag
-        return out
-
-    proxy = "user_filter_proxy_segment"
-    outside = "outside_user_filter_proxy"
-    placed = "qc_placed_over_1.5"
-    windows = ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate")
-    proxy_full = find(proxy, "full_history")
-    proxy_windows = {window: annotate(find(proxy, window), proxy_full) for window in windows}
-    outside_windows = {window: annotate(find(outside, window), find(outside, "full_history")) for window in windows}
-    placed_windows = {window: annotate(find(placed, window), find(placed, "full_history")) for window in windows}
-    return {
-        "generated_at": js.get("generated_at"),
-        "latest_completed_slate": js.get("latest_completed_slate"),
-        "segment_name": js.get("segment_name") or "user_over_15_expected_hits_hot_hitter_proxy",
-        "starter_expected_hits_allowed_min": js.get("starter_expected_hits_allowed_min"),
-        "d7_hits_per_game_min_exclusive": js.get("d7_hits_per_game_min_exclusive"),
-        "recommendation": js.get("recommendation") or "",
-        "recommendation_reason": js.get("recommendation_reason") or "",
-        "proxy_windows": proxy_windows,
-        "outside_windows": outside_windows,
-        "placed_windows": placed_windows,
-        "rows": rows,
     }
 
 
@@ -1878,7 +1960,6 @@ def build_markdown(
     hits_env: Dict[str, Any],
     overlap_watch: Dict[str, Any],
     qc_bottom_order_watch: Dict[str, Any],
-    user_over_15_watch: Dict[str, Any],
     hits_o15_watch_candidates: Dict[str, Any],
     hits_o15_layered_candidates: Dict[str, Any],
     hits_u15_favorite_audit: Dict[str, Any],
@@ -2177,40 +2258,6 @@ def build_markdown(
         f"overlap same-profile latest qualifying date `{ov_diag.get('latest_qualifying_date') or 'n/a'}`, "
         f"latest-slate rows `{ov_diag.get('new_rows_latest_completed_slate', 0)}`, last-7 rows `{ov_diag.get('last_7_rows', 0)}`."
     )
-    lines.append("")
-
-    lines.append("## User Over 1.5 Filter Watch")
-    lines.append(provenance("User Over 1.5 Filter Watch"))
-    proxy_windows = user_over_15_watch.get("proxy_windows") or {}
-    placed_windows = user_over_15_watch.get("placed_windows") or {}
-    outside_windows = user_over_15_watch.get("outside_windows") or {}
-    lines.append(
-        f"- Segment: `hits over 1.5 + starter_expected_hits_allowed >= "
-        f"{user_over_15_watch.get('starter_expected_hits_allowed_min', 'n/a')} + "
-        f"d7_hits_per_game > {user_over_15_watch.get('d7_hits_per_game_min_exclusive', 'n/a')}` | "
-        f"latest_completed_slate `{user_over_15_watch.get('latest_completed_slate') or 'n/a'}`"
-    )
-    lines.append(
-        f"- Action annotation: `{user_over_15_watch.get('recommendation') or 'n/a'}` | "
-        f"{user_over_15_watch.get('recommendation_reason') or 'n/a'}"
-    )
-    lines.append(
-        f"- Placed over 1.5 ROI `{_pct((placed_windows.get('full_history') or {}).get('roi'))}` "
-        f"(rows `{(placed_windows.get('full_history') or {}).get('rows','n/a')}`); "
-        f"outside-proxy QC candidate ROI `{_pct((outside_windows.get('full_history') or {}).get('roi'))}` "
-        f"(rows `{(outside_windows.get('full_history') or {}).get('rows','n/a')}`)."
-    )
-    lines.append("| window | rows | resolved | WR | ROI | units | avg odds | avg starter expected hits allowed | avg d7 hits/game | placed capture | sample warning | drift flag |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|")
-    for window in ("full_history", "last_30", "last_14", "last_7", "latest_completed_slate"):
-        row = proxy_windows.get(window) or {}
-        lines.append(
-            f"| {window} | `{row.get('rows','n/a')}` | `{row.get('resolved_rows','n/a')}` | "
-            f"`{_pct(row.get('wr'))}` | `{_pct(row.get('roi'))}` | `{_num_fmt(row.get('units'))}` | "
-            f"`{_num_fmt(row.get('avg_odds'))}` | `{_num_fmt(row.get('avg_expected_hits_allowed'))}` | "
-            f"`{_num_fmt(row.get('avg_d7_hits_per_game'))}` | `{_pct(row.get('placed_wager_capture_rate'))}` | "
-            f"`{row.get('sample_warning','n/a')}` | `{row.get('drift_flag','n/a')}` |"
-        )
     lines.append("")
 
     lines.append("## Hits Over 1.5 Watch Candidates")
@@ -2565,6 +2612,19 @@ def build_markdown(
 
     lines.append("## Hits Environment & Matchups")
     lines.append(provenance("Hits Environment & Matchups"))
+    if hits_env.get("fallback_used"):
+        lines.append(
+            f"- Display fallback: using current-date hits-environment snapshot "
+            f"`{hits_env.get('fallback_source_file')}` because `{hits_env.get('fallback_reason')}`. "
+            "Refresh failure remains visible; health is not marked PASS by this fallback."
+        )
+    if hits_env.get("team_eval_fallback_used"):
+        lines.append(
+            f"- Expected-vs-actual fallback: using latest successful hits-environment history payload "
+            f"`{hits_env.get('team_eval_fallback_source_file')}` "
+            f"(generated `{hits_env.get('team_eval_fallback_generated_at_utc') or 'n/a'}`) because "
+            f"`{hits_env.get('team_eval_fallback_reason')}`. Refresh failure remains visible; health is not marked PASS by this fallback."
+        )
     lines.append(
         f"- Eval date `{hits_env.get('evaluation_date','n/a')}` | signal `{hits_env.get('league_signal','n/a')}` | "
         f"hits/game `{hits_env.get('league_hits_per_game')}` | z-score `{hits_env.get('league_zscore')}`"
@@ -2765,7 +2825,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--hits-environment-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
     ap.add_argument("--overlap-watch-json", default="artifacts/analysis/mlb/v2_qc_diagnostics/ranking_vs_quick_card_overlap_watch.json")
     ap.add_argument("--qc-bottom-order-watch-json", default="artifacts/analysis/mlb/qc_bottom_order_under_watch.json")
-    ap.add_argument("--user-over-15-watch-json", default="artifacts/analysis/mlb/user_over_15_filter_watch.json")
     ap.add_argument(
         "--hits-o15-watch-candidates-csv",
         default="artifacts/analysis/mlb/review_aids/hits_o15_watch_candidates_{current_slate_date}.csv",
@@ -2831,7 +2890,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "hits_environment_json": Path(args.hits_environment_json),
         "overlap_watch_json": Path(args.overlap_watch_json),
         "qc_bottom_order_watch_json": Path(args.qc_bottom_order_watch_json),
-        "user_over_15_watch_json": Path(args.user_over_15_watch_json),
         "hits_15_tier_backtest_json": Path(args.hits_15_tier_backtest_json),
         "review_aid_performance_json": Path(args.review_aid_performance_json),
         "total_bases_shadow_evaluation_json": Path(args.total_bases_shadow_evaluation_json),
@@ -2894,7 +2952,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     hits_raw, hits_err = _load_json(paths["hits_environment_json"])
     overlap_watch_raw, overlap_watch_err = _load_json(paths["overlap_watch_json"])
     qc_watch_raw, qc_watch_err = _load_json(paths["qc_bottom_order_watch_json"])
-    user_over_15_raw, user_over_15_err = _load_json(paths["user_over_15_watch_json"])
     hits_o15_watch_candidate_rows, hits_o15_watch_candidates_err = _load_csv_rows(
         paths["hits_o15_watch_candidates_csv"]
     )
@@ -2937,7 +2994,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "hits_environment_json": hits_err or "ok",
         "overlap_watch_json": overlap_watch_err or "ok",
         "qc_bottom_order_watch_json": qc_watch_err or "ok",
-        "user_over_15_watch_json": user_over_15_err or "ok",
         "hits_o15_watch_candidates_csv": hits_o15_watch_candidates_err or "ok",
         "hits_o15_layered_candidates_csv": hits_o15_layered_candidates_err or "ok",
         "hits_u15_favorite_audit_csv": hits_u15_favorite_audit_err or "ok",
@@ -2973,9 +3029,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     reporting_alignment = _extract_reporting_alignment(reporting_alignment_rows, reporting_alignment_path)
     bvp_impact = _extract_bvp_impact(bvp_raw if isinstance(bvp_raw, dict) else None)
     hits_env = _extract_hits_env(hits_raw if isinstance(hits_raw, dict) else None)
+    hits_env = _apply_hits_environment_snapshot_fallback(hits_env, current_slate_date)
+    hits_env = _apply_hits_environment_team_eval_history_fallback(
+        hits_env,
+        current_slate_date=current_slate_date,
+        completed_slate_date=completed_slate_date,
+    )
     overlap_watch = _extract_overlap_watch(overlap_watch_raw if isinstance(overlap_watch_raw, dict) else None)
     qc_bottom_order_watch = _extract_qc_bottom_order_watch(qc_watch_raw if isinstance(qc_watch_raw, dict) else None)
-    user_over_15_watch = _extract_user_over_15_watch(user_over_15_raw if isinstance(user_over_15_raw, dict) else None)
     hits_o15_watch_candidates = _extract_hits_o15_watch_candidates(hits_o15_watch_candidate_rows)
     hits_o15_layered_candidates = _extract_hits_o15_layered_candidates(hits_o15_layered_candidate_rows)
     hits_u15_favorite_audit = _extract_hits_u15_favorite_audit(hits_u15_favorite_audit_rows)
@@ -3019,7 +3080,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hits_env=hits_env,
         overlap_watch=overlap_watch,
         qc_bottom_order_watch=qc_bottom_order_watch,
-        user_over_15_watch=user_over_15_watch,
         hits_15_tier_backtest=hits_15_tier_backtest,
         review_aid_performance=review_aid_performance,
         total_bases_shadow_summary=total_bases_shadow_summary,
@@ -3063,7 +3123,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hits_env=hits_env,
         overlap_watch=overlap_watch,
         qc_bottom_order_watch=qc_bottom_order_watch,
-        user_over_15_watch=user_over_15_watch,
         hits_o15_watch_candidates=hits_o15_watch_candidates,
         hits_o15_layered_candidates=hits_o15_layered_candidates,
         hits_u15_favorite_audit=hits_u15_favorite_audit,
@@ -3103,7 +3162,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "hits_environment": hits_env,
         "ranking_qc_overlap_watch": overlap_watch,
         "qc_bottom_order_watch": qc_bottom_order_watch,
-        "user_over_15_filter_watch": user_over_15_watch,
         "hits_o15_watch_candidates": hits_o15_watch_candidates,
         "hits_o15_layered_candidates": hits_o15_layered_candidates,
         "hits_u15_favorite_audit": hits_u15_favorite_audit,

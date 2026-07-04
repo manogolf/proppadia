@@ -269,7 +269,7 @@ def _write_ops_brief_prototype(path: Path, date_text: str, status: str, safe_to_
             "- Prop outlook",
             "- Ranking / QC overlap",
             "- Bottom-order watch",
-            "- User O1.5 watch",
+            "- User O1.5 proxy watch retired from Ops Brief",
             "- Review board summaries",
             "- Total Bases shadow",
             "- Tier audit",

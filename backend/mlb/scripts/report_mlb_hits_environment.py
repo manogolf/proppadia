@@ -64,6 +64,27 @@ def _ensure_parent(path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _has_rich_hits_environment_context(path: Path) -> bool:
+    try:
+        if not path.exists():
+            return False
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return False
+        slate_ctx = payload.get("slate_hits_allowed_context")
+        return isinstance(slate_ctx, dict) and int(slate_ctx.get("rows") or 0) > 0
+    except Exception:
+        return False
+
+
+def _write_failure_payload_preserving_latest(out_json: Path, payload: Dict[str, Any]) -> None:
+    _ensure_parent(out_json)
+    diag_path = out_json.with_name(f"{out_json.stem}_failure_latest{out_json.suffix}")
+    diag_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+    if not _has_rich_hits_environment_context(out_json):
+        out_json.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+
+
 def _write_generic_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
     _ensure_parent(path)
     fieldnames = list(rows[0].keys()) if rows else []
@@ -2924,8 +2945,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "warnings": warnings,
         }
         out_json = Path(args.out_json)
-        _ensure_parent(out_json)
-        out_json.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+        _write_failure_payload_preserving_latest(out_json, payload)
         print(json.dumps(payload, ensure_ascii=True, indent=2))
         return 2
     eval_date = _resolve_evaluation_date(daily_rows, _to_iso(as_of))
@@ -2941,8 +2961,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "warnings": warnings,
         }
         out_json = Path(args.out_json)
-        _ensure_parent(out_json)
-        out_json.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+        _write_failure_payload_preserving_latest(out_json, payload)
         print(json.dumps(payload, ensure_ascii=True, indent=2))
         return 2
 

@@ -264,12 +264,12 @@ def _write_md(path: Path, date_text: str, rows: list[dict[str, Any]], workbenche
             "",
             "## Today's Candidate CSVs",
             "",
-            "| Today's Candidate List | purpose | current rows | Open Today's CSV |",
+            "| Today's Candidate List | purpose | current rows | Open Today's Candidate CSV |",
             "|---|---|---:|---|",
         ]
     )
     for row in workbenches:
-        link = _rel_link(path, Path(str(row.get("launch_csv_path") or "")), "Open Today's CSV")
+        link = _rel_link(path, Path(str(row.get("launch_csv_path") or "")), "Open Today's Candidate CSV")
         lines.append(f"| {row.get('workbench_name')} | {row.get('purpose')} | `{row.get('current_slate_row_count')}` | {link} |")
     lines.extend(
         [

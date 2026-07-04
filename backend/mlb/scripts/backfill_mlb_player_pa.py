@@ -284,13 +284,14 @@ def _existing_player_stats(conn, rows: list[PaRow]) -> dict[tuple[int, int], int
         return {(int(r["player_id"]), int(r["game_id"])): _to_int(r.get("plate_appearances")) for r in cur.fetchall() or []}
 
 
-def _update_player_stats_pa(conn, rows: list[PaRow], *, source: str) -> int:
+def _update_player_stats_pa(conn, rows: list[PaRow], *, source: str, only_missing_pa: bool = False) -> int:
     if not rows:
         return 0
+    missing_clause = "AND ps.plate_appearances IS NULL" if only_missing_pa else ""
     with conn.cursor() as cur:
         cur.executemany(
-            """
-            UPDATE mlb.player_stats
+            f"""
+            UPDATE mlb.player_stats ps
                SET plate_appearances = %s,
                    hit_by_pitch = %s,
                    sacrifice_flies = %s,
@@ -298,9 +299,10 @@ def _update_player_stats_pa(conn, rows: list[PaRow], *, source: str) -> int:
                    catcher_interference = %s,
                    pa_source = %s,
                    pa_backfilled_at = now()
-             WHERE player_id = %s
-               AND game_id = %s
-               AND COALESCE(position, '') <> 'P'
+             WHERE ps.player_id = %s
+               AND ps.game_id = %s
+               AND COALESCE(ps.position, '') <> 'P'
+               {missing_clause}
             """,
             [
                 (
@@ -594,7 +596,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 )
             valid_rows = [r for r in all_rows if r.existing_player_stats_row and r.plate_appearances is not None]
             for idx in range(0, len(valid_rows), max(1, args.batch_size)):
-                writes_applied += _update_player_stats_pa(conn, valid_rows[idx : idx + args.batch_size], source=args.source)
+                writes_applied += _update_player_stats_pa(
+                    conn,
+                    valid_rows[idx : idx + args.batch_size],
+                    source=args.source,
+                    only_missing_pa=args.only_missing_pa,
+                )
                 conn.commit()
             if not missing_derived and not args.skip_rolling:
                 rolling_rows_updated = _refresh_rolling_pa(conn, start, end)
@@ -610,6 +617,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "start_date": start,
         "end_date": end,
         "dry_run": bool(args.dry_run),
+        "only_missing_pa": bool(args.only_missing_pa),
         "source": args.source,
         "games_seen": games_seen,
         "games_processed": games_processed,
@@ -642,6 +650,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-date", required=True, type=_parse_date)
     parser.add_argument("--end-date", required=True, type=_parse_date)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--only-missing-pa", action="store_true")
     parser.add_argument("--limit-games", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--source", choices=["statsapi"], default="statsapi")
