@@ -95,6 +95,149 @@ def _write_generic_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
             writer.writerow(row)
 
 
+def _load_offense_factor_lineage_health(
+    *,
+    as_of_date: str,
+    health_root: Path = Path("artifacts/analysis/mlb/starter_expected_hits_allowed"),
+) -> Dict[str, Any]:
+    """Load WARN-only offense-factor health if present; missing health stays explicit."""
+    candidates = sorted(
+        health_root.glob("offense_factor_health_guard_*/offense_factor_health_summary_*.json"),
+        key=lambda p: p.stat().st_mtime if p.exists() else 0.0,
+        reverse=True,
+    )
+    fallback: Optional[Dict[str, Any]] = None
+    for path in candidates:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        payload["_health_artifact_path"] = str(path)
+        if fallback is None:
+            fallback = payload
+        if str(payload.get("as_of_date") or "") == str(as_of_date):
+            return payload
+    if fallback is not None:
+        return fallback
+    return {
+        "health_status": "unknown",
+        "generated_at": None,
+        "as_of_date": "",
+        "context_date_guard": {},
+        "lineage_summary": {},
+        "_health_artifact_path": "",
+        "_health_missing_reason": "offense_factor_health_summary_not_found",
+    }
+
+
+def _offense_factor_lineage_metadata(
+    *,
+    offense_context_as_of_date: str,
+    eval_date: str,
+    health_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    lineage_summary = health_payload.get("lineage_summary") or {}
+    health_status = str(health_payload.get("health_status") or "unknown")
+    generated_at = health_payload.get("generated_at")
+    source_path = str(health_payload.get("_health_artifact_path") or "")
+    try:
+        excludes_eval_date: Any = _parse_date(offense_context_as_of_date) < _parse_date(eval_date)
+    except Exception:
+        excludes_eval_date = ""
+    return {
+        "offense_context_as_of_date": offense_context_as_of_date or "",
+        "offense_window_excludes_eval_date": excludes_eval_date,
+        "offense_window_max_source_game_date": lineage_summary.get("max_local_source_game_date_used"),
+        "local_team_hits_parity_status": health_status,
+        "team_hits_mismatch_count": lineage_summary.get("team_hits_mismatch_count"),
+        "team_hits_rescheduled_outside_window_count": lineage_summary.get("rescheduled_outside_window_count"),
+        "offense_factor_lineage_health_generated_at": generated_at,
+        "offense_factor_lineage_health_source": source_path,
+        "offense_factor_lineage_health_missing_reason": health_payload.get("_health_missing_reason", ""),
+    }
+
+
+def _fetch_offense_window_max_source_game_date(as_of_date: str) -> str:
+    rows = pg_fetchall(
+        """
+        SELECT MAX(ps.game_date)::date AS max_game_date
+        FROM mlb.player_stats ps
+        WHERE ps.game_date <= %s::date
+        """,
+        (as_of_date,),
+    )
+    if not rows:
+        return ""
+    return str((rows[0] or {}).get("max_game_date") or "")
+
+
+def _offense_factor_completed_eval_lineage_metadata(
+    *,
+    offense_context_as_of_date: str,
+    eval_date: str,
+    health_payload: Dict[str, Any],
+    max_source_game_date: str = "",
+) -> Dict[str, Any]:
+    metadata = _offense_factor_lineage_metadata(
+        offense_context_as_of_date=offense_context_as_of_date,
+        eval_date=eval_date,
+        health_payload=health_payload,
+    )
+    if max_source_game_date:
+        metadata["offense_window_max_source_game_date"] = max_source_game_date
+    try:
+        excludes_eval_date = _parse_date(offense_context_as_of_date) < _parse_date(eval_date)
+    except Exception:
+        excludes_eval_date = False
+    metadata["offense_context_date_guard_status"] = "PASS" if excludes_eval_date else "FAIL"
+    metadata["offense_context_date_guard_reason"] = (
+        "offense_context_as_of_date_before_eval_date"
+        if excludes_eval_date
+        else "offense_context_as_of_date_not_before_eval_date"
+    )
+    return metadata
+
+
+def _apply_offense_factor_lineage_to_rows(
+    rows: Sequence[Dict[str, Any]],
+    *,
+    offense_context_as_of_date: str,
+    health_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    lineage_summary = health_payload.get("lineage_summary") or {}
+    health_status = str(health_payload.get("health_status") or "unknown")
+    generated_at = health_payload.get("generated_at")
+    source_path = str(health_payload.get("_health_artifact_path") or "")
+    max_source_date = lineage_summary.get("max_local_source_game_date_used")
+    mismatch_count = lineage_summary.get("team_hits_mismatch_count")
+    rescheduled_count = lineage_summary.get("rescheduled_outside_window_count")
+    rows_updated = 0
+    for row in rows:
+        game_date = str(row.get("game_date") or "").strip()
+        try:
+            excludes_eval_date: Any = _parse_date(offense_context_as_of_date) < _parse_date(game_date)
+        except Exception:
+            excludes_eval_date = ""
+        row["offense_context_as_of_date"] = offense_context_as_of_date or ""
+        row["offense_window_excludes_eval_date"] = excludes_eval_date
+        row["offense_window_max_source_game_date"] = max_source_date
+        row["local_team_hits_parity_status"] = health_status
+        row["team_hits_mismatch_count"] = mismatch_count
+        row["team_hits_rescheduled_outside_window_count"] = rescheduled_count
+        row["offense_factor_lineage_health_generated_at"] = generated_at
+        row["offense_factor_lineage_health_source"] = source_path
+        row["offense_factor_lineage_health_missing_reason"] = health_payload.get("_health_missing_reason", "")
+        rows_updated += 1
+    return {
+        "rows_updated": int(rows_updated),
+        "health_status": health_status,
+        "health_source": source_path,
+        "health_missing_reason": health_payload.get("_health_missing_reason", ""),
+    }
+
+
 def _canonical_team_code(value: Any) -> str:
     if value is None:
         return ""
@@ -2700,6 +2843,15 @@ def _write_rows_csv(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
         "prior_starter_games",
         "odds_books_seen",
         *IDENTITY_FIELDNAMES,
+        "offense_context_as_of_date",
+        "offense_window_excludes_eval_date",
+        "offense_window_max_source_game_date",
+        "local_team_hits_parity_status",
+        "team_hits_mismatch_count",
+        "team_hits_rescheduled_outside_window_count",
+        "offense_factor_lineage_health_generated_at",
+        "offense_factor_lineage_health_source",
+        "offense_factor_lineage_health_missing_reason",
     ]
     _ensure_parent(path)
     with path.open("w", encoding="utf-8", newline="") as fh:
@@ -2759,6 +2911,15 @@ def _team_eval_tracker_fieldnames() -> List[str]:
         "team_eval_rmse",
         "team_eval_starter_residual_avg",
         "team_eval_starter_residual_total",
+        "team_eval_offense_context_as_of_date",
+        "team_eval_offense_window_excludes_eval_date",
+        "team_eval_offense_window_max_source_game_date",
+        "team_eval_local_team_hits_parity_status",
+        "team_eval_team_hits_mismatch_count",
+        "team_eval_team_hits_rescheduled_outside_window_count",
+        "team_eval_offense_factor_lineage_health_generated_at",
+        "team_eval_offense_context_date_guard_status",
+        "team_eval_offense_context_date_guard_reason",
         "eval_snapshot_slate_csv",
         "eval_snapshot_wide_csv",
     ]
@@ -2794,6 +2955,19 @@ def _build_team_eval_tracker_row(payload: Dict[str, Any]) -> Dict[str, Any]:
         "team_eval_rmse": _as_float(team_eval.get("rmse")),
         "team_eval_starter_residual_avg": _as_float(team_eval.get("starter_only_residual_avg")),
         "team_eval_starter_residual_total": _as_float(team_eval.get("starter_only_residual_total")),
+        "team_eval_offense_context_as_of_date": str(team_eval.get("offense_context_as_of_date") or ""),
+        "team_eval_offense_window_excludes_eval_date": team_eval.get("offense_window_excludes_eval_date", ""),
+        "team_eval_offense_window_max_source_game_date": str(team_eval.get("offense_window_max_source_game_date") or ""),
+        "team_eval_local_team_hits_parity_status": str(team_eval.get("local_team_hits_parity_status") or ""),
+        "team_eval_team_hits_mismatch_count": _as_int(team_eval.get("team_hits_mismatch_count")),
+        "team_eval_team_hits_rescheduled_outside_window_count": _as_int(
+            team_eval.get("team_hits_rescheduled_outside_window_count")
+        ),
+        "team_eval_offense_factor_lineage_health_generated_at": str(
+            team_eval.get("offense_factor_lineage_health_generated_at") or ""
+        ),
+        "team_eval_offense_context_date_guard_status": str(team_eval.get("offense_context_date_guard_status") or ""),
+        "team_eval_offense_context_date_guard_reason": str(team_eval.get("offense_context_date_guard_reason") or ""),
         "eval_snapshot_slate_csv": str(snapshot_paths.get("slate_csv") or ""),
         "eval_snapshot_wide_csv": str(snapshot_paths.get("wide_csv") or ""),
     }
@@ -3115,6 +3289,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         warnings.append("no_team_eval_rows_with_actual_for_evaluation_date")
 
     generated_at_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    offense_factor_health = _load_offense_factor_lineage_health(as_of_date=slate_date)
+    try:
+        eval_offense_max_source_game_date = _fetch_offense_window_max_source_game_date(eval_context_date)
+    except Exception as exc:
+        eval_offense_max_source_game_date = ""
+        warnings.append(f"team_eval_offense_window_max_source_date_query_error:{type(exc).__name__}")
+    team_hits_allowed_eval.update(
+        _offense_factor_completed_eval_lineage_metadata(
+            offense_context_as_of_date=eval_context_date,
+            eval_date=eval_date,
+            health_payload=offense_factor_health,
+            max_source_game_date=eval_offense_max_source_game_date,
+        )
+    )
+    offense_factor_lineage = _offense_factor_lineage_metadata(
+        offense_context_as_of_date=eval_date,
+        eval_date=slate_date,
+        health_payload=offense_factor_health,
+    )
+    offense_factor_lineage["row_propagation"] = _apply_offense_factor_lineage_to_rows(
+        slate_rows,
+        offense_context_as_of_date=eval_date,
+        health_payload=offense_factor_health,
+    )
     _write_rows_csv(Path(args.out_csv), slate_rows)
     snapshot_csv = _archive_rows_csv(
         out_csv=Path(args.out_csv),
@@ -3171,6 +3369,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "summary": lifecycle_meta,
         "warnings": [row for row in lifecycle_rows if row.get("lifecycle_warning")],
         },
+        "offense_factor_lineage": offense_factor_lineage,
         "team_hits_allowed_matchup_evaluation": team_hits_allowed_eval,
         "outputs": {
             "out_json": str(Path(args.out_json)),

@@ -14,6 +14,8 @@ from typing import Any
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "Makefile").exists())
 DEFAULT_REVIEW_AIDS_DIR = Path("artifacts/analysis/mlb/review_aids")
 DEFAULT_OUT_ROOT = Path("artifacts/analysis/mlb/environment_v2/daily")
+DEFAULT_HITS_ENVIRONMENT_LATEST = Path("artifacts/analysis/mlb/mlb_hits_environment_latest.json")
+DEFAULT_HITS_ENVIRONMENT_HISTORY = Path("artifacts/analysis/mlb/mlb_hits_environment_history.jsonl")
 
 SOURCE_BOARDS = [
     ("main", "simple_filter", "hits_o15_simple_filter"),
@@ -67,6 +69,13 @@ OUTPUT_FIELDS = [
     "starter_expected_hits_allowed",
     "bullpen_hits_allowed_form_blended",
     "team_expected_hits_allowed",
+    "offense_context_as_of_date",
+    "offense_window_excludes_eval_date",
+    "offense_window_max_source_game_date",
+    "local_team_hits_parity_status",
+    "team_hits_mismatch_count",
+    "team_hits_rescheduled_outside_window_count",
+    "offense_factor_lineage_health_generated_at",
     "env_v2_beta_profile_family",
     "env_v2_beta_profile_label",
     "env_v2_beta_research_status",
@@ -139,6 +148,12 @@ def _s(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _cell(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
 def _bucket(value: float | None, low_max: float, high_min: float) -> str:
     if value is None:
         return "missing"
@@ -174,6 +189,67 @@ def _source_timestamp(row: dict[str, Any], path: Path) -> str:
         return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     except Exception:
         return ""
+
+
+def _extract_offense_factor_lineage(payload: dict[str, Any], date_text: str, source_path: Path) -> dict[str, Any] | None:
+    if _s(payload.get("evaluation_date"))[:10] != date_text:
+        return None
+    lineage = payload.get("offense_factor_lineage")
+    if not isinstance(lineage, dict):
+        return None
+    return {
+        "offense_context_as_of_date": _cell(lineage.get("offense_context_as_of_date")),
+        "offense_window_excludes_eval_date": _cell(lineage.get("offense_window_excludes_eval_date")),
+        "offense_window_max_source_game_date": _cell(lineage.get("offense_window_max_source_game_date")),
+        "local_team_hits_parity_status": _cell(lineage.get("local_team_hits_parity_status")) or "unknown",
+        "team_hits_mismatch_count": _cell(lineage.get("team_hits_mismatch_count")),
+        "team_hits_rescheduled_outside_window_count": _cell(lineage.get("team_hits_rescheduled_outside_window_count")),
+        "offense_factor_lineage_health_generated_at": _cell(lineage.get("offense_factor_lineage_health_generated_at")),
+        "_offense_factor_lineage_source": str(source_path),
+        "_offense_factor_lineage_status": "retained",
+    }
+
+
+def _load_offense_factor_lineage(date_text: str) -> dict[str, Any]:
+    for path in (DEFAULT_HITS_ENVIRONMENT_LATEST,):
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        lineage = _extract_offense_factor_lineage(payload, date_text, path)
+        if lineage is not None:
+            return lineage
+
+    history_path = DEFAULT_HITS_ENVIRONMENT_HISTORY
+    if history_path.exists():
+        try:
+            lines = history_path.read_text(encoding="utf-8").splitlines()
+        except Exception:
+            lines = []
+        for line in reversed(lines):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+            lineage = _extract_offense_factor_lineage(payload, date_text, history_path)
+            if lineage is not None:
+                return lineage
+
+    return {
+        "offense_context_as_of_date": "",
+        "offense_window_excludes_eval_date": "",
+        "offense_window_max_source_game_date": "",
+        "local_team_hits_parity_status": "unknown",
+        "team_hits_mismatch_count": "",
+        "team_hits_rescheduled_outside_window_count": "",
+        "offense_factor_lineage_health_generated_at": "",
+        "_offense_factor_lineage_source": "",
+        "_offense_factor_lineage_status": "unknown_missing_hits_environment_lineage",
+    }
 
 
 def _profile(row: dict[str, Any]) -> dict[str, str]:
@@ -226,7 +302,7 @@ def _load_sources(date_text: str, review_aids_dir: Path) -> list[dict[str, Any]]
     return rows
 
 
-def _combine_rows(source_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _combine_rows(source_rows: list[dict[str, Any]], offense_factor_lineage: dict[str, Any]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in source_rows:
         grouped.setdefault(_market_key(row), []).append(row)
@@ -271,6 +347,17 @@ def _combine_rows(source_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "starter_expected_hits_allowed": _s(row.get("starter_expected_hits_allowed")),
                 "bullpen_hits_allowed_form_blended": _s(row.get("bullpen_hits_allowed_form_blended")),
                 "team_expected_hits_allowed": _s(row.get("team_expected_hits_allowed")),
+                "offense_context_as_of_date": _cell(offense_factor_lineage.get("offense_context_as_of_date")),
+                "offense_window_excludes_eval_date": _cell(offense_factor_lineage.get("offense_window_excludes_eval_date")),
+                "offense_window_max_source_game_date": _cell(offense_factor_lineage.get("offense_window_max_source_game_date")),
+                "local_team_hits_parity_status": _cell(offense_factor_lineage.get("local_team_hits_parity_status")) or "unknown",
+                "team_hits_mismatch_count": _cell(offense_factor_lineage.get("team_hits_mismatch_count")),
+                "team_hits_rescheduled_outside_window_count": _cell(
+                    offense_factor_lineage.get("team_hits_rescheduled_outside_window_count")
+                ),
+                "offense_factor_lineage_health_generated_at": _cell(
+                    offense_factor_lineage.get("offense_factor_lineage_health_generated_at")
+                ),
                 "env_v2_beta_profile_family": profile["family"],
                 "env_v2_beta_profile_label": profile["label"],
                 "env_v2_beta_research_status": profile["status"],
@@ -303,7 +390,13 @@ def _combine_rows(source_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def _summary_payload(date_text: str, rows: list[dict[str, Any]], source_rows: list[dict[str, Any]], profiles_path: Path) -> dict[str, Any]:
+def _summary_payload(
+    date_text: str,
+    rows: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
+    profiles_path: Path,
+    offense_factor_lineage: dict[str, Any],
+) -> dict[str, Any]:
     family_counts = Counter(row["env_v2_beta_profile_label"] for row in rows)
     status_counts = Counter(row["env_v2_beta_research_status"] for row in rows)
     source_counts = Counter()
@@ -321,6 +414,21 @@ def _summary_payload(date_text: str, rows: list[dict[str, Any]], source_rows: li
         "profile_family_counts": dict(family_counts),
         "research_status_counts": dict(status_counts),
         "source_board_counts": dict(source_counts),
+        "offense_factor_lineage": {
+            "status": _s(offense_factor_lineage.get("_offense_factor_lineage_status")),
+            "source": _s(offense_factor_lineage.get("_offense_factor_lineage_source")),
+            "offense_context_as_of_date": _cell(offense_factor_lineage.get("offense_context_as_of_date")),
+            "offense_window_excludes_eval_date": _cell(offense_factor_lineage.get("offense_window_excludes_eval_date")),
+            "offense_window_max_source_game_date": _cell(offense_factor_lineage.get("offense_window_max_source_game_date")),
+            "local_team_hits_parity_status": _cell(offense_factor_lineage.get("local_team_hits_parity_status")) or "unknown",
+            "team_hits_mismatch_count": _cell(offense_factor_lineage.get("team_hits_mismatch_count")),
+            "team_hits_rescheduled_outside_window_count": _cell(
+                offense_factor_lineage.get("team_hits_rescheduled_outside_window_count")
+            ),
+            "offense_factor_lineage_health_generated_at": _cell(
+                offense_factor_lineage.get("offense_factor_lineage_health_generated_at")
+            ),
+        },
         "profiles_csv": str(profiles_path),
         "profiles_sha256": hashlib.sha256(profiles_path.read_bytes()).hexdigest() if profiles_path.exists() else "",
     }
@@ -361,10 +469,18 @@ def _write_summary_md(path: Path, payload: dict[str, Any]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_health(path: Path, date_text: str, rows: list[dict[str, Any]], profiles_path: Path) -> None:
+def _write_health(
+    path: Path,
+    date_text: str,
+    rows: list[dict[str, Any]],
+    profiles_path: Path,
+    offense_factor_lineage: dict[str, Any],
+) -> None:
     missing_component_rows = sum(1 for row in rows if any(not _s(row.get(field)) for field in COMPONENT_FIELDS))
     missing_profile_rows = sum(1 for row in rows if not _s(row.get("env_v2_beta_profile_family")))
     status = "PASS" if profiles_path.exists() and rows and missing_profile_rows == 0 else "WARN"
+    lineage_status = _s(offense_factor_lineage.get("_offense_factor_lineage_status"))
+    lineage_check = "PASS" if lineage_status == "retained" else "WARN"
     lines = [
         "# Environment v2-beta Daily Research Health",
         "",
@@ -378,13 +494,20 @@ def _write_health(path: Path, date_text: str, rows: list[dict[str, Any]], profil
         f"| rows captured | `{len(rows)}` | `{'PASS' if rows else 'WARN'}` |",
         f"| rows missing profile family | `{missing_profile_rows}` | `{'PASS' if missing_profile_rows == 0 else 'WARN'}` |",
         f"| rows missing one or more component fields | `{missing_component_rows}` | `INFO` |",
+        f"| offense factor lineage retained | `{lineage_status}` | `{lineage_check}` |",
         "",
         "Missing component values are tracked for research coverage. They do not alter production behavior.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_outputs(date_text: str, rows: list[dict[str, Any]], source_rows: list[dict[str, Any]], out_root: Path) -> dict[str, Path]:
+def _write_outputs(
+    date_text: str,
+    rows: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
+    out_root: Path,
+    offense_factor_lineage: dict[str, Any],
+) -> dict[str, Path]:
     out_dir = out_root / date_text
     out_dir.mkdir(parents=True, exist_ok=True)
     profiles = out_dir / f"environment_v2_beta_daily_profiles_{date_text}.csv"
@@ -403,10 +526,10 @@ def _write_outputs(date_text: str, rows: list[dict[str, Any]], source_rows: list
         summary_json = rerun_dir / summary_json.name
         health_md = rerun_dir / health_md.name
     target_profiles.write_bytes(content)
-    payload = _summary_payload(date_text, rows, source_rows, target_profiles)
+    payload = _summary_payload(date_text, rows, source_rows, target_profiles, offense_factor_lineage)
     _write_summary_md(summary_md, payload)
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    _write_health(health_md, date_text, rows, target_profiles)
+    _write_health(health_md, date_text, rows, target_profiles, offense_factor_lineage)
     return {"profiles": target_profiles, "summary_md": summary_md, "summary_json": summary_json, "health_md": health_md}
 
 
@@ -469,8 +592,9 @@ def main() -> int:
 
     date_text = str(args.date)[:10]
     source_rows = _load_sources(date_text, args.review_aids_dir)
-    rows = _combine_rows(source_rows)
-    outputs = _write_outputs(date_text, rows, source_rows, args.out_root)
+    offense_factor_lineage = _load_offense_factor_lineage(date_text)
+    rows = _combine_rows(source_rows, offense_factor_lineage)
+    outputs = _write_outputs(date_text, rows, source_rows, args.out_root, offense_factor_lineage)
     _write_report(args.implementation_report, date_text, rows, outputs, args.wrapper_mode)
     print(
         json.dumps(

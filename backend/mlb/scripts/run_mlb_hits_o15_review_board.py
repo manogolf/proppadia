@@ -59,6 +59,16 @@ ENVIRONMENT_COMPONENT_COLUMNS = [
     "bullpen_hits_allowed_form_blended",
 ]
 
+OFFENSE_FACTOR_LINEAGE_COLUMNS = [
+    "offense_context_as_of_date",
+    "offense_window_excludes_eval_date",
+    "offense_window_max_source_game_date",
+    "local_team_hits_parity_status",
+    "team_hits_mismatch_count",
+    "team_hits_rescheduled_outside_window_count",
+    "offense_factor_lineage_health_generated_at",
+]
+
 OUTPUT_COLUMNS = [
     "date",
     "player_id",
@@ -80,6 +90,7 @@ OUTPUT_COLUMNS = [
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
     *ENVIRONMENT_COMPONENT_COLUMNS,
+    *OFFENSE_FACTOR_LINEAGE_COLUMNS,
     "starter_expected_hits_allowed",
     "team_expected_hits_allowed",
     "opposing_starter",
@@ -144,6 +155,7 @@ LAYERED_OUTPUT_COLUMNS = [
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
     *ENVIRONMENT_COMPONENT_COLUMNS,
+    *OFFENSE_FACTOR_LINEAGE_COLUMNS,
     "starter_expected_hits_allowed",
     "team_expected_hits_allowed",
     "hitter_tier",
@@ -196,6 +208,7 @@ ALTERNATE_DISCOVERY_COLUMNS = [
     "raw_d7_hits_calendar",
     "raw_d15_hits_calendar",
     *ENVIRONMENT_COMPONENT_COLUMNS,
+    *OFFENSE_FACTOR_LINEAGE_COLUMNS,
     "starter_expected_hits_allowed",
     "team_expected_hits_allowed",
     "hitter_tier",
@@ -299,6 +312,12 @@ def _f(value: Any) -> float | None:
         return float(value)
     except Exception:
         return None
+
+
+def _cell(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _american_implied_probability(value: Any) -> float | None:
@@ -637,7 +656,45 @@ def _starter_identity(row: dict[str, Any]) -> str:
     return "name:" + str(row.get("opposing_starter") or "").strip().lower()
 
 
-def _environment_component_context(row: dict[str, Any]) -> dict[str, Any]:
+def _offense_factor_lineage_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    lineage = payload.get("offense_factor_lineage") if isinstance(payload, dict) else {}
+    if not isinstance(lineage, dict):
+        lineage = {}
+    return {
+        "offense_context_as_of_date": _cell(lineage.get("offense_context_as_of_date")),
+        "offense_window_excludes_eval_date": _cell(lineage.get("offense_window_excludes_eval_date")),
+        "offense_window_max_source_game_date": _cell(lineage.get("offense_window_max_source_game_date")),
+        "local_team_hits_parity_status": _cell(lineage.get("local_team_hits_parity_status")) or "unknown",
+        "team_hits_mismatch_count": _cell(lineage.get("team_hits_mismatch_count")),
+        "team_hits_rescheduled_outside_window_count": _cell(lineage.get("team_hits_rescheduled_outside_window_count")),
+        "offense_factor_lineage_health_generated_at": _cell(lineage.get("offense_factor_lineage_health_generated_at")),
+    }
+
+
+def _offense_factor_lineage_from_row(
+    row: dict[str, Any],
+    fallback: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    fallback = fallback or {}
+    out: dict[str, Any] = {}
+    for field in OFFENSE_FACTOR_LINEAGE_COLUMNS:
+        value = row.get(field)
+        if value is None or str(value).strip() == "":
+            value = fallback.get(field)
+        out[field] = _cell(value)
+    if not out.get("local_team_hits_parity_status"):
+        out["local_team_hits_parity_status"] = "unknown"
+    return out
+
+
+def _offense_factor_lineage_output_fields(context: dict[str, Any]) -> dict[str, Any]:
+    out = {field: context.get(field, "") for field in OFFENSE_FACTOR_LINEAGE_COLUMNS}
+    if not str(out.get("local_team_hits_parity_status") or "").strip():
+        out["local_team_hits_parity_status"] = "unknown"
+    return out
+
+
+def _environment_component_context(row: dict[str, Any], offense_factor_lineage: dict[str, Any] | None = None) -> dict[str, Any]:
     pitcher_base = _f(row.get("pitcher_expected_hits_allowed_weighted"))
     return {
         "pitcher_expected_hits_allowed_weighted": pitcher_base,
@@ -653,6 +710,7 @@ def _environment_component_context(row: dict[str, Any]) -> dict[str, Any]:
         "bullpen_hits_allowed_pg_last15": _f(row.get("bullpen_hits_allowed_pg_last15")),
         "bullpen_hits_allowed_pg_last30": _f(row.get("bullpen_hits_allowed_pg_last30")),
         "bullpen_hits_allowed_form_blended": _f(row.get("bullpen_hits_allowed_form_blended")),
+        **_offense_factor_lineage_from_row(row, offense_factor_lineage),
     }
 
 
@@ -665,6 +723,7 @@ def _context_from_matchup_rows(
     source_label: str,
     artifact_row_count: int,
     snapshot_policy: str,
+    offense_factor_lineage: dict[str, Any] | None = None,
 ) -> dict[tuple[str, str], dict[str, Any]]:
     by_team_pair: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
@@ -678,7 +737,7 @@ def _context_from_matchup_rows(
         if current is None or expected > (_f(current.get("starter_expected_hits_allowed")) or -1.0):
             note = str(row.get("forecast_note") or "").strip()
             by_team_pair[key] = {
-                **_environment_component_context(row),
+                **_environment_component_context(row, offense_factor_lineage),
                 "starter_expected_hits_allowed": expected,
                 "team_expected_hits_allowed": _f(row.get("expected_team_hits_allowed_matchup")),
                 "opposing_starter": row.get("pitcher_name") or row.get("starter_name") or row.get("player_name") or "",
@@ -723,6 +782,7 @@ def _unavailable_context_from_rows(
     artifact_row_count: int,
     snapshot_policy: str,
     required_min_starts: int | None,
+    offense_factor_lineage: dict[str, Any] | None = None,
 ) -> dict[tuple[str, str], dict[str, Any]]:
     by_team_pair: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
@@ -744,7 +804,7 @@ def _unavailable_context_from_rows(
         if current is not None and min_applied is False:
             continue
         by_team_pair[key] = {
-            **_environment_component_context(row),
+            **_environment_component_context(row, offense_factor_lineage),
             "starter_expected_hits_allowed": None,
             "team_expected_hits_allowed": _f(row.get("expected_team_hits_allowed_matchup")),
             "opposing_starter": row.get("pitcher_name") or row.get("starter_name") or row.get("player_name") or "",
@@ -813,6 +873,7 @@ def _candidate_from_payload(path: Path, payload: dict[str, Any], slate_date: str
     artifact_row_count = int(slate_context.get("rows") or len(rows) or coverage)
     policy = "fullest_valid_projected_starter_artifact"
     required_min_starts = _f((payload.get("starter_baseline_config") or {}).get("min_starts"))
+    offense_factor_lineage = _offense_factor_lineage_from_payload(payload)
     context = _context_from_matchup_rows(
         rows=rows,
         slate_date=slate_date,
@@ -821,6 +882,7 @@ def _candidate_from_payload(path: Path, payload: dict[str, Any], slate_date: str
         source_label=f"{path}:{source_kind}",
         artifact_row_count=artifact_row_count,
         snapshot_policy=policy,
+        offense_factor_lineage=offense_factor_lineage,
     )
     unavailable_context = _unavailable_context_from_rows(
         rows=_payload_unavailable_rows(payload),
@@ -831,6 +893,7 @@ def _candidate_from_payload(path: Path, payload: dict[str, Any], slate_date: str
         artifact_row_count=artifact_row_count,
         snapshot_policy=policy,
         required_min_starts=int(required_min_starts) if required_min_starts is not None else None,
+        offense_factor_lineage=offense_factor_lineage,
     )
     return {
         "path": str(path),
@@ -873,6 +936,7 @@ def _candidate_from_snapshot_csv(path: Path, slate_date: str, required_min_start
         source_label=f"{path}:full_row_snapshot",
         artifact_row_count=len(date_rows),
         snapshot_policy=policy,
+        offense_factor_lineage=None,
     )
     unavailable_context = _unavailable_context_from_rows(
         rows=date_rows,
@@ -883,6 +947,7 @@ def _candidate_from_snapshot_csv(path: Path, slate_date: str, required_min_start
         artifact_row_count=len(date_rows),
         snapshot_policy=policy,
         required_min_starts=required_min_starts,
+        offense_factor_lineage=None,
     )
     return {
         "path": str(path),
@@ -1533,6 +1598,7 @@ def _filter_rows(
             "raw_d7_hits_calendar": _f(raw.get("raw_d7_hits")),
             "raw_d15_hits_calendar": _f(raw.get("raw_d15_hits")),
             **{field: context.get(field) for field in ENVIRONMENT_COMPONENT_COLUMNS},
+            **_offense_factor_lineage_output_fields(context),
             "starter_expected_hits_allowed": starter_expected,
             "team_expected_hits_allowed": team_expected,
             "opposing_starter": context.get("opposing_starter") or "",
@@ -1853,6 +1919,7 @@ def _build_alternate_discovery_rows(
                 "raw_d7_hits_calendar": _f((raw or {}).get("raw_d7_hits")),
                 "raw_d15_hits_calendar": _f((raw or {}).get("raw_d15_hits")),
                 **{field: context.get(field) for field in ENVIRONMENT_COMPONENT_COLUMNS},
+                **_offense_factor_lineage_output_fields(context),
                 "starter_expected_hits_allowed": starter_expected,
                 "team_expected_hits_allowed": team_expected,
                 "hitter_tier": hitter_tier,

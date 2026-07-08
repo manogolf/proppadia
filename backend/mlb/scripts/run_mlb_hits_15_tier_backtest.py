@@ -43,6 +43,16 @@ ENVIRONMENT_COMPONENT_COLUMNS = [
     "team_expected_hits_allowed",
 ]
 
+OFFENSE_FACTOR_LINEAGE_COLUMNS = [
+    "offense_context_as_of_date",
+    "offense_window_excludes_eval_date",
+    "offense_window_max_source_game_date",
+    "local_team_hits_parity_status",
+    "team_hits_mismatch_count",
+    "team_hits_rescheduled_outside_window_count",
+    "offense_factor_lineage_health_generated_at",
+]
+
 
 def _f(value: Any) -> float | None:
     try:
@@ -66,6 +76,19 @@ def _i(value: Any) -> int | None:
 
 def _clean(value: Any) -> str:
     return str(value or "").strip().lower()
+
+
+def _cell(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _lineage_from_source(row: dict[str, Any]) -> dict[str, Any]:
+    out = {field: _cell(row.get(field)) for field in OFFENSE_FACTOR_LINEAGE_COLUMNS}
+    if not out.get("local_team_hits_parity_status"):
+        out["local_team_hits_parity_status"] = "unknown"
+    return out
 
 
 def _pct(value: float | None) -> str:
@@ -326,6 +349,7 @@ def _enrich_rows(rows: list[dict[str, Any]]) -> None:
                     if matchup_expected is not None and bullpen_expected is not None
                     else None
                 ),
+                **_lineage_from_source(row),
             }
         )
 
@@ -399,6 +423,7 @@ def _load_reconcile_rows(root: Path) -> list[dict[str, Any]]:
                 "actual_under_outcome": _clean(raw.get("actual_under_outcome")),
                 "pnl_over_1u": _f(raw.get("pnl_over_1u")),
                 "pnl_under_1u": _f(raw.get("pnl_under_1u")),
+                **_lineage_from_source(raw),
             }
             rows.append(base)
     _enrich_rows(rows)
