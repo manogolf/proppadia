@@ -7,7 +7,7 @@ import json
 import math
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -508,6 +508,342 @@ def _join_board_rows(
     return out
 
 
+def _candidate_key(row: dict[str, Any], *, resolved_game_id: str = "") -> str:
+    player_key = str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+    if not player_key:
+        player_key = _norm_name(row.get("player_name") or row.get("player") or "")
+    game_key = resolved_game_id or str(row.get("game_id") or row.get("canonical_game_id") or "").strip()
+    return "|".join(
+        [
+            str(row.get("board_date") or row.get("date") or "")[:10],
+            game_key,
+            player_key,
+            _team(row.get("team") or row.get("canonical_team")),
+            _team(row.get("opponent") or row.get("canonical_opponent")),
+            str(row.get("prop_type") or "hits").strip().lower(),
+            str(row.get("side") or "over").strip().lower(),
+            _line_key(row.get("line") or 1.5),
+        ]
+    )
+
+
+def _load_official_hits_sources(
+    start_date: str,
+    end_date: str,
+) -> tuple[
+    dict[tuple[str, str], dict[str, Any]],
+    dict[tuple[str, str, str, str], list[dict[str, Any]]],
+    dict[tuple[str, str, str], list[dict[str, Any]]],
+    dict[tuple[str, str, str], list[dict[str, Any]]],
+    str,
+]:
+    try:
+        from backend.shared.db.pg import pg_fetchall
+
+        player_stats = pg_fetchall(
+            """
+            SELECT
+              game_date::date::text AS game_date,
+              game_id::bigint::text AS game_id,
+              player_id::bigint::text AS player_id,
+              COALESCE(team, '') AS team,
+              COALESCE(opponent, '') AS opponent,
+              COALESCE(position, '') AS position,
+              COALESCE(hits, 0)::float8 AS hits,
+              COALESCE(at_bats, 0)::float8 AS at_bats,
+              COALESCE(plate_appearances, 0)::float8 AS plate_appearances
+            FROM mlb.player_stats
+            WHERE game_date::date BETWEEN %s::date AND %s::date
+              AND game_id IS NOT NULL
+              AND player_id IS NOT NULL
+            """,
+            (start_date, end_date),
+        )
+        games = pg_fetchall(
+            """
+            SELECT
+              game_date::date::text AS game_date,
+              game_id::bigint::text AS game_id,
+              COALESCE(home_team_abbr, '') AS home_team_abbr,
+              COALESCE(away_team_abbr, '') AS away_team_abbr
+            FROM mlb.game_info
+            WHERE game_date::date BETWEEN %s::date AND %s::date
+              AND game_id IS NOT NULL
+            """,
+            (start_date, end_date),
+        )
+    except Exception as exc:
+        return {}, {}, {}, {}, f"{type(exc).__name__}: {exc}"
+
+    by_game_player: dict[tuple[str, str], dict[str, Any]] = {}
+    by_date_player_team_opp: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    by_date_player_team: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in player_stats:
+        game_date = str(row.get("game_date") or "")[:10]
+        game_id = str(row.get("game_id") or "").strip()
+        player_id = str(row.get("player_id") or "").strip()
+        team = _team(row.get("team"))
+        opp = _team(row.get("opponent"))
+        if not game_date or not game_id or not player_id:
+            continue
+        normalized = dict(row)
+        normalized["team"] = team
+        normalized["opponent"] = opp
+        by_game_player[(game_id, player_id)] = normalized
+        by_date_player_team_opp[(game_date, player_id, team, opp)].append(normalized)
+        by_date_player_team[(game_date, player_id, team)].append(normalized)
+
+    by_date_team_opp: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in games:
+        game_date = str(row.get("game_date") or "")[:10]
+        game_id = str(row.get("game_id") or "").strip()
+        home = _team(row.get("home_team_abbr"))
+        away = _team(row.get("away_team_abbr"))
+        if not game_date or not game_id or not home or not away:
+            continue
+        base = {"game_date": game_date, "game_id": game_id, "home_team": home, "away_team": away}
+        by_date_team_opp[(game_date, home, away)].append({**base, "team": home, "opponent": away})
+        by_date_team_opp[(game_date, away, home)].append({**base, "team": away, "opponent": home})
+
+    return by_game_player, by_date_player_team_opp, by_date_player_team, by_date_team_opp, ""
+
+
+def _resolve_official_hits_identity(
+    row: dict[str, Any],
+    *,
+    by_game_player: dict[tuple[str, str], dict[str, Any]],
+    by_date_player_team_opp: dict[tuple[str, str, str, str], list[dict[str, Any]]],
+    by_date_player_team: dict[tuple[str, str, str], list[dict[str, Any]]],
+    by_date_team_opp: dict[tuple[str, str, str], list[dict[str, Any]]],
+) -> tuple[str, str, dict[str, Any] | None, str, str]:
+    date_text = str(row.get("board_date") or row.get("date") or "")[:10]
+    player_id = str(row.get("canonical_player_id") or row.get("player_id") or "").strip()
+    game_id = str(row.get("game_id") or row.get("canonical_game_id") or "").strip()
+    team = _team(row.get("team") or row.get("canonical_team"))
+    opp = _team(row.get("opponent") or row.get("canonical_opponent"))
+
+    if game_id and player_id:
+        official = by_game_player.get((game_id, player_id))
+        if official is not None:
+            return game_id, player_id, official, "game_id+player_id", ""
+        if by_date_team_opp.get((date_text, team, opp)):
+            return game_id, player_id, None, "game_id+player_id_no_player_stats_row", ""
+        return game_id, player_id, None, "game_id+player_id_no_game_match", "team/game identity mismatch"
+
+    if not player_id:
+        return game_id, player_id, None, "missing_player_id", "player identity mismatch"
+
+    exact = by_date_player_team_opp.get((date_text, player_id, team, opp), [])
+    if len(exact) == 1:
+        official = exact[0]
+        return str(official.get("game_id") or ""), player_id, official, "date+player_id+team+opponent", ""
+    if len(exact) > 1:
+        return "", player_id, None, "date+player_id+team+opponent_ambiguous", "team/game identity mismatch"
+
+    team_only = by_date_player_team.get((date_text, player_id, team), [])
+    if len(team_only) == 1:
+        official = team_only[0]
+        return str(official.get("game_id") or ""), player_id, official, "date+player_id+team", ""
+    if len(team_only) > 1:
+        return "", player_id, None, "date+player_id+team_ambiguous", "team/game identity mismatch"
+
+    games = by_date_team_opp.get((date_text, team, opp), [])
+    if len(games) == 1:
+        return str(games[0].get("game_id") or ""), player_id, None, "date+team+opponent_game_only_no_player_stats_row", ""
+    if len(games) > 1:
+        return "", player_id, None, "date+team+opponent_ambiguous_no_player_stats_row", "team/game identity mismatch"
+    return "", player_id, None, "no_game_or_player_stats_match", "team/game identity mismatch"
+
+
+def _grade_official_hits_row(row: dict[str, Any], official: dict[str, Any] | None, *, game_id: str, identity_error: str) -> dict[str, Any]:
+    result = dict(row)
+    result["alternate_denominator"] = "official_player_outcome"
+    result["denominator"] = "official_player_outcome"
+    result["outcome_source"] = "mlb.player_stats"
+    if identity_error:
+        result.update(
+            {
+                "resolved": False,
+                "win": "",
+                "loss": "",
+                "push": "",
+                "units": "",
+                "actual_value": "",
+                "official_game_id": game_id,
+                "official_hits": "",
+                "official_ab": "",
+                "official_pa": "",
+                "appearance_status": "unknown",
+                "official_unresolved_reason": identity_error,
+            }
+        )
+        return result
+    if not game_id:
+        result.update(
+            {
+                "resolved": False,
+                "win": "",
+                "loss": "",
+                "push": "",
+                "units": "",
+                "actual_value": "",
+                "official_game_id": "",
+                "official_hits": "",
+                "official_ab": "",
+                "official_pa": "",
+                "appearance_status": "unknown",
+                "official_unresolved_reason": "team/game identity mismatch",
+            }
+        )
+        return result
+    if official is None:
+        result.update(
+            {
+                "resolved": False,
+                "win": "",
+                "loss": "",
+                "push": "",
+                "units": "",
+                "actual_value": "",
+                "official_game_id": game_id,
+                "official_hits": "",
+                "official_ab": "",
+                "official_pa": "",
+                "appearance_status": "did_not_appear",
+                "official_unresolved_reason": "completed game but player did not appear",
+            }
+        )
+        return result
+
+    hits = _i(official.get("hits")) or 0
+    ab = _i(official.get("at_bats")) or 0
+    pa = _i(official.get("plate_appearances")) or 0
+    if ab == 0 and pa == 0:
+        result.update(
+            {
+                "resolved": False,
+                "win": "",
+                "loss": "",
+                "push": "",
+                "units": "",
+                "actual_value": hits,
+                "official_game_id": game_id,
+                "official_hits": hits,
+                "official_ab": ab,
+                "official_pa": pa,
+                "appearance_status": "zero_official_ab_pa",
+                "official_unresolved_reason": "completed game but zero official AB/PA",
+            }
+        )
+        return result
+
+    side = str(row.get("side") or "over").strip().lower()
+    line_v = _f(row.get("line"))
+    push = bool(line_v is not None and abs(hits - line_v) < 1e-9)
+    won = None
+    if push:
+        won = False
+    elif side == "under":
+        won = bool(line_v is not None and hits < line_v)
+    else:
+        won = bool(line_v is not None and hits > line_v)
+    price = _f(row.get("board_price"))
+    units = _american_units(price, won, push)
+    result.update(
+        {
+            "resolved": won is not None or push,
+            "win": bool(won) if won is not None and not push else False,
+            "loss": bool(won is False and not push),
+            "push": push,
+            "units": units if units is not None else "",
+            "actual_value": hits,
+            "official_game_id": game_id,
+            "official_hits": hits,
+            "official_ab": ab,
+            "official_pa": pa,
+            "appearance_status": "appeared",
+            "official_unresolved_reason": "",
+        }
+    )
+    return result
+
+
+def _apply_alternate_official_outcomes(joined: list[dict[str, Any]], latest: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    alternate = [
+        row for row in joined
+        if str(row.get("board") or "") == "o15_alternate_discovery"
+        and str(row.get("board_date") or "")[:10] <= latest
+    ]
+    dates = sorted({str(row.get("board_date") or "")[:10] for row in alternate if str(row.get("board_date") or "")[:10]})
+    if not alternate or not latest or not dates:
+        return joined, {"status": "not_applicable"}
+
+    by_game_player, by_date_player_team_opp, by_date_player_team, by_date_team_opp, source_error = _load_official_hits_sources(dates[0], latest)
+    if source_error:
+        patched = [dict(row, denominator="reconcile_market") for row in joined]
+        return patched, {"status": "source_unavailable", "source_error": source_error}
+
+    out: list[dict[str, Any]] = []
+    duplicate_resolved: Counter[str] = Counter()
+    unresolved: Counter[str] = Counter()
+    identity_methods: Counter[str] = Counter()
+    for row in joined:
+        if str(row.get("board") or "") != "o15_alternate_discovery" or str(row.get("board_date") or "")[:10] > latest:
+            out.append({**row, "denominator": row.get("denominator") or "reconcile_market"})
+            continue
+        game_id, player_id, official, identity_method, identity_error = _resolve_official_hits_identity(
+            row,
+            by_game_player=by_game_player,
+            by_date_player_team_opp=by_date_player_team_opp,
+            by_date_player_team=by_date_player_team,
+            by_date_team_opp=by_date_team_opp,
+        )
+        graded = _grade_official_hits_row(row, official, game_id=game_id, identity_error=identity_error)
+        graded["official_player_id"] = player_id
+        graded["official_identity_match_method"] = identity_method
+        identity_methods[identity_method] += 1
+        if graded.get("resolved") is True:
+            duplicate_resolved[_candidate_key(graded, resolved_game_id=game_id)] += 1
+        else:
+            unresolved[str(graded.get("official_unresolved_reason") or "unresolved")] += 1
+        out.append(graded)
+
+    duplicate_bad = sum(1 for count in duplicate_resolved.values() if count > 1)
+    status = "ok" if duplicate_bad == 0 else "duplicate_resolved_keys"
+    latest_rows = [row for row in out if row.get("board") == "o15_alternate_discovery" and str(row.get("board_date") or "")[:10] == latest]
+    all_alt = [row for row in out if row.get("board") == "o15_alternate_discovery" and str(row.get("board_date") or "")[:10] <= latest]
+    resolved = [row for row in all_alt if row.get("resolved") is True]
+    metadata = {
+        "status": status,
+        "source": "mlb.player_stats",
+        "collection_start_date": dates[0],
+        "latest_candidate_date": dates[-1],
+        "latest_completed_slate": latest,
+        "distinct_slate_count": len(dates),
+        "calendar_days_inclusive": (
+            datetime.strptime(dates[-1], "%Y-%m-%d").date() - datetime.strptime(dates[0], "%Y-%m-%d").date()
+        ).days + 1,
+        "candidate_rows": len(all_alt),
+        "resolved_rows": len(resolved),
+        "coverage_pct": len(resolved) / len(all_alt) if all_alt else None,
+        "unresolved_rows": len(all_alt) - len(resolved),
+        "unresolved_by_reason": dict(sorted(unresolved.items())),
+        "identity_methods": dict(sorted(identity_methods.items())),
+        "duplicate_resolved_key_count": duplicate_bad,
+        "latest_completed_slate_rows": len(latest_rows),
+        "latest_completed_slate_resolved": sum(1 for row in latest_rows if row.get("resolved") is True),
+        "trust_warning": (
+            "coverage_below_full_decision_grade_or_remaining_technical_identity_errors"
+            if (len(resolved) / len(all_alt) if all_alt else 0.0) < 0.95
+            or unresolved.get("team/game identity mismatch", 0)
+            or unresolved.get("player identity mismatch", 0)
+            else ""
+        ),
+        "row_grain": "candidate_date + game + player + prop_type + side + line; bookmaker_list collapsed on board row",
+    }
+    return out, metadata
+
+
 def _qc_score_bucket(value: Any) -> str:
     score = _f(value)
     if score is None:
@@ -584,6 +920,7 @@ def _build_aggregates(joined: list[dict[str, Any]], latest: str) -> tuple[list[d
                             "board": board,
                             "board_label": rows[0].get("board_label") or board,
                             "discovery_only": rows[0].get("discovery_only"),
+                            "denominator": rows[0].get("denominator") or "reconcile_market",
                         },
                         latest=latest,
                     )
@@ -600,6 +937,7 @@ def _build_aggregates(joined: list[dict[str, Any]], latest: str) -> tuple[list[d
                                 "layer": layer,
                                 "layer_label": LAYER_LABELS.get(layer, layer),
                                 "discovery_only": layer_rows[0].get("discovery_only"),
+                                "denominator": layer_rows[0].get("denominator") or "reconcile_market",
                             },
                             latest=latest,
                         )
@@ -617,6 +955,7 @@ def _build_aggregates(joined: list[dict[str, Any]], latest: str) -> tuple[list[d
                                     "tier_type": tier_col,
                                     "tier": tier,
                                     "discovery_only": tier_rows[0].get("discovery_only"),
+                                    "denominator": tier_rows[0].get("denominator") or "reconcile_market",
                                 },
                                 latest=latest,
                             )
@@ -633,6 +972,7 @@ def _build_aggregates(joined: list[dict[str, Any]], latest: str) -> tuple[list[d
                                 "tier_type": "qc_score_bucket",
                                 "tier": bucket,
                                 "discovery_only": bucket_rows[0].get("discovery_only"),
+                                "denominator": bucket_rows[0].get("denominator") or "reconcile_market",
                             },
                             latest=latest,
                         )
@@ -649,6 +989,7 @@ def _build_aggregates(joined: list[dict[str, Any]], latest: str) -> tuple[list[d
                                 "tier_type": "watch_candidate",
                                 "tier": watch_value,
                                 "discovery_only": watch_rows[0].get("discovery_only"),
+                                "denominator": watch_rows[0].get("denominator") or "reconcile_market",
                             },
                             latest=latest,
                         )
@@ -736,6 +1077,7 @@ def _ontology_source_note(rows: list[dict[str, Any]]) -> str:
     boards = sorted({str(row.get("board_name") or row.get("board") or "") for row in rows if row.get("board_name") or row.get("board")})
     layers = sorted({str(row.get("provenance_layer") or "") for row in rows if row.get("provenance_layer")})
     statuses = sorted({str(row.get("research_status") or "") for row in rows if row.get("research_status")})
+    denominators = sorted({str(row.get("denominator") or "") for row in rows if row.get("denominator")})
     bits = []
     if boards:
         bits.append("boards=" + ";".join(boards[:5]))
@@ -743,6 +1085,8 @@ def _ontology_source_note(rows: list[dict[str, Any]]) -> str:
         bits.append("provenance=" + ";".join(layers[:5]))
     if statuses:
         bits.append("research_status=" + ";".join(statuses[:5]))
+    if denominators:
+        bits.append("denominator=" + ";".join(denominators[:5]))
     return " | ".join(bits)
 
 
@@ -909,7 +1253,24 @@ def _row_for(rows: list[dict[str, Any]], **conds: str) -> dict[str, Any]:
     return {}
 
 
-def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, Any]], by_layer: list[dict[str, Any]], by_tier: list[dict[str, Any]]) -> None:
+def _effective_window_dates(window: str, dates: list[str], latest: str) -> str:
+    effective = [
+        date_text for date_text in dates
+        if window in _window_labels(date_text, latest) and date_text <= latest
+    ]
+    if not effective:
+        return "n/a"
+    return f"{effective[0]} to {effective[-1]} ({len(effective)} dates)"
+
+
+def _write_report(
+    path: Path,
+    summary: dict[str, Any],
+    by_board: list[dict[str, Any]],
+    by_layer: list[dict[str, Any]],
+    by_tier: list[dict[str, Any]],
+    reconcile_diagnostic_by_board: list[dict[str, Any]] | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     report_windows = ["full_history", "last_30", "last_14", "last_7", "latest_completed_slate"]
     lines: list[str] = []
@@ -942,20 +1303,114 @@ def _write_report(path: Path, summary: dict[str, Any], by_board: list[dict[str, 
         label = board_rows[0].get("board_label") or board if board_rows else board
         lines.append(f"### {label}")
         lines.append("")
-        lines.append("| window | rows | resolved | W-L-P | WR | ROI | units | avg odds |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        if board == "o15_alternate_discovery":
+            meta = summary.get("alternate_discovery_official_denominator")
+            if isinstance(meta, dict) and meta.get("status") == "ok":
+                lines.append("Primary denominator: **Official Player Outcome Denominator**.")
+                lines.append("")
+                lines.append(f"- Collection start date: `{meta.get('collection_start_date')}`")
+                lines.append(f"- Actual available date range: `{meta.get('collection_start_date')}` to `{meta.get('latest_candidate_date')}`")
+                lines.append(f"- Distinct slate count: `{meta.get('distinct_slate_count')}`")
+                lines.append(f"- Exact latest completed slate date: `{meta.get('latest_completed_slate')}`")
+                lines.append(f"- Outcome source: `{meta.get('source')}`")
+                lines.append(f"- Row grain: {meta.get('row_grain')}")
+                lines.append(f"- Total candidate rows: `{meta.get('candidate_rows')}`")
+                lines.append(f"- Completed eligible rows: `{meta.get('candidate_rows')}`")
+                lines.append(f"- Resolved rows: `{meta.get('resolved_rows')}`")
+                lines.append(f"- Resolution coverage: `{_fmt_pct(meta.get('coverage_pct'))}`")
+                lines.append(f"- Unresolved rows: `{meta.get('unresolved_rows')}`")
+                if meta.get("trust_warning"):
+                    lines.append(
+                        "- Metric trust warning: corrected metrics are more complete than reconcile-market diagnostics, "
+                        "but not fully decision-grade while technical identity mismatches remain."
+                    )
+                lines.append("")
+                lines.append("Unresolved rows by reason:")
+                lines.append("")
+                lines.append("| unresolved reason | rows | type |")
+                lines.append("|---|---:|---|")
+                reasons = meta.get("unresolved_by_reason") if isinstance(meta.get("unresolved_by_reason"), dict) else {}
+                for reason, count in reasons.items():
+                    reason_type = "technical_unresolved" if "identity mismatch" in reason else "non_settled_or_excluded"
+                    lines.append(f"| {reason} | `{count}` | {reason_type} |")
+                lines.append("")
+            else:
+                lines.append("Primary denominator: **Official Player Outcome Denominator** unavailable; falling back to existing rows.")
+                if isinstance(meta, dict) and meta.get("source_error"):
+                    lines.append(f"- Source error: `{meta.get('source_error')}`")
+                lines.append("")
+        if board == "o15_alternate_discovery":
+            lines.append("| window | effective dates | candidates | resolved | coverage | W-L-P | WR | ROI | units | avg odds |")
+            lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        else:
+            lines.append("| window | rows | resolved | W-L-P | WR | ROI | units | avg odds |")
+            lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
         rows_by_window = {str(row.get("window") or ""): row for row in board_rows}
         for window in report_windows:
             row = rows_by_window.get(window)
             if not row:
                 continue
+            if board == "o15_alternate_discovery":
+                coverage = (_i(row.get("resolved")) or 0) / (_i(row.get("rows")) or 0) if _i(row.get("rows")) else None
+                dates = []
+                meta = summary.get("alternate_discovery_official_denominator")
+                if isinstance(meta, dict):
+                    start = str(meta.get("collection_start_date") or "")
+                    end = str(meta.get("latest_candidate_date") or "")
+                    if start and end:
+                        try:
+                            start_d = datetime.strptime(start, "%Y-%m-%d").date()
+                            end_d = datetime.strptime(end, "%Y-%m-%d").date()
+                            dates = [
+                                (start_d + timedelta(days=idx)).isoformat()
+                                for idx in range((end_d - start_d).days + 1)
+                            ]
+                        except Exception:
+                            dates = []
+                lines.append(
+                    f"| {window} | `{_effective_window_dates(window, dates, str(summary.get('latest_completed_slate') or ''))}` | "
+                    f"`{row.get('rows')}` | `{row.get('resolved')}` | `{_fmt_pct(coverage)}` | "
+                    f"`{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` | `{_fmt_pct(row.get('wr'))}` | "
+                    f"`{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | `{_fmt_num(row.get('avg_odds'))}` |"
+                )
+            else:
+                lines.append(
+                    f"| {window} | `{row.get('rows')}` | "
+                    f"`{row.get('resolved')}` | `{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` | "
+                    f"`{_fmt_pct(row.get('wr'))}` | `{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | "
+                    f"`{_fmt_num(row.get('avg_odds'))}` |"
+                )
+        if board == "o15_alternate_discovery":
+            lines.append("")
             lines.append(
-                f"| {window} | `{row.get('rows')}` | "
-                f"`{row.get('resolved')}` | `{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` | "
-                f"`{_fmt_pct(row.get('wr'))}` | `{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` | "
-                f"`{_fmt_num(row.get('avg_odds'))}` |"
+                "Window disclosure: `full_history`, `last_30`, and `last_14` currently operate on the same available "
+                "14-date collection history. `last_30` does not imply 30 days of alternate-discovery observations yet."
             )
         lines.append("")
+        if board == "o15_alternate_discovery" and reconcile_diagnostic_by_board:
+            diagnostic_rows = [
+                row for row in reconcile_diagnostic_by_board
+                if str(row.get("board") or "") == "o15_alternate_discovery"
+                and str(row.get("window") or "") in report_windows
+            ]
+            if diagnostic_rows:
+                lines.append("#### Reconcile-Market Diagnostic Denominator")
+                lines.append("")
+                lines.append("This diagnostic shows the old market/reconcile join denominator. It is not the primary Alternate Discovery result.")
+                lines.append("")
+                lines.append("| window | rows | resolved | W-L-P | WR | ROI | units |")
+                lines.append("|---|---:|---:|---:|---:|---:|---:|")
+                diagnostic_by_window = {str(row.get("window") or ""): row for row in diagnostic_rows}
+                for window in report_windows:
+                    row = diagnostic_by_window.get(window)
+                    if not row:
+                        continue
+                    lines.append(
+                        f"| {window} | `{row.get('rows')}` | `{row.get('resolved')}` | "
+                        f"`{row.get('wins')}-{row.get('losses')}-{row.get('pushes')}` | `{_fmt_pct(row.get('wr'))}` | "
+                        f"`{_fmt_pct(row.get('roi'))}` | `{_fmt_num(row.get('units'))}` |"
+                    )
+                lines.append("")
     lines.append("")
     lines.append("## Requested Daily Callouts")
     lines.append("")
@@ -1062,6 +1517,8 @@ def _write_decision_performance_report(
         f"- Latest completed slate: `{summary.get('latest_completed_slate') or 'n/a'}`",
         f"- Board rows loaded: `{summary.get('board_rows_loaded')}`",
         f"- Rows matched to reconcile: `{summary.get('matched_rows')}`",
+        "",
+        "Denominator note: `hits_o15_alternate_discovery` uses the Official Player Outcome Denominator; other generated review boards retain the Reconcile-Market denominator unless explicitly documented otherwise.",
         "",
         "Layer names are provenance metadata in this report. They are intentionally moved to the appendix.",
         "",
@@ -1291,6 +1748,7 @@ def main() -> int:
     by_board_path = out_dir / "review_aid_performance_by_board.csv"
     by_layer_path = out_dir / "review_aid_performance_by_layer.csv"
     by_tier_path = out_dir / "review_aid_performance_by_tier.csv"
+    reconcile_diagnostic_by_board_path = out_dir / "review_aid_performance_reconcile_market_diagnostic_by_board.csv"
     latest_path = out_dir / "review_aid_performance_latest_slate.csv"
     report_path = out_dir / "review_aid_performance_report.md"
     decision_report_path = out_dir / "review_aid_decision_performance_report.md"
@@ -1318,7 +1776,12 @@ def main() -> int:
         detail = f"missing completed-slate reconcile: {_rel(target_reconcile)}"
 
     indexes = _build_reconcile_indexes(reconcile_rows)
-    joined = _join_board_rows(board_rows, indexes)
+    reconcile_joined = _join_board_rows(board_rows, indexes)
+    reconcile_diagnostic_by_board, _, _ = _build_aggregates(reconcile_joined, latest) if latest else ([], [], [])
+    joined, alternate_official_meta = _apply_alternate_official_outcomes(reconcile_joined, latest) if latest else (reconcile_joined, {"status": "not_applicable"})
+    if alternate_official_meta.get("status") not in {"ok", "not_applicable"}:
+        status = "source_not_ready" if status == "ok" else status
+        detail = (detail + "; " if detail else "") + f"alternate official outcome denominator unavailable: {alternate_official_meta.get('source_error') or alternate_official_meta.get('status')}"
     latest_rows = [row for row in joined if str(row.get("board_date") or "")[:10] == latest]
     by_board, by_layer, by_tier = _build_aggregates(joined, latest) if latest else ([], [], [])
     (
@@ -1347,6 +1810,7 @@ def main() -> int:
             "by_board_csv": _rel(by_board_path),
             "by_layer_csv": _rel(by_layer_path),
             "by_tier_csv": _rel(by_tier_path),
+            "reconcile_market_diagnostic_by_board_csv": _rel(reconcile_diagnostic_by_board_path),
             "latest_slate_csv": _rel(latest_path),
             "report_md": _rel(report_path),
             "decision_report_md": _rel(decision_report_path),
@@ -1367,6 +1831,7 @@ def main() -> int:
             "u15_layer_2_latest": _row_for(by_layer, window="latest_completed_slate", board="u15_favorite_audit", layer="layer_2_d7_d15_no_tough_starter"),
             "u15_aa_latest": _row_for(by_tier, window="latest_completed_slate", board="u15_favorite_audit", tier_type="combined_tier", tier="A/A"),
         },
+        "alternate_discovery_official_denominator": alternate_official_meta,
     }
     u15_unmatched = [row for row in joined if row.get("board") == "u15_favorite_audit" and row.get("join_status") != "matched"]
 
@@ -1374,6 +1839,7 @@ def main() -> int:
     _write_csv(by_board_path, by_board)
     _write_csv(by_layer_path, by_layer)
     _write_csv(by_tier_path, by_tier)
+    _write_csv(reconcile_diagnostic_by_board_path, reconcile_diagnostic_by_board)
     _write_csv(latest_path, latest_rows)
     _write_csv(decision_universe_path, decision_universe)
     _write_csv(decision_population_path, decision_population)
@@ -1399,7 +1865,7 @@ def main() -> int:
             "join_key_used",
         ],
     )
-    _write_report(report_path, summary, by_board, by_layer, by_tier)
+    _write_report(report_path, summary, by_board, by_layer, by_tier, reconcile_diagnostic_by_board)
     _write_decision_performance_report(
         decision_report_path,
         summary=summary,

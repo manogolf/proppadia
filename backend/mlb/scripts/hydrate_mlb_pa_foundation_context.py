@@ -176,50 +176,30 @@ rolling AS (
     ) AS rn
   FROM dates d
   JOIN mlb.player_derived_stats pds
-    ON pds.game_date <= d.artifact_date
+    ON pds.game_date < d.artifact_date
    AND pds.player_id IN (SELECT player_id FROM wanted)
   WHERE pds.d7_plate_appearances IS NOT NULL
      OR pds.d15_plate_appearances IS NOT NULL
      OR pds.d30_plate_appearances IS NOT NULL
 ),
-direct AS (
-  SELECT
-    ps.game_date::date AS artifact_date,
-    ps.player_id,
-    ps.plate_appearances,
-    ps.hit_by_pitch,
-    ps.sacrifice_flies,
-    ps.sacrifice_hits,
-    ps.catcher_interference,
-    ps.pa_source,
-    ps.pa_backfilled_at
-  FROM mlb.player_stats ps
-  WHERE ps.game_date >= %s::date
-    AND ps.game_date <= %s::date
-    AND ps.player_id IN (SELECT player_id FROM wanted)
-    AND COALESCE(ps.position, '') <> 'P'
-)
 SELECT
   r.artifact_date,
   r.player_id,
-  d.plate_appearances,
-  d.hit_by_pitch,
-  d.sacrifice_flies,
-  d.sacrifice_hits,
-  d.catcher_interference,
-  d.pa_source,
-  d.pa_backfilled_at,
+  NULL::integer AS plate_appearances,
+  NULL::integer AS hit_by_pitch,
+  NULL::integer AS sacrifice_flies,
+  NULL::integer AS sacrifice_hits,
+  NULL::integer AS catcher_interference,
+  NULL::text AS pa_source,
+  NULL::timestamptz AS pa_backfilled_at,
   r.d7_plate_appearances,
   r.d15_plate_appearances,
   r.d30_plate_appearances,
   r.pa_context_date
 FROM rolling r
-LEFT JOIN direct d
-  ON d.artifact_date = r.artifact_date
- AND d.player_id = r.player_id
 WHERE r.rn = 1
 """,
-        (player_ids, start_date, end_date, start_date, end_date),
+        (player_ids, start_date, end_date),
     )
     out: dict[tuple[str, int], dict[str, Any]] = {}
     for row in rows or []:

@@ -236,21 +236,34 @@ def _load_pds_context(
     select_cols = ",\n  ".join(f"pds.{col}::float8 AS {col}" for col in source_fields)
     rows = pg_fetchall(
         f"""
+WITH dates AS (
+  SELECT generate_series(%s::date, %s::date, interval '1 day')::date AS artifact_date
+),
+ranked AS (
 SELECT
+  d.artifact_date,
   pds.game_date::date AS game_date,
   pds.player_id,
-  {select_cols}
-FROM mlb.player_derived_stats pds
-WHERE pds.game_date >= %s::date
-  AND pds.game_date <= %s::date
-  AND pds.player_id = ANY(%s)
+  {select_cols},
+  ROW_NUMBER() OVER (
+    PARTITION BY d.artifact_date, pds.player_id
+    ORDER BY pds.game_date DESC
+  ) AS rn
+FROM dates d
+JOIN mlb.player_derived_stats pds
+  ON pds.game_date < d.artifact_date
+ AND pds.player_id = ANY(%s)
+)
+SELECT *
+FROM ranked
+WHERE rn = 1
 """,
         (start_date, end_date, player_ids),
     )
     out: dict[tuple[str, int], dict[str, Any]] = {}
     for row in rows or []:
         player_id = _i(row.get("player_id"))
-        date_text = str(row.get("game_date") or "")[:10]
+        date_text = str(row.get("artifact_date") or "")[:10]
         if player_id is None or not date_text:
             continue
         out[(date_text, player_id)] = dict(row)
@@ -425,7 +438,7 @@ def _write_plan(path: Path, payload: dict[str, Any]) -> None:
         f"- Generated at: `{payload['generated_at']}`",
         f"- Date range: `{payload['start_date']}` through `{payload['end_date']}`",
         "- Target artifacts: `artifacts/analysis/mlb/execution_vs_model/<date>/reconcile_rows.csv`",
-        "- Source: `mlb.player_derived_stats`, joined by `game_date + player_id`.",
+        "- Source: `mlb.player_derived_stats`, joined by latest `pds.game_date < artifact_date` plus `player_id`.",
         "- Mode: fill missing/null rolling-context cells only; existing non-null context is preserved.",
         "- Guardrails: row counts, protected fields, and non-context fields are hash-checked before write.",
         "- Final 8rain upload files are not touched.",

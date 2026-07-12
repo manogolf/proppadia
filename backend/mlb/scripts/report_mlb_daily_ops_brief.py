@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -120,6 +121,89 @@ def _load_json(path: Path) -> Tuple[Optional[Any], Optional[str]]:
         return json.loads(path.read_text(encoding="utf-8")), None
     except Exception as exc:
         return None, f"error:{type(exc).__name__}"
+
+
+def _resolve_rolling_candidate_obs_mode(raw_mode: Any, *, force_enabled: bool) -> str:
+    if force_enabled:
+        return "explicit_enabled"
+    raw = str(raw_mode if raw_mode is not None else "").strip().lower()
+    if raw in {"1", "true", "yes", "y", "on", "enabled"}:
+        return "explicit_enabled"
+    if raw in {"0", "false", "no", "n", "off", "disabled"}:
+        return "disabled"
+    return "auto_detected"
+
+
+def _load_optional_rolling_candidate_obs(path: Path, *, mode: str, expected_date: str) -> Dict[str, Any]:
+    source_mtime = _path_mtime_utc(path)
+    if mode == "disabled":
+        return {
+            "enabled": False,
+            "source_state": "disabled",
+            "source_path": str(path),
+            "rolling_observation_mode": "disabled",
+            "rolling_observation_source": str(path),
+            "rolling_observation_source_mtime": source_mtime,
+        }
+    raw, err = _load_json(path)
+    if err:
+        enabled = mode == "explicit_enabled"
+        return {
+            "enabled": enabled,
+            "source_state": f"warn_{err}" if enabled else f"unavailable_{err}",
+            "source_path": str(path),
+            "warning": f"Rolling market-late observation artifact unavailable: {err}",
+            "rolling_observation_mode": mode if enabled else "unavailable",
+            "rolling_observation_source": str(path),
+            "rolling_observation_source_mtime": source_mtime,
+        }
+    if not isinstance(raw, dict):
+        enabled = mode == "explicit_enabled"
+        return {
+            "enabled": enabled,
+            "source_state": "warn_invalid_payload" if enabled else "unavailable_invalid_payload",
+            "source_path": str(path),
+            "warning": "Rolling market-late observation artifact is not a JSON object.",
+            "rolling_observation_mode": mode if enabled else "unavailable",
+            "rolling_observation_source": str(path),
+            "rolling_observation_source_mtime": source_mtime,
+        }
+    payload_date = _date_key(raw.get("date") or raw.get("slate_date") or raw.get("current_slate_date"))
+    if expected_date and payload_date and payload_date != expected_date:
+        enabled = mode == "explicit_enabled"
+        return {
+            "enabled": enabled,
+            "source_state": "warn_stale_date" if enabled else "unavailable_stale_date",
+            "source_path": str(path),
+            "warning": (
+                f"Rolling market-late observation artifact date {payload_date} "
+                f"does not match current slate date {expected_date}."
+            ),
+            "rolling_observation_mode": mode if enabled else "unavailable",
+            "rolling_observation_source": str(path),
+            "rolling_observation_source_mtime": source_mtime,
+            "rolling_observation_payload_date": payload_date,
+        }
+    if expected_date and not payload_date:
+        enabled = mode == "explicit_enabled"
+        return {
+            "enabled": enabled,
+            "source_state": "warn_missing_date" if enabled else "unavailable_missing_date",
+            "source_path": str(path),
+            "warning": "Rolling market-late observation artifact does not declare a same-date slate date.",
+            "rolling_observation_mode": mode if enabled else "unavailable",
+            "rolling_observation_source": str(path),
+            "rolling_observation_source_mtime": source_mtime,
+        }
+    payload = dict(raw)
+    payload["enabled"] = True
+    payload["source_state"] = "ok"
+    payload["source_path"] = str(path)
+    payload["rolling_observation_mode"] = mode
+    payload["rolling_observation_source"] = str(path)
+    payload["rolling_observation_source_mtime"] = source_mtime
+    payload["rolling_observation_payload_date"] = payload_date
+    return payload
 
 
 def _load_last_jsonl(path: Path) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -1944,8 +2028,94 @@ def _format_category_separator(label: str) -> str:
     return f"### {label}"
 
 
+def _markdown_link_target(path: Path, *, relative_to_md: Path) -> str:
+    try:
+        base_dir = relative_to_md.parent if str(relative_to_md.parent) else Path(".")
+        return os.path.relpath(path, start=base_dir)
+    except Exception:
+        return str(path)
+
+
+def _format_artifact_markdown_link(label: str, raw_path: Any, *, relative_to_md: Path) -> str:
+    path_text = str(raw_path or "").strip()
+    if not path_text or path_text.lower() == "n/a":
+        return f"{label}: `unavailable`"
+    path = Path(path_text)
+    target = _markdown_link_target(path, relative_to_md=relative_to_md)
+    suffix = "" if path.exists() else " (missing)"
+    return f"{label}: [{label}]({target}){suffix}"
+
+
+def _append_rolling_candidate_obs_section(
+    lines: List[str],
+    payload: Dict[str, Any],
+    *,
+    ops_brief_md_path: Path,
+) -> None:
+    if not payload.get("enabled"):
+        return
+    lines.append("## Rolling Market-Late Candidate Observation")
+    state = str(payload.get("source_state") or "unknown")
+    lines.append(
+        f"- {_format_artifact_markdown_link('Ops Brief input JSON', payload.get('source_path'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append(
+        f"- Observation mode: `{payload.get('rolling_observation_mode') or 'unknown'}` | "
+        f"source mtime `{payload.get('rolling_observation_source_mtime') or 'n/a'}`"
+    )
+    if state != "ok":
+        lines.append(f"- Status: `WARN` | {payload.get('warning') or state}")
+        lines.append("")
+        return
+    lines.append("- Status: `OBSERVATION_ONLY` | production uploads unchanged")
+    lines.append(
+        f"- Latest run tag: `{payload.get('latest_run_tag') or 'n/a'}` | "
+        f"runs inspected `{payload.get('runs_inspected', 'n/a')}`"
+    )
+    lines.append(
+        f"- Ledger rows `{payload.get('ledger_rows', 'n/a')}` | "
+        f"current projection rows `{payload.get('current_projection_rows', 'n/a')}` | "
+        f"current eligible rows `{payload.get('current_eligible_rows', 'n/a')}` | "
+        f"current Hits 1.5 rows `{payload.get('current_hits_15_rows', 'n/a')}`"
+    )
+    lines.append(
+        f"- Late-discovered current rows `{payload.get('current_late_discovered_rows', 'n/a')}` | "
+        f"historical disappeared rows `{payload.get('historical_disappeared_rows', 'n/a')}` | "
+        f"reappeared rows `{payload.get('reappeared_rows', 'n/a')}` | "
+        f"confirmed lineup overlays `{payload.get('confirmed_lineup_overlay_count', 'n/a')}`"
+    )
+    if "morning_candidates" in payload or "late_discovered_candidates" in payload:
+        lines.append(
+            f"- Morning candidates `{payload.get('morning_candidates', 'n/a')}` | "
+            f"late-discovered candidates `{payload.get('late_discovered_candidates', 'n/a')}` | "
+            f"current eligible late-discovered `{payload.get('current_eligible_late_discovered_candidates', 'n/a')}`"
+        )
+        lines.append(
+            f"- Hits 1.5 morning `{payload.get('hits_15_morning_count', 'n/a')}` | "
+            f"Hits 1.5 late-discovered `{payload.get('hits_15_late_discovered_count', 'n/a')}` | "
+            f"Hits 1.5 current eligible `{payload.get('hits_15_current_eligible_count', 'n/a')}`"
+        )
+    if payload.get("delta_summary_csv"):
+        lines.append(
+            f"- {_format_artifact_markdown_link('Delta summary CSV', payload.get('delta_summary_csv'), relative_to_md=ops_brief_md_path)}"
+        )
+    lines.append(
+        f"- {_format_artifact_markdown_link('Pivot source CSV', payload.get('pivot_source_csv'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append(
+        f"- {_format_artifact_markdown_link('Current projection CSV', payload.get('current_projection_csv'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append(
+        f"- {_format_artifact_markdown_link('Observation note', payload.get('rolling_observation_md') or payload.get('report_md'), relative_to_md=ops_brief_md_path)}"
+    )
+    if payload.get("upload_behavior"):
+        lines.append(f"- Upload behavior: `{payload.get('upload_behavior')}`")
+    lines.append("")
+
+
 def build_markdown(
     *,
+    ops_brief_md_path: Path,
     report_date: str,
     completed_slate_date: str,
     current_slate_date: str,
@@ -1973,6 +2143,7 @@ def build_markdown(
     model_performance: Dict[str, Any],
     reporting_alignment: Dict[str, Any],
     today_workspace: Dict[str, Any],
+    rolling_candidate_obs: Dict[str, Any],
     path_forward: Sequence[Dict[str, str]],
     source_states: Dict[str, Any],
     freshness_audit: Sequence[Dict[str, Any]],
@@ -2473,10 +2644,12 @@ def build_markdown(
         display_label = f"{label} ({descriptions[label]})" if label in descriptions else label
         if not row:
             return f"- {display_label}: no latest completed slate rows."
+        denominator = str(row.get("denominator") or "").strip()
+        denominator_note = f"; denominator `{denominator}`" if denominator else ""
         return (
             f"- {display_label}: `{row.get('wins', 0)}-{row.get('losses', 0)}-{row.get('pushes', 0)}` "
             f"ROI `{_pct(row.get('roi'))}` over `{row.get('resolved', 0)}` resolved "
-            f"(rows `{row.get('rows', 0)}`)."
+            f"(rows `{row.get('rows', 0)}`{denominator_note})."
         )
 
     callouts = review_aid_performance.get("callouts") if isinstance(review_aid_performance.get("callouts"), dict) else {}
@@ -2789,6 +2962,7 @@ def build_markdown(
             lines.append(f"retry_attempted: {diag.get('retry_attempted')}")
             lines.append(f"retry_succeeded: {diag.get('retry_succeeded')}")
     lines.append("")
+    _append_rolling_candidate_obs_section(lines, rolling_candidate_obs, ops_brief_md_path=ops_brief_md_path)
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -2869,6 +3043,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--out-json", default="artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json")
     ap.add_argument("--history-jsonl", default="artifacts/analysis/mlb/mlb_daily_ops_brief_history.jsonl")
     ap.add_argument(
+        "--rolling-candidate-obs-json",
+        default="",
+        help="Optional rolling market-late observation JSON path. Used only when the section is enabled.",
+    )
+    ap.add_argument(
+        "--rolling-candidate-obs-mode",
+        default="",
+        help="Rolling market-late observation mode: auto, 1/true, or 0/false.",
+    )
+    ap.add_argument(
+        "--enable-rolling-candidate-obs",
+        action="store_true",
+        help="Opt in to the Rolling Market-Late Candidate Observation section.",
+    )
+    ap.add_argument(
         "--skip-today-workspace-fetch",
         action="store_true",
         help="Render from cached Today Workspace status instead of opening DB/API dependencies.",
@@ -2879,6 +3068,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     report_date = _date_key(args.report_date) or date.today().isoformat()
     completed_slate_date = _date_key(args.completed_slate_date) or _previous_date(report_date)
     current_slate_date = _date_key(args.current_slate_date) or report_date
+    rolling_candidate_obs_mode = _resolve_rolling_candidate_obs_mode(
+        args.rolling_candidate_obs_mode or os.environ.get("MLB_ENABLE_ROLLING_CANDIDATE_OBS"),
+        force_enabled=args.enable_rolling_candidate_obs,
+    )
+    rolling_candidate_obs_path = Path(
+        args.rolling_candidate_obs_json
+        or os.environ.get("MLB_ROLLING_CANDIDATE_OBS_JSON", "")
+        or (
+            "artifacts/analysis/mlb/market_late_candidate_discovery/"
+            f"rolling_observation_{current_slate_date}/"
+            f"rolling_candidate_ops_brief_input_{current_slate_date}.json"
+        )
+    )
 
     paths: Dict[str, Path] = {
         "postgrade_alerts_json": Path(args.postgrade_alerts_json),
@@ -2897,6 +3099,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "input_refresh_status_json": Path(args.input_refresh_status_json),
         "pipeline_history_jsonl": Path(args.pipeline_history_jsonl),
         "ops_history_jsonl": Path(args.ops_history_jsonl),
+        "rolling_candidate_obs_json": rolling_candidate_obs_path,
     }
     paths["total_bases_shadow_summary_json"] = Path(
         str(args.total_bases_shadow_summary_json).format(
@@ -2972,6 +3175,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     input_refresh_status, input_refresh_err = _load_json(paths["input_refresh_status_json"])
     pipeline_raw, pipeline_err = _load_last_jsonl(paths["pipeline_history_jsonl"])
     ops_raw, ops_err = _load_last_jsonl(paths["ops_history_jsonl"])
+    rolling_candidate_obs = _load_optional_rolling_candidate_obs(
+        paths["rolling_candidate_obs_json"],
+        mode=rolling_candidate_obs_mode,
+        expected_date=current_slate_date,
+    )
     if args.skip_today_workspace_fetch:
         today_workspace, today_workspace_err = _cached_today_workspace_status(
             slate_date=current_slate_date,
@@ -3108,7 +3316,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hits_env=hits_env,
     )
 
+    out_md = Path(args.out_md)
     md_text = build_markdown(
+        ops_brief_md_path=out_md,
         report_date=report_date,
         completed_slate_date=completed_slate_date,
         current_slate_date=current_slate_date,
@@ -3136,6 +3346,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_performance=model_performance,
         reporting_alignment=reporting_alignment,
         today_workspace=today_workspace,
+        rolling_candidate_obs=rolling_candidate_obs,
         path_forward=path_forward,
         source_states=source_states,
         freshness_audit=freshness_audit,
@@ -3181,15 +3392,52 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "history_jsonl": str(args.history_jsonl),
         },
     }
+    if rolling_candidate_obs_mode != "disabled":
+        payload["rolling_candidate_observation"] = rolling_candidate_obs
 
-    out_md = Path(args.out_md)
     _ensure_parent(out_md)
     out_md.write_text(md_text, encoding="utf-8")
 
     if str(args.dated_out_md).strip():
         dated_md = Path(str(args.dated_out_md).strip())
         _ensure_parent(dated_md)
-        dated_md.write_text(md_text, encoding="utf-8")
+        dated_md_text = md_text
+        if dated_md.parent != out_md.parent:
+            dated_md_text = build_markdown(
+                ops_brief_md_path=dated_md,
+                report_date=report_date,
+                completed_slate_date=completed_slate_date,
+                current_slate_date=current_slate_date,
+                generated_at_utc=generated_at_utc,
+                overall_status=overall_status,
+                overall_issues=overall_issues,
+                pipeline=pipeline,
+                ops=ops,
+                postgrade=postgrade,
+                model_vs_fade=model_vs_fade,
+                bvp_impact=bvp_impact,
+                hits_env=hits_env,
+                overlap_watch=overlap_watch,
+                qc_bottom_order_watch=qc_bottom_order_watch,
+                hits_o15_watch_candidates=hits_o15_watch_candidates,
+                hits_o15_layered_candidates=hits_o15_layered_candidates,
+                hits_u15_favorite_audit=hits_u15_favorite_audit,
+                hits_o15_alternate_discovery=hits_o15_alternate_discovery,
+                hits_15_tier_backtest=hits_15_tier_backtest,
+                review_aid_performance=review_aid_performance,
+                total_bases_shadow_summary=total_bases_shadow_summary,
+                total_bases_shadow_evaluation=total_bases_shadow_evaluation,
+                feature_lineage_health=feature_lineage_health,
+                prop_regime=prop_regime,
+                model_performance=model_performance,
+                reporting_alignment=reporting_alignment,
+                today_workspace=today_workspace,
+                rolling_candidate_obs=rolling_candidate_obs,
+                path_forward=path_forward,
+                source_states=source_states,
+                freshness_audit=freshness_audit,
+            )
+        dated_md.write_text(dated_md_text, encoding="utf-8")
 
     out_json = Path(args.out_json)
     _ensure_parent(out_json)

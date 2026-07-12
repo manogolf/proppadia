@@ -29,6 +29,7 @@ If the question is “what is the active runtime path right now?”:
 
 - `docs/PROJECT_DOCTRINE.md`: permanent engineering doctrine for durable features, backfills, daily sustainability, visibility, and regression monitoring.
 - `docs/FEATURE_COMPLETION_CHECKLIST.md`: copyable checklist for marking any feature complete.
+- `docs/model_development/champion_challenger_experiment_specification.md`: cross-sport governance spec for freezing champion baselines, proposing challengers, evaluating results, and classifying promotion decisions.
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.
 - `docs/Execution Plan.md`: forward execution plan derived from as-built baseline.
 - `docs/As Built Snapshot.md`: current deployed/runtime as-built summary.
