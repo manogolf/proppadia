@@ -516,7 +516,7 @@ def _write_outputs(
 def build(args: argparse.Namespace) -> dict[str, Any]:
     date_value = args.date
     run_tag = args.run_tag or _default_run_tag()
-    generated_at = _utc_now()
+    generated_at = args.generated_at_utc or _utc_now()
     out_root = Path(args.output_root)
     run_dir = out_root / date_value / "runs" / run_tag
     latest_dir = out_root / date_value / "latest"
@@ -597,6 +597,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--no-db", action="store_true", help="Do not read DB; requires --pitcher-history-csv.")
     parser.add_argument("--strict-prior-only", action="store_true")
+    parser.add_argument("--generated-at-utc", default="", help="Optional deterministic timestamp override for research replay/pilots.")
     return parser.parse_args(argv)
 
 
