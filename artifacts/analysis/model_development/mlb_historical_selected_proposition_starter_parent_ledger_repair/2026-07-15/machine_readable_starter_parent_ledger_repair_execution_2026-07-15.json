@@ -1,0 +1,25 @@
+{
+  "MLB_STARTER_PARENT_LEDGER_REPAIR_EXECUTION_DECISION": "EXECUTED_EXACT_26_ROW_STARTER_PARENT_LEDGER_ACCOUNTING_AND_QUALIFICATION_REPAIR",
+  "MLB_STARTER_PARENT_LEDGER_SIDE_CERTIFICATION_DECISION": "ALL_3_GOVERNED_SIDES_CERTIFIED",
+  "STARTER_POST_PARENT_LEDGER_REPAIR_CUMULATIVE_STATE": "CERTIFIED",
+  "active_platform_code": "unchanged",
+  "cumulative_totals": {
+    "fully_qualified_hits": 1523,
+    "fully_qualified_hits_0_5": 1383,
+    "fully_qualified_hits_1_5": 140,
+    "primary_bundle_blocked": 36,
+    "primary_multiple_downstream_blocked": 3,
+    "primary_outcome_blocked": 363,
+    "primary_pa_blocked": 36,
+    "primary_starter_blocked": 85,
+    "qualified_but_not_matrix_hits_1_5_queue": 41
+  },
+  "downstream_pa_blockers_preserved": 3,
+  "generated_at": "2026-07-15T00:00:00+00:00",
+  "governed_sides_certified": 3,
+  "next_bounded_research_priority": "residual Starter-blocked triage from certified child state",
+  "rows_newly_fully_qualified": 23,
+  "rows_starter_qualified": 26,
+  "source_fields_admitted": 36,
+  "starter_values_recomputed": false
+}

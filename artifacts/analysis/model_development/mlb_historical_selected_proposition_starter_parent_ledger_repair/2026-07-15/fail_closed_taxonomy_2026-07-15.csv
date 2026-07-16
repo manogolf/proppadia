@@ -1,0 +1,5 @@
+taxonomy,count,notes
+side_fail_closed,0,no governed side failed closed
+row_no_movement_side_fail_closed,0,no row blocked by side failure
+row_no_movement_evidence_conflict,0,no row blocked by evidence conflict
+downstream_pa_blocked_preserved,3,downstream PA not repaired

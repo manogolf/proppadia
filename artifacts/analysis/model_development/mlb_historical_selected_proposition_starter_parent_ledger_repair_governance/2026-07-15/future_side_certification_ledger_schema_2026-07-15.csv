@@ -1,0 +1,10 @@
+ledger_schema,column_name,required,notes
+side_certification,governed_side,true,future execution ledger schema only
+side_certification,pitcher_identity,true,future execution ledger schema only
+side_certification,game_identity,true,future execution ledger schema only
+side_certification,required_fields,true,future execution ledger schema only
+side_certification,admitted_fields,true,future execution ledger schema only
+side_certification,version_check,true,future execution ledger schema only
+side_certification,grain_check,true,future execution ledger schema only
+side_certification,certification_result,true,future execution ledger schema only
+side_certification,failure_reason,true,future execution ledger schema only

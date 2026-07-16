@@ -1,0 +1,16 @@
+approval_boundary,future_status,this_task_status
+one bounded local join/materialization-ledger repair for exact 3 sides and 26 rows,MAY_BE_APPROVED_SEPARATELY,NOT_EXECUTED
+exact qualification propagation using already-saved Starter values,MAY_BE_APPROVED_SEPARATELY,NOT_EXECUTED
+creation of one cumulative certified child state,MAY_BE_APPROVED_SEPARATELY,NOT_EXECUTED
+source acquisition,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+field reconstruction,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+formula changes,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+platform-wide code repair,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+daily or production behavior changes,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+PA Outcome Bundle remediation,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+Variant C resolution,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+matrix construction,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+model training or scoring,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+uploads,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+database writes,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED
+LaunchAgent changes,NOT_AUTHORIZED_BY_THIS_GOVERNANCE,PROHIBITED

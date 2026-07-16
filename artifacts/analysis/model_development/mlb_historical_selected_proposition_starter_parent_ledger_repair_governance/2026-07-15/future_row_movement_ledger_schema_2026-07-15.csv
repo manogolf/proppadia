@@ -1,0 +1,12 @@
+ledger_schema,column_name,required,notes
+row_movement,canonical_denominator_identity,true,future execution ledger schema only
+row_movement,governed_side,true,future execution ledger schema only
+row_movement,parent_state_starter_status,true,future execution ledger schema only
+row_movement,source_admission_result,true,future execution ledger schema only
+row_movement,side_certification_result,true,future execution ledger schema only
+row_movement,post_repair_starter_status,true,future execution ledger schema only
+row_movement,pre_full_qualification_status,true,future execution ledger schema only
+row_movement,post_full_qualification_status,true,future execution ledger schema only
+row_movement,downstream_blocker,true,future execution ledger schema only
+row_movement,hits_line,true,future execution ledger schema only
+row_movement,provenance,true,future execution ledger schema only

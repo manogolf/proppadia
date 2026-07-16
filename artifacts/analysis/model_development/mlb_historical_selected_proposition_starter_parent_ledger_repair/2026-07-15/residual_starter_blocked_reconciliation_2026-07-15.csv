@@ -1,0 +1,7 @@
+primary_residual_category,pre_repair_side_count_in_residual_review,pre_repair_row_count_in_residual_review,rows_removed_by_this_repair,sides_removed_by_this_repair,post_repair_side_count_in_residual_review_taxonomy,post_repair_row_count_in_residual_review_taxonomy,notes
+STARTER_CERTIFIED_BUT_PRIMARY_BLOCKER_ACCOUNTING_ARTIFACT,13,104,0,0,13,104,taxonomy reconciliation only; no next residual branch started
+ESTABLISHED_SPECIAL_REGIME_EXCLUSION,7,46,0,0,7,46,taxonomy reconciliation only; no next residual branch started
+STARTER_PARENT_DOMAIN_MISSING_OTHER,3,26,26,3,0,0,taxonomy reconciliation only; no next residual branch started
+LOCAL_PARENT_CONSTRUCTION_OR_PERSISTENCE_DEFECT,2,17,0,0,2,17,taxonomy reconciliation only; no next residual branch started
+IDENTITY_OR_ROLE_REVIEW_HOLDOUT,3,23,0,0,3,23,taxonomy reconciliation only; no next residual branch started
+ZERO_PRIOR_MLB_START_HISTORY_FAIL_CLOSED,2,16,0,0,2,16,taxonomy reconciliation only; no next residual branch started

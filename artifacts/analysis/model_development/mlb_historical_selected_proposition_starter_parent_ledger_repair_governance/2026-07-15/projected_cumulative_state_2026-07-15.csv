@@ -1,0 +1,10 @@
+metric,parent_state,projected_post_repair_state,delta
+fully_qualified_hits,1500,1523,23
+fully_qualified_hits_0_5,1360,1383,23
+fully_qualified_hits_1_5,140,140,0
+primary_starter_blocked,111,85,-26
+primary_pa_blocked,33,36,3
+primary_outcome_blocked,363,363,0
+primary_bundle_blocked,36,36,0
+primary_multiple_downstream_blocked,3,3,0
+qualified_but_not_matrix_hits_1_5_queue,41,41,0

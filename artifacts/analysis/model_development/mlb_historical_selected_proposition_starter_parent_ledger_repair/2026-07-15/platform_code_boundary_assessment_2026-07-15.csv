@@ -1,0 +1,7 @@
+scope,status,notes
+historical_selected_proposition,REPAIRED_IN_CHILD_STATE,exact 26 governed rows only
+active_platform_code,UNCHANGED,separate approval required if reusable code repair is pursued
+daily_feature_paths,UNCHANGED,no daily path touched
+production_schemas,UNCHANGED,no schema change
+scheduled_jobs,UNCHANGED,no LaunchAgent or wrapper change
+future_processing,NOT_CLAIMED_FIXED,historical ledger repair does not fix future materialization

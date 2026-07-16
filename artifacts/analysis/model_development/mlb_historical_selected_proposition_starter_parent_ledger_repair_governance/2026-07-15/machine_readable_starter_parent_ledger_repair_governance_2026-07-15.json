@@ -1,0 +1,28 @@
+{
+  "MLB_STARTER_PARENT_LEDGER_REPAIR_GOVERNANCE_DECISION": "FREEZE_EXACT_26_ROW_STARTER_LEDGER_REPAIR_GOVERNANCE",
+  "MLB_STARTER_PARENT_LEDGER_REPAIR_PLATFORM_SCOPE_DECISION": "HISTORICAL_SELECTED_PROPOSITION_ONLY_ACTIVE_PLATFORM_CODE_REPAIR_SEPARATE_APPROVAL_REQUIRED_IF_PURSUED",
+  "MLB_STARTER_PARENT_LEDGER_REPAIR_STATUS": "FROZEN_AWAITING_EXPLICIT_ACCOUNTING_AND_QUALIFICATION_REPAIR_APPROVAL",
+  "generated_at": "2026-07-15T00:00:00+00:00",
+  "governed_rows": 26,
+  "governed_sides": 3,
+  "prohibited_work": {
+    "matrix_model_upload_db_api_launchagent_production_change": "not_performed",
+    "qualification_propagation": "not_performed",
+    "repair_execution": "not_performed",
+    "value_materialization": "not_performed"
+  },
+  "projected_cumulative": {
+    "fully_qualified_hits": 1523,
+    "fully_qualified_hits_0_5": 1383,
+    "fully_qualified_hits_1_5": 140,
+    "primary_bundle_blocked": 36,
+    "primary_multiple_downstream_blocked": 3,
+    "primary_outcome_blocked": 363,
+    "primary_pa_blocked": 36,
+    "primary_starter_blocked": 85,
+    "qualified_but_not_matrix_hits_1_5_queue": 41
+  },
+  "projected_newly_fully_qualified": 23,
+  "projected_pa_blocked": 3,
+  "projected_starter_qualified": 26
+}

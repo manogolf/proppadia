@@ -1,0 +1,14 @@
+ledger_schema,column_name,required,notes
+source_admission,side_identity,true,future execution ledger schema only
+source_admission,source_row_identity,true,future execution ledger schema only
+source_admission,source_package_sha,true,future execution ledger schema only
+source_admission,source_field,true,future execution ledger schema only
+source_admission,target_qualification_field,true,future execution ledger schema only
+source_admission,source_grain,true,future execution ledger schema only
+source_admission,target_grain,true,future execution ledger schema only
+source_admission,join_key,true,future execution ledger schema only
+source_admission,alias,true,future execution ledger schema only
+source_admission,saved_value,true,future execution ledger schema only
+source_admission,temporal_proof,true,future execution ledger schema only
+source_admission,admission_result,true,future execution ledger schema only
+source_admission,fail_closed_reason,true,future execution ledger schema only

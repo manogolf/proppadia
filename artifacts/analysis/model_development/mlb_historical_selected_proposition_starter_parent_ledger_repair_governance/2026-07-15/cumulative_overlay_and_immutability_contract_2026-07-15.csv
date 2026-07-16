@@ -1,0 +1,10 @@
+contract,rule,status
+parent_state,current certified research state is sole parent,FROZEN
+source_inputs,authoritative Starter payloads are immutable inputs,FROZEN
+repair_ledger,one exact repair ledger only,FROZEN
+row_movement_overlay,one exact row-level movement overlay,FROZEN
+old_state_mutation,prohibited,FROZEN
+source_artifact_mutation,prohibited,FROZEN
+matrix_mutation,prohibited,FROZEN
+child_state,one new cumulative post-repair certified state if separately approved,FROZEN
+replay,deterministic replay and parent-child SHA lineage required,FROZEN

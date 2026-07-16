@@ -1,0 +1,6 @@
+scope,matching_side_count,matching_row_count,dates_affected,historical_vs_daily,already_qualified_rows_affected,matrix_queue_overlap,responsible_code_path_currently_active,reusable_platform_code_repair_justified,notes
+remaining_starter_blocked_population,3,26,2026-07-01;2026-07-03;2026-07-06,historical_selected_proposition,0,0,unknown_not_modified,separate_review_required,exact target class
+already_qualified_historical_rows,3,10,see source artifact,historical_selected_proposition,10,0,unknown_not_modified,separate_review_required,research rows exist with same sides and Starter parents
+hits_1_5_matrix_queue,0,0,see source artifact,historical_selected_proposition,0,0,unknown_not_modified,separate_review_required,none expected; target is Hits 0.5
+broader_starter_research_artifacts,3,3,see source artifact,historical_selected_proposition,0,0,unknown_not_modified,separate_review_required,all three sides present in starter-game base
+current_daily_prepared_feature_paths,not_tested,not_tested,see source artifact,not tested,0,0,unknown_not_modified,separate_review_required,no daily path changes or production inference performed

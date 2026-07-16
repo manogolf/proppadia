@@ -1,0 +1,39 @@
+{
+  "STARTER_POST_PARENT_LEDGER_REPAIR_CUMULATIVE_STATE": "CERTIFIED",
+  "after_totals": {
+    "fully_qualified_hits": 1523,
+    "fully_qualified_hits_0_5": 1383,
+    "fully_qualified_hits_1_5": 140,
+    "primary_bundle_blocked": 36,
+    "primary_multiple_downstream_blocked": 3,
+    "primary_outcome_blocked": 363,
+    "primary_pa_blocked": 36,
+    "primary_starter_blocked": 85,
+    "qualified_but_not_matrix_hits_1_5_queue": 41
+  },
+  "before_totals": {
+    "fully_qualified_hits": 1500,
+    "fully_qualified_hits_0_5": 1360,
+    "fully_qualified_hits_1_5": 140,
+    "primary_bundle_blocked": 36,
+    "primary_multiple_downstream_blocked": 3,
+    "primary_outcome_blocked": 363,
+    "primary_pa_blocked": 33,
+    "primary_starter_blocked": 111,
+    "qualified_but_not_matrix_hits_1_5_queue": 41
+  },
+  "generated_at": "2026-07-15T00:00:00+00:00",
+  "lineage": {
+    "governance_package": "artifacts/analysis/model_development/mlb_historical_selected_proposition_starter_parent_ledger_repair_governance/2026-07-15",
+    "row_movement_ledger": "artifacts/analysis/model_development/mlb_historical_selected_proposition_starter_parent_ledger_repair/2026-07-15/row_level_movement_ledger_2026-07-15.csv",
+    "sole_parent": "artifacts/analysis/model_development/mlb_low_sample_research_pitcher_base_17_row_remediation/2026-07-15/certified_cumulative_research_state_2026-07-15.json",
+    "source_values": "artifacts/analysis/model_development/mlb_historical_selected_proposition_starter_parent_ledger_repair_governance/2026-07-15/authoritative_starter_parent_manifest_2026-07-15.csv"
+  },
+  "movement": {
+    "STARTER_LEDGER_REPAIR_TO_FULLY_QUALIFIED": 23,
+    "STARTER_LEDGER_REPAIR_TO_PA_BLOCKED": 3
+  },
+  "parent_state_package": "artifacts/analysis/model_development/mlb_low_sample_research_pitcher_base_17_row_remediation/2026-07-15",
+  "parent_state_sha256": "2713ebdc96849b13b1a0edbc40b0da4bad0e6862bf8177bf023dff9c180c7d25",
+  "repair_execution_package": "artifacts/analysis/model_development/mlb_historical_selected_proposition_starter_parent_ledger_repair/2026-07-15"
+}

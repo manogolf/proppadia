@@ -1,0 +1,17 @@
+metric,frozen_projection,realized,variance,variance_reason
+governed_sides_attempted,3,3,0,none
+sides_certified,3,3,0,none
+sides_fail_closed,0,0,0,none
+governed_rows_accounted_for,26,26,0,none
+authoritative_source_fields_admitted,,36,,not_projected_metric
+admission_failures,,0,,not_projected_metric
+rows_starter_qualified,26,26,0,none
+rows_still_starter_blocked,,0,,not_projected_metric
+rows_newly_fully_qualified,23,23,0,none
+hits_0_5_additions,23,23,0,none
+hits_1_5_additions,0,0,0,none
+rows_moved_to_pa_blocked,3,3,0,none
+rows_moved_to_outcome_blocked,,0,,not_projected_metric
+rows_moved_to_bundle_blocked,,0,,not_projected_metric
+rows_moved_to_multiple_downstream_blockers,,0,,not_projected_metric
+matrix_queue_additions,0,0,0,none
