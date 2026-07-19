@@ -206,6 +206,40 @@ def _load_optional_rolling_candidate_obs(path: Path, *, mode: str, expected_date
     return payload
 
 
+def _load_optional_betonline_capture_integrity(path: Path, *, expected_date: str) -> Dict[str, Any]:
+    source_mtime = _path_mtime_utc(path)
+    raw, err = _load_json(path)
+    if err:
+        return {
+            "enabled": False,
+            "source_state": f"unavailable_{err}",
+            "source_path": str(path),
+            "source_mtime": source_mtime,
+        }
+    if not isinstance(raw, dict):
+        return {
+            "enabled": False,
+            "source_state": "unavailable_invalid_payload",
+            "source_path": str(path),
+            "source_mtime": source_mtime,
+        }
+    payload_date = _date_key(raw.get("slate_date"))
+    if expected_date and payload_date and payload_date != expected_date:
+        return {
+            "enabled": False,
+            "source_state": "unavailable_stale_date",
+            "source_path": str(path),
+            "source_mtime": source_mtime,
+            "payload_date": payload_date,
+        }
+    payload = dict(raw)
+    payload["enabled"] = True
+    payload["source_state"] = "ok"
+    payload["source_path"] = str(path)
+    payload["source_mtime"] = source_mtime
+    return payload
+
+
 def _load_last_jsonl(path: Path) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     try:
         if not path.exists():
@@ -2113,6 +2147,61 @@ def _append_rolling_candidate_obs_section(
     lines.append("")
 
 
+def _append_betonline_capture_integrity_section(
+    lines: List[str],
+    payload: Dict[str, Any],
+    *,
+    ops_brief_md_path: Path,
+) -> None:
+    if not payload.get("enabled"):
+        return
+    lines.append("## BetOnline Player-Prop Capture Integrity")
+    lines.append(
+        f"- {_format_artifact_markdown_link('Daily semantic summary JSON', payload.get('source_path'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append(
+        f"- Daily classification: `{payload.get('daily_classification') or 'UNRESOLVED'}` | "
+        f"generated `{payload.get('generated_at_utc') or 'n/a'}`"
+    )
+    lines.append(
+        f"- Expected windows `{payload.get('expected_windows', 'n/a')}` | "
+        f"executed `{payload.get('executed_windows', 'n/a')}` | "
+        f"missing eligible `{payload.get('missing_eligible_windows', 'n/a')}`"
+    )
+    lines.append(
+        f"- Scheduler `{payload.get('scheduler_identity') or 'n/a'}` | "
+        f"stdout `{payload.get('stdout_log_path') or 'n/a'}` | "
+        f"stderr `{payload.get('stderr_log_path') or 'n/a'}` | "
+        f"last successful run `{payload.get('last_successful_run') or 'none'}`"
+    )
+    lines.append(
+        f"- Latest direct BetOnline player-prop capture: `{payload.get('latest_direct_betonline_player_prop_capture') or 'none'}`"
+    )
+    lines.append(
+        f"- Current outage status: `{payload.get('current_outage_status') or 'UNRESOLVED'}` | "
+        f"execution authorization `{payload.get('betonline_execution_authorization') or 'NOT_EXECUTABLE_MISSING_DIRECT_BETONLINE_PRICE'}`"
+    )
+    rows = payload.get("windows") if isinstance(payload.get("windows"), list) else []
+    lines.append("")
+    lines.append("| window PT | expected UTC | executed | semantic status | BetOnline rows | FanDuel rows | missing/partial markets | execution |")
+    lines.append("|---|---|---:|---|---:|---:|---|---|")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        missing = str(row.get("missing_or_partial_markets") or "none")
+        if len(missing) > 80:
+            missing = missing[:77] + "..."
+        lines.append(
+            f"| {row.get('expected_pacific_time') or 'n/a'} | {row.get('expected_utc_time') or 'n/a'} | "
+            f"{row.get('executed')} | `{row.get('semantic_status') or 'UNRESOLVED'}` | "
+            f"{row.get('betonline_rows', 0)} | {row.get('fanduel_rows', 0)} | "
+            f"{missing or 'none'} | `{row.get('betonline_execution_authorization') or 'n/a'}` |"
+        )
+    lines.append("")
+    lines.append("- Guardrail: missing direct BetOnline prices are `NOT_EXECUTABLE_MISSING_DIRECT_BETONLINE_PRICE`; FanDuel line-only proxy remains disabled and non-executable.")
+    lines.append("")
+
+
 def build_markdown(
     *,
     ops_brief_md_path: Path,
@@ -2144,6 +2233,7 @@ def build_markdown(
     reporting_alignment: Dict[str, Any],
     today_workspace: Dict[str, Any],
     rolling_candidate_obs: Dict[str, Any],
+    betonline_capture_integrity: Dict[str, Any],
     path_forward: Sequence[Dict[str, str]],
     source_states: Dict[str, Any],
     freshness_audit: Sequence[Dict[str, Any]],
@@ -2962,6 +3052,7 @@ def build_markdown(
             lines.append(f"retry_attempted: {diag.get('retry_attempted')}")
             lines.append(f"retry_succeeded: {diag.get('retry_succeeded')}")
     lines.append("")
+    _append_betonline_capture_integrity_section(lines, betonline_capture_integrity, ops_brief_md_path=ops_brief_md_path)
     _append_rolling_candidate_obs_section(lines, rolling_candidate_obs, ops_brief_md_path=ops_brief_md_path)
     return "\n".join(lines).rstrip() + "\n"
 
@@ -3053,6 +3144,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Rolling market-late observation mode: auto, 1/true, or 0/false.",
     )
     ap.add_argument(
+        "--betonline-capture-integrity-json",
+        default="",
+        help="Optional BetOnline semantic capture daily summary JSON path.",
+    )
+    ap.add_argument(
         "--enable-rolling-candidate-obs",
         action="store_true",
         help="Opt in to the Rolling Market-Late Candidate Observation section.",
@@ -3081,6 +3177,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"rolling_candidate_ops_brief_input_{current_slate_date}.json"
         )
     )
+    betonline_capture_integrity_path = Path(
+        args.betonline_capture_integrity_json
+        or os.environ.get("MLB_BETONLINE_CAPTURE_INTEGRITY_JSON", "")
+        or (
+            "artifacts/analysis/mlb/betonline_capture_integrity/"
+            f"{current_slate_date}/"
+            f"betonline_capture_integrity_daily_summary_{current_slate_date}.json"
+        )
+    )
 
     paths: Dict[str, Path] = {
         "postgrade_alerts_json": Path(args.postgrade_alerts_json),
@@ -3100,6 +3205,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "pipeline_history_jsonl": Path(args.pipeline_history_jsonl),
         "ops_history_jsonl": Path(args.ops_history_jsonl),
         "rolling_candidate_obs_json": rolling_candidate_obs_path,
+        "betonline_capture_integrity_json": betonline_capture_integrity_path,
     }
     paths["total_bases_shadow_summary_json"] = Path(
         str(args.total_bases_shadow_summary_json).format(
@@ -3180,6 +3286,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         mode=rolling_candidate_obs_mode,
         expected_date=current_slate_date,
     )
+    betonline_capture_integrity = _load_optional_betonline_capture_integrity(
+        paths["betonline_capture_integrity_json"],
+        expected_date=current_slate_date,
+    )
     if args.skip_today_workspace_fetch:
         today_workspace, today_workspace_err = _cached_today_workspace_status(
             slate_date=current_slate_date,
@@ -3214,6 +3324,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "input_refresh_status_json": input_refresh_err or "ok",
         "pipeline_history_jsonl": pipeline_err or "ok",
         "ops_history_jsonl": ops_err or "ok",
+        "betonline_capture_integrity_json": "ok" if betonline_capture_integrity.get("source_state") == "ok" else betonline_capture_integrity.get("source_state"),
         "today_workspace": today_workspace_err or "ok",
     }
 
@@ -3347,6 +3458,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         reporting_alignment=reporting_alignment,
         today_workspace=today_workspace,
         rolling_candidate_obs=rolling_candidate_obs,
+        betonline_capture_integrity=betonline_capture_integrity,
         path_forward=path_forward,
         source_states=source_states,
         freshness_audit=freshness_audit,
@@ -3383,6 +3495,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "total_bases_shadow_evaluation": total_bases_shadow_evaluation,
         "feature_lineage_health": feature_lineage_health,
         "today_workspace": today_workspace,
+        "betonline_capture_integrity": betonline_capture_integrity,
         "input_refresh_status": input_refresh_status,
         "path_forward": path_forward,
         "outputs": {
@@ -3433,6 +3546,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 reporting_alignment=reporting_alignment,
                 today_workspace=today_workspace,
                 rolling_candidate_obs=rolling_candidate_obs,
+                betonline_capture_integrity=betonline_capture_integrity,
                 path_forward=path_forward,
                 source_states=source_states,
                 freshness_audit=freshness_audit,

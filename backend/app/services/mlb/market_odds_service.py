@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from backend.domains.mlb.prop_workflow import normalize_prop_type
+from backend.mlb.shared.betonline_market_registry import active_prop_to_market_map
 
 ET = ZoneInfo("America/New_York")
 ODDS_BASE = "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds"
@@ -49,6 +50,10 @@ PROP_TO_ODDS_MARKET = {
     # - batter_first_home_run (yes/no)
     # - pitcher_record_a_win (yes/no)
 }
+
+# Keep the governed BetOnline modeling universe in the acquisition defaults even
+# when future edits touch the broader all-book prop map above.
+PROP_TO_ODDS_MARKET.update(active_prop_to_market_map())
 
 # Additional market-key aliases.
 # - Aliases for props that do not have a primary stable market mapping are always

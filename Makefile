@@ -146,6 +146,11 @@ MLB_FULL_SLATE_BY_PROP_CSV ?= $(MLB_EXEC_OUT_DIR)/full_slate_by_prop.csv
 MLB_FULL_SLATE_SNAPSHOT_POLICY ?= deduped_union
 MLB_FULL_SLATE_SNAPSHOT_RUN_TAG ?=
 MLB_FULL_SLATE_MIN_RESOLVED_ROWS ?= 0
+MLB_ENABLE_O15_PROSPECTIVE_GRADER ?= 1
+MLB_O15_PROSPECTIVE_GRADER_DATE ?= $(MLB_DAILY_RECONCILE_DATE)
+MLB_O15_PROSPECTIVE_GRADER_RUN_DATE ?= 2026-07-17
+MLB_O15_PROSPECTIVE_GRADER_RECONCILE_CSV ?= artifacts/analysis/mlb/execution_vs_model/$(MLB_O15_PROSPECTIVE_GRADER_DATE)/reconcile_rows.csv
+MLB_O15_PROSPECTIVE_GRADER_OUT_DIR ?= artifacts/analysis/model_development/mlb_o15_market_anchored_ranking_prospective
 MLB_PROBABILITY_CALIBRATION_JSON ?= artifacts/analysis/mlb/calibration/mlb_probability_calibrator.json
 MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD ?= 0
 MLB_CALIBRATION_TRAIN_CSV ?= tmp/mlb_base_vs_market_rows_anybook_window.csv
@@ -408,6 +413,18 @@ MLB_ROLLING_OBSERVATION_OUT_DIR ?= artifacts/analysis/mlb/market_late_candidate_
 MLB_ROLLING_OBSERVATION_INDEX_DATE ?= $(MLB_ROLLING_OBSERVATION_EFFECTIVE_DATE)
 MLB_ROLLING_OBSERVATION_ROOT ?= artifacts/analysis/mlb/market_late_candidate_discovery
 MLB_DAILY_ROLLING_OBS_REFRESH_BRIEF_INPUTS ?= 0
+MLB_ENABLE_LIVE_HITTER_PARENT_CAPTURE ?= 0
+MLB_LIVE_HITTER_PARENT_DATE ?= $(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE)
+MLB_LIVE_HITTER_PARENT_RUN_TAG ?=
+MLB_LIVE_HITTER_PARENT_CUTOFF ?=
+MLB_LIVE_HITTER_PARENT_SLATE_ARTIFACT ?=
+MLB_LIVE_HITTER_PARENT_LINEUP_PLAYER_ROWS ?=
+MLB_LIVE_HITTER_PARENT_OPPORTUNITY_PROFILE_PARENT ?=
+MLB_LIVE_HITTER_PARENT_OUT_DIR ?= artifacts/analysis/model_development/mlb_live_hitter_parent_daily_integration/$(MLB_LIVE_HITTER_PARENT_DATE)
+MLB_GOVERNED_LINEUP_CAPTURE_OUT_DIR ?= artifacts/analysis/model_development/mlb_governed_pregame_lineup_capture/$(MLB_LIVE_HITTER_PARENT_DATE)
+MLB_GOVERNED_LINEUP_CAPTURE_RUN_TAG ?= $(MLB_LIVE_HITTER_PARENT_RUN_TAG)
+MLB_GOVERNED_LINEUP_CAPTURE_CUTOFF ?= $(MLB_LIVE_HITTER_PARENT_CUTOFF)
+MLB_GOVERNED_LINEUP_CAPTURE_PARSED ?= $(MLB_GOVERNED_LINEUP_CAPTURE_OUT_DIR)/parsed_lineup_artifact_$(MLB_LIVE_HITTER_PARENT_DATE).csv
 MLB_USER_OVER_15_FILTER_WATCH_CSV ?= artifacts/analysis/mlb/user_over_15_filter_watch.csv
 MLB_USER_OVER_15_FILTER_WATCH_MD ?= artifacts/analysis/mlb/user_over_15_filter_watch.md
 MLB_DAILY_BRIEF_PIPELINE_HISTORY_JSONL ?= $(MLB_PIPELINE_HISTORY_INPUT)
@@ -417,6 +434,7 @@ MLB_DAILY_BRIEF_DATED_OUT_MD ?= artifacts/analysis/mlb/mlb_daily_ops_brief_$(MLB
 MLB_DAILY_BRIEF_OUT_JSON ?= artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json
 MLB_DAILY_BRIEF_HISTORY_JSONL ?= artifacts/analysis/mlb/mlb_daily_ops_brief_history.jsonl
 MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON ?= artifacts/analysis/mlb/mlb_daily_ops_brief_input_refresh_latest.json
+MLB_BETONLINE_CAPTURE_INTEGRITY_JSON ?= artifacts/analysis/mlb/betonline_capture_integrity/$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE)/betonline_capture_integrity_daily_summary_$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE).json
 MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV ?= artifacts/analysis/mlb/execution_vs_model/$(MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE)/reconcile_rows.csv
 MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON ?= artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_latest.json
 MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON ?= artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE).json
@@ -1472,7 +1490,7 @@ mlb-bvp-pvb-refresh:
 		$(VENV_PY) backend/mlb/scripts/refresh_mlb_bvp_pvb.py --date "$(MLB_BVP_DATE)" --feature-set-tag "$(MLB_BVP_FEATURE_SET_TAG)" --model-tag "$(MLB_BVP_MODEL_TAG)" --batch-size "$(MLB_BVP_BATCH_SIZE)" --request-timeout-sec "$(MLB_BVP_REQUEST_TIMEOUT_SEC)" --request-retries "$(MLB_BVP_REQUEST_RETRIES)" $(if $(filter 1,$(MLB_BVP_DRY_RUN)),--dry-run,); \
 	fi
 
-.PHONY: mlb-bvp-impact-preflight mlb-bvp-impact-report mlb-pa-foundation-health mlb-pa-foundation-propagate mlb-morning-workflow-audit
+.PHONY: mlb-bvp-impact-preflight mlb-bvp-impact-report mlb-pa-foundation-health mlb-pa-foundation-propagate mlb-morning-workflow-audit mlb-live-hitter-parent-daily-integration
 
 # Estimate BvP/PvB impact runtime before launching the expensive row-by-row comparison.
 mlb-bvp-impact-preflight:
@@ -1501,6 +1519,19 @@ mlb-pa-foundation-propagate:
 # Research-only PA opportunity shadow test for Hits O1.5/U1.5.
 mlb-pa-opportunity-shadow-test:
 	$(VENV_PY) backend/mlb/scripts/run_mlb_pa_opportunity_shadow_test.py --date "$(MLB_PA_OPPORTUNITY_SHADOW_DATE)" --out-dir "$(MLB_PA_OPPORTUNITY_SHADOW_OUT_DIR)"
+
+mlb-live-hitter-parent-daily-integration:
+	@if [ "$(MLB_ENABLE_LIVE_HITTER_PARENT_CAPTURE)" = "1" ]; then \
+		if [ -z "$(MLB_LIVE_HITTER_PARENT_LINEUP_PLAYER_ROWS)" ]; then \
+			$(VENV_PY) -m backend.mlb.scripts.capture_mlb_governed_pregame_lineups --date "$(MLB_LIVE_HITTER_PARENT_DATE)" --output-dir "$(MLB_GOVERNED_LINEUP_CAPTURE_OUT_DIR)" --mode dry_run $(if $(strip $(MLB_GOVERNED_LINEUP_CAPTURE_RUN_TAG)),--run-tag "$(MLB_GOVERNED_LINEUP_CAPTURE_RUN_TAG)",) $(if $(strip $(MLB_GOVERNED_LINEUP_CAPTURE_CUTOFF)),--cutoff "$(MLB_GOVERNED_LINEUP_CAPTURE_CUTOFF)",); \
+			lineup_rows="$(MLB_GOVERNED_LINEUP_CAPTURE_PARSED)"; \
+		else \
+			lineup_rows="$(MLB_LIVE_HITTER_PARENT_LINEUP_PLAYER_ROWS)"; \
+		fi; \
+		$(VENV_PY) -m backend.mlb.scripts.run_mlb_live_hitter_parent_daily_integration --date "$(MLB_LIVE_HITTER_PARENT_DATE)" --mode dry_run --enabled --output-dir "$(MLB_LIVE_HITTER_PARENT_OUT_DIR)" $(if $(strip $(MLB_LIVE_HITTER_PARENT_RUN_TAG)),--run-tag "$(MLB_LIVE_HITTER_PARENT_RUN_TAG)",) $(if $(strip $(MLB_LIVE_HITTER_PARENT_CUTOFF)),--cutoff "$(MLB_LIVE_HITTER_PARENT_CUTOFF)",) $(if $(strip $(MLB_LIVE_HITTER_PARENT_SLATE_ARTIFACT)),--slate-artifact "$(MLB_LIVE_HITTER_PARENT_SLATE_ARTIFACT)",) --lineup-player-rows "$$lineup_rows" $(if $(strip $(MLB_LIVE_HITTER_PARENT_OPPORTUNITY_PROFILE_PARENT)),--opportunity-profile-parent "$(MLB_LIVE_HITTER_PARENT_OPPORTUNITY_PROFILE_PARENT)",); \
+	else \
+		echo "mlb-live-hitter-parent-daily-integration: disabled (MLB_ENABLE_LIVE_HITTER_PARENT_CAPTURE=$(MLB_ENABLE_LIVE_HITTER_PARENT_CAPTURE))"; \
+	fi
 
 mlb-daily-health-gates:
 	$(MAKE) mlb-expanded-o15-universe MLB_EXPANDED_O15_UNIVERSE_DATE="" MLB_EXPANDED_O15_UNIVERSE_DATE_FROM="" MLB_EXPANDED_O15_UNIVERSE_DATE_TO=""
@@ -1554,7 +1585,12 @@ mlb-daily-ops-brief:
 	if [ "$$lineage_rc" -ne 0 ]; then \
 		echo "mlb-daily-ops-brief: WARN feature lineage health returned rc=$$lineage_rc; continuing to generate brief with source diagnostics"; \
 	fi
-	$(VENV_PY) backend/mlb/scripts/report_mlb_daily_ops_brief.py --report-date "$(MLB_DAILY_BRIEF_REPORT_DATE)" --completed-slate-date "$(MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE)" --current-slate-date "$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE)" --postgrade-alerts-json "$(MLB_DAILY_BRIEF_POSTGRADE_ALERTS_JSON)" --model-vs-fade-json "$(MLB_DAILY_BRIEF_MODEL_VS_FADE_JSON)" --prop-regime-csv "$(MLB_PROP_REGIME_DEPLOY_CSV)" --model-performance-summary-csv "$(MLB_MODEL_PERFORMANCE_SUMMARY_CSV)" --model-performance-daily-csv "$(MLB_MODEL_PERFORMANCE_DAILY_CSV)" --reporting-alignment-csv "backend/mlb/exports/reporting_alignment/reporting_alignment_{completed_slate_date}.csv" --bvp-impact-json "$(MLB_DAILY_BRIEF_BVP_IMPACT_JSON)" --require-fresh-bvp-impact "$(MLB_DAILY_BRIEF_REQUIRE_FRESH_BVP_IMPACT)" --hits-environment-json "$(MLB_DAILY_BRIEF_HITS_ENV_JSON)" --overlap-watch-json "$(MLB_DAILY_BRIEF_OVERLAP_WATCH_JSON)" --qc-bottom-order-watch-json "$(MLB_DAILY_BRIEF_QC_BOTTOM_ORDER_WATCH_JSON)" --hits-15-tier-backtest-json "$(MLB_HITS_15_TIER_BACKTEST_JSON)" --review-aid-performance-json "$(MLB_REVIEW_AID_PERFORMANCE_JSON)" --total-bases-shadow-summary-json "$(MLB_DAILY_BRIEF_TOTAL_BASES_SHADOW_SUMMARY_JSON)" --total-bases-shadow-evaluation-json "$(MLB_DAILY_BRIEF_TOTAL_BASES_SHADOW_EVALUATION_JSON)" --feature-lineage-health-json "$(MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON)" --input-refresh-status-json "$(MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON)" --pipeline-history-jsonl "$(MLB_DAILY_BRIEF_PIPELINE_HISTORY_JSONL)" --ops-history-jsonl "$(MLB_DAILY_BRIEF_OPS_HISTORY_JSONL)" --rolling-candidate-obs-json "$(MLB_ROLLING_CANDIDATE_OBS_JSON)" --rolling-candidate-obs-mode "$(MLB_ENABLE_ROLLING_CANDIDATE_OBS)" --out-md "$(MLB_DAILY_BRIEF_OUT_MD)" --dated-out-md "$(MLB_DAILY_BRIEF_DATED_OUT_MD)" --out-json "$(MLB_DAILY_BRIEF_OUT_JSON)" --history-jsonl "$(MLB_DAILY_BRIEF_HISTORY_JSONL)" $(if $(filter 1 true TRUE yes YES,$(MLB_ENABLE_ROLLING_CANDIDATE_OBS)),--enable-rolling-candidate-obs,) $(if $(filter 0 false FALSE no NO,$(MLB_DAILY_BRIEF_REFRESH_INPUTS)),--skip-today-workspace-fetch,)
+	@if [ "$(MLB_ENABLE_LIVE_HITTER_PARENT_CAPTURE)" = "1" ]; then \
+		$(MAKE) mlb-live-hitter-parent-daily-integration MLB_ENABLE_LIVE_HITTER_PARENT_CAPTURE=1 MLB_LIVE_HITTER_PARENT_DATE="$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE)" MLB_LIVE_HITTER_PARENT_RUN_TAG="$(MLB_LIVE_HITTER_PARENT_RUN_TAG)" MLB_LIVE_HITTER_PARENT_CUTOFF="$(MLB_LIVE_HITTER_PARENT_CUTOFF)" MLB_LIVE_HITTER_PARENT_SLATE_ARTIFACT="$(MLB_LIVE_HITTER_PARENT_SLATE_ARTIFACT)" MLB_LIVE_HITTER_PARENT_LINEUP_PLAYER_ROWS="$(MLB_LIVE_HITTER_PARENT_LINEUP_PLAYER_ROWS)" MLB_LIVE_HITTER_PARENT_OPPORTUNITY_PROFILE_PARENT="$(MLB_LIVE_HITTER_PARENT_OPPORTUNITY_PROFILE_PARENT)" MLB_LIVE_HITTER_PARENT_OUT_DIR="$(MLB_LIVE_HITTER_PARENT_OUT_DIR)"; \
+	else \
+		:; \
+	fi
+	$(VENV_PY) backend/mlb/scripts/report_mlb_daily_ops_brief.py --report-date "$(MLB_DAILY_BRIEF_REPORT_DATE)" --completed-slate-date "$(MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE)" --current-slate-date "$(MLB_DAILY_BRIEF_CURRENT_SLATE_DATE)" --postgrade-alerts-json "$(MLB_DAILY_BRIEF_POSTGRADE_ALERTS_JSON)" --model-vs-fade-json "$(MLB_DAILY_BRIEF_MODEL_VS_FADE_JSON)" --prop-regime-csv "$(MLB_PROP_REGIME_DEPLOY_CSV)" --model-performance-summary-csv "$(MLB_MODEL_PERFORMANCE_SUMMARY_CSV)" --model-performance-daily-csv "$(MLB_MODEL_PERFORMANCE_DAILY_CSV)" --reporting-alignment-csv "backend/mlb/exports/reporting_alignment/reporting_alignment_{completed_slate_date}.csv" --bvp-impact-json "$(MLB_DAILY_BRIEF_BVP_IMPACT_JSON)" --require-fresh-bvp-impact "$(MLB_DAILY_BRIEF_REQUIRE_FRESH_BVP_IMPACT)" --hits-environment-json "$(MLB_DAILY_BRIEF_HITS_ENV_JSON)" --overlap-watch-json "$(MLB_DAILY_BRIEF_OVERLAP_WATCH_JSON)" --qc-bottom-order-watch-json "$(MLB_DAILY_BRIEF_QC_BOTTOM_ORDER_WATCH_JSON)" --hits-15-tier-backtest-json "$(MLB_HITS_15_TIER_BACKTEST_JSON)" --review-aid-performance-json "$(MLB_REVIEW_AID_PERFORMANCE_JSON)" --total-bases-shadow-summary-json "$(MLB_DAILY_BRIEF_TOTAL_BASES_SHADOW_SUMMARY_JSON)" --total-bases-shadow-evaluation-json "$(MLB_DAILY_BRIEF_TOTAL_BASES_SHADOW_EVALUATION_JSON)" --feature-lineage-health-json "$(MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON)" --input-refresh-status-json "$(MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON)" --pipeline-history-jsonl "$(MLB_DAILY_BRIEF_PIPELINE_HISTORY_JSONL)" --ops-history-jsonl "$(MLB_DAILY_BRIEF_OPS_HISTORY_JSONL)" --rolling-candidate-obs-json "$(MLB_ROLLING_CANDIDATE_OBS_JSON)" --rolling-candidate-obs-mode "$(MLB_ENABLE_ROLLING_CANDIDATE_OBS)" --betonline-capture-integrity-json "$(MLB_BETONLINE_CAPTURE_INTEGRITY_JSON)" --out-md "$(MLB_DAILY_BRIEF_OUT_MD)" --dated-out-md "$(MLB_DAILY_BRIEF_DATED_OUT_MD)" --out-json "$(MLB_DAILY_BRIEF_OUT_JSON)" --history-jsonl "$(MLB_DAILY_BRIEF_HISTORY_JSONL)" $(if $(filter 1 true TRUE yes YES,$(MLB_ENABLE_ROLLING_CANDIDATE_OBS)),--enable-rolling-candidate-obs,) $(if $(filter 0 false FALSE no NO,$(MLB_DAILY_BRIEF_REFRESH_INPUTS)),--skip-today-workspace-fetch,)
 
 .PHONY: mlb-daily-rolling-observation
 mlb-daily-rolling-observation:
@@ -1874,6 +1910,20 @@ mlb-daily-review-and-upload:
 	$(MAKE) mlb-daily-preflight MLB_DAILY_PREFLIGHT_DATE="$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-daily-ops-brief MLB_DAILY_BRIEF_REPORT_DATE="$(MLB_DAILY_BRIEF_REPORT_DATE)" MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE="$(MLB_DAILY_RECONCILE_DATE)" MLB_DAILY_BRIEF_CURRENT_SLATE_DATE="$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-daily-index MLB_DAILY_INDEX_DATE="$(MLB_UPLOAD_PREP_DATE)" MLB_DAILY_INDEX_COMPLETED_SLATE_DATE="$(MLB_DAILY_RECONCILE_DATE)"
+
+.PHONY: mlb-o15-prospective-grade
+mlb-o15-prospective-grade:
+	@if [ "$(MLB_ENABLE_O15_PROSPECTIVE_GRADER)" != "1" ]; then \
+		echo "mlb-o15-prospective-grade: disabled MLB_ENABLE_O15_PROSPECTIVE_GRADER=$(MLB_ENABLE_O15_PROSPECTIVE_GRADER)"; \
+	elif [ "$(MLB_O15_PROSPECTIVE_GRADER_DATE)" != "$(MLB_O15_PROSPECTIVE_GRADER_RUN_DATE)" ]; then \
+		echo "mlb-o15-prospective-grade: no frozen O1.5 prospective run for date=$(MLB_O15_PROSPECTIVE_GRADER_DATE); expected_run_date=$(MLB_O15_PROSPECTIVE_GRADER_RUN_DATE); skipping"; \
+	elif [ ! -s "$(MLB_O15_PROSPECTIVE_GRADER_RECONCILE_CSV)" ]; then \
+		echo "mlb-o15-prospective-grade: WARN missing or empty reconcile source $(MLB_O15_PROSPECTIVE_GRADER_RECONCILE_CSV); skipping"; \
+	else \
+		echo "mlb-o15-prospective-grade: START date=$(MLB_O15_PROSPECTIVE_GRADER_DATE) reconcile=$(MLB_O15_PROSPECTIVE_GRADER_RECONCILE_CSV)"; \
+		$(VENV_PY) -m backend.mlb.scripts.run_mlb_o15_market_anchored_ranking_prospective_grader --mode dry_run --run-date "$(MLB_O15_PROSPECTIVE_GRADER_DATE)" --output-dir "$(MLB_O15_PROSPECTIVE_GRADER_OUT_DIR)"; \
+		echo "mlb-o15-prospective-grade: DONE date=$(MLB_O15_PROSPECTIVE_GRADER_DATE)"; \
+	fi
 
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
