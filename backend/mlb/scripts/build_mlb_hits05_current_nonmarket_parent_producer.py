@@ -27,8 +27,8 @@ from backend.mlb.scripts import capture_mlb_governed_pregame_lineups as lineup_c
 
 
 ROOT = spine.ROOT
-RUN_DATE = "2026-07-19"
-DEFAULT_OUT_DIR = ROOT / "artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/2026-07-19"
+DEFAULT_SLATE_DATE = date.today().isoformat()
+DEFAULT_PARENT_ROOT = ROOT / "artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer"
 SOURCE_MODEL_DIR = ROOT / "artifacts/analysis/model_development/mlb_hits_full_nonmarket_spine_model_reconstruction/2026-07-19"
 CANDIDATE_DIR = ROOT / "artifacts/analysis/model_development/mlb_hits05_full_spine_replacement_candidate/2026-07-19"
 REPAIR_DIR = ROOT / "artifacts/analysis/model_development/mlb_hits05_current_parent_source_repair/2026-07-19"
@@ -371,10 +371,10 @@ def score_rows(feature_df: pd.DataFrame, features: list[str], run_tag: str) -> p
     return out.reindex(columns=columns)
 
 
-def withheld_rows(lineup: pd.DataFrame, parent: pd.DataFrame, feature_df: pd.DataFrame, features: list[str]) -> pd.DataFrame:
+def withheld_rows(lineup: pd.DataFrame, parent: pd.DataFrame, feature_df: pd.DataFrame, features: list[str], date_value: str) -> pd.DataFrame:
     rows = []
     if lineup.empty:
-        rows.append({"slate_date": RUN_DATE, "game_id": "", "player_id": "", "player_name": "", "team": "", "withheld_reason": "NO_GOVERNED_LINEUP_SOURCE_ROWS", "notes": ""})
+        rows.append({"slate_date": date_value, "game_id": "", "player_id": "", "player_name": "", "team": "", "withheld_reason": "NO_GOVERNED_LINEUP_SOURCE_ROWS", "notes": ""})
         return pd.DataFrame(rows)
     parent_keys = set(parent["player_game_key"]) if "player_game_key" in parent.columns else set()
     work = lineup.copy()
@@ -382,17 +382,35 @@ def withheld_rows(lineup: pd.DataFrame, parent: pd.DataFrame, feature_df: pd.Dat
         work["player_id"] = work["hitter_id"]
     for _, r in work.iterrows():
         status = lineage_status_to_parent_status(r.get("lineup_status"))
-        key = f"{clean(r.get('slate_date')) or RUN_DATE}|{id_text(r.get('game_id'))}|{id_text(r.get('player_id'))}"
+        key = f"{clean(r.get('slate_date')) or date_value}|{id_text(r.get('game_id'))}|{id_text(r.get('player_id'))}"
         if status not in {"CONFIRMED_PREGAME_STARTER", "PROJECTED_PREGAME_STARTER"}:
-            rows.append({"slate_date": clean(r.get("slate_date")) or RUN_DATE, "game_id": id_text(r.get("game_id")), "player_id": id_text(r.get("player_id")), "player_name": clean(r.get("player_name")), "team": clean(r.get("team")), "withheld_reason": status, "notes": clean(r.get("validation_reason"))})
+            rows.append({"slate_date": clean(r.get("slate_date")) or date_value, "game_id": id_text(r.get("game_id")), "player_id": id_text(r.get("player_id")), "player_name": clean(r.get("player_name")), "team": clean(r.get("team")), "withheld_reason": status, "notes": clean(r.get("validation_reason"))})
         elif key not in parent_keys:
-            rows.append({"slate_date": RUN_DATE, "game_id": id_text(r.get("game_id")), "player_id": id_text(r.get("player_id")), "player_name": clean(r.get("player_name")), "team": clean(r.get("team")), "withheld_reason": "ELIGIBLE_LINEUP_ROW_NOT_ADMITTED", "notes": ""})
+            rows.append({"slate_date": date_value, "game_id": id_text(r.get("game_id")), "player_id": id_text(r.get("player_id")), "player_name": clean(r.get("player_name")), "team": clean(r.get("team")), "withheld_reason": "ELIGIBLE_LINEUP_ROW_NOT_ADMITTED", "notes": ""})
     if not feature_df.empty:
         missing_cols = [f for f in features if f not in feature_df.columns]
         if missing_cols:
             for _, r in feature_df.iterrows():
-                rows.append({"slate_date": RUN_DATE, "game_id": id_text(r.get("game_id")), "player_id": id_text(r.get("player_id")), "player_name": clean(r.get("player_name")), "team": clean(r.get("team")), "withheld_reason": "MISSING_FROZEN_FEATURE_COLUMNS", "notes": "|".join(missing_cols)})
+                rows.append({"slate_date": date_value, "game_id": id_text(r.get("game_id")), "player_id": id_text(r.get("player_id")), "player_name": clean(r.get("player_name")), "team": clean(r.get("team")), "withheld_reason": "MISSING_FROZEN_FEATURE_COLUMNS", "notes": "|".join(missing_cols)})
     return pd.DataFrame(rows)
+
+
+def parent_artifact_state(*, lineup: pd.DataFrame, lineup_team_status: pd.DataFrame, parent: pd.DataFrame, scores: pd.DataFrame) -> str:
+    if len(scores) > 0:
+        return "PARENT_ARTIFACT_NONZERO_VALID"
+    if lineup.empty:
+        return "PARENT_ARTIFACT_ZERO_VALID_NO_LINEUPS"
+    if not lineup_team_status.empty and "lineup_status" in lineup_team_status.columns:
+        counts = lineup_team_status["lineup_status"].astype(str).value_counts(dropna=False).to_dict()
+        if counts.get("OFFICIAL_LINEUP_NOT_YET_POSTED", 0) > 0 and not any(
+            str(k).startswith("CONFIRMED") for k in counts
+        ):
+            return "PARENT_ARTIFACT_ZERO_VALID_NO_LINEUPS"
+        if counts.get("STARTER_UNRESOLVED", 0) > 0:
+            return "PARENT_ARTIFACT_ZERO_VALID_NO_STARTERS"
+    if parent.empty:
+        return "PARENT_ARTIFACT_ZERO_VALID_NO_ELIGIBLE_GAMES"
+    return "PARENT_ARTIFACT_MALFORMED"
 
 
 def deterministic_replay(feature_df: pd.DataFrame, withheld: pd.DataFrame, features: list[str], run_tag: str) -> list[dict[str, Any]]:
@@ -455,7 +473,10 @@ def sha_manifest(out_dir: Path) -> list[dict[str, Any]]:
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
-    out_dir = Path(args.output_dir)
+    date_value = _date_key(args.date) if "_date_key" in globals() else str(args.date)
+    if not date_value:
+        date_value = DEFAULT_SLATE_DATE
+    out_dir = Path(args.output_dir) if args.output_dir else DEFAULT_PARENT_ROOT / date_value
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = iso(now_utc_dt())
     run_tag = args.run_tag or f"hits05_current_parent_{now_utc_dt().strftime('%Y%m%dT%H%M%SZ')}"
@@ -466,13 +487,14 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         slate_tag = run_tag
     manifest = used_feature_manifest()
     features = joblib.load(MODEL_PATH)["model"].feature_names_in_.tolist()
-    lineup, lineup_team_status, lineup_path, lineup_inventory = run_lineup_capture(args.date, run_tag, out_dir, args.allow_statsapi, Path(args.lineup_source) if args.lineup_source else None)
-    parent, lineup_ledger, starter_ledger = build_denominator_from_lineups(lineup, args.date, run_tag, cutoff, lineup_path)
-    feature_parent, feature_audit = add_current_features(parent, args.date)
+    lineup, lineup_team_status, lineup_path, lineup_inventory = run_lineup_capture(date_value, run_tag, out_dir, args.allow_statsapi, Path(args.lineup_source) if args.lineup_source else None)
+    parent, lineup_ledger, starter_ledger = build_denominator_from_lineups(lineup, date_value, run_tag, cutoff, lineup_path)
+    feature_parent, feature_audit = add_current_features(parent, date_value)
     parity = parity_matrix(feature_parent, manifest)
     scores = score_rows(feature_parent, features, run_tag)
-    withheld = withheld_rows(lineup, parent, feature_parent, features)
+    withheld = withheld_rows(lineup, parent, feature_parent, features, date_value)
     deterministic = deterministic_replay(feature_parent, withheld, features, run_tag)
+    artifact_state = parent_artifact_state(lineup=lineup, lineup_team_status=lineup_team_status, parent=parent, scores=scores)
     source_inventory = pd.DataFrame(
         lineup_inventory
         + [
@@ -555,31 +577,31 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         {"gate": "production_swap_authorized", "pass": False, "notes": "Not authorized."},
     ]
     paths = {
-        "summary": out_dir / "hits05_current_nonmarket_parent_producer_2026-07-19.md",
-        "contract": out_dir / "hits05_frozen_current_scoring_contract_2026-07-19.csv",
-        "classification": out_dir / "hits05_45_feature_construction_classification_2026-07-19.csv",
-        "denominator": out_dir / "hits05_current_nonmarket_denominator_2026-07-19.csv",
-        "lineup_inventory": out_dir / "hits05_lineup_source_inventory_2026-07-19.csv",
-        "lineup_ledger": out_dir / "hits05_lineup_source_ledger_2026-07-19.csv",
-        "starter_ledger": out_dir / "hits05_starter_source_ledger_2026-07-19.csv",
-        "batter_ledger": out_dir / "hits05_batter_feature_construction_ledger_2026-07-19.csv",
-        "starter_env_ledger": out_dir / "hits05_starter_environment_construction_ledger_2026-07-19.csv",
-        "parent": out_dir / "hits05_immutable_current_parent_2026-07-19.csv",
-        "feature_matrix": out_dir / "hits05_current_54_feature_matrix_2026-07-19.csv",
-        "parity": out_dir / "hits05_full_54_feature_parity_matrix_2026-07-19.csv",
-        "scores": out_dir / "hits05_scored_current_rows_2026-07-19.csv",
-        "withheld": out_dir / "hits05_withheld_ledger_2026-07-19.csv",
-        "determinism": out_dir / "hits05_deterministic_replay_2026-07-19.csv",
-        "failure": out_dir / "hits05_failure_mode_tests_2026-07-19.csv",
-        "hybrid": out_dir / "hits05_hybrid_availability_contract_2026-07-19.csv",
-        "order": out_dir / "hits05_current_generation_order_2026-07-19.csv",
-        "wrapper": out_dir / "hits05_wrapper_insertion_point_2026-07-19.csv",
-        "gates": out_dir / "hits05_final_replacement_gate_recheck_2026-07-19.csv",
-        "irreducible": out_dir / "hits05_irreducible_feature_report_2026-07-19.csv",
-        "decisions": out_dir / "hits05_current_parent_producer_decisions_2026-07-19.csv",
-        "machine": out_dir / "machine_readable_hits05_current_nonmarket_parent_producer_2026-07-19.json",
-        "sha": out_dir / "sha256_manifest_2026-07-19.csv",
-        "validation": out_dir / "validation_report_2026-07-19.csv",
+        "summary": out_dir / f"hits05_current_nonmarket_parent_producer_{date_value}.md",
+        "contract": out_dir / f"hits05_frozen_current_scoring_contract_{date_value}.csv",
+        "classification": out_dir / f"hits05_45_feature_construction_classification_{date_value}.csv",
+        "denominator": out_dir / f"hits05_current_nonmarket_denominator_{date_value}.csv",
+        "lineup_inventory": out_dir / f"hits05_lineup_source_inventory_{date_value}.csv",
+        "lineup_ledger": out_dir / f"hits05_lineup_source_ledger_{date_value}.csv",
+        "starter_ledger": out_dir / f"hits05_starter_source_ledger_{date_value}.csv",
+        "batter_ledger": out_dir / f"hits05_batter_feature_construction_ledger_{date_value}.csv",
+        "starter_env_ledger": out_dir / f"hits05_starter_environment_construction_ledger_{date_value}.csv",
+        "parent": out_dir / f"hits05_immutable_current_parent_{date_value}.csv",
+        "feature_matrix": out_dir / f"hits05_current_54_feature_matrix_{date_value}.csv",
+        "parity": out_dir / f"hits05_full_54_feature_parity_matrix_{date_value}.csv",
+        "scores": out_dir / f"hits05_scored_current_rows_{date_value}.csv",
+        "withheld": out_dir / f"hits05_withheld_ledger_{date_value}.csv",
+        "determinism": out_dir / f"hits05_deterministic_replay_{date_value}.csv",
+        "failure": out_dir / f"hits05_failure_mode_tests_{date_value}.csv",
+        "hybrid": out_dir / f"hits05_hybrid_availability_contract_{date_value}.csv",
+        "order": out_dir / f"hits05_current_generation_order_{date_value}.csv",
+        "wrapper": out_dir / f"hits05_wrapper_insertion_point_{date_value}.csv",
+        "gates": out_dir / f"hits05_final_replacement_gate_recheck_{date_value}.csv",
+        "irreducible": out_dir / f"hits05_irreducible_feature_report_{date_value}.csv",
+        "decisions": out_dir / f"hits05_current_parent_producer_decisions_{date_value}.csv",
+        "machine": out_dir / f"machine_readable_hits05_current_nonmarket_parent_producer_{date_value}.json",
+        "sha": out_dir / f"sha256_manifest_{date_value}.csv",
+        "validation": out_dir / f"validation_report_{date_value}.csv",
     }
     write_csv(paths["contract"], current_contract(run_tag, cutoff, features))
     write_csv(paths["classification"], feature_classification)
@@ -604,9 +626,13 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     write_csv(paths["decisions"], [{"decision": k, "value": v} for k, v in decisions.items()])
     machine = {
         "generated_at_utc": generated_at,
-        "date": args.date,
+        "date": date_value,
         "run_tag": run_tag,
         "cutoff": cutoff,
+        "parent_artifact_state": artifact_state,
+        "parent_artifact_date_contract": "PARENT_ARTIFACT_DATE_CONTRACT_PASS",
+        "output_dir_date": out_dir.parent.name if out_dir.name == run_tag else out_dir.name,
+        "date_contract_status": "PASS" if date_value in str(paths["machine"]) and date_value in str(out_dir) else "FAIL",
         "allow_statsapi": bool(args.allow_statsapi),
         "frozen_model": rel(MODEL_PATH),
         "frozen_model_sha256": sha256(MODEL_PATH),
@@ -683,17 +709,18 @@ No model was trained, no calibration was changed, no OddsAPI call was made, no s
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--date", default=RUN_DATE)
+    parser.add_argument("--date", default=DEFAULT_SLATE_DATE)
     parser.add_argument("--run-tag", default="")
     parser.add_argument("--cutoff", default="")
     parser.add_argument("--lineup-source", default="")
     parser.add_argument("--slate-artifact", default="")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT_DIR)
+    parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--allow-statsapi", action="store_true")
     parser.add_argument("--mode", choices=["research_only", "dry_run"], default="research_only")
     args = parser.parse_args()
     result = build(args)
-    print(json.dumps({"output_dir": rel(args.output_dir), **result}, indent=2, sort_keys=True))
+    output_dir = args.output_dir or (DEFAULT_PARENT_ROOT / str(args.date))
+    print(json.dumps({"output_dir": rel(output_dir), **result}, indent=2, sort_keys=True))
     return 0
 
 

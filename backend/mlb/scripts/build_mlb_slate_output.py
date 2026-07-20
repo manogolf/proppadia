@@ -28,6 +28,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
+from backend.mlb.shared.hits05_production_replacement import (
+    PROVENANCE_COLUMNS as HITS05_PROVENANCE_COLUMNS,
+    apply_hits05_replacement,
+)
 from backend.mlb.shared.probability_calibration import calibrate_probability, load_calibrator
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 
@@ -633,6 +637,7 @@ def build_slate_output(
     apply_upload_calibration: bool = False,
 ) -> pd.DataFrame:
     df_long = _merge_prepared_feature_context(df_long, prepared_feature_dir)
+    df_long = apply_hits05_replacement(df_long, slate_date=slate_date)
     merged = _enrich_with_db(df_long)
     calibrator = load_calibrator(calibration_json) if apply_upload_calibration else None
     min_prop_samples = int((calibrator or {}).get("min_prop_samples") or 200)
@@ -764,6 +769,7 @@ def build_slate_output(
                 "market_odds_snapshot_file": row.get("market_odds_snapshot_file", row.get("odds_snapshot_file")),
                 "market_snapshot_time_utc": row.get("market_snapshot_time_utc", row.get("snapshot_time_utc")),
                 "market_snapshot_run_tag": row.get("market_snapshot_run_tag", row.get("snapshot_run_tag")),
+                **{col: row.get(col) for col in HITS05_PROVENANCE_COLUMNS},
                 "calibration_method": str((calibrator or {}).get("method") or ""),
                 "prediction_source_file": str(pred_csv_path),
                 "generated_at_utc": generated_at_utc,

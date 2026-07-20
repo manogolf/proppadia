@@ -12,7 +12,7 @@ import csv
 import hashlib
 import json
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -29,6 +29,7 @@ SCHEDULED_WINDOWS = [
     ("13:00", "20:00Z"),
     ("16:30", "23:30Z"),
 ]
+WINDOW_BINDING_TOLERANCE_MINUTES = 45
 CORE_MARKETS = {"hits", "total_bases", "hits_runs_rbis", "strikeouts_pitching", "outs_recorded"}
 _SCHEDULED_WINDOW_LABELS = {pt for pt, _ in SCHEDULED_WINDOWS} | {utc for _, utc in SCHEDULED_WINDOWS}
 SCHEDULER_IDENTITY = "com.proppadia.mlb.refresh.daily"
@@ -335,12 +336,70 @@ def _load_run_payloads(root: Path, slate_date: str) -> list[dict[str, Any]]:
     return out
 
 
+def _parse_utc_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _expected_window_dt(slate_date: str, utc_label: str) -> datetime | None:
+    expected_time = f"{slate_date}T{utc_label.replace('Z', ':00Z')}"
+    return _parse_utc_datetime(expected_time)
+
+
+def _canonical_window_for_run(run: dict[str, Any], slate_date: str) -> str:
+    recorded = str(run.get("scheduled_window") or "").strip()
+    if recorded in _SCHEDULED_WINDOW_LABELS:
+        if recorded in {pt for pt, _ in SCHEDULED_WINDOWS}:
+            return recorded
+        for pt, utc_label in SCHEDULED_WINDOWS:
+            if recorded == utc_label:
+                return pt
+    run_dt = (
+        _parse_utc_datetime(run.get("actual_capture_time"))
+        or _parse_utc_datetime(run.get("expected_run_time"))
+        or _parse_utc_datetime(run.get("generated_at_utc"))
+    )
+    if run_dt is None:
+        return ""
+    matches: list[tuple[float, str]] = []
+    for pacific, utc_label in SCHEDULED_WINDOWS:
+        expected_dt = _expected_window_dt(slate_date, utc_label)
+        if expected_dt is None:
+            continue
+        delta_minutes = abs((run_dt - expected_dt).total_seconds()) / 60.0
+        if delta_minutes <= WINDOW_BINDING_TOLERANCE_MINUTES:
+            matches.append((delta_minutes, pacific))
+    if len(matches) != 1:
+        return ""
+    return sorted(matches)[0][1]
+
+
 def write_daily_summary(*, slate_date: str, output_root: Path) -> dict[str, Any]:
     slate_date = _date_key(slate_date)
     root = output_root / slate_date
     root.mkdir(parents=True, exist_ok=True)
     runs = _load_run_payloads(output_root, slate_date)
-    by_window: dict[str, dict[str, Any]] = {str(r.get("scheduled_window") or ""): r for r in runs}
+    by_window: dict[str, dict[str, Any]] = {}
+    ambiguous_windows: set[str] = set()
+    for run in runs:
+        window = _canonical_window_for_run(run, slate_date)
+        if not window:
+            continue
+        if window in by_window:
+            existing_dt = _parse_utc_datetime(by_window[window].get("actual_capture_time"))
+            run_dt = _parse_utc_datetime(run.get("actual_capture_time"))
+            if existing_dt and run_dt and run_dt > existing_dt:
+                ambiguous_windows.add(window)
+                by_window[window] = run
+            else:
+                ambiguous_windows.add(window)
+        else:
+            by_window[window] = run
     now = datetime.now(timezone.utc)
     rows = []
     for pacific, utc_label in SCHEDULED_WINDOWS:
@@ -349,11 +408,15 @@ def write_daily_summary(*, slate_date: str, output_root: Path) -> dict[str, Any]
             expected_dt = datetime.fromisoformat(expected_time.replace("Z", "+00:00"))
         except Exception:
             expected_dt = now
-        run = by_window.get(pacific) or by_window.get(utc_label) or {}
+        run = {} if pacific in ambiguous_windows else by_window.get(pacific) or {}
         if run:
             status = str(run.get("overall_semantic_status") or "STATUS_UNRESOLVED")
             executed = True
             alert = status if status != "BETONLINE_CAPTURE_SEMANTIC_PASS" else ""
+        elif pacific in ambiguous_windows:
+            status = "AMBIGUOUS_WINDOW_ASSIGNMENT"
+            executed = False
+            alert = "AMBIGUOUS_WINDOW_ASSIGNMENT"
         elif expected_dt > now:
             status = "PENDING_FUTURE_WINDOW"
             executed = False

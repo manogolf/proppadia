@@ -240,6 +240,206 @@ def _load_optional_betonline_capture_integrity(path: Path, *, expected_date: str
     return payload
 
 
+def _read_csv_dicts(path: Path) -> List[Dict[str, Any]]:
+    try:
+        if not path.exists():
+            return []
+        with path.open(newline="", encoding="utf-8") as handle:
+            return list(csv.DictReader(handle))
+    except Exception:
+        return []
+
+
+def _latest_path(paths: Sequence[Path]) -> Optional[Path]:
+    existing = [p for p in paths if p.exists()]
+    if not existing:
+        return None
+    return sorted(existing, key=lambda p: (p.stat().st_mtime, str(p)))[-1]
+
+
+def _load_hits05_full_spine_status(current_slate_date: str) -> Dict[str, Any]:
+    root = Path("artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer") / current_slate_date
+    machine = _latest_path(
+        list(root.glob(f"machine_readable_hits05_current_nonmarket_parent_producer_{current_slate_date}.json"))
+        + list(root.glob(f"**/machine_readable_hits05_current_nonmarket_parent_producer_{current_slate_date}.json"))
+        + list(root.glob("machine_readable_hits05_current_nonmarket_parent_producer_*.json"))
+        + list(root.glob("**/machine_readable_hits05_current_nonmarket_parent_producer_*.json"))
+    )
+    parent_scores = _latest_path(list(root.glob(f"hits05_scored_current_rows_{current_slate_date}.csv")) + list(root.glob(f"**/hits05_scored_current_rows_{current_slate_date}.csv")))
+    withheld = _latest_path(list(root.glob(f"hits05_withheld_ledger_{current_slate_date}.csv")) + list(root.glob(f"**/hits05_withheld_ledger_{current_slate_date}.csv")))
+    slate = Path("backend/mlb/data/processed/mlb_slate_output.csv")
+    payload: Dict[str, Any] = {
+        "enabled": True,
+        "current_slate_date": current_slate_date,
+        "source_state": "ok" if machine or parent_scores else "missing_parent_artifact",
+        "source_path": str(machine or parent_scores or root),
+        "source_mtime": _path_mtime_utc(machine or parent_scores or root),
+        "scheduled_windows": [
+            {"window_id": "0530_pt", "pacific": "05:30", "eastern": "08:30", "utc": "12:30", "purpose": "early projected slate"},
+            {"window_id": "0930_pt", "pacific": "09:30", "eastern": "12:30", "utc": "16:30", "purpose": "morning refresh"},
+            {"window_id": "1100_pt", "pacific": "11:00", "eastern": "14:00", "utc": "18:00", "purpose": "lineup-development refresh"},
+            {"window_id": "1300_pt", "pacific": "13:00", "eastern": "16:00", "utc": "20:00", "purpose": "afternoon confirmed-lineup refresh"},
+            {"window_id": "1630_pt", "pacific": "16:30", "eastern": "19:30", "utc": "23:30", "purpose": "late-game refresh"},
+        ],
+    }
+    machine_payload: Dict[str, Any] = {}
+    if machine:
+        raw, err = _load_json(machine)
+        if isinstance(raw, dict) and not err:
+            machine_payload = raw
+    parent_artifact_state = str(machine_payload.get("parent_artifact_state") or "")
+    parent_artifact_date_contract = str(machine_payload.get("parent_artifact_date_contract") or "")
+    lineup_counts = machine_payload.get("lineup_team_status_counts") if isinstance(machine_payload.get("lineup_team_status_counts"), dict) else {}
+    if (
+        not parent_artifact_state
+        and _as_int(machine_payload.get("scored_rows")) == 0
+        and int(lineup_counts.get("OFFICIAL_LINEUP_NOT_YET_POSTED", 0) or 0) > 0
+        and not any(str(k).startswith("CONFIRMED") for k in lineup_counts)
+    ):
+        parent_artifact_state = "PARENT_ARTIFACT_ZERO_VALID_NO_LINEUPS"
+    if not parent_artifact_date_contract and machine:
+        parent_artifact_date_contract = (
+            "PARENT_ARTIFACT_DATE_CONTRACT_PASS"
+            if current_slate_date in machine.name
+            else "LEGACY_PARENT_FILENAME_DATE_MISMATCH"
+        )
+    payload.update(
+        {
+            "latest_parent_run_tag": machine_payload.get("run_tag") or "",
+            "latest_parent_generated_at": machine_payload.get("generated_at_utc") or "",
+            "parent_rows": machine_payload.get("feature_parent_rows", machine_payload.get("denominator_rows", "")),
+            "scored_rows": machine_payload.get("scored_rows", ""),
+            "withheld_rows": machine_payload.get("withheld_rows", ""),
+            "parent_artifact_state": parent_artifact_state,
+            "parent_artifact_date_contract": parent_artifact_date_contract,
+            "model_sha256": machine_payload.get("frozen_model_sha256") or "",
+            "lineup_team_status_counts": lineup_counts,
+        }
+    )
+
+    slate_rows = _read_csv_dicts(slate)
+    hits05_rows = [
+        r for r in slate_rows
+        if str(r.get("prop_type") or "").strip().lower() == "hits"
+        and abs((_as_float(r.get("line")) or -999.0) - 0.5) < 1e-9
+    ]
+    route_counts: Dict[str, int] = {}
+    fallback_counts: Dict[str, int] = {}
+    games_with_candidate = set()
+    for row in hits05_rows:
+        route = str(row.get("hits05_route") or "").strip() or "missing_route"
+        route_counts[route] = route_counts.get(route, 0) + 1
+        if route == "HITS05_FULL_SPINE_CANDIDATE":
+            games_with_candidate.add(str(row.get("game_id") or ""))
+        else:
+            reason = str(row.get("hits05_fallback_reason") or route or "unknown")
+            fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
+    candidate_rows = int(route_counts.get("HITS05_FULL_SPINE_CANDIDATE", 0))
+    fallback_rows = max(0, len(hits05_rows) - candidate_rows)
+    coverage = (candidate_rows / len(hits05_rows)) if hits05_rows else 0.0
+    if not hits05_rows:
+        slate_status = "ACTIVE_NO_ELIGIBLE_PARENT"
+    elif candidate_rows == len(hits05_rows):
+        slate_status = "ACTIVE_FULL_COVERAGE"
+    elif candidate_rows > 0 and candidate_rows >= fallback_rows:
+        slate_status = "ACTIVE_PARTIAL_COVERAGE"
+    elif candidate_rows > 0:
+        slate_status = "ACTIVE_FALLBACK_DOMINANT"
+    elif payload["source_state"] == "ok":
+        slate_status = "ACTIVE_NO_ELIGIBLE_PARENT"
+    else:
+        slate_status = "REPLACEMENT_RUNTIME_FAILED_INCUMBENT_PRESERVED"
+    dominant_fallback = max(fallback_counts.items(), key=lambda kv: kv[1])[0] if fallback_counts else ""
+    if (
+        payload.get("parent_artifact_state") == "PARENT_ARTIFACT_ZERO_VALID_NO_LINEUPS"
+        and dominant_fallback in {"HITS05_CURRENT_PARENT_ARTIFACT_MISSING", "HITS05_CURRENT_PARENT_SCORE_MISSING", ""}
+    ):
+        dominant_fallback = "HITS05_INCUMBENT_FALLBACK_NO_LINEUP"
+    payload.update(
+        {
+            "slate_output_path": str(slate),
+            "hits05_market_rows": len(hits05_rows),
+            "candidate_routed_rows": candidate_rows,
+            "fallback_rows": fallback_rows,
+            "candidate_coverage_rate": coverage,
+            "games_with_candidate_coverage": len({g for g in games_with_candidate if g}),
+            "route_counts": route_counts,
+            "fallback_counts": fallback_counts,
+            "dominant_fallback_reason": dominant_fallback,
+            "slate_level_status": slate_status,
+            "rollback_status": "MLB_ENABLE_HITS05_FULL_SPINE_REPLACEMENT=0 available",
+            "parent_scores_path": str(parent_scores or ""),
+            "withheld_path": str(withheld or ""),
+        }
+    )
+    return payload
+
+
+def _load_o15_prospective_status() -> Dict[str, Any]:
+    root = Path("artifacts/analysis/model_development")
+    prospective_dir = root / "mlb_o15_market_anchored_ranking_prospective"
+    machine_path = prospective_dir / "machine_readable_prospective_grading_2026-07-17.json"
+    graded_path = prospective_dir / "prospective_graded_ledger_2026-07-17.csv"
+    prediction_path = prospective_dir / "prospective_prediction_ledger_2026-07-17.csv"
+    producer_script = Path("backend/mlb/scripts/run_mlb_o15_market_anchored_ranking_challenger.py")
+    grader_script = Path("backend/mlb/scripts/run_mlb_o15_market_anchored_ranking_prospective_grader.py")
+    wrapper_path = Path("/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh")
+
+    payload: Dict[str, Any] = {
+        "source_state": "missing",
+        "status": "PAUSED_NO_AUTOMATIC_EXECUTION",
+        "candidate_producer_active": False,
+        "automatic_wrapper_status": "unknown",
+        "latest_frozen_candidate_date": "2026-07-17",
+        "latest_grading_date": "2026-07-17",
+        "producer_script": str(producer_script),
+        "grader_script": str(grader_script),
+        "machine_json": str(machine_path),
+        "graded_ledger_csv": str(graded_path),
+        "prediction_ledger_csv": str(prediction_path),
+        "pending_rows": 0,
+        "blocked_rows": 0,
+        "graded_rows": 0,
+        "frozen_prediction_rows": 0,
+    }
+
+    raw, err = _load_json(machine_path)
+    if not err and isinstance(raw, dict):
+        payload["source_state"] = "ok"
+        payload["ranking_run_id"] = raw.get("ranking_run_id")
+        payload["frozen_prediction_rows"] = _as_int(raw.get("prediction_rows")) or 0
+        payload["graded_rows"] = _as_int(raw.get("graded_rows")) or 0
+        payload["blocked_rows"] = _as_int(raw.get("pending_rows")) or 0
+        payload["grade_status_counts"] = raw.get("grade_status_counts") or {}
+        payload["generated_at_utc"] = raw.get("generated_at_utc") or _path_mtime_utc(machine_path)
+        payload["run1_status"] = raw.get("run1_status")
+        payload["milestone_status"] = raw.get("milestone_status")
+    else:
+        payload["source_state"] = err or "missing"
+        payload["warning"] = f"O1.5 prospective machine artifact unavailable: {err or 'missing'}"
+
+    if wrapper_path.exists():
+        try:
+            wrapper_text = wrapper_path.read_text(encoding="utf-8")
+            payload["automatic_wrapper_status"] = (
+                "routine_wrapper_invocation_present"
+                if "make mlb-o15-prospective-grade" in wrapper_text
+                else "removed_from_routine_wrapper"
+            )
+        except Exception:
+            payload["automatic_wrapper_status"] = "wrapper_unreadable"
+
+    status_counts = payload.get("grade_status_counts") if isinstance(payload.get("grade_status_counts"), dict) else {}
+    if payload.get("automatic_wrapper_status") == "removed_from_routine_wrapper":
+        if _as_int(status_counts.get("UNMATCHED_OFFICIAL_PLAYER_GAME_OUTCOME")):
+            payload["status"] = "BLOCKED_ROWS_REQUIRE_MANUAL_REVIEW"
+        else:
+            payload["status"] = "FULLY_GRADED_AUTOMATION_REMOVED"
+    elif payload.get("automatic_wrapper_status") == "routine_wrapper_invocation_present":
+        payload["status"] = "PAUSED_NO_AUTOMATIC_EXECUTION"
+    return payload
+
+
 def _load_last_jsonl(path: Path) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     try:
         if not path.exists():
@@ -2202,6 +2402,69 @@ def _append_betonline_capture_integrity_section(
     lines.append("")
 
 
+def _append_hits05_full_spine_section(
+    lines: List[str],
+    payload: Dict[str, Any],
+    *,
+    ops_brief_md_path: Path,
+) -> None:
+    lines.append("## Hits 0.5 Full-Spine Replacement")
+    lines.append(
+        f"- Status: `{payload.get('slate_level_status') or 'UNKNOWN'}` | "
+        f"model `{payload.get('model_sha256') or 'n/a'}`"
+    )
+    lines.append(
+        f"- Latest parent run tag: `{payload.get('latest_parent_run_tag') or 'n/a'}` | "
+        f"generated `{payload.get('latest_parent_generated_at') or payload.get('source_mtime') or 'n/a'}`"
+    )
+    lines.append(
+        f"- Parent rows `{payload.get('parent_rows', 'n/a')}` | "
+        f"scored rows `{payload.get('scored_rows', 'n/a')}` | "
+        f"withheld rows `{payload.get('withheld_rows', 'n/a')}`"
+    )
+    if payload.get("parent_artifact_state"):
+        lines.append(
+            f"- Parent state: `{payload.get('parent_artifact_state')}` | "
+            f"date contract `{payload.get('parent_artifact_date_contract') or 'n/a'}`"
+        )
+    lines.append(
+        f"- Hits 0.5 market rows `{payload.get('hits05_market_rows', 'n/a')}` | "
+        f"candidate-routed `{payload.get('candidate_routed_rows', 'n/a')}` | "
+        f"fallback `{payload.get('fallback_rows', 'n/a')}` | "
+        f"coverage `{_pct(payload.get('candidate_coverage_rate'))}`"
+    )
+    lines.append(
+        f"- Games with candidate coverage `{payload.get('games_with_candidate_coverage', 'n/a')}` | "
+        f"dominant fallback `{payload.get('dominant_fallback_reason') or 'none'}`"
+    )
+    status_counts = payload.get("lineup_team_status_counts") if isinstance(payload.get("lineup_team_status_counts"), dict) else {}
+    if status_counts:
+        formatted = ", ".join(f"{k}={v}" for k, v in sorted(status_counts.items()))
+        lines.append(f"- Lineup/starter coverage: `{formatted}`")
+    lines.append(f"- Rollback: `{payload.get('rollback_status') or 'n/a'}`")
+    lines.append(
+        f"- {_format_artifact_markdown_link('Parent scores CSV', payload.get('parent_scores_path'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append(
+        f"- {_format_artifact_markdown_link('Withheld ledger CSV', payload.get('withheld_path'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append(
+        f"- {_format_artifact_markdown_link('Slate output CSV', payload.get('slate_output_path'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append("")
+    lines.append("| window | PT | ET | UTC | purpose | parent generated | model status | rollback |")
+    lines.append("|---|---:|---:|---:|---|---|---|---|")
+    for row in payload.get("scheduled_windows") or []:
+        if not isinstance(row, dict):
+            continue
+        parent_generated = "yes" if payload.get("latest_parent_run_tag") else "not yet"
+        lines.append(
+            f"| `{row.get('window_id')}` | {row.get('pacific')} | {row.get('eastern')} | {row.get('utc')} | "
+            f"{row.get('purpose')} | {parent_generated} | `{payload.get('slate_level_status') or 'UNKNOWN'}` | available |"
+        )
+    lines.append("")
+
+
 def build_markdown(
     *,
     ops_brief_md_path: Path,
@@ -2234,6 +2497,8 @@ def build_markdown(
     today_workspace: Dict[str, Any],
     rolling_candidate_obs: Dict[str, Any],
     betonline_capture_integrity: Dict[str, Any],
+    hits05_full_spine: Dict[str, Any],
+    o15_prospective_status: Dict[str, Any],
     path_forward: Sequence[Dict[str, str]],
     source_states: Dict[str, Any],
     freshness_audit: Sequence[Dict[str, Any]],
@@ -2712,6 +2977,32 @@ def build_markdown(
         lines.append("- Top alternate candidates: none available.")
     lines.append("")
 
+    lines.append("## Hits O1.5 Prospective Run 1 Utility")
+    lines.append("- Scope: historical frozen Run 1 process evidence only; not a production selector, upload rule, or active candidate capture.")
+    lines.append(
+        f"- Status: `{o15_prospective_status.get('status') or 'n/a'}` | "
+        f"automatic wrapper `{o15_prospective_status.get('automatic_wrapper_status') or 'n/a'}` | "
+        f"producer active `{o15_prospective_status.get('candidate_producer_active')}`"
+    )
+    lines.append(
+        f"- Frozen rows `{o15_prospective_status.get('frozen_prediction_rows', 0)}` | "
+        f"graded `{o15_prospective_status.get('graded_rows', 0)}` | "
+        f"pending `{o15_prospective_status.get('pending_rows', 0)}` | "
+        f"blocked/manual-review `{o15_prospective_status.get('blocked_rows', 0)}`"
+    )
+    lines.append(
+        f"- Latest frozen date `{o15_prospective_status.get('latest_frozen_candidate_date') or 'n/a'}` | "
+        f"latest grading date `{o15_prospective_status.get('latest_grading_date') or 'n/a'}` | "
+        f"generated `{o15_prospective_status.get('generated_at_utc') or 'n/a'}`"
+    )
+    lines.append(
+        f"- Artifacts: "
+        f"{_format_artifact_markdown_link('machine JSON', o15_prospective_status.get('machine_json'), relative_to_md=ops_brief_md_path)} | "
+        f"{_format_artifact_markdown_link('graded ledger CSV', o15_prospective_status.get('graded_ledger_csv'), relative_to_md=ops_brief_md_path)} | "
+        f"{_format_artifact_markdown_link('prediction ledger CSV', o15_prospective_status.get('prediction_ledger_csv'), relative_to_md=ops_brief_md_path)}"
+    )
+    lines.append("")
+
     lines.append("## Review Aid Performance")
     lines.append(provenance("Review Aid Performance"))
     lines.append("- Scope: review aid outcome tracking only; not a production rule, selector, upload filter, or threshold change.")
@@ -3052,6 +3343,7 @@ def build_markdown(
             lines.append(f"retry_attempted: {diag.get('retry_attempted')}")
             lines.append(f"retry_succeeded: {diag.get('retry_succeeded')}")
     lines.append("")
+    _append_hits05_full_spine_section(lines, hits05_full_spine, ops_brief_md_path=ops_brief_md_path)
     _append_betonline_capture_integrity_section(lines, betonline_capture_integrity, ops_brief_md_path=ops_brief_md_path)
     _append_rolling_candidate_obs_section(lines, rolling_candidate_obs, ops_brief_md_path=ops_brief_md_path)
     return "\n".join(lines).rstrip() + "\n"
@@ -3290,6 +3582,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         paths["betonline_capture_integrity_json"],
         expected_date=current_slate_date,
     )
+    hits05_full_spine = _load_hits05_full_spine_status(current_slate_date)
+    o15_prospective_status = _load_o15_prospective_status()
     if args.skip_today_workspace_fetch:
         today_workspace, today_workspace_err = _cached_today_workspace_status(
             slate_date=current_slate_date,
@@ -3325,6 +3619,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "pipeline_history_jsonl": pipeline_err or "ok",
         "ops_history_jsonl": ops_err or "ok",
         "betonline_capture_integrity_json": "ok" if betonline_capture_integrity.get("source_state") == "ok" else betonline_capture_integrity.get("source_state"),
+        "hits05_full_spine": hits05_full_spine.get("source_state") or "ok",
+        "o15_prospective_status": o15_prospective_status.get("source_state") or "ok",
         "today_workspace": today_workspace_err or "ok",
     }
 
@@ -3459,6 +3755,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         today_workspace=today_workspace,
         rolling_candidate_obs=rolling_candidate_obs,
         betonline_capture_integrity=betonline_capture_integrity,
+        hits05_full_spine=hits05_full_spine,
+        o15_prospective_status=o15_prospective_status,
         path_forward=path_forward,
         source_states=source_states,
         freshness_audit=freshness_audit,
@@ -3496,6 +3794,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "feature_lineage_health": feature_lineage_health,
         "today_workspace": today_workspace,
         "betonline_capture_integrity": betonline_capture_integrity,
+        "hits05_full_spine": hits05_full_spine,
+        "o15_prospective_status": o15_prospective_status,
         "input_refresh_status": input_refresh_status,
         "path_forward": path_forward,
         "outputs": {
@@ -3547,6 +3847,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 today_workspace=today_workspace,
                 rolling_candidate_obs=rolling_candidate_obs,
                 betonline_capture_integrity=betonline_capture_integrity,
+                hits05_full_spine=hits05_full_spine,
+                o15_prospective_status=o15_prospective_status,
                 path_forward=path_forward,
                 source_states=source_states,
                 freshness_audit=freshness_audit,
