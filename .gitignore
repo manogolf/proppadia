@@ -66,6 +66,10 @@ backend/mlb/data/external/
 backend/mlb/data/processed/mlb_uploads/**/*book_upload*.csv
 backend/mlb/data/processed/mlb_uploads/*book_upload*.csv
 backend/mlb/data/processed/mlb_uploads/**/upload_identity_diagnostics_*.csv
+# Daily upload-hub snapshots and manifests are runtime outputs, not source.
+backend/mlb/data/processed/mlb_uploads/
+# Rebuilt by mlb-prop-regime-validation during the daily workflow.
+backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv
 backend/mlb/data/processed/upload_hub/**/*book_upload*.csv
 backend/mlb/data/processed/upload_hub/*book_upload*.csv
 data/**
