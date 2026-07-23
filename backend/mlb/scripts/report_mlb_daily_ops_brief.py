@@ -3072,58 +3072,96 @@ def build_markdown(
                 )
         lines.append("")
 
-    lines.append("## Total Bases Shadow Candidate")
-    lines.append(provenance("Total Bases Shadow Candidate"))
-    eval_note = str(total_bases_shadow_evaluation.get("interpretation_note") or "").strip()
-    lines.append(
-        f"- Shadow scoring ran: `{bool(total_bases_shadow_summary)}` | "
-        f"slate `{total_bases_shadow_summary.get('slate_date') or 'n/a'}` | "
-        f"rows scored `{total_bases_shadow_summary.get('shadow_rows', 0)}` | "
-        f"balanced side changes `{total_bases_shadow_summary.get('tb_rolling_balanced_side_changed_rows', total_bases_shadow_summary.get('side_changed_rows', 0))}` "
-        f"(`{_pct(total_bases_shadow_summary.get('tb_rolling_balanced_side_changed_rate', total_bases_shadow_summary.get('side_changed_rate')))}`) | "
-        f"unweighted side changes `{total_bases_shadow_summary.get('tb_rolling_unweighted_side_changed_rows', 0)}` "
-        f"(`{_pct(total_bases_shadow_summary.get('tb_rolling_unweighted_side_changed_rate'))}`)."
+    lines.append("## Total Bases UBO-5 Route Health")
+    ubo5_health_raw, ubo5_health_error = _load_json(
+        Path(f"artifacts/analysis/mlb/production_routes/ubo5_tb15/{current_slate_date}/route_health.json")
     )
-    lines.append(
-        f"- Avg probability: production over `{_num_fmt(total_bases_shadow_summary.get('avg_production_prob_over'), 4)}` | "
-        f"balanced shadow over `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_balanced_prob_over', total_bases_shadow_summary.get('avg_shadow_prob_over')), 4)}` "
-        f"(delta `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_balanced_probability_delta_over', total_bases_shadow_summary.get('avg_probability_delta_over')), 4)}`) | "
-        f"unweighted shadow over `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_unweighted_prob_over'), 4)}` "
-        f"(delta `{_num_fmt(total_bases_shadow_summary.get('avg_tb_rolling_unweighted_probability_delta_over'), 4)}`)."
-    )
-    lines.append(
-        f"- Coverage: rolling present `{_pct(total_bases_shadow_summary.get('rolling_context_present_rate'))}` | "
-        f"rolling complete `{_pct(total_bases_shadow_summary.get('rolling_context_complete_rate'))}` | "
-        f"training rows `{total_bases_shadow_summary.get('training_rows', 'n/a')}` through "
-        f"`{total_bases_shadow_summary.get('training_train_through') or 'n/a'}`."
-    )
-    lines.append(provenance("Total Bases Shadow Evaluation"))
-    lines.append(
-        f"- Cumulative rows scored `{total_bases_shadow_evaluation.get('rows_scored', 0)}` | "
-        f"rows with outcomes `{total_bases_shadow_evaluation.get('rows_with_outcomes', 0)}` | "
-        f"outcome coverage `{_pct(total_bases_shadow_evaluation.get('outcome_coverage'))}`."
-    )
-    metric_rows = [
-        row
-        for row in (total_bases_shadow_evaluation.get("cumulative_metrics") or [])
-        if isinstance(row, dict)
-    ]
-    if metric_rows:
-        lines.append("| model | rows | Brier | log loss | AUC | avg over prob | actual over rate | overconfidence gap |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
-        for row in metric_rows:
-            lines.append(
-                f"| {row.get('model','n/a')} | `{row.get('rows', 0)}` | `{_num_fmt(row.get('brier'), 4)}` | "
-                f"`{_num_fmt(row.get('log_loss'), 4)}` | `{_num_fmt(row.get('auc'), 4)}` | "
-                f"`{_num_fmt(row.get('avg_prob'), 4)}` | `{_num_fmt(row.get('actual_over_rate'), 4)}` | "
-                f"`{_num_fmt(row.get('overconfidence_gap'), 4)}` |"
-            )
+    ubo5_health = ubo5_health_raw if isinstance(ubo5_health_raw, dict) else {}
+    route_enabled = ubo5_health.get("route_enabled")
+    producer_status = str(ubo5_health.get("feature_ledger_producer_status", "unknown")).lower()
+    route_failures = ubo5_health.get("route_failures_by_reason") or {}
+    eligible_rows = int(ubo5_health.get("eligible_rows", 0) or 0)
+    routed_rows = int(ubo5_health.get("routed_rows", 0) or 0)
+    fallback_rows = int(ubo5_health.get("fallback_rows", 0) or 0)
+    if route_enabled is False:
+        route_state = "disabled_by_rollback_switch"
+    elif not ubo5_health:
+        route_state = f"missing_route_health:{ubo5_health_error or 'invalid_payload'}"
+    elif producer_status in {"missing", "missing_producer", "not_found"}:
+        route_state = "missing_producer"
+    elif producer_status in {"malformed", "invalid"}:
+        route_state = "malformed_ledger"
+    elif ubo5_health.get("artifact_hash_status") not in {None, "PASS", "pass"}:
+        route_state = "artifact_mismatch"
+    elif ubo5_health.get("temporal_integrity_status") not in {None, "PASS", "pass"}:
+        route_state = "temporal_failure"
+    elif route_failures.get("stale_source", 0):
+        route_state = "stale_source"
+    elif eligible_rows == 0:
+        route_state = "enabled_no_current_candidates"
+    elif fallback_rows > 0:
+        route_state = "enabled_with_incumbent_fallbacks"
+    elif routed_rows > 0:
+        route_state = "enabled_routing"
     else:
-        lines.append("- Cumulative metrics unavailable until at least one shadow slate has resolved outcomes.")
-    if eval_note:
-        lines.append(f"- Interpretation note: {eval_note}")
-    lines.append("- Status: balanced shadow is research-only and not promotion-ready; unweighted shadow is research-only pending a larger live sample.")
-    lines.append("- Guardrail: shadow-only; production predictions/uploads/selectors remain unchanged.")
+        route_state = "enabled_no_routed_rows"
+    lines.append(
+        f"- Status: `{route_state}`; certified TB 1.5 established-hitter route is scheduled automatically, "
+        "with incumbent fail-closed fallback and an explicit rollback switch."
+    )
+    lines.append(
+        f"- Route enabled `{ubo5_health.get('route_enabled', 'unknown')}` | "
+        f"eligible `{ubo5_health.get('eligible_rows', 0)}` | routed `{ubo5_health.get('routed_rows', 0)}` | "
+        f"fallback `{ubo5_health.get('fallback_rows', 0)}` | artifact hash `{ubo5_health.get('artifact_hash_status', 'not_run')}`."
+    )
+    lines.append(
+        f"- Feature producer `{ubo5_health.get('feature_ledger_producer_status', 'unknown')}` | "
+        f"rows `{ubo5_health.get('feature_ledger_rows', 0)}` | schema `{ubo5_health.get('feature_schema_status', 'unknown')}` | "
+        f"temporal integrity `{ubo5_health.get('temporal_integrity_status', 'unknown')}`."
+    )
+    lines.append(
+        f"- Feature ledger `{ubo5_health.get('feature_ledger_path', 'n/a')}` | "
+        f"route ledger `{ubo5_health.get('route_ledger_path', 'n/a')}` | "
+        f"last successful route `{ubo5_health.get('last_successful_routed_execution') or 'none'}`."
+    )
+    lines.append(
+        f"- Route failures by reason: `{json.dumps(ubo5_health.get('route_failures_by_reason') or {}, sort_keys=True)}`."
+    )
+    lines.append(
+        f"- Fallback categories `{json.dumps(ubo5_health.get('fallbacks_by_exact_category') or {}, sort_keys=True)}` | "
+        f"top missing features `{json.dumps(ubo5_health.get('top_missing_features') or {}, sort_keys=True)}`."
+    )
+    lines.append(
+        f"- Routed model-supported nulls: `{json.dumps(ubo5_health.get('model_supported_null_features') or {}, sort_keys=True)}`."
+    )
+    lines.append(
+        f"- Legitimate-history fallbacks `{ubo5_health.get('legitimate_history_fallbacks', 0)}` | "
+        f"repairable integration fallbacks `{ubo5_health.get('repairable_integration_fallbacks', 0)}` | "
+        f"source-refresh failures `{ubo5_health.get('source_refresh_failures', 0)}`."
+    )
+    lines.append(f"- Health artifact: `artifacts/analysis/mlb/production_routes/ubo5_tb15/{current_slate_date}/route_health.json`.")
+    lines.append("- Operational rollback: set `MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE=0`; incumbent production remains the automatic fallback.")
+    lines.append("")
+
+    lines.append("## UBO-5 Total Bases 1.5 Board")
+    ubo5_board_raw, ubo5_board_error = _load_json(
+        Path(f"backend/mlb/exports/model_v2/ubo5_tb15/{current_slate_date}/ubo5_tb15_board_summary_{current_slate_date}.json")
+    )
+    ubo5_board = ubo5_board_raw if isinstance(ubo5_board_raw, dict) else {}
+    if ubo5_board:
+        lines.append(
+            f"- Routed `{ubo5_board.get('routed_rows', 0)}` | positive UBO-5 Over edges "
+            f"`{ubo5_board.get('positive_over_edge_rows', ubo5_board.get('positive_no_vig_edge_rows', 0))}` | "
+            f"BetOnline coverage `{ubo5_board.get('betonline_price_coverage_pct', 0):.2f}%`."
+        )
+        lines.append(f"- Open Markdown board: `{ubo5_board.get('markdown_path')}`.")
+        lines.append(f"- Operator CSV: `{ubo5_board.get('csv_path')}`.")
+        lines.append(f"- Latest board: `{ubo5_board.get('latest_markdown_path')}`.")
+    else:
+        lines.append(
+            f"- Board unavailable or stale (`{ubo5_board_error or 'invalid payload'}`); "
+            "production routing remains active, but routine review must not treat an older latest alias as current."
+        )
     lines.append("")
 
     lines.append("## Path Forward")
@@ -3762,6 +3800,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         freshness_audit=freshness_audit,
     )
 
+    # Research-only expected-PA pilot observability. Missing pilot state is
+    # intentionally non-fatal and cannot affect production report sections.
+    pa_shadow_path = Path(
+        "artifacts/analysis/model_development/mlb_hits05_live_expected_pa_parent_pilot/"
+        "2026-07-21/machine_readable_prospective_pilot.json"
+    )
+    pa_shadow: Dict[str, Any] = {}
+    if pa_shadow_path.exists():
+        try:
+            pa_shadow = json.loads(pa_shadow_path.read_text(encoding="utf-8"))
+        except Exception:
+            pa_shadow = {"status": "SOURCE_OR_GRADING_DEFECT"}
+    first_shadow = pa_shadow.get("first_slate", {}) if isinstance(pa_shadow, dict) else {}
+    window_shadow = pa_shadow.get("window_verification", []) if isinstance(pa_shadow, dict) else []
+    if pa_shadow:
+        md_text += (
+            "\n## HITS 0.5 EXPECTED-PA RESEARCH SHADOW — NO PRODUCTION OR WAGER EFFECT\n\n"
+            f"- Current capture: {len(window_shadow)}/5 window paths reported; "
+            f"model contract `{pa_shadow.get('contract_sha256', 'unknown')}`.\n"
+            f"- Prior-slate grading: {first_shadow.get('resolved_rows', 0)} resolved, "
+            f"{first_shadow.get('unresolved_rows', 0)} unresolved.\n"
+            "- Pilot progress: bounded review not complete; status "
+            f"`{first_shadow.get('interpretation', 'PROCESS_VALIDATED_OUTCOME_SAMPLE_EARLY')}`.\n"
+        )
+
     payload: Dict[str, Any] = {
         "generated_at_utc": generated_at_utc,
         "report_date": report_date,
@@ -3796,6 +3859,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "betonline_capture_integrity": betonline_capture_integrity,
         "hits05_full_spine": hits05_full_spine,
         "o15_prospective_status": o15_prospective_status,
+        "hits05_expected_pa_research_shadow": pa_shadow,
         "input_refresh_status": input_refresh_status,
         "path_forward": path_forward,
         "outputs": {

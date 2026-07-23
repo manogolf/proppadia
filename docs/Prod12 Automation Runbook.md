@@ -1038,6 +1038,7 @@ set +a
 
 MLB_DATE_ET="$(TZ=America/New_York date +%F)"
 MLB_LOCAL_DAILY_TRACKING_ENABLED="${MLB_LOCAL_DAILY_TRACKING_ENABLED:-1}"
+MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE="${MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE:-1}"
 MLB_RUN_TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
 MLB_RUN_TAG="local_daily_${MLB_RUN_TS_UTC}"
 MLB_ODDS_DAY_DIR="backend/mlb/exports/odds_history/${MLB_DATE_ET}"
@@ -1062,6 +1063,11 @@ MLB_ROLLING_CHECK_MIN_COVERAGE_PCT=99 \
 MLB_ROLLING_CHECK_MIN_COMPARABLE=100 \
 make mlb-check-rolling-integrity
 
+# This target transitively runs governed lineup capture, TB 1.5 candidate
+# discovery, strict-prior feature materialization, and the fail-closed UBO-5
+# route. Keep slate/upload separate because the Hits 0.5 parent is inserted
+# between predictions-wide and slate output in the installed production wrapper.
+MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE="$MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE" \
 make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
 make mlb-slate-output MLB_DATE="$MLB_DATE_ET"
 

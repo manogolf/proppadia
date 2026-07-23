@@ -462,44 +462,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         detail=detail,
     )
 
-    shadow_summary_path = Path(
-        str(args.total_bases_shadow_summary_json).format(
-            completed_slate_date=completed,
-            current_slate_date=current,
-        )
-    )
-    shadow_score_cmd = [
-        "make",
-        "mlb-total-bases-shadow-candidate",
-        f"MLB_TOTAL_BASES_SHADOW_DATE={current}",
-    ]
-    ok, detail = _run("total_bases_shadow_scoring", shadow_score_cmd, allow_fail=True)
-    _record(
-        results,
-        name="total_bases_shadow_scoring",
-        artifact=shadow_summary_path,
-        expected_date=current,
-        actual_date=_json_date(shadow_summary_path, ("slate_date",)),
-        command=shadow_score_cmd,
-        refresh_ok=ok,
-        required=False,
-        detail=detail,
-    )
-
-    shadow_eval_path = Path(args.total_bases_shadow_evaluation_json)
-    shadow_eval_cmd = ["make", "mlb-total-bases-shadow-evaluation"]
-    ok, detail = _run("total_bases_shadow_evaluation", shadow_eval_cmd, allow_fail=True)
-    _record(
-        results,
-        name="total_bases_shadow_evaluation",
-        artifact=shadow_eval_path,
-        expected_date=current,
-        actual_date=max(_load_json(shadow_eval_path).get("shadow_dates_scanned") or [""])[:10],
-        command=shadow_eval_cmd,
-        refresh_ok=ok,
-        required=False,
-        detail=detail,
-    )
+    # The balanced and unweighted Total Bases shadows were retired when the
+    # certified UBO-5 TB1.5 established-hitter production route was activated.
 
     _print_assertions(results)
     refreshed_count = sum(1 for row in results if row.status == "refreshed")

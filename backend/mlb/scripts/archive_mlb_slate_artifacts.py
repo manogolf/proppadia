@@ -123,6 +123,11 @@ def main() -> int:
         help="Optional explicit manifest path. Default: <archive_dir>/manifest.json",
     )
     ap.add_argument("--strict", action="store_true", help="Fail when any expected artifact is missing")
+    ap.add_argument("--ubo5-feature-ledger", default="")
+    ap.add_argument("--ubo5-route-ledger", default="")
+    ap.add_argument("--ubo5-route-health", default="")
+    ap.add_argument("--ubo5-board-md", default="")
+    ap.add_argument("--ubo5-board-csv", default="")
     args = ap.parse_args()
 
     slate_date = str(args.slate_date or "").strip() or _date_et_today()
@@ -142,6 +147,16 @@ def main() -> int:
         (slate_csv, archive_dir / slate_csv.name),
         (book_csv, archive_dir / book_csv.name),
     ]
+    for raw in (
+        args.ubo5_feature_ledger,
+        args.ubo5_route_ledger,
+        args.ubo5_route_health,
+        args.ubo5_board_md,
+        args.ubo5_board_csv,
+    ):
+        if str(raw).strip():
+            source = Path(str(raw)).expanduser()
+            copy_plan.append((source, archive_dir / source.name))
     if run_tag:
         copy_plan.extend(
             [
