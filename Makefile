@@ -50,6 +50,7 @@ MLB_UBO5_TB15_BOARD_MD ?= $(MLB_UBO5_TB15_BOARD_ROOT)/$(MLB_DATE)/ubo5_tb15_boar
 MLB_UBO5_TB15_BOARD_CSV ?= $(MLB_UBO5_TB15_BOARD_ROOT)/$(MLB_DATE)/ubo5_tb15_board_$(MLB_DATE).csv
 MLB_UBO5_TB15_BOARD_RUN_TAG ?=
 MLB_UBO5_TB15_PROVISIONAL_RUN_TAG ?=
+MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG ?=
 MLB_SLATE_OUTPUT_CSV ?= backend/mlb/data/processed/mlb_slate_output.csv
 MLB_SLATE_PROP_TYPE ?=
 MLB_BOOK_UPLOAD_OUT_CSV ?= backend/mlb/data/processed/mlb_book_upload.csv
@@ -1986,6 +1987,12 @@ mlb-ubo5-tb15-board:
 mlb-ubo5-tb15-provisional-tracker:
 	@test -n "$(MLB_UBO5_TB15_PROVISIONAL_RUN_TAG)" || (echo "MLB_UBO5_TB15_PROVISIONAL_RUN_TAG is required" >&2; exit 2)
 	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker --date "$(MLB_DATE)" --run-tag "$(MLB_UBO5_TB15_PROVISIONAL_RUN_TAG)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --lineup-csv "$(MLB_UBO5_TB15_LINEUP_LEDGER)" --lineup-team-summary "$(MLB_UBO5_TB15_LINEUP_DIR)/pregame_lineup_game_team_summary_$(MLB_DATE)_ubo5_tb15_daily.csv" --normalized-root "$(MLB_UBO5_TB15_NORMALIZED_ROOT)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)"
+
+# Render the presentation-only nine-position pre-lineup confirmation envelope.
+.PHONY: mlb-ubo5-tb15-prelineup-confirmation
+mlb-ubo5-tb15-prelineup-confirmation:
+	@test -n "$(MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG)" || (echo "MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG is required" >&2; exit 2)
+	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_prelineup_confirmation_board --date "$(MLB_DATE)" --run-tag "$(MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --lineup-csv "$(MLB_UBO5_TB15_LINEUP_LEDGER)" --lineup-team-summary "$(MLB_UBO5_TB15_LINEUP_DIR)/pregame_lineup_game_team_summary_$(MLB_DATE)_ubo5_tb15_daily.csv" --route-ledger "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --normalized-root "$(MLB_UBO5_TB15_NORMALIZED_ROOT)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)"
 
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:
