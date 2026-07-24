@@ -22,6 +22,9 @@ from backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker import (
 from backend.mlb.scripts.materialize_mlb_ubo5_strict_prior_features import (
     FEATURES, MODEL_SUPPORTED_NULL_FEATURES,
 )
+from backend.mlb.scripts.run_mlb_ubo5_tb15_role_envelope_pilot import (
+    HYBRID_PROMOTION_ROLES, ROLE_LABELS, read_normalized, role_context,
+)
 from backend.mlb.shared.ubo5_tb15_production_route import ARTIFACT_SHA256, sha256_file
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,7 +33,7 @@ CLASS_LABELS = {
     "ORDER_SENSITIVE_WAIT": "WAIT FOR LINEUP",
     "ROBUST_PASS": "PASS",
 }
-SORT_ORDER = {"CONFIRM": 0, "WAIT FOR LINEUP": 1, "PASS": 2}
+SORT_ORDER = {"CONFIRM": 0, "LIKELY CONFIRM IF STARTING": 1, "WAIT FOR LINEUP": 2, "PASS": 3}
 BOARD_FIELDS = ["player_name", "game", "line", "ubo5_status"]
 AUDIT_FIELDS = [
     "slate_date", "run_tag", "snapshot_timestamp_utc", "game_pk", "batter_mlb_id",
@@ -38,7 +41,9 @@ AUDIT_FIELDS = [
     *[f"ubo5_probability_batting_{slot}" for slot in range(1, 10)],
     "minimum_ubo5_over_probability", "maximum_ubo5_over_probability",
     "BetOnline_over_price", "BetOnline_under_price", "no_vig_over_probability",
-    "provisional_classification", "unscored_reason",
+    "provisional_classification", "full_1_to_9_classification", "role_class",
+    "start_outlook", "plausible_batting_positions", "plausible_envelope_classification",
+    "hybrid_display_status", "unscored_reason",
 ]
 TRANSITION_FIELDS = [
     "slate_date", "origin_run_tag", "comparison_run_tag", "game_pk", "batter_mlb_id",
@@ -285,6 +290,22 @@ def main() -> int:
     )
     player_map, team_map = lineup_as_of(args.lineup_csv, args.lineup_team_summary, captured)
     full_player_map, full_team_map = lineup_context(args.lineup_csv, args.lineup_team_summary)
+    games = read_normalized(args.normalized_root, "games")
+    games["game_date"] = pd.to_datetime(games.game_date)
+    role_lineups = read_normalized(args.normalized_root, "starting_lineups")
+    role_lineups = role_lineups.merge(
+        games[["game_pk", "game_date", "home_team", "away_team"]], on="game_pk", how="left"
+    )
+    missing_team = role_lineups.team.isna() | role_lineups.team.astype(str).str.strip().eq("")
+    role_lineups.loc[missing_team & role_lineups.home_away.astype(str).isin(["home", "h"]), "team"] = role_lineups["home_team"]
+    role_lineups.loc[missing_team & role_lineups.home_away.astype(str).isin(["away", "v"]), "team"] = role_lineups["away_team"]
+    role_lineups["player_id"] = pd.to_numeric(role_lineups.player_id, errors="coerce")
+    role_lineups = role_lineups.dropna(subset=["player_id", "game_date", "batting_order_position"]).copy()
+    role_lineups["player_id"] = role_lineups.player_id.astype(int)
+    role_outcomes = read_normalized(args.normalized_root, "player_game_outcomes")
+    role_outcomes["player_id"] = pd.to_numeric(role_outcomes.player_id, errors="coerce")
+    role_outcomes = role_outcomes.dropna(subset=["player_id"]).copy()
+    role_outcomes["player_id"] = role_outcomes.player_id.astype(int)
     audit_rows, board_rows = [], []
     for market in unstarted:
         key = (int(market["game_id"]), int(market["player_id"]))
@@ -294,6 +315,26 @@ def main() -> int:
         values = probabilities.get(key, [None] * 9)
         reason = reasons.get(key, "")
         classification = classify(values, no_vig) if not reason and no_vig is not None else ""
+        context = role_context(
+            role_lineups, role_outcomes, games, pd.Timestamp(args.date), str(market["team"]), key[1]
+        )
+        plausible_slots = context.pop("_slots")
+        plausible_classification = (
+            classify([values[slot - 1] for slot in plausible_slots], no_vig)
+            if classification and no_vig is not None else ""
+        )
+        if classification == "ROBUST_CONFIRM":
+            hybrid_status = "CONFIRM"
+        elif classification == "ROBUST_PASS":
+            hybrid_status = "PASS"
+        elif (
+            classification == "ORDER_SENSITIVE_WAIT"
+            and plausible_classification == "ROBUST_CONFIRM"
+            and context["role_class"] in HYBRID_PROMOTION_ROLES
+        ):
+            hybrid_status = "LIKELY CONFIRM IF STARTING"
+        else:
+            hybrid_status = "WAIT FOR LINEUP"
         row = {
             "slate_date": args.date, "run_tag": args.run_tag,
             "snapshot_timestamp_utc": captured.isoformat(), "game_pk": key[0],
@@ -308,14 +349,20 @@ def main() -> int:
             "BetOnline_over_price": market["over_price"], "BetOnline_under_price": market["under_price"],
             "no_vig_over_probability": "" if no_vig is None else f"{no_vig:.10f}",
             "provisional_classification": classification,
+            "full_1_to_9_classification": classification,
+            "role_class": context["role_class"],
+            "start_outlook": ROLE_LABELS[context["role_class"]],
+            "plausible_batting_positions": "|".join(map(str, plausible_slots)),
+            "plausible_envelope_classification": plausible_classification,
+            "hybrid_display_status": hybrid_status,
             "unscored_reason": reason or ("" if no_vig is not None else "CURRENT_TWO_SIDED_PRICE_UNAVAILABLE"),
         }
         audit_rows.append(row)
         current_status, _, _ = status_for(market, full_player_map, full_team_map)
-        if classification and current_status in {"LINEUP_UNCONFIRMED", "LINEUP_STATUS_UNKNOWN"}:
+        if current_status in {"LINEUP_UNCONFIRMED", "LINEUP_STATUS_UNKNOWN"}:
             board_rows.append({
                 "player_name": market["player_name"], "game": market["game"],
-                "line": "Over 1.5 TB", "ubo5_status": CLASS_LABELS[classification],
+                "line": "Over 1.5 TB", "ubo5_status": hybrid_status,
             })
     board_rows.sort(key=lambda row: (SORT_ORDER[row["ubo5_status"]], row["game"], row["player_name"]))
     audit_path = day_dir / f"ubo5_tb15_prelineup_confirmation_audit_{safe_tag}.csv"
@@ -334,8 +381,9 @@ def main() -> int:
     else:
         lines.append("| *None* |  |  |  |")
     counts = pd.Series([row["provisional_classification"] for row in audit_rows]).value_counts()
+    hybrid_counts = pd.Series([row["hybrid_display_status"] for row in audit_rows]).value_counts()
     lines += [
-        "", "The status uses the complete batting-position 1–9 probability envelope; no exact batting order or exact UBO-5 probability is asserted.", "",
+        "", "CONFIRM and PASS are governed exclusively by the complete batting-position 1–9 envelope. LIKELY CONFIRM IF STARTING is an asymmetric presentation-only promotion; a narrowed-envelope PASS can never produce PASS.", "",
         f"Scored markets: **{sum(bool(row['provisional_classification']) for row in audit_rows)}**  ",
         f"Unscored markets: **{sum(bool(row['unscored_reason']) for row in audit_rows)}**  ",
         f"Exact identity rejects: **{len(identity_rejects)}**",
@@ -363,6 +411,10 @@ def main() -> int:
         "ROBUST_CONFIRM": int(counts.get("ROBUST_CONFIRM", 0)),
         "ROBUST_PASS": int(counts.get("ROBUST_PASS", 0)),
         "ORDER_SENSITIVE_WAIT": int(counts.get("ORDER_SENSITIVE_WAIT", 0)),
+        "hybrid_CONFIRM": int(hybrid_counts.get("CONFIRM", 0)),
+        "hybrid_LIKELY_CONFIRM_IF_STARTING": int(hybrid_counts.get("LIKELY CONFIRM IF STARTING", 0)),
+        "hybrid_PASS": int(hybrid_counts.get("PASS", 0)),
+        "hybrid_WAIT_FOR_LINEUP": int(hybrid_counts.get("WAIT FOR LINEUP", 0)),
         "identity_rejects": len(identity_rejects), "transition_rows": len(transition_rows),
         "transition_defects": sum(row["integrity_status"] == "DEFECT" for row in transition_rows),
     }

@@ -11,7 +11,6 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from backend.mlb.scripts.build_mlb_ubo5_tb15_prelineup_confirmation_board import classify
 from backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker import market_rows
 from backend.mlb.scripts.build_mlb_ubo5_tb15_human_board import implied
 from backend.mlb.scripts.materialize_mlb_ubo5_strict_prior_features import FEATURES
@@ -26,6 +25,15 @@ ROLE_LABELS = {
     "LIKELY_BENCH": "Likely bench",
     "ROLE_UNRESOLVED": "Role unresolved",
 }
+HYBRID_PROMOTION_ROLES = {"ESTABLISHED_PRIMARY_STARTER", "POSITION_COMPETITION"}
+
+
+def classify(values: list[float], no_vig: float) -> str:
+    if min(values) > no_vig:
+        return "ROBUST_CONFIRM"
+    if max(values) <= no_vig:
+        return "ROBUST_PASS"
+    return "ORDER_SENSITIVE_WAIT"
 
 
 def read_normalized(root: Path, table: str) -> pd.DataFrame:
@@ -328,6 +336,82 @@ def main() -> int:
         and historical_summary["false_robust_confirm_count"] == 0
         and historical_summary["false_robust_pass_count"] == 0
     )
+    historical_hybrid = historical.copy()
+    likely_mask = (
+        historical_hybrid.full_1_9_classification.eq("ORDER_SENSITIVE_WAIT")
+        & historical_hybrid.plausible_classification.eq("ROBUST_CONFIRM")
+        & historical_hybrid.role_class.isin(HYBRID_PROMOTION_ROLES)
+    )
+    historical_hybrid["hybrid_status"] = np.select(
+        [
+            historical_hybrid.full_1_9_classification.eq("ROBUST_CONFIRM"),
+            likely_mask,
+            historical_hybrid.full_1_9_classification.eq("ROBUST_PASS"),
+        ],
+        ["CONFIRM", "LIKELY_CONFIRM_IF_STARTING", "PASS"],
+        default="WAIT_FOR_LINEUP",
+    )
+    likely = historical_hybrid[likely_mask]
+    likely_starters = likely[likely.actual_starter]
+    likely_role = likely.groupby("role_class").agg(
+        rows=("game_pk", "size"), eventual_starters=("actual_starter", "sum"),
+        exact_positive=("exact_positive_edge", lambda values: int(values.eq(True).sum())),
+        exact_nonpositive=("exact_positive_edge", lambda values: int(values.eq(False).sum())),
+    ).reset_index()
+    hybrid_historical_summary = {
+        "counts": historical_hybrid.hybrid_status.value_counts().to_dict(),
+        "likely_confirm_count": len(likely),
+        "eventual_starter_count": int(likely.actual_starter.sum()),
+        "eventual_nonstarter_count": int((~likely.actual_starter).sum()),
+        "exact_order_positive_count": int(likely_starters.exact_positive_edge.eq(True).sum()),
+        "exact_order_nonpositive_count": int(likely_starters.exact_positive_edge.eq(False).sum()),
+        "false_likely_confirm_count": int(likely_starters.exact_positive_edge.eq(False).sum()),
+        "positive_predictive_value": float(likely_starters.exact_positive_edge.eq(True).mean()),
+        "coverage_of_market_population": float(len(likely) / len(historical_hybrid)),
+        "by_role_class": likely_role.to_dict("records"),
+        "nonstarter_validation_limitation": "historical UBO feature vectors exist only for actual starters",
+    }
+    july_hybrid = july.copy()
+    july_likely = (
+        july_hybrid.provisional_classification.eq("ORDER_SENSITIVE_WAIT")
+        & july_hybrid.plausible_classification.eq("ROBUST_CONFIRM")
+        & july_hybrid.role_class.isin(HYBRID_PROMOTION_ROLES)
+    )
+    july_hybrid["hybrid_status"] = np.select(
+        [
+            july_hybrid.provisional_classification.eq("ROBUST_CONFIRM"),
+            july_likely,
+            july_hybrid.provisional_classification.eq("ROBUST_PASS"),
+        ],
+        ["CONFIRM", "LIKELY_CONFIRM_IF_STARTING", "PASS"],
+        default="WAIT_FOR_LINEUP",
+    )
+    hybrid_july_summary = {"counts": july_hybrid.hybrid_status.value_counts().to_dict()}
+    hybrid_board = july_hybrid[["player_name", "game", "hybrid_status"]].copy()
+    hybrid_board["line"] = "Over 1.5 TB"
+    hybrid_board["ubo5_status"] = hybrid_board.hybrid_status.str.replace("_", " ")
+    hybrid_order = {"CONFIRM": 0, "LIKELY CONFIRM IF STARTING": 1, "WAIT FOR LINEUP": 2, "PASS": 3}
+    hybrid_board["_sort"] = hybrid_board.ubo5_status.map(hybrid_order)
+    hybrid_board = hybrid_board.sort_values(["_sort", "game", "player_name"])[
+        ["player_name", "game", "line", "ubo5_status"]
+    ]
+    hybrid_board.to_csv(args.output_dir / "ubo5_tb15_asymmetric_hybrid_board_2026-07-24.csv", index=False)
+    hybrid_lines = [
+        "# UBO-5 TB 1.5 Asymmetric Hybrid Board — 2026-07-24", "",
+        "**LINEUP UNCONFIRMED · PRESENTATION ONLY**", "",
+        "| Player | Game | Line | UBO-5 |", "| --- | --- | --- | --- |",
+    ]
+    hybrid_lines.extend(
+        f"| {row.player_name} | {row.game} | {row.line} | {row.ubo5_status} |"
+        for row in hybrid_board.itertuples()
+    )
+    (args.output_dir / "ubo5_tb15_asymmetric_hybrid_board_2026-07-24.md").write_text(
+        "\n".join(hybrid_lines) + "\n"
+    )
+    hybrid_activation = (
+        len(likely_starters) >= 50
+        and likely_starters.exact_positive_edge.eq(False).sum() == 0
+    )
     result = {
         "method": METHOD, "historical": historical_summary, "july24": july_summary,
         "active_roster_source": {
@@ -337,6 +421,13 @@ def main() -> int:
         },
         "activation_gate_passed": activation,
         "morning_board_action": "ACTIVATE_ROLE_ENVELOPE" if activation else "PILOT_ONLY_KEEP_FULL_1_9_BOARD",
+        "asymmetric_hybrid": {
+            "historical": hybrid_historical_summary, "july24": hybrid_july_summary,
+            "promotion_roles": sorted(HYBRID_PROMOTION_ROLES),
+            "activation_gate_passed": bool(hybrid_activation),
+            "morning_board_action": "ACTIVATE_ASYMMETRIC_HYBRID_DISPLAY" if hybrid_activation else "KEEP_FULL_1_9_DISPLAY",
+            "pass_governance": "FULL_1_TO_9_ROBUST_PASS_ONLY",
+        },
     }
     board = july[["player_name", "game", "pilot_decision", "role_class"]].copy()
     board["line"] = "Over 1.5 TB"
