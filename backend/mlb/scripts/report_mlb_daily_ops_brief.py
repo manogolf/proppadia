@@ -3150,7 +3150,8 @@ def build_markdown(
     ubo5_board = ubo5_board_raw if isinstance(ubo5_board_raw, dict) else {}
     if ubo5_board:
         lines.append(
-            f"- Routed `{ubo5_board.get('routed_rows', 0)}` | positive UBO-5 Over edges "
+            f"- Evaluation `{ubo5_board.get('evaluation_status', 'unknown')}` | "
+            f"run tag `{ubo5_board.get('run_tag') or 'unknown'}` | routed `{ubo5_board.get('routed_rows', 0)}` | positive UBO-5 Over edges "
             f"`{ubo5_board.get('positive_over_edge_rows', ubo5_board.get('positive_no_vig_edge_rows', 0))}` | "
             f"BetOnline coverage `{ubo5_board.get('betonline_price_coverage_pct', 0):.2f}%`."
         )

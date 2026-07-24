@@ -240,6 +240,21 @@ def main() -> int:
         and r["price_source_status"] == "BETONLINE_TWO_SIDED"
     ]
     price_unavailable = [r for r in routed if r["price_source_status"] != "BETONLINE_TWO_SIDED"]
+    now_utc = datetime.now(UTC)
+    future_slate_games = {
+        r.get("game_id")
+        for r in wide
+        if r.get("game_date") == date
+        and (parse_time(r.get("game_time", "")) or now_utc) > now_utc
+    }
+    if not routes and future_slate_games:
+        evaluation_status = "CANDIDATE_COVERAGE_PENDING"
+    elif routed and not priced:
+        evaluation_status = "PRICE_COVERAGE_PENDING"
+    elif routed and len(priced) < len(routed):
+        evaluation_status = "PARTIAL_PRICE_COVERAGE"
+    else:
+        evaluation_status = "COMPLETE_CURRENT_PRICE_EVALUATION"
     def edge_sort(row: dict) -> tuple:
         edge = number(row.get("model_edge_pct_points"))
         prob = number(row.get("displayed_side_probability_pct")) or 0
@@ -297,15 +312,25 @@ def main() -> int:
     md = [
         f"# UBO-5 Total Bases 1.5 Board — {date}", "",
         f"- Generated: `{generated}`",
+        f"- Source run tag: `{args.snapshot_run_tag or snapshot.get('run_tag') or snapshot.get('snapshot_run_tag') or 'unknown'}`",
         f"- Route enabled: `{health.get('route_enabled', 'unknown')}`",
         f"- Candidates: `{health.get('feature_ledger_rows', len(routes))}` | routed: `{len(routed)}` | incumbent fallbacks: `{len(fallbacks)}`",
         f"- Artifact hash: `{health.get('artifact_hash_status')}` | feature schema: `{health.get('feature_schema_status')}` | temporal integrity: `{health.get('temporal_integrity_status')}`",
         f"- BetOnline two-sided price coverage: `{len(priced)}/{len(rows)} ({(100*len(priced)/len(rows) if rows else 0):.2f}%)`", "",
+        f"- Evaluation status: `{evaluation_status}`", "",
         "## Positive UBO-5 Over Edge", "", *table(positive_over), "",
         "## Price-unavailable diagnostic", "",
         "| Player | Game | Line | Status |",
         "|---|---|---|---|",
     ]
+    if not positive_over and evaluation_status != "COMPLETE_CURRENT_PRICE_EVALUATION":
+        pending_marker = {
+            "CANDIDATE_COVERAGE_PENDING": "*Pending confirmed lineup candidates; positive-edge evaluation is not complete.*",
+            "PRICE_COVERAGE_PENDING": "*PRICE_COVERAGE_PENDING; positive-edge evaluation is not complete.*",
+            "PARTIAL_PRICE_COVERAGE": "*Price coverage is partial; the table includes only currently matched rows.*",
+        }[evaluation_status]
+        # Replace the generic empty-state marker emitted by table().
+        md = [pending_marker if line == "*None*" else line for line in md]
     md += [
         f"| {r['player_name']} | {r['matchup']} | Over 1.5 TB | PRICE UNAVAILABLE |"
         for r in price_unavailable
@@ -324,6 +349,9 @@ def main() -> int:
     md_path.write_text("\n".join(md), encoding="utf-8")
     summary = {
         "slate_date": date, "generated_at_utc": generated, "route_enabled": health.get("route_enabled"),
+        "run_tag": args.snapshot_run_tag or snapshot.get("run_tag") or snapshot.get("snapshot_run_tag") or "",
+        "evaluation_status": evaluation_status,
+        "future_slate_games": len(future_slate_games),
         "candidate_rows": len(routes), "routed_rows": len(routed), "fallback_rows": len(fallbacks),
         "identity_excluded_rows": len(excluded), "priced_rows": len(priced),
         "betonline_price_coverage_pct": round(100*len(priced)/len(rows), 2) if rows else 0,
