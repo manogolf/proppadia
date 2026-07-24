@@ -25,7 +25,9 @@ def read(root,table,cols):
  return pd.concat(out,ignore_index=True,sort=False)
 def sha_text(s):return hashlib.sha256(s.encode()).hexdigest()
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--normalized-root",type=Path,required=True);ap.add_argument("--output",type=Path,required=True);ap.add_argument("--candidate-file",type=Path);a=ap.parse_args()
+ ap=argparse.ArgumentParser();ap.add_argument("--normalized-root",type=Path,required=True);ap.add_argument("--output",type=Path,required=True);ap.add_argument("--candidate-file",type=Path)
+ ap.add_argument("--allow-unconfirmed-provisional",action="store_true",help="Presentation-only: allow a real, known batting-order row to be materialized before lineup confirmation.")
+ a=ap.parse_args()
  n=a.normalized_root.resolve()
  cand=pd.read_csv(a.candidate_file) if a.candidate_file else pd.DataFrame()
  if a.candidate_file and not len(cand):
@@ -39,7 +41,9 @@ def main():
   if missing:raise RuntimeError("candidate columns missing: "+"|".join(missing))
   if cand.slate_date.astype(str).nunique()!=1:raise RuntimeError("candidate batch must contain exactly one slate_date")
   cand["prediction_timestamp_utc"]=pd.to_datetime(cand.prediction_timestamp_utc,utc=True);cand["scheduled_start_utc"]=pd.to_datetime(cand.scheduled_start_utc,utc=True);cand["lineup_certified_at_utc"]=pd.to_datetime(cand.lineup_certified_at_utc,utc=True)
-  cand["exclusion_reason"]=np.where(~cand.line.eq(1.5),"UNSUPPORTED_LINE",np.where(~cand.lineup_certified.astype(bool),"LINEUP_NOT_CERTIFIED",np.where(cand.prediction_timestamp_utc.ge(cand.scheduled_start_utc),"POST_START_OR_AT_START",np.where(cand.lineup_certified_at_utc.gt(cand.prediction_timestamp_utc),"LINEUP_CERTIFIED_AFTER_PREDICTION",""))))
+  reject_unconfirmed=(~cand.lineup_certified.astype(bool))&(~a.allow_unconfirmed_provisional)
+  certified_after=cand.lineup_certified.astype(bool)&cand.lineup_certified_at_utc.gt(cand.prediction_timestamp_utc)
+  cand["exclusion_reason"]=np.where(~cand.line.eq(1.5),"UNSUPPORTED_LINE",np.where(reject_unconfirmed,"LINEUP_NOT_CERTIFIED",np.where(cand.prediction_timestamp_utc.ge(cand.scheduled_start_utc),"POST_START_OR_AT_START",np.where(certified_after,"LINEUP_CERTIFIED_AFTER_PREDICTION",""))))
  games=read(n,"games",["game_pk","game_date","home_team","away_team"]).drop_duplicates("game_pk")
  games.game_date=pd.to_datetime(games.game_date);games.game_pk=pd.to_numeric(games.game_pk).astype(int)
  line=read(n,"starting_lineups",["game_pk","team","team_id","player_id","batting_order_position","home_away","lineup_certification_status","source"])
