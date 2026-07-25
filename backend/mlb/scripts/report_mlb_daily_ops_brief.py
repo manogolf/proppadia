@@ -858,7 +858,6 @@ def _build_freshness_audit(
     reporting_alignment: Dict[str, Any],
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
-    overlap_watch: Dict[str, Any],
     hits_15_tier_backtest: Dict[str, Any],
     review_aid_performance: Dict[str, Any],
     total_bases_shadow_summary: Dict[str, Any],
@@ -1053,22 +1052,6 @@ def _build_freshness_audit(
             cadence="daily for current slate workspace context",
             freshness_status=hits_status,
             note=hits_note,
-        )
-    )
-    rows.append(
-        _freshness_row(
-            section="Ranking/QC Overlap Watch",
-            source_file=str(paths["overlap_watch_json"]),
-            source_date=_date_key(overlap_watch.get("latest_completed_slate")),
-            expected_date=completed_slate_date,
-            generated_at_utc=str(overlap_watch.get("generated_at") or ""),
-            mtime_utc=_path_mtime_utc(paths["overlap_watch_json"]),
-            load_status=str(source_states.get("overlap_watch_json") or "ok"),
-            cadence="daily after completed-slate reconcile and actual wager matching",
-            note=(
-                f"composition_drift_flag={overlap_watch.get('composition_drift_flag') or 'n/a'}; "
-                f"action={overlap_watch.get('action_annotation') or 'n/a'}"
-            ),
         )
     )
     for section, key, note in (
@@ -1453,47 +1436,6 @@ def _apply_hits_environment_team_eval_history_fallback(
         out["warnings"] = list(out.get("warnings") or []) + ["using_hits_environment_history_team_eval_fallback"]
         return out
     return hits_env
-
-
-def _extract_overlap_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not isinstance(js, dict):
-        return {}
-    comp = js.get("composition_diagnostics") or {}
-    periods = comp.get("periods") or {}
-
-    def period(name: str) -> Dict[str, Any]:
-        row = periods.get(name) or {}
-        return dict(row) if isinstance(row, dict) else {}
-
-    last7 = period("last_7")
-    full = period("full_history")
-    return {
-        "latest_reconcile_date_found": js.get("latest_reconcile_date_found") or "",
-        "latest_overlap_date_included": js.get("latest_overlap_date_included") or "",
-        "stale": bool(js.get("stale")),
-        "latest_completed_slate": comp.get("latest_completed_slate") or "",
-        "composition_drift_flag": comp.get("composition_drift_flag") or "",
-        "composition_drift_reasons": comp.get("composition_drift_reasons") or [],
-        "action_annotation": comp.get("action_annotation") or "",
-        "status": comp.get("status") or "",
-        "full_history": full,
-        "pre_2026_05_29": period("pre_2026_05_29"),
-        "from_2026_05_29_onward": period("from_2026_05_29_onward"),
-        "last_30": period("last_30"),
-        "last_14": period("last_14"),
-        "last_7": last7,
-        "last_7_row_count": last7.get("rows"),
-        "bottom_order_share_full_history": full.get("bottom_order_share"),
-        "bottom_order_share_last_7": last7.get("bottom_order_share"),
-        "avg_qc_score_full_history": full.get("avg_qc_score"),
-        "avg_qc_score_last_7": last7.get("avg_qc_score"),
-        "avg_v2_ranking_score_full_history": full.get("avg_v2_ranking_score"),
-        "avg_v2_ranking_score_last_7": last7.get("avg_v2_ranking_score"),
-        "qc_probability_55_60_share_last_7": last7.get("qc_probability_55_60_share"),
-        "odds_minus_150_to_minus_120_share_last_7": last7.get("odds_minus_150_to_minus_120_share"),
-        "performance": js.get("performance") or [],
-        "totals": js.get("totals") or {},
-    }
 
 
 def _extract_hits_o15_watch_candidates(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2430,7 +2372,6 @@ def build_markdown(
     model_vs_fade: Dict[str, Any],
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
-    overlap_watch: Dict[str, Any],
     hits_o15_watch_candidates: Dict[str, Any],
     hits_o15_layered_candidates: Dict[str, Any],
     hits_u15_favorite_audit: Dict[str, Any],
@@ -2625,51 +2566,6 @@ def build_markdown(
         f"- Critical props: `{', '.join(model_performance.get('critical_props') or []) or 'none'}`"
     )
     lines.append(f"- Watch props: `{', '.join(model_performance.get('watch_props') or []) or 'none'}`")
-    lines.append("")
-
-    lines.append("## Ranking/QC Overlap Watch")
-    lines.append(provenance("Ranking/QC Overlap Watch"))
-    full_overlap = overlap_watch.get("full_history") or {}
-    last30_overlap = overlap_watch.get("last_30") or {}
-    last14_overlap = overlap_watch.get("last_14") or {}
-    last7_overlap = overlap_watch.get("last_7") or {}
-    lines.append(
-        f"- Action annotation: `{overlap_watch.get('action_annotation') or 'n/a'}` | "
-        f"composition_drift_flag `{overlap_watch.get('composition_drift_flag') or 'n/a'}` | "
-        f"reasons `{', '.join(overlap_watch.get('composition_drift_reasons') or []) or 'none'}`"
-    )
-    lines.append(
-        f"- Latest completed slate `{overlap_watch.get('latest_completed_slate') or 'n/a'}` | "
-        f"latest overlap date `{overlap_watch.get('latest_overlap_date_included') or 'n/a'}` | "
-        f"stale `{overlap_watch.get('stale')}`"
-    )
-    lines.append(
-        f"- Overlap ROI: full history `{_pct(full_overlap.get('roi'))}`, "
-        f"last 30 `{_pct(last30_overlap.get('roi'))}`, "
-        f"last 14 `{_pct(last14_overlap.get('roi'))}`, "
-        f"last 7 `{_pct(last7_overlap.get('roi'))}`."
-    )
-    lines.append(
-        f"- Last-7 rows `{last7_overlap.get('rows','n/a')}` / resolved `{last7_overlap.get('resolved_rows','n/a')}` | "
-        f"WR `{_pct(last7_overlap.get('wr'))}` | units `{_num_fmt(last7_overlap.get('units'))}`."
-    )
-    lines.append(
-        f"- Bottom-order share: full history `{_pct(overlap_watch.get('bottom_order_share_full_history'))}`, "
-        f"last 7 `{_pct(overlap_watch.get('bottom_order_share_last_7'))}`."
-    )
-    lines.append(
-        f"- Avg QC score: full history `{_num_fmt(overlap_watch.get('avg_qc_score_full_history'))}`, "
-        f"last 7 `{_num_fmt(overlap_watch.get('avg_qc_score_last_7'))}`."
-    )
-    lines.append(
-        f"- Avg V2 ranking score: full history `{_num_fmt(overlap_watch.get('avg_v2_ranking_score_full_history'))}`, "
-        f"last 7 `{_num_fmt(overlap_watch.get('avg_v2_ranking_score_last_7'))}`."
-    )
-    lines.append(
-        f"- Last-7 concentration: QC probability 55-60 share "
-        f"`{_pct(overlap_watch.get('qc_probability_55_60_share_last_7'))}`; "
-        f"odds -150 to -120 share `{_pct(overlap_watch.get('odds_minus_150_to_minus_120_share_last_7'))}`."
-    )
     lines.append("")
 
     lines.append("## Hits Over 1.5 Watch Candidates")
@@ -3305,7 +3201,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Fail the brief when BvP impact label_date does not match report-date (default: 1).",
     )
     ap.add_argument("--hits-environment-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
-    ap.add_argument("--overlap-watch-json", default="artifacts/analysis/mlb/v2_qc_diagnostics/ranking_vs_quick_card_overlap_watch.json")
     ap.add_argument(
         "--hits-o15-watch-candidates-csv",
         default="artifacts/analysis/mlb/review_aids/hits_o15_watch_candidates_{current_slate_date}.csv",
@@ -3411,7 +3306,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "model_performance_daily_csv": Path(args.model_performance_daily_csv),
         "bvp_impact_json": Path(args.bvp_impact_json),
         "hits_environment_json": Path(args.hits_environment_json),
-        "overlap_watch_json": Path(args.overlap_watch_json),
         "hits_15_tier_backtest_json": Path(args.hits_15_tier_backtest_json),
         "review_aid_performance_json": Path(args.review_aid_performance_json),
         "total_bases_shadow_evaluation_json": Path(args.total_bases_shadow_evaluation_json),
@@ -3474,7 +3368,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     reporting_alignment_rows, reporting_alignment_err = _load_csv_rows(reporting_alignment_path)
     bvp_raw, bvp_err = _load_json(paths["bvp_impact_json"])
     hits_raw, hits_err = _load_json(paths["hits_environment_json"])
-    overlap_watch_raw, overlap_watch_err = _load_json(paths["overlap_watch_json"])
     hits_o15_watch_candidate_rows, hits_o15_watch_candidates_err = _load_csv_rows(
         paths["hits_o15_watch_candidates_csv"]
     )
@@ -3526,7 +3419,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "reporting_alignment_csv": reporting_alignment_err or "ok",
         "bvp_impact_json": bvp_err or "ok",
         "hits_environment_json": hits_err or "ok",
-        "overlap_watch_json": overlap_watch_err or "ok",
         "hits_o15_watch_candidates_csv": hits_o15_watch_candidates_err or "ok",
         "hits_o15_layered_candidates_csv": hits_o15_layered_candidates_err or "ok",
         "hits_u15_favorite_audit_csv": hits_u15_favorite_audit_err or "ok",
@@ -3571,7 +3463,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         current_slate_date=current_slate_date,
         completed_slate_date=completed_slate_date,
     )
-    overlap_watch = _extract_overlap_watch(overlap_watch_raw if isinstance(overlap_watch_raw, dict) else None)
     hits_o15_watch_candidates = _extract_hits_o15_watch_candidates(hits_o15_watch_candidate_rows)
     hits_o15_layered_candidates = _extract_hits_o15_layered_candidates(hits_o15_layered_candidate_rows)
     hits_u15_favorite_audit = _extract_hits_u15_favorite_audit(hits_u15_favorite_audit_rows)
@@ -3613,7 +3504,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         reporting_alignment=reporting_alignment,
         bvp_impact=bvp_impact,
         hits_env=hits_env,
-        overlap_watch=overlap_watch,
         hits_15_tier_backtest=hits_15_tier_backtest,
         review_aid_performance=review_aid_performance,
         total_bases_shadow_summary=total_bases_shadow_summary,
@@ -3657,7 +3547,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_vs_fade=model_vs_fade,
         bvp_impact=bvp_impact,
         hits_env=hits_env,
-        overlap_watch=overlap_watch,
         hits_o15_watch_candidates=hits_o15_watch_candidates,
         hits_o15_layered_candidates=hits_o15_layered_candidates,
         hits_u15_favorite_audit=hits_u15_favorite_audit,
@@ -3724,7 +3613,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "reporting_alignment": reporting_alignment,
         "bvp_impact": bvp_impact,
         "hits_environment": hits_env,
-        "ranking_qc_overlap_watch": overlap_watch,
         "hits_o15_watch_candidates": hits_o15_watch_candidates,
         "hits_o15_layered_candidates": hits_o15_layered_candidates,
         "hits_u15_favorite_audit": hits_u15_favorite_audit,
@@ -3773,7 +3661,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 model_vs_fade=model_vs_fade,
                 bvp_impact=bvp_impact,
                 hits_env=hits_env,
-                overlap_watch=overlap_watch,
                 hits_o15_watch_candidates=hits_o15_watch_candidates,
                 hits_o15_layered_candidates=hits_o15_layered_candidates,
                 hits_u15_favorite_audit=hits_u15_favorite_audit,

@@ -160,7 +160,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--prop-regime-csv", required=True)
     ap.add_argument("--hits-environment-json", required=True)
     ap.add_argument("--bvp-impact-json", required=True)
-    ap.add_argument("--overlap-watch-json", required=True)
     ap.add_argument(
         "--hits-15-tier-backtest-json",
         default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json",
@@ -392,22 +391,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             required=False,
             detail=detail,
         )
-
-    overlap_watch_cmd = [
-        py,
-        "backend/mlb/scripts/build_mlb_ranking_qc_overlap_watch.py",
-    ]
-    ok, detail = _run("ranking_qc_overlap_watch", overlap_watch_cmd, allow_fail=True)
-    _record(
-        results,
-        name="ranking_qc_overlap_watch",
-        artifact=Path(args.overlap_watch_json),
-        expected_date=completed,
-        actual_date=_json_date(Path(args.overlap_watch_json), ("composition_diagnostics", "latest_completed_slate")),
-        command=overlap_watch_cmd,
-        refresh_ok=ok,
-        detail=detail,
-    )
 
     hits_15_tier_cmd = ["make", "mlb-refresh-hits-15-tier-backtest"]
     ok, detail = _run("hits_15_tier_backtest", hits_15_tier_cmd, allow_fail=True)
