@@ -859,7 +859,6 @@ def _build_freshness_audit(
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
     overlap_watch: Dict[str, Any],
-    qc_bottom_order_watch: Dict[str, Any],
     hits_15_tier_backtest: Dict[str, Any],
     review_aid_performance: Dict[str, Any],
     total_bases_shadow_summary: Dict[str, Any],
@@ -1069,22 +1068,6 @@ def _build_freshness_audit(
             note=(
                 f"composition_drift_flag={overlap_watch.get('composition_drift_flag') or 'n/a'}; "
                 f"action={overlap_watch.get('action_annotation') or 'n/a'}"
-            ),
-        )
-    )
-    rows.append(
-        _freshness_row(
-            section="QC Bottom-Order Under Watch",
-            source_file=str(paths["qc_bottom_order_watch_json"]),
-            source_date=_date_key(qc_bottom_order_watch.get("latest_reconcile_date")),
-            expected_date=completed_slate_date,
-            generated_at_utc=str(qc_bottom_order_watch.get("generated_at") or ""),
-            mtime_utc=_path_mtime_utc(paths["qc_bottom_order_watch_json"]),
-            load_status=str(source_states.get("qc_bottom_order_watch_json") or "ok"),
-            cadence="daily after completed-slate reconcile and actual wager matching",
-            note=(
-                f"recommendation={qc_bottom_order_watch.get('recommendation') or 'n/a'}; "
-                f"reason={qc_bottom_order_watch.get('recommendation_reason') or 'n/a'}"
             ),
         )
     )
@@ -1470,39 +1453,6 @@ def _apply_hits_environment_team_eval_history_fallback(
         out["warnings"] = list(out.get("warnings") or []) + ["using_hits_environment_history_team_eval_fallback"]
         return out
     return hits_env
-
-
-def _extract_qc_bottom_order_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not isinstance(js, dict):
-        return {}
-    rows = [row for row in (js.get("windows") or []) if isinstance(row, dict)]
-
-    def find(group: str, window: str) -> Dict[str, Any]:
-        for row in rows:
-            if str(row.get("watch_group") or "") == group and str(row.get("window") or "") == window:
-                return row
-        return {}
-
-    target = "qc_only_bottom_order_under_0.5"
-    comparison = "qc_only_non_bottom_order_under_0.5"
-    overlap = "overlap_bottom_order_under_0.5"
-    target_windows = {window: find(target, window) for window in ("full_history", "last_30_days", "last_14_days", "last_7_days")}
-    comparison_full = find(comparison, "full_history")
-    overlap_full = find(overlap, "full_history")
-    return {
-        "generated_at": js.get("generated_at"),
-        "latest_reconcile_date": js.get("latest_reconcile_date"),
-        "recommendation": js.get("recommendation") or "",
-        "recommendation_reason": js.get("recommendation_reason") or "",
-        "group_diagnostics": js.get("group_diagnostics") or {},
-        "target_group": target,
-        "comparison_group": comparison,
-        "overlap_group": overlap,
-        "target_windows": target_windows,
-        "comparison_full_history": comparison_full,
-        "overlap_full_history": overlap_full,
-        "windows": rows,
-    }
 
 
 def _extract_overlap_watch(js: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2481,7 +2431,6 @@ def build_markdown(
     bvp_impact: Dict[str, Any],
     hits_env: Dict[str, Any],
     overlap_watch: Dict[str, Any],
-    qc_bottom_order_watch: Dict[str, Any],
     hits_o15_watch_candidates: Dict[str, Any],
     hits_o15_layered_candidates: Dict[str, Any],
     hits_u15_favorite_audit: Dict[str, Any],
@@ -2720,69 +2669,6 @@ def build_markdown(
         f"- Last-7 concentration: QC probability 55-60 share "
         f"`{_pct(overlap_watch.get('qc_probability_55_60_share_last_7'))}`; "
         f"odds -150 to -120 share `{_pct(overlap_watch.get('odds_minus_150_to_minus_120_share_last_7'))}`."
-    )
-    lines.append("")
-
-    lines.append("## QC Bottom-Order Under Watch")
-    lines.append(provenance("QC Bottom-Order Under Watch"))
-    target_windows = qc_bottom_order_watch.get("target_windows") or {}
-    watch_rows: List[Dict[str, Any]] = []
-    for window in ("full_history", "last_30_days", "last_14_days", "last_7_days"):
-        row = target_windows.get(window) or {}
-        watch_rows.append(
-            {
-                "window": window,
-                "bets": row.get("bets", "n/a"),
-                "wr": _pct(row.get("wr")),
-                "roi": _pct(row.get("roi")),
-                "units": _num_fmt(row.get("units")),
-                "avg_odds": _num_fmt(row.get("avg_odds")),
-                "sample_warning": row.get("sample_warning", "n/a"),
-                "drift_flag": row.get("drift_flag", "n/a"),
-            }
-        )
-    lines.append(
-        f"- Segment: `QC-only + bottom-order hitter + under 0.5` | "
-        f"latest_reconcile_date `{qc_bottom_order_watch.get('latest_reconcile_date') or 'n/a'}`"
-    )
-    qc_diag = qc_bottom_order_watch.get("group_diagnostics") or {}
-    qc_group_diag = qc_diag.get("groups") or {}
-    lines.append(
-        f"- Action annotation: `{qc_bottom_order_watch.get('recommendation') or 'n/a'}` | "
-        f"{qc_bottom_order_watch.get('recommendation_reason') or 'n/a'}"
-    )
-    lines.append(
-        f"- Qualifying-row cadence: latest target date `{qc_diag.get('target_latest_qualifying_date') or 'n/a'}`; "
-        f"latest comparison date `{qc_diag.get('comparison_latest_qualifying_date') or 'n/a'}`; "
-        f"new rows on latest completed slate target `{qc_diag.get('target_new_rows_latest_completed_slate', 0)}`, "
-        f"comparisons `{qc_diag.get('comparison_new_rows_latest_completed_slate', 0)}`."
-    )
-    lines.append(
-        f"- Last 7 qualifying rows: target `{qc_diag.get('target_last_7_rows', 0)}`, "
-        f"comparisons `{qc_diag.get('comparison_last_7_rows', 0)}`."
-    )
-    lines.append("| window | bets | WR | ROI | units | avg odds | sample warning | drift flag |")
-    lines.append("|---|---:|---:|---:|---:|---:|---|---|")
-    for row in watch_rows:
-        lines.append(
-            f"| {row['window']} | `{row['bets']}` | `{row['wr']}` | `{row['roi']}` | "
-            f"`{row['units']}` | `{row['avg_odds']}` | `{row['sample_warning']}` | `{row['drift_flag']}` |"
-        )
-    comp = qc_bottom_order_watch.get("comparison_full_history") or {}
-    ov = qc_bottom_order_watch.get("overlap_full_history") or {}
-    lines.append(
-        f"- Full-history baseline comparisons: QC-only non-bottom-order ROI `{_pct(comp.get('roi'))}` "
-        f"(bets `{comp.get('bets','n/a')}`); overlap same-profile ROI `{_pct(ov.get('roi'))}` "
-        f"(bets `{ov.get('bets','n/a')}`)."
-    )
-    comp_diag = qc_group_diag.get("qc_only_non_bottom_order_under_0.5") or {}
-    ov_diag = qc_group_diag.get("overlap_bottom_order_under_0.5") or {}
-    lines.append(
-        f"- Baseline update note: these full-history values only change when new qualifying rows enter the comparison groups. "
-        f"QC-only non-bottom latest qualifying date `{comp_diag.get('latest_qualifying_date') or 'n/a'}`, "
-        f"latest-slate rows `{comp_diag.get('new_rows_latest_completed_slate', 0)}`, last-7 rows `{comp_diag.get('last_7_rows', 0)}`; "
-        f"overlap same-profile latest qualifying date `{ov_diag.get('latest_qualifying_date') or 'n/a'}`, "
-        f"latest-slate rows `{ov_diag.get('new_rows_latest_completed_slate', 0)}`, last-7 rows `{ov_diag.get('last_7_rows', 0)}`."
     )
     lines.append("")
 
@@ -3420,7 +3306,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     ap.add_argument("--hits-environment-json", default="artifacts/analysis/mlb/mlb_hits_environment_latest.json")
     ap.add_argument("--overlap-watch-json", default="artifacts/analysis/mlb/v2_qc_diagnostics/ranking_vs_quick_card_overlap_watch.json")
-    ap.add_argument("--qc-bottom-order-watch-json", default="artifacts/analysis/mlb/qc_bottom_order_under_watch.json")
     ap.add_argument(
         "--hits-o15-watch-candidates-csv",
         default="artifacts/analysis/mlb/review_aids/hits_o15_watch_candidates_{current_slate_date}.csv",
@@ -3527,7 +3412,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "bvp_impact_json": Path(args.bvp_impact_json),
         "hits_environment_json": Path(args.hits_environment_json),
         "overlap_watch_json": Path(args.overlap_watch_json),
-        "qc_bottom_order_watch_json": Path(args.qc_bottom_order_watch_json),
         "hits_15_tier_backtest_json": Path(args.hits_15_tier_backtest_json),
         "review_aid_performance_json": Path(args.review_aid_performance_json),
         "total_bases_shadow_evaluation_json": Path(args.total_bases_shadow_evaluation_json),
@@ -3591,7 +3475,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     bvp_raw, bvp_err = _load_json(paths["bvp_impact_json"])
     hits_raw, hits_err = _load_json(paths["hits_environment_json"])
     overlap_watch_raw, overlap_watch_err = _load_json(paths["overlap_watch_json"])
-    qc_watch_raw, qc_watch_err = _load_json(paths["qc_bottom_order_watch_json"])
     hits_o15_watch_candidate_rows, hits_o15_watch_candidates_err = _load_csv_rows(
         paths["hits_o15_watch_candidates_csv"]
     )
@@ -3644,7 +3527,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "bvp_impact_json": bvp_err or "ok",
         "hits_environment_json": hits_err or "ok",
         "overlap_watch_json": overlap_watch_err or "ok",
-        "qc_bottom_order_watch_json": qc_watch_err or "ok",
         "hits_o15_watch_candidates_csv": hits_o15_watch_candidates_err or "ok",
         "hits_o15_layered_candidates_csv": hits_o15_layered_candidates_err or "ok",
         "hits_u15_favorite_audit_csv": hits_u15_favorite_audit_err or "ok",
@@ -3690,7 +3572,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         completed_slate_date=completed_slate_date,
     )
     overlap_watch = _extract_overlap_watch(overlap_watch_raw if isinstance(overlap_watch_raw, dict) else None)
-    qc_bottom_order_watch = _extract_qc_bottom_order_watch(qc_watch_raw if isinstance(qc_watch_raw, dict) else None)
     hits_o15_watch_candidates = _extract_hits_o15_watch_candidates(hits_o15_watch_candidate_rows)
     hits_o15_layered_candidates = _extract_hits_o15_layered_candidates(hits_o15_layered_candidate_rows)
     hits_u15_favorite_audit = _extract_hits_u15_favorite_audit(hits_u15_favorite_audit_rows)
@@ -3733,7 +3614,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         bvp_impact=bvp_impact,
         hits_env=hits_env,
         overlap_watch=overlap_watch,
-        qc_bottom_order_watch=qc_bottom_order_watch,
         hits_15_tier_backtest=hits_15_tier_backtest,
         review_aid_performance=review_aid_performance,
         total_bases_shadow_summary=total_bases_shadow_summary,
@@ -3778,7 +3658,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         bvp_impact=bvp_impact,
         hits_env=hits_env,
         overlap_watch=overlap_watch,
-        qc_bottom_order_watch=qc_bottom_order_watch,
         hits_o15_watch_candidates=hits_o15_watch_candidates,
         hits_o15_layered_candidates=hits_o15_layered_candidates,
         hits_u15_favorite_audit=hits_u15_favorite_audit,
@@ -3846,7 +3725,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "bvp_impact": bvp_impact,
         "hits_environment": hits_env,
         "ranking_qc_overlap_watch": overlap_watch,
-        "qc_bottom_order_watch": qc_bottom_order_watch,
         "hits_o15_watch_candidates": hits_o15_watch_candidates,
         "hits_o15_layered_candidates": hits_o15_layered_candidates,
         "hits_u15_favorite_audit": hits_u15_favorite_audit,
@@ -3896,7 +3774,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 bvp_impact=bvp_impact,
                 hits_env=hits_env,
                 overlap_watch=overlap_watch,
-                qc_bottom_order_watch=qc_bottom_order_watch,
                 hits_o15_watch_candidates=hits_o15_watch_candidates,
                 hits_o15_layered_candidates=hits_o15_layered_candidates,
                 hits_u15_favorite_audit=hits_u15_favorite_audit,

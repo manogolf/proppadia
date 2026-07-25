@@ -161,7 +161,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--hits-environment-json", required=True)
     ap.add_argument("--bvp-impact-json", required=True)
     ap.add_argument("--overlap-watch-json", required=True)
-    ap.add_argument("--qc-bottom-order-watch-json", required=True)
     ap.add_argument(
         "--hits-15-tier-backtest-json",
         default="artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json",
@@ -406,24 +405,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         expected_date=completed,
         actual_date=_json_date(Path(args.overlap_watch_json), ("composition_diagnostics", "latest_completed_slate")),
         command=overlap_watch_cmd,
-        refresh_ok=ok,
-        detail=detail,
-    )
-
-    qc_watch_cmd = [
-        py,
-        "tmp/analysis/run_mlb_qc_bottom_order_under_watch.py",
-        "--out-json",
-        args.qc_bottom_order_watch_json,
-    ]
-    ok, detail = _run("qc_bottom_order_under_watch", qc_watch_cmd, allow_fail=True)
-    _record(
-        results,
-        name="qc_bottom_order_under_watch",
-        artifact=Path(args.qc_bottom_order_watch_json),
-        expected_date=completed,
-        actual_date=_json_date(Path(args.qc_bottom_order_watch_json), ("latest_reconcile_date",)),
-        command=qc_watch_cmd,
         refresh_ok=ok,
         detail=detail,
     )
