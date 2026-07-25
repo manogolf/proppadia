@@ -1929,7 +1929,7 @@ mlb-daily-reconcile:
 	$(MAKE) mlb-review-aid-performance MLB_DAILY_RECONCILE_DATE="$(MLB_DAILY_RECONCILE_DATE)"
 	$(MAKE) mlb-capture-overlap-snapshot MLB_OVERLAP_SNAPSHOT_DATE="$(MLB_DAILY_RECONCILE_DATE)"
 	$(MAKE) mlb-overlap-monitor MLB_OVERLAP_OPS_DATE="$(MLB_DAILY_RECONCILE_DATE)"
-	-$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$(MLB_DAILY_RECONCILE_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DAILY_RECONCILE_DATE)/reconcile_rows.csv"
+	-$(MAKE) mlb-ubo5-tb15-retry-pending-closeouts MLB_DATE="$(MLB_DAILY_RECONCILE_DATE)"
 
 mlb-daily-upload-prep:
 	@echo "Building current upload prep for $(MLB_UPLOAD_PREP_DATE)"
@@ -2000,6 +2000,21 @@ mlb-ubo5-tb15-prelineup-confirmation:
 .PHONY: mlb-ubo5-tb15-closeout
 mlb-ubo5-tb15-closeout:
 	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_daily_closeout --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
+
+# Retry the just-reconciled slate plus every locally pending closeout. FINAL
+# manifests are skipped; unchanged sources remain revision-stable.
+.PHONY: mlb-ubo5-tb15-retry-pending-closeouts
+mlb-ubo5-tb15-retry-pending-closeouts:
+	-$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv"
+	@for manifest in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/ubo5_tb15_closeout_current.json; do \
+		[ -f "$$manifest" ] || continue; \
+		status=$$($(VENV_PY) -c 'import json,sys; print(json.load(open(sys.argv[1])).get("closeout_status",""))' "$$manifest"); \
+		[ "$$status" != "FINAL" ] || continue; \
+		pending_date=$$(basename "$$(dirname "$$manifest")"); \
+		[ "$$pending_date" != "$(MLB_DATE)" ] || continue; \
+		echo "Retrying pending UBO-5 TB1.5 closeout for $$pending_date"; \
+		$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$$pending_date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" || true; \
+	done
 
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:

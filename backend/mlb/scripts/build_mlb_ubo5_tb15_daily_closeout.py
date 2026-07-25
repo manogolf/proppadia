@@ -6,8 +6,10 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import re
 import shutil
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +39,15 @@ RECORD_FIELDS = [
     "win_rate", "edges_grew", "edges_persisted", "edges_shrank_positive",
     "edges_disappeared", "markets_removed", "closeout_status", "source_run_tags",
     "is_current", "source_fingerprint",
+]
+AUDIT_FIELDS = [
+    "slate_date", "game_pk", "player_name", "batter_mlb_id", "game",
+    "morning_ubo5_status", "eventual_starting_status", "confirmed_batting_order",
+    "final_betonline_over_price", "first_positive_edge_timestamp",
+    "final_pregame_over_edge_pp", "game_final_status", "player_appeared",
+    "plate_appearances", "at_bats", "singles", "doubles", "triples", "home_runs",
+    "calculated_total_bases", "existing_outcome_value", "existing_outcome_status",
+    "current_closeout_status", "unresolved_reason", "recovered_classification",
 ]
 
 
@@ -155,12 +166,83 @@ def load_outcomes(path: Path, date: str) -> dict:
         ident = key(row, date)
         value = number(row.get("actual_value"))
         if value is None:
-            outcomes.setdefault(ident, {"value": None, "conflict": False})
+            outcomes.setdefault(ident, {
+                "value": None, "conflict": False, "source": "RECONCILE", "stats": {},
+            })
             continue
         prior = outcomes.get(ident)
         conflict = bool(prior and prior["value"] is not None and prior["value"] != value)
-        outcomes[ident] = {"value": value, "conflict": conflict or bool(prior and prior["conflict"])}
+        outcomes[ident] = {
+            "value": value, "conflict": conflict or bool(prior and prior["conflict"]),
+            "source": "RECONCILE", "stats": {},
+        }
     return outcomes
+
+
+def load_certified_player_stats(date: str) -> tuple[dict, str]:
+    """Read the canonical official-derived outcome table; fail open to reconciliation."""
+    dsn = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    if not dsn:
+        return {}, "DATABASE_URL_UNAVAILABLE"
+    try:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+            rows = conn.execute(
+                """
+                SELECT game_id, player_id, plate_appearances, at_bats, hits,
+                       singles, doubles, triples, home_runs, total_bases
+                FROM mlb.player_stats
+                WHERE game_date = %s
+                  AND (plate_appearances IS NOT NULL OR at_bats IS NOT NULL
+                       OR total_bases IS NOT NULL)
+                """,
+                (date,),
+            ).fetchall()
+    except Exception as exc:
+        return {}, f"DATABASE_READ_FAILED:{type(exc).__name__}:{exc}"
+    outcomes = {}
+    for row in rows:
+        stats = dict(row)
+        parts = [number(stats.get(name)) for name in ("singles", "doubles", "triples", "home_runs")]
+        calculated = None if any(value is None for value in parts) else (
+            parts[0] + 2 * parts[1] + 3 * parts[2] + 4 * parts[3]
+        )
+        stored = number(stats.get("total_bases"))
+        conflict = calculated is not None and stored is not None and calculated != stored
+        value = calculated if calculated is not None else stored
+        outcomes[(date, int(row["game_id"]), int(row["player_id"]), "total_bases", 1.5)] = {
+            "value": value, "conflict": conflict, "source": "MLB_PLAYER_STATS",
+            "stats": stats | {"calculated_total_bases": calculated},
+        }
+    return outcomes, "PASS"
+
+
+def load_official_game_statuses(date: str, cache_path: Path) -> tuple[dict[int, str], str]:
+    """Refresh official schedule status; retain a same-date cached response on failure."""
+    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}"
+    payload = None
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "proppadia-ubo5-closeout/1"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        cache_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        source = "STATSAPI_REFRESH"
+    except Exception as exc:
+        if cache_path.is_file():
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            source = f"STATSAPI_SAME_DATE_CACHE_AFTER:{type(exc).__name__}"
+        else:
+            return {}, f"STATSAPI_UNAVAILABLE:{type(exc).__name__}:{exc}"
+    statuses = {}
+    for date_row in payload.get("dates", []):
+        for game in date_row.get("games", []):
+            status = game.get("status") or {}
+            statuses[int(game["gamePk"])] = str(
+                status.get("detailedState") or status.get("abstractGameState") or ""
+            )
+    return statuses, source
 
 
 def edge_class(points: list[dict], later_run_without_market: bool) -> str:
@@ -282,11 +364,28 @@ def main() -> int:
     reconcile = Path(args.reconcile_csv) if args.reconcile_csv else (
         ROOT / f"artifacts/analysis/mlb/execution_vs_model/{date}/reconcile_rows.csv"
     )
+    dated_csv = day_dir / f"ubo5_tb15_closeout_{date}.csv"
+    previous_rows = read_rows(dated_csv)
+    previous_unresolved = {
+        key(row, date): row for row in previous_rows if row.get("over_15_result") == "UNRESOLVED"
+    }
     audit_path, morning_tag = select_morning_audit(day_dir)
     morning = read_rows(audit_path)
     by_run, lifecycle, transition_tags = load_transitions(day_dir, date)
     markets, market_tags = load_markets(date, odds_root)
-    outcomes = load_outcomes(reconcile, date)
+    reconcile_outcomes = load_outcomes(reconcile, date)
+    outcomes = dict(reconcile_outcomes)
+    certified_outcomes, certified_status = load_certified_player_stats(date)
+    for ident, certified in certified_outcomes.items():
+        existing = outcomes.get(ident)
+        if existing and existing.get("value") is not None:
+            certified["conflict"] = bool(
+                certified["conflict"] or number(existing["value"]) != number(certified["value"])
+            )
+        outcomes[ident] = certified
+    official_statuses, game_status_source = load_official_game_statuses(
+        date, day_dir / f"ubo5_tb15_official_game_status_{date}.json"
+    )
     all_tags = sorted(market_tags | transition_tags, key=run_time)
 
     rows = []
@@ -321,14 +420,20 @@ def main() -> int:
                 and ident not in markets.get(tag, {})
                 for tag in all_tags
             )
-        actual = outcomes.get(ident, {"value": None, "conflict": False})
+        actual = outcomes.get(ident, {
+            "value": None, "conflict": False, "source": "NONE", "stats": {},
+        })
+        game_is_final = official_statuses.get(ident[1], "").strip().casefold() in {
+            "final", "game over",
+        }
+        outcome_is_settleable = actual.get("source") == "RECONCILE" or game_is_final
         started = "STARTED" if slot else ("DID NOT START" if life["not_start"] else "UNRESOLVED")
         # This record observes the positive-Over board; an exact route score
         # without a positive BetOnline edge is not an action in this ledger.
         action = bool(positive)
         if actual["conflict"]:
             result, outcome_status = "UNRESOLVED", "CONFLICTING_AUTHORITATIVE_OUTCOMES"
-        elif action and actual["value"] is not None:
+        elif action and actual["value"] is not None and outcome_is_settleable:
             result = "WIN" if actual["value"] >= 2 else "LOSS"
             outcome_status = "RESOLVED"
         elif started == "DID NOT START" and not action:
@@ -375,12 +480,25 @@ def main() -> int:
     fingerprint_payload = {
         "rows": [{k: v for k, v in row.items() if k != "closeout_status"} for row in rows],
         "runs": all_tags, "reconcile": str(reconcile),
+        "certified_outcome_status": certified_status,
+        "official_game_statuses": official_statuses,
     }
     fingerprint = hashlib.sha256(
         json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     manifest_path = day_dir / "ubo5_tb15_closeout_current.json"
     prior = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+    if prior.get("closeout_status") == "FINAL" and overall_status != "FINAL":
+        print(json.dumps({
+            "slate_date": date,
+            "closeout_revision": prior.get("closeout_revision"),
+            "closeout_status": "FINAL",
+            "attempted_status": overall_status,
+            "decision": "PRESERVED_EXISTING_FINAL_SOURCE_DEGRADED",
+            "certified_outcome_source": certified_status,
+            "official_game_status_source": game_status_source,
+        }, indent=2))
+        return 0
     unchanged = prior.get("source_fingerprint") == fingerprint
     revision = int(prior.get("closeout_revision", 0)) if unchanged else int(prior.get("closeout_revision", 0)) + 1
     generated = prior.get("generated_at_utc") if unchanged else datetime.now(timezone.utc).isoformat()
@@ -404,7 +522,6 @@ def main() -> int:
         "source_run_tags": "|".join(all_tags), "is_current": "true", "source_fingerprint": fingerprint,
     }
 
-    dated_csv = day_dir / f"ubo5_tb15_closeout_{date}.csv"
     dated_md = day_dir / f"ubo5_tb15_closeout_{date}.md"
     revision_dir = day_dir / "revisions" / f"revision_{revision:03d}"
     if not unchanged:
@@ -417,6 +534,48 @@ def main() -> int:
             "slate_date": date, "closeout_revision": revision, "generated_at_utc": generated,
             "source_fingerprint": fingerprint, "closeout_status": overall_status,
         }, indent=2) + "\n", encoding="utf-8")
+
+    audit_rows = []
+    current_by_id = {key(row, date): row for row in rows}
+    for ident, previous in sorted(previous_unresolved.items(), key=lambda item: (item[1]["game"], item[1]["player_name"])):
+        current = current_by_id[ident]
+        certified = certified_outcomes.get(ident, {})
+        stats = certified.get("stats", {})
+        existing = reconcile_outcomes.get(ident, {})
+        appeared = number(stats.get("plate_appearances")) is not None and number(stats.get("plate_appearances")) > 0
+        final_state = official_statuses.get(ident[1], "")
+        recovered = current["over_15_result"]
+        if certified.get("value") is not None and existing.get("value") is None:
+            reason = "CLOSEOUT_FILTER_EXCLUDED_VALID_OUTCOME"
+        elif certified.get("value") is None:
+            reason = "PLAYER_OUTCOME_NOT_ACQUIRED"
+        else:
+            reason = "OTHER"
+        audit_rows.append({
+            "slate_date": date, "game_pk": ident[1], "player_name": current["player_name"],
+            "batter_mlb_id": ident[2], "game": current["game"],
+            "morning_ubo5_status": current["morning_ubo5_status"],
+            "eventual_starting_status": current["eventual_starting_status"],
+            "confirmed_batting_order": current["confirmed_batting_order"],
+            "final_betonline_over_price": current["final_betonline_over_price"],
+            "first_positive_edge_timestamp": current["first_positive_edge_timestamp"],
+            "final_pregame_over_edge_pp": current["final_pregame_over_edge_pp"],
+            "game_final_status": final_state, "player_appeared": str(bool(appeared)).lower(),
+            "plate_appearances": stats.get("plate_appearances", ""),
+            "at_bats": stats.get("at_bats", ""), "singles": stats.get("singles", ""),
+            "doubles": stats.get("doubles", ""), "triples": stats.get("triples", ""),
+            "home_runs": stats.get("home_runs", ""),
+            "calculated_total_bases": stats.get("calculated_total_bases", ""),
+            "existing_outcome_value": existing.get("value", ""),
+            "existing_outcome_status": previous.get("outcome_status", ""),
+            "current_closeout_status": overall_status, "unresolved_reason": reason,
+            "recovered_classification": recovered,
+        })
+    if audit_rows:
+        write_rows(
+            day_dir / f"ubo5_tb15_unresolved_outcome_audit_{date}.csv",
+            audit_rows, AUDIT_FIELDS,
+        )
 
     record_dir = output_root / "daily_record"
     record_csv = record_dir / "ubo5_tb15_daily_record.csv"
@@ -441,6 +600,8 @@ def main() -> int:
     ]:
         shutil.copy2(source_path, latest / name)
     print(json.dumps(summary, indent=2))
+    print(f"certified_outcome_source={certified_status}")
+    print(f"official_game_status_source={game_status_source}")
     print(f"rerun_unchanged={str(unchanged).lower()}")
     return 0
 
