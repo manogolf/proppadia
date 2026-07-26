@@ -29,6 +29,12 @@ from backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker import (
     market_rows,
     score_candidates,
 )
+from backend.mlb.shared.ubo5_tb15_production_route import (
+    ARTIFACT_SHA256,
+    COUNTERFACTUAL_SOURCE,
+    counterfactual_row_hash,
+    sha256_file,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_ROOT = ROOT / "backend/mlb/exports/model_v2/ubo5_tb15"
@@ -104,10 +110,14 @@ def narrow_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build_identity_rows(
-    date: str, events: list[dict[str, Any]]
+    date: str,
+    events: list[dict[str, Any]],
+    *,
+    source_path: Path,
+    captured_at: datetime,
 ) -> tuple[list[dict[str, Any]], dict[str, int], dict[str, int]]:
-    _, by_name_team = identity._load_player_rows(active_only=True)
-    _, by_pair_games = identity._build_schedule_maps(date)
+    by_player_id, by_name_team = identity._load_player_rows(active_only=True)
+    by_team_ctx, by_pair_games = identity._build_schedule_maps(date)
     offers, flatten_counts = identity._flatten_market_snapshot(
         events=events,
         market_to_prop={"batter_total_bases": "total_bases"},
@@ -121,9 +131,41 @@ def build_identity_rows(
     resolved, resolve_counts = identity._resolve_offers(
         offers=offers, by_name_team=by_name_team, by_pair_games=by_pair_games
     )
+    incumbent_predictions, prediction_counts, _ = identity._predict_rows(
+        resolved, by_team_ctx=by_team_ctx, by_player_id=by_player_id
+    )
+    resolve_counts.update({
+        f"incumbent_{key}": int(value) for key, value in prediction_counts.items()
+    })
+    incumbent_by_identity = {
+        (
+            int(row["game_id"]), int(row["player_id"]),
+            str(row["prop_type"]), float(row["line"]),
+        ): row
+        for row in incumbent_predictions
+    }
+    incumbent_artifact = (
+        Path(os.environ.get("MODEL_DIR", "/var/data/proppadia/models"))
+        / "latest/total_bases.joblib"
+    )
+    incumbent_artifact_hash = (
+        sha256_file(incumbent_artifact) if incumbent_artifact.is_file() else ""
+    )
+    captured_at_utc = captured_at.isoformat()
     rows = []
     for item in resolved:
         offer = item.offer
+        prediction = incumbent_by_identity.get(
+            (int(item.game.game_id), int(item.player.player_id), "total_bases", 1.5)
+        ) or {}
+        incumbent_probability = number(prediction.get("prob_over"))
+        strategy = str(prediction.get("prediction_model_strategy") or "")
+        lineage_certified = bool(
+            incumbent_probability is not None
+            and strategy == "model_pipeline"
+            and incumbent_artifact_hash
+            and incumbent_artifact_hash != ARTIFACT_SHA256
+        )
         rows.append(
             {
                 "slate_date": date,
@@ -132,7 +174,42 @@ def build_identity_rows(
                 "player_name": item.player.player_name,
                 "prop_type": "total_bases",
                 "line": 1.5,
-                "p_over_1_5": offer.implied_over_novig,
+                "p_over_1_5": incumbent_probability if lineage_certified else "",
+                "counterfactual_incumbent_probability": (
+                    incumbent_probability if lineage_certified else ""
+                ),
+                "counterfactual_incumbent_model_source": (
+                    COUNTERFACTUAL_SOURCE if lineage_certified else ""
+                ),
+                "counterfactual_incumbent_artifact_hash": (
+                    incumbent_artifact_hash if lineage_certified else ""
+                ),
+                "counterfactual_incumbent_source_path": (
+                    str(source_path) if lineage_certified else ""
+                ),
+                "counterfactual_incumbent_captured_at_utc": (
+                    captured_at_utc if lineage_certified else ""
+                ),
+                "counterfactual_incumbent_status": (
+                    "PRESERVED" if lineage_certified
+                    else "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE"
+                ),
+                "counterfactual_capture_before_routing_status": (
+                    "PASS" if lineage_certified else "FAIL"
+                ),
+                "active_probability_lineage_status": (
+                    "PASS" if lineage_certified else "FAIL"
+                ),
+                "probability_delta_integrity_status": (
+                    "PASS" if lineage_certified else "FAIL"
+                ),
+                "counterfactual_compatibility_alias_status": (
+                    "PASS" if lineage_certified else "FAIL"
+                ),
+                "counterfactual_lineage_integrity_status": (
+                    "PASS" if lineage_certified else "FAIL"
+                ),
+                "counterfactual_incumbent_feature_or_row_hash": "",
                 "team": item.team_abbr,
                 "opponent": offer.away_team_abbr if item.is_home else offer.home_team_abbr,
                 "home_team_code": offer.home_team_abbr,
@@ -146,6 +223,24 @@ def build_identity_rows(
                 "price_under_american": offer.price_under_american,
             }
         )
+        if lineage_certified:
+            row = rows[-1]
+            hash_input = pd.Series({
+                "slate_date": date, "game_pk": row["game_id"],
+                "batter_mlb_id": row["player_id"], "prop_type": "total_bases",
+                "line": 1.5,
+                **{
+                    key: row[key] for key in (
+                        "counterfactual_incumbent_probability",
+                        "counterfactual_incumbent_model_source",
+                        "counterfactual_incumbent_artifact_hash",
+                        "counterfactual_incumbent_source_path",
+                    )
+                },
+            })
+            row["counterfactual_incumbent_feature_or_row_hash"] = (
+                counterfactual_row_hash(hash_input)
+            )
     return rows, flatten_counts, resolve_counts
 
 
@@ -171,6 +266,7 @@ def render_confirmed_board(
     )
     routes: list[dict[str, Any]] = []
     board: list[dict[str, Any]] = []
+    consensus_board: list[dict[str, Any]] = []
     confirmed = 0
     unconfirmed = 0
     for market in markets:
@@ -194,6 +290,27 @@ def render_confirmed_board(
         no_vig = oi / (oi + ui) if oi is not None and ui is not None and oi + ui else None
         exclusion = str(feature.get("exclusion_reason") or "")
         edge = probability - no_vig if probability is not None and no_vig is not None else None
+        counterfactual = number(market.get("counterfactual_incumbent_probability"))
+        incumbent_edge = (
+            counterfactual - no_vig
+            if counterfactual is not None and no_vig is not None else None
+        )
+        lineage_ok = all(
+            str(market.get(field) or "") == expected
+            for field, expected in {
+                "counterfactual_incumbent_status": "PRESERVED",
+                "counterfactual_capture_before_routing_status": "PASS",
+                "active_probability_lineage_status": "PASS",
+                "probability_delta_integrity_status": "PASS",
+                "counterfactual_compatibility_alias_status": "PASS",
+                "counterfactual_lineage_integrity_status": "PASS",
+            }.items()
+        )
+        consensus_positive = bool(
+            not exclusion and lineage_ok
+            and edge is not None and edge > 0
+            and incumbent_edge is not None and incumbent_edge > 0
+        )
         route = {
             "slate_date": date,
             "run_tag": run_tag,
@@ -211,6 +328,30 @@ def render_confirmed_board(
             "BetOnline_under_price": "" if under_price is None else int(under_price),
             "no_vig_over_probability": "" if no_vig is None else f"{no_vig:.10f}",
             "over_edge_percentage_points": "" if edge is None else f"{edge * 100:.10f}",
+            "counterfactual_incumbent_probability": (
+                "" if counterfactual is None else f"{counterfactual:.10f}"
+            ),
+            "incumbent_over_edge": (
+                "" if incumbent_edge is None else f"{incumbent_edge:.10f}"
+            ),
+            "ubo5_over_edge": "" if edge is None else f"{edge:.10f}",
+            "consensus_positive_flag": consensus_positive,
+            **{
+                field: market.get(field, "")
+                for field in (
+                    "counterfactual_incumbent_model_source",
+                    "counterfactual_incumbent_artifact_hash",
+                    "counterfactual_incumbent_source_path",
+                    "counterfactual_incumbent_captured_at_utc",
+                    "counterfactual_incumbent_feature_or_row_hash",
+                    "counterfactual_incumbent_status",
+                    "counterfactual_capture_before_routing_status",
+                    "active_probability_lineage_status",
+                    "probability_delta_integrity_status",
+                    "counterfactual_compatibility_alias_status",
+                    "counterfactual_lineage_integrity_status",
+                )
+            },
             "feature_vector_sha256": feature.get("feature_vector_sha256", ""),
             "temporal_integrity_status": feature.get("temporal_integrity_status", ""),
             "exclusion_reason": exclusion,
@@ -227,12 +368,32 @@ def render_confirmed_board(
                     "over_edge_percentage_points": f"{edge * 100:+.2f}",
                 }
             )
+        if consensus_positive:
+            consensus_board.append({
+                "player_name": market["player_name"],
+                "game": market["game"],
+                "line": "Over 1.5 TB",
+                "consensus": "UBO-5 + Incumbent",
+                "_ubo5_over_edge": edge,
+            })
     board.sort(key=lambda row: float(row["over_edge_percentage_points"]), reverse=True)
+    consensus_board.sort(
+        key=lambda row: float(row["_ubo5_over_edge"]), reverse=True
+    )
     write_csv(package / "confirmed_route_ledger.csv", routes, list(routes[0]) if routes else [
         "slate_date", "run_tag", "snapshot_timestamp_utc", "game_pk", "batter_mlb_id",
         "player_name", "game", "team", "opponent", "line", "confirmed_batting_order",
         "ubo5_probability_over", "BetOnline_over_price", "BetOnline_under_price",
-        "no_vig_over_probability", "over_edge_percentage_points", "feature_vector_sha256",
+        "no_vig_over_probability", "over_edge_percentage_points",
+        "counterfactual_incumbent_probability", "incumbent_over_edge", "ubo5_over_edge",
+        "consensus_positive_flag", "counterfactual_incumbent_model_source",
+        "counterfactual_incumbent_artifact_hash", "counterfactual_incumbent_source_path",
+        "counterfactual_incumbent_captured_at_utc",
+        "counterfactual_incumbent_feature_or_row_hash", "counterfactual_incumbent_status",
+        "counterfactual_capture_before_routing_status",
+        "active_probability_lineage_status", "probability_delta_integrity_status",
+        "counterfactual_compatibility_alias_status",
+        "counterfactual_lineage_integrity_status", "feature_vector_sha256",
         "temporal_integrity_status", "exclusion_reason",
     ])
     write_csv(package / "confirmed_positive_edge_board.csv", board, BOARD_FIELDS)
@@ -254,6 +415,21 @@ def render_confirmed_board(
         )
     else:
         lines.append("| *None* |  |  |  |  |  |")
+    lines.extend([
+        "",
+        "## Consensus Positive — UBO-5 + Incumbent",
+        "",
+        "| Player | Game | Line | Consensus |",
+        "| --- | --- | --- | --- |",
+    ])
+    if consensus_board:
+        lines.extend(
+            f"| {row['player_name']} | {row['game']} | {row['line']} | "
+            f"{row['consensus']} |"
+            for row in consensus_board
+        )
+    else:
+        lines.extend(["", "*None*"])
     (package / "confirmed_positive_edge_board.md").write_text("\n".join(lines) + "\n")
     shutil.rmtree(package / "exact_order_work", ignore_errors=True)
     return routes, board, confirmed, unconfirmed
@@ -290,8 +466,13 @@ def run(args: argparse.Namespace) -> int:
         }
         snapshot_path = package / "betonline_tb15_snapshot.json"
         snapshot_path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
-        identity_rows, flatten_counts, resolve_counts = build_identity_rows(args.date, events)
         wide_path = package / "identity_binding.csv"
+        identity_rows, flatten_counts, resolve_counts = build_identity_rows(
+            args.date,
+            events,
+            source_path=wide_path,
+            captured_at=captured.to_pydatetime(),
+        )
         write_csv(wide_path, identity_rows, list(identity_rows[0]) if identity_rows else [
             "slate_date", "game_id", "player_id", "player_name", "prop_type", "line",
             "p_over_1_5", "team", "opponent", "home_team_code", "away_team_code",
@@ -418,6 +599,10 @@ def run(args: argparse.Namespace) -> int:
             "PASS": int(counts.get("PASS", 0)),
             "WAIT_FOR_LINEUP": int(counts.get("WAIT FOR LINEUP", 0)),
             "confirmed_positive_over_edge_rows": len(confirmed_board),
+            "consensus_positive_rows": sum(
+                str(row.get("consensus_positive_flag")).lower() == "true"
+                for row in routes
+            ),
             "identity_rejects": identity_rejects,
             "flatten_counts": flatten_counts,
             "resolve_counts": resolve_counts,

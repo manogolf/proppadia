@@ -1122,6 +1122,10 @@ def _predict_rows(
                         "line": float(off.line),
                         "prob_over": prob_over,
                         "prob_col": pcol,
+                        "prediction_model_source": str(pred.get("model") or ""),
+                        "prediction_model_strategy": str(
+                            (pred.get("model_meta") or {}).get("strategy") or ""
+                        ),
                         "books_seen": int(off.books_seen),
                         "books_two_sided": int(off.books_two_sided),
                     }

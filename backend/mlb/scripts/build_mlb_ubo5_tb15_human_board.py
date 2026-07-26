@@ -7,10 +7,14 @@ import argparse
 import csv
 import json
 import math
+import re
 import shutil
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from backend.mlb.shared.ubo5_tb15_production_route import ARTIFACT_SHA256
 
 UTC = ZoneInfo("UTC")
 PT = ZoneInfo("America/Los_Angeles")
@@ -22,6 +26,19 @@ FIELDS = [
     "ubo5_over_probability",
     "no_vig_over_probability",
     "over_edge_percentage_points",
+]
+CONSENSUS_AUDIT_FIELDS = [
+    "slate_date", "run_tag", "snapshot_timestamp_utc", "game_pk", "batter_mlb_id",
+    "player_name", "game", "line", "counterfactual_incumbent_probability",
+    "ubo5_probability_over", "no_vig_over_probability", "incumbent_over_edge",
+    "ubo5_over_edge", "consensus_positive_flag",
+    "counterfactual_incumbent_model_source", "counterfactual_incumbent_artifact_hash",
+    "counterfactual_incumbent_source_path", "counterfactual_incumbent_captured_at_utc",
+    "counterfactual_incumbent_feature_or_row_hash", "counterfactual_incumbent_status",
+    "counterfactual_capture_before_routing_status", "active_probability_lineage_status",
+    "probability_delta_integrity_status", "counterfactual_compatibility_alias_status",
+    "counterfactual_lineage_integrity_status", "same_run_binding_status",
+    "consensus_exclusion_reason",
 ]
 TEAM_NAMES = {
     "ARI": "Arizona Diamondbacks", "ATH": "Athletics", "ATL": "Atlanta Braves",
@@ -85,6 +102,17 @@ def parse_time(value: str) -> datetime | None:
         return None
 
 
+def canonical_player_name(value: object) -> str:
+    """Normalize provider display differences without fuzzy name matching."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    return " ".join(text.encode("ascii", "ignore").decode("ascii").casefold().split())
+
+
+def canonical_game(value: str) -> str:
+    """Use the current market-facing Athletics code for exact matchup binding."""
+    return value.replace("OAK @", "ATH @").replace("@ OAK", "@ ATH")
+
+
 def team_name_map(wide: list[dict[str, str]]) -> dict[str, str]:
     mapping: dict[str, str] = dict(TEAM_NAMES)
     for row in wide:
@@ -104,7 +132,7 @@ def price_index(snapshot: dict, team_names: dict[str, str]) -> dict[tuple[str, s
         away = reverse.get(str(event.get("away_team") or ""))
         if not home or not away:
             continue
-        matchup = f"{away} @ {home}"
+        matchup = canonical_game(f"{away} @ {home}")
         for book in event.get("bookmakers") or []:
             if book.get("key") != "betonlineag":
                 continue
@@ -118,12 +146,17 @@ def price_index(snapshot: dict, team_names: dict[str, str]) -> dict[tuple[str, s
                     side = str(outcome.get("name") or "").lower()
                     if line is None or not name or side not in {"over", "under"}:
                         continue
-                    key = (matchup, name, f"{line:.1f}")
+                    key = (matchup, canonical_player_name(name), f"{line:.1f}")
                     entry = index.setdefault(key, {"over": None, "under": None, "timestamp": updated})
                     entry[side] = integer(outcome.get("price"))
                     if updated > entry["timestamp"]:
                         entry["timestamp"] = updated
     return index
+
+
+def run_tag_from_path(path: Path) -> str:
+    match = re.search(r"__([^/]+)\.csv$", path.name)
+    return match.group(1) if match else ""
 
 
 def main() -> int:
@@ -152,6 +185,19 @@ def main() -> int:
     routes, wide, slate = read_csv(route), read_csv(wide_path), read_csv(slate_path)
     health = json.loads(health_path.read_text())
     snapshot = json.loads(odds_path.read_text())
+    requested_run_tag = str(
+        args.snapshot_run_tag
+        or snapshot.get("run_tag")
+        or snapshot.get("snapshot_run_tag")
+        or ""
+    )
+    same_run_binding = bool(
+        requested_run_tag
+        and requested_run_tag in {
+            str(health.get("run_tag") or ""),
+            run_tag_from_path(route),
+        }
+    )
     wide_idx = {
         (r.get("game_id"), r.get("player_id"), f"{number(r.get('line')) or 0:.1f}", r.get("prop_type")): r
         for r in wide
@@ -165,6 +211,7 @@ def main() -> int:
     generated = datetime.now(UTC).isoformat()
     rows: list[dict[str, object]] = []
     excluded: list[dict[str, str]] = []
+    consensus_audit: list[dict[str, object]] = []
 
     for source in routes:
         line = number(source.get("line")) or 1.5
@@ -179,7 +226,7 @@ def main() -> int:
         name = identity["player_name"]
         home = identity.get("home_team_code") or (source.get("team") if source.get("home_away") == "home" else source.get("opponent"))
         away = identity.get("away_team_code") or (source.get("team") if source.get("home_away") == "away" else source.get("opponent"))
-        matchup = f"{away} @ {home}"
+        matchup = canonical_game(f"{away} @ {home}")
         event_time = parse_time(source.get("scheduled_start_utc", "") or identity.get("game_time", ""))
         active_over = number(source.get("active_probability"))
         incumbent_over = number(source.get("existing_production_probability") or source.get("production_prob_over"))
@@ -189,7 +236,7 @@ def main() -> int:
         side = "OVER" if displayed_over else "UNDER"
         displayed = active_over if displayed_over else (1 - active_over if active_over is not None else None)
         incumbent = incumbent_over if displayed_over else (1 - incumbent_over if incumbent_over is not None else None)
-        market = prices.get((matchup, name, f"{line:.1f}"), {})
+        market = prices.get((matchup, canonical_player_name(name), f"{line:.1f}"), {})
         over_odds, under_odds = market.get("over"), market.get("under")
         raw_over, raw_under = implied(over_odds), implied(under_odds)
         denom = (raw_over or 0) + (raw_under or 0)
@@ -199,6 +246,72 @@ def main() -> int:
         side_odds = over_odds if displayed_over else under_odds
         raw_side = raw_over if displayed_over else raw_under
         route_status = "ROUTED" if routed else "INCUMBENT_FALLBACK"
+        counterfactual = number(source.get("counterfactual_incumbent_probability"))
+        ubo5_edge = ubo5_over - nv_over if ubo5_over is not None and nv_over is not None else None
+        incumbent_edge = (
+            counterfactual - nv_over
+            if counterfactual is not None and nv_over is not None else None
+        )
+        required_lineage = {
+            "counterfactual_incumbent_status": "PRESERVED",
+            "counterfactual_capture_before_routing_status": "PASS",
+            "active_probability_lineage_status": "PASS",
+            "probability_delta_integrity_status": "PASS",
+            "counterfactual_compatibility_alias_status": "PASS",
+            "counterfactual_lineage_integrity_status": "PASS",
+        }
+        lineage_ok = all(
+            str(source.get(field) or "") == expected
+            for field, expected in required_lineage.items()
+        )
+        incumbent_source = str(source.get("counterfactual_incumbent_model_source") or "")
+        incumbent_hash = str(source.get("counterfactual_incumbent_artifact_hash") or "")
+        lineage_ok &= bool(incumbent_source and "UBO5" not in incumbent_source.upper())
+        lineage_ok &= bool(incumbent_hash and incumbent_hash != ARTIFACT_SHA256)
+        lineage_ok &= bool(str(source.get("counterfactual_incumbent_source_path") or ""))
+        consensus_positive = bool(
+            same_run_binding and routed and lineage_ok
+            and over_odds is not None and under_odds is not None
+            and ubo5_edge is not None and ubo5_edge > 0
+            and incumbent_edge is not None and incumbent_edge > 0
+        )
+        if not same_run_binding:
+            consensus_reason = "SAME_RUN_BINDING_NOT_CERTIFIED"
+        elif not routed:
+            consensus_reason = "NOT_UBO5_ROUTED"
+        elif not lineage_ok:
+            consensus_reason = "COUNTERFACTUAL_INCUMBENT_LINEAGE_NOT_CERTIFIED"
+        elif over_odds is None or under_odds is None:
+            consensus_reason = "CURRENT_TWO_SIDED_BETONLINE_PRICE_UNAVAILABLE"
+        elif ubo5_edge is None or ubo5_edge <= 0:
+            consensus_reason = "UBO5_OVER_EDGE_NONPOSITIVE"
+        elif incumbent_edge is None or incumbent_edge <= 0:
+            consensus_reason = "INCUMBENT_OVER_EDGE_NONPOSITIVE"
+        else:
+            consensus_reason = ""
+        consensus_audit.append({
+            "slate_date": date, "run_tag": requested_run_tag,
+            "snapshot_timestamp_utc": market.get("timestamp", ""),
+            "game_pk": source.get("game_pk"), "batter_mlb_id": source.get("batter_mlb_id"),
+            "player_name": name, "game": matchup, "line": f"{line:.1f}",
+            "counterfactual_incumbent_probability": counterfactual,
+            "ubo5_probability_over": ubo5_over, "no_vig_over_probability": nv_over,
+            "incumbent_over_edge": incumbent_edge, "ubo5_over_edge": ubo5_edge,
+            "consensus_positive_flag": consensus_positive,
+            **{
+                field: source.get(field, "")
+                for field in (
+                    "counterfactual_incumbent_model_source",
+                    "counterfactual_incumbent_artifact_hash",
+                    "counterfactual_incumbent_source_path",
+                    "counterfactual_incumbent_captured_at_utc",
+                    "counterfactual_incumbent_feature_or_row_hash",
+                    *required_lineage.keys(),
+                )
+            },
+            "same_run_binding_status": "PASS" if same_run_binding else "FAIL",
+            "consensus_exclusion_reason": consensus_reason,
+        })
         row = {
             "slate_date": date, "player_name": name, "batter_mlb_id": source.get("batter_mlb_id"),
             "team": source.get("team"), "opponent": source.get("opponent"), "matchup": matchup,
@@ -226,6 +339,8 @@ def main() -> int:
             "fallback_reason": source.get("primary_fallback_category") or source.get("secondary_fallback_details") or "",
             "missing_requirement": source.get("exact_missing_features") or "",
             "model_source": source.get("model_source"), "prediction_timestamp_utc": source.get("prediction_timestamp_utc"),
+            "_consensus_positive": consensus_positive,
+            "_ubo5_over_edge": ubo5_edge,
             "_sort_time": event_time.timestamp() if event_time else float("inf"),
         }
         rows.append(row)
@@ -267,6 +382,14 @@ def main() -> int:
             r["_sort_time"],
         )
     )
+    consensus_positive = sorted(
+        (r for r in routed if r["_consensus_positive"]),
+        key=lambda r: (
+            -(number(r["_ubo5_over_edge"]) or -999),
+            -(number(r["ubo5_over_probability_pct"]) or 0),
+            r["_sort_time"],
+        ),
+    )
 
     out_dir = ROOT / args.output_root / date
     latest = ROOT / args.output_root / "latest"
@@ -277,6 +400,10 @@ def main() -> int:
     csv_path = out_dir / f"ubo5_tb15_board_{date}.csv"
     md_path = out_dir / f"ubo5_tb15_board_{date}.md"
     excluded_path = out_dir / f"ubo5_tb15_board_excluded_{date}.csv"
+    audit_tag = requested_run_tag or "unknown_run"
+    consensus_audit_path = (
+        out_dir / f"ubo5_tb15_consensus_audit__{audit_tag}.csv"
+    )
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=FIELDS)
         writer.writeheader()
@@ -294,6 +421,10 @@ def main() -> int:
     with excluded_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=["game_pk", "batter_mlb_id", "reason"])
         writer.writeheader(); writer.writerows(excluded)
+    with consensus_audit_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=CONSENSUS_AUDIT_FIELDS)
+        writer.writeheader()
+        writer.writerows(consensus_audit)
 
     columns = ["Player", "Game", "Line", "UBO-5 Over", "No-vig Over", "Over edge"]
     def table(items: list[dict]) -> list[str]:
@@ -319,9 +450,6 @@ def main() -> int:
         f"- BetOnline two-sided price coverage: `{len(priced)}/{len(rows)} ({(100*len(priced)/len(rows) if rows else 0):.2f}%)`", "",
         f"- Evaluation status: `{evaluation_status}`", "",
         "## Positive UBO-5 Over Edge", "", *table(positive_over), "",
-        "## Price-unavailable diagnostic", "",
-        "| Player | Game | Line | Status |",
-        "|---|---|---|---|",
     ]
     if not positive_over and evaluation_status != "COMPLETE_CURRENT_PRICE_EVALUATION":
         pending_marker = {
@@ -331,6 +459,22 @@ def main() -> int:
         }[evaluation_status]
         # Replace the generic empty-state marker emitted by table().
         md = [pending_marker if line == "*None*" else line for line in md]
+    md += [
+        "## Consensus Positive — UBO-5 + Incumbent", "",
+        "| Player | Game | Line | Consensus |",
+        "|---|---|---|---|",
+    ]
+    md += [
+        f"| {r['player_name']} | {r['matchup']} | Over 1.5 TB | UBO-5 + Incumbent |"
+        for r in consensus_positive
+    ]
+    if not consensus_positive:
+        md += ["", "*None*"]
+    md += [
+        "", "## Price-unavailable diagnostic", "",
+        "| Player | Game | Line | Status |",
+        "|---|---|---|---|",
+    ]
     md += [
         f"| {r['player_name']} | {r['matchup']} | Over 1.5 TB | PRICE UNAVAILABLE |"
         for r in price_unavailable
@@ -357,6 +501,9 @@ def main() -> int:
         "betonline_price_coverage_pct": round(100*len(priced)/len(rows), 2) if rows else 0,
         "positive_over_edge_rows": len(positive_over),
         "positive_no_vig_edge_rows": len(positive_over),
+        "consensus_positive_rows": len(consensus_positive),
+        "consensus_same_run_binding_status": "PASS" if same_run_binding else "FAIL",
+        "consensus_audit_path": str(consensus_audit_path.relative_to(ROOT)),
         "price_unavailable_rows": len(price_unavailable),
         "markdown_path": str(md_path.relative_to(ROOT)), "csv_path": str(csv_path.relative_to(ROOT)),
         "latest_markdown_path": str((latest / "ubo5_tb15_board.md").relative_to(ROOT)),
@@ -364,11 +511,25 @@ def main() -> int:
     }
     summary_path = out_dir / f"ubo5_tb15_board_summary_{date}.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    for source, destination in (
+    copy_plan = [
         (md_path, latest / "ubo5_tb15_board.md"), (csv_path, latest / "ubo5_tb15_board.csv"),
         (health_path, latest / "route_health.json"), (md_path, archive / md_path.name),
         (csv_path, archive / csv_path.name), (health_path, archive / f"ubo5_tb15_route_health_{date}.json"),
-    ):
+        (
+            consensus_audit_path,
+            archive / f"ubo5_tb15_consensus_audit__{audit_tag}.csv",
+        ),
+    ]
+    if not same_run_binding:
+        copy_plan = [
+            pair for pair in copy_plan
+            if pair[1] not in {
+                latest / "ubo5_tb15_board.md",
+                latest / "ubo5_tb15_board.csv",
+                latest / "route_health.json",
+            }
+        ]
+    for source, destination in copy_plan:
         shutil.copy2(source, destination)
     print(f"markdown={md_path.relative_to(ROOT)}")
     print(f"csv={csv_path.relative_to(ROOT)}")

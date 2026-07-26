@@ -9,7 +9,6 @@ import json
 import shutil
 import subprocess
 import sys
-import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from backend.mlb.scripts.build_mlb_ubo5_tb15_human_board import (
-    implied, number, price_index, team_name_map,
+    canonical_game, canonical_player_name, implied, number, price_index, team_name_map,
 )
 from backend.mlb.scripts.materialize_mlb_ubo5_strict_prior_features import (
     FEATURES, MODEL_SUPPORTED_NULL_FEATURES,
@@ -66,22 +65,8 @@ def fmt_edge(value: object) -> str:
     return "—" if parsed is None else f"{parsed:+.2f} pp"
 
 
-def canonical_player_name(value: object) -> str:
-    """Apply the source-certified Unicode normalization only; never fuzzy-match."""
-    text = unicodedata.normalize("NFKD", str(value or ""))
-    return " ".join(text.encode("ascii", "ignore").decode("ascii").casefold().split())
-
-
-def canonical_game(value: str) -> str:
-    # MLB/WIDE retained OAK while the odds team dictionary uses the current ATH code.
-    return value.replace("OAK @", "ATH @").replace("@ OAK", "@ ATH")
-
-
 def market_rows(snapshot: dict, wide: pd.DataFrame) -> tuple[list[dict], list[dict]]:
-    records = wide.loc[
-        wide["prop_type"].eq("total_bases")
-        & pd.to_numeric(wide["p_over_1_5"], errors="coerce").notna()
-    ].copy()
+    records = wide.loc[wide["prop_type"].eq("total_bases")].copy()
     records = records.drop_duplicates(["game_id", "player_id"], keep=False)
     names = team_name_map(records.fillna("").astype(str).to_dict("records"))
     prices = price_index(snapshot, names)
