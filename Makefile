@@ -1999,16 +1999,18 @@ mlb-ubo5-tb15-closeout:
 # manifests are skipped; unchanged sources remain revision-stable.
 .PHONY: mlb-ubo5-tb15-retry-pending-closeouts
 mlb-ubo5-tb15-retry-pending-closeouts:
-	-$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv"
-	@for manifest in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/ubo5_tb15_closeout_current.json; do \
+	@rc=0; \
+	$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
+	for manifest in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/ubo5_tb15_closeout_current.json; do \
 		[ -f "$$manifest" ] || continue; \
 		status=$$($(VENV_PY) -c 'import json,sys; print(json.load(open(sys.argv[1])).get("closeout_status",""))' "$$manifest"); \
 		[ "$$status" != "FINAL" ] || continue; \
 		pending_date=$$(basename "$$(dirname "$$manifest")"); \
 		[ "$$pending_date" != "$(MLB_DATE)" ] || continue; \
 		echo "Retrying pending UBO-5 TB1.5 closeout for $$pending_date"; \
-		$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$$pending_date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" || true; \
-	done
+		$(MAKE) mlb-ubo5-tb15-closeout MLB_DATE="$$pending_date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" || rc=$$?; \
+	done; \
+	exit $$rc
 
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:
