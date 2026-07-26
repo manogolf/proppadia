@@ -27,11 +27,30 @@ class Ubo5Tb15RouteTest(unittest.TestCase):
         self.assertTrue(got.route_eligibility)
         self.assertEqual(got.model_source, "UBO5_TB15_ESTABLISHED")
         self.assertNotEqual(got.active_probability, got.existing_production_probability)
+        self.assertEqual(got.existing_production_probability, got.counterfactual_incumbent_probability)
+        self.assertEqual(got.active_probability, got.ubo5_probability_over)
+        self.assertAlmostEqual(
+            got.probability_delta,
+            got.ubo5_probability_over - got.counterfactual_incumbent_probability,
+        )
+        self.assertEqual(got.counterfactual_incumbent_capture_stage, "PRE_UBO5_ROUTING")
+        self.assertEqual(got.counterfactual_lineage_integrity_status, "PASS")
 
     def test_disabled_is_exact_fallback(self):
         got = route_rows(self.row, artifact=ART, enabled=False, now_utc="2026-07-23T18:30:00Z").iloc[0]
         self.assertFalse(got.route_eligibility)
         self.assertEqual(got.active_probability, got.existing_production_probability)
+        self.assertEqual(got.active_probability, got.counterfactual_incumbent_probability)
+        self.assertEqual(got.counterfactual_incumbent_status, "PRESERVED")
+        self.assertEqual(got.counterfactual_lineage_integrity_status, "PASS")
+
+    def test_counterfactual_lineage_unavailable_fails_closed(self):
+        frame = self.row.copy()
+        frame["counterfactual_incumbent_model_source"] = "UBO5_TB15_ESTABLISHED"
+        got = self.route(frame).iloc[0]
+        self.assertFalse(got.route_eligibility)
+        self.assertEqual(got.exclusion_reason, "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE")
+        self.assertEqual(got.counterfactual_incumbent_status, "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE")
 
     def test_fail_closed_defects(self):
         defects = {

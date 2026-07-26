@@ -15,6 +15,7 @@ ENABLE_FLAG = "MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE"
 ARTIFACT_SHA256 = "505bbd44fee7ba5b4331e81692efd0da24afc1ae1e22e2081f6c65e0804d844d"
 MODEL_SOURCE = "UBO5_TB15_ESTABLISHED"
 FALLBACK_SOURCE = "EXISTING_PRODUCTION"
+COUNTERFACTUAL_SOURCE = "MLB_EXISTING_PRODUCTION_TOTAL_BASES_15"
 IDENTITY = ["slate_date", "game_pk", "batter_mlb_id", "prop_type", "line"]
 
 
@@ -29,6 +30,17 @@ def sha256_file(path: Path) -> str:
 def _vector_hash(row: pd.Series) -> str:
     value = "|".join(f"{name}={row[name]!r}" for name in FEATURES)
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def counterfactual_row_hash(row: pd.Series) -> str:
+    values = [
+        *(f"{name}={row.get(name)!r}" for name in IDENTITY),
+        f"probability={row.get('counterfactual_incumbent_probability')!r}",
+        f"model_source={row.get('counterfactual_incumbent_model_source')!r}",
+        f"artifact_hash={row.get('counterfactual_incumbent_artifact_hash')!r}",
+        f"source_path={row.get('counterfactual_incumbent_source_path')!r}",
+    ]
+    return hashlib.sha256("|".join(values).encode()).hexdigest()
 
 
 def route_rows(
@@ -52,6 +64,12 @@ def route_rows(
         "production_prob_over": np.nan, "batter_identity_certified": False,
         "identity_ambiguous": True, "source_lineage_pointer": "",
         "production_artifact_hash": "", "latest_included_event_date": pd.NaT,
+        "counterfactual_incumbent_probability": np.nan,
+        "counterfactual_incumbent_model_source": COUNTERFACTUAL_SOURCE,
+        "counterfactual_incumbent_artifact_hash": "",
+        "counterfactual_incumbent_source_path": "route_rows_input",
+        "counterfactual_incumbent_captured_at_utc": now,
+        "counterfactual_incumbent_feature_or_row_hash": "",
     }
     for name, value in defaults.items():
         if name not in out:
@@ -65,8 +83,23 @@ def route_rows(
     out["route_flag_enabled"] = bool(enabled)
     out["route_eligibility"] = False
     out["exclusion_reason"] = ""
+    supplied_counterfactual = pd.to_numeric(out["counterfactual_incumbent_probability"], errors="coerce")
+    pre_route_probability = pd.to_numeric(out["production_prob_over"], errors="coerce")
+    out["counterfactual_incumbent_probability"] = supplied_counterfactual.where(
+        supplied_counterfactual.notna(), pre_route_probability
+    )
+    out["counterfactual_incumbent_captured_at_utc"] = pd.to_datetime(
+        out["counterfactual_incumbent_captured_at_utc"], utc=True, errors="coerce"
+    )
+    missing_row_hash = out["counterfactual_incumbent_feature_or_row_hash"].fillna("").eq("")
+    out.loc[missing_row_hash, "counterfactual_incumbent_feature_or_row_hash"] = out.loc[
+        missing_row_hash
+    ].apply(counterfactual_row_hash, axis=1)
+    out["counterfactual_incumbent_capture_stage"] = "PRE_UBO5_ROUTING"
+    out["counterfactual_incumbent_status"] = "PRESERVED"
     out["ubo5_probability_over"] = np.nan
-    out["existing_production_probability"] = pd.to_numeric(out["production_prob_over"], errors="coerce")
+    # Compatibility alias: immutable and always bound to the counterfactual.
+    out["existing_production_probability"] = out["counterfactual_incumbent_probability"]
     out["active_probability"] = out["existing_production_probability"]
     out["probability_delta"] = 0.0
     out["model_source"] = FALLBACK_SOURCE
@@ -122,6 +155,18 @@ def route_rows(
     duplicates = out.duplicated(IDENTITY, keep=False)
     reject(duplicates, "DUPLICATE_CANONICAL_IDENTITY")
     reject(~np.isfinite(out["existing_production_probability"]), "INVALID_EXISTING_PRODUCTION_PROBABILITY")
+    source_model = out["counterfactual_incumbent_model_source"].fillna("").astype(str)
+    source_path = out["counterfactual_incumbent_source_path"].fillna("").astype(str)
+    captured_at = out["counterfactual_incumbent_captured_at_utc"]
+    row_hash = out["counterfactual_incumbent_feature_or_row_hash"].fillna("").astype(str)
+    lineage_unavailable = (
+        source_model.eq("") | source_model.str.contains("UBO5", case=False, regex=False)
+        | source_path.eq("") | captured_at.isna() | row_hash.eq("")
+    )
+    artifact_hash = out["counterfactual_incumbent_artifact_hash"].fillna("").astype(str)
+    lineage_unavailable |= artifact_hash.eq(expected_artifact_sha256)
+    out.loc[lineage_unavailable, "counterfactual_incumbent_status"] = "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE"
+    reject(lineage_unavailable, "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE")
     if not enabled:
         reject(reasons.eq(""), "ROUTE_DISABLED")
 
@@ -177,4 +222,28 @@ def route_rows(
     out.loc[out["exclusion_reason"].str.contains("ARTIFACT|FEATURE_ORDER|PROBABILITY", na=False), "primary_fallback_category"] = "G_BUILDER_IMPLEMENTATION_DEFECT"
     out.loc[out["exclusion_reason"].ne("") & out["primary_fallback_category"].eq(""), "primary_fallback_category"] = "H_TRULY_UNAVAILABLE_OR_UNSUPPORTED"
     out.loc[out["route_eligibility"], "exclusion_reason"] = ""
+    expected_active = out["counterfactual_incumbent_probability"].where(
+        ~out["route_eligibility"], out["ubo5_probability_over"]
+    )
+    expected_delta = out["ubo5_probability_over"] - out["counterfactual_incumbent_probability"]
+    active_ok = np.isclose(out["active_probability"], expected_active, equal_nan=False)
+    delta_ok = (~out["route_eligibility"]) | np.isclose(out["probability_delta"], expected_delta, equal_nan=False)
+    alias_ok = np.isclose(
+        out["existing_production_probability"], out["counterfactual_incumbent_probability"], equal_nan=False
+    )
+    out["counterfactual_capture_before_routing_status"] = np.where(
+        out["counterfactual_incumbent_capture_stage"].eq("PRE_UBO5_ROUTING"), "PASS", "FAIL"
+    )
+    out["active_probability_lineage_status"] = np.where(active_ok, "PASS", "FAIL")
+    out["probability_delta_integrity_status"] = np.where(delta_ok, "PASS", "FAIL")
+    out["counterfactual_compatibility_alias_status"] = np.where(alias_ok, "PASS", "FAIL")
+    out["counterfactual_lineage_integrity_status"] = np.where(
+        out["counterfactual_incumbent_status"].eq("PRESERVED")
+        & out["counterfactual_capture_before_routing_status"].eq("PASS")
+        & out["active_probability_lineage_status"].eq("PASS")
+        & out["probability_delta_integrity_status"].eq("PASS")
+        & out["counterfactual_compatibility_alias_status"].eq("PASS"),
+        "PASS",
+        "FAIL",
+    )
     return out

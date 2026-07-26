@@ -11,7 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 from backend.mlb.shared.ubo5_tb15_production_route import (
-    ARTIFACT_SHA256, ENABLE_FLAG, route_rows,
+    ARTIFACT_SHA256, COUNTERFACTUAL_SOURCE, ENABLE_FLAG, counterfactual_row_hash,
+    route_rows, sha256_file,
 )
 
 
@@ -24,9 +25,13 @@ def main() -> None:
     ap.add_argument("--ledger-out", required=True, type=Path)
     ap.add_argument("--health-out", required=True, type=Path)
     ap.add_argument("--producer-status-json", type=Path)
+    ap.add_argument("--run-tag", default=os.environ.get("MLB_RUN_TAG", ""))
     args = ap.parse_args()
     enabled = os.environ.get(ENABLE_FLAG, "0").strip().lower() in {"1", "true", "yes", "on"}
     wide = pd.read_csv(args.wide_csv)
+    counterfactual_captured_at = datetime.now(timezone.utc)
+    incumbent_artifact = Path(os.environ.get("MODEL_DIR", "/var/data/proppadia/models")) / "latest/total_bases.joblib"
+    incumbent_artifact_hash = sha256_file(incumbent_artifact) if incumbent_artifact.is_file() else ""
     producer = {}
     if args.producer_status_json and args.producer_status_json.is_file():
         producer = json.loads(args.producer_status_json.read_text())
@@ -73,11 +78,34 @@ def main() -> None:
                     ["slate_date", "game_pk", "batter_mlb_id", "prop_type", "line"], keep=False
                 )
                 incumbent = wide.loc[wide["prop_type"].eq("total_bases"), ["game_id", "player_id", "p_over_1_5"]].rename(
-                    columns={"game_id": "game_pk", "player_id": "batter_mlb_id", "p_over_1_5": "production_prob_over"}
+                    columns={
+                        "game_id": "game_pk", "player_id": "batter_mlb_id",
+                        "p_over_1_5": "counterfactual_incumbent_probability",
+                    }
                 )
-                feature_rows = feature_rows.drop(columns=["production_prob_over"], errors="ignore").merge(
+                incumbent["counterfactual_incumbent_model_source"] = COUNTERFACTUAL_SOURCE
+                incumbent["counterfactual_incumbent_artifact_hash"] = incumbent_artifact_hash
+                incumbent["counterfactual_incumbent_source_path"] = str(args.wide_csv)
+                incumbent["counterfactual_incumbent_captured_at_utc"] = counterfactual_captured_at.isoformat()
+                incumbent["slate_date"] = args.slate_date
+                incumbent["prop_type"] = "total_bases"
+                incumbent["line"] = 1.5
+                incumbent["counterfactual_incumbent_feature_or_row_hash"] = incumbent.apply(
+                    counterfactual_row_hash, axis=1
+                )
+                incumbent = incumbent.drop(columns=["slate_date", "prop_type", "line"])
+                feature_rows = feature_rows.drop(
+                    columns=[
+                        "production_prob_over", "counterfactual_incumbent_probability",
+                        "counterfactual_incumbent_model_source", "counterfactual_incumbent_artifact_hash",
+                        "counterfactual_incumbent_source_path", "counterfactual_incumbent_captured_at_utc",
+                        "counterfactual_incumbent_feature_or_row_hash",
+                    ],
+                    errors="ignore",
+                ).merge(
                     incumbent, on=["game_pk", "batter_mlb_id"], how="left", validate="many_to_one"
                 )
+                feature_rows["production_prob_over"] = feature_rows["counterfactual_incumbent_probability"]
                 ledger = route_rows(feature_rows, artifact=args.artifact, enabled=enabled)
                 routed = ledger[ledger.route_eligibility]
                 key = wide["prop_type"].eq("total_bases")
@@ -86,7 +114,13 @@ def main() -> None:
                     if mask.sum() == 1:
                         wide.loc[mask, "p_over_1_5"] = row.active_probability
                     else:
-                        ledger.loc[ledger.index == row.Index, ["route_eligibility", "model_source", "exclusion_reason"]] = [False, "EXISTING_PRODUCTION", "WIDE_IDENTITY_NOT_UNIQUE"]
+                        ledger.loc[ledger.index == row.Index, [
+                            "route_eligibility", "model_source", "exclusion_reason",
+                            "active_probability", "probability_delta",
+                        ]] = [
+                            False, "EXISTING_PRODUCTION", "WIDE_IDENTITY_NOT_UNIQUE",
+                            row.counterfactual_incumbent_probability, 0.0,
+                        ]
         except Exception as exc:
             ledger = pd.DataFrame([{"slate_date": args.slate_date, "route_flag_enabled": enabled,
                                     "route_eligibility": False, "model_source": "EXISTING_PRODUCTION",
@@ -111,7 +145,7 @@ def main() -> None:
         supported_null_tokens.extend(x for x in str(raw).split("|") if x)
     health = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "slate_date": args.slate_date, "route_enabled": enabled,
+        "slate_date": args.slate_date, "run_tag": args.run_tag, "route_enabled": enabled,
         "feature_ledger_producer_status": producer.get("producer_status", "MISSING_PRODUCER_STATUS"),
         "feature_ledger_path": str(args.feature_ledger),
         "feature_ledger_rows": int(len(feature_rows)),
@@ -130,6 +164,27 @@ def main() -> None:
         "feature_schema_status": "PASS" if integration_status in {"OK", "NO_CURRENT_CANDIDATES"} else "NOT_VERIFIED",
         "temporal_integrity_status": "PASS" if ledger.get("temporal_integrity_status", pd.Series(dtype=str)).eq("PASS").any() else ("NO_CURRENT_CANDIDATES" if integration_status == "NO_CURRENT_CANDIDATES" else "NOT_ROUTED"),
         "route_ledger_path": str(args.ledger_out),
+        "counterfactual_incumbent_preserved_rows": int(
+            ledger.get("counterfactual_incumbent_status", pd.Series(dtype=str)).eq("PRESERVED").sum()
+        ),
+        "counterfactual_incumbent_unavailable_rows": int(
+            ledger.get("counterfactual_incumbent_status", pd.Series(dtype=str)).eq(
+                "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE"
+            ).sum()
+        ),
+        "counterfactual_lineage_failures": int(
+            ledger.get("counterfactual_lineage_integrity_status", pd.Series(dtype=str)).eq("FAIL").sum()
+        ),
+        "counterfactual_capture_stage_status": (
+            "PASS"
+            if ledger.get("counterfactual_capture_before_routing_status", pd.Series(dtype=str)).eq("PASS").all()
+            else "FAIL"
+        ),
+        "counterfactual_incumbent_model_source": COUNTERFACTUAL_SOURCE,
+        "counterfactual_incumbent_artifact_hash": incumbent_artifact_hash,
+        "counterfactual_incumbent_source_path": str(args.wide_csv),
+        "counterfactual_incumbent_captured_at_utc": counterfactual_captured_at.isoformat(),
+        "ubo5_artifact_hash": ARTIFACT_SHA256,
         "last_successful_routed_execution": datetime.now(timezone.utc).isoformat() if ledger.get("route_eligibility", pd.Series(dtype=bool)).any() else None,
     }
     args.health_out.parent.mkdir(parents=True, exist_ok=True)

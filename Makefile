@@ -1965,7 +1965,7 @@ mlb-predictions-wide:
 	else \
 		echo "UBO5 TB1.5 integration error: candidate producer did not emit a ledger; preserving incumbent production"; \
 	fi
-	$(VENV_PY) -m backend.mlb.scripts.apply_mlb_ubo5_tb15_production_route --slate-date "$(MLB_DATE)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --feature-ledger "$(MLB_UBO5_TB15_FEATURE_LEDGER)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --ledger-out "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --health-out "$(MLB_UBO5_TB15_HEALTH_JSON)" --producer-status-json "$(MLB_UBO5_TB15_PRODUCER_STATUS)"
+	$(VENV_PY) -m backend.mlb.scripts.apply_mlb_ubo5_tb15_production_route --slate-date "$(MLB_DATE)" --run-tag "$(MLB_RUN_TAG)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --feature-ledger "$(MLB_UBO5_TB15_FEATURE_LEDGER)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --ledger-out "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --health-out "$(MLB_UBO5_TB15_HEALTH_JSON)" --producer-status-json "$(MLB_UBO5_TB15_PRODUCER_STATUS)"
 
 # Render the authoritative route as a presentation-only operator board.
 .PHONY: mlb-ubo5-tb15-board mlb-ubo5-tb15-refresh

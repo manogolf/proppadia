@@ -165,6 +165,16 @@ def main() -> int:
                 (book_csv, archive_dir / f"{book_csv.stem}__{run_tag}{book_csv.suffix}"),
             ]
         )
+        for raw in (
+            args.ubo5_feature_ledger,
+            args.ubo5_route_ledger,
+            args.ubo5_route_health,
+        ):
+            if str(raw).strip():
+                source = Path(str(raw)).expanduser()
+                copy_plan.append(
+                    (source, archive_dir / f"{source.stem}__{run_tag}{source.suffix}")
+                )
     if odds_snapshot_src is not None:
         copy_plan.append((odds_snapshot_src, archive_dir / "odds_mlb_playerprops.json"))
         # Keep legacy-compatible filename in sync for reconcile/report defaults.
