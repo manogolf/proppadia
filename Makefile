@@ -1968,9 +1968,15 @@ mlb-predictions-wide:
 	$(VENV_PY) -m backend.mlb.scripts.apply_mlb_ubo5_tb15_production_route --slate-date "$(MLB_DATE)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --feature-ledger "$(MLB_UBO5_TB15_FEATURE_LEDGER)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --ledger-out "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --health-out "$(MLB_UBO5_TB15_HEALTH_JSON)" --producer-status-json "$(MLB_UBO5_TB15_PRODUCER_STATUS)"
 
 # Render the authoritative route as a presentation-only operator board.
-.PHONY: mlb-ubo5-tb15-board
+.PHONY: mlb-ubo5-tb15-board mlb-ubo5-tb15-refresh
 mlb-ubo5-tb15-board:
 	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_human_board --date "$(MLB_DATE)" --route-ledger "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --route-health "$(MLB_UBO5_TB15_HEALTH_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --snapshot-run-tag "$(MLB_UBO5_TB15_BOARD_RUN_TAG)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --archive-root "$(MLB_ODDS_HISTORY_ROOT)"
+
+# Fresh manual-only UBO-5 TB 1.5 prices, lineups, scoring, and boards.
+mlb-ubo5-tb15-refresh:
+	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
+	@set -a; . backend/.env; set +a; \
+	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_tb15_manual --date "$(MLB_DATE)"
 
 # Append a presentation-only observation and render the provisional watchlist.
 .PHONY: mlb-ubo5-tb15-provisional-tracker
