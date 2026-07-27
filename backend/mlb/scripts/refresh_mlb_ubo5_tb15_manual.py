@@ -248,6 +248,7 @@ def render_confirmed_board(
     date: str,
     run_tag: str,
     captured: pd.Timestamp,
+    prediction_time: pd.Timestamp,
     markets: list[dict[str, Any]],
     player_map: dict,
     team_map: dict,
@@ -256,7 +257,7 @@ def render_confirmed_board(
     scored, contexts = score_candidates(
         date,
         run_tag,
-        captured,
+        prediction_time,
         markets,
         player_map,
         team_map,
@@ -519,6 +520,7 @@ def run(args: argparse.Namespace) -> int:
         team_path = package / f"pregame_lineup_game_team_summary_{args.date}_{label}.csv"
         shutil.copy2(team_path, package / "lineup_status.csv")
         player_map, team_map = lineup_context(player_path, team_path)
+        prediction_time = pd.Timestamp.now(tz="UTC")
         stage_timer(timings, "lineup_capture_seconds", started)
 
         started = time.monotonic()
@@ -555,7 +557,8 @@ def run(args: argparse.Namespace) -> int:
 
         started = time.monotonic()
         routes, confirmed_board, confirmed, unconfirmed = render_confirmed_board(
-            args.date, run_tag, captured, unstarted, player_map, team_map, package
+            args.date, run_tag, captured, prediction_time,
+            unstarted, player_map, team_map, package
         )
         shutil.copy2(staged_pre_md, package / "prelineup_confirmation_board.md")
         shutil.copy2(staged_pre_csv, package / "prelineup_confirmation_board.csv")
