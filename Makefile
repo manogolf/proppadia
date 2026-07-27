@@ -45,6 +45,7 @@ MLB_UBO5_TB15_PRODUCER_STATUS ?= artifacts/analysis/mlb/production_routes/ubo5_t
 MLB_UBO5_TB15_FEATURE_LEDGER ?= artifacts/analysis/mlb/production_routes/ubo5_tb15/$(MLB_DATE)/feature_ledger.parquet
 MLB_UBO5_TB15_ROUTE_LEDGER ?= artifacts/analysis/mlb/production_routes/ubo5_tb15/$(MLB_DATE)/route_ledger.csv
 MLB_UBO5_TB15_HEALTH_JSON ?= artifacts/analysis/mlb/production_routes/ubo5_tb15/$(MLB_DATE)/route_health.json
+MLB_UBO5_HISTORY_NORMALIZED_ROOT ?= artifacts/analysis/model_development/mlb_ubo5_total_bases_15_live_platform_certification/2026-07-23/normalized_refresh
 MLB_UBO5_TB15_BOARD_ROOT ?= backend/mlb/exports/model_v2/ubo5_tb15
 MLB_UBO5_TB15_BOARD_MD ?= $(MLB_UBO5_TB15_BOARD_ROOT)/$(MLB_DATE)/ubo5_tb15_board_$(MLB_DATE).md
 MLB_UBO5_TB15_BOARD_CSV ?= $(MLB_UBO5_TB15_BOARD_ROOT)/$(MLB_DATE)/ubo5_tb15_board_$(MLB_DATE).csv
@@ -1977,6 +1978,19 @@ mlb-ubo5-tb15-refresh:
 	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
 	@set -a; . backend/.env; set +a; \
 	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_tb15_manual --date "$(MLB_DATE)"
+
+.PHONY: mlb-ubo5-history-refresh mlb-ubo5-history-backfill
+mlb-ubo5-history-refresh:
+	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
+	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_completed_game_history \
+		--date "$(MLB_DATE)" --normalized-root "$(MLB_UBO5_HISTORY_NORMALIZED_ROOT)"
+
+mlb-ubo5-history-backfill:
+	@test -n "$(MLB_DATE_FROM)" || (echo "MLB_DATE_FROM=YYYY-MM-DD is required" >&2; exit 2)
+	@test -n "$(MLB_DATE_TO)" || (echo "MLB_DATE_TO=YYYY-MM-DD is required" >&2; exit 2)
+	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_completed_game_history \
+		--date-from "$(MLB_DATE_FROM)" --date-to "$(MLB_DATE_TO)" \
+		--normalized-root "$(MLB_UBO5_HISTORY_NORMALIZED_ROOT)"
 
 # Append a presentation-only observation and render the provisional watchlist.
 .PHONY: mlb-ubo5-tb15-provisional-tracker

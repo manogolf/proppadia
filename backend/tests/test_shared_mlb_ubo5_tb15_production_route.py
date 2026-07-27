@@ -17,6 +17,10 @@ class Ubo5Tb15RouteTest(unittest.TestCase):
         cls.row = pd.read_csv(LIVE).iloc[[0]].copy()
         cls.row["batter_identity_certified"] = True
         cls.row["identity_ambiguous"] = False
+        cls.row["source_platform_freshness_status"] = "CURRENT_THROUGH_LATEST_COMPLETED_SLATE"
+        cls.row["source_platform_certified_through_date"] = "2026-07-22"
+        cls.row["source_date_lineage_status"] = "OBSERVED_FROM_NORMALIZED_EVENTS"
+        cls.row["feature_source_actual_date_status"] = "PASS"
 
     def route(self, frame=None, **kw):
         return route_rows(frame if frame is not None else self.row, artifact=ART, enabled=True,
@@ -77,6 +81,19 @@ class Ubo5Tb15RouteTest(unittest.TestCase):
         got = self.route(frame).iloc[0]
         self.assertTrue(got.route_eligibility)
         self.assertEqual(got.feature_completeness_status, "COMPLETE_WITH_MODEL_SUPPORTED_NULLS")
+
+    def test_stale_or_unverified_event_platform_fails_closed(self):
+        frame = self.row.copy()
+        frame["source_platform_certified_through_date"] = "2026-07-21"
+        got = self.route(frame).iloc[0]
+        self.assertFalse(got.route_eligibility)
+        self.assertEqual(got.exclusion_reason, "STALE_NORMALIZED_EVENT_PLATFORM")
+
+        frame = self.row.copy()
+        frame["source_date_lineage_status"] = "SOURCE_DATE_UNVERIFIED"
+        got = self.route(frame).iloc[0]
+        self.assertFalse(got.route_eligibility)
+        self.assertEqual(got.exclusion_reason, "SOURCE_DATE_UNVERIFIED")
 
 
 if __name__ == "__main__":

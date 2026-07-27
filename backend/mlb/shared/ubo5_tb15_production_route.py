@@ -64,6 +64,12 @@ def route_rows(
         "production_prob_over": np.nan, "batter_identity_certified": False,
         "identity_ambiguous": True, "source_lineage_pointer": "",
         "production_artifact_hash": "", "latest_included_event_date": pd.NaT,
+        "latest_batter_event_date": pd.NaT, "latest_pitcher_event_date": pd.NaT,
+        "latest_matchup_event_date": pd.NaT, "latest_any_included_event_date": pd.NaT,
+        "source_platform_freshness_status": "SOURCE_DATE_UNVERIFIED",
+        "source_platform_certified_through_date": pd.NaT,
+        "source_date_lineage_status": "SOURCE_DATE_UNVERIFIED",
+        "feature_source_actual_date_status": "FAIL",
         "counterfactual_incumbent_probability": np.nan,
         "counterfactual_incumbent_model_source": COUNTERFACTUAL_SOURCE,
         "counterfactual_incumbent_artifact_hash": "",
@@ -146,9 +152,28 @@ def route_rows(
     reject(pd.Series(not source_fresh, index=out.index), "STALE_SOURCE")
     latest_event = pd.to_datetime(out.get("latest_included_event_date"), utc=True, errors="coerce")
     slate_day = pd.to_datetime(out["slate_date"], utc=True, errors="coerce")
+    platform_through = pd.to_datetime(
+        out["source_platform_certified_through_date"], utc=True, errors="coerce"
+    )
+    platform_current = out["source_platform_freshness_status"].isin({
+        "CURRENT_THROUGH_LATEST_COMPLETED_SLATE",
+        "CURRENT_WITH_SAME_DAY_GAMES_PENDING",
+    })
     reject(
-        latest_event.isna() | slate_day.isna() | (latest_event >= slate_day) | ((slate_day - latest_event).dt.days > 3),
-        "STALE_OR_NON_PRIOR_SOURCE_EVENTS",
+        ~platform_current
+        | platform_through.isna()
+        | slate_day.isna()
+        | platform_through.lt(slate_day - pd.Timedelta(days=1)),
+        "STALE_NORMALIZED_EVENT_PLATFORM",
+    )
+    reject(
+        ~out["source_date_lineage_status"].eq("OBSERVED_FROM_NORMALIZED_EVENTS")
+        | ~out["feature_source_actual_date_status"].eq("PASS"),
+        "SOURCE_DATE_UNVERIFIED",
+    )
+    reject(
+        latest_event.isna() | slate_day.isna() | (latest_event >= slate_day),
+        "NON_PRIOR_SOURCE_EVENTS",
     )
     reject(out["prediction_timestamp_utc"].isna() | out["scheduled_start_utc"].isna() | (out["prediction_timestamp_utc"] >= out["scheduled_start_utc"]), "PREDICTION_NOT_BEFORE_FIRST_PITCH")
     reject(out["scheduled_start_utc"] <= now, "GAME_ALREADY_STARTED")

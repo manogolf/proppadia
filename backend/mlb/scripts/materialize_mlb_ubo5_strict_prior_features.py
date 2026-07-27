@@ -31,7 +31,7 @@ def main():
  n=a.normalized_root.resolve()
  cand=pd.read_csv(a.candidate_file) if a.candidate_file else pd.DataFrame()
  if a.candidate_file and not len(cand):
-  meta=["game_pk","game_date","batter_mlb_id","team","opponent","home_away","lineup_certification_status"]+FEATURES+["latest_included_event_date","feature_vector_sha256","feature_schema_sha256","prediction_timestamp_utc","scheduled_start_utc","lineup_certified_at_utc","line","run_tag","exclusion_reason","route_eligible","strict_prior_pa","source_lineage_pointer","feature_completeness_status","temporal_integrity_status"]
+  meta=["game_pk","game_date","batter_mlb_id","team","opponent","home_away","lineup_certification_status"]+FEATURES+["latest_batter_event_date","latest_pitcher_event_date","latest_matchup_event_date","latest_any_included_event_date","latest_included_event_date","source_platform_freshness_status","source_platform_certified_through_date","source_date_lineage_status","feature_source_actual_date_status","feature_vector_sha256","feature_schema_sha256","prediction_timestamp_utc","scheduled_start_utc","lineup_certified_at_utc","line","run_tag","exclusion_reason","route_eligible","strict_prior_pa","source_lineage_pointer","feature_completeness_status","temporal_integrity_status"]
   empty=pd.DataFrame({c:pd.Series(dtype="object") for c in meta})
   a.output.parent.mkdir(parents=True,exist_ok=True);pq.write_table(pa.Table.from_pandas(empty,preserve_index=False),a.output,compression="zstd")
   print(json.dumps({"rows":0,"features":len(FEATURES),"status":"NO_CURRENT_CANDIDATES"}));return
@@ -74,6 +74,7 @@ def main():
  bb["bb"]=1;bb["ev_sum"]=bb.launch_speed.fillna(0);bb["ev_n"]=bb.launch_speed.notna().astype(int);bb["x_6"]=bb.launch_speed_angle.eq(6).astype(int);bb["xba_sum"]=bb.estimated_ba_using_speedangle.fillna(0);bb["xba_n"]=bb.estimated_ba_using_speedangle.notna().astype(int);bb["xwoba_sum"]=bb.estimated_woba_using_speedangle.fillna(0);bb["xwoba_n"]=bb.estimated_woba_using_speedangle.notna().astype(int)
  bga=bb.groupby(["game_pk","batter"],as_index=False)[["bb","ev_sum","ev_n","x_6","xba_sum","xba_n","xwoba_sum","xwoba_n"]].sum()
  hist=pg.merge(pga,on=["game_pk","batter"],how="left").merge(bga,on=["game_pk","batter"],how="left").fillna(0)
+ actual_batter_history=hist[["batter","game_date"]].copy()
  hc=cc+["pitches","swings","whiffs","contacts","called_strikes","fouls","bb","ev_sum","ev_n","x_6","xba_sum","xba_n","xwoba_sum","xwoba_n"]
  if len(cand):
   zeros=pd.DataFrame({"game_pk":cand.game_pk.astype(int),"game_date":pd.to_datetime(cand.slate_date),"batter":cand.batter_mlb_id.astype(int)})
@@ -94,6 +95,7 @@ def main():
   cmap=dict(zip(zip(cand.game_pk.astype(int),cand.batter_mlb_id.astype(int)),pd.to_numeric(cand.opposing_starter_id,errors="coerce")))
   cm=t.get("_candidate",False).fillna(False);t.loc[cm,"opposing_starter_id"]=[cmap.get((int(g),int(b))) for g,b in zip(t.loc[cm,"game_pk"],t.loc[cm,"batter_mlb_id"])]
  ph=pdf.dropna(subset=["pitcher"]).copy();ph["pitcher_id"]=ph.pitcher.astype(int);ph=ph.groupby(["pitcher_id","game_date"],as_index=False)[cc].sum()
+ actual_pitcher_history=ph[["pitcher_id","game_date"]].copy()
  if len(cand):
   pz=pd.DataFrame({"pitcher_id":pd.to_numeric(cand.opposing_starter_id,errors="coerce"),"game_date":pd.to_datetime(cand.slate_date)}).dropna(subset=["pitcher_id"]);pz["pitcher_id"]=pz.pitcher_id.astype(int)
   for c in cc:pz[c]=0
@@ -105,11 +107,32 @@ def main():
   for i in range(8):t[f"h_{scope}_rate_{i}"]=safe_rate(t[f"h_{scope}_oc_{i}"].fillna(0),den,gd[i],200)
  t["h_swing_rate"]=safe_rate(t.h_career_swings,t.h_career_pitches,.47,100);t["h_whiff_per_swing"]=safe_rate(t.h_career_whiffs,t.h_career_swings,.22,100);t["h_contact_per_swing"]=safe_rate(t.h_career_contacts,t.h_career_swings,.78,100);t["h_called_strike_rate"]=safe_rate(t.h_career_called_strikes,t.h_career_pitches,.16,100);t["h_foul_rate"]=safe_rate(t.h_career_fouls,t.h_career_pitches,.17,100);t["h_pitches_per_pa"]=safe_rate(t.h_career_pitches,t.h_career_pa,3.9,50);t["h_ev"]=safe_rate(t.h_career_ev_sum,t.h_career_ev_n,88.5,50);t["h_xba"]=safe_rate(t.h_career_xba_sum,t.h_career_xba_n,.245,50);t["h_xwoba"]=safe_rate(t.h_career_xwoba_sum,t.h_career_xwoba_n,.320,50);t["h_lsa6_rate"]=safe_rate(t.h_career_x_6,t.h_career_bb,.07,50)
  t["p_hit_suppression"]=safe_rate(t.p_career_hit,t.p_career_pa,.225,250);t["p_k_rate"]=safe_rate(t.p_career_oc_0,t.p_career_pa,.225,250);t["matchup_k"]=t.h_career_rate_0*t.p_k_rate;t["matchup_hit"]=sum(t[f"h_career_rate_{i}"] for i in [3,4,5,6])*t.p_hit_suppression;t["pitcher_available"]=t.opposing_starter_id.notna().astype(int)
- out=t[["game_pk","game_date","batter_mlb_id","team","opponent","home_away","lineup_certification_status"]+FEATURES].copy()
- out["latest_included_event_date"]=(out.game_date-pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d");out["feature_vector_sha256"]=out[FEATURES].astype(str).agg("|".join,axis=1).map(sha_text)
+ out=t[["game_pk","game_date","batter_mlb_id","opposing_starter_id","team","opponent","home_away","lineup_certification_status"]+FEATURES].copy()
+ target_date=pd.to_datetime(cand.slate_date.iloc[0]) if len(cand) else pd.to_datetime(out.game_date.max())
+ batter_latest=(actual_batter_history[actual_batter_history.game_date.lt(target_date)]
+  .groupby("batter").game_date.max())
+ pitcher_latest=(actual_pitcher_history[actual_pitcher_history.game_date.lt(target_date)]
+  .groupby("pitcher_id").game_date.max())
+ out["latest_batter_event_date"]=pd.to_numeric(out.batter_mlb_id,errors="coerce").map(batter_latest)
+ out["latest_pitcher_event_date"]=pd.to_numeric(out.opposing_starter_id,errors="coerce").map(pitcher_latest)
+ out["latest_matchup_event_date"]=out[["latest_batter_event_date","latest_pitcher_event_date"]].max(axis=1)
+ out["latest_any_included_event_date"]=out[["latest_batter_event_date","latest_pitcher_event_date"]].max(axis=1)
+ out["latest_included_event_date"]=out["latest_any_included_event_date"]
+ freshness_path=n/"ubo5_source_freshness.json"
+ freshness=json.loads(freshness_path.read_text()) if freshness_path.is_file() else {}
+ platform_status=str(freshness.get("source_freshness_status") or "SOURCE_DATE_UNVERIFIED")
+ certified_through=pd.to_datetime(freshness.get("certified_through_date"),errors="coerce")
+ expected_through=target_date-pd.Timedelta(days=1)
+ platform_current=platform_status in {"CURRENT_THROUGH_LATEST_COMPLETED_SLATE","CURRENT_WITH_SAME_DAY_GAMES_PENDING"} and pd.notna(certified_through) and certified_through>=expected_through
+ out["source_platform_freshness_status"]=platform_status
+ out["source_platform_certified_through_date"]=certified_through
+ out["source_date_lineage_status"]=str(freshness.get("source_date_lineage_status") or "SOURCE_DATE_UNVERIFIED")
+ actual_dates_valid=out.latest_any_included_event_date.notna()&out.latest_any_included_event_date.lt(out.game_date)
+ out["feature_source_actual_date_status"]=np.where(actual_dates_valid,"PASS","FAIL")
+ out["feature_vector_sha256"]=out[FEATURES].astype(str).agg("|".join,axis=1).map(sha_text)
  required_non_null=[c for c in FEATURES if c not in MODEL_SUPPORTED_NULL_FEATURES]
  supported_null_count=out[list(MODEL_SUPPORTED_NULL_FEATURES)].isna().sum(axis=1)
- out["feature_schema_sha256"]=sha_text("\n".join(FEATURES));out["feature_completeness_status"]=np.where(out[required_non_null].notna().all(axis=1),np.where(supported_null_count.gt(0),"COMPLETE_WITH_MODEL_SUPPORTED_NULLS","COMPLETE"),"INCOMPLETE_REQUIRED_FEATURE");out["temporal_integrity_status"]="PASS"
+ out["feature_schema_sha256"]=sha_text("\n".join(FEATURES));out["feature_completeness_status"]=np.where(out[required_non_null].notna().all(axis=1),np.where(supported_null_count.gt(0),"COMPLETE_WITH_MODEL_SUPPORTED_NULLS","COMPLETE"),"INCOMPLETE_REQUIRED_FEATURE");out["temporal_integrity_status"]=np.where(platform_current&actual_dates_valid&out.source_date_lineage_status.eq("OBSERVED_FROM_NORMALIZED_EVENTS"),"PASS","FAIL")
  if len(cand):
   meta_cols=["game_pk","batter_mlb_id","prediction_timestamp_utc","scheduled_start_utc","lineup_certified_at_utc","line","run_tag","exclusion_reason"]+[c for c in ["source_lineage_pointer","batter_identity_certified","identity_ambiguous","market_row_certified"] if c in cand]
   meta=cand[meta_cols]
