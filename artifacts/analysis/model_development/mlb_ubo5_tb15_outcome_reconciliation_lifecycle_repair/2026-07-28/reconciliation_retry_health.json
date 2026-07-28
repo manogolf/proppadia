@@ -1,0 +1,16 @@
+{
+  "population_rows_inspected": 170,
+  "market_backed_resolutions": 110,
+  "exact_id_fallback_resolutions": 41,
+  "no_action_classifications": 5,
+  "void_classifications": 0,
+  "pending_postponed_rows": 14,
+  "technical_unresolved_rows": 0,
+  "dates_retried": [
+    "2026-07-27"
+  ],
+  "closeout_revisions_created": 4,
+  "only_pending_game": "CLE @ CIN",
+  "idempotent_rerun": true,
+  "population_manifest_count": 170
+}
