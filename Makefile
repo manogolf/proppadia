@@ -2011,6 +2011,32 @@ mlb-ubo5-tb15-run-spine-backfill:
 	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
 	$(VENV_PY) -m backend.mlb.scripts.backfill_mlb_ubo5_tb15_run_snapshot_spine --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --odds-root "$(MLB_ODDS_HISTORY_ROOT)"
 
+.PHONY: mlb-ubo5-tb15-ever-positive-closeout
+mlb-ubo5-tb15-ever-positive-closeout:
+	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_broad_population_closeout --date "$(MLB_DATE)" --population ever_positive --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
+
+.PHONY: mlb-ubo5-tb15-final-pregame-closeout
+mlb-ubo5-tb15-final-pregame-closeout:
+	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_broad_population_closeout --date "$(MLB_DATE)" --population final_pregame --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
+
+.PHONY: mlb-ubo5-tb15-broad-records
+mlb-ubo5-tb15-broad-records:
+	@rc=0; \
+	$(MAKE) mlb-ubo5-tb15-ever-positive-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
+	$(MAKE) mlb-ubo5-tb15-final-pregame-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
+	for manifest in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/ubo5_tb15_run_population_manifest_*.json; do \
+		[ -f "$$manifest" ] || continue; pending_date=$$(basename "$$(dirname "$$manifest")"); \
+		[ "$$pending_date" != "$(MLB_DATE)" ] || continue; \
+		[ -s "artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" ] || continue; \
+		for population in ever_positive final_pregame; do \
+			current="$(MLB_UBO5_TB15_BOARD_ROOT)/$$pending_date/ubo5_tb15_$${population}_closeout_current.json"; \
+			status=""; [ ! -f "$$current" ] || status=$$($(VENV_PY) -c 'import json,sys; print(json.load(open(sys.argv[1])).get("closeout_status",""))' "$$current"); \
+			[ "$$status" != "FINAL" ] || continue; \
+			if [ "$$population" = "ever_positive" ]; then target=mlb-ubo5-tb15-ever-positive-closeout; else target=mlb-ubo5-tb15-final-pregame-closeout; fi; \
+			$(MAKE) $$target MLB_DATE="$$pending_date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" || rc=$$?; \
+		done; \
+	done; exit $$rc
+
 # Build a revisioned observation closeout from immutable morning/run-tagged artifacts.
 .PHONY: mlb-ubo5-tb15-closeout
 mlb-ubo5-tb15-closeout:

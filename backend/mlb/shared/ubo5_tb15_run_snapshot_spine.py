@@ -19,7 +19,8 @@ FIELDS = [
     "evaluation_scope", "evaluation_status", "lineup_status", "batting_order",
     "betonline_over_price", "betonline_under_price", "no_vig_over_probability",
     "ubo5_probability_over", "ubo5_over_edge_pp", "positive_over_edge_flag",
-    "route_status", "feature_vector_sha256",
+    "route_status", "feature_vector_sha256", "strict_prior_pa", "feature_state",
+    "pitcher_hit_suppression", "pitcher_strikeout_context", "recent_pitcher_context",
     "full_1_to_9_classification", "hybrid_display_status",
     "hard_confirm_flag", "likely_confirm_if_starting_flag",
     "prelineup_unscored_reason", "market_snapshot_path", "identity_source_path",
@@ -32,6 +33,13 @@ POPULATION_FIELDS = [
     "no_vig_over_probability", "ubo5_over_edge_pp",
     "full_1_to_9_classification", "hybrid_display_status",
     "run_observation_count", "first_evaluation_status", "last_evaluation_status",
+    "batting_order", "strict_prior_pa", "feature_state",
+    "first_ubo5_probability_over", "first_betonline_over_price",
+    "first_betonline_under_price", "first_no_vig_over_probability",
+    "first_ubo5_over_edge_pp", "final_run_tag", "final_timestamp_utc",
+    "final_ubo5_probability_over", "final_betonline_over_price",
+    "final_betonline_under_price", "final_no_vig_over_probability",
+    "final_ubo5_over_edge_pp",
 ]
 
 
@@ -109,6 +117,21 @@ def _population_row(row: dict, first: dict | None = None) -> dict:
         "ubo5_over_edge_pp": row.get("ubo5_over_edge_pp", ""),
         "full_1_to_9_classification": row.get("full_1_to_9_classification", ""),
         "hybrid_display_status": row.get("hybrid_display_status", ""),
+        "batting_order": row.get("batting_order", ""),
+        "strict_prior_pa": row.get("strict_prior_pa", ""),
+        "feature_state": row.get("feature_state", ""),
+        "first_ubo5_probability_over": first.get("ubo5_probability_over", ""),
+        "first_betonline_over_price": first.get("betonline_over_price", ""),
+        "first_betonline_under_price": first.get("betonline_under_price", ""),
+        "first_no_vig_over_probability": first.get("no_vig_over_probability", ""),
+        "first_ubo5_over_edge_pp": first.get("ubo5_over_edge_pp", ""),
+        "final_run_tag": row["run_tag"],
+        "final_timestamp_utc": row["snapshot_timestamp_utc"],
+        "final_ubo5_probability_over": row.get("ubo5_probability_over", ""),
+        "final_betonline_over_price": row.get("betonline_over_price", ""),
+        "final_betonline_under_price": row.get("betonline_under_price", ""),
+        "final_no_vig_over_probability": row.get("no_vig_over_probability", ""),
+        "final_ubo5_over_edge_pp": row.get("ubo5_over_edge_pp", ""),
     }
 
 
@@ -132,9 +155,9 @@ def rebuild_daily_manifest(output_root: Path, date: str) -> dict:
             "last_evaluation_status": last["evaluation_status"],
         })
         positives = [row for row in rows if _truth(row["positive_over_edge_flag"])]
-        if positives:
-            broad.append(_population_row(positives[0]))
         routed = [row for row in rows if row.get("route_status") == "UBO5_ROUTED"]
+        if positives:
+            broad.append(_population_row(routed[-1] if routed else positives[-1], positives[0]))
         if routed and _truth(routed[-1]["positive_over_edge_flag"]):
             final_positive.append(_population_row(routed[-1], routed[0]))
         hard_rows = [row for row in rows if _truth(row["hard_confirm_flag"])]
@@ -276,6 +299,11 @@ def freeze_complete_run(
                 "INCUMBENT_FALLBACK" if route else "PRELINEUP_ONLY"
             ),
             "feature_vector_sha256": route.get("feature_vector_sha256", ""),
+            "strict_prior_pa": route.get("history_depth_pa", ""),
+            "feature_state": route.get("feature_completeness_status", ""),
+            "pitcher_hit_suppression": route.get("p_hit_suppression", ""),
+            "pitcher_strikeout_context": route.get("matchup_k", ""),
+            "recent_pitcher_context": route.get("secondary_fallback_details", ""),
             "full_1_to_9_classification": pre_class,
             "hybrid_display_status": hybrid,
             "hard_confirm_flag": str(pre_class == "ROBUST_CONFIRM").lower(),
