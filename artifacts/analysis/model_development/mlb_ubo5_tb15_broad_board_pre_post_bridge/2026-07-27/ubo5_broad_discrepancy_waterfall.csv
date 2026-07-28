@@ -1,0 +1,10 @@
+step,remaining_rows,predicted_win_rate,actual_win_rate,Brier_score,log_loss,ROI,notes
+original pre-observation population,974,0.3900230510954798,0.406570841889117,0.2429762270980702,0.6792167415947452,,eligible probability rows; no market-edge test
+authentic BetOnline two-sided availability,810,0.39179803308447836,0.4123456790123457,0.24415906249479047,0.6815827934686157,-0.07898276087879662,exact run-tagged prices
+confirmed lineup and exact batting order,810,0.39179803308447836,0.4123456790123457,0.24415906249479047,0.6815827934686157,-0.07898276087879662,historically certified starters
+broad UBO-5 positive-edge rule,260,0.4191904025352548,0.36538461538461536,0.2364330403082383,0.665722804045836,-0.13129957376245213,first positive
+matching snapshot timing,198,0.4217163181441993,0.3383838383838384,0.23243571535990734,0.6576471069032942,-0.19777124718301184,last eligible snapshot
+live odds distribution,39,0.40623844030769224,0.3333333333333333,0.22343820367618022,0.6392965225021465,-0.2090402258292166,July 26 retained partial spine
+stale versus repaired history,22,,,,,,22 preserved July 26 contexts only; membership price unavailable outside retained board
+complete feature-state requirement,6,,,,,,live retained population
+recent pitcher/hitter regime distribution,,,,,,,comparable categorical regimes not preserved
