@@ -36,6 +36,7 @@ from backend.mlb.shared.ubo5_tb15_production_route import (
     sha256_file,
 )
 from backend.mlb.shared.ubo5_tb15_consensus_selection import freeze as freeze_consensus
+from backend.mlb.shared.ubo5_tb15_run_snapshot_spine import freeze_complete_run
 
 ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_ROOT = ROOT / "backend/mlb/exports/model_v2/ubo5_tb15"
@@ -544,7 +545,7 @@ def run(args: argparse.Namespace) -> int:
                 "--wide-csv", str(wide_path), "--lineup-csv", str(player_path),
                 "--lineup-team-summary", str(team_path), "--route-ledger", str(empty_routes),
                 "--normalized-root", str(NORMALIZED_ROOT), "--artifact", str(ARTIFACT),
-                "--output-root", str(staging_root),
+                "--output-root", str(staging_root), "--skip-run-snapshot",
             ], cwd=ROOT, check=True)
         else:
             write_csv(pre_audit, [], PRELINEUP_AUDIT_FIELDS)
@@ -581,6 +582,17 @@ def run(args: argparse.Namespace) -> int:
             })
         consensus_manifest = freeze_consensus(
             OUTPUT_ROOT, args.date, run_tag, selection_rows
+        )
+        run_population_manifest = freeze_complete_run(
+            repository_root=ROOT,
+            output_root=OUTPUT_ROOT,
+            date=args.date,
+            run_tag=run_tag,
+            market_snapshot_path=snapshot_path,
+            identity_source_path=wide_path,
+            route_ledger_path=package / "confirmed_route_ledger.csv",
+            prelineup_audit_path=package / "prelineup_confirmation_audit.csv",
+            identity_rejects=identity_rejects,
         )
         shutil.copy2(staged_pre_md, package / "prelineup_confirmation_board.md")
         shutil.copy2(staged_pre_csv, package / "prelineup_confirmation_board.csv")
@@ -629,6 +641,8 @@ def run(args: argparse.Namespace) -> int:
                 for row in routes
             ),
             "consensus_governed_population_rows": consensus_manifest["selection_count"],
+            "complete_run_snapshot_rows": len(routes) + unconfirmed,
+            "complete_run_snapshot_count": run_population_manifest["run_snapshot_count"],
             "identity_rejects": identity_rejects,
             "flatten_counts": flatten_counts,
             "resolve_counts": resolve_counts,

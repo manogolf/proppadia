@@ -2004,6 +2004,13 @@ mlb-ubo5-tb15-prelineup-confirmation:
 	@test -n "$(MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG)" || (echo "MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG is required" >&2; exit 2)
 	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_prelineup_confirmation_board --date "$(MLB_DATE)" --run-tag "$(MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --lineup-csv "$(MLB_UBO5_TB15_LINEUP_LEDGER)" --lineup-team-summary "$(MLB_UBO5_TB15_LINEUP_DIR)/pregame_lineup_game_team_summary_$(MLB_DATE)_ubo5_tb15_daily.csv" --route-ledger "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --normalized-root "$(MLB_UBO5_TB15_NORMALIZED_ROOT)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)"
 
+# Rebuild the broader run-snapshot spine only from exact surviving run-tagged
+# sources. This never reconstructs or modifies consensus selections.
+.PHONY: mlb-ubo5-tb15-run-spine-backfill
+mlb-ubo5-tb15-run-spine-backfill:
+	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
+	$(VENV_PY) -m backend.mlb.scripts.backfill_mlb_ubo5_tb15_run_snapshot_spine --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --odds-root "$(MLB_ODDS_HISTORY_ROOT)"
+
 # Build a revisioned observation closeout from immutable morning/run-tagged artifacts.
 .PHONY: mlb-ubo5-tb15-closeout
 mlb-ubo5-tb15-closeout:

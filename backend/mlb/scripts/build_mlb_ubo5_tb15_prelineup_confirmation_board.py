@@ -26,6 +26,7 @@ from backend.mlb.scripts.run_mlb_ubo5_tb15_role_envelope_pilot import (
     HYBRID_PROMOTION_ROLES, ROLE_LABELS, read_normalized, role_context,
 )
 from backend.mlb.shared.ubo5_tb15_production_route import ARTIFACT_SHA256, sha256_file
+from backend.mlb.shared.ubo5_tb15_run_snapshot_spine import freeze_complete_run
 
 ROOT = Path(__file__).resolve().parents[3]
 CLASS_LABELS = {
@@ -272,6 +273,7 @@ def main() -> int:
     ap.add_argument("--normalized-root", required=True, type=Path)
     ap.add_argument("--artifact", required=True, type=Path)
     ap.add_argument("--output-root", default="backend/mlb/exports/model_v2/ubo5_tb15", type=Path)
+    ap.add_argument("--skip-run-snapshot", action="store_true")
     args = ap.parse_args()
     snapshot = json.loads(args.odds_json.read_text())
     captured = pd.to_datetime(snapshot.get("captured_at_utc"), utc=True, errors="coerce")
@@ -399,6 +401,19 @@ def main() -> int:
     )
     transition_path = day_dir / f"ubo5_tb15_prelineup_confirmation_transitions_{safe_tag}.csv"
     immutable_write(transition_path, transition_rows, TRANSITION_FIELDS)
+    run_population_manifest = None
+    if not args.skip_run_snapshot:
+        run_population_manifest = freeze_complete_run(
+            repository_root=ROOT,
+            output_root=args.output_root,
+            date=args.date,
+            run_tag=args.run_tag,
+            market_snapshot_path=args.odds_json,
+            identity_source_path=args.wide_csv,
+            route_ledger_path=args.route_ledger,
+            prelineup_audit_path=audit_path,
+            identity_rejects=identity_rejects,
+        )
     latest = args.output_root / "latest"
     latest.mkdir(parents=True, exist_ok=True)
     shutil.copy2(board_md, latest / "ubo5_tb15_prelineup_confirmation_board.md")
@@ -417,6 +432,11 @@ def main() -> int:
         "hybrid_WAIT_FOR_LINEUP": int(hybrid_counts.get("WAIT FOR LINEUP", 0)),
         "identity_rejects": len(identity_rejects), "transition_rows": len(transition_rows),
         "transition_defects": sum(row["integrity_status"] == "DEFECT" for row in transition_rows),
+        "complete_run_snapshot_rows": 0 if args.skip_run_snapshot else len(audit_rows),
+        "complete_run_snapshot_count": (
+            0 if run_population_manifest is None
+            else run_population_manifest["run_snapshot_count"]
+        ),
     }
     print(json.dumps(payload))
     return 0
