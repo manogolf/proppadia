@@ -11,8 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.mlb.scripts.build_mlb_ubo5_tb15_daily_closeout import (
-    load_certified_player_stats, load_outcomes, number, read_rows, write_rows,
+    load_certified_player_stats, load_official_game_statuses, load_outcomes,
+    number, read_rows, write_rows,
 )
+from backend.mlb.shared.ubo5_tb15_outcome_resolver import resolve_tb15_outcome
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = {
@@ -37,7 +39,8 @@ CLOSEOUT_FIELDS = [
     "betonline_over_price", "betonline_under_price", "no_vig_over_probability",
     "ubo5_over_edge_pp", "plate_appearances", "at_bats", "singles", "doubles",
     "triples", "home_runs", "total_bases", "result", "outcome_status",
-    "closeout_status",
+    "outcome_source", "outcome_source_path", "resolution_method",
+    "resolution_reason_code", "closeout_status",
 ]
 RECORD_FIELDS = [
     "slate_date", "population_name", "coverage_status", "selection_count",
@@ -128,25 +131,31 @@ def main() -> int:
     )
     reconciled = load_outcomes(reconcile_path, args.date)
     certified, certified_status = load_certified_player_stats(args.date)
+    official_statuses, game_status_source = load_official_game_statuses(
+        args.date, day / f"ubo5_tb15_official_game_status_{args.date}.json"
+    )
     rows = []
     prefix = config["selection_prefix"]
     for selection in population:
         identity = ident(selection, args.date)
         market, official = reconciled.get(identity), certified.get(identity)
-        outcome = official or market or {"value": None, "stats": {}, "conflict": False}
-        if market and official and number(market.get("value")) is not None:
-            outcome["conflict"] = bool(
-                outcome.get("conflict")
-                or number(market["value"]) != number(official.get("value"))
-            )
+        outcome = resolve_tb15_outcome(
+            identity, reconcile_outcome=market, player_stats_outcome=official,
+            official_game_status=official_statuses.get(identity[1], ""),
+            market_action=True,
+            final_lineup_member=number(selection.get("batting_order")) is not None,
+            reconcile_source_path=str(reconcile_path),
+            game_status_source_path=game_status_source,
+            source_revision="RUN_SNAPSHOT_SPINE_V1",
+            player_stats_available=certified_status == "PASS",
+        )
         stats = outcome.get("stats") or {}
         total_bases = number(outcome.get("value"))
-        if outcome.get("conflict"):
-            result, outcome_status = "UNRESOLVED", "CONFLICTING_AUTHORITATIVE_OUTCOMES"
-        elif total_bases is None:
-            result, outcome_status = "UNRESOLVED", "AUTHORITATIVE_OUTCOME_PENDING"
-        else:
-            result, outcome_status = ("WIN" if total_bases >= 2 else "LOSS"), "RESOLVED"
+        result = outcome["result"]
+        outcome_status = (
+            "RESOLVED" if result in {"WIN", "LOSS"}
+            else outcome["resolution_reason_code"]
+        )
         rows.append({
             "slate_date": args.date, "population_name": config["population_name"],
             "population_rule_version": "RUN_SNAPSHOT_SPINE_V1",
@@ -169,10 +178,20 @@ def main() -> int:
             "home_runs": stats.get("home_runs", ""),
             "total_bases": "" if total_bases is None else f"{total_bases:g}",
             "result": result, "outcome_status": outcome_status,
+            "outcome_source": outcome["outcome_source"],
+            "outcome_source_path": outcome["outcome_source_path"],
+            "resolution_method": outcome["resolution_method"],
+            "resolution_reason_code": outcome["resolution_reason_code"],
         })
     rows.sort(key=lambda row: (row["game"], row["player_name"]))
-    unresolved = sum(row["result"] == "UNRESOLVED" for row in rows)
-    status = "FINAL" if unresolved == 0 else "PARTIAL_PENDING_OUTCOMES"
+    unresolved = sum(row["result"] in {"PENDING", "TECHNICAL_UNRESOLVED"} for row in rows)
+    technical = sum(row["result"] == "TECHNICAL_UNRESOLVED" for row in rows)
+    pending = sum(row["result"] == "PENDING" for row in rows)
+    status = (
+        "FINAL" if unresolved == 0
+        else "TECHNICAL_UNRESOLVED" if technical
+        else "PREPARED_PENDING_OFFICIAL_GAME_COMPLETION"
+    )
     for row in rows:
         row["closeout_status"] = status
     wins, losses = sum(r["result"] == "WIN" for r in rows), sum(r["result"] == "LOSS" for r in rows)
@@ -199,7 +218,9 @@ def main() -> int:
     summary = {
         "slate_date": args.date, "population_name": config["population_name"],
         "coverage_status": coverage, "selection_count": len(rows), "wins": wins,
-        "losses": losses, "voids": 0, "no_action": 0, "unresolved": unresolved,
+        "losses": losses, "voids": sum(r["result"] == "VOID" for r in rows),
+        "no_action": sum(r["result"] == "NO_ACTION" for r in rows),
+        "unresolved": unresolved,
         "win_rate": "" if not resolved else f"{100*wins/len(resolved):.2f}%",
         "average_odds": avg(odds), "units_at_one_unit_risk": f"{units:.6f}" if resolved else "",
         "ROI": f"{100*units/len(resolved):.2f}%" if resolved else "",

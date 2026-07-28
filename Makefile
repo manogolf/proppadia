@@ -2019,15 +2019,23 @@ mlb-ubo5-tb15-ever-positive-closeout:
 mlb-ubo5-tb15-final-pregame-closeout:
 	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_broad_population_closeout --date "$(MLB_DATE)" --population final_pregame --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
 
+.PHONY: mlb-ubo5-tb15-complete-outcome-audit
+mlb-ubo5-tb15-complete-outcome-audit:
+	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_complete_outcome_audit --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
+
 .PHONY: mlb-ubo5-tb15-broad-records
 mlb-ubo5-tb15-broad-records:
 	@rc=0; \
+	$(MAKE) mlb-ubo5-tb15-complete-outcome-audit MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
 	$(MAKE) mlb-ubo5-tb15-ever-positive-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
 	$(MAKE) mlb-ubo5-tb15-final-pregame-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
 	for manifest in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/ubo5_tb15_run_population_manifest_*.json; do \
 		[ -f "$$manifest" ] || continue; pending_date=$$(basename "$$(dirname "$$manifest")"); \
 		[ "$$pending_date" != "$(MLB_DATE)" ] || continue; \
 		[ -s "artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" ] || continue; \
+		current_audit="$(MLB_UBO5_TB15_BOARD_ROOT)/$$pending_date/ubo5_tb15_complete_outcome_audit_current.json"; \
+		audit_status=""; [ ! -f "$$current_audit" ] || audit_status=$$($(VENV_PY) -c 'import json,sys; print(json.load(open(sys.argv[1])).get("closeout_status",""))' "$$current_audit"); \
+		[ "$$audit_status" = "FINAL" ] || $(MAKE) mlb-ubo5-tb15-complete-outcome-audit MLB_DATE="$$pending_date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" || rc=$$?; \
 		for population in ever_positive final_pregame; do \
 			current="$(MLB_UBO5_TB15_BOARD_ROOT)/$$pending_date/ubo5_tb15_$${population}_closeout_current.json"; \
 			status=""; [ ! -f "$$current" ] || status=$$($(VENV_PY) -c 'import json,sys; print(json.load(open(sys.argv[1])).get("closeout_status",""))' "$$current"); \

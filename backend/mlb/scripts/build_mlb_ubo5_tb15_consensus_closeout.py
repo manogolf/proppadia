@@ -11,8 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.mlb.scripts.build_mlb_ubo5_tb15_daily_closeout import (
-    load_certified_player_stats, load_outcomes, number, read_rows, write_rows,
+    load_certified_player_stats, load_official_game_statuses, load_outcomes,
+    number, read_rows, write_rows,
 )
+from backend.mlb.shared.ubo5_tb15_outcome_resolver import resolve_tb15_outcome
 
 ROOT = Path(__file__).resolve().parents[3]
 CLOSEOUT_FIELDS = [
@@ -23,6 +25,8 @@ CLOSEOUT_FIELDS = [
     "incumbent_over_edge_pp", "eventual_starting_status", "plate_appearances",
     "at_bats", "singles", "doubles", "triples", "home_runs", "total_bases",
     "result", "outcome_status", "closeout_status",
+    "outcome_source", "outcome_source_path", "resolution_method",
+    "resolution_reason_code",
 ]
 RECORD_FIELDS = [
     "slate_date", "closeout_revision", "generated_at_utc", "selection_count",
@@ -104,22 +108,30 @@ def main() -> int:
     )
     reconciled = load_outcomes(reconcile_path, date)
     certified, certified_status = load_certified_player_stats(date)
+    official_statuses, game_status_source = load_official_game_statuses(
+        date, day / f"ubo5_tb15_official_game_status_{date}.json"
+    )
     rows = []
     for selection in population:
         ident = identity(selection, date)
         market = reconciled.get(ident)
         stats_outcome = certified.get(ident)
-        outcome = stats_outcome or market or {"value": None, "stats": {}, "conflict": False, "source": "NONE"}
+        outcome = resolve_tb15_outcome(
+            ident, reconcile_outcome=market, player_stats_outcome=stats_outcome,
+            official_game_status=official_statuses.get(ident[1], ""),
+            market_action=True,
+            final_lineup_member=number(selection.get("batting_order")) is not None,
+            reconcile_source_path=str(reconcile_path),
+            game_status_source_path=game_status_source,
+            source_revision="CONSENSUS_POPULATION_V1",
+            player_stats_available=certified_status == "PASS",
+        )
         stats = outcome.get("stats") or {}
         value = number(outcome.get("value"))
         pa = number(stats.get("plate_appearances"))
         appeared = pa is not None and pa > 0
-        if outcome.get("conflict"):
-            result, status = "UNRESOLVED", "CONFLICTING_AUTHORITATIVE_OUTCOMES"
-        elif value is not None:
-            result, status = ("WIN" if value >= 2 else "LOSS"), "RESOLVED"
-        else:
-            result, status = "UNRESOLVED", "AUTHORITATIVE_OUTCOME_PENDING"
+        result = outcome["result"]
+        status = "RESOLVED" if result in {"WIN", "LOSS"} else outcome["resolution_reason_code"]
         rows.append({
             "slate_date": date, "game_pk": selection["game_pk"],
             "batter_mlb_id": selection["batter_mlb_id"], "player_name": selection["player_name"],
@@ -139,14 +151,23 @@ def main() -> int:
             "home_runs": stats.get("home_runs", ""),
             "total_bases": "" if value is None else f"{value:g}",
             "result": result, "outcome_status": status,
+            "outcome_source": outcome["outcome_source"],
+            "outcome_source_path": outcome["outcome_source_path"],
+            "resolution_method": outcome["resolution_method"],
+            "resolution_reason_code": outcome["resolution_reason_code"],
         })
     rows.sort(key=lambda row: (row["game"], row["player_name"]))
     wins = sum(row["result"] == "WIN" for row in rows)
     losses = sum(row["result"] == "LOSS" for row in rows)
     voids = sum(row["result"] == "VOID" for row in rows)
     no_action = sum(row["result"] == "NO_ACTION" for row in rows)
-    unresolved = sum(row["result"] == "UNRESOLVED" for row in rows)
-    closeout_status = "FINAL" if unresolved == 0 else "PARTIAL_PENDING_OUTCOMES"
+    unresolved = sum(row["result"] in {"PENDING", "TECHNICAL_UNRESOLVED"} for row in rows)
+    technical = sum(row["result"] == "TECHNICAL_UNRESOLVED" for row in rows)
+    closeout_status = (
+        "FINAL" if unresolved == 0
+        else "TECHNICAL_UNRESOLVED" if technical
+        else "PREPARED_PENDING_OFFICIAL_GAME_COMPLETION"
+    )
     for row in rows:
         row["closeout_status"] = closeout_status
     source_tags = sorted({row["selection_run_tag"] for row in rows})

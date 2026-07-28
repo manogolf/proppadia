@@ -17,6 +17,7 @@ import pandas as pd
 
 from backend.mlb.scripts.build_mlb_ubo5_tb15_human_board import implied, number
 from backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker import market_rows
+from backend.mlb.shared.ubo5_tb15_outcome_resolver import resolve_tb15_outcome
 
 ROOT = Path(__file__).resolve().parents[3]
 IDENTITY = ["slate_date", "game_pk", "batter_mlb_id", "prop_type", "line"]
@@ -29,13 +30,16 @@ CLOSEOUT_FIELDS = [
     "final_pregame_over_edge_pp", "final_betonline_over_price",
     "final_betonline_under_price", "market_disappeared_flag", "intraday_edge_status",
     "total_bases", "over_15_result", "outcome_status", "closeout_status",
+    "outcome_source", "outcome_source_path", "resolution_method",
+    "resolution_reason_code",
 ]
 RECORD_FIELDS = [
     "slate_date", "closeout_revision", "generated_at_utc", "morning_market_count",
     "morning_confirm_count", "morning_likely_confirm_count", "morning_pass_count",
     "morning_wait_count", "confirm_likely_eventual_starters",
     "confirm_likely_nonstarters", "confirmed_positive_edge_count",
-    "final_pregame_positive_edge_count", "wins", "losses", "voids", "unresolved",
+    "final_pregame_positive_edge_count", "wins", "losses", "voids", "no_action",
+    "pending", "technical_unresolved", "unresolved",
     "win_rate", "edges_grew", "edges_persisted", "edges_shrank_positive",
     "edges_disappeared", "markets_removed", "closeout_status", "source_run_tags",
     "is_current", "source_fingerprint",
@@ -420,29 +424,26 @@ def main() -> int:
                 and ident not in markets.get(tag, {})
                 for tag in all_tags
             )
-        actual = outcomes.get(ident, {
-            "value": None, "conflict": False, "source": "NONE", "stats": {},
-        })
-        game_is_final = official_statuses.get(ident[1], "").strip().casefold() in {
-            "final", "game over",
-        }
-        outcome_is_settleable = actual.get("source") == "RECONCILE" or game_is_final
         started = "STARTED" if slot else ("DID NOT START" if life["not_start"] else "UNRESOLVED")
         # This record observes the positive-Over board; an exact route score
         # without a positive BetOnline edge is not an action in this ledger.
         action = bool(positive)
-        if actual["conflict"]:
-            result, outcome_status = "UNRESOLVED", "CONFLICTING_AUTHORITATIVE_OUTCOMES"
-        elif action and actual["value"] is not None and outcome_is_settleable:
-            result = "WIN" if actual["value"] >= 2 else "LOSS"
-            outcome_status = "RESOLVED"
-        elif started == "DID NOT START" and not action:
-            result, outcome_status = "NO_ACTION", "NONSTARTER_NO_ACTION"
-        elif not action:
-            reason = "NO_POSITIVE_CONFIRMED_EDGE" if exact_probs else "EXACT_PRODUCTION_ROUTE_NOT_SCORED"
-            result, outcome_status = "NO_ACTION", reason
-        else:
-            result, outcome_status = "UNRESOLVED", "OUTCOME_PENDING"
+        resolution = resolve_tb15_outcome(
+            ident, reconcile_outcome=reconcile_outcomes.get(ident),
+            player_stats_outcome=certified_outcomes.get(ident),
+            official_game_status=official_statuses.get(ident[1], ""),
+            market_action=action,
+            final_lineup_member=(True if slot else False if life["not_start"] else None),
+            reconcile_source_path=str(reconcile),
+            game_status_source_path=game_status_source,
+            source_revision="STANDARD_CLOSEOUT_V1",
+            player_stats_available=certified_status == "PASS",
+        )
+        result = resolution["result"]
+        outcome_status = (
+            "RESOLVED" if result in {"WIN", "LOSS"}
+            else resolution["resolution_reason_code"]
+        )
         rows.append({
             "slate_date": date, "game_pk": ident[1], "batter_mlb_id": ident[2],
             "player_name": source.get("player_name", ""), "game": source.get("game", ""),
@@ -461,13 +462,27 @@ def main() -> int:
             "market_disappeared_flag": str(later_missing).lower(),
             "intraday_edge_status": edge_class(points, later_missing),
             "_lineup_edge_pp": "" if not points else f"{points[0]['edge']:.10f}",
-            "total_bases": "" if actual["value"] is None else actual["value"],
+            "total_bases": "" if resolution["value"] is None else resolution["value"],
             "over_15_result": result, "outcome_status": outcome_status,
+            "outcome_source": resolution["outcome_source"],
+            "outcome_source_path": resolution["outcome_source_path"],
+            "resolution_method": resolution["resolution_method"],
+            "resolution_reason_code": resolution["resolution_reason_code"],
         })
     rows.sort(key=lambda r: (r["game"], r["player_name"], int(r["batter_mlb_id"])))
 
-    actionable_unresolved = sum(r["over_15_result"] == "UNRESOLVED" for r in rows)
-    overall_status = "FINAL" if actionable_unresolved == 0 else "PARTIAL_PENDING_OUTCOMES"
+    actionable_unresolved = sum(
+        r["over_15_result"] in {"PENDING", "TECHNICAL_UNRESOLVED"} for r in rows
+    )
+    pending = sum(r["over_15_result"] == "PENDING" for r in rows)
+    technical_unresolved = sum(
+        r["over_15_result"] == "TECHNICAL_UNRESOLVED" for r in rows
+    )
+    overall_status = (
+        "FINAL" if actionable_unresolved == 0
+        else "TECHNICAL_UNRESOLVED" if technical_unresolved
+        else "PREPARED_PENDING_OFFICIAL_GAME_COMPLETION"
+    )
     for row in rows:
         row["closeout_status"] = overall_status
 
@@ -477,6 +492,7 @@ def main() -> int:
     wins = sum(r["over_15_result"] == "WIN" for r in rows)
     losses = sum(r["over_15_result"] == "LOSS" for r in rows)
     voids = sum(r["over_15_result"] == "VOID" for r in rows)
+    no_action = sum(r["over_15_result"] == "NO_ACTION" for r in rows)
     fingerprint_payload = {
         "rows": [{k: v for k, v in row.items() if k != "closeout_status"} for row in rows],
         "runs": all_tags, "reconcile": str(reconcile),
@@ -513,7 +529,9 @@ def main() -> int:
         "confirm_likely_nonstarters": sum(r["eventual_starting_status"] == "DID NOT START" for r in confirm_like),
         "confirmed_positive_edge_count": len(edge_rows),
         "final_pregame_positive_edge_count": sum(number(r["final_pregame_over_edge_pp"]) is not None and number(r["final_pregame_over_edge_pp"]) > 0 for r in edge_rows),
-        "wins": wins, "losses": losses, "voids": voids, "unresolved": actionable_unresolved,
+        "wins": wins, "losses": losses, "voids": voids, "no_action": no_action,
+        "pending": pending, "technical_unresolved": technical_unresolved,
+        "unresolved": actionable_unresolved,
         "win_rate": "" if wins + losses == 0 else f"{wins / (wins + losses):.6f}",
         "edges_grew": classes.count("EDGE_GREW"), "edges_persisted": classes.count("EDGE_PERSISTED"),
         "edges_shrank_positive": classes.count("EDGE_SHRANK_REMAINED_POSITIVE"),
