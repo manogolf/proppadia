@@ -35,6 +35,7 @@ from backend.mlb.shared.ubo5_tb15_production_route import (
     counterfactual_row_hash,
     sha256_file,
 )
+from backend.mlb.shared.ubo5_tb15_consensus_selection import freeze as freeze_consensus
 
 ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_ROOT = ROOT / "backend/mlb/exports/model_v2/ubo5_tb15"
@@ -324,6 +325,8 @@ def render_confirmed_board(
             "opponent": market["opponent"],
             "line": 1.5,
             "confirmed_batting_order": "" if slot is None else int(slot),
+            "scheduled_start_utc": market.get("game_time", ""),
+            "selection_timestamp_utc": prediction_time.isoformat(),
             "ubo5_probability_over": "" if probability is None else f"{probability:.10f}",
             "BetOnline_over_price": "" if over_price is None else int(over_price),
             "BetOnline_under_price": "" if under_price is None else int(under_price),
@@ -354,6 +357,7 @@ def render_confirmed_board(
                 )
             },
             "feature_vector_sha256": feature.get("feature_vector_sha256", ""),
+            "ubo5_artifact_hash": ARTIFACT_SHA256,
             "temporal_integrity_status": feature.get("temporal_integrity_status", ""),
             "exclusion_reason": exclusion,
         }
@@ -560,6 +564,24 @@ def run(args: argparse.Namespace) -> int:
             args.date, run_tag, captured, prediction_time,
             unstarted, player_map, team_map, package
         )
+        selection_rows = []
+        for route in routes:
+            if str(route.get("consensus_positive_flag")).lower() != "true":
+                continue
+            selection_rows.append({
+                **route, "batting_order": route["confirmed_batting_order"],
+                "prop_type": "total_bases", "side": "OVER",
+                "betonline_over_price": route["BetOnline_over_price"],
+                "betonline_under_price": route["BetOnline_under_price"],
+                "ubo5_over_edge_pp": float(route["ubo5_over_edge"]) * 100,
+                "incumbent_over_edge_pp": float(route["incumbent_over_edge"]) * 100,
+                "counterfactual_lineage_status": "CERTIFIED_SAME_RUN_INDEPENDENT",
+                "market_snapshot_path": str(snapshot_path.relative_to(ROOT)),
+                "route_ledger_path": str((package / "confirmed_route_ledger.csv").relative_to(ROOT)),
+            })
+        consensus_manifest = freeze_consensus(
+            OUTPUT_ROOT, args.date, run_tag, selection_rows
+        )
         shutil.copy2(staged_pre_md, package / "prelineup_confirmation_board.md")
         shutil.copy2(staged_pre_csv, package / "prelineup_confirmation_board.csv")
         audit = pd.read_csv(package / "prelineup_confirmation_audit.csv")
@@ -606,6 +628,7 @@ def run(args: argparse.Namespace) -> int:
                 str(row.get("consensus_positive_flag")).lower() == "true"
                 for row in routes
             ),
+            "consensus_governed_population_rows": consensus_manifest["selection_count"],
             "identity_rejects": identity_rejects,
             "flatten_counts": flatten_counts,
             "resolve_counts": resolve_counts,

@@ -15,6 +15,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from backend.mlb.shared.ubo5_tb15_production_route import ARTIFACT_SHA256
+from backend.mlb.shared.ubo5_tb15_consensus_selection import freeze as freeze_consensus
 
 UTC = ZoneInfo("UTC")
 PT = ZoneInfo("America/Los_Angeles")
@@ -212,6 +213,7 @@ def main() -> int:
     rows: list[dict[str, object]] = []
     excluded: list[dict[str, str]] = []
     consensus_audit: list[dict[str, object]] = []
+    consensus_selections: list[dict[str, object]] = []
 
     for source in routes:
         line = number(source.get("line")) or 1.5
@@ -312,6 +314,31 @@ def main() -> int:
             "same_run_binding_status": "PASS" if same_run_binding else "FAIL",
             "consensus_exclusion_reason": consensus_reason,
         })
+        if consensus_positive:
+            consensus_selections.append({
+                "slate_date": date, "run_tag": requested_run_tag,
+                "snapshot_timestamp_utc": market.get("timestamp", ""),
+                "selection_timestamp_utc": source.get("prediction_timestamp_utc", ""),
+                "game_pk": source.get("game_pk"), "batter_mlb_id": source.get("batter_mlb_id"),
+                "player_name": name, "team": source.get("team"), "opponent": source.get("opponent"),
+                "game": matchup,
+                "scheduled_start_utc": source.get("scheduled_start_utc") or identity.get("game_time", ""),
+                "batting_order": source.get("batting_order_position"),
+                "prop_type": "total_bases", "line": "1.5", "side": "OVER",
+                "ubo5_probability_over": ubo5_over,
+                "counterfactual_incumbent_probability": counterfactual,
+                "betonline_over_price": over_odds, "betonline_under_price": under_odds,
+                "no_vig_over_probability": nv_over,
+                "ubo5_over_edge_pp": ubo5_edge * 100,
+                "incumbent_over_edge_pp": incumbent_edge * 100,
+                "consensus_positive_flag": True,
+                "ubo5_artifact_hash": source.get("active_artifact_sha256") or ARTIFACT_SHA256,
+                "counterfactual_incumbent_artifact_hash": incumbent_hash,
+                "counterfactual_lineage_status": "CERTIFIED_SAME_RUN_INDEPENDENT",
+                "feature_vector_sha256": source.get("feature_vector_sha256", ""),
+                "market_snapshot_path": str(odds_path.relative_to(ROOT)),
+                "route_ledger_path": str(route.relative_to(ROOT)),
+            })
         row = {
             "slate_date": date, "player_name": name, "batter_mlb_id": source.get("batter_mlb_id"),
             "team": source.get("team"), "opponent": source.get("opponent"), "matchup": matchup,
@@ -425,6 +452,9 @@ def main() -> int:
         writer = csv.DictWriter(fh, fieldnames=CONSENSUS_AUDIT_FIELDS)
         writer.writeheader()
         writer.writerows(consensus_audit)
+    consensus_manifest = freeze_consensus(
+        ROOT / args.output_root, date, audit_tag, consensus_selections
+    )
 
     columns = ["Player", "Game", "Line", "UBO-5 Over", "No-vig Over", "Over edge"]
     def table(items: list[dict]) -> list[str]:
@@ -502,6 +532,7 @@ def main() -> int:
         "positive_over_edge_rows": len(positive_over),
         "positive_no_vig_edge_rows": len(positive_over),
         "consensus_positive_rows": len(consensus_positive),
+        "consensus_governed_population_rows": consensus_manifest["selection_count"],
         "consensus_same_run_binding_status": "PASS" if same_run_binding else "FAIL",
         "consensus_audit_path": str(consensus_audit_path.relative_to(ROOT)),
         "price_unavailable_rows": len(price_unavailable),

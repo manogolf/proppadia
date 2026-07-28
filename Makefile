@@ -2026,6 +2026,28 @@ mlb-ubo5-tb15-retry-pending-closeouts:
 	done; \
 	exit $$rc
 
+# Grade only the immutable certified UBO-5 + incumbent consensus-board
+# population. This record is intentionally separate from the broad closeout.
+.PHONY: mlb-ubo5-tb15-consensus-closeout
+mlb-ubo5-tb15-consensus-closeout:
+	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_consensus_closeout --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
+
+.PHONY: mlb-ubo5-tb15-retry-pending-consensus-closeouts
+mlb-ubo5-tb15-retry-pending-consensus-closeouts:
+	@rc=0; \
+	$(MAKE) mlb-ubo5-tb15-consensus-closeout MLB_DATE="$(MLB_DATE)" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$(MLB_DATE)/reconcile_rows.csv" || rc=$$?; \
+	for manifest in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/ubo5_tb15_consensus_population_manifest_*.json; do \
+		[ -f "$$manifest" ] || continue; \
+		pending_date=$$(basename "$$(dirname "$$manifest")"); \
+		[ "$$pending_date" != "$(MLB_DATE)" ] || continue; \
+		current="$(MLB_UBO5_TB15_BOARD_ROOT)/$$pending_date/ubo5_tb15_consensus_closeout_current.json"; \
+		status=""; [ ! -f "$$current" ] || status=$$($(VENV_PY) -c 'import json,sys; print(json.load(open(sys.argv[1])).get("closeout_status",""))' "$$current"); \
+		[ "$$status" != "FINAL" ] || continue; \
+		echo "Retrying pending UBO-5 + Incumbent consensus closeout for $$pending_date"; \
+		$(MAKE) mlb-ubo5-tb15-consensus-closeout MLB_DATE="$$pending_date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="artifacts/analysis/mlb/execution_vs_model/$$pending_date/reconcile_rows.csv" || rc=$$?; \
+	done; \
+	exit $$rc
+
 # Build canonical MLB slate output (model-only) from calibrated wide predictions.
 mlb-slate-output:
 	MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD="$(MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD)" $(VENV_PY) backend/mlb/scripts/build_mlb_slate_output.py --slate-date $(MLB_DATE) --pred-csv "$(MLB_SLATE_PRED_CSV)" --out-csv "$(MLB_SLATE_OUTPUT_CSV)" $(if $(strip $(MLB_SLATE_PROP_TYPE)),--prop-type "$(MLB_SLATE_PROP_TYPE)") $(if $(and $(filter 1 true TRUE yes YES,$(MLB_APPLY_PROBABILITY_CALIBRATION_TO_UPLOAD)),$(wildcard $(MLB_PROBABILITY_CALIBRATION_JSON))),--calibration-json "$(MLB_PROBABILITY_CALIBRATION_JSON)",)

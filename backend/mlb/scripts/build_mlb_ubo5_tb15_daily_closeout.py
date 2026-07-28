@@ -276,7 +276,7 @@ def fmt_tb(value: object) -> str:
 
 def render_closeout(path: Path, summary: dict, rows: list[dict]) -> None:
     lines = [
-        f"# UBO-5 TB 1.5 Closeout — {summary['slate_date']}",
+        f"# UBO-5 TB 1.5 Broad Intraday Ever-Positive Closeout — {summary['slate_date']}",
         "",
         f"Status: **{summary['closeout_status']}**  ",
         f"Revision: **{summary['closeout_revision']}**  ",
@@ -336,7 +336,7 @@ def render_closeout(path: Path, summary: dict, rows: list[dict]) -> None:
 
 def render_record(path: Path, rows: list[dict]) -> None:
     lines = [
-        "# UBO-5 TB 1.5 Daily Record", "",
+        "# UBO-5 Broad Positive-Edge Record", "",
         "Observation record only. Win rate excludes void, no-action, and unresolved rows.", "",
         "| Slate | Rev | Current | Status | Confirmed +edge | Final +edge | W | L | Void | Unresolved | Win rate |",
         "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
