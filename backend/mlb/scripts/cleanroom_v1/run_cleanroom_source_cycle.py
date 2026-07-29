@@ -50,10 +50,18 @@ def main() -> int:
     parser.add_argument("--completed-date", required=True)
     parser.add_argument("--raw-root", type=Path, default=Path("backend/mlb/exports/cleanroom_v1/raw"))
     parser.add_argument("--evidence-dir", type=Path, required=True)
+    parser.add_argument("--run-tag")
     args = parser.parse_args()
     slate = date.fromisoformat(args.date)
     completed = date.fromisoformat(args.completed_date)
-    run_tag = f"cleanroom_{now():%Y%m%dT%H%M%SZ}"
+    run_tag = args.run_tag or f"cleanroom_{now():%Y%m%dT%H%M%SZ}"
+    collision_paths = (
+        args.raw_root / "MLB_STATS_API" / args.date / run_tag,
+        args.raw_root / "MLB_STATS_API" / args.completed_date / run_tag,
+        args.raw_root / "THE_ODDS_API" / args.date / run_tag,
+    )
+    if any(path.exists() for path in collision_paths):
+        raise SystemExit(f"run-tag collision: {run_tag}")
     raw_manifest, cycle, identity = [], [], []
     db_url = os.environ["SUPABASE_DB_URL"]
     odds_key = os.environ.get("ODDS_API_KEY", "")

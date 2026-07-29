@@ -10,7 +10,7 @@ import json
 import re
 import unicodedata
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -87,11 +87,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--odds-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--date", required=True)
+    parser.add_argument("--line", type=float, default=1.5)
     args = parser.parse_args()
     raw_mlb = args.output_dir / "raw" / "MLB_STATS_API"
 
     event_payloads: dict[str, list[tuple[Path, dict, str]]] = defaultdict(list)
     for path in sorted(args.odds_root.glob("*/event_*.json")):
+        path = path.resolve()
         payload = json.loads(path.read_text())
         if not any(b.get("key") == "betonlineag" for b in payload.get("bookmakers", [])):
             continue
@@ -99,7 +102,8 @@ def main() -> int:
         event_payloads[payload["id"]].append((path, payload, sha))
 
     official_games = []
-    for day in ("2026-07-28", "2026-07-29"):
+    slate_date = date.fromisoformat(args.date)
+    for day in (str(slate_date - timedelta(days=1)), args.date):
         payload, sha = dump_raw(
             f"{MLB}/v1/schedule",
             {"sportId": 1, "date": day, "hydrate": "team"},
@@ -183,6 +187,8 @@ def main() -> int:
                         continue
                     observed = market.get("last_update")
                     for outcome in market.get("outcomes", []):
+                        if float(outcome.get("point", -1)) != args.line:
+                            continue
                         raw_name = outcome.get("description", "")
                         normalized, provider_ops = norm(raw_name)
                         if not game:

@@ -1,8 +1,11 @@
 {
   "slate_date": "2026-07-29",
-  "identity_route": "exact_game_roster_name_v1",
-  "board_rows": 39,
-  "source_outcome_rows": 330,
+  "run_tag": "cleanroom_20260729T153807Z",
+  "phase": "PARTIAL_LINEUPS",
+  "board_rows": 196,
+  "raw_tb15_sides": 392,
+  "admitted_tb15_sides": 392,
   "identity_rejects": 0,
-  "status": "CERTIFIED_EXACT_ROSTER_BRIDGE"
+  "final_population_frozen": false,
+  "status": "CURRENT_CAPTURE_NOT_FINAL"
 }

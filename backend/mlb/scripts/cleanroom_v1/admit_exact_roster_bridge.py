@@ -30,9 +30,11 @@ def main() -> int:
     parser.add_argument("--board-root", type=Path, required=True)
     args = parser.parse_args()
     attempts_path = args.pilot_dir / "roster_constrained_identity_attempts.csv"
-    attempts = list(csv.DictReader(attempts_path.open()))
-    if not attempts or any(row["decision"] != "EXACT_UNIQUE_MATCH" for row in attempts):
-        raise SystemExit("pilot population is not fully exact-unique; refusing admission")
+    all_attempts = list(csv.DictReader(attempts_path.open()))
+    attempts = [row for row in all_attempts if row["decision"] == "EXACT_UNIQUE_MATCH"]
+    rejected_attempts = [row for row in all_attempts if row["decision"] != "EXACT_UNIQUE_MATCH"]
+    if not attempts:
+        raise SystemExit("pilot has no exact-unique rows; refusing admission")
 
     db_url = os.environ["SUPABASE_DB_URL"]
     run_id = uuid.uuid4()
@@ -135,11 +137,19 @@ def main() -> int:
                     "concept": concept, "received": len(rows), "written": written,
                     "duplicates": duplicates, "rejected": 0, "status": "PASS",
                 })
+            audit.append({
+                "concept": "identity_rejects", "received": len(rejected_attempts),
+                "written": 0, "duplicates": 0, "rejected": len(rejected_attempts),
+                "status": "FAIL_CLOSED",
+            })
             cur.execute("""INSERT INTO mlb_cleanroom_v1.ingestion_runs VALUES
               (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", (
                 run_id, "BETONLINE_EXACT_GAME_ROSTER_BRIDGE_V1", started, now(),
-                min(row[1] for row in odds_rows), len(attempts), total_written,
-                total_duplicates, 0, "COMPLETED", None, str(args.pilot_dir), aggregate_sha,
+                min(row[1] for row in odds_rows), len(all_attempts), total_written,
+                total_duplicates, len(rejected_attempts),
+                "PARTIAL_IDENTITY_FAIL_CLOSED" if rejected_attempts else "COMPLETED",
+                f"{len(rejected_attempts)} non-exact identity rows rejected" if rejected_attempts else None,
+                str(args.pilot_dir), aggregate_sha,
             ))
             conn.commit()
 
@@ -212,7 +222,8 @@ def main() -> int:
             writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
             writer.writeheader(); writer.writerows(rows)
     print(json.dumps({"run_id": str(run_id), "bridge_rows": len(bridge_rows),
-                      "odds_rows": len(odds_rows), "boards": board_results}, default=str))
+                      "odds_rows": len(odds_rows), "identity_rejects": len(rejected_attempts),
+                      "boards": board_results}, default=str))
     return 0
 
 
