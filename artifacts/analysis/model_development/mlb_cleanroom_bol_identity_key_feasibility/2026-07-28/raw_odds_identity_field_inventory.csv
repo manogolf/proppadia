@@ -1,0 +1,9 @@
+field_path,example_value,presence_rate,uniqueness,cross_snapshot_stability,over_under_shared,identity_scope
+$.id,0f350cb709d6394c946ef1df6fca40af,63/63 event payloads,21 unique event values,STABLE_FOR_EVENT,YES,PROVIDER_EVENT_ONLY
+$.bookmakers[].key,betonlineag,all returned BetOnline bookmaker objects,constant bookmaker key,STABLE,YES,BOOKMAKER_ONLY
+$.bookmakers[].markets[].key,batter_total_bases,all inspected TB market objects,constant market type,STABLE,YES,MARKET_TYPE_ONLY
+$.bookmakers[].markets[].outcomes[].description,Corbin Carroll,330/330 outcomes,display names recur across Over/Under and snapshots,TEXT_STABLE_WHEN_PRESENT,YES,PLAYER_NAME_ONLY_PROHIBITED
+$.bookmakers[].sid,491091044,available only with includeSids; 1/1 expanded bookmaker,one BetOnline event-page source ID,NOT_ENOUGH_EXPANDED_SNAPSHOTS,YES,BOOK_EVENT_ONLY
+$.bookmakers[].markets[].sid,,0/1 expanded TB markets non-null,NONE,NOT_APPLICABLE,NOT_APPLICABLE,NO_KEY
+$.bookmakers[].markets[].outcomes[].sid,,0/38 expanded outcomes non-null,NONE,NOT_APPLICABLE,NOT_APPLICABLE,NO_PLAYER_OR_SELECTION_KEY
+participant_id/player_id/competitor_id/selection_id/outcome_id/offer_id,,0 across all inspected raw outcome objects,NONE,NOT_APPLICABLE,NOT_APPLICABLE,ABSENT

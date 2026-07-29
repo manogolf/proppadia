@@ -1,0 +1,6 @@
+endpoint,tested,identity_result,raw_preserved
+GET /v4/sports/baseball_mlb/events,YES,provider event ID and team display names only,YES
+GET /v4/sports/baseball_mlb/events/{eventId}/odds,YES,player description text only,YES
+event odds includeSids=true&includeLinks=true,YES,book event SID/link; market and outcome SIDs null,YES
+GET /v4/sports/{sport}/participants,DOCUMENTATION,provider states team-sport endpoint does not return roster players,NOT_CALLED_NO_FEASIBLE_PLAYER_ROUTE
+GET /events/{eventId}/markets,DOCUMENTATION,market keys by bookmaker; no participant entity contract,NOT_CALLED_NO_FEASIBLE_PLAYER_ROUTE

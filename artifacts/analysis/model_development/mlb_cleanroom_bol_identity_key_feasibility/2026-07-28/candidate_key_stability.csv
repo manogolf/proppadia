@@ -1,0 +1,4 @@
+candidate_key,repeated_player_game_market_groups,groups_with_price_change,over_under_pair_groups,collisions,key_churn,decision
+provider_event_id,55,55,55,many players share event id,0,STABLE_GAME_KEY_NOT_PLAYER_KEY
+display_name_with_event_market_line,55,55,55,not certified; textual identity,not authoritative,NAME_DEPENDENT_BRIDGE_PROHIBITED
+outcome_sid,0,0,0,not applicable,not applicable,NULL_NOT_AVAILABLE

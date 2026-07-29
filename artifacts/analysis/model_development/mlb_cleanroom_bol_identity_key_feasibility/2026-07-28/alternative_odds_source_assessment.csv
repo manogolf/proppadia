@@ -1,0 +1,4 @@
+source,betonline_coverage,player_id_type,mlb_id_crosswalk,authentication_available,cost_quota,current_date,raw_preservation,decision
+SportsGameOdds,DOCUMENTED,stable provider playerID embedded in oddID,NO AUTHORITATIVE MLBAM CROSSWALK DOCUMENTED,NO,new account/subscription required,not tested,possible,NOT_CERTIFIED
+SportsDataIO MLB Advanced Odds,CONTACT_PROVIDER,stable SportsDataIO PlayerID,NO MLBAM FIELD CERTIFIED IN REVIEWED DICTIONARY,NO,licensed product,not tested,possible,NOT_CERTIFIED
+TheRundown,NOT CERTIFIED IN REVIEWED DOCS,stable provider participant ID,NO AUTHORITATIVE MLBAM CROSSWALK IDENTIFIED,NO,new account required,not tested,possible,NOT_CERTIFIED

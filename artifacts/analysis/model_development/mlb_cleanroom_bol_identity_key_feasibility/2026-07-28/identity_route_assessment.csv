@@ -1,0 +1,5 @@
+route,available,evidence
+A_DIRECT_MLB_ID,NO,no player_mlb_id field
+B_PROVIDER_PARTICIPANT_CROSSWALK,NO,no player participant ID and participant endpoint excludes team rosters
+C_SPORTSBOOK_SELECTION_ENTITY,NO,outcome SID null; event SID identifies game only
+D_NAME_CONSTRAINED_BRIDGE,TECHNICALLY_POSSIBLE_NOT_CERTIFIED,description plus event/team roster remains name dependent and prohibited
