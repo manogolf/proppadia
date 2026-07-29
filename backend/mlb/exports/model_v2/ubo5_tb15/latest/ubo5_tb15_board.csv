@@ -1,0 +1,2 @@
+status,decommission_date,last_active_run,historical_root,neutral_bol_tb15_board
+DECOMMISSIONED,2026-07-28,local_daily_20260728T233001Z,backend/mlb/exports/model_v2/ubo5_tb15/,backend/mlb/exports/model_v2/bol_tb15/<DATE>/bol_tb15_market_board_<DATE>.md

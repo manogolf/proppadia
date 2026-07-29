@@ -1,0 +1,17 @@
+{
+  "decommissioned_at_utc": "2026-07-28T23:30:38Z",
+  "historical_artifact_roots": [
+    "backend/mlb/exports/model_v2/ubo5_tb15",
+    "artifacts/analysis/mlb/production_routes/ubo5_tb15",
+    "artifacts/analysis/model_development/mlb_ubo5_total_bases_15_artifact_live_contract_recovery",
+    "artifacts/analysis/model_development/mlb_ubo5_total_bases_15_live_platform_certification"
+  ],
+  "implementation_commit": "POPULATED_BY_IMPLEMENTATION_COMMIT",
+  "last_existing_ubo5_run_tag": "local_daily_20260728T233001Z",
+  "last_existing_ubo5_snapshot_timestamp": "2026-07-28T23:30:37.921897+00:00",
+  "last_slate_date_with_any_ubo5_artifact": "2026-07-28",
+  "last_slate_date_with_exact_ubo5_scores": "2026-07-28",
+  "last_slate_date_with_frozen_ubo5_candidate_population": "2026-07-28",
+  "reason": "Research lifecycle complete: aggregate calibration gains came primarily from lower Over probabilities in an Under-heavy population, without useful Over/Under selection, winner ranking, market-edge, or reusable cross-prop elimination skill.",
+  "status": "DECOMMISSIONED"
+}

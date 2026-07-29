@@ -35,7 +35,9 @@ CROSS_SPORT_MODEL_VS_FADE_REQUIRE_NHL ?= 1
 CROSS_SPORT_MODEL_VS_FADE_REQUIRE_MLB ?= 1
 MLB_MARKET_DAYS ?= 1
 MLB_SLATE_PRED_CSV ?= backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv
-export MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE ?= 1
+# Retired compatibility flag. Active code ignores it; retained only so old
+# environments receive a visible tombstone rather than reactivating UBO-5.
+export MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE ?= 0
 MLB_UBO5_TB15_ARTIFACT ?= artifacts/analysis/model_development/mlb_ubo5_total_bases_15_artifact_live_contract_recovery/2026-07-23/original_ubo5_total_bases_multinomial.joblib
 MLB_UBO5_TB15_NORMALIZED_ROOT ?= artifacts/analysis/model_development/mlb_ubo5_total_bases_15_live_platform_certification/2026-07-23/normalized_refresh
 MLB_UBO5_TB15_CANDIDATE_LEDGER ?= artifacts/analysis/mlb/production_routes/ubo5_tb15/$(MLB_DATE)/candidate_ledger.csv
@@ -1959,57 +1961,40 @@ mlb-o15-prospective-grade:
 # Build MLB daily WIDE predictions from market snapshot + model workflow.
 mlb-predictions-wide:
 	MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS="$(MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS)" $(VENV_PY) backend/mlb/scripts/build_mlb_predictions_wide.py --slate-date $(MLB_DATE) --output "$(MLB_SLATE_PRED_CSV)" --odds-snapshot-out "$(MLB_ODDS_SNAPSHOT_JSON)" --require-min-rows "$(MLB_WIDE_REQUIRE_MIN_ROWS)" $(if $(strip $(MLB_WIDE_PROP_TYPES)),--prop-types "$(MLB_WIDE_PROP_TYPES)",) $(if $(strip $(MLB_ODDS_SNAPSHOT_IN)),--odds-snapshot-in "$(MLB_ODDS_SNAPSHOT_IN)",) $(if $(filter 1 true TRUE yes YES,$(MLB_PREDICT_REQUIRE_TWO_SIDED)),--require-two-sided,) $(if $(strip $(MLB_PREDICT_TWO_SIDED_BOOKMAKER)),--two-sided-bookmaker "$(MLB_PREDICT_TWO_SIDED_BOOKMAKER)",)
-	$(VENV_PY) -m backend.mlb.scripts.dry_run_capture_pregame_lineups --date "$(MLB_DATE)" --output-dir "$(MLB_UBO5_TB15_LINEUP_DIR)" --snapshot-label "ubo5_tb15_daily" --mode dry_run
-	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_daily_candidate_ledger --slate-date "$(MLB_DATE)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --lineup-csv "$(MLB_UBO5_TB15_LINEUP_LEDGER)" --output "$(MLB_UBO5_TB15_CANDIDATE_LEDGER)" --status-json "$(MLB_UBO5_TB15_PRODUCER_STATUS)" --run-tag "ubo5_tb15_daily_$(MLB_DATE)"
-	@if [ -f "$(MLB_UBO5_TB15_CANDIDATE_LEDGER)" ]; then \
-		$(VENV_PY) -m backend.mlb.scripts.materialize_mlb_ubo5_strict_prior_features --normalized-root "$(MLB_UBO5_TB15_NORMALIZED_ROOT)" --candidate-file "$(MLB_UBO5_TB15_CANDIDATE_LEDGER)" --output "$(MLB_UBO5_TB15_FEATURE_LEDGER)"; \
-	else \
-		echo "UBO5 TB1.5 integration error: candidate producer did not emit a ledger; preserving incumbent production"; \
-	fi
-	$(VENV_PY) -m backend.mlb.scripts.apply_mlb_ubo5_tb15_production_route --slate-date "$(MLB_DATE)" --run-tag "$(MLB_RUN_TAG)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --feature-ledger "$(MLB_UBO5_TB15_FEATURE_LEDGER)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --ledger-out "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --health-out "$(MLB_UBO5_TB15_HEALTH_JSON)" --producer-status-json "$(MLB_UBO5_TB15_PRODUCER_STATUS)"
+	@if [ "$${MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE:-0}" != "0" ]; then echo "UBO5_DECOMMISSIONED: old enable flag ignored; incumbent remains active"; fi
+	$(VENV_PY) -m backend.mlb.scripts.build_mlb_bol_tb15_market_board --date "$(MLB_DATE)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --run-tag "$(MLB_RUN_TAG)"
 
 # Render the authoritative route as a presentation-only operator board.
 .PHONY: mlb-ubo5-tb15-board mlb-ubo5-tb15-refresh
 mlb-ubo5-tb15-board:
-	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_human_board --date "$(MLB_DATE)" --route-ledger "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --route-health "$(MLB_UBO5_TB15_HEALTH_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --snapshot-run-tag "$(MLB_UBO5_TB15_BOARD_RUN_TAG)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --archive-root "$(MLB_ODDS_HISTORY_ROOT)"
+	@echo "UBO-5 TB 1.5 is decommissioned and is no longer part of daily operations."
 
 # Fresh manual-only UBO-5 TB 1.5 prices, lineups, scoring, and boards.
 mlb-ubo5-tb15-refresh:
-	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
-	@set -a; . backend/.env; set +a; \
-	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_tb15_manual --date "$(MLB_DATE)"
+	@echo "UBO-5 TB 1.5 is decommissioned and is no longer part of daily operations."
 
 .PHONY: mlb-ubo5-history-refresh mlb-ubo5-history-backfill
 mlb-ubo5-history-refresh:
-	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
-	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_completed_game_history \
-		--date "$(MLB_DATE)" --normalized-root "$(MLB_UBO5_HISTORY_NORMALIZED_ROOT)"
+	@echo "UBO-5 TB 1.5 is decommissioned and is no longer part of daily operations."
 
 mlb-ubo5-history-backfill:
-	@test -n "$(MLB_DATE_FROM)" || (echo "MLB_DATE_FROM=YYYY-MM-DD is required" >&2; exit 2)
-	@test -n "$(MLB_DATE_TO)" || (echo "MLB_DATE_TO=YYYY-MM-DD is required" >&2; exit 2)
-	$(VENV_PY) -m backend.mlb.scripts.refresh_mlb_ubo5_completed_game_history \
-		--date-from "$(MLB_DATE_FROM)" --date-to "$(MLB_DATE_TO)" \
-		--normalized-root "$(MLB_UBO5_HISTORY_NORMALIZED_ROOT)"
+	@echo "UBO-5 TB 1.5 is decommissioned and is no longer part of daily operations."
 
 # Append a presentation-only observation and render the provisional watchlist.
 .PHONY: mlb-ubo5-tb15-provisional-tracker
 mlb-ubo5-tb15-provisional-tracker:
-	@test -n "$(MLB_UBO5_TB15_PROVISIONAL_RUN_TAG)" || (echo "MLB_UBO5_TB15_PROVISIONAL_RUN_TAG is required" >&2; exit 2)
-	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker --date "$(MLB_DATE)" --run-tag "$(MLB_UBO5_TB15_PROVISIONAL_RUN_TAG)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --lineup-csv "$(MLB_UBO5_TB15_LINEUP_LEDGER)" --lineup-team-summary "$(MLB_UBO5_TB15_LINEUP_DIR)/pregame_lineup_game_team_summary_$(MLB_DATE)_ubo5_tb15_daily.csv" --normalized-root "$(MLB_UBO5_TB15_NORMALIZED_ROOT)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)"
+	@echo "UBO-5 TB 1.5 is decommissioned and is no longer part of daily operations."
 
 # Render the presentation-only nine-position pre-lineup confirmation envelope.
 .PHONY: mlb-ubo5-tb15-prelineup-confirmation
 mlb-ubo5-tb15-prelineup-confirmation:
-	@test -n "$(MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG)" || (echo "MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG is required" >&2; exit 2)
-	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_prelineup_confirmation_board --date "$(MLB_DATE)" --run-tag "$(MLB_UBO5_TB15_PRELINEUP_CONFIRMATION_RUN_TAG)" --odds-json "$(MLB_ODDS_SNAPSHOT_JSON)" --wide-csv "$(MLB_SLATE_PRED_CSV)" --lineup-csv "$(MLB_UBO5_TB15_LINEUP_LEDGER)" --lineup-team-summary "$(MLB_UBO5_TB15_LINEUP_DIR)/pregame_lineup_game_team_summary_$(MLB_DATE)_ubo5_tb15_daily.csv" --route-ledger "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --normalized-root "$(MLB_UBO5_TB15_NORMALIZED_ROOT)" --artifact "$(MLB_UBO5_TB15_ARTIFACT)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)"
+	@echo "UBO-5 TB 1.5 is decommissioned and is no longer part of daily operations."
 
 # Rebuild the broader run-snapshot spine only from exact surviving run-tagged
 # sources. This never reconstructs or modifies consensus selections.
 .PHONY: mlb-ubo5-tb15-run-spine-backfill
 mlb-ubo5-tb15-run-spine-backfill:
-	@test -n "$(MLB_DATE)" || (echo "MLB_DATE=YYYY-MM-DD is required" >&2; exit 2)
-	$(VENV_PY) -m backend.mlb.scripts.backfill_mlb_ubo5_tb15_run_snapshot_spine --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --odds-root "$(MLB_ODDS_HISTORY_ROOT)"
+	@echo "UBO-5 TB 1.5 is decommissioned; new or reconstructed populations are prohibited."
 
 .PHONY: mlb-ubo5-tb15-ever-positive-closeout
 mlb-ubo5-tb15-ever-positive-closeout:
@@ -2165,7 +2150,7 @@ mlb-daily-capture-from-snapshot:
 
 # Archive one MLB slate's reproducibility artifacts under backend/mlb/exports/odds_history/YYYY-MM-DD.
 mlb-slate-archive:
-	$(VENV_PY) backend/mlb/scripts/archive_mlb_slate_artifacts.py --slate-date $(MLB_DATE) --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --pred-csv "$(MLB_SLATE_PRED_CSV)" --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" --ubo5-feature-ledger "$(MLB_UBO5_TB15_FEATURE_LEDGER)" --ubo5-route-ledger "$(MLB_UBO5_TB15_ROUTE_LEDGER)" --ubo5-route-health "$(MLB_UBO5_TB15_HEALTH_JSON)" --ubo5-board-md "$(MLB_UBO5_TB15_BOARD_MD)" --ubo5-board-csv "$(MLB_UBO5_TB15_BOARD_CSV)" $(if $(strip $(MLB_ARCHIVE_RUN_TAG)),--run-tag "$(MLB_ARCHIVE_RUN_TAG)",)
+	$(VENV_PY) backend/mlb/scripts/archive_mlb_slate_artifacts.py --slate-date $(MLB_DATE) --odds-root "$(MLB_ODDS_HISTORY_ROOT)" --pred-csv "$(MLB_SLATE_PRED_CSV)" --slate-csv "$(MLB_SLATE_OUTPUT_CSV)" --book-upload-csv "$(MLB_BOOK_UPLOAD_OUT_CSV)" --odds-snapshot-json "$(MLB_ODDS_SNAPSHOT_JSON)" $(if $(strip $(MLB_ARCHIVE_RUN_TAG)),--run-tag "$(MLB_ARCHIVE_RUN_TAG)",)
 
 # Build row-level MLB reconcile dataset from archived odds history artifacts.
 mlb-reconcile-rows:

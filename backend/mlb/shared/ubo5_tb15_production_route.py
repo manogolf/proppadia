@@ -52,8 +52,40 @@ def route_rows(
     now_utc: Any = None,
     source_fresh: bool = True,
 ) -> pd.DataFrame:
-    """Return a route ledger; every integrity failure retains production probability."""
+    """Return an incumbent-only compatibility ledger.
+
+    UBO-5 was decommissioned on 2026-07-28. ``enabled`` and the retired
+    environment flag are intentionally ignored, and the artifact is never
+    opened. This compatibility surface exists only for callers that have not
+    yet removed the old import.
+    """
     out = rows.copy()
+    incumbent = pd.to_numeric(
+        out.get("counterfactual_incumbent_probability", out.get("production_prob_over")),
+        errors="coerce",
+    )
+    out["route_flag_enabled"] = False
+    out["route_eligibility"] = False
+    out["ubo5_route_attempted"] = False
+    out["ubo5_artifact_loaded"] = False
+    out["ubo5_probability_over"] = np.nan
+    out["ubo5_route_status"] = "DECOMMISSIONED_NOT_EVALUATED"
+    out["active_probability"] = incumbent
+    out["existing_production_probability"] = incumbent
+    out["probability_delta"] = 0.0
+    out["model_source"] = "INCUMBENT"
+    out["active_model_source"] = "INCUMBENT"
+    out["active_artifact_sha256"] = ""
+    out["artifact_hash_status"] = "DECOMMISSIONED_NOT_CHECKED"
+    out["exclusion_reason"] = "UBO5_DECOMMISSIONED"
+    out["counterfactual_incumbent_status"] = np.where(
+        incumbent.notna(), "PRESERVED", "COUNTERFACTUAL_INCUMBENT_UNAVAILABLE"
+    )
+    return out
+
+    # Historical implementation below is intentionally unreachable and retained
+    # temporarily as research evidence pending a separate repository-deletion
+    # decision.
     now = pd.Timestamp(now_utc or pd.Timestamp.now(tz="UTC"))
     if now.tzinfo is None:
         now = now.tz_localize("UTC")
