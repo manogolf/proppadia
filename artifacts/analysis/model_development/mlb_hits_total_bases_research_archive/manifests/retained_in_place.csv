@@ -1,0 +1,15 @@
+path,action,reason
+backend/mlb/exports/model_v2/bol_tb15,RETAIN_ACTIVE,Neutral active BetOnline TB1.5 ledger
+backend/mlb/exports/model_v2/ubo5_tb15,RETAIN_IMMUTABLE_OPERATIONAL_HISTORY,Pending historical finalization and decommission notice
+backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv,RETAIN_ACTIVE,Incumbent prediction output
+backend/mlb/exports/odds_history,RETAIN_ACTIVE,Active immutable odds capture
+artifacts/analysis/model_development/mlb_ubo5_total_bases_15_live_platform_certification,RETAIN_SHARED,Shared normalized event history and pending historical lineage
+artifacts/analysis/model_development/mlb_ubo5_total_bases_15_artifact_live_contract_recovery,RETAIN_IMMUTABLE_OPERATIONAL_HISTORY,Frozen artifact evidence referenced by decommission manifest
+artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer,RETAIN_ACTIVE,Current Hits 0.5 daily parent
+artifacts/analysis/model_development/mlb_hits15_prospective_suppression_shadow,RETAIN_ACTIVE,Active prospective Hits 1.5 shadow
+artifacts/analysis/model_development/mlb_starter_skill_workload_daily,RETAIN_SHARED,LaunchAgent-backed shared starter workload
+artifacts/analysis/mlb/review_aids,RETAIN_ACTIVE,Daily Hits review-aid generation
+backend/mlb/shared/ubo5_tb15_outcome_resolver.py,RETAIN_SHARED,Generic exact-ID outcome resolution
+backend/mlb/scripts/build_mlb_bol_tb15_market_board.py,RETAIN_ACTIVE,Neutral board generator
+backend/tests/test_shared_mlb_ubo5_tb15_production_route.py,RETAIN_ACTIVE,Decommission enforcement
+backend/tests/test_mlb_bol_tb15_market_board.py,RETAIN_ACTIVE,Neutral-board regression

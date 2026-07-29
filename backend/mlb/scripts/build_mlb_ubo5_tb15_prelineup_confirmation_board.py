@@ -22,7 +22,7 @@ from backend.mlb.scripts.build_mlb_ubo5_tb15_provisional_tracker import (
 from backend.mlb.scripts.materialize_mlb_ubo5_strict_prior_features import (
     FEATURES, MODEL_SUPPORTED_NULL_FEATURES,
 )
-from backend.mlb.scripts.run_mlb_ubo5_tb15_role_envelope_pilot import (
+from backend.mlb.scripts.research_archive.hits_total_bases.total_bases.ubo5.run_mlb_ubo5_tb15_role_envelope_pilot import (
     HYBRID_PROMOTION_ROLES, ROLE_LABELS, read_normalized, role_context,
 )
 from backend.mlb.shared.ubo5_tb15_production_route import ARTIFACT_SHA256, sha256_file

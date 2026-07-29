@@ -1,0 +1,4 @@
+path,Hits/TB use,other workstream use,active callers,decision,reason
+artifacts/analysis/model_development/mlb_ubo5_total_bases_15_live_platform_certification,Shared normalized event history and pending historical lineage,MLB production/reconciliation,Makefile|LaunchAgent|tests,RETAIN_SHARED,Shared normalized event history and pending historical lineage
+artifacts/analysis/model_development/mlb_starter_skill_workload_daily,LaunchAgent-backed shared starter workload,MLB production/reconciliation,Makefile|LaunchAgent|tests,RETAIN_SHARED,LaunchAgent-backed shared starter workload
+backend/mlb/shared/ubo5_tb15_outcome_resolver.py,Generic exact-ID outcome resolution,MLB production/reconciliation,Makefile|LaunchAgent|tests,RETAIN_SHARED,Generic exact-ID outcome resolution

@@ -1,0 +1,5 @@
+This historical research package was moved for repository organization.
+
+New path: `artifacts/analysis/model_development/mlb_hits_total_bases_research_archive/total_bases/tb15/reconciliation_and_closeout/mlb_ubo5_tb15_outcome_reconciliation_lifecycle_repair/`
+
+Relocation manifest: `artifacts/analysis/model_development/mlb_hits_total_bases_research_archive/manifests/relocation_map.csv`

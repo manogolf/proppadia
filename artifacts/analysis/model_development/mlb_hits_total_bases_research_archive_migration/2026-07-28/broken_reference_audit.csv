@@ -1,0 +1,5 @@
+check,result,broken_count
+active moved-script imports,PASS,0
+installed LaunchAgent wrapper,PASS,0
+neutral BOL generator,PASS,0
+UBO scoring reachability,PASS,0
