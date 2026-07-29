@@ -1,0 +1,8 @@
+component,classification,resolution
+production route,UBO5_EXCLUSIVE_REMOVE_FROM_OPERATIONS,removed from mlb-predictions-wide; compatibility API tombstoned
+manual/scheduled boards,UBO5_EXCLUSIVE_REMOVE_FROM_OPERATIONS,tombstone targets; installed wrapper calls removed
+model artifact and feature contract,HISTORICAL_EVIDENCE_RETAIN_READ_ONLY,unchanged
+exact-ID outcome resolver,SHARED_INFRASTRUCTURE_RETAIN,retained at commit f2b35b22 lineage
+historical non-FINAL closeouts,PENDING_CLOSEOUT_FINALIZER_RETAIN_TEMPORARILY,existing populations only
+BetOnline capture and identity binding,SHARED_INFRASTRUCTURE_RETAIN,neutral bol_tb15 namespace
+incumbent total-bases model,SHARED_INFRASTRUCTURE_RETAIN,sole active TB1.5 probability

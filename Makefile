@@ -1920,7 +1920,7 @@ mlb-daily-reconcile:
 	$(MAKE) mlb-review-aid-performance MLB_DAILY_RECONCILE_DATE="$(MLB_DAILY_RECONCILE_DATE)"
 	$(MAKE) mlb-capture-overlap-snapshot MLB_OVERLAP_SNAPSHOT_DATE="$(MLB_DAILY_RECONCILE_DATE)"
 	$(MAKE) mlb-overlap-monitor MLB_OVERLAP_OPS_DATE="$(MLB_DAILY_RECONCILE_DATE)"
-	-$(MAKE) mlb-ubo5-tb15-retry-pending-closeouts MLB_DATE="$(MLB_DAILY_RECONCILE_DATE)"
+	-$(MAKE) mlb-finalize-frozen-tb15-populations
 
 mlb-daily-upload-prep:
 	@echo "Building current upload prep for $(MLB_UPLOAD_PREP_DATE)"
@@ -2057,6 +2057,30 @@ mlb-ubo5-tb15-retry-pending-closeouts:
 .PHONY: mlb-ubo5-tb15-consensus-closeout
 mlb-ubo5-tb15-consensus-closeout:
 	$(VENV_PY) -m backend.mlb.scripts.build_mlb_ubo5_tb15_consensus_closeout --date "$(MLB_DATE)" --output-root "$(MLB_UBO5_TB15_BOARD_ROOT)" --reconcile-csv "$(MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV)"
+
+# Shared reconciliation hook for already-frozen historical TB1.5 populations.
+# It never creates a population: only an existing non-FINAL current manifest
+# with an existing exact-ID reconcile ledger can reach a retained finalizer.
+.PHONY: mlb-finalize-frozen-tb15-populations
+mlb-finalize-frozen-tb15-populations:
+	@rc=0; \
+	for current in $(MLB_UBO5_TB15_BOARD_ROOT)/????-??-??/*_current.json; do \
+		[ -f "$$current" ] || continue; \
+		status=$$($(VENV_PY) -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("closeout_status") or d.get("status") or "")' "$$current" 2>/dev/null); \
+		[ "$$status" != "FINAL" ] && [ "$$status" != "FINAL_ARCHIVED" ] || continue; \
+		date=$$(basename "$$(dirname "$$current")"); reconcile="artifacts/analysis/mlb/execution_vs_model/$$date/reconcile_rows.csv"; \
+		[ -s "$$reconcile" ] || continue; \
+		case "$$(basename "$$current")" in \
+		  ubo5_tb15_closeout_current.json) target=mlb-ubo5-tb15-closeout ;; \
+		  ubo5_tb15_consensus_closeout_current.json) target=mlb-ubo5-tb15-consensus-closeout ;; \
+		  ubo5_tb15_complete_outcome_audit_current.json) target=mlb-ubo5-tb15-complete-outcome-audit ;; \
+		  ubo5_tb15_ever_positive_closeout_current.json) target=mlb-ubo5-tb15-ever-positive-closeout ;; \
+		  ubo5_tb15_final_pregame_closeout_current.json) target=mlb-ubo5-tb15-final-pregame-closeout ;; \
+		  *) continue ;; \
+		esac; \
+		echo "Finalizing existing frozen TB1.5 population date=$$date target=$$target"; \
+		$(MAKE) $$target MLB_DATE="$$date" MLB_UBO5_TB15_CLOSEOUT_RECONCILE_CSV="$$reconcile" || rc=$$?; \
+	done; exit $$rc
 
 .PHONY: mlb-ubo5-tb15-retry-pending-consensus-closeouts
 mlb-ubo5-tb15-retry-pending-consensus-closeouts:

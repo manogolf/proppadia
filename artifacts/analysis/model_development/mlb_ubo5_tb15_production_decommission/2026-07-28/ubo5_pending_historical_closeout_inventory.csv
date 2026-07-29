@@ -1,0 +1,6 @@
+slate_date,manifest,status,pending_rows,technical_unresolved_rows,finalization_policy
+2026-07-27,backend/mlb/exports/model_v2/ubo5_tb15/2026-07-27/ubo5_tb15_closeout_current.json,PREPARED_PENDING_OFFICIAL_GAME_COMPLETION,,,EXISTING_FROZEN_POPULATION_EXACT_ID_ONLY
+2026-07-27,backend/mlb/exports/model_v2/ubo5_tb15/2026-07-27/ubo5_tb15_complete_outcome_audit_current.json,PREPARED_PENDING_OFFICIAL_GAME_COMPLETION,14,0,EXISTING_FROZEN_POPULATION_EXACT_ID_ONLY
+2026-07-27,backend/mlb/exports/model_v2/ubo5_tb15/2026-07-27/ubo5_tb15_ever_positive_closeout_current.json,PREPARED_PENDING_OFFICIAL_GAME_COMPLETION,,,EXISTING_FROZEN_POPULATION_EXACT_ID_ONLY
+2026-07-27,backend/mlb/exports/model_v2/ubo5_tb15/2026-07-27/ubo5_tb15_final_pregame_closeout_current.json,PREPARED_PENDING_OFFICIAL_GAME_COMPLETION,,,EXISTING_FROZEN_POPULATION_EXACT_ID_ONLY
+2026-07-28,backend/mlb/exports/model_v2/ubo5_tb15/2026-07-28/ubo5_tb15_consensus_closeout_current.json,PREPARED_PENDING_OFFICIAL_GAME_COMPLETION,,,EXISTING_FROZEN_POPULATION_EXACT_ID_ONLY

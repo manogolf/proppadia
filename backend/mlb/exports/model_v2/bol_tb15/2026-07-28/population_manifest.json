@@ -1,0 +1,15 @@
+{
+  "generated_at_utc": "2026-07-29T01:29:51.862993+00:00",
+  "identity": [
+    "slate_date",
+    "game_pk",
+    "batter_mlb_id",
+    "line"
+  ],
+  "model_filter_applied": false,
+  "run_tag": "decommission_cutoff_market_capture",
+  "slate_date": "2026-07-28",
+  "source_timestamp": "2026-07-28T23:30:37.921897+00:00",
+  "status": "ACTIVE_MODEL_INDEPENDENT_MARKET_LEDGER",
+  "valid_identity_bound_two_sided_rows": 112
+}

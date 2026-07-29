@@ -1,0 +1,5 @@
+check,result,value
+neutral namespace exists,PASS,backend/mlb/exports/model_v2/bol_tb15/2026-07-28/bol_tb15_market_board_2026-07-28.csv
+identity-bound two-sided rows,PASS,112
+one row per exact identity,PASS,112
+model/edge filters absent,PASS,slate_date|game_pk|batter_mlb_id|player|game|team|opponent|line|over_odds|under_odds|source_timestamp|lineup_status|batting_order|participation_state

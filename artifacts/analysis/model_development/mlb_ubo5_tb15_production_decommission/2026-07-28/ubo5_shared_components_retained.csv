@@ -1,0 +1,8 @@
+component,status
+BetOnline player-prop ingestion,ACTIVE_SHARED
+two-sided price snapshots,ACTIVE_SHARED
+incumbent TB probability route,ACTIVE_SHARED
+exact game/player identity,ACTIVE_SHARED
+official outcome reconciliation,ACTIVE_SHARED
+canonical exact-ID outcome resolver,ACTIVE_SHARED
+historical closeout files and revisions,READ_ONLY_EXCEPT_AUTHORITATIVE_FINALIZATION

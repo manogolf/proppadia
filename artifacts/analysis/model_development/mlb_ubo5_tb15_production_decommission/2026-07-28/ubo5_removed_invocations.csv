@@ -1,0 +1,8 @@
+entry_point,previous_invocation,status
+mlb-predictions-wide,"candidate ledger, 38-feature materializer, route scorer",REMOVED
+installed daily wrapper,operator board and pre-lineup board,REMOVED
+installed daily wrapper,completed-game UBO history refresh,REMOVED
+installed daily wrapper,UBO-specific closeout chains,REMOVED_FROM_ROUTINE
+slate archive,UBO feature/route/board arguments,REMOVED
+Daily Ops,route health and board sections,REMOVED
+manual refresh/history targets,scoring/history writes,PROTECTIVE_TOMBSTONE
