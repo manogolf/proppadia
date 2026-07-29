@@ -1,0 +1,3 @@
+normalization_pattern,attempt_rows,distinct_raw_names,admitted_rows,rejected_rows,manual_review
+accent_insensitive|casefold,24,4,24,0,REVIEWED_ALLOWED_DETERMINISTIC_OPERATIONS_ONLY
+casefold,306,51,306,0,REVIEWED_ALLOWED_DETERMINISTIC_OPERATIONS_ONLY

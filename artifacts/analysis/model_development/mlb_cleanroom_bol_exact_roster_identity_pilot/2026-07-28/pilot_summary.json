@@ -1,0 +1,13 @@
+{
+  "provider_outcomes_examined": 330,
+  "distinct_games": 3,
+  "distinct_player_names": 55,
+  "over_under_paired_groups": 55,
+  "repeated_groups": 55,
+  "price_change_groups": 55,
+  "exact_unique": 330,
+  "unmatched": 0,
+  "ambiguous": 0,
+  "event_binding_failures": 0,
+  "certifiable": true
+}

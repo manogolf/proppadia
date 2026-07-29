@@ -1,0 +1,7 @@
+-- Applied successfully.
+-- Canonical idempotent migration:
+-- backend/mlb/sql/migrations/20260728_add_cleanroom_odds_player_identity_bridge.sql
+--
+-- The table admits decision = EXACT_UNIQUE_MATCH only, rejects update/delete,
+-- carries ingestion-run and raw SHA-256 lineage, and is readable by the restricted
+-- clean-room research role.
