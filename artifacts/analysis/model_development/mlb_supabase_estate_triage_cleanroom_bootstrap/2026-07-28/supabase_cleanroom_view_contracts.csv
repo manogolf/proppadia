@@ -1,0 +1,3 @@
+cleanroom_name,source_object,grain,exact_identity_key,timestamp_fields,status
+games,mlb.game_info,PRIMARY KEY (game_id),game_id,game_date,PLANNED_NOT_EXECUTED
+official_player_game_batting_and_pitching,mlb.player_stats,"PRIMARY KEY (player_id, game_id)",game_id|player_id,game_date,PLANNED_NOT_EXECUTED

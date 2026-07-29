@@ -1,0 +1,1040 @@
+schema,object_name,object_type,classification,reason,future_action
+auth,audit_log_entries,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,flow_state,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,identities,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,instances,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_amr_claims,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_challenges,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_client_states,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens_id_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,schema_migrations,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_providers,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,users,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_credentials,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+cron,job,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+cron,job_run_details,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+cron,jobid_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+cron,runid_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+extensions,pg_stat_statements,VIEW,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+extensions,pg_stat_statements_info,VIEW,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats,TABLE,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,game_info,TABLE,TRUSTED_SOURCE,source identity and official-result lineage established; audited fail-closed,RETAIN_OPERATIONAL
+mlb,model_training_props,TABLE,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_base,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_1,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_2,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_2_clean,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_3,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_4,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_5,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_6,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_7,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,pitcher_game_v4_features_8,VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,player_derived_stats,TABLE,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,player_ids,TABLE,UNKNOWN_FAIL_CLOSED,MLB purpose or temporal lineage not established in bounded pass,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_profiles_cache,TABLE,UNKNOWN_FAIL_CLOSED,MLB purpose or temporal lineage not established in bounded pass,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_props,TABLE,ACTIVE_OPERATIONAL,referenced by current MLB daily/market workflow,RETAIN_OPERATIONAL
+mlb,player_stats,TABLE,TRUSTED_SOURCE,source identity and official-result lineage established; audited fail-closed,RETAIN_OPERATIONAL
+mlb,player_streak_history,TABLE,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,player_streak_profiles,TABLE,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,player_team_by_game,TABLE,UNKNOWN_FAIL_CLOSED,MLB purpose or temporal lineage not established in bounded pass,REQUIRES_BLOCKER_RESOLUTION
+mlb,prop_features_precomputed,TABLE,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,today_market_snapshot,MATERIALIZED_VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,today_market_timing_signal,MATERIALIZED_VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,today_odds_book_rows,TABLE,ACTIVE_OPERATIONAL,referenced by current MLB daily/market workflow,RETAIN_OPERATIONAL
+mlb,today_player_context,MATERIALIZED_VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+mlb,today_slate_rows,TABLE,ACTIVE_OPERATIONAL,referenced by current MLB daily/market workflow,RETAIN_OPERATIONAL
+mlb,today_wide_rows,TABLE,ACTIVE_OPERATIONAL,referenced by current MLB daily/market workflow,RETAIN_OPERATIONAL
+mlb,today_workspace_mlb,MATERIALIZED_VIEW,DERIVED_RESEARCH_QUARANTINE,derived/model/research population; excluded from clean room,RETAIN_FORENSIC_ONLY
+nhl,_points_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,backfill_progress,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,data_quality_audit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,eval_sog_daily,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,game_manpower_segments,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,games,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_season_audit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_season_audit_audit_id_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_write_audit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_write_audit_audit_id_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_roll_feats_m,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_rolling_agg,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies2023_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies2023_stage_raw,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies_szn_sit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_goalie_logs_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_player_external_ids_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_players_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_skater_logs_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_skater_points_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,keep_games_filter,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,lines_szn_sit_denali,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,pairing_features_store_v2,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,pairing_features_v2,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_game_2023_roll,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_game_2023_summary,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_game_2024_roll,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_game_2024_summary,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_game_shots_2023,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_shot_history_denali,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_shot_phoenix_denali,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_sog_denali_base,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,players,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,points_training_frame_phoenix,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,pp_roles_slate,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions_prediction_id_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_names,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_features_game,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_features_rolling_d10,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_features_rolling_d20,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game_recent_v2,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game_v2,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_pairings_game,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts_clean_v2,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts_clean_v3,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_stats_denali,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shots_all,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shots_stage_2023,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,shots_stage_2024,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_special_teams_exposure,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_roll_windows_v1,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_agg,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_v3,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_shot_game_totals,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_special_teams_szn_to_date,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters2023_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters2023_stage_raw,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters_szn_sit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters_szn_sit_denali,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters_szn_sit_stage,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,sog_denali_rollups_mv,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,sog_denali_rollups_v,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,sog_training_frame_phoenix,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_context_rolling,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_external_ids,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_2023_roll,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_2023_summary,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_2024_roll,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_2024_summary,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_sit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_pp_toi_totals_by_date_team,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_roll10_m,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_shot_history_denali,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_game_sit,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_szn_sit_denali,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_skater_attempts_roll10,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_team_roll10,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2_ready,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_saves_enr_filt,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_saves_enriched,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2_denali_cols,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2_mt,MATERIALIZED_VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_shots,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_shots_2023,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_shots_2024,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_shots_v,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_sog_denali,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_sog_denali_export,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_sog_player_game,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_sog_player_game_v2,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_dqa_goalie_ready_coverage,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_dqa_sog_ready_coverage,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_goalie_game_logs_played,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_site_sog_eval_publish,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_site_sog_predictions_publish,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_skater_game_logs_played,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_skater_logs_clean,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_skater_rolling_agg,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_slate_saves_features,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_slate_sog_features,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+nhl,v_sog_denali_rollups_per_game,VIEW,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+public,mlb_team_map,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+public,opp_starter_per_game,TABLE,UNKNOWN_FAIL_CLOSED,non-MLB object outside bounded source certification,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages,PARTITIONED_TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_21,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_22,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_23,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_24,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_25,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_26,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_27,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,schema_migrations,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription_id_seq,SEQUENCE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_analytics,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_vectors,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,migrations,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,objects,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads_parts,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+storage,vector_indexes,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+vault,decrypted_secrets,VIEW,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+vault,secrets,TABLE,UNKNOWN_FAIL_CLOSED,Supabase platform object outside MLB source boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,email(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+auth,jwt(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+auth,role(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+auth,uid(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,"alter_job(job_id bigint, schedule text, command text, database text, username text, active boolean)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,job_cache_invalidate(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,"schedule(job_name text, schedule text, command text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,"schedule(schedule text, command text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,"schedule_in_database(job_name text, schedule text, command text, database text, username text, active boolean)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,unschedule(job_id bigint),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,unschedule(job_name text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"algorithm_sign(signables text, secret text, algorithm text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,armor(bytea),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"armor(bytea, text[], text[])",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"crypt(text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,dearmor(text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"decrypt(bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"decrypt_iv(bytea, bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"digest(bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"digest(text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"encrypt(bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"encrypt_iv(bytea, bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,gen_random_bytes(integer),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,gen_random_uuid(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,gen_salt(text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"gen_salt(text, integer)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,grant_pg_cron_access(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,grant_pg_graphql_access(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,grant_pg_net_access(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"hmac(bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"hmac(text, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pg_stat_statements(showtext boolean, OUT userid oid, OUT dbid oid, OUT toplevel boolean, OUT queryid bigint, OUT query text, OUT plans bigint, OUT total_plan_time double precision, OUT min_plan_time double precision, OUT max_plan_time double precision, OUT mean_plan_time double precision, OUT stddev_plan_time double precision, OUT calls bigint, OUT total_exec_time double precision, OUT min_exec_time double precision, OUT max_exec_time double precision, OUT mean_exec_time double precision, OUT stddev_exec_time double precision, OUT rows bigint, OUT shared_blks_hit bigint, OUT shared_blks_read bigint, OUT shared_blks_dirtied bigint, OUT shared_blks_written bigint, OUT local_blks_hit bigint, OUT local_blks_read bigint, OUT local_blks_dirtied bigint, OUT local_blks_written bigint, OUT temp_blks_read bigint, OUT temp_blks_written bigint, OUT blk_read_time double precision, OUT blk_write_time double precision, OUT temp_blk_read_time double precision, OUT temp_blk_write_time double precision, OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT jit_functions bigint, OUT jit_generation_time double precision, OUT jit_inlining_count bigint, OUT jit_inlining_time double precision, OUT jit_optimization_count bigint, OUT jit_optimization_time double precision, OUT jit_emission_count bigint, OUT jit_emission_time double precision)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pg_stat_statements_info(OUT dealloc bigint, OUT stats_reset timestamp with time zone)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pg_stat_statements_reset(userid oid, dbid oid, queryid bigint)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_armor_headers(text, OUT key text, OUT value text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,pgp_key_id(bytea),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_decrypt(bytea, bytea)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_decrypt(bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_decrypt(bytea, bytea, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_decrypt_bytea(bytea, bytea)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_decrypt_bytea(bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_decrypt_bytea(bytea, bytea, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_encrypt(text, bytea)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_encrypt(text, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_encrypt_bytea(bytea, bytea)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_pub_encrypt_bytea(bytea, bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_decrypt(bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_decrypt(bytea, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_decrypt_bytea(bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_decrypt_bytea(bytea, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_encrypt(text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_encrypt(text, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_encrypt_bytea(bytea, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"pgp_sym_encrypt_bytea(bytea, text, text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,pgrst_ddl_watch(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,pgrst_drop_watch(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,set_graphql_placeholder(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"sign(payload json, secret text, algorithm text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,try_cast_double(inp text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,url_decode(data text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,url_encode(data bytea),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_generate_v1(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_generate_v1mc(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"uuid_generate_v3(namespace uuid, name text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_generate_v4(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"uuid_generate_v5(namespace uuid, name text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_nil(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_ns_dns(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_ns_oid(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_ns_url(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,uuid_ns_x500(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+extensions,"verify(token text, secret text, algorithm text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+graphql_public,"graphql(""operationName"" text, query text, variables jsonb, extensions jsonb)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,_safe_bigint(t text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,_safe_bool(t text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,_safe_int(t text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,_safe_num(t text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,audit_games_season_write(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,audit_games_write(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,"canonical_game_id(p_season integer, p_short_id integer)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,"load_points_predictions_from_stage(p_model_family text, p_model_params jsonb, p_feature_hash text, p_model_version text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,"load_saves_predictions_from_stage(p_model_family text, p_model_params jsonb, p_feature_hash text, p_model_version text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,"load_sog_predictions_from_stage(p_model_family text, p_model_params jsonb, p_feature_hash text, p_model_version text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,log_games_season_change(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+nhl,set_updated_at(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,batch_update_training_props(rows jsonb),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,bulk_update_training_rows(updates jsonb),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,execute_raw_sql(sql text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,"fetch_bvp_game_ids(offset_value integer, batch_size integer)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,get_daily_prop_accuracy(target_date date),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,get_model_accuracy_metrics(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,norm_player_ids_team_text(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,norm_team_ids_mtp(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,norm_team_ids_ps(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,"resolve_team_context(p_player_id bigint, p_game_id bigint)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,set_is_starter(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+public,update_timestamp(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"apply_rls(wal jsonb, max_record_bytes integer)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"broadcast_changes(topic_name text, event_name text, operation text, table_name text, table_schema text, new record, old record, level text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"build_prepared_statement_sql(prepared_statement_name text, entity regclass, columns realtime.wal_column[])",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"cast(val text, type_ regtype)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"check_equality_op(op realtime.equality_op, type_ regtype, val_1 text, val_2 text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"is_visible_through_filters(columns realtime.wal_column[], filters realtime.user_defined_filter[])",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"list_changes(publication name, slot_name name, max_changes integer, max_record_bytes integer)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,quote_wal2json(entity regclass),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,"send(payload jsonb, event text, topic text, private boolean)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription_check_filters(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,to_regrole(role_name text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+realtime,topic(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,allow_any_operation(expected_operations text[]),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,allow_only_operation(expected_operation text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"can_insert_object(bucketid text, name text, owner uuid, metadata jsonb)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,enforce_bucket_name_length(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,extension(name text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,filename(name text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,foldername(name text),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"get_common_prefix(p_key text, p_prefix text, p_delimiter text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,get_size_by_bucket(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"list_multipart_uploads_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer, next_key_token text, next_upload_token text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"list_objects_with_delimiter(_bucket_id text, prefix_param text, delimiter_param text, max_keys integer, start_after text, next_token text, sort_order text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,operation(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,protect_delete(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"search(prefix text, bucketname text, limits integer, levels integer, offsets integer, search text, sortcolumn text, sortorder text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"search_by_timestamp(p_prefix text, p_bucket_id text, p_limit integer, p_level integer, p_start_after text, p_sort_order text, p_sort_column text, p_sort_column_after text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,"search_v2(prefix text, bucket_name text, limits integer, levels integer, start_after text, sort_order text, sort_column text, sort_column_after text)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,update_updated_at_column(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+vault,"_crypto_aead_det_decrypt(message bytea, additional bytea, key_id bigint, context bytea, nonce bytea)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+vault,"_crypto_aead_det_encrypt(message bytea, additional bytea, key_id bigint, context bytea, nonce bytea)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+vault,_crypto_aead_det_noncegen(),FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+vault,"create_secret(new_secret text, new_name text, new_description text, new_key_id uuid)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+vault,"update_secret(secret_id uuid, new_secret text, new_name text, new_description text, new_key_id uuid)",FUNCTION,UNKNOWN_FAIL_CLOSED,function lineage and write behavior not certified for MLB clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,job.cron_job_policy,RLS_POLICY,UNKNOWN_FAIL_CLOSED,policy outside source-data boundary,REQUIRES_BLOCKER_RESOLUTION
+cron,job_run_details.cron_job_run_details_policy,RLS_POLICY,UNKNOWN_FAIL_CLOSED,policy outside source-data boundary,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.Allow anon insert,RLS_POLICY,UNKNOWN_FAIL_CLOSED,policy outside source-data boundary,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.Allow anon select,RLS_POLICY,UNKNOWN_FAIL_CLOSED,policy outside source-data boundary,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.Allow upsert for anon key,RLS_POLICY,UNKNOWN_FAIL_CLOSED,policy outside source-data boundary,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.Enable read access for all users,RLS_POLICY,UNKNOWN_FAIL_CLOSED,policy outside source-data boundary,REQUIRES_BLOCKER_RESOLUTION
+auth,audit_log_entries.audit_log_entries_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,audit_log_entries.audit_logs_instance_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_created_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_enabled_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_identifier_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_identifier_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_provider_type_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,flow_state.flow_state_created_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,flow_state.flow_state_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,flow_state.idx_auth_code,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,flow_state.idx_user_id_auth_method,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_email_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_provider_id_provider_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_user_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,instances.instances_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_amr_claims.amr_id_pk,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_amr_claims.mfa_amr_claims_session_id_authentication_method_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_challenges.mfa_challenge_created_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_challenges.mfa_challenges_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.factor_id_created_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_last_challenged_at_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_user_friendly_name_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_user_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.unique_phone_factor_per_user,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_auth_pending_exp_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_authorization_code_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_authorization_id_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_client_states.idx_oauth_client_states_created_at,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_client_states.oauth_client_states_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_deleted_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_active_client_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_active_user_client_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_user_client_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_user_order_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_relates_to_hash_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_token_hash_hash_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_user_id_token_type_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_instance_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_instance_id_user_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_parent_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_session_id_revoked_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_token_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_updated_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.saml_providers_entity_id_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.saml_providers_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.saml_providers_sso_provider_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_created_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_for_email_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_sso_provider_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,schema_migrations.schema_migrations_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_not_after_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_oauth_client_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_user_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.user_id_created_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains.sso_domains_domain_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains.sso_domains_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains.sso_domains_sso_provider_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_providers.sso_providers_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_providers.sso_providers_resource_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_providers.sso_providers_resource_id_pattern_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.confirmation_token_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.email_change_token_current_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.email_change_token_new_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.reauthentication_token_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.recovery_token_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_email_partial_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_instance_id_email_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_instance_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_is_anonymous_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_phone_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges.webauthn_challenges_expires_at_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges.webauthn_challenges_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges.webauthn_challenges_user_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_credentials.webauthn_credentials_credential_id_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_credentials.webauthn_credentials_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_credentials.webauthn_credentials_user_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+cron,job.job_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+cron,job.jobname_username_uniq,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+cron,job_run_details.job_run_details_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_game_batter_pitcher_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_game_batter_pitcher_uniq,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_pkey,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.idx_bvp_stats_batter_pitcher,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.idx_bvp_stats_game_batter_pitcher,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.idx_bvp_stats_pitcher_game,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,game_info.game_info_game_id_key,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,game_info.game_info_pkey,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,game_info.idx_game_info_away_team,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,game_info.idx_game_info_game_date,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,game_info.idx_game_info_home_team,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,model_training_props.idx_line_diff,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_model_training_prediction_filter,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_model_training_props_game_date_player_id,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_model_training_props_outcome,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_model_training_props_predicted_outcome,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_model_training_props_prop_type,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_mtp_lookup,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_mtp_pid_gid,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_mtp_profile_player_date_mlb_api,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_mtp_profile_player_prop_date_mlb_api,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_mtp_prop_date,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_mtp_type_date_labeled,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_predicted_outcome_incomplete,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.idx_prop_type_outcome,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_game_player_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_gpp_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_pkey,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_player_id_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_unique_src_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.mtp_ix_player_game_null,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.mtp_ix_team_id,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.mtp_ix_team_norm_null,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.unique_player_game_prop,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.idx_pds_pid_gid,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_game_player_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_game_player_uniq,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_pkey,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_player_id_game_id_key,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_unique_key,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_game_unique,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_player_id_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_player_id_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_unique_player_team_real,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.unique_player_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_profiles_cache.player_profiles_cache_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_profiles_cache.player_profiles_cache_player_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_props.player_props_game_id_idx,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.player_props_pkey,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.player_props_player_id_idx,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.uq_player_props_by_src_value,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.idx_player_stats_bat_order,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.idx_ps_pid_gdate_pos,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.idx_ps_player_date,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_game_player_idx,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_game_player_uniq,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_pkey,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_player_id_idx,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_starter_candidates_idx,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.ps_ix_player_game,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_streak_history.idx_psh_pid_gdate,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_history.idx_psh_pid_gid_prop,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_history.player_streak_history_pkey,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.player_streak_profiles_pkey,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.player_streak_profiles_player_id_prop_type_idx,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.unique_player_prop_source,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.unique_player_prop_streak,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_team_by_game.player_team_by_game_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,prop_features_precomputed.idx_pfp_by_game,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,prop_features_precomputed.idx_pfp_by_player_date,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,prop_features_precomputed.prop_features_precomputed_pkey,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,today_market_snapshot.idx_today_market_snapshot_key,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,today_market_timing_signal.idx_today_market_timing_signal_key,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,today_odds_book_rows.idx_today_odds_book,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,today_odds_book_rows.idx_today_odds_key,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,today_player_context.idx_today_player_context_key,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,today_slate_rows.idx_today_slate_key,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,today_wide_rows.idx_today_wide_key,INDEX,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,today_workspace_mlb.idx_today_workspace_mlb_key,INDEX,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,backfill_progress.backfill_progress_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.blocked_shot_events_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.idx_nhl_blocked_shot_events_blocking_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.idx_nhl_blocked_shot_events_game_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.idx_nhl_blocked_shot_events_shooter_pos,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.idx_nhl_blocked_shot_events_shooting_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,data_quality_audit.data_quality_audit_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,eval_sog_daily.eval_sog_daily_game_date_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,eval_sog_daily.eval_sog_daily_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,eval_sog_daily.eval_sog_daily_segment_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,game_manpower_segments.game_manpower_segments_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,game_manpower_segments.ix_game_manpower_segments_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,game_manpower_segments.ix_game_manpower_segments_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_unique_short,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.idx_games_game_id_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.idx_games_season_short,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.idx_games_teams_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_season_audit.games_season_audit_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_write_audit.games_write_audit_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_logs_game_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_logs_opp_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_logs_team_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.idx_goalie_raw_game_id,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.idx_goalie_raw_player_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.idx_goalie_raw_team_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_roll_feats_m.goalie_roll_feats_m_uniq,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_rolling_agg.goalie_roll_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_rolling_agg.goalie_rolling_agg_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies2023_stage.ix_goalies2023_stage_player_season,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies_szn_sit.gss_player_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies_szn_sit.gss_player_sit_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies_szn_sit.gss_sit_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalies_szn_sit.gss_team_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_goalie_logs_stage.uq_import_goalie_logs_stage_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_skater_logs_stage.ux_import_skater_logs_stage_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_skater_points_stage.import_skater_points_stage_game_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,import_skater_points_stage.import_skater_points_stage_pid_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,keep_games_filter.keep_games_filter_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,pairing_features_store_v2.idx_pairing_store_v2_game_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,pairing_features_store_v2.idx_pairing_store_v2_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,pairing_features_store_v2.pairing_features_store_v2_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.ix_player_external_ids_provider,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.player_external_ids_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.player_external_ids_provider_provider_player_id_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.uq_player_external_ids_player_provider,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.ux_player_external_ids_provider_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,players.players_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,pp_roles_slate.pk_pp_roles_slate,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.idx_predictions_created,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.idx_predictions_lookup,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.predictions_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.uq_nhl_predictions_player_game_prop_line,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.uq_pred,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.ux_predictions_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_names.roster_names_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_latest_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_uk,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game.idx_shift_teammate_overlap_game_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game.idx_shift_teammate_overlap_game_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game.shift_teammate_overlap_game_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game_recent_v2.idx_overlap_recent_v2_game_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game_recent_v2.idx_overlap_recent_v2_game_team_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game_recent_v2.shift_teammate_overlap_game_recent_v2_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_pairings_game.idx_shiftcharts_pairings_game_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_pairings_game.shiftcharts_pairings_game_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.idx_shiftcharts_raw_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.idx_shiftcharts_raw_game_period,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.idx_shiftcharts_raw_game_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.idx_shiftcharts_raw_json_gin,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.idx_shiftcharts_raw_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.idx_shiftcharts_raw_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.shiftcharts_raw_pk,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.shiftcharts_raw_shift_id_uniq,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts.idx_shiftcharts_shifts_game_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts.idx_shiftcharts_shifts_game_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts.shiftcharts_shifts_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.idx_nhl_sog_events_abs_sec,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.idx_nhl_sog_events_defending_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.idx_nhl_sog_events_game_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.idx_nhl_sog_events_shooter_pos,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.idx_nhl_sog_events_shooting_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.shot_on_goal_events_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_stats_denali.idx_shot_stats_denali_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_stats_denali.idx_shot_stats_denali_season_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_stats_denali.shot_stats_denali_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shots_all.idx_shots_all_game_id,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shots_all.idx_shots_all_season,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shots_all.idx_shots_all_shooter,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.idx_skater_game_logs_raw_player_date_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.idx_skater_logs_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.idx_skater_raw_game_id,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.idx_skater_raw_player_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.idx_skater_raw_team_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.sk_logs_game_player_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_logs_game_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_logs_opp_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_logs_team_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skglr_player_date_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skglr_team_date_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.sklr_offenders_by_game_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_special_teams_exposure.ix_st_expo_game_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_special_teams_exposure.skater_game_special_teams_exposure_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_raw_date_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_raw_game_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_raw_pid_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_raw_pk,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_raw_uniq,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.spr_game_team_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.tf_points_enriched_game_date_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.tf_points_enriched_player_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_agg.idx_skater_rolling_agg_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_agg.skater_roll_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_agg.skater_rolling_agg_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters2023_stage.ix_skaters2023_stage_player_season,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters_szn_sit.skaters_szn_sit_player_season_sit_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skaters_szn_sit.skaters_szn_sit_team_season_sit_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_context_rolling.team_context_rolling_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_external_ids.team_external_ids_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_external_ids.team_external_ids_provider_provider_team_id_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_sit.idx_team_game_sit_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_sit.idx_team_game_sit_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_sit.team_game_sit_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_pp_toi_totals_by_date_team.uq_team_pp_toi_totals_by_date_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_roll10_m.team_roll10_m_uniq,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams.teams_abbr_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams.teams_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_game_sit.tgs_date_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_game_sit.tgs_game_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_game_sit.tgs_opp_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_game_sit.tgs_team_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams_game_sit.tgs_team_sit_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_skater_attempts_roll10.uq_tf_skater_attempts_roll10,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_team_roll10.idx_tf_team_roll10_game_team_opp,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_team_roll10.idx_tf_team_roll10_team_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_team_roll10.tf_team_roll10_team_date_unique,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_team_roll10.tf_team_roll10_team_id_game_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2.idx_training_goalie_game_team_opp,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2.training_features_goalie_saves_v2_pk,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2.uq_training_features_goalie_saves_v2_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2_ready.idx_saves_ready_date_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2_ready.idx_saves_ready_date_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2_ready.uq_saves_ready_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_saves_enr_filt.ux_saves_enr_filt,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_saves_enriched.idx_feat_saves_goalie_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_saves_enriched.ux_saves_enr,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame.idx_sog_pregame_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame.idx_sog_pregame_player_date,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame.ux_sog_pregame_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2.idx_sog_enriched_v2_player,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2.idx_sog_enriched_v2_season_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2.idx_sog_enriched_v2_team,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2.uq_sog_pregame_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2_mt.ux_sog_pregame_v2_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_shots.idx_tf_shots_season,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_sog_denali.idx_training_features_sog_denali_player_date_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_sog_denali.uq_training_features_sog_denali_player_game,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.nhl_user_props_lookup_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.nhl_user_props_unique_prop_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.user_props_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+public,mlb_team_map.mlb_team_map_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+public,opp_starter_per_game.opp_starter_per_game_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages.messages_inserted_at_topic_index,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages.messages_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_21.messages_2026_02_21_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_21.messages_2026_02_21_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_22.messages_2026_02_22_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_22.messages_2026_02_22_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_23.messages_2026_02_23_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_23.messages_2026_02_23_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_24.messages_2026_02_24_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_24.messages_2026_02_24_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_25.messages_2026_02_25_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_25.messages_2026_02_25_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_26.messages_2026_02_26_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_26.messages_2026_02_26_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_27.messages_2026_02_27_inserted_at_topic_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_27.messages_2026_02_27_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,schema_migrations.schema_migrations_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription.ix_realtime_subscription_entity,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription.pk_subscription,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription.subscription_subscription_id_entity_filters_action_filter_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets.bname,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets.buckets_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_analytics.buckets_analytics_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_analytics.buckets_analytics_unique_name_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_vectors.buckets_vectors_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,migrations.migrations_name_key,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,migrations.migrations_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.bucketid_objname,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.idx_objects_bucket_id_name,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.idx_objects_bucket_id_name_lower,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.name_prefix_search,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.objects_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads.idx_multipart_uploads_list,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads.s3_multipart_uploads_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads_parts.s3_multipart_uploads_parts_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,vector_indexes.vector_indexes_name_bucket_id_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,vector_indexes.vector_indexes_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+vault,secrets.secrets_name_idx,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+vault,secrets.secrets_pkey,INDEX,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,audit_log_entries.audit_log_entries_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_authorization_url_https,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_authorization_url_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_client_id_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_discovery_url_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_identifier_format,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_identifier_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_issuer_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_jwks_uri_https,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_jwks_uri_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_name_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_oauth2_requires_endpoints,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_oidc_discovery_url_https,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_oidc_issuer_https,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_oidc_requires_issuer,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_provider_type_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_token_url_https,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_token_url_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_userinfo_url_https,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,custom_oauth_providers.custom_oauth_providers_userinfo_url_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,flow_state.flow_state_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_provider_id_provider_unique,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,identities.identities_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,instances.instances_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_amr_claims.amr_id_pk,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_amr_claims.mfa_amr_claims_session_id_authentication_method_pkey,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_amr_claims.mfa_amr_claims_session_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_challenges.mfa_challenges_auth_factor_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_challenges.mfa_challenges_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_last_challenged_at_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,mfa_factors.mfa_factors_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_authorization_code_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_authorization_code_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_authorization_id_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_client_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_code_challenge_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_expires_at_future,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_nonce_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_redirect_uri_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_resource_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_scope_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_state_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_authorizations.oauth_authorizations_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_client_states.oauth_client_states_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_client_name_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_client_uri_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_logo_uri_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_clients.oauth_clients_token_endpoint_auth_method_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_client_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_revoked_after_granted,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_scopes_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_scopes_not_empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_user_client_unique,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,oauth_consents.oauth_consents_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_token_hash_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,one_time_tokens.one_time_tokens_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_session_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,refresh_tokens.refresh_tokens_token_unique,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.entity_id not empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.metadata_url not empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.metadata_xml not empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.saml_providers_entity_id_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.saml_providers_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_providers.saml_providers_sso_provider_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.request_id not empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_flow_state_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,saml_relay_states.saml_relay_states_sso_provider_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,schema_migrations.schema_migrations_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_oauth_client_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_scopes_length,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sessions.sessions_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains.domain not empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains.sso_domains_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_domains.sso_domains_sso_provider_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_providers.resource_id not empty,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,sso_providers.sso_providers_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_email_change_confirm_status_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_phone_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,users.users_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges.webauthn_challenges_challenge_type_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges.webauthn_challenges_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_challenges.webauthn_challenges_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_credentials.webauthn_credentials_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,webauthn_credentials.webauthn_credentials_user_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+cron,job.job_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+cron,job.jobname_username_uniq,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+cron,job_run_details.job_run_details_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_batter_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_batter_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_game_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_game_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_pitcher_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_pitcher_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,bvp_stats.bvp_stats_pkey,PRIMARY_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,game_info.game_info_game_id_key,UNIQUE_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,game_info.game_info_pkey,PRIMARY_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,model_training_props.model_training_props_game_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_game_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_pkey,PRIMARY_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_player_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.model_training_props_player_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.mtp_team_text_no_leagues,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.mtp_team_text_numeric,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,model_training_props.unique_player_game_prop,UNIQUE_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_game_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_game_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_pkey,PRIMARY_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_player_id_fkey,FOREIGN_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_player_id_game_id_key,UNIQUE_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_player_id_pos,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_derived_stats_unique_key,UNIQUE_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_derived_stats.player_game_unique,UNIQUE_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_no_unknown_real,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_player_id_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_player_id_unique,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_ids.player_ids_player_name_not_blank,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_profiles_cache.player_profiles_cache_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_profiles_cache.player_profiles_cache_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_profiles_cache.player_profiles_cache_player_id_pos,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_props.player_props_game_id_fkey,FOREIGN_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.player_props_game_id_pos,CHECK_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.player_props_pkey,PRIMARY_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.player_props_player_id_fkey,FOREIGN_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.player_props_player_id_pos,CHECK_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.status_check,CHECK_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_props.uq_player_props_by_src_value,UNIQUE_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_game_id_fkey,FOREIGN_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_game_id_pos,CHECK_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_pkey,PRIMARY_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_player_id_fkey,FOREIGN_KEY,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_stats.player_stats_player_id_pos,CHECK_CONSTRAINT,ACTIVE_OPERATIONAL,supports parent relation; not itself source data,RETAIN_OPERATIONAL
+mlb,player_streak_history.player_streak_history_pkey,PRIMARY_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_history.psh_streak_type_check,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.player_streak_profiles_pkey,PRIMARY_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.player_streak_profiles_streak_type_check,CHECK_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_streak_profiles.unique_player_prop_source,UNIQUE_CONSTRAINT,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,player_team_by_game.player_team_by_game_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,prop_features_precomputed.prop_features_precomputed_pkey,PRIMARY_KEY,DERIVED_RESEARCH_QUARANTINE,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,backfill_progress.backfill_progress_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.blocked_shot_events_game_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,blocked_shot_events.blocked_shot_events_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,data_quality_audit.data_quality_audit_level_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,data_quality_audit.data_quality_audit_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,eval_sog_daily.eval_sog_daily_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,game_manpower_segments.game_manpower_segments_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_away_team_fk,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_canonical_id_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_game_type_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_home_team_fk,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_season_start_year_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_short_consistency_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games.games_unique_short,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_season_audit.games_season_audit_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,games_write_audit.games_write_audit_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_goals_allowed_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_opponent_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_saves_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_shots_faced_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_game_logs_raw.goalie_game_logs_raw_toi_minutes_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_rolling_agg.goalie_rolling_agg_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,goalie_rolling_agg.goalie_rolling_agg_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,keep_games_filter.keep_games_filter_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,pairing_features_store_v2.pairing_features_store_v2_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.player_external_ids_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.player_external_ids_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.player_external_ids_provider_provider_player_id_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,player_external_ids.uq_player_external_ids_player_provider,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,players.players_current_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,players.players_no_placeholder_fullname,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,players.players_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,players.players_position_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,players.players_shoots_catches_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,pp_roles_slate.pk_pp_roles_slate,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.predictions_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,predictions.uq_pred,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_names.roster_names_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,roster_status.roster_status_unique,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game.shift_teammate_overlap_game_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shift_teammate_overlap_game_recent_v2.shift_teammate_overlap_game_recent_v2_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_pairings_game.shiftcharts_pairings_game_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.shiftcharts_raw_duration_nonneg_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.shiftcharts_raw_pk,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.shiftcharts_raw_shift_id_uniq,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_raw.shiftcharts_raw_time_order_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shiftcharts_shifts.shiftcharts_shifts_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.shot_on_goal_events_game_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_on_goal_events.shot_on_goal_events_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,shot_stats_denali.shot_stats_denali_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_blocks_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_hits_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_opponent_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_penalties_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_pp_toi_minutes_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_shot_attempts_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_shots_on_goal_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_logs_raw.skater_game_logs_raw_toi_minutes_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_game_special_teams_exposure.skater_game_special_teams_exposure_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_points_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_points_raw.skater_points_raw_pk,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_agg.skater_rolling_agg_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,skater_rolling_agg.skater_rolling_agg_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_context_rolling.team_context_rolling_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_context_rolling.team_context_rolling_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_external_ids.team_external_ids_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_external_ids.team_external_ids_provider_provider_team_id_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_external_ids.team_external_ids_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,team_game_sit.team_game_sit_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams.teams_abbr_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,teams.teams_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,tf_team_roll10.tf_team_roll10_team_date_unique,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_goalie_saves_v2.training_features_goalie_saves_v2_pk,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,training_features_nhl_sog_enriched_pregame_v2.sog_pregame_v2_season_start_year_chk,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.nhl_user_props_over_under_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.nhl_user_props_prop_type_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.user_props_opponent_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.user_props_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.user_props_player_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,user_props.user_props_team_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+public,mlb_team_map.mlb_team_map_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+public,opp_starter_per_game.opp_starter_per_game_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages.messages_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_21.messages_2026_02_21_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_22.messages_2026_02_22_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_23.messages_2026_02_23_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_24.messages_2026_02_24_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_25.messages_2026_02_25_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_26.messages_2026_02_26_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,messages_2026_02_27.messages_2026_02_27_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,schema_migrations.schema_migrations_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription.pk_subscription,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,subscription.subscription_action_filter_check,CHECK_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets.buckets_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_analytics.buckets_analytics_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,buckets_vectors.buckets_vectors_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,migrations.migrations_name_key,UNIQUE_CONSTRAINT,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,migrations.migrations_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.objects_bucketId_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,objects.objects_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads.s3_multipart_uploads_bucket_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads.s3_multipart_uploads_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads_parts.s3_multipart_uploads_parts_bucket_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads_parts.s3_multipart_uploads_parts_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,s3_multipart_uploads_parts.s3_multipart_uploads_parts_upload_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,vector_indexes.vector_indexes_bucket_id_fkey,FOREIGN_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+storage,vector_indexes.vector_indexes_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+vault,secrets.secrets_pkey,PRIMARY_KEY,UNKNOWN_FAIL_CLOSED,supports parent relation; not itself source data,REQUIRES_BLOCKER_RESOLUTION
+auth,auth,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+cron,cron,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+extensions,extensions,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+graphql,graphql,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+graphql_public,graphql_public,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+mlb,mlb,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+nhl,nhl,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+public,public,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+realtime,realtime,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+storage,storage,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+vault,vault,SCHEMA,UNKNOWN_FAIL_CLOSED,namespace itself is not source data,REQUIRES_BLOCKER_RESOLUTION
+extension,pg_cron,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+extension,pg_stat_statements,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+extension,pgcrypto,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+extension,pgjwt,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+extension,plpgsql,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+extension,supabase_vault,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+extension,uuid-ossp,EXTENSION,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,1,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,2,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,3,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,4,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,5,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,6,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,7,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,8,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,9,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+cron,10,CRON_JOB,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,models,STORAGE_BUCKET,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+storage,nhl_stats_data,STORAGE_BUCKET,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,anon,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,authenticated,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,authenticator,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,dashboard_user,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,pgbouncer,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,postgres,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,service_role,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_admin,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_auth_admin,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_privileged_role,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_read_only_user,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_realtime_admin,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_replication_admin,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+role,supabase_storage_admin,ROLE,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,cron,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,mlb,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,mlb,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,mlb,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,mlb,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,mlb,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,nhl,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,nhl,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,nhl,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,nhl,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,nhl,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,realtime,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,storage,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,storage,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,storage,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION
+trigger,storage,TRIGGER,UNKNOWN_FAIL_CLOSED,platform/runtime metadata excluded from MLB source clean room,REQUIRES_BLOCKER_RESOLUTION

@@ -1,0 +1,10 @@
+concept,competing_objects,date_range,row_count,identity_quality,temporal_quality,active_callers,source_of_truth_claim,recommended_surviving_source,objects_to_quarantine
+games,mlb.game_info,,,see temporal_identity audit,see temporal_identity audit,see caller map,mlb.game_info,mlb.game_info,
+players,mlb.player_ids|mlb.player_profiles_cache,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,all DB candidates
+lineups,repository run-bound lineup artifacts; no certified DB source,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,all DB candidates
+odds_snapshots,mlb.today_odds_book_rows,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,mlb.today_odds_book_rows (operational mutable table)
+player_props,mlb.player_props|mlb.model_training_props,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,both derived/operational
+batting_pitching_outcomes,mlb.player_stats,,,see temporal_identity audit,see temporal_identity audit,see caller map,mlb.player_stats,mlb.player_stats,
+player_game_team_identity,mlb.player_team_by_game,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,mlb.player_team_by_game
+derived_statistics,mlb.player_derived_stats|mlb.prop_features_precomputed,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,all
+reconciliation,repository exact-ID artifacts; no dedicated certified DB object,,,see temporal_identity audit,see temporal_identity audit,see caller map,NONE_CERTIFIED,NONE,all DB candidates

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "generated_date": "2026-07-28",
+  "status": "PARTIAL_SOURCE_ALLOWLIST_SCHEMA_NOT_EXECUTED",
+  "objects": [
+    "mlb.game_info",
+    "mlb.player_stats"
+  ],
+  "gaps": [
+    "player identity mapping excluded: null identity row and mutable lineage unresolved",
+    "player-game team identity excluded: historical update lineage unresolved",
+    "no immutable database source for official pregame lineup/batting order",
+    "no certified immutable database source for pregame odds snapshots with ingestion lineage",
+    "team identity has no standalone certified dimension",
+    "backup status not verifiable from PostgreSQL catalogs"
+  ]
+}
