@@ -1,0 +1,7 @@
+concept,exact_key,rows_received,rows_admitted,identity_rejects,status
+teams,team_mlb_id,0,0,0,NOT_EXECUTED
+players,player_mlb_id,0,0,0,NOT_EXECUTED
+games,game_pk,0,0,0,NOT_EXECUTED
+lineups,game_pk|team_mlb_id|player_mlb_id,0,0,0,NOT_EXECUTED
+odds,game_pk|player_mlb_id,0,0,0,NOT_EXECUTED
+results,game_pk|player_mlb_id,0,0,0,NOT_EXECUTED

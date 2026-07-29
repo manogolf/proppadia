@@ -1,0 +1,10 @@
+metric,count,status
+games,0,NOT_EXECUTED
+raw_bol_tb15_offers,0,NOT_EXECUTED
+identity_bound_offers,0,NOT_EXECUTED
+identity_rejects,0,NOT_EXECUTED
+lineup_rows,0,NOT_EXECUTED
+confirmed_batting_orders,0,NOT_EXECUTED
+completed_player_game_outcomes,0,NOT_EXECUTED
+exact_outcome_joins,0,NOT_EXECUTED
+technical_unresolved,1,BACKUP_VERIFICATION

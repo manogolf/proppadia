@@ -1,0 +1,4 @@
+-- NOT GENERATED/NOT EXECUTABLE.
+-- Bootstrap stopped before database-write implementation because Supabase managed
+-- backup status could not be verified. No schema, table, view, trigger, or role DDL
+-- is authorized until backup_verification.md is resolved.

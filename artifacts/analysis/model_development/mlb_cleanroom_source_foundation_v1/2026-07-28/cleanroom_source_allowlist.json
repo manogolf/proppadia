@@ -1,0 +1,9 @@
+{
+  "status": "BLOCKED_BACKUP_UNVERIFIED",
+  "existing_relations_permitted_for_future_implementation": [
+    "mlb.game_info",
+    "mlb.player_stats"
+  ],
+  "existing_relations_queried_for_bootstrap_data": [],
+  "database_writes": 0
+}
