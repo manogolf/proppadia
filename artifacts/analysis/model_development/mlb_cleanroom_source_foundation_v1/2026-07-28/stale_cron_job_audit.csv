@@ -1,11 +1,11 @@
 job_id,schedule,command,referenced_missing_object,last_execution_state,last_start_utc,active_dependency,qualifies_for_disable,action
-1,0 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_pitching_games;,public.player_pitching_games,failed,2026-07-28T09:00:00.315678Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-2,2 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_pitching_laststarts_mat;,public.player_pitching_laststarts_mat,failed,2026-07-28T09:02:00.060114Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-3,4 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.pitcher_last3_agg;,public.pitcher_last3_agg,failed,2026-07-28T09:04:00.066950Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-4,6 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_rolling_batting_agg;,public.player_rolling_batting_agg,failed,2026-07-28T09:06:00.033012Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-5,8 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.pitcher_rolling_per9;,public.pitcher_rolling_per9,failed,2026-07-28T09:08:00.030400Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-6,10 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_rolling_pitching_rates;,public.player_rolling_pitching_rates,failed,2026-07-28T09:10:00.026768Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-7,12 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_rolling_agg_mat;,public.player_rolling_agg_mat,failed,2026-07-28T09:12:00.056356Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-8,14 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.bvp_rollup_prior;,public.bvp_rollup_prior,failed,2026-07-28T09:14:00.039636Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
-9,16 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.bvp_pairs;,public.bvp_pairs,failed,2026-07-28T09:16:00.045240Z,NONE_FOUND,YES,BLOCKED_BACKUP_UNVERIFIED
+1,0 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_pitching_games;,public.player_pitching_games,failed,2026-07-28T09:00:00.315678Z,NONE_FOUND,YES,DISABLED
+2,2 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_pitching_laststarts_mat;,public.player_pitching_laststarts_mat,failed,2026-07-28T09:02:00.060114Z,NONE_FOUND,YES,DISABLED
+3,4 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.pitcher_last3_agg;,public.pitcher_last3_agg,failed,2026-07-28T09:04:00.066950Z,NONE_FOUND,YES,DISABLED
+4,6 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_rolling_batting_agg;,public.player_rolling_batting_agg,failed,2026-07-28T09:06:00.033012Z,NONE_FOUND,YES,DISABLED
+5,8 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.pitcher_rolling_per9;,public.pitcher_rolling_per9,failed,2026-07-28T09:08:00.030400Z,NONE_FOUND,YES,DISABLED
+6,10 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_rolling_pitching_rates;,public.player_rolling_pitching_rates,failed,2026-07-28T09:10:00.026768Z,NONE_FOUND,YES,DISABLED
+7,12 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.player_rolling_agg_mat;,public.player_rolling_agg_mat,failed,2026-07-28T09:12:00.056356Z,NONE_FOUND,YES,DISABLED
+8,14 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.bvp_rollup_prior;,public.bvp_rollup_prior,failed,2026-07-28T09:14:00.039636Z,NONE_FOUND,YES,DISABLED
+9,16 9 * * *,REFRESH MATERIALIZED VIEW CONCURRENTLY public.bvp_pairs;,public.bvp_pairs,failed,2026-07-28T09:16:00.045240Z,NONE_FOUND,YES,DISABLED
 10,20 9 * * *,ANALYZE;,NONE,succeeded,2026-07-28T09:20:00.057288Z,DATABASE_MAINTENANCE,NO,RETAIN_UNCHANGED

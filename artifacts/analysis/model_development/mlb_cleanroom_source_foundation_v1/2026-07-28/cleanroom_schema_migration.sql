@@ -1,4 +1,4 @@
--- NOT GENERATED/NOT EXECUTABLE.
--- Bootstrap stopped before database-write implementation because Supabase managed
--- backup status could not be verified. No schema, table, view, trigger, or role DDL
--- is authorized until backup_verification.md is resolved.
+-- Applied successfully on 2026-07-28.
+-- Canonical idempotent migration:
+-- backend/mlb/sql/migrations/20260728_create_mlb_cleanroom_v1.sql
+-- This evidence pointer avoids maintaining a divergent duplicate migration.

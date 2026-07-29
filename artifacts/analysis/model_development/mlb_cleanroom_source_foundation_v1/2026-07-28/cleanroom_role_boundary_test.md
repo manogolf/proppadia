@@ -1,7 +1,13 @@
 # Clean-room Role Boundary Test
 
-Status: **NOT EXECUTED**
+Status: **PASS**
 
-No role or grants were created. The required negative query test against inherited
-derived objects cannot be performed until backup verification authorizes database
-writes and the restricted role exists.
+Role: `mlb_cleanroom_research` (`NOLOGIN`, `NOINHERIT`)
+
+- `SET LOCAL ROLE mlb_cleanroom_research`
+- `SELECT count(*) FROM mlb_cleanroom_v1.current_games`: PASS, 16 rows
+- `SELECT count(*) FROM mlb.model_training_props`: correctly failed with
+  `permission denied for schema mlb`
+
+The role can read the clean-room schema and cannot read the tested inherited derived
+object. Active production was not repointed to this role.

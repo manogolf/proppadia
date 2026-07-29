@@ -1,7 +1,7 @@
 concept,exact_key,rows_received,rows_admitted,identity_rejects,status
-teams,team_mlb_id,0,0,0,NOT_EXECUTED
-players,player_mlb_id,0,0,0,NOT_EXECUTED
-games,game_pk,0,0,0,NOT_EXECUTED
-lineups,game_pk|team_mlb_id|player_mlb_id,0,0,0,NOT_EXECUTED
-odds,game_pk|player_mlb_id,0,0,0,NOT_EXECUTED
-results,game_pk|player_mlb_id,0,0,0,NOT_EXECUTED
+games,game_pk,16,16,0,PASS
+teams,team_mlb_id,30,30,0,PASS
+players,player_mlb_id,948,948,0,PASS
+lineups,game_pk|team_mlb_id|player_mlb_id,486,486,0,PASS
+completed_results,game_pk|player_mlb_id,449,449,0,PASS
+BetOnline TB 1.5,game_pk|player_mlb_id,110,0,110,FAIL_CLOSED_PROVIDER_HAS_NO_MLB_PLAYER_ID

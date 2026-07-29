@@ -1,9 +1,13 @@
 {
-  "status": "BLOCKED_BACKUP_UNVERIFIED",
+  "status": "ACTIVE_SOURCE_ONLY_BOUNDARY",
   "existing_relations_permitted_for_future_implementation": [
     "mlb.game_info",
     "mlb.player_stats"
   ],
   "existing_relations_queried_for_bootstrap_data": [],
-  "database_writes": 0
+  "fresh_sources": [
+    "MLB_STATS_API",
+    "THE_ODDS_API_BETONLINE_MARKETS"
+  ],
+  "database_writes": "mlb_cleanroom_v1 only"
 }

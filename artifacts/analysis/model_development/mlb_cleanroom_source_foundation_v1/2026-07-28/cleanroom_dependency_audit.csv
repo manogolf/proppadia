@@ -1,2 +1,6 @@
 cleanroom_object,dependency,status
-mlb_cleanroom_v1,NONE,SCHEMA_NOT_CREATED
+current_games,mlb_cleanroom_v1.games,PASS
+latest_lineups,mlb_cleanroom_v1.lineup_snapshots,PASS
+latest_bol_tb15,mlb_cleanroom_v1.odds_snapshots,PASS
+official_completed_player_games,mlb_cleanroom_v1.player_game_results,PASS
+all_cleanroom_views,quarantined_or_inherited_derived_objects,ZERO_DEPENDENCIES

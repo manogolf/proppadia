@@ -1,0 +1,10 @@
+{
+  "slate_date": "2026-07-28",
+  "source_relation": "mlb_cleanroom_v1.latest_bol_tb15",
+  "raw_betonline_offer_sides": 110,
+  "exact_identity_bound_offer_sides": 0,
+  "identity_rejects": 110,
+  "board_rows": 0,
+  "status": "IDENTITY_COVERAGE_BLOCKED",
+  "reason": "Fresh odds payload has player names but no MLB player IDs; name joins prohibited."
+}
