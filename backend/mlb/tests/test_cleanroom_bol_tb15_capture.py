@@ -15,6 +15,10 @@ from backend.mlb.scripts.cleanroom_v1.run_cleanroom_bol_tb15_capture import (
     select_new_raw_run,
     validate_snapshot,
 )
+from backend.mlb.scripts.cleanroom_v1.closeout_cleanroom_bol_tb15 import (
+    american_profit,
+    baseline,
+)
 
 
 REQUIRED = (
@@ -138,3 +142,31 @@ def test_doubleheader_event_separation():
     ]
     with pytest.raises(RuntimeError, match="reused"):
         assert_one_event_per_game(invalid)
+
+
+def test_flat_five_american_profit():
+    assert american_profit(5, 150) == 7.5
+    assert american_profit(5, -200) == 2.5
+
+
+def test_neutral_baseline_excludes_voids():
+    rows = [
+        {
+            "settlement_status": "SETTLED", "outcome": "OVER_WIN",
+            "final_pregame_over_odds": "150",
+        },
+        {
+            "settlement_status": "SETTLED", "outcome": "OVER_LOSS",
+            "final_pregame_over_odds": "100",
+        },
+        {
+            "settlement_status": "VOID", "outcome": "NO_ACTION",
+            "final_pregame_over_odds": "200",
+        },
+    ]
+    result = baseline(rows, "Over")
+    assert result["wagers"] == 2
+    assert result["wins"] == 1
+    assert result["losses"] == 1
+    assert result["total_stake"] == 10
+    assert result["net_dollars"] == 2.5
