@@ -1,0 +1,22 @@
+{
+  "closed_hypotheses": [
+    {
+      "hypothesis": "H2_PRICE_BAND_REJECTION",
+      "original_rule": "reject final-pregame BetOnline Under odds -199 through -150 inclusive",
+      "july29_result": "CLEAR_ONE_SLATE_REJECTION_CANDIDATE",
+      "july30_result": "FAILED_TO_REPLICATE_CLOSE_HYPOTHESIS",
+      "terminal_decision": "CLOSED",
+      "closure_timestamp_utc": "2026-07-31T17:08:08Z",
+      "reason": "Failed the frozen July 30 prospective replication rule"
+    },
+    {
+      "hypothesis": "H3_PERSISTENT_MARKET_REJECTION",
+      "original_rule": "reject PERSISTENT markets appearing in at least half of eligible pregame captures",
+      "july29_result": "CLEAR_ONE_SLATE_REJECTION_CANDIDATE",
+      "july30_result": "FAILED_TO_REPLICATE_CLOSE_HYPOTHESIS",
+      "terminal_decision": "CLOSED",
+      "closure_timestamp_utc": "2026-07-31T17:08:08Z",
+      "reason": "Failed the frozen July 30 prospective replication rule"
+    }
+  ]
+}

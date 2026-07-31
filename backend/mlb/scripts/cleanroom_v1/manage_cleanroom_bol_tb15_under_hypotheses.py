@@ -31,6 +31,7 @@ ANALYSIS_ROOT = (
     "mlb_cleanroom_bol_tb15_under_next_slate_replication/2026-07-30"
 )
 RULE_VERSION = "july29_frozen_rules_commit_3abb963d"
+MULTI_HYPOTHESIS_LAST_ALLOWED_SLATE = "2026-07-30"
 
 
 def csv_content(rows: list[dict], fields: list[str] | None = None) -> bytes:
@@ -237,6 +238,11 @@ def build_final_population(slate: str) -> tuple[list[dict], list[dict], list[dic
 
 
 def freeze(slate: str) -> dict:
+    if slate > MULTI_HYPOTHESIS_LAST_ALLOWED_SLATE:
+        raise RuntimeError(
+            "H2 price-band and H3 persistence hypotheses are closed after "
+            "2026-07-30; use the H1-only top-order lifecycle"
+        )
     population, runs, games = build_final_population(slate)
     root = EXPORT_ROOT / slate / "under_hypotheses"
     freeze_timestamp = datetime.now(timezone.utc).isoformat()
@@ -556,6 +562,7 @@ def status(slate: str) -> dict:
                 "wins": int(row["wins"]),
                 "losses": int(row["losses"]),
                 "pending": int(row["pending"]),
+                "no_action": int(row["no_action"]),
                 "technical_unresolved": int(row["technical_unresolved"]),
             }
             for row in closeout_results
