@@ -1,0 +1,7 @@
+{
+  "july29": {"frozen_identities":232,"actionable_settlements":218,"officially_supported_no_action":13,"unsupported_historical_void":1,"exception_identity":{"player":"Vinnie Pasquantino","game_pk":823677,"player_mlb_id":686469}},
+  "july30": {"frozen_identities":129,"actionable_settlements":126,"officially_supported_no_action":3,"standalone_neutral_revision_package":"CREATED_REVISION_001"},
+  "july31": {"immutable_captures_preserved":true,"neutral_population_frozen":false,"neutral_closeout_eligible":false,"h1_evidence_eligible":false},
+  "h1_status":"UNTESTED_UNDER_HARDENED_STRICT_PRIOR_CONTRACT",
+  "next_untouched_slate":{"slate_date":"2026-08-01","designation":"POST_HARDENING_PROSPECTIVE_SLATE_001","research_started":false,"graded":false}
+}

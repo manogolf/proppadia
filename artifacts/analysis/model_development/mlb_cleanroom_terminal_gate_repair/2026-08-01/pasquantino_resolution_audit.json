@@ -1,0 +1,14 @@
+{
+  "exception_id":"PASQUANTINO_JULY29_UNSUPPORTED_VOID",
+  "slate_date":"2026-07-29","game_pk":823677,"player_mlb_id":686469,
+  "official_source":"https://statsapi.mlb.com/api/v1.1/game/823677/feed/live",
+  "bounded_fresh_retrieval_performed":true,
+  "preserved_payload_sha256":"95e492a7191b501ce15b5fab5f5c563d939b691b0a473b769a91077e0edbc04f",
+  "fresh_payload_sha256":"95e492a7191b501ce15b5fab5f5c563d939b691b0a473b769a91077e0edbc04f",
+  "payloads_byte_identical":true,"official_game_status":"Final",
+  "game_data_player_object":false,"away_boxscore_player_object":false,"home_boxscore_player_object":false,"play_by_play_occurrences":0,"roster_or_substitution_occurrences":0,
+  "zero_plate_appearances_officially_supported":false,
+  "decision":"HISTORICAL_EXCEPTION_UNRESOLVED_MISSING_EXACT_PLAYER_RESULT",
+  "disposition":"QUARANTINED_NOT_IN_CERTIFIED_DENOMINATOR",
+  "inference_from_absence_used":false
+}

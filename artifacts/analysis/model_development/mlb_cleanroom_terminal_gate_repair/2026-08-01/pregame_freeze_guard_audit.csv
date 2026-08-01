@@ -1,0 +1,11 @@
+guard,implementation,test_result
+neutral_freeze_immutable_captures_only,audit_and_freeze reads immutable snapshots,PASS
+latest_valid_pre_first_pitch,market timestamp strictly before scheduled pitch and latest selected,PASS
+outcome_independent_membership,manifest membership_uses_outcomes false,PASS
+replacement_refused_unless_identical,population SHA compared before return,PASS
+closeout_requires_existing_freeze,PREGAME_FREEZE_REQUIRED before outcome fetch,PASS
+signal_freeze_requires_neutral_freeze,both signal freeze entry points check final_population_manifest,PASS
+missing_result_fails_closed,Final game missing player maps TECHNICAL_UNRESOLVED,PASS
+july31_retrospective_freeze_blocked,exclusion manifest yields INELIGIBLE_FREEZE_MISSED,PASS
+make_exposes_replay_override,no historical or retrospective override exposed,PASS
+schedule_installed,no,PASS

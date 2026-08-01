@@ -1,0 +1,11 @@
+check,expected,observed,decision
+membership_unchanged,129,129,PASS
+actionable_settlements,126,126,PASS
+officially_supported_no_action,3,3,PASS
+pending,0,0,PASS
+technical_unresolved,0,0,PASS
+revision,1,1,PASS
+first_run_status,PACKAGED,PACKAGED,PASS
+unchanged_second_run_status,ALREADY_PACKAGED_IDENTICAL,ALREADY_PACKAGED_IDENTICAL,PASS
+content_sha256,b0bc54f098dc697bf759fa5eab731945ca6961ba717fb172f31ae329a1ae76a9,b0bc54f098dc697bf759fa5eab731945ca6961ba717fb172f31ae329a1ae76a9,PASS
+new_revision_on_unchanged_rerun,0,0,PASS

@@ -1,0 +1,4 @@
+exception_id,slate_date,game_pk,player_mlb_id,affected_artifact,affected_rows,certified_portions,uncertified_portions,reason,disposition,active_code_affected,future_research_may_use_evidence
+PASQUANTINO_JULY29_UNSUPPORTED_VOID,2026-07-29,823677,686469,bol_tb15_cleanroom_closeout_2026-07-29.csv,1,218 settlements and 13 other NO_ACTION rows,this VOID row,no exact official player result exists,HISTORICAL_EXCEPTION_UNRESOLVED_MISSING_EXACT_PLAYER_RESULT|QUARANTINED_NOT_IN_CERTIFIED_DENOMINATOR,NO,NO
+JULY31_NEUTRAL_POPULATION_NOT_FROZEN,2026-07-31,,,immutable July 31 captures,all neutral identities,source captures only,neutral population and closeout,pregame freeze was missed,SLATE_INELIGIBLE_NO_PREGAME_FREEZE,NO,NO
+JULY29_JULY30_H1_TEMPORAL_LINEAGE_VOID,2026-07-29/2026-07-30,,,historical H1 packages,all H1 evidence,source captures only,H1 inference,strict-prior lineup contract was not governing,VOID_FOR_SIGNAL_INFERENCE,NO,NO

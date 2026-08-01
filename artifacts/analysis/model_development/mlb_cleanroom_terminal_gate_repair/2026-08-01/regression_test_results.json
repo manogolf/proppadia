@@ -1,0 +1,1 @@
+{"command":"python3 -m pytest -q backend/mlb/tests/test_cleanroom*.py","passed":54,"failed":0,"duration_seconds":0.18,"required_terminal_guard_tests":"PASS","july30_idempotence":"PASS","decision":"ACTIVE_PATH_TESTS_PASS"}
