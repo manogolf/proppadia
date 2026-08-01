@@ -1,0 +1,15 @@
+field_or_rule,requirement,fail_closed_reason
+slate_date,current Pacific calendar date,CAPTURE_DATE_MISMATCH
+game_pk,exact official game identity,PROVIDER_EVENT_MISSING
+game_window,15 through 180 minutes inclusive,GAME_OUTSIDE_FIXED_WINDOW
+provider_event_id,exact unique game binding,EVENT_BINDING_AMBIGUOUS
+two_sided_market,BetOnline Over and Under TB 1.5,MARKET_NOT_TWO_SIDED
+player_mlb_id,exact game-roster identity,PLAYER_IDENTITY_UNRESOLVED
+lineup_status,official CONFIRMED,LINEUP_NOT_CONFIRMED
+lineup_visibility,observation no later than governing capture,LINEUP_AFTER_CAPTURE
+lineup_temporality,strictly before first pitch,LINEUP_POST_FIRST_PITCH
+batting_position,integer 1 through 9,LINEUP_NOT_CONFIRMED
+market_visibility,observation no later than governing capture,MARKET_AFTER_CAPTURE
+market_temporality,strictly before first pitch,MARKET_POST_FIRST_PITCH
+source_lineage,preserved payload and verified SHA-256,SOURCE_HASH_FAILURE
+freeze_fields,no outcome fields permitted,ATOMIC_PUBLICATION_FAILURE

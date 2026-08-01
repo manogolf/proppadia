@@ -1,0 +1,9 @@
+stage,publication_allowed_on_failure,implementation,decision
+date guard,no,evaluated before capture subprocess,PASS
+fixed time guard,no,evaluated before capture subprocess,PASS
+source acquisition,no cohort publication,existing clean-room capture may retain diagnostics,PASS
+identity and source hash validation,no cohort publication,build raises before staging publication,PASS
+cohort files,only after all rows hashes and manifest complete,temporary sibling directory plus atomic os.replace,PASS
+successful second attempt,no calls or writes,manifest checked before date guard and capture,PASS
+zero eligible rows,yes immutable empty manifest,EMPTY_ELIGIBLE_COHORT,PASS
+technical prepublication failure,retry only while guards pass,no manifest means retry remains possible,PASS

@@ -1,0 +1,7 @@
+command,purpose,mutation,guard,result
+make mlb-cleanroom-bol-tb15-fixed-cohort MLB_DATE=YYYY-MM-DD,one fresh capture and atomic cohort freeze,immutable fixed cohort,current-date plus 12:45-13:15 PT,READY_NOT_EXECUTED
+make mlb-cleanroom-bol-tb15-fixed-cohort-closeout MLB_DATE=YYYY-MM-DD,official outcome settlement,revisioned closeout,existing cohort required,READY
+make mlb-cleanroom-bol-tb15-fixed-cohort-status MLB_DATE=YYYY-MM-DD,per-date status,none,none,VERIFIED_READ_ONLY
+make mlb-cleanroom-bol-tb15-fixed-cohort-block-status,cumulative block status,none,none,VERIFIED_READ_ONLY
+real July 31 capture invocation,outside-window fail-fast,none,guard before network,FIXED_COHORT_CAPTURE_WINDOW_CLOSED
+real August 1 closeout invocation,no-freeze fail-fast,none,manifest before network,FIXED_COHORT_FREEZE_REQUIRED

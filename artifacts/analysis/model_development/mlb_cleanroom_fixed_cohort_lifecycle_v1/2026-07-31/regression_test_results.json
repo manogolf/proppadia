@@ -1,0 +1,1 @@
+{"command":"python3 -m pytest -q backend/mlb/tests/test_cleanroom*.py","passed":80,"failed":0,"duration_seconds":0.21,"fixed_cohort_contract_tests":26,"real_fail_fast_checks":["July 31 outside-window refused before network","August 1 missing cohort closeout refused","August 1 old full-slate H1 freeze retired"],"decision":"PASS"}
