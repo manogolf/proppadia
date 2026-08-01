@@ -32,6 +32,7 @@ ANALYSIS_ROOT = (
 )
 RULE_VERSION = "july29_frozen_rules_commit_3abb963d"
 MULTI_HYPOTHESIS_LAST_ALLOWED_SLATE = "2026-07-30"
+SIGNAL_RESEARCH_PAUSED = True
 
 
 def csv_content(rows: list[dict], fields: list[str] | None = None) -> bytes:
@@ -246,6 +247,8 @@ def build_final_population(slate: str) -> tuple[list[dict], list[dict], list[dic
 
 
 def freeze(slate: str) -> dict:
+    if SIGNAL_RESEARCH_PAUSED:
+        raise RuntimeError("SIGNAL_RESEARCH_PAUSED_PENDING_PROSPECTIVE_EVIDENCE_LINEAGE_CERTIFICATION")
     if slate > MULTI_HYPOTHESIS_LAST_ALLOWED_SLATE:
         raise RuntimeError(
             "H2 price-band and H3 persistence hypotheses are closed after "
@@ -357,6 +360,8 @@ def population_summary(rows: list[dict]) -> dict:
 
 
 def closeout(slate: str) -> dict:
+    if SIGNAL_RESEARCH_PAUSED:
+        raise RuntimeError("SIGNAL_RESEARCH_PAUSED_PENDING_PROSPECTIVE_EVIDENCE_LINEAGE_CERTIFICATION")
     root = EXPORT_ROOT / slate / "under_hypotheses"
     if not root.exists():
         raise RuntimeError("prospective populations are not frozen")

@@ -83,6 +83,7 @@ def main() -> int:
                      LIMIT 1
                    ) l ON true
                    WHERE o.ingestion_run_id=%s AND o.line=1.5
+                     AND o.snapshot_timestamp_utc < g.scheduled_start_utc
                    ORDER BY o.game_pk,o.player_mlb_id,o.line,o.side""",
                 (run["started_at_utc"], args.run_id),
             )
@@ -90,8 +91,13 @@ def main() -> int:
             cur.execute(
                 """WITH governing_game AS (
                      SELECT game_pk,max(snapshot_timestamp_utc) governing_market_at
-                     FROM mlb_cleanroom_v1.odds_snapshots
-                     WHERE ingestion_run_id=%s AND line=1.5
+                     FROM mlb_cleanroom_v1.odds_snapshots o
+                     WHERE o.ingestion_run_id=%s AND o.line=1.5
+                       AND EXISTS (
+                         SELECT 1 FROM mlb_cleanroom_v1.current_games g
+                         WHERE g.game_pk=o.game_pk
+                           AND o.snapshot_timestamp_utc < g.scheduled_start_utc
+                       )
                      GROUP BY game_pk
                    )
                    SELECT DISTINCT ON (l.game_pk,l.team_mlb_id,l.player_mlb_id)

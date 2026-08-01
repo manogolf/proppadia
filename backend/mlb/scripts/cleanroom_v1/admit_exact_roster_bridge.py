@@ -163,6 +163,7 @@ def main() -> int:
                     SELECT DISTINCT ON (o.game_pk,o.player_mlb_id)
                       o.game_pk,o.player_mlb_id,l.lineup_status,l.batting_order_position
                     FROM mlb_cleanroom_v1.latest_bol_tb15 o
+                    JOIN mlb_cleanroom_v1.current_games g ON g.game_pk=o.game_pk
                     LEFT JOIN LATERAL (
                       SELECT l.*
                       FROM mlb_cleanroom_v1.valid_pregame_lineup_observations l
@@ -178,6 +179,7 @@ def main() -> int:
                       LIMIT 1
                     ) l ON true
                     WHERE o.slate_date=%s
+                      AND o.snapshot_timestamp_utc < g.scheduled_start_utc
                     ORDER BY o.game_pk,o.player_mlb_id,o.snapshot_timestamp_utc DESC
                   ), paired AS (
                     SELECT o.game_pk,o.player_mlb_id,o.line,
@@ -196,6 +198,7 @@ def main() -> int:
                     LEFT JOIN eligible_lineups l
                       ON l.game_pk=o.game_pk AND l.player_mlb_id=o.player_mlb_id
                     WHERE o.slate_date=%s
+                      AND o.snapshot_timestamp_utc < g.scheduled_start_utc
                     GROUP BY o.game_pk,o.player_mlb_id,o.line
                   )
                   SELECT * FROM paired WHERE over_odds IS NOT NULL AND under_odds IS NOT NULL
