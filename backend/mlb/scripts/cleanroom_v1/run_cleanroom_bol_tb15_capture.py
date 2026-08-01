@@ -13,11 +13,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
+import psycopg
 
 ROOT = Path(__file__).resolve().parents[4]
 PYTHON = ROOT / ".venv/bin/python"
@@ -36,6 +38,7 @@ REQUIRED_FILES = {
     "source_hash_manifest.csv",
 }
 TERMINAL_GAME_STATES = {"Final", "Game Over", "Completed Early", "Postponed", "Cancelled"}
+PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 def generate_run_tag(at: datetime | None = None) -> str:
@@ -47,6 +50,98 @@ def validate_date(value: str) -> date:
     if str(parsed) != value:
         raise ValueError("MLB_DATE must use YYYY-MM-DD")
     return parsed
+
+
+def enforce_current_pacific_date(
+    slate: date, allow_noncurrent: bool, at: datetime | None = None
+) -> None:
+    current = (at or datetime.now(timezone.utc)).astimezone(PACIFIC).date()
+    if slate != current and not allow_noncurrent:
+        print("CAPTURE_DATE_MISMATCH", file=sys.stderr)
+        print(f"requested_date={slate}", file=sys.stderr)
+        print(f"current_local_date={current}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+def exact_provider_event_ids(schedule: dict, events: list[dict], slate: date) -> set[str]:
+    games = [
+        game for block in schedule.get("dates", []) for game in block.get("games", [])
+        if game.get("officialDate") == str(slate)
+    ]
+    selected = set()
+    for event in events:
+        start = datetime.fromisoformat(event["commence_time"].replace("Z", "+00:00"))
+        matches = [
+            game for game in games
+            if game["teams"]["home"]["team"]["name"].casefold()
+            == event["home_team"].casefold()
+            and game["teams"]["away"]["team"]["name"].casefold()
+            == event["away_team"].casefold()
+            and abs((datetime.fromisoformat(
+                game["gameDate"].replace("Z", "+00:00")
+            ) - start).total_seconds()) <= 600
+        ]
+        if len(matches) == 1:
+            selected.add(event["id"])
+    return selected
+
+
+def record_failed_source_date_ingestion(
+    slate: date, raw_dir: Path, aggregate_sha: str, summary: str
+) -> str:
+    run_id = str(uuid.uuid4())
+    observed = datetime.now(timezone.utc)
+    with psycopg.connect(os.environ["SUPABASE_DB_URL"], autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO mlb_cleanroom_v1.ingestion_runs VALUES
+                (%s,%s,%s,%s,%s,0,0,0,0,%s,%s,%s,%s)""",
+                (
+                    run_id, "CLEANROOM_CAPTURE_SOURCE_DATE_PREFLIGHT", observed,
+                    observed, slate, "SOURCE_DATE_MISMATCH", summary,
+                    str(raw_dir), aggregate_sha,
+                ),
+            )
+    return run_id
+
+
+def preflight_source_dates(slate: date, run_tag: str) -> set[str]:
+    schedule_response = requests.get(
+        "https://statsapi.mlb.com/api/v1/schedule",
+        params={"sportId": 1, "date": str(slate), "hydrate": "team"}, timeout=45,
+    )
+    schedule_response.raise_for_status()
+    events_response = requests.get(
+        "https://api.the-odds-api.com/v4/sports/baseball_mlb/events",
+        params={"apiKey": os.environ["ODDS_API_KEY"]}, timeout=45,
+    )
+    events_response.raise_for_status()
+    schedule = schedule_response.json()
+    events = events_response.json()
+    official_games = [
+        game for block in schedule.get("dates", []) for game in block.get("games", [])
+    ]
+    schedule_dates_valid = bool(official_games) and all(
+        game.get("officialDate") == str(slate) for game in official_games
+    )
+    selected = exact_provider_event_ids(schedule, events, slate)
+    if schedule_dates_valid and selected:
+        return selected
+    diagnostic = RAW_ROOT / "SOURCE_DATE_DIAGNOSTIC" / str(slate) / run_tag
+    diagnostic.mkdir(parents=True, exist_ok=False)
+    (diagnostic / "official_schedule.json").write_bytes(schedule_response.content)
+    (diagnostic / "provider_events.json").write_bytes(events_response.content)
+    aggregate_sha = hashlib.sha256(
+        schedule_response.content + events_response.content
+    ).hexdigest()
+    reason = (
+        f"requested={slate}; official_games={len(official_games)}; "
+        f"exact_provider_events={len(selected)}"
+    )
+    failed_id = record_failed_source_date_ingestion(slate, diagnostic, aggregate_sha, reason)
+    raise RuntimeError(
+        f"SOURCE_DATE_MISMATCH ingestion_run_id={failed_id} {reason}"
+    )
 
 
 def require_credentials(environment: dict[str, str]) -> None:
@@ -78,6 +173,16 @@ def assert_one_event_per_game(bindings: list[dict]) -> None:
         raise RuntimeError("provider event reused across game bindings")
     if len({game for _, game in admitted}) != len(admitted):
         raise RuntimeError("multiple provider events bound to one official game")
+
+
+def certify_identity_pilot(result: dict) -> None:
+    if (
+        result.get("ambiguous")
+        or result.get("event_binding_failures")
+        or result.get("unmatched")
+        or not result.get("certifiable")
+    ):
+        raise RuntimeError(f"identity certification failed: {result}")
 
 
 def resolve_latest_completed_date(slate: date) -> date:
@@ -181,8 +286,10 @@ def main() -> int:
         )
     )
     parser.add_argument("--date", required=True)
+    parser.add_argument("--allow-noncurrent-date", action="store_true")
     args = parser.parse_args()
     slate = validate_date(args.date)
+    enforce_current_pacific_date(slate, args.allow_noncurrent_date)
     require_credentials(os.environ)
 
     completed_date = resolve_latest_completed_date(slate)
@@ -194,6 +301,7 @@ def main() -> int:
     pilot_dir = EVIDENCE_ROOT / args.date / "runs" / run_tag
     if pilot_dir.exists():
         raise RuntimeError(f"evidence collision: {pilot_dir}")
+    allowed_event_ids = preflight_source_dates(slate, run_tag)
 
     with tempfile.TemporaryDirectory(prefix=f"{run_tag}_") as temporary:
         temp = Path(temporary)
@@ -204,6 +312,7 @@ def main() -> int:
                 "--completed-date", str(completed_date),
                 "--run-tag", run_tag,
                 "--evidence-dir", str(temp / "source_evidence"),
+                "--allowed-event-ids", ",".join(sorted(allowed_event_ids)),
             ],
             accepted=(0, 2),
         )
@@ -222,13 +331,7 @@ def main() -> int:
                 "--output-dir", str(pilot_dir),
             ],
         )
-        if (
-            pilot_result.get("ambiguous")
-            or pilot_result.get("event_binding_failures")
-            or pilot_result.get("unmatched")
-            or not pilot_result.get("certifiable")
-        ):
-            raise RuntimeError(f"identity certification failed: {pilot_result}")
+        certify_identity_pilot(pilot_result)
 
         admitted = run_module(
             "backend.mlb.scripts.cleanroom_v1.admit_exact_roster_bridge",

@@ -1,0 +1,27 @@
+{
+  "requested_slate_date": "2026-07-30",
+  "run_tag": "cleanroom_20260801T001242Z",
+  "source_ingestion_run_id": "14951a25-57cb-49f1-88c1-15424cac4f94",
+  "ingestion_status": "PARTIAL_IDENTITY_FAIL_CLOSED",
+  "rows_received": 2106,
+  "rows_written": 468,
+  "duplicate_rows_skipped": 1380,
+  "identity_rejects": 258,
+  "written_rows": {
+    "games": 0,
+    "teams": 0,
+    "players": 0,
+    "lineups_2026_07_29": 288,
+    "lineups_2026_07_30": 180,
+    "player_game_results": 0,
+    "odds": 0,
+    "identity_bridge": 0
+  },
+  "immutable_snapshot_created": false,
+  "successful_run_index_row_created": false,
+  "july31_neutral_board_replaced": false,
+  "july30_neutral_board_replaced": false,
+  "cleanup_performed": false,
+  "contamination_decision": "NO_DATABASE_CONTAMINATION_SOURCE_DATES_CORRECT",
+  "affected_row_audit_sha256": "a590f9a7887ebf2739429add60de925a84b4c2590b822ae8f09fd2beeb998c9d"
+}

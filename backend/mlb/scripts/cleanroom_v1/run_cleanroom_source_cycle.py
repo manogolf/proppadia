@@ -51,6 +51,7 @@ def main() -> int:
     parser.add_argument("--raw-root", type=Path, default=Path("backend/mlb/exports/cleanroom_v1/raw"))
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--run-tag")
+    parser.add_argument("--allowed-event-ids")
     args = parser.parse_args()
     slate = date.fromisoformat(args.date)
     completed = date.fromisoformat(args.completed_date)
@@ -66,6 +67,7 @@ def main() -> int:
     db_url = os.environ["SUPABASE_DB_URL"]
     odds_key = os.environ.get("ODDS_API_KEY", "")
     totals = {"received": 0, "written": 0, "duplicates": 0, "rejects": 0}
+    allowed_event_ids = set(filter(None, (args.allowed_event_ids or "").split(",")))
 
     with psycopg.connect(db_url, autocommit=False) as conn:
         with conn.cursor() as cur:
@@ -175,6 +177,13 @@ def main() -> int:
                     odds_dir / "events.json",
                 )
                 raw_manifest.append(("THE_ODDS_API", args.date, run_tag, str(odds_dir / "events.json"), odds_observed.isoformat(), event_sha, "PRESERVED"))
+                if allowed_event_ids:
+                    events = [event for event in events if event["id"] in allowed_event_ids]
+                    observed_ids = {event["id"] for event in events}
+                    if observed_ids != allowed_event_ids:
+                        raise RuntimeError(
+                            "provider event set changed after source-date preflight"
+                        )
                 # The provider's player-prop payload exposes player names, not MLB IDs.
                 # Preserve payloads but fail closed: no name-based identity binding.
                 for event in events:

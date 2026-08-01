@@ -1,15 +1,20 @@
 import csv
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
 
+import backend.mlb.scripts.cleanroom_v1.run_cleanroom_bol_tb15_capture as capture
+
 from backend.mlb.scripts.cleanroom_v1.run_cleanroom_bol_tb15_capture import (
     assert_one_event_per_game,
     atomic_publish,
+    certify_identity_pilot,
     ensure_paths_absent,
+    enforce_current_pacific_date,
+    exact_provider_event_ids,
     generate_run_tag,
     require_credentials,
     select_new_raw_run,
@@ -53,6 +58,88 @@ def test_unique_run_tag_generation():
     two = generate_run_tag(datetime(2026, 7, 29, 15, 0, 1, tzinfo=timezone.utc))
     assert one == "cleanroom_20260729T150000Z"
     assert one != two
+
+
+def test_current_pacific_date_guard_accepts_current_date():
+    at = datetime(2026, 8, 1, 0, 12, tzinfo=timezone.utc)
+    enforce_current_pacific_date(date(2026, 7, 31), False, at)
+
+
+@pytest.mark.parametrize("requested", [date(2026, 7, 30), date(2026, 8, 1)])
+def test_current_pacific_date_guard_rejects_prior_and_future(requested):
+    at = datetime(2026, 8, 1, 0, 12, tzinfo=timezone.utc)
+    with pytest.raises(SystemExit):
+        enforce_current_pacific_date(requested, False, at)
+
+
+def test_explicit_noncurrent_replay_bypasses_only_date_guard():
+    at = datetime(2026, 8, 1, 0, 12, tzinfo=timezone.utc)
+    enforce_current_pacific_date(date(2026, 7, 30), True, at)
+
+
+def test_provider_event_date_binding_rejects_different_slate():
+    schedule = {"dates": [{"games": [{
+        "officialDate": "2026-07-30", "gameDate": "2026-07-30T20:00:00Z",
+        "teams": {
+            "away": {"team": {"name": "Away"}},
+            "home": {"team": {"name": "Home"}},
+        },
+    }]}]}
+    events = [{
+        "id": "current-event", "commence_time": "2026-07-31T20:00:00Z",
+        "away_team": "Away", "home_team": "Home",
+    }]
+    assert exact_provider_event_ids(schedule, events, date(2026, 7, 30)) == set()
+
+
+def test_make_capture_target_does_not_enable_replay_flag():
+    makefile = Path("Makefile").read_text()
+    target = makefile.split("mlb-cleanroom-bol-tb15-capture:", 1)[1].split("\n\n", 1)[0]
+    assert "--allow-noncurrent-date" not in target
+
+
+def test_source_date_mismatch_preserves_diagnostics_and_records_zero_row_failure(
+    tmp_path, monkeypatch
+):
+    schedule = {"dates": [{"games": [{
+        "officialDate": "2026-07-30", "gameDate": "2026-07-30T20:00:00Z",
+        "teams": {
+            "away": {"team": {"name": "Away"}},
+            "home": {"team": {"name": "Home"}},
+        },
+    }]}]}
+    events = [{
+        "id": "wrong-day", "commence_time": "2026-07-31T20:00:00Z",
+        "away_team": "Away", "home_team": "Home",
+    }]
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+            self.content = json.dumps(payload).encode()
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    responses = iter((Response(schedule), Response(events)))
+    monkeypatch.setattr(capture.requests, "get", lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(capture, "RAW_ROOT", tmp_path)
+    monkeypatch.setenv("ODDS_API_KEY", "test-key")
+    recorded = {}
+
+    def record(slate, raw_dir, aggregate_sha, summary):
+        recorded.update({"slate": slate, "raw_dir": raw_dir, "summary": summary})
+        return "failed-run-id"
+
+    monkeypatch.setattr(capture, "record_failed_source_date_ingestion", record)
+    with pytest.raises(RuntimeError, match="SOURCE_DATE_MISMATCH"):
+        capture.preflight_source_dates(date(2026, 7, 30), "cleanroom_test")
+    assert (recorded["raw_dir"] / "official_schedule.json").exists()
+    assert (recorded["raw_dir"] / "provider_events.json").exists()
+    assert "exact_provider_events=0" in recorded["summary"]
 
 
 def test_isolated_raw_run_selection(tmp_path):
@@ -110,6 +197,20 @@ def test_failed_snapshot_does_not_refresh_board(tmp_path):
     with pytest.raises(RuntimeError):
         validate_snapshot(snapshot)
     assert current.read_text() == "old\n"
+
+
+def test_failed_identity_pilot_publishes_neither_board_nor_run_index(tmp_path):
+    board = tmp_path / "board.md"
+    index = tmp_path / "run_index.csv"
+    board.write_text("certified-board\n")
+    index.write_text("certified-index\n")
+    with pytest.raises(RuntimeError, match="identity certification failed"):
+        certify_identity_pilot({
+            "certifiable": False, "event_binding_failures": 188,
+            "ambiguous": 0, "unmatched": 0,
+        })
+    assert board.read_text() == "certified-board\n"
+    assert index.read_text() == "certified-index\n"
 
 
 def test_successful_snapshot_refreshes_board(tmp_path):
