@@ -1,0 +1,20 @@
+{
+  "pytest": {
+    "tests_passed": 36,
+    "tests_failed": 0,
+    "status": "PASS"
+  },
+  "failed_ingestion_id": "14951a25-57cb-49f1-88c1-15424cac4f94",
+  "failed_ingestion_source_rows": 468,
+  "failed_ingestion_valid_pregame_view_rows": 0,
+  "failed_ingestion_post_first_pitch_rows": 468,
+  "post_hardening_snapshot": "cleanroom_20260801T004509Z",
+  "post_hardening_attached_valid_pregame_rows": 63,
+  "post_hardening_fail_closed_no_order_rows": 4,
+  "immutable_snapshot_hashes_unchanged_during_audit": {
+    "2026-07-29": "f6890cf5bfecc107a7d220c8d614f6fd439f0562451b7556ecac2a05f5e81b80",
+    "2026-07-30": "9ac8ff86caf1624e2b45fc3c005e7bc8123d32fae44e1df1db396dbcb038d602",
+    "2026-07-31": "3ce4f05d9668cfe738011949d1e60d23db59bdcdc8e7d325fbfa6b6a098a811d"
+  },
+  "status": "PASS_HARDENING_CERTIFIED_HISTORICAL_DEFECTS_PRESERVED"
+}
