@@ -56,6 +56,11 @@ def main() -> int:
                           g.home_team_mlb_id,g.away_team_mlb_id,
                           coalesce(l.lineup_status,'UNCONFIRMED') lineup_status,
                           l.batting_order_position,
+                          l.snapshot_timestamp_utc lineup_observed_at_utc,
+                          l.ingestion_run_id lineup_ingestion_run_id,
+                          CASE WHEN l.game_pk IS NOT NULL
+                               THEN 'LINEUP_VALID_PREGAME'
+                               ELSE 'LINEUP_NOT_RUN_VISIBLE' END lineup_temporal_classification,
                           o.source_payload_sha256
                    FROM mlb_cleanroom_v1.odds_snapshots o
                    JOIN mlb_cleanroom_v1.odds_player_identity_bridge b
@@ -63,21 +68,46 @@ def main() -> int:
                     AND b.game_pk=o.game_pk AND b.player_mlb_id=o.player_mlb_id
                     AND b.raw_payload_sha256=o.source_payload_sha256
                    JOIN mlb_cleanroom_v1.current_games g ON g.game_pk=o.game_pk
-                   LEFT JOIN mlb_cleanroom_v1.latest_lineups l
-                     ON l.game_pk=o.game_pk AND l.player_mlb_id=o.player_mlb_id
+                   LEFT JOIN LATERAL (
+                     SELECT l.*
+                     FROM mlb_cleanroom_v1.valid_pregame_lineup_observations l
+                     JOIN mlb_cleanroom_v1.ingestion_runs li USING (ingestion_run_id)
+                     WHERE l.game_pk=o.game_pk
+                       AND l.player_mlb_id=o.player_mlb_id
+                       AND l.snapshot_timestamp_utc <= o.snapshot_timestamp_utc
+                       AND (l.ingestion_run_id=o.ingestion_run_id
+                            OR li.completed_at_utc <= %s)
+                     ORDER BY l.snapshot_timestamp_utc DESC,
+                              li.completed_at_utc DESC,
+                              l.source_payload_sha256 DESC
+                     LIMIT 1
+                   ) l ON true
                    WHERE o.ingestion_run_id=%s AND o.line=1.5
                    ORDER BY o.game_pk,o.player_mlb_id,o.line,o.side""",
-                (args.run_id,),
+                (run["started_at_utc"], args.run_id),
             )
             sides = [dict(row) for row in cur.fetchall()]
             cur.execute(
-                """SELECT game_pk,team_mlb_id,player_mlb_id,lineup_status,
-                          batting_order_position,snapshot_timestamp_utc,
-                          source,source_payload_sha256
-                   FROM mlb_cleanroom_v1.lineup_snapshots
-                   WHERE ingestion_run_id=%s
-                   ORDER BY game_pk,team_mlb_id,batting_order_position,player_mlb_id""",
-                (args.run_id,),
+                """WITH governing_game AS (
+                     SELECT game_pk,max(snapshot_timestamp_utc) governing_market_at
+                     FROM mlb_cleanroom_v1.odds_snapshots
+                     WHERE ingestion_run_id=%s AND line=1.5
+                     GROUP BY game_pk
+                   )
+                   SELECT DISTINCT ON (l.game_pk,l.team_mlb_id,l.player_mlb_id)
+                          l.game_pk,l.team_mlb_id,l.player_mlb_id,l.lineup_status,
+                          l.batting_order_position,l.snapshot_timestamp_utc,
+                          l.source,l.source_payload_sha256,l.ingestion_run_id
+                   FROM governing_game m
+                   JOIN mlb_cleanroom_v1.valid_pregame_lineup_observations l
+                     ON l.game_pk=m.game_pk
+                    AND l.snapshot_timestamp_utc <= m.governing_market_at
+                   JOIN mlb_cleanroom_v1.ingestion_runs li USING (ingestion_run_id)
+                   WHERE l.ingestion_run_id=%s OR li.completed_at_utc <= %s
+                   ORDER BY l.game_pk,l.team_mlb_id,l.player_mlb_id,
+                            l.snapshot_timestamp_utc DESC,li.completed_at_utc DESC,
+                            l.source_payload_sha256 DESC""",
+                (args.run_id, args.run_id, run["started_at_utc"]),
             )
             lineups = [dict(row) for row in cur.fetchall()]
             cur.execute(
@@ -136,6 +166,9 @@ def main() -> int:
             "over_odds": "", "under_odds": "", "market_timestamp_utc": "",
             "lineup_status": row["lineup_status"],
             "batting_order": row["batting_order_position"] or "",
+            "lineup_observed_at_utc": row["lineup_observed_at_utc"] or "",
+            "lineup_ingestion_run_id": row["lineup_ingestion_run_id"] or "",
+            "lineup_temporal_classification": row["lineup_temporal_classification"],
             "identity_decision": "EXACT_UNIQUE_MATCH",
         })
         pair["over_odds" if row["side"] == "Over" else "under_odds"] = row["american_odds"]

@@ -177,6 +177,11 @@ def build_final_population(slate: str) -> tuple[list[dict], list[dict], list[dic
                     "final_over_odds": int(market["over_odds"]),
                     "lineup_status": market["lineup_status"],
                     "batting_order": market["batting_order"],
+                    "lineup_observed_at_utc": market.get("lineup_observed_at_utc", ""),
+                    "lineup_ingestion_run_id": market.get("lineup_ingestion_run_id", ""),
+                    "lineup_temporal_classification": market.get(
+                        "lineup_temporal_classification", "LINEUP_NOT_RUN_VISIBLE"
+                    ),
                 }
                 if key not in selected or observed > parse_timestamp(
                     selected[key]["market_timestamp_utc"]
@@ -221,9 +226,12 @@ def build_final_population(slate: str) -> tuple[list[dict], list[dict], list[dic
         )
         order = int(row["batting_order"]) if row["batting_order"] else None
         row["h1_action"] = (
-            "REJECT_TOP_ORDER" if row["lineup_status"] == "CONFIRMED" and order in (1, 2, 3)
+            "REJECT_TOP_ORDER"
+            if row["lineup_temporal_classification"] == "LINEUP_VALID_PREGAME"
+            and row["lineup_status"] == "CONFIRMED" and order in (1, 2, 3)
             else "RETAIN_CONFIRMED_NON_TOP_ORDER"
-            if row["lineup_status"] == "CONFIRMED" and order is not None
+            if row["lineup_temporal_classification"] == "LINEUP_VALID_PREGAME"
+            and row["lineup_status"] == "CONFIRMED" and order is not None
             else "ORDER_NOT_CONFIRMED"
         )
         row["h2_action"] = (

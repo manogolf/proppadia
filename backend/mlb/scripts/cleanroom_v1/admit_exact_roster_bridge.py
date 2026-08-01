@@ -159,7 +159,27 @@ def main() -> int:
         with conn.cursor() as cur:
             for slate_date in slate_dates:
                 cur.execute("""
-                  WITH paired AS (
+                  WITH eligible_lineups AS (
+                    SELECT DISTINCT ON (o.game_pk,o.player_mlb_id)
+                      o.game_pk,o.player_mlb_id,l.lineup_status,l.batting_order_position
+                    FROM mlb_cleanroom_v1.latest_bol_tb15 o
+                    LEFT JOIN LATERAL (
+                      SELECT l.*
+                      FROM mlb_cleanroom_v1.valid_pregame_lineup_observations l
+                      JOIN mlb_cleanroom_v1.ingestion_runs li USING (ingestion_run_id)
+                      WHERE l.game_pk=o.game_pk
+                        AND l.player_mlb_id=o.player_mlb_id
+                        AND l.snapshot_timestamp_utc <= o.snapshot_timestamp_utc
+                        AND (l.ingestion_run_id=o.ingestion_run_id
+                             OR li.completed_at_utc <= %s)
+                      ORDER BY l.snapshot_timestamp_utc DESC,
+                               li.completed_at_utc DESC,
+                               l.source_payload_sha256 DESC
+                      LIMIT 1
+                    ) l ON true
+                    WHERE o.slate_date=%s
+                    ORDER BY o.game_pk,o.player_mlb_id,o.snapshot_timestamp_utc DESC
+                  ), paired AS (
                     SELECT o.game_pk,o.player_mlb_id,o.line,
                       max(o.american_odds) FILTER (WHERE o.side='Over') over_odds,
                       max(o.american_odds) FILTER (WHERE o.side='Under') under_odds,
@@ -173,14 +193,14 @@ def main() -> int:
                     JOIN mlb_cleanroom_v1.odds_player_identity_bridge b
                       ON b.game_pk=o.game_pk AND b.player_mlb_id=o.player_mlb_id
                     JOIN mlb_cleanroom_v1.current_games g ON g.game_pk=o.game_pk
-                    LEFT JOIN mlb_cleanroom_v1.latest_lineups l
+                    LEFT JOIN eligible_lineups l
                       ON l.game_pk=o.game_pk AND l.player_mlb_id=o.player_mlb_id
                     WHERE o.slate_date=%s
                     GROUP BY o.game_pk,o.player_mlb_id,o.line
                   )
                   SELECT * FROM paired WHERE over_odds IS NOT NULL AND under_odds IS NOT NULL
                   ORDER BY game_pk,player
-                """, (slate_date,))
+                """, (started, slate_date, slate_date))
                 rows = cur.fetchall()
                 columns = [d.name for d in cur.description]
                 out_dir = args.board_root / str(slate_date)
