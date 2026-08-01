@@ -247,6 +247,11 @@ def build_final_population(slate: str) -> tuple[list[dict], list[dict], list[dic
 
 
 def freeze(slate: str) -> dict:
+    from backend.mlb.scripts.cleanroom_v1.lifecycle_guards import assert_signal_eligible
+    assert_signal_eligible(slate)
+    neutral_manifest = EXPORT_ROOT / slate / "final_population_manifest.json"
+    if not neutral_manifest.exists():
+        raise RuntimeError("PREGAME_FREEZE_REQUIRED: signal freeze requires neutral population freeze")
     if SIGNAL_RESEARCH_PAUSED:
         raise RuntimeError("SIGNAL_RESEARCH_PAUSED_PENDING_PROSPECTIVE_EVIDENCE_LINEAGE_CERTIFICATION")
     if slate > MULTI_HYPOTHESIS_LAST_ALLOWED_SLATE:

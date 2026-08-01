@@ -1,0 +1,43 @@
+{
+  "slate_date": "2026-07-30",
+  "revision": 1,
+  "parent_revision": null,
+  "status": "FINAL",
+  "membership_unchanged": true,
+  "frozen_identities": 129,
+  "actionable": 126,
+  "no_action": 3,
+  "pending": 0,
+  "technical_unresolved": 0,
+  "population_path": "backend/mlb/exports/cleanroom_v1/bol_tb15/2026-07-30/under_hypotheses/baseline_all_under.csv",
+  "population_manifest_path": "backend/mlb/exports/cleanroom_v1/bol_tb15/2026-07-30/under_hypotheses/under_hypothesis_manifest.json",
+  "population_manifest_sha256": "6353669a4dabe4c28b5a96f8a70ef4ee33d4964baea4c843525a206f52ac7f5b",
+  "outcome_source_manifest_sha256": "a092be643c30f54059b68216f7861eff8cc435db5efde41ca6a972acb8fbc805",
+  "closeout_csv_sha256": "b0bc54f098dc697bf759fa5eab731945ca6961ba717fb172f31ae329a1ae76a9",
+  "closeout_report_sha256": "870583ce00d63927788004f7ebd2f980d583af331a376b934251314797b23925",
+  "content_sha256": "b0bc54f098dc697bf759fa5eab731945ca6961ba717fb172f31ae329a1ae76a9",
+  "over_baseline": {
+    "side": "Over",
+    "wagers": 126,
+    "wins": 44,
+    "losses": 82,
+    "win_rate": 0.3492063492063492,
+    "total_stake": 630,
+    "gross_winning_profit": 303.4391336881436,
+    "net_dollars": -106.56086631185639,
+    "roi": -0.1691442322410419,
+    "average_american_odds": 129.0952380952381
+  },
+  "under_baseline": {
+    "side": "Under",
+    "wagers": 126,
+    "wins": 82,
+    "losses": 44,
+    "win_rate": 0.6507936507936508,
+    "total_stake": 630,
+    "gross_winning_profit": 236.03792682922395,
+    "net_dollars": 16.03792682922395,
+    "roi": 0.025457026713053887,
+    "average_american_odds": -179.88095238095238
+  }
+}

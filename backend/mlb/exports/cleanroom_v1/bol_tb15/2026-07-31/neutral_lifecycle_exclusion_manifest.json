@@ -1,0 +1,10 @@
+{
+  "exception_id": "JULY31_NEUTRAL_POPULATION_NOT_FROZEN",
+  "slate_date": "2026-07-31",
+  "decision": "INELIGIBLE_NEUTRAL_POPULATION_NOT_FROZEN_BEFORE_OUTCOME_WINDOW",
+  "immutable_captures_preserved": true,
+  "retrospective_population_construction_prohibited": true,
+  "neutral_closeout_certification_prohibited": true,
+  "h1_evaluation_prohibited": true,
+  "cumulative_performance_use_prohibited": true
+}

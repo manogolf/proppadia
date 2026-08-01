@@ -15,13 +15,14 @@ def main() -> int:
         "market_temporal_certification": "CERTIFIED_PROSPECTIVE_ACTIVE_PATH",
         "player_identity_certification": "CERTIFIED_PROSPECTIVE",
         "lineup_certification": "CERTIFIED_ACTIVE_PATH_HISTORICAL_VOID",
-        "population_freeze_certification": "NOT_CERTIFIED_HISTORICAL_LINEUP_POPULATIONS_VOID",
-        "outcome_certification": "POSTGAME_ONLY_PARTIAL_AUDIT",
-        "closeout_certification": "NOT_CERTIFIED_COMPLETE_GATE",
+        "population_freeze_certification": "CERTIFIED_ACTIVE_PATH_HISTORICAL_EXCEPTIONS_QUARANTINED",
+        "outcome_certification": "CERTIFIED_ACTIVE_PATH_FAIL_CLOSED_MISSING_RESULT",
+        "closeout_certification": "CERTIFIED_ACTIVE_PATH_REVISIONED_IDEMPOTENT",
         "known_invalid_artifacts": reset["invalidated_artifacts"],
-        "unresolved_defects": ["historical H1 temporal lineage void", "complete cross-slate closeout arithmetic audit incomplete"],
-        "signal_research_authorization": "PAUSED",
-        "terminal_decision": "PROSPECTIVE_EVIDENCE_LINEAGE_NOT_CERTIFIED_SIGNAL_RESEARCH_REMAINS_PAUSED"
+        "historical_exceptions": ["PASQUANTINO_JULY29_UNSUPPORTED_VOID", "JULY31_NEUTRAL_POPULATION_NOT_FROZEN", "JULY29_JULY30_H1_TEMPORAL_LINEAGE_VOID"],
+        "unresolved_active_path_defects": [],
+        "signal_research_authorization": "AUTHORIZED_FOR_BOUNDED_PROSPECTIVE_SOURCE_ONLY_RESEARCH",
+        "terminal_decision": "ACTIVE_PROSPECTIVE_PATH_CERTIFIED_WITH_HISTORICAL_EXCEPTIONS"
     }
     print(json.dumps(result, indent=2)); return 0
 if __name__ == "__main__": raise SystemExit(main())

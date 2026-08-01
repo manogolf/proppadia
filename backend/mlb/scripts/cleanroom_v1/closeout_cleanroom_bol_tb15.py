@@ -369,59 +369,108 @@ def status_only(slate: str) -> int:
     return 0
 
 
+def exclusion_manifest(slate: str) -> Path:
+    return EXPORT_ROOT / slate / "neutral_lifecycle_exclusion_manifest.json"
+
+
+def freeze_neutral_population(slate: str) -> dict:
+    excluded = exclusion_manifest(slate)
+    if excluded.exists():
+        decision = json.loads(excluded.read_text()).get("decision", "INELIGIBLE")
+        raise SystemExit(f"neutral freeze refused: {decision}")
+    runs, failures = load_runs(slate)
+    if failures:
+        raise SystemExit(f"untrusted immutable captures: {[r['run_tag'] for r in failures]}")
+    population, coverage, _ = audit_and_freeze(slate, runs)
+    if not population:
+        raise SystemExit("PREGAME_FREEZE_REQUIRED: no valid pre-first-pitch two-sided markets")
+    out = EXPORT_ROOT / slate
+    out.mkdir(parents=True, exist_ok=True)
+    public = [{k: v for k, v in row.items() if not k.startswith("_")} for row in population]
+    fields = list(public[0])
+    content = csv_bytes(fields, public)
+    digest = hashlib.sha256(content).hexdigest()
+    population_path = out / f"bol_tb15_final_pregame_actionable_{slate}.csv"
+    manifest_path = out / "final_population_manifest.json"
+    if manifest_path.exists():
+        prior = json.loads(manifest_path.read_text())
+        if prior["population_sha256"] != digest or not population_path.exists() or hashlib.sha256(population_path.read_bytes()).hexdigest() != digest:
+            raise SystemExit("immutable final population differs from existing freeze")
+        return {"freeze_status": "ALREADY_FROZEN_IDENTICAL", **prior}
+    population_path.write_bytes(content)
+    manifest = {
+        "population_id": f"BOL_TB15_FINAL_PREGAME_ACTIONABLE_{slate}",
+        "slate_date": slate, "frozen_at_utc": datetime.now(timezone.utc).isoformat(),
+        "membership_uses_outcomes": False,
+        "identity_key": ["slate_date", "game_pk", "player_mlb_id", "total_bases", "1.5"],
+        "actionable_rows": len(public), "population_sha256": digest,
+        "game_coverage": coverage,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    return {"freeze_status": "PREGAME_POPULATION_FROZEN", **manifest}
+
+
+def lifecycle_status(slate: str) -> dict:
+    out = EXPORT_ROOT / slate
+    excluded = exclusion_manifest(slate)
+    if excluded.exists():
+        state = "INELIGIBLE_FREEZE_MISSED"
+    elif (out / "neutral_closeout/neutral_closeout_manifest.json").exists():
+        historical = json.loads((out / "neutral_closeout/neutral_closeout_manifest.json").read_text())
+        state = "FINAL" if historical.get("status") == "FINAL" else "OUTCOME_CLOSEOUT_PENDING"
+    elif (out / "closeout_manifest.json").exists():
+        closeout = json.loads((out / "closeout_manifest.json").read_text())
+        state = "FINAL" if closeout.get("closeout_status") == "FINAL" else "OUTCOME_CLOSEOUT_PENDING"
+    elif (out / "final_population_manifest.json").exists():
+        state = "OUTCOME_CLOSEOUT_PENDING"
+    elif (out / "snapshots").exists():
+        state = "PREGAME_FREEZE_REQUIRED"
+    else:
+        state = "CAPTURES_IN_PROGRESS"
+    return {"slate_date": slate, "lifecycle_state": state,
+            "historical_exceptions_visible": [
+                "PASQUANTINO_JULY29_UNSUPPORTED_VOID",
+                "JULY31_NEUTRAL_POPULATION_NOT_FROZEN",
+                "JULY29_JULY30_H1_TEMPORAL_LINEAGE_VOID",
+            ]}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", required=True)
     parser.add_argument("--status-only", action="store_true")
+    parser.add_argument("--freeze-only", action="store_true")
+    parser.add_argument("--lifecycle-status", action="store_true")
     args = parser.parse_args()
     date.fromisoformat(args.date)
     if args.status_only:
         return status_only(args.date)
 
+    if args.lifecycle_status:
+        print(json.dumps(lifecycle_status(args.date), indent=2)); return 0
+    if args.freeze_only:
+        print(json.dumps(freeze_neutral_population(args.date), indent=2)); return 0
+
     runs, failures = load_runs(args.date)
     if failures:
         raise SystemExit(f"untrusted immutable captures: {[r['run_tag'] for r in failures]}")
-    population, coverage, games = audit_and_freeze(args.date, runs)
-    blocked = [
-        row for row in coverage
-        if row["coverage_status"] in {
-            "NO_VALID_CAPTURE_BEFORE_FIRST_PITCH", "EVENT_BINDING_AMBIGUOUS"
-        }
-    ]
-    if blocked:
-        raise SystemExit(f"game coverage insufficient: {blocked}")
-
     out = EXPORT_ROOT / args.date
-    population_fields = [
-        key for key in population[0] if not key.startswith("_")
-    ]
-    population_public = [
-        {key: value for key, value in row.items() if not key.startswith("_")}
-        for row in population
-    ]
-    population_bytes = csv_bytes(population_fields, population_public)
-    population_sha = hashlib.sha256(population_bytes).hexdigest()
     population_path = out / f"bol_tb15_final_pregame_actionable_{args.date}.csv"
     population_manifest_path = out / "final_population_manifest.json"
-    if population_manifest_path.exists():
-        prior = json.loads(population_manifest_path.read_text())
-        if prior["population_sha256"] != population_sha:
-            raise SystemExit("immutable final population differs from existing freeze")
-    else:
-        population_path.write_bytes(population_bytes)
-        population_manifest_path.write_text(json.dumps({
-            "population_id": f"BOL_TB15_FINAL_PREGAME_ACTIONABLE_{args.date}",
-            "slate_date": args.date, "frozen_at_utc": datetime.now(timezone.utc).isoformat(),
-            "membership_uses_outcomes": False, "identity_key": [
-                "slate_date", "game_pk", "player_mlb_id", "total_bases", "1.5"
-            ],
-            "actionable_rows": len(population), "population_sha256": population_sha,
-            "game_coverage": coverage,
-        }, indent=2) + "\n")
+    if not population_manifest_path.exists() or not population_path.exists():
+        raise SystemExit("PREGAME_FREEZE_REQUIRED: closeout requires an existing immutable neutral population")
+    population_manifest = json.loads(population_manifest_path.read_text())
+    if hashlib.sha256(population_path.read_bytes()).hexdigest() != population_manifest["population_sha256"]:
+        raise SystemExit("immutable neutral population hash mismatch")
+    population = list(csv.DictReader(population_path.open()))
+    for row in population:
+        row["game_pk"] = int(row["game_pk"]); row["player_mlb_id"] = int(row["player_mlb_id"])
+        row["over_odds"] = int(row["over_odds"]); row["under_odds"] = int(row["under_odds"])
+    games, _ = latest_schedule(args.date, runs)
+    coverage = population_manifest["game_coverage"]
 
     official, raw_dir = preserve_official_outcomes(args.date, games)
     game_lookup = {int(game["gamePk"]): game for game in games}
-    confirmed_starters = confirmed_starters_before_pitch(runs, games)
     closeout = []
     technical = []
     for selected in population:
@@ -433,18 +482,7 @@ def main() -> int:
             if game_pk == selected["game_pk"]
         }
         game_status = next(iter(game_statuses), "")
-        if (
-            result is None and game_status == "Final"
-            and selected["game_pk"] in confirmed_starters
-            and selected["player_mlb_id"] not in confirmed_starters[selected["game_pk"]]
-        ):
-            outcome, settlement = "NO_ACTION", "VOID"
-            result = {
-                **game_source, "plate_appearances": 0, "at_bats": 0, "hits": 0,
-                "singles": 0, "doubles": 0, "triples": 0, "home_runs": 0,
-                "total_bases": 0,
-            }
-        elif result is None and game_status == "Final":
+        if result is None and game_status == "Final":
             outcome, settlement = "TECHNICAL_UNRESOLVED", "UNRESOLVED"
             technical.append((selected["game_pk"], selected["player_mlb_id"]))
             result = {}

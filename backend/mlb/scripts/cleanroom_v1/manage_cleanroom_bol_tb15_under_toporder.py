@@ -146,6 +146,11 @@ def capture_coverage(slate: str, runs: list[dict], games: list[dict]) -> list[di
 
 
 def freeze(slate: str) -> dict:
+    from backend.mlb.scripts.cleanroom_v1.lifecycle_guards import assert_signal_eligible
+    assert_signal_eligible(slate)
+    neutral_manifest = EXPORT_ROOT / slate / "final_population_manifest.json"
+    if not neutral_manifest.exists():
+        raise RuntimeError("PREGAME_FREEZE_REQUIRED: signal freeze requires neutral population freeze")
     if SIGNAL_RESEARCH_PAUSED:
         raise RuntimeError("SIGNAL_RESEARCH_PAUSED_PENDING_PROSPECTIVE_EVIDENCE_LINEAGE_CERTIFICATION")
     population, runs, games = build_final_population(slate)
