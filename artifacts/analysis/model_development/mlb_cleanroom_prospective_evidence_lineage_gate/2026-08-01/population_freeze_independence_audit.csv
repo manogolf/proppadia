@@ -1,0 +1,4 @@
+slate_date,population,immutable_hash_stable,outcome_fields_used,current_state_rebuild,lineage_decision
+2026-07-29,final_pregame,YES,NO,NO,MARKET_MEMBERSHIP_STABLE_H1_VOID
+2026-07-30,under_hypotheses,YES,NO,NO,MARKET_MEMBERSHIP_STABLE_H1_VOID
+2026-07-31,H1,NOT_FROZEN,NO,NO,VOID_CONTRACT_CHANGED_MID_SLATE

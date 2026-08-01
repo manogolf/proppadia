@@ -1,0 +1,5 @@
+defect,evidence,hardening,historical_action,status
+lineup after market,277 frozen rows,strict-prior lineup view+query,preserved and voided,CLOSED_ACTIVE_PATH
+post-first-pitch market,18 July29 sides,strict pre-first-pitch market filter,preserved and invalidated,NEWLY_HARDENED
+signal research continued after contract change,July31 H1 request,hard pause guards,July31 voided,CLOSED
+cross-slate closeout arithmetic incomplete,July30 hypothesis closeout fields,gate remains paused,no rewrite,UNRESOLVED

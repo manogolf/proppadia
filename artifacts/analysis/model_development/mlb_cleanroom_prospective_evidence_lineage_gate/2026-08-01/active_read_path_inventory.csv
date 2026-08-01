@@ -1,0 +1,8 @@
+path,input,identity_predicate,time_predicate,run_visibility,fallback,publication,future_rows_reachable
+run_cleanroom_source_cycle,official APIs,source date,source observed,run transaction,NONE,raw+append-only,NO
+pilot_exact_game_roster_identity,raw event+game roster,event teams/time + roster name,provider observation,immutable raw run,NONE,evidence only,NO
+admit_exact_roster_bridge,certified pilot,game_pk+player_mlb_id,market before pitch,exact run,NONE,provisional board,NO
+materialize_capture_snapshot,exact run odds+lineup,game_pk+player_mlb_id,market before pitch and lineup before market,same or completed strict-prior,NONE,atomic snapshot+board,NO
+final-pregame freeze,immutable snapshots,game_pk+player_mlb_id,latest eligible before pitch,governing snapshot,NONE,immutable population,NO
+signal freezes,immutable snapshots,exact identity,strict-prior,governing snapshot,HARD_PAUSED,NONE,NO
+closeout,frozen population+official outcome,game_pk+player_mlb_id,postgame only,frozen identity,NONE,revisioned closeout,NO

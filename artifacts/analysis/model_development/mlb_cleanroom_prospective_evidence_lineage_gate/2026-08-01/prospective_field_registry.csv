@@ -1,0 +1,15 @@
+field_name,consumer_artifact,source,direct_or_derived,parent_fields,identity_grain,strict_prior,current_certification_state
+game_pk,all,official schedule,direct,,game_pk,YES,CERTIFIED_PROSPECTIVE
+player_mlb_id,all,official game roster,derived,provider name|game roster,game_pk|player_mlb_id,YES,CERTIFIED_PROSPECTIVE
+market_timestamp_utc,snapshot,provider payload,direct,,event|player|side|line,YES,CERTIFIED_PROSPECTIVE
+over_odds,snapshot,provider payload,direct,market_timestamp,event|player|line,YES,CERTIFIED_PROSPECTIVE
+under_odds,snapshot,provider payload,direct,market_timestamp,event|player|line,YES,CERTIFIED_PROSPECTIVE
+two_sided_market,snapshot,market sides,derived,Over|Under,game_pk|player|line,YES,CERTIFIED_PROSPECTIVE
+lineup_status,snapshot,official lineup,direct,game|player|observation,game_pk|player,YES,CERTIFIED_PROSPECTIVE
+batting_order,snapshot,official lineup,direct,lineup_status,game_pk|player,YES,CERTIFIED_PROSPECTIVE
+population_membership,final population,immutable snapshot,derived,identity|market,game_pk|player|line,YES,CERTIFIED_PROSPECTIVE_MARKET_ONLY
+H1_membership,hypothesis population,batting_order,derived,population|lineup,game_pk|player|line,YES,TEMPORALLY_UNCERTIFIABLE_HISTORICAL
+plate_appearances,closeout,official game feed,direct,,game_pk|player,POSTGAME,POSTGAME_ONLY
+singles,closeout,official game feed,derived,hits|doubles|triples|home_runs,game_pk|player,POSTGAME,POSTGAME_ONLY
+total_bases,closeout,official game feed,derived,singles|doubles|triples|home_runs,game_pk|player,POSTGAME,POSTGAME_ONLY
+settlement_status,closeout,frozen identity plus outcome,derived,population|PA|total_bases,game_pk|player,POSTGAME,MISSING_LINEAGE_COMPLETE_CROSS_SLATE_AUDIT

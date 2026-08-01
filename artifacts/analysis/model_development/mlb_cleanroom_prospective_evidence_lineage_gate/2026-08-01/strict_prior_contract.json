@@ -1,0 +1,9 @@
+{
+  "identity": ["exact game_pk", "exact player_mlb_id", "unique provider event", "no fuzzy or name-only join"],
+  "time": ["observed <= governing capture", "observed < first pitch", "ingestion completed by governing run"],
+  "source": ["source-derived slate matches game", "raw payload preserved", "SHA-256 verified"],
+  "market": ["exact event/game", "exact side and line", "two-sided observations run-visible"],
+  "lineup": ["official confirmed order", "lineup <= market", "same-run or completed strict-prior"],
+  "outcome": ["postgame only", "exact game/player join", "total-bases arithmetic verified", "never defines membership"],
+  "fallbacks": "NONE_FAIL_CLOSED"
+}
