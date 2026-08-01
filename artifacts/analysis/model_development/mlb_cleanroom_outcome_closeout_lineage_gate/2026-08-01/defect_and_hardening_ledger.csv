@@ -1,0 +1,5 @@
+defect_id,affected_slate,affected_identity,severity,evidence,unsafe_behavior,hardening,regression_coverage,immutable_closeout_action,status
+OCG-001,2026-07-29,823677|686469|Total Bases|1.5,HIGH,preserved game_823677.json contains no exact player row,Vinnie Pasquantino classified VOID without official appearance support,verification reports MISSING_PLAYER_RESULT and gate fails closed,missing result is not NO_ACTION,none; existing artifact preserved,OPEN
+OCG-002,2026-07-30,all 129 neutral rows,HIGH,no standalone broad neutral closeout revision package,Under research package is acting as neutral denominator evidence,status reports revision lineage not certified,revision behavior tests partially implemented,none,OPEN
+OCG-003,2026-07-31,entire slate,HIGH,no frozen neutral final-pregame population,no certifiable denominator,classified SLATE_NOT_COMPLETE_OUTCOME_CERTIFICATION_PENDING,unfinished game remains pending,none,OPEN
+OCG-004,cross-slate,verification suite,MEDIUM,required revision/hash tests not all implemented,false confidence from partial unit coverage,status remains NOT_CERTIFIED,existing 46-test suite plus explicit missing coverage in evidence,none,OPEN

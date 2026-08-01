@@ -1,0 +1,7 @@
+{
+  "command": "python3 -m pytest -q backend/mlb/tests/test_cleanroom*.py",
+  "result": "46 passed in 0.17s",
+  "implemented_contracts": ["exact composite join", "missing and duplicate fail closed", "zero PA NO_ACTION", "TB component arithmetic", "negative singles", "positive and negative American odds settlement", "loss is negative risk", "unfinished remains pending"],
+  "required_but_not_yet_explicitly_covered": ["frozen price versus current price", "outcome cannot change membership", "FINAL rejects pending", "unchanged rerun no revision", "source change creates revision", "missing payload hash", "full replay identity and aggregate fixtures"],
+  "decision": "TEST_SUITE_PASS_BUT_CERTIFICATION_COVERAGE_INCOMPLETE"
+}

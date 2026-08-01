@@ -1,0 +1,18 @@
+slate_date,game_pk,player_mlb_id,player,plate_appearances,at_bats,official_appearance_evidence,market_identity,existing_classification,independently_reconstructed_classification,reason
+2026-07-29,822702,649966,Luis Urías,0,0,official boxscore exact player row,822702|649966|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,822702,660688,Keibert Ruiz,0,0,official boxscore exact player row,822702|660688|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,822702,686611,Dylan Crews,0,0,official boxscore exact player row,822702|686611|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823022,608348,Carson Kelly,0,0,official boxscore exact player row,823022|608348|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823022,676369,Nelson Velázquez,0,0,official boxscore exact player row,823022|676369|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823192,661388,William Contreras,0,0,official boxscore exact player row,823192|661388|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823351,663968,Jake Mangum,0,0,official boxscore exact player row,823351|663968|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823596,673357,Luis Robert Jr.,0,0,official boxscore exact player row,823596|673357|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823677,680777,Ryan Jeffers,0,0,official boxscore exact player row,823677|680777|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823677,686469,Vinnie Pasquantino,,,no exact player row in preserved official payload,823677|686469|Total Bases|1.5,VOID,TECHNICAL_UNRESOLVED,MISSING_PLAYER_RESULT
+2026-07-29,823837,656941,Kyle Schwarber,0,0,official boxscore exact player row,823837|656941|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,823837,687282,Gabriel Rincones Jr.,0,0,official boxscore exact player row,823837|687282|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,824002,624585,Jorge Soler,0,0,official boxscore exact player row,824002|624585|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-29,824487,682657,Angel Martínez,0,0,official boxscore exact player row,824487|682657|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-30,822946,802415,Chandler Simpson,0,0,official boxscore exact player row,822946|802415|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-30,823921,660271,Shohei Ohtani,0,0,official boxscore exact player row,823921|660271|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
+2026-07-30,824894,663586,Austin Riley,0,0,official boxscore exact player row,824894|663586|Total Bases|1.5,VOID,NO_ACTION,ZERO_PLATE_APPEARANCES
