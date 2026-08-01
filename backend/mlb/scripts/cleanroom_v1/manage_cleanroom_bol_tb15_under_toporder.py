@@ -33,6 +33,7 @@ from backend.mlb.scripts.cleanroom_v1.manage_cleanroom_bol_tb15_under_hypotheses
 
 RULE_VERSION = "h1_top_order_final_replication_v1"
 SIGNAL_RESEARCH_PAUSED = True
+FIXED_COHORT_ACTIVATION_DATE = "2026-08-01"
 CLOSURE_TIMESTAMP = "2026-07-31T17:08:08Z"
 CLOSED_HYPOTHESES = [
     {
@@ -146,6 +147,8 @@ def capture_coverage(slate: str, runs: list[dict], games: list[dict]) -> list[di
 
 
 def freeze(slate: str) -> dict:
+    if slate >= FIXED_COHORT_ACTIVATION_DATE:
+        raise RuntimeError("H1_FULL_SLATE_PATH_RETIRED_USE_FIXED_COHORT_V1")
     from backend.mlb.scripts.cleanroom_v1.lifecycle_guards import assert_signal_eligible
     assert_signal_eligible(slate)
     neutral_manifest = EXPORT_ROOT / slate / "final_population_manifest.json"
@@ -255,6 +258,8 @@ def grade_baseline(slate: str, baseline: list[dict], runs: list[dict], games: li
 
 
 def closeout(slate: str) -> dict:
+    if slate >= FIXED_COHORT_ACTIVATION_DATE:
+        raise RuntimeError("H1_FULL_SLATE_PATH_RETIRED_USE_FIXED_COHORT_V1")
     if SIGNAL_RESEARCH_PAUSED:
         raise RuntimeError("SIGNAL_RESEARCH_PAUSED_PENDING_PROSPECTIVE_EVIDENCE_LINEAGE_CERTIFICATION")
     root = lifecycle_root(slate)
