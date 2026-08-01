@@ -3,7 +3,11 @@
 if [[ "${MLB_CLEANROOM_FIXED_COHORT_ENABLED:-0}" != "1" ]]; then
   exit 0
 fi
-hook_date="${MLB_DATE_ET:-$(TZ=America/Los_Angeles date +%F)}"
+hook_time_pt="$(TZ=America/Los_Angeles date +%H%M)"
+if (( 10#${hook_time_pt} < 1245 || 10#${hook_time_pt} > 1315 )); then
+  exit 0
+fi
+hook_date="$(TZ=America/Los_Angeles date +%F)"
 hook_log="artifacts/analysis/model_development/mlb_cleanroom_fixed_cohort_lifecycle_v1/$(TZ=America/Los_Angeles date +%F)/optional_pipeline_hook.log"
 mkdir -p "${hook_log:h}"
 {
