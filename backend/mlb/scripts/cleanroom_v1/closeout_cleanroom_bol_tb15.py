@@ -451,14 +451,14 @@ def main() -> int:
     if args.freeze_only:
         print(json.dumps(freeze_neutral_population(args.date), indent=2)); return 0
 
-    runs, failures = load_runs(args.date)
-    if failures:
-        raise SystemExit(f"untrusted immutable captures: {[r['run_tag'] for r in failures]}")
     out = EXPORT_ROOT / args.date
     population_path = out / f"bol_tb15_final_pregame_actionable_{args.date}.csv"
     population_manifest_path = out / "final_population_manifest.json"
     if not population_manifest_path.exists() or not population_path.exists():
         raise SystemExit("PREGAME_FREEZE_REQUIRED: closeout requires an existing immutable neutral population")
+    runs, failures = load_runs(args.date)
+    if failures:
+        raise SystemExit(f"untrusted immutable captures: {[r['run_tag'] for r in failures]}")
     population_manifest = json.loads(population_manifest_path.read_text())
     if hashlib.sha256(population_path.read_bytes()).hexdigest() != population_manifest["population_sha256"]:
         raise SystemExit("immutable neutral population hash mismatch")
