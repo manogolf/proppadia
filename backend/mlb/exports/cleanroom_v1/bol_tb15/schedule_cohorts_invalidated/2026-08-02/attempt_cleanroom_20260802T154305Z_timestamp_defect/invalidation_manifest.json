@@ -1,0 +1,9 @@
+{
+  "run_tag": "cleanroom_20260802T154305Z",
+  "decision": "TECHNICAL_PREPUBLICATION_CONTRACT_FAILURE_QUARANTINED",
+  "reason": "same-run lineup visibility was compared with source run-tag time rather than admitted snapshot timestamp",
+  "research_attempt_counts": false,
+  "h1_evidence_eligible": false,
+  "original_files_preserved": true,
+  "replacement_allowed": "same-day emergency retry before included games begin"
+}

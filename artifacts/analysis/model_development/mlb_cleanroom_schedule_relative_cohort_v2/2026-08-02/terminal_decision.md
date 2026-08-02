@@ -1,0 +1,7 @@
+# Terminal decision
+
+`MLB_CLEANROOM_SCHEDULE_COHORT_V2_READINESS_DECISION = READY_AND_AUGUST2_FROZEN`
+
+`MLB_CLEANROOM_SIGNAL_RESEARCH_AUTHORIZATION = AUTHORIZED_ONLY_FOR_BOUNDED_SCHEDULE_RELATIVE_SOURCE_ONLY_RESEARCH`
+
+No production, modeling, uploads, wagering, historical reconstruction, or H1 grading is authorized.

@@ -1,0 +1,11 @@
+{
+  "manifest_sha256_annotated": "d0859c44bee484640fcbd8d93694d07fedfaedc6496320db573630d189104767",
+  "field": "execution_window_decision",
+  "stored_value": "WITHIN_1245_1315_PT",
+  "authoritative_value": "EMERGENCY_CURRENT_VALID_WINDOW",
+  "reason": "V2 transform retained a V1 presentation field while correctly recording execution_mode",
+  "membership_affected": false,
+  "prices_affected": false,
+  "lineups_affected": false,
+  "immutable_manifest_rewritten": false
+}

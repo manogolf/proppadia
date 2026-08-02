@@ -1,0 +1,17 @@
+{
+  "decision":"AUGUST2_SCHEDULE_COHORT_FROZEN",
+  "execution_timestamp_pt":"2026-08-02T08:45:53.488523-07:00",
+  "earliest_official_first_pitch_pt":"2026-08-02T10:35:00-07:00",
+  "minutes_before_earliest_first_pitch":109.10852461666667,
+  "selected_normal_wrapper_pt":"09:30",
+  "execution_mode":"EMERGENCY_CURRENT_VALID_WINDOW",
+  "governing_run_tag":"cleanroom_20260802T154517Z",
+  "source_ingestion_id":"b5241658-c7bb-443f-976f-4b44a82d51d1",
+  "games_examined":15,"games_inside_cohort_window":11,"provider_events":15,"raw_market_sides":356,"two_sided_markets":178,"confirmed_lineup_games":9,"confirmed_lineup_rows":153,"baseline_rows":89,"rejected_top_order_rows":46,"retained_lower_order_rows":43,"exclusions":{"GAME_OUTSIDE_FIXED_WINDOW":4,"LINEUP_NOT_CONFIRMED":31},"identity_rejects":0,
+  "snapshot_path":"backend/mlb/exports/cleanroom_v1/bol_tb15/2026-08-02/snapshots/cleanroom_20260802T154517Z",
+  "snapshot_combined_sha256":"33f4128d3baa26348a609855ba2a4b12bfcd99ffad23e76f3455e0bb29fd045a",
+  "manifest_path":"backend/mlb/exports/cleanroom_v1/bol_tb15/schedule_cohorts/2026-08-02/schedule_cohort_manifest.json",
+  "manifest_sha256":"d0859c44bee484640fcbd8d93694d07fedfaedc6496320db573630d189104767",
+  "quarantined_technical_attempt":{"run_tag":"cleanroom_20260802T154305Z","reason":"same-run lineup visibility timestamp defect","counts_as_v2_attempt":false,"evidence_preserved":true},
+  "manifest_annotation":"stored V1 execution_window_decision is superseded by authoritative execution_mode=EMERGENCY_CURRENT_VALID_WINDOW; membership unaffected"
+}

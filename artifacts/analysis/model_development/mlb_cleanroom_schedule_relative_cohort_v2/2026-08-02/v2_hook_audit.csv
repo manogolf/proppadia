@@ -1,0 +1,10 @@
+check,observed,decision
+V1 environment flag,0,PASS_DISABLED
+V2 environment flag,1,PASS_ENABLED
+installed wrapper V2 hook count,1,PASS
+current Pacific date resolution,TZ=America/Los_Angeles date +%F,PASS
+non-selected wrapper behavior,NOT_SELECTED_SCHEDULE_RELATIVE_WRAPPER before research writes,PASS
+selected wrapper command,make mlb-cleanroom-bol-tb15-schedule-cohort MLB_DATE=current Pacific date,PASS
+new LaunchAgent count,0,PASS
+normal pipeline failure behavior,set +e capture rc warning continue,PASS_NONBLOCKING
+historical override exposed by Make,no,PASS

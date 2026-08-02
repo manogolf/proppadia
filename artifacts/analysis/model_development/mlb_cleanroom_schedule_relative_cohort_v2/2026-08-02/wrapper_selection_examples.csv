@@ -1,0 +1,5 @@
+slate_shape,earliest_first_pitch_pt,selected_wrapper_pt,minutes_before,decision
+weekend_early,10:30,09:30,60,SELECTED
+midday,12:40,11:00,100,SELECTED
+late,16:10,13:00,190,SELECTED
+august2,10:35,09:30,65,SELECTED
