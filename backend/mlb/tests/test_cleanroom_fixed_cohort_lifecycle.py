@@ -52,3 +52,5 @@ def test_old_full_slate_path_retirement_present():
  source=(f.ROOT/'backend/mlb/scripts/cleanroom_v1/manage_cleanroom_bol_tb15_under_toporder.py').read_text();assert source.count('H1_FULL_SLATE_PATH_RETIRED_USE_FIXED_COHORT_V1')>=2
 def test_optional_hook_defaults_disabled():
  hook=f.ROOT/'bin/mlb_cleanroom_fixed_cohort_optional_hook.sh';assert 'MLB_CLEANROOM_FIXED_COHORT_ENABLED:-0' in hook.read_text()
+def test_same_run_visibility_uses_admitted_snapshot_timestamp():
+ source=Path(f.__file__).read_text();assert "['capture_timestamp_utc']" in source and 'admitted_capture' in source

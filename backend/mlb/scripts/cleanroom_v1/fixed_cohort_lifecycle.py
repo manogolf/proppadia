@@ -96,7 +96,8 @@ def capture(slate:str,at:datetime|None=None):
  after=set((EXPORT_ROOT/slate/'snapshots').iterdir());new=sorted(after-before)
  if len(new)!=1:raise RuntimeError('fixed cohort could not identify one governing snapshot')
  snapshot=new[0];tag=snapshot.name;pilot=EVIDENCE_ROOT/slate/'runs'/tag
- baseline,rejected,retained,exclusions,counts=build(snapshot,pilot/'raw/MLB_STATS_API'/f'schedule_{slate}.json',pilot/'provider_event_to_game_pk_audit.csv',parse(tag.removeprefix('cleanroom_')[:8]+'T'+tag.split('T')[1].removesuffix('Z')+'+00:00'))
+ admitted_capture=parse(json.loads((snapshot/'run_manifest.json').read_text())['capture_timestamp_utc'])
+ baseline,rejected,retained,exclusions,counts=build(snapshot,pilot/'raw/MLB_STATS_API'/f'schedule_{slate}.json',pilot/'provider_event_to_game_pk_audit.csv',admitted_capture)
  parent=out.parent;parent.mkdir(parents=True,exist_ok=True);stage=Path(tempfile.mkdtemp(dir=parent,prefix=f'.{slate}_fixed_'))
  try:
   (stage/'raw').mkdir();shutil.copytree(snapshot,stage/'snapshot')
