@@ -3579,3 +3579,16 @@ mlb-cleanroom-routine-history-agreement-value-decompose:
 
 mlb-cleanroom-routine-history-agreement-value-status:
 	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_agreement_value status
+.PHONY: mlb-cleanroom-routine-history-multibook-price-inventory mlb-cleanroom-routine-history-multibook-price-freeze mlb-cleanroom-routine-history-multibook-price-evaluate mlb-cleanroom-routine-history-multibook-price-status
+
+mlb-cleanroom-routine-history-multibook-price-inventory:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_multibook_price inventory
+
+mlb-cleanroom-routine-history-multibook-price-freeze:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_multibook_price freeze
+
+mlb-cleanroom-routine-history-multibook-price-evaluate:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_multibook_price evaluate
+
+mlb-cleanroom-routine-history-multibook-price-status:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_multibook_price status
