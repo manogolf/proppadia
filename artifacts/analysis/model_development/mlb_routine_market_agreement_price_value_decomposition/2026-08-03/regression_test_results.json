@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "tests": {
+    "additive_decomposition_exact": true,
+    "branch_closed": true,
+    "fixed_gap_bands": true,
+    "fixed_market_bands": true,
+    "frozen_c1_only": true,
+    "no_database_access": true,
+    "no_membership_recalculation": true,
+    "no_selector_created": true,
+    "parent_attachment_hash_verified": true,
+    "partition_manifest_reused": true,
+    "probability_bounds": true
+  }
+}
