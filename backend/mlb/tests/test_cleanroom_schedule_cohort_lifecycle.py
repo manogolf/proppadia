@@ -28,8 +28,8 @@ def test_nonselected_wrapper_no_research_writes(tmp_path,monkeypatch):
 def test_closeout_requires_schedule_cohort(tmp_path,monkeypatch):
  monkeypatch.setattr(s,'COHORT_ROOT',tmp_path)
  with pytest.raises(RuntimeError,match='FREEZE_REQUIRED'):s.closeout('2026-08-02')
-def test_v1_disabled_v2_enabled():
- env=(s.ROOT/'backend/.env').read_text();assert 'MLB_CLEANROOM_FIXED_COHORT_ENABLED=0' in env and 'MLB_CLEANROOM_SCHEDULE_COHORT_ENABLED=1' in env
+def test_retired_cohort_hooks_disabled():
+ env=(s.ROOT/'backend/.env').read_text();assert 'MLB_CLEANROOM_FIXED_COHORT_ENABLED=0' in env and 'MLB_CLEANROOM_SCHEDULE_COHORT_ENABLED=0' in env
 def test_atomic_and_strict_prior_contract_present():
  src=Path(s.__file__).read_text();assert 'os.replace(root,final)' in src and 'LINEUP_AFTER_CAPTURE' in Path(s.v1.__file__).read_text() and 'MARKET_AFTER_CAPTURE' in Path(s.v1.__file__).read_text()
 def test_exact_identity_reused():assert "EXACT_UNIQUE_MATCH" in Path(s.v1.__file__).read_text()
