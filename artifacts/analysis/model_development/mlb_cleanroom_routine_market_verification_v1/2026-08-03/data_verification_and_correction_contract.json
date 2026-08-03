@@ -1,0 +1,25 @@
+{
+  "classifications": [
+    "VERIFIED_EXACT",
+    "DISPLAY_NORMALIZATION_ONLY",
+    "SOURCE_CONFLICT",
+    "IDENTITY_ERROR",
+    "TEAM_OR_GAME_ERROR",
+    "ROSTER_ERROR",
+    "MARKET_ERROR",
+    "OUTCOME_ERROR",
+    "MISSING_AUTHORITATIVE_SUPPORT"
+  ],
+  "corrections": "APPEND_ONLY_OVERLAY",
+  "inference_to_fill_gap": false,
+  "raw_sources": "IMMUTABLE",
+  "required_fields": [
+    "old_value",
+    "corrected_value",
+    "source",
+    "timestamp",
+    "reason",
+    "SHA-256"
+  ],
+  "silent_overwrite": false
+}

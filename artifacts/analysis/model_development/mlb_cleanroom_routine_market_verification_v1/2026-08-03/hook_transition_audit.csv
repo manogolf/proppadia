@@ -1,0 +1,7 @@
+check,configured,decision
+fixed-time hook,0,DISABLED_PRESERVED
+schedule-lineup V2 hook,0,DISABLED_RETIRED
+routine-market hook,1,ENABLED_EXISTING_WRAPPER
+new LaunchAgent,none,NO_NEW_SCHEDULE
+wrapper placement,after normal decision-ready generation,NONBLOCKING_SIDECAR
+August 3,first run completed before implementation,AUGUST3_NOT_USED_IMPLEMENTATION_TRANSITION

@@ -1,0 +1,9 @@
+{
+  "command": "PYTHONPATH=. pytest -q backend/mlb/tests/test_cleanroom_routine_market_lifecycle.py backend/mlb/tests/test_cleanroom_fixed_cohort_lifecycle.py backend/mlb/tests/test_cleanroom_schedule_cohort_lifecycle.py",
+  "failed": 0,
+  "generated_at_utc": "2026-08-03T15:43:41.561446+00:00",
+  "git_diff_check": "PASS",
+  "passed": 58,
+  "shell_syntax": "PASS",
+  "status": "PASS"
+}

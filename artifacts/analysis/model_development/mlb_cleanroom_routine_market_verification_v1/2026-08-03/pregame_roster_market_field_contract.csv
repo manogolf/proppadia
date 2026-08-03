@@ -1,0 +1,9 @@
+field,source,availability,membership_use,verification
+slate_date,normal run artifact path and row,PREGAME,REQUIRED,exact equality
+game_pk,run-tagged identity-bound market ledger,PREGAME,REQUIRED,exact integer
+player_mlb_id,same-run player/game roster artifact,PREGAME,REQUIRED,exact integer
+team/opponent,same-run player/game roster artifact,PREGAME,REQUIRED,exact game/team
+Over/Under odds,run-tagged BetOnline raw odds payload,PREGAME,REQUIRED,both sides and 1.5
+source hashes,SHA-256 of preserved normal artifacts,PREGAME,REQUIRED,byte exact
+confirmed lineup,none,POSTGAME_VERIFY_ONLY,FORBIDDEN,not read
+batting order,none,POSTGAME_VERIFY_ONLY,FORBIDDEN,not read

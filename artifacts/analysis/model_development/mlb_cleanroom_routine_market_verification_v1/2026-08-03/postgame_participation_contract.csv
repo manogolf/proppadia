@@ -1,0 +1,9 @@
+field,authoritative_source,pregame_membership_effect,correction_behavior
+final_participation,official feed exact game_pk+player_mlb_id,NONE,append overlay on proven conflict
+final_batting_position,official boxscore battingOrder,NONE,append overlay on proven conflict
+plate_appearances,official batting stats,NONE,append overlay on proven conflict
+at_bats,official batting stats,NONE,append overlay on proven conflict
+hits/doubles/triples/home_runs,official batting stats,NONE,append overlay on proven conflict
+total_bases,certified component arithmetic,NONE,append overlay on proven conflict
+settlement,PA>0; DID_NOT_APPEAR is NO_ACTION,NONE,append overlay on proven conflict
+missing player result,TECHNICAL_UNRESOLVED unless official nonappearance,NONE,append overlay on proven conflict

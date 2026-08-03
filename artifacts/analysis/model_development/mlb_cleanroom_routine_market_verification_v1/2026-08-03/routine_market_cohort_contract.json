@@ -1,0 +1,28 @@
+{
+  "contract": "MLB_CLEANROOM_BOL_TB15_ROUTINE_MARKET_COHORT_V1",
+  "empty_run": "ROUTINE_RUN_NO_ELIGIBLE_MARKET permits next normal run",
+  "governing_run": "first completed normal Pacific-date run with >=1 eligible exact two-sided BetOnline TB 1.5 market",
+  "identity": [
+    "slate_date",
+    "game_pk",
+    "player_mlb_id",
+    "total_bases",
+    "1.5"
+  ],
+  "pregame_forbids": [
+    "announced lineup",
+    "batting order",
+    "eventual role",
+    "outcome"
+  ],
+  "pregame_requires": [
+    "exact official game",
+    "same-run exact game/player roster row",
+    "two-sided BetOnline TB 1.5",
+    "pregame observation",
+    "verified source hashes"
+  ],
+  "replacement": "immutable after non-empty freeze",
+  "signal_research": "PAUSED_PENDING_ROUTINE_DATA_VERIFICATION",
+  "version": 1
+}
