@@ -3562,3 +3562,13 @@ mlb-cleanroom-routine-history-selection-evaluate:
 
 mlb-cleanroom-routine-history-selection-status:
 	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_pipeline_selection status
+.PHONY: mlb-cleanroom-routine-history-favorite-selector-freeze mlb-cleanroom-routine-history-favorite-selector-evaluate mlb-cleanroom-routine-history-favorite-selector-status
+
+mlb-cleanroom-routine-history-favorite-selector-freeze:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_favorite_selector freeze
+
+mlb-cleanroom-routine-history-favorite-selector-evaluate:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_favorite_selector evaluate
+
+mlb-cleanroom-routine-history-favorite-selector-status:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_favorite_selector status
