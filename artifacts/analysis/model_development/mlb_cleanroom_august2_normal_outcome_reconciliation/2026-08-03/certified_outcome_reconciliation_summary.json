@@ -1,0 +1,13 @@
+{
+  "frozen_identities": 120,
+  "exact_local_player_stats_rows": 103,
+  "local_rows_verified_against_official_source": 103,
+  "local_rows_corrected_by_official_source": 0,
+  "officially_recovered_missing_rows": 17,
+  "supported_nonappearances": 8,
+  "technical_unresolved": 0,
+  "stat_conflicts": 0,
+  "identity_conflicts": 0,
+  "source_payload_coverage": 120,
+  "correction_fields": 0
+}

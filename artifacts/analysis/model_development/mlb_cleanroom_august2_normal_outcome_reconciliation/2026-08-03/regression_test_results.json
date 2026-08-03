@@ -1,0 +1,6 @@
+{
+  "command": "PYTHONPATH=. pytest -q backend/mlb/tests/test_cleanroom_routine_outcome_reconciliation.py backend/mlb/tests/test_cleanroom_routine_market_lifecycle.py backend/mlb/tests/test_cleanroom_fixed_cohort_lifecycle.py backend/mlb/tests/test_cleanroom_schedule_cohort_lifecycle.py",
+  "failed": 0,
+  "passed": 73,
+  "status": "PASS"
+}

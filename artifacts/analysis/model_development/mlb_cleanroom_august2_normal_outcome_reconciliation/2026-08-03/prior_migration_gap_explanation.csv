@@ -1,0 +1,8 @@
+cause,row_count,scope,decision
+clean-room query did not inspect mlb.player_stats,19,previously unsupported 25,APPLICABLE_LOCAL_ROWS_ALREADY_EXISTED
+clean-room query used only one preserved payload subset,25,previously unsupported 25,APPLICABLE_TWO_GAMES_OUTSIDE_RETIRED_COHORT_OUTCOME_SUBSET
+normal result existed but was outside clean-room lineage scope,19,previously unsupported 25,APPLICABLE
+nonappearing player correctly had no player_stats row,6,previously unsupported 25,APPLICABLE
+game/result ingestion was missing,0,previously unsupported 25,NOT_APPLICABLE_TO_APPEARANCES
+player identity translation failed,0,previously unsupported 25,NOT_APPLICABLE
+official payload lacked exact participation evidence,0,previously unsupported 25,NOT_APPLICABLE_AFTER_FINAL_FEED_RECOVERY

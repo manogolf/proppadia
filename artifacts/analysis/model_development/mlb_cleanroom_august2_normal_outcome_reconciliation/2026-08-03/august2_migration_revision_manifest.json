@@ -1,0 +1,9 @@
+{
+  "immutable_pregame_membership_changed": false,
+  "migration_use": "SOURCE_AND_DATA_VERIFICATION_ONLY",
+  "original_audit": "artifacts/analysis/model_development/mlb_cleanroom_routine_market_verification_v1/2026-08-03/august2_migration_audit.csv",
+  "original_audit_sha256": "105a6c6b76ec5217973cb35357017cf63465688c62ae1a53f91dbaefeb82047f",
+  "revised_resolution": "august2_31_excluded_row_resolution.csv",
+  "revised_resolution_sha256": "0be5025212fc392ac50c538d7b7fcdbdf19b3cdfa6a59e2857ebaf71796617e7",
+  "supersession": "MISSING_AUTHORITATIVE_SUPPORT_REVISED_BY_FINAL_OFFICIAL_FEED_RECOVERY"
+}
