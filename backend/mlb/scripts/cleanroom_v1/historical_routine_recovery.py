@@ -113,8 +113,12 @@ def replay(a=A,b=B):
  write('recovered_player_stats_verification.csv',verification);settlement_rows=[{k:v for k,v in r.items() if k not in {'local_row_count','local_verification'}} for r in audit];settle=write('recovered_book_settlement.csv',settlement_rows)
  original=[r for r in audit if r['slate_date'] in {'2026-07-29','2026-07-30','2026-07-31','2026-08-01','2026-08-02'}];new=[r for r in audit if r not in original];results=aggregate(original,'ORIGINAL_FIVE_DATES')+aggregate(new,'NEWLY_RECOVERED_DATES')+aggregate(audit,'COMBINED_EXACT_GRADE_B_POPULATION');write('original_vs_recovered_neutral_results.csv',results)
  # Reuse stable breakdown engine from V1.
- for r in audit:r['source_lineage_grade']='GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED';r['month']=r['slate_date'][:7];r['governing_run_time_pt']=dt(r['cohort_freeze_timestamp']).astimezone(PT).strftime('%H:%M')
- write('expanded_results_by_date.csv',v1.aggregate(audit,['source_lineage_grade','slate_date']));write('expanded_results_by_month.csv',v1.aggregate(audit,['source_lineage_grade','month']))
+ for r in audit:r['source_lineage_grade']='GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED';r['month']=r['slate_date'][:7];r['governing_run_time_pt']=dt(r['cohort_freeze_timestamp']).astimezone(PT).strftime('%H:%M');r['over_price_band']=v1.price_band(r['over_odds']);r['under_price_band']=v1.price_band(r['under_odds'])
+ write('expanded_results_by_date.csv',v1.aggregate(audit,['source_lineage_grade','slate_date']));write('expanded_results_by_month.csv',v1.aggregate(audit,['source_lineage_grade','month']));write('expanded_results_by_run_time.csv',v1.aggregate(audit,['source_lineage_grade','governing_run_time_pt']));write('expanded_results_by_game.csv',v1.aggregate(audit,['source_lineage_grade','game_pk']));write('expanded_results_by_final_class.csv',v1.aggregate(audit,['source_lineage_grade','game_classification']))
+ price=[]
+ for side in ('OVER','UNDER'):
+  rr=[{**x,'price_band':x[f'{side.lower()}_price_band']} for x in audit];price.extend([x for x in v1.aggregate(rr,['source_lineage_grade','price_band']) if x['side']==side])
+ write('expanded_results_by_price_band.csv',price)
  stability=[];rng=random.Random(824807)
  for side in ('OVER','UNDER'):
   settled=[r for r in audit if r['book_settlement']==BOOK_SETTLED_OFFICIAL_RESULT];

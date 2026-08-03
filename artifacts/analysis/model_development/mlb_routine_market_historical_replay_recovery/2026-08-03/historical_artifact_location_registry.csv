@@ -1,0 +1,4 @@
+artifact_family,path_pattern,date_field,run_tag_field,source_timestamp_field,game_identity_fields,player_identity_fields,provider_event_field,market_fields,roster_fields,original_hash,exact_run_binding
+RUN_TAGGED_RAW_ODDS,backend/mlb/exports/odds_history/<date>/odds_mlb_playerprops__<run>.json,game_date_et,filename,captured_at_utc + market.last_update,event teams + commence_time,outcome.description,event.id,market key/outcome/point/price,NONE,NO,YES
+SAME_RUN_ROSTER,backend/mlb/exports/odds_history/<date>/mlb_predictions_wide_calibrated__<run>.csv,game_date,filename,paired run capture,game_id/game_time/teams,player_id/player_name,NONE,NONE,game/team/player,NO,YES
+V1_DERIVED_MARKET,backend/mlb/exports/model_v2/bol_tb15/<date>/snapshots/<run>/bol_tb15_market_rows.csv,slate_date,path,source_timestamp,game_pk,batter_mlb_id,lineage payload,over_odds/under_odds,NONE,NO,YES

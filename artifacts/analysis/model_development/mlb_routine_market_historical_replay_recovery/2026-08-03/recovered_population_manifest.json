@@ -1,0 +1,21 @@
+{
+  "contract": "HISTORICAL_ROUTINE_REPLAY_V2_RECOVERY",
+  "version": 2,
+  "fixed_window": [
+    "2026-05-01",
+    "2026-08-02"
+  ],
+  "v1_control": "HISTORICAL_ROUTINE_REPLAY_V1_ORIGINAL",
+  "v1_population_sha256": "a8f4aa8967b5d455c850aa0924d1f6e1e27285414ad3793e1f36792331d0c7b4",
+  "v1_byte_identical": true,
+  "recovered_dates": 57,
+  "recovered_identities": 8606,
+  "recovered_games": 737,
+  "recovered_population_sha256": "1d6a8801b7dc579d56fcf5fe2a0136d92c51b42e313e6fc273f2f7e425a5e3be",
+  "combined_identities": 9267,
+  "combined_dates": 62,
+  "combined_games": 796,
+  "combined_population_sha256": "152717f287ef789c52a5eaf3a02ed2cbaf0a51cdeb9b6edbef3a10450d5144ce",
+  "outcomes_used_for_membership": false,
+  "status": "FROZEN_BEFORE_OUTCOMES"
+}

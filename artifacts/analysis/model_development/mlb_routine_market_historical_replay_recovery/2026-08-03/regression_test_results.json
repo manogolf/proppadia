@@ -1,0 +1,7 @@
+{
+  "decision": "PASS",
+  "tests_passed": 101,
+  "tests_failed": 0,
+  "replay_byte_comparison": "PASS",
+  "settlement_sha256": "4e55172355f4eb729cc733045faa3e2081752f35fc2bd2059b64bf76b7172ff0"
+}
