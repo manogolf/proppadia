@@ -1,0 +1,7 @@
+object,before_rows,after_rows,status
+mlb.player_stats,0,19,REPAIRED_EXACT
+mlb.game_info,0,1,REPAIRED_FK_PARENT
+mlb.player_derived_stats,0,0,REFRESH_REQUIRED_NOT_RUN
+mlb.model_training_props,0,0,REFRESH_REQUIRED_NOT_RUN
+completed-slate outcome artifacts,not re-materialized,unchanged,REFRESH_REQUIRED_NOT_RUN
+clean-room routine closeout,120/120 official support,unchanged,NO_REFRESH_REQUIRED_AUTHORITATIVE_SOURCE_GOVERNS

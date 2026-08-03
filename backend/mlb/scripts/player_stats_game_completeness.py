@@ -13,6 +13,9 @@ ROOT=Path(__file__).resolve().parents[3]
 DEFAULT=ROOT/'artifacts/analysis/mlb/player_stats_completeness'
 STAT_FIELDS=['plate_appearances','at_bats','hits','singles','doubles','triples','home_runs','total_bases']
 def sh(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def display_path(p):
+ try:return str(p.relative_to(ROOT))
+ except ValueError:return str(p)
 def write(p,rows,fields=None):
  fields=fields or list(dict.fromkeys(k for r in rows for k in r));p.parent.mkdir(parents=True,exist_ok=True)
  with p.open('w',newline='') as f:w=csv.DictWriter(f,fieldnames=fields,lineterminator='\n');w.writeheader();w.writerows(rows)
@@ -65,7 +68,7 @@ def decision(rows):
  return next((x for x in priority if x in states),'COMPLETE_EXACT')
 def inspect_game(game,out):
  src=sources(game,out/'sources');feed,path,digest=src['live_feed'];status=feed['gameData']['status'];final=status.get('abstractGameState')=='Final' or status.get('codedGameState')=='F';official=participant_rows(feed) if final else [];local=local_rows(game);rows=compare(official,local) if final else [{'game_pk':game,'decision':'GAME_NOT_FINAL'}]
- summary={'game_pk':game,'official_status':status,'official_completion_timestamp':feed.get('liveData',{}).get('gameData',{}).get('datetime'),'official_batter_participants':len(official),'local_batter_rows':sum(r['local_row_count']!='0' for r in rows if r.get('decision')!='EXTRA_LOCAL_ROWS'),'exact_matches':sum(r['decision']=='COMPLETE_EXACT' for r in rows),'missing_local_participants':sum(r['decision']=='MISSING_OFFICIAL_PARTICIPANTS' for r in rows),'extra_local_rows':sum(r['decision']=='EXTRA_LOCAL_ROWS' for r in rows),'duplicate_local_rows':sum(r['decision']=='DUPLICATE_LOCAL_ROWS' for r in rows),'stat_conflicts':sum(r['decision']=='STAT_MISMATCH' for r in rows),'identity_conflicts':0,'classification':decision(rows),'live_feed_path':str(path.relative_to(ROOT)),'live_feed_sha256':digest,'boxscore_path':str(src['boxscore'][1].relative_to(ROOT)),'boxscore_sha256':src['boxscore'][2]}
+ summary={'game_pk':game,'official_status':status,'official_completion_timestamp':feed.get('liveData',{}).get('gameData',{}).get('datetime'),'official_batter_participants':len(official),'local_batter_rows':sum(r['local_row_count']!='0' for r in rows if r.get('decision')!='EXTRA_LOCAL_ROWS'),'exact_matches':sum(r['decision']=='COMPLETE_EXACT' for r in rows),'missing_local_participants':sum(r['decision']=='MISSING_OFFICIAL_PARTICIPANTS' for r in rows),'extra_local_rows':sum(r['decision']=='EXTRA_LOCAL_ROWS' for r in rows),'duplicate_local_rows':sum(r['decision']=='DUPLICATE_LOCAL_ROWS' for r in rows),'stat_conflicts':sum(r['decision']=='STAT_MISMATCH' for r in rows),'identity_conflicts':0,'classification':decision(rows),'live_feed_path':display_path(path),'live_feed_sha256':digest,'boxscore_path':display_path(src['boxscore'][1]),'boxscore_sha256':src['boxscore'][2]}
  return summary,official,local,rows,feed
 def canonical_row(x,date):
  row=_extract_player_stats_row(player_id=x['player_mlb_id'],game_id=x['game_pk'],game_date=date,team_abbr=x['team'],opponent_abbr=x['opponent'],is_home=x['is_home'],position=x['position'],stats=x['raw_stats'],is_starter=False);row.update({'plate_appearances':x['plate_appearances'],'hit_by_pitch':x['hit_by_pitch'],'sacrifice_flies':x['sacrifice_flies'],'sacrifice_hits':x['sacrifice_hits'],'catcher_interference':x['catcher_interference'],'pa_source':'statsapi','pa_backfilled_at':datetime.now(timezone.utc)});return row
@@ -96,7 +99,7 @@ def repair(game,out):
  after_summary,official,after,verify,_=inspect_game(game,out);rollback=['BEGIN;']+[f'DELETE FROM mlb.player_stats WHERE game_id = {game} AND player_id = {pid};' for pid in inserted]
  if not game_info_existed:rollback.append(f'DELETE FROM mlb.game_info WHERE game_id = {game};')
  rollback+=['COMMIT;'];(out/f'game_{game}_rollback.sql').write_text('\n'.join(rollback)+'\n');write(out/f'game_{game}_post_repair_verification.csv',verify)
- record={'repair_run_id':run_id,'repair_timestamp_utc':datetime.now(timezone.utc).isoformat(),'game_pk':game,'source_payload_sha256':manifest['source_sha256'],'before_player_stats_rows':len(before),'inserted_rows':len(inserted),'inserted_player_ids':'|'.join(map(str,inserted)),'changed_existing_rows':0,'after_player_stats_rows':len(after),'post_repair_classification':after_summary['classification'],'rollback_sql':str((out/f'game_{game}_rollback.sql').relative_to(ROOT)),'idempotence_replay':False};write(out/f'game_{game}_repair_write_manifest.csv',[record]);return record
+ record={'repair_run_id':run_id,'repair_timestamp_utc':datetime.now(timezone.utc).isoformat(),'game_pk':game,'source_payload_sha256':manifest['source_sha256'],'before_player_stats_rows':len(before),'inserted_rows':len(inserted),'inserted_player_ids':'|'.join(map(str,inserted)),'changed_existing_rows':0,'after_player_stats_rows':len(after),'post_repair_classification':after_summary['classification'],'rollback_sql':display_path(out/f'game_{game}_rollback.sql'),'idempotence_replay':False};write(out/f'game_{game}_repair_write_manifest.csv',[record]);return record
 def inspect_date(date,out):
  schedule=json.loads(fetch(f'https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}'));games=[]
  for block in schedule.get('dates',[]):

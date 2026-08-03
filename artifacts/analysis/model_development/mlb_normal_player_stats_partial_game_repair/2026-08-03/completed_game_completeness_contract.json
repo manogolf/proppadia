@@ -1,0 +1,27 @@
+{
+  "identity": [
+    "game_pk",
+    "player_mlb_id"
+  ],
+  "official_participant_rule": "final official player with batting stats or explicit substitute participation; official nonparticipant excluded",
+  "required_types": [
+    "starters",
+    "pinch hitters",
+    "pinch runners",
+    "defensive substitutes",
+    "zero-PA participants",
+    "other substitutes"
+  ],
+  "classifications": [
+    "COMPLETE_EXACT",
+    "MISSING_OFFICIAL_PARTICIPANTS",
+    "EXTRA_LOCAL_ROWS",
+    "DUPLICATE_LOCAL_ROWS",
+    "STAT_MISMATCH",
+    "OFFICIAL_PAYLOAD_MISSING",
+    "GAME_NOT_FINAL"
+  ],
+  "final_state_rule": "abstractGameState=Final or codedGameState=F; detailedState literal is not authoritative",
+  "repair": "exact missing-row inserts only; conflicts stop; source hashes and rollback required",
+  "finalized_gate": "participant and stat completeness required; date-level row presence insufficient"
+}

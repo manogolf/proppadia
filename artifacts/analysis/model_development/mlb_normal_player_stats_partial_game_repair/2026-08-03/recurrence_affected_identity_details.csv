@@ -1,0 +1,4 @@
+date,game_pk,player_mlb_id,player,team,opponent,team_id,is_home,position,official_role,batting_order,plate_appearances,at_bats,hits,singles,doubles,triples,home_runs,total_bases,walks,strikeouts_batting,runs_scored,rbis,stolen_bases,hit_by_pitch,sacrifice_flies,sacrifice_hits,catcher_interference,local_row_count,decision,mismatch_fields
+2026-07-29,823192,683734,Andrew Vaughn,MIL,SF,158,False,P,PINCH_HITTER,8,2,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,STAT_MISMATCH,plate_appearances
+2026-07-31,824164,670032,Nicky Lopez,TEX,HOU,140,False,P,STARTED,8,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,STAT_MISMATCH,plate_appearances
+2026-08-02,824971,666126,Carlos Cortes,ATH,DET,133,True,P,STARTED,6,3,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,STAT_MISMATCH,plate_appearances

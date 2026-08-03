@@ -1,0 +1,7 @@
+{
+  "command": "PYTHONPATH=. pytest focused normal and clean-room tests",
+  "passed": 97,
+  "failed": 0,
+  "status": "PASS",
+  "wrapper_shell_syntax": "PASS"
+}
