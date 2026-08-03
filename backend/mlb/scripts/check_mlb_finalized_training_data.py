@@ -8,6 +8,7 @@ from datetime import date
 from typing import Any, Dict
 
 from backend.shared.db.pg import pg_fetchone
+from backend.mlb.scripts.player_stats_game_completeness import inspect_date
 
 
 def _parse_date(value: str) -> str:
@@ -72,6 +73,25 @@ def main() -> int:
     if args.check_player_stats and player_stats_rows <= 0:
         print(f"Reconcile skipped: no finalized player_stats data for {args.date}", file=sys.stderr)
         return 2
+
+    if args.check_player_stats:
+        try:
+            completeness = inspect_date(
+                args.date,
+                __import__("pathlib").Path("artifacts/analysis/mlb/player_stats_completeness") / args.date,
+            )
+        except Exception as exc:
+            print(f"COMPLETED_GAME_PLAYER_STATS_INCOMPLETE date={args.date} audit_error={type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
+        incomplete = [r for r in completeness if r.get("classification") != "COMPLETE_EXACT"]
+        if incomplete:
+            print(
+                "COMPLETED_GAME_PLAYER_STATS_INCOMPLETE "
+                f"date={args.date} games="
+                + ",".join(f"{r.get('game_pk')}:{r.get('classification')}" for r in incomplete),
+                file=sys.stderr,
+            )
+            return 2
 
     print(f"[mlb-finalized-data-check] finalized upstream data present for {args.date}")
     return 0

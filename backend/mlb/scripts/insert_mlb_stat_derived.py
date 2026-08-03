@@ -1034,7 +1034,10 @@ def _final_games(
 ) -> List[Tuple[int, str]]:
     out: List[Tuple[int, str]] = []
     for g in schedule:
-        if (g.get("status", {}) or {}).get("detailedState") != "Final":
+        status = g.get("status", {}) or {}
+        # MLB uses terminal detailed states such as "Completed Early: Rain".
+        # Abstract/coded final state is authoritative; exact detailed text is not.
+        if status.get("abstractGameState") != "Final" and status.get("codedGameState") != "F":
             continue
         game_type = str((g.get("gameType") or "")).strip().upper()
         if require_regular_season and game_type not in IN_SEASON_GAME_TYPES:
