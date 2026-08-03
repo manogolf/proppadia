@@ -3572,3 +3572,10 @@ mlb-cleanroom-routine-history-favorite-selector-evaluate:
 
 mlb-cleanroom-routine-history-favorite-selector-status:
 	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_favorite_selector status
+.PHONY: mlb-cleanroom-routine-history-agreement-value-decompose mlb-cleanroom-routine-history-agreement-value-status
+
+mlb-cleanroom-routine-history-agreement-value-decompose:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_agreement_value decompose
+
+mlb-cleanroom-routine-history-agreement-value-status:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_agreement_value status
