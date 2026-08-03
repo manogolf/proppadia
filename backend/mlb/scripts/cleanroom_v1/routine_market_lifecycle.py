@@ -94,29 +94,20 @@ def role(player):
 def closeout(slate):
  out=OUT/slate;mp=out/'routine_market_manifest.json'
  if not mp.exists():raise RuntimeError('ROUTINE_COHORT_FREEZE_REQUIRED')
- frozen=read_csv(out/'routine_market_baseline.csv');raw=out/'official_outcome_sources';raw.mkdir(exist_ok=True);results=[]
- feeds={}
- for game in sorted({int(r['game_pk']) for r in frozen}):
-  q=requests.get(f'https://statsapi.mlb.com/api/v1.1/game/{game}/feed/live',timeout=45);q.raise_for_status();h=hashlib.sha256(q.content).hexdigest();p=raw/f'game_{game}_{h}.json';p.write_bytes(q.content) if not p.exists() else None;feeds[game]=(q.json(),p,h)
- for r in frozen:
-  game=int(r['game_pk']);pid=int(r['player_mlb_id']);d,p,h=feeds[game];final=d['gameData']['status']['abstractGameState']=='Final';player=None
-  for side in ('away','home'):
-   player=player or d['liveData']['boxscore']['teams'][side].get('players',{}).get(f'ID{pid}')
-  if not final:participation='ROLE_AMBIGUOUS_TECHNICAL_UNRESOLVED';settle='PENDING';outcome='PENDING';b={};pos=''
-  elif player is None:participation='ROLE_AMBIGUOUS_TECHNICAL_UNRESOLVED';settle='TECHNICAL_UNRESOLVED';outcome='TECHNICAL_UNRESOLVED';b={};pos=''
-  else:
-   participation,pos=role(player);b=(player.get('stats') or {}).get('batting') or {};pa=int(b.get('plateAppearances') or 0);hits=int(b.get('hits') or 0);db=int(b.get('doubles') or 0);tr=int(b.get('triples') or 0);hr=int(b.get('homeRuns') or 0);tb=hits-db-tr-hr+2*db+3*tr+4*hr
-   if participation=='DID_NOT_APPEAR':settle='NO_ACTION';outcome='NO_ACTION'
-   elif participation.startswith('ROLE_AMBIGUOUS'):settle='TECHNICAL_UNRESOLVED';outcome='TECHNICAL_UNRESOLVED'
-   elif pa<=0:settle='NO_ACTION';outcome='NO_ACTION'
-   else:settle='SETTLED';outcome='OVER_WIN' if tb>1 else 'OVER_LOSS'
-  vals={'final_participation':participation,'final_batting_position':pos,'plate_appearances':b.get('plateAppearances',''),'at_bats':b.get('atBats',''),'hits':b.get('hits',''),'doubles':b.get('doubles',''),'triples':b.get('triples',''),'home_runs':b.get('homeRuns','')}
-  vals['total_bases']=(int(vals['hits'] or 0)-int(vals['doubles'] or 0)-int(vals['triples'] or 0)-int(vals['home_runs'] or 0)+2*int(vals['doubles'] or 0)+3*int(vals['triples'] or 0)+4*int(vals['home_runs'] or 0)) if player else ''
-  results.append({**r,**vals,'settlement_status':settle,'outcome':outcome,'outcome_source':str(p.relative_to(ROOT)),'outcome_sha256':h})
+ from backend.mlb.scripts.cleanroom_v1 import routine_outcome_reconciliation as certified
+ frozen,audit,corrections,feeds,_=certified.reconcile(slate,out);certified.write(out/'certified_outcome_reconciliation.csv',certified.fields_for(audit),audit);certified.write(out/'correction_overlay_manifest.csv',certified.fields_for(corrections) if corrections else ['slate_date','game_pk','player_mlb_id','field','old_value','corrected_value','source_payload','source_sha256','reason','discovery_timestamp','database_write'],corrections)
+ results=[]
+ for r in audit:
+  participation=r['final_participation_role'];pa=r['official_plate_appearances'];tb=r['official_total_bases']
+  if not r['official_game_final']:settle,outcome='PENDING','PENDING'
+  elif r['official_source_status']=='OFFICIAL_NONAPPEARANCE_SUPPORTED' or (str(pa)!='' and int(pa)==0):settle,outcome='NO_ACTION','NO_ACTION'
+  elif 'UNRESOLVED' in r['final_support_decision'] or r['official_source_status']=='OFFICIAL_ROLE_ONLY_RESULT_MISSING':settle,outcome='TECHNICAL_UNRESOLVED','TECHNICAL_UNRESOLVED'
+  else:settle,outcome='SETTLED','OVER_WIN' if int(tb)>1 else 'OVER_LOSS'
+  results.append({**r,'final_participation':participation,'final_batting_position':r['official_final_batting_position'],'plate_appearances':pa,'at_bats':r['official_at_bats'],'hits':r['official_hits'],'doubles':r['official_doubles'],'triples':r['official_triples'],'home_runs':r['official_home_runs'],'total_bases':tb,'settlement_status':settle,'outcome':outcome,'outcome_source':r['official_source_payload'],'outcome_sha256':r['official_source_sha256']})
  fields=list(results[0]) if results else FIELDS;data=csv_bytes(fields,results);digest=hashlib.sha256(data).hexdigest();cm=out/'routine_market_closeout_manifest.json';prior=json.loads(cm.read_text()) if cm.exists() else {}
  if prior.get('content_sha256')==digest:return {**prior,'changed':False}
  revision=int(prior.get('revision',0))+1;c=Counter(r['final_participation'] for r in results);s=Counter(r['settlement_status'] for r in results);o=Counter(r['outcome'] for r in results);status='FINAL' if not s['PENDING'] and not s['TECHNICAL_UNRESOLVED'] else 'OUTCOME_CLOSEOUT_PENDING'
- (out/'routine_market_closeout_rows.csv').write_bytes(data);manifest={'slate_date':slate,'revision':revision,'status':status,'content_sha256':digest,'final_games':sum(d['gameData']['status']['abstractGameState']=='Final' for d,_,_ in feeds.values()),'roles':dict(c),'settlements':dict(s),'outcomes':dict(o),'data_discrepancies':0,'corrections_created':0};cm.write_text(json.dumps(manifest,indent=2)+'\n');return manifest
+ (out/'routine_market_closeout_rows.csv').write_bytes(data);manifest={'slate_date':slate,'revision':revision,'status':status,'content_sha256':digest,'final_games':sum(d['gameData']['status']['abstractGameState']=='Final' for d,_,_,_ in feeds.values()),'roles':dict(c),'settlements':dict(s),'outcomes':dict(o),'data_discrepancies':sum(r['local_status']=='LOCAL_ROW_STAT_MISMATCH' for r in audit),'corrections_created':len(corrections),'certified_outcome_reconciliation_sha256':sha(out/'certified_outcome_reconciliation.csv')};cm.write_text(json.dumps(manifest,indent=2)+'\n');return manifest
 def status(slate):
  out=OUT/slate;m=json.loads((out/'routine_market_manifest.json').read_text()) if (out/'routine_market_manifest.json').exists() else {};c=json.loads((out/'routine_market_closeout_manifest.json').read_text()) if (out/'routine_market_closeout_manifest.json').exists() else {};attempt=json.loads((out/'normal_runs_examined.json').read_text()) if (out/'normal_runs_examined.json').exists() else {}
  return {'normal_runs_examined':m.get('normal_runs_examined',len(attempt.get('runs',[]))),'governing_normal_run':m.get('governing_normal_run'),'cohort_freeze_status':m.get('status','NOT_FROZEN'),'frozen_market_identities':m.get('frozen_market_identities',0),'identity_exclusions':m.get('identity_exclusions',0),'games_represented':m.get('games_represented',0),'final_games':c.get('final_games',0),'starters':c.get('roles',{}).get('STARTED',0),'pinch_hitters':c.get('roles',{}).get('PINCH_HITTER',0),'pinch_runners':c.get('roles',{}).get('PINCH_RUNNER',0),'other_substitutes':c.get('roles',{}).get('OTHER_SUBSTITUTE',0),'did_not_appear':c.get('roles',{}).get('DID_NOT_APPEAR',0),'NO_ACTION':c.get('settlements',{}).get('NO_ACTION',0),'wins':c.get('outcomes',{}).get('OVER_WIN',0),'losses':c.get('outcomes',{}).get('OVER_LOSS',0),'pending':c.get('settlements',{}).get('PENDING',0),'technical_unresolved':c.get('settlements',{}).get('TECHNICAL_UNRESOLVED',0),'data_discrepancies':c.get('data_discrepancies',0),'corrections_created':c.get('corrections_created',0),'closeout_revision':c.get('revision',0)}
