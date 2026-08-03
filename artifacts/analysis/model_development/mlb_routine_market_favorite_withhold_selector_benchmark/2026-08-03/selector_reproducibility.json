@@ -1,0 +1,56 @@
+{
+  "advancement_gates": {
+    "C1_MODEL_MARKET_AGREEMENT": {
+      "holdout_dates_at_least_8": true,
+      "holdout_loss_removal_positive": true,
+      "holdout_roi_exceeds_baseline": true,
+      "holdout_roi_positive": false,
+      "holdout_win_rate_change_positive": true,
+      "largest_holdout_date_share_at_most_25pct": true,
+      "largest_holdout_game_share_at_most_10pct": true,
+      "validation_loss_removal_positive": true,
+      "validation_roi_exceeds_baseline": true,
+      "validation_win_rate_change_positive": true
+    },
+    "C2_UNDER_MARKET_FAVORITE": {
+      "holdout_dates_at_least_8": true,
+      "holdout_loss_removal_positive": false,
+      "holdout_roi_exceeds_baseline": false,
+      "holdout_roi_positive": false,
+      "holdout_win_rate_change_positive": false,
+      "largest_holdout_date_share_at_most_25pct": true,
+      "largest_holdout_game_share_at_most_10pct": true,
+      "validation_loss_removal_positive": true,
+      "validation_roi_exceeds_baseline": true,
+      "validation_win_rate_change_positive": true
+    },
+    "C3_MODEL_CONFIRMED_UNDER_FAVORITE": {
+      "holdout_dates_at_least_8": true,
+      "holdout_loss_removal_positive": true,
+      "holdout_roi_exceeds_baseline": false,
+      "holdout_roi_positive": false,
+      "holdout_win_rate_change_positive": true,
+      "largest_holdout_date_share_at_most_25pct": true,
+      "largest_holdout_game_share_at_most_10pct": true,
+      "validation_loss_removal_positive": true,
+      "validation_roi_exceeds_baseline": true,
+      "validation_win_rate_change_positive": true
+    }
+  },
+  "attachment_sha256_first": "a522ac05771f7bbfcd6dffc7e31237af41167303a7294a528203cced78c1372c",
+  "attachment_sha256_second": "a522ac05771f7bbfcd6dffc7e31237af41167303a7294a528203cced78c1372c",
+  "candidate_classifications": {
+    "C1_MODEL_MARKET_AGREEMENT": "IMPROVES_BASELINE_BUT_REMAINS_NEGATIVE",
+    "C2_UNDER_MARKET_FAVORITE": "FAILED_HOLDOUT",
+    "C3_MODEL_CONFIRMED_UNDER_FAVORITE": "FAILED_HOLDOUT"
+  },
+  "contract": "MARKET_FAVORITE_WITHHOLD_ATTACHMENT_V1",
+  "current_database_used": false,
+  "identical_membership": true,
+  "identical_partitions": true,
+  "identical_settlements": true,
+  "partition_manifest_sha256_first": "f56db95095c85a02b6d33681b13eb2fe695c5dcc97a32b71d7aac31ca38d2cf8",
+  "partition_manifest_sha256_second": "f56db95095c85a02b6d33681b13eb2fe695c5dcc97a32b71d7aac31ca38d2cf8",
+  "settlement_sha256_first": "4e55172355f4eb729cc733045faa3e2081752f35fc2bd2059b64bf76b7172ff0",
+  "settlement_sha256_second": "4e55172355f4eb729cc733045faa3e2081752f35fc2bd2059b64bf76b7172ff0"
+}

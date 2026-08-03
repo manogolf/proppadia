@@ -1,0 +1,17 @@
+{
+  "attachment_rows": 9267,
+  "attachment_sha256": "a522ac05771f7bbfcd6dffc7e31237af41167303a7294a528203cced78c1372c",
+  "candidate_definitions": {
+    "C1": "BET stored model side iff it equals market favorite; else WITHHOLD",
+    "C2": "BET Under iff market favorite Under; else WITHHOLD",
+    "C3": "BET Under iff market favorite Under and stored model side Under; else WITHHOLD"
+  },
+  "contract": "MARKET_FAVORITE_WITHHOLD_ATTACHMENT_V1",
+  "frozen_population_path": "artifacts/analysis/model_development/mlb_routine_market_historical_replay_recovery/2026-08-03/combined_original_plus_recovered_population.csv",
+  "frozen_population_sha256": "152717f287ef789c52a5eaf3a02ed2cbaf0a51cdeb9b6edbef3a10450d5144ce",
+  "market_favorite_ties": 27,
+  "model_orientation_certified_rows": 9267,
+  "partition_manifest_sha256": "f56db95095c85a02b6d33681b13eb2fe695c5dcc97a32b71d7aac31ca38d2cf8",
+  "upstream_selection_attachment_path": "artifacts/analysis/model_development/mlb_routine_market_historical_pipeline_selection_evaluation/2026-08-03/historical_selection_attachment.csv",
+  "upstream_selection_attachment_sha256": "980b370b9860b83ad2d27e2ad659545378d695c0730aaf994cc5d346afb5b053"
+}

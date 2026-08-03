@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "tests": {
+    "attachment_hash_stable": true,
+    "attachment_outcome_free": true,
+    "attachment_rows": true,
+    "authentic_settlement_rows": true,
+    "c1_definition_exact": true,
+    "c2_definition_exact": true,
+    "c3_definition_exact": true,
+    "database_unused": true,
+    "exact_identity_unique": true,
+    "model_orientation_all_rows": true,
+    "no_threshold_fields": true,
+    "partition_hash_stable": true,
+    "partitions_40_11_11": true,
+    "settlement_hash_stable": true,
+    "ties_withheld_B2": true
+  }
+}
