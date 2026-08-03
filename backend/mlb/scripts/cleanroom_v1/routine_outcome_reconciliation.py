@@ -35,10 +35,12 @@ def aug2_population():
  return baseline+excluded
 def routine_population(date):return [{**r,'original_partition':'ROUTINE_MARKET_BASELINE'} for r in read(ROUTINE/date/'routine_market_baseline.csv')]
 def official_feed(game,out):
- candidates=list((AUG2/'outcome_sources').glob(f'game_{game}_*.json')) if out==EVIDENCE else list((out/'official_sources').glob(f'game_{game}_*.json'))
+ candidates=sorted((AUG2/'outcome_sources').glob(f'game_{game}_*.json')) if out==EVIDENCE else sorted((out/'official_sources').glob(f'game_{game}_*.json'))
  for p in candidates:
   d=json.loads(p.read_text())
   if d.get('gameData',{}).get('status',{}).get('abstractGameState')=='Final':return d,p,sh(p),'PRESERVED_OFFICIAL_FEED'
+ if candidates:
+  p=candidates[0];return json.loads(p.read_text()),p,sh(p),'PRESERVED_OFFICIAL_NONFINAL_FEED'
  q=requests.get(f'https://statsapi.mlb.com/api/v1.1/game/{game}/feed/live',timeout=45);q.raise_for_status();h=hashlib.sha256(q.content).hexdigest();p=out/'official_sources'/f'game_{game}_{h}.json';p.parent.mkdir(parents=True,exist_ok=True)
  if not p.exists():p.write_bytes(q.content)
  return q.json(),p,h,'FRESH_OFFICIAL_RECOVERY'
