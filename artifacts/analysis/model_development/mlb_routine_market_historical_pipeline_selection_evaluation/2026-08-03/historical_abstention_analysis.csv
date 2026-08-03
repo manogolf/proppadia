@@ -1,0 +1,2 @@
+surface,eligible_rows,selected_rows,withheld_rows,selection_rate,dates_with_zero_selections,average_selections_per_date,correctly_withheld_loss,incorrectly_withheld_winner,selected_winner,selected_loss,concentration_note
+MODEL_DIRECTION_ONLY_MIXED,9267,9267,0,1,0,149.46774193548387,0,0,4653,3986,not a selective surface

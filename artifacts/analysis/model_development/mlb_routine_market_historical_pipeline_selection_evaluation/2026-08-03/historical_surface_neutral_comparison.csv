@@ -1,0 +1,2 @@
+surface,selected_wagers,selected_wins,selected_losses,selected_roi,same_date_neutral_wagers,same_date_neutral_wins,same_date_neutral_losses,same_date_neutral_roi,unselected_complement_wagers,unselected_complement_wins,unselected_complement_losses,unselected_complement_roi,win_rate_change,roi_change,net_dollars_per_100_change,interpretation
+MODEL_DIRECTION_ONLY_MIXED,8639,4653,3986,-0.058853769553467127,8639,4653,3986,-0.058853769553467127,0,0,0,,0,0,0,model direction covers every exact identity and is not a selection/withholding surface

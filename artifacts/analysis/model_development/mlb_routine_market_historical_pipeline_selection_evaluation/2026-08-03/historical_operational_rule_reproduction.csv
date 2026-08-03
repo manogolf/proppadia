@@ -1,0 +1,2 @@
+surface,rule,stored_rows,matches,missing_rows,extra_rows,rule_mismatches
+normal slate model direction,stored model_pick_side equals over when stored prob_over >= 0.5 else under,9267,9267,0,0,0

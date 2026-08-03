@@ -1,0 +1,6 @@
+layer,surface,classification,dates_active,contract
+A,actual executions,ACTUAL_EXECUTION,0,No exact TB1.5 ticket ledger exists; not evaluated.
+B,operator-actionable exports,OPERATOR_ACTIONABLE_EXPORT,0,Two-sided book upload is not an actionable side selection.
+C,pipeline-selected actions,PIPELINE_SELECTED_ACTION,0,No same-run explicit selected/actionable TB1.5 contract survives.
+D,normal slate model direction,MODEL_DIRECTION_ONLY,62,Use stored exact same-run model_pick_side and prob_over; no withholding claim.
+E,review aids,OPERATOR_REVIEW_AID_ONLY,varies,Inventory only; never promote to action.

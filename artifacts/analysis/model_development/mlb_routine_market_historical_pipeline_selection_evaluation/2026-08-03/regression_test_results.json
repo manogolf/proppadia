@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "tests": {
+    "aggregate_stable": true,
+    "all_exact_model_direction": true,
+    "all_governing_runs": true,
+    "attachment_hash_stable": true,
+    "attachment_outcome_free": true,
+    "attachment_rows": true,
+    "evaluation_settlement_exact": true,
+    "exact_key_unique": true,
+    "frozen_population_rows": true,
+    "no_actual_execution_promotion": true,
+    "no_database_access": true,
+    "review_aids_excluded": true,
+    "rule_reproduction_exact": true,
+    "settlement_hash_stable": true,
+    "two_sided_upload_not_actionable": true
+  }
+}

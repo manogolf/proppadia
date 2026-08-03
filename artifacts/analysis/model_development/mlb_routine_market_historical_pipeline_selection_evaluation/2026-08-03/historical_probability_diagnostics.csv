@@ -1,0 +1,2 @@
+surface,target,rows,dates,model_versions,mean_predicted_probability,observed_outcome_rate,brier_score,log_loss,roc_auc,average_precision,rank_correlation_with_outcome,probability_quality_decision
+normal slate prob_over,total bases >= 2,8639,62,artifact version not embedded,0.4730596209051974,0.37932631091561525,0.2516111380202303,0.6970164712176691,0.5134905983481903,0.3913933801146017,0.022675662817723,EXACT_PROBABILITY_COVERAGE_MODEL_VERSION_METADATA_INCOMPLETE

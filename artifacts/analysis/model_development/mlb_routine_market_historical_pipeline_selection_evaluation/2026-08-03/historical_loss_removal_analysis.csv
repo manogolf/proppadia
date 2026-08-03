@@ -1,0 +1,2 @@
+surface,wins_retained,losses_retained,wins_removed,losses_removed,share_wins_removed,share_losses_removed,loss_removal_advantage,decision
+MODEL_DIRECTION_ONLY_MIXED,4653,3986,0,0,0,0,0,NO_WITHHOLDING_NO_LOSS_REMOVAL

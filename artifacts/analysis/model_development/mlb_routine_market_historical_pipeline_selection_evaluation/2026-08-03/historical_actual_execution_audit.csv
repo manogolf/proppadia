@@ -1,0 +1,2 @@
+actual_tickets,players,games,selected_but_not_wagered,wagered_but_not_selected,odds_changed_between_selection_and_execution,market_unavailable_at_execution,manual_overrides,decision
+0,0,0,uncertifiable because no actionable selection contract,0,not applicable,not applicable,no exact evidence,NO_EXACT_ACTUAL_EXECUTION_EVIDENCE

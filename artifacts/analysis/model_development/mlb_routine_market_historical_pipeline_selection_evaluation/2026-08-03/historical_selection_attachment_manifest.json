@@ -1,0 +1,30 @@
+{
+  "artifact_families_searched": [
+    "normal slate output TB 1.5",
+    "calibrated wide prediction export",
+    "two-sided book upload",
+    "model_v2 ranking/lane selector/Quick Card",
+    "review/discovery/alternate/edge/EV research",
+    "actual/graded wager ledgers and wrapper/Ops logs"
+  ],
+  "attachment_rows": 9267,
+  "attachment_sha256": "980b370b9860b83ad2d27e2ad659545378d695c0730aaf994cc5d346afb5b053",
+  "confirmed_nonselection_identities": 0,
+  "contract": "HISTORICAL_ROUTINE_PIPELINE_SELECTION_ATTACHMENT_V1",
+  "exact_model_direction_identities": 9267,
+  "exact_selection_identities": 0,
+  "excluded_review_only_surfaces": [
+    "model_v2 ranking/lane selector/Quick Card",
+    "review/discovery/alternate/edge/EV research"
+  ],
+  "field_registry_sha256": "936e5df6c229317088b1d67daf8f79850e398c7b01787725232912e061b48a6d",
+  "frozen_replay_population": "artifacts/analysis/model_development/mlb_routine_market_historical_replay_recovery/2026-08-03/combined_original_plus_recovered_population.csv",
+  "frozen_replay_population_sha256": "152717f287ef789c52a5eaf3a02ed2cbaf0a51cdeb9b6edbef3a10450d5144ce",
+  "model_version_coverage": "ARTIFACT_VERSION_NOT_EMBEDDED; exact run artifact coverage 9267/9267",
+  "recovery_manifest": "artifacts/analysis/model_development/mlb_routine_market_historical_replay_recovery/2026-08-03/recovered_population_manifest.json",
+  "recovery_manifest_sha256": "256b30548270baf6df224f44a28bd1984d5f320adb83723f60d592c698dbaa77",
+  "selected_surfaces": [
+    "normal slate output TB 1.5"
+  ],
+  "uncertain_identities": 0
+}
