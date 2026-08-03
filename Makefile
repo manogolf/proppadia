@@ -3549,3 +3549,16 @@ nhl-release-check: nhl-checks-offline
 cross-sport-post-deploy:
 	$(MAKE) mlb-post-deploy-strict-offseason BASE_URL=$(BASE_URL) MLB_DATE=$(MLB_DATE)
 	$(MAKE) nhl-post-deploy-strict-offseason BASE_URL=$(BASE_URL) NHL_DATE=$(NHL_DATE)
+.PHONY: mlb-cleanroom-routine-history-selection-inventory mlb-cleanroom-routine-history-selection-freeze mlb-cleanroom-routine-history-selection-evaluate mlb-cleanroom-routine-history-selection-status
+
+mlb-cleanroom-routine-history-selection-inventory:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_pipeline_selection inventory
+
+mlb-cleanroom-routine-history-selection-freeze:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_pipeline_selection freeze
+
+mlb-cleanroom-routine-history-selection-evaluate:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_pipeline_selection evaluate
+
+mlb-cleanroom-routine-history-selection-status:
+	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_pipeline_selection status
