@@ -96,6 +96,8 @@ def closeout(slate):
  if not mp.exists():raise RuntimeError('ROUTINE_COHORT_FREEZE_REQUIRED')
  from backend.mlb.scripts.cleanroom_v1 import routine_outcome_reconciliation as certified
  frozen,audit,corrections,feeds,_=certified.reconcile(slate,out);certified.write(out/'certified_outcome_reconciliation.csv',certified.fields_for(audit),audit);certified.write(out/'correction_overlay_manifest.csv',certified.fields_for(corrections) if corrections else ['slate_date','game_pk','player_mlb_id','field','old_value','corrected_value','source_payload','source_sha256','reason','discovery_timestamp','database_write'],corrections)
+ from backend.mlb.scripts.cleanroom_v1.settlement_eligibility import classify_game,classify_book_settlement
+ game_classes={int(g):classify_game(feed[0]['gameData']['status'],sum(1 for x in feed[0].get('liveData',{}).get('linescore',{}).get('innings',[]) if x.get('home',{}).get('runs') is not None and x.get('away',{}).get('runs') is not None)) for g,feed in feeds.items()}
  results=[]
  for r in audit:
   participation=r['final_participation_role'];pa=r['official_plate_appearances'];tb=r['official_total_bases']
@@ -103,7 +105,9 @@ def closeout(slate):
   elif r['official_source_status']=='OFFICIAL_NONAPPEARANCE_SUPPORTED' or (str(pa)!='' and int(pa)==0):settle,outcome='NO_ACTION','NO_ACTION'
   elif 'UNRESOLVED' in r['final_support_decision'] or r['official_source_status']=='OFFICIAL_ROLE_ONLY_RESULT_MISSING':settle,outcome='TECHNICAL_UNRESOLVED','TECHNICAL_UNRESOLVED'
   else:settle,outcome='SETTLED','OVER_WIN' if int(tb)>1 else 'OVER_LOSS'
-  results.append({**r,'final_participation':participation,'final_batting_position':r['official_final_batting_position'],'plate_appearances':pa,'at_bats':r['official_at_bats'],'hits':r['official_hits'],'doubles':r['official_doubles'],'triples':r['official_triples'],'home_runs':r['official_home_runs'],'total_bases':tb,'settlement_status':settle,'outcome':outcome,'outcome_source':r['official_source_payload'],'outcome_sha256':r['official_source_sha256']})
+  game_class=game_classes.get(int(r['game_pk']),'NONSTANDARD_FINAL_REQUIRES_BOOK_RULE')
+  book_settlement=classify_book_settlement(game_class,int(pa) if str(pa)!='' else None,slate_date=slate) if r['official_game_final'] else 'BOOK_SETTLEMENT_PENDING'
+  results.append({**r,'final_participation':participation,'final_batting_position':r['official_final_batting_position'],'plate_appearances':pa,'at_bats':r['official_at_bats'],'hits':r['official_hits'],'doubles':r['official_doubles'],'triples':r['official_triples'],'home_runs':r['official_home_runs'],'total_bases':tb,'official_game_classification':game_class,'official_outcome':outcome,'book_settlement':book_settlement,'settlement_status':settle,'outcome':outcome,'outcome_source':r['official_source_payload'],'outcome_sha256':r['official_source_sha256']})
  fields=list(results[0]) if results else FIELDS;data=csv_bytes(fields,results);digest=hashlib.sha256(data).hexdigest();cm=out/'routine_market_closeout_manifest.json';prior=json.loads(cm.read_text()) if cm.exists() else {}
  if prior.get('content_sha256')==digest:return {**prior,'changed':False}
  revision=int(prior.get('revision',0))+1;c=Counter(r['final_participation'] for r in results);s=Counter(r['settlement_status'] for r in results);o=Counter(r['outcome'] for r in results);status='FINAL' if not s['PENDING'] and not s['TECHNICAL_UNRESOLVED'] else 'OUTCOME_CLOSEOUT_PENDING'
