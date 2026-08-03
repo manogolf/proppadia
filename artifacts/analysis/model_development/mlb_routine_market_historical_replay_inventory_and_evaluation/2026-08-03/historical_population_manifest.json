@@ -1,0 +1,85 @@
+{
+  "contract": "MLB_CLEANROOM_ROUTINE_HISTORY_REPLAY_V1",
+  "version": 1,
+  "fixed_window": [
+    "2026-05-01",
+    "2026-08-02"
+  ],
+  "run_selection_rule": "FIRST_DECISION_READY_RUN_WITH_EXACT_SAME_RUN_ROSTER_AND_TWO_SIDED_PREGAME_BETONLINE_TB15",
+  "selected_runs": [
+    {
+      "slate_date": "2026-07-29",
+      "run_tag": "local_daily_20260729T123005Z",
+      "source_lineage_grade": "GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED",
+      "identity_count": 151,
+      "game_count": 13,
+      "market_path": "backend/mlb/exports/model_v2/bol_tb15/2026-07-29/snapshots/local_daily_20260729T123005Z/bol_tb15_market_rows.csv",
+      "market_sha256": "2e94166e04973fa364b1b0854fe97e72b8169f8e848e5bef5c9f221315c9a169",
+      "odds_path": "backend/mlb/exports/odds_history/2026-07-29/odds_mlb_playerprops__local_daily_20260729T123005Z.json",
+      "odds_sha256": "c0917cd0d076da85fbac08e2b13b3b5b5f064b4d3b0fcf7141d6c6704e4cf849",
+      "roster_path": "backend/mlb/exports/odds_history/2026-07-29/mlb_predictions_wide_calibrated__local_daily_20260729T123005Z.csv",
+      "roster_sha256": "73631efa01f531391e2bd5860f9b1cec883d3d45f60b593b4f468a5f2b213ecd"
+    },
+    {
+      "slate_date": "2026-07-30",
+      "run_tag": "local_daily_20260730T123001Z",
+      "source_lineage_grade": "GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED",
+      "identity_count": 87,
+      "game_count": 8,
+      "market_path": "backend/mlb/exports/model_v2/bol_tb15/2026-07-30/snapshots/local_daily_20260730T123001Z/bol_tb15_market_rows.csv",
+      "market_sha256": "b0ab06f2e2dcc1d7c2cc8c0392c5163a347cc9b43de1e260d251bf4938abcd74",
+      "odds_path": "backend/mlb/exports/odds_history/2026-07-30/odds_mlb_playerprops__local_daily_20260730T123001Z.json",
+      "odds_sha256": "803f2281fbd5d66fd2cb4f1a0d5e9c5c539d1f845d5ce4b64fee2b90ca6e6fdc",
+      "roster_path": "backend/mlb/exports/odds_history/2026-07-30/mlb_predictions_wide_calibrated__local_daily_20260730T123001Z.csv",
+      "roster_sha256": "077ee1c4b66d8ab7ae9296054a203b99968c1af7459771542ffccf6cc474455c"
+    },
+    {
+      "slate_date": "2026-07-31",
+      "run_tag": "local_daily_20260731T123005Z",
+      "source_lineage_grade": "GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED",
+      "identity_count": 170,
+      "game_count": 14,
+      "market_path": "backend/mlb/exports/model_v2/bol_tb15/2026-07-31/snapshots/local_daily_20260731T123005Z/bol_tb15_market_rows.csv",
+      "market_sha256": "64a6843086f16be12248d33407d15532dce997a8d549210c9896d6439c052f03",
+      "odds_path": "backend/mlb/exports/odds_history/2026-07-31/odds_mlb_playerprops__local_daily_20260731T123005Z.json",
+      "odds_sha256": "9f1789d9e4aae796aedf7178a8a8d16c3d09810b8eb52235b6d1c336b40a839c",
+      "roster_path": "backend/mlb/exports/odds_history/2026-07-31/mlb_predictions_wide_calibrated__local_daily_20260731T123005Z.csv",
+      "roster_sha256": "9118415ce1645fb62e66a552dd8ecedc6c30550db2703450d3d3292c771f05b1"
+    },
+    {
+      "slate_date": "2026-08-01",
+      "run_tag": "local_daily_20260801T124205Z",
+      "source_lineage_grade": "GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED",
+      "identity_count": 96,
+      "game_count": 10,
+      "market_path": "backend/mlb/exports/model_v2/bol_tb15/2026-08-01/snapshots/local_daily_20260801T124205Z/bol_tb15_market_rows.csv",
+      "market_sha256": "c43a028f7016b88ff2b9173849bc2b7d5349beb78208ae492050d366f25ae13e",
+      "odds_path": "backend/mlb/exports/odds_history/2026-08-01/odds_mlb_playerprops__local_daily_20260801T124205Z.json",
+      "odds_sha256": "159b01aa6249d00c4bbb49e8060d8b557fe893695abb92919b4fac213bba5003",
+      "roster_path": "backend/mlb/exports/odds_history/2026-08-01/mlb_predictions_wide_calibrated__local_daily_20260801T124205Z.csv",
+      "roster_sha256": "c31f64243a045b2c3b325317b72f6de38b157e5e6776f69dc95c326e948e03dd"
+    },
+    {
+      "slate_date": "2026-08-02",
+      "run_tag": "local_daily_20260802T124202Z",
+      "source_lineage_grade": "GRADE_B_EXACT_RUN_ARTIFACTS_AUDIT_HASHED",
+      "identity_count": 157,
+      "game_count": 14,
+      "market_path": "backend/mlb/exports/model_v2/bol_tb15/2026-08-02/snapshots/local_daily_20260802T124202Z/bol_tb15_market_rows.csv",
+      "market_sha256": "a9a823068d33b8706a0603296c225ae3bb20f5d19302ab68dc48c6a9c3e921ca",
+      "odds_path": "backend/mlb/exports/odds_history/2026-08-02/odds_mlb_playerprops__local_daily_20260802T124202Z.json",
+      "odds_sha256": "888b830e401004f5a057254966c062b01b5ede0f9ae8dcb0816f286334adb9b2",
+      "roster_path": "backend/mlb/exports/odds_history/2026-08-02/mlb_predictions_wide_calibrated__local_daily_20260802T124202Z.csv",
+      "roster_sha256": "d5c19bddcf9215372f19ac831bf751123796a72fa7b9a6129a962ea93e4fc02c"
+    }
+  ],
+  "grade_a_identities": 0,
+  "grade_b_identities": 661,
+  "identity_count": 661,
+  "date_count": 5,
+  "game_count": 59,
+  "player_count": 233,
+  "exclusions": {},
+  "population_sha256": "a8f4aa8967b5d455c850aa0924d1f6e1e27285414ad3793e1f36792331d0c7b4",
+  "outcome_fields_in_membership": false
+}

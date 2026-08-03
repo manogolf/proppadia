@@ -1,0 +1,6 @@
+{
+  "decision": "PASS",
+  "tests_passed": 100,
+  "tests_failed": 0,
+  "command": "PYTHONPATH=. pytest -q backend/mlb/tests/test_historical_routine_replay.py backend/mlb/tests/test_settlement_eligibility.py backend/mlb/tests/test_cleanroom_routine_market_lifecycle.py backend/mlb/tests/test_cleanroom_routine_outcome_reconciliation.py backend/mlb/tests/test_cleanroom_schedule_cohort_lifecycle.py backend/mlb/tests/test_player_stats_game_completeness.py"
+}

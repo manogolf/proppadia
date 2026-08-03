@@ -1,0 +1,2 @@
+from_date,to_date,rule_source_date,contract_path,contract_sha256,coverage
+2026-05-01,2026-08-02,2026-04-22,backend/mlb/contracts/betonline_baseball_props_settlement_v1.json,99f5b60b7b255ea4cf32186ea33967d70a89d1d9e7f9b2b10fd933d880627729,CERTIFIED

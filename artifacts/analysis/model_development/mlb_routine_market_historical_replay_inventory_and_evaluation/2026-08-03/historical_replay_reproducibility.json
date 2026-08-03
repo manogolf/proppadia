@@ -1,0 +1,13 @@
+{
+  "decision": "REPRODUCIBLE_BYTE_IDENTICAL",
+  "population_sha256": "a8f4aa8967b5d455c850aa0924d1f6e1e27285414ad3793e1f36792331d0c7b4",
+  "settlement_sha256_first": "2d4bd97cf037d6645775599919d319bd2c9f498f719ef97c16ffde049303ddc5",
+  "settlement_sha256_second": "2d4bd97cf037d6645775599919d319bd2c9f498f719ef97c16ffde049303ddc5",
+  "identity_set_identical": true,
+  "selected_runs_identical": true,
+  "outcomes_identical": true,
+  "settlement_identical": true,
+  "row_order_identical": true,
+  "aggregates_identical": true,
+  "database_changes_cannot_alter_membership": true
+}
