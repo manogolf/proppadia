@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "test": "test_actual_ticket_settlement_preserved",
+      "status": "PASS"
+    },
+    {
+      "test": "test_completed_early_invokes_rule_layer",
+      "status": "PASS"
+    },
+    {
+      "test": "test_current_rule_without_history_fails_closed",
+      "status": "PASS"
+    },
+    {
+      "test": "test_nonappearance_distinct_from_shortened_void",
+      "status": "PASS"
+    },
+    {
+      "test": "test_nonstandard_cannot_silently_settle",
+      "status": "PASS"
+    },
+    {
+      "test": "test_normal_final_game_settles_normally",
+      "status": "PASS"
+    },
+    {
+      "test": "test_normal_official_classification",
+      "status": "PASS"
+    },
+    {
+      "test": "test_normal_home_win_eight_completed_innings_is_normal",
+      "status": "PASS"
+    },
+    {
+      "test": "test_official_stats_remain_when_void",
+      "status": "PASS"
+    },
+    {
+      "test": "test_postponed_is_other_rule_void",
+      "status": "PASS"
+    },
+    {
+      "test": "test_settlement_is_deterministic_idempotent",
+      "status": "PASS"
+    },
+    {
+      "test": "test_shortened_void_returns_stake_zero_net",
+      "status": "PASS"
+    },
+    {
+      "test": "test_void_excluded_from_at_risk_denominator",
+      "status": "PASS"
+    },
+    {
+      "test": "test_written_rule_ticket_conflict_visible",
+      "status": "PASS"
+    }
+  ],
+  "focused_contract_tests_passed": 14,
+  "relevant_suite_tests_passed": 84,
+  "passed": 84,
+  "failed": 0
+}

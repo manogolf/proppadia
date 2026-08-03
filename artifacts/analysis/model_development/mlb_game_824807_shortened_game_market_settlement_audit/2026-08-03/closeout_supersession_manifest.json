@@ -1,0 +1,20 @@
+{
+  "status": "REVISION_REQUIRED_NOT_APPLIED_BY_READ_ONLY_AUDIT",
+  "parent_closeout": "backend/mlb/exports/cleanroom_v1/bol_tb15/schedule_cohorts/2026-08-02/fixed_cohort_closeout_manifest.json",
+  "parent_closeout_hash": "37f6f1128ee9236afd881b7036f5378521802ffb9673465351a7f821ea3116c0",
+  "new_closeout_hash": "a8591bc90336d1436b8ab64474cc0f870a0a4ef4cf7ef2be3861142e877eb5fa",
+  "rule_evidence_hash": "99f5b60b7b255ea4cf32186ea33967d70a89d1d9e7f9b2b10fd933d880627729",
+  "affected_identities": [
+    "2026-08-02|824807|547180|total_bases|1.5",
+    "2026-08-02|824807|592663|total_bases|1.5",
+    "2026-08-02|824807|607208|total_bases|1.5",
+    "2026-08-02|824807|624413|total_bases|1.5",
+    "2026-08-02|824807|656941|total_bases|1.5",
+    "2026-08-02|824807|664761|total_bases|1.5",
+    "2026-08-02|824807|669016|total_bases|1.5",
+    "2026-08-02|824807|681082|total_bases|1.5",
+    "2026-08-02|824807|683002|total_bases|1.5"
+  ],
+  "reason": "BetOnline MLB props require regulation length; game 824807 completed early after seven innings.",
+  "immutable_parent_preserved": true
+}

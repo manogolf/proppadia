@@ -1,0 +1,19 @@
+{
+  "contract": "BETONLINE_MLB_PLAYER_PROPS_SETTLEMENT_V1",
+  "book": "BetOnline",
+  "source_url": "https://help.betonline.ag/en/articles/185179-baseball-rules",
+  "source_title": "Baseball Rules",
+  "source_date": "2026-04-22",
+  "retrieved_at_utc": "2026-08-03T00:00:00Z",
+  "historical_applicability_through": "2026-08-03",
+  "regulation_requirement": "9 innings, or 8.5 when the home team is winning",
+  "player_participation_requirement": "one plate appearance for batting props",
+  "completed_early_treatment": "VOID",
+  "relevant_excerpts": [
+    "All MLB props are official after 9 full innings or 8\u00bd if the home team is winning.",
+    "must either throw one pitch or have one plate appearance"
+  ],
+  "source_capture_note": "Authoritative page was retrieved through indexed web access; direct HTTP archival returned 403.",
+  "applicability_decision": "CERTIFIED_FOR_2026-08-02",
+  "sha256": "99f5b60b7b255ea4cf32186ea33967d70a89d1d9e7f9b2b10fd933d880627729"
+}

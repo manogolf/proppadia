@@ -1,0 +1,3 @@
+side,previous_official_stat_rows,previous_wins,previous_losses,previous_voids,previous_stake,previous_net,previous_roi,corrected_settled_wagers,corrected_wins,corrected_losses,corrected_voids,corrected_no_action,corrected_pending,corrected_book_rule_uncertified,corrected_technical_unresolved,corrected_stake_at_risk,returned_stake,corrected_net,corrected_roi
+OVER,110,28,82,0,550,-224.720456,-0.408582647,101,26,75,9,10,0,0,0,505,45,-203.220456,-0.402416744
+UNDER,110,82,28,0,550,92.627438,0.168413524,101,75,26,9,10,0,0,0,505,45,83.374805,0.165098625

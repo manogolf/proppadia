@@ -1,0 +1,2 @@
+slate_date,game_pk,abstractGameState,codedGameState,detailedState,reason,innings_completed,classification,cleanroom_market_rows,closeout_rows,existing_book_settlement_treatment
+2026-08-02,824807,Final,F,Completed Early: Rain,Rain,5,COMPLETED_EARLY_OFFICIAL,9,18,OFFICIAL_STATS_ONLY
