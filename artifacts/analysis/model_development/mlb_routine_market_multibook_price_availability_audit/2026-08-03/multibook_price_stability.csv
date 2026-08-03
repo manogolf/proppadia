@@ -1,0 +1,4 @@
+instrument,partition,largest_date_share,largest_game_share,profitable_dates,losing_dates,date_clustered_interval,game_clustered_interval
+P3_BEST_EXECUTABLE,VALIDATION,0.11811023622047244,0.014873140857392825,4,7,same as certified P0 prior benchmark,same as certified P0 prior benchmark
+P3_BEST_EXECUTABLE,HOLDOUT,0.13226452905811623,0.01603206412825651,4,7,same as certified P0 prior benchmark,same as certified P0 prior benchmark
+P3_BEST_EXECUTABLE,FULL,0.023720772619451033,0.0028803795323619113,25,37,same as certified P0 prior benchmark,same as certified P0 prior benchmark

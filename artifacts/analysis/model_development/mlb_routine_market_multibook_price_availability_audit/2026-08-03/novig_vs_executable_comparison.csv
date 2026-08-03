@@ -1,0 +1,3 @@
+partition,novig_diagnostic_roi,betonline_roi,best_observed_diagnostic_roi,best_executable_roi,market_median_diagnostic_roi,gap_best_executable_to_novig,gap_best_observed_to_novig,interpretation
+VALIDATION,0.0515975970103637,-0.0114945233452457,0.0047676271377525715,-0.0114945233452457,-0.007727757803031588,-0.0630921203556094,-0.04682996987261113,partially recovered the no-vig value
+HOLDOUT,0.0344614509093129,-0.027578963251111525,-0.0122235865270894,-0.027578963251111525,-0.023391599985311894,-0.062040414160424426,-0.0466850374364023,partially recovered the no-vig value

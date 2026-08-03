@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "tests": {
+    "alphabetical_tie_break_frozen": true,
+    "attachment_hash_verified": true,
+    "betonline_price_complete": true,
+    "frozen_c1_rows": true,
+    "no_database_access": true,
+    "no_outcomes_in_attachment": true,
+    "no_selector_change": true,
+    "only_betonline_executable": true,
+    "other_book_rules_not_borrowed": true,
+    "partitions_unchanged": true,
+    "selected_side_unchanged": true
+  }
+}

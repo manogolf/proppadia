@@ -1,0 +1,26 @@
+{
+  "agreement_report_sha256": "43228d76a8ee1df7a3722eabc8ce3f997bbbf65b62c35ecdc069e7517e389cd9",
+  "alternate_book_rules_certified": [],
+  "attachment_rows": 5902,
+  "attachment_sha256": "a2ae12b65c7ebb7597b54371e503f77ef1b95df519176aabd97cae6773b444c1",
+  "books_observed": [
+    "betmgm",
+    "betonlineag",
+    "betrivers",
+    "bovada",
+    "draftkings",
+    "fanatics",
+    "mybookieag",
+    "williamhill_us"
+  ],
+  "contract": "C1_CONTEMPORANEOUS_MULTIBOOK_PRICE_ATTACHMENT_V1",
+  "exact_quote_rows_total": 20357,
+  "favorite_attachment_sha256": "a522ac05771f7bbfcd6dffc7e31237af41167303a7294a528203cced78c1372c",
+  "favorite_manifest_sha256": "407882b48fcd729a75b83e8c80f67e90b0e9c6ac258d876310e9d3e53e284772",
+  "frozen_population_sha256": "152717f287ef789c52a5eaf3a02ed2cbaf0a51cdeb9b6edbef3a10450d5144ce",
+  "operator_executable_confirmed_books": [
+    "betonlineag"
+  ],
+  "partition_manifest_sha256": "f56db95095c85a02b6d33681b13eb2fe695c5dcc97a32b71d7aac31ca38d2cf8",
+  "settlement_sha256": "4e55172355f4eb729cc733045faa3e2081752f35fc2bd2059b64bf76b7172ff0"
+}

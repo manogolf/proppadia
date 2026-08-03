@@ -1,0 +1,38 @@
+{
+  "books": {
+    "betmgm": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    },
+    "betonlineag": {
+      "classification": "OPERATOR_EXECUTABLE_CONFIRMED",
+      "evidence": "frozen governing BetOnline operational price and settlement lifecycle"
+    },
+    "betrivers": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    },
+    "bovada": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    },
+    "draftkings": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    },
+    "fanatics": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    },
+    "mybookieag": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    },
+    "williamhill_us": {
+      "classification": "OBSERVED_MARKET_ONLY",
+      "evidence": "provider feed observation only; no exact account/ticket/config evidence"
+    }
+  },
+  "contract": "SPORTSBOOK_ACCESSIBILITY_MANIFEST_V1",
+  "evidence_rule": "feed visibility alone does not prove operator access"
+}
