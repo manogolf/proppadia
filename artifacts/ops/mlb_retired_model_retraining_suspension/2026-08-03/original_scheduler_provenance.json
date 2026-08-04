@@ -1,0 +1,17 @@
+{
+  "installed_guarded_wrapper_sha256": "680c74a54e5a3c9b7ae5470f9370f95f3d117d24df974c9e9754495c6a3a06a5",
+  "original_plist": {
+    "original_path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist",
+    "permissions": "-rw-r--r--",
+    "preserved_path": "artifacts/ops/mlb_retired_model_retraining_suspension/2026-08-03/originals/com.proppadia.mlb.retrain.weekly.plist",
+    "sha256": "a9b39fc5e406b61e2e3ed7f6b2f0d6b0ba9527bb63cff0a21986113cbd94ae6d",
+    "size": 928
+  },
+  "original_wrapper": {
+    "original_path": "/Users/jerrystrain/bin/proppadia_mlb_retrain_weekly.sh",
+    "permissions": "-rwxr-xr-x",
+    "preserved_path": "artifacts/ops/mlb_retired_model_retraining_suspension/2026-08-03/originals/proppadia_mlb_retrain_weekly.sh",
+    "sha256": "6c97c614d79db76f822424f3c7d1720d8ffab7472813e12a38292ea5529bcde1",
+    "size": 1327
+  }
+}

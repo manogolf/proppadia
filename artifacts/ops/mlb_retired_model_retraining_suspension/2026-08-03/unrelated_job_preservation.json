@@ -1,0 +1,17 @@
+{
+  "data_collection": "UNCHANGED",
+  "database_maintenance": "UNCHANGED",
+  "decision": "PRESERVED",
+  "disabled_by_this_change": [],
+  "exports": "UNCHANGED",
+  "grading": "UNCHANGED",
+  "loaded_labels": [
+    "com.proppadia.mlb.bvp.prewarm.daily",
+    "com.proppadia.mlb.refresh.daily",
+    "com.proppadia.mlb.starter-skill-workload.daily",
+    "com.proppadia.pregame-lineup-study.20260708",
+    "com.proppadia.pregame-lineup-study.20260709"
+  ],
+  "odds_capture": "UNCHANGED",
+  "reconciliation": "UNCHANGED"
+}

@@ -1,0 +1,13 @@
+{
+  "active_registry_can_restore_authority": false,
+  "authority_status": "NO_QUALIFIED_MLB_MODEL",
+  "blocked_status": "MLB_PREDICTIVE_MODEL_BLOCKED_NO_QUALIFIED_MODEL",
+  "data_only_authority_check": "PASS_ALLOWED",
+  "installed_weekly_wrapper": "BLOCKED_EXIT_78",
+  "production_model_load": "BLOCKED",
+  "retired_model_bundle_publish": "BLOCKED",
+  "retired_model_hashes_unchanged": true,
+  "retired_model_recalibration": "BLOCKED",
+  "retired_model_training": "BLOCKED",
+  "semantic_registry_hashes_unchanged_by_suspension": true
+}
