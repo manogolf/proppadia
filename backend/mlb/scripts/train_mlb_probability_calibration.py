@@ -155,6 +155,9 @@ def _comparison(side_df: pd.DataFrame, calibrator: dict[str, Any]) -> pd.DataFra
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("retired_model_recalibration")
     ap = argparse.ArgumentParser(description="Train MLB probability calibration from resolved reconcile rows.")
     ap.add_argument("--rows-csv", default="tmp/mlb_base_vs_market_rows_anybook_window.csv")
     ap.add_argument("--out-json", default="artifacts/analysis/mlb/calibration/mlb_probability_calibrator.json")

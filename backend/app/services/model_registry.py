@@ -70,6 +70,9 @@ def _feature_metadata_candidates() -> List[Path]:
 
 
 def load_model(prop_type: str, algo: str):
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_model_load")
     prop = canonicalize_prop_type(prop_type)
     alg = str(algo or "").strip().lower()
     if alg not in {"random_forest", "logistic_regression"}:

@@ -1,0 +1,15 @@
+{
+  "authority_status": "NO_QUALIFIED_MLB_MODEL",
+  "blocked_runtime_status": "MLB_PREDICTIVE_MODEL_BLOCKED_NO_QUALIFIED_MODEL",
+  "retired_architecture": "MLB_LEGACY_LR_RF_AUC_WEIGHTED_BLEND",
+  "retired_artifact_pattern": "MODEL_DIR/latest/*.joblib",
+  "blocked_semantic_model_ids": [
+    "MLB_HITS_SEMANTIC_V1_2e7377b2cdcb",
+    "MLB_STRIKEOUTS_PITCHING_SEMANTIC_V1_a3ee2428e5d0",
+    "MLB_TOTAL_BASES_SEMANTIC_V1_b6cdb5379aa9"
+  ],
+  "training_status": "RETIRED_AUTOMATED_RETRAINING_SUSPENDED",
+  "replacement_model_status": "NOT_YET_QUALIFIED",
+  "data_only_processes": "ALLOWED",
+  "predictive_processes": "BLOCKED"
+}

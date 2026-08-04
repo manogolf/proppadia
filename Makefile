@@ -2954,7 +2954,12 @@ mlb-model-rollback:
 	$(VENV_PY) backend/mlb/scripts/mlb_model_rollback.py --archive-dir "$(MLB_MODEL_ARCHIVE_DIR)" --snapshot-id "$(MLB_MODEL_ROLLBACK_SNAPSHOT)" --latest-dir "$(MLB_MODEL_LATEST_DIR)"
 
 mlb-prod12-model-bundle-publish:
+	@$(VENV_PY) -c 'from backend.mlb.shared.model_authority import assert_predictive_model_qualified; assert_predictive_model_qualified("retired_model_bundle_publish")'
 	bin/mlb_prod12_model_bundle_publish.sh
+
+.PHONY: mlb-model-authority-status
+mlb-model-authority-status:
+	@$(VENV_PY) -c 'from backend.mlb.shared.model_authority import status_line; print(status_line())'
 
 mlb-feature-health:
 	$(VENV_PY) backend/mlb/scripts/report_mlb_feature_health.py --window-mode $(MLB_FEATURE_WINDOW_MODE) --window-days $(MLB_FEATURE_WINDOW_DAYS) --games-back $(MLB_FEATURE_GAMES_BACK) --prop-types "$(MLB_FEATURE_PROP_TYPES)" --prop-sources "$(MLB_FEATURE_PROP_SOURCES)" --warn-default-pct $(MLB_FEATURE_WARN_DEFAULT_PCT) --warn-min-rows $(MLB_FEATURE_WARN_MIN_ROWS) $(if $(filter 1,$(MLB_FEATURE_FAIL_ON_WARN)),--fail-on-warn,)

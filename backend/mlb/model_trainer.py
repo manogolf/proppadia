@@ -1056,6 +1056,9 @@ def build_pipeline(num_cols: List[str], cat_cols: List[str]):
 
 # ---- Trainer -----------------------------------------------------------------
 def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=DEFAULT_ROW_LIMIT, quiet=True):
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("retired_model_training")
     sb = _supabase_client()
     if sb is None and not quiet:
         print("[trainer] SUPABASE_URL/key not set; using DATABASE_URL/SUPABASE_DB_URL via direct Postgres fallback.")
@@ -1353,6 +1356,7 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
 # ---- CLI ---------------------------------------------------------------------
 if __name__ == "__main__":
     import argparse, sys
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--prop", help="Single prop type to train (default: all)", default=None)
@@ -1360,6 +1364,8 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=DEFAULT_ROW_LIMIT)
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+
+    assert_predictive_model_qualified("retired_model_training")
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
