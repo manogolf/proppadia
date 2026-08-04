@@ -1,0 +1,15 @@
+{
+  "decision": "LEGACY_MLB_MODEL_ARCHITECTURE_RETIRED_REPLACEMENT_EXECUTION_AUTHORIZED",
+  "predictive_status": "NO_QUALIFIED_MLB_HITS_MODEL",
+  "fail_closed": true,
+  "production_predictions_enabled": false,
+  "candidate_ranking_enabled": false,
+  "ev_edge_enabled": false,
+  "wager_selection_enabled": false,
+  "upload_generation_enabled": false,
+  "routing_enabled": false,
+  "staking_enabled": false,
+  "legacy_artifacts_preserved_for_reproducibility_only": true,
+  "legacy_predictive_authority": false,
+  "first_pass_promotion_authorized": false
+}

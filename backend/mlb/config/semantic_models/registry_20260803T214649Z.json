@@ -1,0 +1,32 @@
+{
+  "registry_id": "registry_20260803T214649Z",
+  "immutable": true,
+  "created_at": "2026-08-03T21:46:49.912141+00:00",
+  "prospective_only": true,
+  "entries": [
+    {
+      "proposition": "hits",
+      "semantic_model_id": "MLB_HITS_SEMANTIC_V1_2e7377b2cdcb",
+      "semantic_manifest_path": "manifests/MLB_HITS_SEMANTIC_V1_2e7377b2cdcb.json",
+      "semantic_manifest_sha256": "84efb9f21723f50abf649d7e03cb2916ddf9b2704c91ff9b8e4553c979ffe972",
+      "active_artifact_sha256": "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf",
+      "effective_from_timestamp": "2026-08-03T21:46:49.912141+00:00"
+    },
+    {
+      "proposition": "total_bases",
+      "semantic_model_id": "MLB_TOTAL_BASES_SEMANTIC_V1_b6cdb5379aa9",
+      "semantic_manifest_path": "manifests/MLB_TOTAL_BASES_SEMANTIC_V1_b6cdb5379aa9.json",
+      "semantic_manifest_sha256": "b97f9986a9a47fdcadda7e62c2fab61930d27f306d8b866e90779b1b659ab9e0",
+      "active_artifact_sha256": "b6cdb5379aa9d81f994b6b080489f253ec90104e3bcae2bd0778d76ad6fc0d6d",
+      "effective_from_timestamp": "2026-08-03T21:46:49.912141+00:00"
+    },
+    {
+      "proposition": "strikeouts_pitching",
+      "semantic_model_id": "MLB_STRIKEOUTS_PITCHING_SEMANTIC_V1_a3ee2428e5d0",
+      "semantic_manifest_path": "manifests/MLB_STRIKEOUTS_PITCHING_SEMANTIC_V1_a3ee2428e5d0.json",
+      "semantic_manifest_sha256": "6e237e7a30222110493d4757b46252a2deafe5b40b8f30084dbdf25501a79030",
+      "active_artifact_sha256": "a3ee2428e5d020ee7ba73d31bd701b53e12c7625c90da9f767537344319f2097",
+      "effective_from_timestamp": "2026-08-03T21:46:49.912141+00:00"
+    }
+  ]
+}

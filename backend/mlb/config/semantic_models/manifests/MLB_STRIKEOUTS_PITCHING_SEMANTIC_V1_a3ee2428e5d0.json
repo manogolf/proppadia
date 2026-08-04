@@ -1,0 +1,87 @@
+{
+  "registration_payload": {
+    "semantic_model_id": "MLB_STRIKEOUTS_PITCHING_SEMANTIC_V1_a3ee2428e5d0",
+    "identity_scope": "PROSPECTIVE_ONLY_NOT_HISTORICALLY_RECOVERED",
+    "effective_from_timestamp": "2026-08-03T21:46:49.912141+00:00",
+    "proposition": "strikeouts_pitching",
+    "loaded_model_artifact_path": "/Users/jerrystrain/Projects/proppadia/models_out/latest/strikeouts_pitching.joblib",
+    "loaded_artifact_sha256": "a3ee2428e5d020ee7ba73d31bd701b53e12c7625c90da9f767537344319f2097",
+    "estimator_class": {
+      "lr": "sklearn.pipeline.Pipeline",
+      "rf": "sklearn.pipeline.Pipeline",
+      "best": "sklearn.pipeline.Pipeline"
+    },
+    "embedded_preprocessing": {
+      "lr": "sklearn.compose._column_transformer.ColumnTransformer",
+      "rf": "sklearn.compose._column_transformer.ColumnTransformer"
+    },
+    "inference_code_path": [
+      "backend/app/services/model_registry.py:load_model",
+      "backend/mlb/prediction/make_prediction.py:predict",
+      "backend/mlb/scripts/build_mlb_predictions_wide.py:_predict_rows"
+    ],
+    "producing_code_git_commit": "38d08f93702c8497cccfed6fcf5a60753c322228",
+    "dirty_working_tree_status": "DIRTY",
+    "feature_schema_sha256": "a97ab220abe774eca9227679d8262233abccbacb23b74126ee002ca84b4be6c2",
+    "required_feature_order": [
+      "d15_earned_runs",
+      "d30_earned_runs",
+      "d15_strikeouts_pitching",
+      "d30_strikeouts_pitching",
+      "d15_walks_allowed",
+      "d30_walks_allowed",
+      "isna__is_home",
+      "isna__d15_hits_allowed",
+      "isna__d30_hits_allowed",
+      "isna__d15_earned_runs",
+      "isna__d30_earned_runs",
+      "isna__d15_strikeouts_pitching",
+      "isna__d30_strikeouts_pitching",
+      "isna__d15_walks_allowed",
+      "isna__d30_walks_allowed",
+      "time_of_day_bucket",
+      "game_day_of_week"
+    ],
+    "configuration": {
+      "model_dir": "/Users/jerrystrain/Projects/proppadia/models_out",
+      "blend_strategy": "auc_weighted_artifact_meta_auc_minus_0.5_nonnegative_equal_mean_if_zero",
+      "line_sensitivity_enabled": true,
+      "line_sensitivity_alpha": 0.9,
+      "forced_invert_props": [],
+      "upload_external_calibration_enabled": false,
+      "require_two_sided": true,
+      "two_sided_bookmaker": "",
+      "pitcher_min_starter_games": 5,
+      "pitcher_min_starter_outs": 1,
+      "pitcher_require_probable_starter": true
+    },
+    "configuration_sha256": "b58f0d544bed1e3ea9bc7edaf3f7bfbaf98dfb9916c80b6e2b98915f5f8761ab",
+    "probability_orientation_contract": "probability_over=P(actual_value>line); probability_under=1-probability_over; selected_probability=P(selected_side wins)",
+    "proposition_contract_version": "mlb_two_sided_player_prop_v1",
+    "calibration_mode": "DETERMINISTIC_CODE_CALIBRATION",
+    "calibration_identity": {
+      "mode": "DETERMINISTIC_CODE_CALIBRATION",
+      "function": "backend.mlb.prediction.make_prediction._apply_line_sensitivity",
+      "producing_code_git_commit": "38d08f93702c8497cccfed6fcf5a60753c322228",
+      "configuration_sha256": "b58f0d544bed1e3ea9bc7edaf3f7bfbaf98dfb9916c80b6e2b98915f5f8761ab",
+      "embedded_calibration_components": [
+        {
+          "component": "lr.clf",
+          "class": "sklearn.calibration.CalibratedClassifierCV",
+          "binding": "loaded_model_artifact_sha256"
+        }
+      ],
+      "external_calibration": {
+        "enabled": false,
+        "artifact_path": "",
+        "artifact_sha256": ""
+      },
+      "identity_definition": "SHA256 of this calibration identity body excluding identity_sha256",
+      "identity_sha256": "52b148c817d332b4b64f974aa764eefe171c6af1b883e92812394a57b4405ba9"
+    },
+    "calibration_artifact_path": "",
+    "calibration_artifact_sha256": ""
+  },
+  "semantic_registration_manifest_sha256": "fdb566d96fbccfb1cea56c86b4c22df6d80c0c00d3603ff15f9f39f8b218064c",
+  "hash_definition": "SHA256 of canonical registration_payload; avoids self-referential whole-document hashing"
+}

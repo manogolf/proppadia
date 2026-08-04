@@ -49,6 +49,7 @@ from backend.mlb.shared.team_name_map import (
 )
 from backend.mlb.shared.name_normalization import normalize_player_name_key
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
+from backend.mlb.shared import prospective_lineage as lineage
 from backend.shared.db.pg import pg_connect
 
 
@@ -997,10 +998,12 @@ def _predict_rows(
     *,
     by_team_ctx: Dict[int, Dict[str, Any]],
     by_player_id: Dict[int, PlayerRow],
+    lineage_context: Optional[Dict[str, Any]] = None,
 ) -> tuple[List[Dict[str, Any]], Dict[str, int], List[Dict[str, Any]]]:
     counts: Dict[str, int] = defaultdict(int)
     rows: List[Dict[str, Any]] = []
     feature_rows: List[Dict[str, Any]] = []
+    lineage_rows: List[Dict[str, Any]] = (lineage_context or {}).setdefault("rows", [])
 
     def _clear_prediction_caches() -> None:
         """Release per-prop model caches to keep peak RSS bounded on small instances."""
@@ -1130,6 +1133,63 @@ def _predict_rows(
                         "books_two_sided": int(off.books_two_sided),
                     }
                 )
+                if lineage_context is not None:
+                    side = "over" if prob_over >= 0.5 else "under"
+                    selected_prob = prob_over if side == "over" else 1.0 - prob_over
+                    selected_price = off.price_over_american if side == "over" else off.price_under_american
+                    selected_market = off.implied_over_novig if side == "over" else off.implied_under_novig
+                    identity = {
+                        "game_date": str(g.game_date), "game_id": int(g.game_id),
+                        "player_id": int(item.player.player_id), "prop_type": str(off.prop_type),
+                        "line": float(off.line), "selected_side": side,
+                        "bookmaker_key": _clean_str(off.bookmaker_key),
+                        "snapshot_run_tag": lineage_context["run_tag"],
+                    }
+                    model_id = lineage.model_identity(str(off.prop_type))
+                    feature_serial = lineage.canonical_json(prepared)
+                    row = {
+                        "lineage_contract_version": lineage.CONTRACT_VERSION,
+                        "run_tag": lineage_context["run_tag"],
+                        "prediction_timestamp": lineage_context["prediction_timestamp"],
+                        "scheduled_game_start": _clean_str(g.game_time) or "",
+                        "normal_decision_window": lineage_context["normal_decision_window"],
+                        "producing_script_path": str(Path(__file__).resolve()),
+                        "producing_code_git_commit": lineage_context["git_commit"],
+                        "dirty_working_tree_status": lineage_context["git_dirty"],
+                        **model_id,
+                        "feature_schema_sha256": model_id.get("registered_feature_schema_sha256") or lineage.hash_value(sorted(str(k) for k in prepared)),
+                        "feature_vector_sha256": lineage.hash_bytes(feature_serial.encode("utf-8")),
+                        "feature_vector_canonical_json": feature_serial,
+                        "feature_construction_contract_version": lineage.FEATURE_CONTRACT_VERSION,
+                        "calibration_method": model_id.get("calibration_method") or "CALIBRATION_IDENTITY_UNRESOLVED",
+                        "calibration_artifact_path": model_id.get("calibration_artifact_path") or "",
+                        "calibration_artifact_sha256": model_id.get("calibration_artifact_sha256") or "",
+                        "configuration_sha256": lineage_context["configuration_sha256"],
+                        "probability_orientation_contract": lineage.ORIENTATION_CONTRACT,
+                        "proposition_contract_version": lineage.PROP_CONTRACT_VERSION,
+                        "odds_snapshot_path": lineage_context["odds_snapshot_path"],
+                        "odds_snapshot_sha256": lineage_context["odds_snapshot_sha256"],
+                        "odds_snapshot_timestamp": lineage_context["odds_snapshot_timestamp"],
+                        "bookmaker_key": _clean_str(off.bookmaker_key) or "",
+                        "market_provider_origin_family": "the_odds_api",
+                        "price_over_american": off.price_over_american,
+                        "price_under_american": off.price_under_american,
+                        "selected_side": side,
+                        "selected_side_executable_price": selected_price,
+                        "selected_side_no_vig_probability": selected_market,
+                        "model_selected_side_probability": selected_prob,
+                        "model_probability_over": prob_over,
+                        "canonical_row_identity": lineage.canonical_json(identity),
+                        "market_favorite": bool(selected_price is not None and float(selected_price) < 0),
+                        "exact_price_break_even_probability": _american_to_implied_probability(selected_price),
+                        "direct_fallback_provenance": str(prepared.get("bvp_source") or prepared.get("prop_source") or "UNRECORDED"),
+                        "distribution_coherence_status": "PENDING_MULTI_LINE_EVALUATION",
+                        "opportunity_data_availability": "PENDING_CERTIFIED_STRICT_PRIOR_DEFINITION",
+                        "contributing_history_observation_status": "EXACT_FEATURE_VECTOR_CAPTURED_FRESHNESS_FIELDS_AS_AVAILABLE",
+                    }
+                    status, detail = lineage.validate(row)
+                    row["lineage_status"] = status; row["lineage_failure_detail"] = detail
+                    lineage_rows.append(row)
                 counts["predicted"] += 1
 
             # Important on 2GB instances: drop model caches before scoring the next prop.
@@ -1303,6 +1363,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="Optional bookmaker key constraint for --require-two-sided (for example: betonlineag).",
     )
     ap.add_argument("--strict", action="store_true", help="Fail when any rows are skipped for resolution/prediction reasons.")
+    ap.add_argument("--lineage-ledger", default=os.environ.get("MLB_PROSPECTIVE_LINEAGE_LEDGER", ""), help="Append-only prediction-time semantic-lineage CSV. A canonical default is used when omitted.")
+    ap.add_argument("--lineage-run-tag", default=os.environ.get("MLB_RUN_TAG", ""), help="Immutable snapshot run tag; defaults to the prediction timestamp.")
+    ap.add_argument("--normal-decision-window", default=os.environ.get("MLB_NORMAL_DECISION_WINDOW", "true"))
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     slate_date = _clean_str(args.slate_date) or _clean_str(os.environ.get("SLATE_DATE")) or _date_et_today()
@@ -1312,6 +1375,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     odds_snapshot_out = Path(str(args.odds_snapshot_out)).expanduser() if str(args.odds_snapshot_out or "").strip() else None
     prop_filter = _parse_prop_types_csv(str(args.prop_types or ""))
+    prediction_timestamp = lineage.utc_now()
+    run_tag = _clean_str(args.lineage_run_tag) or datetime.fromisoformat(prediction_timestamp).strftime("local_daily_%Y%m%dT%H%M%SZ")
+    lineage_ledger = Path(str(args.lineage_ledger)).expanduser() if _clean_str(args.lineage_ledger) else REPO_ROOT / "backend/mlb/exports/prospective_lineage" / str(slate_date) / "prediction_lineage_ledger.csv"
     optional_target_book_props = _parse_prop_types_csv(
         str(os.environ.get("MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS", "singles") or "")
     ) or set()
@@ -1375,6 +1441,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     f"earliest={alias_paths.get('earliest')} mid={alias_paths.get('mid')} final={alias_paths.get('final')}"
                 )
 
+        frozen_snapshot = odds_snapshot_in or odds_snapshot_out
+        snapshot_sha = lineage.hash_file(frozen_snapshot) if frozen_snapshot and frozen_snapshot.is_file() else ""
+        snapshot_ts = ""
+        if frozen_snapshot and frozen_snapshot.is_file():
+            try:
+                raw_snapshot = json.loads(frozen_snapshot.read_text(encoding="utf-8"))
+                snapshot_ts = str(raw_snapshot.get("captured_at_utc") or "") if isinstance(raw_snapshot, dict) else ""
+            except Exception:
+                snapshot_ts = ""
+        git_commit, git_dirty = lineage.git_identity(REPO_ROOT)
+        from backend.mlb.shared.semantic_model_registry import effective_inference_config
+        safe_config = effective_inference_config()
+        lineage_context = {"rows":[], "run_tag":run_tag, "prediction_timestamp":prediction_timestamp,
+            "normal_decision_window":str(args.normal_decision_window).strip().lower() in {"1","true","yes","on"},
+            "git_commit":git_commit,"git_dirty":git_dirty,"configuration_sha256":lineage.hash_value(safe_config),
+            "odds_snapshot_path":str(frozen_snapshot.resolve()) if frozen_snapshot else "",
+            "odds_snapshot_sha256":snapshot_sha,"odds_snapshot_timestamp":snapshot_ts}
+
         market_to_prop = _invert_market_map()
         team_name_rev = _build_team_name_reverse()
         offers, flatten_counts = _flatten_market_snapshot(
@@ -1409,6 +1493,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             resolved_offers,
             by_team_ctx=by_team_ctx,
             by_player_id=by_player_id,
+            lineage_context=lineage_context,
         )
         print(f"[mlb-wide-pred] predicted_rows={len(pred_rows)} pred_counts={pred_counts}")
         _write_feature_debug_exports(feature_rows, out_dir=feature_debug_out_dir)
@@ -1431,6 +1516,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"[mlb-wide-pred] ERROR: strict mode and skipped_total={skipped_total}", file=sys.stderr)
             return 1
 
+        lineage.annotate_distribution_coherence(lineage_context["rows"])
+        for lineage_row in lineage_context["rows"]:
+            lineage_row["lineage_status"], lineage_row["lineage_failure_detail"] = lineage.validate(lineage_row)
+        blocked = [x for x in lineage_context["rows"] if x["lineage_status"] != "LINEAGE_CERTIFIED"]
+        certified = [x for x in lineage_context["rows"] if x["lineage_status"] == "LINEAGE_CERTIFIED"]
+        lineage.append_rows(lineage_ledger, certified)
+        print(f"[mlb-wide-pred] appended certified lineage rows={len(certified)} excluded_blocked={len(blocked)} ledger={lineage_ledger}")
+        if blocked:
+            print(f"[mlb-wide-pred] prospective lineage exclusions={dict(pd.Series([x['lineage_status'] for x in blocked]).value_counts())}", file=sys.stderr)
+        if not certified:
+            print("[mlb-wide-pred] ERROR: no lineage-certified pregame rows", file=sys.stderr)
+            return 1
         out_csv.parent.mkdir(parents=True, exist_ok=True)
         wide.to_csv(out_csv, index=False)
         prop_counts = wide["prop_type"].value_counts(dropna=False).sort_index().to_dict() if "prop_type" in wide.columns else {}

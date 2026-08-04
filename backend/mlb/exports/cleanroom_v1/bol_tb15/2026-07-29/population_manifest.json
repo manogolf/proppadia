@@ -1,10 +1,10 @@
 {
   "slate_date": "2026-07-29",
-  "run_tag": "cleanroom_20260729T153807Z",
+  "run_tag": "cleanroom_20260730T011042Z",
   "phase": "PARTIAL_LINEUPS",
-  "board_rows": 196,
-  "raw_tb15_sides": 392,
-  "admitted_tb15_sides": 392,
+  "board_rows": 50,
+  "raw_tb15_sides": 100,
+  "admitted_tb15_sides": 100,
   "identity_rejects": 0,
   "final_population_frozen": false,
   "status": "CURRENT_CAPTURE_NOT_FINAL"
