@@ -912,6 +912,9 @@ def _select_policy_rows(scored: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_upload_generation")
     import argparse
     from datetime import datetime
     import pytz

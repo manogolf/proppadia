@@ -793,6 +793,9 @@ def build_slate_output(
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_slate_generation")
     import argparse
     import pytz
 

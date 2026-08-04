@@ -1467,6 +1467,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_ranking_and_routing")
     summary = run(parse_args())
     print(f"Wrote {summary['out_csv']}")
     print(f"Wrote {summary['summary_json']}")

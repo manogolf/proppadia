@@ -401,6 +401,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_quick_card_upload")
     args = parse_args()
     date_value = _date_key(args.date)
     if not date_value:

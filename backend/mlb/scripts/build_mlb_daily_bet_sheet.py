@@ -78,6 +78,9 @@ def _safe_mean(values: Iterable[float]) -> float | None:
 
 
 def main() -> int:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_wager_and_staking_output")
     ap = argparse.ArgumentParser(description="Build daily tool-ready bet sheet from historical lane stats.")
     ap.add_argument("--slate-date", default=os.environ.get("MLB_DATE", "") or _today_et(), help="YYYY-MM-DD (ET)")
     ap.add_argument("--history-rows-csv", default="tmp/mlb_red_mode_rows.csv")

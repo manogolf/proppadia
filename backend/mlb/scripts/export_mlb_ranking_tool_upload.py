@@ -491,6 +491,9 @@ def _write_outputs(
 
 
 def main() -> int:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_ranking_upload")
     parser = argparse.ArgumentParser(description="Export rank-model MLB rows for external price-finding tool.")
     parser.add_argument("--rank-csv", type=Path, required=True, help="Daily ranking model CSV.")
     parser.add_argument("--date", default="", help="Slate date YYYY-MM-DD; optional if rank CSV has date.")

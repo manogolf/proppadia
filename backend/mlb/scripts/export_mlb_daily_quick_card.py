@@ -425,6 +425,9 @@ def _apply_tier_caps(row: pd.Series) -> tuple[str, str]:
 
 
 def main() -> None:
+    from backend.mlb.shared.model_authority import assert_predictive_model_qualified
+
+    assert_predictive_model_qualified("production_quick_card_generation")
     args = _parse_args()
     strong = _load_strong_buckets(args.action_report_csv)
 
