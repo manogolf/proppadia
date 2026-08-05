@@ -12,6 +12,10 @@ from .pythagorean_log5_v1 import MODEL_VERSION, PublicGamePredictionError
 from .state_v1 import OfficialFinalGame
 
 
+def _value(row: Any, key: str, index: int) -> Any:
+    return row.get(key) if isinstance(row, dict) else row[index]
+
+
 def _json_default(value: Any) -> str:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
@@ -42,11 +46,14 @@ def load_official_finals_before(cutoff_utc: str) -> list[OfficialFinalGame]:
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (cutoff_utc,cutoff_utc))
         return [OfficialFinalGame(
-            game_pk=int(r[0]), game_date=str(r[1]), scheduled_start_utc=r[2].isoformat(),
-            game_number=int(r[3]), home_team_id=int(r[4]), away_team_id=int(r[5]),
-            home_runs=int(r[6]), away_runs=int(r[7]), official_status=str(r[8]),
-            official_final_effective_utc=r[9].isoformat(), observed_final_at_utc=r[10].isoformat(),
-            source_identity=str(r[11]), source_sha256=str(r[12]),
+            game_pk=int(_value(r,'game_pk',0)), game_date=str(_value(r,'game_date',1)),
+            scheduled_start_utc=_value(r,'scheduled_start_utc',2).isoformat(),
+            game_number=int(_value(r,'game_number',3)), home_team_id=int(_value(r,'home_team_id',4)),
+            away_team_id=int(_value(r,'away_team_id',5)), home_runs=int(_value(r,'home_runs',6)),
+            away_runs=int(_value(r,'away_runs',7)), official_status=str(_value(r,'official_status',8)),
+            official_final_effective_utc=_value(r,'official_final_effective_utc',9).isoformat(),
+            observed_final_at_utc=_value(r,'observed_final_at_utc',10).isoformat(),
+            source_identity=str(_value(r,'source_identity',11)), source_sha256=str(_value(r,'source_sha256',12)),
         ) for r in cur.fetchall()]
 
 
@@ -70,7 +77,7 @@ def append_official_finals(rows: Iterable[OfficialFinalGame]) -> int:
             else:
                 cur.execute("SELECT content_sha256 FROM mlb.public_game_official_finals WHERE game_pk=%s",(row.game_pk,))
                 existing=cur.fetchone()
-                if not existing or existing[0] != row.content_hash:
+                if not existing or _value(existing,'content_sha256',0) != row.content_hash:
                     raise PublicGamePredictionError(f"OFFICIAL_FINAL_CORRECTION_REQUIRES_REPLAY:{row.game_pk}")
         conn.commit()
     return inserted
@@ -91,7 +98,7 @@ def append_state_snapshot(snapshot: dict[str, Any]) -> bool:
         if not inserted:
             cur.execute("SELECT state_hash FROM mlb.public_game_team_state_snapshots WHERE model_version=%s AND prediction_cutoff_utc=%s",(MODEL_VERSION,snapshot['prediction_cutoff_utc']))
             existing=cur.fetchone()
-            if not existing or existing[0]!=snapshot['state_hash']:
+            if not existing or _value(existing,'state_hash',0)!=snapshot['state_hash']:
                 raise PublicGamePredictionError("IMMUTABLE_STATE_SNAPSHOT_CONFLICT")
         conn.commit()
     return inserted
@@ -124,7 +131,7 @@ def append_prediction_rows(rows: Iterable[dict[str, Any]]) -> int:
             else:
                 cur.execute("SELECT payload_sha256 FROM mlb.public_game_moneyline_predictions WHERE game_date=%s AND game_id=%s AND model_version=%s AND prediction_snapshot_class=%s",(row['game_date'],row['game_id'],row['winner_model_version'],row['prediction_snapshot_class']))
                 existing=cur.fetchone()
-                if not existing or existing[0]!=payload_hash:
+                if not existing or _value(existing,'payload_sha256',0)!=payload_hash:
                     raise PublicGamePredictionError(f"IMMUTABLE_PREDICTION_CONFLICT:{row['game_id']}")
         conn.commit()
     return inserted
@@ -135,7 +142,7 @@ def fetch_prediction_rows(game_date: str) -> list[dict[str, Any]]:
         cur.execute("""SELECT prediction_payload FROM mlb.public_game_moneyline_predictions
                        WHERE game_date=%s AND model_version=%s AND admission_status='ADMITTED_SHADOW'
                        ORDER BY scheduled_start_utc,game_id""",(game_date,MODEL_VERSION))
-        return [r[0] for r in cur.fetchall()]
+        return [_value(r,'prediction_payload',0) for r in cur.fetchall()]
 
 
 def append_outcome_grade(grade: dict[str, Any]) -> bool:
@@ -161,7 +168,7 @@ def append_outcome_grade(grade: dict[str, Any]) -> bool:
         if not inserted:
             cur.execute("SELECT payload_sha256 FROM mlb.public_game_moneyline_outcomes WHERE game_date=%s AND game_id=%s AND model_version=%s AND prediction_snapshot_class=%s",(grade['game_date'],grade['game_id'],grade['winner_model_version'],grade['prediction_snapshot_class']))
             existing=cur.fetchone()
-            if not existing or existing[0]!=payload_hash:
+            if not existing or _value(existing,'payload_sha256',0)!=payload_hash:
                 raise PublicGamePredictionError(f"OUTCOME_CORRECTION_REQUIRES_HISTORY:{grade['game_id']}")
         conn.commit()
     return inserted
