@@ -8,4 +8,5 @@
 - Push: none.
 - Deployment or feature-flag mutation: none.
 - Unrelated pre-existing DH-forward and prop-market working-tree changes were left unstaged and preserved.
-- Local implementation commit: recorded after commit in the terminal handoff.
+- Local implementation commit: `02c996e1` (`Harden MLB Pythagorean Log5 production lifecycle`).
+- Evidence-finalization commit: the subsequent local branch-tip documentation commit; its exact hash is reported in the terminal handoff because a commit cannot embed its own hash.
