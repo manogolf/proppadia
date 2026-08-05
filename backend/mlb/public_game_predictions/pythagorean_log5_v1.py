@@ -146,12 +146,27 @@ def _unavailable_fields() -> dict[str, None]:
 
 
 def score_schedule_payload(payload: dict[str, Any], *, prediction_timestamp_utc: str,
-                           source_schedule_hash: str,
+                           source_schedule_hash: str, team_state_snapshot: dict[str, Any] | None = None,
+                           production_mode: bool = False,
                            snapshot_class: str = SNAPSHOT_CLASS) -> list[dict[str, Any]]:
     """Score strict pregame schedule identities without reading outcomes or props."""
     config = load_candidate()
     identity = config["model_identity"]
-    states = _frozen_team_states(config)
+    if production_mode and team_state_snapshot is None:
+        raise PublicGamePredictionError("PRODUCTION_SCORING_REQUIRES_ADVANCED_TEAM_STATE")
+    if team_state_snapshot is None:
+        states = _frozen_team_states(config)
+        state_hash_value = config["frozen_team_state_source"]["sha256"]
+        state_through_game_date = identity["frozen_state_cutoff"]
+        prediction_cutoff_utc = prediction_timestamp_utc
+        state_quality = "CERTIFIED_INITIALIZATION_STATE"
+    else:
+        from .state_v1 import scoring_team_states
+        states = scoring_team_states(team_state_snapshot)
+        state_hash_value = team_state_snapshot["state_hash"]
+        state_through_game_date = team_state_snapshot["state_through_game_date"]
+        prediction_cutoff_utc = team_state_snapshot["prediction_cutoff_utc"]
+        state_quality = "STRICT_PRIOR_ADVANCED_STATE_CERTIFIED"
     now = datetime.fromisoformat(prediction_timestamp_utc.replace("Z", "+00:00")).astimezone(timezone.utc)
     rows: list[dict[str, Any]] = []
     for game in _schedule_games(payload):
@@ -182,6 +197,9 @@ def score_schedule_payload(payload: dict[str, Any], *, prediction_timestamp_utc:
             "winner_model_name": MODEL_NAME, "winner_model_version": MODEL_VERSION,
             "winner_model_hash": config["model_hash"], "scorer_hash": scorer_sha256(),
             "source_schedule_hash": source_schedule_hash,
+            "team_state_hash": state_hash_value,
+            "state_through_game_date": state_through_game_date,
+            "prediction_cutoff_utc": prediction_cutoff_utc,
             "historical_validation_accuracy": config["historical_evaluation"]["validation"]["accuracy"],
             "historical_validation_brier": config["historical_evaluation"]["validation"]["brier"],
             "historical_validation_log_loss": config["historical_evaluation"]["validation"]["log_loss"],
@@ -207,7 +225,7 @@ def score_schedule_payload(payload: dict[str, Any], *, prediction_timestamp_utc:
             "home_win_probability": home_p, "away_win_probability": 1.0 - home_p,
             "predicted_winner": home_name if home_p >= 0.5 else away_name,
             "confidence_band": confidence_band(home_p, identity["confidence_bands"]),
-            "data_quality_status": "STRICT_PRIOR_STATE_CERTIFIED",
+            "data_quality_status": state_quality,
             "home_team_games": int(hs["games"]), "away_team_games": int(aws["games"]),
             "home_pythagorean_strength": hp, "away_pythagorean_strength": ap,
             "home_field_logit_adjustment": float(identity["home_logit_adjustment"]),
@@ -279,6 +297,7 @@ def build_official_final_grade(prediction: dict[str, Any], *, official_home_runs
         "official_away_runs": int(official_away_runs),
         "official_winner": prediction["home_team"] if home_won else prediction["away_team"],
         "prediction_correct": bool(selected_home == bool(home_won)),
+        "observed_outcome_probability": probability if home_won else 1.0 - probability,
         "brier_contribution": (probability - home_won) ** 2,
         "log_loss_contribution": -(home_won * math.log(clipped) + (1 - home_won) * math.log(1 - clipped)),
         "official_source_path": official_source_path,

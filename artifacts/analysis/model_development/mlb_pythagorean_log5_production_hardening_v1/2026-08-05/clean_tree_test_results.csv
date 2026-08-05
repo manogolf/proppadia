@@ -1,0 +1,29 @@
+test_id,test,status,evidence
+1,candidate artifacts available in clean exported tree,PASS,exact staged-tree export; focused suite passed
+2,no ignored research-file dependency,PASS,compact committed fixtures only
+3,exact model hash,PASS,804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6
+4,exact accepted benchmark reproduction,PASS,2885 rows across three accepted periods
+5,chronological state advancement,PASS,unit coverage
+6,same-day doubleheader ordering,PASS,scheduled start game number and game_pk ordering
+7,postponed and suspended games,PASS,explicit unresolved exclusion
+8,cutoff exclusion,PASS,observed-final cutoff enforced
+9,current-game outcome exclusion,PASS,prediction path reports outcomes_accessed=0
+10,deterministic state hash,PASS,repeat reconstruction equality
+11,stale-state rejection,PASS,production scoring requires advanced state
+12,durable prediction identity uniqueness,PASS,canonical database primary key and fake-store test
+13,append-only prediction behavior,PASS,conflicting payload rejected
+14,idempotent designated snapshot,PASS,identical payload accepted without duplicate
+15,post-start rejection,PASS,admission requires prediction timestamp before scheduled start
+16,official-final grading,PASS,non-final result rejected
+17,append-only outcome behavior,PASS,conflicting outcome rejected
+18,retained-source hash lineage,PASS,official retained-response hash required
+19,feature flag false,PASS,environment absent/default false and production endpoint disabled
+20,retired-model isolation,PASS,no retired fallback in service path
+21,betting-authority isolation,PASS,status remains NO_QUALIFIED_MLB_BETTING_MODEL
+22,player-prop-authority isolation,PASS,status remains NO_QUALIFIED_MLB_PROP_MODEL
+23,score fields unavailable,PASS,public disabled response exposes no score prediction
+24,no EV or wager output,PASS,moneyline schema contains neither
+25,API schema,PASS,durable admitted-row service contract tested
+26,clean-tree backend test execution,PASS,60 passed 0 failed in 1.83 seconds
+27,frontend production build,PASS,vite build completed in clean export
+28,migration upgrade and rollback,PASS,two isolated temporary schemas created and removed

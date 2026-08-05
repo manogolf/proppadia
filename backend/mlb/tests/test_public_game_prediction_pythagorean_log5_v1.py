@@ -15,7 +15,7 @@ from backend.app.services.mlb import public_game_prediction_service as service
 from backend.mlb.public_game_predictions import pythagorean_log5_v1 as model
 
 ROOT = Path(__file__).resolve().parents[3]
-BENCHMARK = ROOT / "artifacts/analysis/model_development/mlb_established_game_prediction_methods_benchmark_v1/2026-08-05"
+FIXTURES = ROOT / "backend/mlb/tests/fixtures/public_game_predictions_v1"
 
 
 def schedule_fixture(home_id=110, away_id=111, game_id=824401, start="2026-08-06T17:10:00Z"):
@@ -33,8 +33,7 @@ def score(payload=None, timestamp="2026-08-06T12:00:00Z"):
 
 
 def selected_predictions():
-    p = pd.read_csv(BENCHMARK / "benchmark_game_predictions.csv")
-    return p[p.method == "PYTHAGOREAN_LOG5"]
+    return pd.read_csv(FIXTURES / "pythagorean_log5_exact_reproduction.csv.gz")
 
 
 def test_01_frozen_model_hash_and_version():
@@ -50,7 +49,7 @@ def test_01_frozen_model_hash_and_version():
 ])
 def test_02_benchmark_metrics_reproduce(split, n, accuracy, brier, ll):
     x = selected_predictions().query("split == @split")
-    y, p = (x.home_runs > x.away_runs).astype(int), x.home_win_probability
+    y, p = x.winner_home.astype(int), x.home_win_probability
     assert len(x) == n
     assert np.mean((p >= .5) == y) == pytest.approx(accuracy)
     assert brier_score_loss(y, p) == pytest.approx(brier)
@@ -105,6 +104,17 @@ def test_10_deterministic_repeat():
     assert score() == score()
 
 
+def test_10a_august6_exact_shadow_reproduction():
+    payload=json.loads((FIXTURES / "august6_schedule.json").read_text())
+    expected=pd.read_csv(FIXTURES / "august6_expected.csv").set_index('game_pk')
+    rows=model.score_schedule_payload(payload,prediction_timestamp_utc='2026-08-06T00:00:00Z',source_schedule_hash='a'*64)
+    assert len(rows)==11
+    for row in rows:
+        accepted=expected.loc[int(row['game_id'])]
+        assert row['home_win_probability']==pytest.approx(accepted.home_win_probability,abs=1e-12)
+        assert row['predicted_winner']==accepted.predicted_winner
+
+
 def test_11_prediction_ledger_append_only(tmp_path):
     path = tmp_path / "predictions.jsonl"
     assert model.append_prediction_rows(score(), path) == 1
@@ -154,7 +164,7 @@ def test_14_api_flag_off_returns_no_rows(monkeypatch):
 
 def test_15_api_test_on_renders_team_specific_moneyline_only(monkeypatch):
     monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
-    monkeypatch.setattr(service, "fetch_schedule", lambda game_date: schedule_fixture())
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: score())
     payload = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"}).json()
     row = payload["rows"][0]
     assert row["home_win_probability"] != pytest.approx(.5)

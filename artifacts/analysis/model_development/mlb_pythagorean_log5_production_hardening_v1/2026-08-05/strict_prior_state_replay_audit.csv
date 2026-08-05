@@ -1,0 +1,5 @@
+population,rows,result,evidence,ignored_dependency
+ACCEPTED_BENCHMARK,2885,PASS,compact exact probability/outcome fixture reproduces three accepted metric windows,0
+AUGUST_6_SHADOW,11,PASS,all probabilities match within 1e-12,0
+AUGUST_5_STATE_CUTOFF,30,PASS,initialization through 2026-08-04 hash e674e56400e2b63043e7b8175b7e4e8031e1b81d95394a89a10b747cfa8aaeb9,0
+SYNTHETIC_ADVANCEMENT_REGIMES,8,PASS,chronology/doubleheader/nonfinal/cutoff/duplicate/tamper tests,0

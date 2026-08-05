@@ -1,0 +1,5 @@
+# Daily operational contract
+
+Recommended deployment pattern: one dedicated Render cron command, not request-triggered scoring. At 14:00 UTC (07:00 PT), and hourly retries until 30 minutes before the earliest first pitch: fetch official schedule/finals; append final observations; rebuild strict-prior state; freeze state hash; discover upcoming games; score only pregame identities; insert one designated durable snapshot; expose rows only if the separately controlled feature flag is enabled. A second daily grade job after overnight finals may append outcomes.
+
+The command is `python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 --mlb-date <PACIFIC_DATE> --prediction-cutoff-utc <NOW_UTC> --write-durable`. It remains unconfigured by this passage. Duplicate invocation is idempotent; partial/network/database failures are non-publishing and retryable. Operational health should report candidate/state/source hashes, date-through, admitted/rejected rows, write counts, and grading backlog.

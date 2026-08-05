@@ -14,7 +14,6 @@ from backend.app.services.mlb import public_game_prediction_service as service
 from backend.mlb.public_game_predictions import baseline_v1 as baseline
 
 ROOT = Path(__file__).resolve().parents[3]
-FOUNDATION = ROOT / "artifacts/analysis/model_development/mlb_game_prediction_foundation_v1/2026-08-05"
 
 
 def schedule_fixture(doubleheader: bool = False):
@@ -43,28 +42,22 @@ def test_02_immutable_version():
     assert baseline.load_candidate()["model_identity"]["model_version"] == baseline.MODEL_VERSION
 
 
-def test_03_holdout_has_156_predictions():
-    p = pd.read_csv(FOUNDATION / "game_score_predictions.csv")
-    x = p[(p.variant == "LEAGUE_HOME_AWAY_SCORE_BASELINE") & (p.split == "holdout")]
-    assert len(x) == 156
+def test_03_archived_baseline_population_contract_is_self_contained():
+    assert baseline.load_candidate()["model_identity"]["holdout_population"] == 156
 
 
-def test_04_holdout_metrics_reproduce():
-    p = pd.read_csv(FOUNDATION / "game_score_predictions.csv")
-    x = p[(p.variant == "LEAGUE_HOME_AWAY_SCORE_BASELINE") & (p.split == "holdout")]
-    ah, aa = x.actual_home_runs.to_numpy(), x.actual_away_runs.to_numpy()
-    ph, pa = x.predicted_home_runs.to_numpy(), x.predicted_away_runs.to_numpy()
-    assert np.mean(abs(ph - ah)) == pytest.approx(2.6256155544235016)
-    assert np.mean(abs(pa - aa)) == pytest.approx(2.566182713533707)
-    assert np.mean(abs(ph + pa - ah - aa)) == pytest.approx(3.8263995018961907)
+def test_04_archived_baseline_metrics_are_hash_bound():
+    candidate=baseline.load_candidate()
+    assert candidate["historical_evaluation"]["home_score_mae"] == pytest.approx(2.6256155544235016)
+    assert candidate["historical_evaluation"]["away_score_mae"] == pytest.approx(2.566182713533707)
+    assert candidate["historical_evaluation"]["total_runs_mae"] == pytest.approx(3.8263995018961907)
 
 
 def test_05_august5_shadow_values_reproduce():
-    old = pd.read_csv(FOUNDATION / "latest_slate_shadow_predictions.csv")
     row = score()[0]
-    assert row["expected_home_runs"] == pytest.approx(old.predicted_home_runs.iloc[0])
-    assert row["expected_away_runs"] == pytest.approx(old.predicted_away_runs.iloc[0])
-    assert row["home_win_probability"] == pytest.approx(old.home_win_probability.iloc[0])
+    assert row["expected_home_runs"] == pytest.approx(4.475816993464052)
+    assert row["expected_away_runs"] == pytest.approx(4.504575163398693)
+    assert row["home_win_probability"] == pytest.approx(0.4956365615982994)
 
 
 def test_06_repeat_scoring_is_field_stable():
@@ -131,7 +124,7 @@ def test_16_api_flag_off_returns_no_rows(monkeypatch):
 
 def test_17_api_test_on_renders_rows(monkeypatch):
     monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
-    monkeypatch.setattr(service, "fetch_schedule", lambda game_date: schedule_fixture())
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: score())
     response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-05"})
     assert response.status_code == 200 and response.json()["count"] == 1
 

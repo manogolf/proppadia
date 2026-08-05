@@ -42,6 +42,11 @@
     "prospective_shadow_predictions.csv": "a10c6c5afdfbc9c452875ed02f06569be41dbd50a059881ef031e58c11908ee5",
     "benchmark_execution_source.py": "7f41affbaefd80b1b52b63a82e5bd044c30297ad0b0a0c5e67886aedcb14c7ed"
   },
+  "self_contained_reproduction_fixtures": {
+    "pythagorean_log5_exact_reproduction.csv.gz": "7838ca2e92fd874ebe8770903c901f1d41f40cbccab10d6b45ec4c23a972ddfd",
+    "august6_schedule.json": "fc3a5e482c90825fdf1b8dbb9e3485d5db49beea1c338fd5620de34f0122bdad",
+    "august6_expected.csv": "595644451d66b08f72bf9d6d6220e595cad420342eca89457fb037976428d1ad"
+  },
   "historical_evaluation": {
     "validation": {"games": 2120, "accuracy": 0.5556603773584906, "brier": 0.244239080020185, "log_loss": 0.6813624655515292, "calibration_gap": -0.0081289047359191},
     "early_2026": {"games": 563, "accuracy": 0.5364120781527531, "brier": 0.250398375373888, "log_loss": 0.694007666402166, "calibration_gap": 0.0228585630455696},

@@ -1,0 +1,5 @@
+# Strict-prior state advancement contract
+
+Initialization is the hash-bound August 4 team aggregate. Incremental authority is official MLB schedule/final payloads retained in Postgres. Final observations apply only when observed before `prediction_cutoff_utc`, in `(game_date, scheduled_start_utc, game_number, game_pk)` order. Postponed, suspended, delayed, and non-final games remain explicit unresolved rows. Each game updates both teams' games, runs scored, and runs allowed exactly once. Conflicting duplicate bytes fail closed.
+
+`state_through_game_date`, `state_generated_at_utc`, `prediction_generated_at_utc`, and `prediction_cutoff_utc` are independent explicit fields. State hashes exclude wall-clock generation metadata and bind model/schema, initialization hash, applied game IDs/content hashes, date-through, and team aggregates. Same inputs through the same cutoff reproduce the same hash. Corrections are append-only and require deterministic replay from initialization; earlier snapshots never mutate.
