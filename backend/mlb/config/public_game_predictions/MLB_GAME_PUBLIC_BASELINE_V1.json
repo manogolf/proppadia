@@ -1,0 +1,41 @@
+{
+  "experiment_id": "MLB_GAME_PREDICTION_DEPLOYMENT_REVIEW_V1",
+  "authority_state": "MLB_PUBLIC_GAME_PREDICTION_CANDIDATE_PENDING_ENABLEMENT",
+  "feature_flag": "MLB_PUBLIC_GAME_PREDICTIONS_ENABLED",
+  "feature_flag_default": false,
+  "model_identity": {
+    "model_name": "MLB Public Game Baseline",
+    "model_version": "MLB_GAME_PUBLIC_BASELINE_V1",
+    "model_family": "LEAGUE_HOME_AWAY_SCORE_BASELINE",
+    "training_cutoff": "2026-08-04",
+    "expected_home_runs": 4.475816993464052,
+    "expected_away_runs": 4.504575163398693,
+    "distribution": "INDEPENDENT_POISSON_REGULATION_BASELINE",
+    "home_win_resolution": "RENORMALIZE_EXCLUDING_TIE_AFTER_NINE",
+    "confidence_bands": {
+      "NEAR_EVEN": [0.475, 0.525],
+      "LEAN": [0.425, 0.575],
+      "MODERATE": [0.375, 0.625],
+      "STRONG": "OUTSIDE_0.375_0.625"
+    },
+    "historical_population": 765,
+    "holdout_population": 156
+  },
+  "model_hash": "36a886eb08d9458ddf0c2158f59552e4c62ccb671eaee230066b8ff4128ca651",
+  "historical_evaluation": {
+    "holdout_expected_home_runs": 4.441501103752759,
+    "holdout_expected_away_runs": 4.481236203090509,
+    "home_score_mae": 2.6256155544235016,
+    "away_score_mae": 2.566182713533707,
+    "combined_score_mae": 2.5958991339786044,
+    "total_runs_mae": 3.8263995018961907,
+    "total_score_bias": 0.24325012735608745,
+    "moneyline_accuracy": 0.4551282051282051,
+    "moneyline_brier": 0.25057963818458595,
+    "moneyline_log_loss": 0.6943065153141558,
+    "moneyline_calibration_gap": -0.05092264878816106,
+    "all_confidence_band": "NEAR_EVEN"
+  },
+  "betting_edge_status": "BETTING_EDGE_NOT_TESTABLE_MISSING_HISTORICAL_MAIN_MARKETS",
+  "disclosure": "MODEL PREDICTION — BETTING EDGE NOT DEMONSTRATED"
+}

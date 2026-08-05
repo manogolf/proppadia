@@ -61,6 +61,10 @@ from backend.app.services.mlb.player_service import (
     search_players,
 )
 from backend.app.services.mlb.roster_freshness_service import get_roster_freshness
+from backend.app.services.mlb.public_game_prediction_service import (
+    get_public_game_prediction_status,
+    get_public_game_predictions,
+)
 from backend.app.services.shared import ping_db, sport_ping
 from backend.mlb.shared.team_name_map import normalizeTeamAbbreviation
 
@@ -211,6 +215,28 @@ def mlb_today_workspace_prop_availability(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/game-predictions", summary="Feature-flagged public MLB game predictions")
+def mlb_public_game_predictions(
+    game_date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today ET)"),
+):
+    target = game_date or datetime.now(ET).date().isoformat()
+    try:
+        date.fromisoformat(target)
+        return get_public_game_predictions(target)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="game_date must be YYYY-MM-DD") from e
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"{type(e).__name__}: {e}") from e
+
+
+@router.get("/mlb/model-status", summary="Separated MLB public, betting, and prop authority")
+def mlb_public_model_status():
+    try:
+        return get_public_game_prediction_status()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"{type(e).__name__}: {e}") from e
 
 
 @router.get(

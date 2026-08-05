@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import MLBPublicGamePredictionsPanel from "../../components/mlb/MLBPublicGamePredictionsPanel.jsx";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getBaseURL } from "../../shared/getBaseURL.js";
@@ -1288,6 +1289,8 @@ export default function MLBTodayWorkspacePage() {
             </p>
           </div>
         </div>
+
+        <MLBPublicGamePredictionsPanel gameDate={slateDate} />
 
         <div className="pp-card p-3 mb-4 flex flex-wrap gap-3 items-end">
           <div>
