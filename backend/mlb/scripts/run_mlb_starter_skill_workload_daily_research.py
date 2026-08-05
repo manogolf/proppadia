@@ -58,12 +58,12 @@ def _schedule_game_count(payload: dict) -> int:
     return sum(len(day.get("games", [])) for day in payload.get("dates", []))
 
 
-def _write_noop(date_value: str, reason: str, root: Path) -> Path:
+def _write_noop(date_value: str, reason: str, root: Path, generated_at_utc: str) -> Path:
     out_dir = root / date_value
     out_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "date": date_value,
-        "generated_at_utc": _utc_now(),
+        "generated_at_utc": generated_at_utc,
         "status": "NOOP_SUCCESS",
         "reason": reason,
         "db_writes": 0,
@@ -80,7 +80,12 @@ def run(args: argparse.Namespace) -> dict:
     date_value = _resolve_slate_date(args.date)
     generated_at = _utc_now()
     if args.validate_no_games:
-        noop_path = _write_noop(date_value, "controlled_validate_no_games_mode", Path(args.noop_root))
+        noop_path = _write_noop(
+            date_value,
+            "controlled_validate_no_games_mode",
+            Path(args.noop_root),
+            generated_at,
+        )
         return {
             "date": date_value,
             "status": "NOOP_SUCCESS",
@@ -99,7 +104,12 @@ def run(args: argparse.Namespace) -> dict:
             game_count = _schedule_game_count(schedule)
             schedule_status = "available"
             if game_count == 0:
-                noop_path = _write_noop(date_value, "statsapi_schedule_has_no_games", Path(args.noop_root))
+                noop_path = _write_noop(
+                    date_value,
+                    "statsapi_schedule_has_no_games",
+                    Path(args.noop_root),
+                    generated_at,
+                )
                 return {
                     "date": date_value,
                     "status": "NOOP_SUCCESS",
@@ -127,6 +137,7 @@ def run(args: argparse.Namespace) -> dict:
         validate_only=False,
         no_db=args.no_db,
         strict_prior_only=args.strict_prior_only,
+        generated_at_utc=generated_at,
     )
     result = build_research(build_args)
     obs_args = argparse.Namespace(
