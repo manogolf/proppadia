@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS mlb.public_game_official_finals (
   game_number integer NOT NULL DEFAULT 1, home_team_id bigint NOT NULL, away_team_id bigint NOT NULL,
   home_runs integer NOT NULL CHECK (home_runs >= 0), away_runs integer NOT NULL CHECK (away_runs >= 0),
   official_status text NOT NULL CHECK (official_status IN ('Final','Game Over')),
+  official_final_effective_utc timestamptz NOT NULL,
   observed_final_at_utc timestamptz NOT NULL, source_identity text NOT NULL,
   source_sha256 text NOT NULL CHECK (length(source_sha256)=64),
   content_sha256 text NOT NULL CHECK (length(content_sha256)=64), created_at timestamptz NOT NULL DEFAULT now()

@@ -28,7 +28,7 @@ def load_official_finals_before(cutoff_utc: str) -> list[OfficialFinalGame]:
       SELECT f.game_pk, f.game_date::text, f.scheduled_start_utc, f.game_number,
              f.home_team_id, f.away_team_id, COALESCE(c.corrected_home_runs,f.home_runs),
              COALESCE(c.corrected_away_runs,f.away_runs), f.official_status,
-             COALESCE(c.observed_at_utc,f.observed_final_at_utc),
+             f.official_final_effective_utc, f.observed_final_at_utc,
              COALESCE(c.source_identity,f.source_identity), COALESCE(c.source_sha256,f.source_sha256)
       FROM mlb.public_game_official_finals f
       LEFT JOIN LATERAL (
@@ -36,7 +36,7 @@ def load_official_finals_before(cutoff_utc: str) -> list[OfficialFinalGame]:
         WHERE x.game_pk=f.game_pk AND x.observed_at_utc < %s::timestamptz
         ORDER BY x.observed_at_utc DESC,x.correction_id DESC LIMIT 1
       ) c ON true
-      WHERE f.observed_final_at_utc < %s::timestamptz
+      WHERE f.official_final_effective_utc <= %s::timestamptz
       ORDER BY f.game_date, f.scheduled_start_utc, f.game_number, f.game_pk
     """
     with pg_connect() as conn, conn.cursor() as cur:
@@ -45,7 +45,8 @@ def load_official_finals_before(cutoff_utc: str) -> list[OfficialFinalGame]:
             game_pk=int(r[0]), game_date=str(r[1]), scheduled_start_utc=r[2].isoformat(),
             game_number=int(r[3]), home_team_id=int(r[4]), away_team_id=int(r[5]),
             home_runs=int(r[6]), away_runs=int(r[7]), official_status=str(r[8]),
-            observed_final_at_utc=r[9].isoformat(), source_identity=str(r[10]), source_sha256=str(r[11]),
+            official_final_effective_utc=r[9].isoformat(), observed_final_at_utc=r[10].isoformat(),
+            source_identity=str(r[11]), source_sha256=str(r[12]),
         ) for r in cur.fetchall()]
 
 
@@ -56,12 +57,13 @@ def append_official_finals(rows: Iterable[OfficialFinalGame]) -> int:
             cur.execute("""
               INSERT INTO mlb.public_game_official_finals
               (game_pk,game_date,scheduled_start_utc,game_number,home_team_id,away_team_id,
-               home_runs,away_runs,official_status,observed_final_at_utc,source_identity,source_sha256,content_sha256)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               home_runs,away_runs,official_status,official_final_effective_utc,observed_final_at_utc,
+               source_identity,source_sha256,content_sha256)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
               ON CONFLICT (game_pk) DO NOTHING
               RETURNING game_pk
             """, (row.game_pk,row.game_date,row.scheduled_start_utc,row.game_number,row.home_team_id,
-                  row.away_team_id,row.home_runs,row.away_runs,row.official_status,row.observed_final_at_utc,
+                  row.away_team_id,row.home_runs,row.away_runs,row.official_status,row.official_final_effective_utc,row.observed_final_at_utc,
                   row.source_identity,row.source_sha256,row.content_hash))
             if cur.fetchone():
                 inserted += 1
@@ -87,9 +89,9 @@ def append_state_snapshot(snapshot: dict[str, Any]) -> bool:
               snapshot['state_hash'],snapshot['state_generated_at_utc'],json.dumps(snapshot),payload_hash))
         inserted=cur.fetchone() is not None
         if not inserted:
-            cur.execute("SELECT state_hash,payload_sha256 FROM mlb.public_game_team_state_snapshots WHERE model_version=%s AND prediction_cutoff_utc=%s",(MODEL_VERSION,snapshot['prediction_cutoff_utc']))
+            cur.execute("SELECT state_hash FROM mlb.public_game_team_state_snapshots WHERE model_version=%s AND prediction_cutoff_utc=%s",(MODEL_VERSION,snapshot['prediction_cutoff_utc']))
             existing=cur.fetchone()
-            if not existing or tuple(existing)!=(snapshot['state_hash'],payload_hash):
+            if not existing or existing[0]!=snapshot['state_hash']:
                 raise PublicGamePredictionError("IMMUTABLE_STATE_SNAPSHOT_CONFLICT")
         conn.commit()
     return inserted

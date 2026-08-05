@@ -11,13 +11,15 @@ from backend.mlb.public_game_predictions import durable_store_v1 as durable
 from backend.mlb.public_game_predictions.state_v1 import (
     OfficialFinalGame, load_initialization_state, reconstruct_state, scoring_team_states, state_hash,
 )
+from backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 import official_final_from_feed
 
 ROOT=Path(__file__).resolve().parents[3]
 
 
 def game(pk=1,date='2026-08-05',start='2026-08-05T17:00:00Z',number=1,
-         home=110,away=111,hr=5,ar=3,status='Final',observed='2026-08-05T21:00:00Z'):
-    return OfficialFinalGame(pk,date,start,number,home,away,hr,ar,status,observed,
+         home=110,away=111,hr=5,ar=3,status='Final',effective='2026-08-05T20:59:00Z',
+         observed='2026-08-05T21:00:00Z'):
+    return OfficialFinalGame(pk,date,start,number,home,away,hr,ar,status,effective,observed,
                              f'official:{pk}',hashlib.sha256(str(pk).encode()).hexdigest())
 
 
@@ -48,13 +50,15 @@ def test_04_nonfinal_regimes_are_explicitly_unresolved(status):
     assert not state['applied_game_ids'] and state['unresolved_games'][0]['reason']=='OFFICIAL_STATUS_NOT_FINAL'
 
 
-def test_05_cutoff_excludes_later_observed_final():
-    state=snapshot([game(observed='2026-08-06T00:00:00Z')])
-    assert not state['applied_game_ids'] and state['unresolved_games'][0]['reason']=='FINAL_OBSERVED_AT_OR_AFTER_CUTOFF'
+def test_05_cutoff_uses_final_effective_time_not_later_fetch_time():
+    admitted=snapshot([game(effective='2026-08-05T23:59:00Z',observed='2026-08-06T02:00:00Z')])
+    excluded=snapshot([game(effective='2026-08-06T00:00:01Z',observed='2026-08-06T02:00:00Z')])
+    assert admitted['applied_game_ids']==[1]
+    assert not excluded['applied_game_ids'] and excluded['unresolved_games'][0]['reason']=='FINAL_EFFECTIVE_AFTER_CUTOFF'
 
 
 def test_06_current_game_outcome_cannot_enter_its_prediction_state():
-    state=snapshot([game(pk=99,start='2026-08-06T02:00:00Z',observed='2026-08-06T04:00:00Z')],cutoff='2026-08-06T01:00:00Z')
+    state=snapshot([game(pk=99,start='2026-08-06T02:00:00Z',effective='2026-08-06T04:00:00Z',observed='2026-08-06T04:01:00Z')],cutoff='2026-08-06T01:00:00Z')
     assert 99 not in state['applied_game_ids']
 
 
@@ -66,6 +70,63 @@ def test_07_state_hash_is_deterministic_and_order_invariant():
 def test_08_conflicting_duplicate_official_game_fails_closed():
     with pytest.raises(model.PublicGamePredictionError,match='CONFLICTING'):
         snapshot([game(pk=1,hr=5),game(pk=1,hr=6)])
+
+
+def test_08a_canonical_final_hash_excludes_raw_acquisition_lineage():
+    first=game(observed='2026-08-05T21:00:00Z')
+    second=OfficialFinalGame(**{**first.__dict__,'observed_final_at_utc':'2026-08-06T09:00:00Z',
+                                'source_identity':'different/path.json','source_sha256':'f'*64})
+    assert first.content_hash==second.content_hash
+
+
+def test_08b_genuine_score_correction_changes_canonical_hash():
+    assert game(hr=5).content_hash!=game(hr=6).content_hash
+
+
+def test_08c_state_replay_after_cutoff_is_stable():
+    row=game(effective='2026-08-05T21:00:00Z',observed='2026-08-06T09:00:00Z')
+    early=reconstruct_state([row],prediction_cutoff_utc='2026-08-06T00:00:00Z',state_generated_at_utc='2026-08-06T00:00:01Z')
+    later=reconstruct_state([row],prediction_cutoff_utc='2026-08-06T00:00:00Z',state_generated_at_utc='2026-08-07T00:00:00Z')
+    assert early['state_hash']==later['state_hash'] and early['applied_game_ids']==[1]
+
+
+def test_08d_official_feed_uses_last_play_completion_time():
+    feed={'gamePk':1,'gameData':{'status':{'abstractGameState':'Final'},
+          'datetime':{'officialDate':'2026-08-05','dateTime':'2026-08-05T17:00:00Z'},
+          'game':{'gameNumber':1},'teams':{'home':{'id':110},'away':{'id':111}}},
+          'liveData':{'linescore':{'teams':{'home':{'runs':5},'away':{'runs':3}}},
+          'plays':{'allPlays':[{'about':{'endTime':'2026-08-05T20:59:00.123Z'}}]}}}
+    row=official_final_from_feed(feed,observed_at_utc='2026-08-06T01:00:00Z',
+                                 source_identity='retained.json',source_sha256='a'*64)
+    assert row.official_final_effective_utc=='2026-08-05T20:59:00.123000Z'
+
+
+def test_08e_durable_final_ignores_raw_hash_change_but_rejects_score_change(monkeypatch):
+    db={}
+    class Cursor:
+        result=None
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def execute(self,sql,params):
+            if 'INSERT INTO mlb.public_game_official_finals' in sql:
+                key=int(params[0])
+                if key in db: self.result=None
+                else: db[key]=params[-1];self.result=(key,)
+            elif 'SELECT content_sha256' in sql: self.result=(db.get(int(params[0])),)
+            else: raise AssertionError(sql)
+        def fetchone(self): return self.result
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def cursor(self): return Cursor()
+        def commit(self): pass
+    monkeypatch.setattr(durable,'pg_connect',lambda:Connection())
+    first=game();second=OfficialFinalGame(**{**first.__dict__,'observed_final_at_utc':'2026-08-06T09:00:00Z',
+                                            'source_identity':'new.json','source_sha256':'f'*64})
+    assert durable.append_official_finals([first])==1
+    assert durable.append_official_finals([second])==0
+    with pytest.raises(model.PublicGamePredictionError,match='CORRECTION_REQUIRES_REPLAY'):
+        durable.append_official_finals([game(hr=6)])
 
 
 def test_09_tampered_state_hash_fails_closed():

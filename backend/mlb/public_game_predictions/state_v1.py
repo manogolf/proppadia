@@ -29,6 +29,7 @@ class OfficialFinalGame:
     home_runs: int
     away_runs: int
     official_status: str
+    official_final_effective_utc: str
     observed_final_at_utc: str
     source_identity: str
     source_sha256: str
@@ -39,7 +40,20 @@ class OfficialFinalGame:
 
     @property
     def content_hash(self) -> str:
-        return hashlib.sha256(json.dumps(self.__dict__, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return hashlib.sha256(json.dumps(self.canonical_result_payload, sort_keys=True,
+                                         separators=(",", ":")).encode()).hexdigest()
+
+    @property
+    def canonical_result_payload(self) -> dict[str, Any]:
+        """Stable baseball result only; acquisition and raw-source lineage are excluded."""
+        return {
+            "game_pk": int(self.game_pk), "game_date": str(self.game_date),
+            "scheduled_start_utc": _utc(self.scheduled_start_utc).isoformat().replace("+00:00", "Z"),
+            "game_number": int(self.game_number), "home_team_id": int(self.home_team_id),
+            "away_team_id": int(self.away_team_id), "home_runs": int(self.home_runs),
+            "away_runs": int(self.away_runs), "official_status": str(self.official_status),
+            "official_final_effective_utc": _utc(self.official_final_effective_utc).isoformat().replace("+00:00", "Z"),
+        }
 
 
 def _utc(value: str) -> datetime:
@@ -83,8 +97,6 @@ def reconstruct_state(final_games: Iterable[OfficialFinalGame], *, prediction_cu
                       state_generated_at_utc: str) -> dict[str, Any]:
     cutoff = _utc(prediction_cutoff_utc)
     generated = _utc(state_generated_at_utc)
-    if generated > cutoff:
-        raise PublicGamePredictionError("STATE_GENERATED_AFTER_PREDICTION_CUTOFF")
     snapshot = load_initialization_state()
     initialization_through_date = snapshot["state_through_game_date"]
     by_game: dict[int, OfficialFinalGame] = {}
@@ -94,9 +106,9 @@ def reconstruct_state(final_games: Iterable[OfficialFinalGame], *, prediction_cu
             unresolved.append({"game_pk": game.game_pk, "status": game.official_status,
                                "reason": "OFFICIAL_STATUS_NOT_FINAL"})
             continue
-        if _utc(game.observed_final_at_utc) >= cutoff:
+        if _utc(game.official_final_effective_utc) > cutoff:
             unresolved.append({"game_pk": game.game_pk, "status": game.official_status,
-                               "reason": "FINAL_OBSERVED_AT_OR_AFTER_CUTOFF"})
+                               "reason": "FINAL_EFFECTIVE_AFTER_CUTOFF"})
             continue
         prior = by_game.get(game.game_pk)
         if prior and prior.content_hash != game.content_hash:
