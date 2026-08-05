@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, hashlib, json, sys
+import argparse, hashlib, json, os, sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +11,37 @@ from backend.mlb.scripts.dh_forward_automation_common import (
 )
 
 FIELDS = "canonical_identity game_date game_pk player_mlb_id team_mlb_id opponent_mlb_id grading_timestamp_utc grading_status official_source official_source_sha256 original_dh_plate_appearances original_dh_hits reached_fourth_pa reached_fifth_pa hits_o15_outcome completed_as_dh pinch_hit_before_fourth_pa removal_type replacement_player_mlb_id replacement_player_plate_appearances replacement_player_hits detail".split()
+LINEAGE_FIELDS = "canonical_identity game_date game_pk grading_timestamp_utc source_lineage_state recorded_source_sha256 retained_source_sha256 retained_source_path detail".split()
+
+
+def retained_source(config, game_pk, fetch, run_tag):
+    """Return one immutable, byte-identical official source for this game/run."""
+    cache = config["prior_feed_cache"] / f"{int(game_pk)}.json"
+    if cache.exists():
+        raw = cache.read_bytes(); feed = json.loads(raw)
+        if feed.get("gameData", {}).get("status", {}).get("abstractGameState") == "Final":
+            return feed, raw, cache, "CERTIFIED_EXISTING_CACHE"
+    feed, raw = fetch(feed_url(game_pk))
+    digest = hashlib.sha256(raw).hexdigest()
+    target = config["immutable_grade_sources"] / run_tag / f"game_{int(game_pk)}_{digest}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        tmp = target.with_suffix(".tmp"); tmp.write_bytes(raw); os.replace(tmp, target)
+    retained = target.read_bytes()
+    if hashlib.sha256(retained).hexdigest() != digest: raise RuntimeError("GRADE_SOURCE_RETENTION_HASH_MISMATCH")
+    return json.loads(retained), retained, target, "IMMUTABLE_LIVE_RESPONSE_RETAINED"
+
+
+def repair_existing_lineage_sidecar(config):
+    """Document legacy rows without mutating either accepted ledger."""
+    _, outcomes = read_csv(config["outcome_ledger"]); rows=[]
+    for row in outcomes:
+        cache=config["prior_feed_cache"]/f"{int(row['game_pk'])}.json"
+        retained_hash=sha256_path(cache) if cache.exists() else ""
+        recorded=row.get("official_source_sha256","")
+        state="CERTIFIED_EXISTING_CACHE" if retained_hash and retained_hash==recorded else "RAW_RESPONSE_NOT_RETAINED"
+        rows.append({"canonical_identity":row["canonical_identity"],"game_date":row["game_date"],"game_pk":row["game_pk"],"grading_timestamp_utc":row["grading_timestamp_utc"],"source_lineage_state":state,"recorded_source_sha256":recorded,"retained_source_sha256":retained_hash,"retained_source_path":str(cache),"detail":"legacy row exact retained bytes verified" if state.startswith("CERTIFIED") else "recorded live-response hash differs from retained cache; original response cannot be recreated"})
+    return append_unique_atomic(config["outcome_source_lineage_ledger"],LINEAGE_FIELDS,rows,"canonical_identity",config["backup_dir"])
 
 
 def classify(feed, prediction):
@@ -49,24 +80,25 @@ def run(day=None, fetch=fetch_json):
     if day is None: day=(datetime.now(PACIFIC).date()-timedelta(days=1)).isoformat()
     targets=[r for r in predictions if r["game_date"]==day and r["canonical_identity"] not in existing]
     with exclusive_lock(config["lock_dir"]/"grade.lock"):
-        now=datetime.now(timezone.utc); feeds={}; rows=[]
+        now=datetime.now(timezone.utc); run_tag=now.strftime("grade_%Y%m%dT%H%M%S%fZ"); feeds={}; rows=[]; lineage=[]
         for prediction in targets:
             pk=int(prediction["game_pk"])
-            if pk not in feeds: feeds[pk]=fetch(feed_url(pk))
-            feed,raw=feeds[pk]; status,values=classify(feed,prediction)
+            if pk not in feeds: feeds[pk]=retained_source(config,pk,fetch,run_tag)
+            feed,raw,source_path,lineage_state=feeds[pk]; status,values=classify(feed,prediction)
             if status=="OFFICIAL_RESULT_UNAVAILABLE": continue
-            if feed.get("gameData",{}).get("status",{}).get("abstractGameState")=="Final":
-                cache=config["prior_feed_cache"]; cache.mkdir(parents=True,exist_ok=True); target=cache/f"{pk}.json"
-                if not target.exists():
-                    tmp=target.with_suffix(".tmp"); tmp.write_bytes(raw); __import__("os").replace(tmp,target)
-            row={k:"" for k in FIELDS}; row.update(canonical_identity=prediction["canonical_identity"],game_date=prediction["game_date"],game_pk=pk,player_mlb_id=prediction["player_mlb_id"],team_mlb_id=prediction["team_mlb_id"],opponent_mlb_id=prediction["opponent_mlb_id"],grading_timestamp_utc=now.isoformat(),grading_status=status,official_source="MLB_STATSAPI_FEED_LIVE_FINAL",official_source_sha256=hashlib.sha256(raw).hexdigest(),detail="official final only"); row.update(values); rows.append(row)
+            digest=hashlib.sha256(raw).hexdigest()
+            row={k:"" for k in FIELDS}; row.update(canonical_identity=prediction["canonical_identity"],game_date=prediction["game_date"],game_pk=pk,player_mlb_id=prediction["player_mlb_id"],team_mlb_id=prediction["team_mlb_id"],opponent_mlb_id=prediction["opponent_mlb_id"],grading_timestamp_utc=now.isoformat(),grading_status=status,official_source="MLB_STATSAPI_FEED_LIVE_FINAL",official_source_sha256=digest,detail="official final only"); row.update(values); rows.append(row)
+            lineage.append({"canonical_identity":prediction["canonical_identity"],"game_date":prediction["game_date"],"game_pk":pk,"grading_timestamp_utc":now.isoformat(),"source_lineage_state":lineage_state,"recorded_source_sha256":digest,"retained_source_sha256":digest,"retained_source_path":str(source_path.relative_to(config["outcome_ledger"].parents[5])),"detail":"exact retained bytes used for grading"})
         admitted,duplicates=append_unique_atomic(config["outcome_ledger"],FIELDS,rows,"canonical_identity",config["backup_dir"])
+        append_unique_atomic(config["outcome_source_lineage_ledger"],LINEAGE_FIELDS,lineage,"canonical_identity",config["backup_dir"])
         rolling=update_rolling_status(config); _,all_outcomes=read_csv(config["outcome_ledger"])
         return {"decision":"GRADING_COMPLETED","date":day,"new_outcomes":admitted,"cumulative_outcomes":len(all_outcomes),"duplicates":duplicates,"statuses":dict(Counter(r["grading_status"] for r in rows)),"outcome_ledger_sha256":sha256_path(config["outcome_ledger"]),"evidence_status":rolling["status"]}
 
 
 def main():
-    parser=argparse.ArgumentParser(); parser.add_argument("--date"); args=parser.parse_args()
+    parser=argparse.ArgumentParser(); parser.add_argument("--date"); parser.add_argument("--repair-lineage-sidecar",action="store_true"); args=parser.parse_args()
+    if args.repair_lineage_sidecar:
+        admitted,duplicates=repair_existing_lineage_sidecar(load_config()); print(json.dumps({"decision":"LINEAGE_SIDECAR_REPAIRED","admitted":admitted,"duplicates":duplicates},sort_keys=True)); return 0
     try: print(json.dumps(run(args.date),indent=2,sort_keys=True))
     except RuntimeError as exc: print(json.dumps({"decision":"GRADING_FAILED","error":str(exc)},sort_keys=True),file=sys.stderr); return 2
     return 0

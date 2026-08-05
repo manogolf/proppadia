@@ -19,7 +19,7 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
     payload = json.loads(path.read_text())
-    for key in ("scorer_path", "prediction_ledger", "outcome_ledger", "rolling_status", "capture_audit", "prior_feed_cache", "lock_dir", "backup_dir", "provenance_prediction_seed"):
+    for key in ("scorer_path", "prediction_ledger", "outcome_ledger", "outcome_source_lineage_ledger", "immutable_grade_sources", "rolling_status", "capture_audit", "prior_feed_cache", "lock_dir", "backup_dir", "provenance_prediction_seed"):
         payload[key] = ROOT / payload[key]
     return payload
 

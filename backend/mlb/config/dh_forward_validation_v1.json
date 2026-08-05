@@ -22,6 +22,8 @@
   "capture_window_hours_before_first_pitch": 4,
   "prediction_ledger": "backend/mlb/data/research/dh_forward_validation/v1/forward_prediction_ledger_v1.csv",
   "outcome_ledger": "backend/mlb/data/research/dh_forward_validation/v1/forward_outcome_ledger_v1.csv",
+  "outcome_source_lineage_ledger": "backend/mlb/data/research/dh_forward_validation/v1/forward_outcome_source_lineage_v1.csv",
+  "immutable_grade_sources": "backend/mlb/data/research/dh_forward_validation/v1/immutable_grade_sources",
   "rolling_status": "backend/mlb/data/research/dh_forward_validation/v1/rolling_forward_evidence_status_v1.json",
   "capture_audit": "backend/mlb/data/research/dh_forward_validation/v1/capture_status_v1.csv",
   "prior_feed_cache": "backend/mlb/data/research/dh_forward_validation/v1/prior_official_feed_cache",

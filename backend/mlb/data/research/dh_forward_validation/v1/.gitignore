@@ -3,7 +3,9 @@
 backups/
 locks/
 prior_official_feed_cache/
+immutable_grade_sources/
 capture_status_v1.csv
 forward_outcome_ledger_v1.csv
+forward_outcome_source_lineage_v1.csv
 forward_prediction_ledger_v1.csv
 rolling_forward_evidence_status_v1.json

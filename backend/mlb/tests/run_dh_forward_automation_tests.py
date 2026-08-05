@@ -9,7 +9,7 @@ import joblib
 
 from backend.mlb.scripts.dh_forward_automation_common import ROOT, append_unique_atomic, exclusive_lock, load_config, read_csv, validate_scorer
 from backend.mlb.scripts.run_mlb_dh_forward_capture import FIELDS as PRED_FIELDS, score_feed
-from backend.mlb.scripts.run_mlb_dh_forward_grade import FIELDS as OUT_FIELDS, classify
+from backend.mlb.scripts.run_mlb_dh_forward_grade import FIELDS as OUT_FIELDS, classify, retained_source
 
 
 class DHForwardAutomationTests(unittest.TestCase):
@@ -62,6 +62,14 @@ class DHForwardAutomationTests(unittest.TestCase):
         before=path.read_bytes(); self.assertEqual(append_unique_atomic(path,["canonical_identity","grading_status"],[outcome],"canonical_identity",self.base/"b"),(0,1)); self.assertEqual(before,path.read_bytes())
     def test_outcome_prediction_separation(self):
         self.assertNotIn("original_dh_hits",PRED_FIELDS); self.assertNotIn("cumulative_score",OUT_FIELDS)
+    def test_grade_source_existing_cache_and_new_fetch(self):
+        cfg=load_config(); cfg=dict(cfg); cfg["prior_feed_cache"]=self.base/"cache"; cfg["immutable_grade_sources"]=self.base/"sources"; cfg["prior_feed_cache"].mkdir()
+        final=self._feed(); final["gameData"]["status"]={"abstractGameState":"Final"}; raw=json.dumps(final,sort_keys=True).encode(); cache=cfg["prior_feed_cache"]/"1.json"; cache.write_bytes(raw)
+        got,used,path,state=retained_source(cfg,1,lambda u: self.fail("network used"),"r1")
+        self.assertEqual(used,raw); self.assertEqual(path,cache); self.assertEqual(state,"CERTIFIED_EXISTING_CACHE")
+        cache.unlink(); calls=[]
+        got,used,path,state=retained_source(cfg,1,lambda u:(calls.append(u) or (final,raw)),"r2")
+        self.assertEqual(len(calls),1); self.assertEqual(path.read_bytes(),raw); self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),hashlib.sha256(used).hexdigest()); self.assertEqual(state,"IMMUTABLE_LIVE_RESPONSE_RETAINED")
     def test_launchd_wrapper_invocation(self):
         for name,module in (("com.proppadia.mlb.dh-forward-capture.plist","backend.mlb.scripts.run_mlb_dh_forward_capture"),("com.proppadia.mlb.dh-forward-grade.plist","backend.mlb.scripts.run_mlb_dh_forward_grade")):
             payload=plistlib.loads((ROOT/"backend/mlb/launchagents"/name).read_bytes()); self.assertEqual(payload["ProgramArguments"][2],module); self.assertEqual(payload["WorkingDirectory"],str(ROOT))
