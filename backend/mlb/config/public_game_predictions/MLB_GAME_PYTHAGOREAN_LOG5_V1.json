@@ -1,0 +1,53 @@
+{
+  "experiment_id": "MLB_PYTHAGOREAN_LOG5_REPLACEMENT_REVIEW_V1",
+  "authority_state": "MLB_PUBLIC_MONEYLINE_PREDICTION_CANDIDATE_PENDING_ENABLEMENT",
+  "feature_flag": "MLB_PUBLIC_GAME_PREDICTIONS_ENABLED",
+  "feature_flag_default": false,
+  "model_identity": {
+    "model_name": "MLB Pythagorean/Log5",
+    "model_version": "MLB_GAME_PYTHAGOREAN_LOG5_V1",
+    "model_family": "PYTHAGOREAN_LOG5",
+    "pythagorean_exponent": 1.83,
+    "home_logit_adjustment": 0.15,
+    "log5_clip_lower": 0.01,
+    "log5_clip_upper": 0.99,
+    "final_probability_lower": 0.000001,
+    "final_probability_upper": 0.999999,
+    "season_initialization": "CONTINUOUS_CUMULATIVE_STRICT_PRIOR_STATE_NO_SEASON_RESET",
+    "sparse_history_regression": "NONE_IN_ACCEPTED_BENCHMARK",
+    "minimum_history_games": 1,
+    "sparse_history_fallback": 0.5,
+    "chronological_update_rule": "DATE_BLOCKED_UPDATE_AFTER_ALL_SAME_DATE_PREDICTIONS",
+    "calibration_procedure": "NONE",
+    "prediction_cutoff": "STRICTLY_BEFORE_OFFICIAL_SCHEDULED_START",
+    "doubleheader_handling": "DISTINCT_OFFICIAL_GAME_PK",
+    "development_cutoff": "2024-09-30",
+    "validation_cutoff": "2025-09-30",
+    "frozen_state_cutoff": "2026-08-04",
+    "confidence_bands": {
+      "near_even_max_distance": 0.025,
+      "lean_max_distance": 0.05,
+      "moderate_max_distance": 0.1
+    }
+  },
+  "model_hash": "804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6",
+  "frozen_team_state_source": {
+    "path": "backend/mlb/config/public_game_predictions/MLB_GAME_PYTHAGOREAN_LOG5_V1_team_states.csv",
+    "sha256": "e4ed47bbcf783fb7f3c3628fbf36a93b3ab2963499033e2268109e8aa8f3d26b"
+  },
+  "accepted_source_hashes": {
+    "method_contracts.json": "3b2365580eeab19d3d1654c8656a13c1cc1aad89efb15fbbffbe009ec2660f8a",
+    "temporal_selection_manifest.json": "c86f215c2ae9049ea7f28cabaa6925c2145366f68499d85b7d8fa89bc544e1c0",
+    "benchmark_game_predictions.csv": "c68536eedf2dec00ff5bb06891121073022c5844b0cd8fea3575d323efb18fa2",
+    "prospective_shadow_predictions.csv": "a10c6c5afdfbc9c452875ed02f06569be41dbd50a059881ef031e58c11908ee5",
+    "benchmark_execution_source.py": "7f41affbaefd80b1b52b63a82e5bd044c30297ad0b0a0c5e67886aedcb14c7ed"
+  },
+  "historical_evaluation": {
+    "validation": {"games": 2120, "accuracy": 0.5556603773584906, "brier": 0.244239080020185, "log_loss": 0.6813624655515292, "calibration_gap": -0.0081289047359191},
+    "early_2026": {"games": 563, "accuracy": 0.5364120781527531, "brier": 0.250398375373888, "log_loss": 0.694007666402166, "calibration_gap": 0.0228585630455696},
+    "late_2026_holdout": {"games": 202, "accuracy": 0.594059405940594, "brier": 0.237168056439727, "log_loss": 0.666933958889105, "calibration_gap": 0.0002827226403967}
+  },
+  "score_prediction_status": "UNAVAILABLE_NO_QUALIFIED_SCORE_MODEL",
+  "betting_edge_status": "NOT_DEMONSTRATED",
+  "disclosure": "MODEL PREDICTION — BETTING EDGE NOT DEMONSTRATED"
+}

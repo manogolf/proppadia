@@ -1,0 +1,25 @@
+test,status,evidence
+benchmark reproduction,PASS,26 metric/identity checks within frozen tolerances
+model hash validation,PASS,804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6
+strict chronological update,PASS,accepted date-blocked benchmark predictions reproduced
+season-start regression,PASS,exact accepted NONE/continuous-state contract frozen
+Pythagorean state calculation,PASS,unit test
+Log5 probability calculation,PASS,unit test
+home-field adjustment,PASS,fixed +0.15 logit unit test
+doubleheader identity,PASS,exact gamePk unit test
+sparse-history fallback,PASS,.500 fail-closed contract test
+probability bounds,PASS,unit test
+no outcome access,PASS,August 6 rows outcomes_accessed=0
+deterministic shadow repeat,PASS,11/11 exact probability matches
+append-only prediction ledger,PASS,idempotency and byte-preservation test
+official-final grading,PASS,final gate and scoring test
+API schema,PASS,required moneyline/null score fields test
+feature flag off,PASS,absent/default false test
+test-only enabled rendering,PASS,API and production frontend build
+old baseline no longer bound as candidate,PASS,service import and frontend tests
+retired-model isolation,PASS,source isolation test
+betting-authority isolation,PASS,authority test
+player-prop-authority isolation,PASS,authority test
+score fields unavailable,PASS,explicit-null API test
+disclosure presence,PASS,API/frontend test
+no EV/wager fields,PASS,schema/source test

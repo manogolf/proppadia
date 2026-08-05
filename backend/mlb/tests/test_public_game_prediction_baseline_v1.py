@@ -148,7 +148,8 @@ def test_19_scorer_isolated_from_retired_and_betting_paths():
         assert forbidden not in source.lower()
 
 
-def test_20_frontend_preserves_historical_disclosure():
+def test_20_baseline_remains_archived_but_is_not_public_binding():
     source = (ROOT / "frontend/src/components/mlb/MLBPublicGamePredictionsPanel.jsx").read_text()
-    assert "45.51%" in source and "BETTING EDGE NOT DEMONSTRATED" in source
+    assert "45.51%" not in source and "Pythagorean/Log5 v1" in source
+    assert "BETTING EDGE NOT DEMONSTRATED" in source
     assert "Confidence reflects model separation from 50%" in source

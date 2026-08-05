@@ -1,4 +1,4 @@
-"""Feature-flagged adapter for the frozen public MLB game baseline."""
+"""Feature-flagged adapter for the frozen MLB Pythagorean/Log5 candidate."""
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from backend.app.services.mlb.schedule_service import fetch_schedule
-from backend.mlb.public_game_predictions.baseline_v1 import (
+from backend.mlb.public_game_predictions.pythagorean_log5_v1 import (
     authority_status,
     feature_enabled,
     load_candidate,

@@ -1,0 +1,27 @@
+{
+  "append_only": true,
+  "canonical_identity": [
+    "game_date",
+    "game_id",
+    "winner_model_version",
+    "prediction_snapshot_class"
+  ],
+  "fields": [
+    "prediction_timestamp_utc",
+    "scheduled_start_utc",
+    "lead_time_minutes",
+    "home_team_games",
+    "away_team_games",
+    "home_pythagorean_strength",
+    "away_pythagorean_strength",
+    "home_field_logit_adjustment",
+    "home_win_probability",
+    "predicted_winner",
+    "confidence_band",
+    "winner_model_version",
+    "winner_model_hash",
+    "source_schedule_hash",
+    "admission_status",
+    "failure_reason"
+  ]
+}

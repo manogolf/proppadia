@@ -34,7 +34,7 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
           <h3 className="text-sm font-semibold text-slate-900">Game predictions</h3>
           <p className="text-xs text-slate-500">Confidence reflects model separation from 50%, not expected betting value.</p>
         </div>
-        <span className="text-xs rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-600">Baseline v1</span>
+        <span className="text-xs rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-600">Pythagorean/Log5 v1</span>
       </div>
       {state.error ? <div className="text-sm text-slate-600">Predictions unavailable: {state.error}</div> : null}
       {!state.error && !state.rows.length ? <div className="text-sm text-slate-600">No eligible pregame predictions are available.</div> : null}
@@ -47,7 +47,11 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
               <>
                 <div className="font-medium text-slate-900">{row.away_team} @ {row.home_team}</div>
                 <div className="mt-1 text-sm text-slate-700">Prediction: {row.predicted_winner} · {pct(Math.max(row.home_win_probability, row.away_win_probability))}</div>
-                <div className="mt-1 text-xs text-slate-600">Expected score: {row.away_team} {runs(row.expected_away_runs)}, {row.home_team} {runs(row.expected_home_runs)} · Total {runs(row.expected_total_runs)}</div>
+                {row.score_prediction_status === "UNAVAILABLE_NO_QUALIFIED_SCORE_MODEL" ? (
+                  <div className="mt-1 text-xs text-slate-600">Score, total, and run-line predictions unavailable—no qualified score model.</div>
+                ) : (
+                  <div className="mt-1 text-xs text-slate-600">Expected score: {row.away_team} {runs(row.expected_away_runs)}, {row.home_team} {runs(row.expected_home_runs)} · Total {runs(row.expected_total_runs)}</div>
+                )}
                 <div className="mt-2 inline-flex rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{row.confidence_band}</div>
               </>
             )}
@@ -57,8 +61,9 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
       <details className="mt-3 text-xs text-slate-600">
         <summary className="cursor-pointer font-medium">Historical evaluation and limitations</summary>
         <div className="mt-2 space-y-1">
-          <div>765 certified games · 156 holdout games · Moneyline accuracy 45.51% · Brier 0.2506 · Log loss 0.6943</div>
-          <div>Total-runs MAE 3.826 · Total-score bias +0.243 · All accepted predictions were NEAR_EVEN.</div>
+          <div>2,120 frozen-validation games · Accuracy 55.57% · Brier 0.2442 · Log loss 0.6814</div>
+          <div>202 untouched late-2026 holdout games · Accuracy 59.41% · Brier 0.2372 · Log loss 0.6669</div>
+          <div>Early-season performance was weaker; probability confidence is not a guarantee of correctness.</div>
           <div>Historical market value was not tested.</div>
         </div>
       </details>

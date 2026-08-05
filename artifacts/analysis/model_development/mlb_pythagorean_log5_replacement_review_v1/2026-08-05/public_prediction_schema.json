@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "away_minus_1_5_probability": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "away_plus_1_5_probability": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "disclosure": {
+      "const": "MODEL PREDICTION \u2014 BETTING EDGE NOT DEMONSTRATED"
+    },
+    "expected_away_runs": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "expected_home_margin": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "expected_home_runs": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "expected_total_runs": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "home_minus_1_5_probability": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "home_plus_1_5_probability": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "score_prediction_status": {
+      "const": "UNAVAILABLE_NO_QUALIFIED_SCORE_MODEL"
+    }
+  },
+  "required": [
+    "league",
+    "game_date",
+    "game_id",
+    "scheduled_start_utc",
+    "prediction_timestamp_utc",
+    "away_team",
+    "home_team",
+    "predicted_winner",
+    "home_win_probability",
+    "away_win_probability",
+    "confidence_band",
+    "data_quality_status",
+    "winner_model_name",
+    "winner_model_version",
+    "winner_model_hash",
+    "historical_validation_accuracy",
+    "historical_validation_brier",
+    "historical_validation_log_loss",
+    "historical_holdout_accuracy",
+    "historical_holdout_brier",
+    "historical_holdout_log_loss",
+    "betting_edge_status",
+    "disclosure",
+    "score_prediction_status",
+    "generated_at_utc"
+  ],
+  "title": "MLB public moneyline prediction v1",
+  "type": "object"
+}
