@@ -1,0 +1,9 @@
+# Mutable append-only research state is preserved locally and backed up operationally,
+# not accumulated in source control.
+backups/
+locks/
+prior_official_feed_cache/
+capture_status_v1.csv
+forward_outcome_ledger_v1.csv
+forward_prediction_ledger_v1.csv
+rolling_forward_evidence_status_v1.json

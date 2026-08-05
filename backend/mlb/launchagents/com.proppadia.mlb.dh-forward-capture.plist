@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.proppadia.mlb.dh-forward-capture</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/jerrystrain/Projects/proppadia/.venv/bin/python</string>
+    <string>-m</string><string>backend.mlb.scripts.run_mlb_dh_forward_capture</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/jerrystrain/Projects/proppadia</string>
+  <key>StartInterval</key><integer>600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/ops/mlb_dh_forward_capture.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/ops/mlb_dh_forward_capture.err.log</string>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>

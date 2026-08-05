@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.proppadia.mlb.dh-forward-grade</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/jerrystrain/Projects/proppadia/.venv/bin/python</string>
+    <string>-m</string><string>backend.mlb.scripts.run_mlb_dh_forward_grade</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/jerrystrain/Projects/proppadia</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>15</integer></dict>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/ops/mlb_dh_forward_grade.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/ops/mlb_dh_forward_grade.err.log</string>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>

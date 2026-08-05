@@ -1,0 +1,33 @@
+{
+  "semantic_id": "MLB_DH_PLATOON_CHOICE_SET_CONTROL_FORWARD_SCORER_V1",
+  "scorer_path": "artifacts/analysis/model_development/mlb_dh_forward_scorer_passage_2d1/2026-08-04/immutable_forward_scorer.joblib",
+  "scorer_sha256": "3ecd4182a50fe3e20d3aafccdcc79fb1e38d084b46b32ef799d5af33fc885d29",
+  "feature_columns": [
+    "interval_index",
+    "slot_band",
+    "player_shrunk_ph",
+    "player_shrunk_remove",
+    "team_shrunk_ph",
+    "batter_hand",
+    "opposing_starter_hand",
+    "plausible_platoon_alternative_present_vs_L",
+    "plausible_platoon_alternative_present_vs_R",
+    "left_handed_share_likely_available",
+    "right_handed_share_likely_available"
+  ],
+  "feature_schema_sha256": "frozen_runtime_validated_from_ordered_feature_columns",
+  "regularization_C": 1.0,
+  "shrinkage_alpha": 5,
+  "frozen_top20_cutoff": 0.19124122214661582,
+  "capture_window_hours_before_first_pitch": 4,
+  "prediction_ledger": "backend/mlb/data/research/dh_forward_validation/v1/forward_prediction_ledger_v1.csv",
+  "outcome_ledger": "backend/mlb/data/research/dh_forward_validation/v1/forward_outcome_ledger_v1.csv",
+  "rolling_status": "backend/mlb/data/research/dh_forward_validation/v1/rolling_forward_evidence_status_v1.json",
+  "capture_audit": "backend/mlb/data/research/dh_forward_validation/v1/capture_status_v1.csv",
+  "prior_feed_cache": "backend/mlb/data/research/dh_forward_validation/v1/prior_official_feed_cache",
+  "lock_dir": "backend/mlb/data/research/dh_forward_validation/v1/locks",
+  "backup_dir": "backend/mlb/data/research/dh_forward_validation/v1/backups",
+  "provenance_prediction_seed": "artifacts/analysis/model_development/mlb_dh_current_day_state_adapter_passage_2d2a/2026-08-04/immutable_forward_dh_prediction_ledger.csv",
+  "evidence_status": "NOT_READY_PENDING_FORWARD_DH_EVIDENCE",
+  "production_status": "NO_QUALIFIED_MLB_MODEL"
+}
