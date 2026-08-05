@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -127,6 +128,27 @@ def test_08e_durable_final_ignores_raw_hash_change_but_rejects_score_change(monk
     assert durable.append_official_finals([second])==0
     with pytest.raises(model.PublicGamePredictionError,match='CORRECTION_REQUIRES_REPLAY'):
         durable.append_official_finals([game(hr=6)])
+
+
+def test_08f_production_dict_row_final_loader(monkeypatch):
+    stamp=datetime(2026,8,5,21,tzinfo=timezone.utc)
+    row={'game_pk':1,'game_date':'2026-08-05','scheduled_start_utc':stamp,'game_number':1,
+         'home_team_id':110,'away_team_id':111,'home_runs':5,'away_runs':3,'official_status':'Final',
+         'official_final_effective_utc':stamp,'observed_final_at_utc':stamp,
+         'source_identity':'retained.json','source_sha256':'a'*64}
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def execute(self,sql,params):
+            assert 'AS home_runs' in sql and 'AS source_identity' in sql
+        def fetchall(self): return [row]
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def cursor(self): return Cursor()
+    monkeypatch.setattr(durable,'pg_connect',lambda:Connection())
+    loaded=durable.load_official_finals_before('2026-08-06T00:00:00Z')
+    assert len(loaded)==1 and loaded[0].home_runs==5 and loaded[0].source_identity=='retained.json'
 
 
 def test_09_tampered_state_hash_fails_closed():

@@ -30,10 +30,11 @@ def canonical_payload_hash(row: dict[str, Any]) -> str:
 def load_official_finals_before(cutoff_utc: str) -> list[OfficialFinalGame]:
     sql = """
       SELECT f.game_pk, f.game_date::text, f.scheduled_start_utc, f.game_number,
-             f.home_team_id, f.away_team_id, COALESCE(c.corrected_home_runs,f.home_runs),
-             COALESCE(c.corrected_away_runs,f.away_runs), f.official_status,
+             f.home_team_id, f.away_team_id, COALESCE(c.corrected_home_runs,f.home_runs) AS home_runs,
+             COALESCE(c.corrected_away_runs,f.away_runs) AS away_runs, f.official_status,
              f.official_final_effective_utc, f.observed_final_at_utc,
-             COALESCE(c.source_identity,f.source_identity), COALESCE(c.source_sha256,f.source_sha256)
+             COALESCE(c.source_identity,f.source_identity) AS source_identity,
+             COALESCE(c.source_sha256,f.source_sha256) AS source_sha256
       FROM mlb.public_game_official_finals f
       LEFT JOIN LATERAL (
         SELECT * FROM mlb.public_game_official_final_corrections x
