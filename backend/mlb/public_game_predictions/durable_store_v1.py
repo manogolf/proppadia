@@ -27,6 +27,20 @@ def canonical_payload_hash(row: dict[str, Any]) -> str:
                                      default=_json_default).encode()).hexdigest()
 
 
+def designated_snapshot_exists(game_date: str, prediction_snapshot_class: str) -> bool:
+    """Use the durable prediction identity as the once-per-slate authority."""
+    with pg_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT 1 FROM mlb.public_game_moneyline_predictions
+               WHERE game_date=%s AND model_version=%s
+                 AND prediction_snapshot_class=%s
+                 AND admission_status='ADMITTED_SHADOW'
+               LIMIT 1""",
+            (game_date, MODEL_VERSION, prediction_snapshot_class),
+        )
+        return cur.fetchone() is not None
+
+
 def load_official_finals_before(cutoff_utc: str) -> list[OfficialFinalGame]:
     sql = """
       SELECT f.game_pk, f.game_date::text, f.scheduled_start_utc, f.game_number,
@@ -144,6 +158,40 @@ def fetch_prediction_rows(game_date: str) -> list[dict[str, Any]]:
                        WHERE game_date=%s AND model_version=%s AND admission_status='ADMITTED_SHADOW'
                        ORDER BY scheduled_start_utc,game_id""",(game_date,MODEL_VERSION))
         return [_value(r,'prediction_payload',0) for r in cur.fetchall()]
+
+
+def fetch_ungraded_final_predictions(cutoff_utc: str) -> list[dict[str, Any]]:
+    """Return frozen predictions eligible for official-final grading."""
+    with pg_connect() as conn, conn.cursor() as cur:
+        cur.execute("""
+          SELECT p.prediction_payload,
+                 COALESCE(c.corrected_home_runs,f.home_runs) AS official_home_runs,
+                 COALESCE(c.corrected_away_runs,f.away_runs) AS official_away_runs,
+                 COALESCE(c.source_identity,f.source_identity) AS official_source_identity,
+                 COALESCE(c.source_sha256,f.source_sha256) AS official_source_sha256
+          FROM mlb.public_game_moneyline_predictions p
+          JOIN mlb.public_game_official_finals f ON f.game_pk=p.game_id
+          LEFT JOIN LATERAL (
+            SELECT * FROM mlb.public_game_official_final_corrections x
+            WHERE x.game_pk=f.game_pk AND x.observed_at_utc <= %s::timestamptz
+            ORDER BY x.observed_at_utc DESC,x.correction_id DESC LIMIT 1
+          ) c ON true
+          LEFT JOIN mlb.public_game_moneyline_outcomes o
+            ON o.game_date=p.game_date AND o.game_id=p.game_id
+           AND o.model_version=p.model_version
+           AND o.prediction_snapshot_class=p.prediction_snapshot_class
+          WHERE p.model_version=%s AND p.admission_status='ADMITTED_SHADOW'
+            AND f.official_final_effective_utc <= %s::timestamptz
+            AND o.game_id IS NULL
+          ORDER BY p.game_date,p.scheduled_start_utc,p.game_id
+        """,(cutoff_utc,MODEL_VERSION,cutoff_utc))
+        return [{
+            'prediction':_value(row,'prediction_payload',0),
+            'official_home_runs':int(_value(row,'official_home_runs',1)),
+            'official_away_runs':int(_value(row,'official_away_runs',2)),
+            'official_source_identity':str(_value(row,'official_source_identity',3)),
+            'official_source_sha256':str(_value(row,'official_source_sha256',4)),
+        } for row in cur.fetchall()]
 
 
 def append_outcome_grade(grade: dict[str, Any]) -> bool:

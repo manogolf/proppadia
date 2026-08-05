@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from backend.mlb.public_game_predictions.state_v1 import (
     OfficialFinalGame, load_initialization_state, reconstruct_state, scoring_team_states, state_hash,
 )
 from backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 import official_final_from_feed
+from backend.mlb.scripts import run_mlb_public_game_moneyline_daily_v1 as daily_runner
 
 ROOT=Path(__file__).resolve().parents[3]
 
@@ -253,3 +255,58 @@ def test_16_durable_outcome_is_final_only_append_only_and_idempotent(monkeypatch
     changed={**grade,'official_home_runs':6}
     with pytest.raises(model.PublicGamePredictionError,match='OUTCOME_CORRECTION_REQUIRES_HISTORY'):
         durable.append_outcome_grade(changed)
+
+
+@pytest.mark.parametrize('row',[{'exists':1},(1,)])
+def test_17_designated_snapshot_guard_uses_durable_identity(monkeypatch,row):
+    seen={}
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def execute(self,sql,params): seen['sql']=sql;seen['params']=params
+        def fetchone(self): return row
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def cursor(self): return Cursor()
+    monkeypatch.setattr(durable,'pg_connect',lambda:Connection())
+    assert durable.designated_snapshot_exists('2026-08-05',model.SNAPSHOT_CLASS)
+    assert seen['params']==('2026-08-05',model.MODEL_VERSION,model.SNAPSHOT_CLASS)
+    assert "admission_status='ADMITTED_SHADOW'" in seen['sql']
+
+
+def test_18_runner_guard_advances_finals_and_grading_then_skips_scoring(monkeypatch,tmp_path,capsys):
+    monkeypatch.setattr(daily_runner,'designated_snapshot_exists',lambda *_:True)
+    monkeypatch.setattr(daily_runner,'_fetch_schedule',lambda *_:({'dates':[]},b'{}'))
+    monkeypatch.setattr(daily_runner,'append_official_finals',lambda rows:0)
+    monkeypatch.setattr(daily_runner,'load_official_finals_before',lambda *_:[])
+    prediction=_durable_prediction()
+    monkeypatch.setattr(daily_runner,'fetch_ungraded_final_predictions',lambda *_:[{
+        'prediction':prediction,'official_home_runs':5,'official_away_runs':3,
+        'official_source_identity':'official.json','official_source_sha256':'b'*64,
+    }])
+    appended=[]
+    monkeypatch.setattr(daily_runner,'append_outcome_grade',lambda row:appended.append(row) or True)
+    monkeypatch.setattr(daily_runner,'score_schedule_payload',lambda *_args,**_kwargs:pytest.fail('scoring called'))
+    output=tmp_path/'skip.json'
+    monkeypatch.setattr(sys,'argv',['runner','--mlb-date','2026-08-05','--write-durable',
+                                   '--skip-if-designated-snapshot-exists','--output-json',str(output)])
+    assert daily_runner.main()==0
+    payload=json.loads(output.read_text())
+    assert payload['status']=='SKIPPED'
+    assert payload['skip_reason']=='SUCCESSFUL_DESIGNATED_SNAPSHOT_EXISTS'
+    assert payload['predictions_written']==0
+    assert payload['grading_rows_eligible']==1 and payload['grading_rows_written']==1
+    assert len(appended)==1 and appended[0]['official_status']=='Final'
+    assert payload['games_discovered']==0
+    assert payload['state_hash']
+    assert 'SUCCESSFUL_DESIGNATED_SNAPSHOT_EXISTS' in capsys.readouterr().out
+
+
+def test_19_daily_hook_is_shadow_only_nonblocking_contract():
+    hook=(ROOT/'bin/mlb_public_game_moneyline_daily_hook.sh').read_text()
+    assert '--write-durable' in hook
+    assert '--skip-if-designated-snapshot-exists' in hook
+    assert 'MLB_PUBLIC_GAME_PREDICTIONS_ENABLED' not in hook
+    assert 'exit "${lifecycle_rc}"' in hook
+    assert 'normal MLB refresh continues' in hook
