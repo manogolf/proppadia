@@ -589,6 +589,33 @@ def _build_schedule_maps(slate_date: str) -> tuple[Dict[int, Dict[str, Any]], Di
     return by_team, by_pair
 
 
+def _late_slate_all_games_started(
+    slate_date: str,
+    by_pair_games: Dict[Tuple[str, str], List[GameLite]],
+    prediction_timestamp: str,
+) -> tuple[bool, int]:
+    """Certify the narrow current-date no-work state from official schedule rows."""
+    if slate_date != _date_et_today():
+        return False, 0
+    unique_games = {int(g.game_id): g for games in by_pair_games.values() for g in games}
+    if not unique_games:
+        return False, 0
+    try:
+        captured_at = datetime.fromisoformat(prediction_timestamp.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False, len(unique_games)
+    for game in unique_games.values():
+        if not game.game_time:
+            return False, len(unique_games)
+        try:
+            starts_at = datetime.fromisoformat(str(game.game_time).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return False, len(unique_games)
+        if starts_at.tzinfo is None or captured_at.tzinfo is None or starts_at > captured_at:
+            return False, len(unique_games)
+    return True, len(unique_games)
+
+
 def _choose_game_for_event(
     *,
     pair_games: List[GameLite],
@@ -1527,6 +1554,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"[mlb-wide-pred] prospective lineage exclusions={dict(pd.Series([x['lineage_status'] for x in blocked]).value_counts())}", file=sys.stderr)
         if not certified:
             print("[mlb-wide-pred] ERROR: no lineage-certified pregame rows", file=sys.stderr)
+            late_slate, scheduled_games = _late_slate_all_games_started(
+                str(slate_date), by_pair_games, prediction_timestamp
+            )
+            if late_slate:
+                print(
+                    "[mlb-wide-pred] LATE_SLATE_NO_WORK_CERTIFIED "
+                    f"slate_date={slate_date} scheduled_games={scheduled_games} "
+                    f"started_games={scheduled_games} certified_rows=0",
+                    file=sys.stderr,
+                )
+                return 75
             return 1
         out_csv.parent.mkdir(parents=True, exist_ok=True)
         wide.to_csv(out_csv, index=False)

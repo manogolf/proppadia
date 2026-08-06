@@ -1,9 +1,13 @@
 from pathlib import Path
 from types import SimpleNamespace
+from datetime import datetime, timedelta, timezone
+import subprocess
 
 from backend.mlb.scripts import audit_mlb_morning_workflow as morning
 from backend.mlb.scripts import check_mlb_daily_feature_lineage_health as lineage
 from backend.mlb.scripts import hydrate_mlb_pa_foundation_context as pa
+from backend.mlb.scripts import build_mlb_predictions_wide as wide
+from backend.mlb.shared.mlb_api_v2 import GameLite
 
 
 def test_pa_context_query_is_validly_terminated_and_returns_rows(monkeypatch):
@@ -71,3 +75,58 @@ def test_candidate_navigation_is_skipped_only_without_predictive_authority(tmp_p
     assert row.status == "SKIP"
     assert row.severity == "INFO"
     assert "NO_QUALIFIED_MLB_MODEL" in row.detail
+
+
+def _game(game_id, start):
+    return GameLite(
+        game_id=game_id, game_date=start.date().isoformat(), game_time=start.isoformat(), game_type="R",
+        home_team_id=1, away_team_id=2, home_abbr="A", away_abbr="B",
+        sp_home_id=None, sp_away_id=None,
+    )
+
+
+def test_late_slate_requires_current_date_and_every_game_started(monkeypatch):
+    now = datetime.now(timezone.utc)
+    today = wide._date_et_today()
+    games = {("A", "B"): [_game(1, now - timedelta(minutes=1))]}
+    assert wide._late_slate_all_games_started(today, games, now.isoformat()) == (True, 1)
+    games[("C", "D")] = [_game(2, now + timedelta(minutes=1))]
+    assert wide._late_slate_all_games_started(today, games, now.isoformat()) == (False, 2)
+    assert wide._late_slate_all_games_started("2026-01-01", games, now.isoformat()) == (False, 0)
+
+
+def test_late_slate_guard_continues_without_creating_prediction_artifact(tmp_path):
+    helper = Path("bin/mlb_predictions_wide_guarded.sh").resolve()
+    output = tmp_path / "predictions.csv"
+    today = wide._date_et_today()
+    diagnostic = (
+        "echo '[mlb-wide-pred] ERROR: no lineage-certified pregame rows' >&2; "
+        f"echo '[mlb-wide-pred] LATE_SLATE_NO_WORK_CERTIFIED slate_date={today} "
+        "scheduled_games=15 started_games=15 certified_rows=0' >&2; exit 2"
+    )
+    command = (
+        f"zsh {helper} --slate-date {today} --output {output} -- zsh -c \"{diagnostic}\"; "
+        "echo NEXT_STAGE_EXECUTED; echo FULL_REFRESH_COMPLETED"
+    )
+    result = subprocess.run(["zsh", "-c", command], text=True, capture_output=True)
+    assert result.returncode == 0
+    assert "SKIP MLB predictions-wide: NO_ELIGIBLE_PREGAME_ROWS_LATE_SLATE" in result.stdout
+    assert "NEXT_STAGE_EXECUTED" in result.stdout
+    assert "FULL_REFRESH_COMPLETED" in result.stdout
+    assert not output.exists()
+
+
+def test_late_slate_guard_keeps_unexplained_and_historical_failures_fatal(tmp_path):
+    helper = Path("bin/mlb_predictions_wide_guarded.sh").resolve()
+    output = tmp_path / "predictions.csv"
+    for slate_date, diagnostic in [
+        (wide._date_et_today(), "echo missing_source >&2; exit 7"),
+        ("2026-01-01", "echo '[mlb-wide-pred] ERROR: no lineage-certified pregame rows' >&2; exit 2"),
+    ]:
+        result = subprocess.run(
+            ["zsh", str(helper), "--slate-date", slate_date, "--output", str(output), "--", "zsh", "-c", diagnostic],
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode != 0
+        assert "SKIP MLB predictions-wide" not in result.stdout
