@@ -181,7 +181,7 @@ rolling AS (
   WHERE pds.d7_plate_appearances IS NOT NULL
      OR pds.d15_plate_appearances IS NOT NULL
      OR pds.d30_plate_appearances IS NOT NULL
-),
+)
 SELECT
   r.artifact_date,
   r.player_id,

@@ -17,6 +17,7 @@ from typing import Any
 import pandas as pd
 
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS
+from backend.mlb.shared.model_authority import authority
 
 
 CRITICAL_FIELDS = [
@@ -61,6 +62,13 @@ ROLLING_CONTEXT_FIELDS = [
 MARKET_AUDIT_FIELDS = MARKET_AUDIT_CONTEXT_COLUMNS
 
 STRICT_ARTIFACTS = {"slate_output", "lane_selector_output", "ranking_upload_input", "quick_card_output"}
+RETIRED_PREDICTIVE_ARTIFACTS = {
+    "lane_selector_output",
+    "ranking_upload_input",
+    "quick_card_output",
+    "ranking_upload_diagnostics",
+    "quick_card_upload_diagnostics",
+}
 
 
 def _utc_now_iso() -> str:
@@ -213,6 +221,17 @@ def run(args: argparse.Namespace) -> int:
         _artifact_status(artifact_name="ranking_upload_diagnostics", path=Path(args.ranking_upload_diagnostics_csv), warn_null_threshold=args.warn_null_threshold),
         _artifact_status(artifact_name="quick_card_upload_diagnostics", path=Path(args.quick_card_upload_diagnostics_csv), warn_null_threshold=args.warn_null_threshold),
     ]
+    no_qualified_model = authority().get("authority_status") == "NO_QUALIFIED_MLB_MODEL"
+    if no_qualified_model:
+        for artifact in artifacts:
+            if artifact.get("artifact") not in RETIRED_PREDICTIVE_ARTIFACTS:
+                continue
+            if artifact.get("exists"):
+                continue
+            artifact["status"] = "skip"
+            artifact["required"] = False
+            artifact["issues"] = ["expected_unavailable:NO_QUALIFIED_MLB_MODEL"]
+            artifact["skip_reason"] = "retired predictive output unavailable under NO_QUALIFIED_MLB_MODEL"
     status = _derive_overall(artifacts)
     payload = {
         "generated_at_utc": _utc_now_iso(),
@@ -230,6 +249,7 @@ def run(args: argparse.Namespace) -> int:
             "pass_count": sum(1 for a in artifacts if a.get("status") == "pass"),
             "warn_count": sum(1 for a in artifacts if a.get("status") == "warn"),
             "fail_count": sum(1 for a in artifacts if a.get("status") == "fail"),
+            "skip_count": sum(1 for a in artifacts if a.get("status") == "skip"),
             "missing_required_columns": sorted(
                 {
                     f"{a.get('artifact')}:{field}"

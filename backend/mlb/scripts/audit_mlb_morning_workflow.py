@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from backend.mlb.shared.model_authority import authority
+
 
 MLB_ROOT = Path("artifacts/analysis/mlb")
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
@@ -369,7 +371,7 @@ def _link_checks(rows: list[AuditRow], sources: list[Path]) -> None:
                 _add(rows, "navigation", "markdown link resolves", "PASS", source, target, f"label={label}")
 
 
-def _transition_checks(rows: list[AuditRow], *, home: Path, ops_brief: Path, workbench: Path, candidate_csvs: list[Path], timing_template: Path, decision_performance: Path) -> None:
+def _transition_checks(rows: list[AuditRow], *, home: Path, ops_brief: Path, workbench: Path, candidate_csvs: list[Path], timing_template: Path, decision_performance: Path, predictive_outputs_expected: bool) -> None:
     home_text = _read_text(home)
     workbench_text = _read_text(workbench)
     ops_text = _read_text(ops_brief)
@@ -441,10 +443,11 @@ def _transition_checks(rows: list[AuditRow], *, home: Path, ops_brief: Path, wor
         rows,
         "transition",
         "Workbench points to current Candidate CSV",
-        "PASS" if has_candidate_link else "FAIL",
+        "PASS" if has_candidate_link else "FAIL" if predictive_outputs_expected else "SKIP",
         workbench,
         ", ".join(str(p) for p in candidate_csvs),
-        "at least one current candidate CSV link required",
+        "at least one current candidate CSV link required" if predictive_outputs_expected else "expected unavailable: NO_QUALIFIED_MLB_MODEL",
+        severity="INFO" if not predictive_outputs_expected else "",
     )
     _add(
         rows,
@@ -466,7 +469,7 @@ def _transition_checks(rows: list[AuditRow], *, home: Path, ops_brief: Path, wor
     )
 
 
-def _workflow_completeness(rows: list[AuditRow], *, gate_summary: Path, ops_brief: Path, workbench: Path, candidate_csvs: list[Path], timing_template: Path) -> None:
+def _workflow_completeness(rows: list[AuditRow], *, gate_summary: Path, ops_brief: Path, workbench: Path, candidate_csvs: list[Path], timing_template: Path, predictive_outputs_expected: bool) -> None:
     gate_text = _read_text(gate_summary)
     ops_text = _read_text(ops_brief)
     workbench_text = _read_text(workbench)
@@ -474,7 +477,7 @@ def _workflow_completeness(rows: list[AuditRow], *, gate_summary: Path, ops_brie
         ("Can user begin?", "PASS" if "Safe to begin candidate review: `YES`" in gate_text else "WARN", gate_summary, "safe-to-begin value visible"),
         ("Can user verify trust?", "PASS" if "System Readiness" in ops_text or "Pipeline & Ops" in ops_text else "FAIL", ops_brief, "Ops Brief contains readiness/system section"),
         ("Can user review baseball context?", "PASS" if "Today's Baseball" in ops_text or "Hits Environment" in ops_text else "FAIL", ops_brief, "Ops Brief contains baseball context"),
-        ("Can user reach candidate CSV?", "PASS" if any(path.exists() for path in candidate_csvs) and "Open Today's Candidate CSV" in workbench_text else "FAIL", workbench, "candidate CSV link visible"),
+        ("Can user reach candidate CSV?", "PASS" if any(path.exists() for path in candidate_csvs) and "Open Today's Candidate CSV" in workbench_text else "FAIL" if predictive_outputs_expected else "SKIP", workbench, "candidate CSV link visible" if predictive_outputs_expected else "expected unavailable: NO_QUALIFIED_MLB_MODEL"),
         ("Can user record conclusions?", "PASS" if "Today's Conclusions" in workbench_text else "FAIL", workbench, "conclusion section visible"),
         ("Can user record timing?", "PASS" if timing_template.exists() and _contains_link_to(workbench, timing_template) else "FAIL", timing_template, "timing template linked"),
     ]
@@ -726,6 +729,7 @@ def main() -> int:
     }
     link_rows = _read_csv(out_root / "review_aids" / "performance" / "o15_morning_workbench_links.csv")
     candidate_csvs = [Path(row["launch_csv_path"]) for row in link_rows if row.get("launch_csv_path")]
+    predictive_outputs_expected = authority().get("authority_status") != "NO_QUALIFIED_MLB_MODEL"
     for idx, path in enumerate(candidate_csvs, start=1):
         artifacts[f"candidate_csv_{idx}"] = path
 
@@ -749,6 +753,7 @@ def main() -> int:
         candidate_csvs=candidate_csvs,
         timing_template=artifacts["morning_timing_template"],
         decision_performance=artifacts["decision_performance"],
+        predictive_outputs_expected=predictive_outputs_expected,
     )
     _workflow_completeness(
         rows,
@@ -757,6 +762,7 @@ def main() -> int:
         workbench=artifacts["morning_workbench"],
         candidate_csvs=candidate_csvs,
         timing_template=artifacts["morning_timing_template"],
+        predictive_outputs_expected=predictive_outputs_expected,
     )
     rows = _group_cascading_failures(rows)
     graph = _graph_rows(date_text, artifacts, candidate_csvs)
