@@ -3,6 +3,7 @@ import { getBaseURL } from "../../shared/getBaseURL.js";
 
 const pct = (value) => (Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : "—");
 const runs = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "—");
+const stamp = (value) => value ? new Date(value).toLocaleString() : "—";
 
 export default function MLBPublicGamePredictionsPanel({ gameDate }) {
   const [state, setState] = useState({ loading: true, enabled: false, rows: [], error: "" });
@@ -46,13 +47,22 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
             ) : (
               <>
                 <div className="font-medium text-slate-900">{row.away_team} @ {row.home_team}</div>
-                <div className="mt-1 text-sm text-slate-700">Prediction: {row.predicted_winner} · {pct(Math.max(row.home_win_probability, row.away_win_probability))}</div>
+                <div className="mt-1 text-xs text-slate-500">{row.game_date} · {stamp(row.scheduled_start_utc)}</div>
+                <div className="mt-1 text-sm text-slate-700">Prediction: {row.predicted_winner}</div>
+                <div className="mt-1 text-sm text-slate-700">Away {pct(row.away_win_probability)} · Home {pct(row.home_win_probability)}</div>
                 {row.score_prediction_status === "UNAVAILABLE_NO_QUALIFIED_SCORE_MODEL" ? (
-                  <div className="mt-1 text-xs text-slate-600">Score, total, and run-line predictions unavailable—no qualified score model.</div>
+                  <div className="mt-1 text-xs font-medium text-slate-600">UNAVAILABLE — NO QUALIFIED SCORE MODEL</div>
                 ) : (
                   <div className="mt-1 text-xs text-slate-600">Expected score: {row.away_team} {runs(row.expected_away_runs)}, {row.home_team} {runs(row.expected_home_runs)} · Total {runs(row.expected_total_runs)}</div>
                 )}
-                <div className="mt-2 inline-flex rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{row.confidence_band}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="inline-flex rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{row.confidence_band}</span>
+                  <span className="inline-flex rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{row.grading_status}</span>
+                </div>
+                {row.grading_status === "GRADED" ? <div className="mt-2 text-xs text-slate-700">Official: {row.away_team} {row.official_away_runs}, {row.home_team} {row.official_home_runs} · {row.official_winner} · {row.prediction_correct ? "Correct" : "Incorrect"}</div> : null}
+                <div className="mt-2 text-xs text-slate-500">Data: {row.data_quality_status}</div>
+                <div className="text-xs text-slate-500">Model: Pythagorean/Log5 · {row.model_version}</div>
+                <div className="text-xs text-slate-500">Predicted: {stamp(row.prediction_timestamp_utc)}</div>
               </>
             )}
           </article>
@@ -61,9 +71,10 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
       <details className="mt-3 text-xs text-slate-600">
         <summary className="cursor-pointer font-medium">Historical evaluation and limitations</summary>
         <div className="mt-2 space-y-1">
-          <div>2,120 frozen-validation games · Accuracy 55.57% · Brier 0.2442 · Log loss 0.6814</div>
-          <div>202 untouched late-2026 holdout games · Accuracy 59.41% · Brier 0.2372 · Log loss 0.6669</div>
-          <div>Early-season performance was weaker; probability confidence is not a guarantee of correctness.</div>
+          <div>2025 frozen validation · Accuracy 55.57% · Brier 0.24424 · Log loss 0.68136</div>
+          <div>Early 2026 · Accuracy 53.64% · Brier 0.25040 · Log loss 0.69401</div>
+          <div>Late-2026 holdout · Accuracy 59.41% · Brier 0.23717 · Log loss 0.66693</div>
+          <div>Early-season uncertainty remains material; probability confidence is not a guarantee of correctness.</div>
           <div>Historical market value was not tested.</div>
         </div>
       </details>

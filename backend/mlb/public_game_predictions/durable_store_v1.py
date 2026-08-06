@@ -154,10 +154,30 @@ def append_prediction_rows(rows: Iterable[dict[str, Any]]) -> int:
 
 def fetch_prediction_rows(game_date: str) -> list[dict[str, Any]]:
     with pg_connect() as conn, conn.cursor() as cur:
-        cur.execute("""SELECT prediction_payload FROM mlb.public_game_moneyline_predictions
-                       WHERE game_date=%s AND model_version=%s AND admission_status='ADMITTED_SHADOW'
-                       ORDER BY scheduled_start_utc,game_id""",(game_date,MODEL_VERSION))
-        return [_value(r,'prediction_payload',0) for r in cur.fetchall()]
+        cur.execute("""
+          SELECT p.prediction_payload,
+                 CASE WHEN o.game_id IS NULL THEN 'UNGRADED' ELSE 'GRADED' END AS grading_status,
+                 o.official_home_runs,o.official_away_runs,o.official_winner,o.prediction_correct
+          FROM mlb.public_game_moneyline_predictions p
+          LEFT JOIN mlb.public_game_moneyline_outcomes o
+            ON o.game_date=p.game_date AND o.game_id=p.game_id
+           AND o.model_version=p.model_version
+           AND o.prediction_snapshot_class=p.prediction_snapshot_class
+          WHERE p.game_date=%s AND p.model_version=%s AND p.admission_status='ADMITTED_SHADOW'
+          ORDER BY p.scheduled_start_utc,p.game_id
+        """,(game_date,MODEL_VERSION))
+        rows=[]
+        for result in cur.fetchall():
+            payload=dict(_value(result,'prediction_payload',0))
+            payload.update({
+                'grading_status':_value(result,'grading_status',1),
+                'official_home_runs':_value(result,'official_home_runs',2),
+                'official_away_runs':_value(result,'official_away_runs',3),
+                'official_winner':_value(result,'official_winner',4),
+                'prediction_correct':_value(result,'prediction_correct',5),
+            })
+            rows.append(payload)
+        return rows
 
 
 def fetch_ungraded_final_predictions(cutoff_utc: str) -> list[dict[str, Any]]:
