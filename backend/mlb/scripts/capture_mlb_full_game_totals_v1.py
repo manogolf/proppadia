@@ -13,8 +13,8 @@ from typing import Any
 import requests
 
 from backend.mlb.markets.full_game_total_capture_v1 import (
-    EXPERIMENT, append_market, attach_market, connect_ledger, ledger_counts,
-    market_rows, parse_totals,
+    EXPERIMENT, append_consensus, append_market, attach_all_markets, attach_market,
+    build_consensus, connect_ledger, ledger_counts, market_rows, parse_totals,
 )
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import probability_fields
 from backend.mlb.totals_predictions.live_context_bridge_v1 import fetch_hydrated_schedule, normalize_schedule
@@ -50,7 +50,7 @@ def write_evidence(output_dir: Path, summary: dict[str, Any], capture_rows: list
         "game_identity": "exact date + away/home teams + scheduled start within 10 minutes; one-to-one required",
         "pregame_rule": "captured_at_utc < scheduled_start_utc", "post_start_fallback": False,
         "line_only_policy": "retain explicitly without inferring missing price", "raw_retention": True,
-        "attachment_policy": "latest certified snapshot at/before prediction; otherwise earliest later pregame snapshot explicitly labeled POST_PREDICTION_MARKET_OBSERVATION",
+        "attachment_policy": "every certified pregame book snapshot independently; consensus stored separately by capture timestamp",
         "ledger": str(ledger_path.relative_to(ROOT)), "public_status": "RESEARCH_SHADOW_ONLY",
     }
     (output_dir / "full_game_total_capture_contract.json").write_text(json.dumps(contract, indent=2) + "\n")
@@ -89,6 +89,7 @@ def write_evidence(output_dir: Path, summary: dict[str, Any], capture_rows: list
         "- Main-market timing: 09:30 and 11:00 PT provide the best broad pregame coverage; later 13:00/16:30 runs preserve movements only for still-unstarted games.\n"
         "- Failure isolation: hook failure is logged with its exit status and remains nonblocking to unrelated refresh work.\n"
         "- Player props: unchanged and separately acquired. Moneyline lifecycle: unchanged.\n"
+        "- Project-wide main-market contract: preserve each book independently and derive consensus separately; no single book is canonical without an explicit book-specific request.\n"
         "- Retry: a later normal refresh may retry absent games; post-start admission always fails closed.\n"
     )
     lines = ["# Current totals with market", "", "All attached August 6 markets were observed after the frozen model prediction and are labeled accordingly. No EV or wagering calculation is present.", "",
@@ -110,7 +111,7 @@ def write_evidence(output_dir: Path, summary: dict[str, Any], capture_rows: list
         f"- Frozen predictions attached: {summary['prediction_attachments']}\n"
         f"- Model-minus-market range: {min(differences):+.3f} to {max(differences):+.3f}\n"
         f"- Ledger: {summary['ledger_after']}\n"
-        "- Timing: all five attachments are `POST_PREDICTION_MARKET_OBSERVATION`.\n"
+        "- Timing: all August 6 attachments are `POST_PREDICTION_MARKET_OBSERVATION`.\n"
         "- Outcomes accessed: 0\n- Public/model/moneyline behavior: unchanged\n"
     )
     hash_path = output_dir / "reproducibility_hashes.sha256"
@@ -159,18 +160,31 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, snapshot_in: Path |
     prediction_conn = connect_prediction_ledger(PREDICTION_LEDGER)
     predictions = rows_for_date(prediction_conn, game_date)
     bridge_rows: list[dict[str, Any]] = []
+    consensus_output: list[dict[str, Any]] = []
     for prediction in predictions:
-        attached, action = attach_market(ledger, prediction, all_markets, captured)
-        if attached:
-            probabilities = probability_fields(float(prediction["expected_total"]), MODEL_ALPHA, float(attached["total_line"]))
-            bridge_rows.append({"game_pk": prediction["game_pk"], "away_team": prediction["away_team"], "home_team": prediction["home_team"], "predicted_total": prediction["expected_total"], **attached, **probabilities, "bridge_action": action, "grading_status": prediction["grading_status"]})
+        # Retain the original single-book bridge unchanged for compatibility,
+        # while the governing amended contract writes every book independently.
+        attach_market(ledger, prediction, all_markets, captured)
+        attached_rows = attach_all_markets(ledger, prediction, all_markets, captured)
+        if attached_rows:
+            for attached in attached_rows:
+                probabilities = probability_fields(float(prediction["expected_total"]), MODEL_ALPHA, float(attached["total_line"]))
+                bridge_rows.append({"game_pk": prediction["game_pk"], "away_team": prediction["away_team"], "home_team": prediction["home_team"], "predicted_total": prediction["expected_total"], **attached, **probabilities, "grading_status": prediction["grading_status"]})
+            for capture_time in sorted({row["captured_at_utc"] for row in attached_rows}):
+                consensus = build_consensus(prediction, all_markets, capture_time)
+                if consensus:
+                    consensus["model_expected_total"] = prediction["expected_total"]
+                    consensus.update(probability_fields(float(prediction["expected_total"]), MODEL_ALPHA, float(consensus["median_total_line"])))
+                    consensus["model_minus_consensus_line"] = float(prediction["expected_total"]) - float(consensus["median_total_line"])
+                    consensus["consensus_action"] = append_consensus(ledger, consensus, captured)
+                    consensus_output.append(consensus)
         else:
-            bridge_rows.append({"game_pk": prediction["game_pk"], "away_team": prediction["away_team"], "home_team": prediction["home_team"], "predicted_total": prediction["expected_total"], "market_status": "TOTAL_MARKET_UNAVAILABLE", "timing_relationship": "MARKET_UNAVAILABLE", "bridge_action": action, "grading_status": prediction["grading_status"]})
+            bridge_rows.append({"game_pk": prediction["game_pk"], "away_team": prediction["away_team"], "home_team": prediction["home_team"], "predicted_total": prediction["expected_total"], "market_status": "TOTAL_MARKET_UNAVAILABLE", "timing_relationship": "MARKET_UNAVAILABLE", "bridge_action": "MARKET_UNAVAILABLE", "grading_status": prediction["grading_status"]})
     after = ledger_counts(ledger)
     write_csv(output_dir / "august_6_full_game_total_capture.csv", actions)
     write_csv(output_dir / "total_market_identity_audit.csv", identity_audit)
     write_csv(output_dir / "totals_shadow_market_bridge.csv", bridge_rows)
-    summary = {"experiment": EXPERIMENT, "captured_at_utc": captured, "run_tag": run_tag, "raw_source_path": str(raw_path), "raw_source_sha256": raw_sha, "provider_events": len(events), "official_games": len(schedule), "eligible_games": len({row['game_id'] for row in parsed}), "market_rows_parsed": len(parsed), "paired_rows": sum(row['market_status']=='TOTAL_MARKET_CERTIFIED_PAIRED' for row in parsed), "line_only_rows": sum(row['market_status']=='TOTAL_MARKET_LINE_ONLY' for row in parsed), "prediction_attachments": sum(row.get('market_status')!='TOTAL_MARKET_UNAVAILABLE' for row in bridge_rows), "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0}
+    summary = {"experiment": EXPERIMENT, "captured_at_utc": captured, "run_tag": run_tag, "raw_source_path": str(raw_path), "raw_source_sha256": raw_sha, "provider_events": len(events), "official_games": len(schedule), "eligible_games": len({row['game_id'] for row in parsed}), "market_rows_parsed": len(parsed), "paired_rows": sum(row['market_status']=='TOTAL_MARKET_CERTIFIED_PAIRED' for row in parsed), "line_only_rows": sum(row['market_status']=='TOTAL_MARKET_LINE_ONLY' for row in parsed), "prediction_attachments": sum(row.get('market_status')!='TOTAL_MARKET_UNAVAILABLE' for row in bridge_rows), "consensus_records": len(consensus_output), "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0}
     write_evidence(output_dir, summary, actions, identity_audit, bridge_rows, ledger_path)
     return summary
 

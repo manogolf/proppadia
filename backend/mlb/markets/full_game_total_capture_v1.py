@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -11,6 +12,8 @@ from typing import Any, Iterable
 EXPERIMENT = "MLB_FULL_GAME_TOTAL_MARKET_CAPTURE_V1"
 MARKET_TYPE = "FULL_GAME_TOTAL"
 ATTACHMENT_POLICY = "LATEST_CERTIFIED_AT_OR_BEFORE_PREDICTION_ELSE_EARLIEST_LATER_PREGAME"
+ALL_BOOK_ATTACHMENT_POLICY = "ALL_CERTIFIED_PREGAME_BOOK_SNAPSHOTS"
+CONSENSUS_POLICY = "MEDIAN_LINE_SAME_LINE_MEDIAN_PRICES_AND_NO_VIG"
 
 
 def utc(value: str) -> datetime:
@@ -57,6 +60,27 @@ def connect_ledger(path: Path) -> sqlite3.Connection:
       created_at_utc TEXT NOT NULL,
       UNIQUE(prediction_identity, market_identity, attachment_policy)
     );
+    CREATE TABLE IF NOT EXISTS totals_shadow_all_book_market_bridge (
+      canonical_bridge_identity TEXT PRIMARY KEY,
+      prediction_identity TEXT NOT NULL,
+      market_identity TEXT NOT NULL REFERENCES full_game_total_market_snapshots(canonical_market_identity),
+      attachment_policy TEXT NOT NULL,
+      timing_relationship TEXT NOT NULL,
+      bridge_payload_json TEXT NOT NULL,
+      bridge_payload_sha256 TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL,
+      UNIQUE(prediction_identity, market_identity, attachment_policy)
+    );
+    CREATE TABLE IF NOT EXISTS totals_shadow_market_consensus (
+      canonical_consensus_identity TEXT PRIMARY KEY,
+      prediction_identity TEXT NOT NULL,
+      captured_at_utc TEXT NOT NULL,
+      consensus_policy TEXT NOT NULL,
+      consensus_payload_json TEXT NOT NULL,
+      consensus_payload_sha256 TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL,
+      UNIQUE(prediction_identity, captured_at_utc, consensus_policy)
+    );
     CREATE TRIGGER IF NOT EXISTS total_market_no_update BEFORE UPDATE ON full_game_total_market_snapshots
       BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_TOTAL_MARKET_LEDGER'); END;
     CREATE TRIGGER IF NOT EXISTS total_market_no_delete BEFORE DELETE ON full_game_total_market_snapshots
@@ -65,6 +89,14 @@ def connect_ledger(path: Path) -> sqlite3.Connection:
       BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_TOTAL_MARKET_BRIDGE'); END;
     CREATE TRIGGER IF NOT EXISTS total_market_bridge_no_delete BEFORE DELETE ON totals_shadow_market_bridge
       BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_TOTAL_MARKET_BRIDGE'); END;
+    CREATE TRIGGER IF NOT EXISTS total_market_all_book_bridge_no_update BEFORE UPDATE ON totals_shadow_all_book_market_bridge
+      BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_ALL_BOOK_MARKET_BRIDGE'); END;
+    CREATE TRIGGER IF NOT EXISTS total_market_all_book_bridge_no_delete BEFORE DELETE ON totals_shadow_all_book_market_bridge
+      BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_ALL_BOOK_MARKET_BRIDGE'); END;
+    CREATE TRIGGER IF NOT EXISTS total_market_consensus_no_update BEFORE UPDATE ON totals_shadow_market_consensus
+      BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_TOTAL_MARKET_CONSENSUS'); END;
+    CREATE TRIGGER IF NOT EXISTS total_market_consensus_no_delete BEFORE DELETE ON totals_shadow_market_consensus
+      BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_TOTAL_MARKET_CONSENSUS'); END;
     """)
     conn.commit()
     return conn
@@ -204,9 +236,111 @@ def attach_market(conn: sqlite3.Connection, prediction: dict[str, Any], markets:
     return {**selected, **bridge}, action
 
 
+def prediction_identity(prediction: dict[str, Any]) -> str:
+    return f"{prediction['game_date']}|{prediction['game_pk']}|{prediction['model_version']}|{prediction['prediction_snapshot_class']}"
+
+
+def attach_all_markets(
+    conn: sqlite3.Connection, prediction: dict[str, Any], markets: list[dict[str, Any]], created_at_utc: str,
+) -> list[dict[str, Any]]:
+    candidates = [
+        row for row in markets
+        if int(row["game_id"]) == int(prediction["game_pk"])
+        and utc(row["captured_at_utc"]) < utc(row["scheduled_start_utc"])
+    ]
+    pred_identity = prediction_identity(prediction)
+    prediction_time = utc(prediction["prediction_timestamp_utc"])
+    out: list[dict[str, Any]] = []
+    for market in sorted(candidates, key=lambda row: (row["captured_at_utc"], row["bookmaker_key"], row["total_line"])):
+        timing = "AT_OR_BEFORE_PREDICTION" if utc(market["captured_at_utc"]) <= prediction_time else "POST_PREDICTION_MARKET_OBSERVATION"
+        bridge = {
+            "prediction_identity": pred_identity, "market_identity": market["canonical_market_identity"],
+            "attachment_policy": ALL_BOOK_ATTACHMENT_POLICY, "timing_relationship": timing,
+            "prediction_timestamp_utc": prediction["prediction_timestamp_utc"],
+            "market_timestamp_utc": market["captured_at_utc"],
+        }
+        canonical = f"{pred_identity}|{market['canonical_market_identity']}|{ALL_BOOK_ATTACHMENT_POLICY}"
+        digest = sha256_json(bridge)
+        existing = conn.execute("SELECT bridge_payload_sha256 FROM totals_shadow_all_book_market_bridge WHERE canonical_bridge_identity=?", (canonical,)).fetchone()
+        if not existing:
+            conn.execute("INSERT INTO totals_shadow_all_book_market_bridge VALUES (?,?,?,?,?,?,?,?)", (
+                canonical, pred_identity, market["canonical_market_identity"], ALL_BOOK_ATTACHMENT_POLICY,
+                timing, json.dumps(bridge, sort_keys=True, separators=(",", ":")), digest, created_at_utc,
+            ))
+            conn.commit()
+            action = "APPENDED_NEW"
+        else:
+            action = "EXISTING_IMMUTABLE" if existing[0] == digest else "EXISTING_CONFLICT_PRESERVED"
+        out.append({**market, **bridge, "bridge_action": action})
+    return out
+
+
+def american_implied(price: float | int | None) -> float | None:
+    if price is None:
+        return None
+    value = float(price)
+    if value == 0:
+        return None
+    return 100.0 / (value + 100.0) if value > 0 else abs(value) / (abs(value) + 100.0)
+
+
+def build_consensus(prediction: dict[str, Any], markets: list[dict[str, Any]], captured_at_utc: str) -> dict[str, Any] | None:
+    rows = [row for row in markets if int(row["game_id"]) == int(prediction["game_pk"]) and row["captured_at_utc"] == captured_at_utc]
+    if not rows:
+        return None
+    lines = [float(row["total_line"]) for row in rows]
+    consensus_line = float(statistics.median(lines))
+    modes = statistics.multimode(lines)
+    unique_mode = float(modes[0]) if len(modes) == 1 else None
+    max_frequency = max(lines.count(value) for value in set(lines))
+    same_line = [row for row in rows if float(row["total_line"]) == consensus_line]
+    over_prices = [float(row["over_price"]) for row in same_line if row.get("over_price") is not None]
+    under_prices = [float(row["under_price"]) for row in same_line if row.get("under_price") is not None]
+    no_vig = []
+    for row in same_line:
+        over, under = american_implied(row.get("over_price")), american_implied(row.get("under_price"))
+        if over is not None and under is not None and over + under > 0:
+            no_vig.append(over / (over + under))
+    return {
+        "prediction_identity": prediction_identity(prediction), "game_date": prediction["game_date"],
+        "game_id": int(prediction["game_pk"]), "captured_at_utc": captured_at_utc,
+        "consensus_policy": CONSENSUS_POLICY, "books_captured": len(rows),
+        "distinct_lines": len(set(lines)), "minimum_total_line": min(lines), "maximum_total_line": max(lines),
+        "median_total_line": consensus_line, "modal_total_line": unique_mode,
+        "line_dispersion_population_sd": statistics.pstdev(lines) if len(lines) > 1 else 0.0,
+        "modal_line_book_percentage": 100.0 * max_frequency / len(lines),
+        "largest_book_to_book_line_difference": max(lines) - min(lines),
+        "books_at_consensus_line": len(same_line),
+        "median_over_price_at_consensus_line": statistics.median(over_prices) if over_prices else None,
+        "median_under_price_at_consensus_line": statistics.median(under_prices) if under_prices else None,
+        "median_no_vig_over_probability_at_consensus_line": statistics.median(no_vig) if no_vig else None,
+    }
+
+
+def append_consensus(conn: sqlite3.Connection, consensus: dict[str, Any], created_at_utc: str) -> str:
+    identity = f"{consensus['prediction_identity']}|{consensus['captured_at_utc']}|{CONSENSUS_POLICY}"
+    digest = sha256_json(consensus)
+    existing = conn.execute("SELECT consensus_payload_sha256 FROM totals_shadow_market_consensus WHERE canonical_consensus_identity=?", (identity,)).fetchone()
+    if existing:
+        return "EXISTING_IMMUTABLE" if existing[0] == digest else "EXISTING_CONFLICT_PRESERVED"
+    conn.execute("INSERT INTO totals_shadow_market_consensus VALUES (?,?,?,?,?,?,?)", (
+        identity, consensus["prediction_identity"], consensus["captured_at_utc"], CONSENSUS_POLICY,
+        json.dumps(consensus, sort_keys=True, separators=(",", ":")), digest, created_at_utc,
+    ))
+    conn.commit()
+    return "APPENDED_NEW"
+
+
+def consensus_rows(conn: sqlite3.Connection, game_date: str) -> list[dict[str, Any]]:
+    rows = conn.execute("SELECT consensus_payload_json FROM totals_shadow_market_consensus WHERE json_extract(consensus_payload_json,'$.game_date')=? ORDER BY captured_at_utc,prediction_identity", (game_date,)).fetchall()
+    return [json.loads(row[0]) for row in rows]
+
+
 def ledger_counts(conn: sqlite3.Connection) -> dict[str, int]:
     return {
         "market_rows": conn.execute("SELECT COUNT(*) FROM full_game_total_market_snapshots").fetchone()[0],
         "bridge_rows": conn.execute("SELECT COUNT(*) FROM totals_shadow_market_bridge").fetchone()[0],
+        "all_book_bridge_rows": conn.execute("SELECT COUNT(*) FROM totals_shadow_all_book_market_bridge").fetchone()[0],
+        "consensus_rows": conn.execute("SELECT COUNT(*) FROM totals_shadow_market_consensus").fetchone()[0],
         "duplicate_market_identities": conn.execute("SELECT COUNT(*) FROM (SELECT canonical_market_identity FROM full_game_total_market_snapshots GROUP BY 1 HAVING COUNT(*)>1)").fetchone()[0],
     }

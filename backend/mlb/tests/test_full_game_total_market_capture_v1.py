@@ -7,7 +7,8 @@ import pytest
 
 from backend.app.services.mlb.market_odds_service import get_market_to_prop_map
 from backend.mlb.markets.full_game_total_capture_v1 import (
-    append_market, attach_market, bind_event, connect_ledger, ledger_counts, parse_totals,
+    append_consensus, append_market, attach_all_markets, attach_market, bind_event,
+    build_consensus, connect_ledger, ledger_counts, parse_totals,
 )
 from backend.mlb.scripts.capture_mlb_full_game_totals_v1 import load_or_fetch
 
@@ -112,3 +113,39 @@ def test_shadow_attachment_prefers_latest_prior_snapshot_and_betonline(tmp_path)
     assert attached["bookmaker_key"] == "betonlineag"
     assert attached["captured_at_utc"] == "2026-08-06T20:30:00Z"
     assert attached["timing_relationship"] == "AT_OR_BEFORE_PREDICTION"
+
+
+def test_all_book_bridge_preserves_each_book_without_collapsing(tmp_path):
+    betonline = parse([event()], [schedule()])[0][0]
+    draftkings = {**betonline, "bookmaker": "DraftKings", "bookmaker_key": "draftkings", "total_line": 9.0,
+                    "canonical_market_identity": "10|draftkings|FULL_GAME_TOTAL|2026-08-06T21:00:00Z|9"}
+    conn = connect_ledger(tmp_path / "market.sqlite3")
+    for row in (betonline, draftkings): append_market(conn, row)
+    prediction = {"game_date": "2026-08-06", "game_pk": 10, "model_version": "DIRECT_NEGATIVE_BINOMIAL",
+                  "prediction_snapshot_class": "DAILY_DESIGNATED_PREGAME", "prediction_timestamp_utc": "2026-08-06T20:00:00Z"}
+    attached = attach_all_markets(conn, prediction, [betonline, draftkings], "2026-08-06T21:01:00Z")
+    assert len(attached) == 2
+    assert {row["bookmaker_key"] for row in attached} == {"betonlineag", "draftkings"}
+    assert {row["timing_relationship"] for row in attached} == {"POST_PREDICTION_MARKET_OBSERVATION"}
+    assert ledger_counts(conn)["all_book_bridge_rows"] == 2
+    assert all(row["bridge_action"] == "EXISTING_IMMUTABLE" for row in attach_all_markets(conn, prediction, [betonline, draftkings], "2026-08-06T21:01:00Z"))
+
+
+def test_consensus_uses_median_line_and_same_line_prices_only(tmp_path):
+    prediction = {"game_date": "2026-08-06", "game_pk": 10, "model_version": "DIRECT_NEGATIVE_BINOMIAL",
+                  "prediction_snapshot_class": "DAILY_DESIGNATED_PREGAME", "prediction_timestamp_utc": "2026-08-06T20:00:00Z"}
+    rows = []
+    for key, line, over, under in (("a", 8.0, 500, -900), ("b", 8.5, -110, -110), ("c", 8.5, -120, 100), ("d", 9.0, -500, 300)):
+        rows.append({"game_id": 10, "captured_at_utc": "2026-08-06T21:00:00Z", "total_line": line,
+                     "over_price": over, "under_price": under, "bookmaker_key": key})
+    consensus = build_consensus(prediction, rows, "2026-08-06T21:00:00Z")
+    assert consensus["books_captured"] == 4 and consensus["distinct_lines"] == 3
+    assert consensus["median_total_line"] == 8.5 and consensus["modal_total_line"] == 8.5
+    assert consensus["books_at_consensus_line"] == 2
+    assert consensus["median_over_price_at_consensus_line"] == -115
+    assert consensus["median_under_price_at_consensus_line"] == -5
+    assert consensus["minimum_total_line"] == 8.0 and consensus["maximum_total_line"] == 9.0
+    conn = connect_ledger(tmp_path / "market.sqlite3")
+    assert append_consensus(conn, consensus, "2026-08-06T21:01:00Z") == "APPENDED_NEW"
+    assert append_consensus(conn, consensus, "2026-08-06T21:01:00Z") == "EXISTING_IMMUTABLE"
+    assert ledger_counts(conn)["consensus_rows"] == 1
