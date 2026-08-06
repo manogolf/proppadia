@@ -18,6 +18,7 @@ from backend.mlb.shared.model_authority import (
 
 ROOT = Path(__file__).resolve().parents[3]
 GUARD = ROOT / "bin/mlb_slate_output_guarded.sh"
+SHARED_GUARD = ROOT / "bin/mlb_predictive_command_guarded.sh"
 
 
 def _run(tmp_path: Path, stderr: str, rc: int, *, artifact: bool = False, parent: bool = False):
@@ -85,3 +86,20 @@ def test_moneyline_hook_contract_is_unchanged():
     assert "--skip-if-designated-snapshot-exists" in hook
     assert "--write-durable" in hook
     assert "mlb_slate_output_guarded" not in hook
+
+
+def test_shared_guard_allows_only_verified_active_operations(tmp_path):
+    exact = "MLBPredictiveModelBlocked: MLB_PREDICTIVE_MODEL_BLOCKED_NO_QUALIFIED_MODEL: operation={}"
+    for operation in ("production_slate_generation","production_upload_generation","production_ranking_and_routing"):
+        result=subprocess.run(
+            [str(SHARED_GUARD),'--stage','test stage','--operation',operation,'--',
+             '/bin/zsh','-c',f'print -r -- {exact.format(operation)!r} >&2; exit 9'],
+            cwd=ROOT,text=True,capture_output=True,
+        )
+        assert result.returncode==0
+        assert f'operation={operation}' in result.stdout
+    unlisted=subprocess.run(
+        [str(SHARED_GUARD),'--stage','test','--operation','production_wager_and_staking_output','--','/usr/bin/false'],
+        cwd=ROOT,text=True,capture_output=True,
+    )
+    assert unlisted.returncode==64 and 'UNLISTED' in unlisted.stderr
