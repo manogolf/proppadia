@@ -284,7 +284,7 @@ def test_24_provider_failure_isolation(tmp_path):
     hook = (ROOT / "bin/mlb_full_game_totals_daily_hook.sh").read_text()
     (workspace / "hook.sh").write_text(hook)
     (workspace / "hook.sh").chmod(0o755)
-    fake_book = workspace / "bin/mlb_bookmaker_eu_daily_hook.sh"
+    fake_book = workspace / "bin/mlb_sportsgameodds_main_market_trial_daily_hook.sh"
     fake_book.write_text("#!/bin/zsh\nexit ${BOOK_RC:-0}\n")
     fake_book.chmod(0o755)
     fake_python = workspace / ".venv/bin/python"

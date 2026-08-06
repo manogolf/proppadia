@@ -19,16 +19,16 @@ echo "[$(date -u +%FT%TZ)] DONE MLB full-game totals market capture source=THE_O
 # Supplemental source health is independent: it always gets its one bounded
 # attempt even if The Odds API failed, and its failure never erases a successful
 # existing-provider capture.
-bin/mlb_bookmaker_eu_daily_hook.sh "$slate_date" "$run_tag"
-bookmaker_eu_rc=$?
-if [[ "$bookmaker_eu_rc" -ne 0 ]]; then
-  echo "[$(date -u +%FT%TZ)] WARN MLB Bookmaker.eu supplemental capture failed rc=${bookmaker_eu_rc}; The Odds API result remains authoritative and preserved" >&2
+bin/mlb_sportsgameodds_main_market_trial_daily_hook.sh "$slate_date" "$run_tag" "$odds_api_rc"
+sgo_rc=$?
+if [[ "$sgo_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN MLB SportsGameOdds provider-wide trial capture failed rc=${sgo_rc}; The Odds API result remains authoritative and preserved" >&2
 fi
 if [[ "$odds_api_rc" -ne 0 ]]; then
-  echo "[$(date -u +%FT%TZ)] WARN MLB full-game totals The Odds API capture failed rc=${odds_api_rc}; successful Bookmaker.eu data remains preserved" >&2
+  echo "[$(date -u +%FT%TZ)] WARN MLB full-game totals The Odds API capture failed rc=${odds_api_rc}; successful SportsGameOdds trial data remains preserved" >&2
 fi
 
-if [[ "$odds_api_rc" -ne 0 && "$bookmaker_eu_rc" -ne 0 ]]; then
+if [[ "$odds_api_rc" -ne 0 && "$sgo_rc" -ne 0 ]]; then
   exit 1
 fi
 exit 0
