@@ -1,0 +1,33 @@
+{
+  "dates": [{
+    "date": "2026-08-06",
+    "games": [
+      {
+        "gamePk": 900001,
+        "gameDate": "2026-08-06T22:05:00Z",
+        "officialDate": "2026-08-06",
+        "status": {"abstractGameState": "Preview", "detailedState": "Scheduled"},
+        "teams": {
+          "away": {"team": {"id": 120, "name": "Washington Nationals"}, "probablePitcher": {"id": 571945, "fullName": "Miles Mikolas"}},
+          "home": {"team": {"id": 143, "name": "Philadelphia Phillies"}, "probablePitcher": {"id": 650911, "fullName": "Cristopher Sanchez"}}
+        },
+        "venue": {"id": 2681, "name": "Citizens Bank Park"},
+        "gameNumber": 1,
+        "doubleHeader": "Y"
+      },
+      {
+        "gamePk": 900002,
+        "gameDate": "2026-08-07T01:05:00Z",
+        "officialDate": "2026-08-06",
+        "status": {"abstractGameState": "Preview", "detailedState": "Scheduled"},
+        "teams": {
+          "away": {"team": {"id": 120, "name": "Washington Nationals"}, "probablePitcher": {"id": 543243, "fullName": "Pitcher Two"}},
+          "home": {"team": {"id": 143, "name": "Philadelphia Phillies"}, "probablePitcher": {"id": 592789, "fullName": "Pitcher Three"}}
+        },
+        "venue": {"id": 2681, "name": "Citizens Bank Park"},
+        "gameNumber": 2,
+        "doubleHeader": "Y"
+      }
+    ]
+  }]
+}
