@@ -23,6 +23,12 @@ SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
 SCHEDULE_HYDRATE = "probablePitcher,venue,team"
 SCHEDULE_FIELDS = "dates,date,games,gamePk,gameDate,officialDate,status,abstractGameState,detailedState,teams,away,home,team,id,name,probablePitcher,fullName,venue,gameNumber,doubleHeader"
 MODEL_VERSION = "DIRECT_NEGATIVE_BINOMIAL"
+GOVERNED_STARTER_HISTORY_TIERS = frozenset({
+    "DIRECT_STARTER_HISTORY",
+    "PITCHER_ROLE_COHORT",
+    "TEAM_STARTER_HISTORY",
+    "LEAGUE_STARTER_HISTORY",
+})
 
 
 class TotalsLiveContextError(RuntimeError):
@@ -230,13 +236,29 @@ def attach_context(schedule_row: dict[str, Any], history: dict[str, Any]) -> dic
                   "park_factor": 1.0, "park_history_depth": 0, "fallback_status": "LEAGUE_PARK_FALLBACK", "roof_type": "UNAVAILABLE", "elevation": None,
                   "feature_cutoff_utc": schedule_row["scheduled_start_utc"], "latest_included_game_id": None,
                   "state_hash": canonical_hash({"venue_id": schedule_row.get("venue_id"), "fallback": "LEAGUE_PARK_FALLBACK"})}
-    complete = (all(schedule_row.get(f"{side}_probable_pitcher_status") == "PROBABLE_PITCHER_CERTIFIED" for side in ("away", "home"))
-                and all(state["fallback_tier"] == "DIRECT_STARTER_HISTORY" for state in (away, home))
+    probable_certified = all(
+        schedule_row.get(f"{side}_probable_pitcher_status") == "PROBABLE_PITCHER_CERTIFIED"
+        for side in ("away", "home")
+    )
+    starter_features_certified = all(
+        state["certification_status"] == "STRICT_PRIOR_STARTER_STATE"
+        and state["fallback_tier"] in GOVERNED_STARTER_HISTORY_TIERS
+        for state in (away, home)
+    )
+    complete = (probable_certified and starter_features_certified
                 and park is not None and park["fallback_status"] == "DIRECT_REGRESSED_PARK_HISTORY")
     unresolved = any(schedule_row.get(f"{side}_probable_pitcher_status") == "PROBABLE_PITCHER_IDENTITY_UNRESOLVED" for side in ("away", "home"))
     quality = "TOTALS_CONTEXT_UNRESOLVED" if unresolved else ("TOTALS_CONTEXT_COMPLETE" if complete else "TOTALS_CONTEXT_PARTIAL_FALLBACK")
+    starter_history_quality = ("DIRECT_STARTER_HISTORY_BOTH" if all(
+        state["fallback_tier"] == "DIRECT_STARTER_HISTORY" for state in (away, home)
+    ) else "GOVERNED_SPARSE_STARTER_HISTORY")
     return {**schedule_row, "away_starter_state": away, "home_starter_state": home, "away_bullpen_state": away_bullpen,
-            "home_bullpen_state": home_bullpen, "park_state": park_state, "data_quality_status": quality}
+            "home_bullpen_state": home_bullpen, "park_state": park_state,
+            "away_starter_history_fallback_tier": away["fallback_tier"],
+            "home_starter_history_fallback_tier": home["fallback_tier"],
+            "starter_history_fallback_tier": f"away={away['fallback_tier']}|home={home['fallback_tier']}",
+            "starter_history_quality_state": starter_history_quality,
+            "data_quality_status": quality}
 
 
 def feature_row(context: dict[str, Any], history: dict[str, Any], candidate: dict[str, Any]) -> dict[str, float]:

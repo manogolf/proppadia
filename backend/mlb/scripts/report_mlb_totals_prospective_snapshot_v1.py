@@ -15,7 +15,7 @@ from typing import Any
 from backend.mlb.markets.main_market_provider_replacement_trial_v1 import canonical_book_id, display_name
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import probability_fields
 from backend.mlb.totals_predictions.live_context_bridge_v1 import (
-    attach_context, build_history, canonical_hash, fetch_hydrated_schedule, load_candidate, normalize_schedule,
+    GOVERNED_STARTER_HISTORY_TIERS, attach_context, build_history, canonical_hash, fetch_hydrated_schedule, load_candidate, normalize_schedule,
 )
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     append_context, append_prediction, canonical_identity, connect_ledger, contexts_for_date, counts, rows_for_date,
@@ -91,7 +91,8 @@ def context_reasons(context: dict[str, Any]) -> list[str]:
         status = context.get(f"{side}_probable_pitcher_status")
         if status != "PROBABLE_PITCHER_CERTIFIED": reasons.append(f"{side.upper()}_{status}")
         tier = context[f"{side}_starter_state"]["fallback_tier"]
-        if tier != "DIRECT_STARTER_HISTORY": reasons.append(f"{side.upper()}_STARTER_{tier}")
+        if status == "PROBABLE_PITCHER_CERTIFIED" and tier not in GOVERNED_STARTER_HISTORY_TIERS:
+            reasons.append(f"{side.upper()}_STARTER_UNGOVERNED_{tier}")
     park = context["park_state"]["fallback_status"]
     if park != "DIRECT_REGRESSED_PARK_HISTORY": reasons.append(f"PARK_{park}")
     return reasons

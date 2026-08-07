@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from backend.mlb.totals_predictions.live_context_bridge_v1 import (
-    attach_context, build_history, canonical_hash, distribution, feature_row,
+    GOVERNED_STARTER_HISTORY_TIERS, attach_context, build_history, canonical_hash, distribution, feature_row,
     fetch_hydrated_schedule, load_candidate, normalize_schedule, score_context,
 )
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
@@ -114,18 +114,27 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
     payload, observed, schedule_hash = fetch_hydrated_schedule(game_date); schedule = normalize_schedule(payload, observed, schedule_hash); history = build_history(); env = dynamic_environment(history, game_date)
     markets, market_files = market_inventory(game_date); existing = {row["game_pk"]: row for row in rows_for_date(connection, game_date)}; attempts = []
     for schedule_row in schedule:
-        context = attach_context(schedule_row, history); identity = canonical_identity(game_date, context["game_pk"])
-        if context["game_pk"] in existing:
-            features = feature_row(context, history, candidate); feature_state = {"model_features": features, "away_starter_state": context["away_starter_state"],
-                "home_starter_state": context["home_starter_state"], "park_state": context["park_state"], "dynamic_league_environment": env}
-            context_action = append_context(connection, identity, feature_state, existing[context["game_pk"]]["feature_state_hash"], existing[context["game_pk"]]["prediction_timestamp_utc"])
-            attempts.append({"canonical_identity": identity, "ledger_action": "EXISTING_IMMUTABLE", "context_action": context_action, "game_pk": context["game_pk"]}); continue
-        try: score = score_context(context, history, candidate, observed)
-        except Exception as exc:
-            if str(exc) == "POST_START_GAME_NOT_ELIGIBLE": attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_POST_START", "game_pk": context["game_pk"]}); continue
-            raise
+        game_pk = int(schedule_row["game_pk"]); identity = canonical_identity(game_date, game_pk)
+        if game_pk in existing:
+            attempts.append({"canonical_identity": identity, "ledger_action": "EXISTING_IMMUTABLE",
+                "context_action": "EXISTING_CONTEXT_NOT_RECONSTRUCTED", "game_pk": game_pk}); continue
+        context = attach_context(schedule_row, history)
+        if pd.Timestamp(context["scheduled_start_utc"]) <= pd.Timestamp(observed):
+            attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_POST_START", "game_pk": context["game_pk"]}); continue
         if context["data_quality_status"] != "TOTALS_CONTEXT_COMPLETE":
-            attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_CONTEXT_NOT_COMPLETE", "game_pk": context["game_pk"]}); continue
+            reasons = []
+            for side in ("away", "home"):
+                status = context.get(f"{side}_probable_pitcher_status")
+                if status != "PROBABLE_PITCHER_CERTIFIED": reasons.append(f"{side.upper()}_{status}")
+                tier = context[f"{side}_starter_state"]["fallback_tier"]
+                if status == "PROBABLE_PITCHER_CERTIFIED" and tier not in GOVERNED_STARTER_HISTORY_TIERS:
+                    reasons.append(f"{side.upper()}_STARTER_UNGOVERNED_{tier}")
+            if context["park_state"]["fallback_status"] != "DIRECT_REGRESSED_PARK_HISTORY":
+                reasons.append(f"PARK_{context['park_state']['fallback_status']}")
+            attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_CONTEXT_NOT_COMPLETE",
+                "game_pk": context["game_pk"], "rejection_reasons": reasons,
+                "retry_status": "RETRYABLE_SAME_DAY_IF_OFFICIAL_PROBABLE_POSTS" if any("PROBABLE_PITCHER_UNAVAILABLE" in reason for reason in reasons) else "NOT_RETRYABLE_WITHOUT_CONTEXT_REPAIR"}); continue
+        score = score_context(context, history, candidate, observed)
         market = attach_market(context, markets); probabilities = probability_fields(score["expected_total"], candidate["dispersion_alpha"], market["total_line"])
         features = feature_row(context, history, candidate); feature_state = {"model_features": features, "away_starter_state": context["away_starter_state"],
             "home_starter_state": context["home_starter_state"], "park_state": context["park_state"], "dynamic_league_environment": env}
@@ -136,6 +145,8 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
             "home_probable_starter_id": context["home_probable_pitcher_id"], "home_probable_starter_name": context["home_probable_pitcher_name"],
             "away_starter_state_status": context["away_starter_state"]["certification_status"], "away_starter_fallback_status": context["away_starter_state"]["fallback_tier"],
             "home_starter_state_status": context["home_starter_state"]["certification_status"], "home_starter_fallback_status": context["home_starter_state"]["fallback_tier"],
+            "starter_history_fallback_tier": context["starter_history_fallback_tier"],
+            "starter_history_quality_state": context["starter_history_quality_state"],
             "venue_id": context["venue_id"], "venue_name": context["venue_name"], "park_factor": context["park_state"]["park_factor"],
             "park_fallback_status": context["park_state"]["fallback_status"], "context_quality_state": context["data_quality_status"],
             "dynamic_league_environment": env, "model_version": MODEL_VERSION, "model_hash": candidate["canonical_model_hash"],
