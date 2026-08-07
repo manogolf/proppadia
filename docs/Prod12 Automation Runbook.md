@@ -1257,7 +1257,7 @@ History outputs written locally:
 - `artifacts/ops/mlb_bvp_prewarm_daily.out.log`
 - `artifacts/ops/mlb_bvp_prewarm_daily.err.log`
 
-Create daily LaunchAgent (example: three runs to catch later-game odds movement; first run shifted +90 minutes):
+Create daily LaunchAgent with the governed MLB refresh schedule:
 
 ```bash
 cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
@@ -1274,16 +1274,24 @@ cat > "$HOME/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist" <<EOF
   <key>StartCalendarInterval</key>
   <array>
     <dict>
-      <key>Hour</key><integer>6</integer>
-      <key>Minute</key><integer>50</integer>
+      <key>Hour</key><integer>5</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>8</integer>
+      <key>Minute</key><integer>30</integer>
     </dict>
     <dict>
       <key>Hour</key><integer>11</integer>
-      <key>Minute</key><integer>20</integer>
+      <key>Minute</key><integer>0</integer>
     </dict>
     <dict>
-      <key>Hour</key><integer>15</integer>
-      <key>Minute</key><integer>20</integer>
+      <key>Hour</key><integer>13</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>16</integer>
+      <key>Minute</key><integer>30</integer>
     </dict>
   </array>
   <key>StandardOutPath</key><string>$HOME/Projects/proppadia/artifacts/ops/mlb_refresh_daily.out.log</string>

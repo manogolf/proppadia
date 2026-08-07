@@ -30,11 +30,7 @@ def resolve_mode(mode: str, wrapper_started_at_utc: str) -> str:
     if mode == "score-missing": return SCORE_MISSING
     started = datetime.fromisoformat(wrapper_started_at_utc.replace("Z", "+00:00"))
     pacific = started.astimezone(ZoneInfo("America/Los_Angeles"))
-    if (pacific.hour, pacific.minute) < (9, 30):
-        return GRADE_ONLY
-    if (pacific.hour, pacific.minute) < (11, 0):
-        return PRIMARY_SCORE
-    return SCORE_MISSING
+    return PRIMARY_SCORE if (pacific.hour, pacific.minute) < (8, 30) else SCORE_MISSING
 
 
 def pending_grade_dates(connection: sqlite3.Connection, completed_through: str) -> list[str]:

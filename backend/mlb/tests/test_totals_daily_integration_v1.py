@@ -43,31 +43,31 @@ def add_prediction(connection, game_date, game_pk):
     return row
 
 
-def test_auto_window_0530_and_0830_are_grade_only_0930_primary_later_retry():
-    assert daily.resolve_mode("auto", "2026-08-07T12:30:00Z") == daily.GRADE_ONLY
-    assert daily.resolve_mode("auto", "2026-08-07T15:30:00Z") == daily.GRADE_ONLY
-    assert daily.resolve_mode("auto", "2026-08-07T16:30:00Z") == daily.PRIMARY_SCORE
+def test_auto_window_0530_is_primary_and_0830_or_later_retries_missing():
+    assert daily.resolve_mode("auto", "2026-08-07T12:30:00Z") == daily.PRIMARY_SCORE
+    assert daily.resolve_mode("auto", "2026-08-07T15:30:00Z") == daily.SCORE_MISSING
+    assert daily.resolve_mode("auto", "2026-08-07T16:30:00Z") == daily.SCORE_MISSING
     assert daily.resolve_mode("auto", "2026-08-07T18:00:00Z") == daily.SCORE_MISSING
 
 
-def test_daily_0930_scores_and_later_runs_retry_missing(monkeypatch, tmp_path):
+def test_daily_0830_scores_and_later_runs_retry_missing(monkeypatch, tmp_path):
     today = datetime.now(ZoneInfo("America/New_York")).date().isoformat(); calls=[]
     monkeypatch.setattr(daily,"score",lambda *args:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
     monkeypatch.setattr(daily,"attach_markets",lambda *args:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
     monkeypatch.setattr(daily,"grade",lambda *args,**kwargs:pytest.fail("no pending grade dates expected"))
-    result=daily.run(today,"2000-01-01","auto","2026-08-07T16:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
-    assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score",today),("markets",today)]
+    result=daily.run(today,"2000-01-01","auto","2026-08-07T15:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
+    assert result["resolved_mode"]==daily.SCORE_MISSING and calls==[("score",today),("markets",today)]
     calls.clear()
     result=daily.run(today,"2000-01-01","auto","2026-08-07T18:00:00Z",tmp_path,tmp_path/"p2.sqlite3",tmp_path/"m2.sqlite3")
     assert result["resolved_mode"]==daily.SCORE_MISSING and calls==[("score",today),("markets",today)]
 
 
-def test_daily_0530_is_grade_only(monkeypatch, tmp_path):
+def test_daily_0530_is_primary_scoring_pass(monkeypatch, tmp_path):
     calls=[]
     monkeypatch.setattr(daily,"score",lambda *args:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
     monkeypatch.setattr(daily,"attach_markets",lambda *args:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
     result=daily.run("2026-08-07","2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
-    assert result["resolved_mode"]==daily.GRADE_ONLY and calls==[]
+    assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score","2026-08-07"),("markets","2026-08-07")]
 
 
 def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch, tmp_path):
