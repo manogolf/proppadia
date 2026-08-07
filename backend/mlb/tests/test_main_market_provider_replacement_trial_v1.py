@@ -161,6 +161,26 @@ def test_required_living_package_names_are_exact(tmp_path):
     assert len(expected) == 11 and "reproducibility_hashes.sha256" in expected
 
 
+def test_package_writer_accepts_explicit_source_failure_overlap_row(tmp_path, monkeypatch):
+    rows, audit = _parsed()
+    coverage = runner.bookmaker_coverage(rows, [_event()])
+    priority = runner.priority_coverage(coverage, [])
+    raw = tmp_path / "raw.json"; raw.write_text("{}")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    source = {"run_tag": "trial", "fetch_timestamp_utc": FETCH,
+              "request_count": 0, "provider_notice": None,
+              "raw_response_path": "raw.json"}
+    reliability = [{"provider": "SPORTSGAMEODDS", "request_success": True},
+                   {"provider": "THE_ODDS_API", "request_success": False}]
+    runner.write_package(
+        tmp_path, source=source, coverage=coverage,
+        overlap=[{"classification": "SOURCE_FAILURE", "source_failure": "THE_ODDS_API_CAPTURE_FAILED"}],
+        consensus=[], freshness=[], reliability=reliability, priority=priority,
+        rows=rows, odds=[], schedule=_schedule(), audit=audit,
+    )
+    assert (tmp_path / "provider_replacement_progress.md").exists()
+
+
 def test_no_ev_wager_ranking_staking_fields():
     rows, _ = _parsed()
     forbidden = {"ev", "wager", "ranking", "staking", "stake"}

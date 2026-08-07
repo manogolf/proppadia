@@ -387,7 +387,12 @@ def write_package(output: Path, *, source: dict[str, Any], coverage: list[dict[s
 """
     (output / "historical_capability_audit.md").write_text(historical)
     priority_by_name = {row["priority_book"]: row for row in priority}
-    common = {row["canonical_bookmaker_id"] for row in overlap if row["sportsgameodds_present"] and row["the_odds_api_present"]}
+    # The overlap ledger may contain an explicit SOURCE_FAILURE diagnostic row.
+    # Such rows deliberately do not claim provider-presence fields.
+    common = {
+        row["canonical_bookmaker_id"] for row in overlap
+        if row.get("sportsgameodds_present") and row.get("the_odds_api_present")
+    }
     unique = sorted({row["bookmaker_provider_id"] for row in rows} - {canonical_book_id("THE_ODDS_API", row["bookmaker_key"]) for row in odds})
     meaningful_unique = [book for book in ("bookmakereu", "caesars", "espnbet", "hardrockbet") if book in unique]
     rates = {}

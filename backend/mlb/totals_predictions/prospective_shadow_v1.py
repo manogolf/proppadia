@@ -90,6 +90,39 @@ def rows_for_date(connection: sqlite3.Connection, game_date: str) -> list[dict[s
     return [json.loads(row[0]) for row in rows]
 
 
+def append_outcome(connection: sqlite3.Connection, identity: str, payload: dict[str, Any], graded_at_utc: str) -> str:
+    """Append one immutable official-final grade for an existing prediction."""
+    if not connection.execute("SELECT 1 FROM totals_shadow_predictions WHERE canonical_identity=?", (identity,)).fetchone():
+        raise ValueError("PREDICTION_IDENTITY_NOT_FOUND")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    digest = payload_hash(payload)
+    existing = connection.execute(
+        "SELECT grading_payload_sha256 FROM totals_shadow_outcomes WHERE canonical_identity=?", (identity,)
+    ).fetchone()
+    if existing:
+        return "EXISTING_IMMUTABLE" if existing[0] == digest else "EXISTING_OUTCOME_CONFLICT_PRESERVED"
+    connection.execute(
+        """INSERT INTO totals_shadow_outcomes
+        (canonical_identity,official_final_total,regulation_nine_total,official_source_hash,
+         grading_payload_json,grading_payload_sha256,graded_at_utc) VALUES (?,?,?,?,?,?,?)""",
+        (identity, int(payload["official_final_total"]), int(payload["regulation_nine_total"]),
+         payload["official_source_hash"], encoded, digest, graded_at_utc),
+    )
+    connection.commit()
+    return "APPENDED_NEW"
+
+
+def outcomes_for_date(connection: sqlite3.Connection, game_date: str) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """SELECT o.canonical_identity,o.grading_payload_json,o.grading_payload_sha256,o.graded_at_utc
+        FROM totals_shadow_outcomes o JOIN totals_shadow_predictions p USING(canonical_identity)
+        WHERE p.game_date=? ORDER BY p.scheduled_start_utc,p.game_id""", (game_date,)
+    ).fetchall()
+    return [{"canonical_identity": identity, **json.loads(payload),
+             "grading_payload_sha256": digest, "graded_at_utc": graded_at}
+            for identity, payload, digest, graded_at in rows]
+
+
 def append_context(connection: sqlite3.Connection, identity: str, payload: dict[str, Any], expected_hash: str, created_at_utc: str) -> str:
     digest = payload_hash(payload)
     if digest != expected_hash:

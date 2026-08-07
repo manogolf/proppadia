@@ -7,7 +7,8 @@ import pandas as pd
 import pytest
 
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import dynamic_environment, probability_fields
-from backend.mlb.totals_predictions.prospective_shadow_v1 import append_context, append_prediction, canonical_identity, connect_ledger, contexts_for_date, counts, payload_hash, rows_for_date
+from backend.mlb.scripts.grade_mlb_totals_prospective_shadow_v1 import line_probabilities, no_vig_over
+from backend.mlb.totals_predictions.prospective_shadow_v1 import append_context, append_outcome, append_prediction, canonical_identity, connect_ledger, contexts_for_date, counts, outcomes_for_date, payload_hash, rows_for_date
 
 
 def sample_payload():
@@ -38,11 +39,29 @@ def test_prediction_ledger_rejects_outcome_fields(tmp_path):
         append_prediction(connection,payload)
 
 
+def test_outcome_ledger_is_append_only_idempotent_and_prediction_separate(tmp_path):
+    connection=connect_ledger(tmp_path/"ledger.sqlite3");payload=sample_payload();append_prediction(connection,payload)
+    identity=canonical_identity(payload["game_date"],payload["game_pk"])
+    outcome={"official_final_total":9,"regulation_nine_total":9,"official_source_hash":"f"*64,"absolute_error_final":.5}
+    assert append_outcome(connection,identity,outcome,"2026-08-07T12:00:00Z")=="APPENDED_NEW"
+    assert append_outcome(connection,identity,outcome,"2026-08-07T12:01:00Z")=="EXISTING_IMMUTABLE"
+    assert append_outcome(connection,identity,{**outcome,"official_final_total":10},"2026-08-07T12:02:00Z")=="EXISTING_OUTCOME_CONFLICT_PRESERVED"
+    assert len(outcomes_for_date(connection,payload["game_date"]))==1
+    with pytest.raises(sqlite3.IntegrityError,match="APPEND_ONLY_OUTCOME_LEDGER"):
+        connection.execute("UPDATE totals_shadow_outcomes SET official_final_total=10")
+
+
 def test_market_line_probability_preserves_push_mass():
     values=probability_fields(8.5,.12944479977012996,8.0)
     assert np.isclose(values["p_over_market_line"]+values["p_under_market_line"]+values["push_probability_at_market_line"],1)
     assert values["model_minus_market_total"]==.5
     assert set(f"p_over_{x}" for x in ("6_5","7_5","8_5","9_5","10_5","11_5"))<=set(values)
+
+
+def test_grade_market_probability_and_no_vig_contract():
+    probabilities=line_probabilities(8.5,8.0)
+    assert np.isclose(sum(probabilities.values()),1)
+    assert np.isclose(no_vig_over({"over_price":-110,"under_price":-110}),.5)
 
 
 def test_dynamic_environment_uses_only_prior_dates():

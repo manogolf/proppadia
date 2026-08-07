@@ -42,6 +42,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str] | None =
 
 
 def write_evidence(output_dir: Path, summary: dict[str, Any], capture_rows: list[dict[str, Any]], audit_rows: list[dict[str, Any]], bridge_rows: list[dict[str, Any]], ledger_path: Path) -> None:
+    game_date = summary.get("game_date", "UNSPECIFIED")
     contract = {
         "experiment": EXPERIMENT, "provider": "THE_ODDS_API", "endpoint": "/v4/sports/baseball_mlb/odds",
         "requested_market": "totals", "market_type": "FULL_GAME_TOTAL", "odds_format": "american",
@@ -102,16 +103,20 @@ def write_evidence(output_dir: Path, summary: dict[str, Any], capture_rows: list
             lines.append(f"| {row['away_team']} @ {row['home_team']} | {float(row['predicted_total']):.3f} | {row['bookmaker']} | {float(row['total_line']):.1f} | {float(row['model_minus_market_total']):+.3f} | {float(row['p_over_market_line']):.3f} | {float(row['p_under_market_line']):.3f} | {row['prediction_timestamp_utc']} | {row['captured_at_utc']} | {row['timing_relationship']} | {row['grading_status']} |")
     (output_dir / "current_totals_with_market_report.md").write_text("\n".join(lines) + "\n")
     differences = [float(row["model_minus_market_total"]) for row in bridge_rows if row.get("model_minus_market_total") is not None]
+    difference_range = (
+        f"{min(differences):+.3f} to {max(differences):+.3f}"
+        if differences else "UNAVAILABLE_NO_FROZEN_TOTALS_PREDICTION"
+    )
     (output_dir / "concise_mlb_full_game_total_market_capture_v1.md").write_text(
         "# MLB Full-Game Total Market Capture v1\n\n"
         "`FULL_GAME_TOTAL_MARKET_CAPTURE_IMPLEMENTED`\n\n"
         f"- Capture timestamp: {summary['captured_at_utc']}\n"
-        f"- August 6 eligible games: {summary['eligible_games']}\n"
+        f"- Slate date / eligible games: {game_date} / {summary['eligible_games']}\n"
         f"- Authentic market rows: {summary['market_rows_parsed']} ({summary['paired_rows']} paired; {summary['line_only_rows']} line-only)\n"
         f"- Frozen predictions attached: {summary['prediction_attachments']}\n"
-        f"- Model-minus-market range: {min(differences):+.3f} to {max(differences):+.3f}\n"
+        f"- Model-minus-market range: {difference_range}\n"
         f"- Ledger: {summary['ledger_after']}\n"
-        "- Timing: all August 6 attachments are `POST_PREDICTION_MARKET_OBSERVATION`.\n"
+        f"- Timing: {'attachments retain their certified timing relationship' if summary['prediction_attachments'] else 'no frozen totals prediction existed for this slate; no attachment was inferred'}.\n"
         "- Outcomes accessed: 0\n- Public/model/moneyline behavior: unchanged\n"
     )
     hash_path = output_dir / "reproducibility_hashes.sha256"
@@ -184,7 +189,7 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, snapshot_in: Path |
     write_csv(output_dir / "august_6_full_game_total_capture.csv", actions)
     write_csv(output_dir / "total_market_identity_audit.csv", identity_audit)
     write_csv(output_dir / "totals_shadow_market_bridge.csv", bridge_rows)
-    summary = {"experiment": EXPERIMENT, "captured_at_utc": captured, "run_tag": run_tag, "raw_source_path": str(raw_path), "raw_source_sha256": raw_sha, "provider_events": len(events), "official_games": len(schedule), "eligible_games": len({row['game_id'] for row in parsed}), "market_rows_parsed": len(parsed), "paired_rows": sum(row['market_status']=='TOTAL_MARKET_CERTIFIED_PAIRED' for row in parsed), "line_only_rows": sum(row['market_status']=='TOTAL_MARKET_LINE_ONLY' for row in parsed), "prediction_attachments": sum(row.get('market_status')!='TOTAL_MARKET_UNAVAILABLE' for row in bridge_rows), "consensus_records": len(consensus_output), "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0}
+    summary = {"experiment": EXPERIMENT, "game_date": game_date, "captured_at_utc": captured, "run_tag": run_tag, "raw_source_path": str(raw_path), "raw_source_sha256": raw_sha, "provider_events": len(events), "official_games": len(schedule), "eligible_games": len({row['game_id'] for row in parsed}), "market_rows_parsed": len(parsed), "paired_rows": sum(row['market_status']=='TOTAL_MARKET_CERTIFIED_PAIRED' for row in parsed), "line_only_rows": sum(row['market_status']=='TOTAL_MARKET_LINE_ONLY' for row in parsed), "prediction_attachments": sum(row.get('market_status')!='TOTAL_MARKET_UNAVAILABLE' for row in bridge_rows), "consensus_records": len(consensus_output), "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0}
     write_evidence(output_dir, summary, actions, identity_audit, bridge_rows, ledger_path)
     return summary
 

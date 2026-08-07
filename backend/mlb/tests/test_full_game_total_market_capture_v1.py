@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -10,7 +11,7 @@ from backend.mlb.markets.full_game_total_capture_v1 import (
     append_consensus, append_market, attach_all_markets, attach_market, bind_event,
     build_consensus, connect_ledger, ledger_counts, parse_totals,
 )
-from backend.mlb.scripts.capture_mlb_full_game_totals_v1 import load_or_fetch
+from backend.mlb.scripts.capture_mlb_full_game_totals_v1 import ROOT, load_or_fetch, write_evidence
 
 
 def schedule(start="2026-08-06T23:00:00Z", game_pk=10, game_number=1):
@@ -149,3 +150,15 @@ def test_consensus_uses_median_line_and_same_line_prices_only(tmp_path):
     assert append_consensus(conn, consensus, "2026-08-06T21:01:00Z") == "APPENDED_NEW"
     assert append_consensus(conn, consensus, "2026-08-06T21:01:00Z") == "EXISTING_IMMUTABLE"
     assert ledger_counts(conn)["consensus_rows"] == 1
+
+
+def test_evidence_writer_accepts_market_capture_without_frozen_totals_predictions(tmp_path):
+    summary = {
+        "game_date": "2026-08-07", "captured_at_utc": "2026-08-07T12:49:03Z", "eligible_games": 15,
+        "market_rows_parsed": 159, "paired_rows": 159, "line_only_rows": 0,
+        "prediction_attachments": 0, "ledger_after": {"market_rows": 159},
+    }
+    write_evidence(tmp_path, summary, [], [], [], ROOT / "backend/mlb/exports/test-ledger.sqlite3")
+    report = (tmp_path / "concise_mlb_full_game_total_market_capture_v1.md").read_text()
+    assert "UNAVAILABLE_NO_FROZEN_TOTALS_PREDICTION" in report
+    assert "2026-08-07 / 15" in report and "no attachment was inferred" in report
