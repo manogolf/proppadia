@@ -13,8 +13,8 @@ from typing import Any
 import requests
 
 from backend.mlb.markets.bookmaker_eu_supplemental_v1 import (
-    append_attachment, append_consensus, append_market, build_consensus, connect_ledger,
-    market_rows, no_vig,
+    append_attachment, append_consensus, append_event_discovery, append_market, build_consensus,
+    connect_ledger, mark_first_observed_prices, market_rows, no_vig,
 )
 from backend.mlb.markets.full_game_total_capture_v1 import (
     append_market as append_total_market, attach_all_markets,
@@ -154,6 +154,18 @@ def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFA
         fetched_at_utc=source["fetch_timestamp_utc"], run_tag=run_tag,
         raw_source_path=source["raw_response_path"], raw_source_sha256=source["raw_response_sha256"])
     conn = connect_ledger(ledger_path); total_conn = connect_total_ledger(ledger_path)
+    discovery_actions = []
+    for item in audit:
+        if not item.get("game_pk") or item["event_classification"] not in {"CURRENT_SLATE", "FUTURE_SLATE_PREGAME"}:
+            continue
+        discovery = {"provider": PROVIDER, "provider_event_id": item["provider_event_id"],
+            "game_date": item["scheduled_start_eastern_date"], "game_id": int(item["game_pk"]),
+            "captured_at_utc": source["fetch_timestamp_utc"], "scheduled_start_utc": item["scheduled_start_utc"],
+            "event_classification": item["event_classification"], "raw_source_path": source["raw_response_path"],
+            "raw_source_sha256": source["raw_response_sha256"], "main_market_prices_present": item["admitted_market_rows"] > 0,
+            "bookmaker_scope": "pinnacle", "matchup": f"{item['away_team']} @ {item['home_team']}"}
+        discovery_actions.append(append_event_discovery(conn, discovery))
+    rows = mark_first_observed_prices(conn, rows)
     actions = [{**row, "ledger_action": append_market(conn, row)} for row in rows]
     current_rows = [row for row in rows if row["game_date"] == game_date]
     future_rows = [row for row in rows if row["event_classification"] == "FUTURE_SLATE_PREGAME"]
@@ -191,6 +203,7 @@ def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFA
         "future_moneyline_rows": sum(row["market_type"] == "MONEYLINE" for row in future_rows),
         "future_totals_rows": sum(row["market_type"] == "FULL_GAME_TOTAL" for row in future_rows),
         "future_run_line_rows": sum(row["market_type"] == "RUN_LINE" for row in future_rows),
+        "event_discoveries": len(discovery_actions), "new_event_discoveries": discovery_actions.count("APPENDED_NEW"),
         "outcomes_accessed": 0}
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "pinnacle_capture_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")

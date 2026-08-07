@@ -112,7 +112,11 @@ def parse_events(*, events: Iterable[dict[str, Any]], schedule: list[dict[str, A
                      "away_team": event.get("away_team"), "home_team": event.get("home_team"),
                      "scheduled_start_utc": event.get("commence_time"), "scheduled_start_eastern_date": event_date,
                      "candidate_game_pks": candidate_ids, "original_rejection_reason": "GAME_NOT_FOUND" if event_date != game_date else None,
-                     "certification_status": status, "event_classification": classification}
+                     "certification_status": status, "event_classification": classification,
+                     "observation_timing_class": (
+                         "CURRENT_SLATE_PREGAME_OBSERVATION" if classification == "CURRENT_SLATE" else
+                         "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION" if classification == "FUTURE_SLATE_PREGAME" else
+                         "POST_START_OBSERVATION" if classification == "PAST_OR_STARTED" else "TIMING_UNRESOLVED")}
         if status != "CERTIFIED_EXACT_OR_DETERMINISTIC" or not game:
             audit.append({**audit_row, "admitted_market_rows": 0})
             continue
@@ -129,7 +133,10 @@ def parse_events(*, events: Iterable[dict[str, Any]], schedule: list[dict[str, A
                 if not parsed or updated >= utc(game["scheduled_start_utc"]) or updated > fetched + timedelta(minutes=2):
                     continue
                 actual_date = event_date or game_date
-                timing_status = "PREGAME_CERTIFIED" if classification == "CURRENT_SLATE" else "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"
+                observation_timing_class = (
+                    "CURRENT_SLATE_PREGAME_OBSERVATION" if classification == "CURRENT_SLATE"
+                    else "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"
+                )
                 row = {"provider": PROVIDER, "bookmaker": BOOKMAKER_NAME, "bookmaker_key": BOOKMAKER_KEY,
                        "bookmaker_provider_id": BOOKMAKER_KEY, "league": "MLB",
                        "source_request_slate_date": game_date, "game_date": actual_date,
@@ -140,7 +147,7 @@ def parse_events(*, events: Iterable[dict[str, Any]], schedule: list[dict[str, A
                        "lead_time_minutes": (utc(game["scheduled_start_utc"]) - fetched).total_seconds() / 60,
                        "identity_method": "EXACT_DATE_TEAMS_START_WITHIN_10_MINUTES_AND_GAME_NUMBER_WHEN_REQUIRED",
                        "identity_certification": status, "event_classification": classification,
-                       "timing_status": timing_status,
+                       "timing_status": "PREGAME_CERTIFIED", "observation_timing_class": observation_timing_class,
                        "source_run_tag": run_tag, "request_class": REQUEST_CLASS,
                        "raw_source_path": raw_source_path, "raw_source_sha256": raw_source_sha256, **parsed}
                 row["canonical_market_identity"] = (

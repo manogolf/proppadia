@@ -8,6 +8,7 @@ import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 EXPERIMENT = "MLB_FULL_GAME_TOTAL_MARKET_CAPTURE_V1"
 MARKET_TYPE = "FULL_GAME_TOTAL"
@@ -22,6 +23,10 @@ def utc(value: str) -> datetime:
 
 def normalize_team(value: str) -> str:
     return "".join(ch for ch in str(value or "").casefold() if ch.isalnum())
+
+
+def eastern_date(value: str) -> str:
+    return utc(value).astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
 def sha256_json(value: Any) -> str:
@@ -128,21 +133,32 @@ def parse_totals(
     audit: list[dict[str, Any]] = []
     for event in events:
         game, decision, candidate_ids = bind_event(event, schedule)
+        actual_date = eastern_date(event["commence_time"]) if event.get("commence_time") else None
         audit_row = {
             "provider_event_id": event.get("id"), "provider_away_team": event.get("away_team"),
             "provider_home_team": event.get("home_team"), "provider_start_utc": event.get("commence_time"),
             "candidate_game_pks": "|".join(map(str, candidate_ids)), "candidate_count": len(candidate_ids),
             "game_pk": int(game["game_pk"]) if game else None, "identity_certification": decision,
+            "scheduled_start_eastern_date": actual_date,
         }
         if not game:
             audit_row["admission_status"] = "REJECTED_IDENTITY"
+            audit_row["event_classification"] = "IDENTITY_AMBIGUOUS" if decision == "EVENT_IDENTITY_AMBIGUOUS" else "UNRESOLVED"
+            audit_row["observation_timing_class"] = "TIMING_UNRESOLVED"
             audit.append(audit_row)
             continue
         start = utc(game["scheduled_start_utc"])
         if captured >= start:
             audit_row["admission_status"] = "REJECTED_POST_START"
+            audit_row["event_classification"] = "PAST_OR_STARTED"
+            audit_row["observation_timing_class"] = "POST_START_OBSERVATION"
             audit.append(audit_row)
             continue
+        classification = "CURRENT_SLATE" if actual_date == game_date else "FUTURE_SLATE_PREGAME"
+        audit_row["event_classification"] = classification
+        audit_row["observation_timing_class"] = (
+            "CURRENT_SLATE_PREGAME_OBSERVATION" if classification == "CURRENT_SLATE"
+            else "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION")
         event_rows = 0
         for book in event.get("bookmakers", []) or []:
             for market in book.get("markets", []) or []:
@@ -162,7 +178,8 @@ def parse_totals(
                     status = "TOTAL_MARKET_CERTIFIED_PAIRED" if sides.get("over") is not None and sides.get("under") is not None else "TOTAL_MARKET_LINE_ONLY"
                     market_timestamp = market.get("last_update") or captured_at_utc
                     row = {
-                        "experiment": EXPERIMENT, "league": "MLB", "game_date": game_date,
+                        "experiment": EXPERIMENT, "league": "MLB", "game_date": actual_date or game_date,
+                        "source_request_slate_date": game_date,
                         "game_id": int(game["game_pk"]), "away_team": game["away_team_name"], "home_team": game["home_team_name"],
                         "scheduled_start_utc": game["scheduled_start_utc"], "bookmaker": book.get("title"),
                         "bookmaker_key": book.get("key"), "market_type": MARKET_TYPE, "total_line": line,
@@ -172,7 +189,10 @@ def parse_totals(
                         "provider_event_id": event.get("id"), "provider_market_id": market.get("id"),
                         "source_run_tag": source_run_tag, "raw_source_path": raw_source_path,
                         "raw_source_sha256": raw_source_sha256, "identity_certification": decision,
-                        "timing_status": "PREGAME_CERTIFIED", "market_status": status,
+                        "timing_status": "PREGAME_CERTIFIED",
+                        "observation_timing_class": ("CURRENT_SLATE_PREGAME_OBSERVATION" if classification == "CURRENT_SLATE"
+                                                     else "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"),
+                        "event_classification": classification, "market_status": status,
                     }
                     identity = f"{row['game_id']}|{row['bookmaker_key']}|{MARKET_TYPE}|{captured_at_utc}|{line:g}"
                     row["canonical_market_identity"] = identity
@@ -250,14 +270,33 @@ def attach_all_markets(
     ]
     pred_identity = prediction_identity(prediction)
     prediction_time = utc(prediction["prediction_timestamp_utc"])
+    earliest_by_book = {}
+    latest_before_by_book = {}
+    for candidate in candidates:
+        book = str(candidate["bookmaker_key"])
+        if book not in earliest_by_book or utc(candidate["captured_at_utc"]) < utc(earliest_by_book[book]["captured_at_utc"]):
+            earliest_by_book[book] = candidate
+        if utc(candidate["captured_at_utc"]) <= prediction_time and (
+            book not in latest_before_by_book or utc(candidate["captured_at_utc"]) > utc(latest_before_by_book[book]["captured_at_utc"])
+        ):
+            latest_before_by_book[book] = candidate
     out: list[dict[str, Any]] = []
     for market in sorted(candidates, key=lambda row: (row["captured_at_utc"], row["bookmaker_key"], row["total_line"])):
         timing = "AT_OR_BEFORE_PREDICTION" if utc(market["captured_at_utc"]) <= prediction_time else "POST_PREDICTION_MARKET_OBSERVATION"
+        roles = []
+        book = str(market["bookmaker_key"])
+        if earliest_by_book.get(book, {}).get("canonical_market_identity") == market["canonical_market_identity"]:
+            roles.append("EARLIEST_RETAINED_PREGAME_OBSERVATION")
+        if latest_before_by_book.get(book, {}).get("canonical_market_identity") == market["canonical_market_identity"]:
+            roles.append("LATEST_CERTIFIED_AT_OR_BEFORE_PREDICTION")
+        if utc(market["captured_at_utc"]) > prediction_time:
+            roles.append("LATER_POST_PREDICTION_PREGAME_OBSERVATION")
         bridge = {
             "prediction_identity": pred_identity, "market_identity": market["canonical_market_identity"],
             "attachment_policy": ALL_BOOK_ATTACHMENT_POLICY, "timing_relationship": timing,
             "prediction_timestamp_utc": prediction["prediction_timestamp_utc"],
             "market_timestamp_utc": market["captured_at_utc"],
+            "model_time_attachment_roles": roles,
         }
         canonical = f"{pred_identity}|{market['canonical_market_identity']}|{ALL_BOOK_ATTACHMENT_POLICY}"
         digest = sha256_json(bridge)

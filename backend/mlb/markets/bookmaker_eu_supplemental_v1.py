@@ -122,6 +122,15 @@ def connect_ledger(path: Path) -> sqlite3.Connection:
       consensus_payload_sha256 TEXT NOT NULL,
       UNIQUE(game_id,market_type,captured_at_utc,consensus_policy)
     );
+    CREATE TABLE IF NOT EXISTS main_market_event_discoveries (
+      canonical_discovery_identity TEXT PRIMARY KEY, provider TEXT NOT NULL,
+      provider_event_id TEXT NOT NULL, game_date TEXT NOT NULL, game_id INTEGER NOT NULL,
+      captured_at_utc TEXT NOT NULL, scheduled_start_utc TEXT NOT NULL,
+      event_classification TEXT NOT NULL, discovery_payload_json TEXT NOT NULL,
+      discovery_payload_sha256 TEXT NOT NULL, raw_source_path TEXT NOT NULL,
+      raw_source_sha256 TEXT NOT NULL,
+      UNIQUE(provider,provider_event_id,game_id,captured_at_utc)
+    );
     CREATE TABLE IF NOT EXISTS bookmaker_eu_totals_shadow_attachments (
       canonical_attachment_identity TEXT PRIMARY KEY,
       prediction_identity TEXT NOT NULL,
@@ -166,6 +175,10 @@ def connect_ledger(path: Path) -> sqlite3.Connection:
     CREATE TRIGGER IF NOT EXISTS supplemental_consensus_no_delete
       BEFORE DELETE ON supplemental_main_market_consensus
       BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_SUPPLEMENTAL_CONSENSUS'); END;
+    CREATE TRIGGER IF NOT EXISTS main_market_discovery_no_update BEFORE UPDATE ON main_market_event_discoveries
+      BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_MAIN_MARKET_DISCOVERY'); END;
+    CREATE TRIGGER IF NOT EXISTS main_market_discovery_no_delete BEFORE DELETE ON main_market_event_discoveries
+      BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_MAIN_MARKET_DISCOVERY'); END;
     CREATE TRIGGER IF NOT EXISTS bookmaker_totals_attachment_no_update
       BEFORE UPDATE ON bookmaker_eu_totals_shadow_attachments
       BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_BOOKMAKER_TOTALS_ATTACHMENT'); END;
@@ -395,6 +408,46 @@ def append_market(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
     )
     conn.commit()
     return "APPENDED_NEW"
+
+
+def append_event_discovery(conn: sqlite3.Connection, payload: dict[str, Any]) -> str:
+    identity = (
+        f"{payload['provider']}|{payload['provider_event_id']}|{payload['game_id']}|"
+        f"{payload['captured_at_utc']}"
+    )
+    digest = sha256_json(payload)
+    existing = conn.execute(
+        "SELECT discovery_payload_sha256 FROM main_market_event_discoveries WHERE canonical_discovery_identity=?",
+        (identity,),
+    ).fetchone()
+    if existing:
+        return "EXISTING_IMMUTABLE" if existing[0] == digest else "EXISTING_CONFLICT_PRESERVED"
+    conn.execute(
+        "INSERT INTO main_market_event_discoveries VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (identity, payload["provider"], payload["provider_event_id"], payload["game_date"],
+         payload["game_id"], payload["captured_at_utc"], payload["scheduled_start_utc"],
+         payload["event_classification"], json.dumps(payload, sort_keys=True, separators=(",", ":")),
+         digest, payload["raw_source_path"], payload["raw_source_sha256"]),
+    )
+    conn.commit()
+    return "APPENDED_NEW"
+
+
+def mark_first_observed_prices(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Label first Proppadia-priced observations without claiming bookmaker openers."""
+    output = []
+    for row in rows:
+        prior = conn.execute(
+            """SELECT 1 FROM supplemental_main_market_snapshots
+               WHERE provider=? AND bookmaker_key=? AND game_id=? AND market_type=?
+               AND captured_at_utc<? LIMIT 1""",
+            (row["provider"], row["bookmaker_key"], row["game_id"], row["market_type"], row["captured_at_utc"]),
+        ).fetchone()
+        output.append({**row, "price_observation_class": (
+            "LATER_PROPPADIA_OBSERVED_PREGAME_LINE" if prior
+            else "FIRST_PROPPADIA_OBSERVED_PREGAME_LINE"
+        )})
+    return output
 
 
 def market_rows(conn: sqlite3.Connection, game_date: str) -> list[dict[str, Any]]:

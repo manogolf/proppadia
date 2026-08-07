@@ -151,7 +151,7 @@ def test_20_next_date_event_classified_future_slate():
     rows, audit = parse_events(events=[future], schedule=future_schedule, game_date="2026-08-07",
         fetched_at_utc=FETCH, run_tag="x", raw_source_path="x", raw_source_sha256="x")
     assert audit[0]["event_classification"] == "FUTURE_SLATE_PREGAME"
-    assert {row["timing_status"] for row in rows} == {"EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"}
+    assert {row["observation_timing_class"] for row in rows} == {"EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"}
     assert {row["game_date"] for row in rows} == {"2026-08-08"}
 
 

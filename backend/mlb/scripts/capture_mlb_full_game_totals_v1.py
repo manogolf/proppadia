@@ -12,9 +12,14 @@ from typing import Any
 
 import requests
 
+from backend.mlb.markets.bookmaker_eu_supplemental_v1 import (
+    append_event_discovery, connect_ledger as connect_main_market_ledger,
+)
+
 from backend.mlb.markets.full_game_total_capture_v1 import (
     EXPERIMENT, append_consensus, append_market, attach_all_markets, attach_market,
     build_consensus, connect_ledger, ledger_counts, market_rows, parse_totals,
+    eastern_date,
 )
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import probability_fields
 from backend.mlb.totals_predictions.live_context_bridge_v1 import fetch_hydrated_schedule, normalize_schedule
@@ -155,11 +160,41 @@ def load_or_fetch(game_date: str, snapshot_in: Path | None) -> tuple[list[dict[s
 def run(game_date: str, output_dir: Path, ledger_path: Path, snapshot_in: Path | None = None) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     events, captured, run_tag, raw_path, raw_sha = load_or_fetch(game_date, snapshot_in)
-    schedule_payload, schedule_observed, schedule_sha = fetch_hydrated_schedule(game_date)
-    schedule = normalize_schedule(schedule_payload, schedule_observed, schedule_sha)
+    schedule = []
+    schedule_dates = {game_date} | {
+        eastern_date(event["commence_time"]) for event in events if event.get("commence_time")
+        and eastern_date(event["commence_time"]) >= game_date
+    }
+    for schedule_date in sorted(schedule_dates):
+        schedule_payload, schedule_observed, schedule_sha = fetch_hydrated_schedule(schedule_date)
+        schedule.extend(normalize_schedule(schedule_payload, schedule_observed, schedule_sha))
     parsed, identity_audit = parse_totals(events=events, schedule=schedule, game_date=game_date, captured_at_utc=captured, source_run_tag=run_tag, raw_source_path=str(raw_path.relative_to(ROOT)), raw_source_sha256=raw_sha)
     ledger = connect_ledger(ledger_path)
+    discovery_ledger = connect_main_market_ledger(ledger_path)
+    discovery_actions = []
+    for item in identity_audit:
+        if not item.get("game_pk") or item.get("event_classification") not in {"CURRENT_SLATE", "FUTURE_SLATE_PREGAME"}:
+            continue
+        discovery_actions.append(append_event_discovery(discovery_ledger, {
+            "provider": "THE_ODDS_API", "provider_event_id": item["provider_event_id"],
+            "game_date": item["scheduled_start_eastern_date"], "game_id": int(item["game_pk"]),
+            "captured_at_utc": captured, "scheduled_start_utc": item["provider_start_utc"],
+            "event_classification": item["event_classification"], "raw_source_path": str(raw_path.relative_to(ROOT)),
+            "raw_source_sha256": raw_sha, "main_market_prices_present": item.get("market_rows", 0) > 0,
+            "bookmaker_scope": "THE_ODDS_API_BROAD_US_BOOKS",
+            "matchup": f"{item['provider_away_team']} @ {item['provider_home_team']}",
+        }))
     before = ledger_counts(ledger)
+    marked = []
+    for row in parsed:
+        prior = ledger.execute(
+            """SELECT 1 FROM full_game_total_market_snapshots WHERE bookmaker_key=? AND game_id=?
+               AND market_type=? AND captured_at_utc<? LIMIT 1""",
+            (row["bookmaker_key"], row["game_id"], row["market_type"], row["captured_at_utc"]),
+        ).fetchone()
+        marked.append({**row, "price_observation_class": (
+            "LATER_PROPPADIA_OBSERVED_PREGAME_LINE" if prior else "FIRST_PROPPADIA_OBSERVED_PREGAME_LINE")})
+    parsed = marked
     actions = [{**row, "ledger_action": append_market(ledger, row)} for row in parsed]
     all_markets = market_rows(ledger, game_date)
     prediction_conn = connect_prediction_ledger(PREDICTION_LEDGER)
@@ -189,7 +224,7 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, snapshot_in: Path |
     write_csv(output_dir / "august_6_full_game_total_capture.csv", actions)
     write_csv(output_dir / "total_market_identity_audit.csv", identity_audit)
     write_csv(output_dir / "totals_shadow_market_bridge.csv", bridge_rows)
-    summary = {"experiment": EXPERIMENT, "game_date": game_date, "captured_at_utc": captured, "run_tag": run_tag, "raw_source_path": str(raw_path), "raw_source_sha256": raw_sha, "provider_events": len(events), "official_games": len(schedule), "eligible_games": len({row['game_id'] for row in parsed}), "market_rows_parsed": len(parsed), "paired_rows": sum(row['market_status']=='TOTAL_MARKET_CERTIFIED_PAIRED' for row in parsed), "line_only_rows": sum(row['market_status']=='TOTAL_MARKET_LINE_ONLY' for row in parsed), "prediction_attachments": sum(row.get('market_status')!='TOTAL_MARKET_UNAVAILABLE' for row in bridge_rows), "consensus_records": len(consensus_output), "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0}
+    summary = {"experiment": EXPERIMENT, "game_date": game_date, "captured_at_utc": captured, "run_tag": run_tag, "raw_source_path": str(raw_path), "raw_source_sha256": raw_sha, "provider_events": len(events), "official_games": len(schedule), "eligible_games": len({row['game_id'] for row in parsed}), "market_rows_parsed": len(parsed), "future_market_rows": sum(row.get('event_classification')=='FUTURE_SLATE_PREGAME' for row in parsed), "event_discoveries": len(discovery_actions), "paired_rows": sum(row['market_status']=='TOTAL_MARKET_CERTIFIED_PAIRED' for row in parsed), "line_only_rows": sum(row['market_status']=='TOTAL_MARKET_LINE_ONLY' for row in parsed), "prediction_attachments": sum(row.get('market_status')!='TOTAL_MARKET_UNAVAILABLE' for row in bridge_rows), "consensus_records": len(consensus_output), "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0}
     write_evidence(output_dir, summary, actions, identity_audit, bridge_rows, ledger_path)
     return summary
 

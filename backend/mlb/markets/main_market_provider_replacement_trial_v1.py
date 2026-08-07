@@ -23,6 +23,7 @@ from backend.mlb.markets.bookmaker_eu_supplemental_v1 import (
     utc,
     iso,
 )
+from backend.mlb.markets.pinnacle_main_market_capture_v1 import eastern_date
 
 EXPERIMENT = "MLB_MAIN_MARKET_PROVIDER_REPLACEMENT_TRIAL_V1"
 COMPARISON_WINDOW_MINUTES = 90
@@ -133,12 +134,28 @@ def parse_provider_events(
     fetched = utc(fetched_at_utc)
     for event in events:
         game, status, method, candidate_ids = bind_event(event, schedule, fetched_at_utc)
+        event_start = (event.get("status") or {}).get("startsAt")
+        actual_date = eastern_date(event_start) if event_start else None
+        classification = (
+            "PAST_OR_STARTED" if status == "POST_START" else
+            "IDENTITY_AMBIGUOUS" if status == "AMBIGUOUS" else
+            "UNRESOLVED" if status != "CERTIFIED_EXACT_OR_DETERMINISTIC" else
+            "CURRENT_SLATE" if actual_date == game_date else
+            "FUTURE_SLATE_PREGAME" if actual_date and actual_date > game_date else "PAST_OR_STARTED"
+        )
         books = accessible_book_ids(event)
         base_audit = {
             "provider_event_id": event.get("eventID"), "candidate_game_pks": "|".join(map(str, candidate_ids)),
+            "away_team": (((event.get("teams") or {}).get("away") or {}).get("names") or {}).get("long"),
+            "home_team": (((event.get("teams") or {}).get("home") or {}).get("names") or {}).get("long"),
             "game_pk": int(game["game_pk"]) if game else None, "identity_method": method,
             "certification_status": status, "accessible_bookmaker_count": len(books),
-            "accessible_bookmaker_ids": "|".join(books),
+            "accessible_bookmaker_ids": "|".join(books), "event_classification": classification,
+            "scheduled_start_utc": event_start, "scheduled_start_eastern_date": actual_date,
+            "observation_timing_class": (
+                "CURRENT_SLATE_PREGAME_OBSERVATION" if classification == "CURRENT_SLATE" else
+                "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION" if classification == "FUTURE_SLATE_PREGAME" else
+                "POST_START_OBSERVATION" if classification == "PAST_OR_STARTED" else "TIMING_UNRESOLVED"),
         }
         if status != "CERTIFIED_EXACT_OR_DETERMINISTIC" or not game:
             audit.append({**base_audit, "admitted_market_rows": 0, "malformed_market_rows": 0})
@@ -169,12 +186,16 @@ def parse_provider_events(
                     "experiment": EXPERIMENT, "provider": PROVIDER,
                     "bookmaker": display_name(bookmaker_id),
                     "bookmaker_key": f"sportsgameodds:{bookmaker_id}",
-                    "bookmaker_provider_id": bookmaker_id, "league": "MLB", "game_date": game_date,
+                    "bookmaker_provider_id": bookmaker_id, "league": "MLB", "game_date": actual_date or game_date,
+                    "source_request_slate_date": game_date,
                     "game_id": int(game["game_pk"]), "away_team": game["away_team_name"],
                     "home_team": game["home_team_name"], "scheduled_start_utc": game["scheduled_start_utc"],
                     "provider_event_id": event.get("eventID"), "market_type": market_type,
                     "captured_at_utc": fetched_at_utc, "lead_time_minutes": (start - fetched).total_seconds() / 60.0,
                     "identity_method": method, "identity_certification": status, "timing_status": timing,
+                    "event_classification": classification,
+                    "observation_timing_class": ("CURRENT_SLATE_PREGAME_OBSERVATION" if classification == "CURRENT_SLATE"
+                                                 else "EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"),
                     "source_run_tag": run_tag,
                     "request_class": "CURRENT_MLB_PREGAME_PROVIDER_WIDE_CANONICAL_MAIN_MARKETS",
                     "raw_source_path": raw_source_path, "raw_source_sha256": raw_source_sha256, **market,

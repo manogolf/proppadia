@@ -8,14 +8,16 @@ import json
 import os
 import statistics
 import time as time_module
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import requests
 
-from backend.mlb.markets.bookmaker_eu_supplemental_v1 import connect_ledger
+from backend.mlb.markets.bookmaker_eu_supplemental_v1 import (
+    append_event_discovery, connect_ledger, mark_first_observed_prices,
+)
 from backend.mlb.markets.full_game_total_capture_v1 import (
     market_rows as total_market_rows,
 )
@@ -24,6 +26,7 @@ from backend.mlb.markets.main_market_provider_replacement_trial_v1 import (
     append_reliability, append_shadow_attachment, canonical_book_id, compare_provider_rows, consensus_metrics,
     freshness_metrics, parse_provider_events, reliability_rows, sha256_json, utc,
 )
+from backend.mlb.markets.pinnacle_main_market_capture_v1 import eastern_date
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows as fetch_moneyline_predictions
 from backend.mlb.scripts.capture_mlb_bookmaker_eu_supplemental_v1 import _bounded_read
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import probability_fields
@@ -58,7 +61,7 @@ def _day_bounds(game_date: str) -> tuple[str, str]:
     pacific = ZoneInfo("America/Los_Angeles")
     value = datetime.fromisoformat(game_date).date()
     start = datetime.combine(value, time.min, tzinfo=pacific).astimezone(timezone.utc)
-    end = datetime.combine(value, time.max, tzinfo=pacific).astimezone(timezone.utc)
+    end = datetime.combine(value + timedelta(days=1), time.max, tzinfo=pacific).astimezone(timezone.utc)
     return start.isoformat().replace("+00:00", "Z"), end.isoformat().replace("+00:00", "Z")
 
 
@@ -71,7 +74,7 @@ def fetch_current(game_date: str) -> tuple[list[dict[str, Any]], dict[str, Any]]
     params = {
         "leagueID": "MLB", "oddsAvailable": "true",
         "oddID": ",".join(odd_id for market in MARKETS.values() for odd_id in market.values()),
-        "startsAfter": started, "startsBefore": day_end, "limit": "20",
+        "startsAfter": started, "startsBefore": day_end, "limit": "100",
     }
     monotonic = time_module.monotonic()
     response = requests.get(API_URL, params=params, headers={"x-api-key": key}, timeout=45)
@@ -455,30 +458,53 @@ def run(game_date: str, output: Path, ledger_path: Path, raw_in: Path | None, ca
     if raw_in and not captured_at_utc:
         raise ValueError("--captured-at-utc is required with --raw-in")
     events, source = load_probe(raw_in, game_date, captured_at_utc) if raw_in else fetch_current(game_date)  # type: ignore[arg-type]
-    schedule_payload, observed, schedule_sha = fetch_hydrated_schedule(game_date)
-    schedule = normalize_schedule(schedule_payload, observed, schedule_sha)
+    schedule = []
+    schedule_dates = {game_date} | {
+        eastern_date((event.get("status") or {})["startsAt"]) for event in events
+        if (event.get("status") or {}).get("startsAt")
+        and eastern_date((event.get("status") or {})["startsAt"]) >= game_date
+    }
+    for schedule_date in sorted(schedule_dates):
+        schedule_payload, observed, schedule_sha = fetch_hydrated_schedule(schedule_date)
+        schedule.extend(normalize_schedule(schedule_payload, observed, schedule_sha))
     rows, audit = parse_provider_events(events=events, schedule=schedule, game_date=game_date,
         fetched_at_utc=source["fetch_timestamp_utc"], run_tag=source["run_tag"],
         raw_source_path=source["raw_response_path"], raw_source_sha256=source["raw_response_sha256"])
     conn = connect_ledger(ledger_path)
+    discovery_actions = []
+    for item in audit:
+        if not item.get("game_pk") or item["event_classification"] not in {"CURRENT_SLATE", "FUTURE_SLATE_PREGAME"}:
+            continue
+        discovery_actions.append(append_event_discovery(conn, {
+            "provider": PROVIDER, "provider_event_id": item["provider_event_id"],
+            "game_date": item["scheduled_start_eastern_date"], "game_id": int(item["game_pk"]),
+            "captured_at_utc": source["fetch_timestamp_utc"], "scheduled_start_utc": item["scheduled_start_utc"],
+            "event_classification": item["event_classification"], "raw_source_path": source["raw_response_path"],
+            "raw_source_sha256": source["raw_response_sha256"], "main_market_prices_present": item["admitted_market_rows"] > 0,
+            "bookmaker_scope": "SPORTSGAMEODDS_PROVIDER_WIDE",
+            "matchup": f"{item['away_team']} @ {item['home_team']}",
+        }))
+    rows = mark_first_observed_prices(conn, rows)
     actions = append_provider_rows_batch(conn, rows)
     append_total_rows_batch(conn, rows)
+    current_rows = [row for row in rows if row["game_date"] == game_date]
     odds = odds_api_rows(conn, game_date, source["fetch_timestamp_utc"], same_refresh_max_age_minutes,
                          odds_api_run_status == 0)
-    coverage = bookmaker_coverage(rows, events); priority = priority_coverage(coverage, odds)
-    overlap = compare_provider_rows(rows, odds)
+    coverage = bookmaker_coverage(current_rows, events); priority = priority_coverage(coverage, odds)
+    overlap = compare_provider_rows(current_rows, odds)
     overlap.extend({"classification": "IDENTITY_FAILURE", "provider_event_id": row["provider_event_id"],
                     "game_id": row.get("game_pk"), "identity_status": row["certification_status"]}
                    for row in audit if row["certification_status"] in {"AMBIGUOUS", "GAME_NOT_FOUND", "TIMING_UNRESOLVED"})
     if odds_api_run_status != 0:
         overlap.append({"classification": "SOURCE_FAILURE", "provider": "THE_ODDS_API",
                         "source_exit_status": odds_api_run_status})
-    consensus = (consensus_metrics(rows, PROVIDER, "SPORTSGAMEODDS_ALL_BOOKS") +
+    consensus = (consensus_metrics(current_rows, PROVIDER, "SPORTSGAMEODDS_ALL_BOOKS") +
                  consensus_metrics(odds, "THE_ODDS_API", "THE_ODDS_API_ALL_BOOKS") +
-                 common_book_consensus(rows, odds))
-    attachment_summary = attach_model_context(conn, game_date, rows, consensus, source["fetch_timestamp_utc"])
-    freshness = freshness_metrics(rows, PROVIDER) + freshness_metrics(odds, "THE_ODDS_API")
-    for payload in reliability_payloads(source, schedule, rows, audit, odds, odds_api_run_status):
+                 common_book_consensus(current_rows, odds))
+    attachment_summary = attach_model_context(conn, game_date, current_rows, consensus, source["fetch_timestamp_utc"])
+    freshness = freshness_metrics(current_rows, PROVIDER) + freshness_metrics(odds, "THE_ODDS_API")
+    current_schedule = [game for game in schedule if eastern_date(game["scheduled_start_utc"]) == game_date]
+    for payload in reliability_payloads(source, current_schedule, current_rows, audit, odds, odds_api_run_status):
         payload["ledger_action"] = append_reliability(conn, payload)
     reliability = reliability_rows(conn)
     write_package(output, source=source, coverage=coverage, overlap=overlap, consensus=consensus,
@@ -488,6 +514,7 @@ def run(game_date: str, output: Path, ledger_path: Path, raw_in: Path | None, ca
                "official_games": len(schedule), "provider_events": len(events),
                "games_mapped": len({row["game_id"] for row in rows}), "accessible_bookmakers": len(coverage),
                "paired_market_rows": len(rows), "ledger_appended": actions.count("APPENDED_NEW"),
+               "future_market_rows": len(rows) - len(current_rows), "event_discoveries": len(discovery_actions),
                "overlap_rows": len(overlap), "package": str(output), "outcomes_accessed": 0,
                **attachment_summary}
     print(json.dumps(summary, indent=2, sort_keys=True)); return summary
