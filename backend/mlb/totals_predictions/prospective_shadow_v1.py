@@ -83,6 +83,56 @@ def append_prediction(connection: sqlite3.Connection, payload: dict[str, Any]) -
     connection.commit(); return "APPENDED_NEW"
 
 
+def append_prediction_with_context(
+    connection: sqlite3.Connection,
+    prediction: dict[str, Any],
+    context: dict[str, Any],
+) -> tuple[str, str]:
+    """Append one prediction/context identity atomically.
+
+    A context failure must never leave a prediction row without its immutable
+    feature-state parent. Existing identities remain untouched.
+    """
+    forbidden = {"final_total", "regulation_nine_total", "outcome", "result", "official_final_total"}
+    if forbidden & set(prediction):
+        raise ValueError("OUTCOME_FIELD_FORBIDDEN_IN_PREDICTION_LEDGER")
+    identity = canonical_identity(prediction["game_date"], prediction["game_pk"])
+    prediction_encoded = json.dumps(prediction, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    prediction_digest = payload_hash(prediction)
+    context_digest = payload_hash(context)
+    if context_digest != prediction["feature_state_hash"]:
+        raise ValueError("FEATURE_STATE_HASH_MISMATCH")
+    existing = connection.execute(
+        "SELECT prediction_payload_sha256 FROM totals_shadow_predictions WHERE canonical_identity=?", (identity,)
+    ).fetchone()
+    if existing:
+        context_existing = connection.execute(
+            "SELECT context_payload_sha256 FROM totals_shadow_prediction_context WHERE canonical_identity=?", (identity,)
+        ).fetchone()
+        prediction_action = "EXISTING_IMMUTABLE" if existing[0] == prediction_digest else "EXISTING_IDENTITY_DIFFERENT_CAPTURE_PRESERVED"
+        context_action = ("EXISTING_IMMUTABLE" if context_existing and context_existing[0] == context_digest
+                          else "EXISTING_CONTEXT_CONFLICT_PRESERVED")
+        return prediction_action, context_action
+    try:
+        connection.execute("""INSERT INTO totals_shadow_predictions
+          (canonical_identity,game_date,game_id,totals_model_version,prediction_snapshot_class,scheduled_start_utc,prediction_timestamp_utc,
+           model_hash,feature_state_hash,schedule_source_hash,market_source_hash,prediction_payload_json,prediction_payload_sha256,created_at_utc)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (identity, prediction["game_date"], prediction["game_pk"], MODEL_VERSION, SNAPSHOT_CLASS,
+           prediction["scheduled_start_utc"], prediction["prediction_timestamp_utc"], prediction["model_hash"], prediction["feature_state_hash"],
+           prediction["schedule_source_sha256"], prediction.get("market_source_sha256"), prediction_encoded, prediction_digest,
+           prediction["prediction_timestamp_utc"]))
+        connection.execute(
+            "INSERT INTO totals_shadow_prediction_context VALUES (?,?,?,?)",
+            (identity, json.dumps(context, sort_keys=True, separators=(",", ":"), ensure_ascii=False), context_digest,
+             prediction["prediction_timestamp_utc"]),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    return "APPENDED_NEW", "APPENDED_NEW"
+
+
 def rows_for_date(connection: sqlite3.Connection, game_date: str) -> list[dict[str, Any]]:
     rows = connection.execute("""SELECT prediction_payload_json FROM totals_shadow_predictions
       WHERE game_date=? AND totals_model_version=? AND prediction_snapshot_class=? ORDER BY scheduled_start_utc,game_id""",

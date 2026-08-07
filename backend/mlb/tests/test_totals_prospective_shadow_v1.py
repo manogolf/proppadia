@@ -8,7 +8,7 @@ import pytest
 
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import dynamic_environment, probability_fields
 from backend.mlb.scripts.grade_mlb_totals_prospective_shadow_v1 import line_probabilities, no_vig_over
-from backend.mlb.totals_predictions.prospective_shadow_v1 import append_context, append_outcome, append_prediction, canonical_identity, connect_ledger, contexts_for_date, counts, outcomes_for_date, payload_hash, rows_for_date
+from backend.mlb.totals_predictions.prospective_shadow_v1 import append_context, append_outcome, append_prediction, append_prediction_with_context, canonical_identity, connect_ledger, contexts_for_date, counts, outcomes_for_date, payload_hash, rows_for_date
 
 
 def sample_payload():
@@ -37,6 +37,23 @@ def test_prediction_ledger_rejects_outcome_fields(tmp_path):
     connection=connect_ledger(tmp_path/"ledger.sqlite3");payload=sample_payload();payload["final_total"]=9
     with pytest.raises(ValueError,match="OUTCOME_FIELD_FORBIDDEN"):
         append_prediction(connection,payload)
+
+
+def test_prediction_and_context_append_is_atomic(tmp_path):
+    connection=connect_ledger(tmp_path/"ledger.sqlite3");payload=sample_payload()
+    context={"model_features":{"league_total":8.5}}
+    payload["feature_state_hash"]=payload_hash(context)
+    assert append_prediction_with_context(connection,payload,context)==("APPENDED_NEW","APPENDED_NEW")
+    assert len(rows_for_date(connection,payload["game_date"]))==1
+    assert len(contexts_for_date(connection,payload["game_date"]))==1
+
+
+def test_context_hash_failure_leaves_no_partial_prediction(tmp_path):
+    connection=connect_ledger(tmp_path/"ledger.sqlite3");payload=sample_payload()
+    with pytest.raises(ValueError,match="FEATURE_STATE_HASH_MISMATCH"):
+        append_prediction_with_context(connection,payload,{"different":"context"})
+    assert rows_for_date(connection,payload["game_date"])==[]
+    assert counts(connection)["context_rows"]==0
 
 
 def test_outcome_ledger_is_append_only_idempotent_and_prediction_separate(tmp_path):

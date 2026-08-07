@@ -104,14 +104,24 @@ def selected_market_rows(connection: sqlite3.Connection, game_date: str) -> tupl
     return primary, bookmaker
 
 
-def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path: Path) -> dict[str, Any]:
+def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path: Path, *, allow_partial: bool = False) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True); connection = connect_ledger(ledger_path); before = counts(connection)
     predictions = rows_for_date(connection, game_date)
     if not predictions: raise RuntimeError("NO_FROZEN_TOTALS_PREDICTIONS")
     hashes_before = {row["game_pk"]: hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest() for row in predictions}
-    graded_at = now_utc(); actions = []
+    graded_at = now_utc(); actions = []; deferred = []
     for row in predictions:
-        result = official_final(game_date, int(row["game_pk"])); expected = float(row["expected_total"])
+        try:
+            result = official_final(game_date, int(row["game_pk"]))
+        except RuntimeError as exc:
+            reason = str(exc)
+            source_absent = reason.startswith("OFFICIAL_FINAL_SOURCE_COUNT_") and reason.rsplit("_", 1)[-1] == "0"
+            if allow_partial and (source_absent or reason.startswith("GAME_NOT_OFFICIALLY_FINAL_")):
+                deferred.append({"game_pk": int(row["game_pk"]), "away_team": row["away_team"], "home_team": row["home_team"],
+                                 "grading_status": "DEFERRED_OFFICIAL_FINAL_UNAVAILABLE", "reason": reason})
+                continue
+            raise
+        expected = float(row["expected_total"])
         payload = {"game_date": game_date, "game_pk": int(row["game_pk"]), "away_team": row["away_team"], "home_team": row["home_team"],
             "model_version": row["model_version"], "model_hash": row["model_hash"], "prediction_timestamp_utc": row["prediction_timestamp_utc"],
             "expected_total": expected, **result, "signed_residual_final": expected-result["official_final_total"],
@@ -129,7 +139,9 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
     market_results = []
     for source_class, rows in (("MULTIBOOK_PRIMARY", primary), ("BOOKMAKER_EU_SUPPLEMENTAL", bookmaker)):
         for row in rows:
-            outcome = by_game[int(row["game_id"])]; actual = int(outcome["official_final_total"]); line = float(row["total_line"])
+            outcome = by_game.get(int(row["game_id"]))
+            if outcome is None: continue
+            actual = int(outcome["official_final_total"]); line = float(row["total_line"])
             market_results.append({"source_class": source_class, "game_pk": int(row["game_id"]), "away_team": row["away_team"], "home_team": row["home_team"],
                 "sportsbook": row.get("bookmaker") or row["bookmaker_key"], "bookmaker_key": row["bookmaker_key"], "total_line": line,
                 "over_price": row.get("over_price"), "under_price": row.get("under_price"), "capture_timestamp_utc": row["captured_at_utc"],
@@ -159,9 +171,12 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
             "model_expected_total": expected, "official_final_total": actual, "model_absolute_error": abs(expected-actual),
             "consensus_absolute_error": abs(consensus_line-actual), "model_minus_consensus_line": expected-consensus_line,
             "consensus_signed_residual": consensus_line-actual})
-    model_mae = mean(float(row["absolute_error_final"]) for row in outcomes); model_bias = mean(float(row["signed_residual_final"]) for row in outcomes)
-    reg_mae = mean(float(row["absolute_error_regulation_nine"]) for row in outcomes); model_crps = mean(float(row["crps_final"]) for row in outcomes)
-    consensus_mae = mean(float(row["consensus_absolute_error"]) for row in consensus_rows); consensus_bias = mean(float(row["consensus_signed_residual"]) for row in consensus_rows)
+    model_mae = mean(float(row["absolute_error_final"]) for row in outcomes) if outcomes else None
+    model_bias = mean(float(row["signed_residual_final"]) for row in outcomes) if outcomes else None
+    reg_mae = mean(float(row["absolute_error_regulation_nine"]) for row in outcomes) if outcomes else None
+    model_crps = mean(float(row["crps_final"]) for row in outcomes) if outcomes else None
+    consensus_mae = mean(float(row["consensus_absolute_error"]) for row in consensus_rows) if consensus_rows else None
+    consensus_bias = mean(float(row["consensus_signed_residual"]) for row in consensus_rows) if consensus_rows else None
     model_closer = sum(row["model_absolute_error"] < row["consensus_absolute_error"] for row in consensus_rows)
     consensus_closer = sum(row["consensus_absolute_error"] < row["model_absolute_error"] for row in consensus_rows); ties = len(consensus_rows)-model_closer-consensus_closer
     book_metrics = []
@@ -170,21 +185,26 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
         book_metrics.append({"bookmaker_key": book, "sportsbook": rows[0]["sportsbook"], "games": len(rows),
             "mae": mean(float(row["sportsbook_line_absolute_error"]) for row in rows),
             "signed_bias": mean(float(row["total_line"])-float(row["official_final_total"]) for row in rows), "source_class": rows[0]["source_class"]})
-    summary = {"decision": "AUGUST_6_TOTALS_PROSPECTIVE_GRADE_COMPLETE", "game_date": game_date, "frozen_predictions": len(predictions),
+    complete = len(outcomes) == len(predictions)
+    summary = {"decision": "TOTALS_PROSPECTIVE_GRADE_COMPLETE" if complete else "TOTALS_PROSPECTIVE_GRADE_PENDING_OFFICIAL_FINALS", "game_date": game_date, "frozen_predictions": len(predictions),
         "official_finals": len(outcomes), "new_outcome_rows": sum(a["ledger_action"] == "APPENDED_NEW" for a in actions),
+        "deferred_rows": len(deferred), "deferred": deferred,
         "model_mae_final": model_mae, "model_signed_bias_final": model_bias, "model_mae_regulation_nine": reg_mae, "model_crps_final": model_crps,
         "consensus_market_mae": consensus_mae, "consensus_market_signed_bias": consensus_bias,
         "model_closer_than_consensus": model_closer, "consensus_closer_than_model": consensus_closer, "ties": ties,
         "primary_multibook_rows": len(primary), "primary_books": len({row["bookmaker_key"] for row in primary}), "bookmaker_eu_rows": len(bookmaker),
         "ledger_before": before, "ledger_after": after, "duplicate_outcome_identities": after["duplicate_outcome_identities"],
         "prediction_rows_unchanged": True, "market_timing": "POST_PREDICTION_MARKET_OBSERVATION", "public_status": "SHADOW_ONLY_NOT_PUBLIC"}
-    write_csv(output_dir/"august_6_totals_grading.csv", outcomes); write_csv(output_dir/"august_6_multibook_market_results.csv", market_results)
-    write_csv(output_dir/"august_6_multibook_consensus.csv", consensus_rows); write_csv(output_dir/"august_6_book_specific_metrics.csv", book_metrics)
-    (output_dir/"august_6_totals_grade_summary.json").write_text(json.dumps(summary, indent=2)+"\n")
-    (output_dir/"august_6_totals_grade_report.md").write_text(
-        "# August 6 totals prospective grade\n\n" f"`{summary['decision']}`\n\n- Frozen games/finals: {len(predictions)}/{len(outcomes)}\n"
-        f"- Model final-score MAE / signed bias / CRPS: {model_mae:.6f} / {model_bias:+.6f} / {model_crps:.6f}\n"
-        f"- Model regulation-nine MAE: {reg_mae:.6f}\n- 11-book consensus MAE / signed bias: {consensus_mae:.6f} / {consensus_bias:+.6f}\n"
+    slug = game_date.replace("-", "_")
+    write_csv(output_dir/f"{slug}_totals_grading.csv", outcomes); write_csv(output_dir/f"{slug}_multibook_market_results.csv", market_results)
+    write_csv(output_dir/f"{slug}_multibook_consensus.csv", consensus_rows); write_csv(output_dir/f"{slug}_book_specific_metrics.csv", book_metrics)
+    write_csv(output_dir/f"{slug}_grading_deferred.csv", deferred)
+    (output_dir/f"{slug}_totals_grade_summary.json").write_text(json.dumps(summary, indent=2)+"\n")
+    metric = lambda value, signed=False: "PENDING" if value is None else (f"{value:+.6f}" if signed else f"{value:.6f}")
+    (output_dir/f"{slug}_totals_grade_report.md").write_text(
+        f"# {game_date} totals prospective grade\n\n" f"`{summary['decision']}`\n\n- Frozen games/finals: {len(predictions)}/{len(outcomes)}\n"
+        f"- Model final-score MAE / signed bias / CRPS: {metric(model_mae)} / {metric(model_bias, True)} / {metric(model_crps)}\n"
+        f"- Model regulation-nine MAE: {metric(reg_mae)}\n- Consensus MAE / signed bias: {metric(consensus_mae)} / {metric(consensus_bias, True)}\n"
         f"- Model closer / consensus closer / ties: {model_closer}/{consensus_closer}/{ties}\n"
         f"- Book-specific rows: {len(market_results)} ({len(primary)} accepted 11-book observations; {len(bookmaker)} separate BookMaker.eu observations)\n"
         "- Timing: every comparison is `POST_PREDICTION_MARKET_OBSERVATION`. No EV, ROI, ranking, or wager calculation is present.\n")
@@ -196,7 +216,8 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
 def main() -> None:
     parser = argparse.ArgumentParser(); parser.add_argument("--date", required=True); parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--ledger-path", type=Path, default=DEFAULT_LEDGER); parser.add_argument("--market-ledger-path", type=Path, default=DEFAULT_MARKET_LEDGER)
-    args = parser.parse_args(); print(json.dumps(run(args.date, args.output_dir, args.ledger_path, args.market_ledger_path), indent=2))
+    parser.add_argument("--allow-partial", action="store_true")
+    args = parser.parse_args(); print(json.dumps(run(args.date, args.output_dir, args.ledger_path, args.market_ledger_path, allow_partial=args.allow_partial), indent=2))
 
 
 if __name__ == "__main__": main()

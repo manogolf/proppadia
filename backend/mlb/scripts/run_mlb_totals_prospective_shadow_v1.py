@@ -16,7 +16,7 @@ from backend.mlb.totals_predictions.live_context_bridge_v1 import (
     fetch_hydrated_schedule, load_candidate, normalize_schedule, score_context,
 )
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
-    MODEL_VERSION, SNAPSHOT_CLASS, append_context, append_prediction, canonical_identity,
+    MODEL_VERSION, SNAPSHOT_CLASS, append_context, append_prediction, append_prediction_with_context, canonical_identity,
     connect_ledger, contexts_for_date, counts, payload_hash, rows_for_date,
 )
 
@@ -120,7 +120,8 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
                 "context_action": "EXISTING_CONTEXT_NOT_RECONSTRUCTED", "game_pk": game_pk}); continue
         context = attach_context(schedule_row, history)
         if pd.Timestamp(context["scheduled_start_utc"]) <= pd.Timestamp(observed):
-            attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_POST_START", "game_pk": context["game_pk"]}); continue
+            attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_POST_START",
+                "rejection_reason": "PREGAME_CUTOFF_FAILED", "game_pk": context["game_pk"]}); continue
         if context["data_quality_status"] != "TOTALS_CONTEXT_COMPLETE":
             reasons = []
             for side in ("away", "home"):
@@ -153,7 +154,7 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
             "expected_total": score["expected_total"], "interval_80_low": score["interval_80_low"], "interval_80_high": score["interval_80_high"],
             **probabilities, **market, "feature_state_hash": canonical_hash(feature_state), "schedule_source_sha256": schedule_hash,
             "official_schedule_observed_at_utc": observed, "grading_status": "UNGRADED_OUTCOME_SEPARATE_LEDGER"}
-        action = append_prediction(connection, row); context_action = append_context(connection, identity, feature_state, row["feature_state_hash"], observed)
+        action, context_action = append_prediction_with_context(connection, row, feature_state)
         attempts.append({"canonical_identity": identity, "ledger_action": action, "context_action": context_action, "game_pk": context["game_pk"]})
     rows = rows_for_date(connection, game_date); contexts = contexts_for_date(connection, game_date); after = counts(connection)
 
@@ -180,9 +181,10 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
         ("designated_snapshot_idempotent", all(append_prediction(connection, row).startswith("EXISTING_") for row in rows), len(rows)),
     ]
     pd.DataFrame([{"check": name, "status": "PASS" if passed else "FAIL", "observed": value} for name,passed,value in validation]).to_csv(output_dir/"totals_shadow_ledger_validation.csv", index=False)
+    ledger_display = str(ledger_path.relative_to(ROOT)) if ledger_path.is_relative_to(ROOT) else str(ledger_path)
     contract = {"experiment": EXPERIMENT, "model_version": MODEL_VERSION, "model_hash": candidate["canonical_model_hash"], "model_source": "MLB_TOTALS_PREDICTION_REPRESENTATIVE_RERUN_V1",
         "live_context_source": "MLB_TOTALS_LIVE_CONTEXT_BRIDGE_REPAIR_V1", "canonical_identity": "game_date + game_id + totals_model_version + prediction_snapshot_class",
-        "snapshot_class": SNAPSHOT_CLASS, "ledger_path": str(ledger_path.relative_to(ROOT)), "ledger_type": "LOCAL_SQLITE_APPEND_ONLY_PREDICTION_CONTEXT_OUTCOME_TABLES_WITH_NO_UPDATE_DELETE_TRIGGERS",
+        "snapshot_class": SNAPSHOT_CLASS, "ledger_path": ledger_display, "ledger_type": "LOCAL_SQLITE_APPEND_ONLY_PREDICTION_CONTEXT_OUTCOME_TABLES_WITH_NO_UPDATE_DELETE_TRIGGERS",
         "prediction_outcome_separation": True, "market_source_policy": "EXISTING_LOCAL_FILES_ONLY", "market_source_inventory": market_files,
         "historical_reference": {"validation_2025": {"mae":3.597207,"bias":-0.215047,"crps":2.531596}, "opened_late_2026_diagnostic": {"mae":3.678261,"bias":-0.661055,"crps":2.602277}},
         "prospective_authority_begins": "2026-08-06", "snapshot_game_date": game_date,
@@ -190,7 +192,7 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
     (output_dir/"totals_prospective_contract.json").write_text(json.dumps(contract,indent=2)+"\n")
     (output_dir/"totals_grading_contract.md").write_text("# Totals grading contract\n\nGrade only after official final. Append one separate outcome row per immutable prediction identity with official-source hash, final total, regulation-nine total, absolute error, signed residual, CRPS, fixed-threshold Brier/log loss, and captured-market-line result. Never update prediction rows. Repeated grading must be idempotent. Authentic captured paired prices may support descriptive ROI later, but no EV, wager, ranking, or betting authority is authorized.\n")
     (output_dir/"totals_prospective_checkpoint_contract.md").write_text("# Prospective checkpoint contract\n\n- 25 graded games: integrity and gross bias only.\n- 50: first directional assessment.\n- 100: first practical candidate review.\n- 200: stronger calibration and market comparison.\n\nAt each checkpoint report MAE, bias, CRPS, calibration, fixed-threshold metrics, prediction and market-line-difference distributions, context quality, predicted-total band, park regime, and starter-history depth. Inspect obvious defects immediately.\n")
-    (output_dir/"totals_daily_workflow_hook_audit.md").write_text("# Totals daily workflow hook audit\n\n- Existing hook location: installed daily wrapper immediately after both shared locks, beside `bin/mlb_public_game_moneyline_daily_hook.sh`.\n- Existing schedule: 05:30, 09:30, 11:00, 13:00, and 16:30 Pacific; no new scheduler is needed.\n- Recommendation: use the existing 09:30 PT run for the designated totals snapshot because it maximizes pregame slate coverage while giving existing market capture more time than 05:30.\n- Once-per-date/game guard: SQLite canonical unique identity; existing immutable rows skip.\n- Retry: an absent game identity may be added only while that game remains unstarted; post-start rows fail closed.\n- Failure isolation: a future hook should be nonblocking and visibly log its exit code, matching moneyline-shadow isolation.\n- Market attachment uses existing local source captures only and remains separate from immutable predictions.\n- Installation decision: NOT INSTALLED; explicit authorization remains required.\n")
+    (output_dir/"totals_daily_workflow_hook_audit.md").write_text("# Totals daily workflow hook audit\n\n- Hook location: installed daily wrapper after current-slate two-provider market capture and completed-slate official-source recovery; the earlier moneyline lifecycle is unchanged.\n- Existing scheduler: 05:30, 09:30, 11:00, 13:00, and 16:30 Pacific; no separate scheduler.\n- 05:30 is grade-only. The preferred first current-slate scoring pass is 09:30; later runs retry only identities still missing.\n- Once-per-date/game guard: SQLite canonical unique identity; existing immutable rows skip before context reconstruction.\n- Retry: an absent game identity may be added only while that game remains unstarted; post-start rows fail closed.\n- Missing probable pitchers fail closed; governed sparse starter history is allowed.\n- Failure isolation: the hook is nonblocking and visibly logs its exit code, matching moneyline-shadow isolation.\n- Market availability never blocks model scoring; attachment remains separate from immutable predictions.\n")
     (output_dir/"current_totals_shadow_report.md").write_text(report_markdown(rows))
     market_count = sum(row.get("market_status") == "TOTAL_MARKET_CERTIFIED_PAIRED" for row in rows); declaration = "TOTALS_PROSPECTIVE_SHADOW_INITIALIZED" if market_count == len(rows) else "TOTALS_PROSPECTIVE_SHADOW_INITIALIZED_MARKET_COVERAGE_PARTIAL"
     values = [row["expected_total"] for row in rows]
