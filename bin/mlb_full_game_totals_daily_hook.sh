@@ -16,6 +16,17 @@ echo "[$(date -u +%FT%TZ)] START MLB full-game totals market capture date=${slat
 odds_api_rc=$?
 echo "[$(date -u +%FT%TZ)] DONE MLB full-game totals market capture source=THE_ODDS_API rc=${odds_api_rc} date=${slate_date} run_tag=${run_tag}"
 
+# Pinnacle is acquired explicitly so the broad US request above remains
+# unchanged. Each response is independently retained and failure-isolated.
+pinnacle_output_dir="backend/mlb/exports/market_history/full_game_totals/${slate_date}/${run_tag}/pinnacle"
+echo "[$(date -u +%FT%TZ)] START MLB Pinnacle main-market capture date=${slate_date} run_tag=${run_tag}"
+.venv/bin/python -m backend.mlb.scripts.capture_mlb_pinnacle_main_markets_v1 \
+  --date "$slate_date" \
+  --run-tag "$run_tag" \
+  --output-dir "$pinnacle_output_dir"
+pinnacle_rc=$?
+echo "[$(date -u +%FT%TZ)] DONE MLB Pinnacle main-market capture source=THE_ODDS_API bookmaker=pinnacle rc=${pinnacle_rc} date=${slate_date} run_tag=${run_tag}"
+
 # Supplemental source health is independent: it always gets its one bounded
 # attempt even if The Odds API failed, and its failure never erases a successful
 # existing-provider capture.
@@ -27,8 +38,11 @@ fi
 if [[ "$odds_api_rc" -ne 0 ]]; then
   echo "[$(date -u +%FT%TZ)] WARN MLB full-game totals The Odds API capture failed rc=${odds_api_rc}; successful SportsGameOdds trial data remains preserved" >&2
 fi
+if [[ "$pinnacle_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN MLB explicit Pinnacle capture failed rc=${pinnacle_rc}; broad US-book capture and daily refresh remain independent" >&2
+fi
 
-if [[ "$odds_api_rc" -ne 0 && "$sgo_rc" -ne 0 ]]; then
+if [[ "$odds_api_rc" -ne 0 && "$pinnacle_rc" -ne 0 && "$sgo_rc" -ne 0 ]]; then
   exit 1
 fi
 exit 0

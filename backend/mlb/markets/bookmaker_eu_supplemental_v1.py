@@ -142,6 +142,18 @@ def connect_ledger(path: Path) -> sqlite3.Connection:
       created_at_utc TEXT NOT NULL,
       UNIQUE(prediction_identity,market_identity)
     );
+    CREATE TABLE IF NOT EXISTS pinnacle_totals_shadow_attachments (
+      canonical_attachment_identity TEXT PRIMARY KEY, prediction_identity TEXT NOT NULL,
+      market_identity TEXT NOT NULL, timing_relationship TEXT NOT NULL,
+      attachment_payload_json TEXT NOT NULL, attachment_payload_sha256 TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL, UNIQUE(prediction_identity,market_identity)
+    );
+    CREATE TABLE IF NOT EXISTS pinnacle_moneyline_shadow_attachments (
+      canonical_attachment_identity TEXT PRIMARY KEY, prediction_identity TEXT NOT NULL,
+      market_identity TEXT NOT NULL, timing_relationship TEXT NOT NULL,
+      attachment_payload_json TEXT NOT NULL, attachment_payload_sha256 TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL, UNIQUE(prediction_identity,market_identity)
+    );
     CREATE TRIGGER IF NOT EXISTS supplemental_market_no_update
       BEFORE UPDATE ON supplemental_main_market_snapshots
       BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_SUPPLEMENTAL_MAIN_MARKET'); END;
@@ -166,6 +178,14 @@ def connect_ledger(path: Path) -> sqlite3.Connection:
     CREATE TRIGGER IF NOT EXISTS bookmaker_moneyline_attachment_no_delete
       BEFORE DELETE ON bookmaker_eu_moneyline_shadow_attachments
       BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_BOOKMAKER_MONEYLINE_ATTACHMENT'); END;
+    CREATE TRIGGER IF NOT EXISTS pinnacle_totals_attachment_no_update BEFORE UPDATE ON pinnacle_totals_shadow_attachments
+      BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_PINNACLE_TOTALS_ATTACHMENT'); END;
+    CREATE TRIGGER IF NOT EXISTS pinnacle_totals_attachment_no_delete BEFORE DELETE ON pinnacle_totals_shadow_attachments
+      BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_PINNACLE_TOTALS_ATTACHMENT'); END;
+    CREATE TRIGGER IF NOT EXISTS pinnacle_moneyline_attachment_no_update BEFORE UPDATE ON pinnacle_moneyline_shadow_attachments
+      BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_PINNACLE_MONEYLINE_ATTACHMENT'); END;
+    CREATE TRIGGER IF NOT EXISTS pinnacle_moneyline_attachment_no_delete BEFORE DELETE ON pinnacle_moneyline_shadow_attachments
+      BEGIN SELECT RAISE(ABORT,'APPEND_ONLY_PINNACLE_MONEYLINE_ATTACHMENT'); END;
     """)
     conn.commit()
     return conn
@@ -482,7 +502,10 @@ def append_attachment(
     conn: sqlite3.Connection, *, table: str, prediction_identity: str,
     market_identity: str, payload: dict[str, Any], created_at_utc: str,
 ) -> str:
-    if table not in {"bookmaker_eu_totals_shadow_attachments", "bookmaker_eu_moneyline_shadow_attachments"}:
+    if table not in {
+        "bookmaker_eu_totals_shadow_attachments", "bookmaker_eu_moneyline_shadow_attachments",
+        "pinnacle_totals_shadow_attachments", "pinnacle_moneyline_shadow_attachments",
+    }:
         raise ValueError("UNSUPPORTED_ATTACHMENT_TABLE")
     identity = f"{prediction_identity}|{market_identity}"
     digest = sha256_json(payload)
