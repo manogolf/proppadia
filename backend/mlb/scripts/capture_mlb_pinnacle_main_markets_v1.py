@@ -21,7 +21,7 @@ from backend.mlb.markets.full_game_total_capture_v1 import (
     connect_ledger as connect_total_ledger, market_rows as total_market_rows,
 )
 from backend.mlb.markets.pinnacle_main_market_capture_v1 import (
-    BOOKMAKER_KEY, MARKETS, PROVIDER, REQUEST_CLASS, RUN_LINE_MODEL_STATUS, parse_events,
+    BOOKMAKER_KEY, MARKETS, PROVIDER, REQUEST_CLASS, RUN_LINE_MODEL_STATUS, eastern_date, parse_events,
 )
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import probability_fields
@@ -142,13 +142,21 @@ def _attach(conn: Any, game_date: str, rows: list[dict[str, Any]], created: str)
 
 def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFAULT_LEDGER) -> dict[str, Any]:
     events, source = fetch(game_date, run_tag)
-    schedule_payload, observed, schedule_sha = fetch_hydrated_schedule(game_date)
-    schedule = normalize_schedule(schedule_payload, observed, schedule_sha)
+    schedule = []
+    schedule_dates = {game_date} | {
+        eastern_date(event["commence_time"]) for event in events if event.get("commence_time")
+        and eastern_date(event["commence_time"]) >= game_date
+    }
+    for schedule_date in sorted(schedule_dates):
+        schedule_payload, observed, schedule_sha = fetch_hydrated_schedule(schedule_date)
+        schedule.extend(normalize_schedule(schedule_payload, observed, schedule_sha))
     rows, audit = parse_events(events=events, schedule=schedule, game_date=game_date,
         fetched_at_utc=source["fetch_timestamp_utc"], run_tag=run_tag,
         raw_source_path=source["raw_response_path"], raw_source_sha256=source["raw_response_sha256"])
     conn = connect_ledger(ledger_path); total_conn = connect_total_ledger(ledger_path)
     actions = [{**row, "ledger_action": append_market(conn, row)} for row in rows]
+    current_rows = [row for row in rows if row["game_date"] == game_date]
+    future_rows = [row for row in rows if row["event_classification"] == "FUTURE_SLATE_PREGAME"]
     total_rows = [_to_total(row) for row in rows if row["market_type"] == "FULL_GAME_TOTAL"]
     for row in total_rows:
         append_total_market(total_conn, row)
@@ -159,13 +167,13 @@ def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFA
             attach_all_markets(total_conn, prediction, matching, source["fetch_timestamp_utc"])
     all_rows = market_rows(conn, game_date) + _generic_totals(total_market_rows(total_conn, game_date))
     consensus = []
-    for game_id in sorted({int(row["game_id"]) for row in rows}):
+    for game_id in sorted({int(row["game_id"]) for row in current_rows}):
         for market_type in ("MONEYLINE", "FULL_GAME_TOTAL", "RUN_LINE"):
             value = build_consensus(rows=all_rows, game_date=game_date, game_id=game_id,
                                     market_type=market_type, captured_at_utc=source["fetch_timestamp_utc"])
             if value:
                 value["ledger_action"] = append_consensus(conn, value); consensus.append(value)
-    totals_attach, money_attach, money_status = _attach(conn, game_date, rows, source["fetch_timestamp_utc"])
+    totals_attach, money_attach, money_status = _attach(conn, game_date, current_rows, source["fetch_timestamp_utc"])
     ages = [(datetime.fromisoformat(source["fetch_timestamp_utc"].replace("Z", "+00:00")) -
              datetime.fromisoformat(row["provider_market_updated_at_utc"].replace("Z", "+00:00"))).total_seconds() for row in rows]
     summary = {**source, "events_returned": len(events), "games_mapped": len({row["game_id"] for row in rows}),
@@ -179,6 +187,10 @@ def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFA
         "moneyline_attachments": len(money_attach), "moneyline_prediction_source_status": money_status,
         "run_line_model_status": RUN_LINE_MODEL_STATUS, "duplicate_identities": conn.execute(
             "SELECT COUNT(*) FROM (SELECT canonical_market_identity FROM supplemental_main_market_snapshots GROUP BY 1 HAVING COUNT(*)>1)").fetchone()[0],
+        "future_slate_events": sum(row["event_classification"] == "FUTURE_SLATE_PREGAME" for row in audit),
+        "future_moneyline_rows": sum(row["market_type"] == "MONEYLINE" for row in future_rows),
+        "future_totals_rows": sum(row["market_type"] == "FULL_GAME_TOTAL" for row in future_rows),
+        "future_run_line_rows": sum(row["market_type"] == "RUN_LINE" for row in future_rows),
         "outcomes_accessed": 0}
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "pinnacle_capture_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")

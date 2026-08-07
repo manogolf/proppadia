@@ -138,3 +138,57 @@ def test_18_existing_hook_keeps_broad_request_and_adds_independent_pinnacle():
     hook = (runner.ROOT / "bin/mlb_full_game_totals_daily_hook.sh").read_text()
     assert "capture_mlb_full_game_totals_v1" in hook and "capture_mlb_pinnacle_main_markets_v1" in hook
     assert hook.index("capture_mlb_full_game_totals_v1") < hook.index("capture_mlb_pinnacle_main_markets_v1")
+
+
+def test_19_current_date_event_classified_current_slate():
+    _, audit = parsed()
+    assert audit[0]["event_classification"] == "CURRENT_SLATE"
+
+
+def test_20_next_date_event_classified_future_slate():
+    future = event("2026-08-08T22:00:00Z")
+    future_schedule = schedule("2026-08-08T22:00:00Z")
+    rows, audit = parse_events(events=[future], schedule=future_schedule, game_date="2026-08-07",
+        fetched_at_utc=FETCH, run_tag="x", raw_source_path="x", raw_source_sha256="x")
+    assert audit[0]["event_classification"] == "FUTURE_SLATE_PREGAME"
+    assert {row["timing_status"] for row in rows} == {"EARLY_FUTURE_SLATE_PREGAME_OBSERVATION"}
+    assert {row["game_date"] for row in rows} == {"2026-08-08"}
+
+
+def test_21_future_doubleheader_uses_game_number():
+    future = event("2026-08-08T22:00:00Z"); future["game_number"] = 2
+    games = schedule("2026-08-08T22:00:00Z")
+    games += [{**games[0], "game_pk": 11, "game_number": 2}]
+    game, status, _ = bind_event(future, games, FETCH)
+    assert status == "CERTIFIED_EXACT_OR_DETERMINISTIC" and game["game_pk"] == 11
+
+
+def test_22_started_event_classified_past_or_started():
+    started = event("2026-08-07T17:00:00Z")
+    _, audit = parse_events(events=[started], schedule=schedule("2026-08-07T17:00:00Z"), game_date="2026-08-07",
+        fetched_at_utc=FETCH, run_tag="x", raw_source_path="x", raw_source_sha256="x")
+    assert audit[0]["event_classification"] == "PAST_OR_STARTED"
+
+
+def test_23_ambiguous_event_classified_ambiguous():
+    _, audit = parse_events(events=[event()], schedule=schedule() * 2, game_date="2026-08-07",
+        fetched_at_utc=FETCH, run_tag="x", raw_source_path="x", raw_source_sha256="x")
+    assert audit[0]["event_classification"] == "IDENTITY_AMBIGUOUS"
+
+
+def test_24_future_snapshot_does_not_enter_current_consensus(tmp_path):
+    future = event("2026-08-08T22:00:00Z")
+    rows, _ = parse_events(events=[future], schedule=schedule("2026-08-08T22:00:00Z"), game_date="2026-08-07",
+        fetched_at_utc=FETCH, run_tag="x", raw_source_path="x", raw_source_sha256="x")
+    conn = connect_ledger(tmp_path / "ledger.sqlite3"); [append_market(conn, row) for row in rows]
+    assert conn.execute("SELECT COUNT(*) FROM supplemental_main_market_snapshots WHERE game_date='2026-08-07'").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM supplemental_main_market_snapshots WHERE game_date='2026-08-08'").fetchone()[0] == 3
+
+
+def test_25_future_snapshot_remains_immutable(tmp_path):
+    future = event("2026-08-08T22:00:00Z")
+    rows, _ = parse_events(events=[future], schedule=schedule("2026-08-08T22:00:00Z"), game_date="2026-08-07",
+        fetched_at_utc=FETCH, run_tag="x", raw_source_path="x", raw_source_sha256="x")
+    conn = connect_ledger(tmp_path / "ledger.sqlite3")
+    assert append_market(conn, rows[0]) == "APPENDED_NEW"
+    assert append_market(conn, rows[0]) == "EXISTING_IMMUTABLE"
