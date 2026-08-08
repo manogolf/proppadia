@@ -41,12 +41,34 @@ def _team(value: str) -> str:
     return " ".join(str(value).lower().replace(".", "").split())
 
 
+def _normalize_odds_events(payload: Any, source_path: Path) -> tuple[list[dict[str, Any]], str | None]:
+    """Accept only canonical Odds API arrays or the retained wrapped fixture shape."""
+    if isinstance(payload, list):
+        events = payload; captured_at_utc = None
+    elif isinstance(payload, dict) and "events" in payload:
+        events = payload["events"]; captured_at_utc = payload.get("captured_at_utc")
+        if not isinstance(events, list):
+            raise ValueError(f"ODDS_EVENTS_NOT_LIST source={source_path}")
+    else:
+        root_type = "null" if payload is None else type(payload).__name__
+        raise ValueError(f"UNEXPECTED_ODDS_JSON_ROOT source={source_path} type={root_type}")
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            raise ValueError(f"ODDS_EVENT_NOT_OBJECT source={source_path} index={index} type={type(event).__name__}")
+    return events, captured_at_utc
+
+
 def market_inventory(game_date: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     candidates, files = [], []
     for path in sorted((ODDS_ROOT/game_date).glob("*.json")):
-        try: raw = path.read_bytes(); payload = json.loads(raw)
-        except Exception: continue
-        captured = payload.get("captured_at_utc"); events = payload.get("events", []) if isinstance(payload, dict) else []
+        if path.name.endswith(".manifest.json"):
+            continue
+        raw = path.read_bytes()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"INVALID_ODDS_JSON source={path}") from exc
+        events, captured = _normalize_odds_events(payload, path)
         file_row = {"source_path": str(path.relative_to(ROOT)), "source_sha256": hashlib.sha256(raw).hexdigest(), "captured_at_utc": captured,
                     "event_count": len(events), "game_totals_markets": 0}
         for event in events:

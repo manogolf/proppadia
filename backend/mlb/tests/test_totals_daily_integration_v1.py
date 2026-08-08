@@ -63,11 +63,11 @@ def test_daily_0830_scores_and_later_runs_retry_missing(monkeypatch, tmp_path):
 
 
 def test_daily_0530_is_primary_scoring_pass(monkeypatch, tmp_path):
-    calls=[]
+    today=datetime.now(ZoneInfo("America/New_York")).date().isoformat(); calls=[]
     monkeypatch.setattr(daily,"score",lambda *args:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
     monkeypatch.setattr(daily,"attach_markets",lambda *args:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
-    result=daily.run("2026-08-07","2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
-    assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score","2026-08-07"),("markets","2026-08-07")]
+    result=daily.run(today,"2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
+    assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score",today),("markets",today)]
 
 
 def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch, tmp_path):
@@ -89,6 +89,56 @@ def test_market_unavailable_does_not_block_or_mutate_prediction(tmp_path):
     result=attach_markets("2026-08-07",tmp_path/"out",pred,market)
     assert result["market_unavailable_predictions"]==1 and result["predictions_with_market"]==0
     assert rows_for_date(connection,"2026-08-07")==before==[row]
+
+
+def _odds_event(*, total=8.5):
+    return {"away_team":"Away","home_team":"Home","commence_time":"2026-08-08T23:00:00Z","bookmakers":[{
+        "key":"pinnacle","title":"Pinnacle","markets":[{"key":"totals","last_update":"2026-08-08T12:00:00Z",
+        "outcomes":[{"name":"Over","point":total,"price":-110},{"name":"Under","point":total,"price":-104}]}]}]}
+
+
+def test_market_inventory_accepts_retained_list_shaped_pinnacle(monkeypatch, tmp_path):
+    retained=ROOT/"backend/mlb/exports/odds_history/2026-08-08/odds_mlb_pinnacle_main_markets__local_daily_20260808T123001Z.json"
+    payload=json.loads(retained.read_text())
+    events,captured=shadow._normalize_odds_events(payload,retained)
+    assert len(events)==15 and captured is None and all(isinstance(event,dict) for event in events)
+
+
+def test_market_inventory_accepts_wrapped_fixture_and_preserves_broad_totals(monkeypatch, tmp_path):
+    root=tmp_path/"odds"; day=root/"2026-08-08"; day.mkdir(parents=True)
+    (day/"broad.json").write_text(json.dumps({"captured_at_utc":"2026-08-08T12:01:00Z","events":[_odds_event(total=9.0)]}))
+    monkeypatch.setattr(shadow,"ROOT",tmp_path); monkeypatch.setattr(shadow,"ODDS_ROOT",root)
+    rows,files=shadow.market_inventory("2026-08-08")
+    assert len(rows)==1 and rows[0]["total_line"]==9.0 and rows[0]["provider_key"]=="pinnacle"
+    assert files[0]["captured_at_utc"]=="2026-08-08T12:01:00Z" and files[0]["game_totals_markets"]==1
+
+
+@pytest.mark.parametrize("payload", [[], {"events":[]}])
+def test_market_inventory_accepts_empty_event_list(payload, tmp_path):
+    events,captured=shadow._normalize_odds_events(payload,tmp_path/"empty.json")
+    assert events==[] and captured is None
+
+
+def test_market_inventory_rejects_malformed_list_member(tmp_path):
+    with pytest.raises(ValueError,match="ODDS_EVENT_NOT_OBJECT.*index=1"):
+        shadow._normalize_odds_events([_odds_event(),"bad"],tmp_path/"bad.json")
+
+
+@pytest.mark.parametrize("payload", [None,"bad",7])
+def test_market_inventory_rejects_unexpected_scalar_root(payload, tmp_path):
+    with pytest.raises(ValueError,match="UNEXPECTED_ODDS_JSON_ROOT"):
+        shadow._normalize_odds_events(payload,tmp_path/"bad.json")
+
+
+def test_list_inventory_is_unique_and_does_not_access_outcomes_or_public_surface(monkeypatch, tmp_path):
+    root=tmp_path/"odds"; day=root/"2026-08-08"; day.mkdir(parents=True)
+    (day/"pinnacle.json").write_text(json.dumps([_odds_event()]))
+    monkeypatch.setattr(shadow,"ROOT",tmp_path); monkeypatch.setattr(shadow,"ODDS_ROOT",root)
+    rows,files=shadow.market_inventory("2026-08-08")
+    identities={(r["away_team"],r["home_team"],r["provider_key"],r["total_line"],r["snapshot_timestamp_utc"]) for r in rows}
+    assert len(rows)==len(identities)==1 and files[0]["event_count"]==1
+    assert "outcome" not in rows[0] and "result" not in rows[0]
+    assert "public" not in shadow.market_inventory.__name__ and MONEYLINE.exists()
 
 
 def test_partial_grading_appends_only_official_final(monkeypatch, tmp_path):
