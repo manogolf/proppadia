@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse, hashlib, json, subprocess
 from pathlib import Path
 import pandas as pd
+from backend.nhl.analysis_package_guard import require_create_only
 
 DATE="2026-07-13"; CHAMPION="NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1"; CHAMP_HASH="83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda"
 AUX_SCHEDULE_MANIFEST_HASH="783784e6320b47f90b6dc5f18bb7adc5d359067948836a2c9cabdecdd0842507"
@@ -14,9 +15,10 @@ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def js(o,p): Path(p).write_text(json.dumps(o,indent=2,sort_keys=True,allow_nan=False)+"\n")
 def csv(d,p): d.to_csv(p,index=False,lineterminator="\n",float_format="%.15g")
 def main():
- ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_moneyline_champion_challenger_specification/{DATE}').resolve(); out.mkdir(parents=True,exist_ok=True)
+ ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_moneyline_champion_challenger_specification/{DATE}').resolve()
  pp={k:base/s/DATE for k,(s,h) in PARENTS.items()}; before={str(f):sha(f) for p in pp.values() for f in p.iterdir() if f.is_file()}
  for k,p in pp.items(): assert sha(p/'SHA256SUMS')==PARENTS[k][1]; subprocess.run(['shasum','-a','256','-c','SHA256SUMS'],cwd=p,check=True,capture_output=True)
+ require_create_only(out);out.mkdir(parents=True)
  schedule_parent=base/f'nhl_season_2024_utah_game_date_remediation/{DATE}'; assert sha(schedule_parent/'SHA256SUMS')==AUX_SCHEDULE_MANIFEST_HASH; subprocess.run(['shasum','-a','256','-c','SHA256SUMS'],cwd=schedule_parent,check=True,capture_output=True)
  bp=pp['baseline']; pred=bp/f'nhl_moneyline_simple_baseline_control_predictions_{DATE}.csv'; assert sha(pred)==CHAMP_HASH
  part=pd.read_csv(bp/f'nhl_moneyline_simple_baseline_population_partition_{DATE}.csv'); spine=pd.read_csv(pp['features']/f'nhl_moneyline_team_feature_spine_{DATE}.csv'); sched=pd.read_csv(base/f'nhl_season_2024_utah_game_date_remediation/{DATE}/nhl_season_2024_schedule_rebuild_{DATE}.csv')

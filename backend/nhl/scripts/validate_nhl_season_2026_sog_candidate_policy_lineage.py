@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """Validate and package the NHL season-2026 SOG candidate-lineage remediation."""
 from __future__ import annotations
-import csv,hashlib,json,re
+import argparse,csv,hashlib,json,re
 from pathlib import Path
 import pandas as pd
 from backend.nhl.sog_candidate_lineage.core import POLICY_NAME,POLICY_VERSION,RULES,digest,effective_config,evaluate,file_hash
+from backend.nhl.analysis_package_guard import require_create_only,verify_manifest
 
 ROOT=Path(__file__).resolve().parents[3];DATE="2026-08-10";OUT=ROOT/"artifacts/analysis/model_development/nhl_season_2026_sog_candidate_policy_lineage"/DATE
+CANONICAL_MANIFEST_SHA256="e00e8f699b7e3d91baa0d368d474d70f0bf04b49b3d562e9f5b576bf55603592"
 def js(name,obj):(OUT/name).write_text(json.dumps(obj,indent=2,sort_keys=True)+"\n")
 def cs(name,rows,fields=None):
  fields=fields or list(rows[0]); h=(OUT/name).open("w",newline="");w=csv.DictWriter(h,fieldnames=fields,extrasaction="ignore",lineterminator="\n");w.writeheader();w.writerows(rows);h.close()
 def sh(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
- OUT.mkdir(parents=True,exist_ok=True); core=ROOT/"backend/nhl/sog_candidate_lineage/core.py"
+ global OUT
+ ap=argparse.ArgumentParser();ap.add_argument("--output-dir",type=Path);a=ap.parse_args()
+ if a.output_dir is None and OUT.exists():verify_manifest(OUT,CANONICAL_MANIFEST_SHA256);print("READ_ONLY_PASS");return
+ OUT=(a.output_dir or OUT).resolve();require_create_only(OUT);OUT.mkdir(parents=True); core=ROOT/"backend/nhl/sog_candidate_lineage/core.py"
  segments={f"{side}:{line}":{"min_ev":.05,"min_gap":.03,"train_wilson_lb":.60} for side in ["over","under"] for line in ["1.5","2.5","3.5"]}
  cfg=effective_config(segments); cfg_cap=effective_config(segments,{"max_per_slate":1}); cfg_alt=effective_config(segments,{"min_ev_floor":.20,"max_per_slate":1})
  preds=pd.DataFrame([

@@ -2,6 +2,7 @@
 """Validate and package the bounded immutable NHL SOG quote-capture remediation."""
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -12,9 +13,11 @@ from pathlib import Path
 import pandas as pd
 
 from backend.nhl.sog_quote_capture.core import QUOTE_COLUMNS, capture_run, sha256_file
+from backend.nhl.analysis_package_guard import require_create_only,verify_manifest
 
 ROOT=Path(__file__).resolve().parents[3]; DATE="2026-08-10"
 OUT=ROOT/"artifacts/analysis/model_development/nhl_season_2026_sog_immutable_prop_odds_capture"/DATE
+CANONICAL_MANIFEST_SHA256="0ffc9c2630deded0b1774d717c1e7183abdbdbc4b8ca92f741b47717cf5f195c"
 
 def write_csv(name:str,rows:list[dict],fields:list[str]|None=None)->None:
     if fields is None: fields=list(rows[0]) if rows else []
@@ -49,7 +52,10 @@ def fixture_payload(capture:str, *, final:bool=False)->dict:
     ]}
 
 def main()->None:
-    OUT.mkdir(parents=True,exist_ok=True)
+    global OUT
+    ap=argparse.ArgumentParser();ap.add_argument("--output-dir",type=Path);a=ap.parse_args()
+    if a.output_dir is None and OUT.exists(): verify_manifest(OUT,CANONICAL_MANIFEST_SHA256);print("READ_ONLY_PASS");return
+    OUT=(a.output_dir or OUT).resolve();require_create_only(OUT);OUT.mkdir(parents=True)
     core=ROOT/"backend/nhl/sog_quote_capture/core.py"; cli=ROOT/"backend/nhl/sog_quote_capture/cli.py"
     legacy=[ROOT/"backend/nhl/cli.py",ROOT/"backend/nhl/scripts/build_sog_with_market.py",ROOT/"backend/nhl/scripts/score_sog_poisson_baseline.py",ROOT/"backend/nhl/mainline_shadow/core.py",ROOT/"backend/nhl/mainline_shadow/cli.py"]
     before={str(p.relative_to(ROOT)):h(p) for p in legacy}

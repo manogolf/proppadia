@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 from pathlib import Path
+from backend.nhl.analysis_package_guard import require_create_only
 
 ROOT = Path(__file__).resolve().parents[3]
 DATE = "2026-08-10"
@@ -30,7 +31,8 @@ def write_csv(name: str, fields: list[str], rows: list[dict[str, object]]) -> No
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+    require_create_only(OUT)
+    OUT.mkdir(parents=True)
     scorer_hash = sha(SCORER)
     parents = [
         ("nhl_sog_outcome_denominator_certification", "7df0759194c81a50fad268ae47839aab1a05d267eb20ad41c5048b3a136c61d7"),

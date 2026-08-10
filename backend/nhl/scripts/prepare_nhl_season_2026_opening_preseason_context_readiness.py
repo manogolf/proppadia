@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from backend.nhl.mainline_shadow.core import FEATURES, historical_parity, load_parameters, score_features
+from backend.nhl.analysis_package_guard import require_create_only
 
 DATE = "2026-07-13"
 CHAMPION = "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1"
@@ -82,13 +83,13 @@ def main() -> None:
     root = args.repo_root.resolve()
     base = root / "artifacts/analysis/model_development"
     out = (args.output_dir or base / f"nhl_season_2026_opening_preseason_context_readiness/{DATE}").resolve()
-    out.mkdir(parents=True, exist_ok=True)
-
     parent_dirs = {k: base / name / DATE for k, (name, _) in PARENTS.items()}
     parent_before = {str(f): sha(f) for d in parent_dirs.values() for f in d.iterdir() if f.is_file()}
     for key, directory in parent_dirs.items():
         assert sha(directory / "SHA256SUMS") == PARENTS[key][1]
         subprocess.run(["shasum", "-a", "256", "-c", "SHA256SUMS"], cwd=directory, check=True, capture_output=True)
+    require_create_only(out)
+    out.mkdir(parents=True)
 
     baseline = base / f"nhl_moneyline_simple_baseline_process_validation/{DATE}"
     matrix_path = baseline / f"nhl_moneyline_simple_baseline_feature_matrix_audit_{DATE}.csv"

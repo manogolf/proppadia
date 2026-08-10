@@ -7,8 +7,10 @@ import pandas as pd
 from backend.nhl.sog_candidate_lineage.core import effective_config
 from backend.nhl.sog_quote_capture.core import capture_run,sha256_file
 from backend.nhl.sog_shadow.core import grade_run,run_shadow
+from backend.nhl.analysis_package_guard import begin_package,finalize_package,regeneration_path,verify_manifest
 
 ROOT=Path(__file__).resolve().parents[3];DATE="2026-08-10";OUT=ROOT/"artifacts/analysis/model_development/nhl_season_2026_sog_manual_shadow_capture_implementation"/DATE
+CANONICAL_MANIFEST_SHA256="adb6ddbb5fbc226947b6e2917f66e1301cfe7fd5aae4099559b1e7d2f5660702"
 def cs(name,rows,fields=None):
  fields=fields or list(rows[0]);h=(OUT/name).open("w",newline="");w=csv.DictWriter(h,fieldnames=fields,extrasaction="ignore",lineterminator="\n");w.writeheader();w.writerows(rows);h.close()
 def js(name,obj):(OUT/name).write_text(json.dumps(obj,indent=2,sort_keys=True)+"\n")
@@ -16,7 +18,14 @@ def sh(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def tree(p):return {x.relative_to(p).as_posix():sh(x) for x in sorted(p.rglob("*")) if x.is_file()}
 def payload(capture,update):return {"capture_timestamp_utc":capture,"provider":"SYNTHETIC_DRY_RUN","request_metadata":{"fixture":True},"provider_response":[{"id":"event1","commence_time":"2026-10-10T20:00:00Z","home_team":"Home Club","away_team":"Away Club","bookmakers":[{"key":"book_a","title":"Book A","last_update":update,"markets":[{"key":"player_shots_on_goal","last_update":update,"outcomes":[{"name":"Over","description":"Alpha Skater","price":110,"point":1.5},{"name":"Under","description":"Alpha Skater","price":-125,"point":1.5},{"name":"Over","description":"Alpha Skater","price":120,"point":2.5},{"name":"Under","description":"Alpha Skater","price":-135,"point":2.5},{"name":"Over","description":"Alpha Skater","price":135,"point":3.5},{"name":"Under","description":"Alpha Skater","price":-150,"point":3.5}]}]},{"key":"book_b","title":"Book B","last_update":update,"markets":[{"key":"player_shots_on_goal","last_update":update,"outcomes":[{"name":"Over","description":"Alpha Skater","price":105,"point":1.5},{"name":"Under","description":"Alpha Skater","price":-120,"point":1.5},{"name":"Over","description":"Alpha Skater","price":115,"point":2.5},{"name":"Under","description":"Alpha Skater","price":-130,"point":2.5},{"name":"Over","description":"Alpha Skater","price":130,"point":3.5},{"name":"Under","description":"Alpha Skater","price":-145,"point":3.5}]}]}]}]}
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--parity-dir",type=Path,default=Path("/tmp/nhl_sog_shadow_parity_run"));a=ap.parse_args();OUT.mkdir(parents=True,exist_ok=True)
+ global OUT
+ ap=argparse.ArgumentParser();ap.add_argument("--parity-dir",type=Path,default=Path("/tmp/nhl_sog_shadow_parity_run"));ap.add_argument("--output-dir",type=Path);ap.add_argument("--regeneration-id");a=ap.parse_args()
+ canonical=OUT
+ if a.output_dir and a.regeneration_id:raise ValueError("choose output-dir or regeneration-id")
+ if not a.output_dir and not a.regeneration_id and canonical.exists():
+  verify_manifest(canonical,CANONICAL_MANIFEST_SHA256);print(json.dumps({"validation":"READ_ONLY_PASS","manifest_sha256":CANONICAL_MANIFEST_SHA256}));return
+ target=a.output_dir.resolve() if a.output_dir else (regeneration_path(canonical,a.regeneration_id) if a.regeneration_id else canonical)
+ staging=begin_package(target);OUT=staging
  parity_path=a.parity_dir/"nhl_season_2025_sog_reproduction_run_summary_2026-07-13.json";parity=json.loads(parity_path.read_text());ledger=pd.read_csv(a.parity_dir/"nhl_season_2025_sog_reproduction_ledger_2026-07-13.csv")
  legacy=[ROOT/"backend/nhl/scripts/score_sog_poisson_baseline.py",ROOT/"backend/nhl/cli.py",ROOT/"backend/nhl/site/data/odds_latest.json",ROOT/"backend/nhl/scripts/build_sog_with_market.py",ROOT/"backend/nhl/mainline_shadow/core.py",ROOT/"backend/nhl/sog_quote_capture/core.py",ROOT/"backend/nhl/sog_candidate_lineage/core.py"]
  before={str(x.relative_to(ROOT)):sh(x) for x in legacy if x.exists()};tmp=Path(tempfile.mkdtemp(prefix="nhl_sog_shadow_e2e_"))
@@ -58,6 +67,7 @@ def main():
   parents=[("nhl_season_2026_sog_prospective_capture_readiness","895eb67e6e600b46b65c13beb2b5a97d156077a4d0bf27fdc17d6f21110514c7"),("nhl_season_2026_sog_immutable_prop_odds_capture","0ffc9c2630deded0b1774d717c1e7183abdbdbc4b8ca92f741b47717cf5f195c"),("nhl_season_2026_sog_candidate_policy_lineage","e00e8f699b7e3d91baa0d368d474d70f0bf04b49b3d562e9f5b576bf55603592"),("nhl_season_2025_sog_baseline_reproduction","65e0bca743bdeead084fdeb8bb1179764b905ae5ba11d782823a65953b95344b")];js(f"package_identity_{DATE}.json",{"package":"nhl_season_2026_sog_manual_shadow_capture_implementation","version":"1.0.0","canonical_season":2026,"as_of":DATE,"parents":[{"package":x,"manifest_sha256":y} for x,y in parents],"implementation":{"core":"backend/nhl/sog_shadow/core.py","core_sha256":sh(ROOT/"backend/nhl/sog_shadow/core.py"),"cli":"backend/nhl/sog_shadow/cli.py","cli_sha256":sh(ROOT/"backend/nhl/sog_shadow/cli.py")},"mode":"SHADOW_OBSERVATION_ONLY","dry_run":"synthetic","no_model_change":True,"no_policy_tuning":True})
   files=sorted(x for x in OUT.iterdir() if x.is_file() and x.name!="SHA256SUMS");(OUT/"SHA256SUMS").write_text("".join(f"{sh(x)}  {x.name}\n" for x in files))
  finally:shutil.rmtree(tmp,ignore_errors=True)
+ finalize_package(staging,target);OUT=canonical
 def np_isfinite(s):
  import numpy as np
  return bool(np.isfinite(pd.to_numeric(s,errors="coerce")).all())

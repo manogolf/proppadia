@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse,hashlib,json,re,subprocess
 from pathlib import Path
 import pandas as pd
+from backend.nhl.analysis_package_guard import require_create_only
 
 DATE="2026-07-13"; CHAMP="NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1"; CHAMP_HASH="83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda"
 PARENTS={"certification":("nhl_moneyline_frozen_baseline_certification","8bb36073fee4f055f399c651f942b8de6eb1bb3b75b96b6112dd9d4af4224cf5"),"challenger_execution":("nhl_moneyline_champion_challenger_execution","162ae2e630d6128de381179beae8c92c819544b0555b8d6ef175a37fc03c54b3")}
@@ -11,9 +12,10 @@ def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def js(o,p): Path(p).write_text(json.dumps(o,indent=2,sort_keys=True,allow_nan=False)+"\n")
 def csv(d,p): d.to_csv(p,index=False,lineterminator="\n")
 def main():
- ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_season_2026_mainline_prospective_readiness/{DATE}').resolve(); out.mkdir(parents=True,exist_ok=True)
+ ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_season_2026_mainline_prospective_readiness/{DATE}').resolve()
  pp={k:base/s/DATE for k,(s,h) in PARENTS.items()}; before={str(f):sha(f) for p in pp.values() for f in p.iterdir() if f.is_file()}
  for k,p in pp.items(): assert sha(p/'SHA256SUMS')==PARENTS[k][1]; subprocess.run(['shasum','-a','256','-c','SHA256SUMS'],cwd=p,check=True,capture_output=True)
+ require_create_only(out);out.mkdir(parents=True)
  bp=base/f'nhl_moneyline_simple_baseline_process_validation/{DATE}'; pred=bp/f'nhl_moneyline_simple_baseline_control_predictions_{DATE}.csv'; assert sha(pred)==CHAMP_HASH
  champion_spec=json.loads((bp/f'nhl_moneyline_simple_baseline_specification_{DATE}.json').read_text()); coef=pd.read_csv(bp/f'nhl_moneyline_simple_baseline_coefficient_audit_{DATE}.csv'); assert len(coef)==7 and champion_spec['feature_order']==['diff_std_goal_diff_pg','diff_r10_goal_diff_pg','diff_std_shot_diff_pg','diff_days_rest','home_back_to_back','away_back_to_back']
  evidence=[

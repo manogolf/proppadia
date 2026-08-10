@@ -16,6 +16,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.preprocessing import StandardScaler
+from backend.nhl.analysis_package_guard import require_create_only
 
 
 AS_OF = "2026-07-13"
@@ -161,9 +162,10 @@ def main() -> None:
     args = ap.parse_args()
     root = args.repo_root.resolve()
     out = (args.output_dir or root / f"artifacts/analysis/model_development/nhl_moneyline_simple_baseline_process_validation/{AS_OF}").resolve()
-    out.mkdir(parents=True, exist_ok=True)
     paths = parent_paths(root)
     verified = verify_parents(paths)
+    require_create_only(out)
+    out.mkdir(parents=True)
     parent_before = file_tree_hashes(paths)
     d = load_population(paths)
 

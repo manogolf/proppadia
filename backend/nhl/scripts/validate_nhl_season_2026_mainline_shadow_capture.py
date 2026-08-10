@@ -6,15 +6,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from backend.nhl.mainline_shadow.core import FEATURES,grade_run,historical_parity,load_parameters,normalize_h2h,parameter_hash,run_shadow,sha256_file
+from backend.nhl.analysis_package_guard import require_create_only,verify_manifest,verify_parents
 
 DATE='2026-07-13'; PARENTS={'certification':('nhl_moneyline_frozen_baseline_certification','8bb36073fee4f055f399c651f942b8de6eb1bb3b75b96b6112dd9d4af4224cf5'),'readiness':('nhl_season_2026_mainline_prospective_readiness','bccba8eae9f13088d1b25f057349039a5ecccb688acdc09c0355dec1e83f3a95')}
+CANONICAL_MANIFEST_SHA256='62de5b047b0121664ede00ce197b339968eec00ace64f6a782ca2850a366b09c'
 def js(o,p): Path(p).write_text(json.dumps(o,indent=2,sort_keys=True,allow_nan=False)+'\n')
 def csv(d,p): d.to_csv(p,index=False,lineterminator='\n',float_format='%.15g')
 def tree_hash(path): return {str(x.relative_to(path)):sha256_file(x) for x in path.rglob('*') if x.is_file()}
 def main():
- ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_season_2026_mainline_shadow_capture_implementation/{DATE}').resolve(); out.mkdir(parents=True,exist_ok=True)
- pp={k:base/s/DATE for k,(s,h) in PARENTS.items()}; before={str(x):sha256_file(x) for p in pp.values() for x in p.iterdir() if x.is_file()}
- for k,p in pp.items(): assert sha256_file(p/'SHA256SUMS')==PARENTS[k][1]; subprocess.run(['shasum','-a','256','-c','SHA256SUMS'],cwd=p,check=True,capture_output=True)
+ ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_season_2026_mainline_shadow_capture_implementation/{DATE}').resolve()
+ if a.output_dir is None and out.exists():verify_manifest(out,CANONICAL_MANIFEST_SHA256);print('READ_ONLY_PASS');return
+ pp={k:base/s/DATE for k,(s,h) in PARENTS.items()};verify_parents([(p,PARENTS[k][1]) for k,p in pp.items()]);require_create_only(out);out.mkdir(parents=True);before={str(x):sha256_file(x) for p in pp.values() for x in p.iterdir() if x.is_file()}
  impl=root/'backend/nhl/mainline_shadow'; baseline=base/f'nhl_moneyline_simple_baseline_process_validation/{DATE}'; matrix=baseline/f'nhl_moneyline_simple_baseline_feature_matrix_audit_{DATE}.csv'; predictions=baseline/f'nhl_moneyline_simple_baseline_control_predictions_{DATE}.csv'; assert sha256_file(predictions)=='83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda'
  parity=historical_parity(matrix,predictions); assert parity.status.iloc[0]=='PASS'; csv(parity,out/f'nhl_season_2026_mainline_champion_historical_parity_{DATE}.csv')
  params=load_parameters(); assert params['feature_order']==FEATURES and params['historical_prediction_sha256']==sha256_file(predictions)

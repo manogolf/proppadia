@@ -6,6 +6,7 @@ import argparse, hashlib, json, subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from backend.nhl.analysis_package_guard import require_create_only
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 DATE="2026-07-13"; CONTROL="NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1"; REF="FROZEN_FIT_HOME_PRIOR_REFERENCE"; PRIOR=0.5378031383737518
@@ -33,9 +34,10 @@ def ece(y,p,bins=np.arange(0,1.0001,.1)):
 def q(v): return float(v) if pd.notna(v) else None
 
 def main():
- ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_moneyline_frozen_baseline_certification/{DATE}').resolve(); out.mkdir(parents=True,exist_ok=True)
+ ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_moneyline_frozen_baseline_certification/{DATE}').resolve()
  pp={k:base/s/DATE for k,(s,h) in PARENTS.items()}; before={str(f):sha(f) for p in pp.values() for f in p.iterdir() if f.is_file()}
  for k,p in pp.items(): assert sha(p/'SHA256SUMS')==PARENTS[k][1]; subprocess.run(['shasum','-a','256','-c','SHA256SUMS'],cwd=p,check=True,capture_output=True)
+ require_create_only(out);out.mkdir(parents=True)
  cp=pp['control']; names={"specification":f"nhl_moneyline_simple_baseline_specification_{DATE}.json","feature_manifest":f"nhl_moneyline_simple_baseline_feature_manifest_{DATE}.csv","population_partition":f"nhl_moneyline_simple_baseline_population_partition_{DATE}.csv","control_predictions":f"nhl_moneyline_simple_baseline_control_predictions_{DATE}.csv","preprocessing_state":f"nhl_moneyline_simple_baseline_coefficient_audit_{DATE}.csv","coefficients":f"nhl_moneyline_simple_baseline_coefficient_audit_{DATE}.csv","metrics":f"nhl_moneyline_simple_baseline_metrics_{DATE}.csv"}
  hashes={k:sha(cp/v) for k,v in names.items()}; spec=json.loads((cp/names['specification']).read_text()); assert spec['feature_order']==FEATURES and spec['model']=={'C':1.0,'family':'logistic_regression','fit_intercept':True,'max_iter':1000,'penalty':'l2','random_state':20260713,'solver':'liblinear','tol':0.0001}
  pred=pd.read_csv(cp/names['control_predictions']); part=pd.read_csv(cp/names['population_partition']); coef=pd.read_csv(cp/names['coefficients']); mat=pd.read_csv(cp/f'nhl_moneyline_simple_baseline_feature_matrix_audit_{DATE}.csv'); parent_met=pd.read_csv(cp/names['metrics']); ledger=pd.read_csv(pp['population']/f'nhl_full_game_moneyline_outcome_qualification_ledger_{DATE}.csv',usecols=['canonical_season','game_id','game_type'])

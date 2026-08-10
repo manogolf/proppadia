@@ -5,6 +5,7 @@ import argparse, hashlib, json, subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from backend.nhl.analysis_package_guard import require_create_only
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score,brier_score_loss,log_loss,roc_auc_score
@@ -26,9 +27,10 @@ def paired(y,c,h):
  cm=metric(y,c); hm=metric(y,h)
  return {"rows":len(y),"champion_brier":cm['brier_score'],"challenger_brier":hm['brier_score'],"brier_improvement":cm['brier_score']-hm['brier_score'],"champion_log_loss":cm['log_loss'],"challenger_log_loss":hm['log_loss'],"log_loss_improvement":cm['log_loss']-hm['log_loss'],"champion_roc_auc":cm['roc_auc'],"challenger_roc_auc":hm['roc_auc'],"roc_auc_change":hm['roc_auc']-cm['roc_auc'],"champion_accuracy":cm['accuracy'],"challenger_accuracy":hm['accuracy'],"accuracy_change":hm['accuracy']-cm['accuracy'],"champion_ece":ece(y,c),"challenger_ece":ece(y,h),"ece_degradation":ece(y,h)-ece(y,c)}
 def main():
- ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_moneyline_champion_challenger_execution/{DATE}').resolve(); out.mkdir(parents=True,exist_ok=True)
+ ap=argparse.ArgumentParser(); ap.add_argument('--repo-root',type=Path,default=Path(__file__).resolve().parents[3]); ap.add_argument('--output-dir',type=Path); a=ap.parse_args(); root=a.repo_root.resolve(); base=root/'artifacts/analysis/model_development'; out=(a.output_dir or base/f'nhl_moneyline_champion_challenger_execution/{DATE}').resolve()
  pp={k:base/s/DATE for k,(s,h) in PARENTS.items()}; before={str(f):sha(f) for p in pp.values() for f in p.iterdir() if f.is_file()}
  for k,p in pp.items(): assert sha(p/'SHA256SUMS')==PARENTS[k][1]; subprocess.run(['shasum','-a','256','-c','SHA256SUMS'],cwd=p,check=True,capture_output=True)
+ require_create_only(out);out.mkdir(parents=True)
  specp=pp['specification']; hyp=json.loads((specp/f'nhl_moneyline_selected_challenger_hypothesis_{DATE}.json').read_text()); fm=pd.read_csv(specp/f'nhl_moneyline_challenger_feature_manifest_{DATE}.csv'); popc=json.loads((specp/f'nhl_moneyline_challenger_population_contract_{DATE}.json').read_text()); temporal=json.loads((specp/f'nhl_moneyline_challenger_temporal_protocol_{DATE}.json').read_text()); success=json.loads((specp/f'nhl_moneyline_challenger_success_criteria_{DATE}.json').read_text())
  assert hyp['challenger_name']==CHALL and fm.feature_name.tolist()==FEATURES and fm.timing_status.eq('CERTIFIED_STRICT_PRIOR').all() and popc['rows']==2798 and [temporal[x]['rows'] for x in ['fit','validation','holdout']]==[701,699,1398]
  baseline=base/f'nhl_moneyline_simple_baseline_process_validation/{DATE}'; predp=baseline/f'nhl_moneyline_simple_baseline_control_predictions_{DATE}.csv'; assert sha(predp)==CHAMP_HASH

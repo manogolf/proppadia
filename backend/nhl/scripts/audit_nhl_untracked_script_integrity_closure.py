@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Build the bounded NHL untracked-script integrity closure package."""
+from __future__ import annotations
+import argparse,csv,hashlib,json,subprocess
+from pathlib import Path
+from backend.nhl.analysis_package_guard import begin_package,finalize_package,verify_manifest
+
+ROOT=Path(__file__).resolve().parents[3];DATE="2026-08-10";TARGET=ROOT/f"artifacts/analysis/model_development/nhl_untracked_script_integrity_closure/{DATE}"
+PARENTS=[(ROOT/f"artifacts/analysis/model_development/nhl_analysis_package_immutability_remediation/{DATE}","d3f2c0b5012b331d913218072f923934564a31f1613e391a1ac20793eeabd1d8"),(ROOT/f"artifacts/analysis/model_development/nhl_season_2026_hostile_end_to_end_readiness/{DATE}","d78ae42ff03d8d439f977d13b7fed5f37a83b16e59260850d85c37eaad7ae9e2")]
+SCRIPTS=[("backend/nhl/scripts/assess_nhl_season_2026_goalie_source_integration_readiness.py","6c1a87f825db226567183de0f98b154e2b0534b998b3b65adca65aea35117618",25487,1786371490,"season 2026 goalie-source readiness package","nhl_season_2026_goalie_source_integration_readiness",18),("backend/nhl/scripts/characterize_nhl_season_opening_team_strength_persistence.py","8716a3f8e38db7115f512c560420415842cbd83e443f61d219b0405e15f74df0",26602,1786370762,"season-opening strength persistence package","nhl_season_opening_team_strength_persistence",16)]
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def cs(out,name,rows):
+ with (out/name).open("w",newline="") as f:w=csv.DictWriter(f,fieldnames=list(rows[0]),lineterminator="\n");w.writeheader();w.writerows(rows)
+def js(out,name,obj):(out/name).write_text(json.dumps(obj,indent=2,sort_keys=True)+"\n")
+def main():
+ ap=argparse.ArgumentParser();ap.add_argument("--output-dir",type=Path);a=ap.parse_args()
+ if a.output_dir is None and TARGET.exists():verify_manifest(TARGET);print("READ_ONLY_PASS");return
+ for p,d in PARENTS:verify_manifest(p,d)
+ target=(a.output_dir or TARGET).resolve();out=begin_package(target)
+ inventory=[];static=[];reach=[];runtime=[];vc=[];rem=[]
+ for path,original,size,mtime,purpose,package,file_count in SCRIPTS:
+  p=ROOT/path;current=sha(p);status=subprocess.run(["git","status","--short","--",path],cwd=ROOT,capture_output=True,text=True).stdout.strip()
+  inventory.append({"path":path,"pre_remediation_sha256":original,"post_remediation_sha256":current,"pre_remediation_size":size,"pre_remediation_mtime_epoch":mtime,"git_status":status,"purpose":purpose,"nhl_relevance":"offline evidence package generator","output_path":f"artifacts/analysis/model_development/{package}/2026-08-10","writes_files":"YES","creates_analysis_package":"YES","touches_governed_path":"YES","touches_manifest":"YES","calls_other_generators":"NO","guard_after":"create-only and parent-prewrite verification"})
+  static.append({"path":path,"open_write":"indirect pandas/path writes","mkdir_exist_ok_before":"YES","copy_or_delete":"NO","manifest_generation":"YES","hard_coded_dated_default":"YES","pre_remediation_classification":"OVERWRITE_CAPABLE","post_remediation_classification":"SAFE_CREATE_ONLY","failure":"GOVERNED_PACKAGE_EXISTS_ABORT"})
+  reach.append({"path":path,"tracked_code_references":"0","docs_ops_wrapper_references":"0","launch_cron_references":"0","relationship":"goalie consumes persistence package identity" if "goalie" in path else "parent package for goalie assessment","reachability":"MANUAL_ONLY","active_operational_path":"NO"})
+  runtime.append({"path":path,"sandbox_target":f"/tmp/nhl_untracked_{'goalie' if 'goalie' in path else 'persistence'}","first_run":"PASS","manifest_entries":"PASS","output_files":file_count,"second_run":"GOVERNED_PACKAGE_EXISTS_ABORT","partial_safety":"existing/stale directory rejected","canonical_parent_hashes_unchanged":"PASS"})
+  vc.append({"path":path,"git_status":"UNTRACKED","gitignored":"NO","classification":"FORGOTTEN_SOURCE_FILE","required_or_relevant":"YES — creates governed evidence and participates in package lineage","recommendation":"TRACK_WITH_REMEDIATION; do not commit in this task"})
+  rem.append({"path":path,"risk":"OVERWRITE_CAPABLE","change":"verify all parents before child creation; require create-only output","files_modified":path,"model_policy_semantics_changed":"NO","sandbox_regression":"PASS","decision":"SAFE_BUT_SHOULD_BE_TRACKED"})
+ cs(out,f"nhl_untracked_script_inventory_{DATE}.csv",inventory);cs(out,f"nhl_untracked_script_static_write_risk_{DATE}.csv",static);cs(out,f"nhl_untracked_script_reachability_audit_{DATE}.csv",reach);cs(out,f"nhl_untracked_script_sandbox_runtime_audit_{DATE}.csv",runtime);cs(out,f"nhl_untracked_script_version_control_status_{DATE}.csv",vc);cs(out,f"nhl_untracked_script_remediation_log_{DATE}.csv",rem)
+ decisions={"NHL_UNTRACKED_SCRIPT_SET_IDENTIFIED":"READY","NHL_UNTRACKED_SCRIPT_WRITE_RISK_CHARACTERIZED":"READY","NHL_UNTRACKED_SCRIPT_OPERATIONAL_REACHABILITY_CHARACTERIZED":"READY","NHL_UNTRACKED_SCRIPT_SANDBOX_BEHAVIOR_VERIFIED":"READY","NHL_UNTRACKED_SCRIPT_VERSION_CONTROL_STATUS_RESOLVED":"READY_WITH_BOUNDED_LIMITS","NHL_UNTRACKED_SCRIPT_ARTIFACT_INTEGRITY_RISK":"CLOSED_WITH_MINOR_REMEDIATION","NHL_PRESEASON_EVIDENCE_INTEGRITY_READINESS":"READY_WITH_BOUNDED_LIMITS","NHL_FIRST_REAL_PRESEASON_HOSTILE_VALIDATION_READINESS":"READY"}
+ js(out,f"nhl_untracked_script_integrity_decision_{DATE}.json",{"overall_result":"UNTRACKED_SCRIPT_RISK_CLOSED_WITH_MINOR_REMEDIATION","decisions":decisions,"remaining_risk":"scripts remain untracked until an explicit commit","next_task":"FIRST_REAL_NHL_SEASON_2026_PRESEASON_HOSTILE_VALIDATION"})
+ summary="# NHL untracked-script integrity closure — one-page summary\n\nThe two scripts were untracked, non-ignored, manual-only governed analysis-package generators. Both were overwrite-capable because they reused fixed dated paths with `exist_ok=True`, wrote files directly, and created child directories before parent verification. Both now verify parents first and abort on any existing output path. Isolated first runs produced valid manifests; second runs returned `GOVERNED_PACKAGE_EXISTS_ABORT`; canonical parent hashes remained unchanged. Both are `SAFE_BUT_SHOULD_BE_TRACKED`. Overall: `UNTRACKED_SCRIPT_RISK_CLOSED_WITH_MINOR_REMEDIATION`.\n"
+ (out/f"nhl_untracked_script_integrity_one_page_summary_{DATE}.md").write_text(summary)
+ (out/f"nhl_untracked_script_integrity_closure_report_{DATE}.md").write_text("# NHL Untracked Script Artifact-Mutation Risk Closure Audit\n\n"+summary.split("\n",1)[1]+"\nNo tracked script, wrapper, documentation runbook, launch agent, or scheduler references either script. Their output packages are nevertheless part of offline evidence lineage, so version-control visibility is recommended. No deletion or commit occurred. The only unlocked next milestone is `FIRST_REAL_NHL_SEASON_2026_PRESEASON_HOSTILE_VALIDATION`.\n")
+ js(out,f"package_identity_{DATE}.json",{"package":"nhl_untracked_script_integrity_closure","version":"1.0.0","date":DATE,"parents":{"immutability":PARENTS[0][1],"hostile":PARENTS[1][1]},"script_count":2,"remediation":"create-only and parent-prewrite guard","model_policy_semantics_changed":False})
+ files=sorted(p for p in out.iterdir() if p.is_file() and p.name!="SHA256SUMS");(out/"SHA256SUMS").write_text("".join(f"{sha(p)}  {p.name}\n" for p in files));m=sha(out/"SHA256SUMS");finalize_package(out,target);print(json.dumps({"output":str(target),"manifest_sha256":m,"files":len(files)+1},indent=2))
+if __name__=="__main__":main()

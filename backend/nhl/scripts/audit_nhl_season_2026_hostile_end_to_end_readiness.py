@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Generate the bounded, outcome-blind NHL hostile-readiness evidence package."""
 from __future__ import annotations
-import csv, hashlib, json
+import argparse,csv, hashlib, json
 from pathlib import Path
+from backend.nhl.analysis_package_guard import begin_package,finalize_package,regeneration_path,verify_manifest
 
 ROOT=Path(__file__).resolve().parents[3]; DATE="2026-08-10"
 OUT=ROOT/f"artifacts/analysis/model_development/nhl_season_2026_hostile_end_to_end_readiness/{DATE}"
+CANONICAL_MANIFEST_SHA256="d78ae42ff03d8d439f977d13b7fed5f37a83b16e59260850d85c37eaad7ae9e2"
 PARENTS={
 "mainline":"62de5b047b0121664ede00ce197b339968eec00ace64f6a782ca2850a366b09c","game_type":"48e369a3d58f7c2a6bd1d136971bd55f686450dccf696d03167f6cf2093b7414","sog_shadow":"adb6ddbb5fbc226947b6e2917f66e1301cfe7fd5aae4099559b1e7d2f5660702","sog_odds":"0ffc9c2630deded0b1774d717c1e7183abdbdbc4b8ca92f741b47717cf5f195c","sog_policy":"e00e8f699b7e3d91baa0d368d474d70f0bf04b49b3d562e9f5b576bf55603592","moneyline":"8bb36073fee4f055f399c651f942b8de6eb1bb3b75b96b6112dd9d4af4224cf5"}
 def h(p): return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -16,7 +18,13 @@ def write_csv(name,rows):
 def write_json(name,x): (OUT/name).write_text(json.dumps(x,indent=2,sort_keys=True)+"\n")
 
 def main():
- OUT.mkdir(parents=True,exist_ok=True)
+ global OUT
+ ap=argparse.ArgumentParser();ap.add_argument("--output-dir",type=Path);ap.add_argument("--regeneration-id");a=ap.parse_args();canonical=OUT
+ if a.output_dir and a.regeneration_id:raise ValueError("choose output-dir or regeneration-id")
+ if not a.output_dir and not a.regeneration_id and canonical.exists():
+  verify_manifest(canonical,CANONICAL_MANIFEST_SHA256);print(json.dumps({"validation":"READ_ONLY_PASS","manifest_sha256":CANONICAL_MANIFEST_SHA256}));return
+ target=a.output_dir.resolve() if a.output_dir else (regeneration_path(canonical,a.regeneration_id) if a.regeneration_id else canonical)
+ OUT=begin_package(target)
  deps=[]
  for lane,chain in {"SHARED":["official schedule","game/team/player identity","canonical season/game type/start time","UTC parsing/API transport","create-only archive/manifests"],"MAINLINE":["strict-prior history","six frozen features","frozen champion","H2H binding","health/grading"],"SOG":["player population/prepared inputs","frozen scorer","immutable prop quotes","market derivation","effective policy/rank/caps/upload lineage","health/grading"]}.items():
   for i,x in enumerate(chain,1): deps.append({"lane":lane,"order":i,"dependency":x,"source":"repository or immutable provider archive","mutability":"mutable upstream; frozen per run","failure_mode":"missing/stale/conflicting/wrong identity","fallback":"fail closed or explicitly bounded coverage","fallback_safe":"YES","detectable":"YES, except diagnostic granularity gaps","recovery":"new create-only run; some failures need cleanup"})
@@ -73,5 +81,5 @@ def main():
  write_json(f"package_identity_{DATE}.json",{"package":"NHL_SEASON_2026_HOSTILE_END_TO_END_READINESS","version":"v1","date":DATE,"canonical_season":2026,"parent_manifest_sha256":PARENTS,"harness":"backend/nhl/scripts/audit_nhl_season_2026_hostile_end_to_end_readiness.py","matrix_frozen_before_execution":True})
  manifest="".join(f"{h(p)}  {p.name}\n" for p in sorted(OUT.iterdir()) if p.is_file() and p.name!="SHA256SUMS")
  (OUT/"SHA256SUMS").write_text(manifest)
- print(OUT);print(hashlib.sha256((OUT/"SHA256SUMS").read_bytes()).hexdigest())
+ manifest_sha=hashlib.sha256((OUT/"SHA256SUMS").read_bytes()).hexdigest();finalize_package(OUT,target);OUT=canonical;print(target);print(manifest_sha)
 if __name__=="__main__": main()
