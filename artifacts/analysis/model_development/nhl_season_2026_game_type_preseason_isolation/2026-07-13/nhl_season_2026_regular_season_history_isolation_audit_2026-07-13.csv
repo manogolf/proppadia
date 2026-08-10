@@ -1,0 +1,7 @@
+check,observed,requirement
+preseason_fixture_available,1,type 1 final exists before target
+regular_target_prior_games_home,0,must be zero
+regular_target_prior_games_away,0,must be zero
+regular_target_history_types,REGULAR_SEASON,REGULAR_SEASON target independently typed
+rest_semantics,0,regular target rest uses same type-2 history filter; frozen training population had no preseason rows
+status,PASS,preseason goals/shots/form/rest excluded from regular target

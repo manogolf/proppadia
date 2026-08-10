@@ -1,0 +1,6 @@
+context,recommended_source_path,readiness,next_evidence
+goalie,SportsDataIO projected/confirmed goalies,SOURCE_IDENTIFIED_NOT_CONNECTED,"one schema/sample proof capture, NHL ID crosswalk, source timestamp verification, append-only poller"
+actual_goalie,NHL official gamecenter,READY_NOW,append only after game as separate context/outcome
+roster,NHL official roster,READY_WITH_MINOR_INTEGRATION,immutable raw snapshots and capture timestamps
+lineup_injury,SportsDataIO line combinations plus injuries,SOURCE_IDENTIFIED_NOT_CONNECTED,"one provider account/path, schema proof, NHL crosswalk, append-only polling"
+scratch,NHL gamecenter plus SportsDataIO context,READY_WITH_MINOR_INTEGRATION,prove pregame availability and distinguish confirmed from inferred absence

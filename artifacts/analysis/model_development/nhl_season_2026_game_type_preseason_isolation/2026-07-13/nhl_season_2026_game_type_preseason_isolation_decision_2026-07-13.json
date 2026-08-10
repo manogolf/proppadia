@@ -1,0 +1,36 @@
+{
+  "champion_changed": false,
+  "decisions": {
+    "NHL_SEASON_2026_CHAMPION_PARITY_AFTER_GAME_TYPE_CHANGE": "READY",
+    "NHL_SEASON_2026_FIRST_PRESEASON_SHADOW_RUN_READINESS": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_GAME_TYPE_GRADING_PROPAGATION": "READY",
+    "NHL_SEASON_2026_GAME_TYPE_HEALTH_GATES": "READY",
+    "NHL_SEASON_2026_GAME_TYPE_PROPAGATION": "READY",
+    "NHL_SEASON_2026_GAME_TYPE_SOURCE_MAPPING": "READY",
+    "NHL_SEASON_2026_PRESEASON_EVALUATION_ISOLATION": "READY",
+    "NHL_SEASON_2026_PRESEASON_SCORING_PATH": "READY",
+    "NHL_SEASON_2026_REGULAR_SEASON_HISTORY_ISOLATION": "READY",
+    "NHL_SEASON_2026_REGULAR_SEASON_OPENING_READINESS": "BLOCKED_BY_REAL_PRESEASON_VALIDATION",
+    "NHL_SEASON_2026_SOG_ISOLATION_AFTER_GAME_TYPE_CHANGE": "READY",
+    "NHL_SEASON_2026_UNKNOWN_GAME_TYPE_FAIL_CLOSED": "READY",
+    "NHL_SEASON_2026_WAGER_RECOMMENDATION_READINESS": "NOT_READY"
+  },
+  "live_run_performed": false,
+  "recommended_next_bounded_task": "FIRST_REAL_NHL_SEASON_2026_PRESEASON_MAINLINE_SHADOW_VALIDATION",
+  "refit_performed": false,
+  "still_blocked": [
+    "wagering",
+    "recommendations",
+    "ROI claims",
+    "model promotion",
+    "champion retraining",
+    "challenger research",
+    "SportsDataIO integration",
+    "automated scheduling",
+    "frontend changes",
+    "regular-season operational trust until real preseason validation passes"
+  ],
+  "unlocked": [
+    "One human-initiated real season 2026 preseason mainline shadow validation when an official slate and real H2H markets exist"
+  ]
+}

@@ -1,0 +1,11 @@
+artifact,required_fields,passed,evidence
+game_spine.csv,"['game_type_code', 'game_type_label']",True,source schedule
+champion_features.csv,"['game_type_code', 'game_type_label']",True,independent opening-state label
+champion_predictions.csv,"['game_type_code', 'game_type_label', 'evaluation_status']",True,probability unchanged by type
+provider_game_binding.csv,"['game_type_code', 'game_type_label']",True,bound official identity
+moneyline_quotes.csv,"['game_type_code', 'game_type_label', 'market_evaluation_status']",True,preseason plumbing label
+market_comparison.csv,"['game_type_code', 'game_type_label', 'regular_season_evaluation_eligible']",True,hard eligibility
+population_membership.csv,"['game_type_code', 'game_type_label']",True,typed counts
+run_metadata.json,"['game_type_composition', 'scoreable_rows_by_game_type', 'price_covered_games_by_game_type']",True,mixed preserved
+health_gate_ledger.csv,"['GAME_TYPE_PRESENT', 'GAME_TYPE_MAPPING_VALID', 'PRESEASON_EVALUATION_ISOLATION', 'POSTSEASON_EVALUATION_ISOLATION', 'UNKNOWN_GAME_TYPE_FAIL_CLOSED', 'REGULAR_SEASON_HISTORY_ISOLATION']",True,fail-closed isolation
+graded_predictions.csv,"['game_type_code', 'game_type_label', 'evaluation_status', 'grading_status']",True,pregame status preserved

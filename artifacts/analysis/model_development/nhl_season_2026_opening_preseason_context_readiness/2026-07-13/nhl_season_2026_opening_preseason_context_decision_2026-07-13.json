@@ -1,0 +1,35 @@
+{
+  "champion_changed": false,
+  "decisions": {
+    "NHL_SEASON_2026_CONTEXT_ARCHIVE_READINESS": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_EARLY_SEASON_HISTORY_DEPTH_CHARACTERIZED": "READY",
+    "NHL_SEASON_2026_GOALIE_SOURCE_READINESS": "SOURCE_IDENTIFIED_NOT_CONNECTED",
+    "NHL_SEASON_2026_GOALIE_TIMESTAMP_CERTIFICATION_READINESS": "NOT_READY",
+    "NHL_SEASON_2026_LINEUP_INJURY_SOURCE_READINESS": "SOURCE_IDENTIFIED_NOT_CONNECTED",
+    "NHL_SEASON_2026_MAINLINE_WAGER_RECOMMENDATION_READINESS": "NOT_READY",
+    "NHL_SEASON_2026_OPENING_STATE_BEHAVIOR_CERTIFIED": "READY",
+    "NHL_SEASON_2026_PRESEASON_GAME_IDENTITY_READINESS": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_PRESEASON_SHADOW_VALIDATION_READINESS": "BLOCKED_BY_GAME_TYPE_PROPAGATION_AND_LIVE_PRESEASON_FIXTURE",
+    "NHL_SEASON_2026_PRIOR_SEASON_CARRYOVER_STATUS": "NOT_AVAILABLE",
+    "NHL_SEASON_2026_REGULAR_SEASON_OPENING_READINESS": "BLOCKED_BY_PRESEASON_LIVE_VALIDATION",
+    "NHL_SEASON_2026_REPEATED_RUN_VALIDATION_READINESS": "READY_WITH_BOUNDED_LIMITS"
+  },
+  "preseason_evaluation_authorized": false,
+  "recommended_next_bounded_task": "NHL_SEASON_2026_GAME_TYPE_PROPAGATION_AND_PRESEASON_ISOLATION_IMPLEMENTATION",
+  "refit_performed": false,
+  "still_blocked": [
+    "first real preseason validation until schedule exists",
+    "goalie timestamp certification until provider schema/sample capture",
+    "lineup/injury timestamp certification until provider schema/sample capture",
+    "regular-season operational trust until preseason gates pass",
+    "wager recommendations",
+    "ROI",
+    "retraining",
+    "challenger research",
+    "automatic scheduling",
+    "production promotion"
+  ],
+  "unlocked": [
+    "One bounded implementation that propagates official game_type through immutable mainline artifacts and mechanically excludes preseason from regular-season evaluation"
+  ]
+}

@@ -1,0 +1,5 @@
+stage,tasks,gate
+PRE_PRESEASON,propagate game_type; add opening-state fields/contracts; validate parent/parity; establish source account/sample schemas; implement append-only context envelope,no live game required
+PRESEASON_VALIDATION,"run human-initiated MIDDAY and FINAL_PREGAME captures; validate odds, run identity, reschedules, grading, overwrite rejection, context timestamps",real preseason slate required; non-evaluation only
+REGULAR_SEASON_OPEN,pass regular checklist; prove game_type=REGULAR_SEASON and zero preseason contamination,first regular-season slate
+EARLY_SEASON_OBSERVATION,"monitor opening-state mix, feature missingness, source coverage, timestamp rejection, schedule revisions through first 10 games per team",descriptive monitoring only

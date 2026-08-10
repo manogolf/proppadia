@@ -1,0 +1,10 @@
+dimension,source_or_field,readiness,evidence_or_limit
+official schedule exposure,api-web.nhle.com/v1/schedule/{date},READY_WITH_BOUNDED_LIMITS,date-specific NHL schedule exposes preseason when published; live season 2026 fixture required
+game type,gameType numeric,READY,1=PRESEASON; 2=REGULAR_SEASON; 3=POSTSEASON
+game ID,NHL game id,READY,starting-year season prefix plus type segment; preserve provider id
+scheduled start,startTimeUTC,READY_WITH_BOUNDED_LIMITS,archive every schedule response because starts can change
+home/away,homeTeam/awayTeam ids and abbreviations,READY,deterministic official identities
+canonical season,derived from game season starting year,READY,always canonical_season=2026; never multi-year shorthand
+franchise mapping,official numeric team id plus abbreviation,READY_WITH_BOUNDED_LIMITS,persist both; validate transitions and neutral-site preseason games
+reschedule/postponement,"game id, schedule state, revised start",READY_WITH_BOUNDED_LIMITS,append snapshots; do not overwrite original start/state
+existing mainline game-type propagation,GAME_COLS omits game_type,NOT_READY,current run archive cannot safely prove PRESEASON/REGULAR_SEASON/POSTSEASON isolation

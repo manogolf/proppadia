@@ -1,0 +1,33 @@
+{
+  "allowed": [
+    "schedule ingestion",
+    "game binding",
+    "H2H odds capture",
+    "sportsbook coverage",
+    "quote timestamps",
+    "raw archive preservation",
+    "MIDDAY run",
+    "FINAL_PREGAME run",
+    "immutable run chaining",
+    "market movement observation",
+    "outcome grading",
+    "reschedule handling",
+    "overwrite protection",
+    "health gates",
+    "champion scoring-path execution"
+  ],
+  "canonical_season": 2026,
+  "evaluation_filter": "game_type == 2 only; game_type == 1 is structurally excluded before metric computation",
+  "mode": "PLUMBING_VALIDATION_ONLY",
+  "prediction_label": "PRESEASON_NON_EVALUATION",
+  "prohibited": [
+    "champion performance certification",
+    "model calibration claims",
+    "ROI claims",
+    "promotion",
+    "candidate selection",
+    "threshold tuning",
+    "wager recommendations"
+  ],
+  "required_before_first_run": "propagate official game_type through game_spine, run metadata, predictions, grading, and population gates"
+}

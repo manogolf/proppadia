@@ -1,0 +1,38 @@
+{
+  "append_only": true,
+  "collision_policy": "same event id plus same bytes is idempotent; same event id plus different bytes fails closed",
+  "context_types": [
+    "ROSTER_STATE",
+    "INJURY_STATE",
+    "PROJECTED_LINEUP",
+    "CONFIRMED_LINEUP",
+    "SCRATCH_STATE",
+    "PROJECTED_GOALIE",
+    "CONFIRMED_GOALIE",
+    "ACTUAL_GOALIE"
+  ],
+  "event_id": "sha256(canonical JSON of grain plus source_record_id plus raw_payload_sha256)",
+  "grain": [
+    "canonical_season",
+    "game_id",
+    "source",
+    "source_timestamp_utc",
+    "context_type"
+  ],
+  "post_start_policy": "retain but mark POST_START_CONTEXT; exclude from pregame-qualified populations",
+  "required_envelope": [
+    "canonical_season",
+    "game_id",
+    "team_id",
+    "source",
+    "source_record_id",
+    "source_timestamp_utc",
+    "capture_timestamp_utc",
+    "scheduled_start_time_utc",
+    "context_type",
+    "status",
+    "raw_payload_sha256",
+    "supersedes_event_id"
+  ],
+  "transition_policy": "later state references earlier event but never mutates it"
+}

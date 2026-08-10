@@ -1,0 +1,6 @@
+check,passed,evidence
+no_sog_source_modified,True,none
+no_sog_output_path_changed,True,mainline shadow namespace only
+no_prop_normalization_changed,True,normalize_h2h only
+no_sog_candidate_import,True,core imports no SOG module
+no_player_prop_archive_write,True,fixture used temporary mainline roots

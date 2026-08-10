@@ -1,0 +1,13 @@
+fixture,passed,evidence
+preseason_type_1,True,PRESEASON_NON_EVALUATION
+regular_type_2,True,REGULAR_SEASON_ELIGIBILITY_PENDING_OUTCOME
+postseason_type_3,True,POSTSEASON_NON_REGULAR_SEASON_EVALUATION
+unknown_type,True,GAME_IDENTITY_BLOCKED
+mixed_preseason_regular_run,True,"{'POSTSEASON': 1, 'PRESEASON': 1, 'REGULAR_SEASON': 1, 'UNKNOWN_GAME_TYPE': 1}"
+preseason_valid_h2h,True,PRESEASON_PLUMBING_MARKET_OBSERVATION
+graded_preseason,True,PRESEASON_NON_EVALUATION
+first_regular_after_preseason,True,preseason excluded
+probability_complement,True,1e-12
+immutable_grading,True,pregame hashes unchanged
+overwrite_protection,True,OVERWRITE_ATTEMPT_BLOCKED
+deterministic_second_run,True,byte-identical trees

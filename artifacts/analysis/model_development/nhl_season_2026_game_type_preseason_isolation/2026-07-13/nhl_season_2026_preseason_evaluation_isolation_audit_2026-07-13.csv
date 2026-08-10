@@ -1,0 +1,7 @@
+assertion,passed,evidence
+preseason_scoring_allowed,True,PRESEASON_NON_EVALUATION
+preseason_market_allowed,True,PRESEASON_PLUMBING_MARKET_OBSERVATION
+preseason_regular_evaluation_blocked,True,EXCLUDED_PRESEASON
+postseason_regular_evaluation_blocked,True,EXCLUDED_POSTSEASON_FROM_REGULAR_SEASON_EVALUATION
+unknown_fail_closed,True,GAME_IDENTITY_BLOCKED
+hard_filter,True,game_type_code == 2 only

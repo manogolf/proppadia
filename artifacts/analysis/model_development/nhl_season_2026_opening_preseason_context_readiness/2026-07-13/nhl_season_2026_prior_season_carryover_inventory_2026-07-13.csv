@@ -1,0 +1,6 @@
+concept,repository_evidence,repository_classification,replay_classification,finding
+NHL strict-prior builder season filter,backend/nhl/mainline_shadow/core.py:_team_history,EXISTING_REPOSITORY_CONCEPT,HISTORICALLY_REPLAYABLE,explicitly excludes other seasons; no carryover
+NHL season-to-date feature spine,backend/nhl/scripts/build_nhl_moneyline_team_goalie_feature_spine.py,EXISTING_REPOSITORY_CONCEPT,HISTORICALLY_REPLAYABLE,season reset and prior_season_carryover=NO
+MLB prior-season/rolling concepts,repository MLB pipelines,EXISTING_REPOSITORY_CONCEPT,REQUIRES_NEW_RESEARCH,sport-specific framework ideas only; not portable champion inputs
+NHL prior-season shrinkage/bootstrap model,none,NOT_AVAILABLE,REQUIRES_NEW_RESEARCH,could only be a separately specified challenger
+season 2026 prospective prior-season carryover,none,PROSPECTIVE_ONLY,REQUIRES_NEW_RESEARCH,not implemented or authorized

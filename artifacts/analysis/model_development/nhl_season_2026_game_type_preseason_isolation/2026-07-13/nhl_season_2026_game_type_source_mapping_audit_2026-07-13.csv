@@ -1,0 +1,7 @@
+source_value,canonical_field,implementation,mapping_or_behavior,status
+official source field,gameType,backend/nhl/scripts/import_schedule_today.py,preserved as nhl.games.game_type,PASS
+1,game_type_code=1,mainline normalize_game_types,PRESEASON,PASS
+2,game_type_code=2,mainline normalize_game_types,REGULAR_SEASON,PASS
+3,game_type_code=3,mainline normalize_game_types,POSTSEASON,PASS
+unsupported/missing,source_game_type retained,mainline normalize_game_types,UNKNOWN_GAME_TYPE; evaluation fails closed,PASS
+date inference,not used,repository audit,game type independent from canonical season and date,PASS

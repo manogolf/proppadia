@@ -1,0 +1,35 @@
+{
+  "actual_starter_separation": "actual starter is appended as outcome/context and never rewrites projected/confirmed observations",
+  "blocker": "no connected source with schema-proven provider event timestamp and deterministic NHL identity crosswalk",
+  "capture_rule": "capture_timestamp_utc must also precede scheduled start for pregame-qualified use",
+  "current_readiness": "NOT_READY",
+  "grain": [
+    "canonical_season",
+    "game_id",
+    "team_id",
+    "source",
+    "source_timestamp_utc",
+    "goalie_player_id"
+  ],
+  "pregame_qualified_rule": "source_timestamp_utc < scheduled_start_time_utc AND deterministic game/team binding",
+  "required_fields": [
+    "canonical_season",
+    "game_id",
+    "team_id",
+    "goalie_player_id",
+    "goalie_name",
+    "status",
+    "source",
+    "source_timestamp_utc",
+    "capture_timestamp_utc",
+    "scheduled_start_time_utc"
+  ],
+  "statuses": [
+    "NO_PROJECTION",
+    "PROJECTED",
+    "LIKELY",
+    "CONFIRMED",
+    "CHANGED_AFTER_CONFIRMATION",
+    "UNKNOWN"
+  ]
+}

@@ -1,0 +1,5 @@
+sequence,state,identity_requirement,preservation_requirement,assertion
+1,MIDDAY,create new run id,earlier provider-bound quotes and raw response,no prior path exists
+2,FINAL_PREGAME,create distinct later run id for same games,later provider-bound quotes plus raw response,MIDDAY tree hash unchanged
+3,COMPARE,join by canonical_season+game_id+sportsbook,movement computable only where both states exist,no requirement every book appears twice
+4,POSTGAME,append separate grade artifact,official outcome/context only,both pregame manifests unchanged
