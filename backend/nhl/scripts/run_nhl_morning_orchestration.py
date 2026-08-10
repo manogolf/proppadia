@@ -12,6 +12,7 @@ OPS=ROOT/"artifacts/operational/nhl/morning"
 SLATE_HEALTH=ROOT/"artifacts/operational/nhl/slates"
 
 def utc(): return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00","Z")
+def parse_utc(v): return datetime.fromisoformat(v.replace("Z","+00:00"))
 def atomic_json(path,obj):
  path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_suffix(path.suffix+".tmp");tmp.write_text(json.dumps(obj,indent=2,sort_keys=True)+"\n");tmp.replace(path)
 def load_env(path,env):
@@ -82,6 +83,12 @@ def main():
   if scenario=="interrupted":raise KeyboardInterrupt
   if scenario=="finalization_failure":raise RuntimeError("FINAL_HEALTH_PACKAGING_FAILURE")
   status.update(overall_status="VALID_EMPTY_SLATE" if status["valid_empty_slate"] else ("DRY_RUN" if a.dry_run else "READY"),end_timestamp_utc=utc())
+  if not a.fixture_scenario and not a.dry_run:
+   sentinel_input=run/"live_failure_sentinel_input.json"
+   atomic_json(sentinel_input,{"sentinel_timestamp_utc":status["end_timestamp_utc"],"slate_health":source_health,"parents":[{"child":"morning_canonical_spine","state":"PARENT_PRESENT_AND_CURRENT","parent":"slate_health.json"}],"populations":{"slate_games":status["schedule_game_count"],"market_qualified":0},"identity":{"qualified_issues":[],"diagnostic_issues":[]},"runtime":{"duration_minutes":round((parse_utc(status["end_timestamp_utc"])-parse_utc(status["start_timestamp_utc"])).total_seconds()/60,4),"overlap_minutes":0,"db_errors":[],"slow_threshold_minutes":90},"manual_actions":[],"mutable_inputs":[]})
+   sp=subprocess.run([PY,ROOT/"backend/nhl/scripts/run_nhl_live_failure_sentinel.py","--phase","MORNING","--slate-date",slate,"--run-id",run_id,"--input-json",sentinel_input],cwd=ROOT,env=env,text=True,capture_output=True)
+   if sp.returncode not in {0}:raise RuntimeError(f"MORNING_SENTINEL_BLOCKED rc={sp.returncode} stderr={sp.stderr.strip()}")
+   status["live_failure_sentinel_path"]=sp.stdout.strip()
  except BaseException as e:
   status.update(overall_status="INTERRUPTED" if isinstance(e,KeyboardInterrupt) else "FAILED_BLOCKING",end_timestamp_utc=utc(),blocking_failure=str(e) or type(e).__name__);atomic_json(healthpath,status);print(healthpath);return 130 if isinstance(e,KeyboardInterrupt) else 1
  atomic_json(healthpath,status); digest=hashlib.sha256(healthpath.read_bytes()).hexdigest();(run/"SHA256SUMS").write_text(f"{digest}  morning_health.json\n");print(healthpath);return 0
