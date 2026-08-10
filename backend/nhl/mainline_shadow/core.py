@@ -9,6 +9,7 @@ import pandas as pd
 
 HERE=Path(__file__).resolve().parent
 PARAMETER_PATH=HERE/'frozen_champion_v1.json'
+FROZEN_PARAMETER_SHA256='2f465bf45c7acbac8a9e8ea183a80e1bf0b7a17806527127c7ce702bb6eaa87b'
 ALLOWED_RUN_TYPES={'MIDDAY','FINAL_PREGAME'}
 FEATURES=['diff_std_goal_diff_pg','diff_r10_goal_diff_pg','diff_std_shot_diff_pg','diff_days_rest','home_back_to_back','away_back_to_back']
 GAME_TYPE_LABELS={1:'PRESEASON',2:'REGULAR_SEASON',3:'POSTSEASON'}
@@ -25,6 +26,7 @@ def parse_utc(v:Any)->pd.Timestamp:
  if pd.isna(x): raise ValueError(f'invalid UTC timestamp: {v!r}')
  return x
 def load_parameters(path:Path=PARAMETER_PATH)->dict:
+ if sha256_file(path)!=FROZEN_PARAMETER_SHA256: raise RuntimeError('FROZEN_CHAMPION_PARAMETER_HASH_MISMATCH')
  p=json.loads(path.read_text()); assert p['feature_order']==FEATURES and p['champion_identity']=='NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1'; return p
 def parameter_hash(path:Path=PARAMETER_PATH)->str: return sha256_file(path)
 def normalize_game_types(frame:pd.DataFrame)->pd.DataFrame:
@@ -131,7 +133,9 @@ def make_run_id(season:int,slate_date:str,run_timestamp_utc:str,run_type:str)->s
 def write_manifest(path:Path)->None:
  files=sorted(x for x in path.iterdir() if x.is_file() and x.name!='SHA256SUMS'); (path/'SHA256SUMS').write_text(''.join(f'{sha256_file(x)}  {x.name}\n' for x in files))
 def run_shadow(schedule_csv:Path,history_csv:Path,odds_json:Path|None,output_root:Path,slate_date:str,run_timestamp_utc:str,run_type:str,allow_historical_fixture:bool=False)->Path:
- schedule=normalize_game_types(pd.read_csv(schedule_csv)); season=int(schedule.canonical_season.iloc[0]); run_id=make_run_id(season,slate_date,run_timestamp_utc,run_type); dest=output_root/str(season)/slate_date/run_id
+ schedule=normalize_game_types(pd.read_csv(schedule_csv)); season=int(schedule.canonical_season.iloc[0]);
+ if not schedule.slate_date.astype(str).eq(slate_date).all(): raise ValueError('schedule slate_date mismatch')
+ run_id=make_run_id(season,slate_date,run_timestamp_utc,run_type); dest=output_root/str(season)/slate_date/run_id
  if dest.exists(): raise FileExistsError('OVERWRITE_ATTEMPT_BLOCKED')
  dest.mkdir(parents=True,exist_ok=False); raw_bytes=odds_json.read_bytes() if odds_json else b'{"capture_timestamp_utc":null,"provider_response":[]}\n'; (dest/'raw_h2h_response.json').write_bytes(raw_bytes); raw_envelope=json.loads(raw_bytes); raw=raw_envelope.get('provider_response',[]) if isinstance(raw_envelope,dict) else raw_envelope; odds_capture_timestamp=raw_envelope.get('capture_timestamp_utc') if isinstance(raw_envelope,dict) else None; odds_capture_timestamp=odds_capture_timestamp or run_timestamp_utc; history=pd.read_csv(history_csv); features,audit=build_strict_prior_features(schedule,history,run_timestamp_utc,allow_historical_fixture); scoreable=~features.feature_status.isin(['FEATURE_SOURCE_MISSING','FEATURE_TIMING_INVALID','GAME_IDENTITY_BLOCKED']); scores=score_features(features.loc[scoreable]); predictions=features.loc[scoreable,GAME_COLS+['opening_state_classification','no_history_flag','limited_history_flag']].copy(); predictions['run_id']=run_id; predictions['score_timestamp_utc']=parse_utc(run_timestamp_utc).isoformat(); predictions=pd.concat([predictions.reset_index(drop=True),scores.reset_index(drop=True)],axis=1); predictions['champion_identity']=load_parameters()['champion_identity']; predictions['champion_parameter_sha256']=parameter_hash(); predictions['evaluation_status']=predictions.game_type_code.map(evaluation_status_for_game_type); predictions=regular_season_evaluation_eligibility(predictions)
  quotes,binding=normalize_h2h(raw,schedule,odds_capture_timestamp); comparisons=predictions[['canonical_season','game_id','game_type_code','game_type_label','evaluation_status','regular_season_evaluation_eligible','regular_season_evaluation_exclusion_reason','run_id','champion_home_win_probability']].merge(quotes[quotes.qualification_status.eq('PREGAME_QUALIFIED')][['canonical_season','game_id','sportsbook_key','p_home_devig','provider_market_timestamp_utc','capture_timestamp_utc','market_evaluation_status']],on=['canonical_season','game_id'],how='inner'); comparisons['champion_minus_market_probability']=comparisons.champion_home_win_probability-comparisons.p_home_devig
@@ -157,8 +161,10 @@ def grade_run(run_dir:Path,outcomes_csv:Path,grade_root:Path,grading_timestamp_u
  for line in (run_dir/'SHA256SUMS').read_text().splitlines():
   digest,name=line.split('  ',1); subprocess_result.append(sha256_file(run_dir/name)==digest)
  if not all(subprocess_result): raise RuntimeError('pregame archive hash failure')
- before={x.name:sha256_file(x) for x in run_dir.iterdir() if x.is_file()}; pred=pd.read_csv(run_dir/'champion_predictions.csv'); out=pd.read_csv(outcomes_csv); keys=['canonical_season','game_id']; required=set(keys+['official_final_home_goals','official_final_away_goals','official_full_game_winner','outcome_source','outcome_source_timestamp_utc','outcome_conflict_status']);
+ before={x.name:sha256_file(x) for x in run_dir.iterdir() if x.is_file()}; pred=pd.read_csv(run_dir/'champion_predictions.csv'); out=pd.read_csv(outcomes_csv); keys=['canonical_season','game_id']; required=set(keys+['slate_date','official_final_home_goals','official_final_away_goals','official_full_game_winner','outcome_source','outcome_source_timestamp_utc','outcome_conflict_status']);
  if required-set(out.columns): raise ValueError('outcome schema incomplete')
+ metadata=json.loads((run_dir/'run_metadata.json').read_text())
+ if out.duplicated(keys).any() or not out.canonical_season.eq(metadata['canonical_season']).all() or not out.slate_date.astype(str).eq(metadata['slate_date']).all(): raise ValueError('outcome run identity mismatch')
  g=pred.merge(out,on=keys,how='left',validate='one_to_one'); g['grading_timestamp_utc']=parse_utc(grading_timestamp_utc).isoformat(); g['home_win_target']=np.where(g.official_full_game_winner.eq('HOME'),1,np.where(g.official_full_game_winner.eq('AWAY'),0,np.nan)); g['grading_status']=np.where(g.official_full_game_winner.isin(['HOME','AWAY']),g.evaluation_status,'OUTCOME_PENDING'); grade_id='grade_'+parse_utc(grading_timestamp_utc).strftime('%Y%m%dT%H%M%S%fZ'); dest=grade_root/run_dir.name/grade_id
  if dest.exists():
   raise FileExistsError('OVERWRITE_ATTEMPT_BLOCKED')

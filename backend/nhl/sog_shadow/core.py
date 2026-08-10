@@ -14,6 +14,7 @@ RATE_FIELDS=["d10_sog_per60","d20_sog_per60","d5_sog_per60"]
 TOI_FIELDS=["d10_toi_min_avg","d20_toi_min_avg","d5_toi_min_avg"]
 SCORER=Path(__file__).resolve().parents[1]/"scripts/score_sog_poisson_baseline.py"
 PARITY_SUMMARY_SHA256="40b2e8b72a581a365787cdf040537bdfd704944edcd599056abfa0a571f3a65d"
+FROZEN_SCORER_SHA256="4a63ccdee67170b32daf2bb5d5652ed4728b9f3abe7f7fc67d832a94bdb465e1"
 
 def make_run_id(slate:str,stamp:str,run_type:str)->str:
  if run_type not in RUN_TYPES:raise ValueError("invalid run type")
@@ -37,6 +38,7 @@ def score_inputs(inputs:pd.DataFrame,run_id:str,run_timestamp_utc:str)->tuple[pd
  return pd.DataFrame(archived),pd.DataFrame(pred)
 def verify_parity(path:Path)->dict:
  p=json.loads(path.read_text());ok=sha256_file(path)==PARITY_SUMMARY_SHA256 and p.get("target_rows")==40167 and p.get("mode_a_rows")==40167 and p.get("tolerance_rows")==40167 and p.get("side_match_rows")==40167 and p.get("material_mismatch_rows")==0 and p.get("stored_output_only_rows")==0 and float(p.get("tolerance",1))==1e-12
+ if sha256_file(SCORER)!=FROZEN_SCORER_SHA256:raise RuntimeError("SOG_PROSPECTIVE_SCORER_BLOCKED_BY_MODEL_HASH_MISMATCH")
  if not ok:raise RuntimeError("SOG_PROSPECTIVE_SCORER_BLOCKED_BY_PARITY_FAILURE")
  return p
 def run_shadow(*,game_spine_csv:Path,player_inputs_csv:Path,quote_run_dir:Path,effective_policy_json:Path,parity_json:Path,output_root:Path,slate_date:str,run_timestamp_utc:str,run_type:str,emit_upload:bool=True)->Path:
@@ -46,15 +48,21 @@ def run_shadow(*,game_spine_csv:Path,player_inputs_csv:Path,quote_run_dir:Path,e
  run_id=make_run_id(slate_date,run_timestamp_utc,run_type);dest=output_root/"2026"/slate_date/run_id
  if dest.exists():raise FileExistsError("OVERWRITE_ATTEMPT_BLOCKED")
  games=pd.read_csv(game_spine_csv);inputs=pd.read_csv(player_inputs_csv);starts=pd.to_datetime(games.scheduled_start_time_utc,utc=True,errors="coerce");run=parse_utc(run_timestamp_utc)
- if not games.canonical_season.eq(2026).all() or games.game_id.duplicated().any() or not games.game_type_code.isin(GAME_TYPES).all() or starts.isna().any():raise RuntimeError("game identity gate failed")
+ if not games.canonical_season.eq(2026).all() or not games.slate_date.astype(str).eq(slate_date).all() or games.game_id.duplicated().any() or not games.game_type_code.isin(GAME_TYPES).all() or starts.isna().any():raise RuntimeError("game identity gate failed")
  if (run>=starts).any():raise RuntimeError("run timestamp not pregame")
  if inputs.duplicated(["game_id","player_id"]).any() or inputs.player_id.isna().any():raise RuntimeError("player-game identity gate failed")
+ check=inputs.merge(games[["game_id","canonical_season","slate_date","scheduled_start_time_utc","game_type_code","home_team","away_team"]],on="game_id",how="left",suffixes=("_player","_game"),validate="many_to_one")
+ player_team=check.team.astype(str);valid_team=player_team.eq(check.home_team.astype(str))|player_team.eq(check.away_team.astype(str));valid_opp=check.opponent.astype(str).eq(np.where(player_team.eq(check.home_team.astype(str)),check.away_team,check.home_team));valid_start=pd.to_datetime(check.scheduled_start_time_utc_player,utc=True,errors="coerce").eq(pd.to_datetime(check.scheduled_start_time_utc_game,utc=True,errors="coerce"))
+ if check.canonical_season_game.isna().any() or not check.canonical_season_player.eq(check.canonical_season_game).all() or not check.slate_date_player.astype(str).eq(check.slate_date_game.astype(str)).all() or not pd.to_numeric(check.game_type_code_player,errors="coerce").eq(pd.to_numeric(check.game_type_code_game,errors="coerce")).all() or not valid_team.all() or not valid_opp.all() or not valid_start.all():raise RuntimeError("player-game spine mismatch")
  qmeta=json.loads((quote_run_dir/"run_metadata.json").read_text());qmanifest=sha256_file(quote_run_dir/"SHA256SUMS");quotes=pd.read_csv(quote_run_dir/"sog_quotes.csv");source_quote_run_id=qmeta["run_id"]
+ if qmeta.get("canonical_season")!=2026 or str(qmeta.get("slate_date"))!=slate_date or qmeta.get("run_type")!=run_type:raise RuntimeError("quote run identity mismatch")
  # Verify the immutable source archive before deriving a run-bound working copy.
  for line in (quote_run_dir/"SHA256SUMS").read_text().splitlines():
   d,n=line.split("  ",1)
   if sha256_file(quote_run_dir/n)!=d:raise RuntimeError("quote archive hash failure")
  quotes["quote_capture_run_id"]=quotes.run_id;quotes["run_id"]=run_id
+ capture_times=pd.to_datetime(quotes.capture_timestamp_utc,utc=True,errors="coerce")
+ if capture_times.isna().any() or (capture_times>run).any():raise RuntimeError("quote capture occurs after shadow run timestamp")
  pin,pred=score_inputs(inputs,run_id,run_timestamp_utc);final,ledger,manual=evaluate(pred,quotes,cfg,parse_utc(run_timestamp_utc).isoformat())
  fail=ledger[ledger.rule_result.eq("FAIL")].sort_values(["prediction_identity","rule_order"]).groupby("prediction_identity").first().failure_reason
  final["first_failure_reason"]=final.prediction_identity.map(fail).fillna(""); final["pre_cap_status"]=np.where(final.first_failure_reason.isin(["DUPLICATE_COLLISION","EXCLUDED_BY_GAME_CAP","EXCLUDED_BY_SLATE_CAP"]),"POLICY_PASS_PRE_CAP",np.where(final.final_candidate_status.eq("FINAL_CANDIDATE"),"POLICY_PASS_PRE_CAP","POLICY_FAIL"));final["candidate_status"]=np.where(final.final_candidate_status.eq("FINAL_CANDIDATE"),"FINAL_SHADOW_CANDIDATE",np.where(final.pre_cap_status.eq("POLICY_PASS_PRE_CAP"),"EXCLUDED_BY_CAP","POLICY_FAIL"));final["candidate_identity"]=final.apply(lambda r:digest({"prediction_identity":r.prediction_identity,"policy_hash":cfg["effective_config_hash"]}),axis=1)
@@ -80,9 +88,11 @@ def grade_run(run_dir:Path,outcomes_csv:Path,grade_root:Path,grading_timestamp_u
  for line in (run_dir/"SHA256SUMS").read_text().splitlines():
   d,n=line.split("  ",1)
   if sha256_file(run_dir/n)!=d:raise RuntimeError("pregame archive hash failure")
- pred=pd.read_csv(run_dir/"candidate_summary.csv");out=pd.read_csv(outcomes_csv);required={"game_id","player_id","official_sog","participation_status","outcome_source","outcome_source_timestamp_utc","source_conflict_status"}
+ pred=pd.read_csv(run_dir/"candidate_summary.csv");out=pd.read_csv(outcomes_csv);required={"canonical_season","slate_date","game_id","player_id","official_sog","participation_status","outcome_source","outcome_source_timestamp_utc","source_conflict_status"}
  if required-set(out):raise ValueError("outcome schema incomplete")
- z=pred.merge(out,on=["game_id","player_id"],how="left",validate="many_to_one");z["grading_timestamp_utc"]=parse_utc(grading_timestamp_utc).isoformat();z["settlement_status"]=np.where(~z.participation_status.eq("PARTICIPATED"),"NONPARTICIPANT_UNGRADED",np.where(z.official_sog>z.line,np.where(z.side.eq("OVER"),"WIN","LOSS"),np.where(z.official_sog<z.line,np.where(z.side.eq("UNDER"),"WIN","LOSS"),"PUSH")))
+ meta=json.loads((run_dir/"run_metadata.json").read_text())
+ if out.duplicated(["canonical_season","slate_date","game_id","player_id"]).any() or not out.canonical_season.eq(meta["canonical_season"]).all() or not out.slate_date.astype(str).eq(meta["slate_date"]).all():raise ValueError("outcome run identity mismatch")
+ z=pred.merge(out,on=["canonical_season","slate_date","game_id","player_id"],how="left",validate="many_to_one");z["grading_timestamp_utc"]=parse_utc(grading_timestamp_utc).isoformat();z["settlement_status"]=np.where(~z.participation_status.eq("PARTICIPATED"),"NONPARTICIPANT_UNGRADED",np.where(z.official_sog>z.line,np.where(z.side.eq("OVER"),"WIN","LOSS"),np.where(z.official_sog<z.line,np.where(z.side.eq("UNDER"),"WIN","LOSS"),"PUSH")))
  gid="grade_"+parse_utc(grading_timestamp_utc).strftime("%Y%m%dT%H%M%S%fZ");dest=grade_root/run_dir.name/gid
  if dest.exists():raise FileExistsError("OVERWRITE_ATTEMPT_BLOCKED")
  dest.mkdir(parents=True,exist_ok=False);z.to_csv(dest/"graded_candidates.csv",index=False);(dest/"grading_metadata.json").write_text(json.dumps({"source_run_id":run_dir.name,"source_manifest_sha256":sha256_file(run_dir/"SHA256SUMS"),"grading_timestamp_utc":parse_utc(grading_timestamp_utc).isoformat(),"rows":len(z),"execution_rows":0},indent=2,sort_keys=True)+"\n");write_manifest(dest)
