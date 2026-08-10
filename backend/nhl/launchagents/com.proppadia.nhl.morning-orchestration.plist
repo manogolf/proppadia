@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.proppadia.nhl.morning-orchestration</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/jerrystrain/Projects/proppadia/.venv/bin/python</string>
+    <string>/Users/jerrystrain/Projects/proppadia/backend/nhl/scripts/run_nhl_morning_orchestration.py</string>
+    <string>--slate-date</string>
+    <string>today</string>
+    <string>--env-file</string>
+    <string>/Users/jerrystrain/Projects/proppadia/backend/.env</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/jerrystrain/Projects/proppadia</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/jerrystrain</string>
+    <key>PATH</key><string>/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>StandardOutPath</key>
+  <string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/morning/launchagent.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/morning/launchagent.stderr.log</string>
+</dict>
+</plist>

@@ -1164,7 +1164,7 @@ def build_points(slate: str):
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
-def cmd_daily(with_odds: bool):
+def cmd_daily(with_odds: bool, morning_only: bool = False):
     db = require_db_url()
 
     # DAILY SHOULD MEAN "TODAY" BY DEFAULT.
@@ -1329,6 +1329,20 @@ def cmd_daily(with_odds: bool):
     # 1) Today: schedule & roster
     run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
 
+    # A date-bound completion record distinguishes a valid empty slate from a
+    # failed or never-run fetch.  Never proceed from database rows alone.
+    slate_health_path = ROOT / "artifacts" / "operational" / "nhl" / "slates" / slate / "slate_health.json"
+    if not slate_health_path.exists():
+        raise RuntimeError(f"NHL slate health missing for {slate}: {slate_health_path}")
+    slate_health = json.loads(slate_health_path.read_text())
+    if slate_health.get("slate_date") != slate or not slate_health.get("downstream_ready"):
+        raise RuntimeError(f"NHL slate not downstream-ready for {slate}: {slate_health}")
+    if slate_health.get("completion_status") == "VALID_EMPTY_SLATE":
+        print(f"ℹ️ Valid empty NHL slate for {slate} — skipping scoring/export steps.")
+        return
+    if slate_health.get("completion_status") != "READY":
+        raise RuntimeError(f"Unexpected NHL slate completion status for {slate}: {slate_health}")
+
     # --- EARLY EXIT: no NHL games on this slate date ---
     no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
     res = sp.run(
@@ -1415,6 +1429,10 @@ def cmd_daily(with_odds: bool):
     (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
     (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
+
+    if morning_only:
+        print("✅ Morning-only boundary reached: stable upstream state prepared; scoring, markets, candidates, and uploads skipped.")
+        return
 
     calibrated_pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
     sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
@@ -1766,6 +1784,7 @@ def main():
 
     d = sub.add_parser("daily", help="Run full daily pipeline")
     d.add_argument("--with-odds", action="store_true", help="Fetch odds inline")
+    d.add_argument("--morning-only", action="store_true", help="Prepare stable upstream state only; skip scoring and market-timed work")
 
     fo = sub.add_parser("fetch-odds", help="Fetch odds JSON into nhl/site/data")
     fo.add_argument("--days-from", type=int, default=1)
@@ -1795,7 +1814,7 @@ def main():
     args = ap.parse_args()
 
     if args.cmd == "daily":
-        cmd_daily(with_odds=args.with_odds)
+        cmd_daily(with_odds=args.with_odds, morning_only=args.morning_only)
     elif args.cmd == "fetch-odds":
         fetch_odds(days_from=args.days_from)
     elif args.cmd == "refresh-rosters-all":

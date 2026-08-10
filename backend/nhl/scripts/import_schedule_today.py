@@ -12,6 +12,8 @@ import json
 import datetime as dt
 from zoneinfo import ZoneInfo
 from typing import Iterable
+from pathlib import Path
+import hashlib
 
 # Optional: load .env (so SUPABASE_DB_URL / DATABASE_URL works locally)
 try:
@@ -36,6 +38,8 @@ if "?gssencmode=" not in DB and "&gssencmode=" not in DB:
     DB += ("&" if "?" in DB else "?") + "gssencmode=disable"
 
 BASE_URL = os.getenv("NHL_API_BASE", "https://api-web.nhle.com") + "/v1/schedule"
+HEALTH_ROOT = Path(os.getenv("NHL_SLATE_HEALTH_ROOT", "artifacts/operational/nhl/slates"))
+LAST_FETCH_EVIDENCE: dict = {}
 
 
 # ---------------- HTTP helpers ----------------
@@ -70,12 +74,15 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
         # stats REST fallback (kept last)
         f"https://api.nhle.com/stats/rest/en/schedule?cayenneExp=gameDate=%22{date_str}%22",
     ]
+    global LAST_FETCH_EVIDENCE
     data = None
+    selected_url = None
     last_err = None
     for url in candidates:
         try:
             r = s.get(url, timeout=12); r.raise_for_status()
             data = r.json()
+            selected_url = url
             break
         except Exception as e:
             last_err = e
@@ -122,7 +129,66 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
                 continue
             out.append(g)
             seen.add(gid)
+    raw_bytes = (json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    LAST_FETCH_EVIDENCE = {
+        "source_url": selected_url,
+        "fetch_timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+        "raw_source": data,
+        "raw_source_sha256": hashlib.sha256(raw_bytes).hexdigest(),
+        "raw_game_count": len(games_in),
+    }
     return out
+
+
+def _write_slate_health(date_str: str, games: list[dict], completion_status: str,
+                        downstream_ready: bool, error: str | None = None) -> Path:
+    """Atomically publish date-bound source evidence and the completion gate."""
+    dest = HEALTH_ROOT / date_str
+    dest.mkdir(parents=True, exist_ok=True)
+    raw = LAST_FETCH_EVIDENCE.get("raw_source")
+    if raw is not None:
+        raw_path = dest / "raw_schedule_response.json"
+        tmp = raw_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
+        tmp.replace(raw_path)
+    ids = [g.get("id") or g.get("gamePk") or g.get("gameId") for g in games]
+    types = [g.get("gameType") for g in games]
+    states: dict[str, int] = {}
+    for g in games:
+        state = str(g.get("gameState") or g.get("state") or "UNKNOWN")
+        states[state] = states.get(state, 0) + 1
+    normalized = [{
+        "game_id": gid,
+        "start_time_utc": g.get("startTimeUTC") or g.get("gameDate"),
+        "game_type": g.get("gameType"),
+        "game_state": g.get("gameState") or g.get("state"),
+    } for gid, g in zip(ids, games)]
+    canonical_hash = hashlib.sha256(
+        (json.dumps(normalized, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
+    health = {
+        "canonical_season": int(date_str[:4]) if int(date_str[5:7]) >= 7 else int(date_str[:4]) - 1,
+        "slate_date": date_str,
+        "fetch_timestamp_utc": LAST_FETCH_EVIDENCE.get("fetch_timestamp_utc"),
+        "source": LAST_FETCH_EVIDENCE.get("source_url"),
+        "raw_game_count": LAST_FETCH_EVIDENCE.get("raw_game_count", len(games)),
+        "normalized_game_count": len(games),
+        "duplicate_count": len(ids) - len(set(ids)),
+        "identity_error_count": sum(x is None for x in ids),
+        "game_type_error_count": sum(x not in {1, 2, 3} for x in types),
+        "schedule_status_breakdown": states,
+        "raw_source_hash": LAST_FETCH_EVIDENCE.get("raw_source_sha256"),
+        "canonical_output_hash": canonical_hash,
+        "completion_status": completion_status,
+        "valid_empty_slate": completion_status == "VALID_EMPTY_SLATE",
+        "downstream_ready": downstream_ready,
+        "error": error,
+    }
+    health_path = dest / "slate_health.json"
+    tmp = health_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(health, indent=2, sort_keys=True) + "\n")
+    tmp.replace(health_path)
+    return health_path
 
 def get_schedule(date_str: str) -> list[dict]:
     """
@@ -334,10 +400,28 @@ def _ensure_team_mappings(cur, games: Iterable[dict]) -> dict[str, int]:
 # --------------------- Main ---------------------
 
 def main():
-    games = fetch_schedule_for_date(DATE)
+    try:
+        games = fetch_schedule_for_date(DATE)
+    except Exception as exc:
+        _write_slate_health(DATE, [], "FAILED", False, str(exc))
+        raise
     if not games:
+        health_path = _write_slate_health(DATE, games, "VALID_EMPTY_SLATE", True)
         print(f"ℹ️ No NHL games for {DATE} (ET)")
+        print(f"✅ Slate health: {health_path}")
         return
+
+    # Completeness is a publish gate: do not authorize a slate containing a
+    # silently skipped or unsupported identity. Unknown game types fail closed.
+    for g in games:
+        gid = g.get("id") or g.get("gamePk") or g.get("gameId")
+        start = g.get("startTimeUTC") or g.get("gameDate")
+        home_pid, _ = _extract_provider_team_id_and_teamobj(g, "home")
+        away_pid, _ = _extract_provider_team_id_and_teamobj(g, "away")
+        if gid is None or not start or not home_pid or not away_pid or g.get("gameType") not in {1, 2, 3}:
+            error = f"incomplete/unsupported schedule identity for game_id={gid}"
+            _write_slate_health(DATE, games, "PARTIAL", False, error)
+            raise RuntimeError(error)
 
     with psycopg.connect(DB) as conn, conn.cursor() as cur:
         # Optional: stop psycopg from auto-creating server-side prepared stmts
@@ -472,8 +556,15 @@ def main():
             (json.dumps(payload),)
         )
 
+        if cur.rowcount != len(payload):
+            error = f"canonical write count mismatch: expected={len(payload)} stored={cur.rowcount}"
+            _write_slate_health(DATE, games, "PARTIAL", False, error)
+            raise RuntimeError(error)
+
         conn.commit()
+        health_path = _write_slate_health(DATE, games, "READY", True)
         print(f"✅ Upserted {rows} games for {DATE} (ET) (no stage tables)")
+        print(f"✅ Slate health: {health_path}")
 
 
 if __name__ == "__main__":
