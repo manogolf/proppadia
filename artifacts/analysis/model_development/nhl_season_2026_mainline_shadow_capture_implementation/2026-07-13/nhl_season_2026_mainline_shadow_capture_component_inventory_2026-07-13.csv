@@ -1,0 +1,13 @@
+component,implementation,status,boundary
+frozen_champion_parameters,backend/nhl/mainline_shadow/frozen_champion_v1.json,IMPLEMENTED,governed hash-bound state
+champion_scorer,backend/nhl/mainline_shadow/core.py:score_features,IMPLEMENTED,no fitting imports or state update
+historical_parity,backend/nhl/mainline_shadow/core.py:historical_parity,IMPLEMENTED,"2,798 row gate"
+strict_prior_builder,backend/nhl/mainline_shadow/core.py:build_strict_prior_features,IMPLEMENTED,"completed prior games only, season reset"
+h2h_fetch,backend/nhl/mainline_shadow/cli.py:fetch-h2h,IMPLEMENTED_MANUAL_ONLY,explicit API key; h2h only; create-only raw output
+quote_normalization,backend/nhl/mainline_shadow/core.py:normalize_h2h,IMPLEMENTED,book-level proportional de-vig and status retention
+run_archive,backend/nhl/mainline_shadow/core.py:run_shadow,IMPLEMENTED,dedicated create-only mainline path
+health_gates,backend/nhl/mainline_shadow/core.py:run_shadow,IMPLEMENTED,critical fail-closed plus optional coverage
+grading_hook,backend/nhl/mainline_shadow/core.py:grade_run,IMPLEMENTED,separate grade tree; pregame hash check
+scheduler,none,NOT_IMPLEMENTED,explicitly unauthorized
+goalie_lineup,none,DEFERRED,outside MVP
+recommendations_execution,none,PROHIBITED,shadow observation only

@@ -1,0 +1,31 @@
+{
+  "cadence_rationale": "Two states reflect actual source change behavior without multiplying redundant captures: a stable daily schedule/early quote state and a final pregame state for market/goalie changes.",
+  "canonical_format": "nhlmlobs_s{canonical_season}_d{slate_date_compact}_t{run_timestamp_utc_compact_microseconds}_{run_type}_v1",
+  "canonical_season": 2026,
+  "collision_policy": "CREATE_NEW_ONLY; exclusive creation fails if run_id or path exists; never update/replace",
+  "identity_fields": [
+    "canonical_season",
+    "slate_date",
+    "run_timestamp_utc",
+    "run_type"
+  ],
+  "immutability": "Every later state creates a new run and source event; earlier files are read-only.",
+  "late_run_policy": "Any game with run_timestamp_utc >= scheduled_start_time_utc is excluded from pregame populations and recorded POST_START_REJECTED.",
+  "path_template": "artifacts/observations/nhl/mainline/canonical_season=2026/slate_date={YYYY-MM-DD}/run_id={run_id}/",
+  "required_run_metadata": [
+    "run_id",
+    "run_timestamp_utc",
+    "run_type",
+    "host_clock_utc",
+    "source_versions",
+    "source_capture_timestamps",
+    "scheduled_start_times",
+    "file_sha256",
+    "package_sha256"
+  ],
+  "run_types": {
+    "FINAL_PREGAME": "Per-game or start-time cohort snapshot targeted 30 minutes before scheduled start; never after start.",
+    "MIDDAY": "One slate-wide observation after the official daily schedule is loaded; intended to preserve an earlier market state."
+  },
+  "timestamp_standard": "UTC RFC3339 with six fractional digits and Z"
+}

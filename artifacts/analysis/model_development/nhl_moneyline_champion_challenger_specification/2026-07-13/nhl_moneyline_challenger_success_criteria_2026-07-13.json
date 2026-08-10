@@ -1,0 +1,26 @@
+{
+  "combined_out_of_time": {
+    "brier_improvement": "> 0",
+    "log_loss_improvement": "> 0",
+    "paired_date_bootstrap_positive_fraction": "at least 0.80 for each proper-score improvement"
+  },
+  "failure_policy": "Any required failure produces NO_FURTHER_RESEARCH_PROMOTION; diagnose construction defects only, never tune within this execution.",
+  "holdout": {
+    "ECE_degradation": "<= 0.010",
+    "brier_improvement": "> 0",
+    "log_loss_improvement": "> 0",
+    "roc_auc_change": ">= -0.005"
+  },
+  "overall_rule": "ALL_REQUIRED_GATES_MUST_PASS; no metric shopping or post-result tuning.",
+  "stability": {
+    "leave_one_month_out": "at least 75% retain positive Brier and log-loss improvement; no exclusion has both improvements < -0.002",
+    "leave_one_team_out": "at least 75% retain positive Brier and log-loss improvement; no exclusion has both improvements < -0.002",
+    "missingness": "fully observed combined out-of-time Brier and log-loss improvements both positive",
+    "probability_margin_bands": "at least 3 of 5 have nonnegative Brier improvement and aggregate excluding the best band remains positive"
+  },
+  "validation": {
+    "ECE_degradation": "challenger_ECE - champion_ECE <= 0.010",
+    "brier_improvement": "> 0",
+    "log_loss_improvement": "> 0"
+  }
+}

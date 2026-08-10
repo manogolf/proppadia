@@ -1,0 +1,68 @@
+{
+  "as_of_date": "2026-07-13",
+  "experiment_name": "NHL_FULL_GAME_MONEYLINE_SIMPLE_BASELINE_PROCESS_VALIDATION",
+  "feature_manifest_version": "nhl_moneyline_simple_baseline_features_v1",
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "metric_definitions": [
+    "accuracy at 0.5",
+    "Brier score",
+    "natural-log binary log loss",
+    "ROC AUC",
+    "fixed-width probability-decile calibration",
+    "mean probability",
+    "observed home-win rate"
+  ],
+  "missingness_policy": "FIT-segment median imputation per feature; all certified rows retained and scored; statuses remain explicit.",
+  "model": {
+    "C": 1.0,
+    "family": "logistic_regression",
+    "fit_intercept": true,
+    "max_iter": 1000,
+    "penalty": "l2",
+    "random_state": 20260713,
+    "solver": "liblinear",
+    "tol": 0.0001
+  },
+  "no_promotion_policy": "Frozen research control for process validation only; no tuning, selection, ROI claim, promotion, deployment, or season 2026 restart is authorized.",
+  "parent_manifest_sha256": {
+    "feature_spine": "c1841f802a90aa1e772059695cc7e8e1c512c9f63730ab54bd4cf0576bf92780",
+    "historical_feasibility": "8a64f276634c7915c98a249ac99053305cf42edaa671303a9ec5669ea3d6ac11",
+    "population": "0ce4a3b673e77af434985670f2bcec779eda561210e5ebc0becbe546a4f14326",
+    "schedule_remediation": "783784e6320b47f90b6dc5f18bb7adc5d359067948836a2c9cabdecdd0842507"
+  },
+  "population_contract": {
+    "identity": [
+      "canonical_season",
+      "game_id"
+    ],
+    "rows": 2798,
+    "seasons": [
+      2023,
+      2024
+    ]
+  },
+  "probability_semantics": {
+    "away_win_probability": "1 - home_win_probability",
+    "home_win_probability": "P(certified full-game home winner)"
+  },
+  "reference": "Constant fit-segment home-win rate, unchanged in every split.",
+  "replay_tolerance": 1e-12,
+  "scaling_policy": "StandardScaler fitted only on the fit segment after fit-only median imputation.",
+  "target": {
+    "field": "home_win_target",
+    "one": "certified home full-game winner",
+    "zero": "certified away full-game winner"
+  },
+  "temporal_split": {
+    "fit": "canonical_season 2023, 2023-10-10 through 2024-01-18",
+    "holdout": "canonical_season 2024, 2024-10-04 through 2025-06-17",
+    "validation": "canonical_season 2023, 2024-01-19 through 2024-06-24"
+  }
+}

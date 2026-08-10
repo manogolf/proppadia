@@ -1,0 +1,5 @@
+rank,source,path_or_table,grain,game_id,team_identity,date_field,timestamp_precision,season_coverage,mutability,authority_confidence,direct_or_derived
+1,Official NHL club schedule,https://api-web.nhle.com/v1/club-schedule-season/UTA/[official season key],game,YES,YES,gameDate,date plus startTimeUTC,2024 Utah all games,official historical API,HIGH,DIRECT
+2,Official NHL gamecenter landing,https://api-web.nhle.com/v1/gamecenter/{game_id}/landing,game,YES,YES,gameDate,date/start time,all 82 affected games,official historical API,HIGH,DIRECT
+3,Official start timestamp,club schedule startTimeUTC,game,YES,YES,startTimeUTC converted to ET,seconds,all 82 affected games,official historical API,HIGH_SUPPORTING,DERIVED_TIMEZONE_CONVERSION
+4,Certified parent identity,artifacts/analysis/model_development/nhl_full_game_moneyline_population_certification/2026-07-13/nhl_full_game_moneyline_outcome_qualification_ledger_2026-07-13.csv,game,YES,YES,null for affected rows,none,2024 all games,frozen package,HIGH_IDENTITY_NO_DATE,DIRECT_REPOSITORY

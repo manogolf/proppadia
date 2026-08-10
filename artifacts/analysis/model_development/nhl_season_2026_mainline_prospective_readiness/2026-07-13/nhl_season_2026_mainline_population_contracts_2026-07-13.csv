@@ -1,0 +1,6 @@
+population,inclusion,required_gates,exclusion_or_retention,allowed_evaluation
+A_CHAMPION_PREDICTION,Every scheduled game with deterministic identity and all six strict-prior champion inputs or frozen missingness support,game_id unique per run; champion hash/parity pass; run before start,"Market,goalie,lineup may be absent",Prediction quality
+B_MARKET_QUALIFIED,Population A row with active two-sided h2h quote certified before associated run/start,same game/book snapshot; both sides; timestamp certified,"Incomplete,stale,post-start,suspended excluded",Market-relative quality; never execution
+C_GOALIE_CONTEXT,Population A row with valid projected/likely/confirmed goalie event before start,source and capture timestamps pre-start,NO_PROJECTION/UNKNOWN excluded from qualified subset but retained,Goalie context characterization
+D_LINEUP_CONTEXT,Population A row with timestamped roster/lineup/injury event,quality and source timestamp explicit,NO_SOURCE retained outside qualified subset,Lineup context characterization
+E_EXECUTION,Population B row with explicit user-supplied execution evidence,"execution ID,side,price,timestamp,source required",Never inferred from recommendation or market snapshot,Execution-only evaluation

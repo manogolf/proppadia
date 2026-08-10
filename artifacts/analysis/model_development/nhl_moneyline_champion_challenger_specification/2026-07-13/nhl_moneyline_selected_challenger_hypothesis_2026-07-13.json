@@ -1,0 +1,13 @@
+{
+  "challenger_name": "NHL_MONEYLINE_SCHEDULE_LOAD_CONTEXT_LOGIT_CHALLENGER_V1",
+  "champion_source": {
+    "name": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+    "stored_prediction_sha256": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda"
+  },
+  "execution_boundary": "CHALLENGER_EXECUTION_NOT_AUTHORIZED_BY_THIS_PACKAGE",
+  "form": "ADDITIVE_CHALLENGER",
+  "hypothesis": "Five-day workload imbalance and home/away road-sequence persistence contain strict-prior fatigue and location-context information beyond the champion's team-strength, rest-differential, and back-to-back fields.",
+  "selected_family": "COMPRESSED_WORKLOAD_AND_ROAD_SEQUENCE_CONTEXT",
+  "why_not_algorithm_change": "The information hypothesis is testable with the champion's same linear probabilistic instrument; changing learner would confound information with flexibility.",
+  "why_selected": "It is the highest-readiness family with genuine but bounded novelty, exact repaired-schedule coverage, simple interpretation, and no dependence on historically unavailable personnel data."
+}

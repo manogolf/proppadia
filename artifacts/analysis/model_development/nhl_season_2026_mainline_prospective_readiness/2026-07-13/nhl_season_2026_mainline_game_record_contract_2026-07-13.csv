@@ -1,0 +1,80 @@
+field_name,category,write_stage,requirement,data_type,contract
+canonical_season,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+slate_date,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+game_id,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+game_date,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+scheduled_start_time_utc,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+home_team_id,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+home_team,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+away_team_id,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+away_team,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+game_status,game_identity,PREGAME_CAPTURE,REQUIRED,mixed,Official schedule identity; season must equal 2026.
+run_id,run_identity,PREGAME_CAPTURE,REQUIRED,text/timestamp,Immutable observation identity.
+run_timestamp_utc,run_identity,PREGAME_CAPTURE,REQUIRED,text/timestamp,Immutable observation identity.
+run_type,run_identity,PREGAME_CAPTURE,REQUIRED,text/timestamp,Immutable observation identity.
+diff_std_goal_diff_pg,champion_input,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,float/bool,Strict-prior value computed as of run timestamp; exact frozen feature semantics.
+diff_r10_goal_diff_pg,champion_input,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,float/bool,Strict-prior value computed as of run timestamp; exact frozen feature semantics.
+diff_std_shot_diff_pg,champion_input,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,float/bool,Strict-prior value computed as of run timestamp; exact frozen feature semantics.
+diff_days_rest,champion_input,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,float/bool,Strict-prior value computed as of run timestamp; exact frozen feature semantics.
+home_back_to_back,champion_input,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,float/bool,Strict-prior value computed as of run timestamp; exact frozen feature semantics.
+away_back_to_back,champion_input,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,float/bool,Strict-prior value computed as of run timestamp; exact frozen feature semantics.
+champion_missingness_status,champion_output,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,mixed,Frozen scorer only; probabilities complementary.
+champion_home_win_probability,champion_output,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,mixed,Frozen scorer only; probabilities complementary.
+champion_away_win_probability,champion_output,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,mixed,Frozen scorer only; probabilities complementary.
+champion_predicted_side,champion_output,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,mixed,Frozen scorer only; probabilities complementary.
+champion_model_sha256,champion_output,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_A,mixed,Frozen scorer only; probabilities complementary.
+sportsbook,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+market_type,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+home_moneyline_american,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+away_moneyline_american,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+home_decimal_price,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+away_decimal_price,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+quote_timestamp_utc,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+source_timestamp_utc,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+market_capture_timestamp_utc,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+market_status,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+market_source_id,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+raw_implied_home_probability,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+raw_implied_away_probability,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+overround,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+devig_home_probability,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+devig_away_probability,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+vig_method,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+market_capture_status,market,PREGAME_CAPTURE,REQUIRED_FOR_POPULATION_B,mixed,One record per book quote/snapshot; h2h full game only; never attach post-start quote.
+home_projected_goalie_id,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+home_projected_goalie_name,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+away_projected_goalie_id,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+away_projected_goalie_name,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+home_confirmed_goalie_id,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+home_confirmed_goalie_name,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+away_confirmed_goalie_id,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+away_confirmed_goalie_name,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+goalie_source,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+goalie_source_timestamp_utc,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+goalie_capture_timestamp_utc,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+goalie_certainty,goalie,PREGAME_CAPTURE,OPTIONAL_POPULATION_C,mixed,Append-only goalie state; actual starter never rewrites pregame state.
+lineup_source,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+lineup_source_timestamp_utc,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+lineup_capture_timestamp_utc,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+injury_scratch_summary_json,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+active_roster_json,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+projected_lines_json,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+confirmed_lines_json,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+defensive_pairs_json,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+power_play_units_json,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+lineup_certainty,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+material_lineup_change,lineup,PREGAME_CAPTURE,OPTIONAL_POPULATION_D,mixed,Capture quality explicit; no requirement for champion population.
+official_final_home_goals,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+official_final_away_goals,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+official_full_game_winner,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+decision_type,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+grading_timestamp_utc,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+outcome_source,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+outcome_source_timestamp_utc,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+outcome_source_sha256,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+outcome_conflict_status,outcome,POSTGAME_GRADING,POSTGAME_ONLY,mixed,Separate append-only grading record; prohibited in pregame capture payload.
+execution_evidence_id,execution,USER_SUPPLIED_ONLY,NEVER_INFER,mixed,Population E only; null without user evidence.
+execution_side,execution,USER_SUPPLIED_ONLY,NEVER_INFER,mixed,Population E only; null without user evidence.
+execution_price,execution,USER_SUPPLIED_ONLY,NEVER_INFER,mixed,Population E only; null without user evidence.
+execution_timestamp_utc,execution,USER_SUPPLIED_ONLY,NEVER_INFER,mixed,Population E only; null without user evidence.
+execution_source,execution,USER_SUPPLIED_ONLY,NEVER_INFER,mixed,Population E only; null without user evidence.

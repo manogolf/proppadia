@@ -1,0 +1,6 @@
+outcome,frozen_condition,interpretation,prohibited_response
+CHALLENGER_WINS_CLEANLY,All required gates pass,Potential new schedule-context information; request separate promotion-grade research authorization,Do not promote or deploy
+APPROXIMATE_TIE,Proper-score differences near zero or bootstrap support below 0.80,Treat family as duplicative or too weak,Do not tune
+CHALLENGER_LOSES,Validation or holdout proper-score gates fail,Reject/defer family absent a proven construction defect,Do not replace champion
+MIXED_VALIDATION_HOLDOUT,Direction differs between validation and holdout,Classify unstable,No promotion
+COVERAGE_OR_TIMING_FAILURE,"Row alignment, strict-prior, or coverage assertion fails",Invalidate execution and return to data remediation,Do not interpret performance

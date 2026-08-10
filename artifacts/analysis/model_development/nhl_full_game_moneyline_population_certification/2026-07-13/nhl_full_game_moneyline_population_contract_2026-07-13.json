@@ -1,0 +1,27 @@
+{
+  "canonical_seasons": [
+    2023,
+    2024
+  ],
+  "date_policy": "game_date is metadata, not identity; 82 Utah season 2024 rows retain null date visibly",
+  "duplicate_policy": "game_id duplicates fail certification",
+  "exclusions": "nonfinal, cancelled, tied final, missing/malformed/conflicting unresolved score",
+  "final_status_policy": "complete decisive score source qualifies historical final where nhl.games.status is blank",
+  "game_authority": "nhl.games",
+  "identity": [
+    "canonical_season",
+    "game_id"
+  ],
+  "ledger_sha256": "9affe45b3b554d19ad73c1e6619dfd5cd8c578eec5a177a990f4c52fa8191803",
+  "name": "NHL_FULL_GAME_MONEYLINE_OUTCOME_SPINE_SEASONS_2023_2024",
+  "natural_grain": "one row per canonical NHL game",
+  "ordering": [
+    "canonical_season",
+    "game_id"
+  ],
+  "row_count": 2798,
+  "score_authority": "raw shots_stage score-before-event plus goal event; add one to shootout winner",
+  "score_conflict_policy": "remain visible; only 2024020002 resolved by decisive 3-1 event reconstruction over erroneous homeTeamWon flag",
+  "supporting_authority": "team summary two-team cardinality only; num_event_goal_for rejected",
+  "winner": "HOME_WIN iff final_home_goals > final_away_goals, else AWAY_WIN"
+}

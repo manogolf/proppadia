@@ -1,0 +1,14 @@
+{
+  "affected_games": 82,
+  "after_date_blocked": 0,
+  "after_exact_schedule": 1398,
+  "after_rest_qualified": 1378,
+  "before_date_blocked": 1235,
+  "before_exact_schedule": 163,
+  "before_rest_qualified": 145,
+  "blocked_reduction": 1235,
+  "date_conflicts": 0,
+  "dates_recovered": 82,
+  "season_games": 1398,
+  "source_snapshot_sha256": "2af15369d2e8664f31302ec694cb841b4874e4d166256b4d23c5d90081fe1310"
+}

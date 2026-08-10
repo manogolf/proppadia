@@ -1,0 +1,7 @@
+market,natural_grain,required_outcome,overtime_shootout,push,neutral_logic,repository_readiness
+MONEYLINE,game-team,final home/away score and winner,must be contractually confirmed; default unresolved,none,winner by certified full-game score,READY_WITH_BOUNDED_LIMITS_FOR_SEASONS_2023_2024
+REGULATION_MONEYLINE,game-outcome(3-way),score after period 3,excluded,"draw is third outcome, not push",home win/draw/away win after regulation,BLOCKED_BY_REGULATION_OUTCOME_CERTIFICATION
+PUCK_LINE,game-team-line,certified final goal differential,source contract required,integer line pushes; half line cannot push,team goal differential plus signed handicap,READY_WITH_BOUNDED_LIMITS_FOR_SEASONS_2023_2024
+GAME_TOTAL,game-line,certified final total goals,source contract required,integer line pushes; half line cannot push,home goals plus away goals versus line,READY_WITH_BOUNDED_LIMITS_FOR_SEASONS_2023_2024
+TEAM_TOTAL,game-team-line,certified team-specific goals,source contract required,integer line pushes; half line cannot push,selected team goals versus line,READY_WITH_BOUNDED_LIMITS_FOR_SEASONS_2023_2024
+FIRST_PERIOD,game-period-market,period-one score,not applicable,line-specific,period-one only,NOT_ENOUGH_REPOSITORY_EVIDENCE

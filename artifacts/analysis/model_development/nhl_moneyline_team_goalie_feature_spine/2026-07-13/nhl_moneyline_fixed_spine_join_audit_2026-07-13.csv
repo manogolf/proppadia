@@ -1,0 +1,9 @@
+canonical_season,family,source_rows,source_game_keys,control_games,joinable_games,exact_joins,missing_games,duplicate_keys,one_to_many_joins,many_to_many_joins,strict_prior_qualified_games,bounded_reconstruction_games,timing_blocked_games,date_blocked_games,unknown_games
+2023,TEAM_STRENGTH,2800,1381,1400,1381,1381,19,0,0,0,1381,0,0,0,19
+2023,SCHEDULE_REST,2800,1381,1400,1381,1381,19,0,0,0,1381,0,0,0,0
+2023,GOALIE_IDENTITY,2800,1400,1400,1400,1400,0,0,0,0,0,0,1400,0,0
+2023,LINEUP_INJURY,107,3,1400,3,3,1397,0,0,0,0,0,3,0,1397
+2024,TEAM_STRENGTH,2796,1378,1398,1378,1378,20,0,0,0,0,1378,0,0,20
+2024,SCHEDULE_REST,2796,145,1398,145,145,1253,0,0,0,145,0,0,1235,0
+2024,GOALIE_IDENTITY,2632,1316,1398,1316,1316,82,0,0,0,0,0,1316,0,82
+2024,LINEUP_INJURY,294,9,1398,9,9,1389,0,0,0,0,0,9,0,1389

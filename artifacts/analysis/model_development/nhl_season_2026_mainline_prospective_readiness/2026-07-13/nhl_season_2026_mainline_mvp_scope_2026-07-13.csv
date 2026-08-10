@@ -1,0 +1,11 @@
+component,mvp_class,current_readiness,required_next_action
+official_schedule_game_identity,MVP_REQUIRED,AVAILABLE_NOW,Implement immutable raw schedule snapshot
+six_strict_prior_champion_inputs,MVP_REQUIRED,AVAILABLE_WITH_MINOR_INTEGRATION,Implement prospective as-of feature builder and historical parity fixture
+frozen_champion_probability,MVP_REQUIRED,AVAILABLE_WITH_MINOR_INTEGRATION,Implement parameter-only scorer bound to frozen hashes
+timestamped_h2h_prices,MVP_REQUIRED,SOURCE_EXISTS_NOT_CONNECTED,Implement mainline-only immutable Odds API capture
+immutable_run_archive,MVP_REQUIRED,NOT_IMPLEMENTED,"Implement create-only run directory, metadata, and hashes"
+postgame_outcome_reconciliation,MVP_REQUIRED,AVAILABLE_WITH_MINOR_INTEGRATION,Implement append-only official final grader
+goalie_state,MVP_OPTIONAL,TIMING_UNCERTIFIED,Phase 2 source integration; absence explicit
+lineup_injury_state,PHASE_2,NOT_AVAILABLE,Integrate timestamped source without blocking MVP
+wager_recommendations,DEFER,NOT_AUTHORIZED,Prohibited in shadow mode
+execution_automation,DEFER,NOT_AUTHORIZED,Prohibited

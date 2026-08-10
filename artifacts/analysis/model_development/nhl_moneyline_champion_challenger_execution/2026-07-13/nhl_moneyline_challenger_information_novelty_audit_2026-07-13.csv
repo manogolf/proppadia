@@ -1,0 +1,4 @@
+feature_name,coefficient,coefficient_sign,expected_hypothesis_sign,sign_aligns_with_hypothesis,standardized_magnitude,contribution_variance,contribution_q01,contribution_q99,maximum_absolute_correlation_with_control,most_correlated_control_feature,correlation_with_most_correlated_control
+diff_games_prior_5d,-0.0785921119270978,NEGATIVE,NEGATIVE,True,0.0785921119270978,0.00610247558936023,-0.224526816270625,0.218211012718709,0.523582858527964,diff_days_rest,-0.523582858527964
+home_consecutive_road_games_prior,-0.0248031428131489,NEGATIVE,NEGATIVE,True,0.0248031428131489,0.000649330061358111,-0.0893452098026696,0.0166892011538847,0.0704046677175681,diff_days_rest,0.0704046677175681
+away_consecutive_road_games_prior,-0.0190234255575428,NEGATIVE,POSITIVE,False,0.0190234255575428,0.000353640229898025,-0.0608999005598281,0.0158269691246426,0.101133031239682,diff_days_rest,0.101133031239682

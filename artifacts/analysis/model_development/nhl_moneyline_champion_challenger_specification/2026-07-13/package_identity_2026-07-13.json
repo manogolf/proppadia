@@ -1,0 +1,19 @@
+{
+  "as_of_date": "2026-07-13",
+  "auxiliary_schedule_manifest_sha256": "783784e6320b47f90b6dc5f18bb7adc5d359067948836a2c9cabdecdd0842507",
+  "challenger_fit_count": 0,
+  "challenger_prediction_rows": 0,
+  "champion": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+  "execution_boundary": "CHALLENGER_EXECUTION_NOT_AUTHORIZED_BY_THIS_PACKAGE",
+  "generated_by": "backend/nhl/scripts/specify_nhl_moneyline_champion_challenger.py",
+  "package_name": "nhl_moneyline_champion_challenger_specification",
+  "parent_manifest_sha256": {
+    "baseline": "aeae5fcd8553c91ab1e2af86d27e4bab7dc28d8c05fcd7871cfd72accab1a65c",
+    "certification": "8bb36073fee4f055f399c651f942b8de6eb1bb3b75b96b6112dd9d4af4224cf5",
+    "features": "c1841f802a90aa1e772059695cc7e8e1c512c9f63730ab54bd4cf0576bf92780",
+    "population": "0ce4a3b673e77af434985670f2bcec779eda561210e5ebc0becbe546a4f14326"
+  },
+  "selected_challenger": "NHL_MONEYLINE_SCHEDULE_LOAD_CONTEXT_LOGIT_CHALLENGER_V1",
+  "source_mutation_check": "PASS",
+  "version": "1.0.0"
+}

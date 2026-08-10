@@ -1,0 +1,4 @@
+season,game_count,outcomes_available,outcome_authority,mainline_price_games,timestamped_price_games,team_feature_coverage,goalie_games,pregame_goalie_certified,lineup_games,surviving_model_predictions,strict_prior_feasibility,population_spine_readiness
+2023,1400,1400,two clean team_game_2023_summary rows per game,0,0,HIGH,1400,NO,3,0,READY_WITH_BOUNDED_LIMITS,READY_FOR_OUTCOME_CERTIFICATION
+2024,1398,1398,two clean team_game_2024_summary rows per game,0,0,HIGH,1316,NO,9,0,READY_WITH_BOUNDED_LIMITS,READY_FOR_OUTCOME_CERTIFICATION
+2025,1312,0,nhl.games has 900 final statuses but no scores; no populated team_game_sit source,0,0,PARTIAL_FRAGMENTED,359,NO,1312,0,BLOCKED_BY_CONTINUITY,BLOCKED_BY_OUTCOME_AND_PRICE

@@ -1,0 +1,21 @@
+{
+  "champion_probabilities": "Stored artifact only; no champion refit.",
+  "fit": {
+    "canonical_season": 2023,
+    "dates": "2023-10-10 through 2024-01-18",
+    "rows": 701
+  },
+  "holdout": {
+    "canonical_season": 2024,
+    "dates": "2024-10-04 through 2025-06-17",
+    "rows": 1398
+  },
+  "immutable": true,
+  "random_split": false,
+  "split_source_sha256": "9b45fdaaed5c5dea1f959d434510e259fe13aa7d293db94e8e0ffdbf1fce5280",
+  "validation": {
+    "canonical_season": 2023,
+    "dates": "2024-01-19 through 2024-06-24",
+    "rows": 699
+  }
+}

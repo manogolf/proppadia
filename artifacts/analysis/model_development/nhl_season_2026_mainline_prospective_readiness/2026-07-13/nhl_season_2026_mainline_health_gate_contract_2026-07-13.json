@@ -1,0 +1,53 @@
+{
+  "bounded_noncritical": [
+    {
+      "behavior": "Report missing/incomplete books; game remains Population A",
+      "gate": "market_coverage"
+    },
+    {
+      "behavior": "Record NO_PROJECTION/UNKNOWN; do not fail slate",
+      "gate": "goalie_coverage"
+    },
+    {
+      "behavior": "Record NO_SOURCE/quality; do not fail slate",
+      "gate": "lineup_coverage"
+    }
+  ],
+  "critical_fail_closed": [
+    {
+      "gate": "schedule_loaded",
+      "rule": "at least one official game or explicit NO_GAMES slate authority"
+    },
+    {
+      "gate": "unique_game_identity",
+      "rule": "canonical_season + game_id unique within run"
+    },
+    {
+      "gate": "start_time_valid",
+      "rule": "scheduled_start_time_utc parseable and later than pregame run"
+    },
+    {
+      "gate": "strict_prior_features",
+      "rule": "all source events precede target game start; no target game contribution"
+    },
+    {
+      "gate": "champion_identity",
+      "rule": "specification and parameter hashes exact; historical parity max difference <= 1e-12"
+    },
+    {
+      "gate": "probability_semantics",
+      "rule": "finite 0<=home<=1 and abs(home+away-1)<=1e-12"
+    },
+    {
+      "gate": "market_timing",
+      "rule": "Population B quote/source/capture timestamps strictly before start"
+    },
+    {
+      "gate": "immutable_output",
+      "rule": "create-only path and complete SHA256 manifest"
+    }
+  ],
+  "health_output": "machine-readable gate ledger plus coverage counts and manifest",
+  "post_start": "Any contaminated market/context record rejected from pregame-qualified population and logged; identity/model contamination fails entire run.",
+  "production_write": "No recommendation, candidate, wager, or execution table writes permitted in shadow implementation."
+}

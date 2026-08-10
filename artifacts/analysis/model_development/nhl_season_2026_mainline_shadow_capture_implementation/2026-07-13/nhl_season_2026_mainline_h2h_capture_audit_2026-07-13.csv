@@ -1,0 +1,6 @@
+test,passed,evidence
+raw_payload_create_only,True,baa5432961b2d173874f572ba296fb4b7e7674b37542b02b4f705d7994b3dfd3
+two_sided_normalization,True,2 quotes
+qualified_probability_complement,True,1e-12
+provider_game_binding,True,exact teams plus start within 15 minutes
+prop_archive_isolation,True,dedicated mainline_shadow destination; shared fetcher not invoked or modified

@@ -1,0 +1,26 @@
+{
+  "bookmakers": 13,
+  "database_snapshot_evidence": {
+    "clean_scored_games": {
+      "2023": 1400,
+      "2024": 1398,
+      "2025": 0
+    },
+    "duplicate_game_ids": 0,
+    "games": {
+      "2023": 1400,
+      "2024": 1398,
+      "2025": 1312
+    }
+  },
+  "events_with_books": 855,
+  "mainline_quotes": 0,
+  "market_keys": {
+    "player_points": 5008,
+    "player_shots_on_goal": 8825,
+    "player_shots_on_goal_alternate": 4192,
+    "player_total_saves": 5774
+  },
+  "odds_events": 907,
+  "odds_files": 153
+}

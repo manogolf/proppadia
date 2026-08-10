@@ -1,0 +1,28 @@
+{
+  "champion_identity": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+  "champion_version": "v1",
+  "feature_manifest_sha256": "544f7e68b9cb4c254e08ff29ef687eb27be00f0b2d11c1183f384090e319702e",
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "features": {
+    "away_back_to_back": {"coefficient": 0.0676392173167916, "median": 0.0, "mean": 0.159771754636234, "scale": 0.366394242663136},
+    "diff_days_rest": {"coefficient": 0.0906627232822018, "median": 0.0, "mean": 0.0884450784593438, "scale": 1.09239127372712},
+    "diff_r10_goal_diff_pg": {"coefficient": 0.024591622992364, "median": 0.0, "mean": -0.0524200122274302, "scale": 1.61961038332877},
+    "diff_std_goal_diff_pg": {"coefficient": 0.0449264245768112, "median": 0.0117450638792098, "mean": -0.0604100047681592, "scale": 1.46573427778449},
+    "diff_std_shot_diff_pg": {"coefficient": 0.380218141561234, "median": -0.10215053763441, "mean": -0.113124201966617, "scale": 7.03118046652021},
+    "home_back_to_back": {"coefficient": -0.0444787387651908, "median": 0.0, "mean": 0.10413694721826, "scale": 0.305438117205959}
+  },
+  "historical_prediction_sha256": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda",
+  "intercept": 0.156375029909156,
+  "probability_semantics": "home_win_probability=P(certified full-game home winner including overtime/shootout); away=1-home",
+  "prospective_gate_status": "HISTORICAL_PARITY_PASS",
+  "prospective_parity_maximum_delta": 1.1657341758564144e-15,
+  "prospective_parity_tolerance": 1e-12,
+  "source_parameter_audit_sha256": "885233464e105a1199407e433604de78f81a5c71d360377e53989539db1f3eca"
+}

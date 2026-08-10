@@ -1,0 +1,19 @@
+{
+  "canonical_seasons": [
+    2023,
+    2024
+  ],
+  "challenger_missingness": "Fit-only median imputation using the same preprocessing policy; selected new fields have 2,798/2,798 repaired-spine coverage.",
+  "fit_rows": 701,
+  "holdout_rows": 1398,
+  "identity": [
+    "canonical_season",
+    "game_id"
+  ],
+  "membership_source": "nhl_moneyline_simple_baseline_population_partition_2026-07-13.csv",
+  "membership_source_sha256": "9b45fdaaed5c5dea1f959d434510e259fe13aa7d293db94e8e0ffdbf1fce5280",
+  "row_retention": "All champion rows must be scored; selective dropping prohibited.",
+  "rows": 2798,
+  "target": "home_win_target",
+  "validation_rows": 699
+}

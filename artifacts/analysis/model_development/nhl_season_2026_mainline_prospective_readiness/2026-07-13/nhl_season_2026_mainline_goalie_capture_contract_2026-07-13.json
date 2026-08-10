@@ -1,0 +1,42 @@
+{
+  "actual_starter_policy": "Postgame actual starter is a separate grading/context fact and cannot rewrite any pregame event.",
+  "append_only": true,
+  "change_policy": "Every change creates a new event pointing to the previous event. CHANGED_AFTER_CONFIRMATION never mutates CONFIRMED.",
+  "current_sources": {
+    "active_roster": "AVAILABLE_NOW but does not establish starter",
+    "projected_or_confirmed_starter": "TIMING_UNCERTIFIED; no connected immutable source"
+  },
+  "event_identity": [
+    "canonical_season",
+    "game_id",
+    "team_id",
+    "goalie_player_id",
+    "source_timestamp_utc",
+    "capture_timestamp_utc"
+  ],
+  "mvp": "OPTIONAL; absence does not fail champion/market snapshot",
+  "readiness": "BLOCKED_BY_PREGAME_GOALIE_SOURCE_INTEGRATION",
+  "required_update_fields": [
+    "game_id",
+    "team_id",
+    "goalie_player_id",
+    "goalie_name",
+    "source",
+    "source_record_id",
+    "source_timestamp_utc",
+    "capture_timestamp_utc",
+    "status",
+    "confidence",
+    "previous_event_identity",
+    "raw_payload_sha256"
+  ],
+  "statuses": [
+    "NO_PROJECTION",
+    "PROJECTED",
+    "LIKELY",
+    "CONFIRMED",
+    "CHANGED_AFTER_CONFIRMATION",
+    "UNKNOWN"
+  ],
+  "valid_pregame": "Both source and capture timestamps strictly precede scheduled start."
+}

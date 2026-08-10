@@ -1,0 +1,9 @@
+metric,before_count,after_count,change,definition
+total_games,1398,1398,0,same parent schedule feature definitions; overlay replaces only 82 null dates
+missing_date_games,82,0,-82,same parent schedule feature definitions; overlay replaces only 82 null dates
+exact_schedule_chain_games,163,1398,1235,same parent schedule feature definitions; overlay replaces only 82 null dates
+date_blocked_games,1235,0,-1235,same parent schedule feature definitions; overlay replaces only 82 null dates
+rest_qualified_games,145,1378,1233,same parent schedule feature definitions; overlay replaces only 82 null dates
+back_to_back_qualified_games,145,1378,1233,same parent schedule feature definitions; overlay replaces only 82 null dates
+opponent_rest_qualified_games,145,1378,1233,same parent schedule feature definitions; overlay replaces only 82 null dates
+remaining_unresolved_rows,1235,0,-1235,same parent schedule feature definitions; overlay replaces only 82 null dates

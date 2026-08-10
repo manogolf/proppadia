@@ -1,0 +1,5 @@
+test,passed,evidence
+separate_grade_path,True,nhlmlobs_s2023_d20240119_t20240119T190000000000Z_MIDDAY_v1/grade_20240120T120500000000Z
+pregame_hashes_unchanged,True,c538cb6b028a6d016b7a7f64a91519ce80d92f250d98cb5b510b591af8650919
+graded_rows,True,2
+outcome_source_and_conflict_preserved,True,fixture authority

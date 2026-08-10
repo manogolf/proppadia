@@ -1,0 +1,20 @@
+gate_name,required_threshold,observed_value,passed,status,notes
+validation_brier,> 0,-0.000206672989687628,False,FAIL,champion minus challenger
+validation_log_loss,> 0,-0.00035832690311588,False,FAIL,champion minus challenger
+validation_ece_degradation,<= 0.010,0.00182152146369277,True,PASS,challenger minus champion ECE
+holdout_brier,> 0,1.72347689786356e-06,True,PASS,champion minus challenger
+holdout_log_loss,> 0,2.87585263064605e-05,True,PASS,champion minus challenger
+holdout_roc_auc_change,>= -0.005,-0.00148130413057956,True,PASS,challenger minus champion
+holdout_ece_degradation,<= 0.010,0.00142623303248703,True,PASS,challenger minus champion ECE
+combined_oot_brier,> 0,-6.77420119640226e-05,False,FAIL,champion minus challenger
+combined_oot_log_loss,> 0,-0.000100269950167764,False,FAIL,champion minus challenger
+bootstrap_brier_positive_fraction,>= 0.80,0.4246,False,FAIL,5000 paired date-cluster resamples
+bootstrap_log_loss_positive_fraction,>= 0.80,0.4508,False,FAIL,5000 paired date-cluster resamples
+month_exclusion_fraction,>= 0.75,0.2,False,FAIL,both improvements positive
+month_exclusion_worst_joint,no exclusion both < -0.002,1,True,PASS,1 means condition satisfied
+team_exclusion_fraction,>= 0.75,0.272727272727273,False,FAIL,both improvements positive
+team_exclusion_worst_joint,no exclusion both < -0.002,1,True,PASS,1 means condition satisfied
+margin_nonnegative_bands,>= 3 of 5,3,True,PASS,fixed champion margin bands
+margin_excluding_best_band,> 0,-0.000343180081951056,False,FAIL,excluded lt_0.025
+fully_observed_brier,> 0,-2.77052646642795e-05,False,FAIL,combined out-of-time fully observed
+fully_observed_log_loss,> 0,-1.72510540489279e-05,False,FAIL,combined out-of-time fully observed

@@ -1,0 +1,19 @@
+{
+  "as_of_date": "2026-07-13",
+  "canonical_season_convention": "single starting year",
+  "configuration_count": 1,
+  "control_fit_count": 1,
+  "deterministic_replay_count": 1,
+  "experiment_name": "NHL_FULL_GAME_MONEYLINE_SIMPLE_BASELINE_PROCESS_VALIDATION",
+  "generated_by": "backend/nhl/scripts/run_nhl_moneyline_simple_baseline_process_validation.py",
+  "package_name": "nhl_moneyline_simple_baseline_process_validation",
+  "package_version": "1.0.0",
+  "parent_manifest_sha256": {
+    "feature_spine": "c1841f802a90aa1e772059695cc7e8e1c512c9f63730ab54bd4cf0576bf92780",
+    "historical_feasibility": "8a64f276634c7915c98a249ac99053305cf42edaa671303a9ec5669ea3d6ac11",
+    "population": "0ce4a3b673e77af434985670f2bcec779eda561210e5ebc0becbe546a4f14326",
+    "schedule_remediation": "783784e6320b47f90b6dc5f18bb7adc5d359067948836a2c9cabdecdd0842507"
+  },
+  "source_mutation_check": "PASS",
+  "specification_sha256": "4d4057248c16d8ae0958c4005619212692cdc67f3cab3027bf20fade3002f455"
+}

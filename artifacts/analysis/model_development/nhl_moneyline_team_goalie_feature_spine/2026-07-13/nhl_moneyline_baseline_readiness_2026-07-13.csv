@@ -1,0 +1,4 @@
+baseline_scope,readiness,evidence
+TEAM_ONLY,READY_WITH_BOUNDED_LIMITS,season 2023 exact; season 2024 game-id ordering bounded by 82 missing dates
+TEAM_SCHEDULE,BLOCKED_BY_DATE_GAPS,Utah missing dates propagate rest-chain uncertainty
+TEAM_GOALIE,BLOCKED_BY_GOALIE_TIMING,actual starter oracle exists; no projected/confirmed pregame history

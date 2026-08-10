@@ -1,0 +1,43 @@
+{
+  "append_only": true,
+  "capture_fields": [
+    "injured_players",
+    "scratches",
+    "active_roster",
+    "projected_lines",
+    "confirmed_lines",
+    "defensive_pairs",
+    "power_play_units",
+    "material_lineup_change",
+    "source",
+    "source_timestamp_utc",
+    "capture_timestamp_utc",
+    "raw_payload_sha256"
+  ],
+  "current_state": {
+    "active_roster": "AVAILABLE_NOW",
+    "injury_scratch": "NOT_AVAILABLE",
+    "line_combinations": "NOT_AVAILABLE",
+    "timestamp_certification": "TIMING_UNCERTIFIED"
+  },
+  "event_identity": [
+    "canonical_season",
+    "game_id",
+    "team_id",
+    "source_timestamp_utc",
+    "capture_timestamp_utc",
+    "source_record_id"
+  ],
+  "material_change": "Deterministic comparison with immediately preceding same-source pregame event; preserve both states",
+  "mvp": "OPTIONAL; missing context is explicit and does not fail Population A/B",
+  "quality": [
+    "NO_SOURCE",
+    "ROSTER_ONLY",
+    "PARTIAL_PROJECTED",
+    "PROJECTED_COMPLETE",
+    "CONFIRMED_PARTIAL",
+    "CONFIRMED_COMPLETE",
+    "TIMING_UNCERTIFIED"
+  ],
+  "readiness": "BLOCKED_BY_TIMESTAMPED_LINEUP_INJURY_SOURCE"
+}

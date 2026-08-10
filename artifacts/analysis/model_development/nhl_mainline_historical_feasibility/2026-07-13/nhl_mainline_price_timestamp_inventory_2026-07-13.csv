@@ -1,0 +1,8 @@
+market,season,sportsbook,archive_dates,archive_events,events_with_any_player_prop_book,mainline_quote_rows,exact_timestamped,latest_pregame_certified,pregame_date_only,timestamp_unknown,post_start_invalid,derived_consensus_only,no_price,classification,evidence
+MONEYLINE,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"
+REGULATION_MONEYLINE,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"
+PUCK_LINE,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"
+GAME_TOTAL,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"
+TEAM_TOTAL,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"
+FIRST_PERIOD,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"
+OTHER,2025,NONE,153,907,855,0,0,0,0,0,0,0,907,NO_PRICE,"archive contains only player_shots_on_goal, player_shots_on_goal_alternate, player_total_saves, player_points"

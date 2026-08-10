@@ -1,0 +1,7 @@
+feature_order,feature_name,concept,definition,strict_prior_authority,correlated_alternatives_intentionally_excluded,timing_status
+1,diff_std_goal_diff_pg,team_strength,Home minus away season-to-date goals-for minus goals-against per game.,Strict-prior team spine,r5 counterpart and separate GF/GA levels excluded as correlated.,CERTIFIED_STRICT_PRIOR
+2,diff_r10_goal_diff_pg,recent_form,Home minus away prior-10 goals-for minus goals-against per game.,Strict-prior team spine,r5 counterpart excluded to avoid overlapping rolling windows.,CERTIFIED_STRICT_PRIOR
+3,diff_std_shot_diff_pg,team_strength,Home minus away season-to-date shots-for minus shots-against per game.,Strict-prior team spine,Separate SF/SA levels excluded as correlated.,CERTIFIED_STRICT_PRIOR
+4,diff_days_rest,schedule,Home days rest minus away days rest.,Certified schedule chain; season 2024 repaired schedule,Separate rest-day levels excluded as correlated.,CERTIFIED_STRICT_PRIOR
+5,home_back_to_back,schedule,Home team played on the immediately preceding calendar day.,Certified schedule chain; season 2024 repaired schedule,Dense 3/5/7-day workload windows excluded.,CERTIFIED_STRICT_PRIOR
+6,away_back_to_back,schedule,Away team played on the immediately preceding calendar day.,Certified schedule chain; season 2024 repaired schedule,Dense 3/5/7-day workload windows excluded.,CERTIFIED_STRICT_PRIOR

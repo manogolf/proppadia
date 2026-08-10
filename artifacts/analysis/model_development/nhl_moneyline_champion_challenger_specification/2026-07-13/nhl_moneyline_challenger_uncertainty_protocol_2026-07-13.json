@@ -1,0 +1,21 @@
+{
+  "interpretation": "Uncertainty describes robustness and cannot override failed deterministic gates.",
+  "interval": "two-sided percentile 95%",
+  "method": "paired calendar-date cluster bootstrap",
+  "missing_or_single_class_auc_resample": "record NA for AUC only; never discard proper-score resample",
+  "population": "combined validation plus holdout",
+  "report": [
+    "point estimate",
+    "2.5th percentile",
+    "97.5th percentile",
+    "fraction above zero"
+  ],
+  "resamples": 5000,
+  "resampling_unit": "game_date; all games on a sampled date remain paired",
+  "seed": 20260713,
+  "statistics": [
+    "champion_brier - challenger_brier",
+    "champion_log_loss - challenger_log_loss",
+    "challenger_roc_auc - champion_roc_auc"
+  ]
+}

@@ -1,0 +1,3 @@
+canonical_season,raw_games,completed_games,score_qualified_games,winner_qualified_games,home_wins,away_wins,overtime_games,shootout_games,unresolved_extra_time_type,cancelled_postponed_exclusions,score_conflicts,identity_conflicts,fixed_population_count,home_win_rate,away_win_rate
+2023,1400,1400,1400,1400,752,648,205,83,0,0,0,0,1400,0.5371428571428571,0.46285714285714286
+2024,1398,1398,1398,1398,790,608,213,78,0,0,1,0,1398,0.5650929899856938,0.43490701001430615

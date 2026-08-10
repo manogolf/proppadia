@@ -1,0 +1,10 @@
+feature_order,feature_name,role,definition,timing_status,missingness_policy,population_rows,raw_missing_rows_before_policy,construction
+1,diff_std_goal_diff_pg,FROZEN_CONTROL,Home minus away season-to-date goal differential rate,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,39,parent value
+2,diff_r10_goal_diff_pg,FROZEN_CONTROL,Home minus away prior-10 goal differential rate,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,39,parent value
+3,diff_std_shot_diff_pg,FROZEN_CONTROL,Home minus away season-to-date shot differential rate,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,39,parent value
+4,diff_days_rest,FROZEN_CONTROL,Home minus away days rest,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,1272,parent value
+5,home_back_to_back,FROZEN_CONTROL,Home played previous calendar day,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,1118,parent value
+6,away_back_to_back,FROZEN_CONTROL,Away played previous calendar day,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,1132,parent value
+7,diff_games_prior_5d,ADDITIVE_NEW_FAMILY,Home games in prior five calendar days minus away games in prior five calendar days,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,0,home_games_prior_5d - away_games_prior_5d
+8,home_consecutive_road_games_prior,ADDITIVE_NEW_FAMILY,Home team's consecutive road games immediately before game,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,0,direct certified schedule-chain value
+9,away_consecutive_road_games_prior,ADDITIVE_NEW_FAMILY,Away team's consecutive road games immediately before game,CERTIFIED_STRICT_PRIOR,FIT_ONLY_MEDIAN_IMPUTATION,2798,0,direct certified schedule-chain value

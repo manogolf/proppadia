@@ -1,0 +1,130 @@
+{
+  "artifact_hashes": {
+    "coefficients": "885233464e105a1199407e433604de78f81a5c71d360377e53989539db1f3eca",
+    "control_predictions": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda",
+    "feature_manifest": "544f7e68b9cb4c254e08ff29ef687eb27be00f0b2d11c1183f384090e319702e",
+    "metrics": "5cf9709fca0cf8f1f52af7aa704a4822e0edbd78a553dbf9fc49078632a0ceda",
+    "population_partition": "9b45fdaaed5c5dea1f959d434510e259fe13aa7d293db94e8e0ffdbf1fce5280",
+    "preprocessing_state": "885233464e105a1199407e433604de78f81a5c71d360377e53989539db1f3eca",
+    "specification": "4d4057248c16d8ae0958c4005619212692cdc67f3cab3027bf20fade3002f455"
+  },
+  "certification_date": "2026-07-13",
+  "coefficient_intercept_records": [
+    {
+      "directional_sanity_expectation": "POSITIVE",
+      "directionally_plausible": true,
+      "feature_name": "diff_std_goal_diff_pg",
+      "feature_order": 1,
+      "fit_imputation_median": 0.0117450638792098,
+      "fit_scaler_mean": -0.0604100047681592,
+      "fit_scaler_scale": 1.46573427778449,
+      "sign": "POSITIVE",
+      "standardized_coefficient": 0.0449264245768112
+    },
+    {
+      "directional_sanity_expectation": "POSITIVE",
+      "directionally_plausible": true,
+      "feature_name": "diff_r10_goal_diff_pg",
+      "feature_order": 2,
+      "fit_imputation_median": 0.0,
+      "fit_scaler_mean": -0.0524200122274302,
+      "fit_scaler_scale": 1.61961038332877,
+      "sign": "POSITIVE",
+      "standardized_coefficient": 0.024591622992364
+    },
+    {
+      "directional_sanity_expectation": "POSITIVE",
+      "directionally_plausible": true,
+      "feature_name": "diff_std_shot_diff_pg",
+      "feature_order": 3,
+      "fit_imputation_median": -0.10215053763441,
+      "fit_scaler_mean": -0.113124201966617,
+      "fit_scaler_scale": 7.03118046652021,
+      "sign": "POSITIVE",
+      "standardized_coefficient": 0.380218141561234
+    },
+    {
+      "directional_sanity_expectation": "POSITIVE_OR_NEAR_ZERO",
+      "directionally_plausible": true,
+      "feature_name": "diff_days_rest",
+      "feature_order": 4,
+      "fit_imputation_median": 0.0,
+      "fit_scaler_mean": 0.0884450784593438,
+      "fit_scaler_scale": 1.09239127372712,
+      "sign": "POSITIVE",
+      "standardized_coefficient": 0.0906627232822018
+    },
+    {
+      "directional_sanity_expectation": "NEGATIVE_OR_NEAR_ZERO",
+      "directionally_plausible": true,
+      "feature_name": "home_back_to_back",
+      "feature_order": 5,
+      "fit_imputation_median": 0.0,
+      "fit_scaler_mean": 0.10413694721826,
+      "fit_scaler_scale": 0.305438117205959,
+      "sign": "NEGATIVE",
+      "standardized_coefficient": -0.0444787387651908
+    },
+    {
+      "directional_sanity_expectation": "POSITIVE_OR_NEAR_ZERO",
+      "directionally_plausible": true,
+      "feature_name": "away_back_to_back",
+      "feature_order": 6,
+      "fit_imputation_median": 0.0,
+      "fit_scaler_mean": 0.159771754636234,
+      "fit_scaler_scale": 0.366394242663136,
+      "sign": "POSITIVE",
+      "standardized_coefficient": 0.0676392173167916
+    },
+    {
+      "directional_sanity_expectation": "UNCONSTRAINED",
+      "directionally_plausible": true,
+      "feature_name": "__INTERCEPT__",
+      "feature_order": 0,
+      "fit_imputation_median": null,
+      "fit_scaler_mean": null,
+      "fit_scaler_scale": null,
+      "sign": "POSITIVE",
+      "standardized_coefficient": 0.156375029909156
+    }
+  ],
+  "control_name": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "frozen_reference_probability": 0.5378031383737518,
+  "model_configuration": {
+    "C": 1.0,
+    "family": "logistic_regression",
+    "fit_intercept": true,
+    "max_iter": 1000,
+    "penalty": "l2",
+    "random_state": 20260713,
+    "solver": "liblinear",
+    "tol": 0.0001
+  },
+  "parent_control_manifest_sha256": "aeae5fcd8553c91ab1e2af86d27e4bab7dc28d8c05fcd7871cfd72accab1a65c",
+  "preprocessing_policy": {
+    "imputation": "FIT-segment median imputation per feature; all certified rows retained and scored; statuses remain explicit.",
+    "scaling": "StandardScaler fitted only on the fit segment after fit-only median imputation.",
+    "state_source_sha256": "885233464e105a1199407e433604de78f81a5c71d360377e53989539db1f3eca"
+  },
+  "probabilities_recomputed": false,
+  "refit_performed": false,
+  "stored_prediction_identity": [
+    "canonical_season",
+    "game_id"
+  ],
+  "stored_prediction_rows": 2798,
+  "stored_prediction_sha256": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda",
+  "target": {
+    "field": "home_win_target",
+    "one": "certified home full-game winner",
+    "zero": "certified away full-game winner"
+  }
+}

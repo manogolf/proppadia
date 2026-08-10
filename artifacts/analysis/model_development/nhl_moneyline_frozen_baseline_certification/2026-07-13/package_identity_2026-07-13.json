@@ -1,0 +1,16 @@
+{
+  "as_of_date": "2026-07-13",
+  "certification_level": 3,
+  "control_name": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+  "generated_by": "backend/nhl/scripts/certify_nhl_moneyline_frozen_baseline.py",
+  "no_refit_assertion": true,
+  "package_name": "nhl_moneyline_frozen_baseline_certification",
+  "parent_manifest_sha256": {
+    "control": "aeae5fcd8553c91ab1e2af86d27e4bab7dc28d8c05fcd7871cfd72accab1a65c",
+    "features": "c1841f802a90aa1e772059695cc7e8e1c512c9f63730ab54bd4cf0576bf92780",
+    "population": "0ce4a3b673e77af434985670f2bcec779eda561210e5ebc0becbe546a4f14326",
+    "schedule": "783784e6320b47f90b6dc5f18bb7adc5d359067948836a2c9cabdecdd0842507"
+  },
+  "source_mutation_check": "PASS",
+  "version": "1.0.0"
+}

@@ -1,0 +1,12 @@
+check,expected,observed,status
+affected_set_count,82,82,PASS
+season_2024_population,1398,1398,PASS
+official_schedule_identity_matches,82,82,PASS
+multi_source_date_agreement,82,82,PASS
+duplicate_game_ids,0,0,PASS
+same_team_same_date_double_bookings,0,0,PASS
+date_blocked_after,0,0,PASS
+same_game_leakage,0,0,PASS
+future_game_in_prior_window,0,0,PASS
+prior_season_carryover,0,0,PASS
+intraday_order_required,0,0,PASS_DATE_GRAIN_SUFFICIENT_NO_TEAM_DOUBLEHEADERS

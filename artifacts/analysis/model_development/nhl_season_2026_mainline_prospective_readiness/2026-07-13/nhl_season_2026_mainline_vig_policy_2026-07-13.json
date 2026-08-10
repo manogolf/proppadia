@@ -1,0 +1,27 @@
+{
+  "american_to_decimal": {
+    "negative": "1 + 100/abs(american)",
+    "positive": "1 + american/100",
+    "zero": "INVALID"
+  },
+  "devig_away": "raw_away / (raw_home + raw_away)",
+  "devig_home": "raw_home / (raw_home + raw_away)",
+  "edge_cases": {
+    "duplicate_side": "AMBIGUOUS_REJECT",
+    "missing_side": "NO_DEVIG_INCOMPLETE_TWO_WAY",
+    "nonpositive_overround": "COMPUTE but flag NONPOSITIVE_OVERROUND",
+    "post_start": "REJECT_FROM_PREGAME",
+    "stale": "COMPUTE_AND_FLAG_STALE; exclude qualified comparison",
+    "suspended": "NO_DEVIG_SUSPENDED"
+  },
+  "method": "PROPORTIONAL_TWO_WAY_NORMALIZATION_V1",
+  "optimization": "Method frozen before observation; no performance-based selection.",
+  "overround": "raw_home + raw_away - 1",
+  "raw_implied_probability": "1 / decimal_price",
+  "requirements": [
+    "exactly one active home and away outcome from same book/market snapshot",
+    "positive decimal prices",
+    "timestamps valid pregame"
+  ],
+  "separation": "Champion probability and de-vig market probability remain distinct; never overwrite either."
+}

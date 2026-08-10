@@ -1,0 +1,34 @@
+{
+  "allowed": [
+    "generate frozen champion probabilities",
+    "capture immutable timestamped prices",
+    "capture optional goalie/lineup context",
+    "append later official grades",
+    "compute descriptive prediction/market/context quality"
+  ],
+  "mode": "SHADOW_OBSERVATION_ONLY",
+  "mode_label_required_on_every_output": true,
+  "prohibited": [
+    "wager recommendation",
+    "candidate selection",
+    "automatic execution",
+    "champion retraining",
+    "recalibration",
+    "threshold optimization",
+    "frontend behavior change",
+    "production promotion"
+  ],
+  "review_trigger": {
+    "meaning": "Triggers governance review only; does not authorize promotion.",
+    "minimum_calendar_days": 60,
+    "minimum_graded_population_A_games": 200,
+    "required_before_review": [
+      "capture completeness report",
+      "timestamp contamination audit",
+      "champion parity pass history",
+      "prediction/calibration report",
+      "Population B coverage report"
+    ]
+  },
+  "start_authorization": "Separate shadow-capture implementation and then explicit job-enablement authorization required."
+}

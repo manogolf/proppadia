@@ -1,0 +1,25 @@
+{
+  "brier_improvement": "champion_brier - challenger_brier; positive favors challenger",
+  "calibration": "Identical fixed [0.0,0.1,...,1.0] buckets; no recalibration",
+  "comparison": "Paired challenger minus or champion minus challenger on identical game rows as directionally documented.",
+  "excluded": [
+    "odds",
+    "ROI",
+    "threshold optimization"
+  ],
+  "log_loss_improvement": "champion_log_loss - challenger_log_loss; positive favors challenger",
+  "primary_order": [
+    "brier_score",
+    "log_loss",
+    "roc_auc"
+  ],
+  "roc_auc_change": "challenger_auc - champion_auc",
+  "secondary": [
+    "accuracy_at_0.5",
+    "ECE_fixed_deciles",
+    "weighted_absolute_calibration_gap",
+    "mean_probability",
+    "observed_home_win_rate",
+    "correctness"
+  ]
+}

@@ -1,0 +1,3 @@
+canonical_season,oracle_goalie_rows,oracle_games,shots_faced_nonmissing,saves_nonmissing,goals_allowed_nonmissing,toi_nonmissing,pregame_identity_games,strict_prior_goalie_feature_games,classification,use_decision
+2023,2800,1400,2800,2800,2634,2800,0,0,ACTUAL_STARTER_ORACLE_ONLY,DIAGNOSTIC_ONLY_NOT_MODEL_INPUT
+2024,2632,1316,2632,2632,2465,2632,0,0,ACTUAL_STARTER_ORACLE_ONLY,DIAGNOSTIC_ONLY_NOT_MODEL_INPUT

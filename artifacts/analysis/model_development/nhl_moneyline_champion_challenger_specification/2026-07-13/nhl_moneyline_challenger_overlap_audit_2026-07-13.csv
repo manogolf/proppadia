@@ -1,0 +1,4 @@
+challenger_field,closest_control_fields,overlap_class,novel_information_rationale,anti_sprawl_boundary
+diff_games_prior_5d,diff_days_rest; home_back_to_back; away_back_to_back,MODERATE_OVERLAP,Cumulative games in the prior five calendar days is not determined by yesterday-only status.,Retain one density window; exclude 3-day and 7-day variants.
+home_consecutive_road_games_prior,home_back_to_back,LOW_OVERLAP,"Road-sequence persistence is location context, not elapsed rest.",No travel distance or postgame information.
+away_consecutive_road_games_prior,away_back_to_back,LOW_OVERLAP,"Road-sequence persistence is location context, not elapsed rest.",No travel distance or postgame information.

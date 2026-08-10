@@ -1,0 +1,2 @@
+test,rows,deterministic_second_run,target_game_history_rows,future_history_rows,minimum_history_rows,status,fixture_note
+historical_fixture_strict_prior,2,True,0,0,0,PASS,Historical identities/outcomes with explicitly synthetic missing start times and shot counts; not a season 2026 observation.

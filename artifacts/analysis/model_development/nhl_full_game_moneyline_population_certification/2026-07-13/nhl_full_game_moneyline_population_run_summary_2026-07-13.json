@@ -1,0 +1,14 @@
+{
+  "away_wins": 1256,
+  "exclusions": 0,
+  "games": 2798,
+  "home_wins": 1542,
+  "missing_game_dates": 82,
+  "overtime": 418,
+  "season_counts": {
+    "2023": 1400,
+    "2024": 1398
+  },
+  "shootouts": 161,
+  "winner_flag_conflicts": 1
+}

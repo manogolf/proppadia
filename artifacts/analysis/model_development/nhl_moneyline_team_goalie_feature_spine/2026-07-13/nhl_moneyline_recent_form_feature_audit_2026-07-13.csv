@@ -1,0 +1,5 @@
+canonical_season,window_games,games,home_nonmissing,away_nonmissing,minimum_history,weighting,season_reset,prior_season_inclusion,target_game_excluded,chronology
+2023,5,1400,1383,1385,1,equal,YES,NO,YES,"game_id order; exact date parity season 2023, bounded season 2024"
+2023,10,1400,1383,1385,1,equal,YES,NO,YES,"game_id order; exact date parity season 2023, bounded season 2024"
+2024,5,1398,1381,1383,1,equal,YES,NO,YES,"game_id order; exact date parity season 2023, bounded season 2024"
+2024,10,1398,1381,1383,1,equal,YES,NO,YES,"game_id order; exact date parity season 2023, bounded season 2024"

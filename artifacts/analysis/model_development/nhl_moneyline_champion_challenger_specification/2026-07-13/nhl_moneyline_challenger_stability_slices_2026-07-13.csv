@@ -1,0 +1,8 @@
+slice,fixed_definition,expected_membership,purpose
+validation,Frozen split,699,Primary gate
+holdout,Frozen split,1398,Primary gate
+combined_out_of_time,Validation plus holdout,2097,Primary synthesis
+calendar_month,YYYY-MM from frozen game date,all fixed months,Concentration check
+team,Each franchise as home and away,all teams,Identity/concentration check
+probability_margin_band,"Champion |p-0.5|: <.025, .025-.05, .05-.10, .10-.15, >=.15",five fixed bands,Confidence-region check
+missingness_state,FULLY_OBSERVED versus MINIMUM_HISTORY_LIMITED_IMPUTED,two frozen states,Imputation stability

@@ -1,0 +1,7 @@
+feature_family,source,grain,timing_decision,strict_prior_status,replayability,mutable_source_risk,use_decision
+TEAM_STRENGTH,team_game_2023/2024_summary and roll; shots stages; team context tables,team-game/situation,prior-game roll columns exist for 2023/2024,REQUIRES_CERTIFICATION,BOUNDED_RECONSTRUCTION,MEDIUM,CHARACTERIZE_ONLY
+GOALIE,goalie_game_logs_raw and goalie feature scripts,goalie-game,actual results are postgame; zero prediction-time starter rows,REQUIRES_CERTIFICATION,POSTGAME_ONLY_OR_TIMING_UNCERTIFIED,HIGH,CHARACTERIZE_ONLY
+SCHEDULE,nhl.games,game,game schedule authoritative; rest derivable prior-only,VERIFIED_SOURCE_ORDERING,BOUNDED_RECONSTRUCTION,MEDIUM,CHARACTERIZE_ONLY
+LINEUP_AVAILABILITY,nhl.roster_status,player-team-game snapshot,only 469 rows are pre-start; not full games,REQUIRES_CERTIFICATION,NOT_HISTORICALLY_REPLAYABLE,HIGH,CHARACTERIZE_ONLY
+RECENT_FORM,team_game_2023_roll; team_game_2024_roll; team context,team-game,prior-window definitions require independent certification,REQUIRES_CERTIFICATION,BOUNDED_RECONSTRUCTION,MEDIUM,CHARACTERIZE_ONLY
+MARKET_CONTEXT,player-prop-only odds archive,game-market-book-snapshot,not applicable,REQUIRES_CERTIFICATION,NOT_REPLAYABLE,HIGH,CHARACTERIZE_ONLY

@@ -1,0 +1,44 @@
+{
+  "decisions": {
+    "NHL_SEASON_2026_MAINLINE_AUTOMATED_SHADOW_RUN_READINESS": "NOT_READY",
+    "NHL_SEASON_2026_MAINLINE_CHAMPION_HISTORICAL_PARITY": "READY",
+    "NHL_SEASON_2026_MAINLINE_CHAMPION_SCORER_IMPLEMENTED": "READY",
+    "NHL_SEASON_2026_MAINLINE_H2H_CAPTURE_IMPLEMENTED": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_MAINLINE_HEALTH_GATES_IMPLEMENTED": "READY",
+    "NHL_SEASON_2026_MAINLINE_IMMUTABLE_RUN_ARCHIVE_IMPLEMENTED": "READY",
+    "NHL_SEASON_2026_MAINLINE_MANUAL_SHADOW_RUN_READINESS": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_MAINLINE_OPERATIONAL_RESTART_READINESS": "MANUAL_SHADOW_ONLY",
+    "NHL_SEASON_2026_MAINLINE_OUTCOME_GRADING_HOOK_IMPLEMENTED": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_MAINLINE_PRICE_TIMESTAMP_PERSISTENCE_IMPLEMENTED": "READY",
+    "NHL_SEASON_2026_MAINLINE_SOG_ISOLATION_VERIFIED": "READY",
+    "NHL_SEASON_2026_MAINLINE_STRICT_PRIOR_FEATURE_BUILDER_IMPLEMENTED": "READY_WITH_BOUNDED_LIMITS",
+    "NHL_SEASON_2026_MAINLINE_WAGER_RECOMMENDATION_READINESS": "NOT_READY"
+  },
+  "dry_run": {
+    "archive_manifest_sha256": "c538cb6b028a6d016b7a7f64a91519ce80d92f250d98cb5b510b591af8650919",
+    "deterministic": true,
+    "grading_immutable": true,
+    "health": "PASS",
+    "historical_fixture": true,
+    "overwrite_blocked": true,
+    "population_a": 2,
+    "population_b": 2,
+    "raw_sha256": "baa5432961b2d173874f572ba296fb4b7e7674b37542b02b4f705d7994b3dfd3",
+    "run_id": "nhlmlobs_s2023_d20240119_t20240119T190000000000Z_MIDDAY_v1"
+  },
+  "mode": "SHADOW_OBSERVATION_ONLY",
+  "recommended_next_bounded_task": "NHL_SEASON_2026_FIRST_PROSPECTIVE_MAINLINE_SHADOW_OBSERVATION",
+  "still_blocked": [
+    "wagering",
+    "recommendations",
+    "candidate filters",
+    "champion promotion",
+    "challenger fitting",
+    "historical odds backfill",
+    "automatic scheduling",
+    "frontend changes"
+  ],
+  "unlocked": [
+    "One human-initiated actual season 2026 mainline shadow observation when a real slate is available"
+  ]
+}

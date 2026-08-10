@@ -1,0 +1,4 @@
+system,entry_point,artifact,model_type,target,output,date_coverage,season_coverage,training_replay_status,inputs,status,saved_predictions,saved_probabilities,saved_prepared_inputs,evaluation_reports,exact_reproduction
+No surviving NHL mainline baseline,NONE_FOUND,NONE_FOUND,NONE,game-level mainline,NONE,NONE,NONE,NOT_APPLICABLE,NONE,ABSENT,NO,NO,NO,NO,NO
+Player-prop SOG Poisson baseline,backend/nhl/scripts/score_sog_poisson_baseline.py,formula only,player-game Poisson,player shots on goal,player-prop probabilities,2026-02-28..2026-04-16 production,2025,Level 4 exact reproduction,player SOG rate and TOI,PROP_ONLY_NOT_MAINLINE,YES,YES,YES,YES,YES_PROP_ONLY
+Goalie saves and points models,backend/nhl/models/latest and scoring scripts,prop model artifacts,player prop,goalie saves or player points,player-prop probabilities,partial,primarily 2025,not mainline-certified,player/game context,PROP_ONLY_NOT_MAINLINE,PARTIAL,PARTIAL,PARTIAL,PROP_ONLY,NOT_AS_MAINLINE

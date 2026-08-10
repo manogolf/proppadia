@@ -1,0 +1,7 @@
+concept,role,timing_classification,leakage_evidence,decision
+team season-to-date and rolling goals/shots,TEAM_INPUT,EXACT 2023; BOUNDED 2024,target game shifted out; season grouped,PASS_WITH_BOUNDED_2024
+schedule/rest,SCHEDULE_INPUT,EXACT where date chain complete,82 Utah dates and downstream team rest blocked,PASS_WITH_DATE_BLOCKS
+actual goalie identity/performance,ORACLE_ONLY,POSTGAME_ONLY,created after game; max TOI uses participation,EXCLUDE_MODEL_INPUT
+projected/confirmed goalie,GOALIE_INPUT,NOT_REPLAYABLE,no historical pregame snapshot,BLOCKED
+roster/injury/scratch,LINEUP_INPUT,NOT_REPLAYABLE,sparse/current-state and no injury source,BLOCKED
+final outcomes,OUTCOME_ONLY,POSTGAME_ONLY,retained for evaluation only; excluded from feature contract,PASS_EXCLUDED

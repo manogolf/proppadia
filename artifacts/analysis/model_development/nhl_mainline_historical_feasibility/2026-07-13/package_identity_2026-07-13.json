@@ -1,0 +1,17 @@
+{
+  "as_of": "2026-07-13",
+  "assessment_date": "2026-08-09",
+  "canonical_seasons": [
+    2023,
+    2024,
+    2025
+  ],
+  "odds_archive": {
+    "events": 907,
+    "files": 153,
+    "mainline_quotes": 0
+  },
+  "package": "nhl_mainline_historical_feasibility",
+  "scope": "read-only infrastructure feasibility",
+  "version": "1.0.0"
+}

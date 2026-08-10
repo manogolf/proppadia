@@ -1,0 +1,7 @@
+check,passed,maximum_absolute_difference,evidence
+split_identity,True,0,Exact same immutable partition rule and ordered identities
+feature_matrix,True,0,Independent fit-only preprocessors
+model_configuration,True,0,Exact parameter dictionary
+probabilities,True,0,Tolerance 1e-12
+probability_complement,True,0,Tolerance 1e-12
+output_ordering,True,0,Stable game_date then game_id ordering

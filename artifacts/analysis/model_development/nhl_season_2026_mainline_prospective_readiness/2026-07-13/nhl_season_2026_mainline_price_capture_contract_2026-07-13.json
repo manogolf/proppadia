@@ -1,0 +1,50 @@
+{
+  "current_readiness": "SOURCE_EXISTS_NOT_CONNECTED; immutable h2h capture implementation is required",
+  "identity_matching": "Exact normalized home and away identities plus commence_time within 15 minutes of NHL scheduled start; ambiguity fails closed.",
+  "immutability": "Persist every raw payload and normalized quote append-only. Latest is a derived view, never the only stored state.",
+  "market_family": "FULL_GAME_MONEYLINE_INCLUDING_OVERTIME_AND_SHOOTOUT",
+  "missing_side": "Preserve available side with INCOMPLETE_TWO_WAY; exclude de-vig and Population B",
+  "overwrite": "PROHIBITED",
+  "provider_market_key": "h2h",
+  "quote_grain": [
+    "game_id",
+    "sportsbook",
+    "market_family",
+    "side",
+    "quote_timestamp_utc",
+    "capture_timestamp_utc"
+  ],
+  "required_fields": [
+    "provider_event_id",
+    "game_id",
+    "sportsbook_key",
+    "sportsbook_name",
+    "market_key",
+    "side",
+    "american_price",
+    "decimal_price",
+    "provider_market_last_update_utc",
+    "quote_timestamp_utc",
+    "source_timestamp_utc",
+    "capture_timestamp_utc",
+    "scheduled_start_time_utc",
+    "market_status",
+    "source_url_identity",
+    "raw_payload_sha256"
+  ],
+  "snapshot_classes": {
+    "EARLY_OBSERVED": "Quote preserved by MIDDAY run",
+    "EXECUTION_PRICE": "Only explicit user-supplied execution evidence",
+    "LATEST_BEFORE_CHAMPION_PREDICTION": "Maximum valid quote timestamp <= champion run timestamp",
+    "LATEST_BEFORE_PUCK_DROP": "Maximum valid quote/capture timestamp < scheduled start",
+    "OPENING_OBSERVED": "First valid quote observed per game/book"
+  },
+  "source_candidate": "The Odds API through a new mainline-only wrapper; do not alter prop defaults",
+  "suspended": "Retain event with SUSPENDED status; do not normalize as active quote",
+  "timing_rules": {
+    "post_start": "POST_START_REJECTED",
+    "stale": "Flag when quote age exceeds 30 minutes at associated run; retain but exclude latest-at-run qualification unless no qualified status is claimed",
+    "unknown_provider_timestamp": "retain raw quote but market_capture_status=TIMING_UNCERTIFIED; exclude Population B",
+    "valid_pregame": "quote_timestamp_utc and capture_timestamp_utc strictly before scheduled_start_time_utc"
+  }
+}

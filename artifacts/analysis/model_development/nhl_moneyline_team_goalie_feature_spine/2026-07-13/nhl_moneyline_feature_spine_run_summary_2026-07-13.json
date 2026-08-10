@@ -1,0 +1,13 @@
+{
+  "date_blocked_games": 1235,
+  "games": 2798,
+  "goalie_oracle_games": 2716,
+  "many_to_many_joins": 0,
+  "pregame_goalie_games": 0,
+  "season_counts": {
+    "2023": 1400,
+    "2024": 1398
+  },
+  "team_feature_games_any": 2759,
+  "team_game_rows": 5596
+}

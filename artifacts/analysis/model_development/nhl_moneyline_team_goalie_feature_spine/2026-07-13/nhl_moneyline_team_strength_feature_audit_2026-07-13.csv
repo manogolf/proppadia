@@ -1,0 +1,3 @@
+canonical_season,games,team_source_rows,exact_team_keys,team_feature_games_any,min_history_null_games,strict_prior_games,bounded_games,duplicate_keys,negative_values,same_game_leakage
+2023,1400,2800,2800,1381,19,1381,0,0,0,0
+2024,1398,2796,2796,1378,20,0,1378,0,0,0

@@ -1,0 +1,32 @@
+{
+  "append_policy": "Write a separate grading record linked to immutable run/game rows. No UPDATE to pregame snapshot payloads.",
+  "conflict": "Conflicting authorities set CONFLICT_REVIEW_REQUIRED; no metric contribution until resolved with lineage.",
+  "definition": {
+    "0": "official away full-game winner including overtime/shootout",
+    "1": "official home full-game winner including overtime/shootout"
+  },
+  "eligibility": "Grade only authoritative final, decisive scores; pending/conflict rows remain ungraded.",
+  "readiness": "AVAILABLE_WITH_MINOR_INTEGRATION",
+  "required_fields": [
+    "canonical_season",
+    "game_id",
+    "official_final_home_goals",
+    "official_final_away_goals",
+    "regulation_home_goals",
+    "regulation_away_goals",
+    "decision_type",
+    "official_full_game_winner",
+    "home_win_target",
+    "grading_timestamp_utc",
+    "source_timestamp_utc",
+    "source_uri_identity",
+    "raw_source_sha256",
+    "outcome_conflict_status"
+  ],
+  "separation_assertion": "Outcome fields prohibited from pregame capture schema and champion feature computation.",
+  "source_priority": [
+    "NHL official gamecenter/boxscore final",
+    "NHL official schedule final state"
+  ],
+  "target": "home_win_target"
+}

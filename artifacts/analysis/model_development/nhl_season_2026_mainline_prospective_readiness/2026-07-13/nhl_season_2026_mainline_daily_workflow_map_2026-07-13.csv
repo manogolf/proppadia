@@ -1,0 +1,9 @@
+order,stage,repository_status,planned_command,contract,operation_mode
+1,schedule_acquisition,EXISTING_ADAPTABLE,SLATE_DATE=<date> .venv/bin/python backend/nhl/scripts/import_schedule_today.py,Fetch/upsert official schedule; implementation must additionally archive raw immutable source,Automated after later authorization
+2,feature_preparation,TO_IMPLEMENT,python -m backend.nhl.scripts.build_mainline_observation --stage features --slate-date <date> --run-type <type>,Construct six strict-prior inputs as of run timestamp,Automated after implementation
+3,champion_scoring,TO_IMPLEMENT,python -m backend.nhl.scripts.build_mainline_observation --stage score --run-id <run_id>,Load frozen parameter state and emit probability with parity/hash checks,Automated after implementation
+4,mainline_odds_capture,EXISTING_TRANSPORT_NEW_WRAPPER_REQUIRED,python -m backend.nhl.scripts.capture_mainline_h2h --run-id <run_id>,Call Odds API h2h only; archive raw and normalized append-only quotes,Automated after implementation
+5,goalie_lineup_capture,PHASE_2_MANUAL_OR_SOURCE_DEPENDENT,python -m backend.nhl.scripts.capture_mainline_context --run-id <run_id>,Append available context events; optional absence reported,Manual until source certified
+6,snapshot_packaging,TO_IMPLEMENT,python -m backend.nhl.scripts.finalize_mainline_observation --run-id <run_id>,"Create-only archive, metadata, hashes, coverage summary",Automated after implementation
+7,integrity_validation,TO_IMPLEMENT,python -m backend.nhl.scripts.validate_mainline_observation --run-id <run_id>,Run health gates; fail closed on critical violations,Automated after implementation
+8,postgame_grading,EXISTING_LOGIC_NEW_WRAPPER_REQUIRED,python -m backend.nhl.scripts.grade_mainline_observations --slate-date <date>,Append official outcomes without modifying pregame records,Automated after implementation

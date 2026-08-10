@@ -1,0 +1,31 @@
+{
+  "decisions": {
+    "NHL_MONEYLINE_BASELINE_DETERMINISTIC_REPLAY": "READY",
+    "NHL_MONEYLINE_BASELINE_FEATURE_MANIFEST_FROZEN": "READY",
+    "NHL_MONEYLINE_BASELINE_POPULATION_FROZEN": "READY",
+    "NHL_MONEYLINE_BASELINE_PROBABILITY_SEMANTICS_VERIFIED": "READY",
+    "NHL_MONEYLINE_BASELINE_PROCESS_VALIDATED": "PROCESS_VALIDATED_NO_PROMOTION",
+    "NHL_MONEYLINE_BASELINE_PROMOTION_READINESS": "NOT_READY",
+    "NHL_MONEYLINE_BASELINE_SIGNAL_CHARACTERIZED": "MODEST_OUT_OF_TIME_DISCRIMINATION_WITHOUT_PROMOTION_CLAIM",
+    "NHL_MONEYLINE_BASELINE_TARGET_FROZEN": "READY",
+    "NHL_MONEYLINE_BASELINE_TEMPORAL_SPLIT_FROZEN": "READY",
+    "NHL_MONEYLINE_CHALLENGER_SPECIFICATION_READINESS": "NOT_READY",
+    "NHL_MONEYLINE_MODEL_TRAINING_READINESS": "NOT_READY",
+    "NHL_SEASON_2026_MAINLINE_OPERATIONAL_READINESS": "NOT_READY"
+  },
+  "experiment_name": "NHL_FULL_GAME_MONEYLINE_SIMPLE_BASELINE_PROCESS_VALIDATION",
+  "no_promotion": true,
+  "recommended_next_bounded_activity": "FORMAL_FIXED_BASELINE_EVALUATION_AND_CERTIFICATION",
+  "still_blocked": [
+    "challenger training",
+    "feature or hyperparameter search",
+    "ROI analysis",
+    "historical odds acquisition",
+    "model promotion",
+    "production deployment",
+    "season 2026 operational restart"
+  ],
+  "unlocked": [
+    "A separately authorized formal evaluation/certification of this exact fixed baseline and protocol."
+  ]
+}

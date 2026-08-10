@@ -1,0 +1,19 @@
+field_or_concept,classification,notes
+canonical_season,IDENTITY_METADATA,nhl.games.season authoritative
+game_id,IDENTITY_METADATA,canonical identity
+game_date,IDENTITY_METADATA,schedule identity
+scheduled_start_time_utc,TIMING_UNVERIFIED,missing for all but three season 2023/2024 rows
+home_team,IDENTITY_METADATA,canonical home side
+away_team,IDENTITY_METADATA,canonical away side
+game_type,IDENTITY_METADATA,competition type
+final_home_goals,OUTCOME_ONLY,never model input
+final_away_goals,OUTCOME_ONLY,never model input
+goal_differential,OUTCOME_ONLY,derived final outcome
+total_goals,OUTCOME_ONLY,derived final outcome
+canonical_outcome,OUTCOME_ONLY,settlement target
+decision_type,OUTCOME_ONLY,postgame result type
+team rolling strength,POTENTIAL_STRICT_PRIOR_FEATURE,not constructed here
+goalie state,TIMING_UNVERIFIED,requires pregame certification
+rest and schedule,POTENTIAL_STRICT_PRIOR_FEATURE,future construction only
+lineup context,TIMING_UNVERIFIED,requires snapshot timing
+team_summary.num_event_goal_for,NOT_FOR_MODEL_INPUT,semantic defect: zero on both team rows

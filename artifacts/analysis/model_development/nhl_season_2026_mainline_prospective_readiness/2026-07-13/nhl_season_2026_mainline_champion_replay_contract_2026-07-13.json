@@ -1,0 +1,79 @@
+{
+  "champion_name": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+  "champion_prediction_sha256": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda",
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "intercept": 0.156375029909156,
+  "mutation_prohibitions": [
+    "no retraining",
+    "no online coefficient update",
+    "no recalibration",
+    "no feature reordering",
+    "no missingness amendment"
+  ],
+  "parameter_state_sha256": "885233464e105a1199407e433604de78f81a5c71d360377e53989539db1f3eca",
+  "preprocessing": {
+    "imputation": "frozen fit medians",
+    "scaling": "(imputed_value - frozen fit mean) / frozen fit scale",
+    "state": {
+      "__INTERCEPT__": {
+        "coefficient": null,
+        "median": null,
+        "scaler_mean": null,
+        "scaler_scale": null
+      },
+      "away_back_to_back": {
+        "coefficient": 0.0676392173167916,
+        "median": 0.0,
+        "scaler_mean": 0.159771754636234,
+        "scaler_scale": 0.366394242663136
+      },
+      "diff_days_rest": {
+        "coefficient": 0.0906627232822018,
+        "median": 0.0,
+        "scaler_mean": 0.0884450784593438,
+        "scaler_scale": 1.09239127372712
+      },
+      "diff_r10_goal_diff_pg": {
+        "coefficient": 0.024591622992364,
+        "median": 0.0,
+        "scaler_mean": -0.0524200122274302,
+        "scaler_scale": 1.61961038332877
+      },
+      "diff_std_goal_diff_pg": {
+        "coefficient": 0.0449264245768112,
+        "median": 0.0117450638792098,
+        "scaler_mean": -0.0604100047681592,
+        "scaler_scale": 1.46573427778449
+      },
+      "diff_std_shot_diff_pg": {
+        "coefficient": 0.380218141561234,
+        "median": -0.10215053763441,
+        "scaler_mean": -0.113124201966617,
+        "scaler_scale": 7.03118046652021
+      },
+      "home_back_to_back": {
+        "coefficient": -0.0444787387651908,
+        "median": 0.0,
+        "scaler_mean": 0.10413694721826,
+        "scaler_scale": 0.305438117205959
+      }
+    }
+  },
+  "probability": "sigmoid(intercept + sum(coefficient_i * scaled_i)); home is class 1; away=1-home",
+  "prospective_parity_test": {
+    "expected_prediction_file_sha256": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda",
+    "fixture": "All 2,798 historical matrix-audit rows",
+    "identity_and_order": "canonical_season + game_id exact",
+    "maximum_probability_difference": 1e-12,
+    "required_before_shadow_capture": "PASS"
+  },
+  "season_2026_scoring_status": "IMPLEMENTATION_REQUIRED; contract and state are ready",
+  "specification_sha256": "4d4057248c16d8ae0958c4005619212692cdc67f3cab3027bf20fade3002f455"
+}

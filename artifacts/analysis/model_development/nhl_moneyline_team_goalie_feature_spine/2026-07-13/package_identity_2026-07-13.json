@@ -1,0 +1,13 @@
+{
+  "as_of": "2026-07-13",
+  "assessment_date": "2026-08-09",
+  "canonical_seasons": [
+    2023,
+    2024
+  ],
+  "fixed_games": 2798,
+  "package": "nhl_moneyline_team_goalie_feature_spine",
+  "parent_ledger_sha256": "9affe45b3b554d19ad73c1e6619dfd5cd8c578eec5a177a990f4c52fa8191803",
+  "scope": "strict-prior feature spine construction only",
+  "version": "1.0.0"
+}

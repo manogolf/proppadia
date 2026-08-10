@@ -1,0 +1,18 @@
+{
+  "as_of_date": "2026-07-13",
+  "canonical_season": 2026,
+  "champion": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V1",
+  "champion_prediction_sha256": "83beb11588f7e7e31919f23be2dea51ff49863954fc9be750509b30a0eff2cda",
+  "generated_by": "backend/nhl/scripts/design_nhl_season_2026_mainline_prospective_readiness.py",
+  "jobs_enabled": false,
+  "mode": "SHADOW_OBSERVATION_ONLY",
+  "package_name": "nhl_season_2026_mainline_prospective_readiness",
+  "parent_manifest_sha256": {
+    "certification": "8bb36073fee4f055f399c651f942b8de6eb1bb3b75b96b6112dd9d4af4224cf5",
+    "challenger_execution": "162ae2e630d6128de381179beae8c92c819544b0555b8d6ef175a37fc03c54b3"
+  },
+  "production_writes": false,
+  "run_identity_collision_test": "PASS",
+  "source_mutation_check": "PASS",
+  "version": "1.0.0"
+}

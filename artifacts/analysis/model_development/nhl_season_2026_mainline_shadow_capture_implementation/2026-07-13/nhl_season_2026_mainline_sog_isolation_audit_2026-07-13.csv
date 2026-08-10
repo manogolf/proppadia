@@ -1,0 +1,6 @@
+check,passed,evidence
+shared_cli_unchanged,True,new module only; backend/nhl/cli.py unmodified
+prop_latest_files_untouched,True,validation never invoked shared fetcher
+prop_archive_distinct,True,mainline path backend/nhl/exports/mainline_shadow
+no_sog_policy_import,True,implementation imports no SOG scorer/candidate module
+no_database_write,True,file-only implementation; no psycopg/SQL
