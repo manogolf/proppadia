@@ -276,7 +276,7 @@ def _load_hits05_full_spine_status(current_slate_date: str) -> Dict[str, Any]:
         "source_mtime": _path_mtime_utc(machine or parent_scores or root),
         "scheduled_windows": [
             {"window_id": "0530_pt", "pacific": "05:30", "eastern": "08:30", "utc": "12:30", "purpose": "early projected slate"},
-            {"window_id": "0930_pt", "pacific": "09:30", "eastern": "12:30", "utc": "16:30", "purpose": "morning refresh"},
+            {"window_id": "0830_pt", "pacific": "08:30", "eastern": "11:30", "utc": "15:30", "purpose": "morning refresh"},
             {"window_id": "1100_pt", "pacific": "11:00", "eastern": "14:00", "utc": "18:00", "purpose": "lineup-development refresh"},
             {"window_id": "1300_pt", "pacific": "13:00", "eastern": "16:00", "utc": "20:00", "purpose": "afternoon confirmed-lineup refresh"},
             {"window_id": "1630_pt", "pacific": "16:30", "eastern": "19:30", "utc": "23:30", "purpose": "late-game refresh"},
