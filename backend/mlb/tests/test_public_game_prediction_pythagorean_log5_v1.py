@@ -169,8 +169,10 @@ def test_15_api_test_on_renders_team_specific_moneyline_only(monkeypatch):
     row = payload["rows"][0]
     assert row["home_win_probability"] != pytest.approx(.5)
     assert row["predicted_winner"] in {"Home Club", "Away Club"}
-    assert row["score_prediction_status"] == "UNAVAILABLE_NO_QUALIFIED_SCORE_MODEL"
-    assert all(row[key] is None for key in ("expected_home_runs", "expected_total_runs", "home_minus_1_5_probability"))
+    assert row["model_hash"] == "804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6"
+    assert row["picked_side_probability"] == pytest.approx(max(row["home_win_probability"], row["away_win_probability"]))
+    assert not {"expected_home_runs", "expected_total_runs", "home_minus_1_5_probability"}.intersection(row)
+    assert not {"ev", "edge", "roi", "wager", "stake", "betting_edge_status"}.intersection(row)
 
 
 def test_16_old_baseline_not_bound_and_retired_paths_isolated():
@@ -183,7 +185,52 @@ def test_16_old_baseline_not_bound_and_retired_paths_isolated():
 
 def test_17_frontend_contract_is_honest():
     source = (ROOT / "frontend/src/components/mlb/MLBPublicGamePredictionsPanel.jsx").read_text()
-    assert "Pythagorean/Log5 v1" in source
-    assert "UNAVAILABLE_NO_QUALIFIED_SCORE_MODEL" in source
+    assert "MLB_GAME_PYTHAGOREAN_LOG5_V1" in source
+    assert "picked_side_probability" in source
     assert "BETTING EDGE NOT DEMONSTRATED" in source
     assert "recommended wager" not in source.lower()
+
+
+def test_18_certified_public_adapter_fails_closed(monkeypatch):
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    valid = score()[0]
+    for field, value in (
+        ("winner_model_version", "RETIRED_OR_RESEARCH_MODEL"),
+        ("winner_model_hash", "0" * 64),
+    ):
+        bad = {**valid, field: value}
+        monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date, row=bad: [row])
+        response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
+        assert response.status_code == 503
+
+
+def test_19_duplicate_identity_fails_closed(monkeypatch):
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    row = score()[0]
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [row, dict(row)])
+    response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
+    assert response.status_code == 503
+
+
+def test_20_date_scope_and_parity(monkeypatch):
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    row = score()[0]
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [row])
+    response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
+    assert response.status_code == 200
+    public = response.json()["rows"][0]
+    assert public["home_win_probability"] == row["home_win_probability"]
+    assert public["away_win_probability"] == row["away_win_probability"]
+    assert public["confidence_band"] == row["confidence_band"]
+    assert public["immutable_prediction_identity"].endswith(model.SNAPSHOT_CLASS)
+    wrong_date = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-07"})
+    assert wrong_date.status_code == 503
+
+
+def test_21_status_preserves_certification_disclosure_and_authority(monkeypatch):
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    payload = TestClient(app).get("/api/mlb/model-status").json()
+    assert payload["certification_status"] == "MONEYLINE_STANDALONE_PREDICTION_CERTIFIED"
+    assert payload["display_status"] == "MONEYLINE_PUBLIC_PREDICTION_READY"
+    assert payload["required_disclosure"] == model.DISCLOSURE
+    assert payload["betting_authority"] == "NO_QUALIFIED_MLB_BETTING_MODEL"
