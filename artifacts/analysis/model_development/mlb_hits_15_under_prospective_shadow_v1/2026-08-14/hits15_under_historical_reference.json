@@ -1,0 +1,10 @@
+{
+  "rows": 717,
+  "brier": 0.217089,
+  "log_loss": 0.625357,
+  "observed_rate": 0.707,
+  "mean_model_probability": 0.609,
+  "temporal_behavior": "STABLE",
+  "source": "MLB_HITS_LANE_SPECIFIC_PREDICTION_REVIEW_STAGE2",
+  "modified": false
+}

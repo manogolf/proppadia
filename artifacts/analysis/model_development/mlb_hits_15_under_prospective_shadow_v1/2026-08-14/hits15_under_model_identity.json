@@ -1,0 +1,31 @@
+{
+  "task_id": "MLB_HITS_15_UNDER_PROSPECTIVE_SHADOW_V1",
+  "gate_status": "HITS15_UNDER_PROSPECTIVE_CAPTURE_BLOCKED_MODEL_IDENTITY",
+  "historical_lane_rows": 717,
+  "historical_date_start": "2026-05-08",
+  "historical_date_end": "2026-08-02",
+  "historical_reconcile_artifacts": 52,
+  "historical_probability_field": "model_probability (derived from retained model_pick_prob)",
+  "historical_identity_contract": "game_id + player_id + prop_type=hits + line=1.5 + side=under",
+  "historical_model_hash_embedded": false,
+  "historical_semantic_model_id_embedded": false,
+  "historical_prediction_source_file_embedded": false,
+  "currently_loadable_model": {
+    "semantic_model_id": "MLB_HITS_SEMANTIC_V1_2e7377b2cdcb",
+    "artifact": "models_out/latest/hits.joblib",
+    "artifact_sha256": "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf",
+    "manifest_sha256": "84efb9f21723f50abf649d7e03cb2916ddf9b2704c91ff9b8e4553c979ffe972",
+    "identity_scope": "PROSPECTIVE_ONLY_NOT_HISTORICALLY_RECOVERED",
+    "effective_from_timestamp": "2026-08-03T21:46:49.912141+00:00",
+    "producer": [
+      "backend/app/services/model_registry.py:load_model",
+      "backend/mlb/prediction/make_prediction.py:predict",
+      "backend/mlb/scripts/build_mlb_predictions_wide.py:_predict_rows"
+    ],
+    "feature_schema_sha256": "2b5cadbae4c7d1d34bae90822730200f48992514551461e793de06e17dfe8d76",
+    "probability_orientation_contract": "probability_over=P(actual_value>line); probability_under=1-probability_over; selected_probability=P(selected_side wins)"
+  },
+  "exact_historical_replay_proven": false,
+  "blocker": "The current registered model is prospective-only and effective after the May 8-August 2 historical window; the 717 frozen rows do not bind their probabilities to exact model bytes or a semantic model identity.",
+  "prohibited_inference": "Current hits.joblib bytes must not be assumed to have generated all historical rows."
+}

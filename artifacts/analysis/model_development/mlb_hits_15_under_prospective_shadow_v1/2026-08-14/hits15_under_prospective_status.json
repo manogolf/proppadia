@@ -1,0 +1,27 @@
+{
+  "status": "HITS15_UNDER_PROSPECTIVE_CAPTURE_BLOCKED_MODEL_IDENTITY",
+  "predictions_frozen": 0,
+  "resolved": 0,
+  "unresolved": 0,
+  "duplicates": 0,
+  "post_start_rejects": 0,
+  "market_attachments": 0,
+  "new_scheduler_required": false,
+  "authority": "NO_QUALIFIED_MLB_PROP_MODEL",
+  "certification_status": "NOT_CERTIFIED_PROSPECTIVE_EVIDENCE_PENDING",
+  "stopped_after_part": 1,
+  "not_evaluated_due_to_gate": [
+    "August 14 BetOnline coverage",
+    "current model prediction coverage",
+    "prospective ledger contract",
+    "market attachment",
+    "grading integration"
+  ],
+  "files_intentionally_not_created": [
+    "hits15_under_prediction_ledger.csv",
+    "hits15_under_market_attachment_ledger.csv",
+    "hits15_under_outcome_ledger.csv",
+    "hits15_under_prospective_contract.json",
+    "hits15_under_grading_contract.json"
+  ]
+}
