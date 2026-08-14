@@ -1,0 +1,9 @@
+surface,dates,prediction_state,evidence
+odds_history slate/wide,2026-08-03,PREDICTION_GENERATED_BUT_DOWNSTREAM_MIXED_OR_BLOCKED,six run-tagged slate/wide snapshots
+odds_history raw player props,2026-08-03/2026-08-14,MARKET_ONLY,pregame Odds API snapshots
+prepared_feature_vectors/hits_features.csv,2026-08-03/2026-08-14,FEATURE_STATE_BEFORE_PREDICTION_CALL; PREDICTION_NOT_GENERATED ON AUG4-14,daily diagnostic contract; exact state timestamp absent
+model_v2 lane/review/upload,2026-08-03,DERIVED_REVIEW_SURFACE,August 3 run-tagged quick-card/ranking outputs; not canonical semantic evidence
+semantic manifest,effective 2026-08-03T21:46:49Z,IDENTITY_ONLY,MLB_HITS_SEMANTIC_V1_2e7377b2cdcb
+database/lifecycle,2026-08-03/2026-08-13,NO HITS PREDICTION TABLE FOUND,information_schema inspection; moneyline table unrelated
+current nonmarket parent research package,2026-08-14,27 SCORED RESEARCH CANDIDATE ROWS; NOT CURRENT SEMANTIC MODEL,model hash 4959109c...; production unchanged
+logs/reporting alignment,2026-08-04/2026-08-13,AUTHORITY SKIP EVIDENCE; NO RETAINED PROBABILITY,daily reporting alignment artifacts

@@ -1,0 +1,7 @@
+event,timestamp,date,evidence,detail
+artifact_trained,2026-07-09T06:11:24.788077,2026-07-09,models_out/archive/hits/hits-20260709T061129Z.joblib,byte-identical to current latest artifact
+first_possible_live_scoring,2026-07-09T06:11:29Z,2026-07-09,dated archive chronology,artifact available after training
+first_retained_output_using_byte_identical_artifact,2026-07-09T12:57:52.649855Z,2026-07-09,odds_history/2026-07-09/mlb_slate_output__local_daily_20260709T123644Z.csv,execution lineage inference; hash not embedded in row
+semantic_registration_effective,2026-08-03T21:46:49.912141Z,2026-08-03,MLB_HITS_SEMANTIC_V1_2e7377b2cdcb.json,MLB_HITS_SEMANTIC_V1_2e7377b2cdcb
+first_retained_post_registration_daily_run,2026-08-03T23:39:52.021126Z,2026-08-03,mlb_slate_output__local_daily_20260803T233005Z.csv,prediction rows retained; exact current semantic binding absent; candidate/downstream route mixed
+aug4_aug13_daily_workflows,2026-08-04/2026-08-13,2026-08-04/2026-08-13,daily raw markets and prepared_feature_vectors,prediction attempted upstream; downstream authority prevented retained canonical output

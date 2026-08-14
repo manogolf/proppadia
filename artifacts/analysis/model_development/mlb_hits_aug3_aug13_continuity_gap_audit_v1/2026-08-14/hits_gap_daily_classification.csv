@@ -1,0 +1,23 @@
+date,lane,primary_classification,original_rows,replay_only_candidates,unrecoverable_observed_candidates,evidence_tier,notes
+2026-08-03,HITS05,GENUINE_PROSPECTIVE_ROWS_RECOVERABLE_PARTIAL_PROVENANCE,158,0,0,TIER_B,Tier C requires later authorization and exact timing review
+2026-08-03,HITS15_UNDER,GENUINE_PROSPECTIVE_ROWS_RECOVERABLE_PARTIAL_PROVENANCE,20,0,0,TIER_B,Tier C requires later authorization and exact timing review
+2026-08-04,HITS05,PARTIAL_BRIDGE_ONLY,0,226,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-04,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,39,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-05,HITS05,PARTIAL_BRIDGE_ONLY,0,47,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-05,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,10,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-06,HITS05,PARTIAL_BRIDGE_ONLY,0,72,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-06,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,15,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-07,HITS05,PARTIAL_BRIDGE_ONLY,0,245,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-07,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,25,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-08,HITS05,PARTIAL_BRIDGE_ONLY,0,181,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-08,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,29,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-09,HITS05,PARTIAL_BRIDGE_ONLY,0,17,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-09,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,2,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-10,HITS05,PARTIAL_BRIDGE_ONLY,0,163,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-10,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,21,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-11,HITS05,PARTIAL_BRIDGE_ONLY,0,225,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-11,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,39,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-12,HITS05,PARTIAL_BRIDGE_ONLY,0,132,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-12,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,28,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-13,HITS05,PARTIAL_BRIDGE_ONLY,0,55,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review
+2026-08-13,HITS15_UNDER,PARTIAL_BRIDGE_ONLY,0,2,0,TIER_C_NOT_YET_CREATED,Tier C requires later authorization and exact timing review

@@ -1,0 +1,37 @@
+{
+  "TIER_A": {
+    "label": "ORIGINAL_PROSPECTIVE_CURRENT_MODEL",
+    "requirements": [
+      "actual pregame prediction",
+      "exact semantic ID/hash",
+      "feature-contract hash",
+      "run tag",
+      "prediction timestamp"
+    ]
+  },
+  "TIER_B": {
+    "label": "ORIGINAL_PROSPECTIVE_PARTIAL_PROVENANCE",
+    "requirements": [
+      "actual pregame prediction retained",
+      "timing proven",
+      "exact current-model binding incomplete"
+    ],
+    "may_count_as_tier_a": false
+  },
+  "TIER_C": {
+    "label": "RECONSTRUCTED_PREGAME_BRIDGE",
+    "requirements": [
+      "authorized later replay",
+      "frozen pregame state",
+      "exact model/feature contract",
+      "reconstruction timestamp and original-state timestamp"
+    ],
+    "may_count_as_tier_a": false
+  },
+  "TIER_D": {
+    "label": "UNRECOVERABLE",
+    "requirements": [
+      "no legitimate original or replayable state"
+    ]
+  }
+}
