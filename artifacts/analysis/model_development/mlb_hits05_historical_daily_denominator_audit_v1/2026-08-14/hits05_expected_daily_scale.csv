@@ -1,0 +1,2 @@
+population,days,selection_rule,median_games_per_day,median_hitter_game_opportunities,median_betonline_hits05_player_games,median_proppadia_hits05_prediction_rows,median_synchronized_rows
+STRONG_RETAINED_COVERAGE_DAYS,68,repository games >=10 and model player-game coverage >=80% of retained BetOnline player-games,15.0,286.0,278.0,276.5,190.0

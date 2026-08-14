@@ -1,0 +1,5 @@
+producer,active_dates,row_generation_contract,board_class,semantic_change
+build_mlb_slate_output.py,2026-03-25 through 2026-08-03 retained,one model_pick_side per source player/prop/line row; probabilities for both directions retained,SELECTED_MODEL_DIRECTION_NOT_GOVERNED_BOTH_SIDE_BOARD,schema enrichment over time; duplicates/side flips across snapshots can yield both historical sides
+daily local capture archive,2026-04-30 through 2026-08-03 tagged runs,multiple immutable intraday slate snapshots plus aliases,REPEATED_SELECTED_SIDE_SNAPSHOTS,capture cadence expanded; not a new all-board contract
+build_mlb_reconcile_rows.py,2026-04-09 through 2026-08-02 retained,exact selected model row joined to provider line/prices/outcome,SELECTED_SUBSET_RECONCILIATION,game_time added 2026-05-08; BetOnline availability intermittent
+current governed Hits05 parent/lifecycle,after legacy slate archive,separate governed prediction lifecycle,NOT_MERGED_INTO_HISTORICAL_BENCHMARK,prospective authority/provenance contract differs

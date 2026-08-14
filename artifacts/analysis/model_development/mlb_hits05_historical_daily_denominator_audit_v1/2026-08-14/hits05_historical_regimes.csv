@@ -1,0 +1,7 @@
+start_date,end_date,producer_identity,output_contract,betonline_coverage,synchronized_coverage,regime,median_daily_model_hits05_rows,median_daily_betonline_hits05_player_games,median_daily_synchronized_rows
+2026-03-25,2026-04-08,build_mlb_slate_output.py; semantic model unresolved,selected model direction,raw retained; no reconcile,none strictly auditable,LEGACY_PREDICTION_AND_RAW_ONLY,137.0,120.0,0.0
+2026-04-09,2026-05-07,build_mlb_slate_output.py + reconcile; semantic model unresolved,selected direction; paired prices/outcomes possible,reconcile available,blocked by absent game_time strict timing field,RECONCILE_WITHOUT_STRICT_START_TIME,186.0,273.0,0.0
+2026-05-08,2026-07-20,build_mlb_slate_output.py + strict reconcile; semantic model unresolved,selected direction across intraday snapshots,"variable, including provider gaps",recovered benchmark eligible,STRICT_TIMED_HISTORICAL_BENCHMARK,269.5,188.5,76.5
+2026-07-21,2026-08-02,enriched slate schema + strict reconcile; semantic model unresolved,selected direction with lineup/starter metadata where populated,retained,recovered benchmark eligible,ENRICHED_STRICT_TIMED_BENCHMARK,403.0,274.0,311.0
+2026-08-03,2026-08-03,legacy slate artifact retained; semantic model unresolved,selected-direction slate artifacts,raw retained,no retained reconcile/outcome package,POST_BENCHMARK_LEGACY_ARTIFACT,215.0,150.0,0.0
+2026-08-04,2026-08-14,regular raw collection; legacy producer absent,market capture only for this denominator,raw retained,not historical-benchmark eligible,RAW_COLLECTION_PROSPECTIVE_ONLY,0.0,208.0,0.0

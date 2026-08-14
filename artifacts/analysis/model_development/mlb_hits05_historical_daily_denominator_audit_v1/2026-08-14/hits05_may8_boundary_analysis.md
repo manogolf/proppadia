@@ -1,0 +1,3 @@
+# May 8 boundary analysis
+
+May 8 is not the first retained Hits 0.5 market or prediction date. Raw/provider and model-selected Hits 0.5 artifacts exist from March 25; provider-specific reconcile rows with outcomes exist from April 9. The April 9–May 7 reconcile schema has 72 columns and lacks `game_time`. May 8 is the first 80-column reconcile schema containing both `snapshot_time_utc` and `game_time`, which makes the benchmark's strict `snapshot < scheduled start` pregame rule auditable. The boundary is therefore the first strict temporal-contract-compatible reconcile artifact, not model or market launch.

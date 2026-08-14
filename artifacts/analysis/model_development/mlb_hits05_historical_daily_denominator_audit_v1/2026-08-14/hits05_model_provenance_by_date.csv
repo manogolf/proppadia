@@ -1,0 +1,144 @@
+date,prediction_artifacts,model_name_present,version_present,hash_present,producer_path_recoverable,run_tag_recoverable,identity_status,reason
+2026-03-25,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-03-26,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-03-27,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-03-28,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-03-29,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-03-30,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-03-31,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-01,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-02,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-03,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-04,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-05,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-06,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-07,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-08,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-09,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-10,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-11,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-12,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-13,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-14,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-15,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-16,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-17,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-18,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-19,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-20,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-21,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-22,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-23,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-24,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-25,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-26,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-27,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-28,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-29,1,False,False,False,True,False,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-04-30,4,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-01,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-02,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-03,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-04,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-05,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-06,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-07,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-08,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-09,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-10,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-11,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-12,6,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-13,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-14,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-15,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-16,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-17,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-18,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-19,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-20,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-21,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-22,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-23,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-24,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-25,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-26,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-27,7,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-28,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-29,6,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-30,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-05-31,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-01,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-02,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-03,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-04,7,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-05,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-06,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-07,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-08,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-09,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-10,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-11,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-12,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-13,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-14,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-15,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-16,6,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-17,4,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-18,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-19,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-20,4,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-21,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-22,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-23,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-24,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-25,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-26,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-27,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-28,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-29,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-06-30,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-01,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-02,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-03,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-04,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-05,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-06,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-07,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-08,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-09,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-10,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-11,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-12,4,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-13,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-07-14,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-07-15,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-07-16,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-17,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-18,4,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-19,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-20,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-21,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-22,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-23,8,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-24,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-25,6,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-26,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-27,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-28,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-29,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-30,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-07-31,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-08-01,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-08-02,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-08-03,5,False,False,False,True,True,PARTIALLY_RECOVERABLE,producer path/source/run tag retained; semantic model ID/version/hash absent
+2026-08-04,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-05,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-06,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-07,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-08,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-09,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-10,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-11,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-12,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-13,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
+2026-08-14,0,False,False,False,False,False,UNRECOVERABLE,no retained legacy prediction artifact
