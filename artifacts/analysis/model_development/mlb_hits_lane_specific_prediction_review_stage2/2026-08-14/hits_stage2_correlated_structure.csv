@@ -1,0 +1,9 @@
+player_game_line_structure,side_combination,player_games
+both_0.5_and_1.5,0.5:over|1.5:over,2
+both_0.5_and_1.5,0.5:over|1.5:under,82
+both_0.5_and_1.5,0.5:under|1.5:over,1
+both_0.5_and_1.5,0.5:under|1.5:under,10
+only_0.5,0.5:over,5048
+only_0.5,0.5:under,1607
+only_1.5,1.5:over,94
+only_1.5,1.5:under,625

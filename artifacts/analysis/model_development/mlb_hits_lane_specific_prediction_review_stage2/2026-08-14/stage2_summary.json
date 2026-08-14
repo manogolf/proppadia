@@ -1,0 +1,32 @@
+{
+  "task_id": "MLB_HITS_LANE_SPECIFIC_PREDICTION_REVIEW_STAGE2",
+  "source_sha256": "7c94ead53af9669c1164e41fcd9714edd0656dc02d6550f0c773aa1a3c1147fd",
+  "rows": {
+    "HITS_05_OVER": 5132,
+    "HITS_05_UNDER": 1618,
+    "HITS_15_OVER": 97,
+    "HITS_15_UNDER": 717
+  },
+  "sum_rows": 7564,
+  "ordering": {
+    "HITS_05_OVER": "FLAT",
+    "HITS_05_UNDER": "MONOTONIC_OR_NEAR_MONOTONIC",
+    "HITS_15_OVER": "FLAT",
+    "HITS_15_UNDER": "PARTIAL_ORDERING"
+  },
+  "temporal": {
+    "HITS_05_OVER": "STABLE",
+    "HITS_05_UNDER": "DETERIORATING",
+    "HITS_15_OVER": "DETERIORATING",
+    "HITS_15_UNDER": "STABLE"
+  },
+  "questions": [
+    "Is Hits 0.5 high-confidence overconfidence mild enough to tolerate, or does it undermine probability trust?",
+    "Do Hits 0.5 Over and Under differ enough to require separate treatment?",
+    "Is Hits 1.5 Under evidence sufficiently large and persistent for lane-specific prospective capture?",
+    "Is Hits 1.5 Over too sparse for a reliable conclusion?",
+    "Should resolved prospective evidence be required before deliberating about any lane?",
+    "Should any later decision be lane-specific rather than Hits-family-wide?"
+  ],
+  "certification_decision_made": false
+}

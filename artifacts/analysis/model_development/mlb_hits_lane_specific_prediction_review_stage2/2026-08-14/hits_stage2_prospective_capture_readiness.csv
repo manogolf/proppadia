@@ -1,0 +1,5 @@
+lane,status,detail
+HITS_05_OVER,PROSPECTIVE_CAPTURE_PARTIAL,"BetOnline and full-spine machinery preserve fields, but no mature resolved frozen prediction ledger."
+HITS_05_UNDER,PROSPECTIVE_CAPTURE_PARTIAL,"BetOnline and full-spine machinery preserve fields, but no mature resolved frozen prediction ledger."
+HITS_15_OVER,PROSPECTIVE_CAPTURE_NOT_READY,No active lane-specific immutable prediction/outcome ledger identified.
+HITS_15_UNDER,PROSPECTIVE_CAPTURE_NOT_READY,No active lane-specific immutable prediction/outcome ledger identified.
