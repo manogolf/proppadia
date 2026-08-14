@@ -1,0 +1,2 @@
+lane,predictions,unresolved,probability_invariant_violations,resolved,brier,log_loss,ece,accuracy_at_50,mean_probability,observed_rate,probability_sd,probability_min,probability_max
+HITS_0_5,2682,199,0,2483,0.24476007006018055,0.6826697435205488,0.03198179999016754,0.5666532420459122,0.5549920017416274,0.5739025372533226,0.0723662632336114,0.3738101757804691,0.759531869021303
