@@ -1,0 +1,6 @@
+period,source_type,path,sha256,probability_fields,authoritative_use
+2026-03-25/2026-05-07,retained historical slate outputs,backend/mlb/exports/odds_history/<date>/mlb_slate_output[__run].csv,PER_FILE_IN_REPRODUCIBILITY_MANIFEST,prob_over/prob_under or validated selected-side complement,Regime A original probabilities; weak timing
+2026-05-08/2026-08-02,canonical historical two-sided board,artifacts/analysis/model_development/mlb_hits05_two_sided_probability_reconstruction_v1/2026-08-14/hits05_canonical_player_game_board.csv,25d8a80c87b929a9550be2b9fd4a362ac0bd97db66afacc5bcdf4a45ef7aa0d6,p_over_0_5/p_under_0_5,Regime B earliest strict pregame original probability
+2026-08-03/2026-08-13,append-only prospective lineage normalized primary,artifacts/analysis/model_development/mlb_hits_aug3_aug13_original_prospective_evidence_v1/2026-08-14/hits_original_prospective_primary_predictions.csv,37bb31ad5ab6b95154eee7deb06f30227cd619bd99484e9b8392a51d048dc67b,p_over/p_under; exact lineage references,Regime C earliest strict pregame Tier A
+2026 season,database prediction tables,information_schema prior bounded audit,NOT_APPLICABLE,none for Hits,No Hits database prediction source found
+2026 season,mutable wide/current slate outputs,backend/mlb/data/processed,NOT_AUTHORITATIVE,mutable,Excluded where immutable/canonical source exists

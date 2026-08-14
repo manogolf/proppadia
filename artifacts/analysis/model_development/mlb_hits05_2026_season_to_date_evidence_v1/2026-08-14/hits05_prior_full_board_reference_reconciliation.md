@@ -1,0 +1,5 @@
+# Prior full-board reference reconciliation
+
+The prior Brier `0.244277`, log loss `0.682127`, and ECE `0.036572` refer exactly to the 17,603-prediction May 8–August 2 canonical historical board, with 13,579 resolved outcomes. It contains Regime B only and six execution-chronology-bound fitted generations; provenance is Tier B. It was called “full-board” because it normalized each retained player-game's originally generated selected-side binary output into one coherent P(1+ hit), rather than evaluating Over and Under as separate selected subsets. It was not a March-through-August season board.
+
+The true season-to-date assembly adds weaker-timing original predictions from March 25–May 7 and exact Tier A current-model lineage from August 3–13. The old source remains immutable at `artifacts/analysis/model_development/mlb_hits05_two_sided_probability_reconstruction_v1/2026-08-14/hits05_canonical_player_game_board.csv`, SHA-256 `25d8a80c87b929a9550be2b9fd4a362ac0bd97db66afacc5bcdf4a45ef7aa0d6`.
