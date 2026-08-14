@@ -1,0 +1,9 @@
+lane,status,prediction_rows,graded_rows,unresolved_rows,latest_prediction_date,latest_grading_date,metrics,trend,prominence
+Hits 0.5 full-spine replacement,ACTIVE_RESEARCH_SHADOW,0,0,1,2026-08-14,,none current,HITS05_EVIDENCE_INSUFFICIENT,CURRENT_RESEARCH_RELEVANT
+Hits 0.5 Expected-PA,ACTIVE_RESEARCH_SHADOW,126,0,126,2026-07-21,,none legitimate,HITS05_EVIDENCE_INSUFFICIENT,STALE_RESEARCH
+DH forward,ACTIVE_RESEARCH_SHADOW,265,247,18,2026-08-13,2026-08-12,247 resolved outcomes; qualification metrics not established,INSUFFICIENT_FOR_AUTHORITY,CURRENT_RESEARCH_RELEVANT
+Hits O1.5,ACTIVE_REVIEW_AID,0,0,0,,,no current authoritative board,INSUFFICIENT,COLLECTION_ONLY
+Hits U1.5,ACTIVE_REVIEW_AID,0,0,0,,,no current authoritative board,INSUFFICIENT,COLLECTION_ONLY
+Total Bases legacy shadow,STALE_RESEARCH,2978,1940,1038,2026-07-23,2026-07-23,production Brier 0.259840; balanced shadow 0.272563; unweighted shadow 0.260663,NOT_IMPROVING,STALE_RESEARCH
+outs_recorded,ACTIVE_DATA_COLLECTION,0,0,0,2026-08-14,,collection only,NOT_EVALUABLE,COLLECTION_ONLY
+strikeouts_pitching,ACTIVE_DATA_COLLECTION,0,0,0,2026-08-14,,collection only,NOT_EVALUABLE,COLLECTION_ONLY

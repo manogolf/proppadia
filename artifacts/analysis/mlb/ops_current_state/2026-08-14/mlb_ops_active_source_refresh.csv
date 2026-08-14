@@ -1,0 +1,5 @@
+producer,expected_output,refresh_attempted,result,source_date_after,genuine_failure_reason
+certified moneyline lifecycle,mlb_public_game_moneyline_daily_2026-08-14_latest.json,natural 05:30,PASS,2026-08-14,
+private totals lifecycle,mlb_totals_shadow_daily_2026-08-14_latest.json,natural 05:30,PASS,2026-08-14,
+BetOnline semantic validator,artifacts/analysis/mlb/betonline_capture_integrity/2026-08-14/betonline_capture_integrity_daily_summary_2026-08-14.json,yes; retained capture only,HEALTHY,2026-08-14,
+BvP prewarm/impact,current BvP impact,natural wrapper,TRANSIENT_SOURCE_FAILURE,2026-08-03,StatsAPI DNS/name resolution; research context only

@@ -1,0 +1,2 @@
+date,parent_rows,scored_rows,withheld_rows,official_lineup_rows,starter_resolution,candidate_routed_rows,fallback_rows,authority,latest_outcome_backed_evaluation,conclusion
+2026-08-14,0,0,1,0,"{""OFFICIAL_LINEUP_NOT_YET_POSTED"": 25, ""STARTER_UNRESOLVED"": 3}",93,35,ACTIVE_RESEARCH_SHADOW,none current,HITS05_EVIDENCE_INSUFFICIENT

@@ -24,7 +24,7 @@ COMPARE_BOOK = "fanduel"
 BOOK_ALIASES = {"betonline": "betonlineag", "betonline.ag": "betonlineag", "fanduel sportsbook": "fanduel"}
 SCHEDULED_WINDOWS = [
     ("05:30", "12:30Z"),
-    ("09:30", "16:30Z"),
+    ("08:30", "15:30Z"),
     ("11:00", "18:00Z"),
     ("13:00", "20:00Z"),
     ("16:30", "23:30Z"),

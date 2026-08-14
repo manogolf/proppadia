@@ -1,0 +1,7 @@
+provider,window_pt,expected_utc,executed,rows,markets,semantic_health,price_status,duplicates_or_identity_issues
+BetOnline,05:30,2026-08-14T12:30:00Z,True,1002,hits|total_bases|hits_runs_rbis|strikeouts_pitching,BETONLINE_CAPTURE_SEMANTIC_PASS,AUTHORIZED_DIRECT_BETONLINE_ROWS_PRESENT,none reported
+FanDuel,05:30,2026-08-14T12:30:00Z,True,272,hits|total_bases|hits_runs_rbis|strikeouts_pitching,SUPPLEMENTAL,NON_EXECUTABLE,none reported
+BetOnline,08:30,2026-08-14T15:30:00Z,False,0,,PENDING_FUTURE_WINDOW,,none reported
+BetOnline,11:00,2026-08-14T18:00:00Z,False,0,,PENDING_FUTURE_WINDOW,,none reported
+BetOnline,13:00,2026-08-14T20:00:00Z,False,0,,PENDING_FUTURE_WINDOW,,none reported
+BetOnline,16:30,2026-08-14T23:30:00Z,False,0,,PENDING_FUTURE_WINDOW,,none reported

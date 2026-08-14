@@ -1,0 +1,27 @@
+{
+  "collection": {
+    "betonline_rows": 1002,
+    "fanduel_rows": 272,
+    "player_prop_collection_healthy": true
+  },
+  "date": "2026-08-14",
+  "moneyline_cumulative": {
+    "brier": 0.242112384132311,
+    "games": 116,
+    "log_loss": 0.677189633580637,
+    "losses": 51,
+    "status": "PROSPECTIVE_BEHAVIOR_CONSISTENT",
+    "strong_record": "24-10",
+    "wins": 65
+  },
+  "prop_section_decision": "PROP_SECTION_RESTORE_MARKET_MONITOR_ONLY",
+  "totals_cumulative": {
+    "games": 97,
+    "intercept_bias": -0.14643072549202954,
+    "intercept_crps": 2.2195465855408534,
+    "intercept_mae": 3.143395970094702,
+    "raw_bias": -0.6399807254920301,
+    "raw_crps": 2.25072678774423,
+    "raw_mae": 3.1507580242931423
+  }
+}

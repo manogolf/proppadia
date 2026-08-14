@@ -875,9 +875,9 @@ def _build_freshness_audit(
     )
     if input_refresh_status:
         refresh_source_date = _date_key(input_refresh_status.get("completed_slate_date"))
-        refresh_status = "fresh" if refresh_issue_count == 0 and refresh_source_date == completed_slate_date else "refresh_failed"
+        refresh_status = "fresh" if refresh_issue_count == 0 and refresh_source_date == completed_slate_date else "partial-current-authority"
         if int(input_refresh_status.get("dependency_missing_count") or 0) > 0:
-            refresh_status = "dependency_missing"
+            refresh_status = "partial-current-authority"
         refresh_note = (
             f"dependency_missing_count={input_refresh_status.get('dependency_missing_count', 0)}; "
             f"refresh_failed_count={input_refresh_status.get('refresh_failed_count', 0)}; "
@@ -902,6 +902,32 @@ def _build_freshness_audit(
             note=refresh_note,
         )
     )
+    # These are the active prediction lanes. Their lifecycle artifacts, rather
+    # than retired prop upload products, own current operational health.
+    for section, path, expected_status in (
+        ("Certified Moneyline Lifecycle", Path(f"artifacts/ops/mlb_public_game_moneyline_daily_{current_slate_date}_latest.json"), None),
+        ("Private Totals Lifecycle", Path(f"artifacts/ops/mlb_totals_shadow_daily_{current_slate_date}_latest.json"), "TOTALS_SHADOW_DAILY_LIFECYCLE_COMPLETE"),
+    ):
+        payload, err = _load_json(path)
+        payload = payload if isinstance(payload, dict) else {}
+        status_ok = not err and (expected_status is None or payload.get("status") == expected_status)
+        rows.append(_freshness_row(
+            section=section, source_file=str(path), source_date=current_slate_date if status_ok else "",
+            expected_date=current_slate_date, mtime_utc=_path_mtime_utc(path), load_status=err or "ok",
+            cadence="each governed daily refresh invocation", freshness_status="fresh" if status_ok else "active-lane-failure",
+            note=(f"rows={payload.get('predictions_written', payload.get('scoring', {}).get('rows', 0))}; status={payload.get('status', 'moneyline lifecycle artifact')}" if status_ok else f"active lifecycle unavailable: {err or payload.get('status') or 'invalid'}"),
+        ))
+    pinnacle_paths = sorted(Path(f"backend/mlb/exports/market_history/full_game_totals/{current_slate_date}").glob("*/pinnacle/pinnacle_capture_summary.json"))
+    pinnacle, pinnacle_err = _load_json(pinnacle_paths[-1]) if pinnacle_paths else (None, "missing")
+    pinnacle = pinnacle if isinstance(pinnacle, dict) else {}
+    pinnacle_ok = not pinnacle_err and int(pinnacle.get("identity_rejects") or 0) == 0
+    rows.append(_freshness_row(
+        section="Pinnacle Main-Market Capture", source_file=str(pinnacle_paths[-1]) if pinnacle_paths else "",
+        source_date=current_slate_date if pinnacle_ok else "", expected_date=current_slate_date,
+        mtime_utc=_path_mtime_utc(pinnacle_paths[-1]) if pinnacle_paths else "", load_status=pinnacle_err or "ok",
+        cadence="each governed daily refresh invocation", freshness_status="fresh" if pinnacle_ok else "active-lane-failure",
+        note=f"mapped={pinnacle.get('games_mapped', 0)}; moneyline={pinnacle.get('moneyline_coverage', 0)}; totals={pinnacle.get('totals_coverage', 0)}; run_line={pinnacle.get('run_line_coverage', 0)}",
+    ))
     pipe_date = max([d for d in (_date_key(pipeline.get("captured_at")), _date_key(ops.get("captured_at"))) if d] or [""])
     rows.append(
         _freshness_row(
@@ -924,8 +950,9 @@ def _build_freshness_audit(
             expected_date=completed_slate_date,
             mtime_utc=_path_mtime_utc(paths["postgrade_alerts_json"]),
             load_status=str(source_states.get("postgrade_alerts_json") or "ok"),
-            cadence="daily after completed slate grading",
-            note="Alert rows include new-vs-persistent fields below.",
+            cadence="inactive legacy prop-production reporting",
+            freshness_status="inactive-by-authority",
+            note="Historical only; NO_QUALIFIED_MLB_PROP_MODEL means this source is not required for active operations.",
         )
     )
     rows.append(
@@ -936,8 +963,9 @@ def _build_freshness_audit(
             expected_date=completed_slate_date,
             mtime_utc=_path_mtime_utc(paths["model_vs_fade_json"]),
             load_status=str(source_states.get("model_vs_fade_json") or "ok"),
-            cadence="daily after actual wager reconcile",
-            note="Fade/model warning may persist; alert state records last change.",
+            cadence="inactive legacy wager reporting",
+            freshness_status="inactive-by-authority",
+            note="Historical only; no qualified MLB betting model or active prop wager lifecycle.",
         )
     )
     rows.append(
@@ -948,8 +976,9 @@ def _build_freshness_audit(
             expected_date=completed_slate_date,
             mtime_utc=_path_mtime_utc(paths["prop_regime_csv"]),
             load_status=str(source_states.get("prop_regime_csv") or "ok"),
-            cadence="daily after source outlook generation",
-            note="Uses max latest_usable_date across prop regime rows.",
+            cadence="inactive legacy prop-model outlook",
+            freshness_status="inactive-by-authority",
+            note="Not required under NO_QUALIFIED_MLB_PROP_MODEL.",
         )
     )
     perf_source_date = str(model_performance.get("source_date") or "")
@@ -966,8 +995,9 @@ def _build_freshness_audit(
                 and source_states.get("model_performance_daily_csv") == "ok"
                 else "missing"
             ),
-            cadence="daily after model outcome grading",
-            note="Uses max date found in rolling/daily performance CSV rows.",
+            cadence="inactive legacy prop-model grading summary",
+            freshness_status="inactive-by-authority",
+            note="Historical performance retained; not an active model-authority input.",
         )
     )
     rows.append(
@@ -1001,7 +1031,7 @@ def _build_freshness_audit(
         completed_slate_date=completed_slate_date,
     )
     if bvp_status == "stale-unexpected" and bvp_prewarm_note:
-        bvp_status = "refresh_failed"
+        bvp_status = "research-refresh-failed"
         bvp_note = bvp_prewarm_note
     rows.append(
         _freshness_row(
@@ -1087,9 +1117,7 @@ def _build_freshness_audit(
                 mtime_utc=_path_mtime_utc(paths[key]),
                 load_status=load_state,
                 cadence="daily current-slate upload prep before Ops Brief render",
-                freshness_status=(
-                    "fresh" if load_state == "ok" else "optional-missing" if optional_missing else "missing-unexpected"
-                ),
+                freshness_status=("fresh-review-aid" if load_state == "ok" else "optional-missing" if optional_missing else "not-required-current-authority"),
                 note=note if load_state == "ok" else (
                     f"OPTIONAL_MISSING: {paths[key]}" if optional_missing else f"MISSING_INPUT: {paths[key]}"
                 ),
@@ -1124,11 +1152,7 @@ def _build_freshness_audit(
             mtime_utc=_path_mtime_utc(paths["total_bases_shadow_summary_json"]),
             load_status=str(source_states.get("total_bases_shadow_summary_json") or "ok"),
             cadence="daily current-slate shadow scoring; analysis-only",
-            freshness_status=(
-                "fresh"
-                if _date_key(total_bases_shadow_summary.get("slate_date")) == current_slate_date
-                else ("missing-unexpected" if not total_bases_shadow_summary else "stale-unexpected")
-            ),
+            freshness_status=("fresh-research-shadow" if _date_key(total_bases_shadow_summary.get("slate_date")) == current_slate_date else "stale-research"),
             note=(
                 f"rows={total_bases_shadow_summary.get('shadow_rows', 0)}; "
                 f"side_changed={total_bases_shadow_summary.get('side_changed_rows', 0)}; "
@@ -1148,11 +1172,7 @@ def _build_freshness_audit(
             mtime_utc=_path_mtime_utc(paths["total_bases_shadow_evaluation_json"]),
             load_status=str(source_states.get("total_bases_shadow_evaluation_json") or "ok"),
             cadence="daily cumulative read-only evaluation after shadow scoring",
-            freshness_status=(
-                "fresh"
-                if eval_source_date == current_slate_date
-                else ("missing-unexpected" if not total_bases_shadow_evaluation else "stale-unexpected")
-            ),
+            freshness_status=("fresh-research-shadow" if eval_source_date == current_slate_date else "stale-research"),
             note=(
                 f"rows_scored={total_bases_shadow_evaluation.get('rows_scored', 0)}; "
                 f"rows_with_outcomes={total_bases_shadow_evaluation.get('rows_with_outcomes', 0)}; "
@@ -1220,14 +1240,14 @@ def _build_freshness_audit(
         ws_status = "refresh_failed"
     rows.append(
         _freshness_row(
-            section="MLB Today Workspace",
+            section="Legacy Player-Prop Workspace Staging",
             source_file="backend.app.services.mlb.today_workspace_service.fetch_today_workspace",
             source_date=_date_key(today_workspace.get("active_slate_date") or today_workspace.get("requested_slate_date")),
             expected_date=current_slate_date,
             generated_at_utc=generated_at_utc,
             load_status=str(source_states.get("today_workspace") or "ok"),
-            cadence="current slate staging",
-            freshness_status=ws_status,
+            cadence="inactive legacy player-prop staging service",
+            freshness_status="inactive-by-authority" if ws_status == "not-refreshed" else ws_status,
             note=str(
                 (today_workspace.get("diagnostics") or {}).get("failure_classification")
                 or today_workspace.get("reason")
@@ -1940,6 +1960,7 @@ def _derive_overall_status(
             "dependency_missing",
             "feature-lineage-warn",
             "feature-lineage-fail",
+            "active-lane-failure",
         }
     ]
     if actionable_freshness:
@@ -1954,7 +1975,7 @@ def _derive_overall_status(
     if ops and ops.get("status") not in {"pass", "ok"}:
         fatal = True
         issues.append(f"ops_status={ops.get('status')}")
-    postgrade_alerts = [a for a in (postgrade.get("alerts") or []) if isinstance(a, dict)]
+    postgrade_alerts: List[Dict[str, Any]] = []  # Legacy prop-production alerts are non-authoritative.
     new_critical_count = sum(
         1
         for alert in postgrade_alerts
@@ -1970,17 +1991,17 @@ def _derive_overall_status(
         issues.append(f"new_critical_alerts={new_critical_count}")
     if persistent_critical_count > 0:
         issues.append(f"persistent_actionable_critical_alerts={persistent_critical_count}")
-    if int(postgrade.get("warning_count") or 0) > 0:
-        issues.append(f"warning_alerts={postgrade.get('warning_count')}")
-    model_alert = (model_vs_fade or {}).get("alert_state") or {}
+    # Legacy postgrade warning counts remain visible in their historical
+    # section, but are not current operational warnings without prop authority.
+    model_alert: Dict[str, Any] = {}  # No qualified betting model; historical only.
     if model_alert.get("alert_active"):
         age = model_alert.get("alert_age_days")
         if model_alert.get("alert_is_new_today"):
             issues.append("new_model_vs_fade_alert=1")
         else:
             issues.append(f"persistent_actionable_model_vs_fade_alert_age_days={age}")
-    if hits_env and hits_env.get("warnings"):
-        issues.append(f"hits_env_warnings={len(hits_env.get('warnings') or [])}")
+    # Hits environment warnings describe a research/data-collection lane and do
+    # not degrade certified moneyline, private totals, or main-market capture.
 
     if fatal:
         return "fail", issues
@@ -2013,8 +2034,6 @@ def _derive_path_forward(
     hits_env: Dict[str, Any],
 ) -> List[Dict[str, str]]:
     actions: List[Dict[str, str]] = []
-    postgrade_report_date = str(postgrade.get("report_date") or report_date).strip() or report_date
-
     pipeline_status = str(pipeline.get("status") or "").strip().lower()
     ops_status = str(ops.get("status") or "").strip().lower()
     if pipeline_status not in {"pass", "ok"} or ops_status not in {"pass", "ok"}:
@@ -2029,36 +2048,17 @@ def _derive_path_forward(
             }
         )
 
-    if int(postgrade.get("critical_count") or 0) > 0 or bool(model_vs_fade.get("fade_beating_model_alert")):
-        delta_pct = _pct(model_vs_fade.get("delta_fade_minus_model_1u"))
-        actions.append(
-            {
-                "title": "Run ROOT-CAUSE checks on model vs fade",
-                "description": (
-                    "Model-vs-fade alert is active "
-                    f"(delta fade-model {delta_pct}). Verify paired results and open incident context."
-                ),
-                "command": (
-                    f"make mlb-model-vs-fade MLB_POST_GRADE_DATE={postgrade_report_date} "
-                    "&& make mlb-prod12-incident"
-                ),
-            }
-        )
-
     degraded = [d for d in (pipeline.get("degraded_prop_lanes") or []) if isinstance(d, dict)]
     degraded_props_csv = _csv_props(degraded)
     if degraded_props_csv:
         actions.append(
             {
-                "title": "Retrain degraded prop lanes with market-only profile",
+                "title": "Keep legacy prop quality flags informational",
                 "description": (
-                    f"Current degraded lanes: {degraded_props_csv}. Retrain only impacted props, "
-                    "then rerun candidate eval before considering publish."
+                    f"Legacy threshold flags remain for {degraded_props_csv}, but player-prop authority is "
+                    "NO_QUALIFIED_MLB_PROP_MODEL. Do not infer a retraining or promotion action from them."
                 ),
-                "command": (
-                    f"make mlb-retrain-bol-market-only MLB_RETRAIN_BOL_PROP_TYPES=\"{degraded_props_csv}\" "
-                    f"&& make mlb-candidate-eval-prod12 MLB_PROD12_CANDIDATE_PROP_TYPES=\"{degraded_props_csv}\""
-                ),
+                "command": "none",
             }
         )
 
@@ -2087,11 +2087,12 @@ def _derive_path_forward(
 
     actions.append(
         {
-            "title": "Hold publish behind strict weekly phase2 gate",
+            "title": "Keep current prediction authority unchanged",
             "description": (
-                "After remedial steps, require strict weekly readiness + candidate checks to pass before any promotion."
+                "Continue certified moneyline monitoring and private totals evidence collection. Player props remain "
+                "collection/research only; a read-only market monitor may be scoped separately."
             ),
-            "command": f"make mlb-prod12-phase2-weekly-gate MLB_BASE_URL=<url> MLB_DATE={report_date}",
+            "command": "none",
         }
     )
 
@@ -2438,10 +2439,10 @@ def build_markdown(
     lines.append("## Snapshot")
     lines.append(
         f"- Pipeline: `{pipeline.get('status','n/a')}` | Ops: `{ops.get('status','n/a')}` | "
-        f"Postgrade alerts: `{postgrade.get('critical_count',0)} critical / {postgrade.get('warning_count',0)} warning`"
+        f"Legacy postgrade alerts: `{postgrade.get('critical_count',0)} critical / {postgrade.get('warning_count',0)} warning`"
     )
     lines.append(
-        f"- Model vs Fade ({model_vs_fade.get('window_game_date_min') or 'n/a'} to "
+        f"- Legacy Model vs Fade ({model_vs_fade.get('window_game_date_min') or 'n/a'} to "
         f"{model_vs_fade.get('window_game_date_max') or 'n/a'}, paired={model_vs_fade.get('paired_bets','n/a')}): "
         f"model ROI `{_pct(model_vs_fade.get('model_roi_1u'))}` vs fade ROI `{_pct(model_vs_fade.get('fade_roi_1u'))}`"
     )
@@ -2450,6 +2451,41 @@ def build_markdown(
         f"starter rows `{hits_env.get('starter_rows','n/a')}`, "
         f"slate expected rows `{hits_env.get('slate_rows_with_expected','n/a')}`"
     )
+    lines.append("")
+
+    moneyline_path = Path(f"artifacts/ops/mlb_public_game_moneyline_daily_{current_slate_date}_latest.json")
+    totals_path = Path(f"artifacts/ops/mlb_totals_shadow_daily_{current_slate_date}_latest.json")
+    moneyline_raw, _ = _load_json(moneyline_path)
+    totals_raw, _ = _load_json(totals_path)
+    moneyline_raw = moneyline_raw if isinstance(moneyline_raw, dict) else {}
+    totals_raw = totals_raw if isinstance(totals_raw, dict) else {}
+    totals_scoring = totals_raw.get("scoring") if isinstance(totals_raw.get("scoring"), dict) else {}
+    attempts = totals_scoring.get("attempts") or []
+    pending = [row for row in attempts if str(row.get("ledger_action") or "").startswith("REJECTED")]
+    pinnacle_paths = sorted(Path(f"backend/mlb/exports/market_history/full_game_totals/{current_slate_date}").glob("*/pinnacle/pinnacle_capture_summary.json"))
+    pinnacle_raw, _ = _load_json(pinnacle_paths[-1]) if pinnacle_paths else ({}, "missing")
+    pinnacle_raw = pinnacle_raw if isinstance(pinnacle_raw, dict) else {}
+    public_enabled = str(os.getenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED") or "").strip().lower() in {"1", "true", "yes", "on"}
+    aligned_raw, _ = _load_json(Path(f"artifacts/analysis/mlb/ops_current_state/{current_slate_date}/mlb_ops_current_state_summary.json"))
+    aligned = aligned_raw if isinstance(aligned_raw, dict) else {}
+    ml_evidence = aligned.get("moneyline_cumulative") if isinstance(aligned.get("moneyline_cumulative"), dict) else {}
+    totals_evidence = aligned.get("totals_cumulative") if isinstance(aligned.get("totals_cumulative"), dict) else {}
+    lines.append("## Active MLB Prediction Authority")
+    lines.append("- Moneyline: `MONEYLINE_STANDALONE_PREDICTION_CERTIFIED` / `MONEYLINE_PUBLIC_PREDICTION_READY`; " +
+                 f"public feature flag `{'enabled' if public_enabled else 'absent/false in this runtime'}`; " +
+                 f"current frozen rows `{moneyline_raw.get('predictions_written', 0)}`; betting authority `NO_QUALIFIED_MLB_BETTING_MODEL`.")
+    if ml_evidence:
+        lines.append(f"  - Prospective evidence: `{ml_evidence.get('wins', 0)}-{ml_evidence.get('losses', 0)}`; Brier `{ml_evidence.get('brier')}`; log loss `{ml_evidence.get('log_loss')}`; STRONG `{ml_evidence.get('strong_record')}`.")
+    lines.append("- Totals: `TOTALS_STANDALONE_PREDICTION_VALID_WITH_LIMITATIONS`; point foundation `RAW_V1`; " +
+                 "fair-probability foundation `V1_INTERCEPT`; display `TOTALS_PRIVATE_ONLY`; " +
+                 f"current frozen `{totals_scoring.get('rows', 0)}`, pending/fail-closed `{len(pending)}`.")
+    if totals_evidence:
+        lines.append(f"  - Cumulative raw: MAE `{totals_evidence.get('raw_mae')}`, forecast-minus-actual bias `{totals_evidence.get('raw_bias')}`, CRPS `{totals_evidence.get('raw_crps')}`; " +
+                     f"intercept diagnostic: MAE `{totals_evidence.get('intercept_mae')}`, bias `{totals_evidence.get('intercept_bias')}`, CRPS `{totals_evidence.get('intercept_crps')}`.")
+    lines.append(f"- Pinnacle: mapped `{pinnacle_raw.get('games_mapped', 0)}`; moneyline `{pinnacle_raw.get('moneyline_coverage', 0)}`; " +
+                 f"totals `{pinnacle_raw.get('totals_coverage', 0)}`; run line `{pinnacle_raw.get('run_line_coverage', 0)}`; " +
+                 f"identity rejects `{pinnacle_raw.get('identity_rejects', 0)}`.")
+    lines.append("- Player props: `NO_QUALIFIED_MLB_PROP_MODEL`; collection and research-shadow activity below do not confer prediction authority.")
     lines.append("")
 
     lines.append("## Pipeline & Ops")
@@ -2483,6 +2519,7 @@ def build_markdown(
 
     lines.append("## Postgrade Alerts")
     lines.append(provenance("Postgrade Alerts"))
+    lines.append("- Authority: `INACTIVE_LEGACY` — retained for historical context; not an active operational-health input.")
     lines.append(
         f"- Report date: `{postgrade.get('report_date','n/a')}` | "
         f"alerts `{postgrade.get('alerts_count',0)}` "
@@ -2510,6 +2547,7 @@ def build_markdown(
 
     lines.append("## Model vs Fade")
     lines.append(provenance("Model vs Fade"))
+    lines.append("- Authority: `INACTIVE_LEGACY` — no qualified MLB betting model currently consumes this surface.")
     lines.append(
         f"- Source window: `{model_vs_fade.get('window_game_date_min') or 'n/a'}` to "
         f"`{model_vs_fade.get('window_game_date_max') or 'n/a'}`"
@@ -3050,8 +3088,9 @@ def build_markdown(
             )
     lines.append("")
 
-    lines.append("## MLB Today Workspace")
-    lines.append(provenance("MLB Today Workspace"))
+    lines.append("## Legacy Player-Prop Workspace Staging")
+    lines.append(provenance("Legacy Player-Prop Workspace Staging"))
+    lines.append("- This is the old player-prop staging service, not the certified moneyline panel mounted on `/mlb/today`.")
     lines.append(f"requested_slate_date: {today_workspace.get('requested_slate_date')}")
     lines.append(f"active_slate_date: {today_workspace.get('active_slate_date')}")
     lines.append(f"row_count: {today_workspace.get('row_count')}")

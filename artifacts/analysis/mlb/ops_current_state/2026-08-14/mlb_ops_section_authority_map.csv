@@ -1,0 +1,22 @@
+section,current_purpose,producer,expected_cadence,latest_source_date,actual_authority,expected_today,absence_affects_operational_health
+Certified Moneyline,public prediction,run_mlb_public_game_moneyline_daily_v1,each daily refresh,2026-08-14,MONEYLINE_STANDALONE_PREDICTION_CERTIFIED,yes,yes
+Private Totals,private prediction/research,run_mlb_totals_daily_lifecycle_v1,each daily refresh,2026-08-14,TOTALS_STANDALONE_PREDICTION_VALID_WITH_LIMITATIONS,yes,yes
+Pinnacle Main Markets,market collection,capture_mlb_oddsapi_pinnacle_main_markets,each daily refresh,2026-08-14,ACTIVE_DATA_COLLECTION,yes,yes
+BetOnline Player Props,direct market collection,validate_mlb_betonline_semantic_capture_completeness,five governed windows,2026-08-14,ACTIVE_DATA_COLLECTION,yes,yes
+FanDuel Player Props,supplemental market collection,Odds API player-prop capture,five governed windows,2026-08-14,ACTIVE_DATA_COLLECTION,yes,no
+Hits Environment & Matchups,research context,daily hits environment producer,daily,2026-08-14,ACTIVE_RESEARCH_SHADOW,yes,no
+Hits 0.5 Full-Spine Replacement,research-only candidate,current nonmarket parent producer,five windows,2026-08-14,ACTIVE_RESEARCH_SHADOW,yes,no
+Hits 0.5 Expected-PA,research shadow,live expected-PA pilot,five paths when enabled,2026-07-21,ACTIVE_RESEARCH_SHADOW,conditional,no
+DH Forward Evidence,forward research shadow,dh-forward capture/grade agents,10-minute capture / 08:15 grade,2026-08-14,ACTIVE_RESEARCH_SHADOW,yes,no
+Hits O1.5 Watch Candidates,operator review aid,upload-prep review aid,only when authorized inputs exist,,ACTIVE_REVIEW_AID,no,no
+Hits O1.5 Layered Candidates,operator review aid,upload-prep review aid,only when authorized inputs exist,,ACTIVE_REVIEW_AID,no,no
+Hits U1.5 Favorite Audit,operator review aid,upload-prep review aid,only when authorized inputs exist,,ACTIVE_REVIEW_AID,no,no
+Total Bases Shadow Candidate,historical shadow,total-bases shadow scorer,inactive,2026-07-23,STALE_RESEARCH,no,no
+Total Bases Shadow Evaluation,historical evaluation,total-bases shadow evaluator,inactive,2026-07-23,STALE_RESEARCH,no,no
+BvP Impact,research context,BvP prewarm/impact,best effort daily,2026-08-03,ACTIVE_RESEARCH_SHADOW,yes,no
+Review Aid Performance,review-aid evaluation,review aid performance report,when reconcile source exists,2026-08-13,ACTIVE_REVIEW_AID,conditional,no
+Postgrade Alerts,retired prop-production alerting,legacy postgrade reporter,inactive,2026-08-02,INACTIVE_LEGACY,no,no
+Model vs Fade,retired wager comparison,legacy model-vs-fade reporter,inactive,2026-08-02,INACTIVE_LEGACY,no,no
+Model Performance By Prop,retired production model summary,legacy performance reporter,inactive,2026-08-02,INACTIVE_LEGACY,no,no
+Prop Outlook Freshness,retired production prop outlook,legacy outlook producer,inactive,2026-08-02,INACTIVE_LEGACY,no,no
+Legacy Player-Prop Workspace Staging,old prop staging service,today_workspace_service,inactive without prop authority,2026-08-14,INACTIVE_LEGACY,no,no
