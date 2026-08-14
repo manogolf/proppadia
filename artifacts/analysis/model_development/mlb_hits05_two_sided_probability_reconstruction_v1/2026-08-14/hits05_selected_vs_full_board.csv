@@ -1,0 +1,3 @@
+view,rows,over_fraction,under_fraction,accuracy_or_observed_win_rate,mean_probability,interpretation
+HISTORICAL_SELECTED_SIDE,13579,0.8589734148317255,0.14102658516827454,0.5823698357758303,0.6075674929670816,selected preferred direction; lane asymmetry is selection-conditioned
+CANONICAL_FULL_BOARD,9764,not applicable,not applicable,0.5738426874231872,0.5854794367062679,one P(1+ hit) per player-game; natural binary calibration and ordering

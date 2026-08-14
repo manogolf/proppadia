@@ -1,0 +1,7 @@
+check,rows,violations,tolerance
+source_prob_over_plus_under,83717,0,1e-09
+reconstructed_over_plus_under,83717,0,1e-09
+values_in_unit_interval,83717,0,1e-09
+selected_probability_matches_reconstruction,83717,0,1e-09
+reconstructed_matches_stored_prob_over,83717,0,1.1e-06
+fair_odds_coherent,83717,0,finite

@@ -1,0 +1,15 @@
+{
+  "policy": "EARLIEST_VALID_STRICT_PREGAME_MODEL_PREDICTION",
+  "keys": [
+    "game_date",
+    "game_pk",
+    "player_id",
+    "hits",
+    "0.5"
+  ],
+  "outcome_independent": true,
+  "market_independent": true,
+  "supported_player_games": 17603,
+  "excluded_same_timestamp_probability_conflicts": 0,
+  "reason": "No retained designated daily model snapshot is uniformly authoritative; earliest strict-pregame is uniformly auditable and avoids repeated-snapshot weighting."
+}
