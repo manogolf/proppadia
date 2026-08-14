@@ -1,0 +1,11 @@
+date,scorer_executed,probability_generated,probability_retained,downstream_guard_location,recovery_possible,strongest_evidence,final_classification
+2026-08-04,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-04/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-05,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-05/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-06,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-06/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-07,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-07/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-08,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-08/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-09,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-09/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-10,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-10/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-11,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-11/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-12,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-12/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED
+2026-08-13,YES,YES,YES,production_slate_generation before candidate/routing output,DIRECT_ARTIFACT_RECOVERY_POSSIBLE,backend/mlb/exports/prospective_lineage/2026-08-13/prediction_lineage_ledger.csv,GENERATED_AND_RECOVERED

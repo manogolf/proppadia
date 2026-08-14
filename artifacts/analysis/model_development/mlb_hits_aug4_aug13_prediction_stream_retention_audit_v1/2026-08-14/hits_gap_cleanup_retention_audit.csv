@@ -1,0 +1,6 @@
+path_or_code,operation,can_explain_missing_mutable_wide,can_delete_lineage,finding
+build_mlb_predictions_wide.py output writer,replace current processed wide CSV,YES,NO,Later daily runs overwrite current wide output.
+bin/mlb_predictions_wide_guarded.sh,trap rm -f temporary stdout/stderr,NO,NO,"Temp logs removed, but emitted content survives in LaunchAgent log."
+bin/mlb_predictive_command_guarded.sh,trap cleanup temporary command captures,NO,NO,Downstream capture cleanup does not touch scorer artifacts.
+prospective_lineage.append_certified_rows,append certified rows,NO,NO,No cleanup/pruning path found for daily lineage ledgers.
+authority failure path,fail/skip before slate output,YES_FOR_SLATE_ONLY,NO,Guard suppresses later artifacts but leaves already-persisted lineage immutable.

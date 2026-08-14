@@ -1,0 +1,3 @@
+surface,object,rows,dates,model_identity,finding
+PostgreSQL information_schema,mlb Hits prediction/lifecycle table,0,2026-08-04/2026-08-13,NONE,No Hits prediction or lifecycle DB table found; public_game_moneyline_predictions is unrelated.
+filesystem shadow/analysis ledger,backend/mlb/exports/prospective_lineage/<date>/prediction_lineage_ledger.csv,13179,2026-08-04/2026-08-13,MLB_HITS_SEMANTIC_V1_2e7377b2cdcb,Certified exact probability rows persisted outside the database.

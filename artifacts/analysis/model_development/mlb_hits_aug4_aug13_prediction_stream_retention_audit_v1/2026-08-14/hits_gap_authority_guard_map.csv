@@ -1,0 +1,4 @@
+order,guard,location,earliest_blocked_stage,prevents_model_scoring,prevents_raw_probability_write,prevents_candidate_ranking,prevents_upload_generation,prevents_publication,observed_effect
+1,production_slate_generation,backend/mlb/scripts/build_mlb_slate_output.py::main,candidate/routing slate construction,NO,NO,YES,YES_DOWNSTREAM,YES,"Scoring, mutable wide write, and certified lineage complete before guard raises."
+2,production_ranking_and_routing,daily upload/ranking guarded path,ranking/routing,NO,NO,YES,YES,YES,Expected skip after slate guard.
+3,production_upload_generation,backend/mlb/scripts/export_mlb_prediction_book.py,upload artifact generation,NO,NO,NO/UPSTREAM ALREADY BLOCKED,YES,YES,No production prediction book/upload.

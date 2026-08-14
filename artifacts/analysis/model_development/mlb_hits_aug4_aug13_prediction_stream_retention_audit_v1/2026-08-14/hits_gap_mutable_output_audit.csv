@@ -1,0 +1,5 @@
+path,overwritten_in_place,run_tagged_copies_existed,git_ignored,backup_or_temp_survives,log_counts_or_hashes,risk,explanation
+backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv,YES,NO_FOR_AUG4_AUG13,YES/OPERATIONAL,NO GAP COPY FOUND,ROW COUNTS IN DAILY LOG; NO PER-RUN FILE HASH,YES,Each wide run replaces current-slate output; certified lineage separately retained probabilities.
+backend/mlb/data/processed/mlb_slate_output.csv,"POTENTIALLY, BUT GAP WRITER BLOCKED",NO_FOR_AUG4_AUG13,YES/OPERATIONAL,NO GAP COPY FOUND,AUTHORITY SKIP MARKER,YES,Slate writer was blocked before new gap output.
+"/tmp/mlb-predictions-wide-{stdout,stderr}.*",NO; UNIQUE TEMP,NO,OUTSIDE_REPO,NO; TRAP DELETES,CONTENT FORWARDED TO GLOBAL DAILY LOG,YES,Temporary capture deleted after wrapper emits content.
+backend/mlb/exports/prospective_lineage/<date>/prediction_lineage_ledger.csv,NO; APPEND-ONLY,RUN TAG IN EACH ROW,OPERATIONAL EXPORT,PRIMARY ARTIFACT SURVIVES,ROW AND SOURCE HASHES EMBEDDED,NO,This durable surface prevents loss of exact probability evidence.
