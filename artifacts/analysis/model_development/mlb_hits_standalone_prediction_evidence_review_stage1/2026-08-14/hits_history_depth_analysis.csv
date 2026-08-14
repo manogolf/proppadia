@@ -1,0 +1,2 @@
+classification,rows,reason
+NOT_AVAILABLE_IN_FROZEN_SYNCHRONIZED_LINEAGE,0,No governed existing player-history-depth classification is embedded in the frozen population; thresholds were not invented.

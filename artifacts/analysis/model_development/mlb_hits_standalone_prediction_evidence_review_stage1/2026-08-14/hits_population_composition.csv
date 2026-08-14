@@ -1,0 +1,6 @@
+scope,rows,unique_games,unique_players,unique_dates,date_start,date_end,months,over_rows,under_rows,duplicate_identities,correlated_player_game_groups,line,side
+overall,7564,651,471,53.0,2026-05-08,2026-08-02,2026-05|2026-06|2026-07|2026-08,5229.0,2335.0,0.0,95.0,,
+,5132,634,426,,,,,,,,,0.5,over
+,1618,504,415,,,,,,,,,0.5,under
+,97,83,40,,,,,,,,,1.5,over
+,717,352,166,,,,,,,,,1.5,under

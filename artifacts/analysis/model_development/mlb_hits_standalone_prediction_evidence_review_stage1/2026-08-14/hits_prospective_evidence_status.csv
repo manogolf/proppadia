@@ -1,0 +1,4 @@
+lane,predictions,resolved,unresolved,latest_date,maturity
+Hits 0.5 full-spine,0,0,1,2026-08-14,INSUFFICIENT
+Hits 0.5 Expected-PA,126,0,126,2026-07-21,INSUFFICIENT
+active Hits prediction ledger,0,0,0,,NO_QUALIFIED_ACTIVE_LEDGER_IDENTIFIED

@@ -1,0 +1,22 @@
+{
+  "task_id": "MLB_HITS_STANDALONE_PREDICTION_EVIDENCE_REVIEW_STAGE1",
+  "population_rows": 7564,
+  "source_sha256": "3ac2ea64a2301d6224ab999216cf300807496e4e90aac271d615ce3f63f88088",
+  "model_identity": "retained per-date production probability; semantic version not embedded in frozen rows",
+  "lines": [
+    0.5,
+    1.5
+  ],
+  "sides": [
+    "over",
+    "under"
+  ],
+  "questions_requiring_review_before_certification": [
+    "Should Hits 0.5 and Hits 1.5 be reviewed as separate prediction authorities?",
+    "Is the observed line/side asymmetry operationally material?",
+    "Does deterioration at >=15 pp separation undermine probability trust despite aggregate parity?",
+    "Is temporal behavior stable enough across the retained May-August window?",
+    "Must prospective resolved evidence mature before any certification decision?"
+  ],
+  "certification_decision_made": false
+}
