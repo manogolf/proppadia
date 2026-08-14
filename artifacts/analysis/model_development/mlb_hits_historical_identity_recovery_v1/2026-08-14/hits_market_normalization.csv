@@ -1,0 +1,7 @@
+raw_market,raw_line,raw_side,line,side,canonical_prop,accepted,rule
+batter_hits,1.5,Over,1.5,over,hits,True,exact batter_hits market; exact numeric line; case-normalized exact side
+batter_hits,0.5,Over,0.5,over,hits,True,exact batter_hits market; exact numeric line; case-normalized exact side
+batter_hits,2.5,Over,2.5,over,hits,False,exact batter_hits market; exact numeric line; case-normalized exact side
+batter_hits,3.5,Over,3.5,over,hits,False,exact batter_hits market; exact numeric line; case-normalized exact side
+batter_hits,0.5,Under,0.5,under,hits,True,exact batter_hits market; exact numeric line; case-normalized exact side
+batter_hits,1.5,Under,1.5,under,hits,True,exact batter_hits market; exact numeric line; case-normalized exact side

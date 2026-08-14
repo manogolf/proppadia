@@ -1,0 +1,18 @@
+{
+  "task_id": "MLB_HITS_HISTORICAL_IDENTITY_RECOVERY_V1",
+  "original_unmatched": 18334,
+  "raw_orphan_propositions": 31613,
+  "raw_orphan_candidate_ledger_rows": 31635,
+  "game_identities_recovered": 756,
+  "player_identities_recovered": 14788,
+  "new_exact_matches": 7618,
+  "new_valid_pregame": 7618,
+  "new_paired": 7367,
+  "new_outcome_complete": 5054,
+  "original_synchronized": 7564,
+  "candidate_synchronized": 12618,
+  "composition": "RECOVERED_POPULATION_COMPOSITION_SIMILAR",
+  "historical_model_identity": "UNRESOLVED",
+  "decision": "HITS_IDENTITY_RECOVERY_EXPOSES_SYSTEMATIC_HISTORICAL_MATCHING_GAP",
+  "next_step_recommendation": "RERUN_PREDICTIVE_PARITY_ON_FROZEN_RECOVERED_POPULATION"
+}

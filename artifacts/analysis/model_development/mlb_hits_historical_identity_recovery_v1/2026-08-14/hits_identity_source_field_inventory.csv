@@ -1,0 +1,16 @@
+source,identity_field,retained_field,deterministic_usable,note
+MODEL,game_pk,game_id,True,canonical MLB identity
+MODEL,game_date,game_date/capture_date,True,retained slate date
+MODEL,scheduled_start,not uniformly in slate; reconcile game_time,True,canonical rows provide exact time
+MODEL,player_id,player_id,True,canonical MLBAM identity
+MODEL,player_name,player_name,True,roster-context support
+MODEL,team/opponent/home-away,home_team_code/away_team_code,True,game context; player team absent
+MODEL,prop/line/side,prop_type/line/model_pick_side,True,exact canonical equality
+MODEL,prediction timestamp,generated_at_utc,True,strict temporal gate
+MODEL,source/run tag,capture_file,True,immutable retained artifact
+BETONLINE,provider event ID,event.id,True,stable within retained payloads
+BETONLINE,event teams/start,away_team/home_team/commence_time,True,exact game reconstruction
+BETONLINE,provider player ID,outcome.player_id,False,not populated in retained endpoint
+BETONLINE,player/team,outcome.description / team absent,True,name only; requires verified game roster
+BETONLINE,market/prop/line/side,market.key/description/point/name,True,batter_hits plus exact .5/1.5 and over/under
+BETONLINE,capture/source,captured_at_utc/file/window,True,strict temporal selection and lineage

@@ -1,0 +1,5 @@
+lane,original_model_denominator,original_synchronized_rows,new_exact_matches,new_valid_pregame,new_outcome_complete,projected_synchronized_total,recovery_rate_of_original_unmatched
+HITS_05_OVER,18247,5132,4901,4901,3344,8476,0.4082125603864734
+HITS_05_UNDER,4683,1618,1617,1617,978,2596,0.613662239089184
+HITS_15_OVER,501,97,108,108,67,164,0.2755102040816326
+HITS_15_UNDER,4156,717,992,992,665,1382,0.3005149954559225

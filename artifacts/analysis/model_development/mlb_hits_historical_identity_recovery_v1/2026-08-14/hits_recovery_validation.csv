@@ -1,0 +1,8 @@
+check,expected,actual,passed
+original_model_lane_denominator,27587,27587,True
+raw_unique_side_propositions,40866,40866,True
+original_exact_matches,9253,9253,True
+frozen_predecessor_raw_orphan_cardinality,31613,31613,True
+original_synchronized_rows_immutable,7564,7564,True
+recovered_identity_conflicts,0,0,True
+recovered_spot_validation_rows,all four lanes/months/windows where recovered,77,True
