@@ -1,0 +1,9 @@
+check,expected,actual,passed
+total_rows,12618,12618,True
+lane_counts,"{""HITS_05_OVER"": 8476, ""HITS_05_UNDER"": 2596, ""HITS_15_OVER"": 164, ""HITS_15_UNDER"": 1382}","{""HITS_05_OVER"": 8476, ""HITS_05_UNDER"": 2596, ""HITS_15_OVER"": 164, ""HITS_15_UNDER"": 1382}",True
+duplicate_proposition_identities,0,0,True
+identity_conflicts,0,0,True
+outcome_complete,12618,12618,True
+strictly_pregame,12618,12618,True
+provenance_classes,ORIGINAL_CANONICAL_MATCH|RECOVERED_DETERMINISTIC_MATCH,ORIGINAL_CANONICAL_MATCH|RECOVERED_DETERMINISTIC_MATCH,True
+source_hash,5e7763ded77ea15ff8b5031c6aa58631128f6942c38f3c3f6161804346e0045e,5e7763ded77ea15ff8b5031c6aa58631128f6942c38f3c3f6161804346e0045e,True

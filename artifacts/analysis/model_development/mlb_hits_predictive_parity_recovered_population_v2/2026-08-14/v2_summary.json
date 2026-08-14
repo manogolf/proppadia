@@ -1,0 +1,29 @@
+{
+  "task_id": "MLB_HITS_PREDICTIVE_PARITY_RECOVERED_POPULATION_V2",
+  "source_sha256": "5e7763ded77ea15ff8b5031c6aa58631128f6942c38f3c3f6161804346e0045e",
+  "rows": 12618,
+  "provenance_behavior": "RECOVERED_ROWS_PARTIALLY_DIFFER",
+  "pooled_classification": "BROADLY_COMPARABLE",
+  "ordering": {
+    "HITS_05_OVER": "PARTIAL_ORDERING",
+    "HITS_05_UNDER": "MONOTONIC_OR_NEAR_MONOTONIC",
+    "HITS_15_OVER": "INVERTED_OR_UNRELIABLE",
+    "HITS_15_UNDER": "FLAT"
+  },
+  "temporal": {
+    "HITS_05_OVER": "STABLE",
+    "HITS_05_UNDER": "DETERIORATING",
+    "HITS_15_OVER": "MILD_DRIFT",
+    "HITS_15_UNDER": "MILD_DRIFT"
+  },
+  "historical_model_identity": "UNRESOLVED",
+  "questions": [
+    "Did Hits 1.5 Under survive the doubled sample strongly enough to prioritize provenance work?",
+    "Is Hits 0.5 Over extreme-confidence deterioration material enough to preclude formal review?",
+    "Is the persistent Hits 0.5 Under temporal deterioration durable?",
+    "Is 164 rows still too sparse for Hits 1.5 Over conclusions?",
+    "Can exact historical model producer/version binding be recovered before any certification review?",
+    "Which lanes, if any, deserve formal certification review after provenance is resolved?"
+  ],
+  "certification_decision_made": false
+}

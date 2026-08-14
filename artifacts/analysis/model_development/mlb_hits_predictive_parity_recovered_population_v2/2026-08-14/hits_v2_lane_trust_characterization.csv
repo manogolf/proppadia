@@ -1,0 +1,5 @@
+lane,probability_calibration,confidence_ordering,temporal_stability,independence_from_betonline,extreme_confidence_trust,betonline_relative_position
+HITS_05_OVER,MODERATE,MODERATE,STRONG,MODERATE,WEAK,approximately comparable
+HITS_05_UNDER,MODERATE,STRONG,WEAK,STRONG,WEAK,approximately comparable
+HITS_15_OVER,WEAK,WEAK,MODERATE,STRONG,WEAK,materially worse
+HITS_15_UNDER,WEAK,WEAK,MODERATE,STRONG,MODERATE,modestly worse
