@@ -1,0 +1,11 @@
+{
+  "july9_artifact_path": "models_out/archive/hits/hits-20260709T061129Z.joblib",
+  "july9_sha256": "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf",
+  "semantic_artifact_path": "models_out/latest/hits.joblib",
+  "semantic_sha256": "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf",
+  "byte_equality": true,
+  "BYTE_IDENTICAL_MODEL_ARTIFACT": true,
+  "model_family": "serialized sklearn LR/RF pipelines with AUC-weighted probability blend",
+  "fitted_parameters_identity": "BYTE_IDENTICAL",
+  "feature_count_identity": 73
+}

@@ -1,0 +1,3 @@
+# Future Tier A capture requirements
+
+Every canonical row must freeze semantic model ID, exact model SHA-256, feature-contract hash, source/run tag, prediction timestamp, scheduled first pitch, deterministic player/game identity, line, full model probability, and all source hashes. The repository has components capable of producing these fields (semantic manifest, model hashes, run tags, schedule, identities, and hashing utilities), but the current daily Hits prediction surface does not bind all of them into one immutable row. Therefore `FUTURE_TIER_A_CAPTURE_READY_FOR_IMPLEMENTATION = NO`: a bounded design/implementation decision is still required. No implementation occurred here.
