@@ -1,0 +1,5 @@
+dimension,historical,current_aug14,materially_more_complete
+capture_windows,multiple retained but irregular/missing timing lineage,five governed windows,True
+direct_betonline_rows,9253,1002 at 05:30 all prop families,True
+paired_prices,9253,semantic paired-price validation active,True
+identity_and_outcomes,model hashes/start-lineup denominator not uniformly embedded,stronger direct identity capture; prospective outcomes still require ledger,True

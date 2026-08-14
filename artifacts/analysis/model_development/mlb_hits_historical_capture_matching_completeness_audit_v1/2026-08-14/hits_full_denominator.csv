@@ -1,0 +1,10 @@
+metric,rows,note
+mlb_games_represented_in_retained_slate_artifacts,1138,Retained artifact denominator; independent official schedule archive not uniformly retained.
+games_with_betonline_capture,758,
+games_with_hits_capture,758,
+unique_hitter_game_opportunities,22579,
+starting_hitter_opportunities,,UNAVAILABLE_UNIFORMLY; not approximated
+unique_betonline_hits_propositions,40866,
+raw_betonline_hits_observations,178960,
+model_hits_predictions,27826,
+final_synchronized_rows,7564,

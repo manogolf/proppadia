@@ -1,0 +1,5 @@
+lane,recoverable_rows_proven_now,candidate_rows_requiring_outcome_review,raw_identity_normalization_candidates_total_all_lanes,recovery_mechanism,projected_synchronized_population
+HITS_05_OVER,0,503,31613,"deterministic retained provider-event team/time/player-name to canonical game/player identity join, then unchanged temporal/outcome gates",not asserted until identity join validates
+HITS_05_UNDER,0,199,31613,"deterministic retained provider-event team/time/player-name to canonical game/player identity join, then unchanged temporal/outcome gates",not asserted until identity join validates
+HITS_15_OVER,0,5,31613,"deterministic retained provider-event team/time/player-name to canonical game/player identity join, then unchanged temporal/outcome gates",not asserted until identity join validates
+HITS_15_UNDER,0,39,31613,"deterministic retained provider-event team/time/player-name to canonical game/player identity join, then unchanged temporal/outcome gates",not asserted until identity join validates

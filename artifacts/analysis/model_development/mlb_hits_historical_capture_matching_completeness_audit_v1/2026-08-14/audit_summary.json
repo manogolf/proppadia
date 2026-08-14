@@ -1,0 +1,13 @@
+{
+  "task_id": "MLB_HITS_HISTORICAL_CAPTURE_MATCHING_COMPLETENESS_AUDIT_V1",
+  "retained_games": 1138,
+  "games_with_raw_betonline_hits": 758,
+  "player_games": 22579,
+  "raw_betonline_observations": 178960,
+  "unique_raw_betonline_propositions": 40866,
+  "exact_identity_betonline_rows": 9253,
+  "unique_betonline_pregame_propositions": 8310,
+  "model_predictions": 27826,
+  "synchronized": 7564,
+  "decision": "HITS_HISTORICAL_COVERAGE_INCOMPLETE_RECOVERY_JUSTIFIED"
+}

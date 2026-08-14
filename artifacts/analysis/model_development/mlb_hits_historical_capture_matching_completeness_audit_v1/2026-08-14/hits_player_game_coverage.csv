@@ -1,0 +1,11 @@
+scope,value,player_game_opportunities,with_betonline_hits,synchronized_rows
+month,2026-05,6238,1680,1547
+month,2026-06,7947,2127,1958
+month,2026-07,7758,4010,3705
+month,2026-08,636,397,354
+line_side,0.5|over,18247,5635,5132
+line_side,0.5|under,4683,1817,1618
+line_side,1.5|over,501,102,97
+line_side,1.5|under,4156,756,717
+line_side,2.5|under,229,0,0
+line_side,3.5|under,10,0,0

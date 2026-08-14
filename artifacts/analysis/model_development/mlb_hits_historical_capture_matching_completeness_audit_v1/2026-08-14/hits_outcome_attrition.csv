@@ -1,0 +1,5 @@
+lane,matched_pregame_paired,with_certified_outcome,without_outcome_or_other_final_exclusion
+HITS_05_OVER,5635,5132,503
+HITS_05_UNDER,1817,1618,199
+HITS_15_OVER,102,97,5
+HITS_15_UNDER,756,717,39

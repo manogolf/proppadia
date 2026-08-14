@@ -1,0 +1,7 @@
+line,side,predictions,games,player_games,lacking_betonline,lacking_outcome
+0.5,over,18247,1126,18247,12019,reported via funnel
+0.5,under,4683,1020,4683,2616,reported via funnel
+1.5,over,501,358,501,399,reported via funnel
+1.5,under,4156,984,4156,3400,reported via funnel
+2.5,under,229,146,229,229,reported via funnel
+3.5,under,10,10,10,10,reported via funnel
