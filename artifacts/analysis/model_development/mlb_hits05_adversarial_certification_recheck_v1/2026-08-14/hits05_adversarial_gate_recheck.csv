@@ -1,0 +1,11 @@
+gate,result,adversarial_basis
+SAMPLE_EVIDENCE,MIXED,"2,483 resolved but only 11 date clusters"
+TEMPORAL_STABILITY,MIXED,exact evidence covers 11 days
+GENERATION_STABILITY,MIXED,"older rows support family, not byte-identical artifact"
+PROSPECTIVE_CONTINUITY,PASS,Aug 3-13 append-only evidence predates outcomes
+CALIBRATION,PASS_WITH_LIMITATIONS,aggregate ECE is low; >=75 current sample is too small
+CONFIDENCE_ORDERING,DIRECTIONALLY_PRESENT,point monotonic; clustered intervals overlap
+REPRODUCIBILITY,PASS_WITH_LIMITATIONS,exact vectors/hashes retained; upstream source-row timestamps incomplete
+MARKET_INDEPENDENCE,PASS,no market feature is in trained feature schema; model differs from BetOnline
+INCREMENTAL_INFORMATION,MIXED,rolling-forward contemporaneous recheck is unstable
+STRICT_PRIOR_FEATURE_INTEGRITY,PASS_WITH_LIMITATIONS,"code cutoff plus vectors, without row-level source observation timestamps"

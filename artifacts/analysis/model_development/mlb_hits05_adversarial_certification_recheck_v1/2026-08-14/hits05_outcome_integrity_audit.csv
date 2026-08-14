@@ -1,0 +1,9 @@
+check,count,result
+exact_primary_predictions,2682,identity-level earliest strict pregame
+official_outcomes_attached,2483,mlb.player_stats by game_pk + player_id
+unresolved_or_nonappearance,199,not scored
+known_plate_appearance_rows,0,PA field incomplete in retained outcome attachment
+known_zero_PA_rows,0,excluded in alternate sensitivity
+alternate_nonzero_PA_or_PA_unknown,2483,"{""n"": 2483, ""brier"": 0.2447600700601806, ""log_loss"": 0.6826697435205488, ""accuracy_50"": 0.5666532420459122, ""mean_predicted"": 0.5549920017416274, ""observed_rate"": 0.5739025372533226, ""probability_sd"": 0.0723662632336114, ""calibration_gap"": -0.018910535511695192}"
+postponed_or_suspended_admitted,0,no non-final outcome is scored
+duplicate_outcome_matches,0,one outcome per numeric identity

@@ -1,0 +1,3 @@
+first_date,last_date,classification,predictions,resolved,basis
+2026-07-09,2026-08-02,ORIGINAL_PREDICTION_STRICT_TIMING_PARTIAL_PROVENANCE,5352,4865,dated artifact chronology only; no per-row artifact/run/hash binding
+2026-08-03,2026-08-13,ORIGINAL_PROSPECTIVE_FULL_PROVENANCE,2682,2483,append-only ledgers predate outcomes and bind exact model/vector/run

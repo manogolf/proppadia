@@ -1,0 +1,2 @@
+definition,n,proppadia_brier,betonline_brier,proppadia_log_loss,betonline_log_loss,pearson,spearman,mean_abs_difference,median_abs_difference,ge_5pp,ge_10pp,market_inputs_in_model
+ABS_TIMESTAMP_DIFFERENCE_LE_30_MIN_BOTH_PREGAME,454,0.2475295431839225,0.24957750038101378,0.6884918269574023,0.6927982619745696,0.3757933310429253,0.3657363712601021,0.06636476026355026,0.05733479655859944,259,111,NO

@@ -1,0 +1,10 @@
+feature_family,coverage,result,evidence_and_limitation
+artifact_and_vector_binding,complete,PASS,"Every exact row binds model SHA, schema SHA, vector SHA, canonical vector, run and prediction timestamp."
+batter_rolling_statistics,complete,PASS_WITH_LIMITATIONS,Production builders use source game_date < slate date / shifted rolling windows; retained vector lacks contributing source-row timestamps.
+pitcher_state,complete,PASS_WITH_LIMITATIONS,"Exact vector preserves pitcher-state/fallback values, but not a row-level source-observation ledger."
+pa_derived_features,complete,PASS_WITH_LIMITATIONS,PA-derived missingness/state is frozen; source-row cutoff cannot be independently replayed per prediction.
+matchup_bvp,complete,PASS_WITH_LIMITATIONS,BvP values are frozen; contributing plate-appearance dates are not retained in lineage.
+park_game_lineup_state,complete,PASS_WITH_LIMITATIONS,"Pregame context is frozen, including explicit fallback warnings; source freshness is only as available."
+same_day_and_game_outcome_fields,complete,PASS,"No actual_hits, target, final score, or same-game outcome field appears in the frozen model vector."
+post_start_refresh,complete,PASS,Primary evaluation retains earliest strict-pregame identity only; post-start rows excluded.
+overall,complete,PASS_WITH_LIMITATIONS,"Code-level cutoff and frozen-vector evidence support strict-prior construction, but lack of contributing source-row timestamps prevents row-by-row proof of every input."

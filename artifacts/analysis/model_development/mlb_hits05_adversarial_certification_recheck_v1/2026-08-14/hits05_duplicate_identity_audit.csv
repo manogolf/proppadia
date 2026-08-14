@@ -1,0 +1,8 @@
+check,count,interpretation
+retained_exact_H05_run_observations,11890,all repeated scheduled captures
+unique_primary_game_player_H05_identities,2682,earliest valid strict-pregame only
+repeated_run_observations_excluded,9208,not independent predictions
+duplicate_primary_identities,0,zero required
+side_complements_double_counted,0,P(1+) evaluated once
+name_collisions,0,numeric identity governs
+doubleheader_collision_rows,0,distinct game_pk preserved
