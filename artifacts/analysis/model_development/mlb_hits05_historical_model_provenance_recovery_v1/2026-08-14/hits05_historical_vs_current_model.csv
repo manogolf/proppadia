@@ -1,0 +1,9 @@
+dimension,historical_contract,current_contract,assessment,continuity_classification
+model_family,LR/RF AUC-weighted blend,LR/RF AUC-weighted blend,same family,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+target,hits binary probability,hits binary probability,same,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+probability_semantics,p_over plus deterministic line transform,p_over plus deterministic line transform,same,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+feature_order,87 columns in pre-Jul9 generations; 73 Jul9,73 artifact-defined columns,material generation change,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+training_population,rolling 540 days; max 150000; exact row IDs absent,rolling 540 days; max 150000; exact row IDs absent,retrained generation,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+preprocessing,serialized sklearn pipelines,serialized sklearn pipelines,"same mechanism, fitted parameters differ",CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+calibration,no upload calibrator evidenced,no artifact calibrator,same,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT
+side_selection,over iff p_over >= 0.5,over iff p_over >= 0.5,same,CURRENT_MODEL_IS_MATERIALLY_CHANGED_DESCENDANT

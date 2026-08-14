@@ -1,0 +1,6 @@
+period,rows,minimum,maximum,unique_probabilities,duplicated_probability_rows,missing_probabilities,side_mismatches,exact_ties,schema,ordering,inference_limit
+FULL,17603,0.2436789999999999,0.884085,15804,3336,0,1,1,canonical board; selected-side plus reconstructed complements,game_date/game/player from predecessor board,SUPPORTING_ONLY
+2026-05,3514,0.2436789999999999,0.884085,3383,251,0,1,1,canonical board; selected-side plus reconstructed complements,game_date/game/player from predecessor board,SUPPORTING_ONLY
+2026-06,6663,0.356159,0.867983,6123,1033,0,0,0,canonical board; selected-side plus reconstructed complements,game_date/game/player from predecessor board,SUPPORTING_ONLY
+2026-07,6833,0.3599489999999999,0.82182,6070,1385,0,0,0,canonical board; selected-side plus reconstructed complements,game_date/game/player from predecessor board,SUPPORTING_ONLY
+2026-08,593,0.3674509999999999,0.786483,553,78,0,0,0,canonical board; selected-side plus reconstructed complements,game_date/game/player from predecessor board,SUPPORTING_ONLY

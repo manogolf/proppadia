@@ -1,0 +1,8 @@
+producer,path,function,identity
+scheduled_or_manual_daily_entry,Makefile,Make targets invoke wide and slate builders,PARTIAL
+wide_prediction_export,backend/mlb/scripts/build_mlb_predictions_wide.py,calls production prop workflow/predict and emits p_over_0_5,EXACT
+feature_workflow,backend/domains/mlb/prop_workflow.py,constructs strict-prior feature dictionaries,EXACT
+probability_producer,backend/mlb/prediction/make_prediction.py,loads hits artifact; LR/RF blend plus line sensitivity,EXACT
+slate_export,backend/mlb/scripts/build_mlb_slate_output.py,"rounds probability, complements it, and selects side at 0.5",EXACT
+artifact_archive,models_out/archive/hits,retains dated joblib generations,EXACT
+semantic_registry,backend/mlb/config/semantic_models/manifests/MLB_HITS_SEMANTIC_V1_2e7377b2cdcb.json,registers July 9 artifact prospectively,EXACT

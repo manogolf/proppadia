@@ -1,0 +1,7 @@
+gap,evidence,recoverability,impact
+per-row model semantic ID/hash,not stored on canonical frozen rows,RECOVERABLE_FROM_REPOSITORY,"artifact generation can be inferred, not proven row-by-row"
+per-row feature-contract hash,not stored,RECOVERABLE_FROM_REPOSITORY,artifact metadata supplies generation contracts
+exact training row identities,not present in artifact metadata,NOT_FOUND_AFTER_REPOSITORY_AND_GIT_SEARCH,training window/limit retained; exact membership cannot be asserted
+runtime latest symlink/hash for each run,not retained in row/run metadata,NOT_FOUND_AFTER_REPOSITORY_AND_GIT_SEARCH,prevents fully bound model identity
+external upload-calibration environment per run,flag not bound to rows,RECOVERABLE_FROM_OUTPUT_EVIDENCE,raw_prob_over equality/blank method supports disabled calibration
+March25-Apr8 prepared vectors,daily vectors begin Apr9,NOT_FOUND_AFTER_REPOSITORY_AND_GIT_SEARCH,outside strict benchmark; output rows remain evidence

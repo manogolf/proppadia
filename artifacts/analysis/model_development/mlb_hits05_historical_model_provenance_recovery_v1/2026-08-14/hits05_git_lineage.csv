@@ -1,0 +1,9 @@
+commit_sha,date,affected_surface,behavioral_change
+86e9daec641ba695d002004d3e482fc5652b62d4,2026-02-22,wide/slate builders,introduced wide predictions and slate artifact pipeline
+07208d1f9fb606712d9d113d26e16a02d2490a92,2026-03-31,make_prediction.py,added deterministic prop-line sensitivity transform
+90204fe3f8d59e8b34586ad111f5b8d1305cbd5a,2026-04-19,training/wide/slate,two-sided market rows and richer odds observability; model input remained artifact-defined
+14b0d5d819876b68ecceb96ee338ac0ea1ef09c2,2026-05-10,wide prediction diagnostics,added prepared feature observability
+1f0ec2b09d61001daae79ed896886d0a23c5e2a2,2026-06-19,daily lineage workflows,expanded run lineage
+4502988694042059eed7e0508704cc71b671703e,2026-07-20,slate routing,operationalized Hits 0.5 routing
+052360a7d1380b48b9132cd2ee1c2b9f62e7f660,2026-08-03,downstream predictive outputs,blocked retired model output
+73160edf67a8afa9425f4b55d8f80c82a91dd112,2026-08-03,semantic lineage,preserved research lineage and registered prospective semantic identity
