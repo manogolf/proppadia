@@ -3,6 +3,7 @@ import { getBaseURL } from "../../shared/getBaseURL.js";
 
 const pct = (value) => (Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : "—");
 const stamp = (value) => value ? new Date(value).toLocaleString() : "—";
+const confidenceLabel = (value) => value === "NEAR_EVEN" ? "NEAR EVEN" : value;
 
 export default function MLBPublicGamePredictionsPanel({ gameDate }) {
   const [state, setState] = useState({ loading: true, enabled: false, rows: [], error: "" });
@@ -45,7 +46,7 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
             <div className="mt-1 text-xs text-slate-500">{row.game_date} · {stamp(row.scheduled_start_utc)}</div>
             <div className="mt-1 text-sm text-slate-700">Prediction: {row.predicted_winner} · {pct(row.picked_side_probability)}</div>
             <div className="mt-2 flex flex-wrap gap-2">
-              <span className="inline-flex rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{row.confidence_band}</span>
+              <span className="inline-flex rounded border border-slate-300 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{confidenceLabel(row.confidence_band)}</span>
             </div>
             <div className="mt-2 text-xs text-slate-500">Model: {row.model_version}</div>
             <div className="text-xs text-slate-500">Predicted: {stamp(row.prediction_timestamp_utc)}</div>
