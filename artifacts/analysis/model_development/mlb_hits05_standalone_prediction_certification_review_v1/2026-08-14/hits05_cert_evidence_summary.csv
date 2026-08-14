@@ -1,0 +1,10 @@
+dimension,status,value,detail
+AUTHORITATIVE_POPULATION,PASS,STRICT_PREGAME_SEASON_EVIDENCE,weaker-timing recoverable rows excluded
+SAMPLE_EVIDENCE,SUFFICIENT,20138,resolved=18319; dates=93; games=1083; players=559; months=4; generations=6
+PREDICTION_VALIDITY,PASS,0.2437865063696259,proper scores and monotonic ordering on original probabilities
+TEMPORAL_STABILITY,PASS,monthly Brier 0.243285-0.245479,behavior persists across fixed monthly periods
+GENERATION_STABILITY,PASS,dated generation Brier 0.241502-0.248528,no dated generation materially breaks proper-score behavior
+PROSPECTIVE_CONTINUITY,PASS,AUGUST_CONTINUITY_CONSISTENT,exact Tier A current model
+CALIBRATION,CALIBRATION_ACCEPTABLE_WITH_KNOWN_UPPER_TAIL_LIMITATION,0.0338391130305262,>=75% overconfidence disclosed
+CONFIDENCE_ORDERING,PASS,MONOTONIC,strict quintiles
+REPRODUCIBILITY,PASS_WITH_SMALL_PROVENANCE_PATCH,explicit P(Under) derived,all other required lineage fields retained

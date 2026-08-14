@@ -1,0 +1,3 @@
+group,rows,percentage,proppadia_correct,betonline_correct,both_correct,both_wrong,handling
+OPPOSITE_SIDES_OF_50,1749,0.1694931679426301,897,852,0,0,binary opposite decisions imply exactly one correct
+SAME_DIRECTION_MATERIAL_CONFIDENCE_DIFFERENCE_GE5PP,3827,0.3708692702781277,2301,2301,2301,1526,same binary direction; confidence differs

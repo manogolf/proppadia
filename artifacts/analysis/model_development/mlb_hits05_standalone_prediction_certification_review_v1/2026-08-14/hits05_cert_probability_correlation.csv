@@ -1,0 +1,2 @@
+rows,pearson_correlation,spearman_rank_correlation,regression_target,regression_predictor,regression_slope,regression_intercept,r_squared,mean_signed_difference,mean_absolute_difference,median_absolute_difference,sd_probability_difference
+10319,0.44295947448679995,0.4350649554652071,Proppadia probability,BetOnline probability,0.7233999147021615,0.1524241360592965,0.196213096037622,-0.01241685882608817,0.06108223048147079,0.051888146422096604,0.0757236791498139
