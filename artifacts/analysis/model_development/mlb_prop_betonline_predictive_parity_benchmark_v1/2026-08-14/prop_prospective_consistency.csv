@@ -1,0 +1,5 @@
+lane,frozen,resolved,unresolved,quality,historical_consistency
+Hits 0.5 full-spine,0,0,1,not measurable,MIXED
+Hits 0.5 Expected-PA,126,0,126,not measurable,MIXED
+DH forward,265,247,18,qualification metrics not established,MIXED
+Total Bases legacy shadow,2978,1940,1038,shadow variants did not improve Brier,CONSISTENT

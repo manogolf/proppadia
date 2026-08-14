@@ -1,0 +1,285 @@
+{
+  "experiment_id": "MLB_PROP_BETONLINE_PREDICTIVE_PARITY_BENCHMARK_V1",
+  "population": [
+    {
+      "prop_family": "hits",
+      "prediction_rows": 12710,
+      "certified_outcome_rows": 11612,
+      "exact_betonline_rows": 12710,
+      "paired_price_rows": 12710,
+      "pregame_valid_rows": 8310,
+      "primary_rows": 7564,
+      "pushes": 0,
+      "duplicate_identities": 0,
+      "ambiguous_matches": 0,
+      "post_start_or_timing_unresolved_exclusions": 4400,
+      "missing_opposite_price": 0,
+      "missing_outcomes": 1098,
+      "date_start": "2026-05-08",
+      "date_end": "2026-08-02"
+    },
+    {
+      "prop_family": "total_bases",
+      "prediction_rows": 10664,
+      "certified_outcome_rows": 9773,
+      "exact_betonline_rows": 10664,
+      "paired_price_rows": 10664,
+      "pregame_valid_rows": 6700,
+      "primary_rows": 6114,
+      "pushes": 0,
+      "duplicate_identities": 0,
+      "ambiguous_matches": 0,
+      "post_start_or_timing_unresolved_exclusions": 3964,
+      "missing_opposite_price": 0,
+      "missing_outcomes": 891,
+      "date_start": "2026-05-08",
+      "date_end": "2026-08-02"
+    },
+    {
+      "prop_family": "hits_runs_rbis",
+      "prediction_rows": 353,
+      "certified_outcome_rows": 305,
+      "exact_betonline_rows": 353,
+      "paired_price_rows": 353,
+      "pregame_valid_rows": 155,
+      "primary_rows": 152,
+      "pushes": 0,
+      "duplicate_identities": 0,
+      "ambiguous_matches": 0,
+      "post_start_or_timing_unresolved_exclusions": 198,
+      "missing_opposite_price": 0,
+      "missing_outcomes": 48,
+      "date_start": "2026-05-08",
+      "date_end": "2026-08-02"
+    },
+    {
+      "prop_family": "strikeouts_pitching",
+      "prediction_rows": 125,
+      "certified_outcome_rows": 125,
+      "exact_betonline_rows": 125,
+      "paired_price_rows": 125,
+      "pregame_valid_rows": 80,
+      "primary_rows": 80,
+      "pushes": 0,
+      "duplicate_identities": 0,
+      "ambiguous_matches": 0,
+      "post_start_or_timing_unresolved_exclusions": 45,
+      "missing_opposite_price": 0,
+      "missing_outcomes": 0,
+      "date_start": "2026-05-08",
+      "date_end": "2026-08-02"
+    }
+  ],
+  "comparison": [
+    {
+      "prop_family": "hits",
+      "rows": 7564,
+      "model_brier": 0.2448180259337841,
+      "betonline_brier": 0.23907254129551575,
+      "brier_delta_model_minus_betonline": 0.00574548463826835,
+      "model_log_loss": 0.6830243739727095,
+      "betonline_log_loss": 0.6709265353000113,
+      "log_loss_delta": 0.012097838672698202,
+      "model_ece": 0.024997658249603344,
+      "betonline_ece": 0.022070041891309775,
+      "ece_delta": 0.0029276163582935694,
+      "accuracy_delta": -0.012427287149656241
+    },
+    {
+      "prop_family": "hits_runs_rbis",
+      "rows": 152,
+      "model_brier": 0.24625964783294074,
+      "betonline_brier": 0.2485137349597586,
+      "brier_delta_model_minus_betonline": -0.0022540871268178497,
+      "model_log_loss": 0.6851609345921228,
+      "betonline_log_loss": 0.6901961019050892,
+      "log_loss_delta": -0.005035167312966382,
+      "model_ece": 0.06028430921052637,
+      "betonline_ece": 0.05680671535584301,
+      "ece_delta": 0.00347759385468336,
+      "accuracy_delta": 0.0
+    },
+    {
+      "prop_family": "strikeouts_pitching",
+      "rows": 80,
+      "model_brier": 0.2548311267482125,
+      "betonline_brier": 0.24407252697046453,
+      "brier_delta_model_minus_betonline": 0.010758599777747985,
+      "model_log_loss": 0.7053857573895888,
+      "betonline_log_loss": 0.681275001945894,
+      "log_loss_delta": 0.024110755443694787,
+      "model_ece": 0.1978858375,
+      "betonline_ece": 0.06326987057702206,
+      "ece_delta": 0.13461596692297795,
+      "accuracy_delta": -0.08750000000000002
+    },
+    {
+      "prop_family": "total_bases",
+      "rows": 6114,
+      "model_brier": 0.2538572158467031,
+      "betonline_brier": 0.245633784735271,
+      "brier_delta_model_minus_betonline": 0.008223431111432117,
+      "model_log_loss": 0.7020998739147352,
+      "betonline_log_loss": 0.6843519089642995,
+      "log_loss_delta": 0.017747964950435624,
+      "model_ece": 0.05313240055610076,
+      "betonline_ece": 0.013015705661019675,
+      "ece_delta": 0.04011669489508109,
+      "accuracy_delta": -0.019463526333006298
+    }
+  ],
+  "separation": [
+    {
+      "prop_family": "hits",
+      "rows": 7564,
+      "mean_signed": 0.02003837747542324,
+      "mean_absolute": 0.06995767952678957,
+      "median_absolute": 0.05999755073133062,
+      "sd_signed": 0.08399670946389176,
+      "signed_p5": -0.11495339712248727,
+      "signed_p25": -0.04190345428018019,
+      "signed_p50": 0.018046408630105204,
+      "signed_p75": 0.0780628122825362,
+      "signed_p95": 0.16293239363851458,
+      "absolute_p5": 0.005344583068736081,
+      "absolute_p25": 0.029762529918188063,
+      "absolute_p50": 0.05999755073133062,
+      "absolute_p75": 0.10178789551547032,
+      "absolute_p95": 0.16492853452930092
+    },
+    {
+      "prop_family": "hits_runs_rbis",
+      "rows": 152,
+      "mean_signed": 0.06172961001143855,
+      "mean_absolute": 0.0786123459422486,
+      "median_absolute": 0.06646096153846154,
+      "sd_signed": 0.07590903502921593,
+      "signed_p5": -0.04818189162352902,
+      "signed_p25": -0.0006494171074505062,
+      "signed_p50": 0.0583605384615386,
+      "signed_p75": 0.11127234312812762,
+      "signed_p95": 0.1896310604492852,
+      "absolute_p5": 0.005821346153846138,
+      "absolute_p25": 0.029796943036577622,
+      "absolute_p50": 0.06646096153846154,
+      "absolute_p75": 0.11127234312812762,
+      "absolute_p95": 0.1896310604492852
+    },
+    {
+      "prop_family": "strikeouts_pitching",
+      "rows": 80,
+      "mean_signed": 0.11903924516909278,
+      "mean_absolute": 0.122485803648233,
+      "median_absolute": 0.11334682019401532,
+      "sd_signed": 0.07734562657480976,
+      "signed_p5": 1.5475948520911537e-05,
+      "signed_p25": 0.07640947174134527,
+      "signed_p50": 0.11334682019401532,
+      "signed_p75": 0.1740022355735397,
+      "signed_p95": 0.23663350090827642,
+      "absolute_p5": 0.00933061256365319,
+      "absolute_p25": 0.07640947174134527,
+      "absolute_p50": 0.11334682019401532,
+      "absolute_p75": 0.1740022355735397,
+      "absolute_p95": 0.23663350090827642
+    },
+    {
+      "prop_family": "total_bases",
+      "rows": 6114,
+      "mean_signed": 0.05830247556971515,
+      "mean_absolute": 0.0783067321539834,
+      "median_absolute": 0.06496070429802059,
+      "sd_signed": 0.08038876730423322,
+      "signed_p5": -0.06539015804528436,
+      "signed_p25": 9.362982474309112e-06,
+      "signed_p50": 0.05349069545372018,
+      "signed_p75": 0.11212352950029798,
+      "signed_p95": 0.198514254256794,
+      "absolute_p5": 0.005981816456818336,
+      "absolute_p25": 0.03046061116036225,
+      "absolute_p50": 0.06496070429802059,
+      "absolute_p75": 0.11337323064013964,
+      "absolute_p95": 0.198514254256794
+    }
+  ],
+  "classification": [
+    {
+      "prop_family": "hits",
+      "classification": "STANDALONE_PROP_PREDICTION_COMPARABLE_TO_BETONLINE",
+      "rows": 7564,
+      "brier_delta": 0.00574548463826835
+    },
+    {
+      "prop_family": "hits_runs_rbis",
+      "classification": "INSUFFICIENT_SYNCHRONIZED_EVIDENCE",
+      "rows": 152,
+      "brier_delta": -0.0022540871268178497
+    },
+    {
+      "prop_family": "strikeouts_pitching",
+      "classification": "INSUFFICIENT_SYNCHRONIZED_EVIDENCE",
+      "rows": 80,
+      "brier_delta": 0.010758599777747985
+    },
+    {
+      "prop_family": "total_bases",
+      "classification": "STANDALONE_PROP_PREDICTION_COMPARABLE_TO_BETONLINE",
+      "rows": 6114,
+      "brier_delta": 0.008223431111432117
+    }
+  ],
+  "readiness": [
+    {
+      "prop_family": "hits",
+      "prediction_authority": "CERTIFICATION_REVIEW_JUSTIFIED",
+      "betting_authority": "NO_QUALIFIED_MLB_PROP_MODEL"
+    },
+    {
+      "prop_family": "hits_runs_rbis",
+      "prediction_authority": "CERTIFICATION_REVIEW_NOT_JUSTIFIED",
+      "betting_authority": "NO_QUALIFIED_MLB_PROP_MODEL"
+    },
+    {
+      "prop_family": "strikeouts_pitching",
+      "prediction_authority": "CERTIFICATION_REVIEW_NOT_JUSTIFIED",
+      "betting_authority": "NO_QUALIFIED_MLB_PROP_MODEL"
+    },
+    {
+      "prop_family": "total_bases",
+      "prediction_authority": "CERTIFICATION_REVIEW_JUSTIFIED",
+      "betting_authority": "NO_QUALIFIED_MLB_PROP_MODEL"
+    }
+  ],
+  "hits05_special": {
+    "rows": 6750,
+    "model": {
+      "rows": 6750,
+      "brier": 0.24743945431079925,
+      "log_loss": 0.688500541624502,
+      "ece": 0.02824553644444444,
+      "accuracy": 0.5616296296296296,
+      "mean_probability": 0.5812323420740741,
+      "probability_sd": 0.06571215249886392,
+      "probability_min": 0.5,
+      "probability_max": 0.823991
+    },
+    "betonline": {
+      "rows": 6750,
+      "brier": 0.24261401201130922,
+      "log_loss": 0.6782175086890921,
+      "ece": 0.021871848934597534,
+      "accuracy": 0.5702222222222222,
+      "mean_probability": 0.5564877909637377,
+      "probability_sd": 0.08646078381051121,
+      "probability_min": 0.3135593220338983,
+      "probability_max": 0.6864406779661016
+    },
+    "mean_absolute_separation": 0.06845807299644374
+  },
+  "hits05_conclusion": "HITS05_PREDICTIVE_PARITY_MIXED",
+  "total_bases_conclusion": "TOTAL_BASES_PREDICTIVE_PARITY_COMPARABLE",
+  "pitcher_k_conclusion": "PITCHER_K_PREDICTIVE_PARITY_INSUFFICIENT",
+  "hrr_conclusion": "INSUFFICIENT_SYNCHRONIZED_EVIDENCE",
+  "ui_implication": "PROP_UI_MARKET_MONITOR_ONLY_REMAINS_CORRECT",
+  "betting_authority": "NO_QUALIFIED_MLB_PROP_MODEL"
+}

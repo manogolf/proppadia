@@ -1,0 +1,8 @@
+{
+  "contract": "exact game_id/player_id/prop_family/side/line; BetOnline only; snapshot before scheduled start",
+  "accepted_root": "provider-specific reconcile rows",
+  "primary_probability": "paired no-vig same-side probability",
+  "push_policy": "reported separately and excluded from binary proper scores",
+  "unexpected_or_missing_timing": "fail_closed",
+  "duplicates": 0
+}
