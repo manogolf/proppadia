@@ -1,0 +1,77 @@
+{
+  "task_id": "MLB_PLAYER_STAT_PA_COMPLETENESS_REPAIR_V1",
+  "decision": "PA_COMPLETENESS_REPAIR_VALIDATED",
+  "primary_importer_pa_fix": "IMPLEMENTED",
+  "installed_wrapper_sha256": "1acef81f5d0bc5ddfaf4550bc357b1c2fc1e8af1d2bff6e2270e2d5b9a5bdd20",
+  "repair_contract": "Authoritative completed-game participant stats, including PA, are populated or blank-only backfilled before exact completeness validation; the strict completeness guard remains reconciliation authority.",
+  "pa_rows_repaired": {
+    "2026-08-10": 216,
+    "2026-08-11": 313,
+    "2026-08-12": 323,
+    "2026-08-13": 190,
+    "2026-08-14": 292,
+    "total": 1334
+  },
+  "dates": {
+    "2026-08-10": {
+      "player_stats_row_md5": "269f1a0161f3a5beb8cae37c96b0dace",
+      "completeness": {"COMPLETE_EXACT": 10},
+      "hits_0_5": {"predictions": 190, "resolved": 179, "unresolved": 11},
+      "hits_1_5": {"predictions": 26, "resolved": 25, "unresolved": 1},
+      "all_supported_props": {"predictions": 501, "resolved": 475, "unresolved": 26},
+      "outcome_csv_sha256": "84b5a26532bbed7a73d5ffda0e2e4819d8282eebab0bb753ccd7e953269f3857"
+    },
+    "2026-08-11": {
+      "player_stats_row_md5": "daf63ab1f7b5562ba52133ffd8f0cf5d",
+      "completeness": {"COMPLETE_EXACT": 15},
+      "hits_0_5": {"predictions": 279, "resolved": 260, "unresolved": 19},
+      "hits_1_5": {"predictions": 34, "resolved": 32, "unresolved": 2},
+      "all_supported_props": {"predictions": 750, "resolved": 703, "unresolved": 47},
+      "outcome_csv_sha256": "6121ebc14dd0d0f43158ea621b658c4c4c5324df15b9ad50ca664b54a9859428"
+    },
+    "2026-08-12": {
+      "player_stats_row_md5": "51ed3282a7ed562f31530d5db0536826",
+      "completeness": {"COMPLETE_EXACT": 15},
+      "hits_0_5": {"predictions": 288, "resolved": 270, "unresolved": 18},
+      "hits_1_5": {"predictions": 39, "resolved": 37, "unresolved": 2},
+      "all_supported_props": {"predictions": 731, "resolved": 690, "unresolved": 41},
+      "outcome_csv_sha256": "f5aa1bfb13b3b424d091cb4d282d1d6dfeb24af71fd76f67d4dfea72cd0830c4"
+    },
+    "2026-08-13": {
+      "player_stats_row_md5": "7c1c5d06a61a7dc50aed9ef80c5b646e",
+      "completeness": {"COMPLETE_EXACT": 9},
+      "hits_0_5": {"predictions": 189, "resolved": 168, "unresolved": 21},
+      "hits_1_5": {"predictions": 13, "resolved": 12, "unresolved": 1},
+      "all_supported_props": {"predictions": 478, "resolved": 427, "unresolved": 51},
+      "outcome_csv_sha256": "d0927c640f50cb8e8f78bb00ca64d3edf22d19c84f8e4cfede0ffa23f158609d"
+    },
+    "2026-08-14": {
+      "player_stats_row_md5": "61fd88d265ae70287c37d41f5ff5321c",
+      "completeness": {"COMPLETE_EXACT": 14},
+      "hits_0_5": {"predictions": 279, "resolved": 254, "unresolved": 25},
+      "hits_1_5": {"predictions": 29, "resolved": 28, "unresolved": 1},
+      "all_supported_props": {"predictions": 701, "resolved": 647, "unresolved": 54},
+      "outcome_csv_sha256": "dedc2a2d5b0e40bccc405dc299b487da117f2b75d481ef953d94e7887dc9736a"
+    }
+  },
+  "prior_evaluator_comparison": {
+    "overlapping_hits_rows": 1058,
+    "same_resolved_outcomes": 983,
+    "differing_outcomes": 0,
+    "prior_resolved_canonical_unresolved": 0,
+    "prior_unresolved_canonical_resolved": 0
+  },
+  "prediction_ledger_hashes_unchanged": true,
+  "model_artifact_hashes_unchanged": true,
+  "core_batting_aggregates_unchanged": true,
+  "duplicate_canonical_outcome_identities": 0,
+  "validation": {
+    "focused_tests_passed": 47,
+    "focused_tests_failed": 0,
+    "python_compile": "PASS",
+    "installed_wrapper_syntax": "PASS",
+    "august_14_immutable_replay": "PASS"
+  },
+  "legacy_execution_vs_model_result": "NOT_APPLICABLE_MISSING_ARCHIVED_MLB_SLATE_OUTPUT; header-only failure artifacts removed",
+  "august_15_forward_status": "AUG15_GRADING_PATH_READY"
+}

@@ -252,6 +252,11 @@ def _extract_player_stats_row(
         "opponent": normalizeTeamAbbreviation(opponent_abbr),
         "is_home": bool(is_home),
         "position": (str(position).upper() if position else None),
+        "plate_appearances": _stat_int(
+            bat.get("plateAppearances")
+            if bat.get("plateAppearances") is not None
+            else bat.get("plate_appearances")
+        ),
         "at_bats": _stat_int(bat.get("atBats") or bat.get("at_bats")),
         "hits": hits,
         "total_bases": _stat_int(bat.get("totalBases") or bat.get("total_bases")),
@@ -447,12 +452,12 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
             """
             INSERT INTO mlb.player_stats (
                 player_id, game_id, game_date, team, opponent, is_home, position,
-                at_bats, hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
+                plate_appearances, at_bats, hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
                 singles, doubles, triples, home_runs, stolen_bases,
                 strikeouts_pitching, walks_allowed, hits_allowed, outs_recorded, earned_runs, is_starter
             ) VALUES (
                 %(player_id)s, %(game_id)s, %(game_date)s, %(team)s, %(opponent)s, %(is_home)s, %(position)s,
-                %(at_bats)s, %(hits)s, %(total_bases)s, %(rbis)s, %(runs_scored)s, %(strikeouts_batting)s, %(walks)s,
+                %(plate_appearances)s, %(at_bats)s, %(hits)s, %(total_bases)s, %(rbis)s, %(runs_scored)s, %(strikeouts_batting)s, %(walks)s,
                 %(singles)s, %(doubles)s, %(triples)s, %(home_runs)s, %(stolen_bases)s,
                 %(strikeouts_pitching)s, %(walks_allowed)s, %(hits_allowed)s, %(outs_recorded)s, %(earned_runs)s, %(is_starter)s
             )
@@ -463,6 +468,7 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
                 opponent = EXCLUDED.opponent,
                 is_home = EXCLUDED.is_home,
                 position = COALESCE(EXCLUDED.position, player_stats.position),
+                plate_appearances = COALESCE(player_stats.plate_appearances, EXCLUDED.plate_appearances),
                 at_bats = EXCLUDED.at_bats,
                 hits = EXCLUDED.hits,
                 total_bases = EXCLUDED.total_bases,

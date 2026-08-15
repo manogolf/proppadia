@@ -1,5 +1,10 @@
 from backend.mlb.scripts import player_stats_game_completeness as c
-from backend.mlb.scripts.insert_mlb_stat_derived import _final_games
+from backend.mlb.scripts.insert_mlb_stat_derived import (
+ _extract_player_stats_row,
+ _final_games,
+ _upsert_player_stats_row,
+)
+from backend.mlb.scripts.backfill_mlb_player_pa import PaRow,_update_player_stats_pa
 
 def off(pid=1,role='STARTED',pa=4,tb=0):
  return {'game_pk':10,'player_mlb_id':pid,'player':f'p{pid}','official_role':role,'plate_appearances':pa,'at_bats':pa,'hits':tb,'singles':tb,'doubles':0,'triples':0,'home_runs':0,'total_bases':tb}
@@ -15,6 +20,11 @@ def test_pitcher_local_not_batter_extra():
  x=loc();x['position']='P';assert c.compare([],[x])==[]
 def test_duplicate_local_fails():assert c.decision(c.compare([off()],[loc(),loc()]))=='DUPLICATE_LOCAL_ROWS'
 def test_stat_mismatch_fails():assert c.decision(c.compare([off(tb=2)],[loc(tb=1)]))=='STAT_MISMATCH'
+def test_pa_mismatch_fails_entire_game():
+ second=loc(2,pa=3);second['plate_appearances']=0
+ rows=c.compare([off(1,pa=4),off(2,pa=3)],[loc(1,pa=4),second])
+ assert rows[1]['mismatch_fields']=='plate_appearances'
+ assert c.decision(rows)=='STAT_MISMATCH'
 def test_exact_id_binding_not_name():assert c.compare([off(1)],[loc(2)])[0]['decision']=='MISSING_OFFICIAL_PARTICIPANTS'
 def test_date_only_matching_refused():
  x=loc();x['game_id']=11;assert c.compare([off()],[x])[0]['decision']=='MISSING_OFFICIAL_PARTICIPANTS'
@@ -49,3 +59,37 @@ def test_finalized_gate_accepts_complete_games(monkeypatch):
  import sys
  from backend.mlb.scripts import check_mlb_finalized_training_data as gate
  monkeypatch.setattr(gate,'_counts',lambda date:{'model_training_props_rows':1,'player_stats_rows':10});monkeypatch.setattr(gate,'inspect_date',lambda date,out:[{'game_pk':10,'classification':'COMPLETE_EXACT'}]);monkeypatch.setattr(sys,'argv',['gate','--date','2026-08-02','--check-player-stats']);assert gate.main()==0
+
+def test_primary_importer_parses_direct_plate_appearances():
+ row=_extract_player_stats_row(player_id=1,game_id=10,game_date='2026-08-14',team_abbr='NYY',opponent_abbr='BOS',is_home=True,position='LF',stats={'batting':{'plateAppearances':5,'atBats':4,'hits':2}},is_starter=True)
+ assert row['plate_appearances']==5
+ assert row['at_bats']==4
+ assert row['hits']==2
+
+def test_primary_importer_only_fills_blank_pa_on_conflict():
+ class Cursor:
+  rowcount=1
+  def __enter__(self):return self
+  def __exit__(self,*args):return False
+  def execute(self,sql,row):self.sql=sql
+ class Conn:
+  def __init__(self):self.cur=Cursor()
+  def cursor(self):return self.cur
+ conn=Conn();row=_extract_player_stats_row(player_id=1,game_id=10,game_date='2026-08-14',team_abbr='NYY',opponent_abbr='BOS',is_home=True,position='LF',stats={'batting':{'plateAppearances':5}},is_starter=True)
+ assert _upsert_player_stats_row(conn,row)==1
+ assert 'plate_appearances = COALESCE(player_stats.plate_appearances, EXCLUDED.plate_appearances)' in conn.cur.sql
+
+def test_blank_only_pa_backfill_does_not_overwrite_populated_pa():
+ class Cursor:
+  rowcount=1
+  def __enter__(self):return self
+  def __exit__(self,*args):return False
+  def executemany(self,sql,rows):self.sql=sql;self.rows=rows
+ class Conn:
+  def __init__(self):self.cur=Cursor()
+  def cursor(self):return self.cur
+ row=PaRow(game_date='2026-08-14',game_id=10,player_id=1,player_name='p',team='NYY',opponent='BOS',at_bats=4,walks=1,hit_by_pitch=0,sacrifice_flies=0,sacrifice_hits=0,catcher_interference=0,plate_appearances_direct=5,plate_appearances_formula=5,plate_appearances=5,formula_matches_direct=True,used_direct_pa=True,missing_components='')
+ conn=Conn();assert _update_player_stats_pa(conn,[row],source='statsapi',only_missing_pa=True)==1
+ assert 'AND ps.plate_appearances IS NULL' in conn.cur.sql
+ assert 'OR COALESCE(ps.at_bats, 0) > 0' in conn.cur.sql
+ assert conn.cur.rows[0][0:5]==(5,0,0,0,0)

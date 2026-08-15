@@ -1901,6 +1901,10 @@ mlb-reporting-alignment-audit:
 mlb-check-finalized-training-data:
 	$(VENV_PY) backend/mlb/scripts/check_mlb_finalized_training_data.py --date "$(MLB_DATE)" $(if $(filter 1 true TRUE yes YES,$(MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS)),--check-player-stats,)
 
+mlb-reconcile-prospective-lineage-outcomes:
+	@test -n "$(MLB_DATE)" || (echo "MLB_DATE is required" >&2; exit 2)
+	$(VENV_PY) -m backend.mlb.scripts.reconcile_mlb_prospective_lineage_outcomes --date "$(MLB_DATE)"
+
 mlb-ensure-finalized-training-data:
 	@echo "Ensuring finalized MLB stat/training data for $(MLB_DATE)"
 	@if $(MAKE) --no-print-directory mlb-check-finalized-training-data MLB_DATE="$(MLB_DATE)" MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS="$(MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS)"; then \

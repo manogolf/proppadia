@@ -1,0 +1,77 @@
+{
+  "task_id": "MLB_PLAYER_STAT_PA_COMPLETENESS_REPAIR_V1",
+  "captured_at_utc": "2026-08-15T17:24:32Z",
+  "note": "Read-only pre-repair inventory; durable hashes and counts are authoritative.",
+  "installed_wrapper_sha256": "a1585895dac6fc03e20a902c9dd9e47df751ce31d061b73aa156e472a16e7132",
+  "code_sha256": {
+    "backend/mlb/scripts/insert_mlb_stat_derived.py": "1455d9df2a43f47c4880781f52c0ee13fa59946d64b9cb95c78598bfe06f5301",
+    "backend/mlb/scripts/backfill_mlb_player_pa.py": "e1d8dde37d299782feca7ccbf25f6f12fc6fd7007e8d8799e6a1ae4cdbb76be3",
+    "backend/mlb/scripts/player_stats_game_completeness.py": "3e8f7bc986b0ebcf553cd43f5c5b966040e5eeaeda38633bbb7a4e07a10b7c86",
+    "backend/mlb/scripts/check_mlb_finalized_training_data.py": "c6962e01e2dbc6a6b6b69318c2789cff8844f86dbb1d7274ea7eb8b4296fee80"
+  },
+  "dates": {
+    "2026-08-10": {
+      "prediction_ledger_sha256": "e1851a890b35b74ff989f5a3b4f5410512cea3d159aee41598c9b23d1288f98d",
+      "prediction_ledger_lines": 2529,
+      "player_stats_rows": 476,
+      "player_stats_null_pa": 476,
+      "player_stats_row_md5": "63d34a6a74b45a0a29d7214e06b94fba",
+      "model_training_props_rows": 1981,
+      "model_training_props_row_md5": "4c050af8ad96d67c9be40d2460ceff5b",
+      "completeness_sha256": "a838d0f7b0cfd168a1940e0081a4d8231ec553b82d188cd79f6b74c65b6b7b97",
+      "completeness": {"STAT_MISMATCH": 10},
+      "reconcile_rows": "ABSENT"
+    },
+    "2026-08-11": {
+      "prediction_ledger_sha256": "2d484778f3c021f9f601f6dcfc782b69aa3ab014d6f82895fcd022b976008b21",
+      "prediction_ledger_lines": 3540,
+      "player_stats_rows": 703,
+      "player_stats_null_pa": 703,
+      "player_stats_row_md5": "7a3caf5ca301240a68ae23ad146c9f9f",
+      "model_training_props_rows": 2883,
+      "model_training_props_row_md5": "5a87c20f382a5546fd544cbef0e0d207",
+      "completeness_sha256": "2fb89e60cd0ab2fbd98c23337562481b139ee6a5ff3d67196ad31c64254458e6",
+      "completeness": {"STAT_MISMATCH": 15},
+      "reconcile_rows": "ABSENT"
+    },
+    "2026-08-12": {
+      "prediction_ledger_sha256": "55e9796e00e746fc574abfde44760be8dcabfe117b4c098f942ba1651116b7da",
+      "prediction_ledger_lines": 2931,
+      "player_stats_rows": 713,
+      "player_stats_null_pa": 713,
+      "player_stats_row_md5": "e0f10be39fd5b8f9ab84a35389c6583b",
+      "model_training_props_rows": 3013,
+      "model_training_props_row_md5": "7096b5eba9c7bfc9764f77d3089e7c57",
+      "completeness_sha256": "411ca0b19b1a0762c1be4608c224654eb7d2a99a59e3edce173272422a4de143",
+      "completeness": {"STAT_MISMATCH": 15},
+      "reconcile_rows": "ABSENT"
+    },
+    "2026-08-13": {
+      "prediction_ledger_sha256": "12a57d89b35e1274f9456d3e7973ce379225275de15c338737769d255d56d2b0",
+      "prediction_ledger_lines": 1691,
+      "player_stats_rows": 424,
+      "player_stats_null_pa": 424,
+      "player_stats_row_md5": "cee85a8517cc940e97caba5f9daea4a7",
+      "model_training_props_rows": 1739,
+      "model_training_props_row_md5": "4604f30eba53dac09bbbecd9358733b5",
+      "completeness_sha256": "e89b6cef7d87b31ee7bcda5b330ea945ac24c3229f7e961917750e2f6ec69ad9",
+      "completeness": {"STAT_MISMATCH": 9},
+      "reconcile_rows": "ABSENT"
+    },
+    "2026-08-14": {
+      "prediction_ledger_sha256": "a91087c4bef6ce395ba4965afb0e647c260f5537575a01689d941b955d362bc4",
+      "prediction_ledger_lines": 3242,
+      "player_stats_rows": 656,
+      "player_stats_null_pa": 656,
+      "player_stats_row_md5": "5ea1d2d4a0246f11575e9304bdc975d5",
+      "model_training_props_rows": 2688,
+      "model_training_props_row_md5": "f09138dbb07eaadc6f7227d3d51367e6",
+      "completeness_sha256": "9219bfa14ec4c80e98831e5ddf596a642c1f591be8a7b787199029b7388ffe00",
+      "completeness": {"STAT_MISMATCH": 14},
+      "reconcile_rows": "ABSENT"
+    }
+  },
+  "prior_evaluator_tree_sha256": "96a2a20aae255d5e29ff6d8ba9f7e685a2cc301d1f0c95379d0884dc615674e3",
+  "prior_evaluator_primary_predictions_sha256": "37bb31ad5ab6b95154eee7deb06f30227cd619bd99484e9b8392a51d048dc67b",
+  "prior_evaluator_daily_metrics_sha256": "e589f5a45bee306e94bd4d53c1574fdb210bea6f3742c9c19e571eed24b054b0"
+}

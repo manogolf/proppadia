@@ -301,7 +301,16 @@ def _update_player_stats_pa(conn, rows: list[PaRow], *, source: str, only_missin
                    pa_backfilled_at = now()
              WHERE ps.player_id = %s
                AND ps.game_id = %s
-               AND COALESCE(ps.position, '') <> 'P'
+               AND (
+                    COALESCE(ps.position, '') <> 'P'
+                    OR COALESCE(ps.at_bats, 0) > 0
+                    OR COALESCE(ps.hits, 0) > 0
+                    OR COALESCE(ps.walks, 0) > 0
+                    OR COALESCE(ps.strikeouts_batting, 0) > 0
+                    OR COALESCE(ps.runs_scored, 0) > 0
+                    OR COALESCE(ps.rbis, 0) > 0
+                    OR COALESCE(ps.stolen_bases, 0) > 0
+               )
                {missing_clause}
             """,
             [
