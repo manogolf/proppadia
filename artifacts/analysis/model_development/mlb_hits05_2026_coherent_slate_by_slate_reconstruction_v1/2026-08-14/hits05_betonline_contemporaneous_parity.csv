@@ -1,0 +1,2 @@
+status,phase,reason
+NOT_PRODUCED_STOP_CONDITION,PHASE_16,Phase 1 stop: neither exact-artifact full-season replay nor chronological frozen-procedure replay is reproducible without unretained historical state.

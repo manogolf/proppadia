@@ -1,0 +1,6 @@
+{
+  "status": "NO_PREDICTION_LEDGER_FROZEN",
+  "reason": "Phase 1 stop: neither exact-artifact full-season replay nor chronological frozen-procedure replay is reproducible without unretained historical state.",
+  "prediction_rows": 0,
+  "outcomes_attached": 0
+}
