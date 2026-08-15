@@ -1,0 +1,5 @@
+stage,status,attempted_sources,files,failures,limitation
+schedule,PASS,MLB StatsAPI schedule,2,0,
+boxscores,PASS,MLB StatsAPI official boxscore,4261,0,
+eligibility,PASS_WITH_LIMITATION,MLB StatsAPI dated active roster,8432,0,dated endpoint has no retained intraday version timestamp
+historical_probable_pitcher_bvp,GOVERNED_FALLBACK,schedule payload historical state evaluated,0,0,historical as-of probable-pitcher identity not provable; feature family frozen missing

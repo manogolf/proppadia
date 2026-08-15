@@ -1,0 +1,3 @@
+# Frozen modeling procedure
+
+`FROZEN_MODEL_PROCEDURE` is the contract in `hits05_frozen_modeling_procedure.json`; `CURRENT_FITTED_ARTIFACT` is reference-only. The procedure was frozen before 2026 scoring. It uses official dated active-roster non-pitchers, strict prior-date game histories, a three-game minimum, explicit missing fallback for historically unavailable pitcher/BvP state, the reference LR/isotonic plus 300-tree RF architecture, weekly Monday refits, a 540-day window, and the deterministic 0.5-line transform. No market input or actual participation defines eligibility. Exact duplicate player records within one dated team roster are collapsed; conflicting or cross-team player-game identities fail closed.

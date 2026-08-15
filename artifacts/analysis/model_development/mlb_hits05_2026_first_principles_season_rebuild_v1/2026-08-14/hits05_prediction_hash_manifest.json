@@ -1,0 +1,7 @@
+{
+  "ledger": "hits05_walk_forward_prediction_ledger.csv",
+  "sha256": "524a486abcf6f13d55e9d46ce0f6fcbadd5d230d69848b250cfbe17f4ca2eb54",
+  "rows": 47198,
+  "outcome_columns_present": false,
+  "frozen_before_outcome_attachment": true
+}

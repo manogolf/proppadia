@@ -1,0 +1,2 @@
+fit_id,training_start,training_end,training_rows,training_population_hash,fit_timestamp_logic,contains_2026_outcomes,status
+FIT_20260325_OPENING,2025-04-01,2025-09-28,47263,37e037342aaa4321d750ec07f477d716895f0835d31ccd4d83148c9dd682fd87,2026-03-25T09:00:00-04:00,False,FROZEN

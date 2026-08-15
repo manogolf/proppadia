@@ -1,0 +1,2 @@
+rows,model_brier,betonline_brier,model_log_loss,betonline_log_loss,pearson,mean_abs_separation,median_abs_separation,ge_5pp_disagreement,ge_10pp_disagreement
+544,0.26450459530567827,0.2540871623017852,0.7260911357831104,0.7020649932872567,0.4527269859545129,0.08283453379197224,0.07434346930672026,358,197
