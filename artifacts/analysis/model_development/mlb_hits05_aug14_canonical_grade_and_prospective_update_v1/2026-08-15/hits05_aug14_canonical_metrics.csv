@@ -1,0 +1,2 @@
+date,confidence_ordering,predictions,resolved,unresolved,brier,log_loss,ece,accuracy_at_50,mean_probability,observed_rate,probability_sd,probability_min,probability_max,calibration_gap_predicted_minus_observed
+2026-08-14,NEAR_MONOTONIC,279,254,25,0.23727790367279822,0.66699970672788,0.05972743922171991,0.5590551181102362,0.5534113048640842,0.5866141732283464,0.07272697357403747,0.3992897368199036,0.708509460347817,-0.03320286836426223
