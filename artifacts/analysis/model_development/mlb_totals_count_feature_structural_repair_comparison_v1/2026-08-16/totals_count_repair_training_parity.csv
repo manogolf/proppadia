@@ -1,0 +1,17 @@
+variant,check,control,candidate,status
+A_CONTROL,training_rows,4859,4859,EXACT
+A_CONTROL,training_row_identity_and_target_hash,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,EXACT
+A_CONTROL,fit_configuration,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,EXACT
+A_CONTROL,outcome_and_probability_contract,official final total; NB 0..30 tail fold,official final total; NB 0..30 tail fold,EXACT
+B_PARK_ONLY,training_rows,4859,4859,EXACT
+B_PARK_ONLY,training_row_identity_and_target_hash,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,EXACT
+B_PARK_ONLY,fit_configuration,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,EXACT
+B_PARK_ONLY,outcome_and_probability_contract,official final total; NB 0..30 tail fold,official final total; NB 0..30 tail fold,EXACT
+C_CONFIDENCE_ONLY,training_rows,4859,4859,EXACT
+C_CONFIDENCE_ONLY,training_row_identity_and_target_hash,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,EXACT
+C_CONFIDENCE_ONLY,fit_configuration,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,EXACT
+C_CONFIDENCE_ONLY,outcome_and_probability_contract,official final total; NB 0..30 tail fold,official final total; NB 0..30 tail fold,EXACT
+D_LOW_DEPTH,training_rows,4859,4859,EXACT
+D_LOW_DEPTH,training_row_identity_and_target_hash,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,EXACT
+D_LOW_DEPTH,fit_configuration,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,PoissonRegressor alpha=.1 max_iter=1000 deterministic StandardScaler,EXACT
+D_LOW_DEPTH,outcome_and_probability_contract,official final total; NB 0..30 tail fold,official final total; NB 0..30 tail fold,EXACT

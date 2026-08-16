@@ -1,0 +1,57 @@
+{
+  "models": {
+    "A_CONTROL": {
+      "artifact_sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+      "artifact_source": "backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json",
+      "canonical_model_hash": "fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac",
+      "feature_count": 22,
+      "fit_action_this_task": "LOADED_FROZEN",
+      "identity": "DIRECT_NEGATIVE_BINOMIAL"
+    },
+    "B_PARK_ONLY": {
+      "artifact_sha256": "ee30a88ac4da83f0b6e62b0aa43e3f56299361e3f6c135695ebb7724d520c9e2",
+      "artifact_source": "artifacts/analysis/model_development/mlb_totals_remove_park_history_depth_direct_location_defect_v1/2026-08-16/TOTALS_PARK_DEPTH_REPAIR_CHALLENGER_V1.json",
+      "canonical_model_hash": "43256ef8396ddfdb53c58f04cc5b8fa783b97c457abf0072b767e7df6050d1b7",
+      "feature_count": 21,
+      "fit_action_this_task": "LOADED_FROZEN",
+      "identity": "DIRECT_NEGATIVE_BINOMIAL_PARK_DEPTH_REPAIR_V1"
+    },
+    "C_CONFIDENCE_ONLY": {
+      "artifact_sha256": "ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc",
+      "artifact_source": "DIRECT_NEGATIVE_BINOMIAL_COUNT_CONFIDENCE_ONLY_V1.json",
+      "canonical_model_hash": "21828319efc421661f833484246b81e48721282ccd65f84ccc4f94222d7dd1cd",
+      "feature_count": 19,
+      "fit_action_this_task": "FIT_ONCE_AND_FROZEN",
+      "identity": "DIRECT_NEGATIVE_BINOMIAL_COUNT_CONFIDENCE_ONLY_V1"
+    },
+    "D_LOW_DEPTH": {
+      "artifact_sha256": "a7881e27b440332d9310852850c45db1959ec77c327aaa244210c17f63f9c234",
+      "artifact_source": "DIRECT_NEGATIVE_BINOMIAL_LOW_DEPTH_EXPERIENCE_V1.json",
+      "canonical_model_hash": "999529a5017168d425730dc5b790f9a5de90c1dbd40c2c119df654475cfa0422",
+      "feature_count": 23,
+      "fit_action_this_task": "FIT_ONCE_AND_FROZEN",
+      "identity": "DIRECT_NEGATIVE_BINOMIAL_LOW_DEPTH_EXPERIENCE_V1"
+    }
+  },
+  "protected_hashes_after": {
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/totals_core_feature_spine.csv": "7d4dc527f792ffb27398352d5640c3f4039c4fd400c42714bdfa46a834ecd0f2",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_remove_park_history_depth_direct_location_defect_v1/2026-08-16/TOTALS_PARK_DEPTH_REPAIR_CHALLENGER_V1.json": "ee30a88ac4da83f0b6e62b0aa43e3f56299361e3f6c135695ebb7724d520c9e2",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/totals_predictions/live_context_bridge_v1.py": "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f",
+    "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh": "1acef81f5d0bc5ddfaf4550bc357b1c2fc1e8af1d2bff6e2270e2d5b9a5bdd20"
+  },
+  "protected_hashes_before": {
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/totals_core_feature_spine.csv": "7d4dc527f792ffb27398352d5640c3f4039c4fd400c42714bdfa46a834ecd0f2",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_remove_park_history_depth_direct_location_defect_v1/2026-08-16/TOTALS_PARK_DEPTH_REPAIR_CHALLENGER_V1.json": "ee30a88ac4da83f0b6e62b0aa43e3f56299361e3f6c135695ebb7724d520c9e2",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/totals_predictions/live_context_bridge_v1.py": "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f",
+    "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh": "1acef81f5d0bc5ddfaf4550bc357b1c2fc1e8af1d2bff6e2270e2d5b9a5bdd20"
+  },
+  "task_id": "MLB_TOTALS_COUNT_FEATURE_STRUCTURAL_REPAIR_COMPARISON_V1",
+  "training_population_parity": "EXACT",
+  "variant_e_status": "NOT_AUTHORIZED_NO_PREEXISTING_SEMANTIC_TRANSFORM"
+}
