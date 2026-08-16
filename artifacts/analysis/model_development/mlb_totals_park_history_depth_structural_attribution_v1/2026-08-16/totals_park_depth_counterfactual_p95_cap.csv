@@ -1,0 +1,2 @@
+variant,games,mean_prediction,mean_actual,actual_minus_forecast_bias,median_actual_minus_forecast_residual,mae,rmse,crps,fixed_threshold_macro_brier,fixed_threshold_macro_log_loss,fixed_threshold_macro_ece,mean_prediction_shift_vs_raw,counterfactual_status
+P95_CAP,126,8.716017686820656,8.61111111111111,-0.10490657570954416,-0.4888066507958069,3.2950987159228284,4.073781149724614,2.2942317098621943,0.2211294736711078,0.6331842175334115,0.016122950039712324,0.6638989511088952,COUNTERFACTUAL_ONLY_NOT_A_MODEL

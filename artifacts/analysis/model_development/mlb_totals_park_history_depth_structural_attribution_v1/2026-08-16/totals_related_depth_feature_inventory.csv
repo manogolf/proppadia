@@ -1,0 +1,6 @@
+feature,semantics,frozen_model_input,frozen_coefficient,training_mean,training_p99,training_max,prospective_mean,prospective_share_above_training_max,standardized_mean_shift,drift_severity,mean_log_location_contribution_vs_training_center,directional_effect
+park_history_depth,venue sample-support count; direct model input,True,-0.02681303790069205,80.043836180284,159.0,161.0,291.26984126984127,0.9603174603174603,4.5176691329322916,EXTREME,-0.12114490035769707,SUPPRESSION
+home_starter_prior_starts,starter history depth; direct model input,True,0.012677233712015375,18.73677711463264,59.0,65.0,51.698412698412696,0.3333333333333333,2.119964973465234,EXTREME,0.026878057373557904,INFLATION
+away_starter_prior_starts,starter history depth; direct model input,True,0.0008268356527004493,18.666803869108872,59.0,66.0,55.333333333333336,0.38095238095238093,2.369602797193595,EXTREME,0.001959473719268457,INFLATION
+home_bullpen_likely_available_reliever_count,bullpen availability count; direct model input,True,-0.01084444912895344,9.422309117102284,17.0,21.0,13.341269841269842,0.0,1.2650205908746197,EXTREME,-0.013719863316529564,SUPPRESSION
+away_bullpen_likely_available_reliever_count,bullpen availability count; direct model input,True,0.003558827664027518,9.578925704877546,17.0,20.0,13.087301587301587,0.0,1.1254226591281717,EXTREME,0.004005597497557503,INFLATION

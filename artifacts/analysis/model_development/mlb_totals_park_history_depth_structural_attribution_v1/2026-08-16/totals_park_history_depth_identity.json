@@ -1,0 +1,28 @@
+{
+  "artifact_path": "backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json",
+  "artifact_sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+  "counterfactual_contract": "COUNTERFACTUAL_ONLY_NOT_A_MODEL",
+  "feature": "park_history_depth",
+  "feature_index_zero_based": 20,
+  "frozen_coefficient": -0.02681303790069205,
+  "link": "log location with exponential inverse",
+  "model_hash": "fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac",
+  "model_hash_verified": true,
+  "model_name": "DIRECT_NEGATIVE_BINOMIAL",
+  "prospective_games": 126,
+  "protected_input_hashes_after": {
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/strict_prior_park_factor.csv": "7fd37c9420db8766a0e78746c95ecef6d52f759ee84501961b03af2f0fdf5d29",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/totals_core_feature_spine.csv": "7d4dc527f792ffb27398352d5640c3f4039c4fd400c42714bdfa46a834ecd0f2",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b"
+  },
+  "protected_input_hashes_before": {
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/strict_prior_park_factor.csv": "7fd37c9420db8766a0e78746c95ecef6d52f759ee84501961b03af2f0fdf5d29",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/totals_core_feature_spine.csv": "7d4dc527f792ffb27398352d5640c3f4039c4fd400c42714bdfa46a834ecd0f2",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b"
+  },
+  "task_id": "MLB_TOTALS_PARK_HISTORY_DEPTH_STRUCTURAL_ATTRIBUTION_V1",
+  "training_center": 80.043836180284,
+  "training_scale": 46.75071640123089
+}
