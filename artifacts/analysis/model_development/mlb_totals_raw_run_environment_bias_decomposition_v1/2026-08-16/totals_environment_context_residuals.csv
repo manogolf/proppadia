@@ -1,0 +1,2 @@
+dimension,level,games,mean_run_residual,mae,reason
+WEATHER_ENVIRONMENT,NOT_TESTABLE,0,nan,nan,"Temperature, wind, humidity, and ABS are not governed RAW_V1 inputs or reliable retained prediction-time fields."

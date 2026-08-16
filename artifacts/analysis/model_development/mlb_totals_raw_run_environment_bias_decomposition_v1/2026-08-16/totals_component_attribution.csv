@@ -1,0 +1,10 @@
+rank,explanation,support,evidence
+1,park/context issue: cumulative park_history_depth feature drift,STRONG_SUPPORT,"Frozen coefficient is negative; mean depth rose to 291.270 vs training center 80.044, mechanically contributing -0.121145 log runs (factor 0.885906)."
+2,broad global level/intercept miss,STRONG_SUPPORT,"Positive actual-minus-RAW residual survives 2025 validation, both 2026 historical periods, prospective trimming, and every leave-one-date-out stress."
+3,forecast nonlinearity,MODERATE_SUPPORT,Fixed forecast-band declaration is NONLINEAR; no selector or alternative specification was created.
+4,extreme-game tail,WEAK_SUPPORT,Distribution declaration is BROAD_WITH_TAIL_CONTRIBUTION; 5%-absolute-trimmed mean residual remains +0.171851.
+5,offensive component understatement,WEAK_SUPPORT,Prospective association is MIXED; observational grouping is not causal.
+6,pitching component understatement / starter or relief context,WEAK_SUPPORT,Prospective pitching-context association is MIXED; no causal attribution is made.
+7,stale run-environment prior,NOT_SUPPORTED,"All-official Aug 6-15 scoring changed -0.309658 runs/game versus 2026 pre-Aug-6, while simple baselines overforecast rather than underforecast."
+8,data/fallback issue,NOT_SUPPORTED,All prospective admitted rows are context-complete; fail-closed identities were not replayed and fallback partitions do not explain the global sign.
+9,weather / ABS / other environmental cause,NOT_TESTABLE,Those fields are not governed RAW_V1 inputs and no external causal research was authorized.
