@@ -342,7 +342,7 @@ def main() -> None:
     # Outcome-free current shadow. The official schedule fetch is field-limited
     # by the certified live bridge and contains no score/run outcome fields.
     payload, observed, source_hash = fetch_hydrated_schedule(args.date); schedule = normalize_schedule(payload, observed, source_hash); history = build_history()
-    contexts = [attach_context(row, history) for row in schedule]; dynamic_live = live_dynamic(history, args.date)
+    contexts = [attach_context(row, history, observed) for row in schedule]; dynamic_live = live_dynamic(history, args.date)
     team_starter = defaultdict(list); league_starter = []
     for row in data.itertuples():
         if row.game_date >= pd.Timestamp(args.date): continue

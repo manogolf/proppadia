@@ -140,7 +140,7 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
         if game_pk in existing:
             attempts.append({"canonical_identity": identity, "ledger_action": "EXISTING_IMMUTABLE",
                 "context_action": "EXISTING_CONTEXT_NOT_RECONSTRUCTED", "game_pk": game_pk}); continue
-        context = attach_context(schedule_row, history)
+        context = attach_context(schedule_row, history, observed)
         if pd.Timestamp(context["scheduled_start_utc"]) <= pd.Timestamp(observed):
             attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_POST_START",
                 "rejection_reason": "PREGAME_CUTOFF_FAILED", "game_pk": context["game_pk"]}); continue
@@ -154,13 +154,22 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
                     reasons.append(f"{side.upper()}_STARTER_UNGOVERNED_{tier}")
             if context["park_state"]["fallback_status"] != "DIRECT_REGRESSED_PARK_HISTORY":
                 reasons.append(f"PARK_{context['park_state']['fallback_status']}")
+            for side in ("away", "home"):
+                bullpen_status = context[f"{side}_bullpen_state"]["certification_status"]
+                if bullpen_status != "GOVERNED_TEAM_RELIEVER_HISTORY":
+                    reasons.append(f"{side.upper()}_{bullpen_status}")
             attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_CONTEXT_NOT_COMPLETE",
                 "game_pk": context["game_pk"], "rejection_reasons": reasons,
-                "retry_status": "RETRYABLE_SAME_DAY_IF_OFFICIAL_PROBABLE_POSTS" if any("PROBABLE_PITCHER_UNAVAILABLE" in reason for reason in reasons) else "NOT_RETRYABLE_WITHOUT_CONTEXT_REPAIR"}); continue
+                "retry_status": ("RETRYABLE_SAME_DAY_IF_OFFICIAL_PROBABLE_POSTS" if any("PROBABLE_PITCHER_UNAVAILABLE" in reason for reason in reasons)
+                                 else "RETRYABLE_SAME_DAY_IF_OFFICIAL_HISTORY_ADVANCES" if any("BULLPEN_HISTORY_STALE" in reason for reason in reasons)
+                                 else "NOT_RETRYABLE_WITHOUT_CONTEXT_REPAIR")}); continue
         score = score_context(context, history, candidate, observed)
         market = attach_market(context, markets); probabilities = probability_fields(score["expected_total"], candidate["dispersion_alpha"], market["total_line"])
+        bullpen_provenance = {key: value for key, value in history["bullpen_history_provenance"].items() if key != "supplement_sources"}
         features = feature_row(context, history, candidate); feature_state = {"model_features": features, "away_starter_state": context["away_starter_state"],
-            "home_starter_state": context["home_starter_state"], "park_state": context["park_state"], "dynamic_league_environment": env}
+            "home_starter_state": context["home_starter_state"], "away_bullpen_state": context["away_bullpen_state"],
+            "home_bullpen_state": context["home_bullpen_state"], "bullpen_history_provenance": bullpen_provenance,
+            "park_state": context["park_state"], "dynamic_league_environment": env}
         row = {"experiment": EXPERIMENT, "game_date": game_date, "game_pk": context["game_pk"], "prediction_snapshot_class": SNAPSHOT_CLASS,
             "scheduled_start_utc": context["scheduled_start_utc"], "prediction_timestamp_utc": observed, "scoring_cutoff_utc": context["scheduled_start_utc"],
             "away_team_id": context["away_team_id"], "away_team": context["away_team_name"], "home_team_id": context["home_team_id"], "home_team": context["home_team_name"],

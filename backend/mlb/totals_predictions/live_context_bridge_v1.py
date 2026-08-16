@@ -5,7 +5,7 @@ import gzip
 import hashlib
 import json
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -19,6 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json"
 SPINE_DIR = REPO_ROOT / "artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06"
 RAW_BOXSCORES = REPO_ROOT / "artifacts/raw/mlb/totals_feature_spine_v1/boxscore"
+OFFICIAL_FINAL_ROOT = REPO_ROOT / "artifacts/analysis/mlb/player_stats_completeness"
+BULLPEN_FEATURE_GENERATION = "BULLPEN_RECENCY_FRESHNESS_INVARIANT_V1"
 SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
 SCHEDULE_HYDRATE = "probablePitcher,venue,team"
 SCHEDULE_FIELDS = "dates,date,games,gamePk,gameDate,officialDate,status,abstractGameState,detailedState,teams,away,home,team,id,name,probablePitcher,fullName,venue,gameNumber,doubleHeader"
@@ -117,6 +119,75 @@ def distribution(mu: float, alpha: float, max_total: int = 30) -> np.ndarray:
     return mass
 
 
+def _official_relief_records(payload: dict[str, Any], source_path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Normalize one retained official final feed into team relief appearances."""
+    status = payload.get("gameData", {}).get("status", {})
+    if status.get("abstractGameState") != "Final":
+        raise TotalsLiveContextError(f"BULLPEN_SOURCE_NOT_FINAL_{source_path}")
+    game_pk = int(payload["gamePk"])
+    official_date = date.fromisoformat(payload["gameData"]["datetime"]["officialDate"])
+    source_bytes = source_path.read_bytes()
+    source_hash = hashlib.sha256(source_bytes).hexdigest()
+    acquired_at = datetime.fromtimestamp(source_path.stat().st_mtime, timezone.utc)
+    records: list[dict[str, Any]] = []
+    for side in ("away", "home"):
+        team_id = int(payload["gameData"]["teams"][side]["id"])
+        box = payload["liveData"]["boxscore"]["teams"][side]
+        for pitcher_id in box.get("pitchers", []):
+            stats = box.get("players", {}).get(f"ID{pitcher_id}", {}).get("stats", {}).get("pitching", {})
+            if not stats or int(stats.get("gamesStarted", 0)):
+                continue
+            records.append({
+                "game_pk": game_pk, "date": official_date, "pitcher_id": int(pitcher_id),
+                "team_id": team_id, "is_starter": False, "outs": int(stats.get("outs", 0)),
+                "batters_faced": int(stats.get("battersFaced", 0)),
+                "pitches": int(stats.get("pitchesThrown", stats.get("numberOfPitches", 0))),
+                "runs": int(stats.get("runs", 0)), "earned_runs": int(stats.get("earnedRuns", 0)),
+                "hits": int(stats.get("hits", 0)), "walks": int(stats.get("baseOnBalls", 0)),
+                "strikeouts": int(stats.get("strikeOuts", 0)), "home_runs": int(stats.get("homeRuns", 0)),
+                "source_path": str(source_path.relative_to(REPO_ROOT)), "source_sha256": source_hash,
+                "source_acquired_at_utc": acquired_at.isoformat(), "source_type": "RETAINED_OFFICIAL_FINAL_LIVE_FEED",
+            })
+    normalized_hash = canonical_hash([{key: record[key] for key in (
+        "game_pk", "date", "pitcher_id", "team_id", "outs", "runs",
+    )} for record in records])
+    manifest = {
+        "game_pk": game_pk, "official_date": official_date.isoformat(),
+        "source_path": str(source_path.relative_to(REPO_ROOT)), "source_sha256": source_hash,
+        "source_acquired_at_utc": acquired_at.isoformat(), "normalized_relief_sha256": normalized_hash,
+        "relief_appearance_rows": len(records),
+    }
+    return manifest, records
+
+
+def load_official_relief_supplement(after_date: date) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load one deterministic, content-consistent retained final source per game."""
+    grouped: dict[tuple[str, int], list[tuple[dict[str, Any], list[dict[str, Any]]]]] = {}
+    for path in sorted(OFFICIAL_FINAL_ROOT.glob("*/game_*/sources/game_*_live_feed_*.json")):
+        try:
+            payload = json.loads(path.read_bytes())
+        except (json.JSONDecodeError, OSError) as exc:
+            raise TotalsLiveContextError(f"BULLPEN_SOURCE_UNREADABLE_{path}") from exc
+        status = payload.get("gameData", {}).get("status", {}).get("abstractGameState")
+        official_date_value = payload.get("gameData", {}).get("datetime", {}).get("officialDate")
+        if status != "Final" or not official_date_value or date.fromisoformat(official_date_value) <= after_date:
+            continue
+        manifest, records = _official_relief_records(payload, path)
+        grouped.setdefault((manifest["official_date"], manifest["game_pk"]), []).append((manifest, records))
+    manifests, records = [], []
+    for identity, candidates in sorted(grouped.items()):
+        normalized = {candidate[0]["normalized_relief_sha256"] for candidate in candidates}
+        if len(normalized) != 1:
+            raise TotalsLiveContextError(f"CONFLICTING_OFFICIAL_RELIEF_SOURCES_{identity[1]}")
+        chosen_manifest, chosen_records = min(candidates, key=lambda item: item[0]["source_acquired_at_utc"])
+        chosen_manifest = dict(chosen_manifest)
+        chosen_manifest["equivalent_source_count"] = len(candidates)
+        chosen_manifest["equivalent_source_hashes"] = sorted(item[0]["source_sha256"] for item in candidates)
+        manifests.append(chosen_manifest)
+        records.extend(chosen_records)
+    return manifests, records
+
+
 def _historical_context() -> dict[str, Any]:
     core = pd.read_csv(SPINE_DIR / "totals_core_feature_spine.csv")
     core["game_date"] = pd.to_datetime(core["game_date"]); core["scheduled_start_utc"] = pd.to_datetime(core["scheduled_start_utc"], utc=True)
@@ -131,7 +202,8 @@ def _historical_context() -> dict[str, Any]:
         game = int(path.name.split(".")[0]); match = core[core.game_pk == game]
         if match.empty:
             continue
-        row = match.iloc[0]; box = json.loads(gzip.decompress(path.read_bytes()))
+        row = match.iloc[0]; source_bytes = path.read_bytes(); source_hash = hashlib.sha256(source_bytes).hexdigest()
+        box = json.loads(gzip.decompress(source_bytes))
         for side in ("home", "away"):
             team_id = int(row[f"{side}_team_id"])
             for pitcher_id in box["teams"][side].get("pitchers", []):
@@ -143,12 +215,18 @@ def _historical_context() -> dict[str, Any]:
                        "batters_faced": int(stats.get("battersFaced", 0)), "pitches": int(stats.get("pitchesThrown", stats.get("numberOfPitches", 0))),
                        "runs": int(stats.get("runs", 0)), "earned_runs": int(stats.get("earnedRuns", 0)),
                        "hits": int(stats.get("hits", 0)), "walks": int(stats.get("baseOnBalls", 0)),
-                       "strikeouts": int(stats.get("strikeOuts", 0)), "home_runs": int(stats.get("homeRuns", 0))}
+                       "strikeouts": int(stats.get("strikeOuts", 0)), "home_runs": int(stats.get("homeRuns", 0)),
+                       "source_path": str(path.relative_to(REPO_ROOT)), "source_sha256": source_hash,
+                       "source_acquired_at_utc": None, "source_type": "FROZEN_FEATURE_SPINE_BOXSCORE"}
                 appearances.setdefault(int(pitcher_id), []).append(rec)
                 if rec["is_starter"]:
                     team_starts.setdefault(team_id, []).append(rec); league_starts.append(rec)
                 else:
                     team_relievers.setdefault(team_id, []).append(rec)
+    core_last_date = core.game_date.max().date()
+    bullpen_source_manifest, relief_supplement = load_official_relief_supplement(core_last_date)
+    for record in relief_supplement:
+        team_relievers.setdefault(record["team_id"], []).append(record)
     for collection in (appearances, team_starts, team_relievers):
         for values in collection.values():
             values.sort(key=lambda x: (x["date"], x["game_pk"]))
@@ -179,9 +257,19 @@ def _historical_context() -> dict[str, Any]:
                         "roof_type": meta.get("roof_type", "UNAVAILABLE"), "elevation": meta.get("elevation"),
                         "latest_included_game_id": prior[-1]["game"],
                         "source_sha256": canonical_hash([x["source_sha256"] for x in prior])}
+    bullpen_dates = sorted({*(value.date() for value in core.game_date), *(record["date"] for record in relief_supplement)})
+    bullpen_provenance = {
+        "feature_generation": BULLPEN_FEATURE_GENERATION,
+        "frozen_base_last_game_date": core_last_date.isoformat(),
+        "latest_completed_game_date": bullpen_dates[-1].isoformat(),
+        "available_completed_game_dates": [value.isoformat() for value in bullpen_dates],
+        "supplement_game_count": len(bullpen_source_manifest),
+        "supplement_source_manifest_hash": canonical_hash(bullpen_source_manifest),
+        "supplement_sources": bullpen_source_manifest,
+    }
     return {"core": core, "league_total": league_total, "league_home": league_home, "league_away": league_away,
             "teams": teams, "appearances": appearances, "team_starts": team_starts, "league_starts": league_starts,
-            "team_relievers": team_relievers, "parks": parks}
+            "team_relievers": team_relievers, "parks": parks, "bullpen_history_provenance": bullpen_provenance}
 
 
 def _starter(pid: int | None, team_id: int, cutoff_date, feature_cutoff_utc: str, history: dict[str, Any]) -> dict[str, Any]:
@@ -211,8 +299,51 @@ def _starter(pid: int | None, team_id: int, cutoff_date, feature_cutoff_utc: str
     return state
 
 
-def _bullpen(team_id: int, cutoff_date, history: dict[str, Any]) -> dict[str, Any]:
-    prior = [x for x in history["team_relievers"].get(team_id, []) if x["date"] < cutoff_date]
+def _bullpen(team_id: int, cutoff_date, history: dict[str, Any], as_of_utc: str | None = None) -> dict[str, Any]:
+    as_of = datetime.fromisoformat(as_of_utc.replace("Z", "+00:00")) if as_of_utc else None
+    provenance = history["bullpen_history_provenance"]
+    eligible_dates = [date.fromisoformat(value) for value in provenance["available_completed_game_dates"]
+                      if date.fromisoformat(value) < cutoff_date]
+    latest_eligible = max(eligible_dates) if eligible_dates else None
+    freshness_age = (cutoff_date - latest_eligible).days if latest_eligible else None
+    stale = latest_eligible is None or freshness_age > 1
+    prior = [x for x in history["team_relievers"].get(team_id, []) if x["date"] < cutoff_date and
+             (not x.get("source_acquired_at_utc") or as_of is None or datetime.fromisoformat(x["source_acquired_at_utc"]) <= as_of)]
+    if as_of is not None:
+        if provenance.get("supplement_sources") and provenance.get("frozen_base_last_game_date"):
+            base_last = date.fromisoformat(provenance["frozen_base_last_game_date"])
+            available_dates = [value for value in eligible_dates if value <= base_last]
+            available_dates.extend(
+                date.fromisoformat(source["official_date"])
+                for source in provenance["supplement_sources"]
+                if date.fromisoformat(source["official_date"]) < cutoff_date
+                and datetime.fromisoformat(source["source_acquired_at_utc"]) <= as_of
+            )
+        else:
+            available_dates = [x["date"] for values in history["team_relievers"].values() for x in values
+                               if x["date"] < cutoff_date and
+                               (not x.get("source_acquired_at_utc") or datetime.fromisoformat(x["source_acquired_at_utc"]) <= as_of)]
+        latest_eligible = max(available_dates) if available_dates else None
+        freshness_age = (cutoff_date - latest_eligible).days if latest_eligible else None
+        stale = latest_eligible is None or freshness_age > 1
+    source_hashes = sorted({x.get("source_sha256") for x in prior if x.get("source_sha256")})
+    common = {
+        "history_cutoff_date": latest_eligible.isoformat() if latest_eligible else None,
+        "expected_latest_prior_date": (cutoff_date - timedelta(days=1)).isoformat(),
+        "history_freshness_age_days": freshness_age,
+        "source_last_team_game_date": max((x["date"] for x in prior), default=None).isoformat() if prior else None,
+        "source_hash": canonical_hash(source_hashes), "source_hash_count": len(source_hashes),
+        "feature_generation_run_tag": BULLPEN_FEATURE_GENERATION,
+        "feature_cutoff_utc": as_of_utc,
+    }
+    if stale:
+        return {"bullpen_ra9": None, "recent_innings_burden": None, "likely_available_reliever_count": None,
+                "certification_status": "BULLPEN_HISTORY_STALE", "freshness_status": "STALE_OR_INCOMPLETE_HISTORY",
+                "staleness_reason": "LATEST_ELIGIBLE_COMPLETED_GAME_DATE_TOO_OLD", **common}
+    if not prior:
+        return {"bullpen_ra9": history["league_total"] / 2, "recent_innings_burden": None,
+                "likely_available_reliever_count": None, "certification_status": "LEAGUE_BULLPEN_FALLBACK",
+                "freshness_status": "TEAM_RELIEF_HISTORY_UNAVAILABLE", "staleness_reason": "NO_TEAM_RELIEF_HISTORY", **common}
     recent30 = [x for x in prior if (cutoff_date - x["date"]).days <= 30]
     recent1 = [x for x in prior if (cutoff_date - x["date"]).days <= 1]
     recent3 = [x for x in prior if (cutoff_date - x["date"]).days <= 3]
@@ -220,14 +351,16 @@ def _bullpen(team_id: int, cutoff_date, history: dict[str, Any]) -> dict[str, An
     return {"bullpen_ra9": 27 * runs / outs if outs else history["league_total"] / 2,
             "recent_innings_burden": sum(x["outs"] for x in recent3) / 3,
             "likely_available_reliever_count": max(0, len({x["pitcher_id"] for x in recent30}) - len({x["pitcher_id"] for x in recent1})),
-            "certification_status": "GOVERNED_TEAM_RELIEVER_HISTORY" if prior else "LEAGUE_BULLPEN_FALLBACK"}
+            "certification_status": "GOVERNED_TEAM_RELIEVER_HISTORY", "freshness_status": "CURRENT_STRICT_PRIOR_HISTORY",
+            "staleness_reason": None, **common}
 
 
-def attach_context(schedule_row: dict[str, Any], history: dict[str, Any]) -> dict[str, Any]:
+def attach_context(schedule_row: dict[str, Any], history: dict[str, Any], prediction_timestamp_utc: str | None = None) -> dict[str, Any]:
     cutoff_date = pd.Timestamp(schedule_row["game_date"]).date()
     away = _starter(schedule_row["away_probable_pitcher_id"], int(schedule_row["away_team_id"]), cutoff_date, schedule_row["scheduled_start_utc"], history)
     home = _starter(schedule_row["home_probable_pitcher_id"], int(schedule_row["home_team_id"]), cutoff_date, schedule_row["scheduled_start_utc"], history)
-    away_bullpen = _bullpen(int(schedule_row["away_team_id"]), cutoff_date, history); home_bullpen = _bullpen(int(schedule_row["home_team_id"]), cutoff_date, history)
+    away_bullpen = _bullpen(int(schedule_row["away_team_id"]), cutoff_date, history, prediction_timestamp_utc)
+    home_bullpen = _bullpen(int(schedule_row["home_team_id"]), cutoff_date, history, prediction_timestamp_utc)
     park = history["parks"].get(int(schedule_row["venue_id"])) if schedule_row.get("venue_id") else None
     park_state = {"park_factor": float(park["strict_prior_total_run_factor"]), "park_history_depth": int(park["park_history_depth"]),
                   "fallback_status": park["fallback_status"], "roof_type": park["roof_type"], "elevation": park["elevation"],
@@ -245,7 +378,12 @@ def attach_context(schedule_row: dict[str, Any], history: dict[str, Any]) -> dic
         and state["fallback_tier"] in GOVERNED_STARTER_HISTORY_TIERS
         for state in (away, home)
     )
-    complete = (probable_certified and starter_features_certified
+    bullpen_features_certified = all(
+        state["certification_status"] == "GOVERNED_TEAM_RELIEVER_HISTORY"
+        and state["freshness_status"] == "CURRENT_STRICT_PRIOR_HISTORY"
+        for state in (away_bullpen, home_bullpen)
+    )
+    complete = (probable_certified and starter_features_certified and bullpen_features_certified
                 and park is not None and park["fallback_status"] == "DIRECT_REGRESSED_PARK_HISTORY")
     unresolved = any(schedule_row.get(f"{side}_probable_pitcher_status") == "PROBABLE_PITCHER_IDENTITY_UNRESOLVED" for side in ("away", "home"))
     quality = "TOTALS_CONTEXT_UNRESOLVED" if unresolved else ("TOTALS_CONTEXT_COMPLETE" if complete else "TOTALS_CONTEXT_PARTIAL_FALLBACK")

@@ -1,0 +1,6 @@
+model_or_artifact,hash,scope,affected,treatment
+DIRECT_NEGATIVE_BINOMIAL_RAW_V1,fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac,RAW prospective forecasts Aug 7-16,YES,preserve originals; separate no-refit counterfactual
+V1_INTERCEPT,DERIVED_FROM_RAW,probabilities/diagnostics based on RAW location,YES,derived numerical state changes; no historical rewrite
+DIRECT_NEGATIVE_BINOMIAL_COUNT_CONFIDENCE_ONLY_V1,21828319efc421661f833484246b81e48721282ccd65f84ccc4f94222d7dd1cd,Aug 7-15 retrospective diagnostics,YES,separate no-refit corrected-feature diagnostic
+RAW/C historical validation and holdout,FROZEN_DATE_STRICT_FEATURE_SPINE,"2025, early 2026, late holdout through Aug 5",NO,independent strict-prior reproduction
+DIRECT_NEGATIVE_BINOMIAL_RAW_V1,fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac,Aug 16 frozen predictions,YES,15 original rows preserved; future scoring repaired

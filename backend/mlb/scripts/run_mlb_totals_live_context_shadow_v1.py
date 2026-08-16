@@ -70,7 +70,7 @@ def run(game_date: str, output_dir: Path, schedule_path: Path | None = None, pre
     candidate = load_candidate(); schedule = normalize_schedule(payload, observed, source_hash)
     if any(row["game_date"] != game_date for row in schedule):
         raise RuntimeError("SOURCE_DATE_MISMATCH")
-    history = build_history(); contexts = [attach_context(row, history) for row in schedule]
+    history = build_history(); contexts = [attach_context(row, history, when) for row in schedule]
 
     contract = {"experiment": EXPERIMENT, "source": source, "request": {"sportId": 1, "date": game_date, "hydrate": SCHEDULE_HYDRATE, "fields": SCHEDULE_FIELDS},
                 "source_observed_at_utc": observed, "source_sha256": source_hash, "outcome_fields_requested": [], "normalized_rows": schedule}

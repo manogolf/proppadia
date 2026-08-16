@@ -1,0 +1,8 @@
+gate,dimension,status,evidence
+D,training/current bullpen support,PASS,home_bullpen_recent_innings_burden=IN_SUPPORT; away_bullpen_recent_innings_burden=IN_SUPPORT
+H,fallback/missingness/source freshness,PASS,"all 141 reconstructed states carry non-null, current strict-prior history and explicit provenance"
+WATCH,home_bullpen_likely_available_reliever_count,MILD_DRIFT,training_mean=9.422309; corrected_current_mean=11.382979; standardized_shift=0.632959
+WATCH,away_bullpen_likely_available_reliever_count,MILD_DRIFT,training_mean=9.578926; corrected_current_mean=11.404255; standardized_shift=0.585593
+WATCH,home_bullpen_recent_innings_burden,IN_SUPPORT,training_mean=9.605543; corrected_current_mean=10.267139; standardized_shift=0.198777
+WATCH,away_bullpen_recent_innings_burden,IN_SUPPORT,training_mean=9.224806; corrected_current_mean=9.654846; standardized_shift=0.133242
+AGGREGATE,C bullpen stability,PASS_WITH_WATCH,TOTALS_COUNT_CONFIDENCE_ONLY_SHADOW_READY_WITH_WATCH_ITEMS

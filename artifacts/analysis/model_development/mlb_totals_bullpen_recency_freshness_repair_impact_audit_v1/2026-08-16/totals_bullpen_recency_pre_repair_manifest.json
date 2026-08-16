@@ -1,0 +1,2549 @@
+{
+  "affected_original_feature_rows_sha256": "7ba0bf5aeb6e68cab891e6b8e673e824896b88fc72b4d7d306b85038ec0d8ad4",
+  "captured_before_repair": {
+    "c_model_artifact": "ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc",
+    "existing_due_diligence": "4887f6cf40fe82cd1aaa880e7b6cec66dd72735aede422e985b214ecce9a98ad",
+    "installed_daily_wrapper": "1acef81f5d0bc5ddfaf4550bc357b1c2fc1e8af1d2bff6e2270e2d5b9a5bdd20",
+    "installed_launchagent": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+    "live_context_bridge": "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f",
+    "prediction_ledger": "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b",
+    "raw_model_artifact": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe"
+  },
+  "models_refit": 0,
+  "original_frozen_outcomes": 126,
+  "original_frozen_prediction_rows": 141,
+  "original_prediction_rows_mutated": 0,
+  "protected_inputs_at_audit": {
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_count_confidence_only_deployment_stability_shadow_decision_v1/2026-08-16/concise_mlb_totals_count_confidence_only_deployment_stability_shadow_decision_v1.md": "c083f86005945685cba8fa2944b2287d5c9c652b11047fc67370312bec88fb3f",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_count_feature_structural_repair_comparison_v1/2026-08-16/DIRECT_NEGATIVE_BINOMIAL_COUNT_CONFIDENCE_ONLY_V1.json": "ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc",
+    "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/mlb_totals_existing_model_prospective_due_diligence_v1/2026-08-16/concise_mlb_totals_existing_model_prospective_due_diligence_v1.md": "4887f6cf40fe82cd1aaa880e7b6cec66dd72735aede422e985b214ecce9a98ad",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b",
+    "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh": "1acef81f5d0bc5ddfaf4550bc357b1c2fc1e8af1d2bff6e2270e2d5b9a5bdd20"
+  },
+  "repair_implementation_at_audit": {
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/scripts/audit_mlb_totals_bullpen_recency_freshness_repair_impact_v1.py": "de1f0eda5049ada52b2defdfefadeb9b8b99cb63dfa4de8dd12c9b4a4026b5ec",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/scripts/report_mlb_totals_prospective_snapshot_v1.py": "71b904598d8691ce13909f9a97a7e8d8e93c935f953c52dd33d3e23fb3f64a15",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/scripts/run_mlb_totals_live_context_shadow_v1.py": "babcc7811f04f827e07d79a565152cb56c4ec2fc14109d9677867e709e19ccb3",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/scripts/run_mlb_totals_prospective_shadow_v1.py": "4657f2415f809cdaba98b45839c8a6252abb88bb8ed64b320a59dadfc881ab34",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/scripts/run_mlb_totals_structural_challenger_v2.py": "78732f1ae2ca939621337e0064a37b6ed4a7dc733a9e3d4f31b441eda72d9499",
+    "/Users/jerrystrain/Projects/proppadia/backend/mlb/totals_predictions/live_context_bridge_v1.py": "9583c02027a9e5a3e0ec1a113d8fb7aeb833422f7c225bc17b617b1b1f0d7a4a"
+  },
+  "scheduler_config_state": {
+    "installed_launchagent_sha256": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+    "installed_wrapper_sha256": "1acef81f5d0bc5ddfaf4550bc357b1c2fc1e8af1d2bff6e2270e2d5b9a5bdd20"
+  },
+  "source_history_after": {
+    "available_completed_game_dates": [
+      "2023-03-30",
+      "2023-03-31",
+      "2023-04-01",
+      "2023-04-02",
+      "2023-04-03",
+      "2023-04-04",
+      "2023-04-05",
+      "2023-04-06",
+      "2023-04-07",
+      "2023-04-08",
+      "2023-04-09",
+      "2023-04-10",
+      "2023-04-11",
+      "2023-04-12",
+      "2023-04-13",
+      "2023-04-14",
+      "2023-04-15",
+      "2023-04-16",
+      "2023-04-17",
+      "2023-04-18",
+      "2023-04-19",
+      "2023-04-20",
+      "2023-04-21",
+      "2023-04-22",
+      "2023-04-23",
+      "2023-04-24",
+      "2023-04-25",
+      "2023-04-26",
+      "2023-04-27",
+      "2023-04-28",
+      "2023-04-29",
+      "2023-04-30",
+      "2023-05-01",
+      "2023-05-02",
+      "2023-05-03",
+      "2023-05-04",
+      "2023-05-05",
+      "2023-05-06",
+      "2023-05-07",
+      "2023-05-08",
+      "2023-05-09",
+      "2023-05-10",
+      "2023-05-11",
+      "2023-05-12",
+      "2023-05-13",
+      "2023-05-14",
+      "2023-05-15",
+      "2023-05-16",
+      "2023-05-17",
+      "2023-05-18",
+      "2023-05-19",
+      "2023-05-20",
+      "2023-05-21",
+      "2023-05-22",
+      "2023-05-23",
+      "2023-05-24",
+      "2023-05-25",
+      "2023-05-26",
+      "2023-05-27",
+      "2023-05-28",
+      "2023-05-29",
+      "2023-05-30",
+      "2023-05-31",
+      "2023-06-01",
+      "2023-06-02",
+      "2023-06-03",
+      "2023-06-04",
+      "2023-06-05",
+      "2023-06-06",
+      "2023-06-07",
+      "2023-06-08",
+      "2023-06-09",
+      "2023-06-10",
+      "2023-06-11",
+      "2023-06-12",
+      "2023-06-13",
+      "2023-06-14",
+      "2023-06-15",
+      "2023-06-16",
+      "2023-06-17",
+      "2023-06-18",
+      "2023-06-19",
+      "2023-06-20",
+      "2023-06-21",
+      "2023-06-22",
+      "2023-06-23",
+      "2023-06-24",
+      "2023-06-25",
+      "2023-06-26",
+      "2023-06-27",
+      "2023-06-28",
+      "2023-06-29",
+      "2023-06-30",
+      "2023-07-01",
+      "2023-07-02",
+      "2023-07-03",
+      "2023-07-04",
+      "2023-07-05",
+      "2023-07-06",
+      "2023-07-07",
+      "2023-07-08",
+      "2023-07-09",
+      "2023-07-14",
+      "2023-07-15",
+      "2023-07-16",
+      "2023-07-17",
+      "2023-07-18",
+      "2023-07-19",
+      "2023-07-20",
+      "2023-07-21",
+      "2023-07-22",
+      "2023-07-23",
+      "2023-07-24",
+      "2023-07-25",
+      "2023-07-26",
+      "2023-07-27",
+      "2023-07-28",
+      "2023-07-29",
+      "2023-07-30",
+      "2023-07-31",
+      "2023-08-01",
+      "2023-08-02",
+      "2023-08-03",
+      "2023-08-04",
+      "2023-08-05",
+      "2023-08-06",
+      "2023-08-07",
+      "2023-08-08",
+      "2023-08-09",
+      "2023-08-10",
+      "2023-08-11",
+      "2023-08-12",
+      "2023-08-13",
+      "2023-08-14",
+      "2023-08-15",
+      "2023-08-16",
+      "2023-08-17",
+      "2023-08-18",
+      "2023-08-19",
+      "2023-08-20",
+      "2023-08-21",
+      "2023-08-22",
+      "2023-08-23",
+      "2023-08-24",
+      "2023-08-25",
+      "2023-08-26",
+      "2023-08-27",
+      "2023-08-28",
+      "2023-08-29",
+      "2023-08-30",
+      "2023-08-31",
+      "2023-09-01",
+      "2023-09-02",
+      "2023-09-03",
+      "2023-09-04",
+      "2023-09-05",
+      "2023-09-06",
+      "2023-09-07",
+      "2023-09-08",
+      "2023-09-09",
+      "2023-09-10",
+      "2023-09-11",
+      "2023-09-12",
+      "2023-09-13",
+      "2023-09-14",
+      "2023-09-15",
+      "2023-09-16",
+      "2023-09-17",
+      "2023-09-18",
+      "2023-09-19",
+      "2023-09-20",
+      "2023-09-21",
+      "2023-09-22",
+      "2023-09-23",
+      "2023-09-24",
+      "2023-09-25",
+      "2023-09-26",
+      "2023-09-27",
+      "2023-09-28",
+      "2023-09-29",
+      "2023-09-30",
+      "2023-10-01",
+      "2024-03-20",
+      "2024-03-21",
+      "2024-03-28",
+      "2024-03-29",
+      "2024-03-30",
+      "2024-03-31",
+      "2024-04-01",
+      "2024-04-02",
+      "2024-04-03",
+      "2024-04-04",
+      "2024-04-05",
+      "2024-04-06",
+      "2024-04-07",
+      "2024-04-08",
+      "2024-04-09",
+      "2024-04-10",
+      "2024-04-11",
+      "2024-04-12",
+      "2024-04-13",
+      "2024-04-14",
+      "2024-04-15",
+      "2024-04-16",
+      "2024-04-17",
+      "2024-04-18",
+      "2024-04-19",
+      "2024-04-20",
+      "2024-04-21",
+      "2024-04-22",
+      "2024-04-23",
+      "2024-04-24",
+      "2024-04-25",
+      "2024-04-26",
+      "2024-04-27",
+      "2024-04-28",
+      "2024-04-29",
+      "2024-04-30",
+      "2024-05-01",
+      "2024-05-02",
+      "2024-05-03",
+      "2024-05-04",
+      "2024-05-05",
+      "2024-05-06",
+      "2024-05-07",
+      "2024-05-08",
+      "2024-05-09",
+      "2024-05-10",
+      "2024-05-11",
+      "2024-05-12",
+      "2024-05-13",
+      "2024-05-14",
+      "2024-05-15",
+      "2024-05-16",
+      "2024-05-17",
+      "2024-05-18",
+      "2024-05-19",
+      "2024-05-20",
+      "2024-05-21",
+      "2024-05-22",
+      "2024-05-23",
+      "2024-05-24",
+      "2024-05-25",
+      "2024-05-26",
+      "2024-05-27",
+      "2024-05-28",
+      "2024-05-29",
+      "2024-05-30",
+      "2024-05-31",
+      "2024-06-01",
+      "2024-06-02",
+      "2024-06-03",
+      "2024-06-04",
+      "2024-06-05",
+      "2024-06-06",
+      "2024-06-07",
+      "2024-06-08",
+      "2024-06-09",
+      "2024-06-10",
+      "2024-06-11",
+      "2024-06-12",
+      "2024-06-13",
+      "2024-06-14",
+      "2024-06-15",
+      "2024-06-16",
+      "2024-06-17",
+      "2024-06-18",
+      "2024-06-19",
+      "2024-06-20",
+      "2024-06-21",
+      "2024-06-22",
+      "2024-06-23",
+      "2024-06-24",
+      "2024-06-25",
+      "2024-06-26",
+      "2024-06-27",
+      "2024-06-28",
+      "2024-06-29",
+      "2024-06-30",
+      "2024-07-01",
+      "2024-07-02",
+      "2024-07-03",
+      "2024-07-04",
+      "2024-07-05",
+      "2024-07-06",
+      "2024-07-07",
+      "2024-07-08",
+      "2024-07-09",
+      "2024-07-10",
+      "2024-07-11",
+      "2024-07-12",
+      "2024-07-13",
+      "2024-07-14",
+      "2024-07-19",
+      "2024-07-20",
+      "2024-07-21",
+      "2024-07-22",
+      "2024-07-23",
+      "2024-07-24",
+      "2024-07-25",
+      "2024-07-26",
+      "2024-07-27",
+      "2024-07-28",
+      "2024-07-29",
+      "2024-07-30",
+      "2024-07-31",
+      "2024-08-01",
+      "2024-08-02",
+      "2024-08-03",
+      "2024-08-04",
+      "2024-08-05",
+      "2024-08-06",
+      "2024-08-07",
+      "2024-08-08",
+      "2024-08-09",
+      "2024-08-10",
+      "2024-08-11",
+      "2024-08-12",
+      "2024-08-13",
+      "2024-08-14",
+      "2024-08-15",
+      "2024-08-16",
+      "2024-08-17",
+      "2024-08-18",
+      "2024-08-19",
+      "2024-08-20",
+      "2024-08-21",
+      "2024-08-22",
+      "2024-08-23",
+      "2024-08-24",
+      "2024-08-25",
+      "2024-08-26",
+      "2024-08-27",
+      "2024-08-28",
+      "2024-08-29",
+      "2024-08-30",
+      "2024-08-31",
+      "2024-09-01",
+      "2024-09-02",
+      "2024-09-03",
+      "2024-09-04",
+      "2024-09-05",
+      "2024-09-06",
+      "2024-09-07",
+      "2024-09-08",
+      "2024-09-09",
+      "2024-09-10",
+      "2024-09-11",
+      "2024-09-12",
+      "2024-09-13",
+      "2024-09-14",
+      "2024-09-15",
+      "2024-09-16",
+      "2024-09-17",
+      "2024-09-18",
+      "2024-09-19",
+      "2024-09-20",
+      "2024-09-21",
+      "2024-09-22",
+      "2024-09-23",
+      "2024-09-24",
+      "2024-09-25",
+      "2024-09-26",
+      "2024-09-27",
+      "2024-09-28",
+      "2024-09-29",
+      "2024-09-30",
+      "2025-03-18",
+      "2025-03-19",
+      "2025-03-27",
+      "2025-03-28",
+      "2025-03-29",
+      "2025-03-30",
+      "2025-03-31",
+      "2025-04-01",
+      "2025-04-02",
+      "2025-04-03",
+      "2025-04-04",
+      "2025-04-05",
+      "2025-04-06",
+      "2025-04-07",
+      "2025-04-08",
+      "2025-04-09",
+      "2025-04-10",
+      "2025-04-11",
+      "2025-04-12",
+      "2025-04-13",
+      "2025-04-14",
+      "2025-04-15",
+      "2025-04-16",
+      "2025-04-17",
+      "2025-04-18",
+      "2025-04-19",
+      "2025-04-20",
+      "2025-04-21",
+      "2025-04-22",
+      "2025-04-23",
+      "2025-04-24",
+      "2025-04-25",
+      "2025-04-26",
+      "2025-04-27",
+      "2025-04-28",
+      "2025-04-29",
+      "2025-04-30",
+      "2025-05-01",
+      "2025-05-02",
+      "2025-05-03",
+      "2025-05-04",
+      "2025-05-05",
+      "2025-05-06",
+      "2025-05-07",
+      "2025-05-08",
+      "2025-05-09",
+      "2025-05-10",
+      "2025-05-11",
+      "2025-05-12",
+      "2025-05-13",
+      "2025-05-14",
+      "2025-05-15",
+      "2025-05-16",
+      "2025-05-17",
+      "2025-05-18",
+      "2025-05-19",
+      "2025-05-20",
+      "2025-05-21",
+      "2025-05-22",
+      "2025-05-23",
+      "2025-05-24",
+      "2025-05-25",
+      "2025-05-26",
+      "2025-05-27",
+      "2025-05-28",
+      "2025-05-29",
+      "2025-05-30",
+      "2025-05-31",
+      "2025-06-01",
+      "2025-06-02",
+      "2025-06-03",
+      "2025-06-04",
+      "2025-06-05",
+      "2025-06-06",
+      "2025-06-07",
+      "2025-06-08",
+      "2025-06-09",
+      "2025-06-10",
+      "2025-06-11",
+      "2025-06-12",
+      "2025-06-13",
+      "2025-06-14",
+      "2025-06-15",
+      "2025-06-16",
+      "2025-06-17",
+      "2025-06-18",
+      "2025-06-19",
+      "2025-06-20",
+      "2025-06-21",
+      "2025-06-22",
+      "2025-06-23",
+      "2025-06-24",
+      "2025-06-25",
+      "2025-06-26",
+      "2025-06-27",
+      "2025-06-28",
+      "2025-06-29",
+      "2025-06-30",
+      "2025-07-01",
+      "2025-07-02",
+      "2025-07-03",
+      "2025-07-04",
+      "2025-07-05",
+      "2025-07-06",
+      "2025-07-07",
+      "2025-07-08",
+      "2025-07-09",
+      "2025-07-10",
+      "2025-07-11",
+      "2025-07-12",
+      "2025-07-13",
+      "2025-07-18",
+      "2025-07-19",
+      "2025-07-20",
+      "2025-07-21",
+      "2025-07-22",
+      "2025-07-23",
+      "2025-07-24",
+      "2025-07-25",
+      "2025-07-26",
+      "2025-07-27",
+      "2025-07-28",
+      "2025-07-29",
+      "2025-07-30",
+      "2025-07-31",
+      "2025-08-01",
+      "2025-08-02",
+      "2025-08-03",
+      "2025-08-04",
+      "2025-08-05",
+      "2025-08-06",
+      "2025-08-07",
+      "2025-08-08",
+      "2025-08-09",
+      "2025-08-10",
+      "2025-08-11",
+      "2025-08-12",
+      "2025-08-13",
+      "2025-08-14",
+      "2025-08-15",
+      "2025-08-16",
+      "2025-08-17",
+      "2025-08-18",
+      "2025-08-19",
+      "2025-08-20",
+      "2025-08-21",
+      "2025-08-22",
+      "2025-08-23",
+      "2025-08-24",
+      "2025-08-25",
+      "2025-08-26",
+      "2025-08-27",
+      "2025-08-28",
+      "2025-08-29",
+      "2025-08-30",
+      "2025-08-31",
+      "2025-09-01",
+      "2025-09-02",
+      "2025-09-03",
+      "2025-09-04",
+      "2025-09-05",
+      "2025-09-06",
+      "2025-09-07",
+      "2025-09-08",
+      "2025-09-09",
+      "2025-09-10",
+      "2025-09-11",
+      "2025-09-12",
+      "2025-09-13",
+      "2025-09-14",
+      "2025-09-15",
+      "2025-09-16",
+      "2025-09-17",
+      "2025-09-18",
+      "2025-09-19",
+      "2025-09-20",
+      "2025-09-21",
+      "2025-09-22",
+      "2025-09-23",
+      "2025-09-24",
+      "2025-09-25",
+      "2025-09-26",
+      "2025-09-27",
+      "2025-09-28",
+      "2025-09-30",
+      "2026-03-25",
+      "2026-03-26",
+      "2026-03-27",
+      "2026-03-28",
+      "2026-03-29",
+      "2026-03-30",
+      "2026-03-31",
+      "2026-04-01",
+      "2026-04-02",
+      "2026-04-03",
+      "2026-04-04",
+      "2026-04-05",
+      "2026-04-06",
+      "2026-04-07",
+      "2026-04-08",
+      "2026-04-09",
+      "2026-04-10",
+      "2026-04-11",
+      "2026-04-12",
+      "2026-04-13",
+      "2026-04-14",
+      "2026-04-15",
+      "2026-04-16",
+      "2026-04-17",
+      "2026-04-18",
+      "2026-04-19",
+      "2026-04-20",
+      "2026-04-21",
+      "2026-04-22",
+      "2026-04-23",
+      "2026-04-24",
+      "2026-04-25",
+      "2026-04-26",
+      "2026-04-27",
+      "2026-04-28",
+      "2026-04-29",
+      "2026-04-30",
+      "2026-05-01",
+      "2026-05-02",
+      "2026-05-03",
+      "2026-05-04",
+      "2026-05-05",
+      "2026-05-06",
+      "2026-05-07",
+      "2026-05-08",
+      "2026-05-09",
+      "2026-05-10",
+      "2026-05-11",
+      "2026-05-12",
+      "2026-05-13",
+      "2026-05-14",
+      "2026-05-15",
+      "2026-05-16",
+      "2026-05-17",
+      "2026-05-18",
+      "2026-05-19",
+      "2026-05-20",
+      "2026-05-21",
+      "2026-05-22",
+      "2026-05-23",
+      "2026-05-24",
+      "2026-05-25",
+      "2026-05-26",
+      "2026-05-27",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-30",
+      "2026-05-31",
+      "2026-06-01",
+      "2026-06-02",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-07",
+      "2026-06-08",
+      "2026-06-09",
+      "2026-06-10",
+      "2026-06-11",
+      "2026-06-12",
+      "2026-06-13",
+      "2026-06-14",
+      "2026-06-15",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20",
+      "2026-06-21",
+      "2026-06-22",
+      "2026-06-23",
+      "2026-06-24",
+      "2026-06-25",
+      "2026-06-26",
+      "2026-06-27",
+      "2026-06-28",
+      "2026-06-29",
+      "2026-06-30",
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03",
+      "2026-07-04",
+      "2026-07-05",
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-16",
+      "2026-07-17",
+      "2026-07-18",
+      "2026-07-19",
+      "2026-07-20",
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+      "2026-07-24",
+      "2026-07-25",
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09",
+      "2026-08-10",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+      "2026-08-15"
+    ],
+    "feature_generation": "BULLPEN_RECENCY_FRESHNESS_INVARIANT_V1",
+    "frozen_base_last_game_date": "2026-08-05",
+    "latest_completed_game_date": "2026-08-15",
+    "supplement_game_count": 134,
+    "supplement_source_manifest_hash": "024ce3c4625159cceabc847971ab54ff299b96bc882fc44a3b9c00b19f7b3f11",
+    "supplement_sources": [
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "df03c305d232f6ee3e9fcf90b61c2dd065ff435df10439f0c7420d92baba71d0"
+        ],
+        "game_pk": 823105,
+        "normalized_relief_sha256": "a1c85f204664ce158712df96c388c95c9ab6bd8cf653b70c73c2af5e036e4073",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-07T12:49:20.637208+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_823105/sources/game_823105_live_feed_df03c305d232f6ee3e9fcf90b61c2dd065ff435df10439f0c7420d92baba71d0.json",
+        "source_sha256": "df03c305d232f6ee3e9fcf90b61c2dd065ff435df10439f0c7420d92baba71d0"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "19e95d545e5ac12be86fcbd4390f25fcadb542fd28f0bbc7e1407be47ee46701",
+          "51d2e9de0d148d6d0e04fb8205b1f5f08bac78d3d2315db93b76cc7ab808b256",
+          "c30ad4c6f56481a6b00db78ee473f50682e449f340ee6f6583127c42f46d16a8"
+        ],
+        "game_pk": 823430,
+        "normalized_relief_sha256": "4570a771e8e8027defccccbd433fc61e7643acdd7b3e19364c799537670f40d7",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-07T12:49:20.984747+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_823430/sources/game_823430_live_feed_c30ad4c6f56481a6b00db78ee473f50682e449f340ee6f6583127c42f46d16a8.json",
+        "source_sha256": "c30ad4c6f56481a6b00db78ee473f50682e449f340ee6f6583127c42f46d16a8"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "86e77e507b06bb72e20549ab1e522c1aac26390c2ddee2797890ad00b5623d7c"
+        ],
+        "game_pk": 823754,
+        "normalized_relief_sha256": "ee41513b16a620f8aa3aeb8f2eae6035d69f8cb9a99e9e300058a42bf34fc160",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-07T12:49:19.882368+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_823754/sources/game_823754_live_feed_86e77e507b06bb72e20549ab1e522c1aac26390c2ddee2797890ad00b5623d7c.json",
+        "source_sha256": "86e77e507b06bb72e20549ab1e522c1aac26390c2ddee2797890ad00b5623d7c"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "7556ade9820666fd6aa6035d737dfb8248040b63b02f5fe42c1f4f78f4b4c067",
+          "baf827d80f7d67b4bbe920b97b603630bc7e1049e05909742b4648ebbdce8b7c"
+        ],
+        "game_pk": 824080,
+        "normalized_relief_sha256": "6d642b8af88e0879fe3be3ce8557c789f5a9dd768c9d35f9a1dbf550004b9954",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-07T12:49:22.066411+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824080/sources/game_824080_live_feed_7556ade9820666fd6aa6035d737dfb8248040b63b02f5fe42c1f4f78f4b4c067.json",
+        "source_sha256": "7556ade9820666fd6aa6035d737dfb8248040b63b02f5fe42c1f4f78f4b4c067"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "695b6f3014b1810f30f9a45ceb9fc02665e68ff3077aea2a491c535d434f23ce",
+          "82fd032e869e73a5daaf8375e70f9a92855c99d7306db77f4e707e08318a4106"
+        ],
+        "game_pk": 824401,
+        "normalized_relief_sha256": "1dae6665e40f8b36d45f2c86116013ec27145d0157915ba697510f797c559740",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-07T12:49:19.519638+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824401/sources/game_824401_live_feed_695b6f3014b1810f30f9a45ceb9fc02665e68ff3077aea2a491c535d434f23ce.json",
+        "source_sha256": "695b6f3014b1810f30f9a45ceb9fc02665e68ff3077aea2a491c535d434f23ce"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "9b7ba7c2a268a251365def5e3671241ac80c1b004c0f206edf276d06c10ff5f9",
+          "f154e12642cbb540d3546e5b796eb82f17effd7487db723c4e09d94369386ca3"
+        ],
+        "game_pk": 824481,
+        "normalized_relief_sha256": "75cfeab994b95e13a40c6389d3f5788c727e387d99d6950768847dadf320376b",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-07T12:49:19.159526+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824481/sources/game_824481_live_feed_f154e12642cbb540d3546e5b796eb82f17effd7487db723c4e09d94369386ca3.json",
+        "source_sha256": "f154e12642cbb540d3546e5b796eb82f17effd7487db723c4e09d94369386ca3"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "57eebe9172d83fe0d556ece3732c7829f799c27ac2bedb03ef3d469097da5645",
+          "71e7d6564b01e1658830b621e675527c92d66327b492c92a5bfd51685bc0feba"
+        ],
+        "game_pk": 824664,
+        "normalized_relief_sha256": "f257d02710175ad33fb51c14383b175f2ecea79863b9b195b83d2c35281a645f",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-07T12:49:20.277166+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824664/sources/game_824664_live_feed_57eebe9172d83fe0d556ece3732c7829f799c27ac2bedb03ef3d469097da5645.json",
+        "source_sha256": "57eebe9172d83fe0d556ece3732c7829f799c27ac2bedb03ef3d469097da5645"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "06f34c03ee20c931132deb619a0dde626b9c0b560ff7b5c362f942b4245722dd",
+          "b91d73c8f71d33f2306a59cd61cdc014d20944d5782164e291e92c0c747cfb16",
+          "e141cf80ee498583846b93c22184feeaaa61850522e5b36dae9c5cc64beefc54"
+        ],
+        "game_pk": 824729,
+        "normalized_relief_sha256": "84db17c63710e840a15517573ecb7ee13e8c60c28ec021e7c5142a9425d003e4",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 15,
+        "source_acquired_at_utc": "2026-08-07T12:49:21.353650+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824729/sources/game_824729_live_feed_b91d73c8f71d33f2306a59cd61cdc014d20944d5782164e291e92c0c747cfb16.json",
+        "source_sha256": "b91d73c8f71d33f2306a59cd61cdc014d20944d5782164e291e92c0c747cfb16"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "80f6f857eb229fadbf0ffaa79a69930249cdd13eafb7ddd2553c51b61a655c22"
+        ],
+        "game_pk": 824804,
+        "normalized_relief_sha256": "d1a7402c851d0a4e55f66ba4c97a279b93b7edb9dc995d6c80fdc8c59be8d115",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-07T12:49:18.762243+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824804/sources/game_824804_live_feed_80f6f857eb229fadbf0ffaa79a69930249cdd13eafb7ddd2553c51b61a655c22.json",
+        "source_sha256": "80f6f857eb229fadbf0ffaa79a69930249cdd13eafb7ddd2553c51b61a655c22"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "15532da6b60f7e161e1c6299458f9f614621a564b3988ba5d32b3b8561d18243",
+          "9dd2aecdfef1b494e8fca8e4e5f78af693d6e3a4233aa1cd078b2b0c18d32e68"
+        ],
+        "game_pk": 824885,
+        "normalized_relief_sha256": "b4d3c34b404607a06b0f616271d6856cf8358b9a80de504b0676e2c60bccc388",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 10,
+        "source_acquired_at_utc": "2026-08-07T12:49:21.713573+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_824885/sources/game_824885_live_feed_15532da6b60f7e161e1c6299458f9f614621a564b3988ba5d32b3b8561d18243.json",
+        "source_sha256": "15532da6b60f7e161e1c6299458f9f614621a564b3988ba5d32b3b8561d18243"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "b7c0bf81349b43aeac003746e83e65326aa9f96e7547c8b61df283262ed8d276",
+          "e1c70d11aed0c63a7e0401180de191a45f611d00437ad9f7b5b73c46afccc4b2"
+        ],
+        "game_pk": 825053,
+        "normalized_relief_sha256": "68985b38127b61ff7fb9f925738e1e4800d679067809e71fa0e6a2a5dff2631f",
+        "official_date": "2026-08-06",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-07T12:49:22.422608+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-06/game_825053/sources/game_825053_live_feed_b7c0bf81349b43aeac003746e83e65326aa9f96e7547c8b61df283262ed8d276.json",
+        "source_sha256": "b7c0bf81349b43aeac003746e83e65326aa9f96e7547c8b61df283262ed8d276"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "c2b4096ea20b3a833f57afd1d6e04cddead0d4fe1d99f3c6098388e54996fff1"
+        ],
+        "game_pk": 822699,
+        "normalized_relief_sha256": "2190707706b0ade17c56fa71e6af7a0effb8307f7578223a01c18703838befe4",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-08T12:50:38.378745+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_822699/sources/game_822699_live_feed_c2b4096ea20b3a833f57afd1d6e04cddead0d4fe1d99f3c6098388e54996fff1.json",
+        "source_sha256": "c2b4096ea20b3a833f57afd1d6e04cddead0d4fe1d99f3c6098388e54996fff1"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "bb05edc9f4b962f32bc64cb8984cd9d16efe125b0bc6d68bc878736a2dc16d99"
+        ],
+        "game_pk": 822863,
+        "normalized_relief_sha256": "934e11a9238a398214daa2eb31f258cc3a1b65d6fd9fb3d20795fe827d8ac409",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-08T12:50:41.751892+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_822863/sources/game_822863_live_feed_bb05edc9f4b962f32bc64cb8984cd9d16efe125b0bc6d68bc878736a2dc16d99.json",
+        "source_sha256": "bb05edc9f4b962f32bc64cb8984cd9d16efe125b0bc6d68bc878736a2dc16d99"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "6d9669945d537fbfa4d32c7215191e8e8048e4543dbb9a2d6d287790c484543e"
+        ],
+        "game_pk": 823024,
+        "normalized_relief_sha256": "1d4355bc0d105bcad855f744ed4954987f0a2d5f3b206204e38d11f40e83a5c3",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-08T12:50:41.344967+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823024/sources/game_823024_live_feed_6d9669945d537fbfa4d32c7215191e8e8048e4543dbb9a2d6d287790c484543e.json",
+        "source_sha256": "6d9669945d537fbfa4d32c7215191e8e8048e4543dbb9a2d6d287790c484543e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "1d231b29e0a768c4fb3182eb4fa5e417aa78c896756511966b8293911a1c5197"
+        ],
+        "game_pk": 823103,
+        "normalized_relief_sha256": "69318ba5f2ccbfa669e416da78114a602e5136775a63970e1e25ee9528719753",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-08T12:50:43.029895+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823103/sources/game_823103_live_feed_1d231b29e0a768c4fb3182eb4fa5e417aa78c896756511966b8293911a1c5197.json",
+        "source_sha256": "1d231b29e0a768c4fb3182eb4fa5e417aa78c896756511966b8293911a1c5197"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "25790c8f6a21d0ddabd37cbf94a4402f23744fa553d780409774412bdb85bfae"
+        ],
+        "game_pk": 823191,
+        "normalized_relief_sha256": "aa431b0acceb7e4f23f562b6b4d36d30f7e8bec6c39ca5c67b9c2d79d4958f6a",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-08T12:50:43.441322+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823191/sources/game_823191_live_feed_25790c8f6a21d0ddabd37cbf94a4402f23744fa553d780409774412bdb85bfae.json",
+        "source_sha256": "25790c8f6a21d0ddabd37cbf94a4402f23744fa553d780409774412bdb85bfae"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "b1923d21292c665a8b1dae296411f2fdf856d50e25a04950e74a4f2da721f98e"
+        ],
+        "game_pk": 823266,
+        "normalized_relief_sha256": "a42bf99e6f5bdaa20ce2a23fd82dc1c4d01d7bf089e9053316ab66f33a5ac7f4",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-08T12:50:42.618506+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823266/sources/game_823266_live_feed_b1923d21292c665a8b1dae296411f2fdf856d50e25a04950e74a4f2da721f98e.json",
+        "source_sha256": "b1923d21292c665a8b1dae296411f2fdf856d50e25a04950e74a4f2da721f98e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "9dabd34b0f607cceb4b5cf7ed926949cbb58de14da7d9df26b178e6d867e4722"
+        ],
+        "game_pk": 823349,
+        "normalized_relief_sha256": "9f5a388d383f8ede870ca2e067684bb4b93a9cd03ee346ea7b6ee57e3e1dddde",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-08T12:50:37.517755+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823349/sources/game_823349_live_feed_9dabd34b0f607cceb4b5cf7ed926949cbb58de14da7d9df26b178e6d867e4722.json",
+        "source_sha256": "9dabd34b0f607cceb4b5cf7ed926949cbb58de14da7d9df26b178e6d867e4722"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "3aa569829406e8b40dc5f9b4883ace94b98785e9a8683ebf12b4aa65f897dcd7",
+          "8b10f8479b77f1868074d1154edcf4a7fdd91a742c33fdffe3470dedae6525bf"
+        ],
+        "game_pk": 823428,
+        "normalized_relief_sha256": "d05d85803ff081f0d0b0c52f5486e34b21f2cfef444ffc19c6c24f1658a0650a",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-08T12:50:37.972938+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823428/sources/game_823428_live_feed_8b10f8479b77f1868074d1154edcf4a7fdd91a742c33fdffe3470dedae6525bf.json",
+        "source_sha256": "8b10f8479b77f1868074d1154edcf4a7fdd91a742c33fdffe3470dedae6525bf"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "800c483e1f992e4c8abee73c1d974e1f53ea1e3b986a17fa871324640a08e95e",
+          "cae3234047d5ff81a9f48f5871906037ea707ade3dec10c1c18a15f1c28c09e4"
+        ],
+        "game_pk": 823515,
+        "normalized_relief_sha256": "379da8ee57aa1e30fbd3fe4213ea7a2ff9c405cb1ea4be240fd4a1579be05a2b",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 10,
+        "source_acquired_at_utc": "2026-08-08T12:50:38.787919+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823515/sources/game_823515_live_feed_cae3234047d5ff81a9f48f5871906037ea707ade3dec10c1c18a15f1c28c09e4.json",
+        "source_sha256": "cae3234047d5ff81a9f48f5871906037ea707ade3dec10c1c18a15f1c28c09e4"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "af886067bd71f0612a552a5ad5b5de63e0d5510415e29441faff2d1ee7178262"
+        ],
+        "game_pk": 823750,
+        "normalized_relief_sha256": "133cdfa2cd4db7db5f1075ed128cec9c7e3c7685150e7746dbf7ad5e097d4e9c",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-08T12:50:40.526019+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823750/sources/game_823750_live_feed_af886067bd71f0612a552a5ad5b5de63e0d5510415e29441faff2d1ee7178262.json",
+        "source_sha256": "af886067bd71f0612a552a5ad5b5de63e0d5510415e29441faff2d1ee7178262"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "5546f048c300e77e713bacbe68a589e3bf34c10902060b4595762d9d0584ae83"
+        ],
+        "game_pk": 823836,
+        "normalized_relief_sha256": "c82898e9a9570b2aaf4bf3d309585cbda67c260b859da803886e82315896ba7d",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-08T12:50:39.655179+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_823836/sources/game_823836_live_feed_5546f048c300e77e713bacbe68a589e3bf34c10902060b4595762d9d0584ae83.json",
+        "source_sha256": "5546f048c300e77e713bacbe68a589e3bf34c10902060b4595762d9d0584ae83"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "0b038b142629a2c5307f706b65f33b2fcce00bd37e690f176f3fc176d715e222",
+          "7c9ed4c0a2a5b907ef8e60fb92ea5fb90e05c6426e2f556a8603ef40e0ae5989"
+        ],
+        "game_pk": 824081,
+        "normalized_relief_sha256": "43b90c80a1536ce726487e9a995f9dda8e0b62bc059d94c6885f3fbc0006c936",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-08T12:50:40.937479+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_824081/sources/game_824081_live_feed_0b038b142629a2c5307f706b65f33b2fcce00bd37e690f176f3fc176d715e222.json",
+        "source_sha256": "0b038b142629a2c5307f706b65f33b2fcce00bd37e690f176f3fc176d715e222"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "64ccc83ed595b3ffe72d18d8de724523215c1bc037eebc0a85e0c7bec9adc39f",
+          "9da2e956ee68dd48ebb9ab029143b6690015038321fbba7e57fbe1aec3f40708"
+        ],
+        "game_pk": 824566,
+        "normalized_relief_sha256": "5f93ef7c3294b83a212da28758b4d6fde4314e43316790e5d7bc58cdadd38ead",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-08T12:50:40.116407+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_824566/sources/game_824566_live_feed_9da2e956ee68dd48ebb9ab029143b6690015038321fbba7e57fbe1aec3f40708.json",
+        "source_sha256": "9da2e956ee68dd48ebb9ab029143b6690015038321fbba7e57fbe1aec3f40708"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "2869d0c2eb410ad43832ab45e12e321078fb3329f6fe7f9e0049384d4070d40e",
+          "7807500977eff22e98e3b0f6c3e78fc56068afc195a00893fc114c5c977d0310"
+        ],
+        "game_pk": 824727,
+        "normalized_relief_sha256": "7ee5f2241d6d1ea8070a8e917d0c224f1bd9c12434c449f0963d44fe2b0e7daa",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-08T12:50:39.237037+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_824727/sources/game_824727_live_feed_7807500977eff22e98e3b0f6c3e78fc56068afc195a00893fc114c5c977d0310.json",
+        "source_sha256": "7807500977eff22e98e3b0f6c3e78fc56068afc195a00893fc114c5c977d0310"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "e563c88fa0c80b9aafc193dc41018628c070891472f6a660dfa37ae326cc68e1"
+        ],
+        "game_pk": 825051,
+        "normalized_relief_sha256": "3bad252ec1528f43f3881ea71c1124459ef274a97dc3420bf37cfb8880fade44",
+        "official_date": "2026-08-07",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-08T12:50:42.202599+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-07/game_825051/sources/game_825051_live_feed_e563c88fa0c80b9aafc193dc41018628c070891472f6a660dfa37ae326cc68e1.json",
+        "source_sha256": "e563c88fa0c80b9aafc193dc41018628c070891472f6a660dfa37ae326cc68e1"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "c6b01024b246c08d5b5fdddf2b4fc7ea788ec1de5250f8c82f3386bb091eed1e"
+        ],
+        "game_pk": 822701,
+        "normalized_relief_sha256": "5374fb9db21c00ed39056847dc270687b2149f5e56df53659e2b25b3b24d2ad7",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-09T12:50:50.322545+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_822701/sources/game_822701_live_feed_c6b01024b246c08d5b5fdddf2b4fc7ea788ec1de5250f8c82f3386bb091eed1e.json",
+        "source_sha256": "c6b01024b246c08d5b5fdddf2b4fc7ea788ec1de5250f8c82f3386bb091eed1e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "4a56544590409fcbe6fcba59afb4acaf9eb8924311fa4371eaa07498e6863222"
+        ],
+        "game_pk": 822864,
+        "normalized_relief_sha256": "1734af58a21532dc962a6e8a1913262e757a42c8505441358876776d3afa3a16",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-09T12:50:52.928193+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_822864/sources/game_822864_live_feed_4a56544590409fcbe6fcba59afb4acaf9eb8924311fa4371eaa07498e6863222.json",
+        "source_sha256": "4a56544590409fcbe6fcba59afb4acaf9eb8924311fa4371eaa07498e6863222"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "8f1d05157ab7b5cb5cebfd87c32d8383eee80be98e8bc68688d58924f9309cdb"
+        ],
+        "game_pk": 823021,
+        "normalized_relief_sha256": "fdf1660ecf460638cebeb0182a9e4932aaf7eb5db8a9c12287079e8d7814f12b",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-09T12:50:52.470866+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823021/sources/game_823021_live_feed_8f1d05157ab7b5cb5cebfd87c32d8383eee80be98e8bc68688d58924f9309cdb.json",
+        "source_sha256": "8f1d05157ab7b5cb5cebfd87c32d8383eee80be98e8bc68688d58924f9309cdb"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "f43aa39121c09244597888a2c1d23034985b4c3316665f84ec36b717e9c04f91"
+        ],
+        "game_pk": 823102,
+        "normalized_relief_sha256": "dff400be527ad80e77eb36b0d99d2cb6169a77e590470dda8e7b59f64ac58f6b",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 10,
+        "source_acquired_at_utc": "2026-08-09T12:50:54.109112+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823102/sources/game_823102_live_feed_f43aa39121c09244597888a2c1d23034985b4c3316665f84ec36b717e9c04f91.json",
+        "source_sha256": "f43aa39121c09244597888a2c1d23034985b4c3316665f84ec36b717e9c04f91"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "198ac3fc804be59bebb611feb520dcaa2137ff94beca3ede860d0359d0700374",
+          "66532483160b8385223583d0eff9deb033339da3e6e0dc52692ed319a67376db"
+        ],
+        "game_pk": 823188,
+        "normalized_relief_sha256": "55e68bef64211b5c7f8735f3343dff8c80639e6f4ea7f38db6ab209079418fb6",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-09T12:50:52.058486+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823188/sources/game_823188_live_feed_66532483160b8385223583d0eff9deb033339da3e6e0dc52692ed319a67376db.json",
+        "source_sha256": "66532483160b8385223583d0eff9deb033339da3e6e0dc52692ed319a67376db"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "b36b721e61074f9cbb467d8e31e949d49d3a0068e3ba8ea514a891f986830897"
+        ],
+        "game_pk": 823267,
+        "normalized_relief_sha256": "9d78521e0d7a5f89af97fe1e9eddf2ade729dc997075bdd297f8910690040be1",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-09T12:50:51.704370+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823267/sources/game_823267_live_feed_b36b721e61074f9cbb467d8e31e949d49d3a0068e3ba8ea514a891f986830897.json",
+        "source_sha256": "b36b721e61074f9cbb467d8e31e949d49d3a0068e3ba8ea514a891f986830897"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "d723043300548fce993a7e0a7ef8cf8a7508d47d7e76620c33f8d4e5531bb0d1"
+        ],
+        "game_pk": 823348,
+        "normalized_relief_sha256": "9cff37c5e8521c062bb6d5bfee7909bf60b8132bbe78228688cea1914ccf56ab",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-09T12:50:49.876103+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823348/sources/game_823348_live_feed_d723043300548fce993a7e0a7ef8cf8a7508d47d7e76620c33f8d4e5531bb0d1.json",
+        "source_sha256": "d723043300548fce993a7e0a7ef8cf8a7508d47d7e76620c33f8d4e5531bb0d1"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "acca15be33f1be77416eea0af813964454d004ca90984b37a03b71fc434e254d"
+        ],
+        "game_pk": 823426,
+        "normalized_relief_sha256": "396a6157e3ba2fe4e526fe7ea60364862392620ed7698c39f97f18f2f9983584",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 11,
+        "source_acquired_at_utc": "2026-08-09T12:50:49.479518+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823426/sources/game_823426_live_feed_acca15be33f1be77416eea0af813964454d004ca90984b37a03b71fc434e254d.json",
+        "source_sha256": "acca15be33f1be77416eea0af813964454d004ca90984b37a03b71fc434e254d"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "36e60c229fc8690324cb297f5eb2c516c8b7e191b9404b1ef081b566b537fb59"
+        ],
+        "game_pk": 823514,
+        "normalized_relief_sha256": "b82bcf14eb1a25a4e74f9ffcc2f4757b7a0da72b4debfc564bc0d5bd5cc5bc06",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-09T12:50:48.250860+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823514/sources/game_823514_live_feed_36e60c229fc8690324cb297f5eb2c516c8b7e191b9404b1ef081b566b537fb59.json",
+        "source_sha256": "36e60c229fc8690324cb297f5eb2c516c8b7e191b9404b1ef081b566b537fb59"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "6ed0b68bac668eb6df9c62b66a8c3d8361a34a99c7aec222891a3d60d4f1f664",
+          "eb195b0f6f47b1b7cbc0afa8ce98f19690f015f8699ed15654639074cb2a2612"
+        ],
+        "game_pk": 823752,
+        "normalized_relief_sha256": "b683c30fa59980b369a6229c71eaf66e89d425c6c7923b9af5dc342e227065ae",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-09T12:50:51.242095+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823752/sources/game_823752_live_feed_6ed0b68bac668eb6df9c62b66a8c3d8361a34a99c7aec222891a3d60d4f1f664.json",
+        "source_sha256": "6ed0b68bac668eb6df9c62b66a8c3d8361a34a99c7aec222891a3d60d4f1f664"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "105559205f1434e760a543935e44bccc0db5a6ec5917d1f8d9019b4b563307a8"
+        ],
+        "game_pk": 823834,
+        "normalized_relief_sha256": "7c42c593d8e3c0c4aa0b06c6b915940423fc3531df2dae9efd2a170d2d75f8bb",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-09T12:50:49.061146+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_823834/sources/game_823834_live_feed_105559205f1434e760a543935e44bccc0db5a6ec5917d1f8d9019b4b563307a8.json",
+        "source_sha256": "105559205f1434e760a543935e44bccc0db5a6ec5917d1f8d9019b4b563307a8"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "f1b72e3ee62b6e791262b29f550aa9ae771355885e2ce4646798ad96f132f484"
+        ],
+        "game_pk": 824079,
+        "normalized_relief_sha256": "accf6b60f05a9e0bf62d6704823a95c2d1ea64608eb6da06cc2b3381a22dab80",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-09T12:50:50.674195+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_824079/sources/game_824079_live_feed_f1b72e3ee62b6e791262b29f550aa9ae771355885e2ce4646798ad96f132f484.json",
+        "source_sha256": "f1b72e3ee62b6e791262b29f550aa9ae771355885e2ce4646798ad96f132f484"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "420e52798eacfbd2ce92ea55c9448ff6f4c7d1b303c7d8f132048848b09e4c4d",
+          "f80117b341597fcbe7d2f999b35a5f1bace4a66f393e9c2c84ebebd08493ac27"
+        ],
+        "game_pk": 824565,
+        "normalized_relief_sha256": "747a6d228b67ff09de0683bc45b8c99057c5c75c788ad2c5e977c76c25019189",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-09T12:50:53.326617+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_824565/sources/game_824565_live_feed_f80117b341597fcbe7d2f999b35a5f1bace4a66f393e9c2c84ebebd08493ac27.json",
+        "source_sha256": "f80117b341597fcbe7d2f999b35a5f1bace4a66f393e9c2c84ebebd08493ac27"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "72f84f0f815faae737881f0dba150bfb86391d2e9199cf3303c5a9d56f9b2d42"
+        ],
+        "game_pk": 824726,
+        "normalized_relief_sha256": "edbe0c6c6225b311cdd18040ae057cd8ce64361f2c40645e4ae0d109d1eb53e0",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-09T12:50:48.658549+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_824726/sources/game_824726_live_feed_72f84f0f815faae737881f0dba150bfb86391d2e9199cf3303c5a9d56f9b2d42.json",
+        "source_sha256": "72f84f0f815faae737881f0dba150bfb86391d2e9199cf3303c5a9d56f9b2d42"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "3a95cd4f2fe8f90fb1868a4b13018832287c4d6a74757aec3cfee07d543fe7b6"
+        ],
+        "game_pk": 825049,
+        "normalized_relief_sha256": "f456533cdb2559c5efad0c34646eaf4639bb4edffa779192faec5387dd0d2272",
+        "official_date": "2026-08-08",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-09T12:50:53.743244+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-08/game_825049/sources/game_825049_live_feed_3a95cd4f2fe8f90fb1868a4b13018832287c4d6a74757aec3cfee07d543fe7b6.json",
+        "source_sha256": "3a95cd4f2fe8f90fb1868a4b13018832287c4d6a74757aec3cfee07d543fe7b6"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "d23f0bbac0779b81744f2ef9f47a516e0d6081977dcfc9df188c657bdfb5d4d1"
+        ],
+        "game_pk": 822700,
+        "normalized_relief_sha256": "d986a074720ce08e5f26058999352bff9837fe2329535d58c0f94ddd04aeef49",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-10T12:45:03.592649+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_822700/sources/game_822700_live_feed_d23f0bbac0779b81744f2ef9f47a516e0d6081977dcfc9df188c657bdfb5d4d1.json",
+        "source_sha256": "d23f0bbac0779b81744f2ef9f47a516e0d6081977dcfc9df188c657bdfb5d4d1"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "6d18f426d257c6eef8ed21c3ca026cfb777e0dfb71ca61df3f383c601ab74b04"
+        ],
+        "game_pk": 822862,
+        "normalized_relief_sha256": "74a2597b89a4e483f94185e3a4475296923541137c93deb9b29f85975ed8e651",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-10T12:45:07.247816+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_822862/sources/game_822862_live_feed_6d18f426d257c6eef8ed21c3ca026cfb777e0dfb71ca61df3f383c601ab74b04.json",
+        "source_sha256": "6d18f426d257c6eef8ed21c3ca026cfb777e0dfb71ca61df3f383c601ab74b04"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "3c08f1458d6fda1fb68863f197468af1bf61f7683142bf1bae8a91a3b10b29c0"
+        ],
+        "game_pk": 823020,
+        "normalized_relief_sha256": "e5a8b808466697196b9fe80539c519894ea01f09fd2a70e8a9a1b48387438b66",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-10T12:45:06.879039+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823020/sources/game_823020_live_feed_3c08f1458d6fda1fb68863f197468af1bf61f7683142bf1bae8a91a3b10b29c0.json",
+        "source_sha256": "3c08f1458d6fda1fb68863f197468af1bf61f7683142bf1bae8a91a3b10b29c0"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "b1fcc464dd8f45cf6ace7c4d6daabaddb081aea8368a7a5a43f1a441143a6ed4"
+        ],
+        "game_pk": 823104,
+        "normalized_relief_sha256": "b968945d629839fb268855238871bb8dee374e3262b2c0c48622b479a92e3b3b",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-10T12:45:08.366843+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823104/sources/game_823104_live_feed_b1fcc464dd8f45cf6ace7c4d6daabaddb081aea8368a7a5a43f1a441143a6ed4.json",
+        "source_sha256": "b1fcc464dd8f45cf6ace7c4d6daabaddb081aea8368a7a5a43f1a441143a6ed4"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "8d412542ba179631a36f5a0dce845111ddbfcf072dc942072ad54fc814daa804",
+          "99ddf48be43142ff1d14749be7f8b2718ee6c461f3895cdc1d5a2ba8a8a0e68a"
+        ],
+        "game_pk": 823190,
+        "normalized_relief_sha256": "0797bf124e235e1787d354772682f5489e3ee9aaaf3c7e90a18441eb6768f0eb",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-10T12:45:07.605934+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823190/sources/game_823190_live_feed_99ddf48be43142ff1d14749be7f8b2718ee6c461f3895cdc1d5a2ba8a8a0e68a.json",
+        "source_sha256": "99ddf48be43142ff1d14749be7f8b2718ee6c461f3895cdc1d5a2ba8a8a0e68a"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "e2b60251d2c8de34925528ab802bac680f6c8864df70ffa3d1d1b4ef29ac089e"
+        ],
+        "game_pk": 823268,
+        "normalized_relief_sha256": "54de718b075e58ed97d8fb5f3a1aba1bf1dc56d06465e59abc3021d7e6e6f7ba",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-10T12:45:08.720459+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823268/sources/game_823268_live_feed_e2b60251d2c8de34925528ab802bac680f6c8864df70ffa3d1d1b4ef29ac089e.json",
+        "source_sha256": "e2b60251d2c8de34925528ab802bac680f6c8864df70ffa3d1d1b4ef29ac089e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "ea9d9c22be05f502ad95ddf346e4b8ab0e887741332eb4620dd0d9f1da9a294a"
+        ],
+        "game_pk": 823345,
+        "normalized_relief_sha256": "871384c6d5acaaac371deb386ea5eeedcf76bdabfb78fc21848ee4303a2aed6a",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-10T12:45:04.292311+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823345/sources/game_823345_live_feed_ea9d9c22be05f502ad95ddf346e4b8ab0e887741332eb4620dd0d9f1da9a294a.json",
+        "source_sha256": "ea9d9c22be05f502ad95ddf346e4b8ab0e887741332eb4620dd0d9f1da9a294a"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "5c06479d569e89bca8a148b15545c4feec9b801ed178567150f3389a5bc86118"
+        ],
+        "game_pk": 823425,
+        "normalized_relief_sha256": "6ba6ea8fa2a70b30bb169d2fb888c708c3b90d35e40bc5ff62d823fa6f655051",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 11,
+        "source_acquired_at_utc": "2026-08-10T12:45:04.659013+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823425/sources/game_823425_live_feed_5c06479d569e89bca8a148b15545c4feec9b801ed178567150f3389a5bc86118.json",
+        "source_sha256": "5c06479d569e89bca8a148b15545c4feec9b801ed178567150f3389a5bc86118"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "253c854f4d8ae1824a87463c0e14751a4575da989ad095a0dfd06435a57ec362"
+        ],
+        "game_pk": 823513,
+        "normalized_relief_sha256": "6e673eb3fdffc4f6700225052d73c3fe3fab3e5d41289ec7b9e200fbea33311d",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-10T12:45:05.012699+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823513/sources/game_823513_live_feed_253c854f4d8ae1824a87463c0e14751a4575da989ad095a0dfd06435a57ec362.json",
+        "source_sha256": "253c854f4d8ae1824a87463c0e14751a4575da989ad095a0dfd06435a57ec362"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "e122c2bc8dc2f8658124dce76fd62642f849709c0a28f9854fa1b5deef7b8f5a"
+        ],
+        "game_pk": 823751,
+        "normalized_relief_sha256": "ec307669b894499fbeb9160d1ba87164b43144dcf91298c82238cb71fef04c7f",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-10T12:45:06.524003+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823751/sources/game_823751_live_feed_e122c2bc8dc2f8658124dce76fd62642f849709c0a28f9854fa1b5deef7b8f5a.json",
+        "source_sha256": "e122c2bc8dc2f8658124dce76fd62642f849709c0a28f9854fa1b5deef7b8f5a"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "8c88cf921da3479b61ac7497bec3da2a17d0a656eef63b8d3bc44168242895ec"
+        ],
+        "game_pk": 823835,
+        "normalized_relief_sha256": "af52b73ed88235be00f40616c754d8ff092d5c201b0ebabab6533e9a8f1c5beb",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-10T12:45:05.367450+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_823835/sources/game_823835_live_feed_8c88cf921da3479b61ac7497bec3da2a17d0a656eef63b8d3bc44168242895ec.json",
+        "source_sha256": "8c88cf921da3479b61ac7497bec3da2a17d0a656eef63b8d3bc44168242895ec"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "9d166e5c39c45eaad89128cf69353c5dcef5329b857dffb54808f783b79ff2ea",
+          "aa59f458ce57290a2ec96361254fb371abeaf54507f1d3868a39dd4cc5b2f921"
+        ],
+        "game_pk": 824078,
+        "normalized_relief_sha256": "8e58fb17b088ea065f8b384d4a0012365113750d23e3e799eb260d65c9ebd9b7",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-10T12:45:05.752499+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_824078/sources/game_824078_live_feed_9d166e5c39c45eaad89128cf69353c5dcef5329b857dffb54808f783b79ff2ea.json",
+        "source_sha256": "9d166e5c39c45eaad89128cf69353c5dcef5329b857dffb54808f783b79ff2ea"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "c79128a999e5c7100e1e864eb39b06642c24f522a0991c02bf3cf79c0a3b2e2a",
+          "ce6ab899dbdac1014a33415be02c5ac47cc768d2eb5ddf7a07c89925d291479c"
+        ],
+        "game_pk": 824564,
+        "normalized_relief_sha256": "9db2939bf5378263c968db1dd7640c56ec5acd7d30172f2eaad5a8ff37315a66",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 12,
+        "source_acquired_at_utc": "2026-08-10T12:45:06.149481+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_824564/sources/game_824564_live_feed_ce6ab899dbdac1014a33415be02c5ac47cc768d2eb5ddf7a07c89925d291479c.json",
+        "source_sha256": "ce6ab899dbdac1014a33415be02c5ac47cc768d2eb5ddf7a07c89925d291479c"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "7315db6928a32927a5710c527ef5b1087f4d077ea2a60d2598a1c94db8d5ef94"
+        ],
+        "game_pk": 824724,
+        "normalized_relief_sha256": "4b9aba745a043930ccdbccba5b54235c9628f4654f0e0f756eeed8fb9d3a1dd9",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-10T12:45:03.940883+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_824724/sources/game_824724_live_feed_7315db6928a32927a5710c527ef5b1087f4d077ea2a60d2598a1c94db8d5ef94.json",
+        "source_sha256": "7315db6928a32927a5710c527ef5b1087f4d077ea2a60d2598a1c94db8d5ef94"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "dde3c9f7e72e588b2c42ce96b0cc8a47cfaa1c11040083a3de79e11f0c55ab62"
+        ],
+        "game_pk": 825050,
+        "normalized_relief_sha256": "4150ba60c18108fdd381aa5424b8d5770a2326e829e93d2b973756259aa339c3",
+        "official_date": "2026-08-09",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-10T12:45:08.002833+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-09/game_825050/sources/game_825050_live_feed_dde3c9f7e72e588b2c42ce96b0cc8a47cfaa1c11040083a3de79e11f0c55ab62.json",
+        "source_sha256": "dde3c9f7e72e588b2c42ce96b0cc8a47cfaa1c11040083a3de79e11f0c55ab62"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "53bc78220e415988bf9e51b3bb1f0e0408aa47c675cc9789a24941ac12f9a1a0",
+          "99b0dbb4d98b1c6ed3de0344e9b6ff0002c70f85f85d6afb3aa49073a7221c1f",
+          "c61d6efdafc91f85cb3c2b19b0b8f939b2250fe3092798c48aaef6ae8f482629"
+        ],
+        "game_pk": 822780,
+        "normalized_relief_sha256": "00aac85843ac7d11fcbe8da4b7406095414a084a906dfdbf0c2c4892cb4eb5bf",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-11T12:49:38.266430+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_822780/sources/game_822780_live_feed_c61d6efdafc91f85cb3c2b19b0b8f939b2250fe3092798c48aaef6ae8f482629.json",
+        "source_sha256": "c61d6efdafc91f85cb3c2b19b0b8f939b2250fe3092798c48aaef6ae8f482629"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "03ca631f7b57729d8d2cd9b36c47afa6c4cc50a972442946c22f4146480354d0"
+        ],
+        "game_pk": 823018,
+        "normalized_relief_sha256": "28aa0bce76e0758460d4498fc071cc825c770038d9a14f9d3bd2c7f8c837cbb3",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-11T12:49:39.526217+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_823018/sources/game_823018_live_feed_03ca631f7b57729d8d2cd9b36c47afa6c4cc50a972442946c22f4146480354d0.json",
+        "source_sha256": "03ca631f7b57729d8d2cd9b36c47afa6c4cc50a972442946c22f4146480354d0"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "ad2e2d06fcca1474351f52c7739d1246c90b2bbc3be77a941f198448ba2b0853",
+          "ea2f9a3fe1fff9e167b5ef60639eeef78806f0644617f367c4f362518ed16b0b"
+        ],
+        "game_pk": 823189,
+        "normalized_relief_sha256": "c02d5ad2c60ee1a56ab35e7446dce614a5da67d91686679274979c9574064f2c",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-11T12:49:41.728583+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_823189/sources/game_823189_live_feed_ea2f9a3fe1fff9e167b5ef60639eeef78806f0644617f367c4f362518ed16b0b.json",
+        "source_sha256": "ea2f9a3fe1fff9e167b5ef60639eeef78806f0644617f367c4f362518ed16b0b"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "13843776768c394ded881389d3d171591a1d201e9e26aa3849e46e3a7a7cafc7",
+          "1c246db1dae278ffb80e742d136736d5a5987f40e08d97ec4bd1dbdbc6adfb5b",
+          "38e7844860b6f3f3268428d544ff92e8ba3446b0637eee71c13401b5a34c3cf4"
+        ],
+        "game_pk": 823265,
+        "normalized_relief_sha256": "84b4d74e8d9eb7b50661ba80e2ff8fb7acda90102024bcfd6da2456293910d1a",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-11T12:49:41.249917+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_823265/sources/game_823265_live_feed_38e7844860b6f3f3268428d544ff92e8ba3446b0637eee71c13401b5a34c3cf4.json",
+        "source_sha256": "38e7844860b6f3f3268428d544ff92e8ba3446b0637eee71c13401b5a34c3cf4"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "2fcbedc8e3f866f49486b0b9f220578ed0ca69048d5bd580075ae2a8336cbfc6",
+          "4b049fd0a9a55566c07d25ea2ad752222e00d292e084d75aa22c48b62b45fb73"
+        ],
+        "game_pk": 823675,
+        "normalized_relief_sha256": "f74f9498bb69eac15a35cf0209519e0e4411629451e55f0ee5cfddfe65e02082",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-11T12:49:39.081601+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_823675/sources/game_823675_live_feed_4b049fd0a9a55566c07d25ea2ad752222e00d292e084d75aa22c48b62b45fb73.json",
+        "source_sha256": "4b049fd0a9a55566c07d25ea2ad752222e00d292e084d75aa22c48b62b45fb73"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "85da4795fdd6e21e8f5471a43ca10ab4918f80546f0dafd233732d68a8376107"
+        ],
+        "game_pk": 823918,
+        "normalized_relief_sha256": "8d5d3733dcf4a5cf2c1de71a70af718a4e0765a72ca6ae3bfce334be10f7084f",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-11T12:49:42.157199+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_823918/sources/game_823918_live_feed_85da4795fdd6e21e8f5471a43ca10ab4918f80546f0dafd233732d68a8376107.json",
+        "source_sha256": "85da4795fdd6e21e8f5471a43ca10ab4918f80546f0dafd233732d68a8376107"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "1037142dcf54d74828c730e28b5aa1ea79841518c3b2587b6b072104b1234ddb",
+          "9418611859183af97d528cf443a2214cdc76941b4c60588fffc65d0588d65a6c"
+        ],
+        "game_pk": 823998,
+        "normalized_relief_sha256": "b6283adeb3e2ca33e8b4e3e9bab785e33d88f59686c27436ef0d16e909b9adc8",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 11,
+        "source_acquired_at_utc": "2026-08-11T12:49:39.963255+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_823998/sources/game_823998_live_feed_1037142dcf54d74828c730e28b5aa1ea79841518c3b2587b6b072104b1234ddb.json",
+        "source_sha256": "1037142dcf54d74828c730e28b5aa1ea79841518c3b2587b6b072104b1234ddb"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "26274c73bece0eba48bdfbb09ae0b975873cc073105e930e59760e933ce73c0e",
+          "806acceb467fc394ac0ac9e47a7d68ab0582d9c2bc8793320b3d6996444fbdd4",
+          "917e160462720d21c6a5d4c053f1fb3efaae311f77aeb917899906cd2f67f65a"
+        ],
+        "game_pk": 824887,
+        "normalized_relief_sha256": "f27e4d3b29c9b2eae8984de5f28f7b4ae964f1dc7c5316715553605d75676a3d",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-11T12:49:38.671676+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_824887/sources/game_824887_live_feed_806acceb467fc394ac0ac9e47a7d68ab0582d9c2bc8793320b3d6996444fbdd4.json",
+        "source_sha256": "806acceb467fc394ac0ac9e47a7d68ab0582d9c2bc8793320b3d6996444fbdd4"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "c393ffd06f32229d37a5dc4252696beb69b8307bb28ef72ae3207f0efab30291"
+        ],
+        "game_pk": 824969,
+        "normalized_relief_sha256": "85d792d8f0fc1a6f23ec40fea37fe7f6afa3fe21e403585e5a229de97bb48eb2",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-11T12:49:40.842903+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_824969/sources/game_824969_live_feed_c393ffd06f32229d37a5dc4252696beb69b8307bb28ef72ae3207f0efab30291.json",
+        "source_sha256": "c393ffd06f32229d37a5dc4252696beb69b8307bb28ef72ae3207f0efab30291"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "dea5d9f41a42204b4a9ac5c477a4278d2bb05d82d96ddffc3bacbd1bf0a004f4",
+          "f13eafb355b117de95144e52851e65218d1a759c3f9a9756a2972a9534f6f102"
+        ],
+        "game_pk": 825048,
+        "normalized_relief_sha256": "7d29c3b2e57e986ab78776a7ea2164d7588b39e661b4c5505a3f9b0c1889b339",
+        "official_date": "2026-08-10",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-11T12:49:40.381378+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-10/game_825048/sources/game_825048_live_feed_f13eafb355b117de95144e52851e65218d1a759c3f9a9756a2972a9534f6f102.json",
+        "source_sha256": "f13eafb355b117de95144e52851e65218d1a759c3f9a9756a2972a9534f6f102"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "5572c18c6ec75a9b4219f78bf96b80dd9033930d7e2e38683e73e210f5abaa99",
+          "c02cc1c5472d14afcd6ad4da75b581883ee007514723848ebf1a1c175f7cdb6d"
+        ],
+        "game_pk": 822697,
+        "normalized_relief_sha256": "c778b9a501bd846d6236d7af52d7f0254afd53aff036f01dd4e9727797db35b5",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-12T12:50:35.717142+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_822697/sources/game_822697_live_feed_c02cc1c5472d14afcd6ad4da75b581883ee007514723848ebf1a1c175f7cdb6d.json",
+        "source_sha256": "c02cc1c5472d14afcd6ad4da75b581883ee007514723848ebf1a1c175f7cdb6d"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "6b21f8274fd1d0d137f3eecefe6f240b9215dcc0a5449eb1fc840de9c4953293",
+          "cd944155aef6c7fd552713ea603ad2b7a73b5644100a60f55ef48ef469a8a5a4"
+        ],
+        "game_pk": 822778,
+        "normalized_relief_sha256": "6c4bd59021ae6730ff09621162d4a5391472a3a190f50ae945bbbb7304686775",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-12T12:50:36.492294+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_822778/sources/game_822778_live_feed_cd944155aef6c7fd552713ea603ad2b7a73b5644100a60f55ef48ef469a8a5a4.json",
+        "source_sha256": "cd944155aef6c7fd552713ea603ad2b7a73b5644100a60f55ef48ef469a8a5a4"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "2ce231d10a517e2cef6feb600306ebc83c995841fc11131682f18c0fad2567a3",
+          "2db02fc18ee0f9df5182aa8ebbc3c242dee9039e779abe782110d57805e858e9"
+        ],
+        "game_pk": 823019,
+        "normalized_relief_sha256": "8f2685bb2047faf2df64759512c19bfe4dd86875004945e7e81cb63e6d7e3b0e",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-12T12:50:38.034815+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823019/sources/game_823019_live_feed_2db02fc18ee0f9df5182aa8ebbc3c242dee9039e779abe782110d57805e858e9.json",
+        "source_sha256": "2db02fc18ee0f9df5182aa8ebbc3c242dee9039e779abe782110d57805e858e9"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "051afc404e28012e90b2cb5ab56ca002b7a14f934d414c1f9148d410158b8965",
+          "5e3f1a86dd1e1f106fd55939b172a507c5342a617a3ef8593bdf20740b7399dd"
+        ],
+        "game_pk": 823186,
+        "normalized_relief_sha256": "010eeca3d78f91f6fd4c75cf205b323bfb55b5fa039f3f578f7c0ce0a999b10d",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-12T12:50:39.834310+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823186/sources/game_823186_live_feed_051afc404e28012e90b2cb5ab56ca002b7a14f934d414c1f9148d410158b8965.json",
+        "source_sha256": "051afc404e28012e90b2cb5ab56ca002b7a14f934d414c1f9148d410158b8965"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "088edd29ca475b91a3921f98429409bb9162ea208f6e73271e87e6c9538b87ad",
+          "337bb3b677146ac87680e6919a7922a3508de235833a4ad874782a2ad7f275c0",
+          "508fd884adeda9239cd886a349000f7ed0dc87dd99ded0ce4e2e3966bf44b136"
+        ],
+        "game_pk": 823264,
+        "normalized_relief_sha256": "9cf30e7790b4eb38a83389135581c11bd41d926024494336e24db9f2f0b9f778",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-12T12:50:39.464822+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823264/sources/game_823264_live_feed_337bb3b677146ac87680e6919a7922a3508de235833a4ad874782a2ad7f275c0.json",
+        "source_sha256": "337bb3b677146ac87680e6919a7922a3508de235833a4ad874782a2ad7f275c0"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "1f8bad84ded3a742558aedf74441fc1a58f8a2067a4f37b753b81be6b50923cf",
+          "ad7d51da933106d1811fd3ba86a41ea3d45b7e0b88cc40105facdd46e1ad6f5e"
+        ],
+        "game_pk": 823512,
+        "normalized_relief_sha256": "a027756769c01de131eaef82f22a96a4cfc4dc8a8fc23d30d06d48a1daa04327",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-12T12:50:36.069699+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823512/sources/game_823512_live_feed_1f8bad84ded3a742558aedf74441fc1a58f8a2067a4f37b753b81be6b50923cf.json",
+        "source_sha256": "1f8bad84ded3a742558aedf74441fc1a58f8a2067a4f37b753b81be6b50923cf"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "540bb68f5bcdc03c2e158890575b6fee651effc741610148ba6176472ce507b0",
+          "9d6a19774ce02a66c556e614d6671e5be77c6cab7bd25f9877d2b643a32f5928"
+        ],
+        "game_pk": 823673,
+        "normalized_relief_sha256": "484aa97ae1d8598d62bc8faa549fd0760e7243206353d6e38bead163e3560d92",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-12T12:50:37.268794+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823673/sources/game_823673_live_feed_9d6a19774ce02a66c556e614d6671e5be77c6cab7bd25f9877d2b643a32f5928.json",
+        "source_sha256": "9d6a19774ce02a66c556e614d6671e5be77c6cab7bd25f9877d2b643a32f5928"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "6e9becec1e931c19f6fd0912c94e81cc742bdd10cf4e37dd32246f05ccd8a02a"
+        ],
+        "game_pk": 823832,
+        "normalized_relief_sha256": "bd274f46863f656d3e612f188b14acaac7917c9ce4a300ee0d12c9de68cf1d3f",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-12T12:50:35.359405+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823832/sources/game_823832_live_feed_6e9becec1e931c19f6fd0912c94e81cc742bdd10cf4e37dd32246f05ccd8a02a.json",
+        "source_sha256": "6e9becec1e931c19f6fd0912c94e81cc742bdd10cf4e37dd32246f05ccd8a02a"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "4513e6e14e178d2a62cc7e6eed0ef21b4792a961026a9623101cab65dad1fc73"
+        ],
+        "game_pk": 823917,
+        "normalized_relief_sha256": "ed0701f717fe06ac735046529aa15318d29bf72533db8807c8b1ef16ccb7bd8f",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-12T12:50:40.188768+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823917/sources/game_823917_live_feed_4513e6e14e178d2a62cc7e6eed0ef21b4792a961026a9623101cab65dad1fc73.json",
+        "source_sha256": "4513e6e14e178d2a62cc7e6eed0ef21b4792a961026a9623101cab65dad1fc73"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "6982b6116b1d956d22109bd8973ba102f300bbc1c7494c1b587f600786ebcbd7"
+        ],
+        "game_pk": 823997,
+        "normalized_relief_sha256": "a0379a25c257550b2d3299ea190d3f98da811a1c7032f7c7fdde9fb186a60337",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-12T12:50:38.401956+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_823997/sources/game_823997_live_feed_6982b6116b1d956d22109bd8973ba102f300bbc1c7494c1b587f600786ebcbd7.json",
+        "source_sha256": "6982b6116b1d956d22109bd8973ba102f300bbc1c7494c1b587f600786ebcbd7"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "19ac4e293e238beee215723e0b82bccaa527da297c7f1c1f28f1de26fe659896",
+          "478e1dbcdf05be46f2cb7a0fbeb751df8aea2a53697db18a0cd2df7cde79e9a1"
+        ],
+        "game_pk": 824240,
+        "normalized_relief_sha256": "e2820fbfd8fe5bbb53552bea09fc1f03c46dc132099f6e2a7689eda0169490bf",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-12T12:50:35.009893+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_824240/sources/game_824240_live_feed_19ac4e293e238beee215723e0b82bccaa527da297c7f1c1f28f1de26fe659896.json",
+        "source_sha256": "19ac4e293e238beee215723e0b82bccaa527da297c7f1c1f28f1de26fe659896"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "08b36c513bdd9d7487e82189a69a2492e04f7ed1a880cfdc2ccef3f9db32961b",
+          "5b4db3d55ff141108538750daf389d83a811880f58776830624adaec74704629"
+        ],
+        "game_pk": 824563,
+        "normalized_relief_sha256": "7b89487e3116dac8792793cbe7d01495ae366b53a488f8702397a91865d5f0a4",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-12T12:50:37.627856+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_824563/sources/game_824563_live_feed_5b4db3d55ff141108538750daf389d83a811880f58776830624adaec74704629.json",
+        "source_sha256": "5b4db3d55ff141108538750daf389d83a811880f58776830624adaec74704629"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "0120ad8bf7f2fd8b7d7e5099331fb56e7b94b028b3bb2c32dacd8e445214aaed"
+        ],
+        "game_pk": 824886,
+        "normalized_relief_sha256": "a954add3d996eae7cf2e2e4333fe540c2c190bf4a9612cd46cb04abf5ee4849f",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-12T12:50:36.913814+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_824886/sources/game_824886_live_feed_0120ad8bf7f2fd8b7d7e5099331fb56e7b94b028b3bb2c32dacd8e445214aaed.json",
+        "source_sha256": "0120ad8bf7f2fd8b7d7e5099331fb56e7b94b028b3bb2c32dacd8e445214aaed"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "0505dcdd4811bf37012cc72f64b207b83422e6b396e77bbca0465e1ab3694b2d",
+          "5ba8d07b09ef8501dba9373c83effe1038d8636c3afaef74691cb8acb0f52b54"
+        ],
+        "game_pk": 824970,
+        "normalized_relief_sha256": "a5e10f0c7d3e7cf5c89ccd897987c6be72bd7a117e39c11530abfd1640f5e9b8",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-12T12:50:39.108364+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_824970/sources/game_824970_live_feed_5ba8d07b09ef8501dba9373c83effe1038d8636c3afaef74691cb8acb0f52b54.json",
+        "source_sha256": "5ba8d07b09ef8501dba9373c83effe1038d8636c3afaef74691cb8acb0f52b54"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "65af9243edeb0312a735eb7224f2434f57096977d8b1f7d9d2ce8165c6f4281c",
+          "c71e81d41e272666b9c29ff7706aafce0c0b73f268e72f152039840a50126dc0"
+        ],
+        "game_pk": 825046,
+        "normalized_relief_sha256": "96357d2b530e7d513583a8a3e48c0c96faf7a4d0ffd2575f938387c6a3acbec3",
+        "official_date": "2026-08-11",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-12T12:50:38.767896+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-11/game_825046/sources/game_825046_live_feed_65af9243edeb0312a735eb7224f2434f57096977d8b1f7d9d2ce8165c6f4281c.json",
+        "source_sha256": "65af9243edeb0312a735eb7224f2434f57096977d8b1f7d9d2ce8165c6f4281c"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "1038992cae900308084d86150fdbfedb27875e8e50fc6e7d4dd6eebc870c4581",
+          "eb265f6b042732b28457dbcbc4c8bcc388c2950ba9742d26514227a59a59d3d7"
+        ],
+        "game_pk": 822698,
+        "normalized_relief_sha256": "98ee7aaedb755131211257c64154dab2e28fc5c9e8b5cc89fbd356aa2ba6938a",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-13T12:44:38.074140+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_822698/sources/game_822698_live_feed_eb265f6b042732b28457dbcbc4c8bcc388c2950ba9742d26514227a59a59d3d7.json",
+        "source_sha256": "eb265f6b042732b28457dbcbc4c8bcc388c2950ba9742d26514227a59a59d3d7"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "01d87f26872732d45307e35d3fa781fb8964145abc84165e49fcb8f1cdcf480a"
+        ],
+        "game_pk": 822779,
+        "normalized_relief_sha256": "74360f0f88d22b3da80fe28443f9abde3d951755847578565b1fde66f434ebd7",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-13T12:44:38.948138+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_822779/sources/game_822779_live_feed_01d87f26872732d45307e35d3fa781fb8964145abc84165e49fcb8f1cdcf480a.json",
+        "source_sha256": "01d87f26872732d45307e35d3fa781fb8964145abc84165e49fcb8f1cdcf480a"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "9877424bc85075c74fb6e6df1982f493910bb7276fbc686e0997b26b763fa516",
+          "f8e222186449c1e338b396633cc6960227dc19336d72ce851d3a3683944d762e"
+        ],
+        "game_pk": 823017,
+        "normalized_relief_sha256": "856d025485a5bba9f25660d72e93c55de636d9152863393862576909d9bd6e8a",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-13T12:44:35.217337+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823017/sources/game_823017_live_feed_f8e222186449c1e338b396633cc6960227dc19336d72ce851d3a3683944d762e.json",
+        "source_sha256": "f8e222186449c1e338b396633cc6960227dc19336d72ce851d3a3683944d762e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "c142ee847c03ad169438603a33cb50d39eda0c3012f453459f169e22df427d47"
+        ],
+        "game_pk": 823187,
+        "normalized_relief_sha256": "bda1540fcc32577c148a56f6000cde5bae518338845f2e22aea10490607c8b6d",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-13T12:44:36.482136+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823187/sources/game_823187_live_feed_c142ee847c03ad169438603a33cb50d39eda0c3012f453459f169e22df427d47.json",
+        "source_sha256": "c142ee847c03ad169438603a33cb50d39eda0c3012f453459f169e22df427d47"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "152df9d6ef2602426691d1464a8e53de7dfd3cd10d06b26e9f5fb93c803a536f",
+          "2e49b5f41aad42341fc05eb433b3f2e94f4a45e1282dda3a7ae2310d13506f76"
+        ],
+        "game_pk": 823263,
+        "normalized_relief_sha256": "b66d395a77924a7ce2ad8bf21e837601edf7b63892dcdf97e203ba093c002c74",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-13T12:44:36.890692+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823263/sources/game_823263_live_feed_2e49b5f41aad42341fc05eb433b3f2e94f4a45e1282dda3a7ae2310d13506f76.json",
+        "source_sha256": "2e49b5f41aad42341fc05eb433b3f2e94f4a45e1282dda3a7ae2310d13506f76"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "23f3dee801e34e1c781254f8d09cefd48e0352d91083a306aa6a1b31de9c8e31"
+        ],
+        "game_pk": 823511,
+        "normalized_relief_sha256": "596697ed8b3982ef81444fb079081cb9553fcd8945da0f09e2232c09b9720aae",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-13T12:44:38.500359+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823511/sources/game_823511_live_feed_23f3dee801e34e1c781254f8d09cefd48e0352d91083a306aa6a1b31de9c8e31.json",
+        "source_sha256": "23f3dee801e34e1c781254f8d09cefd48e0352d91083a306aa6a1b31de9c8e31"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "45ac88380b8f138ff7755ae95b4465e1986b4ee027913457005d44af22cc5ab5",
+          "9324c62ef009385d06fbcc41e5388c15e8b256c91815f6042776ad85792ff851"
+        ],
+        "game_pk": 823672,
+        "normalized_relief_sha256": "38e3e4187a8f053227e97d6943d765a65e326a8113bae238087b8139906bc283",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-13T12:44:34.794122+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823672/sources/game_823672_live_feed_45ac88380b8f138ff7755ae95b4465e1986b4ee027913457005d44af22cc5ab5.json",
+        "source_sha256": "45ac88380b8f138ff7755ae95b4465e1986b4ee027913457005d44af22cc5ab5"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "2d7c22b1c4d27895d414156320c906cab59eeb4974180f6a8567ca1b5a2ddd97"
+        ],
+        "game_pk": 823833,
+        "normalized_relief_sha256": "ebf2a5a3fc24b3f1dcdeeb6c2ade6819d4c9d56120956008294c6eb42e717296",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-13T12:44:37.709246+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823833/sources/game_823833_live_feed_2d7c22b1c4d27895d414156320c906cab59eeb4974180f6a8567ca1b5a2ddd97.json",
+        "source_sha256": "2d7c22b1c4d27895d414156320c906cab59eeb4974180f6a8567ca1b5a2ddd97"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "a9abc3b94108fe53976a2ffbc32a3f09039bfa33b2dee0e68ed502fa6d61efcd"
+        ],
+        "game_pk": 823916,
+        "normalized_relief_sha256": "ca2a54c7728f495ca00c6e15550664d5c6dcb40fab818405af0c3d1499e5c812",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-13T12:44:40.130513+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823916/sources/game_823916_live_feed_a9abc3b94108fe53976a2ffbc32a3f09039bfa33b2dee0e68ed502fa6d61efcd.json",
+        "source_sha256": "a9abc3b94108fe53976a2ffbc32a3f09039bfa33b2dee0e68ed502fa6d61efcd"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "fbea0ddf404dd0e17280b445c89fbd1860183d7cb9bae17b2da4b2a984723deb"
+        ],
+        "game_pk": 823994,
+        "normalized_relief_sha256": "da20ee43ac91ce402250f4d0c07e94f4ffbd5dd83dd76805673a7c6f4ac3f824",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-13T12:44:40.536297+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_823994/sources/game_823994_live_feed_fbea0ddf404dd0e17280b445c89fbd1860183d7cb9bae17b2da4b2a984723deb.json",
+        "source_sha256": "fbea0ddf404dd0e17280b445c89fbd1860183d7cb9bae17b2da4b2a984723deb"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "49fd23253a30c3e78b62912a2d154ec952073ea06aebf0379925f889a510be52",
+          "cd3a4aaddb04af888b0736eab5259932da016b33e4385747668d4c02f7e55072"
+        ],
+        "game_pk": 824241,
+        "normalized_relief_sha256": "40ecbb6c91a57f6634d2c7638c86cf0b55ded7b0dd4e5407075ab860a398b69f",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-13T12:44:37.297397+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_824241/sources/game_824241_live_feed_49fd23253a30c3e78b62912a2d154ec952073ea06aebf0379925f889a510be52.json",
+        "source_sha256": "49fd23253a30c3e78b62912a2d154ec952073ea06aebf0379925f889a510be52"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "41eb5ddc3b73fba6a32957481ae6a9f3adb757d4398d67570e402cc974880169",
+          "5018a99d2e1a19b3fdfd5bf56475ef96e6214ff41eaf00505847fe58c7824cf9"
+        ],
+        "game_pk": 824562,
+        "normalized_relief_sha256": "f59f51ae742aee58e4189d962bfb0be33f5c34aade08c0971f51c85cdc1147c3",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-13T12:44:39.750797+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_824562/sources/game_824562_live_feed_41eb5ddc3b73fba6a32957481ae6a9f3adb757d4398d67570e402cc974880169.json",
+        "source_sha256": "41eb5ddc3b73fba6a32957481ae6a9f3adb757d4398d67570e402cc974880169"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "598ce3f91c915f78fb650d99b6ef8022eaa2c2d5b5f02ed0a2bfe8b6f8f8dcbc"
+        ],
+        "game_pk": 824883,
+        "normalized_relief_sha256": "5df0b79286ed2948006e4a7ec9d5d7360a2a769b994830511da650c3ef326542",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-13T12:44:39.348233+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_824883/sources/game_824883_live_feed_598ce3f91c915f78fb650d99b6ef8022eaa2c2d5b5f02ed0a2bfe8b6f8f8dcbc.json",
+        "source_sha256": "598ce3f91c915f78fb650d99b6ef8022eaa2c2d5b5f02ed0a2bfe8b6f8f8dcbc"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "c35c5e48ebab613febbe398e70fecd922e56ed336665c59e62933850b253e0f5"
+        ],
+        "game_pk": 824967,
+        "normalized_relief_sha256": "b467ca22959182be9d04b7b143cc1d78ccab68ddbd9a2bf9558b36df67a0f13b",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-13T12:44:35.645000+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_824967/sources/game_824967_live_feed_c35c5e48ebab613febbe398e70fecd922e56ed336665c59e62933850b253e0f5.json",
+        "source_sha256": "c35c5e48ebab613febbe398e70fecd922e56ed336665c59e62933850b253e0f5"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "438648a9420d1c8207d81c1161d85ad39a405918631e5c2cf441d4c5ccd189ad",
+          "a9bb47f42e90ca32f27e6383316b8510b107a437567ca977e6bb99902a4f8279",
+          "b2347f307c3408ab835f5d22f5905bee2b77ca5ec404380eba137a3e0f6edafc"
+        ],
+        "game_pk": 825047,
+        "normalized_relief_sha256": "60d5d6103b465a4591bc990c84838ef65959096f4d5b61f1f4d272d3ed112802",
+        "official_date": "2026-08-12",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-13T12:44:36.048179+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-12/game_825047/sources/game_825047_live_feed_a9bb47f42e90ca32f27e6383316b8510b107a437567ca977e6bb99902a4f8279.json",
+        "source_sha256": "a9bb47f42e90ca32f27e6383316b8510b107a437567ca977e6bb99902a4f8279"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "cca82bcdb2d5a6d41365439f82761d06b8c765d4a7d554f7156598d4713f3ded",
+          "e48b0d904a5f4b4581e2eb167ae1948968e1c5f7e51453880adb8c8b54b37e5c"
+        ],
+        "game_pk": 822696,
+        "normalized_relief_sha256": "7c3a575870416763304209ef044dc12d8d0528b6731eb433c5d903fed239bb84",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 2,
+        "source_acquired_at_utc": "2026-08-14T12:48:50.666289+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_822696/sources/game_822696_live_feed_e48b0d904a5f4b4581e2eb167ae1948968e1c5f7e51453880adb8c8b54b37e5c.json",
+        "source_sha256": "e48b0d904a5f4b4581e2eb167ae1948968e1c5f7e51453880adb8c8b54b37e5c"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "93d0eed3a67fa81e0a72ceb392afd282e9fe924ef8773f002465d0af0eeae567"
+        ],
+        "game_pk": 822776,
+        "normalized_relief_sha256": "eaa2c8ca0d573f2e38a5babf8b3c5d68044f1ee4a129e4ef54f31df4c90b5526",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-14T12:48:50.031792+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_822776/sources/game_822776_live_feed_93d0eed3a67fa81e0a72ceb392afd282e9fe924ef8773f002465d0af0eeae567.json",
+        "source_sha256": "93d0eed3a67fa81e0a72ceb392afd282e9fe924ef8773f002465d0af0eeae567"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "52b6cb4a413e79db9f199cda3d65e8812018698a37643a59407e716a356f81db"
+        ],
+        "game_pk": 823508,
+        "normalized_relief_sha256": "3ec59fcc01eba386547b732856f4e1fcca5a4cc35d631c9a62fb9ce5554e8081",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-14T12:48:49.541795+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_823508/sources/game_823508_live_feed_52b6cb4a413e79db9f199cda3d65e8812018698a37643a59407e716a356f81db.json",
+        "source_sha256": "52b6cb4a413e79db9f199cda3d65e8812018698a37643a59407e716a356f81db"
+      },
+      {
+        "equivalent_source_count": 3,
+        "equivalent_source_hashes": [
+          "0c2aa23f2343223fba829ae741c290607c3ca3e6aadb21489c8a87115453a9e3",
+          "38d88144d7829b896e9d5960bff734d4a20f1233aac4939a8467e289f45811b3",
+          "f3c552a5240e3aca91655060fdb4615030cf239a703d1aee4577985701d1a8db"
+        ],
+        "game_pk": 823669,
+        "normalized_relief_sha256": "f5965c0dbf5d88765cc6211f3f2e3c3bdaee9d11493b97d06894c82802373eb8",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-14T12:48:51.202633+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_823669/sources/game_823669_live_feed_f3c552a5240e3aca91655060fdb4615030cf239a703d1aee4577985701d1a8db.json",
+        "source_sha256": "f3c552a5240e3aca91655060fdb4615030cf239a703d1aee4577985701d1a8db"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "602e7687f8c36affcc4385ec6cb326f0f97705b058e8b0311c6e04988b3b61c2",
+          "8d21b0549712fc5af5f2d6230ece1e3b6d39facc91cc6314c8f6b7c57e180008"
+        ],
+        "game_pk": 823829,
+        "normalized_relief_sha256": "303e49f669c4cbd10b5c1e5d848fa78c0611f826b5e1ec0c2984ca3026627e1b",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-14T12:48:48.956540+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_823829/sources/game_823829_live_feed_8d21b0549712fc5af5f2d6230ece1e3b6d39facc91cc6314c8f6b7c57e180008.json",
+        "source_sha256": "8d21b0549712fc5af5f2d6230ece1e3b6d39facc91cc6314c8f6b7c57e180008"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "18a9a7d85f65c2b60dca497d857c7a739af6ff576be5f00587de09a1fc7e4b00",
+          "2480a3079be87d6b4f1262c2125c87405feb40efe9d1a61ee57b1f95b054f6b6"
+        ],
+        "game_pk": 823915,
+        "normalized_relief_sha256": "fac2b9f324c0397bad9f2b47bb5194c5341b3ac0b70bfce578f9356c697214fa",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-14T12:48:52.325784+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_823915/sources/game_823915_live_feed_18a9a7d85f65c2b60dca497d857c7a739af6ff576be5f00587de09a1fc7e4b00.json",
+        "source_sha256": "18a9a7d85f65c2b60dca497d857c7a739af6ff576be5f00587de09a1fc7e4b00"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "ecd9b25f3b219af67c5acb13393e4f56d8e522215095775b2f6977323a94e473"
+        ],
+        "game_pk": 823995,
+        "normalized_relief_sha256": "971c179d7459e896dbe07972f907c38511a4c25356a2cd76d2ea2092f4a50c2a",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-14T12:48:51.774895+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_823995/sources/game_823995_live_feed_ecd9b25f3b219af67c5acb13393e4f56d8e522215095775b2f6977323a94e473.json",
+        "source_sha256": "ecd9b25f3b219af67c5acb13393e4f56d8e522215095775b2f6977323a94e473"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "50c9593350ba8a9ff2c664b4929fecdf93206d22a10f82a5cd0c7c272e5b6c09",
+          "c834293ca548483e3d92ba15d3ab9275e4d1e59e23e62599caeba483567b8e50"
+        ],
+        "game_pk": 824238,
+        "normalized_relief_sha256": "23057937ce0703cc829e516b1946845f1fbc4ee803a9ffb4efab1cb45475f572",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-14T12:48:47.847705+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_824238/sources/game_824238_live_feed_50c9593350ba8a9ff2c664b4929fecdf93206d22a10f82a5cd0c7c272e5b6c09.json",
+        "source_sha256": "50c9593350ba8a9ff2c664b4929fecdf93206d22a10f82a5cd0c7c272e5b6c09"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "d76602b2b425f7db353d1df50f64f775c9e32a75b3f3f6c9ff579c17c64fa3c7"
+        ],
+        "game_pk": 824561,
+        "normalized_relief_sha256": "2b2689d98e5b44c588dd00a6d984111e402a11f3021ccf458ac58c88dac7a699",
+        "official_date": "2026-08-13",
+        "relief_appearance_rows": 10,
+        "source_acquired_at_utc": "2026-08-14T12:48:48.406682+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-13/game_824561/sources/game_824561_live_feed_d76602b2b425f7db353d1df50f64f775c9e32a75b3f3f6c9ff579c17c64fa3c7.json",
+        "source_sha256": "d76602b2b425f7db353d1df50f64f775c9e32a75b3f3f6c9ff579c17c64fa3c7"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "b6066bc4a61fe7ddb4d701c8607dd19680b2c502c613163d8c2a00cc142fd011"
+        ],
+        "game_pk": 822777,
+        "normalized_relief_sha256": "eaf8cb24fa26f7518a97d08c91c74e85ccbeabe387115bb644e76ce42f5f0691",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-15T12:51:14.530748+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_822777/sources/game_822777_live_feed_b6066bc4a61fe7ddb4d701c8607dd19680b2c502c613163d8c2a00cc142fd011.json",
+        "source_sha256": "b6066bc4a61fe7ddb4d701c8607dd19680b2c502c613163d8c2a00cc142fd011"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "186a027431bdaeed69273c9b2e7556d57fa54e73b0e7c869ff20c4408ab4ec02"
+        ],
+        "game_pk": 822942,
+        "normalized_relief_sha256": "c68795e212d4cd9a7845f5148a8c6872406d3478f0c603805bc7145b44443c82",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 11,
+        "source_acquired_at_utc": "2026-08-15T12:51:13.765104+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_822942/sources/game_822942_live_feed_186a027431bdaeed69273c9b2e7556d57fa54e73b0e7c869ff20c4408ab4ec02.json",
+        "source_sha256": "186a027431bdaeed69273c9b2e7556d57fa54e73b0e7c869ff20c4408ab4ec02"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "ac2611287a01ac8abb3e4159fd02febce525abbb0e64678a4eca8cd89954a2b2"
+        ],
+        "game_pk": 823185,
+        "normalized_relief_sha256": "66180ada65c37971d9c904835b6172501b48277e2e54e528f7ab3cc69254d4fb",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-15T12:51:16.432956+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_823185/sources/game_823185_live_feed_ac2611287a01ac8abb3e4159fd02febce525abbb0e64678a4eca8cd89954a2b2.json",
+        "source_sha256": "ac2611287a01ac8abb3e4159fd02febce525abbb0e64678a4eca8cd89954a2b2"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "416f6d84733eb3e2eb6002b8a1cd14f8d7e4b32fee97d2972be77bbf8abecd5f"
+        ],
+        "game_pk": 823346,
+        "normalized_relief_sha256": "8a29a734776286ee5fe73fd77bed67f5f6f1862a72c9247e708437642ac054d4",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-15T12:51:12.271000+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_823346/sources/game_823346_live_feed_416f6d84733eb3e2eb6002b8a1cd14f8d7e4b32fee97d2972be77bbf8abecd5f.json",
+        "source_sha256": "416f6d84733eb3e2eb6002b8a1cd14f8d7e4b32fee97d2972be77bbf8abecd5f"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "66767c33a0ef018e7f54899d5f93789c4f94fc420fe51fb8a5651a6058a860c6"
+        ],
+        "game_pk": 823591,
+        "normalized_relief_sha256": "1732fef5fba5bc6e34e0181d25da3c6899c71a50736df7f14ba37f9250f05a50",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-15T12:51:13.019665+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_823591/sources/game_823591_live_feed_66767c33a0ef018e7f54899d5f93789c4f94fc420fe51fb8a5651a6058a860c6.json",
+        "source_sha256": "66767c33a0ef018e7f54899d5f93789c4f94fc420fe51fb8a5651a6058a860c6"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "0398ac60cd03a7aff1a79b1afda375746d9aa029d32d06cd2e1a39cb2bdd7392"
+        ],
+        "game_pk": 823913,
+        "normalized_relief_sha256": "34c9ffd8be62d748b2149d81d37dacb37faea8ea3cf519fe10290576aa016c37",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-15T12:51:16.009743+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_823913/sources/game_823913_live_feed_0398ac60cd03a7aff1a79b1afda375746d9aa029d32d06cd2e1a39cb2bdd7392.json",
+        "source_sha256": "0398ac60cd03a7aff1a79b1afda375746d9aa029d32d06cd2e1a39cb2bdd7392"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "4132d322ab373ca57fed400f13a70564b5f0386d7f22d31c50396278e5b10f8d"
+        ],
+        "game_pk": 823993,
+        "normalized_relief_sha256": "7af5c5c595749836f82a4718eb4d59f9391df8f5ef814e84fe22a376740d3b05",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-15T12:51:15.267068+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_823993/sources/game_823993_live_feed_4132d322ab373ca57fed400f13a70564b5f0386d7f22d31c50396278e5b10f8d.json",
+        "source_sha256": "4132d322ab373ca57fed400f13a70564b5f0386d7f22d31c50396278e5b10f8d"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "220ffd9a334f4a2db36c8bcf035117b7f3b3a8814a5e33a044682e9de1eb2834",
+          "455397734ac6345e267a1191a2636d9bb92b86de1b4909dd5f5cc0bed54b6062"
+        ],
+        "game_pk": 824159,
+        "normalized_relief_sha256": "2471001ae2e09dfa52fc834b28713a6d435f7cc539938d005df3bf59edd0ee13",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-15T12:51:14.895985+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824159/sources/game_824159_live_feed_455397734ac6345e267a1191a2636d9bb92b86de1b4909dd5f5cc0bed54b6062.json",
+        "source_sha256": "455397734ac6345e267a1191a2636d9bb92b86de1b4909dd5f5cc0bed54b6062"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "341e6e456c408623878218d7a8f2eaa15957af41753022b1f5b88106698f83f0",
+          "35ba2383d9133e42eeef80f6500c38f551db92bd9cedacc192eb1cd41d3f67fb"
+        ],
+        "game_pk": 824237,
+        "normalized_relief_sha256": "90655b01929c9be1aa91b13cbf11566bda8a6f06d03f4d63931ff15a2ed29872",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-15T12:51:12.675452+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824237/sources/game_824237_live_feed_341e6e456c408623878218d7a8f2eaa15957af41753022b1f5b88106698f83f0.json",
+        "source_sha256": "341e6e456c408623878218d7a8f2eaa15957af41753022b1f5b88106698f83f0"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "16171ee50a47366f027160730f690c2957bcca530cefee324d0dd69fb02dd9d8",
+          "e2fffaeed2a665a937e90bb652c23b2de9b096efeb425c491380cf5089bbe693"
+        ],
+        "game_pk": 824399,
+        "normalized_relief_sha256": "31fb5f7439300668cef3bf312e4e6ed2b5d5f5a24b74ffb151029853236c7307",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-15T12:51:13.403054+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824399/sources/game_824399_live_feed_e2fffaeed2a665a937e90bb652c23b2de9b096efeb425c491380cf5089bbe693.json",
+        "source_sha256": "e2fffaeed2a665a937e90bb652c23b2de9b096efeb425c491380cf5089bbe693"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "412d04f6947bb18a8aa0ee4144453d7d027309f0447ae06404d4217bb2e82e8a"
+        ],
+        "game_pk": 824479,
+        "normalized_relief_sha256": "ac44aefecdd882e03fc44b1474d2708bdf3214495a0179c93e0deb4f79a08e22",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-15T12:51:11.861751+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824479/sources/game_824479_live_feed_412d04f6947bb18a8aa0ee4144453d7d027309f0447ae06404d4217bb2e82e8a.json",
+        "source_sha256": "412d04f6947bb18a8aa0ee4144453d7d027309f0447ae06404d4217bb2e82e8a"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "1055f9746e62750a6ec0fd314ca279f3ff0ccbd67e990548de96b865a09cbf8c"
+        ],
+        "game_pk": 824643,
+        "normalized_relief_sha256": "840a7a4cd83e8aa0bb12602f5bc8a468ce28f5d69084a7da566ccd742b69fdc5",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-15T12:51:11.453429+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824643/sources/game_824643_live_feed_1055f9746e62750a6ec0fd314ca279f3ff0ccbd67e990548de96b865a09cbf8c.json",
+        "source_sha256": "1055f9746e62750a6ec0fd314ca279f3ff0ccbd67e990548de96b865a09cbf8c"
+      },
+      {
+        "equivalent_source_count": 2,
+        "equivalent_source_hashes": [
+          "463c7706f91c33607a6606f42223931161378ad0c04278b3ae8d5650263cd7ef",
+          "f238c8816cb4cecceac7a8d7146cc5dde2ab0cc0c3ebd3f8eedb28a66ddc259c"
+        ],
+        "game_pk": 824882,
+        "normalized_relief_sha256": "d8bb69a1e6ea7d64f4574892c4cc30570685b4195703a03036eeaab562e4fb40",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-15T12:51:14.122658+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824882/sources/game_824882_live_feed_463c7706f91c33607a6606f42223931161378ad0c04278b3ae8d5650263cd7ef.json",
+        "source_sha256": "463c7706f91c33607a6606f42223931161378ad0c04278b3ae8d5650263cd7ef"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "e75e353d90989fe51991cfffc1207b9c3bcb349b2556cc56b9fb52c594493342"
+        ],
+        "game_pk": 824968,
+        "normalized_relief_sha256": "2a8371370b5fe6825d24ef2f48bdae0da7343e6c2ef5f96550242de40ac5237e",
+        "official_date": "2026-08-14",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-15T12:51:15.634260+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-14/game_824968/sources/game_824968_live_feed_e75e353d90989fe51991cfffc1207b9c3bcb349b2556cc56b9fb52c594493342.json",
+        "source_sha256": "e75e353d90989fe51991cfffc1207b9c3bcb349b2556cc56b9fb52c594493342"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "eb8b4fdb6df9c6b33790f8cea61eb9a00d0fdb2c5f629343df0e5419caa0e10e"
+        ],
+        "game_pk": 822775,
+        "normalized_relief_sha256": "dcdfa189d8da757a1953577e178f4020526fb8a1c476f854ce780479348f3844",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 10,
+        "source_acquired_at_utc": "2026-08-16T12:51:00.194869+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_822775/sources/game_822775_live_feed_eb8b4fdb6df9c6b33790f8cea61eb9a00d0fdb2c5f629343df0e5419caa0e10e.json",
+        "source_sha256": "eb8b4fdb6df9c6b33790f8cea61eb9a00d0fdb2c5f629343df0e5419caa0e10e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "3e1d10e316db431cacac0db1a703bd68e366a2cd832657fb46e03485b15cdf96"
+        ],
+        "game_pk": 822941,
+        "normalized_relief_sha256": "3d338dcd2a092dc471bfef8d8f0c60a93228b4df3d97eeeb8c168f558a7956b3",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 8,
+        "source_acquired_at_utc": "2026-08-16T12:51:01.373812+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_822941/sources/game_822941_live_feed_3e1d10e316db431cacac0db1a703bd68e366a2cd832657fb46e03485b15cdf96.json",
+        "source_sha256": "3e1d10e316db431cacac0db1a703bd68e366a2cd832657fb46e03485b15cdf96"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "ced354b64d1449ebc5e9cc7221441c28c0cf681f442da820b6fe96319f70eb51"
+        ],
+        "game_pk": 823184,
+        "normalized_relief_sha256": "b439327865e8736b7e2a63238034161b72bd03b07a96f0e16838200152763568",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-16T12:51:00.578636+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_823184/sources/game_823184_live_feed_ced354b64d1449ebc5e9cc7221441c28c0cf681f442da820b6fe96319f70eb51.json",
+        "source_sha256": "ced354b64d1449ebc5e9cc7221441c28c0cf681f442da820b6fe96319f70eb51"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "d7562a083f8f4af44d7391180af2e1176cbb201adf27415dee4ceaf3fef4b38f"
+        ],
+        "game_pk": 823347,
+        "normalized_relief_sha256": "ff33304f6112ae93d5314ccc32cf951d13e79a479af5ca68b592643e2c6f5d27",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-16T12:51:03.225000+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_823347/sources/game_823347_live_feed_d7562a083f8f4af44d7391180af2e1176cbb201adf27415dee4ceaf3fef4b38f.json",
+        "source_sha256": "d7562a083f8f4af44d7391180af2e1176cbb201adf27415dee4ceaf3fef4b38f"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "b0f4896f6afd58a3f3d7b746db8a9df84e4e216514f04d9ea7464c792f075a75"
+        ],
+        "game_pk": 823588,
+        "normalized_relief_sha256": "286cf01d1284bc2eb8ec11643173dd976425f54d9b33e8e6eec8c483a4d5bdc7",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 7,
+        "source_acquired_at_utc": "2026-08-16T12:51:00.948128+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_823588/sources/game_823588_live_feed_b0f4896f6afd58a3f3d7b746db8a9df84e4e216514f04d9ea7464c792f075a75.json",
+        "source_sha256": "b0f4896f6afd58a3f3d7b746db8a9df84e4e216514f04d9ea7464c792f075a75"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "34ca6f2e89dad923131d25305d6164a97dc791658b3364617be2208a65a6c436"
+        ],
+        "game_pk": 823671,
+        "normalized_relief_sha256": "3cc57afd0935c15a7acecaa2cc063fa06fc366628de871351a2d728a93a07eac",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-16T12:51:02.844699+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_823671/sources/game_823671_live_feed_34ca6f2e89dad923131d25305d6164a97dc791658b3364617be2208a65a6c436.json",
+        "source_sha256": "34ca6f2e89dad923131d25305d6164a97dc791658b3364617be2208a65a6c436"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "500d5e30621a4ab0c0b47e059bf8c43a0ffd16ccc3fb7cb94d5d3a7dc6485f32"
+        ],
+        "game_pk": 823914,
+        "normalized_relief_sha256": "9d6f65ee049384309dc1ec95b1452ad53b5bfca139046440ef66dd3a811c9fcf",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-16T12:51:03.953873+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_823914/sources/game_823914_live_feed_500d5e30621a4ab0c0b47e059bf8c43a0ffd16ccc3fb7cb94d5d3a7dc6485f32.json",
+        "source_sha256": "500d5e30621a4ab0c0b47e059bf8c43a0ffd16ccc3fb7cb94d5d3a7dc6485f32"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "e2fb6ba408413e325733cd16a75e3f83d6f215b97b0adc61330ea12471496dcc"
+        ],
+        "game_pk": 823990,
+        "normalized_relief_sha256": "c0212738ad7a6ea477f7a20a11b9aecac28798b11a1311193418dc579b3323a1",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 3,
+        "source_acquired_at_utc": "2026-08-16T12:51:04.321579+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_823990/sources/game_823990_live_feed_e2fb6ba408413e325733cd16a75e3f83d6f215b97b0adc61330ea12471496dcc.json",
+        "source_sha256": "e2fb6ba408413e325733cd16a75e3f83d6f215b97b0adc61330ea12471496dcc"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "2f18cc377c36fa73da307f31c5464e39d38726d488975084fc3c6bbd63615406"
+        ],
+        "game_pk": 824157,
+        "normalized_relief_sha256": "8726b299ebec43da98e437c1b5e0030d1f84abb22dc81e5cf45a9a6b44d3bf9a",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 4,
+        "source_acquired_at_utc": "2026-08-16T12:51:02.437856+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824157/sources/game_824157_live_feed_2f18cc377c36fa73da307f31c5464e39d38726d488975084fc3c6bbd63615406.json",
+        "source_sha256": "2f18cc377c36fa73da307f31c5464e39d38726d488975084fc3c6bbd63615406"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "73f82c5f35a6fd3badf8bb680ce9bceff9138ab891af31750c152d5f9594cd0c"
+        ],
+        "game_pk": 824239,
+        "normalized_relief_sha256": "7adeeb8494ea5b20f56ec14f3e003fb564cd72653374a6c157ab49ec31ceb3aa",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-16T12:50:59.520387+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824239/sources/game_824239_live_feed_73f82c5f35a6fd3badf8bb680ce9bceff9138ab891af31750c152d5f9594cd0c.json",
+        "source_sha256": "73f82c5f35a6fd3badf8bb680ce9bceff9138ab891af31750c152d5f9594cd0c"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "bda750cabda22dbd599b4955e900cf3ed0e84503f329b090ba1e2497b7c0524e"
+        ],
+        "game_pk": 824400,
+        "normalized_relief_sha256": "870b13e7a151e4a9be093589051008663de095c7abf478db71dc0d9916ed0845",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-16T12:51:02.099283+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824400/sources/game_824400_live_feed_bda750cabda22dbd599b4955e900cf3ed0e84503f329b090ba1e2497b7c0524e.json",
+        "source_sha256": "bda750cabda22dbd599b4955e900cf3ed0e84503f329b090ba1e2497b7c0524e"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "9695512238f4cd912c6947054425e49b40fbaa24f54e163430eb710e48f6764a"
+        ],
+        "game_pk": 824480,
+        "normalized_relief_sha256": "56aecaea964a9e27fe7f0ce117ec02a8f80456c00008227fd1af2e70268009cf",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 9,
+        "source_acquired_at_utc": "2026-08-16T12:51:01.741740+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824480/sources/game_824480_live_feed_9695512238f4cd912c6947054425e49b40fbaa24f54e163430eb710e48f6764a.json",
+        "source_sha256": "9695512238f4cd912c6947054425e49b40fbaa24f54e163430eb710e48f6764a"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "b5d28727a0e51724ff7caf7a3b028079e255882d6048cb278cc9537896a6a8c5"
+        ],
+        "game_pk": 824644,
+        "normalized_relief_sha256": "5542fec382218f187a03d1d6596e80b8623b30f8d90bde8c85555a66f29d7323",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-16T12:50:59.850061+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824644/sources/game_824644_live_feed_b5d28727a0e51724ff7caf7a3b028079e255882d6048cb278cc9537896a6a8c5.json",
+        "source_sha256": "b5d28727a0e51724ff7caf7a3b028079e255882d6048cb278cc9537896a6a8c5"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "57a165f0eb2f8e27d685976eae11141b0b7f4ac796bd53be219a83f5187c3a1c"
+        ],
+        "game_pk": 824884,
+        "normalized_relief_sha256": "59a85b350f8323f94540dfe636113734a0397b4226e9acfbf9b3105fd60c9ad6",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 6,
+        "source_acquired_at_utc": "2026-08-16T12:51:03.589287+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824884/sources/game_824884_live_feed_57a165f0eb2f8e27d685976eae11141b0b7f4ac796bd53be219a83f5187c3a1c.json",
+        "source_sha256": "57a165f0eb2f8e27d685976eae11141b0b7f4ac796bd53be219a83f5187c3a1c"
+      },
+      {
+        "equivalent_source_count": 1,
+        "equivalent_source_hashes": [
+          "834d1133096d667d83f554196f5fa01c3ce2e79a29961bed0533c57b0c95337b"
+        ],
+        "game_pk": 824966,
+        "normalized_relief_sha256": "6b3b8013f1d684dea574efb80a1ac89e0c423d2519cdb6a6e20c8661bdb48836",
+        "official_date": "2026-08-15",
+        "relief_appearance_rows": 5,
+        "source_acquired_at_utc": "2026-08-16T12:51:04.765341+00:00",
+        "source_path": "artifacts/analysis/mlb/player_stats_completeness/2026-08-15/game_824966/sources/game_824966_live_feed_834d1133096d667d83f554196f5fa01c3ce2e79a29961bed0533c57b0c95337b.json",
+        "source_sha256": "834d1133096d667d83f554196f5fa01c3ce2e79a29961bed0533c57b0c95337b"
+      }
+    ]
+  },
+  "source_history_before": {
+    "fixed_artifact_last_game_date": "2026-08-05",
+    "fixed_live_bridge_sha256": "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f"
+  },
+  "task_id": "MLB_TOTALS_BULLPEN_RECENCY_FRESHNESS_REPAIR_IMPACT_AUDIT_V1"
+}

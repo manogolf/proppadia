@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -38,8 +39,16 @@ def fake_history():
     park = {"venue_id": 2681, "park_name": "Citizens Bank Park", "park_history_depth": 100,
             "strict_prior_total_run_factor": 1.02, "fallback_status": "DIRECT_REGRESSED_PARK_HISTORY",
             "roof_type": "Open", "elevation": 20, "latest_included_game_id": 899900}
+    relievers = {
+        team_id: [{"game_pk": 899800 + team_id, "date": date(2026, 8, 5), "pitcher_id": 600000 + team_id,
+                   "team_id": team_id, "is_starter": False, "outs": 3, "runs": 0,
+                   "source_sha256": f"source-{team_id}", "source_acquired_at_utc": None}]
+        for team_id in (120, 143)
+    }
     return {"league_total": 8.8, "league_home": 4.5, "league_away": 4.3, "teams": {}, "appearances": {},
-            "team_starts": {}, "league_starts": [], "team_relievers": {}, "parks": {2681: park}, "core": pd.DataFrame()}
+            "team_starts": {}, "league_starts": [], "team_relievers": relievers, "parks": {2681: park},
+            "bullpen_history_provenance": {"available_completed_game_dates": ["2026-08-05"]},
+            "core": pd.DataFrame()}
 
 
 def starter_record(pitcher_id, team_id, game_pk, day, outs=15, runs=2):

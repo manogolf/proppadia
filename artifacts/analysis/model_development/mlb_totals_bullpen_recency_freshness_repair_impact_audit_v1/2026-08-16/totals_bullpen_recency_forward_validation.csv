@@ -1,0 +1,8 @@
+validation,status,evidence
+history advances after each completed date,PASS,latest=2026-08-15; supplement_games=134
+historical scoring strict prior,PASS,independent burden reconstruction
+valid zero distinguishable from stale,PASS,valid=CURRENT_STRICT_PRIOR_HISTORY; stale=STALE_OR_INCOMPLETE_HISTORY
+prediction/date cutoffs retained,PASS,BULLPEN_RECENCY_FRESHNESS_INVARIANT_V1
+team identities stable,PASS,official MLB numeric team_id keyed history
+doubleheader same-date state does not leak,PASS,computed=2.0; same-date 9 outs excluded
+target outcome excluded,PASS,burden source reads pitching appearances only where official_date < target_date; outcome ledger is not an input

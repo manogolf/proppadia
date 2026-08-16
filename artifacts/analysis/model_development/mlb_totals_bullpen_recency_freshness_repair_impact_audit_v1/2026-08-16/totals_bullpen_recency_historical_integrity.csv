@@ -1,0 +1,4 @@
+period,games,side_feature_rows,strict_prior_reconstruction_mismatches,target_game_outcomes_used,status
+FROZEN_2025_VALIDATION,2433,4866,0,0,UNAFFECTED
+2026_SEQUENTIAL_EARLY,1281,2562,0,0,UNAFFECTED
+2026_LATE_HOLDOUT,439,878,0,0,UNAFFECTED

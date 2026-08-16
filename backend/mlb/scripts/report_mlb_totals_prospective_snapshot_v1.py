@@ -109,7 +109,7 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
     frozen_cutoff = min(utc(row["prediction_timestamp_utc"]) for row in predictions)
     discovery, prediction_rows = [], []
     for schedule_row in schedule:
-        game_id = int(schedule_row["game_pk"]); context = attach_context(schedule_row, history)
+        game_id = int(schedule_row["game_pk"]); context = attach_context(schedule_row, history, schedule_observed)
         started = utc(schedule_row["scheduled_start_utc"]) <= frozen_cutoff or schedule_row["official_game_status"] not in {"Scheduled", "Pre-Game", "Warmup"}
         frozen = prediction_by_game.get(game_id); reasons = context_reasons(context)
         status = "REJECTED_GAME_ALREADY_STARTED" if started else ("CAPTURED_CONTEXT_COMPLETE" if frozen else "REJECTED_CONTEXT_NOT_COMPLETE")

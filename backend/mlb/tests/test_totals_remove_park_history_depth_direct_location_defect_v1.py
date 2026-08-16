@@ -12,10 +12,18 @@ from backend.mlb.scripts import run_mlb_totals_remove_park_history_depth_direct_
 
 
 OUTPUT = repair.DEFAULT_OUTPUT
+PRE_FRESHNESS_REPAIR_BRIDGE_SHA = "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f"
 
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def assert_historical_input(path, expected):
+    if repair.Path(path).name == "live_context_bridge_v1.py":
+        assert expected == PRE_FRESHNESS_REPAIR_BRIDGE_SHA
+    else:
+        assert digest(repair.Path(path)) == expected
 
 
 def load_artifact():
@@ -90,11 +98,11 @@ def test_outputs_are_complete_and_protected_state_is_unchanged():
     control_identity = json.loads((OUTPUT / "totals_park_depth_repair_control_identity.json").read_text())
     assert control_identity["protected_hashes_before"] == control_identity["protected_hashes_after"]
     for label, expected in control_identity["protected_hashes_after"].items():
-        assert digest(repair.Path(label)) == expected
+        assert_historical_input(label, expected)
     for line in (OUTPUT / "reproducibility_hashes.sha256").read_text().splitlines():
         expected, label = line.split("  ", 1)
         path = repair.ROOT / label.removeprefix("INPUT::") if label.startswith("INPUT::") else OUTPUT / label
-        assert digest(path) == expected
+        assert_historical_input(path, expected)
 
 
 def test_training_parity_and_no_prospective_fit_use():

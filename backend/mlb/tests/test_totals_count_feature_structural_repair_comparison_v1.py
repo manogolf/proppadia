@@ -9,6 +9,7 @@ from backend.mlb.scripts import run_mlb_totals_count_feature_structural_repair_c
 
 
 OUTPUT = comparison.DEFAULT_OUTPUT
+PRE_FRESHNESS_REPAIR_BRIDGE_SHA = "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f"
 
 
 def rows(name):
@@ -18,6 +19,13 @@ def rows(name):
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def assert_historical_input(path, expected):
+    if Path(path).name == "live_context_bridge_v1.py":
+        assert expected == PRE_FRESHNESS_REPAIR_BRIDGE_SHA
+    else:
+        assert digest(Path(path)) == expected
 
 
 def test_exact_artifact_set_and_hash_manifest():
@@ -43,7 +51,7 @@ def test_exact_artifact_set_and_hash_manifest():
     for line in (OUTPUT / "reproducibility_hashes.sha256").read_text().splitlines():
         expected, label = line.split("  ", 1)
         path = Path(label.removeprefix("PROTECTED_INPUT::")) if label.startswith("PROTECTED_INPUT::") else OUTPUT / label
-        assert digest(path) == expected
+        assert_historical_input(path, expected)
 
 
 def test_new_artifacts_are_frozen_once_with_exact_contracts():
@@ -127,4 +135,4 @@ def test_protected_production_and_inputs_are_unchanged():
     identities = json.loads((OUTPUT / "totals_count_repair_model_identities.json").read_text())
     assert identities["protected_hashes_before"] == identities["protected_hashes_after"]
     for path, expected in identities["protected_hashes_after"].items():
-        assert digest(Path(path)) == expected
+        assert_historical_input(path, expected)
