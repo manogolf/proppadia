@@ -1,0 +1,11 @@
+check,control,repaired,status
+row_count,4859,4859,EXACT
+row_identity_and_target_hash,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,db7c21c9e1d990b66c149bcd95a5d1eb35092c099ffe40a76224c2842fc5de4c,EXACT
+date_range,2023-03-30..2024-09-30,2023-03-30..2024-09-30,EXACT
+outcome,OFFICIAL_FINAL_TOTAL_RUNS,OFFICIAL_FINAL_TOTAL_RUNS,EXACT
+missing_value_rule,governed fallback then numeric NaN/inf to 0,governed fallback then numeric NaN/inf to 0,EXACT
+model_family,REGULARIZED_POISSON_LOCATION_WITH_NEGATIVE_BINOMIAL_DISTRIBUTION,REGULARIZED_POISSON_LOCATION_WITH_NEGATIVE_BINOMIAL_DISTRIBUTION,EXACT
+fit_settings,"alpha=.1,max_iter=1000,deterministic","alpha=.1,max_iter=1000,deterministic",EXACT
+retained_feature_preprocessing,frozen means/scales,identical retained means/scales,EXACT
+location_feature_count,22,21,AUTHORIZED_DELTA
+removed_location_field,park_history_depth,ABSENT,AUTHORIZED_DELTA

@@ -1,0 +1,13 @@
+{
+  "artifact_file": "TOTALS_PARK_DEPTH_REPAIR_CHALLENGER_V1.json",
+  "artifact_sha256": "ee30a88ac4da83f0b6e62b0aa43e3f56299361e3f6c135695ebb7724d520c9e2",
+  "candidate_identity": "DIRECT_NEGATIVE_BINOMIAL_PARK_DEPTH_REPAIR_V1",
+  "canonical_model_hash": "43256ef8396ddfdb53c58f04cc5b8fa783b97c457abf0072b767e7df6050d1b7",
+  "designation": "TOTALS_PARK_DEPTH_REPAIR_CHALLENGER_V1",
+  "feature_count": 21,
+  "production_status": "NOT_PROMOTED_RESEARCH_ONLY",
+  "prospective_rows_used_for_fit_or_selection": 0,
+  "removed_feature": "park_history_depth",
+  "task_id": "MLB_TOTALS_REMOVE_PARK_HISTORY_DEPTH_DIRECT_LOCATION_DEFECT_V1",
+  "training_population_parity": "EXACT"
+}
