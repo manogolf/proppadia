@@ -1,0 +1,15 @@
+gate,dimension,status,evidence
+A,exact artifact identity,PASS,canonical hash and artifact SHA exact
+B,feature-contract reproducibility,PASS,"feature order, scaler, training row and matrix hashes exact"
+C,count stationarity,PASS,all three repaired depth perturbations exactly invariant
+D,training-support coverage,FAIL,both bullpen recent-innings features have severe center drift caused by stale live history
+E,mechanical-growth safety,PASS,no mechanically cumulative direct location input remains
+F,sample-depth double-use safety,PASS,all raw sample-depth counts absent from location
+G,coefficient reassignment,PASS,risk=LOW
+H,fallback stability,FAIL,rolling bullpen burden silently reaches zero while source cutoff is stale
+I,starter-state stability,PASS_WITH_WATCH,governed sparse tiers are rare and must remain monitored
+J,park/context stability,PASS,depth only upstream; all current parks direct regressed
+K,probability-distribution quality,PASS,frozen C improves prior CRPS/Brier/log loss headline evidence
+L,point-summary semantics,PASS,"mean, median and full distribution roles explicitly frozen"
+M,historical temporal robustness,PASS_WITH_WATCH,primary periods reproduce; Aug 6–15 remains diagnostic only
+N,no dependence on August post-hoc results for model selection,PASS,C fit once on 2023–24; August used only for diagnosis

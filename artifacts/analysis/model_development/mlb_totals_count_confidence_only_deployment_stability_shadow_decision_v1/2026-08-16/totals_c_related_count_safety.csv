@@ -1,0 +1,61 @@
+row_type,feature,direct_location_input,training_min,training_p99,training_max,current_min,current_mean,current_max,standardized_mean_shift,coefficient,center_shift_log_location_contribution,mechanical_growth,safety_decision,reason,game_date,games,current_date_mean,current_date_min,current_date_max,history_latest_included_game_date
+SUMMARY,home_bullpen_likely_available_reliever_count,True,0.0,17.0,21.0,8.0,13.340425531914894,20.0,1.2648782170916044,-0.013262985030833062,-0.016776060859112762,NO,STRUCTURAL_REVIEW_REQUIRED,"rolling-state semantics are valid, but the live source history does not advance beyond Aug 5",,,,,,
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-06,5,10.0,8.0,14.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-07,14,14.071428571428571,10.0,20.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-08,15,13.8,10.0,20.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-09,15,13.6,10.0,19.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-10,10,13.1,11.0,15.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-11,15,13.333333333333334,11.0,19.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-12,15,13.133333333333333,11.0,18.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-13,8,13.625,12.0,18.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-14,14,13.285714285714286,10.0,18.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-15,15,13.333333333333334,10.0,18.0,2026-08-05
+CURRENT_DATE,home_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-16,15,13.333333333333334,10.0,18.0,2026-08-05
+SUMMARY,away_bullpen_likely_available_reliever_count,True,0.0,17.0,20.0,10.0,13.049645390070921,18.0,1.1134578242054831,0.0020310716464405666,0.0022615126162511615,NO,STRUCTURAL_REVIEW_REQUIRED,"rolling-state semantics are valid, but the live source history does not advance beyond Aug 5",,,,,,
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-06,5,11.6,10.0,13.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-07,14,13.714285714285714,11.0,17.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-08,15,13.533333333333333,11.0,17.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-09,15,13.333333333333334,11.0,16.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-10,10,13.3,11.0,18.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-11,15,13.066666666666666,10.0,18.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-12,15,12.933333333333334,10.0,18.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-13,8,13.0,10.0,18.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-14,14,12.714285714285714,10.0,18.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-15,15,12.733333333333333,10.0,18.0,2026-08-05
+CURRENT_DATE,away_bullpen_likely_available_reliever_count,,,,,,,,,,,,,,2026-08-16,15,12.733333333333333,10.0,18.0,2026-08-05
+SUMMARY,home_bullpen_recent_innings_burden,True,0.0,18.0,24.666666666666668,0.0,1.3569739952718676,13.333333333333334,-2.478287556529939,-0.0025168109530165667,0.006237381266999214,NO,STRUCTURAL_REVIEW_REQUIRED,"rolling-state semantics are valid, but the live source history does not advance beyond Aug 5",,,,,,
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-06,5,7.133333333333333,5.0,11.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-07,14,7.142857142857143,5.0,13.333333333333334,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-08,15,3.711111111111111,1.0,7.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-09,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-10,10,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-11,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-12,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-13,8,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-14,14,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-15,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,home_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-16,15,0.0,0.0,0.0,2026-08-05
+SUMMARY,away_bullpen_recent_innings_burden,True,0.0,17.0,21.0,0.0,1.4231678486997636,15.0,-2.4172288560090327,0.006379359474389643,-0.015420371804349261,NO,STRUCTURAL_REVIEW_REQUIRED,"rolling-state semantics are valid, but the live source history does not advance beyond Aug 5",,,,,,
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-06,5,8.6,5.0,15.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-07,14,7.19047619047619,5.0,12.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-08,15,3.8,2.0,6.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-09,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-10,10,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-11,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-12,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-13,8,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-14,14,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-15,15,0.0,0.0,0.0,2026-08-05
+CURRENT_DATE,away_bullpen_recent_innings_burden,,,,,,,,,,,,,,2026-08-16,15,0.0,0.0,0.0,2026-08-05
+SUMMARY,game_number,True,1.0,2.0,2.0,1.0,1.0,1.0,-0.11553024151667364,0.00341793920317846,-0.0003948753416325146,NO,SAFE,bounded schedule ordinal,,,,,,
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-06,5,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-07,14,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-08,15,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-09,15,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-10,10,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-11,15,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-12,15,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-13,8,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-14,14,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-15,15,1.0,1.0,1.0,2026-08-05
+CURRENT_DATE,game_number,,,,,,,,,,,,,,2026-08-16,15,1.0,1.0,1.0,2026-08-05

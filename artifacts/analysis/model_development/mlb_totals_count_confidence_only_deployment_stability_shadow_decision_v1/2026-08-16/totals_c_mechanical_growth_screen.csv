@@ -1,0 +1,23 @@
+feature,mechanically_grows_with_calendar_or_sample_size,semantic_justification,raw_repaired_depth_feature,present_in_c_direct_location
+league_total,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_offense,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_prevention,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_offense,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_prevention,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_starter_ra9,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_starter_ra9,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_expected_outs,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_expected_outs,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_workload_uncertainty_outs,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_workload_uncertainty_outs,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_bullpen_ra9,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_bullpen_ra9,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+home_bullpen_likely_available_reliever_count,NO,rolling roster-availability state; it does not rise merely as season sample grows,False,
+away_bullpen_likely_available_reliever_count,NO,rolling roster-availability state; it does not rise merely as season sample grows,False,
+home_bullpen_recent_innings_burden,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+away_bullpen_recent_innings_burden,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+strict_prior_total_run_factor,NO,not a raw cumulative count; location changes only with the represented baseball state,False,
+game_number,NO,"bounded schedule ordinal, not accumulated history",False,
+park_history_depth,YES,removed from C direct location; retained only upstream as support/confidence,True,False
+home_starter_prior_starts,YES,removed from C direct location; retained only upstream as support/confidence,True,False
+away_starter_prior_starts,YES,removed from C direct location; retained only upstream as support/confidence,True,False

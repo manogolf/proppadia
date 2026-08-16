@@ -1,0 +1,4 @@
+feature,low_value,high_value,forecast_low,forecast_high,absolute_difference,exact_invariance,COUNT_STATIONARITY_INVARIANT
+park_history_depth,0,5000,9.105973602969037,9.105973602969037,0.0,True,PASS
+home_starter_prior_starts,0,150,9.105973602969037,9.105973602969037,0.0,True,PASS
+away_starter_prior_starts,0,150,9.105973602969037,9.105973602969037,0.0,True,PASS

@@ -1,0 +1,20 @@
+feature,training_missing_after_governed_construction,training_pre_fallback_missing_rate,current_missing_after_governed_construction,current_fallback_rate,fallback_evidence,fallback_stability,notes
+league_total,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+home_offense,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+home_prevention,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+away_offense,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+away_prevention,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+home_starter_ra9,0.0,0.052274130479522535,0.0,0.028368794326241134,retained governed starter fallback tier,PASS,
+away_starter_ra9,0.0,0.05392055978596419,0.0,0.02127659574468085,retained governed starter fallback tier,PASS,
+home_expected_outs,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+away_expected_outs,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+home_workload_uncertainty_outs,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+away_workload_uncertainty_outs,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,
+home_bullpen_ra9,0.0,0.0030870549495781024,0.0,NOT_RETAINED,bullpen fallback provenance is absent from retained context; zero burden can silently represent stale recency,WATCH,
+away_bullpen_ra9,0.0,0.0030870549495781024,0.0,NOT_RETAINED,bullpen fallback provenance is absent from retained context; zero burden can silently represent stale recency,WATCH,
+home_bullpen_likely_available_reliever_count,0.0,0.0,0.0,NOT_RETAINED,bullpen fallback provenance is absent from retained context; zero burden can silently represent stale recency,WATCH,
+away_bullpen_likely_available_reliever_count,0.0,0.0,0.0,NOT_RETAINED,bullpen fallback provenance is absent from retained context; zero burden can silently represent stale recency,WATCH,
+home_bullpen_recent_innings_burden,0.0,0.0,0.0,NOT_RETAINED,bullpen fallback provenance is absent from retained context; zero burden can silently represent stale recency,FAIL,zero from 2026-08-09 onward while retained source cutoff remains 2026-08-05
+away_bullpen_recent_innings_burden,0.0,0.0,0.0,NOT_RETAINED,bullpen fallback provenance is absent from retained context; zero burden can silently represent stale recency,FAIL,zero from 2026-08-09 onward while retained source cutoff remains 2026-08-05
+strict_prior_total_run_factor,0.0,0.0,0.0,0.0,retained park fallback status,PASS,
+game_number,0.0,0.0,0.0,0.0,constructed deterministically with governed fallback,PASS,

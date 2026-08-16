@@ -1,0 +1,23 @@
+feature,sample_depth_or_confidence_double_use,reason,present_in_c_direct_location
+league_total,NO,"baseball state/rate input, not raw sample depth",
+home_offense,NO,"baseball state/rate input, not raw sample depth",
+home_prevention,NO,"baseball state/rate input, not raw sample depth",
+away_offense,NO,"baseball state/rate input, not raw sample depth",
+away_prevention,NO,"baseball state/rate input, not raw sample depth",
+home_starter_ra9,NO,"baseball state/rate input, not raw sample depth",
+away_starter_ra9,NO,"baseball state/rate input, not raw sample depth",
+home_expected_outs,NO,"baseball state/rate input, not raw sample depth",
+away_expected_outs,NO,"baseball state/rate input, not raw sample depth",
+home_workload_uncertainty_outs,NO,"workload variability is a baseball exposure state, not estimator confidence or history depth",
+away_workload_uncertainty_outs,NO,"workload variability is a baseball exposure state, not estimator confidence or history depth",
+home_bullpen_ra9,NO,"baseball state/rate input, not raw sample depth",
+away_bullpen_ra9,NO,"baseball state/rate input, not raw sample depth",
+home_bullpen_likely_available_reliever_count,NO,"baseball state/rate input, not raw sample depth",
+away_bullpen_likely_available_reliever_count,NO,"baseball state/rate input, not raw sample depth",
+home_bullpen_recent_innings_burden,NO,"baseball state/rate input, not raw sample depth",
+away_bullpen_recent_innings_burden,NO,"baseball state/rate input, not raw sample depth",
+strict_prior_total_run_factor,NO,"baseball state/rate input, not raw sample depth",
+game_number,NO,"baseball state/rate input, not raw sample depth",
+park_history_depth,NO,absent from C direct location; allowed upstream for shrinkage/fallback only,False
+home_starter_prior_starts,NO,absent from C direct location; allowed upstream for shrinkage/fallback only,False
+away_starter_prior_starts,NO,absent from C direct location; allowed upstream for shrinkage/fallback only,False

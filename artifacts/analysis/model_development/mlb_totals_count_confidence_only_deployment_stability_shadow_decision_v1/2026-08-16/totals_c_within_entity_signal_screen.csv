@@ -1,0 +1,8 @@
+feature,entity,games,pooled_actual_total_correlation,within_entity_month_actual_total_correlation,direct_signal,reason
+away_bullpen_likely_available_reliever_count,away_team_id,4859,-0.009270378977220575,-0.030930582312584148,WEAK,descriptive strict-prior signal screen; not a refit or selection rule
+away_bullpen_recent_innings_burden,away_team_id,4859,0.007783702407178452,-0.008146457865675489,ABSENT,descriptive strict-prior signal screen; not a refit or selection rule
+game_number,schedule/game,4859,0.007464451148630866,nan,NOT_TESTABLE,no repeated stable entity key for this global/schedule state
+home_bullpen_likely_available_reliever_count,home_team_id,4859,-0.02014313590761576,-0.043406075060483454,WEAK,descriptive strict-prior signal screen; not a refit or selection rule
+home_bullpen_recent_innings_burden,home_team_id,4859,0.00010673400413585279,-0.025836045459693334,WEAK,descriptive strict-prior signal screen; not a refit or selection rule
+league_total,league/date,4859,-0.005069108094381161,nan,NOT_TESTABLE,no repeated stable entity key for this global/schedule state
+strict_prior_total_run_factor,venue_id,4859,0.08952653242120101,-0.2401930877199504,SUPPORTED,descriptive strict-prior signal screen; not a refit or selection rule

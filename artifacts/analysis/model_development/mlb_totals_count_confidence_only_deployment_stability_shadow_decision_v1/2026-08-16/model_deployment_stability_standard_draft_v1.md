@@ -1,0 +1,3 @@
+# MODEL_DEPLOYMENT_STABILITY_STANDARD_DRAFT_V1
+
+Before shadow entry, every fitted model must freeze and pass: (1) exact artifact and feature reproducibility; (2) direct-feature training support inventory and current/OOT comparison; (3) mechanical-growth screen; (4) sample-depth/confidence double-use screen; (5) within-entity proxy checks for suspicious terms; (6) in/out-support performance without optimized cutoffs; (7) coefficient × drift impact; (8) missingness, fallback, and source-freshness drift; (9) coefficient-reassignment safety; and (10) same-row stationarity perturbations for mechanically growing inputs. Any material structural FAIL blocks shadow entry. This is a draft only and is not implemented repository-wide.
