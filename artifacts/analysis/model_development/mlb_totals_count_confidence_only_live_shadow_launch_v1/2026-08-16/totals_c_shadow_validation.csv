@@ -1,0 +1,21 @@
+validation,status,evidence
+exact C artifact SHA,PASS,ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc
+exact C canonical model hash,PASS,21828319efc421661f833484246b81e48721282ccd65f84ccc4f94222d7dd1cd
+feature contract and training binding,PASS,feature_contract=d7551fd7798aa60ada1b96831e32bcb7748a17aabf67f53c8800f24c9f4a0927; training=2023-2024; rows=4859
+deterministic C score,PASS,score_a=8.247442856501975; score_b=8.247442856501975
+RAW unchanged and shared feature state,PASS,RAW=fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac; context_sha=4272ae5ffd698fc5db7b71db0bde2a74186918c381a6e73d65b095998cb95084
+mean and median semantics,PASS,mean=8.247442856502; median=8
+probabilities normalized,PASS,sum=1.0000000000000000
+bullpen freshness guard,PASS,BULLPEN_HISTORY_STALE
+strict pregame source timing,PASS,checked_rows=15
+05:30 primary mode,PASS,PRIMARY_SCORE
+08:30 and later missing-only mode,PASS,SCORE_MISSING
+regime tag schema,PASS,C_SHADOW_PRIMARY_2026_REGIME + exact three-state operational classification
+no pre-Aug17 real predictions,PASS,real C ledger absent before natural launch
+natural hook syntax,PASS,zsh -n
+public/production side effects,PASS,private ledger; no UI/upload/ranking/wager path
+natural hook wiring,PASS,existing totals hook runs C after successful RAW lifecycle
+installed wrapper wiring,PASS,existing installed wrapper invokes repository hook
+append-only prediction ledger,PASS,"('APPENDED_NEW', 'APPENDED_NEW')"
+duplicate protection,PASS,"('EXISTING_IMMUTABLE', 'EXISTING_IMMUTABLE')"
+outcome separation,PASS,prediction append rejects outcome fields

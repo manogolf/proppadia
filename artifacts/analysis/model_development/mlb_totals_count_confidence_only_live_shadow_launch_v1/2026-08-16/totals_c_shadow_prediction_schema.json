@@ -1,0 +1,53 @@
+{
+  "comparators": [
+    "production RAW",
+    "strict-prior population baseline",
+    "team-shrunk baseline"
+  ],
+  "forbidden": [
+    "outcome",
+    "result",
+    "official_final_total",
+    "regulation_nine_total",
+    "EV",
+    "ROI",
+    "wager",
+    "ranking"
+  ],
+  "prediction_outputs": [
+    "expected_total_mean",
+    "central_total_median",
+    "mae_optimal_point",
+    "dispersion_alpha",
+    "probability_distribution_0_to_30plus",
+    "governed_total_line",
+    "p_over",
+    "p_under",
+    "p_push"
+  ],
+  "required_identity": [
+    "experiment",
+    "game_date",
+    "game_pk",
+    "teams",
+    "scheduled_start_utc",
+    "prediction_timestamp_utc",
+    "scoring_run_tag",
+    "scoring_mode",
+    "model_name",
+    "model_hash",
+    "artifact_sha256",
+    "feature_contract_hash",
+    "feature_state_hash"
+  ],
+  "required_provenance": [
+    "source_raw_identity",
+    "source_raw_prediction_sha256",
+    "source_raw_context_sha256",
+    "schedule_source_sha256",
+    "market_source_sha256",
+    "probable_starter identities/state",
+    "bullpen history cutoff/freshness/source hashes",
+    "park context status/hash"
+  ]
+}
