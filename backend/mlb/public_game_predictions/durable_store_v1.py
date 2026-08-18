@@ -90,9 +90,28 @@ def append_official_finals(rows: Iterable[OfficialFinalGame]) -> int:
             if cur.fetchone():
                 inserted += 1
             else:
-                cur.execute("SELECT content_sha256 FROM mlb.public_game_official_finals WHERE game_pk=%s",(row.game_pk,))
+                # Compare the stable official identity/result, not mutable
+                # postgame play-feed timing. The latter remains retained and is
+                # still used for cutoff gating, but timestamp-only drift does not
+                # require a score/state replay.
+                cur.execute("""
+                  SELECT game_pk,game_date::text,scheduled_start_utc,game_number,
+                         home_team_id,away_team_id,home_runs,away_runs,official_status
+                  FROM mlb.public_game_official_finals WHERE game_pk=%s
+                """,(row.game_pk,))
                 existing=cur.fetchone()
-                if not existing or _value(existing,'content_sha256',0) != row.content_hash:
+                existing_payload=None if not existing else {
+                    'game_pk':int(_value(existing,'game_pk',0)),
+                    'game_date':str(_value(existing,'game_date',1)),
+                    'scheduled_start_utc':_value(existing,'scheduled_start_utc',2).isoformat().replace('+00:00','Z'),
+                    'game_number':int(_value(existing,'game_number',3)),
+                    'home_team_id':int(_value(existing,'home_team_id',4)),
+                    'away_team_id':int(_value(existing,'away_team_id',5)),
+                    'home_runs':int(_value(existing,'home_runs',6)),
+                    'away_runs':int(_value(existing,'away_runs',7)),
+                    'official_status':str(_value(existing,'official_status',8)),
+                }
+                if existing_payload != row.correction_guard_payload:
                     raise PublicGamePredictionError(f"OFFICIAL_FINAL_CORRECTION_REQUIRES_REPLAY:{row.game_pk}")
         conn.commit()
     return inserted
@@ -180,8 +199,13 @@ def fetch_prediction_rows(game_date: str) -> list[dict[str, Any]]:
         return rows
 
 
-def fetch_ungraded_final_predictions(cutoff_utc: str) -> list[dict[str, Any]]:
-    """Return frozen predictions eligible for official-final grading."""
+def fetch_ungraded_final_predictions(cutoff_utc: str, *, game_date: str | None = None) -> list[dict[str, Any]]:
+    """Return frozen predictions eligible for official-final grading.
+
+    ``game_date`` permits a governed correction replay to grade only its
+    explicitly affected slate; normal daily lifecycle calls retain the existing
+    all-eligible behavior.
+    """
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute("""
           SELECT p.prediction_payload,
@@ -202,9 +226,10 @@ def fetch_ungraded_final_predictions(cutoff_utc: str) -> list[dict[str, Any]]:
            AND o.prediction_snapshot_class=p.prediction_snapshot_class
           WHERE p.model_version=%s AND p.admission_status='ADMITTED_SHADOW'
             AND f.official_final_effective_utc <= %s::timestamptz
+            AND (%s::date IS NULL OR p.game_date=%s::date)
             AND o.game_id IS NULL
           ORDER BY p.game_date,p.scheduled_start_utc,p.game_id
-        """,(cutoff_utc,MODEL_VERSION,cutoff_utc))
+        """,(cutoff_utc,MODEL_VERSION,cutoff_utc,game_date,game_date))
         return [{
             'prediction':_value(row,'prediction_payload',0),
             'official_home_runs':int(_value(row,'official_home_runs',1)),

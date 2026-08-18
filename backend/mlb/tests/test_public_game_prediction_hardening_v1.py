@@ -86,6 +86,15 @@ def test_08b_genuine_score_correction_changes_canonical_hash():
     assert game(hr=5).content_hash!=game(hr=6).content_hash
 
 
+def test_08b1_completion_timestamp_drift_is_not_an_official_result_correction():
+    first=game(effective='2026-08-05T20:59:00.123Z')
+    revised=OfficialFinalGame(**{**first.__dict__,
+                                 'official_final_effective_utc':'2026-08-05T20:58:57.832Z',
+                                 'source_identity':'revised.json','source_sha256':'f'*64})
+    assert first.content_hash!=revised.content_hash
+    assert first.correction_guard_payload==revised.correction_guard_payload
+
+
 def test_08c_state_replay_after_cutoff_is_stable():
     row=game(effective='2026-08-05T21:00:00Z',observed='2026-08-06T09:00:00Z')
     early=reconstruct_state([row],prediction_cutoff_utc='2026-08-06T00:00:00Z',state_generated_at_utc='2026-08-06T00:00:01Z')
@@ -114,8 +123,13 @@ def test_08e_durable_final_ignores_raw_hash_change_but_rejects_score_change(monk
             if 'INSERT INTO mlb.public_game_official_finals' in sql:
                 key=int(params[0])
                 if key in db: self.result=None
-                else: db[key]=params[-1];self.result=(key,)
-            elif 'SELECT content_sha256' in sql: self.result=(db.get(int(params[0])),)
+                else: db[key]=params;self.result=(key,)
+            elif 'FROM mlb.public_game_official_finals WHERE game_pk=' in sql:
+                row=db.get(int(params[0]))
+                self.result=None if row is None else (
+                    row[0],row[1],datetime.fromisoformat(row[2].replace('Z','+00:00')),row[3],
+                    row[4],row[5],row[6],row[7],row[8],
+                )
             else: raise AssertionError(sql)
         def fetchone(self): return self.result
     class Connection:
@@ -128,6 +142,9 @@ def test_08e_durable_final_ignores_raw_hash_change_but_rejects_score_change(monk
                                             'source_identity':'new.json','source_sha256':'f'*64})
     assert durable.append_official_finals([first])==1
     assert durable.append_official_finals([second])==0
+    timing_revision=OfficialFinalGame(**{**second.__dict__,
+                                         'official_final_effective_utc':'2026-08-05T20:58:57.709Z'})
+    assert durable.append_official_finals([timing_revision])==0
     with pytest.raises(model.PublicGamePredictionError,match='CORRECTION_REQUIRES_REPLAY'):
         durable.append_official_finals([game(hr=6)])
 
@@ -151,6 +168,24 @@ def test_08f_production_dict_row_final_loader(monkeypatch):
     monkeypatch.setattr(durable,'pg_connect',lambda:Connection())
     loaded=durable.load_official_finals_before('2026-08-06T00:00:00Z')
     assert len(loaded)==1 and loaded[0].home_runs==5 and loaded[0].source_identity=='retained.json'
+
+
+def test_08g_correction_replay_grading_can_be_date_scoped(monkeypatch):
+    seen={}
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def execute(self,sql,params): seen.update(sql=sql,params=params)
+        def fetchall(self): return []
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def cursor(self): return Cursor()
+    monkeypatch.setattr(durable,'pg_connect',lambda:Connection())
+    assert durable.fetch_ungraded_final_predictions(
+        '2026-08-18T17:00:00Z',game_date='2026-08-17')==[]
+    assert '(%s::date IS NULL OR p.game_date=%s::date)' in seen['sql']
+    assert seen['params'][-2:]==('2026-08-17','2026-08-17')
 
 
 def test_09_tampered_state_hash_fails_closed():

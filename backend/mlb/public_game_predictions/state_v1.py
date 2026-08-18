@@ -44,6 +44,23 @@ class OfficialFinalGame:
                                          separators=(",", ":")).encode()).hexdigest()
 
     @property
+    def correction_guard_payload(self) -> dict[str, Any]:
+        """Stable official result fields whose revision requires governed replay.
+
+        MLB may revise play-feed timestamps after a game without changing its
+        official identity or result.  The completion timestamp remains part of
+        state provenance and cutoff gating, but timestamp-only feed drift is not
+        an official-result correction.
+        """
+        return {
+            "game_pk": int(self.game_pk), "game_date": str(self.game_date),
+            "scheduled_start_utc": _utc(self.scheduled_start_utc).isoformat().replace("+00:00", "Z"),
+            "game_number": int(self.game_number), "home_team_id": int(self.home_team_id),
+            "away_team_id": int(self.away_team_id), "home_runs": int(self.home_runs),
+            "away_runs": int(self.away_runs), "official_status": str(self.official_status),
+        }
+
+    @property
     def canonical_result_payload(self) -> dict[str, Any]:
         """Stable baseball result only; acquisition and raw-source lineage are excluded."""
         return {
