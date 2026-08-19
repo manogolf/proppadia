@@ -34,10 +34,71 @@ C_LEDGER = ROOT / "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shad
 OUTPUT_ROOT = ROOT / "artifacts/analysis/model_development/mlb_totals_c_live_shadow_v1"
 SUPPORT = ROOT / "artifacts/analysis/model_development/mlb_totals_count_confidence_only_deployment_stability_shadow_decision_v1/2026-08-16/totals_c_feature_support_drift.csv"
 THRESHOLDS = (6.5, 7.5, 8.5, 9.5, 10.5, 11.5)
+NORMAL_COMPETITIVE_REGIME = "NORMAL_COMPETITIVE_REGIME"
+LATE_SEASON_TRANSITION_WATCH = "LATE_SEASON_TRANSITION_WATCH"
+LATE_SEASON_DISTINCT_REGIME = "LATE_SEASON_DISTINCT_REGIME"
+_REGIME_STATE_KEYS = {
+    "affirmative_transition_evidence", "affirmative_distinct_evidence",
+    "unavailable_metadata", "ordinary_game_conditions",
+}
+_AFFIRMATIVE_NONPERFORMANCE_EVIDENCE_TYPES = {
+    "MATHEMATICAL_ELIMINATION_STATUS", "ACTIVE_ROSTER_TURNOVER",
+    "LINEUP_CHURN", "REPLACEMENT_PLAYER_USAGE", "REST_PROTECTION_BEHAVIOR",
+    "SHUTDOWN_WORKLOAD_MANAGEMENT", "STARTER_BULLPEN_WORKLOAD_POLICY",
+    "COMPETITIVE_ENVIRONMENT_CHANGE",
+}
+_OPERATIONAL_REGIME_LABELS = {
+    NORMAL_COMPETITIVE_REGIME: "NORMAL",
+    LATE_SEASON_TRANSITION_WATCH: "TRANSITION_WATCH",
+    LATE_SEASON_DISTINCT_REGIME: "LATE_SEASON_DISTINCT",
+}
 
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def classify_regime(regime_state: dict[str, Any] | None = None) -> str:
+    """Classify the competitive regime without using outcomes or C performance.
+
+    Missing metadata and ordinary game conditions are accepted as observations but
+    are deliberately non-triggering. A non-normal classification requires an
+    affirmative, structured non-performance fact from the governed evidence set.
+    """
+    state = regime_state or {}
+    unexpected = set(state) - _REGIME_STATE_KEYS
+    if unexpected:
+        raise ValueError(f"C_REGIME_STATE_UNEXPECTED_KEYS_{sorted(unexpected)}")
+    for field in ("unavailable_metadata", "ordinary_game_conditions"):
+        value = state.get(field, [])
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValueError(f"C_REGIME_STATE_{field.upper()}_INVALID")
+    evidence_by_class = {}
+    for field in ("affirmative_transition_evidence", "affirmative_distinct_evidence"):
+        evidence = state.get(field, [])
+        if not isinstance(evidence, list):
+            raise ValueError(f"C_REGIME_STATE_{field.upper()}_INVALID")
+        for item in evidence:
+            if not isinstance(item, dict) or item.get("affirmative") is not True:
+                raise ValueError(f"C_REGIME_STATE_{field.upper()}_NOT_AFFIRMATIVE")
+            evidence_type = item.get("evidence_type")
+            if evidence_type not in _AFFIRMATIVE_NONPERFORMANCE_EVIDENCE_TYPES:
+                raise ValueError(f"C_REGIME_STATE_{field.upper()}_TYPE_INVALID_{evidence_type}")
+            if item.get("performance_used") not in (None, False):
+                raise ValueError("C_REGIME_CLASSIFICATION_PERFORMANCE_FORBIDDEN")
+        evidence_by_class[field] = evidence
+    if evidence_by_class["affirmative_distinct_evidence"]:
+        return LATE_SEASON_DISTINCT_REGIME
+    if evidence_by_class["affirmative_transition_evidence"]:
+        return LATE_SEASON_TRANSITION_WATCH
+    return NORMAL_COMPETITIVE_REGIME
+
+
+def operational_regime_label(regime_classification: str) -> str:
+    try:
+        return _OPERATIONAL_REGIME_LABELS[regime_classification]
+    except KeyError as exc:
+        raise ValueError(f"C_REGIME_CLASSIFICATION_INVALID_{regime_classification}") from exc
 
 
 def load_artifact() -> dict[str, Any]:
@@ -113,7 +174,8 @@ def _support_bounds() -> dict[str, dict[str, float]]:
     } for row in frame.itertuples()}
 
 
-def watch_payload(game_date: str, run_tag: str, observed: str, source_rows: list[dict[str, Any]], artifact: dict[str, Any], raw_attempts: list[dict[str, Any]] | None) -> dict[str, Any]:
+def watch_payload(game_date: str, run_tag: str, observed: str, source_rows: list[dict[str, Any]], artifact: dict[str, Any],
+                  raw_attempts: list[dict[str, Any]] | None, regime_state: dict[str, Any] | None = None) -> dict[str, Any]:
     features = [row["context"]["model_features"] for row in source_rows]
     contexts = [row["context"] for row in source_rows]
     bounds = _support_bounds()
@@ -158,15 +220,30 @@ def watch_payload(game_date: str, run_tag: str, observed: str, source_rows: list
                  "evidence": "feature values outside frozen development min/max"})
     rows.append({"watch": "I_MODEL_HASH_INTEGRITY", "status": "PASS", "value": MODEL_HASH, "evidence": ARTIFACT_SHA256})
     status = "FAIL" if any(row["status"] == "FAIL" for row in rows) else ("WATCH" if any(row["status"] == "WATCH" for row in rows) else "PASS")
+    effective_regime_state = regime_state or {
+        "affirmative_transition_evidence": [],
+        "affirmative_distinct_evidence": [],
+        "unavailable_metadata": [
+            "mathematical_elimination_status", "active_roster_turnover",
+            "lineup_churn", "replacement_player_usage",
+        ],
+        "ordinary_game_conditions": [],
+    }
+    regime_classification = classify_regime(effective_regime_state)
     return {
         "experiment": EXPERIMENT, "game_date": game_date, "scoring_run_tag": run_tag, "observed_at_utc": observed,
         "deployment_watch_status": status, "watch_rows": rows,
-        "regime_classification": "LATE_SEASON_TRANSITION_WATCH",
+        "regime_classification": regime_classification,
+        "C_REGIME": operational_regime_label(regime_classification),
         "regime_evidence": {
             "performance_used": False,
             "available_nonperformance_indicators": [row["watch"] for row in rows[:-1]],
-            "unavailable_exact_indicators": ["mathematical_elimination_status", "active_roster_turnover", "lineup_churn", "replacement_player_usage"],
-            "reason": "exact objective late-season classification is not yet supportable; contract requires WATCH rather than invented certainty",
+            "affirmative_transition_evidence": effective_regime_state.get("affirmative_transition_evidence", []),
+            "affirmative_distinct_evidence": effective_regime_state.get("affirmative_distinct_evidence", []),
+            "unavailable_exact_indicators": effective_regime_state.get("unavailable_metadata", []),
+            "ordinary_game_conditions": effective_regime_state.get("ordinary_game_conditions", []),
+            "missing_metadata_triggered_watch": False,
+            "reason": "normal is the default; only affirmative non-performance evidence can change the regime",
         },
     }
 
@@ -239,7 +316,7 @@ def score_from_raw(game_date: str, scoring_mode: str, run_tag: str, raw_ledger_p
             "comparator_team_shrunk_baseline": team_baseline,
             "v1_intercept_policy": "DO_NOT_APPLY_RAW_INTERCEPT_TO_C", "raw_intercept_applied_to_c": False,
             "evidence_regime": "C_SHADOW_PRIMARY_2026_REGIME",
-            "regime_classification": "LATE_SEASON_TRANSITION_WATCH",
+            "regime_classification": NORMAL_COMPETITIVE_REGIME,
             "grading_status": "UNGRADED_OUTCOME_SEPARATE_SIDECAR",
             "outcomes_accessed_during_prediction": 0, "public_status": "PRIVATE_SHADOW_ONLY_NOT_PUBLIC",
         }
@@ -254,6 +331,7 @@ def score_from_raw(game_date: str, scoring_mode: str, run_tag: str, raw_ledger_p
         "scoring_run_tag": run_tag, "source_raw_rows": len(source_rows), "rows": len(rows),
         "new_rows": sum(row["ledger_action"] == "APPENDED_NEW" for row in attempts), "attempts": attempts,
         "deployment_watch_status": watches["deployment_watch_status"], "regime_classification": watches["regime_classification"],
+        "C_REGIME": watches["C_REGIME"],
         "watch_action": watch_action, "ledger_before": before, "ledger_after": after,
         "model_name": MODEL_NAME, "model_hash": MODEL_HASH, "artifact_sha256": ARTIFACT_SHA256,
         "raw_control_hash": RAW_MODEL_HASH, "outcomes_accessed": 0, "public_side_effects": 0,

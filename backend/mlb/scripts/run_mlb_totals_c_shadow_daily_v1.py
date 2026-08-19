@@ -91,6 +91,7 @@ def cluster_counts(connection: sqlite3.Connection) -> dict[str, Any]:
       FROM totals_c_shadow_predictions p LEFT JOIN totals_c_shadow_outcomes o USING(canonical_identity)
       GROUP BY p.game_date ORDER BY p.game_date""").fetchall()
     completed = {game_date for game_date, predictions, outcomes in rows if predictions > 0 and predictions == outcomes}
+    pending = {game_date for game_date, predictions, outcomes in rows if predictions > 0 and predictions != outcomes}
     latest_watch = {}
     for game_date, classification in connection.execute("""SELECT w.game_date,w.regime_classification
       FROM totals_c_shadow_watch_observations w JOIN (
@@ -100,12 +101,22 @@ def cluster_counts(connection: sqlite3.Connection) -> dict[str, Any]:
     primary = sorted(day for day in completed if latest_watch.get(day) == "NORMAL_COMPETITIVE_REGIME")
     transition = sorted(day for day in completed if latest_watch.get(day) == "LATE_SEASON_TRANSITION_WATCH")
     late = sorted(day for day in completed if latest_watch.get(day) == "LATE_SEASON_DISTINCT_REGIME")
+    pending_primary = sorted(day for day in pending if latest_watch.get(day) == "NORMAL_COMPETITIVE_REGIME")
+    pending_transition = sorted(day for day in pending if latest_watch.get(day) == "LATE_SEASON_TRANSITION_WATCH")
+    pending_late = sorted(day for day in pending if latest_watch.get(day) == "LATE_SEASON_DISTINCT_REGIME")
     return {
         "completed_date_clusters": len(completed), "completed_primary_regime_clusters": len(primary),
         "completed_transition_watch_clusters": len(transition), "completed_late_season_clusters": len(late),
         "primary_dates": primary, "transition_watch_dates": transition, "late_season_dates": late,
+        "pending_date_clusters": len(pending), "pending_primary_regime_clusters": len(pending_primary),
+        "pending_transition_watch_clusters": len(pending_transition), "pending_late_season_clusters": len(pending_late),
+        "pending_primary_dates": pending_primary, "pending_transition_watch_dates": pending_transition,
+        "pending_late_season_dates": pending_late,
         "first_formal_checkpoint": 8, "second_conditional_checkpoint": 12,
         "next_primary_checkpoint": 8 if len(primary) < 8 else (12 if len(primary) < 12 else None),
+        "completed_primary_clusters_to_next_checkpoint": (
+            max(0, 8 - len(primary)) if len(primary) < 8 else (max(0, 12 - len(primary)) if len(primary) < 12 else 0)
+        ),
     }
 
 

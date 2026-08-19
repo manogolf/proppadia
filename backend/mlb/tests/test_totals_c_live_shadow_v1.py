@@ -135,14 +135,55 @@ def test_outcome_sidecar_is_separate_and_prediction_trigger_is_append_only(tmp_p
         c_connection.execute("UPDATE totals_c_shadow_predictions SET game_pk=1")
 
 
-def test_watch_and_regime_schema_fail_closed_to_transition_watch(tmp_path):
+def test_watch_and_regime_schema_defaults_to_normal_when_metadata_is_unavailable(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_fixture(raw_path)
     result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z")
-    assert result["regime_classification"] == "LATE_SEASON_TRANSITION_WATCH"
+    assert result["regime_classification"] == "NORMAL_COMPETITIVE_REGIME"
+    assert result["C_REGIME"] == "NORMAL"
     connection = ledger.connect_ledger(c_path)
     watch = connection.execute("SELECT watch_payload_json FROM totals_c_shadow_watch_observations").fetchone()[0]
     assert all(label in watch for label in ("A_BULLPEN_SOURCE_FRESHNESS", "I_MODEL_HASH_INTEGRITY", "performance_used"))
+    payload = json.loads(watch)
+    assert payload["regime_evidence"]["missing_metadata_triggered_watch"] is False
+    assert ledger.predictions_for_date(connection, "2026-08-17")[0]["regime_classification"] == "NORMAL_COMPETITIVE_REGIME"
+
+
+def test_regime_classification_requires_affirmative_nonperformance_evidence():
+    missing_only = {
+        "affirmative_transition_evidence": [], "affirmative_distinct_evidence": [],
+        "unavailable_metadata": ["mathematical_elimination_status"],
+        "ordinary_game_conditions": [],
+    }
+    weather_only = {
+        "affirmative_transition_evidence": [], "affirmative_distinct_evidence": [],
+        "unavailable_metadata": [],
+        "ordinary_game_conditions": ["RAIN_DELAY", "EXTRA_INNINGS", "COMPLETED_UNUSUAL_GAME"],
+    }
+    transition = {
+        "affirmative_transition_evidence": [{
+            "evidence_type": "ACTIVE_ROSTER_TURNOVER", "affirmative": True,
+            "performance_used": False, "source": "governed_roster_snapshot",
+        }],
+        "affirmative_distinct_evidence": [], "unavailable_metadata": [], "ordinary_game_conditions": [],
+    }
+    distinct = {
+        "affirmative_transition_evidence": [],
+        "affirmative_distinct_evidence": [{
+            "evidence_type": "MATHEMATICAL_ELIMINATION_STATUS", "affirmative": True,
+            "performance_used": False, "source": "governed_standings_snapshot",
+        }],
+        "unavailable_metadata": [], "ordinary_game_conditions": [],
+    }
+    assert scorer.classify_regime(missing_only) == "NORMAL_COMPETITIVE_REGIME"
+    assert scorer.classify_regime(weather_only) == "NORMAL_COMPETITIVE_REGIME"
+    assert scorer.classify_regime(transition) == "LATE_SEASON_TRANSITION_WATCH"
+    assert scorer.classify_regime(distinct) == "LATE_SEASON_DISTINCT_REGIME"
+    assert scorer.operational_regime_label("LATE_SEASON_TRANSITION_WATCH") == "TRANSITION_WATCH"
+    assert scorer.operational_regime_label("LATE_SEASON_DISTINCT_REGIME") == "LATE_SEASON_DISTINCT"
+    with pytest.raises(ValueError, match="PERFORMANCE_FORBIDDEN"):
+        transition["affirmative_transition_evidence"][0]["performance_used"] = True
+        scorer.classify_regime(transition)
 
 
 def test_hook_is_syntax_valid_natural_and_private():
