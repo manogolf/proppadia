@@ -7,16 +7,171 @@ import csv
 import hashlib
 import json
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from backend.mlb.scripts.build_mlb_reconcile_rows import _load_actual_values
 
 ROOT = Path(__file__).resolve().parents[3]
 
+OUTCOME_FIELDS = (
+    "canonical_identity",
+    "game_date",
+    "game_id",
+    "player_id",
+    "prop_type",
+    "line",
+    "selected_side",
+    "prediction_timestamp",
+    "scheduled_game_start",
+    "model_semantic_name",
+    "model_artifact_sha256",
+    "model_probability_over",
+    "model_selected_side_probability",
+    "prediction_lineage_status",
+    "actual_value",
+    "selected_side_outcome",
+    "outcome_status",
+    "actual_sample_rows",
+    "actual_distinct_values",
+    "outcome_contract",
+)
+INTEGER_OUTCOME_FIELDS = {"game_id", "player_id", "actual_sample_rows", "actual_distinct_values"}
+DECIMAL_OUTCOME_FIELDS = {
+    "line",
+    "model_probability_over",
+    "model_selected_side_probability",
+    "actual_value",
+}
+NULLABLE_OUTCOME_FIELDS = {"actual_value", "selected_side_outcome"}
+INCIDENTAL_OUTCOME_FIELDS = {
+    "generated_at",
+    "generated_at_utc",
+    "reconciliation_timestamp",
+    "reconciliation_timestamp_utc",
+    "write_timestamp",
+    "write_timestamp_utc",
+}
+SUMMARY_SEMANTIC_FIELDS = (
+    "date",
+    "prediction_ledger",
+    "frozen_identities",
+    "resolved",
+    "unresolved",
+    "duplicate_identities",
+    "by_prop",
+    "by_prop_line",
+    "outcome_csv",
+    "outcome_csv_sha256",
+)
+
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _normalized_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none", "null"}:
+        return None
+    return text
+
+
+def _normalized_decimal(value: Any, *, field: str) -> str | None:
+    text = _normalized_text(value)
+    if text is None:
+        return None
+    try:
+        number = Decimal(text)
+    except (InvalidOperation, ValueError) as exc:
+        raise RuntimeError(f"INVALID_CANONICAL_OUTCOME_NUMERIC field={field} value={value!r}") from exc
+    if not number.is_finite():
+        raise RuntimeError(f"INVALID_CANONICAL_OUTCOME_NUMERIC field={field} value={value!r}")
+    if number == 0:
+        return "0"
+    return format(number.normalize(), "f")
+
+
+def _canonical_outcome_row(row: Mapping[str, Any]) -> dict[str, str | None]:
+    keys = set(row)
+    missing = set(OUTCOME_FIELDS) - keys
+    unexpected = keys - set(OUTCOME_FIELDS) - INCIDENTAL_OUTCOME_FIELDS
+    if missing or unexpected:
+        raise RuntimeError(
+            "CANONICAL_OUTCOME_SCHEMA_MISMATCH "
+            f"missing={','.join(sorted(missing)) or 'NONE'} "
+            f"unexpected={','.join(sorted(str(key) for key in unexpected)) or 'NONE'}"
+        )
+    normalized: dict[str, str | None] = {}
+    for field in OUTCOME_FIELDS:
+        if field in INTEGER_OUTCOME_FIELDS:
+            number = _normalized_decimal(row[field], field=field)
+            if number is None or Decimal(number) != Decimal(number).to_integral_value():
+                raise RuntimeError(f"INVALID_CANONICAL_OUTCOME_INTEGER field={field} value={row[field]!r}")
+            normalized[field] = str(int(Decimal(number)))
+        elif field in DECIMAL_OUTCOME_FIELDS:
+            normalized[field] = _normalized_decimal(row[field], field=field)
+        else:
+            normalized[field] = _normalized_text(row[field])
+        if normalized[field] is None and field not in NULLABLE_OUTCOME_FIELDS:
+            raise RuntimeError(f"MISSING_CANONICAL_OUTCOME_VALUE field={field}")
+
+    expected_identity = ":".join(
+        (
+            str(normalized["game_id"]),
+            str(normalized["player_id"]),
+            str(normalized["prop_type"]),
+            str(normalized["line"]),
+        )
+    )
+    if normalized["canonical_identity"] != expected_identity:
+        raise RuntimeError(
+            "CANONICAL_OUTCOME_IDENTITY_MISMATCH "
+            f"recorded={normalized['canonical_identity']} expected={expected_identity}"
+        )
+    return normalized
+
+
+def canonical_outcome_set(rows: list[Mapping[str, Any]]) -> list[dict[str, str | None]]:
+    canonical = [_canonical_outcome_row(row) for row in rows]
+    identities = [str(row["canonical_identity"]) for row in canonical]
+    if len(identities) != len(set(identities)):
+        raise RuntimeError("DUPLICATE_CANONICAL_OUTCOME_IDENTITIES")
+    return sorted(canonical, key=lambda row: str(row["canonical_identity"]))
+
+
+def canonical_outcome_set_sha256(rows: list[Mapping[str, Any]]) -> str:
+    encoded = json.dumps(
+        canonical_outcome_set(rows),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _read_outcome_csv(path: Path) -> list[dict[str, Any]]:
+    with path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise RuntimeError(f"CANONICAL_OUTCOME_SCHEMA_MISMATCH path={path} missing=HEADER")
+        rows = list(reader)
+    if any(None in row for row in rows):
+        raise RuntimeError(f"CANONICAL_OUTCOME_SCHEMA_MISMATCH path={path} unexpected=EXTRA_CSV_VALUES")
+    return rows
+
+
+def _encoded_outcome_csv(rows: list[Mapping[str, Any]]) -> bytes:
+    ordered = sorted(rows, key=lambda row: str(_canonical_outcome_row(row)["canonical_identity"]))
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=list(OUTCOME_FIELDS), lineterminator="\n")
+    writer.writeheader()
+    writer.writerows({field: row.get(field) for field in OUTCOME_FIELDS} for row in ordered)
+    return buffer.getvalue().encode()
 
 
 def _strict_pregame(row: dict[str, str]) -> bool:
@@ -113,19 +268,46 @@ def require_complete(date: str, path: Path) -> None:
 
 
 def write_immutable_csv(path: Path, rows: list[dict[str, Any]]) -> str:
-    fields = list(rows[0]) if rows else []
-    from io import StringIO
-    buffer = StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=fields, lineterminator="\n")
-    writer.writeheader()
-    writer.writerows(rows)
-    data = buffer.getvalue().encode()
-    if path.exists() and path.read_bytes() != data:
-        raise RuntimeError(f"IMMUTABLE_OUTCOME_SIDECAR_CONFLICT path={path}")
+    proposed_semantic_sha = canonical_outcome_set_sha256(rows)
+    if path.exists():
+        existing_semantic_sha = canonical_outcome_set_sha256(_read_outcome_csv(path))
+        if existing_semantic_sha != proposed_semantic_sha:
+            raise RuntimeError(
+                "IMMUTABLE_OUTCOME_SIDECAR_CONFLICT "
+                f"path={path} existing_semantic_sha256={existing_semantic_sha} "
+                f"proposed_semantic_sha256={proposed_semantic_sha}"
+            )
+        return sha256(path)
+    data = _encoded_outcome_csv(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_bytes(data)
+    path.write_bytes(data)
     return hashlib.sha256(data).hexdigest()
+
+
+def write_immutable_summary(path: Path, summary: dict[str, Any]) -> str:
+    encoded = (json.dumps(summary, indent=2, sort_keys=True) + "\n").encode()
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"IMMUTABLE_OUTCOME_SUMMARY_INVALID path={path}") from exc
+        if not isinstance(existing, dict):
+            raise RuntimeError(f"IMMUTABLE_OUTCOME_SUMMARY_INVALID path={path}")
+        missing = [field for field in SUMMARY_SEMANTIC_FIELDS if field not in existing]
+        if missing:
+            raise RuntimeError(
+                f"IMMUTABLE_OUTCOME_SUMMARY_INVALID path={path} missing={','.join(missing)}"
+            )
+        changed = [field for field in SUMMARY_SEMANTIC_FIELDS if existing[field] != summary[field]]
+        if changed:
+            raise RuntimeError(
+                "IMMUTABLE_OUTCOME_SUMMARY_CONFLICT "
+                f"path={path} semantic_fields={','.join(changed)}"
+            )
+        return "IMMUTABLE_OUTCOME_SUMMARY_ALREADY_CURRENT"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(encoded)
+    return "CANONICAL_PROSPECTIVE_OUTCOME_RECONCILIATION_COMPLETE"
 
 
 def main() -> int:
@@ -142,8 +324,7 @@ def main() -> int:
     frozen = freeze_predictions(ledger)
     actual = _load_actual_values(from_date=date, to_date=date)
     rows = reconcile_rows(frozen, actual)
-    if len(rows) != len({row["canonical_identity"] for row in rows}):
-        raise RuntimeError("DUPLICATE_CANONICAL_OUTCOME_IDENTITIES")
+    outcome_set_sha = canonical_outcome_set_sha256(rows)
     out_dir = ROOT / args.out_root / date
     out_csv = out_dir / "canonical_outcome_reconciliation.csv"
     digest = write_immutable_csv(out_csv, rows)
@@ -174,12 +355,12 @@ def main() -> int:
         "outcome_csv_sha256": digest,
     }
     summary_path = out_dir / "canonical_outcome_reconciliation_summary.json"
-    encoded = (json.dumps(summary, indent=2, sort_keys=True) + "\n").encode()
-    if summary_path.exists() and summary_path.read_bytes() != encoded:
-        raise RuntimeError(f"IMMUTABLE_OUTCOME_SUMMARY_CONFLICT path={summary_path}")
-    if not summary_path.exists():
-        summary_path.write_bytes(encoded)
-    print(json.dumps(summary, indent=2, sort_keys=True))
+    decision = write_immutable_summary(summary_path, summary)
+    result = dict(summary)
+    result["decision"] = decision
+    result["canonical_outcome_set_sha256"] = outcome_set_sha
+    result["write_action"] = "NO_OP" if decision == "IMMUTABLE_OUTCOME_SUMMARY_ALREADY_CURRENT" else "CREATED"
+    print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
 
