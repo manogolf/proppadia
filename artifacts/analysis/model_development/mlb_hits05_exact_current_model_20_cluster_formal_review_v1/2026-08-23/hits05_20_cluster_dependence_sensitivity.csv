@@ -1,0 +1,15 @@
+analysis,metric,point_estimate,ci_low,ci_high,fraction_draws_favoring_model,clusters,replicates,inference_materially_changes_vs_date_cluster
+STRUCTURE,unique_players,422.0,,,,,,NO
+STRUCTURE,games_represented,265.0,,,,,,NO
+STRUCTURE,predictions_per_player_min,1.0,,,,,,NO
+STRUCTURE,predictions_per_player_median,12.0,,,,,,NO
+STRUCTURE,predictions_per_player_mean,11.106635071090047,,,,,,NO
+STRUCTURE,predictions_per_player_p90,17.0,,,,,,NO
+STRUCTURE,predictions_per_player_max,19.0,,,,,,NO
+STRUCTURE,hitters_per_game_min,10.0,,,,,,NO
+STRUCTURE,hitters_per_game_median,18.0,,,,,,NO
+STRUCTURE,hitters_per_game_mean,17.68679245283019,,,,,,NO
+STRUCTURE,hitters_per_game_p90,20.0,,,,,,NO
+STRUCTURE,hitters_per_game_max,21.0,,,,,,NO
+GAME_ID_CLUSTER_BOOTSTRAP,model_minus_population_brier,0.00028858897858173555,-0.002036804324343905,0.0025652131571492695,0.3938,265.0,5000.0,NO
+GAME_ID_CLUSTER_BOOTSTRAP,model_minus_hitter_brier,-0.0007679851816846857,-0.003425257187226862,0.001844843481730449,0.7096,265.0,5000.0,NO
