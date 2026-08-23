@@ -1,0 +1,26 @@
+{
+  "manifest_contract": "SHA256_OF_EACH_LISTED_FILE_BYTES; MANIFEST_EXCLUDES_ITSELF",
+  "frozen_at_utc": "2026-08-23T18:08:27Z",
+  "experiment_start_date": "2026-08-24",
+  "files": [
+    {"path": "backend/mlb/hits05_full_board_shadow/__init__.py", "sha256": "eaec5a5423a99dc875a48930f4e9d32f9237a07a37d0373e685cf3211b900c1d"},
+    {"path": "backend/mlb/hits05_full_board_shadow/ledger_v1.py", "sha256": "7c202002fc4778a569396c84a2b147269f0f2c41c23d4a7f2246bb5dc4f895c6"},
+    {"path": "backend/mlb/scripts/attach_mlb_hits05_full_board_markets_v1.py", "sha256": "45f0df553d1b1d8b4a1fbd18c81adb0f25cefd57057a87755960e46d0aa1570c"},
+    {"path": "backend/mlb/scripts/grade_mlb_hits05_full_board_shadow_v1.py", "sha256": "5beeb35202ee0397375319a541aac6fd516dc33b250b4d0c7482d257779ee7ba"},
+    {"path": "backend/mlb/scripts/report_mlb_hits05_full_board_shadow_v1.py", "sha256": "9720d6deb74f7c80c2daddd4f4b5b6f9b57a333d973ae25407c8b11744df0a92"},
+    {"path": "backend/mlb/scripts/run_mlb_hits05_full_board_shadow_daily_v1.py", "sha256": "576f0b5e7a3516cc4d61788fbd2957229ee10e3f283dc0ef3a0bd1b7dd56468e"},
+    {"path": "backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py", "sha256": "a54591711d7c1a7c17cad0412ced8252082b92b5d1c1cb22f61a93680a74da02"},
+    {"path": "backend/mlb/scripts/validate_mlb_hits05_full_board_shadow_v1.py", "sha256": "d0b8799453832bb7644a5293fc3e21d963008bc25ae6c5d2c875e345ed43a3bb"},
+    {"path": "backend/mlb/tests/test_hits05_full_board_shadow_v1.py", "sha256": "1a8aafc89ee12c37ff1c3e57d7f7940030cbc704c70b50857c08ccd1110d7a85"},
+    {"path": "bin/mlb_hits05_full_board_shadow_daily_hook.sh", "sha256": "edc49c36976b5cdcce36d6806037bed6969bab30616ca78a526932a01440e5e0"},
+    {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/eligibility_contract.md", "sha256": "4f18ba8e0671c3ae7065a72079a24e821f67c88008f4430f199056b5cb7d6560"},
+    {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/field_manifest.json", "sha256": "242537df78c44897fa225a6dead70495d0cb5c456e97c9a1da3166da44c477da"},
+    {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/frozen_experiment_specification.md", "sha256": "1a8b2155cbefedd7c1c47a5c05c5df705a7e164b4ada0599091524b5db9b9455"},
+    {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/implementation_and_validation_report.md", "sha256": "88a85c7080b0594de1456ab735fafa595c3d3ac7fb67863a423ed19c4e394411"},
+    {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/operational_run_instructions.md", "sha256": "c59c112ca39feff49c009aa13ed453654b8fa34aade244a78dd43b961c88790d"},
+    {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/prestart_process_fixture.json", "sha256": "ebe9927ba589b823148fc215d39a4931321f4b3e0adbbe179f5e345ff9142ab1"},
+    {"path": "models_out/latest/hits.joblib", "sha256": "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf"},
+    {"path": "backend/mlb/config/semantic_models/manifests/MLB_HITS_SEMANTIC_V1_2e7377b2cdcb.json", "sha256": "84efb9f21723f50abf649d7e03cb2916ddf9b2704c91ff9b8e4553c979ffe972"},
+    {"path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh", "sha256": "b62cb0f4321641e6b1c790f2c560491707e7679ee1a8d81286cc5900c56d567e", "installation": "installed_daily_wrapper"}
+  ]
+}

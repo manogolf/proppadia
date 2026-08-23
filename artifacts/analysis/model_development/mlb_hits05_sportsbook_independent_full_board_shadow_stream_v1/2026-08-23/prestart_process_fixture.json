@@ -1,0 +1,15 @@
+{
+  "fixture_contract": "PROCESS_ONLY_REPLAY_NOT_PROSPECTIVE_EVIDENCE",
+  "rows": [
+    {
+      "slate_date": "2099-01-02",
+      "game_id": 990001,
+      "player_id": 660001,
+      "player_name": "Governed Process Fixture Hitter",
+      "team": "NYY",
+      "opponent": "BOS",
+      "scheduled_start_utc": "2099-01-02T20:00:00Z",
+      "prepared_features": {}
+    }
+  ]
+}
