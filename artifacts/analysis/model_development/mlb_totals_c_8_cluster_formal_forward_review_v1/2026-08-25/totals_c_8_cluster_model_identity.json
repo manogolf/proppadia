@@ -1,0 +1,28 @@
+{
+  "C_PROSPECTIVE_INTEGRITY": "PASS",
+  "c_artifact_file_sha256": "ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc",
+  "c_artifact_sha256": "ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc",
+  "c_dispersion_alpha": 0.12988346817423194,
+  "c_intercept_policy": "DO_NOT_APPLY_RAW_INTERCEPT_TO_C",
+  "c_model_hash": "21828319efc421661f833484246b81e48721282ccd65f84ccc4f94222d7dd1cd",
+  "c_model_name": "DIRECT_NEGATIVE_BINOMIAL_COUNT_CONFIDENCE_ONLY_V1",
+  "context_contract_unchanged": true,
+  "feature_contract_hash": "d7551fd7798aa60ada1b96831e32bcb7748a17aabf67f53c8800f24c9f4a0927",
+  "feature_contract_unchanged": true,
+  "mean_semantics": "NEGATIVE_BINOMIAL_EXPECTED_TOTAL",
+  "median_semantics": "DISCRETE_DISTRIBUTION_MEDIAN",
+  "outcome_access_rows": 0,
+  "probability_contract": "negative binomial with fitted mean and alpha; support 0..30 with 30-plus tail folded into 30",
+  "probability_ladder_unchanged": true,
+  "raw_config_file_sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+  "raw_control_hash": "fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac",
+  "raw_dispersion_alpha": 0.12944479977012996,
+  "raw_intercept_applied_to_c_rows": 0,
+  "raw_v1_intercept": 0.49355,
+  "review_window": {
+    "clusters": 8,
+    "end": "2026-08-24",
+    "start": "2026-08-17"
+  },
+  "task_id": "MLB_TOTALS_C_8_CLUSTER_FORMAL_FORWARD_REVIEW_V1"
+}

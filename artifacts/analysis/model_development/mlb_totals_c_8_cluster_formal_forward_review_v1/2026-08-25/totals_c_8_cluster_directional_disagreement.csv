@@ -1,0 +1,2 @@
+nonpush_rows,opposite_side_count,opposite_side_percentage,c_correct_on_disagreements,pinnacle_correct_on_disagreements,both_effectively_neutral_count,same_side_confidence_disagreement_ge_5pp,neutral_definition
+98,47,0.47959183673469385,26,19,7,16,ABS_PROBABILITY_MINUS_0.5_LT_0.01

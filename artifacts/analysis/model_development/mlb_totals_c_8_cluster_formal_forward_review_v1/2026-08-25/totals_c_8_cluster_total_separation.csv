@@ -1,0 +1,2 @@
+synchronized_rows,mean_signed_c_minus_market_total,mean_absolute_separation,median_absolute_separation,separation_sd,ge_0_5,ge_1_0,ge_1_5,ge_2_0
+104,0.6682721553881965,0.7459794783283166,0.6428282522849713,0.6201818264771909,68,23,10,3

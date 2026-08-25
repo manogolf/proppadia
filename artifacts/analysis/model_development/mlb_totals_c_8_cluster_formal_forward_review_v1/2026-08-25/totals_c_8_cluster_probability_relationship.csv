@@ -1,0 +1,2 @@
+rows,pearson_c_vs_pinnacle,spearman_c_vs_pinnacle,mean_absolute_probability_difference,ge_5pp_disagreement,ge_10pp_disagreement,ge_15pp_disagreement
+98,0.2110389351982703,0.18028164195747162,0.045397899885396505,33,9,2

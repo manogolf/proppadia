@@ -1,0 +1,10 @@
+watch,label,pass_dates,watch_dates,fail_dates,watch_date_list,fail_date_list,materially_explains_results
+A,bullpen freshness,8,0,0,,,NO_GOVERNED_EVIDENCE
+B,zero burden,8,0,0,,,NO_GOVERNED_EVIDENCE
+C,likely-reliever-count drift,1,7,0,2026-08-17|2026-08-18|2026-08-19|2026-08-21|2026-08-22|2026-08-23|2026-08-24,,NO_GOVERNED_EVIDENCE
+D,starter fallback mix,2,6,0,2026-08-17|2026-08-18|2026-08-19|2026-08-22|2026-08-23|2026-08-24,,NO_GOVERNED_EVIDENCE
+E,league-total center drift,0,8,0,2026-08-17|2026-08-18|2026-08-19|2026-08-20|2026-08-21|2026-08-22|2026-08-23|2026-08-24,,NO_GOVERNED_EVIDENCE
+F,probable-pitcher availability,8,0,0,,,NO_GOVERNED_EVIDENCE
+G,park/context fallback,8,0,0,,,NO_GOVERNED_EVIDENCE
+H,feature support,2,6,0,2026-08-17|2026-08-18|2026-08-19|2026-08-21|2026-08-22|2026-08-23,,NO_GOVERNED_EVIDENCE
+I,model/hash,8,0,0,,,NO_GOVERNED_EVIDENCE
