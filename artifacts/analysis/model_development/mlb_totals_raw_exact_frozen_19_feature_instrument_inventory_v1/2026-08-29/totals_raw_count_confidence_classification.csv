@@ -1,0 +1,13 @@
+exact_field_name,qualifies_as_history_sample_support_confidence_feature,quantity_class,raw_usage_code,raw_usage_definition,direct_raw_location_coefficient,removed_from_c_direct_location,upstream_role_retained_in_c,explanation
+home_starter_prior_starts,TRUE,START_COUNT|HISTORY_DEPTH|SUPPORT_CONFIDENCE,C,BOTH_UPSTREAM_CONFIDENCE_AND_DIRECT_LOCATION,0.012677233712015375,TRUE,TRUE,Used both to choose starter-history fallback tier and as an unbounded standardized location term.
+away_starter_prior_starts,TRUE,START_COUNT|HISTORY_DEPTH|SUPPORT_CONFIDENCE,C,BOTH_UPSTREAM_CONFIDENCE_AND_DIRECT_LOCATION,0.0008268356527004493,TRUE,TRUE,Used both to choose starter-history fallback tier and as an unbounded standardized location term.
+park_history_depth,TRUE,HISTORY_DEPTH|SAMPLE_COUNT|SUPPORT_CONFIDENCE,C,BOTH_UPSTREAM_CONFIDENCE_AND_DIRECT_LOCATION,-0.02681303790069205,TRUE,TRUE,Used in n/(n+50) park shrinkage and separately as an unbounded standardized location term.
+home_bullpen_likely_available_reliever_count,FALSE,SUBSTANTIVE_ROSTER_AVAILABILITY_COUNT,B,DIRECT_LOCATION_ONLY,-0.01084444912895344,FALSE,FALSE,"Direct state count, but not history depth/sample support/confidence."
+away_bullpen_likely_available_reliever_count,FALSE,SUBSTANTIVE_ROSTER_AVAILABILITY_COUNT,B,DIRECT_LOCATION_ONLY,0.003558827664027518,FALSE,FALSE,"Direct state count, but not history depth/sample support/confidence."
+home_bullpen_recent_innings_burden,FALSE,SUBSTANTIVE_WORKLOAD_QUANTITY,B,DIRECT_LOCATION_ONLY,-0.000834537374008508,FALSE,FALSE,"Innings-equivalent recent workload, not a support/confidence count."
+away_bullpen_recent_innings_burden,FALSE,SUBSTANTIVE_WORKLOAD_QUANTITY,B,DIRECT_LOCATION_ONLY,0.007154814495771844,FALSE,FALSE,"Innings-equivalent recent workload, not a support/confidence count."
+home_expected_outs,FALSE,SUBSTANTIVE_WORKLOAD_QUANTITY,B,DIRECT_LOCATION_ONLY,-0.011065970207803344,FALSE,FALSE,"Expected workload, not sample support."
+away_expected_outs,FALSE,SUBSTANTIVE_WORKLOAD_QUANTITY,B,DIRECT_LOCATION_ONLY,0.007419496809107899,FALSE,FALSE,"Expected workload, not sample support."
+home_workload_uncertainty_outs,FALSE,UNCERTAINTY_ESTIMATE_NOT_SUPPORT_COUNT,B,DIRECT_LOCATION_ONLY,0.010362819278096425,FALSE,FALSE,"Estimated workload dispersion, not its sample size."
+away_workload_uncertainty_outs,FALSE,UNCERTAINTY_ESTIMATE_NOT_SUPPORT_COUNT,B,DIRECT_LOCATION_ONLY,0.0014323801126656583,FALSE,FALSE,"Estimated workload dispersion, not its sample size."
+game_number,FALSE,SCHEDULE_ORDINAL,B,DIRECT_LOCATION_ONLY,0.003839049993724805,FALSE,FALSE,"Game-number state, not history/sample support/confidence."
