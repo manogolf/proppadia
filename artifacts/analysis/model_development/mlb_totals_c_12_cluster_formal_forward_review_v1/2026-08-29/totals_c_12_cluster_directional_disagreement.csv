@@ -1,0 +1,4 @@
+scope,nonpush_rows,opposite_side_count,opposite_side_percentage,c_correct_on_disagreements,pinnacle_correct_on_disagreements,both_effectively_neutral_count,same_side_confidence_disagreement_ge_5pp,neutral_definition,same_side_total_count,same_side_non_neutral_count
+FIRST_8,98,47,0.47959183673469385,26,19,7,16,ABS_PROBABILITY_MINUS_0.5_LT_0.01,51,44
+NEXT_4,50,18,0.36,8,10,1,14,ABS_PROBABILITY_MINUS_0.5_LT_0.01,32,31
+FULL_12,148,65,0.4391891891891892,34,29,8,30,ABS_PROBABILITY_MINUS_0.5_LT_0.01,83,75

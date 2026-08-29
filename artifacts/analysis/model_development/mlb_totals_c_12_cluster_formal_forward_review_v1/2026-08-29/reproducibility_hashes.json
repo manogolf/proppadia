@@ -1,0 +1,14 @@
+{
+  "bootstrap_reps": 10000,
+  "bootstrap_seed": 20260829,
+  "generated_at_utc": "2026-08-29T16:32:09.540238+00:00",
+  "source_hashes": {
+    "artifacts/analysis/model_development/mlb_totals_count_feature_structural_repair_comparison_v1/2026-08-16/DIRECT_NEGATIVE_BINOMIAL_COUNT_CONFIDENCE_ONLY_V1.json": "ea496a7a65d6ffad306238a46dd1279cf0cc81675c07f7447e9a48b511b4abfc",
+    "backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "5d1958e10ed775dc5baa34ed10ca0cb3eb110910d374476fa30ef6fc85e04ef6",
+    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "6ec9de88cb764c1a27b10673d31b96d385d498d09462220b532f12abc98b419d",
+    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3433656ccf350d223f3341383c3e49e009652ae52c3b706ff2114684a70cfca9",
+    "backend/mlb/scripts/run_mlb_totals_c_12_cluster_formal_forward_review_v1.py": "1dd6ecd6a75fd6d729081cc894509314f129f12a17bbbd2e0f1b1c1d88c553ac"
+  },
+  "task_id": "MLB_TOTALS_C_12_CLUSTER_FORMAL_FORWARD_REVIEW_V1"
+}

@@ -1,0 +1,8 @@
+comparison,delta
+c_mean_minus_raw_mae,0.09590365028518821
+c_median_minus_raw_mae,0.02521227874245957
+c_minus_raw_rmse,0.008090882627084461
+c_minus_raw_absolute_bias,-0.20932044494693838
+c_minus_raw_crps,0.008271355025578853
+c_minus_raw_brier,0.0035949983384528372
+c_minus_raw_log_loss,0.007460202307530972

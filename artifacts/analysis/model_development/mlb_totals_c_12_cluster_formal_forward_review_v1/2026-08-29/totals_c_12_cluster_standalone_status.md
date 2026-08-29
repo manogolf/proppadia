@@ -1,0 +1,6 @@
+# Totals C standalone status
+
+- RAW/C mean MAE: 3.718377 / 3.814281; C median MAE: 3.743590.
+- RAW/C CRPS: 2.597321 / 2.605593.
+- RAW/C Brier: 0.252193 / 0.255788; log loss: 0.697786 / 0.705246.
+`C_STANDALONE_FORWARD_EVIDENCE_12 = MIXED`
