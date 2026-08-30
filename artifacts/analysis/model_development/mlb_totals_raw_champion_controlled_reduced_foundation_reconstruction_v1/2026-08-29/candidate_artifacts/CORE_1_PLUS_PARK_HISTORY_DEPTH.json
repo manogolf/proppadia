@@ -1,0 +1,45 @@
+{
+  "candidate_identity": "CORE_1_PLUS_PARK_HISTORY_DEPTH",
+  "canonical_candidate_hash": "271854d74acf541bf6b6d225730f0cfaf44117d7895843541564313eb5f2a4ad",
+  "champion_model_hash": "fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac",
+  "coefficients": [
+    0.041412117768816155,
+    -0.016815039774381868
+  ],
+  "designation": "RESEARCH_STRUCTURE_ONLY_NOT_PROMOTED",
+  "development_date_max": "2024-09-30",
+  "development_date_min": "2023-03-30",
+  "development_games": 4859,
+  "dispersion_alpha": 0.13096114878073586,
+  "distribution_support": "0..30_WITH_30_PLUS_TAIL",
+  "evaluation_rows_used_for_fit_selection_or_tuning": 0,
+  "feature_order": [
+    "strict_prior_total_run_factor",
+    "park_history_depth"
+  ],
+  "fit_count": 1,
+  "frozen_pre_fit_manifest_sha256": "849f5e493d41bc6c4e58a78aaaaee004a62314606325eafc459cc519c46df794",
+  "intercept": 2.197159383302696,
+  "location_max_iter": 1000,
+  "location_regularization_alpha": 0.1,
+  "model_class": "sklearn.linear_model.PoissonRegressor",
+  "model_family": "REGULARIZED_POISSON_LOCATION_WITH_NEGATIVE_BINOMIAL_DISTRIBUTION",
+  "normalization": "STANDARD_SCALER_DEVELOPMENT_ONLY",
+  "outcome_target": "OFFICIAL_FINAL_TOTAL_RUNS",
+  "public_status": "RESEARCH_ONLY_NOT_AUTHORIZED",
+  "random_seed": "NOT_APPLICABLE_DETERMINISTIC_LBFGS",
+  "scaler_mean": [
+    1.0080243915561882,
+    80.043836180284
+  ],
+  "scaler_scale": [
+    0.058277054946043745,
+    46.75071640123089
+  ],
+  "sklearn_version": "1.6.1",
+  "solver": "lbfgs",
+  "solver_tolerance": 0.0001,
+  "source_task": "MLB_TOTALS_RAW_CHAMPION_CONTROLLED_REDUCED_FOUNDATION_RECONSTRUCTION_V1",
+  "training_matrix_hash": "cc588c846f53c319626329876331eb7ff8be1eb0a992e646af4a4ccf4ce95633",
+  "training_row_identity_target_hash": "2a0de11d142b493859ec97e5b2585a13836f4e9fe64589269c3da4dab629369b"
+}

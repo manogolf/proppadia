@@ -1,0 +1,6 @@
+concept_number,primitive_information_concept,role,direct_model_term
+1,official venue/game identity,partitions strict-prior outcomes into venue histories,False
+2,official historical total-run outcomes,numerator of each venue adjusted-total ratio,False
+3,participating-team strict-prior scoring history,home and away expected-run denominator inputs; one concept instantiated for both sides,False
+4,league strict-prior run environment,8.6 initial and sparse-team expected-run fallback,False
+5,venue history depth/shrinkage support,n/(n+50) regression weight,False

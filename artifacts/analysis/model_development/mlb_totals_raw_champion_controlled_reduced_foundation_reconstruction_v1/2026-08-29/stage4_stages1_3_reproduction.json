@@ -1,0 +1,32 @@
+{
+  "STAGES_1_3_REPRODUCTION": "PASS",
+  "artifact_sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+  "model_hash": "fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac",
+  "model_identity": "DIRECT_NEGATIVE_BINOMIAL_RAW_V1",
+  "stage1_ablation_rows": 92,
+  "stage1_hash_failures": [],
+  "stage1_hash_manifest_sha256": "591d1ca0306154f79798b56bedeec8fd6100cb37fc677488a1ab09db36a5c663",
+  "stage1_output_hashes_valid": true,
+  "stage1_raw_reproduction": "PASS",
+  "stage2_hash_failures": [],
+  "stage2_hash_manifest_sha256": "573195ffea1af98a8c546ff5e63b825ab3431b7a441b127e8784a2ab4a11ff3a",
+  "stage2_manifest_expected": true,
+  "stage2_manifest_sha256": "bfd7d1c1b27908831e83a0b2dcdef6276598ba06ba2e1669979304bc3514551c",
+  "stage2_output_hashes_valid": true,
+  "stage3_candidate_artifacts": 22,
+  "stage3_classification_counts": {
+    "FULLY_REPLACEABLE": 1,
+    "HIGH_CONFIDENCE_FOUNDATION_CANDIDATE": 1,
+    "PARTIALLY_REPLACEABLE": 1,
+    "POTENTIALLY_REMOVABLE": 1,
+    "REDUNDANT_OR_NEAR_REDUNDANT": 16,
+    "REGIME_DEPENDENT": 2
+  },
+  "stage3_classification_rows": 22,
+  "stage3_hash_failures": [],
+  "stage3_hash_manifest_sha256": "7fac2e5298f42e33f3f8b159b4ccf919e7e35848e9432b1609d64b06c14ff86a",
+  "stage3_output_hashes_valid": true,
+  "stage3_raw_reproduction": "PASS_WITH_NUMERICAL_TOLERANCE",
+  "stage3_refit_manifest_rows": 22,
+  "task_id": "MLB_TOTALS_RAW_CHAMPION_CONTROLLED_REDUCED_FOUNDATION_RECONSTRUCTION_V1"
+}

@@ -1,0 +1,5 @@
+population,date_min,date_max,expected_rows,observed_rows,all_candidate_rows,row_count_parity,unique_game_identities,outcomes_complete,row_identity_outcome_hash,raw_prediction_reproduced,prospective_probability_max_abs_error
+FROZEN_2025_VALIDATION,2025-03-18,2025-09-30,2433,2433,2433,True,True,True,f629c77ce0c39a0873afad8e3c4d50f33e68c3ffd027697322030470a0844be8,True,NOT_APPLICABLE
+2026_SEQUENTIAL_EARLY,2026-03-25,2026-06-30,1281,1281,1281,True,True,True,b4a38b93710a64b50fec2f8097b98321e15c18326ae0de9bf6539a364e0f3ca0,True,NOT_APPLICABLE
+2026_LATE_HOLDOUT,2026-07-01,2026-08-05,439,439,439,True,True,True,3eef60ab36ad75f75d4bfdd41f459f3e9b3e435f834b88716e8cf0ec67588f24,True,NOT_APPLICABLE
+PROSPECTIVE_AUG17_28_CLEAN_RAW,2026-08-17,2026-08-28,156,156,156,True,True,True,7b9ccb01acc1ce3089779d62249f45aca7b2bbd7f92c6cfecf85418ecb8b85b6,True,6.661338147750939e-16

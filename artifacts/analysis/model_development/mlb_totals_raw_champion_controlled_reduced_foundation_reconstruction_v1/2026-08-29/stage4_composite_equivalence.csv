@@ -1,0 +1,6 @@
+population,rows,exact_matches,max_absolute_difference,mean_absolute_difference,missingness_differences,fallback_differences,temporal_version_difference
+ORIGINAL_TRAINING,4859,3473,2.220446049250313e-16,4.0785101851325465e-17,0,0,NONE; independent date-batch strict-prior reconstruction of MLB_TOTALS_FEATURE_SPINE_V1
+FROZEN_2025_VALIDATION,2433,1678,2.220446049250313e-16,4.170751518731579e-17,0,0,NONE; independent date-batch strict-prior reconstruction of MLB_TOTALS_FEATURE_SPINE_V1
+2026_SEQUENTIAL_EARLY,1281,887,2.220446049250313e-16,4.125418889317522e-17,0,0,NONE; independent date-batch strict-prior reconstruction of MLB_TOTALS_FEATURE_SPINE_V1
+2026_LATE_HOLDOUT,439,298,2.220446049250313e-16,4.375138570846289e-17,0,0,NONE; independent date-batch strict-prior reconstruction of MLB_TOTALS_FEATURE_SPINE_V1
+PROSPECTIVE_AUG17_28_CLEAN_RAW,156,156,0.0,0.0,0,0,Same formula; prospective live_context_bridge_v1 park foundation frozen through 2026-08-05 rather than advanced after each later final
