@@ -1,0 +1,64 @@
+{
+  "STAGE1_REPRODUCTION": "PASS",
+  "all_22_single_ablations_reproduced": true,
+  "artifact_sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+  "champion_hash": "fb1c730d295ce28d90436ec95cb71d1a81813679de8364e838255111917498ac",
+  "champion_metrics_reproduced": true,
+  "classifications_reproduced": true,
+  "file_checks": [
+    {
+      "authoritative_sha256": "b5c23da7822f267f6e0c6a6bd9860561fced6ad0a7eecb2be6dbc81b5a58cf8e",
+      "exact": true,
+      "file": "raw_champion_reproduction.json",
+      "replay_sha256": "b5c23da7822f267f6e0c6a6bd9860561fced6ad0a7eecb2be6dbc81b5a58cf8e"
+    },
+    {
+      "authoritative_sha256": "c557dd71c1835d74f1e8a11316db7299381848c3a250c3de52f8675f319d5870",
+      "exact": true,
+      "file": "raw_champion_evaluation_populations.csv",
+      "replay_sha256": "c557dd71c1835d74f1e8a11316db7299381848c3a250c3de52f8675f319d5870"
+    },
+    {
+      "authoritative_sha256": "1cb6fbe0f3fcafe6a2cee0dd47a3325764f0dd603c1010e6cdf6538f8629e43a",
+      "exact": true,
+      "file": "raw_champion_22_feature_ablation_manifest.csv",
+      "replay_sha256": "1cb6fbe0f3fcafe6a2cee0dd47a3325764f0dd603c1010e6cdf6538f8629e43a"
+    },
+    {
+      "authoritative_sha256": "919c1f443cb2ef5114157f9c74406d84c01105f5f42ff95ee7e86d30ed5c9d36",
+      "exact": true,
+      "file": "raw_champion_feature_point_deltas.csv",
+      "replay_sha256": "919c1f443cb2ef5114157f9c74406d84c01105f5f42ff95ee7e86d30ed5c9d36"
+    },
+    {
+      "authoritative_sha256": "fe22d58ce687679f8c7805e1880389fbaaf3a574ca07a179c27848cdff5d4899",
+      "exact": true,
+      "file": "raw_champion_feature_distribution_deltas.csv",
+      "replay_sha256": "fe22d58ce687679f8c7805e1880389fbaaf3a574ca07a179c27848cdff5d4899"
+    },
+    {
+      "authoritative_sha256": "458d6008d603034ed5bf6dbfde233ea96fa8cf6e84db351dc91c4abc0d764d9f",
+      "exact": true,
+      "file": "raw_champion_feature_forecast_effects.csv",
+      "replay_sha256": "458d6008d603034ed5bf6dbfde233ea96fa8cf6e84db351dc91c4abc0d764d9f"
+    },
+    {
+      "authoritative_sha256": "0582eda680efdcdd27005e190a6b9d754aeeb9625d3ad03655d59b1ec832ff3e",
+      "exact": true,
+      "file": "raw_champion_feature_temporal_effects.csv",
+      "replay_sha256": "0582eda680efdcdd27005e190a6b9d754aeeb9625d3ad03655d59b1ec832ff3e"
+    },
+    {
+      "authoritative_sha256": "8c01f618b14849c1c821afe2df4770e1c65903c4c5d7733e75ca39843ee134e2",
+      "exact": true,
+      "file": "raw_champion_stage1_classification.csv",
+      "replay_sha256": "8c01f618b14849c1c821afe2df4770e1c65903c4c5d7733e75ca39843ee134e2"
+    }
+  ],
+  "files_replayed_exactly": 8,
+  "forecast_effects_reproduced": true,
+  "joint_outcomes_evaluated_during_replay": false,
+  "status": "PASS",
+  "task_id": "MLB_TOTALS_RAW_FROZEN_CHAMPION_INTERACTION_CANCELLATION_DISSECTION_V1",
+  "temporal_effects_reproduced": true
+}

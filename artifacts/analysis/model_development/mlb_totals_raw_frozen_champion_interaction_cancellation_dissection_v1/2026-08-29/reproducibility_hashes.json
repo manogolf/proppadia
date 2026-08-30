@@ -1,0 +1,32 @@
+{
+  "analysis_utility_sha256": "7943e40570d0f04278de1e6c83e03dc3f1d612279fd288d18dcfd95d2d7f9a2f",
+  "bootstrap_draws": 10000,
+  "bootstrap_seed": 20260831,
+  "created_at_utc": "2026-08-30T02:45:41.991928+00:00",
+  "frozen_stage2_manifest_sha256": "bfd7d1c1b27908831e83a0b2dcdef6276598ba06ba2e1669979304bc3514551c",
+  "model_artifact_sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe",
+  "outputs": {
+    "concise_mlb_totals_raw_frozen_champion_interaction_cancellation_dissection_v1.md": "f3f3c106bf9c48cdf84fc0f22dd79dc7865f616472c71bb5e3a29fcccb372b1c",
+    "stage1_reproduction.json": "7dcabe98b32a75907f993e6f1bd2a3e65cd2feae7aa44eb09c45e31cf1cb9318",
+    "stage2_candidate_derivation.csv": "fa043596df5dbc7c88b6b65d67daccc9c0a568be75c4194989715baf6fc6e5d2",
+    "stage2_champion_skeleton_revision.md": "7db29e87a996141d401b629a5cb4b8eee7a187154cbfd36e6dc39d428c4a501e",
+    "stage2_clustered_uncertainty.csv": "a0bfb5d63885f7527a335d9b95c3c2b6291bb5f95226f7bbc371f398bedcf7f3",
+    "stage2_compensation_results.csv": "36fabc5a7d1b90fb55fbe077e7f5fa4e1b74e7f06bc060a941e85df6ea918dec",
+    "stage2_conditional_dependence.csv": "b401ab6781227cd93961a5aee14a87d53632c70e3db5eacef199a4782ba57c6b",
+    "stage2_count_confidence_trio.csv": "3136e34706c5961917fb1132e9c55de0360bff34e877983177fc9f84bed963fe",
+    "stage2_feature_structural_classification.csv": "7d13247036940c145fa85bfe3aeca66c66dc90b291fa095391b00b0fd6f3d3c4",
+    "stage2_home_away_concepts.csv": "387c49f93c126942852cbcc925d433c4bb55e5e7b81095c8a9f5d03b1985094a",
+    "stage2_interaction_residuals.csv": "487d5581a6f2f3fd20539fee672a829e12a1b1eb1f4e20f23f279697025d9ae1",
+    "stage2_joint_ablation_manifest.csv": "bfd7d1c1b27908831e83a0b2dcdef6276598ba06ba2e1669979304bc3514551c",
+    "stage2_joint_forecast_effects.csv": "e242de93e1763af36ab3e8bf92baf8077e7ab1280df61df101289cf6ddfc9956",
+    "stage2_joint_metrics.csv": "55445ffc9059335ca2f55fc97ddd41405cdd650675985594ef624dc5da4be827",
+    "stage2_multiple_comparison_sensitivity.csv": "7b39d516f6e9e8609b62cfb83f3966a381c177aee570b7509017a1e52adcaa21",
+    "stage2_nhl_transfer_lessons.md": "7a551e127d25349ee1d47bd856194ddfa4b2c33e8e4fac559926498afa467e21",
+    "stage2_pair_diagnostic_matrix.csv": "049ddb0e773971e11b63849a6f75917b1230b935971dca81150a4ac1ff02b0dc",
+    "stage2_redundancy_results.csv": "b79268cdce90095b299229d0bf481159289aaa4bfd7566690664eaddc124ec25",
+    "stage2_stage3_recommendation.md": "dc98af25001028f52c7526ebdd3d9cc05d7c6cb1f4ea2a581c67a9bd8a512d6b",
+    "stage2_temporal_interactions.csv": "94c67d595f2397c67ffa2044571e221deff96a93d83409d71e76283289b1aec0"
+  },
+  "stage1_package_manifest_sha256": "591d1ca0306154f79798b56bedeec8fd6100cb37fc677488a1ab09db36a5c663",
+  "task_id": "MLB_TOTALS_RAW_FROZEN_CHAMPION_INTERACTION_CANCELLATION_DISSECTION_V1"
+}

@@ -1,0 +1,23 @@
+feature,stage1_classification_preserved,stage1_temporal_effect_preserved,tested_candidate_ids,stage2_primary_structural_label,explanatory_notes,irrereplaceable_claimed
+league_total,UNRESOLVED,CONSISTENTLY_BENEFICIAL,,UNRESOLVED,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_offense,TEMPORALLY_UNSTABLE,MIXED,S2_01|S2_13,TEMPORALLY_UNSTABLE,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_prevention,POTENTIALLY_HARMFUL_IN_FROZEN_CHAMPION,MOSTLY_HARMFUL,S2_02|S2_09|S2_11,COMPENSATING_DEPENDENCE,at least one predeclared joint test has forecast-plus-score compensation evidence,False
+away_offense,POTENTIALLY_HARMFUL_IN_FROZEN_CHAMPION,MOSTLY_HARMFUL,S2_01,POTENTIALLY_HARMFUL,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_prevention,TEMPORALLY_UNSTABLE,MIXED,S2_02|S2_10,TEMPORALLY_UNSTABLE,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_starter_ra9,TEMPORALLY_UNSTABLE,MIXED,S2_03,TEMPORALLY_UNSTABLE,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_starter_ra9,MODERATELY_REQUIRED_IN_FROZEN_CHAMPION,CONSISTENTLY_BENEFICIAL,S2_03,UNIQUE_DEPENDENCE,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_starter_prior_starts,UNRESOLVED,MOSTLY_BENEFICIAL,S2_04|S2_15,CONDITIONAL_DEPENDENCE,joint behavior materially differs from constituent single-feature behavior,False
+away_starter_prior_starts,UNRESOLVED,CONSISTENTLY_BENEFICIAL,S2_04|S2_15,CONDITIONAL_DEPENDENCE,joint behavior materially differs from constituent single-feature behavior,False
+home_expected_outs,MODERATELY_REQUIRED_IN_FROZEN_CHAMPION,MOSTLY_BENEFICIAL,S2_05,UNIQUE_DEPENDENCE,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_expected_outs,POTENTIALLY_HARMFUL_IN_FROZEN_CHAMPION,CONSISTENTLY_HARMFUL,S2_05,POTENTIALLY_HARMFUL,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_workload_uncertainty_outs,UNRESOLVED,MOSTLY_HARMFUL,,UNRESOLVED,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_workload_uncertainty_outs,NEUTRAL_IN_FROZEN_CHAMPION,NEGLIGIBLE,,WEAK_OR_NEUTRAL,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_bullpen_ra9,MODERATELY_REQUIRED_IN_FROZEN_CHAMPION,MOSTLY_BENEFICIAL,S2_06|S2_09|S2_12,UNIQUE_DEPENDENCE,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_bullpen_ra9,MODERATELY_REQUIRED_IN_FROZEN_CHAMPION,CONSISTENTLY_BENEFICIAL,S2_06|S2_10,UNIQUE_DEPENDENCE,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_bullpen_likely_available_reliever_count,POTENTIALLY_HARMFUL_IN_FROZEN_CHAMPION,CONSISTENTLY_HARMFUL,S2_07,POTENTIALLY_HARMFUL,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_bullpen_likely_available_reliever_count,MODERATELY_REQUIRED_IN_FROZEN_CHAMPION,MOSTLY_BENEFICIAL,S2_07,UNIQUE_DEPENDENCE,no tested relationship crossed the Stage-2 structural evidence gates,False
+home_bullpen_recent_innings_burden,NEUTRAL_IN_FROZEN_CHAMPION,NEGLIGIBLE,S2_08,WEAK_OR_NEUTRAL,no tested relationship crossed the Stage-2 structural evidence gates,False
+away_bullpen_recent_innings_burden,POTENTIALLY_HARMFUL_IN_FROZEN_CHAMPION,CONSISTENTLY_HARMFUL,S2_08,POTENTIALLY_HARMFUL,no tested relationship crossed the Stage-2 structural evidence gates,False
+strict_prior_total_run_factor,STRONGLY_REQUIRED_IN_FROZEN_CHAMPION,CONSISTENTLY_BENEFICIAL,S2_11|S2_12|S2_13|S2_14,POSSIBLE_FOUNDATION,single dependence remains coherent across every frozen overlap test; one compensating relationship does not dominate the four-test body; replaceability remains untested,False
+park_history_depth,TEMPORALLY_UNSTABLE,MIXED,S2_14|S2_15,REDUNDANT_DEPENDENCE,at least one predeclared joint test meets score-based redundancy criteria,False
+game_number,MODERATELY_REQUIRED_IN_FROZEN_CHAMPION,MOSTLY_BENEFICIAL,,UNIQUE_DEPENDENCE,no tested relationship crossed the Stage-2 structural evidence gates,False
