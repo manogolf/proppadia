@@ -1,0 +1,551 @@
+feature,population,metric,stage1_frozen_delta,stage3_refit_delta,fraction_stage1_loss_recovered,recovery_defined,interpretation
+league_total,FROZEN_2025_VALIDATION,mae,-0.006854966870309731,-0.0040745341433972015,,False,not defined because frozen removal did not worsen metric
+league_total,FROZEN_2025_VALIDATION,rmse,0.009587724026429711,0.004159241968142879,0.5661908961211827,True,positive frozen loss basis only
+league_total,FROZEN_2025_VALIDATION,crps,0.005302411811632268,0.0022531370566603037,0.5750731673240768,True,positive frozen loss basis only
+league_total,FROZEN_2025_VALIDATION,brier,0.0005804709675478747,0.0002553769768295633,0.560052110946443,True,positive frozen loss basis only
+league_total,FROZEN_2025_VALIDATION,log_loss,0.0014006975947897793,0.0006092696188588764,0.565024155731261,True,positive frozen loss basis only
+home_offense,FROZEN_2025_VALIDATION,mae,0.0012389423353882378,0.00186033492377069,-0.5015508556237456,True,positive frozen loss basis only
+home_offense,FROZEN_2025_VALIDATION,rmse,0.003317357703117807,0.004669179408367974,-0.40749953011689455,True,positive frozen loss basis only
+home_offense,FROZEN_2025_VALIDATION,crps,0.0013918994475519142,0.0022262817666121038,-0.5994558877997322,True,positive frozen loss basis only
+home_offense,FROZEN_2025_VALIDATION,brier,9.017421441967488e-05,0.00021030406485883502,-1.3321973605455586,True,positive frozen loss basis only
+home_offense,FROZEN_2025_VALIDATION,log_loss,0.00021160558596167167,0.00047114434841699637,-1.22652131925447,True,positive frozen loss basis only
+home_prevention,FROZEN_2025_VALIDATION,mae,-0.0034120336780030236,-0.0005534757124889822,,False,not defined because frozen removal did not worsen metric
+home_prevention,FROZEN_2025_VALIDATION,rmse,-0.0009751607545886998,-0.0015717439863829341,,False,not defined because frozen removal did not worsen metric
+home_prevention,FROZEN_2025_VALIDATION,crps,-0.0006435231812189635,-0.0007925121977923055,,False,not defined because frozen removal did not worsen metric
+home_prevention,FROZEN_2025_VALIDATION,brier,-9.585371067799553e-05,-7.452163598581363e-05,,False,not defined because frozen removal did not worsen metric
+home_prevention,FROZEN_2025_VALIDATION,log_loss,-0.0001561795650011355,-0.00016840129785644642,,False,not defined because frozen removal did not worsen metric
+away_offense,FROZEN_2025_VALIDATION,mae,-0.00020092696756091044,-0.0010812055742714932,,False,not defined because frozen removal did not worsen metric
+away_offense,FROZEN_2025_VALIDATION,rmse,-0.001617741891500657,-0.0015204570625746427,,False,not defined because frozen removal did not worsen metric
+away_offense,FROZEN_2025_VALIDATION,crps,-0.0008514641015509028,-0.0007476878277405952,,False,not defined because frozen removal did not worsen metric
+away_offense,FROZEN_2025_VALIDATION,brier,-0.00010707089425276983,-9.283941145429853e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,FROZEN_2025_VALIDATION,log_loss,-0.0002527909807401585,-0.00020523631776159235,,False,not defined because frozen removal did not worsen metric
+away_prevention,FROZEN_2025_VALIDATION,mae,-0.0008977667135097178,0.0007662660913267949,,False,not defined because frozen removal did not worsen metric
+away_prevention,FROZEN_2025_VALIDATION,rmse,-0.0004764594391275523,-0.0005562526464233386,,False,not defined because frozen removal did not worsen metric
+away_prevention,FROZEN_2025_VALIDATION,crps,-0.00013361632776787147,-0.00019363790844550977,,False,not defined because frozen removal did not worsen metric
+away_prevention,FROZEN_2025_VALIDATION,brier,9.676158109955812e-06,-3.898481406833243e-06,1.4028955875392415,True,positive frozen loss basis only
+away_prevention,FROZEN_2025_VALIDATION,log_loss,9.929020224230811e-06,-2.2628133986235532e-05,3.2789896158146363,True,positive frozen loss basis only
+home_starter_ra9,FROZEN_2025_VALIDATION,mae,0.004143655184650985,0.0011801257097929785,0.715196931886508,True,positive frozen loss basis only
+home_starter_ra9,FROZEN_2025_VALIDATION,rmse,0.0028145093834668344,0.0022707719460006714,0.1931908419493,True,positive frozen loss basis only
+home_starter_ra9,FROZEN_2025_VALIDATION,crps,0.0019132562041286327,0.0013475698617693155,0.2956668015180704,True,positive frozen loss basis only
+home_starter_ra9,FROZEN_2025_VALIDATION,brier,0.00023082579406233372,0.00015270175668091746,0.33845453753889887,True,positive frozen loss basis only
+home_starter_ra9,FROZEN_2025_VALIDATION,log_loss,0.0005095817407666514,0.00035481827033723157,0.3037068600546451,True,positive frozen loss basis only
+away_starter_ra9,FROZEN_2025_VALIDATION,mae,0.0001522056224589896,-0.0007811206084316069,6.132008895677114,True,positive frozen loss basis only
+away_starter_ra9,FROZEN_2025_VALIDATION,rmse,7.097898843166917e-05,-0.0002518529869526276,4.548275236341023,True,positive frozen loss basis only
+away_starter_ra9,FROZEN_2025_VALIDATION,crps,0.00011206377605166296,-7.4451227924488e-05,1.6643647978644316,True,positive frozen loss basis only
+away_starter_ra9,FROZEN_2025_VALIDATION,brier,1.6752688116183911e-06,-1.919523352517105e-05,12.458002078262009,True,positive frozen loss basis only
+away_starter_ra9,FROZEN_2025_VALIDATION,log_loss,7.338293352088243e-06,-3.449263295152161e-05,5.700361691278819,True,positive frozen loss basis only
+home_starter_prior_starts,FROZEN_2025_VALIDATION,mae,-0.014788531822835793,-0.007780476049742635,,False,not defined because frozen removal did not worsen metric
+home_starter_prior_starts,FROZEN_2025_VALIDATION,rmse,0.0028832171775938775,-0.009115206547989807,4.161470672006988,True,positive frozen loss basis only
+home_starter_prior_starts,FROZEN_2025_VALIDATION,crps,0.0008559802872198929,-0.005529014058205384,7.459277323036102,True,positive frozen loss basis only
+home_starter_prior_starts,FROZEN_2025_VALIDATION,brier,-1.400846198060246e-05,-0.0006814369103236573,,False,not defined because frozen removal did not worsen metric
+home_starter_prior_starts,FROZEN_2025_VALIDATION,log_loss,4.46584721475185e-05,-0.001551253942220887,35.73593850449459,True,positive frozen loss basis only
+away_starter_prior_starts,FROZEN_2025_VALIDATION,mae,-0.0004862533969243188,6.253059547800532e-05,,False,not defined because frozen removal did not worsen metric
+away_starter_prior_starts,FROZEN_2025_VALIDATION,rmse,0.0006452543845929526,8.27305234833986e-05,0.8717861893560201,True,positive frozen loss basis only
+away_starter_prior_starts,FROZEN_2025_VALIDATION,crps,0.00034047676592452447,4.0076288582824304e-05,0.8822936170871987,True,positive frozen loss basis only
+away_starter_prior_starts,FROZEN_2025_VALIDATION,brier,3.6506201465613675e-05,6.4642032144845984e-06,0.8229286270560515,True,positive frozen loss basis only
+away_starter_prior_starts,FROZEN_2025_VALIDATION,log_loss,8.63559597713559e-05,1.2425513925440335e-05,0.8561128385540583,True,positive frozen loss basis only
+home_expected_outs,FROZEN_2025_VALIDATION,mae,0.005496147694631137,0.00019076563428166438,0.9652910283928483,True,positive frozen loss basis only
+home_expected_outs,FROZEN_2025_VALIDATION,rmse,0.004745485977077024,-0.0012565002358622124,1.2647779894265228,True,positive frozen loss basis only
+home_expected_outs,FROZEN_2025_VALIDATION,crps,0.0032800940088648645,-0.00036008552382149617,1.109779025493879,True,positive frozen loss basis only
+home_expected_outs,FROZEN_2025_VALIDATION,brier,0.0003932764113105669,-3.222095437951933e-05,1.081929537223311,True,positive frozen loss basis only
+home_expected_outs,FROZEN_2025_VALIDATION,log_loss,0.0008902723835184645,-8.343595849857888e-05,1.0937195852002393,True,positive frozen loss basis only
+away_expected_outs,FROZEN_2025_VALIDATION,mae,-0.002439644442924216,-0.0024048579600939313,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,FROZEN_2025_VALIDATION,rmse,-0.0020650470952201516,-0.002248904110896177,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,FROZEN_2025_VALIDATION,crps,-0.00119533821072082,-0.0012832745372404197,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,FROZEN_2025_VALIDATION,brier,-0.0001441824539493708,-0.0001627264910067927,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,FROZEN_2025_VALIDATION,log_loss,-0.00030140897193209337,-0.00033583790592384144,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,FROZEN_2025_VALIDATION,mae,0.0006527672301355203,-0.0011696889995840287,2.791892952930849,True,positive frozen loss basis only
+home_workload_uncertainty_outs,FROZEN_2025_VALIDATION,rmse,0.0005254049613778733,-0.00047533202794802776,1.9046964967774012,True,positive frozen loss basis only
+home_workload_uncertainty_outs,FROZEN_2025_VALIDATION,crps,0.0001424603497861554,-0.000596598182466046,5.187819160640757,True,positive frozen loss basis only
+home_workload_uncertainty_outs,FROZEN_2025_VALIDATION,brier,-2.0041326645042767e-05,-0.00011495836296837592,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,FROZEN_2025_VALIDATION,log_loss,-3.474540030934392e-05,-0.00024722041009839213,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,FROZEN_2025_VALIDATION,mae,0.0002398728370081038,0.00016692791196337708,0.304098312900107,True,positive frozen loss basis only
+away_workload_uncertainty_outs,FROZEN_2025_VALIDATION,rmse,2.998450142577269e-05,1.845170170877708e-05,0.3846253620573054,True,positive frozen loss basis only
+away_workload_uncertainty_outs,FROZEN_2025_VALIDATION,crps,2.641248594814627e-05,1.607155714111741e-05,0.3915166799267006,True,positive frozen loss basis only
+away_workload_uncertainty_outs,FROZEN_2025_VALIDATION,brier,1.303354360576714e-06,-2.342924375065003e-07,1.1797611183829004,True,positive frozen loss basis only
+away_workload_uncertainty_outs,FROZEN_2025_VALIDATION,log_loss,3.007291653811528e-06,-2.2906163998914764e-07,1.0761687479492814,True,positive frozen loss basis only
+home_bullpen_ra9,FROZEN_2025_VALIDATION,mae,0.0030677026014087616,-0.00030944137542832095,1.1008707217206186,True,positive frozen loss basis only
+home_bullpen_ra9,FROZEN_2025_VALIDATION,rmse,0.001471162631133005,-0.001491673855274378,2.0139421867489773,True,positive frozen loss basis only
+home_bullpen_ra9,FROZEN_2025_VALIDATION,crps,0.0009793580480184083,-0.0008416103840813705,1.859349025399086,True,positive frozen loss basis only
+home_bullpen_ra9,FROZEN_2025_VALIDATION,brier,0.0001501265617467884,-7.580582312366468e-05,1.5049461084143319,True,positive frozen loss basis only
+home_bullpen_ra9,FROZEN_2025_VALIDATION,log_loss,0.00028544401327113,-0.00017441226269721,1.6110209168462886,True,positive frozen loss basis only
+away_bullpen_ra9,FROZEN_2025_VALIDATION,mae,0.0006655505775152726,0.0005058313871439957,0.23998054508128164,True,positive frozen loss basis only
+away_bullpen_ra9,FROZEN_2025_VALIDATION,rmse,0.0008319129958707094,-0.0009039759887459198,2.0866232325169856,True,positive frozen loss basis only
+away_bullpen_ra9,FROZEN_2025_VALIDATION,crps,0.000480042718477236,-0.00040615235455465637,1.8460754406254294,True,positive frozen loss basis only
+away_bullpen_ra9,FROZEN_2025_VALIDATION,brier,4.6025946784294947e-05,-3.422572940584012e-05,1.7436181501326267,True,positive frozen loss basis only
+away_bullpen_ra9,FROZEN_2025_VALIDATION,log_loss,0.00011540327216585933,-8.489455099813803e-05,1.7356338291355058,True,positive frozen loss basis only
+home_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,mae,-0.008254315635499054,-0.006148075962337796,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,rmse,-0.009017738854865343,-0.005513243622981001,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,crps,-0.005504026610252399,-0.0034098427620894434,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,brier,-0.0006372467104224233,-0.0003894836901508214,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,log_loss,-0.0014089152966769714,-0.0008460622176557075,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,mae,0.0015754143204413928,0.000590899325074723,0.6249244929364567,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,rmse,0.001426462557615693,-5.78195220279909e-05,1.0405335013662296,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,crps,0.0009215765672681009,2.594836785307919e-05,0.9718435029983457,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,brier,0.00011207221423853442,1.0607122586436812e-05,0.9053545728662001,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,FROZEN_2025_VALIDATION,log_loss,0.0002503885745667178,2.385273025462542e-05,0.9047371458705689,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,mae,0.0002668384960715642,0.00024841668299391273,0.06903731413892714,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,rmse,9.784217903430203e-05,0.00012233069931255613,-0.2502859249451996,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,crps,9.505477617999247e-05,0.00010787122046451714,-0.1348321967562775,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,brier,1.605869338283661e-05,1.7480022318328015e-05,-0.08850837995390771,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,log_loss,3.490722703825e-05,3.806005519724209e-05,-0.09032021235996046,True,positive frozen loss basis only
+away_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,mae,-0.0017575898780908261,-0.001092390331102422,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,rmse,-0.001272134930050406,-0.0009540891641375282,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,crps,-0.0008423285168324135,-0.0005557482627156496,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,brier,-0.00010024609183406641,-4.8563015085767436e-05,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,FROZEN_2025_VALIDATION,log_loss,-0.0002266808389037589,-0.00011521964050098532,,False,not defined because frozen removal did not worsen metric
+strict_prior_total_run_factor,FROZEN_2025_VALIDATION,mae,0.027196686798764524,0.011542053023382515,0.5756081206220002,True,positive frozen loss basis only
+strict_prior_total_run_factor,FROZEN_2025_VALIDATION,rmse,0.01829329888538922,0.009421777765305173,0.48496015812488,True,positive frozen loss basis only
+strict_prior_total_run_factor,FROZEN_2025_VALIDATION,crps,0.011457453750576718,0.005792529482294917,0.49443134500950126,True,positive frozen loss basis only
+strict_prior_total_run_factor,FROZEN_2025_VALIDATION,brier,0.001436777169747383,0.0007224250901722018,0.49719058363154534,True,positive frozen loss basis only
+strict_prior_total_run_factor,FROZEN_2025_VALIDATION,log_loss,0.002982977504307427,0.0014671835111131903,0.5081479799983158,True,positive frozen loss basis only
+park_history_depth,FROZEN_2025_VALIDATION,mae,0.06233888609813265,0.011841093493612842,0.8100528540889739,True,positive frozen loss basis only
+park_history_depth,FROZEN_2025_VALIDATION,rmse,0.004781374455870235,-0.010031593613272882,3.0980564701341886,True,positive frozen loss basis only
+park_history_depth,FROZEN_2025_VALIDATION,crps,0.0040253707830610885,-0.005443661324826987,2.3523378635662877,True,positive frozen loss basis only
+park_history_depth,FROZEN_2025_VALIDATION,brier,0.0006212520057353177,-0.0005626380654502883,1.9056519097823217,True,positive frozen loss basis only
+park_history_depth,FROZEN_2025_VALIDATION,log_loss,0.001168917687034976,-0.0013807833794006186,2.181249453845678,True,positive frozen loss basis only
+game_number,FROZEN_2025_VALIDATION,mae,0.001148831556796015,0.0004200882262437311,0.6343343601952245,True,positive frozen loss basis only
+game_number,FROZEN_2025_VALIDATION,rmse,0.0007595053240647687,0.00024608125106606593,0.6759979907065394,True,positive frozen loss basis only
+game_number,FROZEN_2025_VALIDATION,crps,0.00045481149220583106,0.00011118069213900128,0.755545552290739,True,positive frozen loss basis only
+game_number,FROZEN_2025_VALIDATION,brier,6.392857195933188e-05,2.164811523774901e-05,0.6613702672488845,True,positive frozen loss basis only
+game_number,FROZEN_2025_VALIDATION,log_loss,0.00013925727453534265,4.4920369014156414e-05,0.6774289230918712,True,positive frozen loss basis only
+league_total,2026_SEQUENTIAL_EARLY,mae,0.003482257693882218,0.002285352220036785,0.34371536487612875,True,positive frozen loss basis only
+league_total,2026_SEQUENTIAL_EARLY,rmse,0.021895317085133925,0.008307554051372179,0.6205785000020535,True,positive frozen loss basis only
+league_total,2026_SEQUENTIAL_EARLY,crps,0.01305150901824037,0.004311193887245324,0.6696785114104326,True,positive frozen loss basis only
+league_total,2026_SEQUENTIAL_EARLY,brier,0.0014658263859690102,0.00047553750144174733,0.6755840214137059,True,positive frozen loss basis only
+league_total,2026_SEQUENTIAL_EARLY,log_loss,0.0034368917899442186,0.0010725331047779507,0.6879351546894765,True,positive frozen loss basis only
+home_offense,2026_SEQUENTIAL_EARLY,mae,-0.0005194675833584128,-0.00037614644309202916,,False,not defined because frozen removal did not worsen metric
+home_offense,2026_SEQUENTIAL_EARLY,rmse,-0.004525308842300291,-0.001760740666153282,,False,not defined because frozen removal did not worsen metric
+home_offense,2026_SEQUENTIAL_EARLY,crps,-0.0022764654471632007,-0.0005586629498508522,,False,not defined because frozen removal did not worsen metric
+home_offense,2026_SEQUENTIAL_EARLY,brier,-0.00026506059580028163,-6.16576107105582e-05,,False,not defined because frozen removal did not worsen metric
+home_offense,2026_SEQUENTIAL_EARLY,log_loss,-0.0006106503140657082,-0.00014720247130906028,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_SEQUENTIAL_EARLY,mae,-0.002189306410767422,0.0008508401989426595,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_SEQUENTIAL_EARLY,rmse,-0.0022715010936824598,0.00010326396769588797,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_SEQUENTIAL_EARLY,crps,-0.0009980650554743953,3.7744025777719514e-05,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_SEQUENTIAL_EARLY,brier,-9.511242631296546e-05,9.975602994205524e-07,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_SEQUENTIAL_EARLY,log_loss,-0.0001575633839085988,-5.434787562541565e-06,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_SEQUENTIAL_EARLY,mae,-0.002202321534821472,-9.998549274081725e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_SEQUENTIAL_EARLY,rmse,-0.004048930085943425,2.508655059418885e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_SEQUENTIAL_EARLY,crps,-0.0024393526280857003,-3.0831658179408805e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_SEQUENTIAL_EARLY,brier,-0.00027790771634508826,-1.2757956628833833e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_SEQUENTIAL_EARLY,log_loss,-0.0006601537104407029,-2.699324522970059e-05,,False,not defined because frozen removal did not worsen metric
+away_prevention,2026_SEQUENTIAL_EARLY,mae,-0.004452538102416526,-0.0012256899769385043,,False,not defined because frozen removal did not worsen metric
+away_prevention,2026_SEQUENTIAL_EARLY,rmse,-0.0034870094718728595,-0.003419411823124996,,False,not defined because frozen removal did not worsen metric
+away_prevention,2026_SEQUENTIAL_EARLY,crps,-0.0016840730430622841,-0.0017680167134326297,,False,not defined because frozen removal did not worsen metric
+away_prevention,2026_SEQUENTIAL_EARLY,brier,-0.0001498631007765816,-0.00016857745433213056,,False,not defined because frozen removal did not worsen metric
+away_prevention,2026_SEQUENTIAL_EARLY,log_loss,-0.0003500481604866712,-0.0004081373736031235,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_SEQUENTIAL_EARLY,mae,0.0012158130761208419,1.6644536163124002e-05,0.9863099546385619,True,positive frozen loss basis only
+home_starter_ra9,2026_SEQUENTIAL_EARLY,rmse,-0.0006141163356101487,0.0005089929394861414,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_SEQUENTIAL_EARLY,crps,-0.000592176558204649,0.00014684595155900482,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_SEQUENTIAL_EARLY,brier,-8.002242009882976e-05,1.7052456727228993e-07,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_SEQUENTIAL_EARLY,log_loss,-0.00020441732640430477,1.7647666565201447e-05,,False,not defined because frozen removal did not worsen metric
+away_starter_ra9,2026_SEQUENTIAL_EARLY,mae,0.003352896976613451,0.0018962058401168491,0.434457469661926,True,positive frozen loss basis only
+away_starter_ra9,2026_SEQUENTIAL_EARLY,rmse,0.00022173935903868625,5.6938542041251594e-05,0.7432186045449979,True,positive frozen loss basis only
+away_starter_ra9,2026_SEQUENTIAL_EARLY,crps,0.0003912219281461127,0.0002589761428164472,0.33803265056317244,True,positive frozen loss basis only
+away_starter_ra9,2026_SEQUENTIAL_EARLY,brier,8.624033506193785e-05,5.965824355966265e-05,0.3082327020550642,True,positive frozen loss basis only
+away_starter_ra9,2026_SEQUENTIAL_EARLY,log_loss,0.00016139878895660154,0.0001076419481375046,0.33306842738176673,True,positive frozen loss basis only
+home_starter_prior_starts,2026_SEQUENTIAL_EARLY,mae,0.002968443520760644,0.0019120036138846608,0.3558901826790619,True,positive frozen loss basis only
+home_starter_prior_starts,2026_SEQUENTIAL_EARLY,rmse,0.02846325271718353,-0.0024942180871523334,1.0876294115762304,True,positive frozen loss basis only
+home_starter_prior_starts,2026_SEQUENTIAL_EARLY,crps,0.01725883544036355,-0.0024462110728418196,1.1417367400769591,True,positive frozen loss basis only
+home_starter_prior_starts,2026_SEQUENTIAL_EARLY,brier,0.001876066367070106,-0.0003540992162868739,1.1887455702539342,True,positive frozen loss basis only
+home_starter_prior_starts,2026_SEQUENTIAL_EARLY,log_loss,0.0042214562978014625,-0.0010011313678918166,1.2371530811329745,True,positive frozen loss basis only
+away_starter_prior_starts,2026_SEQUENTIAL_EARLY,mae,0.00014859890634966177,0.00024189300394805713,-0.6278249274518143,True,positive frozen loss basis only
+away_starter_prior_starts,2026_SEQUENTIAL_EARLY,rmse,0.0016588163488622243,1.2849479426257915e-05,0.9922538263894787,True,positive frozen loss basis only
+away_starter_prior_starts,2026_SEQUENTIAL_EARLY,crps,0.0010280663017256941,-1.49869202736852e-05,1.0145777760135979,True,positive frozen loss basis only
+away_starter_prior_starts,2026_SEQUENTIAL_EARLY,brier,0.0001230506993976921,6.851303379989959e-06,0.9443212967213865,True,positive frozen loss basis only
+away_starter_prior_starts,2026_SEQUENTIAL_EARLY,log_loss,0.0002788667847238857,4.303144539474779e-06,0.9845691750498883,True,positive frozen loss basis only
+home_expected_outs,2026_SEQUENTIAL_EARLY,mae,0.0029223369652005005,0.0017351768322519945,0.40623656583252893,True,positive frozen loss basis only
+home_expected_outs,2026_SEQUENTIAL_EARLY,rmse,0.003231014802552501,0.00028588759326098057,0.9115177086050087,True,positive frozen loss basis only
+home_expected_outs,2026_SEQUENTIAL_EARLY,crps,0.0020445157323960572,-2.1078394976559167e-05,1.0103097250085018,True,positive frozen loss basis only
+home_expected_outs,2026_SEQUENTIAL_EARLY,brier,0.00024133244830940037,-2.1573573697947213e-05,1.0893935890058548,True,positive frozen loss basis only
+home_expected_outs,2026_SEQUENTIAL_EARLY,log_loss,0.0005245386897873017,-0.0001549635009149286,1.2954281617963503,True,positive frozen loss basis only
+away_expected_outs,2026_SEQUENTIAL_EARLY,mae,-0.004003563171047109,-0.003570292783509288,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_SEQUENTIAL_EARLY,rmse,-0.0028049974157724478,-0.0026479693735579346,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_SEQUENTIAL_EARLY,crps,-0.0020493984091127793,-0.0017980055376862758,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_SEQUENTIAL_EARLY,brier,-0.0002920504298914717,-0.0002769214406341536,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_SEQUENTIAL_EARLY,log_loss,-0.0006420375478340956,-0.0005799322406924157,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,mae,-0.0003174523404156915,-0.001085712393981364,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,rmse,-0.0016655271558683182,-0.0014210397305323141,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,crps,-0.001069899716037881,-0.0009530703939431007,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,brier,-9.716668127487949e-05,-8.975064686300716e-05,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,log_loss,-0.00022169220580259275,-0.0002071392326346011,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,mae,6.897145937934113e-05,-6.53440604541089e-05,1.947407247028345,True,positive frozen loss basis only
+away_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,rmse,-0.0005481814157564102,-0.0005626115199381942,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,crps,-0.0002921364116854619,-0.0003124366338562723,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,brier,-2.7513075682189525e-05,-3.1189263786701726e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_SEQUENTIAL_EARLY,log_loss,-6.507214652096138e-05,-7.373697474100105e-05,,False,not defined because frozen removal did not worsen metric
+home_bullpen_ra9,2026_SEQUENTIAL_EARLY,mae,0.004527845806259201,0.0003731619606921477,0.9175850997009889,True,positive frozen loss basis only
+home_bullpen_ra9,2026_SEQUENTIAL_EARLY,rmse,0.005681711046452875,-0.0010001547680964507,1.1760305583862547,True,positive frozen loss basis only
+home_bullpen_ra9,2026_SEQUENTIAL_EARLY,crps,0.003049994308255144,-0.0007699997509500456,1.2524594058637935,True,positive frozen loss basis only
+home_bullpen_ra9,2026_SEQUENTIAL_EARLY,brier,0.00031518384714282477,-0.00010720249771550838,1.3401268773362291,True,positive frozen loss basis only
+home_bullpen_ra9,2026_SEQUENTIAL_EARLY,log_loss,0.0006709495638795859,-0.0002603127604466904,1.387976644535696,True,positive frozen loss basis only
+away_bullpen_ra9,2026_SEQUENTIAL_EARLY,mae,0.0032760997615652876,-1.7253001050043792e-06,1.000526632346562,True,positive frozen loss basis only
+away_bullpen_ra9,2026_SEQUENTIAL_EARLY,rmse,0.0032746314119913578,-0.001620844954111078,1.4949701966993028,True,positive frozen loss basis only
+away_bullpen_ra9,2026_SEQUENTIAL_EARLY,crps,0.0017849088462633667,-0.0009167249995916116,1.5135976559871602,True,positive frozen loss basis only
+away_bullpen_ra9,2026_SEQUENTIAL_EARLY,brier,0.00018015228142695405,-9.59299144089043e-05,1.5324934752369528,True,positive frozen loss basis only
+away_bullpen_ra9,2026_SEQUENTIAL_EARLY,log_loss,0.0004236498866735383,-0.00023293056629158926,1.549818549747622,True,positive frozen loss basis only
+home_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,mae,-0.0047373760004036924,-0.003618442392681054,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,rmse,-0.004998326552378529,-0.000985380794245927,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,crps,-0.0030651344851451157,-0.0005555791338571758,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,brier,-0.0003924746205604679,-0.0001097267479482078,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,log_loss,-0.0009267495120470759,-0.00025979233101669497,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,mae,0.0012517036250878633,9.976840515024676e-05,0.92029390731912,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,rmse,0.001069913841657666,-0.0007036130243163186,1.657635219697858,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,crps,0.0005969629826516609,-0.0005196114314842681,1.870424878233147,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,brier,6.501047348980715e-05,-6.635127589374457e-05,2.020624406068164,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_SEQUENTIAL_EARLY,log_loss,0.00015262996614440194,-0.00015792800921088368,2.0347116834283336,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,mae,0.00018341036900926255,0.0001822453990163453,0.006351712824144806,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,rmse,0.00010327855971414834,0.00019088243779830094,-0.8482290838158499,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,crps,8.230617379334504e-05,0.00014062933225167384,-0.7086121948125912,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,brier,1.0994857273349812e-05,1.850632471137037e-05,-0.6831800769462861,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,log_loss,2.487194289479966e-05,4.259206949364103e-05,-0.7124544581736867,True,positive frozen loss basis only
+away_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,mae,0.00045932008607874053,0.000851508705208559,-0.8538460019851738,True,positive frozen loss basis only
+away_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,rmse,-0.00010875786481623351,-0.0001660411221839908,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,crps,-0.00022463691836849264,-0.00023548727033606554,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,brier,-1.0325092464180674e-05,6.04999896847147e-08,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_SEQUENTIAL_EARLY,log_loss,-4.3861816969914535e-05,-3.0282643068479942e-05,,False,not defined because frozen removal did not worsen metric
+strict_prior_total_run_factor,2026_SEQUENTIAL_EARLY,mae,0.044593417311902694,0.02897911331512537,0.3501481819068757,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_SEQUENTIAL_EARLY,rmse,0.038262922123853293,0.030996874202660507,0.18989788332614294,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_SEQUENTIAL_EARLY,crps,0.022062771590902752,0.01874018582121595,0.1505969345690376,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_SEQUENTIAL_EARLY,brier,0.0025052029376495533,0.0021745543487510788,0.13198475218486597,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_SEQUENTIAL_EARLY,log_loss,0.0054006007136444545,0.0047536047288490035,0.11980074423218054,True,positive frozen loss basis only
+park_history_depth,2026_SEQUENTIAL_EARLY,mae,0.07366065110140507,0.02713971591368347,0.6315574800401705,True,positive frozen loss basis only
+park_history_depth,2026_SEQUENTIAL_EARLY,rmse,-0.008661257244886755,-0.014701609532532522,,False,not defined because frozen removal did not worsen metric
+park_history_depth,2026_SEQUENTIAL_EARLY,crps,-0.010538184072413248,-0.012105675984591002,,False,not defined because frozen removal did not worsen metric
+park_history_depth,2026_SEQUENTIAL_EARLY,brier,-0.001200034070548972,-0.001280202448663531,,False,not defined because frozen removal did not worsen metric
+park_history_depth,2026_SEQUENTIAL_EARLY,log_loss,-0.0030450284910823466,-0.0032673557243901863,,False,not defined because frozen removal did not worsen metric
+game_number,2026_SEQUENTIAL_EARLY,mae,0.0008618528665707004,0.0005268722703353212,0.38867492263298015,True,positive frozen loss basis only
+game_number,2026_SEQUENTIAL_EARLY,rmse,0.00032160246854928687,0.00010999623772089961,0.6579745229659447,True,positive frozen loss basis only
+game_number,2026_SEQUENTIAL_EARLY,crps,0.0002977045365262221,0.00012179111595633785,0.5908993615701574,True,positive frozen loss basis only
+game_number,2026_SEQUENTIAL_EARLY,brier,4.745172826906008e-05,2.5009075125481672e-05,0.47295754996160333,True,positive frozen loss basis only
+game_number,2026_SEQUENTIAL_EARLY,log_loss,0.00010988106718445856,5.2035679432238524e-05,0.5264363482665703,True,positive frozen loss basis only
+league_total,2026_LATE_HOLDOUT,mae,-0.004693424681841307,-0.00011902934707563873,,False,not defined because frozen removal did not worsen metric
+league_total,2026_LATE_HOLDOUT,rmse,0.020788595493461237,0.0030747179609118547,0.8520959262553853,True,positive frozen loss basis only
+league_total,2026_LATE_HOLDOUT,crps,0.011999954759875031,0.0015747634737106608,0.8687692157826884,True,positive frozen loss basis only
+league_total,2026_LATE_HOLDOUT,brier,0.001092062529273491,0.00013642751687961696,0.8750735299283849,True,positive frozen loss basis only
+league_total,2026_LATE_HOLDOUT,log_loss,0.0027806912313582677,0.000323973544509526,0.883491722901116,True,positive frozen loss basis only
+home_offense,2026_LATE_HOLDOUT,mae,0.0017288396177010945,0.000206603169826014,0.8804960461857403,True,positive frozen loss basis only
+home_offense,2026_LATE_HOLDOUT,rmse,-0.000276784062676505,0.0023415197557508094,,False,not defined because frozen removal did not worsen metric
+home_offense,2026_LATE_HOLDOUT,crps,0.00014544450932829633,0.0014570094057311245,-9.01763086458199,True,positive frozen loss basis only
+home_offense,2026_LATE_HOLDOUT,brier,6.225183147051672e-05,0.00016037505720628564,-1.5762303440380123,True,positive frozen loss basis only
+home_offense,2026_LATE_HOLDOUT,log_loss,0.00018138431924685783,0.0003754553234766034,-1.069943670078898,True,positive frozen loss basis only
+home_prevention,2026_LATE_HOLDOUT,mae,0.0005064786993407289,-0.002169083466264432,5.2826746101817825,True,positive frozen loss basis only
+home_prevention,2026_LATE_HOLDOUT,rmse,-0.0020409717396443483,-0.0029854616557729585,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_LATE_HOLDOUT,crps,-0.0004895311267434366,-0.0021702304419624063,,False,not defined because frozen removal did not worsen metric
+home_prevention,2026_LATE_HOLDOUT,brier,6.193255677805487e-05,-0.0002541757830754332,5.104073790886955,True,positive frozen loss basis only
+home_prevention,2026_LATE_HOLDOUT,log_loss,0.0002603725942601498,-0.0005984953468523013,3.2986111443599864,True,positive frozen loss basis only
+away_offense,2026_LATE_HOLDOUT,mae,0.00166851375179089,-0.001487812859681359,1.8916994888920893,True,positive frozen loss basis only
+away_offense,2026_LATE_HOLDOUT,rmse,-0.0017044372098142802,-0.00016997535423790566,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_LATE_HOLDOUT,crps,-0.0009382642861210932,-0.0004347386329475178,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_LATE_HOLDOUT,brier,-4.480535959650034e-05,-6.319662154705141e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,2026_LATE_HOLDOUT,log_loss,-9.062907388934782e-05,-9.592443848571719e-05,,False,not defined because frozen removal did not worsen metric
+away_prevention,2026_LATE_HOLDOUT,mae,0.0009658325251562516,0.0023758290105364566,-1.4598767888377924,True,positive frozen loss basis only
+away_prevention,2026_LATE_HOLDOUT,rmse,0.0002759679724322339,-0.001524680637217557,6.524846321041672,True,positive frozen loss basis only
+away_prevention,2026_LATE_HOLDOUT,crps,0.00025226446037462935,-0.0007785405770945886,4.086207926151803,True,positive frozen loss basis only
+away_prevention,2026_LATE_HOLDOUT,brier,6.729254912229976e-05,-4.3404531069185515e-05,1.6450124365225138,True,positive frozen loss basis only
+away_prevention,2026_LATE_HOLDOUT,log_loss,0.0001525337281081951,-0.0001599008800472479,2.0482985109616356,True,positive frozen loss basis only
+home_starter_ra9,2026_LATE_HOLDOUT,mae,-0.0016338018781310026,-0.0003825025156083406,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_LATE_HOLDOUT,rmse,-0.006503502181566034,-0.003077940592933537,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_LATE_HOLDOUT,crps,-0.003447058758712096,-0.0006609948411666622,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_LATE_HOLDOUT,brier,-0.00036248906574701256,-2.9793655683646447e-05,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,2026_LATE_HOLDOUT,log_loss,-0.000889939129935291,-6.021221626117956e-05,,False,not defined because frozen removal did not worsen metric
+away_starter_ra9,2026_LATE_HOLDOUT,mae,0.0025680371431890947,0.0020036677362953448,0.21976683958429535,True,positive frozen loss basis only
+away_starter_ra9,2026_LATE_HOLDOUT,rmse,0.002010661671055125,0.0030738119368844963,-0.5287564194086751,True,positive frozen loss basis only
+away_starter_ra9,2026_LATE_HOLDOUT,crps,0.0013139973299209906,0.0018602628599295734,-0.4157280365565349,True,positive frozen loss basis only
+away_starter_ra9,2026_LATE_HOLDOUT,brier,0.00016156362236777189,0.000205531957379268,-0.27214254277741884,True,positive frozen loss basis only
+away_starter_ra9,2026_LATE_HOLDOUT,log_loss,0.0003504465392452083,0.0004633406652887473,-0.32214364646513655,True,positive frozen loss basis only
+home_starter_prior_starts,2026_LATE_HOLDOUT,mae,-0.004339936170778547,0.0017475717884414266,,False,not defined because frozen removal did not worsen metric
+home_starter_prior_starts,2026_LATE_HOLDOUT,rmse,0.04109086239337767,-0.0038187130005633563,1.0929333866007833,True,positive frozen loss basis only
+home_starter_prior_starts,2026_LATE_HOLDOUT,crps,0.023205386210781498,-0.003979282787342608,1.1714809980406096,True,positive frozen loss basis only
+home_starter_prior_starts,2026_LATE_HOLDOUT,brier,0.0020114402539415377,-0.0006321344489373659,1.3142695626671788,True,positive frozen loss basis only
+home_starter_prior_starts,2026_LATE_HOLDOUT,log_loss,0.005225653554944754,-0.0014702879499660648,1.2813596298543004,True,positive frozen loss basis only
+away_starter_prior_starts,2026_LATE_HOLDOUT,mae,0.0007956845347378838,0.001809062846795051,-1.2735930734043945,True,positive frozen loss basis only
+away_starter_prior_starts,2026_LATE_HOLDOUT,rmse,0.0031360566220772768,0.0007075352325403017,0.7743869713450388,True,positive frozen loss basis only
+away_starter_prior_starts,2026_LATE_HOLDOUT,crps,0.0020769467955594756,0.0006482839633639159,0.6878668414858047,True,positive frozen loss basis only
+away_starter_prior_starts,2026_LATE_HOLDOUT,brier,0.00022783561852388057,9.887028966304445e-05,0.5660455099004575,True,positive frozen loss basis only
+away_starter_prior_starts,2026_LATE_HOLDOUT,log_loss,0.0005599140218620624,0.00022821048979426717,0.5924186912924143,True,positive frozen loss basis only
+home_expected_outs,2026_LATE_HOLDOUT,mae,-0.006790464214379899,-0.006379193455244181,,False,not defined because frozen removal did not worsen metric
+home_expected_outs,2026_LATE_HOLDOUT,rmse,-0.0034463985973802735,-0.00518038742084137,,False,not defined because frozen removal did not worsen metric
+home_expected_outs,2026_LATE_HOLDOUT,crps,-0.004032478017219621,-0.005476795626261577,,False,not defined because frozen removal did not worsen metric
+home_expected_outs,2026_LATE_HOLDOUT,brier,-0.0005382215949630287,-0.0007665459585506351,,False,not defined because frozen removal did not worsen metric
+home_expected_outs,2026_LATE_HOLDOUT,log_loss,-0.0012486052746482068,-0.0017972076229454403,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_LATE_HOLDOUT,mae,-0.00023555240746775397,-0.006781345372645298,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_LATE_HOLDOUT,rmse,-0.0010386280530383374,-0.0032077149725653342,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_LATE_HOLDOUT,crps,-0.0007193601016450835,-0.0028902752608139792,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_LATE_HOLDOUT,brier,-8.120253903987074e-05,-0.00042779154404279374,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,2026_LATE_HOLDOUT,log_loss,-0.00018187532196434208,-0.0009931549173761711,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_LATE_HOLDOUT,mae,0.0013500165000106534,0.002066529042412224,-0.5307435445388381,True,positive frozen loss basis only
+home_workload_uncertainty_outs,2026_LATE_HOLDOUT,rmse,-0.001562373787557192,0.0009607756438123616,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_LATE_HOLDOUT,crps,-0.001271987770631533,0.0005052065096897707,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_LATE_HOLDOUT,brier,-4.912740318882558e-05,0.00014723682009068484,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,2026_LATE_HOLDOUT,log_loss,-0.0001348939226467616,0.00034126465638584236,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_LATE_HOLDOUT,mae,-0.000116932286502891,-2.3246502689033832e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_LATE_HOLDOUT,rmse,-0.00037236407253349313,-8.391120086148618e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_LATE_HOLDOUT,crps,-0.00027234199121961566,-8.649291062701181e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_LATE_HOLDOUT,brier,-3.616124760386086e-05,-1.6483107300457878e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,2026_LATE_HOLDOUT,log_loss,-9.157829530337391e-05,-4.388920210673941e-05,,False,not defined because frozen removal did not worsen metric
+home_bullpen_ra9,2026_LATE_HOLDOUT,mae,-0.0008930721433082489,-0.0006756617166936429,,False,not defined because frozen removal did not worsen metric
+home_bullpen_ra9,2026_LATE_HOLDOUT,rmse,0.0019810667360271594,-0.006696248348412759,4.38012255046059,True,positive frozen loss basis only
+home_bullpen_ra9,2026_LATE_HOLDOUT,crps,0.0005219330224490726,-0.0039244311630501905,8.519032125301317,True,positive frozen loss basis only
+home_bullpen_ra9,2026_LATE_HOLDOUT,brier,-5.554570761381883e-05,-0.0003731745785038043,,False,not defined because frozen removal did not worsen metric
+home_bullpen_ra9,2026_LATE_HOLDOUT,log_loss,-0.0002148679039076784,-0.0009096305196987231,,False,not defined because frozen removal did not worsen metric
+away_bullpen_ra9,2026_LATE_HOLDOUT,mae,0.0003857153174440242,0.001556914902460349,-3.0364352465372124,True,positive frozen loss basis only
+away_bullpen_ra9,2026_LATE_HOLDOUT,rmse,0.001382893906794358,-0.0017782997484054874,2.285926374878393,True,positive frozen loss basis only
+away_bullpen_ra9,2026_LATE_HOLDOUT,crps,0.0008640712259526673,-0.0009708486245152415,2.123574764852109,True,positive frozen loss basis only
+away_bullpen_ra9,2026_LATE_HOLDOUT,brier,6.656639650248763e-05,-8.51229938431397e-05,2.2787682421709365,True,positive frozen loss basis only
+away_bullpen_ra9,2026_LATE_HOLDOUT,log_loss,0.00016387662794303814,-0.00023786919674417817,2.451513859724152,True,positive frozen loss basis only
+home_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,mae,-0.003261614685804215,-0.005749348125546394,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,rmse,-0.010489359123543096,-0.0036572729546691107,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,crps,-0.006158437799606453,-0.0023570532946717293,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,brier,-0.0006383052995938276,-0.00027426749939207795,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,log_loss,-0.0015511077473481238,-0.000662181961075814,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,mae,-0.0003102933667888941,-3.9978486963132553e-05,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,rmse,0.0024253780867340424,3.695733466724249e-05,0.9847622377437208,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,crps,0.001226660876625374,-0.00014365079901423883,1.117107182393745,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,brier,0.00011537105819384164,-7.530634265479064e-06,1.065273166280805,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,2026_LATE_HOLDOUT,log_loss,0.00026326486736505395,-4.9457828320997876e-05,1.1878633819089033,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,mae,0.00011197588239264533,-1.536929849255131e-05,1.137255435404015,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,rmse,4.296726359243053e-05,0.00023308171811464717,-4.424634911023489,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,crps,4.437895935849312e-05,0.00015768536689897417,-2.5531560266024305,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,brier,3.554096240032667e-06,1.3061257510993407e-05,-2.674987009038719,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,log_loss,1.0388412874484665e-05,3.459838101216306e-05,-2.3304780460874177,True,positive frozen loss basis only
+away_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,mae,-0.0016637001481933922,-0.0008114389280637901,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,rmse,-0.0006624947615803123,-0.0013430884592731118,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,crps,-0.0003857888581890734,-0.0005719427277499634,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,brier,-7.577479655709873e-05,-6.922296376707382e-05,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,2026_LATE_HOLDOUT,log_loss,-0.0001588051150706038,-0.00014579171861339724,,False,not defined because frozen removal did not worsen metric
+strict_prior_total_run_factor,2026_LATE_HOLDOUT,mae,0.028450104336317228,0.003962157914320752,0.8607330972328645,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_LATE_HOLDOUT,rmse,0.04422275755701399,0.045359147612245465,-0.025696951479481745,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_LATE_HOLDOUT,crps,0.019281518425304345,0.02032659265792658,-0.0542008263856812,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_LATE_HOLDOUT,brier,0.0012834129947328354,0.0013620777079351165,-0.0612933744049058,True,positive frozen loss basis only
+strict_prior_total_run_factor,2026_LATE_HOLDOUT,log_loss,0.002577211572622584,0.0030150982489631772,-0.16990715119868768,True,positive frozen loss basis only
+park_history_depth,2026_LATE_HOLDOUT,mae,0.15192241167239828,0.08060358372004783,0.46944244214698616,True,positive frozen loss basis only
+park_history_depth,2026_LATE_HOLDOUT,rmse,-0.02416098632014929,-0.01605575548485838,,False,not defined because frozen removal did not worsen metric
+park_history_depth,2026_LATE_HOLDOUT,crps,-0.013708002318260082,-0.006960793695913736,,False,not defined because frozen removal did not worsen metric
+park_history_depth,2026_LATE_HOLDOUT,brier,0.0003756105625630224,0.0001760683170780597,0.5312476947489521,True,positive frozen loss basis only
+park_history_depth,2026_LATE_HOLDOUT,log_loss,-0.0004371142363762681,-0.0003473235969017052,,False,not defined because frozen removal did not worsen metric
+game_number,2026_LATE_HOLDOUT,mae,-0.0017392256021362407,-0.0015672173635441489,,False,not defined because frozen removal did not worsen metric
+game_number,2026_LATE_HOLDOUT,rmse,-0.004115426894788499,-0.004359131227968049,,False,not defined because frozen removal did not worsen metric
+game_number,2026_LATE_HOLDOUT,crps,-0.0023519696228579967,-0.0024425904304119506,,False,not defined because frozen removal did not worsen metric
+game_number,2026_LATE_HOLDOUT,brier,-0.0002300190723074358,-0.00023656867379140412,,False,not defined because frozen removal did not worsen metric
+game_number,2026_LATE_HOLDOUT,log_loss,-0.0005303990824232496,-0.0005430672341720788,,False,not defined because frozen removal did not worsen metric
+league_total,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.007461465875917117,0.0002429816467013346,,False,not defined because frozen removal did not worsen metric
+league_total,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.01606564919064013,0.0022439640995335353,0.8603253393058731,True,positive frozen loss basis only
+league_total,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.008906086383141165,0.0015136490816103354,0.8300432966296388,True,positive frozen loss basis only
+league_total,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.0011075944507398516,0.0001869625451654533,0.8311994565875931,True,positive frozen loss basis only
+league_total,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0028277532724888532,0.00048377173114422245,0.8289201056362213,True,positive frozen loss basis only
+home_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0013353416938324258,-0.0026539061768762195,2.987436016664408,True,positive frozen loss basis only
+home_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.003297757758296882,-0.0031724482844763813,,False,not defined because frozen removal did not worsen metric
+home_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.0017741666100374864,-0.002014822278588735,,False,not defined because frozen removal did not worsen metric
+home_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-0.00014851345795074966,-0.0001798011226232521,,False,not defined because frozen removal did not worsen metric
+home_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-0.00043536336454308433,-0.00048600661450970417,,False,not defined because frozen removal did not worsen metric
+home_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.0013556272017076765,0.0028620751946015766,,False,not defined because frozen removal did not worsen metric
+home_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.0010453212127545797,0.0011863675669721019,,False,not defined because frozen removal did not worsen metric
+home_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.001179419500573431,0.000751734530257675,,False,not defined because frozen removal did not worsen metric
+home_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-6.908186360007895e-05,6.751244991262673e-05,,False,not defined because frozen removal did not worsen metric
+home_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-8.595124447741131e-05,0.00014846644700572398,,False,not defined because frozen removal did not worsen metric
+away_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.001765348837466263,0.0024841493970324535,-0.40717196755166946,True,positive frozen loss basis only
+away_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.0009165189541793239,0.002276375784303397,,False,not defined because frozen removal did not worsen metric
+away_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,7.496257756534064e-05,0.0018689025541971382,-23.931140508984253,True,positive frozen loss basis only
+away_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,3.2768561208040836e-05,0.0002336264413697331,-6.129591070126241,True,positive frozen loss basis only
+away_offense,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,7.335983320633233e-05,0.0005375063231064514,-6.326983985836742,True,positive frozen loss basis only
+away_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.0040149451995170615,-0.0018438761263492864,,False,not defined because frozen removal did not worsen metric
+away_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.0030126750662846646,-0.003972582284050397,,False,not defined because frozen removal did not worsen metric
+away_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.0020986622621745887,-0.0025170760865833586,,False,not defined because frozen removal did not worsen metric
+away_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-0.00022659885396700274,-0.0003002395300906735,,False,not defined because frozen removal did not worsen metric
+away_prevention,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-0.000480120555140795,-0.0007233913797354274,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.004177970773406425,0.0003969663786165256,0.9049858411783798,True,positive frozen loss basis only
+home_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.005170883434605145,0.004649937526602699,0.10074601653483724,True,positive frozen loss basis only
+home_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.002768186377327897,0.002327138602775669,0.15932734087723058,True,positive frozen loss basis only
+home_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.00023285489823787753,0.00021785553132741553,0.06441508005186602,True,positive frozen loss basis only
+home_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0005947675403251695,0.0005650124893007424,0.05002803449589652,True,positive frozen loss basis only
+away_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.003212587930793376,0.001447347976802682,0.5494759963051822,True,positive frozen loss basis only
+away_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.0006592372611198272,-0.0003004465514546695,1.455748740513104,True,positive frozen loss basis only
+away_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.0007063566637368623,0.000179246004966771,0.74623867209166,True,positive frozen loss basis only
+away_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,9.853099270534793e-05,6.771152251947021e-05,0.312789603957831,True,positive frozen loss basis only
+away_starter_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.00017235629995460133,0.00012370920056115065,0.28224729473923693,True,positive frozen loss basis only
+home_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0021690949862809283,0.020304908783216558,-8.361004894502479,True,positive frozen loss basis only
+home_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.041224280471245045,0.011864442047402335,0.7121977166908207,True,positive frozen loss basis only
+home_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.024700627327836955,0.008410982513408882,0.6594830405813246,True,positive frozen loss basis only
+home_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.002852569233229185,0.0007770521064067171,0.7275957065809502,True,positive frozen loss basis only
+home_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.006753593986909223,0.0015108030582211551,0.7762964339950538,True,positive frozen loss basis only
+away_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.00021711381555178377,0.001077082028892118,,False,not defined because frozen removal did not worsen metric
+away_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.001977824706227871,0.00028065886240202786,0.8580972006678471,True,positive frozen loss basis only
+away_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.0012402329860732308,0.0003194395659926741,0.7424358410236539,True,positive frozen loss basis only
+away_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.00016248948299282806,4.240800398633282e-05,0.7390107765423525,True,positive frozen loss basis only
+away_starter_prior_starts,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.000421829309963595,0.0001131994851205631,0.7316462311963753,True,positive frozen loss basis only
+home_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0025517478837939755,0.009032006934632353,-2.539537346927642,True,positive frozen loss basis only
+home_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.007950085348058522,0.007804595884248755,0.0183003650200179,True,positive frozen loss basis only
+home_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.004060231928736613,0.0045975669538731445,-0.13234096834062617,True,positive frozen loss basis only
+home_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.00043883474495598485,0.000455669174397183,-0.038361660362345895,True,positive frozen loss basis only
+home_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0011824488258845856,0.0010638806937792733,0.10027337294416261,True,positive frozen loss basis only
+away_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.0009981557898286475,-0.0042338001036137385,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.003136981660779803,-0.002622199006041548,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.0010689911190859824,-0.0013375589424660106,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-2.7714590614597023e-05,-0.00010875029542328774,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-6.90787839863205e-06,-0.0002664254385057463,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.00463117336669594,-0.006083562315497559,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.005226106676887277,-0.005640332771183587,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.00327085051531828,-0.003519084937290806,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-0.00037231670305967746,-0.0003802510622178401,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-0.0008902876813413618,-0.0009282565858519387,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0006959696760260314,0.0006603291795070909,0.05120984109889216,True,positive frozen loss basis only
+away_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.0017834023493374929,0.0018659935442988385,-0.046311027341657915,True,positive frozen loss basis only
+away_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.0010967223686493277,0.001178050689324639,-0.07415579639856479,True,positive frozen loss basis only
+away_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,8.769639034031385e-05,0.00010092588090890309,-0.15085558843700403,True,positive frozen loss basis only
+away_workload_uncertainty_outs,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0002029691036117276,0.00024001890578062568,-0.1825391229976213,True,positive frozen loss basis only
+home_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0026567997971986834,0.0031049734854207145,-0.1686892963085074,True,positive frozen loss basis only
+home_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.004042050022578181,-0.0017670674630210215,1.4371711020770384,True,positive frozen loss basis only
+home_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.0029666729838271344,-0.0009478408753080814,1.3194962439322606,True,positive frozen loss basis only
+home_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.00024705557611900963,-0.0001455433321705668,1.5891117069968776,True,positive frozen loss basis only
+home_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0005027533039988485,-0.000374691492523338,1.7452790256037705,True,positive frozen loss basis only
+away_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0020838442526840417,0.0007299734948231773,0.649698630843954,True,positive frozen loss basis only
+away_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.003283065200998081,-0.001379737430517558,1.4202589184333305,True,positive frozen loss basis only
+away_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.0020427429497646976,-0.000733077111954028,1.3588689962378628,True,positive frozen loss basis only
+away_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.0002270200763488106,-0.00010049885023818983,1.4426870603451647,True,positive frozen loss basis only
+away_bullpen_ra9,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0005314802158414844,-0.0002535220546866501,1.477011273665667,True,positive frozen loss basis only
+home_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.0010872064630116363,-0.009568003177045092,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.01224291388226817,-0.010017387613446616,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.007109531909588185,-0.006721332481259168,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-0.0007390208662574616,-0.0006526560783722823,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-0.0017929524724579204,-0.0015041844463968834,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.0040191798982514015,-0.0036892866616149433,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,3.574221120850041e-05,-0.00276800482479711,78.44358088675857,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.0005747108263807199,-0.0021365084665205814,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-7.035451640152734e-05,-0.00024030168594707524,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-0.0001525297476215881,-0.0005576797079309692,,False,not defined because frozen removal did not worsen metric
+home_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.00025984532179146314,-0.00012232137192258463,1.4707468700196678,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.00024651103778250416,-0.0004272793071899983,,False,not defined because frozen removal did not worsen metric
+home_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-9.398420878259373e-05,-0.00020107174558114949,,False,not defined because frozen removal did not worsen metric
+home_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-1.1835933783010955e-05,-2.145206829176627e-05,,False,not defined because frozen removal did not worsen metric
+home_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-4.076005625930357e-05,-6.029910221727608e-05,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,-0.00494083864622219,-0.003097545494601839,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,-0.0059517706997676,-0.006920300906103627,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,-0.0031053970265770836,-0.00335985002691519,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,-0.0003256133076750267,-0.0003487581905710635,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,-0.0007668972537702157,-0.0008507863431163054,,False,not defined because frozen removal did not worsen metric
+strict_prior_total_run_factor,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.054781676236445254,0.03247303632269016,0.40722813623788967,True,positive frozen loss basis only
+strict_prior_total_run_factor,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.03075210740708645,0.032209642612411216,-0.04739627063701318,True,positive frozen loss basis only
+strict_prior_total_run_factor,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.023849654323032876,0.022138012980824406,0.07176797277751094,True,positive frozen loss basis only
+strict_prior_total_run_factor,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.0024020038629658236,0.002452845212647131,-0.021166223112785636,True,positive frozen loss basis only
+strict_prior_total_run_factor,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.004784714792619105,0.00523097814358231,-0.09326853747931027,True,positive frozen loss basis only
+park_history_depth,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.14923413978823863,0.08801692991977728,0.41020915157435023,True,positive frozen loss basis only
+park_history_depth,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.02489847351431962,0.016539685672595006,0.33571487171361347,True,positive frozen loss basis only
+park_history_depth,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.017931113346176808,0.01422664388129391,0.20659450383055822,True,positive frozen loss basis only
+park_history_depth,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.0016004145172814066,0.0014014040324655253,0.12434933741661919,True,positive frozen loss basis only
+park_history_depth,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.0022968077752114624,0.0025407534004024956,-0.10621072769948006,True,positive frozen loss basis only
+game_number,PROSPECTIVE_AUG17_28_CLEAN_RAW,mae,0.0019662961569228976,0.002295236706980841,-0.16728942326404692,True,positive frozen loss basis only
+game_number,PROSPECTIVE_AUG17_28_CLEAN_RAW,rmse,0.0007436262040316777,0.0004535542546557636,0.39007763282580254,True,positive frozen loss basis only
+game_number,PROSPECTIVE_AUG17_28_CLEAN_RAW,crps,0.0007484780165678551,0.0006844422049971932,0.08555469920719647,True,positive frozen loss basis only
+game_number,PROSPECTIVE_AUG17_28_CLEAN_RAW,brier,0.0001212748167883082,0.00012026532079964514,0.00832403639434226,True,positive frozen loss basis only
+game_number,PROSPECTIVE_AUG17_28_CLEAN_RAW,log_loss,0.00025853966126587746,0.0002583400475185682,0.0007720817236778935,True,positive frozen loss basis only
+league_total,ALL_GOVERNED_EVALUATION,mae,-0.0035836074266821782,-0.0016245426139476216,,False,not defined because frozen removal did not worsen metric
+league_total,ALL_GOVERNED_EVALUATION,rmse,0.014594546544032916,0.005189737546808182,0.644405701050709,True,positive frozen loss basis only
+league_total,ALL_GOVERNED_EVALUATION,crps,0.008418909400190522,0.0027690815154572945,0.6710878590290293,True,positive frozen loss basis only
+league_total,ALL_GOVERNED_EVALUATION,brier,0.0009148780805608436,0.00030623197051035667,0.665275650365753,True,positive frozen loss basis only
+league_total,ALL_GOVERNED_EVALUATION,log_loss,0.0021982846581843907,0.0007133814495247082,0.6754826783379797,True,positive frozen loss basis only
+home_offense,ALL_GOVERNED_EVALUATION,mae,0.0007695944822749823,0.0008635508711742901,-0.12208558021565495,True,positive frozen loss basis only
+home_offense,ALL_GOVERNED_EVALUATION,rmse,0.0004085940587907899,0.0022603780089802683,-4.532087313432124,True,positive frozen loss basis only
+home_offense,ALL_GOVERNED_EVALUATION,crps,5.973990868080037e-05,0.0011664449183252934,-18.525388372416003,True,positive frozen loss basis only
+home_offense,ALL_GOVERNED_EVALUATION,brier,-2.691768506893344e-05,0.00011024415536445287,,False,not defined because frozen removal did not worsen metric
+home_offense,ALL_GOVERNED_EVALUATION,log_loss,-5.933990030004832e-05,0.00024291847043267367,,False,not defined because frozen removal did not worsen metric
+home_prevention,ALL_GOVERNED_EVALUATION,mae,-0.002574869609011543,-0.00017693757831827028,,False,not defined because frozen removal did not worsen metric
+home_prevention,ALL_GOVERNED_EVALUATION,rmse,-0.0014678576888496053,-0.001128311102313262,,False,not defined because frozen removal did not worsen metric
+home_prevention,ALL_GOVERNED_EVALUATION,crps,-0.0007526356098166431,-0.0006301445016267948,,False,not defined because frozen removal did not worsen metric
+home_prevention,ALL_GOVERNED_EVALUATION,brier,-7.858887780981538e-05,-6.523195455879205e-05,,False,not defined because frozen removal did not worsen metric
+home_prevention,ALL_GOVERNED_EVALUATION,log_loss,-0.00011161021157879425,-0.00015230007242694743,,False,not defined because frozen removal did not worsen metric
+away_offense,ALL_GOVERNED_EVALUATION,mae,-0.0005342671716181968,-0.0007018512689414003,,False,not defined because frozen removal did not worsen metric
+away_offense,ALL_GOVERNED_EVALUATION,rmse,-0.0023119774987021557,-0.0007888517446721366,,False,not defined because frozen removal did not worsen metric
+away_offense,ALL_GOVERNED_EVALUATION,crps,-0.0012988226352192989,-0.00040796502678830393,,False,not defined because frozen removal did not worsen metric
+away_offense,ALL_GOVERNED_EVALUATION,brier,-0.00014645182818975866,-5.419327512540262e-05,,False,not defined because frozen removal did not worsen metric
+away_offense,ALL_GOVERNED_EVALUATION,log_loss,-0.000345564954437827,-0.00011422096782176538,,False,not defined because frozen removal did not worsen metric
+away_prevention,ALL_GOVERNED_EVALUATION,mae,-0.0018775350883606379,0.00024357410063924334,,False,not defined because frozen removal did not worsen metric
+away_prevention,ALL_GOVERNED_EVALUATION,rmse,-0.0013708315088614142,-0.0016190640513897847,,False,not defined because frozen removal did not worsen metric
+away_prevention,ALL_GOVERNED_EVALUATION,crps,-0.0006263711553535778,-0.0008053826001410691,,False,not defined because frozen removal did not worsen metric
+away_prevention,ALL_GOVERNED_EVALUATION,brier,-4.043641948653365e-05,-6.760841960914976e-05,,False,not defined because frozen removal did not worsen metric
+away_prevention,ALL_GOVERNED_EVALUATION,log_loss,-0.00010029957933177513,-0.00017658940987552718,,False,not defined because frozen removal did not worsen metric
+home_starter_ra9,ALL_GOVERNED_EVALUATION,mae,0.0026858886124196957,0.0006466873180466237,0.7592277970663763,True,positive frozen loss basis only
+home_starter_ra9,ALL_GOVERNED_EVALUATION,rmse,0.0009271915616979598,0.0012849559410037514,-0.3858581053634915,True,positive frozen loss basis only
+home_starter_ra9,ALL_GOVERNED_EVALUATION,crps,0.0006532727902928137,0.0008214444243197505,-0.2574294177346005,True,positive frozen loss basis only
+home_starter_ra9,ALL_GOVERNED_EVALUATION,brier,7.804202856095954e-05,9.112273474526367e-05,-0.16761104786104622,True,positive frozen loss basis only
+home_starter_ra9,ALL_GOVERNED_EVALUATION,log_loss,0.0001578218237202611,0.00021990909677249704,-0.39340106196140223,True,positive frozen loss basis only
+away_starter_ra9,ALL_GOVERNED_EVALUATION,mae,0.0014606426849730347,0.0003791992716379866,0.7403887511030892,True,positive frozen loss basis only
+away_starter_ra9,ALL_GOVERNED_EVALUATION,rmse,0.0003387741544740308,0.00018348673242662983,0.4583803693304022,True,positive frozen loss basis only
+away_starter_ra9,ALL_GOVERNED_EVALUATION,crps,0.0003390213331320169,0.0002309645796447768,0.31873142757409356,True,positive frozen loss basis only
+away_starter_ra9,ALL_GOVERNED_EVALUATION,brier,4.661106134007387e-05,3.0288172113146494e-05,0.3501934681949361,True,positive frozen loss basis only
+away_starter_ra9,ALL_GOVERNED_EVALUATION,log_loss,9.40681201905269e-05,6.420838870790924e-05,0.3174266842171327,True,positive frozen loss basis only
+home_starter_prior_starts,ALL_GOVERNED_EVALUATION,mae,-0.007831231129259209,-0.002911550664731699,,False,not defined because frozen removal did not worsen metric
+home_starter_prior_starts,ALL_GOVERNED_EVALUATION,rmse,0.01577206206024151,-0.005857867285818941,1.371407826284526,True,positive frozen loss basis only
+home_starter_prior_starts,ALL_GOVERNED_EVALUATION,crps,0.008872506532278113,-0.0039499836294907276,1.4451936569582358,True,positive frozen loss basis only
+home_starter_prior_starts,ALL_GOVERNED_EVALUATION,brier,0.0008580138083272293,-0.0005262993718647135,1.613392659601573,True,positive frozen loss basis only
+home_starter_prior_starts,ALL_GOVERNED_EVALUATION,log_loss,0.0020570810287300345,-0.001268605536469125,1.6167017821618408,True,positive frozen loss basis only
+away_starter_prior_starts,ALL_GOVERNED_EVALUATION,mae,-0.0001571741843022778,0.00033051874288814176,,False,not defined because frozen removal did not worsen metric
+away_starter_prior_starts,ALL_GOVERNED_EVALUATION,rmse,0.0012500070878758152,0.00013464693494658064,0.8922830628301546,True,positive frozen loss basis only
+away_starter_prior_starts,ALL_GOVERNED_EVALUATION,crps,0.0007543719872544763,9.578477546146047e-05,0.8730271310708826,True,positive frozen loss basis only
+away_starter_prior_starts,ALL_GOVERNED_EVALUATION,brier,8.6288171263188e-05,1.7294878587731377e-05,0.7995683726454211,True,positive frozen loss basis only
+away_starter_prior_starts,ALL_GOVERNED_EVALUATION,log_loss,0.00020397772785019086,3.5643334470703e-05,0.8252586944351059,True,positive frozen loss basis only
+home_expected_outs,ALL_GOVERNED_EVALUATION,mae,0.003372638633839742,0.00030063157699444787,0.9108616102602788,True,positive frozen loss basis only
+home_expected_outs,ALL_GOVERNED_EVALUATION,rmse,0.0035659585283820405,-0.0008830332989440137,1.247628594644556,True,positive frozen loss basis only
+home_expected_outs,ALL_GOVERNED_EVALUATION,crps,0.002196015713179289,-0.000601109848815895,1.2737274807317458,True,positive frozen loss basis only
+home_expected_outs,ALL_GOVERNED_EVALUATION,brier,0.0002548543316378271,-8.620529461828008e-05,1.3382532055244256,True,positive frozen loss basis only
+home_expected_outs,ALL_GOVERNED_EVALUATION,log_loss,0.0005742146836819062,-0.00023776205382752824,1.4140647402169877,True,positive frozen loss basis only
+away_expected_outs,ALL_GOVERNED_EVALUATION,mae,-0.002627834569932208,-0.0032634132994524556,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,ALL_GOVERNED_EVALUATION,rmse,-0.0022134120784240707,-0.0024790244518611004,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,ALL_GOVERNED_EVALUATION,crps,-0.001396170556499765,-0.0016019823804609423,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,ALL_GOVERNED_EVALUATION,brier,-0.00017750844788214093,-0.00022172556323807324,,False,not defined because frozen removal did not worsen metric
+away_expected_outs,ALL_GOVERNED_EVALUATION,log_loss,-0.00037983268109975654,-0.00047285778662686795,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,mae,0.00024407528919523358,-0.000992917239330815,5.068077692767127,True,positive frozen loss basis only
+home_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,rmse,-0.0005427907144790467,-0.0007905761841735526,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,crps,-0.0004856325868907163,-0.0006961239603260339,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,brier,-5.868633142672164e-05,-9.035657401249009e-05,,False,not defined because frozen removal did not worsen metric
+home_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,log_loss,-0.00013149839520010254,-0.0002000059081025407,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,mae,0.0001692274420030948,9.636481914299111e-05,0.43056032755474255,True,positive frozen loss basis only
+away_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,rmse,-0.00011703053295430976,-9.470205159978207e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,crps,-5.9975541817802736e-05,-4.9970691500700326e-05,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,brier,-7.952503967179059e-06,-7.429827592164706e-06,,False,not defined because frozen removal did not worsen metric
+away_workload_uncertainty_outs,ALL_GOVERNED_EVALUATION,log_loss,-1.9628770149604513e-05,-1.783216106676644e-05,,False,not defined because frozen removal did not worsen metric
+home_bullpen_ra9,ALL_GOVERNED_EVALUATION,mae,0.0030833819922242434,-2.0211191616770208e-05,1.0065548776206579,True,positive frozen loss basis only
+home_bullpen_ra9,ALL_GOVERNED_EVALUATION,rmse,0.0028499283841405543,-0.001900116537563612,1.666724310736189,True,positive frozen loss basis only
+home_bullpen_ra9,ALL_GOVERNED_EVALUATION,crps,0.0016202716226585423,-0.0011382446513263922,1.7025023677565616,True,positive frozen loss basis only
+home_bullpen_ra9,ALL_GOVERNED_EVALUATION,brier,0.00018175087889343855,-0.000117960168720177,1.6490211735885891,True,positive frozen loss basis only
+home_bullpen_ra9,ALL_GOVERNED_EVALUATION,log_loss,0.0003569445767526158,-0.0002821038181145541,1.7903294698607204,True,positive frozen loss basis only
+away_bullpen_ra9,ALL_GOVERNED_EVALUATION,mae,0.0014644643948562575,0.000470141369889987,0.6789670192451943,True,positive frozen loss basis only
+away_bullpen_ra9,ALL_GOVERNED_EVALUATION,rmse,0.0016933325254484544,-0.0012220690886692864,1.7216946880209718,True,positive frozen loss basis only
+away_bullpen_ra9,ALL_GOVERNED_EVALUATION,crps,0.0009636591632573577,-0.0006273047061347015,1.650961180106759,True,positive frozen loss basis only
+away_bullpen_ra9,ALL_GOVERNED_EVALUATION,brier,9.454490160340501e-05,-6.015415060026119e-05,1.6362495447146856,True,positive frozen loss basis only
+away_bullpen_ra9,ALL_GOVERNED_EVALUATION,log_loss,0.0002270421024243019,-0.00015059329679745215,1.6632835724715924,True,positive frozen loss basis only
+home_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,mae,-0.006440654827799097,-0.005479244800215444,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,rmse,-0.008112204155457547,-0.004158952682393746,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,crps,-0.0049037770225428545,-0.0025739425792701276,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,brier,-0.0005682721088544063,-0.00030410572353625764,,False,not defined because frozen removal did not worsen metric
+home_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,log_loss,-0.0012939647084094785,-0.0006768656315011556,,False,not defined because frozen removal did not worsen metric
+away_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,mae,0.0010845218225159492,0.00022566305637372608,0.7919239136652712,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,rmse,0.0013754663314289317,-0.00033570689783068985,1.2440676955588827,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,crps,0.0008019852877381162,-0.00023180503278963371,1.2890390089865693,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,brier,9.181311296616035e-05,-2.3203032401386547e-05,1.252720244982201,True,positive frozen loss basis only
+away_bullpen_likely_available_reliever_count,ALL_GOVERNED_EVALUATION,log_loss,0.0002080512937331358,-5.871016666503248e-05,1.2821908271348657,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,mae,0.0002260060399650321,0.0001884485703889105,0.16617905247989184,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,rmse,8.113557094002743e-05,0.00013385575838675834,-0.6497789666840431,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,crps,7.925813545162086e-05,0.0001115000087632545,-0.40679575828924297,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,brier,1.2269449001373056e-05,1.592547357842644e-05,-0.29797789425134286,True,positive frozen loss basis only
+home_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,log_loss,2.6686513508344945e-05,3.549375368649965e-05,-0.3300258827516251,True,positive frozen loss basis only
+away_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,mae,-0.0012042149772559796,-0.0005584687423483281,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,rmse,-0.0010389290232497572,-0.0009817097191495705,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,crps,-0.0006941165975340446,-0.0005637071659712056,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,brier,-7.917985531788463e-05,-4.708087120902649e-05,,False,not defined because frozen removal did not worsen metric
+away_bullpen_recent_innings_burden,ALL_GOVERNED_EVALUATION,log_loss,-0.00018497398136352317,-0.00011971378164465918,,False,not defined because frozen removal did not worsen metric
+strict_prior_total_run_factor,ALL_GOVERNED_EVALUATION,mae,0.03349483496274486,0.01671135765915288,0.5010765785906889,True,positive frozen loss basis only
+strict_prior_total_run_factor,ALL_GOVERNED_EVALUATION,rmse,0.027302564058632406,0.0203278039117194,0.2554617263028729,True,positive frozen loss basis only
+strict_prior_total_run_factor,ALL_GOVERNED_EVALUATION,crps,0.01585600558045952,0.011714157918133683,0.2612163348018829,True,positive frozen loss basis only
+strict_prior_total_run_factor,ALL_GOVERNED_EVALUATION,brier,0.001773723537812688,0.0012819355609411387,0.2772630381158555,True,positive frozen loss basis only
+strict_prior_total_run_factor,ALL_GOVERNED_EVALUATION,log_loss,0.0037255895034087327,0.0027381494225778846,0.2650426408833793,True,positive frozen loss basis only
+park_history_depth,ALL_GOVERNED_EVALUATION,mae,0.07797731920835549,0.026152464812247533,0.6646144663890263,True,positive frozen loss basis only
+park_history_depth,ALL_GOVERNED_EVALUATION,rmse,-0.0014206938101279931,-0.01105094588606903,,False,not defined because frozen removal did not worsen metric
+park_history_depth,ALL_GOVERNED_EVALUATION,crps,-0.0016073905818720924,-0.0068666119578999485,,False,not defined because frozen removal did not worsen metric
+park_history_depth,ALL_GOVERNED_EVALUATION,brier,9.02344365843466e-05,-0.0006295949709252124,7.977324785939111,True,positive frozen loss basis only
+park_history_depth,ALL_GOVERNED_EVALUATION,log_loss,-0.00020661311240577351,-0.001694371356138813,,False,not defined because frozen removal did not worsen metric
+game_number,ALL_GOVERNED_EVALUATION,mae,0.0007988774334886095,0.00031725377963409684,0.602875527164806,True,positive frozen loss basis only
+game_number,ALL_GOVERNED_EVALUATION,rmse,0.00012284846300403274,-0.0002660155328157998,3.1653956941005226,True,positive frozen loss basis only
+game_number,ALL_GOVERNED_EVALUATION,crps,0.00013278342491895856,-0.00012508869144989276,1.9420504970875536,True,positive frozen loss basis only
+game_number,ALL_GOVERNED_EVALUATION,brier,3.115905736028601e-05,-8.95261407785064e-08,1.0028731979836019,True,positive frozen loss basis only
+game_number,ALL_GOVERNED_EVALUATION,log_loss,6.661814480879436e-05,-5.141913488992955e-06,1.077184879641292,True,positive frozen loss basis only
