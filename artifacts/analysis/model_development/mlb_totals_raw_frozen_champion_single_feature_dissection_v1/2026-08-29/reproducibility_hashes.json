@@ -1,0 +1,44 @@
+{
+  "analysis_utility": {
+    "path": "backend/mlb/scripts/run_mlb_totals_raw_frozen_champion_single_feature_dissection_v1.py",
+    "sha256": "c62bdf6215c124c9f37558431fa687b1157a0522dd27d56b64ec2714ccf40c7e"
+  },
+  "authoritative_inputs": {
+    "artifacts/analysis/model_development/mlb_totals_bias_attribution_passage_1/2026-08-06/totals_candidate_residual_spine.csv": "04fbca3ba138c1299b0fbca2a4b643ca274897fe041e72fa14812c4d09b5b232",
+    "artifacts/analysis/model_development/mlb_totals_feature_spine_v1/2026-08-06/totals_core_feature_spine.csv": "7d4dc527f792ffb27398352d5640c3f4039c4fd400c42714bdfa46a834ecd0f2",
+    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "c943b42dc6237aa4c8ab2c764b7c73cfaba3b85e589a60e12954999218a3d072"
+  },
+  "bootstrap_draws": 10000,
+  "bootstrap_seed": 20260829,
+  "created_at_utc": "2026-08-30T01:53:17.418819+00:00",
+  "model_artifact": {
+    "path": "backend/mlb/config/totals_predictions/MLB_TOTALS_DIRECT_NEGATIVE_BINOMIAL_V1.json",
+    "sha256": "c99079334a7f061d08f7611a05e40cca4f17281239e962da267588282c1e22fe"
+  },
+  "outputs": {
+    "concise_mlb_totals_raw_frozen_champion_single_feature_dissection_v1.md": "a44e298a18c7f484a44b157bd72b53ae4462e2283ed7eeb00179fc2fc03bb5df",
+    "raw_champion_22_feature_ablation_manifest.csv": "1cb6fbe0f3fcafe6a2cee0dd47a3325764f0dd603c1010e6cdf6538f8629e43a",
+    "raw_champion_coefficient_vs_dependence.csv": "ebaf55a56385d9bef97c31d55e44a3522def1911dbb6b2ca4b378a573bfee420",
+    "raw_champion_count_confidence_review.csv": "4f3176f5379e7f1cb4995fb4f406c35fb8e975e13fb341dc5cffd6f2c4043926",
+    "raw_champion_evaluation_populations.csv": "c557dd71c1835d74f1e8a11316db7299381848c3a250c3de52f8675f319d5870",
+    "raw_champion_feature_clustered_uncertainty.csv": "28bac523c5b1f80d8e0c009fc3f27baac4b992aa9529511fa59befa63c84178d",
+    "raw_champion_feature_distribution_deltas.csv": "fe22d58ce687679f8c7805e1880389fbaaf3a574ca07a179c27848cdff5d4899",
+    "raw_champion_feature_forecast_effects.csv": "458d6008d603034ed5bf6dbfde233ea96fa8cf6e84db351dc91c4abc0d764d9f",
+    "raw_champion_feature_multiple_comparison_sensitivity.csv": "b6e233a569319e334b3fbbf0552d447a19aa3e037fbd4d7a5902c36452f9465e",
+    "raw_champion_feature_point_deltas.csv": "919c1f443cb2ef5114157f9c74406d84c01105f5f42ff95ee7e86d30ed5c9d36",
+    "raw_champion_feature_temporal_effects.csv": "0582eda680efdcdd27005e190a6b9d754aeeb9625d3ad03655d59b1ec832ff3e",
+    "raw_champion_home_away_asymmetry_review.csv": "d28e18bb6f090c90d1c5a39167ec33d2d25d20cf102a3319f2afd0340a287d1e",
+    "raw_champion_nhl_transfer_lessons.md": "dccdbced91b2a6e8adbc74632866fc40a08fcf8d78f19c423b7b19c733f1f292",
+    "raw_champion_reproduction.json": "b5c23da7822f267f6e0c6a6bd9860561fced6ad0a7eecb2be6dbc81b5a58cf8e",
+    "raw_champion_skeleton_preview.md": "8178d0984f688a14f6f83ae3005e4a21478565de0994ad1c7dd17dc0ffae6449",
+    "raw_champion_stage1_classification.csv": "8c01f618b14849c1c821afe2df4770e1c65903c4c5d7733e75ca39843ee134e2",
+    "raw_champion_stage2_candidate_groups.md": "932821a66b83a885ca8be10eee1563ae8ae1f9101c6d3ba20c05db307b59a77a"
+  },
+  "population_row_hashes": {
+    "2026_LATE_HOLDOUT": "3eef60ab36ad75f75d4bfdd41f459f3e9b3e435f834b88716e8cf0ec67588f24",
+    "2026_SEQUENTIAL_EARLY": "b4a38b93710a64b50fec2f8097b98321e15c18326ae0de9bf6539a364e0f3ca0",
+    "FROZEN_2025_VALIDATION": "f629c77ce0c39a0873afad8e3c4d50f33e68c3ffd027697322030470a0844be8",
+    "PROSPECTIVE_AUG17_28_CLEAN_RAW": "7b9ccb01acc1ce3089779d62249f45aca7b2bbd7f92c6cfecf85418ecb8b85b6"
+  },
+  "task_id": "MLB_TOTALS_RAW_FROZEN_CHAMPION_SINGLE_FEATURE_DISSECTION_V1"
+}
