@@ -5,13 +5,22 @@ Date: 2026-08-31 (America/Los_Angeles)
 Host: Mac14,12, macOS 26.6.2 (25G83)
 Scope: read-only diagnosis; no service, launchd, disk, mount, Time Machine, or source configuration was changed.
 
+> **Superseding topology correction (connected-test addendum, 2026-08-31):** The
+> high-rate USB pipe-stall and SCSI power-command records described below identify
+> USB address 8, `RTL9210B-CG@01120000`. Live I/O-registry tracing proves that the
+> ACASIS TBU401E containing `ACASIS 1`, `Music`, and `Time Machine` is a different
+> device at USB address 9, `ACASIS USB Drive@01130000`, mapped to physical `disk7`.
+> Address 8 is a separate Realtek bridge with no mounted media and zero block I/O.
+> The prior attribution of address-8 errors to the TBU401E is therefore withdrawn.
+> See **Connected reliability characterization addendum** for the measured result.
+
 ## Executive finding
 
 The 2026-08-31 panic is conclusively a `configd` userspace-watchdog panic. Its preliminary stackshot names `IPConfigurationAgentQueue`, and the blocked queue's kernel dependency is the built-in wired-Ethernet poller `skywalk_netif_poller_en0`. Repeated router-ARP failures on `en0` and DHCP retries on `en8` preceded the hang. This is the strongest direct technical evidence.
 
-There is also a serious, concurrent external-device abnormality: the directly attached RTL9210B USB storage enclosure emitted approximately 464 USB pipe-stall errors per minute throughout the incident window, failed SCSI power commands at 07:14:41 and 07:30:38, and a bounded `diskutil info` read later took about 175 seconds. An automatic Time Machine activity was dispatched at 06:58:57 and did not show the normal immediate activity-end transition before the 07:05:45 stackshot. No August 31 backup snapshot was completed.
+There is also a serious, concurrent external-device abnormality: a separate RTL9210B-CG bridge at USB address 8 emitted approximately 464 USB pipe-stall errors per minute throughout the incident window and failed SCSI power commands at 07:14:41 and 07:30:38. The TBU401E is USB address 9 and did not reproduce those errors in the connected characterization below. A bounded `diskutil info` read later took about 175 seconds, but that timing alone does not identify which device caused the delay. An automatic Time Machine activity was dispatched at 06:58:57 and did not show the normal immediate activity-end transition before the 07:05:45 stackshot. No August 31 backup snapshot was completed.
 
-The stackshot does **not** place `backupd`, `backupd-helper`, APFS, Disk Arbitration, or an external-drive process in configd's mutex/turnstile chain. Time Machine or the USB enclosure therefore cannot be declared causal from this evidence. The enclosure is nevertheless a meaningful isolation-test target because its error rate and timing are abnormal.
+The stackshot does **not** place `backupd`, `backupd-helper`, APFS, Disk Arbitration, or an external-drive process in configd's mutex/turnstile chain. Time Machine or the TBU401E therefore cannot be declared causal from this evidence. The address-8 bridge is a separate diagnostic target; its errors must not be attributed to the TBU401E.
 
 The older incident report and its preliminary stackshot are no longer present in the bounded system diagnostic-report locations. The two-incident configd/`IPConfigurationAgentQueue` signature cannot be independently confirmed from retained local evidence. The current event has that exact signature; the first remains unverified. If the earlier incident was the likely August 20 unexpected reboot that motivated the August 21 storage audit, it predates creation/configuration of this Time Machine volume and cannot have been caused by this destination.
 
@@ -96,10 +105,10 @@ Not proven:
 
 ### Proven abnormal findings
 
-- RTL9210B endpoint `0x81` repeatedly returned `0xe0005000 (pipe stalled)` with zero bytes transferred.
+- The separate USB-address-8 RTL9210B-CG endpoint `0x81` repeatedly returned `0xe0005000 (pipe stalled)` with zero bytes transferred.
 - Per-minute counts were approximately 464 throughout 06:45–07:05; 9,768 such records occurred across those 21 displayed minute buckets.
 - The error stream existed before `com.apple.backupd-auto` was dispatched, so Time Machine did not initiate the underlying USB error condition.
-- The enclosure failed SCSI power-state commands at 07:14:41 and 07:30:38.
+- The address-8 device failed SCSI power-state commands at 07:14:41 and 07:30:38.
 - The same pipe-stall pattern resumed after restart.
 - A later bounded `diskutil info disk8; diskutil info disk8s4` operation completed but took approximately 175 seconds, unusually long for metadata-only reads.
 
@@ -110,7 +119,7 @@ Not proven:
 - no APFS corruption or recovery requirement after restart;
 - no exposed SMART health status (`SMART Status: Not Supported` over this interface).
 
-The physical enclosure contains `ACASIS 1`, `Music`, and encrypted `Time Machine` APFS volumes. Therefore, a physical-drive isolation test affects all three, not just backup coverage.
+The address-9 TBU401E contains `ACASIS 1`, `Music`, and encrypted `Time Machine` APFS volumes. The address-8 error source has no mounted media. A TBU401E isolation test would therefore affect all three volumes but would not isolate the device that produced the logged stalls.
 
 ## Launchd and local automation inventory
 
@@ -154,13 +163,13 @@ The two dated July pregame-lineup studies remain configured at five-minute inter
 1. Current panic and preliminary report both identify configd in the same boot session.
 2. `IPConfigurationAgentQueue` was blocked uninterruptibly on the built-in `en0` Skywalk poller.
 3. Wired-network router ARP failures and DHCP instability preceded the hang.
-4. The external USB enclosure was simultaneously in a sustained, high-rate pipe-stall state.
+4. A separate USB-address-8 RTL9210B-CG bridge was simultaneously in a sustained, high-rate pipe-stall state.
 5. Time Machine automatic activity began shortly before the stackshot and failed to reach its normal activity-end transition.
 
 ### Plausible association
 
-- An unhealthy USB storage enclosure or its power/bridge behavior may have contributed to wider system stalls, and the automatic Time Machine activity could have exercised that device during the vulnerable period.
-- The timing and device errors justify isolation, but there is no stackshot wait chain from configd to storage or backupd.
+- The address-8 USB bridge abnormality may have contributed to wider system stalls, but the automatic Time Machine activity used the different address-9 TBU401E.
+- The timing justifies characterizing the address-8 device separately, but there is no stackshot wait chain from configd to either storage device or backupd.
 
 ### Unrelated or weakened hypotheses
 
@@ -179,16 +188,16 @@ The two dated July pregame-lineup studies remain configured at five-minute inter
 
 ## Safe isolation recommendation
 
-Temporarily operating with the entire TBU401E/RTL9210B device physically disconnected would be a meaningful A/B test because the enclosure is generating reproducible USB errors and SCSI power-command failures. It tests the physical device/bridge/cable/power path, not just Time Machine.
+The prior recommendation to disconnect the TBU401E as the source of the logged stalls is withdrawn. The connected topology proves that the reproducible USB errors and historical SCSI power-command failures belong to the separate address-8 RTL9210B-CG bridge. Any future physical isolation should first identify that device by serial `012345681550` and change only that one variable; no disconnection was performed here.
 
 A reasonable observation window is **14 consecutive days**, chosen to exceed the roughly 10–11 day spacing between the likely August 20 storage-pressure incident and the August 31 panic. Because the first event timestamp is not independently verified, absence of recurrence would reduce suspicion but not prove causality; recurrence with the drive absent would strongly weaken the drive hypothesis.
 
 Tradeoffs:
 
-- no new backups to this external Time Machine destination during the test;
-- local APFS snapshots may continue but are not equivalent protection against internal-drive failure;
-- `ACASIS 1` and `Music` on the same physical device would also be unavailable;
-- before any human-performed disconnection, complete and verify a current backup if the device remains responsive, then eject safely or shut down. Those actions are recommendations only and were not performed here.
+- isolating only address 8 should not interrupt the address-9 Time Machine destination, but its physical identity must be confirmed before touching cables;
+- disconnecting the TBU401E would remove `ACASIS 1`, `Music`, and Time Machine backup coverage without isolating the observed error source;
+- cable/port tests should vary only one physical factor at a time and repeat the same bounded observation;
+- those actions are recommendations only and were not performed here.
 
 No Time Machine setting, Apple service, drive connection, or launchd definition was changed during this diagnostic.
 
@@ -208,3 +217,247 @@ Approved protected read access was used for `diskutil`, focused unified logs, Ti
 ## Repository integrity
 
 Initial Git state was clean on `main` at `8aa24583d6606da3155f935d3c71afc2e88e0a09`. This Markdown report is the only intended repository write from the diagnostic.
+
+## Connected reliability characterization addendum
+
+Date/time: 2026-08-31 08:42–09:30 PT
+
+Authority remained diagnostic-only. No disk, APFS, encryption, snapshot, Time
+Machine, cable, port, or source-control configuration was changed. No synthetic
+file or write-mode media test was used. The addendum was left uncommitted for
+owner review as requested.
+
+### Corrected physical topology
+
+| Layer | Resolved identity |
+|---|---|
+| ACASIS enclosure USB node | `ACASIS USB Drive@01130000`; USB address 9; serial `012345678931`; Realtek vendor/product `0x0bda:0x9210` |
+| USB path | `AppleUSB20HubPort@01130000`; negotiated 480,000,000 bit/s (USB 2.0); reported sink allocation 500 mA |
+| SCSI identity | vendor `ACASIS`; product `TBU401E`; product revision `1.00` |
+| Physical disk | `disk7`, GUID, 2,000,398,934,016 bytes; `disk7s1` EFI and `disk7s2` APFS physical store |
+| APFS container | synthesized `disk8`, UUID `9DE34D98-850C-4BA6-8D71-DD62B871FC60`, 2,000,189,177,856 bytes |
+| APFS volumes | `disk8s1` `ACASIS 1`; `disk8s2` `Music`; `disk8s4` encrypted/unlocked `Time Machine` with 1.4 TB quota |
+| Separate noisy device | `RTL9210B-CG@01120000`; USB address 8; serial `012345681550`; adjacent hub port; 480,000,000 bit/s; no `IOMedia` child and zero block operations/bytes |
+
+Both USB devices use the same Realtek vendor/product identifiers, which made a
+product-name-only log search ambiguous. USB address, location path, SCSI identity,
+and `IOMedia` ancestry provide the deterministic mapping.
+
+The live bridge path exposes neither the installed drive model nor rotational/
+solid-state status (`Solid State: Info not available`). ACASIS specifies the
+[TBU401 family as an M.2 NVMe SSD enclosure](https://www.acasis.com/en-in/products/acasis-usb4-0-mobile-m-2-nvme-enclosure-40gbps-compatible-with-typec-thunderbolt-3-interface-solid-state-nvme-ssd-universal-tools?variant=43694516601061),
+so the installed medium is consistent with NVMe SSD use, but macOS did not expose
+the SSD identity needed to independently confirm its model. The SCSI product
+revision is `1.00`; no unambiguous RTL9210 firmware revision was exposed.
+`smartctl` is not installed, `diskutil` reports SMART unsupported through this
+bridge, and no temperature sensor is exposed. No utility was installed.
+
+### Idle observation
+
+An automatic Time Machine attempt entered `PreparingSourceVolumes` at 08:49:04
+while the initial baseline was being established and then returned to
+`Running = 0`. It was not manually started or stopped. Disk7 continued background
+I/O briefly, then reached a full zero-I/O interval. The formal idle clock was
+therefore reset and ran from 08:56:03 through 09:27:16 PT (31 minutes 13 seconds).
+All three volumes remained mounted and Time Machine remained stopped.
+
+| Measure | TBU401E address 9 | Separate address 8 bridge |
+|---|---:|---:|
+| Focused USB/SCSI events | 0 | 14,536 |
+| Pipe stalls | 0 | 14,536 |
+| Pipe-stall rate | 0.0/min | 465.6/min |
+| USB resets | 0 | 0 |
+| SCSI/power failures | 0 | 0 in this interval |
+| Disconnects/device disappearance | 0 | 0 |
+
+TBU401E driver-counter deltas during the formal observation were 413 read
+operations / 13,717,504 bytes and 596 write operations / 9,936,896 bytes. These
+were incidental macOS metadata accesses, not a synthetic test. Most one-minute
+samples were 0 MB/s; brief samples peaked at 0.27 MB/s. Driver read errors,
+write errors, and retries remained zero. Thus the historical “approximately 464
+per minute” condition is still occurring now, but on address 8—not on the ACASIS
+TBU401E at address 9.
+
+The five minutes immediately preceding the formal window independently contained
+2,328 address-8 events (465.6/min) and zero matching address-9 events, including
+the short natural Time Machine preparation attempt. That attempt was not a
+controlled workload phase and is insufficient for a Time Machine association
+finding.
+
+### Read-only verification and workload boundary
+
+After the clean idle phase, `diskutil verifyDisk disk7` and one bounded
+`diskutil verifyVolume '/Volumes/ACASIS 1'` attempt were rejected before starting:
+
+```text
+This operation is restricted by Sandbox; check your settings in
+System Settings > Privacy & Security > Files and Folders (-69464)
+```
+
+No verification I/O occurred. After the identical second preflight denial, no
+container/volume verification and no raw physical-device read were attempted.
+Completing those phases requires the user to grant the running Codex host
+**Removable Volumes** permission; Full Disk Access is not requested by this
+addendum. Consequently, errors per unit of intentional data read, sustained
+throughput, and workload-latency stability are not yet measured.
+
+The manually initiated Time Machine phase was not started. Its prerequisite
+read-only verification/workload phases are incomplete, and the task separately
+requires explicit user confirmation immediately before starting a backup. Cable
+and port comparisons also remain pending human action; neither variable was
+changed.
+
+### Current classification
+
+Overall classification: **`INCONCLUSIVE`**.
+
+The completed no-load subphase is **`CONNECTED_TEST_CLEAN`** for the TBU401E:
+zero address-9 USB/SCSI faults, resets, retries, power failures, or disappearances
+were observed. There is no current `MEDIA_OR_FILESYSTEM_FAILURE_EVIDENCE`,
+`ENCLOSURE_CONTROLLER_OR_POWER_PATH_EVIDENCE`, `TIME_MACHINE_WORKLOAD_ASSOCIATION`,
+or `IDLE_POWER_STATE_ASSOCIATION` for the TBU401E from this bounded test.
+
+The separate address-8 RTL9210B-CG bridge does exhibit continuing controller/USB
+path abnormality. That evidence must not be attributed to the address-9 TBU401E.
+The earlier panic's direct `configd`/`IPConfigurationAgentQueue`/`en0` evidence is
+unchanged, and no new storage-to-configd causal chain was found.
+
+Pre-addendum Git state was clean on `main` at
+`f423ecdfcbb24ed092beea6d3fa35615e51f8d7b`. This addendum is the only repository
+write in the connected test and is intentionally not committed pending review.
+
+### Removable-Volumes permission continuation
+
+At 09:36:57 PT the user confirmed that Removable Volumes permission had been
+granted to the running Codex host and authorized resumption of only the read-only
+verification/physical-read phase. The topology was re-resolved before testing:
+TBU401E remained USB address 9 / physical `disk7` / APFS `disk8`; the noisy
+RTL9210B-CG remained the separate address-8 device with no mounted media. Time
+Machine reported `Running = 0`, and `ACASIS 1`, `Music`, and `Time Machine` were
+all mounted.
+
+macOS still rejected the physical partition-map verification before it began:
+
+```text
+diskutil verifyDisk disk7
+Error starting partition map verification for disk7: This operation is
+restricted by Sandbox; check your settings in System Settings > Privacy &
+Security > Files and Folders (-69464)
+```
+
+A single 4 KiB raw-read permission probe was then attempted against the correctly
+resolved physical device, with output directed to `/dev/null`:
+
+```text
+dd if=/dev/rdisk7 of=/dev/null bs=4096 count=1
+dd: /dev/rdisk7: Operation not permitted
+```
+
+The probe transferred zero bytes. Testing stopped at that boundary; no alternate
+privilege path, `sudo`, direct filesystem utility, short read scan, extended read
+scan, repair, or write was attempted.
+
+The monitored interval ran from 09:36:57 through 09:38:48 PT (111 seconds):
+
+| Measure | Result |
+|---|---:|
+| TBU401E/address-9 USB or SCSI fault events | 0 |
+| TBU401E read errors / write errors | 0 / 0 |
+| TBU401E retries | 0 |
+| TBU401E resets | 0 |
+| TBU401E SCSI/I/O/power failures | 0 |
+| TBU401E disconnect/reconnect events | 0 |
+| ACASIS mount-state changes | 0 |
+| Separate address-8 pipe stalls | 872 (471.4/min) |
+| Time Machine state transitions | 0; `Running = 0` at both boundaries |
+
+Disk7 `iostat` samples were zero except for one incidental 1.27 MB/s metadata
+interval. TBU401E driver counters increased by 50 read operations / 2,535,424
+bytes and 289 write operations / 4,370,432 bytes during preflight and permission
+checks; these were naturally occurring macOS metadata operations, not the blocked
+raw-read probe. Error and retry counters remained zero. Intentional read
+throughput and errors per unit of intentional data read remain unmeasured.
+
+Read-phase classification: **`READ_TEST_INCONCLUSIVE`**. The observation contains
+no TBU401E fault, but macOS denied the verification and physical-read operations
+before data transfer, so it cannot support `READ_TEST_CLEAN`. No Time Machine
+workload was initiated. A Time Machine workload test remains separately gated by
+explicit human authorization and must not begin from this continuation.
+
+### Full Disk Access verification/read continuation
+
+This subsection supersedes the permission-blocked read classification immediately
+above. At 09:53:43 PT the user temporarily granted Visual Studio Code Full Disk
+Access and authorized only the previously defined read-only verification and
+physical-read phase. Topology remained TBU401E at USB address 9 / physical
+`disk7` / APFS `disk8`; the address-8 RTL9210B-CG remained a separate no-media
+device. Time Machine reported `Running = 0` and all three ACASIS volumes were
+mounted at preflight.
+
+Read-only verification results:
+
+- `diskutil verifyDisk disk7`: partition map appears OK; exit 0; 0.76 seconds.
+- `diskutil verifyVolume disk8`: invoked `fsck_apfs -n -x /dev/disk7s2`.
+- APFS container superblock, checkpoint, space manager/queues, object map, and
+  encryption key structures: checked without error.
+- `ACASIS 1` (`disk8s1`): appears OK.
+- `Music` (`disk8s2`): appears OK.
+- `Time Machine` (`disk8s4`): appears OK, including all ten retained snapshots
+  from August 22 through the new natural August 31 08:53 snapshot.
+- Allocated space and container `disk7s2`: appear OK.
+- Storage-system check exit code: 0; duration 219.62 seconds.
+- No repair action was invoked and no filesystem error was reported.
+
+`diskutil verifyVolume` performed an offline read-only check, temporarily
+unmounting `disk8s1`, `disk8s2`, and `disk8s4` at 09:54:30–09:54:31 and remounting
+all three successfully at 09:58:09. All were mounted at the final boundary. These
+three unmount/remount cycles are verification-induced mount-state changes, not
+device disconnects.
+
+The TBU driver recorded 2,435,041,280 bytes read during the APFS verification,
+averaging 11.09 MB/s (10.57 MiB/s) across its metadata-heavy 219.62-second run.
+Observed five-second `iostat` samples ranged from idle to 24.72 MB/s. Across the
+full 09:53:43–10:00:27 phase, the driver recorded 3,343,099,904 bytes read. Read
+errors, write errors, and retries remained zero.
+
+No synthetic or user-directed write was issued. The device driver nevertheless
+recorded 377,925,632 bytes written by macOS during the full interval, including
+filesystem unmount/remount and post-verification system activity. Time Machine
+remained `Running = 0` at both boundaries and no Time Machine state transition was
+found. The observed system writes are therefore disclosed rather than attributed
+to a synthetic test, repair, or Time Machine backup.
+
+The planned 256 MiB sequential raw read was attempted only as:
+
+```text
+dd if=/dev/rdisk7 of=/dev/null bs=4m count=64
+```
+
+It was rejected immediately with `Permission denied` and transferred zero bytes.
+Full Disk Access permits the privileged `diskutil` verification helper but does
+not override `/dev/rdisk7` ownership (`root:operator`, mode `0640`). No `sudo`,
+alternate privilege path, second raw attempt, or extended scan was used.
+
+Phase-level event results:
+
+| Measure | Result |
+|---|---:|
+| TBU401E/address-9 USB/SCSI events | 0 |
+| TBU401E read/write errors | 0 / 0 |
+| TBU401E retries | 0 |
+| TBU401E resets | 0 |
+| TBU401E SCSI/I/O/power failures | 0 |
+| TBU401E disconnect/reconnect events | 0 |
+| Verification-induced volume unmount/remount cycles | 3 / 3 successful |
+| Separate address-8 pipe stalls | 3,144 (466.9/min) |
+| Time Machine state transitions | 0 |
+
+Final read-phase classification: **`READ_TEST_CLEAN`** for the completed bounded
+workload. The partition map and full APFS storage system passed while the
+TBU401E successfully serviced more than 2.4 GB of verified reads without an
+address-9 fault, driver error, retry, reset, or disconnect. This classification
+does not claim a full-device surface scan or raw sequential benchmark; that
+specific `dd` path remained unavailable without root device access.
+
+Testing stopped after this phase. No Time Machine workload, cable/port/hub change,
+repair, erase, reformat, device alteration, commit, or push was performed.
