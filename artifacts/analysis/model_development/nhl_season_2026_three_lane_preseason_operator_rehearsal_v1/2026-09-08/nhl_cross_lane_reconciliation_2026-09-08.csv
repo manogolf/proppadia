@@ -1,0 +1,15 @@
+check,lane,status,evidence
+canonical_game_identity_equal,ALL,PASS,2026020001
+midday_final_distinct_no_overwrite,ALL,PASS,five phase-paired namespaces
+grading_preserved_pregame,MONEYLINE,PASS,4cd55dbed01b23c706a23fa6f584529b6d84811a76c91dcfb0e2825b0640a2a0
+grading_preserved_pregame,SOG,PASS,0eef2aee192c518d759956a7d642cf8bd892ec3978ef15b9f981ee2f615cce47
+grading_preserved_pregame,POINTS,PASS,ed68b61163bc99b4139b622120c7509ca66a811a414d0ea8525082cebc3f6be6
+preseason_non_evaluation,MONEYLINE,PASS,"{""PRESEASON_NON_EVALUATION"":1}"
+preseason_non_evaluation,SOG,PASS,"{""PRESEASON_NON_EVALUATION"":12}"
+preseason_non_evaluation,POINTS,PASS,"{""PRESEASON_NON_EVALUATION"":9}"
+points_p_m_c_u_e,POINTS,PASS,"{""C"": 0, ""E"": 0, ""G"": 0, ""M"": 6, ""P"": 9, ""U"": 0}"
+points_blocked_visible_p_absent_m,POINTS,PASS,"blocked=[(np.int64(2026020001), np.int64(8473986))];market=[(np.int64(2026020001), np.int64(8475852)), (np.int64(2026020001), np.int64(8476869))]"
+points_policy_fail_closed,POINTS,PASS,RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG
+sog_policy_archived_hash_bound,SOG,PASS,86095e176f3fd916aca4b932bde3ce4810823dbf1ba751b05e6007af464fe442
+sog_no_upload_no_execution,SOG,PASS,--no-upload-shaped-output equivalent; E=0
+goalie_saves_absent,GOALIE_SAVES,PASS,"no command, import, process, artifact, or population"

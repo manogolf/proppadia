@@ -1,0 +1,62 @@
+{
+  "canonical_season": 2026,
+  "fixed_input": {
+    "path": "backend/nhl/points_shadow/fixtures/retained_2026-04-16/train_nhl_points_v2.csv",
+    "rows": 310,
+    "sha256": "daa7515d5760f773037b990627b228d63b0b432299077511122612500659e87f"
+  },
+  "fixed_output": {
+    "path": "backend/nhl/points_shadow/fixtures/retained_2026-04-16/points_predictions.csv",
+    "rows": 930,
+    "sha256": "4ecc984864f5e6fd6ae3e703683b5c148e4e95c58a4c5a38325610c9125ce6bb"
+  },
+  "feature_construction": {
+    "path": "backend/nhl/sql/export_points.sql",
+    "sha256": "4ff6e3700a96b883829d887ef67273c6322f682f04fc181e48cb2b0a6c991bc1",
+    "strict_prior_contract": "regular-season logs only; game_date strictly before slate date; bounded 120-day history"
+  },
+  "gate_contract": {
+    "lines": [0.5, 1.5, 2.5],
+    "material_crossing_probability": 0.01,
+    "numerical_tolerance": 1e-12,
+    "ordering": "p_over_0_5 >= p_over_1_5 >= p_over_2_5"
+  },
+  "model_name": "points_phoenix_lr",
+  "model_root": "backend/nhl/models/latest/points",
+  "model_version": "phoenix_v1_frozen_2026_control",
+  "models": {
+    "0.5": {
+      "coefficient_sha256": "7faf7faa3339d81d09131a2b587210aa56e68e6ff0cfb914288b8d17a0167444",
+      "configuration_sha256": "b53e183caf8019dbab7a7016d6e5253c4f56f8ee8ca5bd7fda9d52111ec07187",
+      "feature_metadata_sha256": "07da7397488dcc67f1c4d474adef06ac7fd305a29a6000d166b08fa834db813e",
+      "feature_order_sha256": "db9201cdd33017f080d0e3764da8fc9f50bee9d6881a50337b23b77e179bbb98",
+      "joblib_sha256": "4eb459587b70ef41e709dddc7e1f54b8341c3eba208926022c4803295e370add",
+      "scaler_sha256": "e6b3a76645005c60ab4502043efb9b0cec243f350c90bd3f81a5f149d061dfd2"
+    },
+    "1.5": {
+      "coefficient_sha256": "df43fcbe9ae252bca4875390668986122d2f68f1778132ec962607e6f28d1b6b",
+      "configuration_sha256": "b53e183caf8019dbab7a7016d6e5253c4f56f8ee8ca5bd7fda9d52111ec07187",
+      "feature_metadata_sha256": "7c6f756be8679e537998c9bcd32d70205496fec78d9ec9c95d2d46ff17e39f19",
+      "feature_order_sha256": "db9201cdd33017f080d0e3764da8fc9f50bee9d6881a50337b23b77e179bbb98",
+      "joblib_sha256": "f23a97ade5473cb9557a2f93c0b93c39558cb15607663dd393b707d690994812",
+      "scaler_sha256": "919255256aa31593f384d42c9a580e2fa43d59f503f476ec2c9e1af929949302"
+    },
+    "2.5": {
+      "coefficient_sha256": "c69aa1fd05329e990042e8abc97732a235b9b3261839393522909080345f9ffc",
+      "configuration_sha256": "b53e183caf8019dbab7a7016d6e5253c4f56f8ee8ca5bd7fda9d52111ec07187",
+      "feature_metadata_sha256": "738fbc484d99d73bfef4c4065662576778fe6df2a79b8a784fd50e07968ea1a1",
+      "feature_order_sha256": "db9201cdd33017f080d0e3764da8fc9f50bee9d6881a50337b23b77e179bbb98",
+      "joblib_sha256": "9cea920df96b178e0b554eac0e0c83c201e23f5ec1f2d6daa1c3900a470b8b44",
+      "scaler_sha256": "330be1723425d0379ac6f64dbc910d669513b89b467518261626f68420764e8a"
+    }
+  },
+  "policy_status": "RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG",
+  "surviving_operator_surface": {
+    "path": "frontend/src/Pages/nhl/NHLPredictions.jsx",
+    "sha256_at_certification": "c7c995de92789ba06576d553a463ec014109b52e3b7fbc6d77882dbfe7be10f9",
+    "status": "RESEARCH_RANKING_ONLY_NOT_A_GOVERNED_CANDIDATE_POLICY"
+  },
+  "scorer_path": "backend/nhl/scripts/score_points_phoenix.py",
+  "scorer_sha256": "a6871ac0bfca5ebb968f31c376ef924dcd817430cf17f730b2c57c37396e36b2",
+  "training_or_update_allowed": false
+}

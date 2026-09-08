@@ -1,0 +1,20 @@
+{
+  "POINTS_IMMUTABLE_SHADOW_PATH": "PROCEED_WITH_EXPLICIT_FAIL_CLOSED_GATE",
+  "assessment_date": "2026-09-08",
+  "audit_id": "NHL_POINTS_PROBABILITY_LADDER_COHERENCE_AUDIT_V1",
+  "exact_next_bounded_task": "NHL_POINTS_IMMUTABLE_PRESEASON_SHADOW_PATH_V1_WITH_EXPLICIT_LADDER_COHERENCE_GATE",
+  "fail_closed_rule": {
+    "diagnostic_rule": "retain all raw probabilities and all sub-1pp crossings as explicitly flagged observation-only evidence",
+    "meaning": "does not alter any frozen probability; preserves coherent predictions while failing closed on materially incoherent ladders",
+    "missing_or_duplicate_rule": "exclude incomplete or duplicate ladders",
+    "population": "complete three-line player-game ladders only",
+    "raw_probability_rule": "exclude the entire player-game from candidate/upload/execution eligibility when max(p1.5-p0.5,p2.5-p1.5) >= 0.01",
+    "repair_performed": false
+  },
+  "goalie_saves_classification": "NOT_READY_FOR_PRESEASON_BURN_IN",
+  "model_fit_performed": false,
+  "monotonic_repair_performed": false,
+  "production_workflow_modified": false,
+  "retained_scorer_disposition": "SAFE_ONLY_WITH_CANDIDATE_EXCLUSION",
+  "scorer_modified": false
+}

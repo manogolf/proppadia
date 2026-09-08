@@ -1,0 +1,24 @@
+{
+  "canonical_season": 2026,
+  "database_write": false,
+  "fixture_type": "CERTIFIED_ISOLATED_NONEMPTY_PRESEASON_REHEARSAL",
+  "game_ids": [
+    2026020001
+  ],
+  "goalie_saves_invoked": false,
+  "live_namespaces_written": false,
+  "moneyline_parameter_sha256": "2f465bf45c7acbac8a9e8ea183a80e1bf0b7a17806527127c7ce702bb6eaa87b",
+  "network_used": false,
+  "points_frozen_identity_sha256": "3797a9660592fbc67b5b7a907ca1b1fae5578ef26ddd6961deb7ea4983840d1f",
+  "points_ladder_expected": {
+    "M": 6,
+    "P": 9,
+    "blocked_player_id": 8473986
+  },
+  "scheduled_start_time_utc": "2026-09-19T22:00:00Z",
+  "slate_date": "2026-09-19",
+  "sog_effective_policy_hash": "86095e176f3fd916aca4b932bde3ce4810823dbf1ba751b05e6007af464fe442",
+  "sog_parity_summary_sha256": "40b2e8b72a581a365787cdf040537bdfd704944edcd599056abfa0a571f3a65d",
+  "sog_policy_fixture_authority": "exact certified manual-shadow validation fixture values; not a live policy choice",
+  "sog_scorer_sha256": "4a63ccdee67170b32daf2bb5d5652ed4728b9f3abe7f7fc67d832a94bdb465e1"
+}

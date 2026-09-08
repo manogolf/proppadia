@@ -1,0 +1,18 @@
+{
+  "fixed_input_rows": 310,
+  "fixed_input_sha256": "daa7515d5760f773037b990627b228d63b0b432299077511122612500659e87f",
+  "fixed_output_rows": 930,
+  "fixed_output_sha256": "4ecc984864f5e6fd6ae3e703683b5c148e4e95c58a4c5a38325610c9125ce6bb",
+  "frozen_identity_authority": "backend/nhl/points_shadow/frozen_points_v1.json",
+  "frozen_identity_sha256": "3797a9660592fbc67b5b7a907ca1b1fae5578ef26ddd6961deb7ea4983840d1f",
+  "line_joblib_sha256": {
+    "0.5": "4eb459587b70ef41e709dddc7e1f54b8341c3eba208926022c4803295e370add",
+    "1.5": "f23a97ade5473cb9557a2f93c0b93c39558cb15607663dd393b707d690994812",
+    "2.5": "9cea920df96b178e0b554eac0e0c83c201e23f5ec1f2d6daa1c3900a470b8b44"
+  },
+  "model_name": "points_phoenix_lr",
+  "model_version": "phoenix_v1_frozen_2026_control",
+  "parity": "EXACT_BYTE_PARITY",
+  "scorer_sha256": "a6871ac0bfca5ebb968f31c376ef924dcd817430cf17f730b2c57c37396e36b2",
+  "training_or_update_allowed": false
+}

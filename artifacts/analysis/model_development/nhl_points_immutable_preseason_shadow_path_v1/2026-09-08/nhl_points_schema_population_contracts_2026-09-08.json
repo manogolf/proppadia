@@ -1,0 +1,17 @@
+{
+  "canonical_prediction_identity": ["canonical_season", "slate_date", "run_id", "run_type", "run_timestamp_utc", "game_id", "team", "opponent", "player_id", "prop_type", "line", "side", "model_version", "model_joblib_sha256"],
+  "completion": "RUN_COMPLETE.json plus SHA256SUMS followed by atomic incomplete-to-final rename",
+  "populations": {
+    "C": "policy-qualified candidate; disabled until governed effective Points policy exists",
+    "E": "separate execution record; never inferred from U",
+    "G": "separate append-only grading run",
+    "M": "P row with coherence PASS/WARNING and a bound qualified quote in the same immutable quote run",
+    "P": "all untouched frozen model output rows, including blocked ladders",
+    "U": "separate upload lineage; disabled and empty"
+  },
+  "run_types": ["MIDDAY", "FINAL_PREGAME"],
+  "season": 2026,
+  "separate_namespaces": ["points_input_snapshots", "points_quote_runs", "points_shadow_runs", "points_shadow_grades"],
+  "unsafe_dependencies_forbidden": ["latest files", "today files", "unmanifested critical inputs", "cross-run quote carry-forward"]
+}
+

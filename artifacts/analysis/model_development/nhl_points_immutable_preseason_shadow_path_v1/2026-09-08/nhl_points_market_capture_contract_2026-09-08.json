@@ -1,0 +1,12 @@
+{
+  "book_level_fields": ["sportsbook", "sportsbook_name", "provider_event_id", "provider_market_id", "provider_outcome_id", "player_id", "game_id", "raw_line", "line", "raw_side", "side", "raw_price", "decimal_price", "provider_quote_timestamp_utc", "provider_market_timestamp_utc", "source_timestamp_utc", "capture_timestamp_utc", "market_status", "raw_payload_sha256"],
+  "canonical_market": "player_points",
+  "credential_dependency": "THE_ODDS_API_KEY supplied explicitly to fetch; no credential was added or persisted",
+  "disappearing_market_rule": "absence remains absence in the later distinct snapshot; no prior quote is carried forward",
+  "immutable_source": "raw_odds_response.json in create-only run directory",
+  "late_missing_suspended_handling": "retained diagnostically but not qualified",
+  "market_view": "deterministic median price by run/game/player/line/side with evidence hash; raw book rows retained",
+  "post_start_rule": "capture or provider/source timestamp at/after canonical start is POST_START_INVALID",
+  "snapshot_rule": "MIDDAY and FINAL_PREGAME have distinct run identities and manifests",
+  "subscription_dependency": "provider account must expose NHL player_points; season-2026 live availability remains to be observed"
+}

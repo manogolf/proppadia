@@ -1,0 +1,12 @@
+{
+  "append_only": true,
+  "corrections": "new grade identity with correction_of_grade_id; source run remains unchanged",
+  "identity": ["canonical_season", "slate_date", "game_id", "player_id", "prop_type", "line", "side"],
+  "participant_regular_season": "REGULAR_SEASON_OBSERVED with observed_over; no betting settlement claim",
+  "preseason": "PRESEASON_NON_EVALUATION",
+  "regular_season_feature_history_write_rows": 0,
+  "scratched_or_nonparticipant": "NONPARTICIPANT_UNGRADED",
+  "states": ["SCHEDULED", "ACTIVE", "PARTICIPATED", "SCRATCHED", "NONPARTICIPANT", "UNRESOLVED", "POSTPONED"],
+  "unresolved": "UNRESOLVED_UNGRADED"
+}
+

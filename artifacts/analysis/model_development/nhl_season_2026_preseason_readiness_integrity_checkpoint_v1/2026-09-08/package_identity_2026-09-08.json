@@ -1,0 +1,10 @@
+{
+  "assessment_date": "2026-09-08",
+  "create_only": true,
+  "generated_by": "tmp/analysis/create_nhl_preseason_readiness_integrity_checkpoint_v1.py",
+  "historical_packages_mutated": false,
+  "live_actions_performed": false,
+  "package": "nhl_season_2026_preseason_readiness_integrity_checkpoint_v1",
+  "remote_push_performed": false,
+  "source_head": "323ffd803add79dac823e9e27414ab2442433bc6"
+}

@@ -1,0 +1,16 @@
+measure,rows,denominator,notes
+archive_files_read,48,48,date-named overwrite-capable archives; not certified candidate history
+archived_market_rows,59133,59133,duplicate identities removed=0
+complete_archived_player_game_ladders,19711,19711,recoverable display surface
+non_monotonic_archived_ladders,14306,19711,raw probabilities
+material_non_monotonic_archived_ladders_ge_1pp,13836,19711,fail-closed tolerance candidate
+market_playable_player_games,5633,19711,frontend price bounds -350 to +500
+max_edge_picks_from_non_monotonic_ladders,5354,5633,reconstructed not historical candidate ledger
+max_edge_picks_from_material_ladders,5290,5633,would be excluded by 1pp fail-closed gate
+max_edge_picks_on_crossing_higher_line,1705,5633,selection can change action not presentation
+max_edge_picks_strictly_dominated_same_side_quote,0,5633,lower line easier and same-or-better archived decimal payout
+max_ev_picks_from_non_monotonic_ladders,5354,5633,line-local EV can propagate crossings
+max_ev_picks_on_crossing_higher_line,1705,5633,selection can change action not presentation
+max_ev_picks_strictly_dominated_same_side_quote,0,5633,strict definition above
+recoverable_points_candidate_ledgers,0,0,none found
+recoverable_points_upload_ledgers,0,0,none found; current DB user_props rows=0 at assessment

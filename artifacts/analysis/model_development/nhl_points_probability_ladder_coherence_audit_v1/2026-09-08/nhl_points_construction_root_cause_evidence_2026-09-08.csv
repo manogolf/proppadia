@@ -1,0 +1,11 @@
+evidence,result,detail
+shared_count_distribution,NO,score_points_phoenix.py loads one independent joblib per line and calls predict_proba separately
+line_specific_features,NO_AT_SCORER_INPUT,all feature metadata lists identical=True; retained lines share one feature-export row
+line_specific_preprocessing,YES_INSIDE_ARTIFACT,each joblib has its own fitted StandardScaler and LogisticRegression; scaler means and coefficients differ by line
+probability_orientation,CONSISTENT_WITH_OVER,"all LR classes are [0,1]; scorer selects predict_proba[:,1], names output prob_over, and market builder carries it as p_over"
+row_association,NO_DEFECT_FOUND,"same input dataframe order and zip(player_id,game_id) are used for every line; retained identities are unique and complete"
+rounding,NOT_CAUSAL,crossings exist in raw full-precision probabilities before UI rounds to 0.1 percentage point
+root_cause,IDENTIFIED,independent balanced binary classifiers with independently fitted transforms have no cross-line order constraint; crossings intentionally remain possible in construction though not necessarily desired semantically
+line_0.5_artifact,INDEPENDENT_LINE_SPECIFIC_CLASSIFIER,"sha256=4eb459587b70ef41e709dddc7e1f54b8341c3eba208926022c4803295e370add; classes=[0, 1]; intercept=[-0.02289964172174365]; scaler_mean_sha256=ee28ffae6e5cafa419d7a6312e57abf674d7b01c84cd78e044f8b6caa396ab4b"
+line_1.5_artifact,INDEPENDENT_LINE_SPECIFIC_CLASSIFIER,"sha256=f23a97ade5473cb9557a2f93c0b93c39558cb15607663dd393b707d690994812; classes=[0, 1]; intercept=[-0.17222986565262688]; scaler_mean_sha256=b3485c67f493eef35fbb265c40822035f07525ae87922b3018f14c2b47471061"
+line_2.5_artifact,INDEPENDENT_LINE_SPECIFIC_CLASSIFIER,"sha256=9cea920df96b178e0b554eac0e0c83c201e23f5ec1f2d6daa1c3900a470b8b44; classes=[0, 1]; intercept=[-0.3820013939075826]; scaler_mean_sha256=180b09e3f32732c061ca184e25d8512c2d9fc742c36175fb59098d224630a336"

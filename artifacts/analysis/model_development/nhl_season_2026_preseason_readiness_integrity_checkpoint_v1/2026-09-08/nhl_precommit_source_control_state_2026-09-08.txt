@@ -1,0 +1,20 @@
+HEAD 323ffd803add79dac823e9e27414ab2442433bc6
+STAGED no
+
+VISIBLE STATUS (--untracked-files=all)
+ M backend/nhl/mainline_shadow/core.py
+ M backend/nhl/scripts/run_nhl_morning_orchestration.py
+ M backend/nhl/scripts/validate_nhl_season_2026_mainline_shadow_capture.py
+ M backend/nhl/sog_shadow/core.py
+?? backend/nhl/points_quote_capture/__init__.py
+?? backend/nhl/points_quote_capture/cli.py
+?? backend/nhl/points_quote_capture/core.py
+?? backend/nhl/points_shadow/__init__.py
+?? backend/nhl/points_shadow/cli.py
+?? backend/nhl/points_shadow/core.py
+?? backend/nhl/points_shadow/fixtures/retained_2026-04-16/points_predictions.csv
+?? backend/nhl/points_shadow/fixtures/retained_2026-04-16/train_nhl_points_v2.csv
+?? backend/nhl/points_shadow/frozen_points_v1.json
+?? backend/nhl/scripts/create_points_shadow_input_snapshot.py
+?? backend/nhl/scripts/validate_nhl_points_immutable_preseason_shadow_path.py
+

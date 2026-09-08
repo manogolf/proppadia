@@ -1,0 +1,8 @@
+priority,dependency,lane,blocking_now,operator_action
+1,Real nonempty official preseason slate,ALL,YES_UNTIL_AVAILABLE,Wait for first real nonempty slate; do not simulate live evidence
+2,SUPABASE_DB_URL or DATABASE_URL,ALL,YES_FOR_REAL_RUN,Confirm backend/.env and SELECT 1 via 07:30 health
+3,ODDS_API_KEY and provider market availability,MONEYLINE|SOG|POINTS,YES_FOR_CAPTURE,Fetch each family to create-only raw paths; partial/no coverage is not a pipeline failure
+4,Explicit frozen SOG Step4a effective policy JSON,SOG,YES_FOR_CANDIDATES,Build and archive from authorized walk-forward policy; no default/substitution
+5,Run-bound Points feature and roster snapshot,POINTS,YES_FOR_P,Create after morning spine; verify manifests and strict-prior timestamps
+6,Certified outcome source,ALL,YES_FOR_GRADING_ONLY,Grade append-only after official completion; never infer execution
+7,Certified projected/confirmed starter-goalie source,GOALIE_SAVES,YES,Keep lane disabled; actual starters may not substitute for pregame state

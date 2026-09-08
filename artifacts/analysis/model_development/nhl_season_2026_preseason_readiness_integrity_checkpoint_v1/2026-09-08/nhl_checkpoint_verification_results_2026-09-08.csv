@@ -1,0 +1,13 @@
+suite,command,tests_or_rows,result,evidence
+historical Moneyline scorer parity,validate_nhl_season_2026_mainline_shadow_capture.py --output-dir /tmp/nhl_checkpoint_mainline_20260908,2798 rows,PASS,max delta 1.16573417585641e-15; 0 tolerance failures; 0 side mismatches
+historical SOG scorer parity,reproduce_nhl_season_2025_sog_baseline.py --certified-ledger ... --prepared-root ... --out-dir /tmp/nhl_checkpoint_sog_parity_20260908,40167 rows / 13389 player-games,PASS,max delta 5.828670879282072e-16; 0 material mismatches; 0 side mismatches
+SOG isolation and grading validation,validate_nhl_season_2026_sog_manual_shadow_capture.py --parity-dir /tmp/nhl_checkpoint_sog_parity_20260908 --output-dir /tmp/nhl_checkpoint_sog_shadow_20260908,53 checks,PASS,"game-type isolation, preseason non-evaluation, participation, health, lineage, upload and repeated-run checks"
+Points fixed-input and ladder-gate parity,validate_nhl_points_immutable_preseason_shadow_path.py --output-dir /tmp/nhl_checkpoint_points_20260908,24 tests,PASS,310 ladders; 222 nonmonotonic; 213 materially fail-closed; P/M only; C/U/E disabled
+three-lane hostile tests,rehearse_nhl_three_lane_preseason_operator_v1.py (output redirected to /tmp),24 tests,PASS,0 failures
+three-lane reconciliation,rehearse_nhl_three_lane_preseason_operator_v1.py (output redirected to /tmp),14 checks,PASS,0 failures
+three-lane command/regression checks,rehearse_nhl_three_lane_preseason_operator_v1.py (output redirected to /tmp),10 checks,PASS,exact command surfaces and no-go boundaries validated
+runtime hash drift rejection,isolated mutated-copy checks,2 tests,PASS,Moneyline FROZEN_CHAMPION_PARAMETER_HASH_MISMATCH; SOG SOG_PROSPECTIVE_SCORER_BLOCKED_BY_MODEL_HASH_MISMATCH
+parent/package immutability,remediate_nhl_analysis_package_immutability.py --output-dir /tmp/nhl_checkpoint_immutability_20260908,19 checks,PASS,9 fault tests; 6 post-remediation checks; 4 model/policy invariance checks
+syntax/import validation,python -m compileall plus explicit changed-module imports,7 modules,PASS,"Moneyline, SOG, Points quote/shadow, orchestration and validators import/compile"
+git diff whitespace validation,git diff --check,all tracked diffs,PASS,no output
+LaunchAgent and MLB isolation,scoped git diff/status inspection,2 scopes,PASS,no LaunchAgent diff; no MLB tracked diff or schedule change

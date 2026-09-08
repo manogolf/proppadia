@@ -1,0 +1,29 @@
+{
+  "assessment_date": "2026-09-08",
+  "historical_source_sha256": "10f408ddd80f0ab1991a1e9ee0145222caed58572501982c268965b742e6751d",
+  "large_tolerance": 0.05,
+  "material_tolerance": 0.01,
+  "model_fit_performed": false,
+  "numeric_tolerance": 1e-12,
+  "package": "nhl_points_probability_ladder_coherence_audit_v1",
+  "production_workflow_modified": false,
+  "repair_performed": false,
+  "repository_boxscore_files": 8,
+  "repository_boxscore_sha256": {
+    "2025020140.boxscore.json": "25eee28b06eccef20349c64ac376420f772ba5d873f9f7bf136bba3f7baae628",
+    "2025020141.boxscore.json": "f01ec1bcf2cf1106385113af0930fdbcbc6d395d08e94d7a9cd509014b94c548",
+    "2025020142.boxscore.json": "bcda135b06cb337d5908ee22ead2af774a25abd2d8a131ef8798a4a088cec40d",
+    "2025020143.boxscore.json": "fd18bda5e6bc884bac96f38b0670885ce7f797cab2d68aa98d5d8cffccf161fa",
+    "2025020144.boxscore.json": "44681e9e18b16cacab42e5f1aea2790bd52cbc00a52033f8deeb7a10dcfaeb2e",
+    "2025020145.boxscore.json": "9a3ed90995a8821feedf278149336e13a2ee58af79ecdf8d361275c61d219e34",
+    "2025020146.boxscore.json": "edb3be5cc79ff36fcd968bf2cacb56a5be0493fc547d64bf531eb768dd9edda5",
+    "2025020147.boxscore.json": "c14c19c132058b7fa08f7b6010bbbf6a0dd563d6091fb79656ca3698b883f36d"
+  },
+  "retained_input_sha256": "daa7515d5760f773037b990627b228d63b0b432299077511122612500659e87f",
+  "retained_market_sha256": "c2940ffc0bf7e470ad65bc9fa865990af2d1d956eb6e05e53a6ddcefb42204fa",
+  "retained_prediction_sha256": "4ecc984864f5e6fd6ae3e703683b5c148e4e95c58a4c5a38325610c9125ce6bb",
+  "scorer_modified": false,
+  "severe_tolerance": 0.1,
+  "supported_outcome_player_games": 180,
+  "version": "1.0.0"
+}

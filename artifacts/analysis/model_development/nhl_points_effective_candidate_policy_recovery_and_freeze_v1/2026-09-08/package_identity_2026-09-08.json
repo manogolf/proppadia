@@ -1,0 +1,9 @@
+{
+  "assessment_date": "2026-09-08",
+  "create_only": true,
+  "decision": "NOT_RECOVERABLE_SHADOW_ONLY",
+  "files_excluding_manifest": 17,
+  "manifest_semantics": "SHA256SUMS hashes every other package file; package identity is intentionally included after regeneration.",
+  "repository_head": "323ffd803add79dac823e9e27414ab2442433bc6",
+  "task_id": "NHL_POINTS_EFFECTIVE_CANDIDATE_POLICY_RECOVERY_AND_FREEZE_V1"
+}

@@ -1,0 +1,9 @@
+{
+  "accepted_official_game_types": {"1": "PRESEASON", "2": "REGULAR_SEASON", "3": "POSTSEASON"},
+  "canonical_season": 2026,
+  "preseason_evaluation": "PRESEASON_NON_EVALUATION",
+  "preseason_to_regular_history": "FORBIDDEN",
+  "unknown_game_type": "FAIL_CLOSED",
+  "wrong_season_or_slate": "FAIL_CLOSED"
+}
+

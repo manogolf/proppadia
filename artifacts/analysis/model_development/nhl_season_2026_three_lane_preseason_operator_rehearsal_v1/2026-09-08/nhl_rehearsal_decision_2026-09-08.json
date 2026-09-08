@@ -1,0 +1,20 @@
+{
+  "authorized_scopes": {
+    "GOALIE_SAVES": "DISABLED_NOT_READY_FOR_PRESEASON_BURN_IN",
+    "MONEYLINE": "FROZEN_CONTROL_PREDICTION_MARKET_SHADOW_ONLY",
+    "POINTS": "P_M_SHADOW_ONLY_C_U_E_BLOCKED",
+    "SOG": "CERTIFIED_PREDICTION_MARKET_CANDIDATE_LINEAGE_SHADOW_ONLY_NO_UPLOAD_NO_EXECUTION"
+  },
+  "decision": "READY_WITH_DOCUMENTED_NONBLOCKING_LIMITATIONS",
+  "documented_nonblocking_limits": [
+    "First real nonempty preseason behavior and provider coverage remain unobserved",
+    "Moneyline and SOG incomplete runs use missing-manifest recognition rather than a .incomplete suffix",
+    "SOG live candidate processing still requires an explicit frozen run-specific effective policy JSON"
+  ],
+  "negative_test_failures": 0,
+  "negative_tests": 24,
+  "next_task": "FIRST_REAL_NHL_SEASON_2026_PRESEASON_MULTI_RUN_BURN_IN",
+  "next_task_wait_condition": "FIRST_REAL_NONEMPTY_PRESEASON_SLATE",
+  "open_critical_high_defects": 0,
+  "reconciliation_failures": 0
+}

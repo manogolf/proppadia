@@ -1,0 +1,14 @@
+{
+  "assessment_date": "2026-09-08",
+  "canonical_season": 2026,
+  "goalie_saves_decision": "NOT_READY_FOR_PRESEASON_BURN_IN",
+  "live_fetch_performed": false,
+  "model_fit_performed": false,
+  "package_name": "nhl_season_2026_points_goalie_saves_operational_readiness",
+  "points_decision": "READY_AFTER_BOUNDED_REMEDIATION",
+  "production_code_modified": false,
+  "recommended_next_bounded_task": "NHL_POINTS_IMMUTABLE_PRESEASON_SHADOW_PATH_V1",
+  "repository_root": "/Users/jerrystrain/Projects/proppadia",
+  "source_access_purchase_performed": false,
+  "version": "1.0.0"
+}

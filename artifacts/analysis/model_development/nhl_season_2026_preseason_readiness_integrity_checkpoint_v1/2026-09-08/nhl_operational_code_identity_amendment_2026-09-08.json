@@ -1,0 +1,32 @@
+{
+  "amendment_type": "CURRENT_RUNTIME_OPERATIONAL_CODE_IDENTITY",
+  "assessment_date": "2026-09-08",
+  "authority": "bounded operational amendment authorized by the readiness checkpoint",
+  "binding_rule": "Historical package identities remain immutable; this amendment alone binds the repaired integration-core bytes for current preseason operation.",
+  "bindings": {
+    "moneyline_integration_core": {
+      "current_operational_sha256": "7909c5acecb33a134bb14226b5617ff3729d2e55220d7a3ff780922989bd4ebe",
+      "historical_package_core_pin": null,
+      "path": "backend/nhl/mainline_shadow/core.py",
+      "pre_repair_head_sha256": "820e604d5102d2ffb60b29105f86bede9380508dd59d628d1ef762ea0ebf6284"
+    },
+    "sog_integration_core": {
+      "current_operational_sha256": "b8e4f4723e8713ba0de66a61c063941ba71e7d5d37e3c444b8e76468b859a369",
+      "historical_certification_sha256": "32905628e38f268624ede08372fb440dfb7a88528a927021547cecf7c7691b7b",
+      "historical_package_manifest_sha256": "131cc0b24d6b52ed90e90d06cde7203c3c71ae02e61699a543952c46ccea52d7",
+      "path": "backend/nhl/sog_shadow/core.py",
+      "pre_repair_head_sha256": "7184dc6eedad941843eae7eac350faad1a5c7eba51e63071b60962534f9c996f"
+    }
+  },
+  "historical_evidence_mutated": false,
+  "reason": "game-type and preseason grading isolation repairs changed integration-core bytes without changing frozen scoring math",
+  "task_id": "NHL_SEASON_2026_PRESEASON_READINESS_INTEGRITY_CHECKPOINT_V1",
+  "unchanged_frozen_identities": {
+    "moneyline_parameter_sha256": "2f465bf45c7acbac8a9e8ea183a80e1bf0b7a17806527127c7ce702bb6eaa87b",
+    "points_fixed_input_sha256": "daa7515d5760f773037b990627b228d63b0b432299077511122612500659e87f",
+    "points_fixed_output_sha256": "4ecc984864f5e6fd6ae3e703683b5c148e4e95c58a4c5a38325610c9125ce6bb",
+    "points_scorer_sha256": "a6871ac0bfca5ebb968f31c376ef924dcd817430cf17f730b2c57c37396e36b2",
+    "sog_parity_summary_sha256": "40b2e8b72a581a365787cdf040537bdfd704944edcd599056abfa0a571f3a65d",
+    "sog_scorer_sha256": "4a63ccdee67170b32daf2bb5d5652ed4728b9f3abe7f7fc67d832a94bdb465e1"
+  }
+}

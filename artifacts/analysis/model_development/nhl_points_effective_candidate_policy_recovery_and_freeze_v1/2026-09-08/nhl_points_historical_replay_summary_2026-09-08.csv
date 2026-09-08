@@ -1,0 +1,15 @@
+chain,population_code,line_rows,player_game_identities,status,reason
+GOVERNED_RECOVERABLE_CHAIN,P,59133,19711,OBSERVED,Archived frozen-model line rows retained diagnostically.
+GOVERNED_RECOVERABLE_CHAIN,P_AFTER_LADDER_GATE,17625,5875,ELIGIBLE,13836 player-game ladders / 41508 line rows excluded before market.
+GOVERNED_RECOVERABLE_CHAIN,M_LEGACY_PROXY,642,343,PARTIAL_UNCERTIFIED,"Over median attachment exists, but archive lacks immutable run/book/timestamp/status identity."
+GOVERNED_RECOVERABLE_CHAIN,C,0,0,UNRECOVERABLE,No governed Points candidate ledger or uniquely defensible policy.
+GOVERNED_RECOVERABLE_CHAIN,U,0,0,NO_EVIDENCE,No Points book-upload builder or archived upload.
+GOVERNED_RECOVERABLE_CHAIN,E,0,0,NO_EVIDENCE,Execution is never inferred from display/export/manual rows.
+GOVERNED_RECOVERABLE_CHAIN,G,0,0,NO_CANDIDATE_CHAIN,Prediction outcomes exist separately; no candidate/upload/execution grade lineage survives.
+REACT_RESEARCH_COUNTERFACTUAL_GATE_FIRST_ALL_48_DATES,P,59133,19711,REPLAYED,Same archive population.
+REACT_RESEARCH_COUNTERFACTUAL_GATE_FIRST_ALL_48_DATES,M_PRICE_PLAYABLE,383,343,REPLAYED,Legacy market rows after ladder gate and -350/+500 price bounds.
+REACT_RESEARCH_COUNTERFACTUAL_GATE_FIRST_ALL_48_DATES,C_PROXY_PRE_CAP,343,343,RESEARCH_ONLY,One max-gap line per player-game; not an actual candidate population.
+REACT_RESEARCH_COUNTERFACTUAL_GATE_FIRST_ALL_48_DATES,C_PROXY_TOP10,294,294,RESEARCH_ONLY,Top 10 per date; 43 negative-gap rows survive because there is no minimum-gap gate.
+REACT_RESEARCH_COUNTERFACTUAL_GATE_FIRST_ALL_48_DATES,U,0,0,NOT_APPLICABLE,No upload action/schema.
+STATIC_RESEARCH_EXPORT_DEFAULTS_GATE_FIRST_ALL_48_DATES,C_PROXY_TOP20,955,955,RESEARCH_ONLY,Generic table exports; 721 rows have no market attachment.
+STATIC_RESEARCH_EXPORT_DEFAULTS_GATE_FIRST_ALL_48_DATES,U,0,0,NOT_APPLICABLE,Downloaded table is not a book upload and no archived downloads survive.

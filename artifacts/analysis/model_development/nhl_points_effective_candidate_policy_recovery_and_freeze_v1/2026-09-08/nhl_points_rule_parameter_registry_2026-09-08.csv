@@ -1,0 +1,20 @@
+rule_order,rule_id,recovered_value_or_state,source_symbol,mode,confidence,eligible_for_policy_freeze
+10,LADDER_COHERENCE_GATE,complete 0.5/1.5/2.5 ladder; exclude entire player-game when max raw adjacent crossing >=0.01,backend/nhl/points_shadow/core.py,hard-coded certified control,DIRECT,YES
+20,ELIGIBLE_LINES,"Historical prediction/display surface contains 0.5, 1.5, 2.5",score_points_phoenix.py + 48 archives,model artifacts/output,CORROBORATED_NOT_CANDIDATE_POLICY,NO
+30,ELIGIBLE_SIDE,Over only in legacy market builder and both display surfaces,build_points_with_market.py,hard-coded display behavior,DIRECT_NOT_CANDIDATE_POLICY,NO
+40,SPORTSBOOK_SELECTION,No chosen sportsbook; aggregate every encountered book,parse_points_odds,hard-coded,DIRECT_DISPLAY_ONLY,NO
+50,QUOTE_NORMALIZATION,median American Over price by short normalized player name + line; raw implied probability,parse_points_odds/american_to_prob,hard-coded,DIRECT_DISPLAY_ONLY,NO
+60,MARKET_SEGMENT,No segment selection survives,repository-wide evidence inventory,none,UNRECOVERABLE,NO
+70,MODEL_PROBABILITY_FLOOR,No governed floor survives,React and static display comparison,none,UNRECOVERABLE,NO
+80,EV_REQUIREMENT,"React: none; static default: finite edge >=0, EV rank at selected line",NHLPredictions.jsx vs nhl/site/index.html,hard-coded vs runtime UI,CONFLICTED_RESEARCH_SURFACES,NO
+90,PROBABILITY_GAP,React ranks raw model-minus-raw-implied gap with no minimum; static default minimum edge 0 bps,NHLPredictions.jsx vs nhl/site/index.html,hard-coded vs runtime UI,CONFLICTED_RESEARCH_SURFACES,NO
+100,PRICE_BOUNDS,React accepts -350 through +500; static has no price bounds,isPlayableMarket vs filterAndRank,hard-coded vs absent,CONFLICTED_RESEARCH_SURFACES,NO
+110,FAIR_OR_SEGMENT_PRICE_GATE,fair_over displayed/exported; no surviving governed gate,build_points_with_market.py + static export,display only,UNRECOVERABLE,NO
+120,SUPPORT_CONFIDENCE,No Points-specific sample/support/Wilson/confidence gate survives,repository-wide evidence inventory,none,UNRECOVERABLE,NO
+130,DUPLICATE_SUPPRESSION,React keeps one max-gap line/player-game; static evaluates one operator-selected line; neither creates candidate identity,two frontend surfaces,hard-coded/UI state,CONFLICTED_RESEARCH_SURFACES,NO
+140,CAPS,React top 10/slate; static Top N runtime 1-500 default 20; no game cap,two frontend surfaces,hard-coded/runtime,CONFLICTED_RESEARCH_SURFACES,NO
+150,RANK_TIE_BREAK,React edge desc then selected p desc; static EV desc then p desc; final ties rely on input order,two frontend surfaces,hard-coded,CONFLICTED_AND_NONCANONICAL_TIES,NO
+160,MANUAL_ACTIONS,"Generic direct API can add/delete points rows, but no Points UI action or append-only action ledger",prop_submission_service.py/repository.py/NHLPredictions.jsx,runtime payload,DIRECT_COMPATIBILITY_ONLY,NO
+170,UPLOAD_SCHEMA_PROVENANCE,No Points book-upload builder or archived upload; static table export lacks book/timestamp/status,git/file/archive inventory,none,UNRECOVERABLE,NO
+180,DEFAULT_ALTERNATE_MODE,No governed default/alternate Points upload modes survive,repository-wide evidence inventory,none,UNRECOVERABLE,NO
+190,PRESEASON_CONTROLS,"PRESEASON_NON_EVALUATION, immutable parent binding, no post-start quote, and separate manual/execution ledgers are mandatory in new shadow path",points_shadow/core.py,hard-coded certified control,DIRECT_CURRENT_CONTROL,NO

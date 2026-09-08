@@ -1,0 +1,34 @@
+{
+  "future_new_policy_decisions_if_candidate_operation_is_desired": [
+    "side and eligible lines",
+    "sportsbook/market-view and price provenance",
+    "probability/EV/gap/fair-price/support gates",
+    "price bounds",
+    "deterministic rank/ties and caps",
+    "manual action separation",
+    "upload schema and destination provenance"
+  ],
+  "reason": "No alternative qualifies as a defensible recovered policy.",
+  "recovery_choice_required_now": false,
+  "research_surfaces_not_eligible_for_selection": [
+    {
+      "disqualifier": "No candidate identity, policy contract, upload action/schema, archive parity target, or execution lineage.",
+      "historical_effect_if_counterfactually_gated": {
+        "applicable_archive_dates": 41,
+        "top_rows_with_gate": 260,
+        "top_rows_without_gate": 410
+      },
+      "name": "CURRENT_REACT_TOP_POINTS_EDGE_RESEARCH_DISPLAY"
+    },
+    {
+      "disqualifier": "Obsolete client-only, runtime-mutable controls, generic download rather than book upload, and no archived export ledger.",
+      "historical_effect_if_counterfactually_gated": {
+        "archive_dates": 48,
+        "top_rows_with_gate": 955,
+        "top_rows_without_gate": 960,
+        "unpriced_rows_with_gate": 721
+      },
+      "name": "LEGACY_STATIC_CLIENT_TABLE_EXPORT_DEFAULTS"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+test_id,lane,severity,status,expected,evidence
+valid_empty_slate_stops_downstream_cleanly,ALL,CRITICAL,PASS,VALID_EMPTY_SLATE,VALID_EMPTY_SLATE
+moneyline_rerun_rejected,MONEYLINE,CRITICAL,PASS,OVERWRITE_ATTEMPT_BLOCKED,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+sog_quote_rerun_rejected,SOG,CRITICAL,PASS,OVERWRITE_ATTEMPT_BLOCKED,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+points_rerun_rejected,POINTS,CRITICAL,PASS,OVERWRITE_ATTEMPT_BLOCKED,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+missing_sog_policy_blocks_candidate_stage,SOG,CRITICAL,PASS,RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG,RuntimeError:RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG
+substitute_points_policy_rejected,POINTS,CRITICAL,PASS,UNCERTIFIED_POINTS_POLICY_CONFIG_NOT_ACCEPTED,RuntimeError:UNCERTIFIED_POINTS_POLICY_CONFIG_NOT_ACCEPTED
+moneyline_post_start_excluded,MONEYLINE,CRITICAL,PASS,POST_START_INVALID and M=0,"{""POST_START_INVALID"":1}"
+sog_post_start_excluded,SOG,CRITICAL,PASS,POST_START_INVALID,"{""POST_START_INVALID"":12}"
+points_post_start_excluded,POINTS,CRITICAL,PASS,POST_START_INVALID,"{""POST_START_INVALID"":18}"
+moneyline_unknown_game_type_fail_closed,MONEYLINE,CRITICAL,PASS,FAIL_CLOSED,FAIL_CLOSED
+sog_unknown_game_type_rejected,SOG,CRITICAL,PASS,game identity gate failed,RuntimeError:game identity gate failed
+points_unknown_game_type_rejected,POINTS,CRITICAL,PASS,GAME_SPINE_DUPLICATE_OR_UNKNOWN_GAME_TYPE,RuntimeError:GAME_SPINE_DUPLICATE_OR_UNKNOWN_GAME_TYPE
+points_incomplete_staging_blocks_reuse,POINTS,CRITICAL,PASS,OVERWRITE_ATTEMPT_BLOCKED,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+moneyline_interrupted_output_unmanifested,MONEYLINE,CRITICAL,PASS,schema missing,"ValueError:schema missing schedule=[] history=['away_team_id', 'canonical_season', 'final_away_goals', 'final_away_shots', 'final_home_goals', 'final_home_shots', 'game_id', 'game_status', 'home_team_id', 'scheduled_start_time_utc']"
+moneyline_partial_cannot_appear_complete,MONEYLINE,CRITICAL,PASS,no SHA256SUMS,[PosixPath('/var/folders/lz/cnb553jj45j151c5cqtly_h40000gn/T/nhl_three_lane_rehearsal_elt9mref/broken_ml/2026/2026-09-19/nhlmlobs_s2026_d20260919_t20260919T170600000000Z_MIDDAY_v1')]
+sog_interrupted_output_unmanifested,SOG,CRITICAL,PASS,provider response must be a list,ValueError:provider response must be a list
+sog_partial_cannot_appear_complete,SOG,CRITICAL,PASS,no SHA256SUMS,[PosixPath('/var/folders/lz/cnb553jj45j151c5cqtly_h40000gn/T/nhl_three_lane_rehearsal_elt9mref/broken_sog/2026/2026-09-19/nhlsogquote_s2026_d20260919_t20260919T170700000000Z_MIDDAY_v1')]
+sentinel_normal_fixture,ALL,CRITICAL,PASS,YELLOW bounded evidence,YELLOW:historical_live_expectation:INSUFFICIENT_LIVE_SAMPLE
+sentinel_useless_low_coverage,ALL,CRITICAL,PASS,YELLOW coverage warning,market_coverage:MARKET_COVERAGE_LOW|population_denominators:POPULATION_COLLAPSE|coverage_usefulness:PIPELINE_HEALTHY_COVERAGE_LOW|historical_live_expectation:INSUFFICIENT_LIVE_SAMPLE
+sentinel_blocking_partial_slate,ALL,CRITICAL,PASS,RED exit 2,slate_completion:PARTIAL_SLATE
+unsafe_latest_input_fail_closed,ALL,CRITICAL,PASS,MUTABLE_INPUT_USED_UNSAFE,mutable_path:MUTABLE_INPUT_USED_UNSAFE
+cross_lane_failure_isolation,ALL,CRITICAL,PASS,SOG policy failure leaves Moneyline/Points unchanged,tree hashes stable
+lane_namespace_and_lock_isolation,ALL,CRITICAL,PASS,distinct prefixes and Points lane lock,nhlmlobs_s2026_d20260919_t20260919T170000000000Z_MIDDAY_v1|nhlsogshadow_s2026_d20260919_t20260919T170000000000Z_MIDDAY_v1|nhlpointsshadow_s2026_d20260919_t20260919T170000000000Z_MIDDAY_v1
+no_goalie_saves_invocation,GOALIE_SAVES,CRITICAL,PASS,no invocation,static command/import/artifact plan contains no saves lane

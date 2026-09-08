@@ -1,0 +1,31 @@
+id,lane,severity,status,gap_or_hazard,evidence,required_control,dependency
+P01,Points,CRITICAL,OPEN,"No immutable run-bound input/prediction/quote package","All critical files are latest/today paths and DB loader updates conflicts","Create-only run identity parent hashes and manifests",official game/player/type spine
+P02,Points,CRITICAL,OPEN,"Ladder probabilities are incoherent","222/310 retained players violate ordered Over probabilities","Preserve raw values but derive a declared monotone observation layer before comparisons",frozen artifact manifest
+P03,Points,HIGH,OPEN,"No policy lineage","UI computes edges with hard-coded bounds","Explicit observation-only policy and effective config",immutable predictions and quotes
+P04,Points,HIGH,OPEN,"Market evidence is collapsed","Only median Over survives; book/Under/timestamp/status lost","Book-level two-sided append-only quotes",Odds API acquisition
+P05,Points,HIGH,OPEN,"Participation population is uncertified","All roster rows enter regardless of active/scratch state","Explicit eligibility and nonparticipant reason states",roster/lineup evidence
+P06,Points,HIGH,OPEN,"Pregame timing is unprovable","Strict-date SQL exists but source and output as-of state is mutable","Bind source hashes capture timestamp and scheduled start",immutable run package
+P07,Points,HIGH,OPEN,"Preseason can contaminate evaluation surface","Game type absent from predictions/markets/grades","Carry official type and hard-label preseason non-evaluation",official spine
+P08,Points,MEDIUM,OPEN,"Season-to-date fields are actually 120-day fields","export_points.sql applies a global 120-day window","Declare/fail on opening-state semantics and preserve feature diagnostics",feature contract
+P09,Points,MEDIUM,OPEN,"Model lineage is contradictory","metadata v1 vs DB phoenix_v2; training population absent","Hash-bound release manifest and literal provenance",existing joblibs
+P10,Points,MEDIUM,OPEN,"No lane-specific morning/sentinel health","Morning gates only Mainline/SOG","Expose Points prerequisite/population/freshness states",immutable lane runner
+P11,Points,MEDIUM,OPEN,"No append-only grading/correction path","user_props status/outcome updated in place","Separate outcome event and correction supersession ledger",immutable prediction identity
+G01,Goalie Saves,CRITICAL,BLOCKED,"No certified projected/confirmed starter source","No source table/credential/crosswalk; exporter start_prob NULL","Timestamp-certified source plus deterministic game/team/player crosswalk",human source authorization
+G02,Goalie Saves,CRITICAL,OPEN,"Invalid pregame participant population","Every rostered historical goalie is scored","Score only certified projected/confirmed eligible goalie states",G01
+G03,Goalie Saves,CRITICAL,OPEN,"Actual starter could be misused as pregame state","Only actual goalie logs are authoritative today","Hard separation: actual is outcome context only",G01
+G04,Goalie Saves,CRITICAL,OPEN,"No immutable run-bound package","Mutable inputs/outputs DB upserts and overwritable archives","Create-only goalie-state feature prediction quote and grade objects",G01
+G05,Goalie Saves,HIGH,OPEN,"Active model package is ambiguous","Different index/artifact copies coexist in models/latest","Single hash-bound release manifest without changing coefficients",existing active files
+G06,Goalie Saves,HIGH,OPEN,"Daily line surface exceeds evidence","13 scored lines vs evaluation only 24.5/28.5; API exposes unevaluated 18.5-23.5","Declare burn-in line eligibility and block unsupported actionable lines",model release manifest
+G07,Goalie Saves,HIGH,OPEN,"Feature preprocessing is slate-dependent","Winsor and median learned from current slate","Freeze preprocessing contract or preserve exact population and label noncertified",model release manifest
+G08,Goalie Saves,HIGH,OPEN,"Market merge produces duplicate identities","377 rows vs 364 expected; 13 duplicates on retained slate","Fail closed on duplicate canonical quote/prediction identities",canonical provider bindings
+G09,Goalie Saves,HIGH,OPEN,"Market evidence is collapsed","Only median Over survives","Book-level two-sided append-only quotes",Odds API acquisition
+G10,Goalie Saves,HIGH,OPEN,"No snapshot or goalie-state transition semantics","No MIDDAY/FINAL_PREGAME or projected-to-confirmed history","Append-only state and capture transitions",G01
+G11,Goalie Saves,HIGH,OPEN,"Unsafe candidate/upload action","Save best persists maximum Over probability without edge lineage","Observation-only policy and no execution until certification",G01 and immutable quotes
+G12,Goalie Saves,HIGH,OPEN,"Nonparticipants inferred from missing actual","Backups become DNP after two days","Explicit pregame eligibility and postgame nonparticipant event",G01 and completed-ingestion proof
+G13,Goalie Saves,HIGH,OPEN,"Preseason can contaminate evaluation surface","Game type absent from prediction/market/grade outputs","Carry official type and hard-label preseason non-evaluation",official spine
+G14,Goalie Saves,MEDIUM,OPEN,"No lane-specific health/sentinel input","Morning exposes no Saves starter or population state","Starter-source freshness/coverage and population sentinel",G01 and lane runner
+G15,Goalie Saves,MEDIUM,OPEN,"No append-only grading/correction path","user_props rows update in place","Outcome event plus correction supersession ledger",immutable prediction identity
+S01,Shared,HIGH,OPEN,"Market fetch fails open to empty payload","fetch_odds writes [] and daily continues","Lane health must distinguish no market from successful empty market",immutable capture runner
+S02,Shared,HIGH,OPEN,"Provider market identity reduced to names","Builders do not retain provider event/player IDs","Deterministic game/team/player binding with ambiguity exclusions",official spine and raw quote archive
+S03,Shared,MEDIUM,OPEN,"Legacy archive is date-named but not immutable","copy2 overwrites existing files and lacks manifest","Create-only run directories with hashes",lane runner
+S04,Shared,LOW,OPEN,"Odds credential prefix is printed","fetch_odds logs first eight key characters","Do not expose credential fragments in new runner",new runner only

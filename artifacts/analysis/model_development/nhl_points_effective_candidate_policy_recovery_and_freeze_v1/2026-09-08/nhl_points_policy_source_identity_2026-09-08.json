@@ -1,0 +1,28 @@
+{
+  "archive_manifest_sha256_before_package_manifest": "34790b59035ff800fbf11315b8bea9aee3ebff02d51c6c08000c764e78e2dd98",
+  "archive_market_file_count": 48,
+  "assessment_date": "2026-09-08",
+  "git_history_points_origin_commits": {
+    "points_prediction_display_extended": "9d59664edecd9b0b9efc4dbcfcf4484fb9f6601b",
+    "points_prop_created": "b8cef9813c2fbfebeb2a6eaceac1fb441fbd4006",
+    "react_points_edge_surface_added": "97a673f246582249e80fed6418169b9a7e413767"
+  },
+  "repository_head": "323ffd803add79dac823e9e27414ab2442433bc6",
+  "source_hashes": {
+    "backend/app/services/nhl/prop_submission_service.py": "ca1e43a63390a0bc8ee4137f9e7898266d80d18f0f9193627db1e0d57180effd",
+    "backend/domains/nhl/repository/prop_repository.py": "86f954bf5f01f3511735f7d546a8cc4d0c67f0ed00a1226f1d52f477abdd66ad",
+    "backend/nhl/cli.py": "0885a7f7cc70a83f95908f887fe407953a32cc6e40430f6827002498a3d28c56",
+    "backend/nhl/points_shadow/core.py": "48a47b4645ac7f75eff81cd521d8a30cd883f98af1d6c562d2f73e00b83b4765",
+    "backend/nhl/scripts/build_points_with_market.py": "7c64a392025390ee8679467c6e9527562dc01cc61bdb2efba18a67678bbb9fb2",
+    "backend/nhl/scripts/export_sog_candidate_book_upload.py": "6b0abbc71692637bd5158ba127e31a24a2275dd32baeeb443abe9c8a2930e020",
+    "backend/nhl/scripts/select_sog_candidates_live.py": "83a4e20f8e0d857be99a5f4d4e9dd244aafa38a33d6569b6bda19eeaa1637023",
+    "bin/nhl_ops.sh": "31d4b9ad736a9b376d14e2ede8150288da7ba364b421cf8fb9d9e65c0f6656c2",
+    "docs/Cross-Sport Product Plan.md": "61076f20251b1b9e00f1ddc1d3830f6c678220d5956400b26662e81fc7d454d2",
+    "docs/Cross-Sport Sprint Schedule.md": "8a351de8d08f38995e53d53e9001ea6fc05db5f7adf2c7e280d60a28ac84508e",
+    "docs/NHL SOG Command Deck.md": "baeb588919ff114119ae38c614663f32f1c1af5be898fe7accf0bb61257056e0",
+    "frontend/src/Pages/nhl/NHLPlayerPropsPage.jsx": "5ab704a66a9dbfe7767f4f644293c1e2b37e8334935f76efd5c9a7da27f28578",
+    "frontend/src/Pages/nhl/NHLPredictions.jsx": "c7c995de92789ba06576d553a463ec014109b52e3b7fbc6d77882dbfe7be10f9",
+    "nhl/site/index.html": "9b7d14d5ba36b744e1cbf99195349d7a79b17d582d8b230968506cd31efbd969"
+  },
+  "task_id": "NHL_POINTS_EFFECTIVE_CANDIDATE_POLICY_RECOVERY_AND_FREEZE_V1"
+}

@@ -1,0 +1,25 @@
+test_id,severity,status,evidence
+exact_retained_scorer_parity,CRITICAL,PASS,"{""input_rows"": 310, ""input_sha256"": ""daa7515d5760f773037b990627b228d63b0b432299077511122612500659e87f"", ""output_sha256"": ""4ecc984864f5e6fd6ae3e703683b5c148e4e95c58a4c5a38325610c9125ce6bb"", ""prediction_rows"": 930, ""status"": ""EXACT_BYTE_PARITY""}"
+frozen_gate_parity_222_213,CRITICAL,PASS,"ladders=310,nonmonotonic=222,materially_blocked=213"
+immutable_book_level_quote_capture,CRITICAL,PASS,/var/folders/lz/cnb553jj45j151c5cqtly_h40000gn/T/nhl_points_shadow_cert_iv3ebe_k/quotes/2026/2026-09-20/nhlpointsquote_s2026_d20260920_t20260920T173000000000Z_MIDDAY_v1
+quote_capture_create_only_rerun_rejection,CRITICAL,PASS,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+quote_after_declared_timestamp_rejection,CRITICAL,PASS,RuntimeError:QUOTE_CAPTURE_AFTER_DECLARED_RUN_TIMESTAMP
+parent_hash_drift_rejection,CRITICAL,PASS,RuntimeError:PARENT_HASH_MISMATCH_OR_MUTABLE_GAME_SPINE
+population_reconciliation_and_blocked_retention,CRITICAL,PASS,"{""C"": 0, ""E"": 0, ""G"": 0, ""M"": 6, ""P"": 9, ""U"": 0}"
+raw_probabilities_unchanged,CRITICAL,PASS,exact_serialized_float_equal=True
+shadow_create_only_rerun_rejection,CRITICAL,PASS,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+missing_policy_fail_closed,CRITICAL,PASS,RuntimeError:UNCERTIFIED_POINTS_POLICY_CONFIG_NOT_ACCEPTED
+orientation_negative,CRITICAL,PASS,RuntimeError:PLAYER_GAME_ORIENTATION_MISMATCH
+unknown_game_type_fail_closed,CRITICAL,PASS,RuntimeError:WRONG_SLATE_SEASON_OR_GAME_TYPE
+quote_run_phase_mismatch,CRITICAL,PASS,RuntimeError:QUOTE_RUN_SLATE_OR_PHASE_MISMATCH
+incomplete_ladder_not_coherent,CRITICAL,PASS,BLOCKED_LADDER_COHERENCE_NOT_EVALUABLE
+nonparticipant_and_regular_grading,CRITICAL,PASS,"{""UNRESOLVED_UNGRADED"":3,""REGULAR_SEASON_OBSERVED"":3,""NONPARTICIPANT_UNGRADED"":3}"
+append_only_correction_and_pregame_immutability,CRITICAL,PASS,points_grade_20260921T020000000000Z
+preseason_non_evaluation_isolation,CRITICAL,PASS,"rows=9,feature_history_rows=0"
+interrupted_staging_not_complete_and_not_reusable,CRITICAL,PASS,FileExistsError:OVERWRITE_ATTEMPT_BLOCKED
+scorer_code_hash_drift,CRITICAL,PASS,RuntimeError:POINTS_SCORER_CODE_HASH_DRIFT
+model_hash_drift,CRITICAL,PASS,RuntimeError:POINTS_MODEL_HASH_DRIFT:0.5
+post_start_quote_excluded,CRITICAL,PASS,"{""PREGAME_QUALIFIED_PROVIDER_TIMESTAMP"":18,""POST_START_INVALID"":1}"
+provider_timestamp_after_capture_excluded,CRITICAL,PASS,"{""SOURCE_TIMESTAMP_AFTER_CAPTURE"":18}"
+player_parent_hash_drift_rejection,CRITICAL,PASS,RuntimeError:PARENT_HASH_MISMATCH_OR_MUTABLE_PLAYER_SPINE
+gate_material_minor_pass_threshold_boundary,CRITICAL,PASS,"{""1"": ""BLOCKED_MATERIAL_LADDER_INCOHERENCE"", ""2"": ""WARNING_MINOR_LADDER_INCOHERENCE"", ""3"": ""PASS_LADDER_COHERENCE""}"

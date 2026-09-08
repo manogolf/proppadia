@@ -1,0 +1,16 @@
+{
+  "decision_before_local_commit": "COMMIT_AUTHORIZED",
+  "lane_states": {
+    "Goalie Saves": "disabled / not ready",
+    "Moneyline": "authorized preseason shadow scope",
+    "Points": "P/M shadow-only with ladder gate; C/U/E disabled",
+    "SOG": "authorized preseason scope"
+  },
+  "next_task": "FIRST_REAL_NHL_SEASON_2026_PRESEASON_MULTI_RUN_BURN_IN",
+  "remote_push_authorized": false,
+  "required_final_decision_if_commit_succeeds": "PRESEASON_READINESS_CHECKPOINT_COMMITTED",
+  "source_head": "323ffd803add79dac823e9e27414ab2442433bc6",
+  "staged_at_package_creation": false,
+  "task_id": "NHL_SEASON_2026_PRESEASON_READINESS_INTEGRITY_CHECKPOINT_V1",
+  "wait_condition": "first real nonempty preseason slate"
+}

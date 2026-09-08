@@ -1,0 +1,6 @@
+defect_id,severity,lane,status,description,remediation,scope_change
+D1,HIGH,SOG,REPAIRED_AND_REHEARSED,Preseason SOG outcomes previously emitted ordinary settlements,Explicit game-type isolation and regular-season-only settlement in grade_run,grading only; scorer/policy/candidates unchanged
+D2,HIGH,MONEYLINE,REPAIRED_AND_REHEARSED,Unknown game type was not a critical health failure,GAME_TYPE_SUPPORTED critical gate,health gate only
+D3,HIGH,MONEYLINE,REPAIRED_AND_REHEARSED,Preseason grade retained a numeric regular-season target,home_win_target null unless regular-season eligible,grading only
+D4,MEDIUM,MONEYLINE|SOG,DOCUMENTED_NONBLOCKING,Incomplete creation claims final-looking paths rather than .incomplete suffix,Completion requires SHA256SUMS; preserve partial and retry with new timestamp identity,no code change
+D5,MEDIUM,MONEYLINE_VALIDATOR,REPAIRED_AND_REHEARSED,Legacy grading fixture omitted required slate_date,Added the fixture slate_date before grading,validator fixture only; no runtime behavior

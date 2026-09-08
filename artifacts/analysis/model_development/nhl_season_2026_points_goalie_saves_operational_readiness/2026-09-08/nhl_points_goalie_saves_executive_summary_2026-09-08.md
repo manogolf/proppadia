@@ -1,0 +1,8 @@
+# NHL Points and Goalie Saves Readiness — Executive Summary
+
+- **Points:** `READY_AFTER_BOUNDED_REMEDIATION`. The three active LR artifacts and scorer survive, and the retained April 16 snapshot replays byte-for-byte. The lane is not yet burn-in safe because it lacks immutable run/snapshot packaging, book-level two-sided markets, policy/upload/execution lineage, participation and game-type gates, and lane health. Its retained ladder is non-monotone for 222/310 players.
+- **Goalie Saves:** `NOT_READY_FOR_PRESEASON_BURN_IN`. The scorer survives and fixed-input replay passes, but the lane scores every rostered historical goalie while the authoritative export sets `start_prob` null. There is no certified projected/confirmed starter source, timestamp, or crosswalk. Actual starter data is postgame grading context only.
+- **Current season evidence:** The 2026-09-08 morning run was healthy but `VALID_EMPTY_SLATE`; neither lane has a nonempty season-2026 operational run. Database season-2026 lane rows are zero.
+- **Markets and persistence:** Raw Odds API acquisition remains callable, but both lane builders collapse to median Over prices and discard book, Under, timestamps, and status. Critical files, database predictions, grades, and date archives are mutable.
+- **SOG/Mainline comparison:** Their immutable capture, snapshot, game-type, policy, grading, and sentinel contracts do not extend to Points or Saves.
+- **Next task:** `NHL_POINTS_IMMUTABLE_PRESEASON_SHADOW_PATH_V1`, with no refit, no recommendation activation, and no legacy production-code changes. Goalie Saves remains disabled pending a human-authorized, timestamp-certifiable projected/confirmed starter source.

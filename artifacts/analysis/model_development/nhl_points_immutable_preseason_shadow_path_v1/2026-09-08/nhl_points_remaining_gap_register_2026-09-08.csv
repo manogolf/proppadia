@@ -1,0 +1,9 @@
+gap_id,severity,component,status,evidence,operational_disposition
+PTS-GAP-001,MEDIUM,candidate policy,MISSING,"no governed Points effective policy/candidate/upload lineage survives",C/U/E fail closed; research-only display not promoted
+PTS-GAP-002,MEDIUM,live quote coverage,PARTIAL,"fixture capture passed; no season-2026 nonempty preseason player_points response observed yet",exercise first nonempty preseason dual snapshot
+PTS-GAP-003,MEDIUM,input snapshot live binding,PARTIAL,"DB-backed create-only builder implemented but no nonempty season-2026 slate exists at certification time",exercise during first nonempty preseason slate
+PTS-GAP-004,MEDIUM,grading source acquisition,PARTIAL,"append-only grader requires canonical outcomes CSV; official-source fetch is not automated in this path",perform bounded manual official GameCenter outcome observation during burn-in
+PTS-GAP-005,LOW,participation detail,PARTIAL,"roster active_flag supports ACTIVE versus UNRESOLVED; certified scratch feed does not survive",retain unresolved state and never infer participation
+PTS-GAP-006,LOW,legacy mutable UI,UNSAFE_OUTSIDE_PATH,"research UI and legacy latest/today exports remain overwrite-capable",not authoritative; never use as Points shadow input
+PTS-GAP-007,NOT_APPLICABLE,predictive coherence repair,NOT_AUTHORIZED,"gate contains crossings without changing model meaning",defer to research only; not required for safe reduced-coverage burn-in
+PTS-GAP-008,MEDIUM,external dependencies,PARTIAL,"input snapshot requires existing NHL database credential; quote fetch requires an existing provider key/account with player_points coverage; no credential or subscription was added",verify availability in first burn-in; do not purchase or add credentials in this task

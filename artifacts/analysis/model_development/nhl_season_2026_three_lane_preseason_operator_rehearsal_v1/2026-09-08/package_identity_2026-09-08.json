@@ -1,0 +1,14 @@
+{
+  "as_of_date": "2026-09-08",
+  "database_writes": false,
+  "decision": "READY_WITH_DOCUMENTED_NONBLOCKING_LIMITATIONS",
+  "execution_rows": 0,
+  "generated_by": "tmp/analysis/rehearse_nhl_three_lane_preseason_operator_v1.py",
+  "goalie_saves_invocations": 0,
+  "live_namespaces_written": false,
+  "network_used": false,
+  "offline": true,
+  "package": "NHL_SEASON_2026_THREE_LANE_PRESEASON_OPERATOR_REHEARSAL_V1",
+  "source_git_sha": "323ffd803add79dac823e9e27414ab2442433bc6",
+  "uploads": 0
+}

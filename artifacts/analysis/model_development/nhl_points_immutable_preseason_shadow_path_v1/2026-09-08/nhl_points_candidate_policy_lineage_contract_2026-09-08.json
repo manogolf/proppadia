@@ -1,0 +1,15 @@
+{
+  "candidate_creation_allowed": false,
+  "effective_policy_status": "RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG",
+  "injection_rule": "an uncertified supplied policy JSON is rejected",
+  "ordered_rules": [
+    {"order": 10, "rule": "LADDER_COHERENCE_GATE"},
+    {"order": 20, "rule": "EFFECTIVE_POINTS_POLICY_CONFIG"}
+  ],
+  "silent_defaults_used": false,
+  "surviving_surface": "frontend/src/Pages/nhl/NHLPredictions.jsx research-only max-edge display",
+  "surviving_surface_status": "not a governed candidate/upload policy",
+  "upload_allowed": false,
+  "execution_allowed": false
+}
+

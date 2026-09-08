@@ -1,0 +1,15 @@
+check,passed,evidence
+LADDER_GATE_FIRST,True,Existing shadow rule order is ladder coherence 10 then policy config 20.
+MATERIAL_LADDERS_ABSENT_FROM_M_PROXY_REPLAY,True,blocked=13836
+PREDICTIONS_PRESERVED_DIAGNOSTICALLY,True,P=59133
+NO_POLICY_CONFIG_CREATED,True,Decision does not authorize a frozen policy/config/hash.
+EXISTING_MISSING_POLICY_FAIL_CLOSED_PRESERVED,True,Source status unchanged.
+UNCERTIFIED_CONFIG_REJECTED,True,Source status unchanged.
+C_U_E_EMPTY_BY_EXISTING_PATH,True,No integration performed.
+NO_POINTS_CANDIDATE_ARCHIVE,True,Repository file and all-name git-history inventories found zero Points candidate files.
+NO_POINTS_UPLOAD_ARCHIVE,True,Repository file and all-name git-history inventories found zero Points upload files.
+REACT_REPLAY_DETERMINISTIC,True,rows=294
+STATIC_REPLAY_DETERMINISTIC,True,rows=955
+ARCHIVE_ALIAS_DUPLICATES_EXCLUDED,True,6/6 exact aliases excluded.
+NO_LIVE_CAPTURE_UPLOAD_EXECUTION,True,Read-only repository and archive replay only.
+NO_MODEL_FIT_OR_PROBABILITY_REPAIR,True,No model loading/fitting or probability mutation in this diagnostic.

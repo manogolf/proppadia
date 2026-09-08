@@ -1,0 +1,14 @@
+{
+  "artifact_date": "2026-09-08",
+  "candidate_policy_status": "RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG",
+  "critical_verification_failures": 0,
+  "goalie_saves_classification": "NOT_READY_FOR_PRESEASON_BURN_IN",
+  "model_fit_performed": false,
+  "overall_classification": "READY_FOR_PRESEASON_BURN_IN_WITH_REDUCED_COVERAGE",
+  "package": "nhl_points_immutable_preseason_shadow_path_v1",
+  "parent_coherence_audit": "artifacts/analysis/model_development/nhl_points_probability_ladder_coherence_audit_v1/2026-09-08",
+  "probability_repair_performed": false,
+  "production_upload_or_execution_enabled": false,
+  "task_id": "NHL_POINTS_IMMUTABLE_PRESEASON_SHADOW_PATH_V1_WITH_EXPLICIT_LADDER_COHERENCE_GATE",
+  "version": "1.0.0"
+}

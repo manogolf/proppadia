@@ -92,9 +92,22 @@ def grade_run(run_dir:Path,outcomes_csv:Path,grade_root:Path,grading_timestamp_u
  if required-set(out):raise ValueError("outcome schema incomplete")
  meta=json.loads((run_dir/"run_metadata.json").read_text())
  if out.duplicated(["canonical_season","slate_date","game_id","player_id"]).any() or not out.canonical_season.eq(meta["canonical_season"]).all() or not out.slate_date.astype(str).eq(meta["slate_date"]).all():raise ValueError("outcome run identity mismatch")
- z=pred.merge(out,on=["canonical_season","slate_date","game_id","player_id"],how="left",validate="many_to_one");z["grading_timestamp_utc"]=parse_utc(grading_timestamp_utc).isoformat();z["settlement_status"]=np.where(~z.participation_status.eq("PARTICIPATED"),"NONPARTICIPANT_UNGRADED",np.where(z.official_sog>z.line,np.where(z.side.eq("OVER"),"WIN","LOSS"),np.where(z.official_sog<z.line,np.where(z.side.eq("UNDER"),"WIN","LOSS"),"PUSH")))
+ allowed={"SCHEDULED","ACTIVE","PARTICIPATED","SCRATCHED","NONPARTICIPANT","UNRESOLVED","POSTPONED"}
+ if not set(out.participation_status).issubset(allowed):raise RuntimeError("UNKNOWN_PARTICIPATION_STATUS")
+ z=pred.merge(out,on=["canonical_season","slate_date","game_id","player_id"],how="left",validate="many_to_one");z["grading_timestamp_utc"]=parse_utc(grading_timestamp_utc).isoformat()
+ statuses=[]
+ for row in z.itertuples():
+  if int(row.game_type_code)==1:status="PRESEASON_NON_EVALUATION"
+  elif int(row.game_type_code)!=2:status="NON_REGULAR_SEASON_NON_EVALUATION"
+  elif pd.isna(row.participation_status) or row.participation_status in {"SCHEDULED","ACTIVE","UNRESOLVED"}:status="UNRESOLVED_UNGRADED"
+  elif row.participation_status in {"SCRATCHED","NONPARTICIPANT","POSTPONED"}:status="NONPARTICIPANT_UNGRADED"
+  elif row.participation_status=="PARTICIPATED" and pd.notna(row.official_sog):
+   status="WIN" if (row.official_sog>row.line and row.side=="OVER") or (row.official_sog<row.line and row.side=="UNDER") else "PUSH" if row.official_sog==row.line else "LOSS"
+  else:status="UNRESOLVED_UNGRADED"
+  statuses.append(status)
+ z["settlement_status"]=statuses
  gid="grade_"+parse_utc(grading_timestamp_utc).strftime("%Y%m%dT%H%M%S%fZ");dest=grade_root/run_dir.name/gid
  if dest.exists():raise FileExistsError("OVERWRITE_ATTEMPT_BLOCKED")
- dest.mkdir(parents=True,exist_ok=False);z.to_csv(dest/"graded_candidates.csv",index=False);(dest/"grading_metadata.json").write_text(json.dumps({"source_run_id":run_dir.name,"source_manifest_sha256":sha256_file(run_dir/"SHA256SUMS"),"grading_timestamp_utc":parse_utc(grading_timestamp_utc).isoformat(),"rows":len(z),"execution_rows":0},indent=2,sort_keys=True)+"\n");write_manifest(dest)
+ dest.mkdir(parents=True,exist_ok=False);z.to_csv(dest/"graded_candidates.csv",index=False);(dest/"grading_metadata.json").write_text(json.dumps({"source_run_id":run_dir.name,"source_manifest_sha256":sha256_file(run_dir/"SHA256SUMS"),"grading_timestamp_utc":parse_utc(grading_timestamp_utc).isoformat(),"rows":len(z),"preseason_non_evaluation_rows":int(z.settlement_status.eq("PRESEASON_NON_EVALUATION").sum()),"regular_season_settled_rows":int(z.settlement_status.isin(["WIN","LOSS","PUSH"]).sum()),"nonparticipant_ungraded_rows":int(z.settlement_status.eq("NONPARTICIPANT_UNGRADED").sum()),"entered_regular_season_feature_history_rows":0,"execution_rows":0},indent=2,sort_keys=True)+"\n");write_manifest(dest)
  if before!={p.name:sha256_file(p) for p in run_dir.iterdir() if p.is_file()}:raise RuntimeError("pregame mutation detected")
  return dest

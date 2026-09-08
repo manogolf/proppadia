@@ -1,0 +1,9 @@
+finding_id,severity,vector,result,evidence
+ADV-001,CRITICAL,material ladder crossing reaches M/C/U/E,PASS,blocked player-game retained in P and absent from M; C/U/E zero
+ADV-002,CRITICAL,partial ladder mislabeled coherent,PASS,BLOCKED_LADDER_COHERENCE_NOT_EVALUABLE
+ADV-003,CRITICAL,post-start quote contamination,PASS,POST_START_INVALID excluded
+ADV-004,HIGH,mutable or drifted parent,PASS,manifest mismatch rejected
+ADV-005,HIGH,model/scorer drift,PASS,both hash drifts rejected
+ADV-006,HIGH,invented policy injected,PASS,uncertified config rejected; candidate population closed
+ADV-007,MEDIUM,minor crossing silently hidden,PASS,WARNING_MINOR_LADDER_INCOHERENCE retained and eligible for M
+ADV-008,MEDIUM,market disappearance between runs,BOUNDED,distinct immutable MIDDAY/FINAL_PREGAME quote runs preserve absence; no carry-forward

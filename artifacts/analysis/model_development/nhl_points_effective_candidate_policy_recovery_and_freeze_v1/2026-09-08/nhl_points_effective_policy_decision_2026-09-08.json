@@ -1,0 +1,15 @@
+{
+  "NHL_POINTS_EFFECTIVE_POLICY_DECISION": "NOT_RECOVERABLE_SHADOW_ONLY",
+  "assessment_date": "2026-09-08",
+  "exact_next_live_task": "NHL_POINTS_FIRST_NONEMPTY_PRESEASON_DUAL_SNAPSHOT_BURN_IN_V1",
+  "integration_performed": false,
+  "next_live_task_scope": "Run P/M only on first real nonempty official season-2026 preseason slate; keep C/U/E disabled.",
+  "policy_config_created": false,
+  "policy_frozen": false,
+  "policy_hash_issued": false,
+  "policy_name_requested_if_authorized": "NHL_POINTS_PRESEASON_SHADOW_CANDIDATE_POLICY_V1",
+  "preseason_disposition": "PREDICTION_AND_MARKET_SHADOW_ONLY; C/U/E remain disabled",
+  "preserved_status": "RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG",
+  "reason": "No Points candidate/upload authority or archived candidate/upload ledger survives. Two materially different display/export heuristics are research-only and cannot be promoted without inventing policy.",
+  "smallest_future_authority_needed": "A separate operator/governance task must explicitly define a new Points candidate and upload policy; this cannot be characterized as recovery."
+}
