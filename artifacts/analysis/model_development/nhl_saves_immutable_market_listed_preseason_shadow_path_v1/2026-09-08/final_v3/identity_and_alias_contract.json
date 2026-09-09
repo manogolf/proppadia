@@ -1,0 +1,23 @@
+{
+  "ambiguous_alias": "retained as rejected evidence",
+  "binding_order": [
+    "provider goalie ID within canonical bound game",
+    "exact normalized canonical name within canonical bound game",
+    "deterministic unique declared alias within canonical bound game"
+  ],
+  "name_only_global_join": false,
+  "outcome_to_prediction_cardinality": "zero_or_one_never_many",
+  "prediction_identity": [
+    "canonical_season",
+    "slate_date",
+    "game_id",
+    "game_type_code",
+    "scheduled_start_time_utc",
+    "team",
+    "opponent",
+    "goalie_id",
+    "model_version",
+    "run_type",
+    "run_timestamp_utc"
+  ]
+}

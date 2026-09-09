@@ -1,0 +1,14 @@
+{
+  "actual_starter_use": "postgame only, for participation and grading",
+  "agreement_gate": "multi-book agreement required on the same canonical goalie",
+  "authorization": "C/U/E disabled",
+  "evaluation_denominator": "exclude nonstarters from the scored evaluation denominator",
+  "identity_gate": "exactly one unique goalie per canonical game-team",
+  "implementation_status": "NOT_IMPLEMENTED_BY_THIS_AUDIT",
+  "market_listing_claim": "availability signal only; never starter confirmation",
+  "population": "latest qualified pregame state only",
+  "prediction_semantics": "predictions explicitly conditional on starting",
+  "scoring_population_stability": "to preserve retained probabilities, construct/transform the complete immutable slate feature snapshot once, then apply the market-listed eligibility gate; do not refit batch preprocessing on a filtered subset",
+  "starter_representation": "no representation of projected or confirmed starter status",
+  "status": "MARKET_LISTED_STARTER_UNCONFIRMED"
+}

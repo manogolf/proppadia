@@ -1,0 +1,12 @@
+{
+  "date": "2026-09-08",
+  "generated_by": "backend/nhl/scripts/rehearse_nhl_four_lane_preseason_readiness_v1.py",
+  "live_activity": false,
+  "parents": {
+    "saves_certification": "516974b3e4cec8d7f3df969690690a6d5b307726dc03d20a499ca64dff18392e",
+    "three_lane_rehearsal": "f80447221b69ad2413aa86cea51107d47c44aca7b57648eabd763319e8bcc4e1"
+  },
+  "source_sha256": "1ea9514f5b5232d7c5e5b10318aae980bf99712a3e683532ae09aa73e9938652",
+  "successor_not_rewrite": true,
+  "task": "NHL_SEASON_2026_FOUR_LANE_PRESEASON_READINESS_AMENDMENT_AND_CHECKPOINT_V1"
+}

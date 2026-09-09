@@ -1,0 +1,22 @@
+{
+  "candidate": false,
+  "execution": false,
+  "label": "SHADOW_PREDICTION_EXPORT",
+  "required_fields": [
+    "run_id",
+    "game_id",
+    "goalie_id",
+    "goalie_name",
+    "team",
+    "opponent",
+    "game_type_code",
+    "line",
+    "expected_saves",
+    "prob_over",
+    "prob_under",
+    "prediction_semantics",
+    "start_prob_operational_input",
+    "market_qualified"
+  ],
+  "upload": false
+}

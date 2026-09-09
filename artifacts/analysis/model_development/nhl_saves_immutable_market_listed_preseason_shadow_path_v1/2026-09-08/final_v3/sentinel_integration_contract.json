@@ -1,0 +1,21 @@
+{
+  "checks": [
+    "parent freshness/hash",
+    "complete population",
+    "quote coverage",
+    "multiple goalies",
+    "multibook support",
+    "alias identity",
+    "pregame timing",
+    "pre-score filter",
+    "single-batch preprocessing",
+    "start_prob exactly 1",
+    "actual-state leakage",
+    "nonstarter grading",
+    "mutable inputs",
+    "season/slate/game type"
+  ],
+  "launchagent_schedule_changed": false,
+  "morning": "prerequisite health only; no Saves market capture or scoring",
+  "other_lane_behavior_changed": false
+}

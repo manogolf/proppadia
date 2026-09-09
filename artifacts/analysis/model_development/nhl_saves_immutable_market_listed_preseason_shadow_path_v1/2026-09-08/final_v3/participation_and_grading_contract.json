@@ -1,0 +1,15 @@
+{
+  "actual_state_timing": "postgame only",
+  "conditional_denominator": "STARTED with official saves in regular season only",
+  "corrections": "create-only revision directories",
+  "nonstarter": "separate operational mismatch; never ordinary prediction loss",
+  "pregame_mutation": false,
+  "states": [
+    "STARTED",
+    "RELIEF_APPEARANCE",
+    "DRESSED_DID_NOT_PARTICIPATE",
+    "SCRATCHED_INACTIVE",
+    "UNRESOLVED",
+    "POSTPONED"
+  ]
+}

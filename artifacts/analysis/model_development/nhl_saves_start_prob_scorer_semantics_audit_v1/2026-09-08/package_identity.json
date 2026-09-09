@@ -1,0 +1,14 @@
+{
+  "created_at_utc": "2026-09-09T02:29:08.498635+00:00",
+  "current_head": "df959c513da35a935dadc664d38871722d0f9e3a",
+  "final_decision": "SCORER_OUTPUT_UNCHANGED_BUT_SEMANTICS_REQUIRE_EXPLICIT_CONTRACT",
+  "model_mutations": 0,
+  "next_task": "NHL_SAVES_IMMUTABLE_MARKET_LISTED_PRESEASON_SHADOW_PATH_V1",
+  "package_date": "2026-09-08",
+  "parent_manifest_sha256": "c6fdd38d568bb5f03c74a27c43feb790baaded4432ff297276a486f95bc40583",
+  "parent_package": "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance_v1_regenerated/2026-09-08/authoritative_replay_v2",
+  "prior_package_mutations": 0,
+  "read_only_database_queries": true,
+  "repository_source_mutations": 0,
+  "task": "NHL_SAVES_START_PROB_SCORER_SEMANTICS_AUDIT_V1"
+}

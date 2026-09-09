@@ -1,0 +1,5 @@
+lane,expected
+MONEYLINE,"game_spine, champion_features/predictions, raw H2H, book quotes, market comparison, health ledger, run metadata, SHA256SUMS"
+SOG,"prediction inputs, SOG predictions, raw/book quotes, market view, policy config/hash, rule ledger, candidate summary, populations, health, SHA256SUMS; no upload-shaped output"
+POINTS,"canonical/input snapshots, full predictions, ladder diagnostics, book quotes, market-qualified rows, C/U/E empty, RUN_COMPLETE, SHA256SUMS"
+GOALIE_SAVES,"canonical/source/operational goalie inputs, complete P, book quotes, goalie support, Policy C decisions, derived market view, M, C/U/E empty, Saves sentinel, RUN_COMPLETE, SHA256SUMS"

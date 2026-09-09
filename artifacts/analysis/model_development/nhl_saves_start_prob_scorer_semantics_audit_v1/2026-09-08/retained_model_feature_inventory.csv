@@ -1,0 +1,10 @@
+zero_based_position,one_based_position,feature,coefficient,scaler,retained_training_value_summary,live_2026_04_16_value_summary,enters_expected_saves,enters_probability,controls_filtering_ranking_display_grading
+0,1,is_home,-0.028812332770330341,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+1,2,rest_days,-0.004396163667899705,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+2,3,b2b_flag,0.029273682991793226,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+3,4,start_prob,1.4807531785590077e-05,NONE,"1.0 on all 5,798 rows",NULL on all 28 rows -> 0.0,True,through Poisson survival,none directly
+4,5,d5_saves_per60,0.0063809027143818782,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+5,6,d10_saves_per60,0.0070914436174531574,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+6,7,d5_shots_faced_per60,-0.00087888737102457138,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+7,8,season_save_pct,0.034106753282082153,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly
+8,9,opponent_id,-0.0009971506041290669,NONE,not expanded in this supplement,see representative input,True,through Poisson survival,none directly

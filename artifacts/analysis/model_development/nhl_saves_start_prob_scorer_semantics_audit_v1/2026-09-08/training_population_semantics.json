@@ -1,0 +1,20 @@
+{
+  "caveat": "max TOI is postgame and is not authoritative starter identity; fitted start_flag is null, so training-sample starter purity cannot be certified.",
+  "fitted_rows": 5798,
+  "fitted_start_prob_values": {
+    "1.0": 5798
+  },
+  "fitted_target": "y_saves from actual goalie-game participation row",
+  "lower_toi_participant_proxy": 320,
+  "lower_toi_proxy_mean_saves": 7.68125,
+  "lower_toi_proxy_share_of_matched": 0.055973412629001226,
+  "max_toi_ties": 0,
+  "primary_proxy_mean_saves": 25.750787474522884,
+  "primary_proxy_share_of_matched": 0.9440265873709988,
+  "read_only_db_overlap": 5717,
+  "retained_prediction_semantics": "conditional Saves distribution given that the named goalie starts",
+  "semantic_basis": "start_prob was fixed at 1.0 throughout fit and is not a learned participation mixture; live output is not multiplied by a start probability. Lower-TOI participation rows are retained model-target contamination/uncertainty, not an unconditional start-probability mechanism.",
+  "training_view_filter": "joins actual goalie log; does not filter start_flag",
+  "unique_max_toi_primary_proxy": 5397,
+  "unmatched_training_rows": 81
+}

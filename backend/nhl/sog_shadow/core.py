@@ -1,6 +1,6 @@
 """Integrated create-only SOG shadow run and append-only grading."""
 from __future__ import annotations
-import hashlib,json,math,shutil
+import fcntl,hashlib,json,math,shutil
 from pathlib import Path
 from typing import Any
 import numpy as np
@@ -46,6 +46,9 @@ def run_shadow(*,game_spine_csv:Path,player_inputs_csv:Path,quote_run_dir:Path,e
  if cfg.get("policy_name")!=POLICY_NAME or cfg.get("policy_version")!=POLICY_VERSION or not isinstance(cfg.get("policy_segments"),dict) or not cfg["policy_segments"]:raise RuntimeError("RUN_BLOCKED_BY_MISSING_EFFECTIVE_POLICY_CONFIG")
  if digest({k:v for k,v in cfg.items() if k!="effective_config_hash"})!=cfg.get("effective_config_hash"):raise RuntimeError("RUN_BLOCKED_BY_INVALID_EFFECTIVE_POLICY_CONFIG")
  run_id=make_run_id(slate_date,run_timestamp_utc,run_type);dest=output_root/"2026"/slate_date/run_id
+ lock_dir=output_root/"locks";lock_dir.mkdir(parents=True,exist_ok=True);lock=(lock_dir/f"{slate_date}_{run_type}.lock").open("a+")
+ try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+ except BlockingIOError as exc:raise RuntimeError("SOG_SHADOW_ALREADY_RUNNING") from exc
  if dest.exists():raise FileExistsError("OVERWRITE_ATTEMPT_BLOCKED")
  games=pd.read_csv(game_spine_csv);inputs=pd.read_csv(player_inputs_csv);starts=pd.to_datetime(games.scheduled_start_time_utc,utc=True,errors="coerce");run=parse_utc(run_timestamp_utc)
  if not games.canonical_season.eq(2026).all() or not games.slate_date.astype(str).eq(slate_date).all() or games.game_id.duplicated().any() or not games.game_type_code.isin(GAME_TYPES).all() or starts.isna().any():raise RuntimeError("game identity gate failed")

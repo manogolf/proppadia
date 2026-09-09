@@ -1,0 +1,40 @@
+{
+  "schema_version": "nhl_saves_frozen_identity_v1",
+  "model_name": "NHL_GOALIE_SAVES_PHOENIX_V2",
+  "model_version": "phoenix_v2_conditional_start_operational_amendment_v1",
+  "model_artifact_path": "backend/nhl/models/latest/goalie_saves/MODEL_ARTIFACT.json",
+  "model_artifact_sha256": "28f2d531dfc80ea850cdcbe022b2168612db5ce20931cf647f3ab9d06c306122",
+  "model_index_path": "backend/nhl/models/latest/goalie_saves/MODEL_INDEX.json",
+  "model_index_sha256": "150cf3ebbb65ee6769c8641659eda709822ae5473a4016b13373410902f4cee2",
+  "feature_metadata_path": "backend/nhl/features/feature_metadata_nhl.json",
+  "feature_metadata_sha256": "aaaa20dfb9208190f54539c4ab140e9127a24d45f12a0d7ca398a2a5e8204b60",
+  "scorer_path": "backend/nhl/scripts/score_nhl_props.py",
+  "scorer_sha256": "b2c4dea9fb657aae125e229c8392b8675d5a552ca2c48d8eedc9f4ccc45dbdc3",
+  "family": "poisson",
+  "feature_order": ["is_home", "rest_days", "b2b_flag", "start_prob", "d5_saves_per60", "d10_saves_per60", "d5_shots_faced_per60", "season_save_pct", "opponent_id"],
+  "feature_order_sha256": "e0c9af48831713cb4b635ca2a88592c4881215be8594b8a9b250ffa741ea6402",
+  "coefficient_sha256": "78e8709ce5e5d81dcc97887847d5d29f9b538d69d3ccdb4684e982265a9a3e03",
+  "intercept_sha256": "3330d8a1c061ea89f67b767e6aeee58b33c49d1d15ed40c5085c3a05d7f045bf",
+  "start_prob_zero_based_position": 3,
+  "start_prob_coefficient": 0.000014807531785590077,
+  "lines": [18.5, 19.5, 20.5, 21.5, 22.5, 23.5, 24.5, 25.5, 26.5, 27.5, 28.5, 29.5, 30.5],
+  "historical_fixed_input": {"path": "backend/nhl/exports/history/2026-04-16/train_goalie_saves_v2.csv", "sha256": "6532d1b0ce77e4dfaf62fe899e72d293d50a8b2f13aacc5603adcaf3da282101", "rows": 28},
+  "historical_fixed_output": {"path": "backend/nhl/data/processed/saves_predictions.csv", "sha256": "c248a82d9247108ec0afda17c1730ef13e06940adac7bf2ccbc2c781546b0375", "rows": 28},
+  "operational_amendment": {
+    "former_identity": "historical null start_prob is filled to 0.0 by retained preprocessing",
+    "current_identity": "season-2026 conditional-on-start wrapper supplies constant start_prob=1.0",
+    "semantic_contract": "P(goalie saves exceed proposition line | named goalie starts)",
+    "max_expected_saves_delta": 0.00028618417805503782,
+    "max_probability_delta": 0.00002600557877119325,
+    "max_probability_delta_percentage_points": 0.002600557877119325,
+    "source_package_manifest_sha256": "1dcf5e514b85b8a46bc12ce4ef458ed1b6211fdc2ad2750aedc0d82aa0052b85"
+  },
+  "policy_c": {
+    "name": "C_MULTIPLE_BOOKS_UNIQUE_GOALIE_AGREEMENT",
+    "rule": "unique strictly top-supported canonical goalie per game-team with at least two distinct sportsbooks",
+    "historical_team_games_selected": 544,
+    "historical_team_games_universe": 706,
+    "historical_mismatches": 2,
+    "source_package_manifest_sha256": "c6fdd38d568bb5f03c74a27c43feb790baaded4432ff297276a486f95bc40583"
+  }
+}

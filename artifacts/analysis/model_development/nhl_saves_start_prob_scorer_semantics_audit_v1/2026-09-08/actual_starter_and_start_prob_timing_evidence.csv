@@ -1,0 +1,5 @@
+evidence_population,rows,start_flag_true,start_flag_false,start_flag_null,start_prob_null,start_prob_0_35,start_prob_0_55,start_prob_0_65,start_prob_1,timing_finding
+retained fitted CSV,5798,,,,0,0,0,0,5798,synthetic constant; no starter timestamp
+DB overlap with fitted CSV (read-only 2026-09-08 query),5717,0,0,5717,5717,0,0,0,0,all outcome rows created 2025-09-20; only 6 schedule starts present and all 6 creation times were after start
+current feature table (read-only 2026-09-08 query),11733,,,,5807,3,5923,0,0,heuristic feature values; not consumed by authoritative Saves exporter
+accepted season-2025 postgame outcome snapshot,1436,706,710,20,,,,,,actual start flag explicitly evaluation-side/postgame only

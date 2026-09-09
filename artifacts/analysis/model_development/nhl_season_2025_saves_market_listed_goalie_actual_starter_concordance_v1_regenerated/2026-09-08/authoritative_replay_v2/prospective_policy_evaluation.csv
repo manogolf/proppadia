@@ -1,0 +1,5 @@
+policy,selection_contract,selected_team_games,selected_goalie_predictions,actual_starter_team_game_universe,historical_coverage_rate,mismatches,mismatch_rate
+A_EVERY_ACTIVE_MARKET_LISTED_GOALIE,predict every canonically qualified listed goalie; NOT starter confirmation,544,548,706,0.7705382436260623,6.0,0.010948905109489052
+B_EXACTLY_ONE_LISTED_GOALIE_PER_TEAM,select only one-listed team-game state,540,540,706,0.7648725212464589,2.0,0.003703703703703704
+C_MULTIPLE_BOOKS_UNIQUE_GOALIE_AGREEMENT,unique top-supported goalie with at least two distinct books; other singly-listed goalies may exist,544,544,706,0.7705382436260623,2.0,0.003676470588235294
+D_EXTERNAL_PROJECTED_CONFIRMED_SOURCE,retain independent timestamp-certified projected/confirmed goalie source,0,0,706,,,

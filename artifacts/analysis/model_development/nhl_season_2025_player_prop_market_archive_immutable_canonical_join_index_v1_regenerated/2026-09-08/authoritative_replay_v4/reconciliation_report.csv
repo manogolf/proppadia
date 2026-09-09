@@ -1,0 +1,28 @@
+check,expected,observed,status,demonstrated_cause,detail
+historical_bundle_files,153,153,PASS,SOURCE_INVENTORY,
+historical_wrapper_events,907,907,PASS,SOURCE_INVENTORY,
+historical_events_with_player_prop_books,855,855,PASS,SOURCE_INVENTORY,
+sportsbooks,13,13,PASS,LEGITIMATE_BOOK_LEVEL_MULTIPLICITY,
+contemporaneous_days,42,42,PASS,SOURCE_INVENTORY,
+at_post_market_objects_HISTORICAL_BUNDLE_POINTS,5,5,PASS,TIMING_EXCLUSION,
+at_post_market_objects_HISTORICAL_BUNDLE_SAVES,20,20,PASS,TIMING_EXCLUSION,
+at_post_market_objects_CONTEMPORANEOUS_LATEST_POINTS,2,2,PASS,TIMING_EXCLUSION,
+at_post_market_objects_CONTEMPORANEOUS_LATEST_SAVES,2,2,PASS,TIMING_EXCLUSION,
+april16_saves_alias_expansion_extras,13,13,PASS,ALIAS_EXPANSION,
+april16_points_prediction_rows,930,930,PASS,REPRESENTATIVE_DAY,
+april16_points_normalized_rows,930,930,PASS,REPRESENTATIVE_DAY,
+april16_points_normalized_priced_unique_identities,187,187,PASS,REPRESENTATIVE_DAY,
+april16_points_priced_identities_traced_to_raw_name_evidence,187,187,PASS,REPRESENTATIVE_DAY,
+april16_points_priced_identities_traced_to_qualified_raw_quotes,183,183,PASS,IDENTITY_FAILURE,Four legacy Points identities are excluded because Elias Pettersson maps to two same-game players at two lines.
+april16_saves_prediction_rows,364,364,PASS,REPRESENTATIVE_DAY,
+april16_saves_normalized_rows,377,377,PASS,REPRESENTATIVE_DAY,
+april16_saves_normalized_priced_unique_identities,8,8,PASS,REPRESENTATIVE_DAY,
+april16_saves_priced_identities_traced_to_raw_name_evidence,8,8,PASS,REPRESENTATIVE_DAY,
+april16_saves_priced_identities_traced_to_qualified_raw_quotes,8,8,PASS,REPRESENTATIVE_DAY,
+march24_sog_candidate_rows,25,25,PASS,OPERATIONAL_ACTION_EVIDENCE,
+march24_sog_surviving_provider_grade_rows,19,19,PASS,OPERATIONAL_ACTION_EVIDENCE,
+march24_sog_normalized_priced_without_same_game_raw,6,6,PASS,NAME_ONLY_CROSS_GAME_JOIN,M. Wood and A. Lee across three lines each were attached to canonical game IDs different from their raw provider events.
+march24_sog_name_traced_but_identity_excluded,6,6,PASS,AMBIGUOUS_SAME_NAME,Two Elias Petterssons across three lines remain ambiguous within the same game.
+raw_observations_preserved,1058841,1058841,PASS,NO_AGGREGATION,
+qualified_subset,identity+timing+status+price,1046999,PASS,TIMING_EXCLUSION_IDENTITY_FAILURE,
+incomplete_two_way_pairs,0,379167,INFORMATIONAL,MISSING_OPPOSITE_SIDE,

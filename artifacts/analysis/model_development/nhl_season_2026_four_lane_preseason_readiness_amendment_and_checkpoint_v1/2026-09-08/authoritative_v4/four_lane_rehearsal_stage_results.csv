@@ -1,0 +1,9 @@
+stage,lane,status,evidence
+morning prerequisite state and canonical slate,ALL,PASS,fresh isolated three-lane rehearsal plus Saves prerequisite field
+Moneyline score and H2H view,MONEYLINE,PASS,FROZEN_CONTROL_PREDICTION_MARKET_SHADOW_ONLY
+SOG prediction/market/candidate lineage,SOG,PASS,CERTIFIED_PREDICTION_MARKET_CANDIDATE_LINEAGE_SHADOW_ONLY_NO_UPLOAD_NO_EXECUTION
+Points score then ladder gate,POINTS,PASS,P_M_SHADOW_ONLY_C_U_E_BLOCKED
+MIDDAY Saves full-population score and Policy C,GOALIE_SAVES,PASS,P=39 M=2 start_prob=1.0
+FINAL_PREGAME Saves full-population score and Policy C,GOALIE_SAVES,PASS,P=39 M=1 start_prob=1.0
+isolated grading and cumulative reconciliation,ALL,PASS,four preseason lanes non-evaluative; pregame manifests unchanged
+sentinel evaluation,ALL,PASS,overall=YELLOW saves=PASS

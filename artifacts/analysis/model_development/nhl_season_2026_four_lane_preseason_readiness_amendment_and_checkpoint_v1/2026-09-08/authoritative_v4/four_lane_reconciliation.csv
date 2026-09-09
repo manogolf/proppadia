@@ -1,0 +1,17 @@
+check,status,evidence
+four lane canonical game identity,PASS,2026020001
+separate namespaces and run identities,PASS,nhlsavesshadow_s2026_d20260919_t20260919T170000000000Z_MIDDAY_v1
+all four lane locks are separate,PASS,all four isolated runs exercised distinct output-root lock namespaces; each lane core enforces nonblocking fcntl lock
+complete Saves population before market gate,PASS,P=39 M=2
+Saves conditional start value,PASS,[np.float64(1.0)]
+Policy C exact multi-book selection,PASS,"[{""team"":""Away Club"",""selected_goalie_id"":201,""reason"":""POLICY_C_UNIQUE_TOP_MULTIBOOK""},{""team"":""Home Club"",""selected_goalie_id"":101,""reason"":""POLICY_C_UNIQUE_TOP_MULTIBOOK""}]"
+market listing remains unconfirmed,PASS,['MARKET_LISTED_STARTER_UNCONFIRMED']
+actual starter absent from prediction input,PASS,prediction input columns inspected
+preseason non-evaluation and no numeric target,PASS,"{'conditional_evaluation_rows': 0, 'correction_reason': None, 'entered_regular_season_feature_history_rows': 0, 'nonstarter_rows': 0, 'preseason_numeric_targets': 0, 'revision_id': '39beab176ec4a33637c7', 'rows': 1, 'schema_version': 'nhl_saves_shadow_grading_v1', 'shadow_run_id': 'nhlsavesshadow_s2026_d20260919_t20260919T213000000000Z_FINAL_PREGAME_v1'}"
+Saves pregame immutable after grading,PASS,5f7b634ae835e2285301e0191cdaf8981a2ff26cc01dfcc839f1e02ebce61a74
+Points blocked ladder remains P not M,PASS,fresh three-lane rehearsal
+Points and Saves C/U/E disabled,PASS,population ledgers
+SOG unchanged,PASS,fresh validator
+Moneyline unchanged,PASS,fresh validator
+three-lane parent not rewritten,PASS,f80447221b69ad2413aa86cea51107d47c44aca7b57648eabd763319e8bcc4e1
+cross-lane failure isolation,PASS,PRE_SCORING_MARKET_FILTER_FORBIDDEN

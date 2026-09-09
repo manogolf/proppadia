@@ -1,0 +1,16 @@
+{
+  "actual_snapshot_parent_manifest_sha256": "c822e3bf8911dde7caa78b354a9841fe928822319407017fe34cfe90e7fbf915",
+  "actual_snapshot_source": "IMMUTABLE_PACKAGE:/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance_v1_regenerated/2026-09-08/policy_metric_correction_v1",
+  "actual_starter_contract": "postgame nhl.goalie_game_logs_raw start_flag=true only",
+  "final_decision": "MARKET_LISTING_SUFFICIENT_WITH_ADDITIONAL_GATE",
+  "live_authorization_changes": 0,
+  "package_date": "2026-09-08",
+  "parent_manifest_sha256": "f5d3affdc3a79585fa82593237c923154460033f894bdaf5442bd2b189d7881d",
+  "parent_package": "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/nhl_season_2025_player_prop_market_archive_immutable_canonical_join_index_v1_regenerated/2026-09-08/authoritative_replay_v4",
+  "source_code": "backend/nhl/scripts/assess_nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance.py",
+  "source_code_sha256": "fe9f35731b9c52a3798133f8e87c10d1771cfcc7745cc576a99b914a76bfada6",
+  "source_mutations": 0,
+  "supersedes_package": "artifacts/analysis/model_development/nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance_v1_regenerated/2026-09-08/policy_metric_correction_v1",
+  "supersession_reason": "Corrects Policy B/C mismatch counting for nullable/object booleans; pregame and outcome populations are unchanged.",
+  "task": "NHL_SEASON_2025_SAVES_MARKET_LISTED_GOALIE_ACTUAL_STARTER_CONCORDANCE_V1"
+}

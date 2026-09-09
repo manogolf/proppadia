@@ -1,6 +1,6 @@
 """Pure core for immutable NHL moneyline shadow capture and grading."""
 from __future__ import annotations
-import hashlib,json,math,re
+import fcntl,hashlib,json,math,re
 from datetime import datetime,timezone
 from pathlib import Path
 from typing import Any
@@ -136,6 +136,9 @@ def run_shadow(schedule_csv:Path,history_csv:Path,odds_json:Path|None,output_roo
  schedule=normalize_game_types(pd.read_csv(schedule_csv)); season=int(schedule.canonical_season.iloc[0]);
  if not schedule.slate_date.astype(str).eq(slate_date).all(): raise ValueError('schedule slate_date mismatch')
  run_id=make_run_id(season,slate_date,run_timestamp_utc,run_type); dest=output_root/str(season)/slate_date/run_id
+ lock_dir=output_root/"locks";lock_dir.mkdir(parents=True,exist_ok=True);lock=(lock_dir/f"{slate_date}_{run_type}.lock").open("a+")
+ try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+ except BlockingIOError as exc:raise RuntimeError("MAINLINE_SHADOW_ALREADY_RUNNING") from exc
  if dest.exists(): raise FileExistsError('OVERWRITE_ATTEMPT_BLOCKED')
  dest.mkdir(parents=True,exist_ok=False); raw_bytes=odds_json.read_bytes() if odds_json else b'{"capture_timestamp_utc":null,"provider_response":[]}\n'; (dest/'raw_h2h_response.json').write_bytes(raw_bytes); raw_envelope=json.loads(raw_bytes); raw=raw_envelope.get('provider_response',[]) if isinstance(raw_envelope,dict) else raw_envelope; odds_capture_timestamp=raw_envelope.get('capture_timestamp_utc') if isinstance(raw_envelope,dict) else None; odds_capture_timestamp=odds_capture_timestamp or run_timestamp_utc; history=pd.read_csv(history_csv); features,audit=build_strict_prior_features(schedule,history,run_timestamp_utc,allow_historical_fixture); scoreable=~features.feature_status.isin(['FEATURE_SOURCE_MISSING','FEATURE_TIMING_INVALID','GAME_IDENTITY_BLOCKED']); scores=score_features(features.loc[scoreable]); predictions=features.loc[scoreable,GAME_COLS+['opening_state_classification','no_history_flag','limited_history_flag']].copy(); predictions['run_id']=run_id; predictions['score_timestamp_utc']=parse_utc(run_timestamp_utc).isoformat(); predictions=pd.concat([predictions.reset_index(drop=True),scores.reset_index(drop=True)],axis=1); predictions['champion_identity']=load_parameters()['champion_identity']; predictions['champion_parameter_sha256']=parameter_hash(); predictions['evaluation_status']=predictions.game_type_code.map(evaluation_status_for_game_type); predictions=regular_season_evaluation_eligibility(predictions)
  quotes,binding=normalize_h2h(raw,schedule,odds_capture_timestamp); comparisons=predictions[['canonical_season','game_id','game_type_code','game_type_label','evaluation_status','regular_season_evaluation_eligible','regular_season_evaluation_exclusion_reason','run_id','champion_home_win_probability']].merge(quotes[quotes.qualification_status.eq('PREGAME_QUALIFIED')][['canonical_season','game_id','sportsbook_key','p_home_devig','provider_market_timestamp_utc','capture_timestamp_utc','market_evaluation_status']],on=['canonical_season','game_id'],how='inner'); comparisons['champion_minus_market_probability']=comparisons.champion_home_win_probability-comparisons.p_home_devig

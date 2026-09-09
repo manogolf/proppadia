@@ -1,0 +1,14 @@
+{
+  "authorized_current_runtime_binding": "this successor checkpoint",
+  "current": {
+    "mainline_shadow_core_sha256": "bdc3ee561d19c4074695df9914860899bbc45789f35c960553b144493c96c779",
+    "sog_shadow_core_sha256": "3736fd7e4d52166338905943fa072393eed2ba9b72be855a558211c78f46a1e7"
+  },
+  "former": {
+    "mainline_shadow_core_sha256": "7909c5acecb33a134bb14226b5617ff3729d2e55220d7a3ff780922989bd4ebe",
+    "sog_shadow_core_sha256": "b8e4f4723e8713ba0de66a61c063941ba71e7d5d37e3c444b8e76468b859a369"
+  },
+  "historical_identities_preserved": true,
+  "historical_package_rewrite": false,
+  "reason": "add per-lane nonblocking overlap locks required by four-lane checkpoint; no scorer/model/feature/policy change"
+}

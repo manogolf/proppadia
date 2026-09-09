@@ -1,0 +1,9 @@
+{
+  "final_decision": "SCORER_OUTPUT_UNCHANGED_BUT_SEMANTICS_REQUIRE_EXPLICIT_CONTRACT",
+  "model_refit": false,
+  "next_task": "NHL_SAVES_IMMUTABLE_MARKET_LISTED_PRESEASON_SHADOW_PATH_V1",
+  "prior_packages_modified": false,
+  "retained_prediction_semantics": "conditional Saves distribution given that the named goalie starts",
+  "scorer_modified": false,
+  "shadow_implemented": false
+}

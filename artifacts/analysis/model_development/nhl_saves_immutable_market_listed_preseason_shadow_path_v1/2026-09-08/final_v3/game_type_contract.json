@@ -1,0 +1,7 @@
+{
+  "1": "PRESEASON_NON_EVALUATION",
+  "2": "REGULAR_SEASON conditional evaluation eligible only after actual start",
+  "3": "POSTSEASON_NON_REGULAR_SEASON_EVALUATION",
+  "preseason_regular_season_numeric_target_rows": 0,
+  "unknown": "FAIL_CLOSED"
+}

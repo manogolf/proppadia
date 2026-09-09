@@ -1,0 +1,20 @@
+{
+  "certified_fixture_replay": {
+    "mismatch_rate": 0.003676470588235294,
+    "mismatches": 2,
+    "selected_team_games": 544,
+    "status": "EXACT_CERTIFIED_POLICY_C_POPULATION_PARITY",
+    "universe_team_games": 706
+  },
+  "market_presence_is_starter_confirmation": false,
+  "policy": {
+    "historical_mismatches": 2,
+    "historical_team_games_selected": 544,
+    "historical_team_games_universe": 706,
+    "name": "C_MULTIPLE_BOOKS_UNIQUE_GOALIE_AGREEMENT",
+    "rule": "unique strictly top-supported canonical goalie per game-team with at least two distinct sportsbooks",
+    "source_package_manifest_sha256": "c6fdd38d568bb5f03c74a27c43feb790baaded4432ff297276a486f95bc40583"
+  },
+  "qualifying_label": "MARKET_LISTED_STARTER_UNCONFIRMED",
+  "selection": "unique strictly top-supported canonical goalie per game-team with at least two distinct books; lower singly-listed goalies may coexist without creating a top-support tie"
+}

@@ -1,0 +1,36 @@
+{
+  "command_checks": 12,
+  "command_failures": 0,
+  "four_lane_reconciliation_checks": 16,
+  "four_lane_reconciliation_failures": 0,
+  "fresh_three_lane_rehearsal_exit": 0,
+  "saves_counts": [
+    {
+      "C": 0,
+      "E": 0,
+      "G": 0,
+      "M": 2,
+      "P": 39,
+      "U": 0,
+      "lane": "GOALIE_SAVES",
+      "manifest_sha256": "4403721032ff813a161da1cb4c552af9bb6c5a992d542c71adf05e8ffa58c162",
+      "phase": "MIDDAY"
+    },
+    {
+      "C": 0,
+      "E": 0,
+      "G": 0,
+      "M": 1,
+      "P": 39,
+      "U": 0,
+      "lane": "GOALIE_SAVES",
+      "manifest_sha256": "5f7b634ae835e2285301e0191cdaf8981a2ff26cc01dfcc839f1e02ebce61a74",
+      "phase": "FINAL_PREGAME"
+    }
+  ],
+  "stage_failures": 0,
+  "stages": 8,
+  "three_lane_negative_failures": 0,
+  "three_lane_negative_tests": 24,
+  "three_lane_rehearsal_manifest_sha256": "b5bf4304ed6a65427e0841808a849c7ad2829295a67a247e7bc21b845126f4d9"
+}

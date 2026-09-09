@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[3]
 DEFAULT_ROOT=ROOT/"artifacts/operational/nhl/sentinels"
-BLOCKING={"STALE_BLOCKING","PARENT_PRESENT_BUT_STALE","PARENT_MISSING","PARENT_HASH_MISMATCH","PARENT_IDENTITY_AMBIGUOUS","ORIENTATION_MISMATCH","IDENTITY_CRITICAL","POST_START_CONTAMINATION","MISGRADING_DETECTED","WRONG_SEASON","WRONG_GAME_TYPE","PARTIAL_SLATE","MUTABLE_INPUT_USED_UNSAFE"}
+BLOCKING={"STALE_BLOCKING","PARENT_PRESENT_BUT_STALE","PARENT_MISSING","PARENT_HASH_MISMATCH","PARENT_IDENTITY_AMBIGUOUS","ORIENTATION_MISMATCH","IDENTITY_CRITICAL","POST_START_CONTAMINATION","MISGRADING_DETECTED","WRONG_SEASON","WRONG_GAME_TYPE","PARTIAL_SLATE","MUTABLE_INPUT_USED_UNSAFE","SAVES_CONTRACT_VIOLATION"}
 
 def parse(v):return datetime.fromisoformat(str(v).replace("Z","+00:00")) if v else None
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -73,6 +73,17 @@ def main():
  # Manual and mutable-path lineage.
  manual=src.get("manual_actions",[]);add("manual_intervention","YES" if manual else "NO","WARNING" if manual else "INFO",{"actions":manual,"MANUAL_INTERVENTION_OCCURRED":"YES" if manual else "NO"},blocking=False)
  mutable=src.get("mutable_inputs",[]);unsafe=[x for x in mutable if x.get("used_for_critical_decision") and not x.get("documented_snapshot_binding")];bounded=[x for x in mutable if x.get("used") and x not in unsafe];mstate="MUTABLE_INPUT_USED_UNSAFE" if unsafe else "MUTABLE_INPUT_USED_BOUNDED" if bounded else "MUTABLE_INPUT_PRESENT_BUT_NOT_USED" if mutable else "RUN_BOUND_ONLY";add("mutable_path",mstate,"CRITICAL" if unsafe else "WARNING" if bounded else "INFO",{"unsafe":unsafe,"bounded":bounded})
+ # Optional lane-specific Saves contract. Missing during other lanes/morning is not applicable.
+ saves=src.get("saves")
+ if saves is None:add("saves_shadow_contract","NOT_APPLICABLE","INFO",{},blocking=False)
+ else:
+  violations=[]
+  required_true=["parents_current","complete_population_scored_before_market_gate","quote_coverage_visible","multi_goalie_state_visible","multibook_gate_applied","aliases_unambiguous","strictly_pregame","single_batch_preprocessing","actual_starter_postgame_only","nonstarters_excluded_from_evaluation","run_bound_inputs_only","identity_current"]
+  violations += [x for x in required_true if saves.get(x) is not True]
+  if saves.get("start_prob_values") != [1.0]:violations.append("start_prob_not_constant_one")
+  if saves.get("canonical_season") != 2026:violations.append("wrong_season")
+  if saves.get("game_type_codes") and not set(saves["game_type_codes"]).issubset({1,2,3}):violations.append("wrong_game_type")
+  add("saves_shadow_contract","PASS" if not violations else "SAVES_CONTRACT_VIOLATION","CRITICAL",{"violations":violations,"contract":saves})
  # Descriptive historical/live comparison only.
  hist=src.get("historical_expectation",{});sample=int(hist.get("live_sample",0));shift=bool(hist.get("material_shift"));hstate="INSUFFICIENT_LIVE_SAMPLE" if sample<int(hist.get("minimum_sample",20)) else "MATERIAL_DISTRIBUTION_SHIFT" if shift else "WITHIN_HISTORICAL_RANGE";add("historical_live_expectation",hstate,"WARNING" if hstate!="WITHIN_HISTORICAL_RANGE" else "INFO",hist,blocking=False)
  blockers=[x for x in results if x["blocking"]];warnings=[x for x in results if x["severity"]=="WARNING"]

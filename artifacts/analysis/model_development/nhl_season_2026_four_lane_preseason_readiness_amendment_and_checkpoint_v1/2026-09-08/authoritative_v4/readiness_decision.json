@@ -1,0 +1,51 @@
+{
+  "authorizations": {
+    "GOALIE_SAVES": {
+      "C": "UNAUTHORIZED",
+      "E": "UNAUTHORIZED",
+      "G": "AUTHORIZED_SHADOW_NON_EVALUATIVE_IN_PRESEASON",
+      "M": "AUTHORIZED_POLICY_C",
+      "P": "AUTHORIZED_CONDITIONAL_ON_START",
+      "U": "UNAUTHORIZED",
+      "condition": "MARKET_LISTED_STARTER_UNCONFIRMED; start_prob=1.0 constant",
+      "lane": "GOALIE_SAVES"
+    },
+    "MONEYLINE": {
+      "C": "NOT_AUTHORIZED_BY_THIS_AMENDMENT",
+      "E": "NOT_AUTHORIZED",
+      "G": "PRESEASON_NON_EVALUATION",
+      "M": "AUTHORIZED",
+      "P": "AUTHORIZED",
+      "U": "NOT_AUTHORIZED",
+      "condition": "frozen-control prediction/market shadow",
+      "lane": "MONEYLINE"
+    },
+    "POINTS": {
+      "C": "DISABLED",
+      "E": "DISABLED",
+      "G": "PRESEASON_NON_EVALUATION",
+      "M": "AUTHORIZED_AFTER_LADDER_GATE",
+      "P": "AUTHORIZED",
+      "U": "DISABLED",
+      "condition": "blocked ladders retained in P and excluded from M",
+      "lane": "POINTS"
+    },
+    "SOG": {
+      "C": "AUTHORIZED_SHADOW_LINEAGE",
+      "E": "DISABLED",
+      "G": "PRESEASON_NON_EVALUATION",
+      "M": "AUTHORIZED",
+      "P": "AUTHORIZED",
+      "U": "DISABLED",
+      "condition": "explicit hash-valid effective policy; no upload-shaped output",
+      "lane": "SOG"
+    }
+  },
+  "candidate_uploads": 0,
+  "decision": "FOUR_LANE_REHEARSAL_PASS",
+  "executions": 0,
+  "network_calls": 0,
+  "next_live_task": "FIRST_REAL_NHL_SEASON_2026_PRESEASON_MULTI_RUN_BURN_IN",
+  "next_offline_research": "NHL_POINTS_HISTORICAL_OUTCOME_SPINE_AND_COHERENT_PREDICTION_FOUNDATION_V1",
+  "real_slate_runs": 0
+}

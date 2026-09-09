@@ -1,0 +1,22 @@
+{
+  "C": 0,
+  "E": 0,
+  "M_line_level_rows_expected": 2,
+  "M_line_level_rows_observed": 2,
+  "P_expected": 52,
+  "P_observed": 52,
+  "U": 0,
+  "fixture_goalies": 4,
+  "lines": 13,
+  "policy_c_selected_goalies": [
+    101,
+    201
+  ],
+  "probability_mutations_after_gate": 0,
+  "quoted_lines_per_selected_goalie": 1,
+  "single_book_goalies_rejected": [
+    102
+  ],
+  "source": "backend/tests/test_nhl_saves_shadow.py::test_full_population_scores_before_exact_policy_c_gate",
+  "status": "PASS"
+}

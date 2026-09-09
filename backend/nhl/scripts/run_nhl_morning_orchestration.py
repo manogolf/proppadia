@@ -34,7 +34,7 @@ def main():
  except BlockingIOError: print("MORNING_ORCHESTRATION_ALREADY_RUNNING",file=sys.stderr);return 73
  if a.hold_lock_seconds:time.sleep(a.hold_lock_seconds)
  run_id=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")+"_"+uuid.uuid4().hex[:8];run=outroot/slate/"runs"/run_id;run.mkdir(parents=True,exist_ok=False)
- status={"schema_version":"nhl_morning_health_v1","slate_date":slate,"canonical_season":season,"orchestration_run_id":run_id,"start_timestamp_utc":utc(),"end_timestamp_utc":None,"overall_status":"RUNNING","valid_empty_slate":False,"schedule_game_count":None,"canonical_game_count":None,"team_history_readiness":"NOT_STARTED","player_history_readiness":"NOT_STARTED","mainline_prerequisite_readiness":"NOT_STARTED","sog_prerequisite_readiness":"NOT_STARTED","points_prerequisite_readiness":"NOT_STARTED","optional_context_readiness":"NOT_RUN_MORNING_BOUNDARY","blocking_failure":None,"recovery_command":f"{PY} {Path(__file__).resolve()} --slate-date {slate} --env-file {a.env_file.resolve()}","downstream":{"MAINLINE_MORNING_PREREQUISITES_READY":False,"SOG_MORNING_PREREQUISITES_READY":False,"POINTS_MORNING_PREREQUISITES_READY":False,"MIDDAY_MARKET_CAPTURE_ALLOWED":False,"FINAL_PREGAME_CAPTURE_ALLOWED":False,"GRADING_ALLOWED":True},"stages":[]}
+ status={"schema_version":"nhl_morning_health_v1","slate_date":slate,"canonical_season":season,"orchestration_run_id":run_id,"start_timestamp_utc":utc(),"end_timestamp_utc":None,"overall_status":"RUNNING","valid_empty_slate":False,"schedule_game_count":None,"canonical_game_count":None,"team_history_readiness":"NOT_STARTED","player_history_readiness":"NOT_STARTED","mainline_prerequisite_readiness":"NOT_STARTED","sog_prerequisite_readiness":"NOT_STARTED","points_prerequisite_readiness":"NOT_STARTED","saves_prerequisite_readiness":"NOT_STARTED","optional_context_readiness":"NOT_RUN_MORNING_BOUNDARY","blocking_failure":None,"recovery_command":f"{PY} {Path(__file__).resolve()} --slate-date {slate} --env-file {a.env_file.resolve()}","downstream":{"MAINLINE_MORNING_PREREQUISITES_READY":False,"SOG_MORNING_PREREQUISITES_READY":False,"POINTS_MORNING_PREREQUISITES_READY":False,"SAVES_MORNING_PREREQUISITES_READY":False,"MIDDAY_MARKET_CAPTURE_ALLOWED":False,"FINAL_PREGAME_CAPTURE_ALLOWED":False,"GRADING_ALLOWED":True},"stages":[]}
  healthpath=run/"morning_health.json";atomic_json(healthpath,status)
  env={"HOME":os.environ.get("HOME",str(Path.home())),"PATH":"/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin","PYTHONUNBUFFERED":"1"}
  if a.env_file.exists():load_env(a.env_file,env)
@@ -71,9 +71,9 @@ def main():
   status["canonical_game_spine_sha256"]=hashlib.sha256(spine.read_bytes()).hexdigest()
   status["canonical_game_count"]=source_health["normalized_game_count"]
   if status["valid_empty_slate"]:
-   for sid in ["05_stable_upstream_daily","06_team_history_readiness","07_player_history_readiness","08_mainline_prerequisites","09_sog_prerequisites","10_points_prerequisites"]:
+   for sid in ["05_stable_upstream_daily","06_team_history_readiness","07_player_history_readiness","08_mainline_prerequisites","09_sog_prerequisites","10_points_prerequisites","11_saves_prerequisites"]:
     status["stages"].append({"stage_id":sid,"command":"none","start_time":utc(),"end_time":utc(),"state":"SKIPPED_VALID_EMPTY_SLATE","exit_status":0,"input_identities":["04_canonical_slate_export"],"output_identities":[],"row_counts":{},"warnings":[],"failure_class":None,"downstream_allowed":True})
-   status.update(team_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",player_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",mainline_prerequisite_readiness="VALID_EMPTY_SLATE",sog_prerequisite_readiness="VALID_EMPTY_SLATE",points_prerequisite_readiness="VALID_EMPTY_SLATE")
+   status.update(team_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",player_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",mainline_prerequisite_readiness="VALID_EMPTY_SLATE",sog_prerequisite_readiness="VALID_EMPTY_SLATE",points_prerequisite_readiness="VALID_EMPTY_SLATE",saves_prerequisite_readiness="VALID_EMPTY_SLATE")
   else:
    stage("05_stable_upstream_daily",[PY,"-m","backend.nhl.cli","daily","--morning-only"],["04_canonical_slate_export"],"FAIL_ROSTER_REFRESH" if scenario=="roster_failure" else ("FAIL_PREPARATION" if scenario=="preparation_failure" else None))
    stage("06_team_history_readiness",["internal","daily morning-only completed-game history stages"],["05_stable_upstream_daily"]);status["team_history_readiness"]="READY"
@@ -81,7 +81,8 @@ def main():
    stage("08_mainline_prerequisites",["internal","canonical spine plus team history"],["06_team_history_readiness"]);status["mainline_prerequisite_readiness"]="READY"
    stage("09_sog_prerequisites",["internal","canonical spine plus player history"],["07_player_history_readiness"]);status["sog_prerequisite_readiness"]="READY"
    stage("10_points_prerequisites",["internal","canonical spine plus strict-prior Points feature export"],["07_player_history_readiness"]);status["points_prerequisite_readiness"]="READY_FOR_IMMUTABLE_SNAPSHOT"
-   status["downstream"].update(MAINLINE_MORNING_PREREQUISITES_READY=True,SOG_MORNING_PREREQUISITES_READY=True,POINTS_MORNING_PREREQUISITES_READY=True,MIDDAY_MARKET_CAPTURE_ALLOWED=True,FINAL_PREGAME_CAPTURE_ALLOWED=True)
+   stage("11_saves_prerequisites",["internal","canonical spine plus complete strict-prior goalie feature and roster identity snapshot"],["07_player_history_readiness"]);status["saves_prerequisite_readiness"]="READY_FOR_IMMUTABLE_SNAPSHOT"
+   status["downstream"].update(MAINLINE_MORNING_PREREQUISITES_READY=True,SOG_MORNING_PREREQUISITES_READY=True,POINTS_MORNING_PREREQUISITES_READY=True,SAVES_MORNING_PREREQUISITES_READY=True,MIDDAY_MARKET_CAPTURE_ALLOWED=True,FINAL_PREGAME_CAPTURE_ALLOWED=True)
   if scenario=="interrupted":raise KeyboardInterrupt
   if scenario=="finalization_failure":raise RuntimeError("FINAL_HEALTH_PACKAGING_FAILURE")
   status.update(overall_status="VALID_EMPTY_SLATE" if status["valid_empty_slate"] else ("DRY_RUN" if a.dry_run else "READY"),end_timestamp_utc=utc())

@@ -1,0 +1,15 @@
+{
+  "former_identity": "historical null start_prob -> retained preprocessing value 0.0",
+  "historical_artifacts_rewritten": false,
+  "measured_bound": {
+    "max_expected_saves_delta": 0.0002861841780550378,
+    "max_probability_delta": 2.600557877119325e-05,
+    "max_probability_delta_percentage_points": 0.002600557877119325,
+    "start_prob": 1.0,
+    "status": "BOUNDED_OPERATIONAL_INPUT_CONTRACT_AMENDMENT"
+  },
+  "not_estimated_start_probability": true,
+  "operational_identity": "start_prob=1.0 constant conditional-start flag",
+  "schema_version": "nhl_saves_operational_input_amendment_v1",
+  "semantics": "P(goalie saves exceed proposition line | named goalie starts)"
+}

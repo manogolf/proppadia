@@ -1,0 +1,9 @@
+{
+  "C": 0,
+  "E": 0,
+  "G": "append-only shadow grading; conditional model denominator includes actual starts only",
+  "M": "P rows with line-level quote evidence for the Policy C selected goalie",
+  "P": "all complete-population conditional-start predictions",
+  "U": 0,
+  "policy_status": "P_M_SHADOW_ONLY_C_U_E_UNAUTHORIZED"
+}

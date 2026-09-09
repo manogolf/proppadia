@@ -1,0 +1,14 @@
+{
+  "book_level_quote_capture_readiness": "READY",
+  "candidate_selection": "UNAUTHORIZED",
+  "diagnostic_prediction_export_readiness": "READY",
+  "downstream_candidate_upload": "UNAUTHORIZED",
+  "execution": "UNAUTHORIZED",
+  "full_prediction_population_readiness": "READY",
+  "market_listed_goalie_gate_readiness": "READY",
+  "market_qualified_shadow_readiness": "READY",
+  "overall_decision": "READY_FOR_FIRST_REAL_PRESEASON_SAVES_SHADOW_BURN_IN",
+  "participation_grading_readiness": "READY",
+  "production_runs_executed": 0,
+  "sentinel_readiness": "READY"
+}

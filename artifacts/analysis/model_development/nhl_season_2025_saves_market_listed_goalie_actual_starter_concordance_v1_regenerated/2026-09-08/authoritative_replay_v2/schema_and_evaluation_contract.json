@@ -1,0 +1,18 @@
+{
+  "latest_state": "derived by maximum qualified observation time per canonical game/team; source rows remain immutable",
+  "listing_grain": "source snapshot x canonical game x team x canonical goalie x sportsbook",
+  "no_claims": [
+    "starter confirmation",
+    "candidate",
+    "upload",
+    "execution",
+    "true starter change"
+  ],
+  "phase_equivalence": {
+    "FINAL_PREGAME_EQUIVALENT": "0 to 180 minutes before provider event commence",
+    "MIDDAY_EQUIVALENT": "more than 180 minutes before provider event commence"
+  },
+  "policy_C": "unique goalie with strictly top distinct-book support and at least two books",
+  "pregame_outcome_separation": "qualified_pregame_saves_observations contains no actual starter fields; postgame outcome snapshot and evaluation tables are separate",
+  "status_limit": "all qualified source rows have NOT_PROVIDED; suspended/closed rows are absent by parent qualification"
+}

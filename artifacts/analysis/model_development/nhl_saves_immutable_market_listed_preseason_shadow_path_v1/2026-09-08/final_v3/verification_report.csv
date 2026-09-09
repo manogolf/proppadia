@@ -1,0 +1,19 @@
+requirement,control,status,evidence
+1,historical null-to-zero byte replay,PASS,EXACT_BYTE_PARITY
+2,operational start_prob exactly 1,PASS,PASS
+3,bounded amendment,PASS,PASS max=0.002600557877119325 pp
+4,frozen parameters and coefficients,PASS,78e8709ce5e5d81dcc97887847d5d29f9b538d69d3ccdb4684e982265a9a3e03
+5,full population before gate,PASS,PASS
+6,post-gate exact probabilities,PASS,PASS
+7,pre-score filter rejected,PASS,PASS
+8,Policy C historical population,PASS,PASS 544/706 mismatches=2
+9,multiple/top-tie and single-book fail,PASS,PASS
+10,aliases cannot multiply predictions,PASS,PASS
+11,MIDDAY and FINAL_PREGAME distinct/create-only,PASS,PASS
+12,post-start quotes rejected,PASS,PASS
+13,preseason non-evaluation,PASS,PASS
+14,actual starter input rejected,PASS,PASS
+15,nonstarters excluded,PASS,PASS
+16,export not C/U/E,PASS,PASS
+17,duplicate/incomplete cannot publish,PASS,PASS
+18,parent/scorer/configuration/hash drift,PASS,PASS

@@ -1,0 +1,13 @@
+{
+  "batch_composition_bound_to_input_sha256": true,
+  "pre_scoring_market_filter": "FAIL_CLOSED",
+  "required_order": [
+    "complete scorer-eligible roster/history population",
+    "canonical identity validation",
+    "constant start_prob=1.0",
+    "one complete-batch preprocessing pass",
+    "preserve all P predictions",
+    "post-score Policy C gate"
+  ],
+  "required_parent_field": "expected_complete_population_rows must exactly equal archived goalie rows"
+}

@@ -1,0 +1,20 @@
+{
+  "decisions": {
+    "POINTS_BOOK_LEVEL_ARCHIVE_READINESS": "READY_WITH_DOCUMENTED_LIMITATIONS",
+    "POINTS_PREDICTION_MARKET_LINKAGE_READINESS": "READY_WITH_DOCUMENTED_LIMITATIONS",
+    "SAVES_BOOK_LEVEL_ARCHIVE_READINESS": "READY_WITH_DOCUMENTED_LIMITATIONS",
+    "SAVES_PREDICTION_MARKET_LINKAGE_READINESS": "READY_WITH_DOCUMENTED_LIMITATIONS",
+    "SOG_BOOK_LEVEL_ARCHIVE_READINESS": "READY_WITH_DOCUMENTED_LIMITATIONS"
+  },
+  "live_workflow_mutations": 0,
+  "package_date": "2026-09-08",
+  "package_status": "AUTHORITATIVE_COMPLETE",
+  "points_ladder_parent_path": "artifacts/analysis/model_development/nhl_points_probability_ladder_coherence_audit_v1/2026-09-08/nhl_points_player_ladder_audit_2026-09-08.csv",
+  "points_ladder_parent_sha256": "46cca186ce2d02bed502e33ee2dacfd55941e6c58bcd56ef39ccf2b4672a096d",
+  "source_code": "backend/nhl/market_archive_index/core.py + backend/nhl/scripts/build_nhl_season_2025_player_prop_market_archive_canonical_index.py",
+  "source_code_sha256": "98370afeb6aea582ca77c495fdace460a8b437ad28161c6e902bb2294b3aa047",
+  "source_mutations": 0,
+  "supersedes_package": "artifacts/analysis/model_development/nhl_season_2025_player_prop_market_archive_immutable_canonical_join_index_v1_regenerated/2026-09-08/representative_reconciliation_correction_v3",
+  "supersession_reason": "Corrects supersession-lineage metadata only; all canonical data tables are required to reproduce byte-identically.",
+  "task": "NHL_SEASON_2025_PLAYER_PROP_MARKET_ARCHIVE_IMMUTABLE_CANONICAL_JOIN_INDEX_V1"
+}

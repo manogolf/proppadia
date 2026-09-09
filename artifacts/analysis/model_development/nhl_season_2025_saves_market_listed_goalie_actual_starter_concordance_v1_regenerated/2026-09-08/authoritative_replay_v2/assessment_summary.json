@@ -1,0 +1,18 @@
+{
+  "actual_goalie_rows": 1436,
+  "authoritative_actual_starter_rows": 706,
+  "authoritative_actual_starter_team_games": 706,
+  "candidate_upload_execution_authorization": "NOT_AUTHORIZED",
+  "final_decision": "MARKET_LISTING_SUFFICIENT_WITH_ADDITIONAL_GATE",
+  "latest_evaluable_market_team_games": 544,
+  "latest_unique_actual_count": 538,
+  "latest_unique_actual_rate": 0.9889705882352942,
+  "market_game_team_states": 1919,
+  "market_games": 1056,
+  "market_listing_label": "PREGAME_AVAILABILITY_SIGNAL_NOT_STARTER_CONFIRMATION",
+  "parent_manifest_sha256": "f5d3affdc3a79585fa82593237c923154460033f894bdaf5442bd2b189d7881d",
+  "qualified_saves_observations": 28078,
+  "task": "NHL_SEASON_2025_SAVES_MARKET_LISTED_GOALIE_ACTUAL_STARTER_CONCORDANCE_V1",
+  "transition_comparisons": 27,
+  "transition_goalie_set_changes": 0
+}

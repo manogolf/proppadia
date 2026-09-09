@@ -1,0 +1,39 @@
+{
+  "analytical_authority": "Parquet",
+  "identity_values": [
+    "CANONICAL_EXACT",
+    "CANONICAL_CORROBORATED",
+    "ALIAS_RESOLVED",
+    "AMBIGUOUS",
+    "UNRESOLVED",
+    "CONFLICT"
+  ],
+  "non_claims": [
+    "candidate policy",
+    "upload",
+    "execution",
+    "grading",
+    "certified starting goalie"
+  ],
+  "null_semantics": "Arrow nulls; no empty-string substitution in authoritative tables",
+  "numeric_semantics": "canonical IDs use nullable integers; line/probability/price columns are typed; raw American price is retained separately from derived decimal/implied/no-vig values",
+  "observation_timestamp_precedence": [
+    "outcome provider timestamp",
+    "market provider timestamp",
+    "book provider timestamp",
+    "response-level timestamp",
+    "filesystem/archive timestamp"
+  ],
+  "primary_grain": "source file x provider event x bookmaker x market object x player x line x side x raw locator",
+  "qualified_contract": "accepted event identity AND accepted player identity AND PREGAME_QUALIFIED AND non-suspended status AND valid side/line/price",
+  "timing_start_precedence": [
+    "provider event commence_time",
+    "canonical NHL scheduled start fallback"
+  ],
+  "timing_values": [
+    "PREGAME_QUALIFIED",
+    "AT_OR_POST_START",
+    "TIMING_INDETERMINATE",
+    "START_TIME_UNRESOLVED"
+  ]
+}

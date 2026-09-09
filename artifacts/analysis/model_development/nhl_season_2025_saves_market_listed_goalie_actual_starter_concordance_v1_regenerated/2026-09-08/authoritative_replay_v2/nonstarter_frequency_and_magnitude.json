@@ -1,0 +1,15 @@
+{
+  "actual_starter_team_game_universe": 706,
+  "latest_listed_goalies": 548,
+  "latest_market_team_games_with_actual": 544,
+  "latest_market_unique_actual_rate": 0.9889705882352942,
+  "latest_market_uniquely_identified_actual_starter": 538,
+  "latest_nonstarter_listing_rate": 0.010948905109489052,
+  "latest_nonstarter_listings": 6,
+  "maximum_extra_listed_goalies": 1,
+  "mean_extra_listed_goalies_per_evaluable_team_game": 0.007352941176470588,
+  "median_extra_listed_goalies_per_evaluable_team_game": 0.0,
+  "status_note": "Qualified parent has zero suspended/closed rows; all retained rows have source status NOT_PROVIDED and represent listed availability, not explicit active certification.",
+  "team_games_with_multiple_listed": 4,
+  "true_change_note": "No timestamp-certified projected/confirmed pregame source exists; market transitions cannot certify true starter changes."
+}
