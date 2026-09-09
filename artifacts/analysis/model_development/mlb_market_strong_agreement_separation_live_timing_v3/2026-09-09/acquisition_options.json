@@ -1,0 +1,35 @@
+[
+  {
+    "credits_per_request": 3,
+    "dates": 18,
+    "gross_credits_for_designated_0530_requests": 54,
+    "incremental_if_historical_recovery_every_date": 180,
+    "incremental_study_credits_no_failures": 0,
+    "markets": "h2h,totals,spreads",
+    "option": "EXPAND_AND_MOVE_EXISTING_LIVE_REQUEST",
+    "status": "RECOMMENDED_PENDING_SEPARATE_SCHEDULER_AUTHORIZATION",
+    "timing": "move existing request immediately after durable prediction commit; no intervening workflow stage"
+  },
+  {
+    "credits_per_request": 1,
+    "dates": 18,
+    "gross_credits_for_designated_0530_requests": 18,
+    "incremental_if_historical_recovery_every_date": 198,
+    "incremental_study_credits_no_failures": 18,
+    "markets": "h2h",
+    "option": "ADD_SEPARATE_LIVE_TEN_BOOK_H2H_REQUEST",
+    "status": "VALID_LOW_RISK_ALTERNATIVE",
+    "timing": "new request immediately after durable prediction commit; existing three-market request remains later"
+  },
+  {
+    "credits_per_request": 10,
+    "dates": 18,
+    "gross_credits_for_designated_0530_requests": 180,
+    "incremental_if_historical_recovery_every_date": 180,
+    "incremental_study_credits_no_failures": 180,
+    "markets": "h2h",
+    "option": "HISTORICAL_SNAPSHOT_FOR_EVERY_DATE",
+    "status": "UNNECESSARY_AS_PRIMARY; FALLBACK_ONLY",
+    "timing": "retrieve nearest historical snapshot at or before the frozen target after the live window"
+  }
+]

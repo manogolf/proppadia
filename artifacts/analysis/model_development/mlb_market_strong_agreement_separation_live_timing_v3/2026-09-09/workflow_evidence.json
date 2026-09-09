@@ -1,0 +1,103 @@
+{
+  "bookmaker_group_rule": {
+    "accessed_utc_date": "2026-09-09",
+    "frozen_bookmaker_count": 10,
+    "remains_one_group": true,
+    "rule": "up to ten explicit bookmakers count as one region-equivalent bookmaker group",
+    "source": "https://the-odds-api.com/liveapi/guides/v4/"
+  },
+  "current_client": {
+    "downstream_parser_retains_only_pinnacle_rows": true,
+    "endpoint": "GET /v4/sports/baseball_mlb/odds",
+    "markets": [
+      "h2h",
+      "totals",
+      "spreads"
+    ],
+    "parser_path": "backend/mlb/markets/pinnacle_main_market_capture_v1.py",
+    "parser_sha256": "e10a12a974e867959ccde7e565b60637986b6d077225da0690f1254573f29d22",
+    "path": "backend/mlb/scripts/capture_mlb_pinnacle_main_markets_v1.py",
+    "prediction_attachment_occurs_after_immutable_prediction_fetch": true,
+    "raw_response_preserved_before_status_check": true,
+    "sha256": "b756db8e0b9f6575aa80cd708a9d31efcd8d46b9e0437b8c88679e480d3c5aa1",
+    "uses_bookmakers_pinnacle": true,
+    "uses_region_parameter": false
+  },
+  "installed_wrapper": {
+    "intervening_workflow_stages": [
+      "roster refresh",
+      "stat-derived refresh",
+      "predictions-wide",
+      "Hits 0.5 research scoring",
+      "slate-output generation",
+      "odds snapshot preservation"
+    ],
+    "main_market_hook_line": 1242,
+    "moneyline_lifecycle_line": 1086,
+    "moneyline_precedes_market_capture": true,
+    "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+    "sha256": "b62cb0f4321641e6b1c790f2c560491707e7679ee1a8d81286cc5900c56d567e"
+  },
+  "launchagent": {
+    "calendar_intervals_local_time": [
+      {
+        "Hour": 5,
+        "Minute": 30
+      },
+      {
+        "Hour": 8,
+        "Minute": 30
+      },
+      {
+        "Hour": 11,
+        "Minute": 0
+      },
+      {
+        "Hour": 13,
+        "Minute": 0
+      },
+      {
+        "Hour": 16,
+        "Minute": 30
+      }
+    ],
+    "has_0530_local_interval": true,
+    "path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist",
+    "sha256": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8"
+  },
+  "market_hook": {
+    "path": "bin/mlb_full_game_totals_daily_hook.sh",
+    "pinnacle_capture_line": 23,
+    "sha256": "1892f92af6cfa1766857b4bac35b9723f789760848807367a27b79269c754be3"
+  },
+  "odds_api_requests_by_this_review": 0,
+  "sample_2026_09_09": {
+    "all_h2h_updates_not_after_response": true,
+    "all_h2h_updates_pregame": true,
+    "credential_or_connection_string_preserved": false,
+    "earliest_bookmaker_market_update_utc": "2026-09-09T12:51:25Z",
+    "first_created_at_utc": "2026-09-09T12:32:42.569548Z",
+    "game_date": "2026-09-09",
+    "last_created_at_utc": "2026-09-09T12:32:42.569548Z",
+    "latest_bookmaker_market_update_utc": "2026-09-09T12:51:25Z",
+    "meets_immediate_max_lag": false,
+    "meets_post_commit_order": true,
+    "pinnacle_h2h_rows": 14,
+    "prediction_commit_to_request_lag_seconds": 1130.785939,
+    "prediction_timestamp_utc": "2026-09-09T12:32:39.520656Z",
+    "query_observed_utc_date": "2026-09-09",
+    "request_manifest_path": "backend/mlb/exports/odds_history/2026-09-09/odds_mlb_pinnacle_main_markets__local_daily_20260909T123000Z.manifest.json",
+    "request_manifest_sha256": "01e353396bfd13aa253221ac5f311542cf0a072e030745759e4394929b695430",
+    "request_parameters_without_secret": {
+      "bookmakers": "pinnacle",
+      "dateFormat": "iso",
+      "markets": "h2h,totals,spreads",
+      "oddsFormat": "american"
+    },
+    "request_started_at_utc": "2026-09-09T12:51:33.355487Z",
+    "response_received_at_utc": "2026-09-09T12:51:33.490602Z",
+    "rows": 15,
+    "source": "read-only query of mlb.public_game_moneyline_predictions",
+    "x_requests_last": 3
+  }
+}

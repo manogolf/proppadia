@@ -1,0 +1,26 @@
+{
+  "checks": {
+    "actual_0530_workflow_order": true,
+    "actual_endpoint_parameters": true,
+    "amended_before_rows": true,
+    "credential_free": true,
+    "failure_recovery_frozen": true,
+    "freeze_exact": true,
+    "ledger_bound": true,
+    "live_timing_frozen": true,
+    "no_scheduler_or_api_change": true,
+    "observed_bookmaker_timestamps_valid": true,
+    "observed_header_cost": true,
+    "observed_timing_reconciled": true,
+    "option_costs_exact": true,
+    "prior_freezes_byte_exact": true,
+    "required_outputs_present": true,
+    "ten_books_one_group": true
+  },
+  "credential_environment_read": false,
+  "failed_checks": [],
+  "network_requests": 0,
+  "scheduler_changed": false,
+  "status": "PASS",
+  "validator": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V3"
+}
