@@ -1,0 +1,11 @@
+bookmaker_key,bookmaker_name,BOOKMAKER_ABSENT,VALID_PREGAME_PRICE,PRICE_UNAVAILABLE,ONE_SIDED_MARKET,STALE_OR_POST_START_PRICE,IDENTITY_MISMATCH
+betmgm,BetMGM,0,76,0,0,0,0
+betonlineag,BetOnline,3,73,0,0,0,0
+betrivers,BetRivers,0,76,0,0,0,0
+bovada,Bovada,0,76,0,0,0,0
+draftkings,DraftKings,0,76,0,0,0,0
+fanatics,Fanatics,0,76,0,0,0,0
+fanduel,FanDuel,0,76,0,0,0,0
+mybookieag,MyBookie.ag,0,76,0,0,0,0
+pinnacle,Pinnacle,2,74,0,0,0,0
+williamhill_us,William Hill US,0,76,0,0,0,0

@@ -1,0 +1,1 @@
+.venv/bin/python -m backend.mlb.scripts.acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1 --finalize

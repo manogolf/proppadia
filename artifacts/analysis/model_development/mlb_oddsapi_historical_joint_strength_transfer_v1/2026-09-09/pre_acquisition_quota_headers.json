@@ -1,0 +1,11 @@
+{
+  "checked_at_utc": "2026-09-09T20:53:09.030518Z",
+  "documented_endpoint_cost": 0,
+  "expected_acquisition_cost": 290,
+  "http_status": 200,
+  "raw_response_path": "artifacts/analysis/model_development/mlb_oddsapi_historical_joint_strength_transfer_v1/2026-09-09/pre_acquisition_quota_raw_response.json",
+  "raw_sha256": "cc5349848fd4f8bd6709515e0cec7eb2715e01861d519cd3c48b1b85d2b9ec4c",
+  "x-requests-last": "0",
+  "x-requests-remaining": "90441",
+  "x-requests-used": "9559"
+}

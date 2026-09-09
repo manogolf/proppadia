@@ -1,0 +1,12 @@
+frozen_order,bookmaker_key,bookmaker_name,role,selected,selection_rationale,outcomes_consulted
+1,pinnacle,Pinnacle,REFERENCE,True,Preserved historical Odds API evidence; required reference,False
+2,betonlineag,BetOnline,ALTERNATIVE,True,Preserved historical Odds API h2h evidence; explicitly requested when available,False
+3,draftkings,DraftKings,ALTERNATIVE,True,Major US sportsbook with preserved historical Odds API availability,False
+4,fanduel,FanDuel,ALTERNATIVE,True,Major US sportsbook with preserved historical Odds API availability,False
+5,betmgm,BetMGM,ALTERNATIVE,True,Major US sportsbook with preserved historical Odds API availability,False
+6,betrivers,BetRivers,ALTERNATIVE,True,US sportsbook with preserved historical Odds API availability,False
+7,fanatics,Fanatics,ALTERNATIVE,True,Major US sportsbook with preserved historical Odds API availability,False
+8,bovada,Bovada,ALTERNATIVE,True,Broadly relevant sportsbook with preserved historical Odds API availability,False
+9,mybookieag,MyBookie.ag,ALTERNATIVE,True,Broadly relevant sportsbook with preserved historical Odds API availability,False
+10,williamhill_us,William Hill US,ALTERNATIVE,True,Preserved historical US Odds API identifier,False
+,fliff,Fliff,CANDIDATE,False,Not returned in preserved Odds API historical MLB h2h availability evidence; no charged discovery request authorized,False

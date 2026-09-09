@@ -1,0 +1,8 @@
+{
+  "documented_quota_cost": 0,
+  "endpoint": "/v4/sports/",
+  "parameters_excluding_secret": {
+    "all": "true"
+  },
+  "purpose": "pre-acquisition quota headers"
+}

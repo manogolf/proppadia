@@ -1,0 +1,62 @@
+{
+  "actual_credit_cost": 290,
+  "alternative_books_reaching_robustness_floor": 9,
+  "audit": "MLB_ODDSAPI_HISTORICAL_JOINT_STRENGTH_TRANSFER_V1",
+  "authorized_credit_ceiling": 400,
+  "classification": "ALTERNATIVE_BOOK_TRANSFER_SUPPORTED",
+  "economics_label": "captured historical price hypothetical flat-risk ROI",
+  "expected_credit_cost": 290,
+  "fixed_games": 76,
+  "fixed_record": "56-20",
+  "fliff_reason": "NOT_HISTORICALLY_AVAILABLE_IN_PRESERVED_ODDS_API_EVIDENCE_NOT_REQUESTED",
+  "fliff_requested": false,
+  "frozen_bookmakers": [
+    "pinnacle",
+    "betonlineag",
+    "draftkings",
+    "fanduel",
+    "betmgm",
+    "betrivers",
+    "fanatics",
+    "bovada",
+    "mybookieag",
+    "williamhill_us"
+  ],
+  "game_dates": 29,
+  "market": "h2h",
+  "model_changes": false,
+  "network_source": "THE_ODDS_API_ONLY",
+  "positive_robust_alternative_books": [
+    "betonlineag",
+    "draftkings",
+    "fanduel",
+    "betmgm",
+    "betrivers",
+    "fanatics",
+    "bovada",
+    "mybookieag",
+    "williamhill_us"
+  ],
+  "post_acquisition_quota": {
+    "x-requests-last": "10",
+    "x-requests-remaining": "90151",
+    "x-requests-used": "9849"
+  },
+  "pre_acquisition_quota": {
+    "x-requests-last": "0",
+    "x-requests-remaining": "90441",
+    "x-requests-used": "9559"
+  },
+  "production_changes": false,
+  "provider_snapshot_lag_seconds_max": 298.0,
+  "provider_snapshot_lag_seconds_min": 7.0,
+  "publication_changes": false,
+  "returned_snapshot_after_requested_rows": 0,
+  "robustness_floor": 38,
+  "scheduler_changes": false,
+  "snapshots_per_date": 1,
+  "successful_charged_requests": 29,
+  "threshold_changes": false,
+  "user_access_and_fillability": "UNKNOWN_NOT_ESTABLISHED",
+  "wagering": false
+}

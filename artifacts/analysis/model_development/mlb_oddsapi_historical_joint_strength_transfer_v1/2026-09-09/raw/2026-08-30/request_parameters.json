@@ -1,0 +1,12 @@
+{
+  "authorized_total_ceiling": 400,
+  "expected_max_credit_cost": 10,
+  "parameters_excluding_secret": {
+    "bookmakers": "pinnacle,betonlineag,draftkings,fanduel,betmgm,betrivers,fanatics,bovada,mybookieag,williamhill_us",
+    "date": "2026-08-30T12:32:05Z",
+    "dateFormat": "iso",
+    "markets": "h2h",
+    "oddsFormat": "american"
+  },
+  "url": "https://api.the-odds-api.com/v4/historical/sports/baseball_mlb/odds"
+}
