@@ -1,0 +1,1 @@
+group,unique_games,wins,losses,win_rate,win_rate_ci_2_5,win_rate_ci_97_5,market_brier,market_brier_ci_2_5,market_brier_ci_97_5,market_log_loss,market_log_loss_ci_2_5,market_log_loss_ci_97_5,model_brier,model_brier_ci_2_5,model_brier_ci_97_5,model_log_loss,model_log_loss_ci_2_5,model_log_loss_ci_97_5

@@ -1,0 +1,26 @@
+{
+  "checks": {
+    "append_only_triggers": true,
+    "bookmaker_cell_count_exact": true,
+    "effective_outcome_count_exact": true,
+    "fixed_evidence_requirement": true,
+    "fixed_terminal_categories": true,
+    "frozen_bookmaker_set": true,
+    "frozen_market_definition": true,
+    "frozen_model_identity": true,
+    "no_early_stopping": true,
+    "no_forbidden_action": true,
+    "no_pre_freeze_rows": true,
+    "one_outcome_not_bookmaker_cells": true,
+    "package_has_no_credential_literal": true,
+    "prospective_only": true,
+    "required_outputs_present": true,
+    "risk_states_closed": true,
+    "unique_risk_games": true
+  },
+  "credential_environment_read": false,
+  "failed_checks": [],
+  "network_requests": 0,
+  "status": "PASS",
+  "validator": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V1"
+}

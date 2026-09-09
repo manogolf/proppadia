@@ -1,0 +1,1 @@
+request_id,recorded_at_utc,game_date,requested_timestamp_utc,attempt,status,http_status,x_requests_last,x_requests_used,x_requests_remaining,authorized_credit_ceiling,raw_response_path,request_parameters_path,raw_sha256,error
