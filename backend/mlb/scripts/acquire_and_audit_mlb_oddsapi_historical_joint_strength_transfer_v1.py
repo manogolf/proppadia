@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 import re
+import shlex
+import traceback
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -53,6 +55,21 @@ LEDGER_FIELDS = (
     "x_requests_last", "x_requests_used", "x_requests_remaining", "raw_response_path",
     "response_headers_path", "raw_sha256", "error",
 )
+RETRY_FIELDS = (
+    "request_id", "recorded_at_utc", "prior_status", "x_requests_last",
+    "retry_allowed", "decision_reason",
+)
+_CREDENTIAL_KEYS = frozenset({"apikey", "api_key", "odds_api_key", "the_odds_api_key"})
+_QUERY_CREDENTIAL = re.compile(
+    r"(?i)(\b(?:apiKey|api_key|ODDS_API_KEY|THE_ODDS_API_KEY)(?:=|%3[dD]))([^&\s\"'<>]+)"
+)
+_JSON_CREDENTIAL = re.compile(
+    r"(?i)([\"'](?:apiKey|api_key|ODDS_API_KEY|THE_ODDS_API_KEY)[\"']\s*:\s*[\"'])([^\"']*)([\"'])"
+)
+_CLI_REPR_CREDENTIAL = re.compile(
+    r"(?i)([\"'](?:--api-key|--apikey)[\"']\s*,\s*[\"'])([^\"']+)([\"'])"
+)
+_CLI_CREDENTIAL = re.compile(r"(?i)((?:--api-key|--apikey)\s+)([^\s]+)")
 
 
 def sha(path: Path) -> str:
@@ -74,8 +91,72 @@ def json_default(value: Any) -> Any:
     raise TypeError(type(value).__name__)
 
 
+def redact_sensitive(value: Any) -> str:
+    """Return render-safe text without depending on knowledge of the credential value."""
+    text = str(value)
+    text = _QUERY_CREDENTIAL.sub(r"\1[REDACTED]", text)
+    text = _JSON_CREDENTIAL.sub(r"\1[REDACTED]\3", text)
+    text = _CLI_REPR_CREDENTIAL.sub(r"\1[REDACTED]\3", text)
+    return _CLI_CREDENTIAL.sub(r"\1[REDACTED]", text)
+
+
+def redact_sensitive_bytes(value: bytes) -> bytes:
+    """Scrub response bytes before persistence if a provider echoes a request URL."""
+    return redact_sensitive(value.decode("utf-8", errors="replace")).encode("utf-8")
+
+
+def sanitize_command(command: str | Iterable[Any]) -> str:
+    """Render a shell/subprocess command with credential arguments redacted."""
+    if isinstance(command, str):
+        return redact_sensitive(command)
+    return redact_sensitive(" ".join(shlex.quote(str(part)) for part in command))
+
+
+def render_exception(exc: BaseException) -> str:
+    """Render an exception without allowing request URLs or commands to leak apiKey values."""
+    return redact_sensitive(f"{type(exc).__name__}: {exc}")
+
+
+def render_traceback(exc: BaseException) -> str:
+    """Render a traceback for diagnostics through the same credential scrubber."""
+    return redact_sensitive("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+
+
 def safe_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in params.items() if k.lower() != "apikey"}
+    """Retain request metadata while omitting every recognized credential field."""
+    return {k: redact_sensitive(v) if isinstance(v, str) else v
+            for k, v in params.items() if k.lower() not in _CREDENTIAL_KEYS}
+
+
+def safe_get(url: str, params: dict[str, Any], timeout: int) -> requests.Response:
+    """Make a request while ensuring any transport exception is safe to render or trace."""
+    try:
+        return requests.get(url, params=params, timeout=timeout)
+    except Exception as exc:
+        raise RuntimeError(render_exception(exc)) from None
+
+
+def safe_error_code(content: bytes) -> str:
+    """Extract only a bounded provider error code, never the provider's free-form message."""
+    try:
+        code = json.loads(content).get("error_code", "")
+    except (AttributeError, json.JSONDecodeError, UnicodeDecodeError):
+        return "UNAVAILABLE"
+    return code if isinstance(code, str) and re.fullmatch(r"[A-Z0-9_]{1,80}", code) else "UNAVAILABLE"
+
+
+def http_error_message(endpoint: str, status_code: int, content: bytes) -> str:
+    return redact_sensitive(
+        f"Odds API {endpoint} HTTP {status_code}; error_code={safe_error_code(content)}; "
+        "raw response and quota headers preserved"
+    )
+
+
+def retry_decision(prior_status: str, x_requests_last: Any) -> tuple[bool, str]:
+    last = header_int({"x-requests-last": x_requests_last}, "x-requests-last")
+    if prior_status == "HTTP_ERROR" and last == 0:
+        return True, "DEMONSTRABLY_UNCHARGED_HTTP_FAILURE"
+    return False, "PRIOR_SUCCESS_OR_CHARGED_OR_UNKNOWN_FAILURE"
 
 
 def header_dict(response: requests.Response) -> dict[str, str]:
@@ -93,7 +174,17 @@ def append_ledger(output: Path, row: dict[str, Any]) -> None:
     with path.open("a", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=LEDGER_FIELDS, extrasaction="ignore")
         if new: writer.writeheader()
-        writer.writerow({k: row.get(k, "") for k in LEDGER_FIELDS})
+        writer.writerow({k: redact_sensitive(row.get(k, "")) for k in LEDGER_FIELDS})
+        handle.flush(); os.fsync(handle.fileno())
+
+
+def append_retry_ledger(output: Path, row: dict[str, Any]) -> None:
+    path = output / "append_only_retry_decision_ledger.csv"
+    new = not path.exists()
+    with path.open("a", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RETRY_FIELDS, extrasaction="ignore")
+        if new: writer.writeheader()
+        writer.writerow({k: redact_sensitive(row.get(k, "")) for k in RETRY_FIELDS})
         handle.flush(); os.fsync(handle.fileno())
 
 
@@ -232,9 +323,9 @@ def quota_check(output: Path, api_key: str, timeout: int) -> dict[str, Any]:
     (output / "pre_acquisition_quota_request.json").write_text(json.dumps(request_meta, indent=2, sort_keys=True) + "\n")
     append_ledger(output, {"request_id": "ZERO_COST_QUOTA_CHECK", "recorded_at_utc": now(),
                            "endpoint_class": "sports_quota_check", "status": "REQUEST_STARTED"})
-    response = requests.get(SPORTS_URL, params=params, timeout=timeout)
+    response = safe_get(SPORTS_URL, params=params, timeout=timeout)
     raw_path = output / "pre_acquisition_quota_raw_response.json"
-    raw_path.write_bytes(response.content)
+    raw_path.write_bytes(redact_sensitive_bytes(response.content))
     headers = header_dict(response)
     record = {"http_status": response.status_code, **headers,
               "checked_at_utc": now(), "documented_endpoint_cost": 0,
@@ -242,14 +333,16 @@ def quota_check(output: Path, api_key: str, timeout: int) -> dict[str, Any]:
               "expected_acquisition_cost": freeze["expected_total_cost"]}
     (output / "pre_acquisition_quota_headers.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
     status = "ZERO_COST_QUOTA_CHECK_SUCCESS" if response.ok else "HTTP_ERROR"
+    error = "" if response.ok else http_error_message("quota check", response.status_code, response.content)
     append_ledger(output, {"request_id": "ZERO_COST_QUOTA_CHECK", "recorded_at_utc": now(),
                            "endpoint_class": "sports_quota_check", "status": status,
                            "http_status": response.status_code, "x_requests_last": headers["x-requests-last"],
                            "x_requests_used": headers["x-requests-used"],
                            "x_requests_remaining": headers["x-requests-remaining"],
-                           "raw_response_path": str(raw_path.relative_to(ROOT)), "raw_sha256": sha(raw_path)})
+                           "raw_response_path": str(raw_path.relative_to(ROOT)), "raw_sha256": sha(raw_path),
+                           "error": error})
     if not response.ok:
-        raise RuntimeError(f"Odds API quota check HTTP {response.status_code}; raw response preserved")
+        raise RuntimeError(error)
     if header_int(headers, "x-requests-last") not in (None, 0):
         raise RuntimeError("The documented zero-cost quota check reported a nonzero charge")
     remaining = header_int(headers, "x-requests-remaining")
@@ -306,20 +399,32 @@ def acquire(output: Path, api_key: str, timeout: int) -> dict[str, Any]:
     terminal = load_terminal_ledger(output)
     charged = pd.to_numeric(terminal.x_requests_last, errors="coerce").fillna(0).sum()
     successes = set(terminal.loc[terminal.status.eq("SUCCESS"), "request_id"])
-    blocked_failures = set(terminal.loc[terminal.status.isin(["HTTP_ERROR", "TRANSPORT_ERROR"])
-                                        & pd.to_numeric(terminal.x_requests_last, errors="coerce").fillna(-1).ne(0), "request_id"])
     acquired = skipped = 0
     for row in plan.itertuples(index=False):
         if row.request_id in successes:
             skipped += 1; continue
-        if row.request_id in blocked_failures:
-            raise RuntimeError(f"Prior charged/unknown failure will not be retried: {row.request_id}")
+        prior_failures = terminal[(terminal.request_id.eq(row.request_id))
+                                  & terminal.status.isin(["HTTP_ERROR", "TRANSPORT_ERROR"])]
+        retry_number = 0
+        if len(prior_failures):
+            prior = prior_failures.iloc[-1]
+            allowed, reason = retry_decision(prior.status, prior.x_requests_last)
+            append_retry_ledger(output, {"request_id": row.request_id, "recorded_at_utc": now(),
+                                         "prior_status": prior.status, "x_requests_last": prior.x_requests_last,
+                                         "retry_allowed": allowed, "decision_reason": reason})
+            if not allowed:
+                raise RuntimeError(f"Prior charged/unknown failure will not be retried: {row.request_id}")
+            retry_number = len(prior_failures)
         if charged + EXPECTED_COST_PER_REQUEST > MAX_CREDITS:
             raise RuntimeError(f"Next request would exceed {MAX_CREDITS}: charged={charged}")
         raw_path = ROOT / row.raw_response_path
         raw_path.parent.mkdir(parents=True, exist_ok=True)
         if raw_path.exists():
-            raise RuntimeError(f"Raw exists without successful ledger row; refusing overwrite: {raw_path}")
+            if not retry_number:
+                raise RuntimeError(f"Raw exists without terminal ledger evidence; refusing overwrite: {raw_path}")
+            raw_path = raw_path.with_name(f"{raw_path.stem}.retry_{retry_number}{raw_path.suffix}")
+            if raw_path.exists():
+                raise RuntimeError(f"Retry raw response already exists; refusing overwrite: {raw_path}")
         params = {"apiKey": api_key, "date": row.requested_timestamp_utc, "markets": MARKET,
                   "bookmakers": ",".join(books), "oddsFormat": "american", "dateFormat": "iso"}
         meta_path = raw_path.parent / "request_parameters.json"
@@ -332,15 +437,20 @@ def acquire(output: Path, api_key: str, timeout: int) -> dict[str, Any]:
                                "bookmakers": ",".join(books), "odds_format": "american", "date_format": "iso",
                                "status": "REQUEST_STARTED"})
         try:
-            response = requests.get(URL, params=params, timeout=timeout)
+            response = safe_get(URL, params=params, timeout=timeout)
         except Exception as exc:
-            redacted_error = f"{type(exc).__name__}: {str(exc).replace(api_key, '[REDACTED]')}"
+            redacted_error = render_exception(exc)
             append_ledger(output, {"request_id": row.request_id, "recorded_at_utc": now(),
                                    "endpoint_class": "historical_sport_odds", "game_date": row.game_date,
                                    "requested_timestamp_utc": row.requested_timestamp_utc, "status": "TRANSPORT_ERROR",
                                    "error": redacted_error})
+            append_retry_ledger(output, {"request_id": row.request_id, "recorded_at_utc": now(),
+                                         "prior_status": "TRANSPORT_ERROR", "x_requests_last": "",
+                                         "retry_allowed": False,
+                                         "decision_reason": "PRIOR_SUCCESS_OR_CHARGED_OR_UNKNOWN_FAILURE"})
             raise RuntimeError(redacted_error) from None
-        raw_path.write_bytes(response.content)  # Preserve immutable response bytes before JSON parsing.
+        # Preserve the response before parsing, with only credential-shaped URL values scrubbed.
+        raw_path.write_bytes(redact_sensitive_bytes(response.content))
         headers = header_dict(response)
         headers_path = raw_path.parent / "response_headers.json"
         headers_path.write_text(json.dumps({"http_status": response.status_code, **headers}, indent=2, sort_keys=True) + "\n")
@@ -349,6 +459,7 @@ def acquire(output: Path, api_key: str, timeout: int) -> dict[str, Any]:
             status = "HTTP_ERROR"
         else:
             charged += last; status = "SUCCESS" if response.ok else "HTTP_ERROR"
+        error = "" if response.ok else http_error_message("historical odds", response.status_code, response.content)
         append_ledger(output, {"request_id": row.request_id, "recorded_at_utc": now(),
                                "endpoint_class": "historical_sport_odds", "game_date": row.game_date,
                                "requested_timestamp_utc": row.requested_timestamp_utc, "markets": MARKET,
@@ -358,10 +469,14 @@ def acquire(output: Path, api_key: str, timeout: int) -> dict[str, Any]:
                                "x_requests_remaining": headers["x-requests-remaining"],
                                "raw_response_path": str(raw_path.relative_to(ROOT)),
                                "response_headers_path": str(headers_path.relative_to(ROOT)),
-                               "raw_sha256": sha(raw_path), "error": "" if response.ok else response.text[:500]})
+                               "raw_sha256": sha(raw_path), "error": error})
         if charged > MAX_CREDITS: raise RuntimeError("Observed charged usage exceeded authorization")
         if not response.ok:
-            raise RuntimeError(f"Odds API HTTP {response.status_code}; raw response and quota headers preserved")
+            allowed, reason = retry_decision(status, headers["x-requests-last"])
+            append_retry_ledger(output, {"request_id": row.request_id, "recorded_at_utc": now(),
+                                         "prior_status": status, "x_requests_last": headers["x-requests-last"],
+                                         "retry_allowed": allowed, "decision_reason": reason})
+            raise RuntimeError(error)
         if last > EXPECTED_COST_PER_REQUEST:
             raise RuntimeError(f"Observed request cost {last} exceeded expected {EXPECTED_COST_PER_REQUEST}")
         acquired += 1
@@ -608,8 +723,10 @@ def finalize(output: Path) -> dict[str, Any]:
               "No SportsGameOdds request, model/cohort/threshold/outcome change, production/scheduler/publication change, or wager occurred."]
     (output / "main_report.md").write_text("\n".join(lines) + "\n")
     (output / "validator.py").write_text(validator_text()); (output / "validator.py").chmod(0o755)
-    (output / "exact_finalize_rerun_command.txt").write_text(
-        ".venv/bin/python -m backend.mlb.scripts.acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1 --finalize\n")
+    command = [".venv/bin/python", "-m",
+               "backend.mlb.scripts.acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1",
+               "--finalize"]
+    (output / "exact_finalize_rerun_command.txt").write_text(sanitize_command(command) + "\n")
     files = sorted(p for p in output.rglob("*") if p.is_file() and p.name != "sha256_manifest.txt")
     (output / "sha256_manifest.txt").write_text("".join(f"{sha(p)}  {p.relative_to(output)}\n" for p in files))
     return summary
@@ -640,4 +757,10 @@ def main() -> None:
     print(json.dumps(result, indent=2, sort_keys=True, default=json_default))
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    try:
+        main()
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:
+        raise SystemExit(render_exception(exc)) from None

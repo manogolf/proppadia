@@ -1,4 +1,8 @@
+import csv
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 import pandas as pd
 
@@ -18,6 +22,81 @@ class HistoricalJointTransferTest(unittest.TestCase):
 
     def test_secret_is_removed(self):
         self.assertEqual(audit.safe_params({"apiKey": "secret", "markets": "h2h"}), {"markets": "h2h"})
+
+    def test_http_error_is_status_and_code_only(self):
+        credential = "dynamic-test-credential-material"
+        content = (f'{{"error_code":"UPSTREAM_FAILURE","message":"https://example.test/?apiKey={credential}"}}').encode()
+        rendered = audit.http_error_message("historical odds", 500, content)
+        self.assertNotIn(credential, rendered)
+        self.assertIn("HTTP 500", rendered)
+        self.assertIn("error_code=UPSTREAM_FAILURE", rendered)
+        self.assertNotIn("example.test", rendered)
+        persisted = audit.redact_sensitive_bytes(content)
+        self.assertNotIn(credential.encode(), persisted)
+        self.assertIn(b"apiKey=[REDACTED]", persisted)
+
+    def test_invalid_timestamp_error_preserves_only_safe_code(self):
+        credential = "another-dynamic-test-credential"
+        content = (f'{{"error_code":"INVALID_HISTORICAL_TIMESTAMP","message":"apiKey={credential}"}}').encode()
+        rendered = audit.http_error_message("historical odds", 422, content)
+        self.assertEqual(
+            rendered,
+            "Odds API historical odds HTTP 422; error_code=INVALID_HISTORICAL_TIMESTAMP; "
+            "raw response and quota headers preserved",
+        )
+
+    def test_retry_logging_is_append_only_and_secret_free(self):
+        credential = "retry-dynamic-test-credential"
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            audit.append_retry_ledger(output, {
+                "request_id": "R1", "prior_status": "HTTP_ERROR", "x_requests_last": "0",
+                "retry_allowed": True, "decision_reason": f"apiKey={credential}",
+            })
+            audit.append_retry_ledger(output, {
+                "request_id": "R2", "prior_status": "TRANSPORT_ERROR", "x_requests_last": "",
+                "retry_allowed": False, "decision_reason": "UNKNOWN_CHARGE",
+            })
+            text = (output / "append_only_retry_decision_ledger.csv").read_text()
+            self.assertNotIn(credential, text)
+            self.assertIn("apiKey=[REDACTED]", text)
+            self.assertEqual(len(list(csv.DictReader(text.splitlines()))), 2)
+            self.assertEqual(audit.retry_decision("HTTP_ERROR", "0"),
+                             (True, "DEMONSTRABLY_UNCHARGED_HTTP_FAILURE"))
+            self.assertFalse(audit.retry_decision("TRANSPORT_ERROR", "")[0])
+
+    def test_request_ledger_preserves_quota_metadata_without_secret(self):
+        credential = "ledger-dynamic-test-credential"
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            audit.append_ledger(output, {
+                "request_id": "R1", "status": "HTTP_ERROR", "http_status": 422,
+                "x_requests_last": 0, "x_requests_used": 101, "x_requests_remaining": 899,
+                "error": f"https://example.test/odds?apiKey={credential}&markets=h2h",
+            })
+            row = next(csv.DictReader((output / "append_only_request_ledger.csv").read_text().splitlines()))
+            self.assertNotIn(credential, str(row))
+            self.assertIn("apiKey=[REDACTED]", row["error"])
+            self.assertEqual(row["x_requests_last"], "0")
+            self.assertEqual(row["x_requests_used"], "101")
+            self.assertEqual(row["x_requests_remaining"], "899")
+
+    def test_subprocess_command_and_traceback_rendering_are_redacted(self):
+        credential = "subprocess-dynamic-test-credential"
+        url = f"https://example.test/odds?apiKey={credential}&markets=h2h"
+        command = ["curl", url, "--api-key", credential]
+        safe_command = audit.sanitize_command(command)
+        self.assertNotIn(credential, safe_command)
+        self.assertEqual(safe_command.count("[REDACTED]"), 2)
+        try:
+            raise subprocess.CalledProcessError(1, command, stderr=f"request failed: {url}")
+        except subprocess.CalledProcessError as exc:
+            rendered_exception = audit.render_exception(exc)
+            rendered_traceback = audit.render_traceback(exc)
+        self.assertNotIn(credential, rendered_exception)
+        self.assertNotIn(credential, rendered_traceback)
+        self.assertIn("[REDACTED]", rendered_exception)
+        self.assertIn("[REDACTED]", rendered_traceback)
 
     def test_economics(self):
         rows = pd.DataFrame({"game_id": [1, 2], "game_date": ["2026-08-01", "2026-08-02"],
