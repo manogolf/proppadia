@@ -1,0 +1,8 @@
+{
+  "dates": 18,
+  "first_date": "2026-09-10",
+  "last_date": "2026-09-27",
+  "scheduled_games": 235,
+  "source_sha256": "ed32663ad6f318cb9ad62f83275bd438ed781aa988f8fca06b5e902505206ad1",
+  "source_url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-09-10&endDate=2026-10-05&gameType=R"
+}

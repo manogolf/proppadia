@@ -1,0 +1,110 @@
+{
+  "admission": {
+    "all_provider events and all immutable predictions on an acquired date": true,
+    "book_and_market_update_must_be_strictly_pregame": true,
+    "identity": "exact normalized home/away plus unique closest start within three hours",
+    "missing_model_or_price_is_classified_not_dropped": true,
+    "returned_snapshot_must_not_exceed_request": true,
+    "risk_states": [
+      "IDENTITY_MISMATCH",
+      "MARKET_STRONG_MISSING_MODEL",
+      "MARKET_STRONG_MODEL_AGREES",
+      "MARKET_STRONG_MODEL_DISAGREES",
+      "MARKET_STRONG_MODEL_NOT_STRONG",
+      "REFERENCE_BOOKMAKER_ABSENT",
+      "REFERENCE_MARKET_NOT_STRONG",
+      "REFERENCE_ONE_SIDED_MARKET",
+      "REFERENCE_PRICE_UNAVAILABLE",
+      "REFERENCE_STALE_OR_POST_START"
+    ],
+    "two_sided_prices_required": true
+  },
+  "agreement_indicator": "1 only when the reference market-strong side is also the frozen model's strictly-over-0.60 side; 0 combines model-not-strong and model-strong-opposite, which remain separately reported; missing model is never imputed",
+  "blocked_date_fit": "expanding-origin unpenalized-equivalent logistic fit: outcome ~ logit(reference market probability) + fixed agreement indicator; test dates never enter training",
+  "bookmaker_selection_rationale": {
+    "betmgm": "Major US sportsbook with preserved historical Odds API availability",
+    "betonlineag": "Preserved historical Odds API h2h evidence; explicitly requested when available",
+    "betrivers": "US sportsbook with preserved historical Odds API availability",
+    "bovada": "Broadly relevant sportsbook with preserved historical Odds API availability",
+    "draftkings": "Major US sportsbook with preserved historical Odds API availability",
+    "fanatics": "Major US sportsbook with preserved historical Odds API availability",
+    "fanduel": "Major US sportsbook with preserved historical Odds API availability",
+    "mybookieag": "Broadly relevant sportsbook with preserved historical Odds API availability",
+    "pinnacle": "Preserved historical Odds API evidence; required reference",
+    "williamhill_us": "Preserved historical US Odds API identifier"
+  },
+  "bookmaker_selection_used_outcomes": false,
+  "bookmakers": [
+    "pinnacle",
+    "betonlineag",
+    "draftkings",
+    "fanduel",
+    "betmgm",
+    "betrivers",
+    "fanatics",
+    "bovada",
+    "mybookieag",
+    "williamhill_us"
+  ],
+  "constraints": {
+    "best_price": false,
+    "book_selection_by_roi": false,
+    "outcome_based_subclass_exclusion": false,
+    "production": false,
+    "public_prediction": false,
+    "scheduler": false,
+    "threshold_optimization": false,
+    "wagering": false
+  },
+  "decision_not_before_utc_date": "2027-01-01",
+  "decision_rule": {
+    "MARKET_STRENGTH_EXPLAINS_COHORT": "evidence gate met, overall market-strong paid-break-even excess is positive, and agreement effects satisfy frozen equivalence bounds: win-rate interval within +/-0.03 and Brier difference interval within +/-0.002",
+    "MODEL_AGREEMENT_INCREMENTAL_VALUE_NOT_SUPPORTED": "evidence gate met and agreement is demonstrably harmful: win-rate upper bound below 0 or both out-of-time score-difference lower bounds above 0",
+    "MODEL_AGREEMENT_INCREMENTAL_VALUE_SUPPORTED": "evidence gate met with predictive support (positive clustered agreement coefficient and both out-of-time score-difference upper bounds below 0) and economic support (Pinnacle ROI- and paid-break-even-excess-difference lower bounds above 0 and positive ROI-difference direction at >=8 books)",
+    "SEPARATION_EVIDENCE_INSUFFICIENT": "evidence gate unmet or powered results remain mixed/inconclusive"
+  },
+  "designated_prediction_timestamp": "immutable prediction_timestamp_utc on DESIGNATED_DAILY_PUBLIC_SNAPSHOT",
+  "designated_price_timestamp": "one requested timestamp per game date: immutable daily prediction timestamp floored to whole-second precision; nearest provider historical snapshot at or before it",
+  "early_stopping": false,
+  "evidence_requirement": {
+    "agreement_games": 438,
+    "basis": "Two-sided alpha 0.05, 80% power for a declared 10 percentage-point lift from a 60.8% market-strong/non-agreement baseline, using the prior 76:51 allocation only for planning; 732 is a lower bound before date-cluster inflation.",
+    "eligible_resolved_games": 732,
+    "no_agreement_games": 294,
+    "out_of_time_scored_games": 100,
+    "resolved_dates": 20
+  },
+  "frozen_at_utc": "2026-09-09T22:15:52.060946Z",
+  "grading": {
+    "authority": "mlb.public_game_moneyline_outcomes",
+    "bookmaker_rows_do_not_increase_effective_sample_size": true,
+    "flat_risk": "one unit risked at each bookmaker's fixed selected-side price",
+    "one_outcome_per_game": true,
+    "paid_break_even_excess": "selected-side win rate minus mean raw implied probability"
+  },
+  "late_season_regime": "Remainder-of-2026 fixed horizon; September, postseason-calendar, and offseason-calendar windows reported separately; no pooling with the prior 56-20 cohort",
+  "market": {
+    "market": "h2h",
+    "odds_format": "american",
+    "reference_book": "pinnacle",
+    "strong_definition": "reference-book no-vig selected-side probability > 0.60 strict"
+  },
+  "model": {
+    "admission": "ADMITTED_SHADOW",
+    "hash": "804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6",
+    "snapshot": "DESIGNATED_DAILY_PUBLIC_SNAPSHOT",
+    "strong_definition": "selected probability > 0.60 strict",
+    "version": "MLB_GAME_PYTHAGOREAN_LOG5_V1"
+  },
+  "prior_56_20_rows_admitted": false,
+  "prospective_end_game_date": "2026-12-31",
+  "prospective_start_game_date": "2026-09-10",
+  "reference_book_selected_before_prospective_outcomes": true,
+  "study_id": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V1",
+  "uncertainty": {
+    "bootstrap_repetitions": 4000,
+    "interval": "two-sided percentile 95%",
+    "seed": 20260910,
+    "unit": "game date cluster"
+  }
+}

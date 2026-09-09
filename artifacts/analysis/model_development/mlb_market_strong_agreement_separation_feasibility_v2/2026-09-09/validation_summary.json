@@ -1,0 +1,27 @@
+{
+  "checks": {
+    "amended_before_first_row": true,
+    "bounded_categories_exact": true,
+    "exact_regular_season_ceiling": true,
+    "historical_cost_verified_from_headers": true,
+    "historical_rates_reconcile": true,
+    "initial_bounded_state": true,
+    "ledger_bound_to_v2_freeze": true,
+    "live_expansion_not_overclaimed": true,
+    "no_odds_api_request": true,
+    "no_promotion_or_state_change": true,
+    "original_freeze_byte_exact": true,
+    "package_has_no_credential_literal": true,
+    "power_inputs_explicit": true,
+    "power_reproduces_732": true,
+    "remaining_schedule_exact": true,
+    "required_outputs_present": true,
+    "target_is_eligible_resolved": true,
+    "v2_freeze_exact": true
+  },
+  "credential_environment_read": false,
+  "failed_checks": [],
+  "network_requests": 0,
+  "status": "PASS",
+  "validator": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_FEASIBILITY_V2"
+}

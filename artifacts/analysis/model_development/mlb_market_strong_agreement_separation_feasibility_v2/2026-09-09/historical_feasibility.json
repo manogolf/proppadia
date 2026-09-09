@@ -1,0 +1,54 @@
+{
+  "agreement_rows": 76,
+  "agreement_share": 0.5984251968503937,
+  "cluster_caution": "The empirical factor is below one on only 30 nonempty dates and is not used to deflate the target; 1.0 remains the minimum planning design effect.",
+  "date_cluster_standard_error": 0.07574911193703739,
+  "empirical_date_cluster_se_ratio": 0.8841020869537748,
+  "empirical_date_cluster_variance_design_effect": 0.7816365001560199,
+  "empirical_primary_win_difference": 0.12899896800825594,
+  "historical_missing_or_excluded_bookmaker_cells": 5,
+  "historical_ten_book_cells": 760,
+  "historical_valid_pregame_bookmaker_cell_rate": 0.993421052631579,
+  "historical_valid_pregame_bookmaker_cells": 755,
+  "history_end": "2026-09-08",
+  "history_start": "2026-08-07",
+  "iid_hc1_standard_error": 0.08567914616968654,
+  "market_strong_frequency_conditional_on_reference_price": 0.2828507795100223,
+  "market_strong_frequency_per_prediction_row": 0.26963906581740976,
+  "market_strong_rows": 127,
+  "ordinary_dates_to_732_at_observed_eligible_rate": 191,
+  "ordinary_game_dates": 33,
+  "per_ordinary_date": {
+    "agreement": {
+      "maximum": 5,
+      "mean": 2.303030303030303,
+      "median": 2.0,
+      "minimum": 0,
+      "p25": 2.0,
+      "p75": 3.0
+    },
+    "market_strong": {
+      "maximum": 8,
+      "mean": 3.8484848484848486,
+      "median": 4.0,
+      "minimum": 0,
+      "p25": 3.0,
+      "p75": 5.0
+    },
+    "without_agreement": {
+      "maximum": 3,
+      "mean": 1.5454545454545454,
+      "median": 2.0,
+      "minimum": 0,
+      "p25": 1.0,
+      "p75": 2.0
+    }
+  },
+  "pinnacle_priced_rows": 449,
+  "prediction_rows": 471,
+  "reference_price_availability": 0.9532908704883227,
+  "source_path": "artifacts/analysis/model_development/mlb_joint_strength_incremental_value_executability_audit_v1/2026-09-09/unique_game_strength_class_ledger.csv",
+  "source_sha256": "146d8a473ca12ba01d555786d2079e566407478ad5a8298fb33c19a498fda354",
+  "without_agreement_rows": 51,
+  "without_agreement_share": 0.40157480314960625
+}

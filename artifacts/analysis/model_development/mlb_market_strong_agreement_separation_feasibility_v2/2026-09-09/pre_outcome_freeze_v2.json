@@ -1,0 +1,62 @@
+{
+  "acquisition": {
+    "api_called_by_feasibility_review": false,
+    "bookmaker_count": 10,
+    "calls": 18,
+    "contingency_calls": 0,
+    "dates": 18,
+    "exact_credit_ceiling": 180,
+    "market": "h2h",
+    "verified_cost_per_call": 10
+  },
+  "amendment_version": 2,
+  "bounded_2026_regular_season_layer": {
+    "categories": [
+      "2026_DIRECTIONALLY_FAVORABLE_BUT_UNRESOLVED",
+      "2026_EVIDENCE_CONTRADICTS_INCREMENTAL_AGREEMENT_VALUE",
+      "2026_INSUFFICIENT_COMPARISON_SUPPORT",
+      "2026_NO_OBSERVABLE_SEPARATION"
+    ],
+    "contradicts_rule": "support gate met; agreement-minus-comparison win-rate clustered upper bound < 0; agreement coefficient clustered upper bound < 0; and both blocked score-difference lower bounds > 0",
+    "directionally_favorable_rule": "support gate met; positive win-rate difference and agreement coefficient, negative point differences for both blocked scores, and positive Pinnacle paid-break-even-excess difference; confirmatory support is explicitly unavailable",
+    "game_dates": [
+      "2026-09-10",
+      "2026-09-27"
+    ],
+    "insufficient_rule": "regular-season horizon open or any minimum-support gate unmet",
+    "minimum_support_gate": {
+      "agreement_games": 15,
+      "blocked_out_of_time_games": 20,
+      "resolved_comparison_games": 40,
+      "resolved_dates": 10,
+      "without_agreement_games": 15
+    },
+    "minimum_support_gate_rationale": "A descriptive sufficiency screen, not a powered decision threshold: 40 resolved games is approximately 63% of the 63.4-game schedule projection and 15 per group preserves two-sided comparison support under moderate allocation drift; 10 dates permits date-clustered uncertainty, and 20 blocked out-of-time games prevents score comparisons from resting on a negligible holdout.",
+    "no_observable_separation_rule": "support gate met but neither the contradiction rule nor the coherent directional-favorable rule is met; this is not an equivalence claim",
+    "official_schedule_sha256": "ed32663ad6f318cb9ad62f83275bd438ed781aa988f8fca06b5e902505206ad1",
+    "season_close_date": "2026-09-27"
+  },
+  "collection_contract": "UNCHANGED_FROM_V1",
+  "constraints": {
+    "model_change": false,
+    "prediction_change": false,
+    "production": false,
+    "promotion_authorized": false,
+    "scheduler": false,
+    "statistical_significance_manufactured": false,
+    "threshold_change": false,
+    "wagering": false
+  },
+  "frozen_at_utc": "2026-09-09T23:07:34.576696Z",
+  "long_horizon_confirmatory_target": {
+    "eligible_resolved_games": 732,
+    "not_a_2026_terminal_gate": true,
+    "status": "RETAINED_UNCLUSTERED_LOWER_BOUND"
+  },
+  "original_v1_freeze_modified": false,
+  "original_v1_freeze_path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/pre_outcome_freeze.json",
+  "original_v1_freeze_sha256": "941c31da8e66099d0203385212a653cee6b01dde4ae1479f4378c1774525e346",
+  "pre_outcome": true,
+  "prospective_rows_at_amendment": 0,
+  "study_id": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V2"
+}

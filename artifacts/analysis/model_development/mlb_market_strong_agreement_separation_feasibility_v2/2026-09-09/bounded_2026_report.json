@@ -1,0 +1,41 @@
+{
+  "agreement_coefficient_clustered": {
+    "ci_2_5": null,
+    "ci_97_5": null,
+    "coefficient": null
+  },
+  "agreement_games": 0,
+  "as_of_date": "2026-09-09",
+  "blocked_score_differences_combo_minus_market": [],
+  "bookmaker_effect_size_metrics": [],
+  "bookmaker_rows_in_effective_sample_size": false,
+  "bounded_assessment_made": false,
+  "category": "2026_INSUFFICIENT_COMPARISON_SUPPORT",
+  "confirmatory_incremental_value_decision": "NOT_AUTHORIZED_BY_BOUNDED_LAYER",
+  "group_effect_size_metrics": [],
+  "long_horizon_732_target_reached": false,
+  "pinnacle_paid_break_even_excess_difference": {
+    "ci_2_5": null,
+    "ci_97_5": null,
+    "difference": null
+  },
+  "promotion_authorized": false,
+  "resolved_comparison_games": 0,
+  "resolved_dates": 0,
+  "study_id": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V2",
+  "support_gates": {
+    "agreement_games": false,
+    "blocked_out_of_time_games": false,
+    "regular_season_closed": false,
+    "resolved_comparison_games": false,
+    "resolved_dates": false,
+    "without_agreement_games": false
+  },
+  "wagering_authorized": false,
+  "win_rate_difference_agreement_minus_without": {
+    "ci_2_5": null,
+    "ci_97_5": null,
+    "difference": null
+  },
+  "without_agreement_games": 0
+}

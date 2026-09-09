@@ -1,0 +1,23 @@
+{
+  "agreement_ceiling": 438,
+  "agreement_exact": 437.7542025470605,
+  "agreement_share": 0.5984251968503937,
+  "agreement_to_comparison_allocation": "76:51",
+  "alternative_win_rate": 0.7078431372549019,
+  "baseline_source": "31 wins / 51 market-strong without-model-agreement games",
+  "baseline_win_rate": 0.6078431372549019,
+  "cohen_h": 0.21130263642816716,
+  "comparison_ceiling": 294,
+  "comparison_exact": 293.7561096039485,
+  "comparison_share": 0.4015748031496063,
+  "comparison_to_agreement_ratio": 0.6710526315789473,
+  "date_cluster_design_effect_in_original_732": 1.0,
+  "interpretation": "732 is statistically derived and conservatively integer-rounded, but is an unclustered eligible-resolved lower bound; its baseline and allocation are inherited from the earlier 127-game comparison and its 10-point MDE is a predeclared judgmental design choice.",
+  "minimum_detectable_incremental_effect_absolute": 0.1,
+  "missing_price_or_outcome_inflation_in_original_732": 1.0,
+  "power": 0.8,
+  "test": "two-independent-proportion normal approximation using Cohen arcsine effect size",
+  "total_after_separate_group_ceilings": 732,
+  "total_exact": 731.510312151009,
+  "two_sided_alpha": 0.05
+}

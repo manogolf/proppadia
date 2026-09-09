@@ -1,0 +1,26 @@
+{
+  "additional_charged_calls": 18,
+  "amendment_recommended_and_frozen": true,
+  "audit": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V2",
+  "bounded_current_category": "2026_INSUFFICIENT_COMPARISON_SUPPORT",
+  "exact_credit_ceiling": 180,
+  "expected_dates_to_target": 191,
+  "expected_regular_season_eligible_games": 63.36518046709129,
+  "floor_determination": {
+    "arbitrary": false,
+    "cluster_adjusted": false,
+    "conservatively_integer_rounded": true,
+    "historical_inputs_inherited": [
+      "31/51 baseline",
+      "76:51 allocation"
+    ],
+    "judgmental_input": "10 percentage-point minimum detectable increment",
+    "meaning_of_732": "resolved comparison-eligible market-strong games, not all market-strong observations",
+    "missingness_adjusted": false,
+    "statistically_derived": true,
+    "whole_floor_inherited_from_another_study": false
+  },
+  "long_horizon_target": 732,
+  "odds_api_requests": 0,
+  "original_freeze_unchanged": true
+}

@@ -1,0 +1,11 @@
+{
+  "agreement_games": 37.91932059447983,
+  "comparison_eligible_market_strong_games": 63.36518046709129,
+  "expected_market_strong_lost_to_reference_unavailability": 3.104752717763946,
+  "expected_missing_bookmaker_cells_at_eligible_volume": 4.168761872834931,
+  "expected_reference_unavailable_all_games": 10.976645435244158,
+  "historical_ten_book_valid_cell_rate": 0.993421052631579,
+  "market_strong_before_reference_exclusions": 66.46993318485524,
+  "scheduled_games": 235,
+  "without_agreement_games": 25.44585987261146
+}

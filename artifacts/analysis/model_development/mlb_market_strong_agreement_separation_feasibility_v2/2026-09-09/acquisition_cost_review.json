@@ -1,0 +1,13 @@
+{
+  "current_capture_expansion_conclusion": "NOT_VERIFIED_AT_ZERO_MARGINAL_COST: the exact ten-book explicit current request has no x-requests-last observation; region requests cost 1/1/2, and existing current captures are not certified at the immutable prediction timestamp",
+  "current_eu_region_h2h_observed_cost": 1,
+  "current_pinnacle_three_market_observations": 4,
+  "current_pinnacle_three_market_observed_cost_each": 3,
+  "current_us_plus_eu_h2h_observed_cost": 2,
+  "current_us_region_h2h_observed_cost": 1,
+  "historical_replacement_conclusion": "VERIFIED_ZERO_MARGINAL_COST_WITHIN_ONE_HISTORICAL_H2H_CALL: one explicit book and the frozen ten-book list both recorded x-requests-last=10",
+  "historical_single_book_h2h_observed_cost": 10,
+  "historical_ten_book_h2h_observed_cost_each": 10,
+  "historical_ten_book_h2h_x_requests_last_observations": 29,
+  "scheduler_change_authorized": false
+}
