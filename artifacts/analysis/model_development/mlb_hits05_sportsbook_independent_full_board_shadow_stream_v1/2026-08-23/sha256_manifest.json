@@ -21,6 +21,17 @@
     {"path": "artifacts/analysis/model_development/mlb_hits05_sportsbook_independent_full_board_shadow_stream_v1/2026-08-23/prestart_process_fixture.json", "sha256": "ebe9927ba589b823148fc215d39a4931321f4b3e0adbbe179f5e345ff9142ab1"},
     {"path": "models_out/latest/hits.joblib", "sha256": "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf"},
     {"path": "backend/mlb/config/semantic_models/manifests/MLB_HITS_SEMANTIC_V1_2e7377b2cdcb.json", "sha256": "84efb9f21723f50abf649d7e03cb2916ddf9b2704c91ff9b8e4553c979ffe972"},
-    {"path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh", "sha256": "b62cb0f4321641e6b1c790f2c560491707e7679ee1a8d81286cc5900c56d567e", "installation": "installed_daily_wrapper"}
+    {
+      "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+      "sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
+      "installation": "installed_daily_wrapper",
+      "previous_sha256": "b62cb0f4321641e6b1c790f2c560491707e7679ee1a8d81286cc5900c56d567e",
+      "change_provenance": {
+        "authorization_commit": "ce5c7f5b",
+        "authorized_change": "conditional detached MLB agreement-separation v4 launch immediately after successful durable Moneyline lifecycle",
+        "existing_lane_behavior_changed": false,
+        "verified_at_utc": "2026-09-10T17:10:24Z"
+      }
+    }
   ]
 }
