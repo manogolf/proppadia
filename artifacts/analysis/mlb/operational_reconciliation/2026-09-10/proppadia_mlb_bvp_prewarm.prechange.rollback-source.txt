@@ -1,0 +1,108 @@
+#!/bin/zsh
+set -euo pipefail
+
+LA_WRAPPER_NAME="proppadia_mlb_bvp_prewarm.sh"
+REPO="$HOME/Projects/proppadia"
+cd "$REPO"
+
+source backend/mlb/scripts/launchagent_lock.zsh
+trap 'wrapper_rc=$?; release_launchagent_locks; exit "$wrapper_rc"' EXIT
+
+if ! acquire_launchagent_lock "mlb-bvp-prewarm" "${MLB_BVP_PREWARM_SELF_LOCK_WAIT_SEC:-0}" "${MLB_BVP_PREWARM_STALE_SEC:-14400}"; then
+  echo "[$(date -u +%FT%TZ)] WARN another BvP prewarm appears active; skipping duplicate run" >&2
+  exit 0
+fi
+if ! acquire_launchagent_lock "mlb-pipeline" "${MLB_PIPELINE_LOCK_WAIT_SEC:-1800}" "${MLB_PIPELINE_LOCK_STALE_SEC:-21600}"; then
+  echo "[$(date -u +%FT%TZ)] ERROR unable to acquire shared MLB pipeline lock for BvP prewarm" >&2
+  exit 75
+fi
+
+set -a
+source backend/.env
+set +a
+
+# Ensure psql is available when LaunchAgent PATH is minimal.
+PSQL_BIN="$(command -v psql || true)"
+if [[ -z "${PSQL_BIN}" ]]; then
+  for cand in /opt/homebrew/opt/libpq/bin/psql /usr/local/opt/libpq/bin/psql; do
+    if [[ -x "$cand" ]]; then
+      PSQL_BIN="$cand"
+      break
+    fi
+  done
+fi
+if [[ -z "${PSQL_BIN}" ]]; then
+  echo "[$(date -u +%FT%TZ)] ERROR psql not found (install libpq or add PATH)" >&2
+  exit 127
+fi
+
+MLB_DATE_ET="$(TZ=America/New_York date +%F)"
+MLB_RUN_TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
+MLB_RUN_TAG="local_prewarm_${MLB_RUN_TS_UTC}"
+MLB_ODDS_DAY_DIR="backend/mlb/exports/odds_history/${MLB_DATE_ET}"
+MLB_ODDS_CANONICAL_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops.json"
+MLB_ODDS_COMPAT_JSON="${MLB_ODDS_DAY_DIR}/odds_latest_compatible.json"
+MLB_ODDS_TAGGED_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops__${MLB_RUN_TAG}.json"
+
+echo "[$(date -u +%FT%TZ)] START local MLB BvP prewarm (MLB_DATE_ET=${MLB_DATE_ET} pid=$$ ppid=${PPID:-} cwd=$(pwd) xpc=${XPC_SERVICE_NAME:-manual})"
+echo "[$(date -u +%FT%TZ)] INFO prewarm env PATH=${PATH:-} python=$({ command -v .venv/bin/python || true; } 2>/dev/null) make=$({ command -v make || true; } 2>/dev/null) psql=${PSQL_BIN:-}"
+
+# Refresh BvP/PvB features for daily build + weekly retrain consumers.
+MLB_BVP_DATE="$MLB_DATE_ET" \
+make mlb-bvp-pvb-refresh MLB_BVP_REQUEST_RETRIES="${MLB_BVP_REQUEST_RETRIES:-3}"
+
+# Build today's slate context before BvP impact monitor.
+make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
+make mlb-slate-output MLB_DATE="$MLB_DATE_ET"
+
+# Prewarm also refreshes canonical reconcile snapshot + stores a run-specific odds file.
+if [[ -f "${MLB_ODDS_CANONICAL_JSON}" ]]; then
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_COMPAT_JSON}"
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_TAGGED_JSON}"
+  echo "[$(date -u +%FT%TZ)] INFO prewarm odds snapshot synced -> ${MLB_ODDS_COMPAT_JSON} + ${MLB_ODDS_TAGGED_JSON}"
+else
+  echo "[$(date -u +%FT%TZ)] WARN missing prewarm odds snapshot: ${MLB_ODDS_CANONICAL_JSON}" >&2
+fi
+
+# Keep /mlb/today staging aligned with the latest prewarm artifact refresh when
+# archived slate artifacts are already present. This is best effort because BvP
+# impact only needs the processed slate/wide CSVs produced above.
+MLB_ARCHIVED_SLATE_CSV="${MLB_ODDS_DAY_DIR}/mlb_slate_output.csv"
+MLB_ARCHIVED_WIDE_CSV="${MLB_ODDS_DAY_DIR}/mlb_predictions_wide_calibrated.csv"
+if [[ ! -d "${MLB_ODDS_DAY_DIR}" ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN skipping prewarm workspace build; missing odds day directory: ${MLB_ODDS_DAY_DIR}" >&2
+elif [[ ! -f "${MLB_ARCHIVED_SLATE_CSV}" || ! -f "${MLB_ARCHIVED_WIDE_CSV}" ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN skipping prewarm workspace build; missing archived slate artifacts (${MLB_ARCHIVED_SLATE_CSV}, ${MLB_ARCHIVED_WIDE_CSV})" >&2
+else
+  set +e
+  echo "[$(date -u +%FT%TZ)] START mlb-today workspace build (slate_date=${MLB_DATE_ET})"
+  .venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py --slate-date "$MLB_DATE_ET" --odds-root "backend/mlb/exports/odds_history"
+  workspace_rc=$?
+  if [[ "$workspace_rc" -eq 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] START mlb-today workspace materialized view refresh (slate_date=${MLB_DATE_ET})"
+    "$PSQL_BIN" "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+REFRESH MATERIALIZED VIEW mlb.today_market_snapshot;
+REFRESH MATERIALIZED VIEW mlb.today_market_timing_signal;
+REFRESH MATERIALIZED VIEW mlb.today_player_context;
+REFRESH MATERIALIZED VIEW mlb.today_workspace_mlb;
+SQL
+    workspace_rc=$?
+  fi
+  set -e
+  if [[ "$workspace_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN prewarm workspace refresh failed rc=${workspace_rc}; continuing to BvP impact" >&2
+  else
+    echo "[$(date -u +%FT%TZ)] DONE mlb-today workspace refresh (slate_date=${MLB_DATE_ET})"
+  fi
+fi
+
+set +e
+MLB_BVP_IMPACT_LABEL_DATE="$MLB_DATE_ET" \
+make mlb-bvp-impact-report
+impact_rc=$?
+set -e
+if [[ "$impact_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-bvp-impact-report failed rc=${impact_rc}" >&2
+fi
+
+echo "[$(date -u +%FT%TZ)] DONE local MLB BvP prewarm (MLB_DATE_ET=${MLB_DATE_ET})"

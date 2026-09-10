@@ -1820,9 +1820,13 @@ def _fetch_today_workspace_status(slate_date: str) -> Tuple[Dict[str, Any], Opti
         return status, f"error:{type(exc).__name__}"
 
 
-def _bvp_prewarm_failure_note(*, current_slate_date: str, completed_slate_date: str) -> str:
-    out_log = Path("artifacts/ops/mlb_bvp_prewarm_daily.out.log")
-    err_log = Path("artifacts/ops/mlb_bvp_prewarm_daily.err.log")
+def _bvp_prewarm_failure_note(
+    *,
+    current_slate_date: str,
+    completed_slate_date: str,
+    out_log: Path = Path("artifacts/ops/mlb_bvp_prewarm_daily.out.log"),
+    err_log: Path = Path("artifacts/ops/mlb_bvp_prewarm_daily.err.log"),
+) -> str:
     try:
         out_text = out_log.read_text(encoding="utf-8") if out_log.exists() else ""
         err_text = err_log.read_text(encoding="utf-8") if err_log.exists() else ""
@@ -1830,25 +1834,58 @@ def _bvp_prewarm_failure_note(*, current_slate_date: str, completed_slate_date: 
         return ""
 
     candidates = [d for d in (current_slate_date, completed_slate_date) if d]
+    runs: List[Tuple[int, int, str, str, str]] = []
+    start_token = "BVP_PREWARM_RUN_START "
+    end_token = "BVP_PREWARM_RUN_END "
+    starts: Dict[str, Tuple[int, str]] = {}
+    for offset, line in enumerate(err_text.splitlines()):
+        if start_token in line:
+            fields = dict(item.split("=", 1) for item in line.split(start_token, 1)[1].split() if "=" in item)
+            if fields.get("run_tag") and fields.get("MLB_DATE_ET"):
+                starts[fields["run_tag"]] = (offset, fields["MLB_DATE_ET"])
+        elif end_token in line:
+            fields = dict(item.split("=", 1) for item in line.split(end_token, 1)[1].split() if "=" in item)
+            run_tag = fields.get("run_tag", "")
+            if run_tag in starts:
+                start_offset, game_date = starts[run_tag]
+                runs.append((start_offset, offset, game_date, run_tag, line.split(end_token, 1)[1]))
+
+    eligible = [run for run in runs if run[2] in candidates]
+    if eligible:
+        start_offset, end_offset, game_date, run_tag, end_fields_text = eligible[-1]
+        fields = dict(item.split("=", 1) for item in end_fields_text.split() if "=" in item)
+        segment = "\n".join(err_text.splitlines()[start_offset : end_offset + 1])
+        acquisition = fields.get("acquisition_status", "UNKNOWN")
+        downstream = fields.get("downstream_status", "UNKNOWN")
+        impact = fields.get("impact_status", "UNKNOWN")
+        wrapper_rc = fields.get("wrapper_rc", "UNKNOWN")
+        if acquisition == "SUCCESS":
+            return (
+                f"BvP acquisition succeeded for {game_date}; downstream={downstream}; "
+                f"impact={impact}; wrapper_rc={wrapper_rc}; run_tag={run_tag}."
+            )
+        err_lower = segment.lower()
+        if "nodename nor servname provided" in err_lower or "failed to resolve" in err_lower:
+            reason = "DNS/name resolution failure contacting statsapi.mlb.com"
+        elif "certificate verify failed" in err_lower or "sslcertverificationerror" in err_lower:
+            reason = "TLS certificate verification failure contacting statsapi.mlb.com"
+        elif "connectionerror" in err_lower or "maxretryerror" in err_lower:
+            reason = "network/API connection failure contacting statsapi.mlb.com"
+        else:
+            reason = "current prewarm invocation failed; inspect BvP prewarm logs"
+        return (
+            f"BvP acquisition status={acquisition} for {game_date}; downstream={downstream}; "
+            f"impact={impact}; wrapper_rc={wrapper_rc}; reason={reason}; run_tag={run_tag}."
+        )
+
+    # Legacy logs have no reliable stderr run boundary. Never attach an old
+    # traceback to a newer stdout invocation merely because the dates overlap.
     started = [d for d in candidates if f"MLB_DATE_ET={d}" in out_text]
-    failed = [d for d in candidates if f"date={d}" in err_text or f"/date={d}" in err_text or f"MLB_DATE_ET={d}" in err_text]
-    if not started and not failed:
+    if not started:
         return ""
-
-    err_lower = err_text.lower()
-    if "nodename nor servname provided" in err_lower or "failed to resolve" in err_lower:
-        reason = "DNS/name resolution failure contacting statsapi.mlb.com"
-    elif "certificate verify failed" in err_lower or "sslcertverificationerror" in err_lower:
-        reason = "TLS certificate verification failure contacting statsapi.mlb.com"
-    elif "connectionerror" in err_lower or "maxretryerror" in err_lower:
-        reason = "network/API connection failure contacting statsapi.mlb.com"
-    else:
-        reason = "prewarm producer failed; inspect BvP prewarm logs"
-
-    attempted = ",".join(started or failed)
     return (
-        f"BvP prewarm producer attempted date(s) {attempted} but failed before impact refresh: {reason}. "
-        f"logs: {out_log}; {err_log}"
+        f"BvP prewarm ran for {','.join(started)}, but legacy logs lack a current-run stderr boundary; "
+        "historical stderr was excluded from diagnosis."
     )
 
 

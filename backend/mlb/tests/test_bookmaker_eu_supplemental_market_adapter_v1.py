@@ -277,7 +277,7 @@ def test_23_run_line_preserved_without_model(tmp_path):
     assert RUN_LINE_MODEL_STATUS == "MODEL_COMPARISON_UNAVAILABLE_NO_QUALIFIED_RUN_LINE_MODEL"
 
 
-def test_24_provider_failure_isolation(tmp_path):
+def test_24_retired_provider_not_invoked_and_active_provider_failure_isolation(tmp_path):
     workspace = tmp_path
     (workspace / "bin").mkdir()
     (workspace / ".venv/bin").mkdir(parents=True)
@@ -285,16 +285,25 @@ def test_24_provider_failure_isolation(tmp_path):
     (workspace / "hook.sh").write_text(hook)
     (workspace / "hook.sh").chmod(0o755)
     fake_book = workspace / "bin/mlb_sportsgameodds_main_market_trial_daily_hook.sh"
-    fake_book.write_text("#!/bin/zsh\nexit ${BOOK_RC:-0}\n")
+    fake_book.write_text("#!/bin/zsh\nprint invoked > sportsgameodds_was_invoked\nexit 99\n")
     fake_book.chmod(0o755)
     fake_python = workspace / ".venv/bin/python"
-    fake_python.write_text("#!/bin/zsh\nexit ${ODDS_RC:-0}\n")
+    fake_python.write_text(
+        "#!/bin/zsh\n"
+        "if [[ \"$*\" == *capture_mlb_pinnacle_main_markets_v1* ]]; then\n"
+        "  exit ${PINNACLE_RC:-0}\n"
+        "fi\n"
+        "exit ${ODDS_RC:-0}\n"
+    )
     fake_python.chmod(0o755)
-    for odds_rc, book_rc, expected in ((0, 1, 0), (1, 0, 0), (1, 1, 1)):
+    for odds_rc, pinnacle_rc, expected in ((0, 1, 0), (1, 0, 0), (1, 1, 1)):
         result = subprocess.run([str(workspace / "hook.sh"), "2026-08-06", "run"], cwd=workspace,
-                                env={"PATH": "/bin:/usr/bin", "ODDS_RC": str(odds_rc), "BOOK_RC": str(book_rc)},
+                                env={"PATH": "/bin:/usr/bin", "ODDS_RC": str(odds_rc),
+                                     "PINNACLE_RC": str(pinnacle_rc)},
                                 text=True, capture_output=True)
         assert result.returncode == expected
+        assert not (workspace / "sportsgameodds_was_invoked").exists()
+        assert "SportsGameOdds" not in result.stdout + result.stderr
 
 
 def test_25_no_ev_wager_ranking_or_staking_fields_and_evidence_smoke(tmp_path, monkeypatch):

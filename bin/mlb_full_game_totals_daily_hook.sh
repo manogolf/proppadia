@@ -27,22 +27,14 @@ echo "[$(date -u +%FT%TZ)] START MLB Pinnacle main-market capture date=${slate_d
 pinnacle_rc=$?
 echo "[$(date -u +%FT%TZ)] DONE MLB Pinnacle main-market capture source=THE_ODDS_API bookmaker=pinnacle rc=${pinnacle_rc} date=${slate_date} run_tag=${run_tag}"
 
-# Supplemental source health is independent: it always gets its one bounded
-# attempt even if The Odds API failed, and its failure never erases a successful
-# existing-provider capture.
-bin/mlb_sportsgameodds_main_market_trial_daily_hook.sh "$slate_date" "$run_tag" "$odds_api_rc"
-sgo_rc=$?
-if [[ "$sgo_rc" -ne 0 ]]; then
-  echo "[$(date -u +%FT%TZ)] WARN MLB SportsGameOdds provider-wide trial capture failed rc=${sgo_rc}; The Odds API result remains authoritative and preserved" >&2
-fi
 if [[ "$odds_api_rc" -ne 0 ]]; then
-  echo "[$(date -u +%FT%TZ)] WARN MLB full-game totals The Odds API capture failed rc=${odds_api_rc}; successful SportsGameOdds trial data remains preserved" >&2
+  echo "[$(date -u +%FT%TZ)] WARN MLB full-game totals The Odds API capture failed rc=${odds_api_rc}" >&2
 fi
 if [[ "$pinnacle_rc" -ne 0 ]]; then
   echo "[$(date -u +%FT%TZ)] WARN MLB explicit Pinnacle capture failed rc=${pinnacle_rc}; broad US-book capture and daily refresh remain independent" >&2
 fi
 
-if [[ "$odds_api_rc" -ne 0 && "$pinnacle_rc" -ne 0 && "$sgo_rc" -ne 0 ]]; then
+if [[ "$odds_api_rc" -ne 0 && "$pinnacle_rc" -ne 0 ]]; then
   exit 1
 fi
 exit 0

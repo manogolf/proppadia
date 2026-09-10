@@ -1,0 +1,55 @@
+{
+  "task": "SEPTEMBER_10_MLB_DAILY_WARNING_RECONCILIATION",
+  "authorized_at": "2026-09-10",
+  "completed_at_utc": "2026-09-10T18:10:01Z",
+  "network_requests": 0,
+  "production_pipeline_runs": 0,
+  "sports_game_odds_retirement": {
+    "classification": "OBSOLETE_AUTOMATIC_INVOCATION_RETIRED",
+    "changed_file": "bin/mlb_full_game_totals_daily_hook.sh",
+    "prechange_sha256": "1892f92af6cfa1766857b4bac35b9723f789760848807367a27b79269c754be3",
+    "postchange_sha256": "dbb2f0fb141fb1fb0ac238c22ee12a729828213239619d054b3f790ccb241959",
+    "preserved": [
+      "bin/mlb_sportsgameodds_main_market_trial_daily_hook.sh",
+      "bin/mlb_bookmaker_eu_daily_hook.sh",
+      "backend/mlb/scripts/run_mlb_main_market_provider_replacement_trial_v1.py",
+      "backend/mlb/exports/market_history/sportsgameodds_main_market/raw",
+      "supplemental_main_market_snapshots historical table rows"
+    ],
+    "unchanged_active_paths": [
+      "The Odds API full-game totals capture",
+      "The Odds API explicit Pinnacle h2h/totals/spreads capture",
+      "player-prop acquisition"
+    ]
+  },
+  "bvp_prewarm_exit_semantics": {
+    "installed_path": "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh",
+    "prechange_sha256": "d258117434b64377a2a00a1dc5ec2b10727bd21d054f2bdfee849c721c69e662",
+    "postchange_sha256": "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb",
+    "rollback_source": "artifacts/analysis/mlb/operational_reconciliation/2026-09-10/proppadia_mlb_bvp_prewarm.prechange.rollback-source.txt",
+    "rollback_source_sha256": "d258117434b64377a2a00a1dc5ec2b10727bd21d054f2bdfee849c721c69e662",
+    "rollback_instructions": [
+      "Verify the rollback source SHA-256 equals the recorded prechange SHA-256.",
+      "Copy the rollback source to a temporary file and set mode 0755.",
+      "Syntax-check the temporary file with zsh -n.",
+      "With separate authorization, replace only /Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh.",
+      "Verify its SHA-256 equals the recorded prechange SHA-256."
+    ],
+    "authorized_behavior": [
+      "BvP acquisition behavior and retry inputs unchanged",
+      "exact predictive availability guard applied to production slate generation",
+      "SKIPPED_NO_QUALIFIED_MODEL returns zero after successful acquisition",
+      "BvP impact explicitly skipped when the required production slate is unavailable",
+      "unexpected acquisition and qualified-model slate failures preserve nonzero status and emit FAILED_TECHNICAL",
+      "structured per-run start and end state supports current-run-only Ops Brief diagnosis",
+      "locks remain released by the EXIT trap"
+    ],
+    "future_validation_authority": "this manifest plus the byte-exact non-executable rollback source and backend/mlb/tests/test_mlb_bvp_prewarm_exit_semantics.py"
+  },
+  "ops_brief": {
+    "changed_file": "backend/mlb/scripts/report_mlb_daily_ops_brief.py",
+    "prechange_sha256": "c3c49c2f895718622cdc501cb195562ee6c241211c7aa941b52a3606ada7fe50",
+    "postchange_sha256": "9ac49b93f9bae0bc8e2564c39dfce36b24bc343acf62b8c37872f8c07a6a4c00",
+    "behavior": "parse only the latest matching structured prewarm start/end interval; never attribute unbounded historical stderr to a newer invocation"
+  }
+}
