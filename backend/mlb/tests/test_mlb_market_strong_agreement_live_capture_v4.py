@@ -19,10 +19,64 @@ class Response:
 
 
 def snapshot(barrier="2026-09-10T12:30:00Z"):
-    row = ("2026-09-10", 1, "2026-09-10T23:00:00Z", "2026-09-10T12:29:55Z",
-           "2026-09-10T12:00:00Z", "Home Club", "Away Club", .65, .35, "a" * 64,
-           capture.v1.MODEL_HASH, capture.v1.ADMISSION, barrier)
-    return capture.PredictionSnapshot("2026-09-10", barrier, 1, (row,))
+    return capture.prediction_snapshot_from_rows(
+        "2026-09-10", 1, (prediction_row(created_at=barrier),)
+    )
+
+
+def prediction_row(**changes):
+    row = {
+        "game_date": "2026-09-10",
+        "game_id": 1,
+        "scheduled_start_utc": "2026-09-10T23:00:00Z",
+        "prediction_timestamp_utc": "2026-09-10T12:29:55Z",
+        "prediction_cutoff_utc": "2026-09-10T12:00:00Z",
+        "home_team": "Home Club",
+        "away_team": "Away Club",
+        "home_win_probability": .65,
+        "away_win_probability": .35,
+        "payload_sha256": "a" * 64,
+        "model_version": capture.v1.MODEL,
+        "prediction_snapshot_class": capture.v1.SNAPSHOT,
+        "model_hash": capture.v1.MODEL_HASH,
+        "admission_status": capture.v1.ADMISSION,
+        "created_at": "2026-09-10T12:30:00Z",
+    }
+    row.update(changes)
+    return row
+
+
+class FakeCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.sql = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def execute(self, sql, params):
+        self.sql = sql
+        self.params = params
+
+    def fetchall(self):
+        return self.rows
+
+
+class FakeConnection:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def cursor(self):
+        return self._cursor
 
 
 def event(book_state="complete"):
@@ -63,6 +117,99 @@ class LiveCaptureV4Test(unittest.TestCase):
                 mode="LIVE", snapshot=snapshot(), ledger=self.ledger, runtime=self.runtime,
                 freeze_path=self.freeze, getter=getter, clock=lambda: next(values))
         return result, calls
+
+    def assert_schema_error(self, rows, text, expected=1, game_date="2026-09-10"):
+        with self.assertRaisesRegex(capture.PredictionSnapshotSchemaError, text):
+            capture.prediction_snapshot_from_rows(game_date, expected, tuple(rows))
+
+    def test_loader_accepts_actual_dictionary_row_contract_by_name(self):
+        cursor = FakeCursor([prediction_row()])
+        with patch.object(capture, "pg_connect", return_value=FakeConnection(cursor)):
+            loaded = capture.load_prediction_snapshot("2026-09-10", 1)
+        self.assertEqual(loaded.expected_rows, 1)
+        self.assertEqual(loaded.rows[0].game_id, 1)
+        self.assertEqual(loaded.rows[0].model_hash, capture.v1.MODEL_HASH)
+        self.assertEqual(loaded.barrier_utc, "2026-09-10T12:30:00Z")
+        self.assertNotIn("outcome", cursor.sql.lower())
+        self.assertEqual(cursor.params, ("2026-09-10", capture.v1.MODEL, capture.v1.SNAPSHOT))
+
+    def test_loader_rejects_missing_required_key(self):
+        row = prediction_row()
+        del row["model_hash"]
+        self.assert_schema_error([row], "missing required fields: model_hash")
+
+    def test_loader_rejects_null_required_value(self):
+        self.assert_schema_error([prediction_row(home_team=None)], "required field 'home_team' is null")
+
+    def test_loader_rejects_unexpected_model_identity_or_hash(self):
+        cases = (
+            (prediction_row(model_version="OTHER_MODEL"), "unexpected model_version"),
+            (prediction_row(prediction_snapshot_class="OTHER_SNAPSHOT"),
+             "unexpected prediction_snapshot_class"),
+            (prediction_row(model_hash="b" * 64), "unexpected frozen model_hash"),
+        )
+        for row, message in cases:
+            with self.subTest(message=message):
+                self.assert_schema_error([row], message)
+
+    def test_loader_rejects_duplicate_prediction_key(self):
+        row = prediction_row()
+        self.assert_schema_error([row, dict(row)], "duplicate immutable prediction key", expected=2)
+
+    def test_loader_rejects_incorrect_game_date(self):
+        self.assert_schema_error([prediction_row(game_date="2026-09-11")], "unexpected game_date")
+
+    def test_loader_rejects_malformed_timestamp(self):
+        self.assert_schema_error([prediction_row(created_at="not-a-timestamp")],
+                                 "field 'created_at' is malformed")
+
+    def test_loader_rejects_tuple_shape_descriptively(self):
+        self.assert_schema_error([tuple(prediction_row().values())],
+                                 "expected a dictionary row from psycopg dict_row; got tuple")
+
+    def test_no_network_preflight_stops_before_claim_credit_credential_and_files(self):
+        with sqlite3.connect(self.ledger) as conn:
+            capture.schema(conn)
+            capture.establish_authorization(conn, self.freeze)
+            conn.commit()
+        with patch.object(capture.os, "getenv", side_effect=AssertionError("credential read")), \
+             patch.object(capture.hardened, "safe_get", side_effect=AssertionError("network called")):
+            result = capture.preflight_capture(
+                game_date="2026-09-10", run_identity="preflight", snapshot=snapshot(),
+                ledger=self.ledger, runtime=self.runtime, freeze_path=self.freeze,
+            )
+        self.assertEqual(result["status"], "PREFLIGHT_REQUEST_BOUNDARY_REACHED")
+        self.assertFalse(result["live_date_is_operationally_eligible"])
+        self.assertEqual(result["first_eligible_prospective_date"], "2026-09-11")
+        self.assertEqual(result["validated_prediction_identities"], [{
+            "game_date": "2026-09-10", "game_id": 1,
+            "model_version": capture.v1.MODEL,
+            "prediction_snapshot_class": capture.v1.SNAPSHOT,
+        }])
+        self.assertEqual(result["validated_frozen_model_hash"], capture.v1.MODEL_HASH)
+        self.assertEqual(result["request_parameters_excluding_secret"]["bookmakers"].split(","),
+                         list(capture.BOOKS))
+        self.assertNotIn("apiKey", result["request_parameters_excluding_secret"])
+        self.assertFalse(result["live_claim_created"])
+        self.assertFalse(result["credits_reserved"])
+        self.assertFalse(result["api_credential_read"])
+        self.assertEqual(result["network_requests"], 0)
+        self.assertFalse(result["outcome_data_accessed"])
+        self.assertFalse(self.runtime.exists())
+        with sqlite3.connect(self.ledger) as conn:
+            counts = [conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in (
+                "live_capture_claims_v4", "live_capture_events_v4", "predictions",
+                "risk_set", "bookmaker_prices", "outcomes",
+            )]
+        self.assertEqual(counts, [0, 0, 0, 0, 0, 0])
+
+    def test_failed_september_10_date_is_not_retried_live(self):
+        with patch.object(capture, "read_expected_rows", side_effect=AssertionError("lifecycle read")), \
+             patch.object(capture, "load_prediction_snapshot", side_effect=AssertionError("database read")):
+            result = capture.run_live("2026-09-10", "later-window", self.base / "unused.json")
+        self.assertEqual(result["status"], "SKIPPED_PRE_REQUEST_CLIENT_FAILURE_DATE")
+        self.assertEqual(result["failure_classification"], "PRE_REQUEST_CLIENT_FAILURE")
+        self.assertFalse(result["charged_request"])
 
     def test_success_preserves_raw_safe_params_quota_and_pregame_prices(self):
         result, calls = self.execute(Response([event()]))
@@ -133,9 +280,12 @@ class LiveCaptureV4Test(unittest.TestCase):
     def test_invalid_or_missing_quota_cost_stops_future_dates(self):
         result, _ = self.execute(Response([event()], last=""))
         self.assertEqual(result["status"], "SUCCESS_COST_MISMATCH")
-        other = snapshot("2026-09-10T12:31:00Z")
-        other = capture.PredictionSnapshot("2026-09-11", other.barrier_utc, 1,
-            (("2026-09-11",) + other.rows[0][1:],))
+        other = capture.prediction_snapshot_from_rows("2026-09-11", 1, (
+            prediction_row(game_date="2026-09-11", scheduled_start_utc="2026-09-11T23:00:00Z",
+                           prediction_timestamp_utc="2026-09-11T12:30:55Z",
+                           prediction_cutoff_utc="2026-09-11T12:00:00Z",
+                           created_at="2026-09-11T12:31:00Z"),
+        ))
         blocked = capture.execute_capture(game_date="2026-09-11", run_identity="run-2", mode="LIVE",
             snapshot=other, ledger=self.ledger, runtime=self.runtime, freeze_path=self.freeze,
             getter=lambda *_: self.fail("network called"), clock=lambda: "2026-09-10T12:31:10Z")
