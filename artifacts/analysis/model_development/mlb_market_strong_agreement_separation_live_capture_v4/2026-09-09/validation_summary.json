@@ -1,0 +1,22 @@
+{
+  "charged_requests": 0,
+  "checks": {
+    "credential_free_artifacts": true,
+    "credit_contract": true,
+    "existing_0530_reused": true,
+    "existing_lane_unchanged": true,
+    "freeze_exact": true,
+    "ledger_authorization_bound": true,
+    "no_network_or_credential_test": true,
+    "prior_v3_preserved": true,
+    "recovery_fail_closed": true,
+    "required_outputs": true,
+    "standalone_h2h_frozen": true,
+    "timing_contract": true,
+    "workflow_order_and_detachment": true
+  },
+  "failed_checks": [],
+  "network_requests": 0,
+  "scheduler_installed": true,
+  "status": "PASS"
+}

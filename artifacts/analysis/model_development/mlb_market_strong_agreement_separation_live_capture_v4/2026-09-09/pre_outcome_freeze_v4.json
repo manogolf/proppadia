@@ -1,0 +1,141 @@
+{
+  "amendment_version": 4,
+  "authorization": {
+    "actual_cost_authority": "x-requests-last; an unknown charge reserves the full expected request cost",
+    "expected_live_cost_each": 1,
+    "historical_expected_cost_each": 10,
+    "historical_recovery_count_ceiling": 3,
+    "historical_recovery_credit_ceiling": 30,
+    "routine_credit_ceiling": 18,
+    "routine_dates": 18,
+    "routine_dates_inclusive": [
+      "2026-09-10",
+      "2026-09-27"
+    ],
+    "stop_before_request_if_expected_total_would_exceed_ceiling": true,
+    "total_credit_ceiling": 48
+  },
+  "authorized_primary": "STANDALONE_LIVE_TEN_BOOK_H2H_REQUEST",
+  "constraints": {
+    "model_changed": false,
+    "odds_api_called_during_implementation_or_validation": false,
+    "public_output_changed": false,
+    "threshold_changed": false,
+    "unrelated_scheduler_changed": false,
+    "wagering": false
+  },
+  "frozen_at_utc": "2026-09-10T00:27:27.885049Z",
+  "idempotency": {
+    "charged_call_guard": "immutable date/mode claim acquired transactionally before credential access",
+    "complete_success_is_never_repeated": true,
+    "identity": [
+      "game_date",
+      "run_identity",
+      "study_id"
+    ],
+    "repeat_live_call_after_any_prior_live_claim": false
+  },
+  "isolation": {
+    "existing_pinnacle_request_moved_expanded_or_modified": false,
+    "existing_totals_spreads_props_or_publication_artifacts_modified": false,
+    "integrity_failures": "classified and excluded; never silently substituted",
+    "launch_mode": "detached child immediately after successful durable moneyline lifecycle hook",
+    "market_data_enters_prediction_generation": false,
+    "shadow_exit_status_propagates_to_workflow": false,
+    "shadow_process_is_awaited_by_workflow": false
+  },
+  "live_request": {
+    "bookmaker_and_market_last_update_preserved": true,
+    "bookmaker_count": 10,
+    "bookmaker_selection_rationale": {
+      "betmgm": "Major US sportsbook with preserved historical Odds API availability",
+      "betonlineag": "Preserved historical Odds API h2h evidence; explicitly requested when available",
+      "betrivers": "US sportsbook with preserved historical Odds API availability",
+      "bovada": "Broadly relevant sportsbook with preserved historical Odds API availability",
+      "draftkings": "Major US sportsbook with preserved historical Odds API availability",
+      "fanatics": "Major US sportsbook with preserved historical Odds API availability",
+      "fanduel": "Major US sportsbook with preserved historical Odds API availability",
+      "mybookieag": "Broadly relevant sportsbook with preserved historical Odds API availability",
+      "pinnacle": "Preserved historical Odds API evidence; required reference",
+      "williamhill_us": "Preserved historical US Odds API identifier"
+    },
+    "bookmaker_selection_used_outcomes": false,
+    "bookmakers": [
+      "pinnacle",
+      "betonlineag",
+      "draftkings",
+      "fanduel",
+      "betmgm",
+      "betrivers",
+      "fanatics",
+      "bovada",
+      "mybookieag",
+      "williamhill_us"
+    ],
+    "capture_timestamp": "response_received_at_utc",
+    "complete_raw_response_preserved_before_parsing": true,
+    "date_format": "iso",
+    "designated_price_timestamp": "first request_started_at_utc after durable barrier",
+    "endpoint": "GET /v4/sports/baseball_mlb/odds",
+    "markets": [
+      "h2h"
+    ],
+    "odds_format": "american",
+    "pregame_validation": "each book and h2h update must exist, be no later than receipt, and precede commence_time",
+    "quota_headers": [
+      "x-requests-last",
+      "x-requests-used",
+      "x-requests-remaining"
+    ],
+    "regions_parameter": "OMITTED",
+    "request_parameters_exclude_secret": true
+  },
+  "pre_outcome": true,
+  "prediction_commit_barrier": {
+    "all_expected_rows_required": true,
+    "authority": "maximum created_at across every immutable designated model row for the slate date",
+    "capture_may_start_before_barrier": false,
+    "expected_row_count_authority": "games_discovered in the successful durable moneyline lifecycle result",
+    "failure_mode": "FAIL_CLOSED_WITHOUT_REQUEST",
+    "maximum_start_lag_seconds": 300
+  },
+  "preserved_prior_freezes": [
+    {
+      "path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/pre_outcome_freeze.json",
+      "sha256": "941c31da8e66099d0203385212a653cee6b01dde4ae1479f4378c1774525e346",
+      "version": 1
+    },
+    {
+      "path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_feasibility_v2/2026-09-09/pre_outcome_freeze_v2.json",
+      "sha256": "97441cf46be83e42b05b5f3d7e519508d84a897e34ccdf1f4a1990f482091bb4",
+      "version": 2
+    },
+    {
+      "path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_live_timing_v3/2026-09-09/pre_outcome_freeze_v3.json",
+      "sha256": "72f6e92318c56e552c7fc3685586c34397010a577960b18210779cee42f7f2cd",
+      "version": 3
+    }
+  ],
+  "prospective_rows_at_amendment": 0,
+  "recovery": {
+    "command": "bin/mlb_market_strong_agreement_historical_recovery_v4.sh YYYY-MM-DD",
+    "eligible_live_failures": [
+      "HTTP_ERROR",
+      "INVALID_RESPONSE",
+      "TRANSPORT_ERROR"
+    ],
+    "historical_target": "immutable first live request_started_at_utc",
+    "outcomes_or_observed_returns_consulted": false,
+    "returned_snapshot_must_be_at_or_before_target": true,
+    "row_label": "HISTORICAL_RECOVERY",
+    "successful_response_bookmaker_absence_incomplete_market_or_one_sided_price_is_eligible": false
+  },
+  "scheduler": {
+    "disable_switch": "MLB_AGREEMENT_SEPARATION_CAPTURE_V4_ENABLED=0",
+    "existing_0530_orchestration": true,
+    "new_calendar_schedule_created": false
+  },
+  "study_id": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V4",
+  "supersedes_v3_recommendation_only": "EXPAND_AND_MOVE_EXISTING_LIVE_REQUEST",
+  "unchanged_contract": "model, model threshold, market-strength threshold, agreement indicator, bookmaker set, risk-set admission, exclusions, grading, outcomes, uncertainty, and decision layers"
+}

@@ -1,0 +1,15 @@
+{
+  "actual_cost_authority": "x-requests-last; an unknown charge reserves the full expected request cost",
+  "expected_live_cost_each": 1,
+  "historical_expected_cost_each": 10,
+  "historical_recovery_count_ceiling": 3,
+  "historical_recovery_credit_ceiling": 30,
+  "routine_credit_ceiling": 18,
+  "routine_dates": 18,
+  "routine_dates_inclusive": [
+    "2026-09-10",
+    "2026-09-27"
+  ],
+  "stop_before_request_if_expected_total_would_exceed_ceiling": true,
+  "total_credit_ceiling": 48
+}

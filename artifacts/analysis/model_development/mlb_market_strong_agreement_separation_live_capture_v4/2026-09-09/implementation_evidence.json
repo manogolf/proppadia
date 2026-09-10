@@ -1,0 +1,37 @@
+{
+  "credential_value_read_or_tested": false,
+  "existing_lane_immutability": {
+    "client_path": "backend/mlb/scripts/capture_mlb_pinnacle_main_markets_v1.py",
+    "client_sha256": "b756db8e0b9f6575aa80cd708a9d31efcd8d46b9e0437b8c88679e480d3c5aa1",
+    "expected_client_sha256": "b756db8e0b9f6575aa80cd708a9d31efcd8d46b9e0437b8c88679e480d3c5aa1",
+    "expected_hook_sha256": "1892f92af6cfa1766857b4bac35b9723f789760848807367a27b79269c754be3",
+    "hook_path": "bin/mlb_full_game_totals_daily_hook.sh",
+    "hook_sha256": "1892f92af6cfa1766857b4bac35b9723f789760848807367a27b79269c754be3",
+    "unchanged": true
+  },
+  "installed_wrapper": {
+    "detached_syntax_present": true,
+    "disable_switch_present": true,
+    "existing_main_market_line": 1254,
+    "moneyline_lifecycle_line": 1086,
+    "new_shadow_line": 1097,
+    "order_is_commit_then_shadow_then_existing_main_market": true,
+    "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+    "sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b"
+  },
+  "launchagent": {
+    "has_0530_local": true,
+    "new_calendar_schedule": false,
+    "path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist",
+    "sha256": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8"
+  },
+  "new_files": {
+    "client": "backend/mlb/scripts/capture_mlb_market_strong_agreement_live_v4.py",
+    "client_sha256": "79d664eef17c91df0a2169a9cc01c3329ba23004f2feb6fb3a5ea92122ceb4d8",
+    "live_hook": "bin/mlb_market_strong_agreement_live_capture_v4.sh",
+    "live_hook_sha256": "35bb003ba50a5c2cb0ce48373803e25125f76e233261e26caa1ff1657c5f667c",
+    "manual_recovery_hook": "bin/mlb_market_strong_agreement_historical_recovery_v4.sh",
+    "manual_recovery_hook_sha256": "4c08459de52a657ac207123c637e5729cf3d5344a3f8aaa6bc584b1b0f9cd10b"
+  },
+  "odds_api_requests_during_implementation": 0
+}

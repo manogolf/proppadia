@@ -1,0 +1,13 @@
+{
+  "freeze_sha256": "3c0b541c276f20ccabebcf343b3a03ff17c157ca0474fe6ef0efca279e1890ce",
+  "installed_wrapper_sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
+  "network_requests": 0,
+  "next_eligible_slate": "2026-09-10",
+  "prospective_rows_at_freeze": {
+    "bookmaker_prices": 0,
+    "outcomes": 0,
+    "predictions": 0,
+    "risk_set": 0
+  },
+  "status": "FROZEN_AND_SCHEDULED"
+}
