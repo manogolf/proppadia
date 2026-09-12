@@ -91,10 +91,96 @@ class Hits05FullBoardShadowV1Test(unittest.TestCase):
             "outcome_status": "CANONICAL_RESOLVED_OFFICIAL_PLAYER_STAT",
             "grading_timestamp_utc": "2099-01-03T12:00:00Z", "grading_source": "FIXTURE",
             "grading_source_sha256": "a" * 64,
+            "grading_source_state": {
+                "contract": "FIXTURE",
+                "completeness_path": "/temporary/first.csv",
+                "completeness_sha256": "b" * 64,
+                "actual_identity_count": 1,
+                "actual_identity_state_sha256": "c" * 64,
+            },
+            "actual_sample_rows": 1,
+            "actual_distinct_values": 1,
+            "completeness_file_modification_time_utc": "2099-01-03T11:59:00Z",
         }
         self.assertEqual(ledger.append_outcome(connection, identity, payload), "APPENDED_NEW")
+        stored_before = connection.execute(
+            "SELECT outcome_payload_json,outcome_payload_sha256 FROM hits05_full_board_outcomes "
+            "WHERE canonical_identity=?", (identity,)
+        ).fetchone()
+        stored_payload = json.loads(stored_before[0])
+        self.assertEqual(
+            stored_payload["outcome_idempotency_contract_version"],
+            ledger.OUTCOME_IDEMPOTENCY_CONTRACT_V2,
+        )
+        self.assertIsNone(
+            stored_payload["timestamp_provenance"]["authoritative_source_observation_time_utc"]
+        )
+        self.assertEqual(
+            stored_payload["timestamp_provenance"]["first_grading_time_utc"],
+            payload["grading_timestamp_utc"],
+        )
+        self.assertEqual(
+            stored_payload["timestamp_provenance"]["completeness_file_modification_time_utc"],
+            payload["completeness_file_modification_time_utc"],
+        )
+        self.assertEqual(
+            ledger.append_outcome(connection, identity, stored_payload),
+            "IDEMPOTENT_SUBSTANTIVE_MATCH",
+        )
+        metadata_only = {
+            **payload,
+            "grading_timestamp_utc": "2099-01-04T12:00:00Z",
+            "grading_source_sha256": "d" * 64,
+            "grading_source_state": {
+                **payload["grading_source_state"],
+                "completeness_path": "/temporary/rewritten.csv",
+                "completeness_sha256": "e" * 64,
+            },
+            "completeness_file_modification_time_utc": "2099-01-04T11:59:00Z",
+            "verification_timestamp_utc": "2099-01-04T12:00:00Z",
+        }
+        self.assertEqual(
+            ledger.append_outcome(connection, identity, metadata_only),
+            "METADATA_ONLY_DIFFERENCE",
+        )
         changed = {**payload, "actual_hits": 0}
-        self.assertEqual(ledger.append_outcome(connection, identity, changed), "EXISTING_OUTCOME_CONFLICT_PRESERVED")
+        self.assertEqual(ledger.append_outcome(connection, identity, changed), "OUTCOME_VALUE_CONFLICT")
+        changed_appearance = {**payload, "appearance_status": "NO_APPEARANCE_UNRESOLVED"}
+        self.assertEqual(
+            ledger.append_outcome(connection, identity, changed_appearance),
+            "APPEARANCE_STATE_CONFLICT",
+        )
+        changed_identity = {**payload, "player_id": 660002}
+        self.assertEqual(ledger.append_outcome(connection, identity, changed_identity), "IDENTITY_CONFLICT")
+        changed_family = {**payload, "proposition_family": "total_bases"}
+        self.assertEqual(ledger.append_outcome(connection, identity, changed_family), "IDENTITY_CONFLICT")
+        changed_source = {
+            **payload,
+            "grading_source_state": {
+                **payload["grading_source_state"],
+                "actual_identity_state_sha256": "f" * 64,
+            },
+        }
+        self.assertEqual(
+            ledger.append_outcome(connection, identity, changed_source),
+            "SOURCE_PROVENANCE_CONFLICT",
+        )
+        unresolved = {**payload, "grading_source_sha256": "", "grading_source_state": {}}
+        self.assertEqual(ledger.append_outcome(connection, identity, unresolved), "UNRESOLVED_CONFLICT")
+        stored_after = connection.execute(
+            "SELECT outcome_payload_json,outcome_payload_sha256 FROM hits05_full_board_outcomes "
+            "WHERE canonical_identity=?", (identity,)
+        ).fetchone()
+        self.assertEqual(stored_before, stored_after)
+        self.assertEqual(
+            connection.execute("SELECT COUNT(*) FROM hits05_full_board_outcomes").fetchone()[0], 1
+        )
+        validated = validate(self.ledger, None)
+        self.assertEqual(validated["status"], "PASS", validated)
+        self.assertEqual(
+            validated["outcome_contract_versions"],
+            {ledger.OUTCOME_IDEMPOTENCY_CONTRACT_V2: 1},
+        )
 
     def test_market_attaches_after_prediction_without_changing_population(self) -> None:
         self._score_fixture()

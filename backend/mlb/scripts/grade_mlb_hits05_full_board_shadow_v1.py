@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -42,10 +43,13 @@ def grade_date(slate_date: str, ledger_path: Path, grading_timestamp: str | None
         ]),
     }
     source_hash = ledger.payload_hash(source_state)
-    timestamp = grading_timestamp or datetime.fromtimestamp(
+    completeness_file_mtime = datetime.fromtimestamp(
         completeness.stat().st_mtime, tz=timezone.utc
     ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    verification_timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    timestamp = grading_timestamp or verification_timestamp
     added = existing = conflicts = resolved = no_appearance = 0
+    comparison_counts: Counter[str] = Counter()
     for prediction in predictions:
         key = (int(prediction["game_id"]), int(prediction["player_id"]), "hits")
         actual = actuals.get(key) or {}
@@ -78,11 +82,16 @@ def grade_date(slate_date: str, ledger_path: Path, grading_timestamp: str | None
             "grading_source_state": source_state,
             "actual_sample_rows": int(actual.get("sample_rows") or 0),
             "actual_distinct_values": distinct,
+            # Operational filesystem provenance is retained but excluded from
+            # substantive outcome equality.  It is not an authoritative
+            # source-observation timestamp.
+            "completeness_file_modification_time_utc": completeness_file_mtime,
         }
         action = ledger.append_outcome(connection, prediction["canonical_identity"], payload)
+        comparison_counts[action] += 1
         if action == "APPENDED_NEW":
             added += 1
-        elif action == "EXISTING_IMMUTABLE":
+        elif action in {"IDEMPOTENT_SUBSTANTIVE_MATCH", "METADATA_ONLY_DIFFERENCE"}:
             existing += 1
         else:
             conflicts += 1
@@ -93,9 +102,19 @@ def grade_date(slate_date: str, ledger_path: Path, grading_timestamp: str | None
         "outcomes_added": added,
         "outcomes_existing": existing,
         "outcome_conflicts": conflicts,
+        "substantive_idempotent_matches": existing,
+        "metadata_only_differences": comparison_counts["METADATA_ONLY_DIFFERENCE"],
+        "comparison_classification_counts": {
+            classification: comparison_counts[classification]
+            for classification in ledger.OUTCOME_COMPARISON_CLASSIFICATIONS
+        },
+        "outcome_idempotency_contract_version": ledger.OUTCOME_IDEMPOTENCY_CONTRACT_V2,
         "appearance_resolved": resolved,
         "no_appearance_unresolved": no_appearance,
         "grading_source_sha256": source_hash,
+        "verification_timestamp_utc": verification_timestamp,
+        "authoritative_source_observation_time_utc": None,
+        "completeness_file_modification_time_utc": completeness_file_mtime,
         "ledger_counts": ledger.counts(connection),
     }
 

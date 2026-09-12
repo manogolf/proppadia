@@ -19,6 +19,17 @@ MODEL_ID = "MLB_HITS_SEMANTIC_V1_2e7377b2cdcb"
 MODEL_HASH = "2e7377b2cdcb836b110e4b1a1a6acccff3afc78f7f82652e3b490048087ddadf"
 TARGET_LINE = 0.5
 EXPERIMENT_START_DATE = "2026-08-24"
+OUTCOME_IDEMPOTENCY_CONTRACT_LEGACY = "HITS05_FULL_BOARD_OUTCOME_PAYLOAD_LEGACY_V1"
+OUTCOME_IDEMPOTENCY_CONTRACT_V2 = "HITS05_SUBSTANTIVE_OUTCOME_IDEMPOTENCY_V2"
+OUTCOME_COMPARISON_CLASSIFICATIONS = (
+    "IDEMPOTENT_SUBSTANTIVE_MATCH",
+    "OUTCOME_VALUE_CONFLICT",
+    "APPEARANCE_STATE_CONFLICT",
+    "IDENTITY_CONFLICT",
+    "SOURCE_PROVENANCE_CONFLICT",
+    "METADATA_ONLY_DIFFERENCE",
+    "UNRESOLVED_CONFLICT",
+)
 
 OUTCOME_FORBIDDEN = {
     "actual_hits",
@@ -49,6 +60,111 @@ def canonical_json(payload: Any) -> str:
 
 def payload_hash(payload: Any) -> str:
     return hashlib.sha256(canonical_json(payload).encode()).hexdigest()
+
+
+def outcome_contract_version(payload: dict[str, Any]) -> str:
+    return str(payload.get("outcome_idempotency_contract_version") or OUTCOME_IDEMPOTENCY_CONTRACT_LEGACY)
+
+
+def stable_outcome_source_state(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return outcome-defining source state without operational artifact metadata.
+
+    Legacy production rows carry a broad grading-source hash that also covers a
+    completeness path/hash.  When their embedded source state is available, use
+    only its authoritative contract and stable actual-value identity.  Minimal
+    legacy fixtures without embedded state retain their original source hash as
+    the compatibility fallback.
+    """
+    source_state = payload.get("grading_source_state")
+    if isinstance(source_state, dict) and source_state.get("actual_identity_state_sha256"):
+        return {
+            "source_authority": str(payload.get("grading_source") or ""),
+            "source_contract": str(source_state.get("contract") or payload.get("grading_source") or ""),
+            "actual_identity_count": int(source_state.get("actual_identity_count") or 0),
+            "actual_identity_state_sha256": str(source_state["actual_identity_state_sha256"]),
+            "actual_sample_rows": int(payload.get("actual_sample_rows") or 0),
+            "actual_distinct_values": int(payload.get("actual_distinct_values") or 0),
+        }
+    legacy_hash = str(payload.get("grading_source_sha256") or "")
+    if not legacy_hash:
+        raise ValueError("OUTCOME_SOURCE_STATE_UNRESOLVED")
+    return {
+        "source_authority": str(payload.get("grading_source") or ""),
+        "legacy_source_state_sha256": legacy_hash,
+    }
+
+
+def stable_outcome_source_state_hash(payload: dict[str, Any]) -> str:
+    return payload_hash(stable_outcome_source_state(payload))
+
+
+def substantive_outcome_payload(identity: str, payload: dict[str, Any]) -> dict[str, Any]:
+    required = ("slate_date", "game_id", "player_id", "appearance_status", "outcome_status", "grading_source")
+    if any(payload.get(field) is None for field in required):
+        raise ValueError("SUBSTANTIVE_OUTCOME_FIELD_MISSING")
+    actual_hits = payload.get("actual_hits")
+    return {
+        "contract_version": OUTCOME_IDEMPOTENCY_CONTRACT_V2,
+        "canonical_identity": str(identity),
+        "slate_date": str(payload["slate_date"]),
+        "game_id": int(payload["game_id"]),
+        "player_id": int(payload["player_id"]),
+        "proposition_family": str(payload.get("proposition_family") or "hits"),
+        "target_line": float(payload.get("target_line", TARGET_LINE)),
+        "actual_hits": None if actual_hits is None else float(actual_hits),
+        "appearance_status": str(payload["appearance_status"]),
+        "outcome_status": str(payload["outcome_status"]),
+        "grading_source": str(payload["grading_source"]),
+        "stable_source_state_sha256": stable_outcome_source_state_hash(payload),
+    }
+
+
+def substantive_outcome_hash(identity: str, payload: dict[str, Any]) -> str:
+    return payload_hash(substantive_outcome_payload(identity, payload))
+
+
+def prepare_versioned_outcome_payload(identity: str, payload: dict[str, Any]) -> dict[str, Any]:
+    prepared = dict(payload)
+    prepared["outcome_idempotency_contract_version"] = OUTCOME_IDEMPOTENCY_CONTRACT_V2
+    prepared["proposition_family"] = "hits"
+    prepared["target_line"] = float(TARGET_LINE)
+    prepared["stable_source_state_sha256"] = stable_outcome_source_state_hash(prepared)
+    prepared["substantive_outcome_sha256"] = substantive_outcome_hash(identity, prepared)
+    prepared.setdefault("timestamp_provenance", {
+        "authoritative_source_observation_time_utc": prepared.get("authoritative_source_observation_time_utc"),
+        "first_grading_time_utc": prepared.get("grading_timestamp_utc"),
+        "later_verification_time_utc": None,
+        "completeness_file_modification_time_utc": prepared.get("completeness_file_modification_time_utc"),
+    })
+    return prepared
+
+
+def classify_existing_outcome(
+    identity: str,
+    existing_payload: dict[str, Any],
+    candidate_payload: dict[str, Any],
+) -> str:
+    try:
+        existing = substantive_outcome_payload(identity, existing_payload)
+        candidate = substantive_outcome_payload(identity, candidate_payload)
+    except (KeyError, TypeError, ValueError):
+        return "UNRESOLVED_CONFLICT"
+    identity_fields = ("canonical_identity", "slate_date", "game_id", "player_id", "proposition_family", "target_line")
+    if any(existing[field] != candidate[field] for field in identity_fields):
+        return "IDENTITY_CONFLICT"
+    if existing["actual_hits"] != candidate["actual_hits"]:
+        return "OUTCOME_VALUE_CONFLICT"
+    if (existing["appearance_status"], existing["outcome_status"]) != (
+        candidate["appearance_status"], candidate["outcome_status"]
+    ):
+        return "APPEARANCE_STATE_CONFLICT"
+    if (existing["grading_source"], existing["stable_source_state_sha256"]) != (
+        candidate["grading_source"], candidate["stable_source_state_sha256"]
+    ):
+        return "SOURCE_PROVENANCE_CONFLICT"
+    if payload_hash(existing_payload) == payload_hash(candidate_payload):
+        return "IDEMPOTENT_SUBSTANTIVE_MATCH"
+    return "METADATA_ONLY_DIFFERENCE"
 
 
 def connect_ledger(path: Path) -> sqlite3.Connection:
@@ -369,10 +485,19 @@ def append_outcome(connection: sqlite3.Connection, identity: str, payload: dict[
         raise ValueError("PREDICTION_IDENTITY_NOT_FOUND")
     digest = payload_hash(payload)
     existing = connection.execute(
-        "SELECT outcome_payload_sha256 FROM hits05_full_board_outcomes WHERE canonical_identity=?", (identity,)
+        "SELECT outcome_payload_json,outcome_payload_sha256 FROM hits05_full_board_outcomes WHERE canonical_identity=?",
+        (identity,),
     ).fetchone()
     if existing:
-        return "EXISTING_IMMUTABLE" if existing[0] == digest else "EXISTING_OUTCOME_CONFLICT_PRESERVED"
+        if existing[1] == digest:
+            return "IDEMPOTENT_SUBSTANTIVE_MATCH"
+        try:
+            existing_payload = json.loads(existing[0])
+        except (TypeError, json.JSONDecodeError):
+            return "UNRESOLVED_CONFLICT"
+        return classify_existing_outcome(identity, existing_payload, payload)
+    payload = prepare_versioned_outcome_payload(identity, payload)
+    digest = payload_hash(payload)
     connection.execute(
         """INSERT INTO hits05_full_board_outcomes
         (canonical_identity,slate_date,game_id,player_id,actual_hits,appearance_status,outcome_status,

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,40 @@ def validate(ledger_path: Path, manifest_path: Path | None = None) -> dict[str, 
             contaminated.append(row[0])
     check("prediction_and_context_payload_hashes", not hash_failures, hash_failures)
     check("no_market_or_outcome_prediction_contamination", not contaminated, contaminated)
+    outcome_hash_failures = []
+    outcome_contract_failures = []
+    outcome_timestamp_failures = []
+    outcome_contract_versions: Counter[str] = Counter()
+    for row in connection.execute(
+        "SELECT canonical_identity,grading_timestamp_utc,outcome_payload_json,outcome_payload_sha256 "
+        "FROM hits05_full_board_outcomes"
+    ):
+        identity, grading_timestamp, encoded, recorded_hash = row
+        try:
+            payload = json.loads(encoded)
+            version = ledger.outcome_contract_version(payload)
+            outcome_contract_versions[version] += 1
+            if ledger.payload_hash(payload) != recorded_hash:
+                outcome_hash_failures.append(identity)
+            if payload.get("grading_timestamp_utc") != grading_timestamp:
+                outcome_timestamp_failures.append(identity)
+            if version == ledger.OUTCOME_IDEMPOTENCY_CONTRACT_V2:
+                if (
+                    payload.get("proposition_family") != "hits"
+                    or float(payload.get("target_line", -1)) != ledger.TARGET_LINE
+                    or payload.get("stable_source_state_sha256")
+                    != ledger.stable_outcome_source_state_hash(payload)
+                    or payload.get("substantive_outcome_sha256")
+                    != ledger.substantive_outcome_hash(identity, payload)
+                ):
+                    outcome_contract_failures.append(identity)
+            elif version != ledger.OUTCOME_IDEMPOTENCY_CONTRACT_LEGACY:
+                outcome_contract_failures.append(identity)
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            outcome_contract_failures.append(identity)
+    check("outcome_payload_hashes_preserved", not outcome_hash_failures, outcome_hash_failures)
+    check("outcome_timestamp_column_payload_consistency", not outcome_timestamp_failures, outcome_timestamp_failures)
+    check("versioned_substantive_outcome_contract", not outcome_contract_failures, outcome_contract_failures)
     market_timing = connection.execute(
         "SELECT observation_identity FROM hits05_full_board_market_observations WHERE observation_timestamp_utc >= scheduled_start_utc"
     ).fetchall()
@@ -84,7 +119,12 @@ def validate(ledger_path: Path, manifest_path: Path | None = None) -> dict[str, 
     scoring_outcomes = connection.execute("SELECT run_tag FROM hits05_full_board_runs WHERE outcomes_accessed<>0").fetchall()
     check("scoring_outcomes_accessed_zero", not scoring_outcomes, [row[0] for row in scoring_outcomes])
     check("experiment_start_frozen", ledger.EXPERIMENT_START_DATE == "2026-08-24", ledger.EXPERIMENT_START_DATE)
-    return {"status": "PASS" if all(row["status"] == "PASS" for row in checks) else "FAIL", "checks": checks, "counts": counts}
+    return {
+        "status": "PASS" if all(row["status"] == "PASS" for row in checks) else "FAIL",
+        "checks": checks,
+        "counts": counts,
+        "outcome_contract_versions": dict(sorted(outcome_contract_versions.items())),
+    }
 
 
 def main() -> int:
