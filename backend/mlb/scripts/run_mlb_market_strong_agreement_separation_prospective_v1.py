@@ -584,17 +584,21 @@ def grade(output: Path, ledger: Path, through_date: str) -> dict[str, int]:
     """
     with pg_connect() as source, source.cursor() as cursor:
         cursor.execute(sql, (MODEL, SNAPSHOT, PROSPECTIVE_START, through_date)); source_rows = cursor.fetchall()
-    authority = {(r[0], int(r[1])): r for r in source_rows}; inserted = 0
+    # pg_connect() has a repository-wide dict_row contract.  Keep grading
+    # keyed to named source fields so outcome-only runs do not depend on a
+    # positional cursor representation.
+    authority = {(str(r["game_date"]), int(r["game_id"])): r for r in source_rows}; inserted = 0
     with sqlite3.connect(ledger) as conn:
         schema(conn)
         for r in candidates.itertuples(index=False):
             outcome = authority.get((r.game_date, int(r.game_id)))
             if not outcome or r.market_strong_side not in ("HOME", "AWAY"): continue
-            home_won = normalize_team(outcome[2]) == normalize_team(conn.execute(
+            home_won = normalize_team(outcome["official_winner"]) == normalize_team(conn.execute(
                 "SELECT home_team FROM risk_set WHERE game_key=?", (r.game_key,)).fetchone()[0])
-            values = {"game_key": r.game_key, "official_winner": outcome[2],
+            values = {"game_key": r.game_key, "official_winner": outcome["official_winner"],
                       "selected_side_win": int(home_won if r.market_strong_side == "HOME" else not home_won),
-                      "outcome_payload_sha256": outcome[3], "grading_timestamp_utc": iso(outcome[4])}
+                      "outcome_payload_sha256": outcome["payload_sha256"],
+                      "grading_timestamp_utc": iso(outcome["grading_timestamp_utc"])}
             values["row_sha256"] = digest(values)
             inserted += immutable_insert(conn, "outcomes", "game_key", values)
         conn.commit()

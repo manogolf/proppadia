@@ -79,7 +79,15 @@ def validate(output: Path, ledger: Path) -> dict[str, object]:
         triggers = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'")}
         outcome_count = conn.execute("SELECT COUNT(*) FROM outcomes").fetchone()[0]
         price_count = conn.execute("SELECT COUNT(*) FROM bookmaker_prices").fetchone()[0]
-    checks["append_only_triggers"] = len(triggers) == 10
+    # The live-capture v4 extension adds its own append-only protections to
+    # this ledger.  Require every frozen base trigger without rejecting those
+    # additional protections.
+    with sqlite3.connect(":memory:") as baseline:
+        study.schema(baseline)
+        required_triggers = {
+            row[0] for row in baseline.execute("SELECT name FROM sqlite_master WHERE type='trigger'")
+        }
+    checks["append_only_triggers"] = required_triggers.issubset(triggers)
     checks["effective_outcome_count_exact"] = summary["effective_outcome_count"] == outcome_count
     checks["bookmaker_cell_count_exact"] = summary["bookmaker_price_cells"] == price_count
     failed = sorted(name for name, passed in checks.items() if not passed)

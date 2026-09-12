@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -30,6 +31,45 @@ def event(home=-180, away=160, include_pinnacle=True):
 
 
 class ProspectiveAgreementSeparationTest(unittest.TestCase):
+    def test_outcome_grade_accepts_dict_rows_and_is_idempotent(self):
+        class Cursor:
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+            def execute(self, *_): return None
+            def fetchall(self):
+                return [{"game_date": "2026-09-11", "game_id": 1,
+                         "official_winner": "Home Club", "payload_sha256": "c"*64,
+                         "grading_timestamp_utc": "2026-09-12T12:00:00Z"}]
+
+        class Connection:
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+            def cursor(self): return Cursor()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp); out, ledger = base/"out", base/"ledger.sqlite3"
+            study.initialize(out, ledger)
+            risk = {
+                "game_key": "MLB|2026-09-11|1", "game_date": "2026-09-11", "game_id": 1,
+                "provider_event_id": "provider-1", "scheduled_start_utc": "2026-09-11T23:00:00Z",
+                "home_team": "Home Club", "away_team": "Away Club",
+                "requested_timestamp_utc": "2026-09-11T12:30:00Z",
+                "returned_snapshot_timestamp_utc": "2026-09-11T12:29:55Z",
+                "reference_book_last_update_utc": "2026-09-11T12:29:00Z",
+                "reference_market_last_update_utc": "2026-09-11T12:29:00Z",
+                "market_strong_side": "HOME", "selected_market_probability": .64,
+                "selected_model_probability": .65, "model_strong_side": "HOME",
+                "agreement_indicator": 1, "risk_state": "MARKET_STRONG_MODEL_AGREES",
+                "risk_set_eligible": 1, "late_season_regime": "LATE_SEASON_SEPTEMBER",
+                "prediction_payload_sha256": "a"*64, "raw_response_sha256": "b"*64,
+            }
+            risk["row_sha256"] = study.digest(risk)
+            with sqlite3.connect(ledger) as conn:
+                study.immutable_insert(conn, "risk_set", "game_key", risk); conn.commit()
+            with patch.object(study, "pg_connect", return_value=Connection()):
+                self.assertEqual(study.grade(out, ledger, "2026-09-11")["inserted_rows"], 1)
+                self.assertEqual(study.grade(out, ledger, "2026-09-11")["inserted_rows"], 0)
+
     def test_freeze_is_fixed_and_excludes_prior_cohort(self):
         freeze = study.freeze_payload("2026-09-09T20:00:00Z")
         self.assertEqual(freeze["prospective_start_game_date"], "2026-09-10")
