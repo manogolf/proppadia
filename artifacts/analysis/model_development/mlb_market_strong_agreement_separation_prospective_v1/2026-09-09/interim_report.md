@@ -4,7 +4,7 @@
 
 This is an interim descriptive report. No post-freeze game has been backfilled, and no decision is made until every frozen evidence gate is met.
 
-Risk-set rows: 30; eligible resolved unique games: 7; agreement/non-agreement: 4/3. Bookmaker cells never change the effective outcome count.
+Risk-set rows: 55; eligible resolved unique games: 15; agreement/non-agreement: 8/7. Bookmaker cells never change the effective outcome count.
 
 Prospective horizon status: ACTIVE_REMAINDER_OF_2026. Late-season evidence is reported separately by frozen calendar regime and is not pooled with the prior 56–20 cohort.
 
