@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import fcntl
 import hashlib
 import json
 import os
@@ -164,6 +165,23 @@ def validate_scorer(config: dict, artifact: dict) -> str:
     return hashlib.sha256(json.dumps(config["feature_columns"], separators=(",", ":")).encode()).hexdigest()
 
 
+def publish_rolling_status(path: Path, payload: dict) -> None:
+    """Serialize publication only; capture and grading retain independent locks."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_name(path.name + ".publish.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        fd, raw = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        temporary = Path(raw)
+        try:
+            with os.fdopen(fd, "w") as handle:
+                handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
 def update_rolling_status(config: dict) -> dict:
     _, predictions = read_csv(config["prediction_ledger"]); _, outcomes = read_csv(config["outcome_ledger"])
     outcome_by_id = {r["canonical_identity"]: r for r in outcomes}
@@ -200,7 +218,5 @@ def update_rolling_status(config: dict) -> dict:
         "concentration": {"player_counts":dict(Counter(r["player_mlb_id"] for r in predictions)),"team_counts":dict(Counter(r["team_mlb_id"] for r in predictions)),"date_counts":dict(Counter(r["game_date"] for r in predictions)),"batting_slot_counts":dict(Counter(r["batting_order"] for r in predictions)),"month_counts":dict(Counter(r["game_date"][:7] for r in predictions))},
         "automatic_replication_decision": "NOT_AUTHORIZED"
     }
-    config["rolling_status"].parent.mkdir(parents=True, exist_ok=True)
-    tmp = config["rolling_status"].with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True)+"\n"); os.replace(tmp, config["rolling_status"])
+    publish_rolling_status(config["rolling_status"], payload)
     return payload
