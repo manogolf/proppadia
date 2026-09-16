@@ -9,7 +9,7 @@
   "blocked_out_of_time_games": 0,
   "book_selected_by_roi": false,
   "bookmaker_cells_do_not_inflate_effective_sample_size": true,
-  "bookmaker_price_cells": 550,
+  "bookmaker_price_cells": 700,
   "classification": "SEPARATION_EVIDENCE_INSUFFICIENT",
   "decision_made": false,
   "effective_outcome_count": 15,
@@ -24,10 +24,10 @@
   },
   "evidence_requirement_met": false,
   "late_season_regime_counts": {
-    "LATE_SEASON_SEPTEMBER": 55
+    "LATE_SEASON_SEPTEMBER": 70
   },
-  "planned_expected_credit_cost": 40,
-  "planned_request_dates": 4,
+  "planned_expected_credit_cost": 50,
+  "planned_request_dates": 5,
   "primary_contrast": {
     "ci_2_5": -1.0,
     "ci_97_5": 0.33333333333333337,
@@ -38,7 +38,7 @@
   "prospective_horizon_status": "ACTIVE_REMAINDER_OF_2026",
   "public_prediction_changes": false,
   "report_status": "INTERIM_DESCRIPTIVE",
-  "risk_rows": 55,
+  "risk_rows": 70,
   "scheduler_changes": false,
   "study_id": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V1",
   "user_access_or_fillability": "UNKNOWN_NOT_ESTABLISHED",
