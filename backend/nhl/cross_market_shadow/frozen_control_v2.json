@@ -1,0 +1,69 @@
+{
+  "classes": [0, 1],
+  "coefficients": {
+    "away_back_to_back": 0.06763921731679158,
+    "diff_days_rest": 0.09066272328220187,
+    "diff_r10_goal_diff_pg": 0.024591622992363907,
+    "diff_std_goal_diff_pg": 0.04492642457681119,
+    "diff_std_shot_diff_pg": 0.3802181415612343,
+    "home_back_to_back": -0.04447873876519075
+  },
+  "control_name": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2",
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "feature_selection": false,
+  "fit_feature_target_sha256": "5066c6952b7cd140c893288ede7c84aa6f0d56ad5d19f79b6f8bc27373aa241d",
+  "fit_membership": "exact original V1 fit identities",
+  "fit_membership_sha256": "79a0faf13c37594fba23549bfcd687800f97843951c59bfa1ec207f2db8653b0",
+  "fit_performed_once": true,
+  "fit_rows": 701,
+  "hyperparameter_search": false,
+  "imputation_medians": {
+    "away_back_to_back": 0.0,
+    "diff_days_rest": 0.0,
+    "diff_r10_goal_diff_pg": 0.0,
+    "diff_std_goal_diff_pg": 0.011745063879210205,
+    "diff_std_shot_diff_pg": -0.10215053763440873,
+    "home_back_to_back": 0.0
+  },
+  "intercept": 0.15637502990915578,
+  "model_configuration": {
+    "C": 1.0,
+    "family": "logistic_regression",
+    "fit_intercept": true,
+    "max_iter": 1000,
+    "penalty": "l2",
+    "random_state": 20260713,
+    "solver": "liblinear",
+    "tol": 0.0001
+  },
+  "standardization_means": {
+    "away_back_to_back": 0.15977175463623394,
+    "diff_days_rest": 0.0884450784593438,
+    "diff_r10_goal_diff_pg": -0.05242001222743019,
+    "diff_std_goal_diff_pg": -0.060410004768159095,
+    "diff_std_shot_diff_pg": -0.1131242019666166,
+    "home_back_to_back": 0.10413694721825963
+  },
+  "standardization_scales": {
+    "away_back_to_back": 0.36639424266313597,
+    "diff_days_rest": 1.092391273727116,
+    "diff_r10_goal_diff_pg": 1.6196103833287672,
+    "diff_std_goal_diff_pg": 1.4657342777844935,
+    "diff_std_shot_diff_pg": 7.0311804665202144,
+    "home_back_to_back": 0.3054381172059588
+  },
+  "threshold_optimization": false,
+  "v2_contract_sha256": "589a5dfdee9d40fc9a6bcebe69d2f72e6c8cfb3614fc9f831fa7214ea353eeb8",
+  "versions": {
+    "numpy": "2.2.5",
+    "pandas": "2.2.3",
+    "scikit_learn": "1.6.1"
+  }
+}

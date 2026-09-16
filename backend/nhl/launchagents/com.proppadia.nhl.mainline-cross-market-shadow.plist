@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.proppadia.nhl.mainline-cross-market-shadow</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/jerrystrain/Projects/proppadia/.venv/bin/python</string>
+    <string>/Users/jerrystrain/Projects/proppadia/backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py</string>
+    <string>--slate-date</string><string>today</string>
+    <string>--phase</string><string>AUTO</string>
+    <string>--env-file</string><string>/Users/jerrystrain/Projects/proppadia/backend/.env</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/jerrystrain/Projects/proppadia</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <key>StartInterval</key><integer>900</integer>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><false/>
+  <key>StandardOutPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/cross_market_shadow/launchagent.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/cross_market_shadow/launchagent.stderr.log</string>
+</dict>
+</plist>

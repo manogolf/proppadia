@@ -1,0 +1,7 @@
+player_id,canonical_name,team_id,team_code,effective_start_date,effective_end_date,evidence_classification,evidence_date,evidence_url,evidence_note
+8478013,Jake Walman,22,EDM,2025-03-07,,TRADE_EFFECTIVE_DATE,2025-03-07,https://www.nhl.com/oilers/news/release-oilers-acquire-walman-from-sharks,Oilers acquisition predates target; provider-listed player maps to EDM schedule side
+8477986,Brandon Montour,55,SEA,2024-07-01,,ROSTER_TIMING,2024-07-01,https://www.nhl.com/kraken/news/seattle-kraken-agree-to-terms-with-defenseman-brandon-montour-on-seven-year-contract,Seven-year Seattle contract predates every target; fixes erroneous prior-team lineage
+8485366,Matthew Schaefer,2,NYI,2025-10-06,,ROSTER_TIMING,2025-10-06,https://www.nhl.com/islanders/news/islanders-announce-23-man-roster-for-2025-26,Official opening roster predates first target
+8483890,Braeden Bowman,54,VGK,2025-03-02,,DETERMINISTIC_HOME_AWAY,2025-03-02,https://www.nhl.com/goldenknights/news/vegas-golden-knights-sign-forward-braeden-bowman-to-six-year-contract-extension,Official VGK history identifies March 2 2025 VGK entry-level signing; provider listing maps to only VGK schedule side
+8484305,Zach Metsa,7,BUF,2025-10-16,,ROSTER_TIMING,2025-10-16,https://www.nhl.com/sabres/news/buffalo-sabres-practice-zach-metsa-ryan-johnson-amerks,Official Buffalo first NHL promotion predates target
+8482804,Ty Murchison,4,PHI,2025-12-07,,ROSTER_TIMING,2025-12-07,https://www.nhl.com/flyers/news/rav4-things-flyers-vs-avalanche,Official Flyers recall predates target

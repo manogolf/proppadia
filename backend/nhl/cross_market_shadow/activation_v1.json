@@ -1,0 +1,11 @@
+{
+  "activation_status": "ARMED_PENDING_ELIGIBLE_EVENT",
+  "capture_enabled": true,
+  "control_name": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2",
+  "mode": "SHADOW_RESEARCH_ONLY",
+  "preseason_canary_required": true,
+  "preseason_canary_status": "PENDING_NO_ELIGIBLE_EVENT",
+  "puck_line_control_name": "NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1",
+  "regular_season_evaluation_start": "2026-09-29",
+  "season": 2026
+}

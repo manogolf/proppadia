@@ -1,0 +1,2 @@
+normalized_alias,canonical_player_id,canonical_name,status,evidence
+yegor chinakhov,8482475,E. Chinakhov,ACCEPTED,"Canonical nhl.players row 8482475 stores first_name=Yegor and last_name=Chinakhov; season-2025 game-scoped identity rows use display name E. Chinakhov. Reviewed 2026-09-15; exact spelling/display variant, no fuzzy match."

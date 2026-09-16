@@ -13,6 +13,7 @@ import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -46,6 +47,22 @@ TEAM_ALIASES = {
     "utahhockeyclub": "UTA", "utahmammoth": "UTA", "vancouvercanucks": "VAN",
     "vegasgoldenknights": "VGK", "washingtoncapitals": "WSH", "winnipegjets": "WPG",
 }
+
+
+@lru_cache(maxsize=1)
+def declared_player_aliases() -> dict[str, int]:
+    """Return reviewed, exact provider-name variants keyed by normalized text."""
+    path = Path(__file__).resolve().parents[1] / "data" / "player_identity_aliases.csv"
+    if not path.is_file():
+        return {}
+    frame = pd.read_csv(path, dtype={"canonical_player_id": "Int64"})
+    required = {"normalized_alias", "canonical_player_id", "status"}
+    if not required.issubset(frame.columns):
+        raise ValueError(f"invalid player alias registry: missing {sorted(required - set(frame.columns))}")
+    accepted = frame.loc[frame.status.eq("ACCEPTED") & frame.canonical_player_id.notna()].copy()
+    if accepted.normalized_alias.duplicated().any():
+        raise ValueError("invalid player alias registry: duplicate normalized alias")
+    return {normalize_name(row.normalized_alias): int(row.canonical_player_id) for row in accepted.itertuples(index=False)}
 
 
 def sha256_file(path: Path) -> str:
@@ -279,6 +296,14 @@ def bind_player(source_name: Any, game_id: int | None, candidates_by_game: dict[
     matches = frame[frame.normalized_name.eq(norm_name)]
     if len(matches) == 1:
         return _player_result(matches.iloc[0], "CANONICAL_CORROBORATED", "EXACT_NORMALIZED_NAME_WITHIN_BOUND_GAME", "HIGH", f"normalized_name={norm_name};game_id={game_id}")
+    declared_id = declared_player_aliases().get(norm_name)
+    if declared_id is not None:
+        declared_matches = frame[pd.to_numeric(frame.player_id, errors="coerce").eq(declared_id)]
+        if len(declared_matches) == 1:
+            return _player_result(
+                declared_matches.iloc[0], "ALIAS_RESOLVED", "DECLARED_EXACT_PROVIDER_NAME_VARIANT_WITHIN_BOUND_GAME",
+                "HIGH", f"normalized_alias={norm_name};canonical_player_id={declared_id};game_id={game_id}",
+            )
     alias = player_initial_last(source_name_text) if len(norm_name.split()) > 1 else norm_name
     alias_matches = frame[frame.initial_last.eq(alias)] if alias else frame.iloc[0:0]
     if len(alias_matches) == 1:

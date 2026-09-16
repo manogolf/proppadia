@@ -25,7 +25,7 @@ def resolve_date(v):
  return date.fromisoformat(v).isoformat()
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0)
+ ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","shadow_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0)
  a=ap.parse_args(); slate=resolve_date(a.slate_date); season=int(slate[:4]) if int(slate[5:7])>=7 else int(slate[:4])-1
  if season not in {2025,2026}: raise SystemExit(f"WRONG_CANONICAL_SEASON_FOR_SEASON_2026_ORCHESTRATION:{season}")
  outroot=a.output_root.resolve(); lockdir=outroot/"locks";lockdir.mkdir(parents=True,exist_ok=True);lockpath=lockdir/f"{slate}.lock"
@@ -34,7 +34,7 @@ def main():
  except BlockingIOError: print("MORNING_ORCHESTRATION_ALREADY_RUNNING",file=sys.stderr);return 73
  if a.hold_lock_seconds:time.sleep(a.hold_lock_seconds)
  run_id=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")+"_"+uuid.uuid4().hex[:8];run=outroot/slate/"runs"/run_id;run.mkdir(parents=True,exist_ok=False)
- status={"schema_version":"nhl_morning_health_v1","slate_date":slate,"canonical_season":season,"orchestration_run_id":run_id,"start_timestamp_utc":utc(),"end_timestamp_utc":None,"overall_status":"RUNNING","valid_empty_slate":False,"schedule_game_count":None,"canonical_game_count":None,"team_history_readiness":"NOT_STARTED","player_history_readiness":"NOT_STARTED","mainline_prerequisite_readiness":"NOT_STARTED","sog_prerequisite_readiness":"NOT_STARTED","points_prerequisite_readiness":"NOT_STARTED","saves_prerequisite_readiness":"NOT_STARTED","optional_context_readiness":"NOT_RUN_MORNING_BOUNDARY","blocking_failure":None,"recovery_command":f"{PY} {Path(__file__).resolve()} --slate-date {slate} --env-file {a.env_file.resolve()}","downstream":{"MAINLINE_MORNING_PREREQUISITES_READY":False,"SOG_MORNING_PREREQUISITES_READY":False,"POINTS_MORNING_PREREQUISITES_READY":False,"SAVES_MORNING_PREREQUISITES_READY":False,"MIDDAY_MARKET_CAPTURE_ALLOWED":False,"FINAL_PREGAME_CAPTURE_ALLOWED":False,"GRADING_ALLOWED":True},"stages":[]}
+ status={"schema_version":"nhl_morning_health_v1","slate_date":slate,"canonical_season":season,"orchestration_run_id":run_id,"start_timestamp_utc":utc(),"end_timestamp_utc":None,"overall_status":"RUNNING","valid_empty_slate":False,"schedule_game_count":None,"canonical_game_count":None,"team_history_readiness":"NOT_STARTED","player_history_readiness":"NOT_STARTED","mainline_prerequisite_readiness":"NOT_STARTED","sog_prerequisite_readiness":"NOT_STARTED","points_prerequisite_readiness":"NOT_STARTED","saves_prerequisite_readiness":"NOT_STARTED","cross_market_shadow_readiness":"NOT_STARTED","optional_context_readiness":"NOT_RUN_MORNING_BOUNDARY","blocking_failure":None,"recovery_command":f"{PY} {Path(__file__).resolve()} --slate-date {slate} --env-file {a.env_file.resolve()}","downstream":{"MAINLINE_MORNING_PREREQUISITES_READY":False,"SOG_MORNING_PREREQUISITES_READY":False,"POINTS_MORNING_PREREQUISITES_READY":False,"SAVES_MORNING_PREREQUISITES_READY":False,"MIDDAY_MARKET_CAPTURE_ALLOWED":False,"FINAL_PREGAME_CAPTURE_ALLOWED":False,"GRADING_ALLOWED":True},"stages":[]}
  healthpath=run/"morning_health.json";atomic_json(healthpath,status)
  env={"HOME":os.environ.get("HOME",str(Path.home())),"PATH":"/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin","PYTHONUNBUFFERED":"1"}
  if a.env_file.exists():load_env(a.env_file,env)
@@ -52,6 +52,17 @@ def main():
   except Exception as e:
    rec.update(end_time=utc(),state="FAILED_BLOCKING",exit_status=1,failure_class=str(e),downstream_allowed=False);atomic_json(healthpath,status);raise
   return rec
+ def warn_stage(sid,command,depends=(),fixture_result=None):
+  rec={"stage_id":sid,"command":" ".join(map(str,command)),"start_time":utc(),"end_time":None,"state":"RUNNING","exit_status":None,"input_identities":list(depends),"output_identities":[],"row_counts":{},"warnings":[],"failure_class":None,"downstream_allowed":True};status["stages"].append(rec);atomic_json(healthpath,status)
+  try:
+   if fixture_result:raise RuntimeError(fixture_result)
+   if not a.fixture_scenario and not a.dry_run:
+    p=subprocess.run(list(map(str,command)),cwd=ROOT,env=env,text=True,capture_output=True);(run/f"{sid}.stdout.log").write_text(p.stdout);(run/f"{sid}.stderr.log").write_text(p.stderr)
+    if p.returncode:raise RuntimeError(f"exit={p.returncode}")
+   rec.update(end_time=utc(),state="PASS" if not a.dry_run else "PASS_WITH_BOUNDED_LIMITS",exit_status=0)
+  except Exception as e:
+   rec.update(end_time=utc(),state="FAILED_WARN_ONLY",exit_status=1,failure_class=str(e),warnings=["PLAYER_PROP_EXECUTION_UNCHANGED"])
+  atomic_json(healthpath,status);return rec
  try:
   scenario=a.fixture_scenario
   stage("01_db_and_environment",["psql",env.get("SUPABASE_DB_URL",env.get("DATABASE_URL","MISSING")),"-v","ON_ERROR_STOP=1","-Atqc","SELECT 1"],fixture_result="FAIL_DB_UNAVAILABLE" if scenario=="db_failure" else None)
@@ -83,6 +94,8 @@ def main():
    stage("10_points_prerequisites",["internal","canonical spine plus strict-prior Points feature export"],["07_player_history_readiness"]);status["points_prerequisite_readiness"]="READY_FOR_IMMUTABLE_SNAPSHOT"
    stage("11_saves_prerequisites",["internal","canonical spine plus complete strict-prior goalie feature and roster identity snapshot"],["07_player_history_readiness"]);status["saves_prerequisite_readiness"]="READY_FOR_IMMUTABLE_SNAPSHOT"
    status["downstream"].update(MAINLINE_MORNING_PREREQUISITES_READY=True,SOG_MORNING_PREREQUISITES_READY=True,POINTS_MORNING_PREREQUISITES_READY=True,SAVES_MORNING_PREREQUISITES_READY=True,MIDDAY_MARKET_CAPTURE_ALLOWED=True,FINAL_PREGAME_CAPTURE_ALLOWED=True)
+  shadow=warn_stage("12_cross_market_shadow_status",[PY,ROOT/"backend/nhl/scripts/run_nhl_cross_market_shadow_warn_only.py","--slate-date",slate],["04_canonical_slate_export"],"SIMULATED_CROSS_MARKET_SHADOW_FAILURE" if scenario=="shadow_failure" else None)
+  status["cross_market_shadow_readiness"]="WARN_ONLY_FAILURE" if shadow["state"]=="FAILED_WARN_ONLY" else "READY_NOT_ACTIVATED"
   if scenario=="interrupted":raise KeyboardInterrupt
   if scenario=="finalization_failure":raise RuntimeError("FINAL_HEALTH_PACKAGING_FAILURE")
   status.update(overall_status="VALID_EMPTY_SLATE" if status["valid_empty_slate"] else ("DRY_RUN" if a.dry_run else "READY"),end_timestamp_utc=utc())

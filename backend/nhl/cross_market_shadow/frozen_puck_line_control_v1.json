@@ -1,0 +1,106 @@
+{
+  "class_encoding": {
+    "AWAY_BY_2_PLUS": 0,
+    "HOME_BY_2_PLUS": 2,
+    "ONE_GOAL_GAME": 1
+  },
+  "classes": [
+    "AWAY_BY_2_PLUS",
+    "ONE_GOAL_GAME",
+    "HOME_BY_2_PLUS"
+  ],
+  "coefficients_by_class": {
+    "AWAY_BY_2_PLUS": {
+      "away_back_to_back": -0.025612618503155875,
+      "diff_days_rest": -0.07912789453118244,
+      "diff_r10_goal_diff_pg": 0.10825127300859261,
+      "diff_std_goal_diff_pg": -0.08524607885731297,
+      "diff_std_shot_diff_pg": -0.3415816492576518,
+      "home_back_to_back": -0.0484551820837233
+    },
+    "HOME_BY_2_PLUS": {
+      "away_back_to_back": 0.012082271328124417,
+      "diff_days_rest": 0.1006118102965201,
+      "diff_r10_goal_diff_pg": -0.08193316162116032,
+      "diff_std_goal_diff_pg": 0.14057221785381355,
+      "diff_std_shot_diff_pg": 0.3400899814530668,
+      "home_back_to_back": 0.058127105330198825
+    },
+    "ONE_GOAL_GAME": {
+      "away_back_to_back": 0.013530347175031229,
+      "diff_days_rest": -0.021483915765337362,
+      "diff_r10_goal_diff_pg": -0.026318111387431897,
+      "diff_std_goal_diff_pg": -0.05532613899650044,
+      "diff_std_shot_diff_pg": 0.0014916678045850086,
+      "home_back_to_back": -0.009671923246474739
+    }
+  },
+  "configuration": {
+    "C": 1.0,
+    "feature_selection": false,
+    "hyperparameter_search": false,
+    "loss": "true_multinomial",
+    "max_iter": 1000,
+    "penalty": "l2",
+    "random_state": 20260713,
+    "solver": "lbfgs"
+  },
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "fit_class_counts": {
+    "AWAY_BY_2_PLUS": 195,
+    "HOME_BY_2_PLUS": 221,
+    "ONE_GOAL_GAME": 285
+  },
+  "fit_class_probabilities": {
+    "AWAY_BY_2_PLUS": 0.2781740370898716,
+    "HOME_BY_2_PLUS": 0.3152639087018545,
+    "ONE_GOAL_GAME": 0.4065620542082739
+  },
+  "fit_feature_target_sha256": "4e4f897daf3ad5510c1c49c40daf0d09d21776a5806ae3aaef72f5d9f09cc676",
+  "fit_game_ids_sha256": "67f7e6d0fb82158fe9d3c794dadd9d22d85500ee1e48f3e51eb9c017a7c0fca9",
+  "fit_rows": 701,
+  "imputation_medians": {
+    "away_back_to_back": 0.0,
+    "diff_days_rest": 0.0,
+    "diff_r10_goal_diff_pg": 0.0,
+    "diff_std_goal_diff_pg": 0.011745063879210201,
+    "diff_std_shot_diff_pg": -0.1021505376344086,
+    "home_back_to_back": 0.0
+  },
+  "intercepts_by_class": {
+    "AWAY_BY_2_PLUS": -0.18428803765603358,
+    "HOME_BY_2_PLUS": -0.06775842588310914,
+    "ONE_GOAL_GAME": 0.25204646353914406
+  },
+  "model_family": "multinomial_logistic_regression",
+  "model_name": "NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1",
+  "model_sha256": "2b72a59436ace35435b86c2dd1fa36afd3ee65fa73542db5093dd92571121d9a",
+  "standardization_means": {
+    "away_back_to_back": 0.15977175463623394,
+    "diff_days_rest": 0.0884450784593438,
+    "diff_r10_goal_diff_pg": -0.05242001222743028,
+    "diff_std_goal_diff_pg": -0.060410004768159165,
+    "diff_std_shot_diff_pg": -0.11312420196661704,
+    "home_back_to_back": 0.10413694721825963
+  },
+  "standardization_scales": {
+    "away_back_to_back": 0.36639424266313597,
+    "diff_days_rest": 1.092391273727116,
+    "diff_r10_goal_diff_pg": 1.6196103833287672,
+    "diff_std_goal_diff_pg": 1.4657342777844933,
+    "diff_std_shot_diff_pg": 7.031180466520213,
+    "home_back_to_back": 0.3054381172059588
+  },
+  "versions": {
+    "numpy": "2.2.5",
+    "pandas": "2.2.3",
+    "scikit_learn": "1.6.1"
+  }
+}
