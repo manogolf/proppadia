@@ -1,0 +1,340 @@
+{
+  "contract": "BVP_MANUAL_SAME_DAY_ACTUAL_TIME_V1",
+  "reconciliation_date": "2026-09-18",
+  "verified_at_utc": "2026-09-18T17:27:40.406793+00:00",
+  "scheduled": {
+    "run_tag": "local_prewarm_20260918T103934Z",
+    "classification": "FAILED_TRANSIENT_NETWORK_BEFORE_ACQUISITION",
+    "wrapper_rc": 2,
+    "original_snapshot": "NOT_RECONSTRUCTED"
+  },
+  "manual": {
+    "run_tag": "manual_bvp_20260918T171242Z_29198",
+    "log_path": "artifacts/ops/manual_bvp_20260918T171242Z_29198.log",
+    "log_sha256": "ef2c3794e0e8426cf937b0fad26e77b989b068d8caca1de094cb0fa22147af17",
+    "start_utc": "2026-09-18T17:12:42Z",
+    "end_utc": "2026-09-18T17:13:44Z",
+    "start_pt": "2026-09-18T10:12:42-07:00",
+    "end_pt": "2026-09-18T10:13:44-07:00",
+    "duration_seconds": 62,
+    "wrapper_rc": 0,
+    "done": true,
+    "acquisition_status": "MANUAL_SAME_DAY_BVP_ACQUISITION_SUCCESS",
+    "downstream_status": "SKIPPED_NO_QUALIFIED_MODEL",
+    "impact_status": "SKIPPED_NO_QUALIFIED_MODEL",
+    "both_locks_released": true,
+    "initial_schedule_attempts": 1,
+    "total_retry_delay_sec": 0,
+    "retry_recovery_exercised": false
+  },
+  "certification": {
+    "classification": "MANUAL_SAME_DAY_BVP_ACQUISITION_PARTIALLY_CERTIFIED_WITH_ACTUAL_TIMESTAMP",
+    "package_status": "YELLOW_BVP_IDENTITY_DEFECT_NO_ZERO_ROW_CLAIM",
+    "physical_rows": 1937,
+    "stored_game_ids": 14,
+    "distinct_batters": 149,
+    "pitcher_count": null,
+    "pitcher_count_status": "NOT_RECONSTRUCTABLE_FROM_RETAINED_FEATURES_OR_LOG",
+    "feature_set_tag": "v1",
+    "model_tag": "bvp_pvb_refresh_v1",
+    "computed_at_min_utc": "2026-09-18T17:13:42.094683Z",
+    "computed_at_max_utc": "2026-09-18T17:13:42.094683Z",
+    "false_0330_timestamps": 0,
+    "row_stream_sha256": "87de42893507c219325e239b03d0f43ab9b2bf43c3f5444b480bfc1fab5f2775",
+    "row_stream_contract": "Select prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,lineup_slot,is_probable_sp,computed_at; order by prop_type,player_id,game_id,feature_set_tag; Python json.dumps(rows,sort_keys=True,separators=(',',':'),default=str), UTF-8, SHA256.",
+    "row_checks": {
+      "current_slate_identity_matches": {
+        "batters": 142,
+        "games": 13,
+        "minimum_prestart_margin": "5:26:17.905317",
+        "rows": 1846
+      },
+      "duplicate_canonical_keys": 0,
+      "feature_keys": [
+        "bvp_ab_prior",
+        "bvp_at_bats",
+        "bvp_avg_prior_sm",
+        "bvp_bb_prior",
+        "bvp_bb_rate_prior_sm",
+        "bvp_hits",
+        "bvp_hits_prior",
+        "bvp_home_runs",
+        "bvp_hr_prior",
+        "bvp_pa_prior",
+        "bvp_plate_appearances",
+        "bvp_rbi",
+        "bvp_so_prior",
+        "bvp_so_rate_prior_sm",
+        "bvp_strikeouts",
+        "bvp_tb_per_ab_prior_sm",
+        "bvp_tb_prior",
+        "bvp_total_bases",
+        "bvp_walks"
+      ],
+      "incomplete_prop_families": 0,
+      "malformed_required_features": 0,
+      "missing_batter_identity": 0,
+      "null_identities": 0,
+      "player_game_groups": 149,
+      "prop_types": [
+        "doubles",
+        "hits",
+        "hits_runs_rbis",
+        "home_runs",
+        "rbis",
+        "runs_rbis",
+        "runs_scored",
+        "singles",
+        "stolen_bases",
+        "strikeouts_batting",
+        "total_bases",
+        "triples",
+        "walks"
+      ],
+      "rows": 1937
+    },
+    "scheduled_games": 15,
+    "current_slate_games_with_correctly_keyed_rows": 13,
+    "fully_certified_source_pairings": false,
+    "poststart_dependency_status": "Correctly keyed 1846 rows written before every current-slate start; 91 stored under a prior-started game, so full identity-bound no-poststart certification fails. No today-outcome/score/winner/market fields are collector inputs. Strict source as-of cannot be proved without retained raw responses.",
+    "storage_contract": "MUTABLE_OPERATIONAL_UPSERT_NOT_APPEND_ONLY",
+    "canonical_key": [
+      "prop_type",
+      "player_id",
+      "game_id",
+      "feature_set_tag"
+    ],
+    "conflicting_prior_rows_status": "UNKNOWN_NO_PRE_MANUAL_KEY_SNAPSHOT_OR_HISTORY; acquisition upsert can replace keys, game_date is not part of PK; reconciliation changes zero rows.",
+    "malformed_or_duplicate_current_keys": 0
+  },
+  "identity": {
+    "classification": "IDENTITY_MAPPING_DEFECT",
+    "mapped": 1,
+    "unmapped": 14,
+    "unmapped_meaning": "No local date+teams match; original StatsAPI gamePk retained. Normal fallback, not failed acquisition.",
+    "defective_remap": {
+      "matchup": "Minnesota Twins at Los Angeles Angels",
+      "expected_game_id": 823977,
+      "retained_game_id": 823978,
+      "retained_canonical_slate_date": "2026-09-17",
+      "retained_game_start_utc": "2026-09-18T01:38:00Z",
+      "current_game_start_utc": "2026-09-19T01:38:00Z",
+      "misbound_rows": 91,
+      "batters": 7
+    },
+    "local_candidates": [
+      {
+        "away_team_id": 111,
+        "game_date": "2026-09-18",
+        "game_id": 822845,
+        "game_time": "2026-09-18 00:05:00",
+        "home_team_id": 140,
+        "starting_pitcher_id_away": null,
+        "starting_pitcher_id_home": null
+      },
+      {
+        "away_team_id": 142,
+        "game_date": "2026-09-18",
+        "game_id": 823978,
+        "game_time": "2026-09-18 01:38:00",
+        "home_team_id": 108,
+        "starting_pitcher_id_away": null,
+        "starting_pitcher_id_home": null
+      }
+    ],
+    "db_starter_rows": 1,
+    "db_starter_rows_meaning": "One game_info row found by already-remapped ID; not one pitcher or one filled starter.",
+    "db_games_filled": 0,
+    "db_starter_query_errors": 0,
+    "downstream_join": "1846 rows match current immutable slate; all 1937 cannot be certified exact-game joinable. prop_workflow permits latest-date fallback, which does not establish correct pitcher/game provenance.",
+    "smallest_proposed_correction": "Separately authorize mapper repair: require authoritative official slate date, exact game/start identity and unambiguous doubleheader-aware matching, otherwise preserve StatsAPI gamePk. Add previous-night UTC-date and repeated-series fixtures. Do not rekey/update retained rows under this authority."
+  },
+  "exclusions": {
+    "empty_bvp_rows": 243,
+    "meaning": "Two team-side exclusions because opposing probable pitcher is absent after DB fallback; not two acquisition exceptions or necessarily two games.",
+    "legitimate_zero_history_status": "Plausible normal collector exclusion, but individual empty source responses were not retained and cannot all be certified genuine zero-history.",
+    "skip_no_opp_sp": 2,
+    "exact_excluded_games_and_pitchers": null,
+    "exact_identity_status": "UNRECOVERABLE_FROM_SUMMARY_AND_FEATURES; original manual schedule not retained; do not substitute later starter data.",
+    "zero_correctly_keyed_games": [
+      {
+        "game_id": 824547,
+        "matchup": "Detroit Tigers at Chicago White Sox",
+        "reason": "No stored rows; exact attribution to either starter exclusion not provable."
+      },
+      {
+        "game_id": 823977,
+        "matchup": "Minnesota Twins at Los Angeles Angels",
+        "reason": "Seven batter families misbound to prior-night ID, not zero acquisition."
+      }
+    ],
+    "recent_successful_scheduled_acquisitions": [
+      {
+        "date": "2026-09-11",
+        "games": 15,
+        "rows": 2808,
+        "bvp_fetches": 378,
+        "empty_bvp_rows": 162,
+        "mapped": 0,
+        "unmapped": 15,
+        "starter_skips": 3,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      },
+      {
+        "date": "2026-09-12",
+        "games": 15,
+        "rows": 2444,
+        "bvp_fetches": 392,
+        "empty_bvp_rows": 204,
+        "mapped": 0,
+        "unmapped": 15,
+        "starter_skips": 2,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      },
+      {
+        "date": "2026-09-13",
+        "games": 15,
+        "rows": 2587,
+        "bvp_fetches": 392,
+        "empty_bvp_rows": 193,
+        "mapped": 0,
+        "unmapped": 15,
+        "starter_skips": 2,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      },
+      {
+        "date": "2026-09-14",
+        "games": 10,
+        "rows": 1963,
+        "bvp_fetches": 280,
+        "empty_bvp_rows": 129,
+        "mapped": 0,
+        "unmapped": 10,
+        "starter_skips": 0,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      },
+      {
+        "date": "2026-09-15",
+        "games": 15,
+        "rows": 3081,
+        "bvp_fetches": 407,
+        "empty_bvp_rows": 170,
+        "mapped": 0,
+        "unmapped": 15,
+        "starter_skips": 1,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      },
+      {
+        "date": "2026-09-16",
+        "games": 15,
+        "rows": 2977,
+        "bvp_fetches": 421,
+        "empty_bvp_rows": 193,
+        "mapped": 0,
+        "unmapped": 15,
+        "starter_skips": 0,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      },
+      {
+        "date": "2026-09-17",
+        "games": 9,
+        "rows": 2080,
+        "bvp_fetches": 238,
+        "empty_bvp_rows": 78,
+        "mapped": 0,
+        "unmapped": 9,
+        "starter_skips": 1,
+        "bvp_fetch_errors": 0,
+        "db_starter_rows": 0,
+        "db_games_filled": 0
+      }
+    ]
+  },
+  "validation": {
+    "offline_tests": 36,
+    "offline_test_result": "PASS",
+    "compilation": "PASS",
+    "shell_syntax": "PASS",
+    "diff_check": "PASS",
+    "documentation_manifest_consistency": "PASS",
+    "protected_sqlite_quick_checks": "PASS_ALL_FOUR_DATABASES; read-only mode, quick_check=ok, current WAL files zero bytes, main-file SHA256 unchanged.",
+    "live_api_requests_during_reconciliation": 0,
+    "bvp_runs_during_reconciliation": 0,
+    "database_writes_during_reconciliation": 0,
+    "protected_moneyline_snapshot": {
+      "predictions": {
+        "row_stream_md5": "520488d4a008add6e74272aa3bf8f4a2",
+        "rows": 600
+      },
+      "outcomes": {
+        "row_stream_md5": "378df93e6ec70ce160a87ff84c6351ad",
+        "rows": 585
+      }
+    },
+    "protected_file_sha256_before": {
+      "/Users/jerrystrain/Projects/proppadia/backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3": "9b7d8e057c483fe3f2f31a481893604a288babba35b118cccd9ddda1f791b6ec",
+      "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh": "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/append_only_request_ledger.csv": "ad8835c0926be51ab9f881e20685d0de2cb1f85a50c187ee61295449f2286cbb",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/append_only_retry_decision_ledger.csv": "1bd5f321358f5d87842a657a31c56b44539582b0ccdd72b357ffc40cfa1376d0",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/blocked_date_agreement_coefficients.csv": "77790f07e1104cf31c22e6461319691009af3993a5b4db4786c76e811af670d8",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/blocked_date_score_differences.csv": "3f01e503c4f9912114b56f30571069e7af01b6698c4d0771385e630d3e2d83c9",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/bookmaker_economics.csv": "d239ef2fc90df453de0fd75f0f9e3c23a0c629175867707aea8f66c4f4210c20",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/bookmaker_incremental_economics.csv": "76e3f6e7540a08c53476acfffe61be2544d7307b5fb6d3907e16fd906e17ef41",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/bookmaker_price_ledger.csv": "be254980af009273a4413deae59a3a1abdc9f967a89ecf13e5af105e19fe3e86",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/bookmaker_price_state_coverage.csv": "c40ecb007b0a2f4cd22325e7b4f8721da62369d9af5312167b3df84d8aed7dc4",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/implementation_report.md": "6a51746838e47732f2b161f27fc0991fd6fd18dcfeacb0a7964334a9ec12b339",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/interim_report.md": "54c8beaff14db1ba53740e3aa4ec6648cd50ac4a8b3606243e78bc44bc141dfe",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/late_season_regime_metrics.csv": "f87a5080cfee56d403d37112f50860f3d775e8e339a33b7b72addff20c85a765",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/manual_runbook.md": "6d19dadb001548dc79769330a1fba09ed39a9dd8ae781b78cc5c2055f962d872",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/outcome_and_probability_metrics.csv": "4e24f6ec0e49418d732da670791f1de6993bc59f7b48d59ae9305b0b739c8bb7",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/outcome_ledger.csv": "c3b85174ce6b68bfe7b370afe135d789644a7baef8f94402393b0a9c96a8c356",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/pre_outcome_freeze.json": "941c31da8e66099d0203385212a653cee6b01dde4ae1479f4378c1774525e346",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/prospective_date_request_plan.csv": "4765851b23a9ce8138c6e83b54d066c5b21d39136b7b2ba9d0590be767e1499a",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/prospective_risk_set_ledger.csv": "aeeb63a00027cfb6da67850025076f4cafea53ef76ba35ded116e3c5fa2b6a98",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/schema.sql": "86f12f0fa9e27cd0275393e0b150b2c632bcad3b0c2fffa216bc153cd1ed5a4a",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/sha256_manifest.txt": "c0bc4a0097bac0a863cbe6afbad7a9ffb61b93da769c8a41b21ce9cc67578f70",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/summary.json": "d0bb7bca99d3806b8b8cea7af089b0ea6532f95e649600ee28c8e07bf7726aad",
+      "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/validation_summary.json": "48464b14dd7d8800ea3166448ff9340839f3beda6818da315b8230aa757545a2",
+      "artifacts/ops/manual_bvp_20260918T171242Z_29198.log": "ef2c3794e0e8426cf937b0fad26e77b989b068d8caca1de094cb0fa22147af17",
+      "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "adce97f1fc2491bc40aeee005ba271a83c09672381d64d53570dd4c4cfdf5fba",
+      "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "59d721b750b692b3fd3d6d0a0a183ebd15c021049d92946618e00b64f474b63e",
+      "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "87e2c80efa9210bcfa7fc18a3a1edf48141f5db72d9d75824cf6dd8774cc4611",
+      "backend/mlb/scripts/refresh_mlb_bvp_pvb.py": "01472f9ea4f03cd26ed8ea95661d2578a9ce57c7677fc45e6e350ac0e7438866"
+    },
+    "protected_after_comparison": "PASS_ALL_28_FILE_SHA256_AND_MONEYLINE_TABLE_ROW_STREAMS_UNCHANGED",
+    "bvp_row_stream_unchanged": true,
+    "final_verified_at_utc": "2026-09-18T17:32:12.682193+00:00",
+    "next_1100_window_at_utc": "2026-09-18T18:00:00Z",
+    "next_1100_status_at_audit": "PENDING_LATER_WINDOW; manual completed 46m16s earlier, no active relevant process at 17:28 UTC."
+  },
+  "governance": {
+    "updated_generated_status_artifacts": [
+      "artifacts/analysis/mlb/mlb_daily_ops_brief_2026-09-18.md",
+      "artifacts/analysis/mlb/mlb_daily_ops_brief_latest.md",
+      "artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json",
+      "artifacts/analysis/mlb/daily/2026-09-18/INDEX.md"
+    ],
+    "generated_artifact_policy": "These existing ignored mutable reports were updated locally but not newly tracked. A later scheduled renderer may replace their supplements; this durable reconciliation artifact and canonical diagnostic remain authoritative for the manual run. No production report generator was modified.",
+    "document": "docs/MLB BvP Acquisition Retry and Late-Admission Contract V1.md",
+    "document_sha256": "c95372e8350c5f4c45b0842f3cf3970bba43f9a49c0173850c3c8665f25934ff",
+    "retry_commit": "d9950e1fe3075c8719f496b176dc807443d3e80c",
+    "retry_source_unchanged": true,
+    "prior_implementation_manifest": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_initial_schedule_retry_manifest.json",
+    "prior_implementation_manifest_preserved": true,
+    "future_authorization": "Specific user-approved current-PT-date BvP-only acquisition; no standing/automatic authorization. Both locks, pregame/date/process/window and remap-identity preflight required. Refuse a known mismapping; no full prewarm/pipeline or predictive application.",
+    "rollback": "With approval, revert only this documentation/status reconciliation commit; preserve all database rows, failed/manual logs and retry commit. No acquisition/data rollback is performed.",
+    "push": false
+  }
+}
