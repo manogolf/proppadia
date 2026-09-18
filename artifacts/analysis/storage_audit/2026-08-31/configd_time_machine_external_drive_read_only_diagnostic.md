@@ -461,3 +461,169 @@ specific `dd` path remained unavailable without root device access.
 
 Testing stopped after this phase. No Time Machine workload, cable/port/hub change,
 repair, erase, reformat, device alteration, commit, or push was performed.
+
+## September 18, 2026 addendum — BvP prewarm delayed dispatch and wake-time DNS failure
+
+Investigation date: 2026-09-18. Evidence cutoff: 09:39 PT (16:39 UTC); retained event window queried: 03:15–05:40 PT (10:15–12:40 UTC). PT is America/Los_Angeles, UTC−07:00. This addendum is the sole diagnostic write authorized by the investigation's deliverable section. No network request, database query, acquisition, recovery, service signal, configuration change, commit or push was performed. Private network addresses, hardware addresses, resolver addresses and DHCP identifiers are omitted. Existing unrelated worktree changes were preserved.
+
+### Decisions and direct answers
+
+- Network: `SLEEP_WAKE_NETWORK_READINESS_RACE`.
+- Recovery: `BVP_RECOVERY_CONTRACT_UNCLEAR` for evidence-grade admission of a late capture. Operational collection may still be useful, but is not an original-03:30 replay and is not authorized by this investigation.
+- Dispatch delay: the Mac was in actual system sleep at 03:30. The missed calendar event dispatched in a subsequent Ethernet/network-triggered dark wake, before en0/DHCP/DNS initialization completed. This is not explained by waiting for either application lock.
+- Acquisition failed genuinely, rather than reaching a governed no-qualified-model skip. Three fast DNS failures exhausted the existing 1.5-second and 3-second waits. en0/DNS returned approximately two seconds after wrapper termination.
+- Smallest prospective correction: narrowly extend and instrument the existing initial-schedule DNS/transport retry budget, retaining bounded failure, locks and acquisition-before-write ordering. Do not introduce whole-wrapper launchd retries or change wake times on this evidence alone. No correction was implemented.
+
+### Launch, power and network timeline
+
+Times below are on September 18; UTC column is the corresponding date and time. Application log timestamps have whole-second precision; unified-log timestamps retain microseconds. A wake-summary timestamp is not the beginning of the wake transition.
+
+| PT | UTC | Retained event and interpretation |
+|---|---|---|
+| 03:23:09 | 10:23:09Z | Maintenance dark wake from Deep Idle, rtc/Maintenance. |
+| 03:23:54 | 10:23:54Z | Actual system sleep, reason `Maintenance Sleep`, TCP keepalive active. This sleep spans 03:30. |
+| 03:30:00 expected | 10:30:00Z | BvP StartCalendarInterval due; no application dispatch at this time. Calendar triggers do not wake the Mac. |
+| 03:39:34.282673 | 10:39:34.282673Z | launchd: `xpcproxy spawned with pid 20135`. Earliest retained dispatch/process timestamp. |
+| 03:39:34.286380 | 10:39:34.286380Z | Kernel Ethernet route resolution on en0 fails with err 50; private destination redacted. |
+| 03:39:34.304386 | 10:39:34.304386Z | powerd updates wake-start timestamp. Its logging order does not imply the process ran before the underlying wake began. |
+| 03:39:34.463295 | 10:39:34.463295Z | launchd confirms installed BvP wrapper spawned because an XPC event. |
+| 03:39:34 | 10:39:34Z | Wrapper acquires both `mlb-bvp-prewarm` and `mlb-pipeline`, records START and `local_prewarm_20260918T103934Z`; PID 20135, PPID 1. |
+| 03:39:34.515330 | 10:39:34.515330Z | Aquantia Ethernet en0: wake reason 15, `TCP Keep Alive Timeout`. |
+| 03:39:34.634790–.635150 | 10:39:34.634790–.635150Z | configd: en0 link INACTIVE, link changed at wake, DHCP removes address and records network changed. |
+| 03:39:34.651590 | 10:39:34.651590Z | configd removes IPv4 en0/DNS/proxy configuration. |
+| 03:39:34.652893–.672260 | 10:39:34.652893–.672260Z | mDNSResponder/Network.framework: `[65: No route to host]`, failed connection and cancellation. |
+| 03:39:34.670402 | 10:39:34.670402Z | Resolver has zero nameservers; subsequently no DNS service is available for multiple questions. |
+| 03:39:34.836335–.837426 | 10:39:34.836335–.837426Z | Python PID 20168, first StatsAPI A/AAAA lookup: null DNS service and no answer; 1.091 ms from A start to last stop. |
+| 03:39:36.414238–.414825 | 10:39:36.414238–.414825Z | Second same-name A/AAAA lookup, same failure; 0.587 ms. |
+| 03:39:36.983608 | 10:39:36.983608Z | powerd dark-wake summary: Deep Idle, enet/SMC/lan-10gb. pmset rounds this summary to 03:39:36, after dispatch began. |
+| 03:39:39.566008–.567097 | 10:39:39.566008–.567097Z | Third same-name A/AAAA lookup, same failure; 1.089 ms. |
+| 03:39:39 | 10:39:39Z | Acquisition fails; wrapper end records rc 2, acquisition FAILED, downstream/impact NOT_STARTED. Both locks released. No successful DONE marker. |
+| 03:39:39.654330 | 10:39:39.654330Z | launchd service becomes inactive; child removal logged at .654399. |
+| 03:39:41.629550–.632783 | 10:39:41.629550–.632783Z | configd link-active transition and en0 ACTIVE. |
+| 03:39:41.633241–.645271 | 10:39:41.633241–.645271Z | DHCP INIT/REBOOT, router ARP detection, response, lease identified. Positive local reachability/lease-validation evidence, not proof of a new DHCP lease. |
+| 03:39:41.658897–.686748 | 10:39:41.658897–.686748Z | IPv4/DNS/DHCP published successfully; en0 route-bearing configuration returns, followed by an en0-scoped Do53 service with two nameservers. |
+| 03:39:41.710380 | 10:39:41.710380Z | Unrelated outbound connection's path becomes Satisfied on en0, IPv4/DNS. First retained usable-route evidence; no literal historical default-route table snapshot exists. |
+| 03:39:41.751821 | 10:39:41.751821Z | Positive DNS A answer. Resolver usability restored; a cached answer cannot alone prove a fresh upstream DNS exchange. |
+| 03:39:41.778315–.810909 | 10:39:41.778315–.810909Z | Unrelated internet connection receives SYN/ACK, connects TCP, and reports ready after TLS. Positive external connectivity, without disclosing destination identifiers. |
+| 03:39:42.667772; 03:39:43.317882 | 10:39:42.667772Z; 10:39:43.317882Z | DHCP BOUND and subsequent bound processing/republishing. |
+| 04:43:58; 04:59:13; 05:00:19 | 11:43:58Z; 11:59:13Z; 12:00:19Z | Maintenance sleep, maintenance dark wake, maintenance sleep. Recovery at 03:39 does not establish uninterrupted later health. |
+| 05:15:47; 05:16:47 | 12:15:47Z; 12:16:47Z | SleepService dark wake followed by Back-to-Sleep. |
+| 05:25:32; 05:26:17 | 12:25:32Z; 12:26:17Z | Maintenance dark wake followed by maintenance sleep. |
+| 05:26:19 | 12:26:19Z | Retained powerd wake-request record identifies UserWake scheduled for 05:27. This is historical evidence, not projection from today's settings. |
+| 05:27:00; 05:27:03; 05:27:33 | 12:27:00Z; 12:27:03Z; 12:27:33Z | Display ON, full Wake with rtc/HIDActivity, display OFF. Scheduled 05:27 wake participated. HID wording alone does not establish human action. |
+| 05:30:03 | 12:30:03Z | Natural daily job acquires daily/pipeline locks and starts Moneyline lifecycle; run `local_daily_20260918T123003Z`. The main refresh START banner occurs later, after this prerequisite. |
+| 05:30:03.413569–.414482 | 12:30:03.413569–.414482Z | Daily Python PID 20871 resolves the same hostname hash that failed during BvP; positive A and AAAA results. |
+| 05:34:00.664362 | 12:34:00.664362Z | Retained original daily immutable prediction timestamp. |
+| 05:34:02 | 12:34:02Z | Successful Moneyline lifecycle, with 15 games discovered/predictions written in original run; proves StatsAPI access by this point. Exact first HTTP response-completion timestamp is not retained. |
+| 05:34:02–05:34:19 | 12:34:02–12:34:19Z | Roster refresh succeeds on attempt 1/4, all 30 teams, 840 roster rows upserted. |
+| 05:34:19 | 12:34:19Z | Daily explicitly skips BvP fallback. No further BvP attempt in the inspected 03:15–05:40 window. |
+
+Timing separation: expected calendar to first process spawn **574.282673 seconds**; first spawn to first Python DNS request **0.553662 seconds**; first-to-third DNS start **4.729673 seconds**; first spawn to service inactive **5.371657 seconds**. These are distinct from the individual ~1 ms resolution failures and from the ~7.4-second dispatch-to-network-readiness interval. Exact initial hardware wake onset is not independently timestamped before launchd; the driver's reason and powerd records establish the same wake episode. Both locks were obtained in the START second, without a retained lock wait.
+
+Current state inspected read-only: agent `com.proppadia.mlb.bvp.prewarm.daily` is loaded, not running, runs=1, last exit=2; installed plist is `/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist`, calendar Hour=3/Minute=30, RunAtLoad=false, no KeepAlive or StartInterval retry. Program is `/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh`; working directory is the repository; stdout/stderr are `artifacts/ops/mlb_bvp_prewarm_daily.out.log` and `.err.log`. Local launchd.plist documentation describes missed calendar events coalescing on wake, not waking the system themselves.
+
+Current pmset reports AC `sleep=0`, `displaysleep=0`, `powernap=1`, `tcpkeepalive=1`, `womp=1`, `standby=0`, `disksleep=0`, and daily wakepoweron 05:27. Current sleep=0 does not prevent explicit/manual sleep and is not historical proof the machine remained awake. One-time events shown by the current schedule are later than this failure, not causes of it. Retained logs show an mDNS maintenance-wake assertion near 03:39:34 and powerd AC-wake linger. No retained human-activity/keypress evidence near 03:39 was found in the focused power records; the affirmative hardware wake reason is network-related. Small clock offsets near wake cannot explain nine minutes; later timed records include multi-second corrections, so microsecond precision denotes recorded event times, not a claim of absolute clock accuracy. Why the Mac initially entered system sleep before this window is not established by the maintenance-sleep records.
+
+### Exact application error and retry/storage semantics
+
+The terminal exception chain, scoped to today's structured prewarm invocation, contains:
+
+```text
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x109dddb10>: Failed to resolve 'statsapi.mlb.com' ([Errno 8] nodename nor servname provided, or not known)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='statsapi.mlb.com', port=443): Max retries exceeded with url: /api/v1/schedule?sportId=1&date=2026-09-18&hydrate=probablePitcher (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x109dddb10>: Failed to resolve 'statsapi.mlb.com' ([Errno 8] nodename nor servname provided, or not known)"))
+make: *** [mlb-bvp-pvb-refresh] Error 1
+[2026-09-18T10:39:39Z] ERROR BVP_ACQUISITION_STATUS=FAILED rc=2
+[2026-09-18T10:39:39Z] BVP_PREWARM_RUN_END run_tag=local_prewarm_20260918T103934Z MLB_DATE_ET=2026-09-18 wrapper_rc=2 acquisition_status=FAILED downstream_status=NOT_STARTED impact_status=NOT_STARTED
+```
+
+The first two retry logs have the same gaierror text and URL, with connection objects `0x109dcde90` and `0x109dcfe90` respectively; next-attempt labels 2/3 and 3/3, waits 1.5 and 3.0 seconds. The OS resolver evidence supplies the exact three lookup times above. This is not evidence of authoritative upstream NXDOMAIN, a 20-second resolver timeout, or a browser-only failure: DNS services were absent while the interface was inactive. Multiple mDNS questions, unrelated network activity and kernel route failures were affected; both A and AAAA requests failed. Full historical IPv4/IPv6 route tables and an ARP/DHCP packet capture were not available.
+
+Acquisition path: installed wrapper → `make mlb-bvp-pvb-refresh` → `backend/mlb/scripts/refresh_mlb_bvp_pvb.py`. `_fetch_json` already implements **three total application attempts**, 20-second requests timeout, and 1.5/3-second waits; it catches `requests.RequestException` (including ConnectionError, Timeout and HTTPError). The phrase “Max retries exceeded” in urllib3 is not four wrapper attempts. DNS errors are retried, but each failed immediately because no resolver was available. HTTP/schema failures should not be normalized into harmless readiness skips.
+
+The schedule fetch is the first operation in `_build_rows_for_date`, before local-game mapping, starter fallback, roster/BvP acquisition or `_upsert_rows`. Therefore this failed invocation produced no BvP data or database writes; no durable acquisition/paid-attempt claim is used by this path. Data writes normally occur after the date's rows are assembled. Acquisition exceptions can be distinguished from post-acquisition failures here because the wrapper records stage status. Existing nonzero failure was correct; the no-qualified-model exit-0 correction did not apply because downstream stages were never reached.
+
+Later daily runs **can** invoke the same target through `MLB_DAILY_BVP_FALLBACK_ENABLED=1`, but the installed default is 0 and today's 05:34:19 and 08:33:52 logs explicitly skipped it. There is no automatic launchd retry. This explains the missing date without claiming later MLB collection failed. The prior daily review reported zero September 18 BvP rows; no new database query was made in this investigation. Subsequent retained daily DONE/lock releases were 06:06:11 PT and 09:04:39 PT.
+
+### Comparison with earlier en0 incidents
+
+| Earlier signature | September 18 evidence |
+|---|---|
+| Same en0 Ethernet path | Present: Aquantia en0 driver wake/link messages. |
+| System-level No route to host | Present in mDNSResponder/Network.framework during link/address withdrawal. |
+| Multiple DNS questions and A/AAAA failures | Present; absent DNS service affects more than the BvP client. |
+| Repeated router ARP failure despite continuous awake operation | Not found in the focused retained network window; affirmative router-detection response on reactivation. September 18 actually slept, unlike the established earlier awake/display-off failures. |
+| configd missed check-ins/stall/watchdog panic | Not found in the focused window; configd promptly removes and republishes network state. August 31's watchdog panic is not reproduced. |
+| DHCP/ARP involvement | Present, but observed as wake-time INIT/REBOOT, lease/router validation and successful BOUND, not proven renewal/expiration failure. |
+| Persistent failure requiring a later stir | Not reproduced: recovery occurred during the 03:39 dark wake, long before 05:27. |
+| RTL9210B/Time Machine causal association | Unavailable in this focused diagnosis; no attribution made. Earlier concurrent storage errors were not proven causal. |
+
+The established September 1–2 incidents recovered after en0/router failures; September 3's clean active-monitor observation had traffic/promiscuity/restart confounders and was not a natural-idle control. Shared interface and No-route wording do not establish a shared root cause. This addendum does not replace the earlier incident classifications.
+
+### Recovery validity and lineage
+
+Existing BvP feature-lineage authority consulted: `artifacts/analysis/mlb/feature_lineage/bvp_data_production_alignment_audit.md` and `bvp_lineage_recovery_window_dry_run_summary.md`. The acquisition reads mutable probable starters, active rosters and career vsPlayer statistics, including optional current database starter references. The endpoint has no implemented 03:30 as-of cutoff; fields named `*_prior` are not proof of timestamp-frozen replayability. No complete immutable 03:30 BvP input set was retained by the failed schedule request.
+
+At this morning's cutoff the retained daily evidence discovers 15 games; the retained early Pinnacle raw response places its earliest event at 15:41 PT (22:41 UTC). No retained evidence indicates a started September 18 game by the cutoff. Market commence times are not substituted for official state, and no live official-state check was performed. Later collection can therefore plausibly be pregame at its **actual** acquisition time, but cannot be admitted as observations made at 03:30. Actual captured rows cannot be predicted reliably from 15 games: starter availability, active hitters, empty vsPlayer statistics and skips determine the count.
+
+The existing target writes a mutable operational feature table, `mlb.prop_features_precomputed`, keyed by `(prop_type, player_id, game_id, feature_set_tag)`. ON CONFLICT merges features and replaces model_tag/computed_at; this is not an append-only historical capture ledger. There is no existing missing-only/per-game-start gate in this target. A late invocation could change current input state, and must not retroactively alter any frozen prediction, risk classification, outcome or original lineage. Existing daily lineage health passing and compact BvP payload coverage do not prove a fresh September 18 BvP acquisition.
+
+Required late label, if separately approved: `LATE_PREGAME_RECOVERY_NOT_0330_REPLAY`, a distinct actual-time run identity, exact acquisition/observation times, source hashes, explicit admitted/skipped game population and individual pre-start checks. Such data could support subsequently authorized operational features or separately admitted late evidence, not the existing immutable morning ledgers automatically. Partial not-yet-started recovery must enumerate exclusions rather than claim a full original population. No governed late-admission/locking/missing-only entry point proving these requirements was found; hence `BVP_RECOVERY_CONTRACT_UNCLEAR`, not a claim that recovery is already valid.
+
+No recovery command is recommended as contract-valid yet. The existing `make mlb-bvp-pvb-refresh MLB_BVP_DATE=2026-09-18` is an acquisition/upsert target, **not** a safeguarded evidence-grade recovery command; its `--dry-run` still makes network requests. The installed full prewarm wrapper is also unsuitable for BvP-only recovery because it proceeds into prediction/market-context work after acquisition. Any later collection requires separate network and write authorization, review of late admission, and existing lock coordination before execution. Keeping the missed date is safer than silently backdating or repopulating original evidence.
+
+### Prospective resilience options — proposals only
+
+| Option | Failure addressed; duplicate/late/failure risk | Locks/storage and observation semantics | Recommendation |
+|---|---|---|---|
+| 1. No change | Preserves visible missing date; no duplicate or concealed acquisition failure. Does not prevent next wake-readiness race. | No mutation; preserves gap and original schedule. | Safe default pending approval. |
+| 2. Extend existing bounded initial-request retry | Short absent-resolver/link transition; repeated public schedule reads are not paid market requests. Persistent failure still nonzero; preserve exception/attempt/recovery warnings. | Hold existing locks; no write before assembled acquisition. Record actual delayed observation rather than claim 03:30. | **Preferred smallest correction.** Restrict to initial schedule DNS/transport failure, not arbitrary downstream/HTTP/schema faults. |
+| 3. Short readiness gate | Detect inactive en0/missing route/resolver before request. Local readiness cannot prove gateway/internet health. False-ready or false-block is possible. | Existing locks; explicit timeout/failure, no fabricated rows. Adds macOS coupling and actual-time delay. | Optional, less minimal than fixing retry budget. |
+| 4. launchd retry | Re-enters after calendar failure, but can repeat successful portions and paid downstream context calls if wrapper fails later. Risks hiding partial successes. | Whole-wrapper restart is not a per-phase durable claim; mutable upserts and late observation remain. | Do not enable generic KeepAlive retry. Requires durable phase guards first. |
+| 5. Later BvP-only window | Repairs a missed date operationally; late/post-start and duplicate risks require explicit contracts. | Acquire existing locks; missing-only guards, game-start exclusions and separate late provenance required; no rewrite of immutable evidence. | Defer: larger policy/scheduler change. |
+| 6. Power-wake reconciliation | Could provide wake lead time before 03:30, but changes sleep intent and existing timing test; does not address arbitrary network loss. | Does not itself govern acquisition/append-only behavior; changes overnight operation, not formulas. | Do not change power policy from this incident alone. |
+| 7. Missing-only later daily fallback | Uses later natural dispatch; default fallback currently reruns unconditionally when enabled, not missing-only. Duplicate/upsert/post-start risks remain. | Existing pipeline lock helps serialize, but needs durable completion/eligibility guards and late lineage before admission. | Do not simply enable current fallback. Consider only after late contract is defined. |
+
+Required tests/rollback per option:
+
+1. No-change: validate continued visibility of missing acquisition and no stale stderr; rollback not applicable.
+2. Retry: deterministic no-network fixtures for readiness returning after ~7.4 seconds, persistent DNS failure, transport timeout, nonretryable HTTP/schema failure, interruption and zero premature writes; assert attempts, deadline, locks, explicit recovered warning and nonzero exhaustion. Proposed example: same three initial-schedule attempts with 5/10-second waits and a hard monotonic 90-second total deadline (20-second request timeout is not a total-run bound); no implementation or tuning experiment was performed. Roll back only the authorized retry diff to the recorded code baseline, rerun focused tests; keep wrapper hash/provenance unchanged if untouched.
+3. Gate: fixtures for absent link/route/resolver, false-positive local readiness and deadline; rollback remove only gate, retain acquisition failure handling.
+4. launchd retry: crash-before-write/after-write/after-paid-context fixtures, durable retry eligibility and zero duplicate paid calls; rollback the exact proposed plist change and reload only after separate authorization. No plist change now.
+5. Recovery window: fixtures for missing-only, started game exclusions, concurrent entry, explicit late lineage, downstream isolation and idempotency; rollback new proposed window/entry point without deleting captured evidence.
+6. Wake policy: preserve complete repeating/one-time schedule and pmset baseline, test actual sleep and wake lead time separately; rollback only proposed event to preserved baseline. No power change now.
+7. Fallback: fixtures for complete/missing/partial capture, start cutoff, locks, repeated daily windows and immutable-ledger isolation; rollback missing-only integration and restore fallback default 0, retaining all admitted evidence.
+
+### Source integrity and evidence limits
+
+Installed prewarm SHA-256: `23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb`, exactly the authorized post-change hash in `artifacts/analysis/mlb/operational_reconciliation/2026-09-10/reconciliation_manifest.json`. That manifest, the non-executable byte-exact rollback source and `backend/mlb/tests/test_mlb_bvp_prewarm_exit_semantics.py` govern future validation/rollback; no competing executable source was created. Rollback-source SHA-256 remains `d258117434b64377a2a00a1dc5ec2b10727bd21d054f2bdfee849c721c69e662`. Acquisition source SHA-256: `f552c348c4dcf16edaa2ec7a13b63d276110e3cad58a82e96420a44d5e7e1b21`. The older runbook wrapper example is not a byte-exact current installed source and must not replace it.
+
+Evidence commands were read-only launchctl/plist/pmset inspection, local file/hash inspection and `/usr/bin/log show --info --debug` over bounded retained windows, with identifier redaction before display. Unified-log access required approved execution outside the filesystem sandbox, not interactive sudo; no root command was necessary. Retained processes covered powerd, launchd, configd, mDNSResponder/Network.framework, symptomsd, timed and relevant kernel Ethernet events. No networkd entries were retained in the queried window; this is an availability limit, not proof it was inactive. No authoritative negative upstream DNS packet, historical literal default-route snapshot, renewal packet exchange, full original BvP source capture or explicit governed late-recovery admission contract was available. These limits do not negate the affirmative sleep/link/resolver/recovery sequence.
+
+Files modified by this investigation: this diagnostic Markdown addendum only. Production and ledger state unchanged. Commit: none. Push: none.
+
+### September 18 authorized prospective correction and late-contract resolution
+
+This follow-up supersedes the preceding unresolved recovery decision without changing retained incident evidence. Root cause remains `SLEEP_WAKE_NETWORK_READINESS_RACE`: a missed sleeping-system calendar dispatch began during network dark wake and exhausted its initial DNS retries before en0/resolver readiness returned. No persistent gateway-ARP failure or configd watchdog stall was reproduced. The short No-route messages documented above occurred during wake-time configuration withdrawal, not a proven recurrence of the previous persistent routing defect.
+
+Implemented contract: **`BVP_INITIAL_SCHEDULE_WAKE_RETRY_V1`**, in the tracked acquisition source only. `_fetch_schedule_games` now calls `_fetch_initial_schedule_json`; the old `_fetch_json`, date/population construction, row upsert, main and all other existing functions remain unchanged. No installed-wrapper change, replacement, schedule change, power change or live acquisition was necessary.
+
+Frozen limits: at most three attempts (explicit lower caller limits remain); waits **10 then 20 seconds**, maximum **30 seconds** retry delay; default pre-response attempt wall limits **20/5/5 seconds**, capped by configured timeout and remaining **60-second monotonic budget**. Maximum added pre-response wall time after the first completed failure is approximately **40 seconds**, including the two later request limits. The 30-second delay is 25.5 seconds more than the former default. Normal first-attempt parsed payload is preserved, with retry telemetry added. Receiving response headers ends retry eligibility; HTTP, body-read/parser/schema, database/integrity and programming failures do not trigger another request.
+
+Typed DNS/name-resolution, connection-establishment/unreachable and pre-response timeout failures may retry. SSL/proxy failures, errors carrying a response, unclassified connection errors and unfinished request workers fail closed. The actual schedule GET establishes readiness; no separate connectivity probe is made. A header-only daemon worker bounds an otherwise uninterruptible resolver wait: if it remains unfinished at the wall limit, **no replacement request** is started, and acquisition exits nonzero; a late response is closed. That worker cannot construct BvP inputs or write rows. The approximate 60-second bound covers pre-response attempts/backoff, not the whole subsequent valid-response/BvP processing stage.
+
+Every failed attempt records UTC timestamp, attempt, fixed sanitized classification, next wait and response-received state (`UNKNOWN` rather than an inference for unfinished requests). Recovered initial requests record `ACQUISITION_SUCCESS_AFTER_TRANSIENT_NETWORK_RETRY`, attempts, accumulated delay and first-failure/successful-attempt timestamps, scoped explicitly to `INITIAL_SCHEDULE_FETCH`. Exhausted completed transient requests record `ACQUISITION_FAILED_TRANSIENT_NETWORK_EXHAUSTED` and remain nonzero. No raw exception message, URL, body, credential or private identifier enters these events or terminal errors.
+
+The installed wrapper still releases both locks on exit. Acquisition success followed by no qualified model remains an explicit downstream/impact skip and exit zero; true exhausted acquisition remains FAILED/nonzero with no DONE marker or data write. Existing acquisition has mutable operational upserts, not an append-only BvP capture ledger; this correction preserves that contract and does not certify late evidence. Later daily fallback remains disabled by default. No agreement-study, Moneyline, Totals, Hits, market, publication or wagering behavior was changed.
+
+Sleep remains acceptable: a calendar schedule cannot itself wake the Mac, missed events may run on wake, and short initialization races are handled by bounded request resilience. This correction does not promise exact 03:30 execution or conceal a delayed observation. No sleep-prevention assertion or wake-policy change was made; actual acquisition timestamps remain material.
+
+Final September 18 recovery classification: **`BVP_RECOVERY_CONTRACT_REQUIRES_AMENDMENT`**. The frozen lineage contracts allow exact aligned retained-source reconstruction, not fresh mutable StatsAPI inputs masquerading as original observations. Probable starters/active rosters/database starter references may change; career vsPlayer reads have no implemented strict-prior date cutoff. September 18's original observation remains missing. A separate operational late capture is not automatically evidence-grade and no recovery command or execution was authorized here.
+
+The reviewed decision and a future-only, **PROPOSED / NOT ACTIVATED** amendment (`BVP_LATE_OPERATIONAL_CAPTURE_AMENDMENT_V1`, earliest slate date September 19) are documented in `docs/MLB BvP Acquisition Retry and Late-Admission Contract V1.md`. It requires separately authorized missing-only/locked acquisition, actual-time late labels, immutable provenance, game-specific pre-start exclusions, qualified source cutoff and frozen-ledger isolation. It cannot retroactively admit September 18 or alter downstream eligibility by itself.
+
+Validation: **36 offline tests passed** in the available python3/pytest environment; the production .venv has no pytest and no package installation/download was attempted. Tests include first success, DNS/connection/timeouts, readiness at 7.4 seconds succeeding exactly once at the next attempt, exhaustion, HTTP/security/semantic/parser/body failures, stuck-worker no-replacement/late-response close, no premature/duplicate writes or write retries, current date, sanitized telemetry and the actual installed wrapper with its real lock helper in isolated fixtures. Wrapper success/skip returns zero; exhaustion is nonzero with both locks released and no DONE. Source-AST validation confirms every pre-existing function unchanged except the initial fetch callee. Production-interpreter compilation, shell syntax, source/installed manifest/hash/mode/launchd-target checks and `git diff --check` passed. Live network/API/database requests: **0**; recovery/production pipeline runs: **0**.
+
+Source pre-change SHA-256: `f552c348c4dcf16edaa2ec7a13b63d276110e3cad58a82e96420a44d5e7e1b21`; post-change: `01472f9ea4f03cd26ed8ea95661d2578a9ce57c7677fc45e6e350ac0e7438866`. Installed wrapper pre/post remains `23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb`, mode 0755; its September 10 governance manifest remains unchanged. New source governance/provenance is `artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_initial_schedule_retry_manifest.json`.
+
+Rollback with separate authorization: `git revert <local retry-correction commit>`; baseline is `502ceb0ef3e1d1fbe7b0e993b737de073f32695f`. Preserve unrelated work/history, then repeat focused tests, compilation/syntax and hash checks. No installed replacement, launchd reload, network/power rollback or data deletion is needed. Changed files: acquisition source; focused retry tests; existing wrapper tests; contract document; new source manifest; this canonical diagnostic. Local commit is authorized for these files only; unrelated study changes remain outside it. Push: none.

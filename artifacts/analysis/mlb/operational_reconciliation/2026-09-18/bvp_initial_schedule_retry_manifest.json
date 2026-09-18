@@ -1,0 +1,68 @@
+{
+  "task": "SEPTEMBER_18_BVP_INITIAL_SCHEDULE_WAKE_RETRY_CORRECTION",
+  "authorized_date": "2026-09-18",
+  "contract_version": "BVP_INITIAL_SCHEDULE_WAKE_RETRY_V1",
+  "source": {
+    "path": "backend/mlb/scripts/refresh_mlb_bvp_pvb.py",
+    "tracked": true,
+    "rollback_baseline_commit": "502ceb0ef3e1d1fbe7b0e993b737de073f32695f",
+    "prechange_sha256": "f552c348c4dcf16edaa2ec7a13b63d276110e3cad58a82e96420a44d5e7e1b21",
+    "postchange_sha256": "01472f9ea4f03cd26ed8ea95661d2578a9ce57c7677fc45e6e350ac0e7438866",
+    "changed_request_boundary": "_fetch_schedule_games -> _fetch_initial_schedule_json",
+    "unchanged_boundaries": ["_fetch_json", "_build_rows_for_date", "_upsert_rows", "main"]
+  },
+  "installed_wrapper": {
+    "path": "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh",
+    "changed": false,
+    "prechange_sha256": "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb",
+    "postchange_sha256": "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb",
+    "mode": "0755",
+    "governing_manifest": "artifacts/analysis/mlb/operational_reconciliation/2026-09-10/reconciliation_manifest.json",
+    "launchagent": "com.proppadia.mlb.bvp.prewarm.daily",
+    "launchagent_path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist"
+  },
+  "retry_policy": {
+    "maximum_attempts": 3,
+    "caller_lower_attempt_limit_preserved": true,
+    "wait_seconds": [10, 20],
+    "default_pre_response_attempt_wall_limits_seconds": [20, 5, 5],
+    "maximum_added_retry_delay_seconds": 30,
+    "maximum_added_pre_response_wall_time_after_first_completed_failure_seconds": 40,
+    "added_delay_vs_prior_default_seconds": 25.5,
+    "pre_response_monotonic_budget_seconds": 60,
+    "unfinished_worker_behavior": "FAIL_CLOSED_NO_REPLACEMENT_REQUEST",
+    "valid_response_boundary": "HEADERS_RECEIVED_NO_FURTHER_REQUEST_RETRY",
+    "success_after_retry": "ACQUISITION_SUCCESS_AFTER_TRANSIENT_NETWORK_RETRY",
+    "exhaustion": "ACQUISITION_FAILED_TRANSIENT_NETWORK_EXHAUSTED",
+    "retryable_classes": ["DNS_NAME_RESOLUTION_FAILURE", "CONNECTION_ESTABLISHMENT_FAILURE", "PRE_RESPONSE_TIMEOUT"],
+    "nonretryable": ["HTTP_ERRORS", "SSL_OR_PROXY_FAILURE", "RESPONSE_ALREADY_RECEIVED", "UNCLASSIFIED_CONNECTION_ERROR", "UNFINISHED_REQUEST", "PARSER_SCHEMA_BODY_READ_FAILURE", "PROGRAMMING_EXCEPTION", "DATABASE_WRITE_OR_INTEGRITY_FAILURE"]
+  },
+  "recovery": {
+    "september18_classification": "BVP_RECOVERY_CONTRACT_REQUIRES_AMENDMENT",
+    "september18_original_observation": "MISSING_NOT_RETROACTIVELY_ADMITTED",
+    "future_amendment": "BVP_LATE_OPERATIONAL_CAPTURE_AMENDMENT_V1",
+    "future_amendment_status": "PROPOSED_NOT_ACTIVATED",
+    "future_amendment_earliest_slate_date": "2026-09-19",
+    "contract_document": "docs/MLB BvP Acquisition Retry and Late-Admission Contract V1.md"
+  },
+  "rollback": [
+    "With separate approval, git revert the local commit containing this retry contract and manifest.",
+    "Preserve unrelated worktree changes and all operational/history evidence.",
+    "Repeat focused offline tests, compilation, shell syntax, source-boundary and installed-wrapper manifest/hash checks.",
+    "No installed-wrapper replacement, launchd reload, schedule/power change or data deletion is needed."
+  ],
+  "validation": {
+    "live_network_requests": 0,
+    "api_requests": 0,
+    "database_requests": 0,
+    "september18_recovery_runs": 0,
+    "production_pipeline_runs": 0,
+    "focused_tests": 36,
+    "focused_test_result": "PASS",
+    "production_interpreter_compilation": "PASS",
+    "shell_syntax": "PASS",
+    "diff_check": "PASS",
+    "installed_wrapper_and_source_boundary_checks": "PASS",
+    "test_interpreter_note": "Repository .venv has no pytest; focused tests used the existing python3 pytest environment without installation or downloading."
+  }
+}

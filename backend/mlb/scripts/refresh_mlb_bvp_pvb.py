@@ -16,9 +16,13 @@ Feature payloads are merged on conflict so existing rolling fields are preserved
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
+import queue
+import socket
 import sys
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -27,12 +31,183 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 import requests
+from urllib3.exceptions import NameResolutionError, NewConnectionError
+from urllib3.util import Timeout
 
 from backend.shared.db.pg import pg_connect
 
 
 ET = ZoneInfo("America/New_York")
 STATS_BASE = "https://statsapi.mlb.com/api/v1"
+
+# Initial schedule only. Other StatsAPI reads retain their existing contract.
+INITIAL_SCHEDULE_RETRY_CONTRACT = "BVP_INITIAL_SCHEDULE_WAKE_RETRY_V1"
+INITIAL_SCHEDULE_WAITS = (10.0, 20.0)
+INITIAL_SCHEDULE_BUDGET_SEC = 60.0
+
+
+class InitialScheduleAcquisitionError(RuntimeError):
+    """Sanitized, nonzero acquisition failure; never a downstream governed skip."""
+
+
+class _UnfinishedHeaderRequest(RuntimeError):
+    """An uninterruptible request must not overlap a replacement request."""
+
+
+def _request_schedule_headers(url: str, timeout_sec: float) -> requests.Response:
+    # requests' timeout alone does not bound OS getaddrinfo. A daemon worker
+    # bounds the caller's wait. If it has not returned, fail closed: NEVER start
+    # another attempt. This worker can only read public schedule headers, not
+    # parse a schedule, begin BvP acquisition, publish artifacts or write rows.
+    result: queue.Queue = queue.Queue(maxsize=1)
+    abandoned = threading.Event()
+
+    def request() -> None:
+        try:
+            response = requests.get(
+                url, stream=True,
+                timeout=Timeout(total=timeout_sec, connect=timeout_sec, read=timeout_sec),
+            )
+            result.put((response, None))
+            if abandoned.is_set():
+                response.close()
+        except Exception as exc:
+            result.put((None, exc))
+
+    threading.Thread(target=request, daemon=True, name="bvp-schedule-headers").start()
+    try:
+        response, exc = result.get(timeout=timeout_sec)
+    except queue.Empty:
+        abandoned.set()
+        # Close a response queued concurrently with the deadline, if present.
+        try:
+            response, _ = result.get_nowait()
+            if response is not None:
+                response.close()
+        except queue.Empty:
+            pass
+        raise _UnfinishedHeaderRequest() from None
+    if exc is not None:
+        raise exc
+    return response
+
+
+def _initial_transient_class(exc: Exception) -> Optional[str]:
+    if isinstance(exc, (requests.HTTPError, requests.exceptions.SSLError,
+                        requests.exceptions.ProxyError)):
+        return None
+    if getattr(exc, "response", None) is not None:
+        return None
+    if isinstance(exc, requests.Timeout):
+        return "PRE_RESPONSE_TIMEOUT"
+    if not isinstance(exc, requests.ConnectionError):
+        return None
+    pending = [exc]
+    seen: set[int] = set()
+    connection_error = False
+    while pending:
+        item = pending.pop()
+        if id(item) in seen:
+            continue
+        seen.add(id(item))
+        if isinstance(item, (socket.gaierror, NameResolutionError)):
+            return "DNS_NAME_RESOLUTION_FAILURE"
+        if isinstance(item, OSError) and item.errno in {
+            errno.ENETDOWN, errno.ENETUNREACH, errno.EHOSTUNREACH,
+            errno.ECONNREFUSED, errno.ECONNRESET, errno.ECONNABORTED, errno.ETIMEDOUT,
+        }:
+            connection_error = True
+        if isinstance(item, NewConnectionError):
+            connection_error = True
+        for nested in (getattr(item, "reason", None), getattr(item, "__cause__", None),
+                       getattr(item, "__context__", None), *getattr(item, "args", ())):
+            if isinstance(nested, BaseException):
+                pending.append(nested)
+    return "CONNECTION_ESTABLISHMENT_FAILURE" if connection_error else None
+
+
+def _initial_schedule_event(status: str, **fields: Any) -> str:
+    timestamp = datetime.now(ZoneInfo("UTC")).isoformat()
+    # No URL, exception message, response body, network identifier or credential.
+    print("[bvp-refresh] " + json.dumps({
+        "status": status, "contract": INITIAL_SCHEDULE_RETRY_CONTRACT,
+        "stage": "INITIAL_SCHEDULE_FETCH",
+        "timestamp_utc": timestamp, **fields,
+    }, sort_keys=True), file=sys.stderr)
+    return timestamp
+
+
+def _fetch_initial_schedule_json(url: str, *, timeout_sec: int, retries: int) -> Dict[str, Any]:
+    attempts = min(3, max(1, int(retries)))
+    started = time.monotonic()
+    first_failure = None
+    retry_delay = 0.0
+    for attempt in range(1, attempts + 1):
+        remaining = INITIAL_SCHEDULE_BUDGET_SEC - (time.monotonic() - started)
+        if remaining <= 0:
+            _initial_schedule_event("ACQUISITION_FAILED_TRANSIENT_NETWORK_EXHAUSTED",
+                                    attempts_used=attempt - 1, total_retry_delay_sec=retry_delay)
+            raise InitialScheduleAcquisitionError("ACQUISITION_FAILED_TRANSIENT_NETWORK_EXHAUSTED")
+        # Preserve first-attempt normal-awake timeout (default 20s); shorter
+        # subsequent attempts keep 20 + 10 + 5 + 20 + 5 within 60s.
+        attempt_timeout = min(max(0.001, float(timeout_sec)),
+                              20.0 if attempt == 1 else 5.0, remaining)
+        attempt_started_at = datetime.now(ZoneInfo("UTC")).isoformat()
+        try:
+            response = _request_schedule_headers(url, attempt_timeout)
+        except Exception as exc:
+            classification = _initial_transient_class(exc)
+            next_wait = INITIAL_SCHEDULE_WAITS[attempt - 1] if attempt < attempts else 0.0
+            if classification is None:
+                next_wait = 0.0
+            if time.monotonic() - started + next_wait >= INITIAL_SCHEDULE_BUDGET_SEC:
+                next_wait = 0.0
+            failure_time = _initial_schedule_event(
+                "INITIAL_SCHEDULE_REQUEST_FAILED", attempt=attempt,
+                classification=classification or (
+                    "UNFINISHED_REQUEST_FAIL_CLOSED" if isinstance(exc, _UnfinishedHeaderRequest)
+                    else "NON_RETRYABLE_PRE_RESPONSE_FAILURE"),
+                next_wait_sec=next_wait,
+                http_response_received="UNKNOWN" if isinstance(exc, _UnfinishedHeaderRequest)
+                else getattr(exc, "response", None) is not None,
+            )
+            first_failure = first_failure or failure_time
+            if classification is None:
+                raise InitialScheduleAcquisitionError("INITIAL_SCHEDULE_NON_RETRYABLE_FAILURE") from None
+            if next_wait == 0:
+                _initial_schedule_event("ACQUISITION_FAILED_TRANSIENT_NETWORK_EXHAUSTED",
+                                        attempts_used=attempt, total_retry_delay_sec=retry_delay)
+                raise InitialScheduleAcquisitionError("ACQUISITION_FAILED_TRANSIENT_NETWORK_EXHAUSTED") from None
+            time.sleep(next_wait)
+            retry_delay += next_wait
+            continue
+        # Receiving headers is the retry boundary. HTTP, body-read, JSON and
+        # schema failures below MUST NOT re-enter the request loop.
+        try:
+            response.raise_for_status()
+            data = response.json()
+            if not isinstance(data, dict) or not isinstance(data.get("dates"), list):
+                raise ValueError("INVALID_SCHEDULE_SCHEMA")
+        except Exception as exc:
+            _initial_schedule_event(
+                "INITIAL_SCHEDULE_REQUEST_FAILED", attempt=attempt,
+                classification="HTTP_STATUS_FAILURE" if isinstance(exc, requests.HTTPError)
+                else "POST_RESPONSE_PARSE_OR_CONTRACT_FAILURE",
+                next_wait_sec=0.0, http_response_received=True,
+            )
+            raise InitialScheduleAcquisitionError("INITIAL_SCHEDULE_POST_RESPONSE_FAILURE") from None
+        finally:
+            response.close()
+        _initial_schedule_event(
+            "ACQUISITION_SUCCESS_AFTER_TRANSIENT_NETWORK_RETRY" if first_failure
+            else "INITIAL_SCHEDULE_REQUEST_SUCCESS",
+            attempts_used=attempt, total_retry_delay_sec=retry_delay,
+            first_failure_timestamp_utc=first_failure,
+            successful_attempt_timestamp_utc=attempt_started_at,
+            http_response_received=True,
+        )
+        return data
+    raise AssertionError("unreachable initial schedule retry state")
 
 BATTER_PROPS: tuple[str, ...] = (
     "doubles",
@@ -105,7 +280,7 @@ def _fetch_json(url: str, *, timeout_sec: int, retries: int) -> Dict[str, Any]:
 
 
 def _fetch_schedule_games(game_date: str, *, timeout_sec: int, retries: int) -> List[GameRow]:
-    data = _fetch_json(
+    data = _fetch_initial_schedule_json(
         f"{STATS_BASE}/schedule?sportId=1&date={game_date}&hydrate=probablePitcher",
         timeout_sec=timeout_sec,
         retries=retries,
