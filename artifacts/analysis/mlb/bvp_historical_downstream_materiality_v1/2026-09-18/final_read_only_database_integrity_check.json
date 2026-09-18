@@ -1,0 +1,26 @@
+{
+  "after": {
+    "row_stream_md5": "c339a5269c86a18afffc96fbba4330c5",
+    "rows": 270582
+  },
+  "before": {
+    "row_stream_md5": "c339a5269c86a18afffc96fbba4330c5",
+    "rows": 270582
+  },
+  "classification": "PASS",
+  "database_writes": 0,
+  "external_api_requests": 0,
+  "natural_host_jobs_may_change_unrelated_artifacts": true,
+  "september18": {
+    "canonical_game_identity_eligible_rows": 1846,
+    "database_writes": 0,
+    "eligible_batters": 142,
+    "eligible_games": 13,
+    "excluded_rows": 91,
+    "external_acquisition_requests": 0,
+    "pitcher_lineage_certification": "LEGACY_NOT_RECONSTRUCTABLE",
+    "remaining_identity_eligible_rows": 1846,
+    "retained_rows": 1937,
+    "status": "PASS"
+  }
+}

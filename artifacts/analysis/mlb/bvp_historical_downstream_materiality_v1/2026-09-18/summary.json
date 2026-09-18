@@ -1,0 +1,132 @@
+{
+  "active_certified_bypass": "NONE_FOUND_IN_LOADED_PROPPADIA_GUI_AND_REVIEWED_WRAPPER_GRAPH; raw/manual archived research utilities remain noncertified",
+  "artifact_row_key_overlaps": 18901,
+  "artifacts_with_key_overlap": 107,
+  "audited_rows": 270582,
+  "bvp_referencing_report_metadata_files": 793,
+  "certification_boundary": {
+    "confirmed_historical": "832_CONFIRMED_OR_QUARANTINED_ROWS; NO_RETROACTIVE_CERTIFICATION",
+    "forward": "PROSPECTIVE_IDENTITY_AND_REQUEST_JOURNALS_REQUIRE_NATURAL_RUN_VALIDATION",
+    "legacy_artifacts": "LIMITED_BY_ORIGINAL_SOURCE_PICK_AND_PITCHER_ASOF_PROVENANCE",
+    "legitimate_reschedules": "1937_DATE_IDENTITY_LEGITIMATE_ONLY",
+    "september18": "1846_GAME_IDENTITY_ELIGIBLE_NOT_FULL_PITCHER_FEATURE_CERTIFICATION; 91_QUARANTINED",
+    "unresolved": "5252_NOT_AUTOMATICALLY_DEFECTIVE_OR_CERTIFIED"
+  },
+  "classes": {
+    "CONFIRMED_UTC_LOCAL_DATE_IDENTITY_DEFECT": {
+      "acquisition_dates": 1,
+      "batters": 57,
+      "games": 4,
+      "known_original_pitchers": 0,
+      "original_pitcher_count": "UNRECOVERABLE_FROM_RETAINED_ROWS",
+      "rows": 741,
+      "slate_dates": 1
+    },
+    "OTHER_CONFIRMED_IDENTITY_DEFECT": {
+      "acquisition_dates": 0,
+      "batters": 0,
+      "games": 0,
+      "known_original_pitchers": 0,
+      "original_pitcher_count": "UNRECOVERABLE_FROM_RETAINED_ROWS",
+      "rows": 0,
+      "slate_dates": 0
+    },
+    "SEPTEMBER_18_HASH_PINNED_QUARANTINE": {
+      "acquisition_dates": 1,
+      "batters": 7,
+      "games": 1,
+      "known_original_pitchers": 0,
+      "original_pitcher_count": "UNRECOVERABLE_FROM_RETAINED_ROWS",
+      "rows": 91,
+      "slate_dates": 1
+    },
+    "UNRESOLVED_IDENTITY_PROVENANCE": {
+      "acquisition_dates": 4,
+      "batters": 221,
+      "games": 25,
+      "known_original_pitchers": 0,
+      "original_pitcher_count": "UNRECOVERABLE_FROM_RETAINED_ROWS",
+      "rows": 5252,
+      "slate_dates": 5
+    },
+    "VERIFIED_LEGITIMATE_RESCHEDULE_OR_SUSPENSION": {
+      "acquisition_dates": 11,
+      "batters": 122,
+      "games": 13,
+      "known_original_pitchers": 0,
+      "original_pitcher_count": "UNRECOVERABLE_FROM_RETAINED_ROWS",
+      "rows": 1937,
+      "slate_dates": 11
+    }
+  },
+  "classification": "HISTORICAL_BVP_DEFECT_BOUNDED_REBUILD_REQUIRED + HISTORICAL_BVP_DEFECT_LINEAGE_INCOMPLETE",
+  "confirmed_defect_artifact_admissions": {
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_bvp_blocker_audit/total_bases_post_bvp_blocker_classified_rows.csv": 56,
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_rolling_blocker_audit/total_bases_post_bvp_blocker_classified_rows.csv": 56,
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_spine_rolling_hydrated/2026-04-01_2026-06-14/total_bases_canonical_spine_dry_run_dataset.csv": 56
+  },
+  "confirmed_defect_source_rows": 832,
+  "consumers": 167,
+  "contract": "BVP_HISTORICAL_DOWNSTREAM_MATERIALITY_V1",
+  "csv_artifacts_full_scan": 1881,
+  "csv_artifacts_indexed": 34896,
+  "current_qualified_model": {
+    "authority_status": "NO_QUALIFIED_MLB_MODEL",
+    "blocked_runtime_status": "MLB_PREDICTIVE_MODEL_BLOCKED_NO_QUALIFIED_MODEL",
+    "blocked_semantic_model_ids": [
+      "MLB_HITS_SEMANTIC_V1_2e7377b2cdcb",
+      "MLB_STRIKEOUTS_PITCHING_SEMANTIC_V1_a3ee2428e5d0",
+      "MLB_TOTAL_BASES_SEMANTIC_V1_b6cdb5379aa9"
+    ],
+    "data_only_processes": "ALLOWED",
+    "predictive_processes": "BLOCKED",
+    "replacement_model_status": "NOT_YET_QUALIFIED",
+    "retired_architecture": "MLB_LEGACY_LR_RF_AUC_WEIGHTED_BLEND",
+    "retired_artifact_pattern": "MODEL_DIR/latest/*.joblib",
+    "training_status": "RETIRED_AUTOMATED_RETRAINING_SUSPENDED"
+  },
+  "database_evidence_cutoff_utc": "2026-09-18 22:16:37.094857+00:00",
+  "database_writes": 0,
+  "external_api_requests": 0,
+  "fix_commit": "1c36620785837e057f89b263d3ab88f28c723469",
+  "historical_certification": "PRE_FIX_ARTIFACTS_NOT_RETROACTIVELY_CERTIFIED",
+  "historical_rebuilds": 0,
+  "historical_scope": {
+    "acquisition_dates": 17,
+    "fingerprints": 5954,
+    "games": 43,
+    "other_offdate_rows": 2067,
+    "slate_dates": 18
+  },
+  "independent_current_lanes": [
+    "CANONICAL_MONEYLINE",
+    "RAW_TOTALS",
+    "TOTALS_C",
+    "HITS05_NONMARKET_PARENT"
+  ],
+  "inventory_limits": "Complete bounded CSV header inventory and selected feature-row scans; JSON/JSONL report and source-reference review plus forensic model metadata. Not an assertion that absent legacy DB revisions or discarded in-memory picks were recovered.",
+  "model_metadata_readable": 83,
+  "model_refits": 0,
+  "models_declaring_direct_bvp_features": 37,
+  "offdate_rows": 8021,
+  "prediction_acquisition_reruns": 0,
+  "proven_artifact_source_admissions": 5799,
+  "proven_changed_coefficients": null,
+  "proven_changed_published_or_executed_picks": null,
+  "related_reports_requiring_superseding_context_correction": [
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_bvp_blocker_audit/total_bases_post_bvp_blocker_audit.md",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_bvp_blocker_audit/total_bases_post_bvp_blocker_audit_summary.json",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_rolling_blocker_audit/total_bases_post_bvp_blocker_audit.md",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_rolling_blocker_audit/total_bases_post_bvp_blocker_audit_summary.json",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_spine_rolling_hydrated/2026-04-01_2026-06-14/total_bases_canonical_spine_dry_run_report.md",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_spine_rolling_hydrated/2026-04-01_2026-06-14/total_bases_canonical_spine_dry_run_summary.json"
+  ],
+  "required_bounded_rebuilds": [
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_bvp_blocker_audit/total_bases_post_bvp_blocker_classified_rows.csv",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_post_rolling_blocker_audit/total_bases_post_bvp_blocker_classified_rows.csv",
+    "artifacts/analysis/mlb/model_quality/total_bases_canonical_spine_rolling_hydrated/2026-04-01_2026-06-14/total_bases_canonical_spine_dry_run_dataset.csv"
+  ],
+  "scan_gaps": 0,
+  "serialized_models": 87,
+  "source_snapshot_sha256": "514c9694abdfca4f410188c1cd7606be41464c78d7f083dce12af4dceaa69fa7"
+}

@@ -1,0 +1,84 @@
+{
+  "after_next_run_require": [
+    "actual wrapper START/run tag/DONE/BVP_PREWARM_RUN_END wrapper_rc",
+    "INITIAL_SCHEDULE evidence attempt count/timestamps and retry outcome",
+    "identity_summary intended/verified/unmapped/rejected/prepared/written counts",
+    "per-request batter/pitcher/teams/raw-response hash and actual UTC observation time",
+    "starter side and reason identities; successful empty response identity retained",
+    "DATABASE_WRITE_COMMITTED receipt matching admitted row payloads",
+    "both lock acquisition and release; acquisition SUCCESS separately from downstream/impact model skip"
+  ],
+  "collector_sha256": "5e6a9bf7a7204ee650b56c4e08b6b1918b06c6833788256e5ef5016c2f58de36",
+  "disabled_proppadia_labels": [
+    "com.proppadia.pregame-lineup-study.20260708",
+    "com.proppadia.pregame-lineup-study.20260709",
+    "com.proppadia.mlb.retrain.weekly"
+  ],
+  "dispatch_caveat": "StartCalendarInterval does not wake the Mac. 05:27 repeating wake is later than 03:30; manual system sleep can defer dispatch. Code readiness is not a promise of timely dispatch or network health.",
+  "empty_and_starter_journal": "artifacts/ops/bvp_identity_v1/2026-09-19/*.jsonl",
+  "governed_locks": [
+    "artifacts/ops/locks/mlb-bvp-prewarm.lock",
+    "artifacts/ops/locks/mlb-pipeline.lock"
+  ],
+  "gui_inventory_command_exit": 0,
+  "identity_gate": "BVP_CANONICAL_SLATE_IDENTITY_V1",
+  "label": "com.proppadia.mlb.bvp.prewarm.daily",
+  "last_exit_code": "2",
+  "loaded": true,
+  "loaded_proppadia_gui_jobs": [
+    {
+      "label": "com.proppadia.mlb.refresh.daily",
+      "last_exit": 0,
+      "pid": 0
+    },
+    {
+      "label": "com.proppadia.nhl.mainline-cross-market-shadow",
+      "last_exit": 0,
+      "pid": 0
+    },
+    {
+      "label": "com.proppadia.mlb.bvp.prewarm.daily",
+      "last_exit": 2,
+      "pid": 0
+    },
+    {
+      "label": "com.proppadia.nhl.morning-orchestration",
+      "last_exit": 0,
+      "pid": 0
+    },
+    {
+      "label": "com.proppadia.mlb.dh-forward-capture",
+      "last_exit": 0,
+      "pid": 0
+    },
+    {
+      "label": "com.proppadia.mlb.dh-forward-grade",
+      "last_exit": 0,
+      "pid": 0
+    },
+    {
+      "label": "com.proppadia.mlb.starter-skill-workload.daily",
+      "last_exit": 0,
+      "pid": 0
+    }
+  ],
+  "makefile_sha256": "6443e0193b631f590ef1f3eb4ed6da797726c0d544f5efd85447ef01c6438435",
+  "manual_run_invoked": false,
+  "next_intended_dispatch_utc": "2026-09-19T10:30:00Z",
+  "next_intended_local_dispatch": "2026-09-19T03:30:00-07:00",
+  "no_qualified_model_skip_preserved": true,
+  "plist_path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist",
+  "plist_sha256": "1c5081079628e800ddaa15c2befa97a033fbbc1a317fd2e7379e5e5ba0f266e6",
+  "repeating_power_schedule": "Repeating power events:\n  wakepoweron at 5:27AM every day",
+  "retry_byte_source_unchanged": true,
+  "retry_contract": "BVP_INITIAL_SCHEDULE_WAKE_RETRY_V1",
+  "schedule": {
+    "Hour": 3,
+    "Minute": 30
+  },
+  "state": "not running",
+  "stderr": "/Users/jerrystrain/Projects/proppadia/artifacts/ops/mlb_bvp_prewarm_daily.err.log",
+  "stdout": "/Users/jerrystrain/Projects/proppadia/artifacts/ops/mlb_bvp_prewarm_daily.out.log",
+  "wrapper": "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh",
+  "wrapper_sha256": "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb"
+}

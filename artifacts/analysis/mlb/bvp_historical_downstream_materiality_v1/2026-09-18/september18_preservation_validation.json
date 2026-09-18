@@ -1,0 +1,12 @@
+{
+  "all_three_readers_guarded": true,
+  "eligible_batters": 142,
+  "eligible_games": 13,
+  "excluded_rows": 91,
+  "legacy_pitcher_feature_certification": "NOT_RECONSTRUCTABLE",
+  "other_active_reader_bypass": "NONE_FOUND_IN_LOADED_PROPPADIA_GUI_AND_REVIEWED_WRAPPER_GRAPH; raw/manual archived research utilities remain noncertified",
+  "raw_date_alone_sufficient": false,
+  "remaining_identity_eligible_rows": 1846,
+  "retained_rows": 1937,
+  "status": "PASS"
+}

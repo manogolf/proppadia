@@ -1,0 +1,770 @@
+{
+  "822909": [
+    {
+      "away_team_id": 133,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 822909,
+      "home_team_id": 140,
+      "official_date": "2026-04-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-24",
+      "schedule_game_sha256": "99fb03c92f24cf016f2e863c76bd39acbd5cbd040b9926e69d8229aa7ac5d5f0",
+      "start_utc": "2026-04-25T00:05:00Z",
+      "state": "Final"
+    }
+  ],
+  "822913": [
+    {
+      "away_team_id": 134,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 822913,
+      "home_team_id": 140,
+      "official_date": "2026-04-22",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-22",
+      "schedule_game_sha256": "5fd92f6c0ad65c1fc2e0e6112de13c0a92c45f8780a136a1f456ab6194a05514",
+      "start_utc": "2026-04-23T00:05:00Z",
+      "state": "Final"
+    }
+  ],
+  "822916": [
+    {
+      "away_team_id": 136,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 822916,
+      "home_team_id": 140,
+      "official_date": "2026-04-07",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-07",
+      "schedule_game_sha256": "8d3a399edde6072c077c83fe175e1847826e084e1e694bff8df7fd9030b0871b",
+      "start_utc": "2026-04-08T00:05:00Z",
+      "state": "Final"
+    }
+  ],
+  "822918": [
+    {
+      "away_team_id": 136,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 822918,
+      "home_team_id": 140,
+      "official_date": "2026-04-06",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-06",
+      "schedule_game_sha256": "e6fa01ee42a6742c5a71603310fe4b8a1ad6d0ce68c9d22214d0688c67c944e7",
+      "start_utc": "2026-04-07T00:05:00Z",
+      "state": "Final"
+    }
+  ],
+  "823069": [
+    {
+      "away_team_id": 136,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823069,
+      "home_team_id": 138,
+      "official_date": "2026-04-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-24",
+      "schedule_game_sha256": "fabbf3e97c82ed82f10925db81b827e5c102a1cbca6c530547847201a926b5e9",
+      "start_utc": "2026-04-25T00:15:00Z",
+      "state": "Final"
+    }
+  ],
+  "823152": [
+    {
+      "away_team_id": 140,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823152,
+      "home_team_id": 136,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "5e7efcacade2667736303587165a917edad91e08a84c5d5d22246be08c96e00c",
+      "start_utc": "2026-04-18T01:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "823231": [
+    {
+      "away_team_id": 119,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823231,
+      "home_team_id": 137,
+      "official_date": "2026-04-22",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-22",
+      "schedule_game_sha256": "03fe3870b143c1ea20f775e4f6b06eb0e94e5f217a721796113eeaa0eaf67515",
+      "start_utc": "2026-04-23T01:45:00Z",
+      "state": "Final"
+    }
+  ],
+  "823232": [
+    {
+      "away_team_id": 146,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823232,
+      "home_team_id": 137,
+      "official_date": "2026-04-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-24",
+      "schedule_game_sha256": "aca4bce14cb1e9c59bdcbf23a3442a09ff11541115e2bed5a5bbe7e8b52f75a4",
+      "start_utc": "2026-04-25T02:15:00Z",
+      "state": "Final"
+    }
+  ],
+  "823235": [
+    {
+      "away_team_id": 143,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823235,
+      "home_team_id": 137,
+      "official_date": "2026-04-07",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-07",
+      "schedule_game_sha256": "3c2a9a1d347454174a9dc5ae03ea819ff1aa29327cac021758ff8c6d66544be3",
+      "start_utc": "2026-04-08T01:45:00Z",
+      "state": "Final"
+    }
+  ],
+  "823237": [
+    {
+      "away_team_id": 143,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823237,
+      "home_team_id": 137,
+      "official_date": "2026-04-06",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-06",
+      "schedule_game_sha256": "b144999651d950d977ff70ad5dc0392b76b2e547d9ac61c3160bf4bdb2f32f6d",
+      "start_utc": "2026-04-07T01:45:00Z",
+      "state": "Final"
+    }
+  ],
+  "823315": [
+    {
+      "away_team_id": 136,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823315,
+      "home_team_id": 135,
+      "official_date": "2026-04-14",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-14",
+      "schedule_game_sha256": "e5209929a957ab815c34cc8f341551aa9ad8620a18180567d0ab52e4ebd41719",
+      "start_utc": "2026-04-15T01:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "823471": [
+    {
+      "away_team_id": 137,
+      "description": "Makeup 4/30",
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823471,
+      "home_team_id": 143,
+      "official_date": "2026-04-30",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "rescheduleDate": "2026-04-30T21:35:00Z",
+      "rescheduleGameDate": "2026-04-30",
+      "schedule_date": "2026-04-29",
+      "schedule_game_sha256": "2f6690047f98240d93210c19dfc80c3a142d9b66c5b693e4e99ed4df547709b9",
+      "start_utc": "2026-04-29T22:10:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 137,
+      "description": "Makeup of 4/29 PPD",
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823471,
+      "home_team_id": 143,
+      "official_date": "2026-04-30",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "rescheduledFrom": "2026-04-29T22:10:00Z",
+      "rescheduledFromDate": "2026-04-29",
+      "schedule_date": "2026-04-30",
+      "schedule_game_sha256": "4ff66b13b67d752fdba803f7ef41f76b785ceb6e89c31ce290915857e6b1da34",
+      "start_utc": "2026-04-30T21:35:00Z",
+      "state": "Final"
+    }
+  ],
+  "823523": [
+    {
+      "away_team_id": 119,
+      "file_sha256": "5a57a8906d36fd2c779a572232f678a4a5fbf9c46b4b263342e5d186b6db6e2b",
+      "game_id": 823523,
+      "home_team_id": 147,
+      "official_date": "2026-07-19",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-07-01_2026-07-31.json.gz",
+      "rescheduleDate": "2026-07-19T16:35:00Z",
+      "rescheduleGameDate": "2026-07-19",
+      "schedule_date": "2026-07-18",
+      "schedule_game_sha256": "65d4119d938a79dd907a6db83af1d8b2aa10f2c1ee1816991025345827fc8943",
+      "start_utc": "2026-07-19T00:08:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 119,
+      "description": "Makeup of 7/18 PPD",
+      "file_sha256": "5a57a8906d36fd2c779a572232f678a4a5fbf9c46b4b263342e5d186b6db6e2b",
+      "game_id": 823523,
+      "home_team_id": 147,
+      "official_date": "2026-07-19",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-07-01_2026-07-31.json.gz",
+      "rescheduledFrom": "2026-07-19T00:08:00Z",
+      "rescheduledFromDate": "2026-07-18",
+      "schedule_date": "2026-07-19",
+      "schedule_game_sha256": "388d9dbbf56eb16d3e170b170eaccf227b2e460588086c9df2baa6560a61b9a2",
+      "start_utc": "2026-07-19T16:35:00Z",
+      "state": "Final"
+    }
+  ],
+  "823539": [
+    {
+      "away_team_id": 111,
+      "description": "Makeup 8/29",
+      "file_sha256": "5ea1e3202700e82d0d18364bace2f4ac55b81c721c6797235764132945613fc4",
+      "game_id": 823539,
+      "home_team_id": 147,
+      "official_date": "2026-08-29",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "rescheduleDate": "2026-08-29T17:05:00Z",
+      "rescheduleGameDate": "2026-08-29",
+      "schedule_date": "2026-06-06",
+      "schedule_game_sha256": "8c814a50008c577ccd197ddef142e3885990a3fd88c360aaf4dae41f7f4952de",
+      "start_utc": "2026-06-06T23:35:00Z",
+      "state": "Postponed"
+    }
+  ],
+  "823543": [
+    {
+      "away_team_id": 139,
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 823543,
+      "home_team_id": 147,
+      "official_date": "2026-09-22",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduleDate": "2026-09-22T17:05:00Z",
+      "rescheduleGameDate": "2026-09-22",
+      "schedule_date": "2026-05-23",
+      "schedule_game_sha256": "d42f3ffa67b35c87ea3ca2994084f95b43dacde7ae42dbf12f3b7065654e7397",
+      "start_utc": "2026-05-23T17:35:00Z",
+      "state": "Postponed"
+    }
+  ],
+  "823613": [
+    {
+      "away_team_id": 112,
+      "file_sha256": "5ea1e3202700e82d0d18364bace2f4ac55b81c721c6797235764132945613fc4",
+      "game_id": 823613,
+      "home_team_id": 121,
+      "official_date": "2026-06-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "rescheduleDate": "2026-06-24T17:10:00Z",
+      "rescheduleGameDate": "2026-06-24",
+      "schedule_date": "2026-06-22",
+      "schedule_game_sha256": "9e19af2834866b8e3a07f78569579a4e88d4117618fb3c6e451161f62f76873c",
+      "start_utc": "2026-06-22T23:10:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 112,
+      "description": "Makeup of 6/22 PPD",
+      "file_sha256": "5ea1e3202700e82d0d18364bace2f4ac55b81c721c6797235764132945613fc4",
+      "game_id": 823613,
+      "home_team_id": 121,
+      "official_date": "2026-06-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "rescheduledFrom": "2026-06-22T23:10:00Z",
+      "rescheduledFromDate": "2026-06-22",
+      "schedule_date": "2026-06-24",
+      "schedule_game_sha256": "51e7ddc4abdbfd2d8dbdbdc8616119e87dd91e0a2d98afdf00b6aee770134ce6",
+      "start_utc": "2026-06-24T17:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "823637": [
+    {
+      "away_team_id": 115,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823637,
+      "home_team_id": 121,
+      "official_date": "2026-04-26",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "rescheduleDate": "2026-04-26T17:45:00Z",
+      "rescheduleGameDate": "2026-04-26",
+      "schedule_date": "2026-04-25",
+      "schedule_game_sha256": "74c5ea638c1923953fd770d01f0a733e4c89110bd4dded37bd868c7d404be99b",
+      "start_utc": "2026-04-25T20:10:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 115,
+      "description": "Makeup of 4/25 PPD",
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823637,
+      "home_team_id": 121,
+      "official_date": "2026-04-26",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "rescheduledFrom": "2026-04-25T20:10:00Z",
+      "rescheduledFromDate": "2026-04-25",
+      "schedule_date": "2026-04-26",
+      "schedule_game_sha256": "b570d95cce784eecd36055d509b38f2999c5296d526f9427c14ce6f9461f8c2e",
+      "start_utc": "2026-04-26T17:45:00Z",
+      "state": "Final"
+    }
+  ],
+  "823720": [
+    {
+      "away_team_id": 113,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823720,
+      "home_team_id": 142,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "3482233e5594753dfb514d99076657805065ce9e43bee1346cc76a44efd8db4d",
+      "start_utc": "2026-04-18T00:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "823962": [
+    {
+      "away_team_id": 112,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823962,
+      "home_team_id": 119,
+      "official_date": "2026-04-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-24",
+      "schedule_game_sha256": "e876c34d1f03bb42604d3c3056007ea88ecbef76d27194f5e98ca3d8ad209b28",
+      "start_utc": "2026-04-25T02:15:00Z",
+      "state": "Final"
+    }
+  ],
+  "823965": [
+    {
+      "away_team_id": 121,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 823965,
+      "home_team_id": 119,
+      "official_date": "2026-04-14",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-14",
+      "schedule_game_sha256": "806dde1c0209ffc6fdb86b9b57c2ecf0b232d540b36a37ed7ab5d07d73916c85",
+      "start_utc": "2026-04-15T02:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "824048": [
+    {
+      "away_team_id": 135,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824048,
+      "home_team_id": 108,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "9d770316cf1bbc43dfedd49a271282b980672554031e2d9cd80446ddf2e48045",
+      "start_utc": "2026-04-18T01:38:00Z",
+      "state": "Final"
+    }
+  ],
+  "824051": [
+    {
+      "away_team_id": 144,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824051,
+      "home_team_id": 108,
+      "official_date": "2026-04-07",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-07",
+      "schedule_game_sha256": "23198e0cb08018793a200d4dfaa0074f765c9373eb50c3f50144000e49a0934e",
+      "start_utc": "2026-04-08T01:38:00Z",
+      "state": "Final"
+    }
+  ],
+  "824052": [
+    {
+      "away_team_id": 144,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824052,
+      "home_team_id": 108,
+      "official_date": "2026-04-06",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-06",
+      "schedule_game_sha256": "1cab13eb5dfc683387607094ab42572091c9ff582f196f4e86db52fe479e8660",
+      "start_utc": "2026-04-07T01:38:00Z",
+      "state": "Final"
+    }
+  ],
+  "824204": [
+    {
+      "away_team_id": 147,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824204,
+      "home_team_id": 117,
+      "official_date": "2026-04-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-24",
+      "schedule_game_sha256": "6b3e502f2e317b59b1fbd57f7700c373584f63d9954bcdf2c32710bb9ee8e49e",
+      "start_utc": "2026-04-25T00:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "824207": [
+    {
+      "away_team_id": 138,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824207,
+      "home_team_id": 117,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "2afd06b04d30bef266ae90098d37d157f6b4dde7fbd69bfb01767c8759b8d89c",
+      "start_utc": "2026-04-18T00:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "824210": [
+    {
+      "away_team_id": 115,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824210,
+      "home_team_id": 117,
+      "official_date": "2026-04-14",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-14",
+      "schedule_game_sha256": "58cdb715c9c22f102efddb8f23678467f7d19aefa4104a733ed1ea7cc8422f2a",
+      "start_utc": "2026-04-15T00:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "824367": [
+    {
+      "away_team_id": 135,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824367,
+      "home_team_id": 115,
+      "official_date": "2026-04-22",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-22",
+      "schedule_game_sha256": "5be241aa51d599f237e77f6cdb876ce0ca9057b4a0c1ec57d41b66c1374f2e3f",
+      "start_utc": "2026-04-23T00:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "824373": [
+    {
+      "away_team_id": 119,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824373,
+      "home_team_id": 115,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "7f1efef9529b903e8fd1bf44c3a977bdf361c889896344e7eb7efd2a71992101",
+      "start_utc": "2026-04-18T00:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "824375": [
+    {
+      "away_team_id": 117,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824375,
+      "home_team_id": 115,
+      "official_date": "2026-04-07",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-07",
+      "schedule_game_sha256": "6b966f6eb9eefffd2229732d9c3a7a3c90881ec4f4ccde9e307c50a4813f090f",
+      "start_utc": "2026-04-08T00:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "824376": [
+    {
+      "away_team_id": 117,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824376,
+      "home_team_id": 115,
+      "official_date": "2026-04-06",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-06",
+      "schedule_game_sha256": "1954a499465aa652c254fe8e5cef95ec01b1c7ebcf1c5589cc0d0e4451ea0cc4",
+      "start_utc": "2026-04-07T00:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "824490": [
+    {
+      "away_team_id": 114,
+      "file_sha256": "5a57a8906d36fd2c779a572232f678a4a5fbf9c46b4b263342e5d186b6db6e2b",
+      "game_id": 824490,
+      "home_team_id": 113,
+      "official_date": "2026-07-28",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-07-01_2026-07-31.json.gz",
+      "rescheduleDate": "2026-07-28T17:40:00Z",
+      "rescheduleGameDate": "2026-07-28",
+      "schedule_date": "2026-07-27",
+      "schedule_game_sha256": "6182b706193da65f3c5ba73de739e3272003a9970869c9cdf3e484a73d55ce74",
+      "start_utc": "2026-07-27T23:10:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 114,
+      "description": "Makeup of 7/27 PPD",
+      "file_sha256": "5a57a8906d36fd2c779a572232f678a4a5fbf9c46b4b263342e5d186b6db6e2b",
+      "game_id": 824490,
+      "home_team_id": 113,
+      "official_date": "2026-07-28",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-07-01_2026-07-31.json.gz",
+      "rescheduledFrom": "2026-07-27T23:10:00Z",
+      "rescheduledFromDate": "2026-07-27",
+      "schedule_date": "2026-07-28",
+      "schedule_game_sha256": "0694898d9a9bf07acfc5277ad9fd9b5fee4c2e4107c72a34ef6b5da65d3ebf16",
+      "start_utc": "2026-07-28T17:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "824514": [
+    {
+      "away_team_id": 138,
+      "description": "Makeup 8/17",
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 824514,
+      "home_team_id": 113,
+      "official_date": "2026-08-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduleDate": "2026-08-17T17:40:00Z",
+      "rescheduleGameDate": "2026-08-17",
+      "schedule_date": "2026-05-24",
+      "schedule_game_sha256": "7c9dd7c1e065d2200f84335462cc9dd2c2cc9eae89ee37e3f6c5370b283a84ab",
+      "start_utc": "2026-05-24T17:40:00Z",
+      "state": "Postponed"
+    }
+  ],
+  "824518": [
+    {
+      "away_team_id": 138,
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 824518,
+      "home_team_id": 113,
+      "official_date": "2026-05-23",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduleDate": "2026-05-23T17:10:00Z",
+      "rescheduleGameDate": "2026-05-23",
+      "schedule_date": "2026-05-22",
+      "schedule_game_sha256": "4c9abed45247c8e2a0597852a7e9780a175eedace81b2b6195ef1e9b6a46bfb7",
+      "start_utc": "2026-05-22T22:40:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 138,
+      "description": "Makeup of 5/22 PPD",
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 824518,
+      "home_team_id": 113,
+      "official_date": "2026-05-23",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduledFrom": "2026-05-22T22:40:00Z",
+      "rescheduledFromDate": "2026-05-22",
+      "schedule_date": "2026-05-23",
+      "schedule_game_sha256": "898b5d3b9a38ff8d2e0d89d242c45a12207d9249c19fe743464f7a83efde42f0",
+      "start_utc": "2026-05-23T17:10:00Z",
+      "state": "Final"
+    }
+  ],
+  "824589": [
+    {
+      "away_team_id": 144,
+      "file_sha256": "5ea1e3202700e82d0d18364bace2f4ac55b81c721c6797235764132945613fc4",
+      "game_id": 824589,
+      "home_team_id": 145,
+      "official_date": "2026-08-20",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "rescheduleDate": "2026-08-20T18:10:00Z",
+      "rescheduleGameDate": "2026-08-20",
+      "schedule_date": "2026-06-11",
+      "schedule_game_sha256": "3fff0b3661109151ade7d29a1b8e71a8c8ad25dda2bcdf438116955deb8df534",
+      "start_utc": "2026-06-11T23:40:00Z",
+      "state": "Postponed"
+    }
+  ],
+  "824766": [
+    {
+      "away_team_id": 139,
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 824766,
+      "home_team_id": 111,
+      "official_date": "2026-07-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduleDate": "2026-07-17T17:35:00Z",
+      "rescheduleGameDate": "2026-07-17",
+      "schedule_date": "2026-05-09",
+      "schedule_game_sha256": "16db43c10f805fd22b16aca3c35dd2728aff0a6e9671955450ef3d3eca6582cb",
+      "start_utc": "2026-05-09T20:10:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 139,
+      "description": "Makeup of 5/9 PPD",
+      "file_sha256": "5a57a8906d36fd2c779a572232f678a4a5fbf9c46b4b263342e5d186b6db6e2b",
+      "game_id": 824766,
+      "home_team_id": 111,
+      "official_date": "2026-07-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-07-01_2026-07-31.json.gz",
+      "rescheduledFrom": "2026-05-09T20:10:00Z",
+      "rescheduledFromDate": "2026-05-09",
+      "schedule_date": "2026-07-17",
+      "schedule_game_sha256": "cd5175cc690268aac2a68380149925a49a06ce5f80dd2ffe9285f2900b730d93",
+      "start_utc": "2026-07-17T17:35:00Z",
+      "state": "Final"
+    }
+  ],
+  "824840": [
+    {
+      "away_team_id": 116,
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 824840,
+      "home_team_id": 110,
+      "official_date": "2026-05-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduleDate": "2026-05-24T22:05:00Z",
+      "rescheduleGameDate": "2026-05-24",
+      "schedule_date": "2026-05-23",
+      "schedule_game_sha256": "a9b13b8a9c519ae70b25809f48c8ae543c39671960a45ae7eeef8c7bbc821280",
+      "start_utc": "2026-05-23T20:05:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 116,
+      "description": "Makeup of 5/23ppd",
+      "file_sha256": "2d0f6c0b9d18029e901ab431c81972e9c1913c9efe88b4999c5d35d4af86f7f9",
+      "game_id": 824840,
+      "home_team_id": 110,
+      "official_date": "2026-05-24",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "rescheduledFrom": "2026-05-23T20:05:00Z",
+      "rescheduledFromDate": "2026-05-23",
+      "schedule_date": "2026-05-24",
+      "schedule_game_sha256": "d2382a8f2f93bb545e80aa1964c845ef162ae7e857f52eab59cc8be5ebc75776",
+      "start_utc": "2026-05-24T22:05:00Z",
+      "state": "Final"
+    }
+  ],
+  "824850": [
+    {
+      "away_team_id": 117,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824850,
+      "home_team_id": 110,
+      "official_date": "2026-04-30",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "rescheduleDate": "2026-04-30T16:40:00Z",
+      "rescheduleGameDate": "2026-04-30",
+      "schedule_date": "2026-04-29",
+      "schedule_game_sha256": "e95088dc3cdcc4eeb14265b0b1b12ad126a57086cd01a5224483727392732d55",
+      "start_utc": "2026-04-29T22:35:00Z",
+      "state": "Postponed"
+    },
+    {
+      "away_team_id": 117,
+      "description": "Makeup of 4/29 PPD",
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 824850,
+      "home_team_id": 110,
+      "official_date": "2026-04-30",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "rescheduledFrom": "2026-04-29T22:35:00Z",
+      "rescheduledFromDate": "2026-04-29",
+      "schedule_date": "2026-04-30",
+      "schedule_game_sha256": "14a5880cf4e6fa1cbe5031d555aec43b853c5001879c3076da3ab4844e44561a",
+      "start_utc": "2026-04-30T16:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "824912": [
+    {
+      "away_team_id": 137,
+      "file_sha256": "5ea1e3202700e82d0d18364bace2f4ac55b81c721c6797235764132945613fc4",
+      "game_id": 824912,
+      "home_team_id": 144,
+      "official_date": "2026-06-16",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "resumeDate": "2026-06-17T18:00:00Z",
+      "resumeGameDate": "2026-06-17",
+      "schedule_date": "2026-06-16",
+      "schedule_game_sha256": "1153a19faef0caa08fefe2322dc29a3bd996f10b1424a4485aa4a4d8fc3ee1f6",
+      "start_utc": "2026-06-16T23:15:00Z",
+      "state": "Final"
+    },
+    {
+      "away_team_id": 137,
+      "file_sha256": "5ea1e3202700e82d0d18364bace2f4ac55b81c721c6797235764132945613fc4",
+      "game_id": 824912,
+      "home_team_id": 144,
+      "official_date": "2026-06-16",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "resumedFrom": "2026-06-16T23:15:00Z",
+      "resumedFromDate": "2026-06-16",
+      "schedule_date": "2026-06-17",
+      "schedule_game_sha256": "4b9a41cbd0166897262ba0a33ef547bdb68ef763bdaadf8249ae8cfb447314db",
+      "start_utc": "2026-06-17T18:00:00Z",
+      "state": "Final"
+    }
+  ],
+  "825019": [
+    {
+      "away_team_id": 145,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 825019,
+      "home_team_id": 133,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "90fbf1a9ec94e494675dc6343805c7ec11f8c3460dd5d01e9ab5fbd94d32ae9e",
+      "start_utc": "2026-04-18T01:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "825022": [
+    {
+      "away_team_id": 140,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 825022,
+      "home_team_id": 133,
+      "official_date": "2026-04-14",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-14",
+      "schedule_game_sha256": "f5c0448570b475a8e41130d3dea6e180680953a687a1ed38a1dfd1161c20a430",
+      "start_utc": "2026-04-15T01:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "825097": [
+    {
+      "away_team_id": 145,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 825097,
+      "home_team_id": 109,
+      "official_date": "2026-04-22",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-22",
+      "schedule_game_sha256": "c29207fd16c718ddc1a51588ba9144eab9aac340614b21ab4e8cf12ba4f19f3b",
+      "start_utc": "2026-04-23T01:40:00Z",
+      "state": "Final"
+    }
+  ],
+  "825101": [
+    {
+      "away_team_id": 141,
+      "file_sha256": "f9131c6a6875cc0aae8252b084e12d9a113f47c32fb3e5c391873da92429b923",
+      "game_id": 825101,
+      "home_team_id": 109,
+      "official_date": "2026-04-17",
+      "path": "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "schedule_date": "2026-04-17",
+      "schedule_game_sha256": "2c9119ca6c0594598dc517f3bce3df4144c39ef5d3d45c4bb6e5c32740bff428",
+      "start_utc": "2026-04-18T01:40:00Z",
+      "state": "Final"
+    }
+  ]
+}

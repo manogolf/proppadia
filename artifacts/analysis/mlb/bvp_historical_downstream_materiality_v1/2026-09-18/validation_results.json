@@ -1,0 +1,43 @@
+{
+  "contract": "BVP_HISTORICAL_DOWNSTREAM_MATERIALITY_V1",
+  "focused_tests": {
+    "passed": 89,
+    "failed": 0,
+    "command": "python3 -m pytest -q backend/mlb/tests/test_bvp_downstream_materiality_audit.py backend/mlb/tests/test_bvp_canonical_identity.py backend/mlb/tests/test_bvp_initial_schedule_wake_retry.py backend/mlb/tests/test_mlb_bvp_prewarm_exit_semantics.py backend/mlb/tests/test_hits05_full_board_shadow_v1.py",
+    "identity_tests": "PASS",
+    "wake_retry_tests": "PASS",
+    "all_three_actual_reader_query_regressions": "PASS_NO_NETWORK",
+    "governed_model_skip_and_technical_failure_semantics": "PASS",
+    "hits_shadow_contamination_and_integrity_regressions": "PASS"
+  },
+  "offline_evidence_reproduction": {
+    "unique_row_dispositions": 8021,
+    "complete_original_row_hash_set": "PASS",
+    "partition_recomputed_from_retained_authorities_and_runs": "PASS",
+    "original_and_confirmed_source_filtered_metric_reproduction": "PASS",
+    "confirmed_target_context_rows_per_copy": 56,
+    "confirmed_unique_source_rows_per_copy": 46,
+    "original_september18_full_hash_stream": "PASS",
+    "hash_pinned_quarantine_rows": 91,
+    "lossless_audit_jsonl_compression": "PASS_BYTE_EQUALITY_BEFORE_DUPLICATE_REMOVAL"
+  },
+  "database_integrity": {
+    "transaction_mode": "READ_ONLY",
+    "all_270582_bvp_rows_unchanged": "PASS",
+    "original_1937_september18_rows_unchanged": "PASS",
+    "eligible_rows": 1846,
+    "evidence": "final_read_only_database_integrity_check.json"
+  },
+  "compilation": "PASS",
+  "installed_wrapper_zsh_syntax": "PASS",
+  "protected_operational_sources_equal_fix_commit": "PASS",
+  "git_diff_check": "PASS",
+  "sha256_manifest_and_offline_validator": "PASS",
+  "database_writes": 0,
+  "external_api_requests": 0,
+  "model_refits": 0,
+  "prediction_or_acquisition_reruns": 0,
+  "historical_artifact_rebuilds": 0,
+  "unrelated_existing_worktree_changes": "PRESERVED_UNSTAGED",
+  "push": false
+}
