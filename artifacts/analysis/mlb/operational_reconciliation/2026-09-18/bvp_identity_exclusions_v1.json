@@ -1,0 +1,1108 @@
+{
+  "contract": "BVP_CANONICAL_SLATE_IDENTITY_V1",
+  "artifact_policy": "APPEND_ONLY_EXCLUSION_RECEIPT; preserve this file and all original rows; additional corrections require new versioned receipts.",
+  "manual_run_tag": "manual_bvp_20260918T171242Z_29198",
+  "stored_slate_date": "2026-09-18",
+  "authoritative_game_date": "2026-09-17",
+  "retained_game_id": 823978,
+  "intended_game_id": 823977,
+  "excluded_row_count": 91,
+  "reason_code": "OFF_DATE_GAME_REJECTED",
+  "source_branch": "LEGACY_TEAM_DATE_LOCAL_ID_SUBSTITUTION",
+  "all_1937_row_stream_sha256": "87de42893507c219325e239b03d0f43ab9b2bf43c3f5444b480bfc1fab5f2775",
+  "row_hash_contract": "Python json.dumps(full selected row,sort_keys=True,separators=(',',':'),default=str); SHA256. Stream selects prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,lineup_slot,is_probable_sp,computed_at ordered by prop_type,player_id,game_id,feature_set_tag.",
+  "excluded_rows": [
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "bbd357c73908d76fef31fe4a38d281adb63bfb0c9a8d00e8130cafcf68899a34"
+    },
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "98302bc4e64370240eb1e8473be55910ce7613fb115104e319793c60403cbe60"
+    },
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "8c0299226a8d3711e2456e84b98246410e227fc0d36a6c6bdce55bc527536748"
+    },
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "71402ff46d1efaddbe4ce278592010f2c54ddf215541a61e8a93e7f65a26835c"
+    },
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "f66f0435710ad916d31b940bcb1fe072e55e0c433bca0c42586dc2a7e48614f2"
+    },
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "465385d0275d0dff889bedf2f9f623ff4e0f56348c83411a149c3289bcbee473"
+    },
+    {
+      "key": {
+        "prop_type": "doubles",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "933d0919be3b06325cde3b050e7a7590528c5f0abd63cbb7182cb94909d151fd"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "57e1a4e74ef5db17e36d9ac280322f3557aefb152a48273be293002cb32fb4dd"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "23593c9cd94b344d929fc7cd2cbcbadd7397493d746dd04167edb847ada7c91b"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "a56f7d096745e40ba99e61361aae9078027bba30caea4112917b6c4c7220677a"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "ab92e60ff90c4433397c3f34c3fdc31e1b097618dc6dbee85c6f7a66b96aaeda"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "9f16e04755c87ba6fe9ad2d0d684b455c1ea4865bab56a7d3f14043e309fede5"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "f2e4c520192a38b072ff3f5f6e013138df7c31f3ef5ed4b58745ec7b526453f6"
+    },
+    {
+      "key": {
+        "prop_type": "hits",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "350dabb5cdd4b6c9f6caf3cfb6ee5c3e7df9ba990ba0f6c97e5ce4a59662bb25"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "0a97b8a0916d158e1249045b6d08727f3f9d4febb528f2c077865f7e11e6c356"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "5ed486b369a923ad640bededebd49640f2e8774fa3eb0bd89fa1df0d37673388"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "f6e1f627a8be1cda40e3cbc0cc8f665edf4285d3ab5a978572e6001e271176e9"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "9cf342d688856cac5f1000326a919f7cc24d11dbe84baadde19e3caf1914084d"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "e06d93905a3f6de9038937f0c6947a7c511e5b62dfe4e0fd79d6e6d5baeba379"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "5b76ac106cb11cd188afb8d81d293363647634b4622d25836faae09f9486d8a5"
+    },
+    {
+      "key": {
+        "prop_type": "hits_runs_rbis",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "40a828e2101becaeb43f76d6a1d12fab4f00f908b0e5298113600369b7c3a6fe"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "a08573c7c1eb3ce49f71189032f04910f8da04a4bbd71a5dbdaebeffc9aa94cd"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "83421eff08bc50844a92b04578f4edf97ea6ffd5f495a0d3249f858d664e86f9"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "43f04e264f4a814cba86183e285e8c22dfd1740572a805f68680819a5c3628f9"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "abd6a4d52042011461488a4e593d21741f5379fce74e6bbf0e75e2669ab1c274"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "1c3c1bca2ab811beb018079d760f362928648b3c6599e7690dc0a57bac4cfe33"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "d98be8864ba2273c11b6710ecc773d062f264e7191a9ea0c0e7e6812a878237d"
+    },
+    {
+      "key": {
+        "prop_type": "home_runs",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "4ef54ca343231560fcb0b022dc5cb5fb217aa8ba2787e3c396f720de67e83791"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "dd85a27700f395790f29318d6e9762468d9321eb588c81863ed69e5bc8b596a9"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "8893562757694f9c6712236c6663d35e861e1bd07716c1500cb027d04b08a1de"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "a88a476afb8d33f0dc96e87e2ad0c38bae2f51b9dae27ea863d4bee2906957a3"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "68545651f358071f24729f4e05aec12f5517d3e54447db35eb5260b295389f7d"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "4040d943cc03dc2d55ef7dd70dacae2b08a5821a3c5c02d2f8d31a539d143ecb"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "949f852c929ab7458faee8354ecf0351fec15f46545c7056b10b8fdfdc4424eb"
+    },
+    {
+      "key": {
+        "prop_type": "rbis",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "0abb40af545213e84798acde4e50fe73af1d9819d93e0a521942cad3a309ba9f"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "3c16187dbb2492e7e33ad13c11af0bd1dc314563661bada02b87216a7a09b585"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "ee8b7fe1a230185d9cc2890582f99723a9bd39de2b1c6e85459483294fc3709b"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "8dbb17c876d6f5965fd1a546808c20ed16d3cf17829f693b68d1adf919acf560"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "9d72782a8c519e22512603ab476ae56d29e894dc6b11bfb85a16edd6595902a3"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "6cea12baff4876653f3fa2c8f8d01f5def92ab40de9bb4f2d9f90384b824a3ea"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "66c8f40433bb4a9456bbca6d9e27ded5fc19d114d60dd33cf297e6d524d1a5ea"
+    },
+    {
+      "key": {
+        "prop_type": "runs_rbis",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "ff033e3756c02b81379937965b0be0d2b3e6fdd73f6c6ec87114348ac7da1e9c"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "35a9338add9aa46d4fa4f1e9ed185f4998132320d5acf935440307bba5903ea0"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "d0b41165f1264b4fa9720b4acdfbe3cceb0ddc9c6b5fc986c208b154fd6aeb8b"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "28fb67e363910517f586215579fbd54692cbc947674589394504e16613041ec7"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "4cb41d6b5292e94822c7565b769dac79d00f7400d05cca78088004d093462a5d"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "847e474d6a2b66dbb19f9c87d223008d5bfdf190d277ad2e761b98b2e7359260"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "7f4614b1a05e39cfc9262d466915d351364927391fd60074a7da9bf4ba20ab61"
+    },
+    {
+      "key": {
+        "prop_type": "runs_scored",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "491d7a31ad328c8864dfde4b9218b4d26fb4f59d0e97cbcff2252453f824e0a3"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "eccf01e7b265f59576d63145711693a9778feba5357dc8c199af46b291a8d913"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "0fa22d6235f1874092e82f8882555cb0a2a5a9268207bea66437f3d5d677c6e1"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "09f95717e1579fae439ecfefc4c9f57d999f2b730a119fa94c73322b538e61f7"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "54b73d7ebd7a1c768db8d812803d076c726e7d17077c4fe20154a2d099bdfabe"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "94162c85f0ca80e3aa4f4334b76602c4de32c27ff6ea598687f797a365f6a74d"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "95969f3c6318902cb110d9c8faa76fd8e1bbe4f9f3e414fd6b3a38e23d1c31f7"
+    },
+    {
+      "key": {
+        "prop_type": "singles",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "93a3a1ed2d8a9814fa0e8f5f22c4795810ae3cdfc77619759073aedbd8cba927"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "dcac856ec3bdf00b84fb2845b8d7f4eb6f5d2ba3dc5a661b397cd7309f4b3954"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "131170de23cb4311ad729a1dcb5b462eacb7871b7f227f914a83acbc88f68d9a"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "3303230a5f89559b2d815e96376be9ea499535893281932b885ebcbccb0e76e8"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "e361980ec49ab054c1a4675308ebb163067e2301d0046635271c673ffddf4d77"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "6a2ca8936ff3c199aa34899d34f5cdb1dd134b13a0e6e791d08ee069ef495b0c"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "3f8246ad409c3347e092bd36f2f59eb5d12469de46cb3594df8ca0c72eeb066d"
+    },
+    {
+      "key": {
+        "prop_type": "stolen_bases",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "9fd39c7b60e35242a9cf86e6a7e83a8a492a217f2383e3112d19728980940826"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "80f5ec38fd5f1b272e8e7a29e6b53c3b3361b538f61aa3ff66016f9e7374c94f"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "def025d96a670eb33bca9506b36338b22a31ca682e998fb259e8f3fcd0fcc981"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "46be1ce92fcb1e47a57384246d680ba40da7b36d618eb68dddb0ebdae5732f3e"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "db7013aadac3bcc9f49cd4e64ed87041a958d78902eced74f5b94da30932d2a4"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "c34177d60624adf824e34b533cd0108534079b62e4a1a99baae399c89dc74b77"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "dfd018e489bae936b1c0f6a1c752a3655307452cdb86a7ac63d9c0fa6960e20d"
+    },
+    {
+      "key": {
+        "prop_type": "strikeouts_batting",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "5b8de834c407e604e2764615c18c7f368376764af2c064bbea602a503bbb1353"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "b3d60b671b79106277849bf1afecb2d3aa231dff883dfccf9bdc351ced61154d"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "8fcc4a7fc9a2ed662c5634387e29e2764af0d55768aa474ca6a7481dca3c272a"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "831bef23cf72a537129dfb5e95ee4691f56874d612e6ed96a9cdf539260e1293"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "caaf0af3c838058e1d9919a2502249cee2b6a9df1239c063a3d9ad00024f8d37"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "57b6371c4b75862018dae74f30ba830296932d002596794f8089d2dcf8aac88a"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "3de60d9ad1c31e8f5ad73120cd03189a8df2af8e207211186df86b6e8abd8538"
+    },
+    {
+      "key": {
+        "prop_type": "total_bases",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "cb27d537c6bfa589e07f101a0456bd3ab91d225d9328164a139c2614ba44b702"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "05292e22db232a2689718d354aa136ab0e8cc22d278af89e3cda25e44e81e328"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "213568b681c2f56ab758c7240bc9a529f6d6e847a0b4fdaface61eec96d15226"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "ec5282923b4d2e46f7f36fea72261012a2192d88c9c4b943983178de226a1a0a"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "720256d5000b8d75391515c15718b2bd5ce3e97f5fc522ae59021f05c3bbabc5"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "14557ebee2e5b83fb4b796e4c9e5f114c3203b73ea4eaadd3b6c57ea67deea13"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "dde5ae9c9c2c7142a566aa50960874e7907205b38ebb2c231961b8a2e41ebf27"
+    },
+    {
+      "key": {
+        "prop_type": "triples",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "f0553c83ec4e92b3af64a26309d6f605b03239c0ce62aa0af5ae26243e1170d2"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 605137,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "e704e139b8be54914679b97b3ebca7ffc3f7a62a51715482d15d187e66341520"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 663616,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "77668693f9398bd72f0cf1702fcb5d73726dd954c4134fe1210fcba59c71dddf"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 665019,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "debfee3c1dbf28b2911269832105a746135af28122106080907fa926c4956cc5"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 668904,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "67a1b8231f2b6d4c7433f1c05f02b7fb0aede6bd7152f6fa3abde4fd581243eb"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 680777,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "b9f710810b1726673e629870b355957324d1f15d129511e93192c7c684d566a5"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 686797,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "e5d26bf1a5831a7ec5bb704996dd0abe9dd2994c621b472e8e8d87030d08a68b"
+    },
+    {
+      "key": {
+        "prop_type": "walks",
+        "player_id": 807712,
+        "game_id": 823978,
+        "feature_set_tag": "v1"
+      },
+      "stored_slate_date": "2026-09-18",
+      "model_tag": "bvp_pvb_refresh_v1",
+      "computed_at": "2026-09-18 17:13:42.094683+00:00",
+      "row_sha256": "a53a0980beb2adfa47c5bab5ecb5eee7e36de6a35b81248968686d03d5ec61cd"
+    }
+  ]
+}

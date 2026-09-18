@@ -1,4 +1,13 @@
 {
+  "subsequent_forward_identity_repair": {
+    "contract": "BVP_CANONICAL_SLATE_IDENTITY_V1",
+    "manifest": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_identity_forward_correction_manifest.json",
+    "exclusion_receipt": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_identity_exclusions_v1.json",
+    "retained_rows_changed": 0,
+    "excluded_from_certified_evidence": 91,
+    "prior_manual_classification_preserved": true,
+    "note": "Later forward code/reader correction only; original validation and hashes below describe the earlier reconciliation cutoff, not newly modified source/document bytes. No acquisition or historical row correction."
+  },
   "contract": "BVP_MANUAL_SAME_DAY_ACTUAL_TIME_V1",
   "reconciliation_date": "2026-09-18",
   "verified_at_utc": "2026-09-18T17:27:40.406793+00:00",

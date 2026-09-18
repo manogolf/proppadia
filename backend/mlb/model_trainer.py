@@ -332,7 +332,7 @@ def _fetch_pfp_feature_rows(
         if sb is not None:
             r = (
                 sb.schema("mlb").table("prop_features_precomputed")
-                .select("prop_type,player_id,game_id,features")
+                .select("prop_type,player_id,game_id,game_date,feature_set_tag,model_tag,computed_at,features")
                 .eq("feature_set_tag", feature_set_tag)
                 .in_("game_id", chunk)
                 .execute()
@@ -341,14 +341,15 @@ def _fetch_pfp_feature_rows(
         else:
             placeholders = ",".join(["%s"] * len(chunk))
             sql = (
-                "SELECT prop_type, player_id, game_id, features "
+                "SELECT prop_type, player_id, game_id, game_date, feature_set_tag, model_tag, computed_at, features "
                 "FROM mlb.prop_features_precomputed "
                 f"WHERE feature_set_tag = %s AND game_id IN ({placeholders})"
             )
             part = pg_fetchall(sql, tuple([feature_set_tag, *chunk]))
         if part:
             rows.extend(part)
-    return rows
+    from backend.mlb.shared.bvp_identity import certified_rows
+    return list(certified_rows(rows))
 
 
 def _merge_pfp_bvp_features(sb: Optional[Client], df: pd.DataFrame, feat_cols: List[str]) -> pd.DataFrame:

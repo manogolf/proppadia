@@ -21,7 +21,8 @@ from backend.mlb.shared.team_name_map import (
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
-from backend.shared.db.pg import pg_fetchone
+from backend.shared.db.pg import pg_fetchone, pg_fetchall
+from backend.mlb.shared.bvp_identity import certified_rows
 
 ET = ZoneInfo("America/New_York")
 _HORIZONS = ("d7", "d15", "d30")
@@ -130,9 +131,10 @@ def _load_latest_pfp_features(
     game_date: str,
     feature_set_tag: str,
 ) -> Dict[str, Any]:
-    row = pg_fetchone(
+    rows = pg_fetchall(
         """
-SELECT pfp.features
+SELECT pfp.prop_type, pfp.player_id, pfp.game_id, pfp.game_date,
+       pfp.feature_set_tag, pfp.model_tag, pfp.computed_at, pfp.features
 FROM mlb.prop_features_precomputed pfp
 WHERE pfp.prop_type = %s
   AND pfp.player_id = %s
@@ -144,7 +146,6 @@ WHERE pfp.prop_type = %s
 ORDER BY
   CASE WHEN %s::int IS NOT NULL AND pfp.game_id = %s::int THEN 1 ELSE 0 END DESC,
   pfp.game_date DESC NULLS LAST
-LIMIT 1
 """,
         (
             str(prop_type),
@@ -156,7 +157,9 @@ LIMIT 1
             game_id,
             game_id,
         ),
-    ) or {}
+    ) or []
+    eligible = certified_rows(rows)
+    row = eligible[0] if eligible else {}
     features = row.get("features")
     return features if isinstance(features, dict) else {}
 

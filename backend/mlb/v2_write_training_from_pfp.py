@@ -320,12 +320,13 @@ def _pfp_rows_for_date(date_str: str) -> List[Dict[str, Any]]:
         supabase
         .schema("mlb")
         .from_("prop_features_precomputed")
-        .select("prop_type, player_id, game_id, game_date, features")
+        .select("prop_type, player_id, game_id, game_date, feature_set_tag, model_tag, computed_at, features")
         .eq("game_date", date_str)
         .limit(20000)
         .execute()
     )
-    return getattr(res, "data", []) or []
+    from backend.mlb.shared.bvp_identity import certified_rows
+    return list(certified_rows(getattr(res, "data", []) or []))
 
 def upsert_mtp(row: Dict[str, Any]) -> None:
     supabase.schema("mlb").from_("model_training_props").upsert(

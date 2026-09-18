@@ -1,0 +1,2417 @@
+{
+  "reader_inventory": [
+  {
+    "path": "backend/_legacy/scripts/backfill_mlb_pfp_overlap_from_mtp.py",
+    "role": "WRITER_NOT_EXECUTED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/domains/mlb/prop_workflow.py",
+    "role": "CERTIFIED_READER_GUARDED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/model_trainer.py",
+    "role": "CERTIFIED_READER_GUARDED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/precompute/precompute_props_daily.py",
+    "role": "WRITER_NOT_EXECUTED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/audit_expanded_o15_hidden_matchup_support.py",
+    "role": "ARTIFACT_CONSUMER_OR_SOURCE_LABEL_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/audit_mlb_hits_feature_parity.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/build_mlb_predictions_wide.py",
+    "role": "TRANSITIVE_GUARDED_READER_OR_PROVENANCE_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/build_mlb_slate_output.py",
+    "role": "TRANSITIVE_GUARDED_READER_OR_PROVENANCE_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/check_mlb_hits_expectation_sources.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/database_audit/inventory_mlb_supabase_estate.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/diagnose_mlb_hits_feature_drivers.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/diagnose_mlb_hits_feature_interactions.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/diagnose_mlb_hits_feature_only_failure.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/export_mlb_ranking_tool_upload.py",
+    "role": "ARTIFACT_CONSUMER_OR_SOURCE_LABEL_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/export_quick_card_hits_tool_upload.py",
+    "role": "ARTIFACT_CONSUMER_OR_SOURCE_LABEL_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/grade_first_strict_asof_replay.py",
+    "role": "ARTIFACT_CONSUMER_OR_SOURCE_LABEL_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/hydrate_expanded_o15_context.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/refresh_mlb_bvp_pvb.py",
+    "role": "WRITER_NOT_EXECUTED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_degenerate_lanes.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_feature_health.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_high_value_historical.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_feature_probability_slope.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_interaction_failure.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_local_base_rate.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_probability_curvature.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_recency_sensitivity.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_recency_vs_baseline.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_hits_variance_analysis.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_prop_diagnostic_meta.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/report_mlb_strikeouts_pitching_diagnostics.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/run_mlb_hits_model_repair_experiment.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/run_mlb_o15_pa_opportunity_audit.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/run_mlb_o15_tier_a_failure_audit.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/run_mlb_o15_two_hit_conversion_audit.py",
+    "role": "RAW_DIAGNOSTIC_RESEARCH_READER_NOT_CERTIFIED_ADMISSION",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py",
+    "role": "TRANSITIVE_GUARDED_READER_OR_PROVENANCE_ONLY",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/scripts/validate_mlb_bvp_identity_v1.py",
+    "role": "OFFLINE_TEST_OR_READ_ONLY_VALIDATOR",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/tests/test_bvp_canonical_identity.py",
+    "role": "OFFLINE_TEST_OR_READ_ONLY_VALIDATOR",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/v2_backfill_mlb_api_training.py",
+    "role": "WRITER_NOT_EXECUTED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  },
+  {
+    "path": "backend/mlb/v2_write_training_from_pfp.py",
+    "role": "CERTIFIED_READER_GUARDED",
+    "restriction": "Existing evidence remains unchanged; direct diagnostic SQL is not retrospective certification."
+  }
+],
+  "reconstructed_september18_slate_detail": [
+  {
+    "game_date": "2026-09-18",
+    "game_id": 822847,
+    "scheduled_start_utc": "2026-09-19 00:05:00+00",
+    "home_team": "Texas Rangers",
+    "away_team": "Toronto Blue Jays",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 140,
+    "away_team_id": 141,
+    "scheduled_start_pt": "2026-09-18T17:05:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 247,
+    "retained_batters": 19
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 822923,
+    "scheduled_start_utc": "2026-09-18 23:10:00+00",
+    "home_team": "Tampa Bay Rays",
+    "away_team": "Boston Red Sox",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 139,
+    "away_team_id": 111,
+    "scheduled_start_pt": "2026-09-18T16:10:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 260,
+    "retained_batters": 20
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 823005,
+    "scheduled_start_utc": "2026-09-19 00:15:00+00",
+    "home_team": "St. Louis Cardinals",
+    "away_team": "Washington Nationals",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 138,
+    "away_team_id": 120,
+    "scheduled_start_pt": "2026-09-18T17:15:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 169,
+    "retained_batters": 13
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 823252,
+    "scheduled_start_utc": "2026-09-19 01:40:00+00",
+    "home_team": "San Diego Padres",
+    "away_team": "Miami Marlins",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 135,
+    "away_team_id": 146,
+    "scheduled_start_pt": "2026-09-18T18:40:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 104,
+    "retained_batters": 8
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 823331,
+    "scheduled_start_utc": "2026-09-18 22:40:00+00",
+    "home_team": "Pittsburgh Pirates",
+    "away_team": "Kansas City Royals",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 134,
+    "away_team_id": 118,
+    "scheduled_start_pt": "2026-09-18T15:40:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 78,
+    "retained_batters": 6
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 823572,
+    "scheduled_start_utc": "2026-09-18 23:15:00+00",
+    "home_team": "New York Mets",
+    "away_team": "Philadelphia Phillies",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 121,
+    "away_team_id": 143,
+    "scheduled_start_pt": "2026-09-18T16:15:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 117,
+    "retained_batters": 9
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 823898,
+    "scheduled_start_utc": "2026-09-19 02:15:00+00",
+    "home_team": "Los Angeles Dodgers",
+    "away_team": "San Francisco Giants",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 119,
+    "away_team_id": 137,
+    "scheduled_start_pt": "2026-09-18T19:15:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 52,
+    "retained_batters": 4
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 823977,
+    "scheduled_start_utc": "2026-09-19 01:38:00+00",
+    "home_team": "Los Angeles Angels",
+    "away_team": "Minnesota Twins",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 108,
+    "away_team_id": 142,
+    "scheduled_start_pt": "2026-09-18T18:38:00-07:00",
+    "local_id_branch": "LEGACY_REPLACED_WITH_823978",
+    "retained_rows": 0,
+    "retained_batters": 0
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 824138,
+    "scheduled_start_utc": "2026-09-19 00:10:00+00",
+    "home_team": "Houston Astros",
+    "away_team": "Atlanta Braves",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 117,
+    "away_team_id": 144,
+    "scheduled_start_pt": "2026-09-18T17:10:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 260,
+    "retained_batters": 20
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 824303,
+    "scheduled_start_utc": "2026-09-19 00:10:00+00",
+    "home_team": "Colorado Rockies",
+    "away_team": "Seattle Mariners",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 115,
+    "away_team_id": 136,
+    "scheduled_start_pt": "2026-09-18T17:10:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 26,
+    "retained_batters": 2
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 824383,
+    "scheduled_start_utc": "2026-09-18 23:10:00+00",
+    "home_team": "Cleveland Guardians",
+    "away_team": "Athletics",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 114,
+    "away_team_id": 133,
+    "scheduled_start_pt": "2026-09-18T16:10:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 26,
+    "retained_batters": 2
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 824463,
+    "scheduled_start_utc": "2026-09-18 22:40:00+00",
+    "home_team": "Cincinnati Reds",
+    "away_team": "Chicago Cubs",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 113,
+    "away_team_id": 112,
+    "scheduled_start_pt": "2026-09-18T15:40:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 221,
+    "retained_batters": 17
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 824547,
+    "scheduled_start_utc": "2026-09-18 23:40:00+00",
+    "home_team": "Chicago White Sox",
+    "away_team": "Detroit Tigers",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 145,
+    "away_team_id": 116,
+    "scheduled_start_pt": "2026-09-18T16:40:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 0,
+    "retained_batters": 0
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 824790,
+    "scheduled_start_utc": "2026-09-18 23:05:00+00",
+    "home_team": "Baltimore Orioles",
+    "away_team": "Milwaukee Brewers",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 110,
+    "away_team_id": 158,
+    "scheduled_start_pt": "2026-09-18T16:05:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 130,
+    "retained_batters": 10
+  },
+  {
+    "game_date": "2026-09-18",
+    "game_id": 825032,
+    "scheduled_start_utc": "2026-09-19 01:40:00+00",
+    "home_team": "Arizona Diamondbacks",
+    "away_team": "New York Yankees",
+    "requested_date": "2026-09-18",
+    "official_date": "2026-09-18",
+    "home_team_id": 109,
+    "away_team_id": 147,
+    "scheduled_start_pt": "2026-09-18T18:40:00-07:00",
+    "local_id_branch": "OFFICIAL_ID_RETAINED_OPTIONAL_LOCAL_UNMAPPED",
+    "retained_rows": 156,
+    "retained_batters": 12
+  }
+],
+  "task": "MLB_BVP_CANONICAL_IDENTITY_FORWARD_CORRECTION_V1",
+  "contract": "BVP_CANONICAL_SLATE_IDENTITY_V1",
+  "authority_date": "2026-09-18",
+  "baseline_commit": "f74293b1d94e1495253084b08f8929685bf91e22",
+  "root_cause": {
+    "producer": "backend/mlb/scripts/insert_mlb_stat_derived.py::_upsert_game_info_min parses gameDate and uses parsed.date() (UTC for Z timestamps), not officialDate or PT date.",
+    "admission": "Legacy _map_games_to_local_game_ids used game_info.game_date plus home/away teams to replace official gamePk.",
+    "reproduced_offline": true,
+    "requested_date": "2026-09-18",
+    "official_id": 823977,
+    "official_date": "2026-09-18",
+    "scheduled_start_utc": "2026-09-19T01:38:00Z",
+    "scheduled_start_pt": "2026-09-18T18:38:00-07:00",
+    "wrong_local_id": 823978,
+    "wrong_local_database_date": "2026-09-18",
+    "wrong_official_date": "2026-09-17",
+    "wrong_start_utc": "2026-09-18T01:38:00Z",
+    "wrong_start_pt": "2026-09-17T18:38:00-07:00",
+    "source_branch": "TEAM_DATE_LOCAL_DB_SUBSTITUTION_AFTER_SCHEDULE_PARSE_BEFORE_STARTER_FALLBACK_AND_ROW_WRITE",
+    "legacy_mapped": 1,
+    "legacy_unmapped": 14,
+    "corrected_official_ids_preserved": 15,
+    "corrected_optional_unmapped_with_same_database_fixture": 15,
+    "other_branches": "No evidence the prior-night ID came from StatsAPI date-range construction, cache, or source schedule. Earlier retained 05:30 official schedule contains all 15 intended IDs; original manual response was not saved."
+  },
+  "behavior": {
+    "authoritative_identity": [
+      "requested PT slate date",
+      "official MLB gamePk",
+      "source officialDate",
+      "source schedule day date",
+      "aware scheduled start UTC with matching PT date",
+      "home and away team IDs",
+      "batter ID",
+      "opposing pitcher ID",
+      "feature-set/model tags",
+      "actual source/acquisition/computed timestamps"
+    ],
+    "game_primary_key": "OFFICIAL_MLB_GAME_PK_NEVER_SUBSTITUTED_BY_TEAM_DATE_MATCH",
+    "unknown_or_malformed_authoritative_slate": "FAIL_ACQUISITION_BEFORE_FEATURE_WRITE",
+    "individual_known_offdate_or_unverifiable_state": "EXCLUDE_BEFORE_VSPLAYER; valid population continues; PARTIAL_IDENTITY_REJECTIONS",
+    "prewrite_foreign_or_offdate_rows": "EXCLUDED_BY_INDEPENDENT_VERIFIED_ID_SET; duplicate or malformed row keys fail closed",
+    "optional_local_id_missing": "KEEP_CANONICAL_OFFICIAL_ID; OPTIONAL_LOCAL_ID_UNMAPPED",
+    "starter_unresolved": "SKIP_TEAM_SIDE; retain exact game/team/opponent/pitcher-null identities and fallback reason",
+    "auditing": "Exclusive private per-acquisition JSONL journal, fsync before admission, successful/failed request identity, empty payload plus response hash, later database-commit marker; actual timestamps only.",
+    "empty_semantics": "Successful verified empty stats/splits retained with request identity; never claim certified zero history or manufacture zero feature rows. Invalid empty shape classified EMPTY_BVP_RESPONSE_UNVERIFIABLE.",
+    "new_reader_admission": "Canonical membership from retained official archives, immutable Moneyline slate, or committed forward source journal. New captures additionally require committed batter/pitcher/tag/hash/pregame receipt. Unknown/ambiguous authority and quarantined keys fail closed.",
+    "legacy_compatibility": "Legacy rows are preserved; only game identity can be certified, not absent original pitcher/as-of lineage.",
+    "forward_effective_utc": "2026-09-18T17:41:34Z"
+  },
+  "historical_scope": {
+    "retained_rows": 270582,
+    "date_game_tag_acquisition_groups": 1580,
+    "retained_slate_acquisition_date_cohorts": 121,
+    "identity_matching_rows": 262561,
+    "off_date_rows": 8021,
+    "unknown_rows": 0,
+    "duplicate_canonical_keys": 0,
+    "off_date_groups": 43,
+    "off_date_slate_dates": 18,
+    "affected_acquisition_dates": 17,
+    "first_offdate_slate": "2026-04-07",
+    "first_offdate_acquisition_date": "2026-04-08",
+    "last_offdate_slate": "2026-09-18",
+    "previous_local_date_utc_fingerprint_rows": 5954,
+    "previous_local_date_utc_fingerprint_games": 29,
+    "other_offdate_rows": 2067,
+    "scheduled_april15": {
+      "local_game_id_mapped": 4,
+      "local_game_id_unmapped": 11,
+      "retained_prior_day_rows": 741,
+      "retained_prior_day_games": 4
+    },
+    "causal_limits": "Retention is a mutable latest-row population, not a full acquisition ledger. Date cohorts are not run counts. Retrospective schedule archives contain reschedules/postponements; 8021 is not a proven causal count for this mapper. The scheduled April 15 counter and retained prior-night rows show this is not manual-only. Earlier April boundary fingerprints lack full original run provenance.",
+    "downstream": {
+      "known_paths": [
+        "prop_workflow latest-date fallback",
+        "model_trainer game-ID BvP merge",
+        "v2_write_training_from_pfp date selector"
+      ],
+      "current_qualified_production_model": false,
+      "training_key_overlap": {
+        "matched_training_keys": 53,
+        "prior_day_training_keys": 53,
+        "first_created": "2026-09-18 12:35:50.916125+00",
+        "last_updated": "2026-09-18 12:34:20.250326"
+      },
+      "actual_consumption_status": "UNRESOLVED_FOR_ALL_HISTORICAL_RUNS; 53 prior-day training keys existed before manual acquisition, but no stored feature-copy provenance demonstrates consumption of the 91 later rows. Legacy feature loader discarded source-row identity. No blanket historical nonconsumption claim."
+    },
+    "cohort_columns": [
+      "slate_date",
+      "acquisition_date",
+      "valid_rows",
+      "off_date_rows",
+      "unknown_rows",
+      "valid_games",
+      "off_date_games",
+      "unknown_games"
+    ],
+    "cohorts": [
+      [
+        "2026-04-07",
+        "2026-04-07",
+        416,
+        0,
+        0,
+        8,
+        0,
+        0
+      ],
+      [
+        "2026-04-07",
+        "2026-04-08",
+        2821,
+        1248,
+        0,
+        11,
+        4,
+        0
+      ],
+      [
+        "2026-04-08",
+        "2026-04-08",
+        2145,
+        858,
+        0,
+        11,
+        4,
+        0
+      ],
+      [
+        "2026-04-08",
+        "2026-04-07",
+        858,
+        0,
+        0,
+        4,
+        0,
+        0
+      ],
+      [
+        "2026-04-15",
+        "2026-04-15",
+        1872,
+        741,
+        0,
+        11,
+        4,
+        0
+      ],
+      [
+        "2026-04-16",
+        "2026-04-16",
+        1339,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-04-17",
+        "2026-04-17",
+        1807,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-04-18",
+        "2026-04-18",
+        3029,
+        1261,
+        0,
+        15,
+        7,
+        0
+      ],
+      [
+        "2026-04-19",
+        "2026-04-19",
+        2353,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-04-20",
+        "2026-04-20",
+        1781,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-04-21",
+        "2026-04-21",
+        2145,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-04-22",
+        "2026-04-22",
+        2145,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-04-23",
+        "2026-04-23",
+        1261,
+        728,
+        0,
+        8,
+        4,
+        0
+      ],
+      [
+        "2026-04-24",
+        "2026-04-24",
+        1833,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-04-25",
+        "2026-04-25",
+        3068,
+        1157,
+        0,
+        14,
+        6,
+        0
+      ],
+      [
+        "2026-04-26",
+        "2026-04-26",
+        2587,
+        0,
+        0,
+        16,
+        0,
+        0
+      ],
+      [
+        "2026-04-27",
+        "2026-04-27",
+        1456,
+        0,
+        0,
+        8,
+        0,
+        0
+      ],
+      [
+        "2026-04-29",
+        "2026-04-29",
+        2223,
+        364,
+        0,
+        13,
+        2,
+        0
+      ],
+      [
+        "2026-04-30",
+        "2026-04-30",
+        2054,
+        0,
+        0,
+        10,
+        0,
+        0
+      ],
+      [
+        "2026-05-01",
+        "2026-05-01",
+        2522,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-02",
+        "2026-05-02",
+        2379,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-03",
+        "2026-05-03",
+        2873,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-04",
+        "2026-05-04",
+        2080,
+        0,
+        0,
+        12,
+        0,
+        0
+      ],
+      [
+        "2026-05-06",
+        "2026-05-06",
+        3029,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-05-07",
+        "2026-05-07",
+        1651,
+        0,
+        0,
+        10,
+        0,
+        0
+      ],
+      [
+        "2026-05-08",
+        "2026-05-08",
+        2249,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-05-09",
+        "2026-05-09",
+        2288,
+        156,
+        0,
+        14,
+        1,
+        0
+      ],
+      [
+        "2026-05-10",
+        "2026-05-10",
+        2496,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-11",
+        "2026-05-11",
+        1027,
+        0,
+        0,
+        6,
+        0,
+        0
+      ],
+      [
+        "2026-05-12",
+        "2026-05-12",
+        2665,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-13",
+        "2026-05-13",
+        2470,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-14",
+        "2026-05-14",
+        1638,
+        0,
+        0,
+        10,
+        0,
+        0
+      ],
+      [
+        "2026-05-15",
+        "2026-05-15",
+        2340,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-16",
+        "2026-05-16",
+        2158,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-17",
+        "2026-05-17",
+        2626,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-18",
+        "2026-05-18",
+        2301,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-05-19",
+        "2026-05-19",
+        2483,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-20",
+        "2026-05-20",
+        2353,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-21",
+        "2026-05-21",
+        1612,
+        0,
+        0,
+        7,
+        0,
+        0
+      ],
+      [
+        "2026-05-22",
+        "2026-05-22",
+        2132,
+        26,
+        0,
+        14,
+        1,
+        0
+      ],
+      [
+        "2026-05-23",
+        "2026-05-23",
+        2496,
+        364,
+        0,
+        13,
+        2,
+        0
+      ],
+      [
+        "2026-05-24",
+        "2026-05-24",
+        2340,
+        299,
+        0,
+        15,
+        1,
+        0
+      ],
+      [
+        "2026-05-25",
+        "2026-05-25",
+        2431,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-05-26",
+        "2026-05-26",
+        2626,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-05-27",
+        "2026-05-27",
+        2808,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-28",
+        "2026-05-28",
+        1339,
+        0,
+        0,
+        6,
+        0,
+        0
+      ],
+      [
+        "2026-05-29",
+        "2026-05-29",
+        2340,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-05-30",
+        "2026-05-30",
+        2197,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-05-31",
+        "2026-05-31",
+        2015,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-06-01",
+        "2026-06-01",
+        1248,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-06-02",
+        "2026-06-02",
+        2366,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-06-03",
+        "2026-06-03",
+        2691,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-06-04",
+        "2026-06-04",
+        1326,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-06-05",
+        "2026-06-05",
+        2496,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-06-06",
+        "2026-06-06",
+        2080,
+        234,
+        0,
+        14,
+        1,
+        0
+      ],
+      [
+        "2026-06-07",
+        "2026-06-07",
+        2301,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-06-08",
+        "2026-06-08",
+        1443,
+        0,
+        0,
+        8,
+        0,
+        0
+      ],
+      [
+        "2026-06-10",
+        "2026-06-10",
+        2171,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-06-11",
+        "2026-06-10",
+        1235,
+        13,
+        0,
+        7,
+        1,
+        0
+      ],
+      [
+        "2026-06-13",
+        "2026-06-13",
+        2067,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-06-16",
+        "2026-06-16",
+        2262,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-06-17",
+        "2026-06-17",
+        1872,
+        208,
+        0,
+        13,
+        1,
+        0
+      ],
+      [
+        "2026-06-22",
+        "2026-06-22",
+        1625,
+        117,
+        0,
+        12,
+        1,
+        0
+      ],
+      [
+        "2026-06-24",
+        "2026-06-24",
+        2236,
+        0,
+        0,
+        16,
+        0,
+        0
+      ],
+      [
+        "2026-06-29",
+        "2026-06-29",
+        2444,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-06-30",
+        "2026-06-30",
+        2795,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-07-01",
+        "2026-07-01",
+        2132,
+        0,
+        0,
+        12,
+        0,
+        0
+      ],
+      [
+        "2026-07-02",
+        "2026-07-02",
+        1482,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-07-04",
+        "2026-07-04",
+        2964,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-07-09",
+        "2026-07-08",
+        2418,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-07-16",
+        "2026-07-16",
+        247,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        "2026-07-18",
+        "2026-07-18",
+        2327,
+        143,
+        0,
+        15,
+        1,
+        0
+      ],
+      [
+        "2026-07-25",
+        "2026-07-25",
+        2496,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-07-26",
+        "2026-07-26",
+        2717,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-07-27",
+        "2026-07-27",
+        1560,
+        13,
+        0,
+        11,
+        1,
+        0
+      ],
+      [
+        "2026-07-28",
+        "2026-07-28",
+        2301,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-07-29",
+        "2026-07-29",
+        2717,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-07-30",
+        "2026-07-30",
+        2015,
+        0,
+        0,
+        10,
+        0,
+        0
+      ],
+      [
+        "2026-07-31",
+        "2026-07-31",
+        2275,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-01",
+        "2026-08-01",
+        2613,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-02",
+        "2026-08-02",
+        2626,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-08-03",
+        "2026-08-03",
+        1326,
+        0,
+        0,
+        8,
+        0,
+        0
+      ],
+      [
+        "2026-08-04",
+        "2026-08-04",
+        2340,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-05",
+        "2026-08-05",
+        2626,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-06",
+        "2026-08-06",
+        2184,
+        0,
+        0,
+        11,
+        0,
+        0
+      ],
+      [
+        "2026-08-07",
+        "2026-08-07",
+        2158,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-08",
+        "2026-08-08",
+        2834,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-09",
+        "2026-08-09",
+        2132,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-10",
+        "2026-08-10",
+        1703,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-08-11",
+        "2026-08-11",
+        2496,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-12",
+        "2026-08-12",
+        2353,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-13",
+        "2026-08-13",
+        1859,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-08-14",
+        "2026-08-14",
+        2223,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-08-15",
+        "2026-08-15",
+        2925,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-16",
+        "2026-08-16",
+        2938,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-17",
+        "2026-08-17",
+        1625,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-08-18",
+        "2026-08-18",
+        2379,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-19",
+        "2026-08-19",
+        2210,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-08-20",
+        "2026-08-20",
+        1443,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-08-22",
+        "2026-08-22",
+        2613,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-23",
+        "2026-08-23",
+        2327,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-08-24",
+        "2026-08-24",
+        1599,
+        0,
+        0,
+        10,
+        0,
+        0
+      ],
+      [
+        "2026-08-25",
+        "2026-08-25",
+        2405,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-08-26",
+        "2026-08-26",
+        2132,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-27",
+        "2026-08-27",
+        1209,
+        0,
+        0,
+        7,
+        0,
+        0
+      ],
+      [
+        "2026-08-28",
+        "2026-08-28",
+        2223,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-08-30",
+        "2026-08-30",
+        2613,
+        0,
+        0,
+        13,
+        0,
+        0
+      ],
+      [
+        "2026-09-02",
+        "2026-09-02",
+        2418,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-03",
+        "2026-09-03",
+        1586,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-09-05",
+        "2026-09-05",
+        2964,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-06",
+        "2026-09-06",
+        2886,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-09-09",
+        "2026-09-09",
+        2431,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-10",
+        "2026-09-10",
+        949,
+        0,
+        0,
+        5,
+        0,
+        0
+      ],
+      [
+        "2026-09-11",
+        "2026-09-11",
+        2808,
+        0,
+        0,
+        14,
+        0,
+        0
+      ],
+      [
+        "2026-09-12",
+        "2026-09-12",
+        2444,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-13",
+        "2026-09-13",
+        2587,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-14",
+        "2026-09-14",
+        1963,
+        0,
+        0,
+        10,
+        0,
+        0
+      ],
+      [
+        "2026-09-15",
+        "2026-09-15",
+        3081,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-16",
+        "2026-09-16",
+        2938,
+        0,
+        0,
+        15,
+        0,
+        0
+      ],
+      [
+        "2026-09-17",
+        "2026-09-17",
+        2080,
+        0,
+        0,
+        9,
+        0,
+        0
+      ],
+      [
+        "2026-09-18",
+        "2026-09-18",
+        1846,
+        91,
+        0,
+        13,
+        1,
+        0
+      ]
+    ],
+    "off_date_details": [
+      {
+        "slate_date": "2026-04-07",
+        "acquisition_date": "2026-04-08",
+        "game_id": 822918,
+        "rows": 299,
+        "official_date": "2026-04-06",
+        "start_utc": "2026-04-07T00:05:00Z",
+        "start_pt": "2026-04-06T17:05:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-07",
+        "acquisition_date": "2026-04-08",
+        "game_id": 823237,
+        "rows": 325,
+        "official_date": "2026-04-06",
+        "start_utc": "2026-04-07T01:45:00Z",
+        "start_pt": "2026-04-06T18:45:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-07",
+        "acquisition_date": "2026-04-08",
+        "game_id": 824052,
+        "rows": 299,
+        "official_date": "2026-04-06",
+        "start_utc": "2026-04-07T01:38:00Z",
+        "start_pt": "2026-04-06T18:38:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-07",
+        "acquisition_date": "2026-04-08",
+        "game_id": 824376,
+        "rows": 325,
+        "official_date": "2026-04-06",
+        "start_utc": "2026-04-07T00:40:00Z",
+        "start_pt": "2026-04-06T17:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-08",
+        "acquisition_date": "2026-04-08",
+        "game_id": 822916,
+        "rows": 247,
+        "official_date": "2026-04-07",
+        "start_utc": "2026-04-08T00:05:00Z",
+        "start_pt": "2026-04-07T17:05:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-08",
+        "acquisition_date": "2026-04-08",
+        "game_id": 823235,
+        "rows": 195,
+        "official_date": "2026-04-07",
+        "start_utc": "2026-04-08T01:45:00Z",
+        "start_pt": "2026-04-07T18:45:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-08",
+        "acquisition_date": "2026-04-08",
+        "game_id": 824051,
+        "rows": 247,
+        "official_date": "2026-04-07",
+        "start_utc": "2026-04-08T01:38:00Z",
+        "start_pt": "2026-04-07T18:38:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-08",
+        "acquisition_date": "2026-04-08",
+        "game_id": 824375,
+        "rows": 169,
+        "official_date": "2026-04-07",
+        "start_utc": "2026-04-08T00:40:00Z",
+        "start_pt": "2026-04-07T17:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-15",
+        "acquisition_date": "2026-04-15",
+        "game_id": 823315,
+        "rows": 182,
+        "official_date": "2026-04-14",
+        "start_utc": "2026-04-15T01:40:00Z",
+        "start_pt": "2026-04-14T18:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-15",
+        "acquisition_date": "2026-04-15",
+        "game_id": 823965,
+        "rows": 156,
+        "official_date": "2026-04-14",
+        "start_utc": "2026-04-15T02:10:00Z",
+        "start_pt": "2026-04-14T19:10:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-15",
+        "acquisition_date": "2026-04-15",
+        "game_id": 824210,
+        "rows": 182,
+        "official_date": "2026-04-14",
+        "start_utc": "2026-04-15T00:10:00Z",
+        "start_pt": "2026-04-14T17:10:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-15",
+        "acquisition_date": "2026-04-15",
+        "game_id": 825022,
+        "rows": 221,
+        "official_date": "2026-04-14",
+        "start_utc": "2026-04-15T01:40:00Z",
+        "start_pt": "2026-04-14T18:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 823152,
+        "rows": 299,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T01:40:00Z",
+        "start_pt": "2026-04-17T18:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 823720,
+        "rows": 169,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T00:10:00Z",
+        "start_pt": "2026-04-17T17:10:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 824048,
+        "rows": 234,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T01:38:00Z",
+        "start_pt": "2026-04-17T18:38:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 824207,
+        "rows": 91,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T00:10:00Z",
+        "start_pt": "2026-04-17T17:10:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 824373,
+        "rows": 195,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T00:40:00Z",
+        "start_pt": "2026-04-17T17:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 825019,
+        "rows": 78,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T01:40:00Z",
+        "start_pt": "2026-04-17T18:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-18",
+        "acquisition_date": "2026-04-18",
+        "game_id": 825101,
+        "rows": 195,
+        "official_date": "2026-04-17",
+        "start_utc": "2026-04-18T01:40:00Z",
+        "start_pt": "2026-04-17T18:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-23",
+        "acquisition_date": "2026-04-23",
+        "game_id": 822913,
+        "rows": 130,
+        "official_date": "2026-04-22",
+        "start_utc": "2026-04-23T00:05:00Z",
+        "start_pt": "2026-04-22T17:05:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-23",
+        "acquisition_date": "2026-04-23",
+        "game_id": 823231,
+        "rows": 260,
+        "official_date": "2026-04-22",
+        "start_utc": "2026-04-23T01:45:00Z",
+        "start_pt": "2026-04-22T18:45:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-23",
+        "acquisition_date": "2026-04-23",
+        "game_id": 824367,
+        "rows": 260,
+        "official_date": "2026-04-22",
+        "start_utc": "2026-04-23T00:40:00Z",
+        "start_pt": "2026-04-22T17:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-23",
+        "acquisition_date": "2026-04-23",
+        "game_id": 825097,
+        "rows": 78,
+        "official_date": "2026-04-22",
+        "start_utc": "2026-04-23T01:40:00Z",
+        "start_pt": "2026-04-22T18:40:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-25",
+        "acquisition_date": "2026-04-25",
+        "game_id": 822909,
+        "rows": 286,
+        "official_date": "2026-04-24",
+        "start_utc": "2026-04-25T00:05:00Z",
+        "start_pt": "2026-04-24T17:05:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-25",
+        "acquisition_date": "2026-04-25",
+        "game_id": 823069,
+        "rows": 260,
+        "official_date": "2026-04-24",
+        "start_utc": "2026-04-25T00:15:00Z",
+        "start_pt": "2026-04-24T17:15:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-25",
+        "acquisition_date": "2026-04-25",
+        "game_id": 823232,
+        "rows": 156,
+        "official_date": "2026-04-24",
+        "start_utc": "2026-04-25T02:15:00Z",
+        "start_pt": "2026-04-24T19:15:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-25",
+        "acquisition_date": "2026-04-25",
+        "game_id": 823637,
+        "rows": 130,
+        "official_date": "2026-04-26",
+        "start_utc": "2026-04-26T17:45:00Z",
+        "start_pt": "2026-04-26T10:45:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-04-25",
+        "acquisition_date": "2026-04-25",
+        "game_id": 823962,
+        "rows": 247,
+        "official_date": "2026-04-24",
+        "start_utc": "2026-04-25T02:15:00Z",
+        "start_pt": "2026-04-24T19:15:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-25",
+        "acquisition_date": "2026-04-25",
+        "game_id": 824204,
+        "rows": 78,
+        "official_date": "2026-04-24",
+        "start_utc": "2026-04-25T00:10:00Z",
+        "start_pt": "2026-04-24T17:10:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      },
+      {
+        "slate_date": "2026-04-29",
+        "acquisition_date": "2026-04-29",
+        "game_id": 823471,
+        "rows": 260,
+        "official_date": "2026-04-30",
+        "start_utc": "2026-04-30T21:35:00Z",
+        "start_pt": "2026-04-30T14:35:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-04-29",
+        "acquisition_date": "2026-04-29",
+        "game_id": 824850,
+        "rows": 104,
+        "official_date": "2026-04-30",
+        "start_utc": "2026-04-30T16:40:00Z",
+        "start_pt": "2026-04-30T09:40:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-05-09",
+        "acquisition_date": "2026-05-09",
+        "game_id": 824766,
+        "rows": 156,
+        "official_date": "2026-07-17",
+        "start_utc": "2026-05-09T20:10:00Z",
+        "start_pt": "2026-05-09T13:10:00-07:00",
+        "state": "Postponed",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-05-22",
+        "acquisition_date": "2026-05-22",
+        "game_id": 824518,
+        "rows": 26,
+        "official_date": "2026-05-23",
+        "start_utc": "2026-05-23T17:10:00Z",
+        "start_pt": "2026-05-23T10:10:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-05-23",
+        "acquisition_date": "2026-05-23",
+        "game_id": 823543,
+        "rows": 208,
+        "official_date": "2026-09-22",
+        "start_utc": "2026-05-23T17:35:00Z",
+        "start_pt": "2026-05-23T10:35:00-07:00",
+        "state": "Postponed",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-05-23",
+        "acquisition_date": "2026-05-23",
+        "game_id": 824840,
+        "rows": 156,
+        "official_date": "2026-05-24",
+        "start_utc": "2026-05-24T22:05:00Z",
+        "start_pt": "2026-05-24T15:05:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-05-24",
+        "acquisition_date": "2026-05-24",
+        "game_id": 824514,
+        "rows": 299,
+        "official_date": "2026-08-17",
+        "start_utc": "2026-05-24T17:40:00Z",
+        "start_pt": "2026-05-24T10:40:00-07:00",
+        "state": "Postponed",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-06-06",
+        "acquisition_date": "2026-06-06",
+        "game_id": 823539,
+        "rows": 234,
+        "official_date": "2026-08-29",
+        "start_utc": "2026-06-06T23:35:00Z",
+        "start_pt": "2026-06-06T16:35:00-07:00",
+        "state": "Postponed",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-06-11",
+        "acquisition_date": "2026-06-10",
+        "game_id": 824589,
+        "rows": 13,
+        "official_date": "2026-08-20",
+        "start_utc": "2026-06-11T23:40:00Z",
+        "start_pt": "2026-06-11T16:40:00-07:00",
+        "state": "Postponed",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-06-17",
+        "acquisition_date": "2026-06-17",
+        "game_id": 824912,
+        "rows": 208,
+        "official_date": "2026-06-16",
+        "start_utc": "2026-06-17T18:00:00Z",
+        "start_pt": "2026-06-17T11:00:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-06-22",
+        "acquisition_date": "2026-06-22",
+        "game_id": 823613,
+        "rows": 117,
+        "official_date": "2026-06-24",
+        "start_utc": "2026-06-24T17:10:00Z",
+        "start_pt": "2026-06-24T10:10:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-07-18",
+        "acquisition_date": "2026-07-18",
+        "game_id": 823523,
+        "rows": 143,
+        "official_date": "2026-07-19",
+        "start_utc": "2026-07-19T16:35:00Z",
+        "start_pt": "2026-07-19T09:35:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-07-27",
+        "acquisition_date": "2026-07-27",
+        "game_id": 824490,
+        "rows": 13,
+        "official_date": "2026-07-28",
+        "start_utc": "2026-07-28T17:40:00Z",
+        "start_pt": "2026-07-28T10:40:00-07:00",
+        "state": "Final",
+        "classification": "OTHER_OFF_DATE_RETAINED_AUTHORITY_NOT_PROVEN_MAPPING_CAUSE"
+      },
+      {
+        "slate_date": "2026-09-18",
+        "acquisition_date": "2026-09-18",
+        "game_id": 823978,
+        "rows": 91,
+        "official_date": "2026-09-17",
+        "start_utc": "2026-09-18T01:38:00Z",
+        "start_pt": "2026-09-17T18:38:00-07:00",
+        "state": "Final",
+        "classification": "PREVIOUS_LOCAL_DATE_UTC_BOUNDARY_FINGERPRINT"
+      }
+    ],
+    "archive_files": [
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-01-01_2026-01-31.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-02-01_2026-02-28.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-03-01_2026-03-31.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-04-01_2026-04-30.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-05-01_2026-05-31.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-06-01_2026-06-30.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-07-01_2026-07-31.json.gz",
+      "artifacts/raw/mlb/totals_feature_spine_v1/schedule/2026-08-01_2026-08-05.json.gz"
+    ]
+  },
+  "september18": {
+    "retained_rows": 1937,
+    "distinct_batters": 149,
+    "stored_game_ids": 14,
+    "canonical_game_identity_eligible_rows": 1846,
+    "eligible_batters": 142,
+    "eligible_games": 13,
+    "exclusion_rows": 91,
+    "exclusion_receipt": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_identity_exclusions_v1.json",
+    "exclusion_receipt_sha256": "cb5d014c8ce9b82031fed3dce297d3b65d45f233a1d8fec05e56dd7dd1b69622",
+    "original_row_stream_sha256": "87de42893507c219325e239b03d0f43ab9b2bf43c3f5444b480bfc1fab5f2775",
+    "retained_rows_modified": 0,
+    "original_computed_at_preserved": true,
+    "starter_skips": 2,
+    "starter_skip_identity_status": "UNRECOVERABLE_AT_MANUAL_TIMESTAMP. Earlier 05:30 schedule missing BAL/COL home starters is not substituted for actual manual response; two missing current keys do not prove two starter-skip games.",
+    "intended_slate": [
+      {
+        "game_date": "2026-09-18",
+        "game_id": 822847,
+        "scheduled_start_utc": "2026-09-19 00:05:00+00",
+        "home_team": "Texas Rangers",
+        "away_team": "Toronto Blue Jays"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 822923,
+        "scheduled_start_utc": "2026-09-18 23:10:00+00",
+        "home_team": "Tampa Bay Rays",
+        "away_team": "Boston Red Sox"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 823005,
+        "scheduled_start_utc": "2026-09-19 00:15:00+00",
+        "home_team": "St. Louis Cardinals",
+        "away_team": "Washington Nationals"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 823252,
+        "scheduled_start_utc": "2026-09-19 01:40:00+00",
+        "home_team": "San Diego Padres",
+        "away_team": "Miami Marlins"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 823331,
+        "scheduled_start_utc": "2026-09-18 22:40:00+00",
+        "home_team": "Pittsburgh Pirates",
+        "away_team": "Kansas City Royals"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 823572,
+        "scheduled_start_utc": "2026-09-18 23:15:00+00",
+        "home_team": "New York Mets",
+        "away_team": "Philadelphia Phillies"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 823898,
+        "scheduled_start_utc": "2026-09-19 02:15:00+00",
+        "home_team": "Los Angeles Dodgers",
+        "away_team": "San Francisco Giants"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 823977,
+        "scheduled_start_utc": "2026-09-19 01:38:00+00",
+        "home_team": "Los Angeles Angels",
+        "away_team": "Minnesota Twins"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 824138,
+        "scheduled_start_utc": "2026-09-19 00:10:00+00",
+        "home_team": "Houston Astros",
+        "away_team": "Atlanta Braves"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 824303,
+        "scheduled_start_utc": "2026-09-19 00:10:00+00",
+        "home_team": "Colorado Rockies",
+        "away_team": "Seattle Mariners"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 824383,
+        "scheduled_start_utc": "2026-09-18 23:10:00+00",
+        "home_team": "Cleveland Guardians",
+        "away_team": "Athletics"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 824463,
+        "scheduled_start_utc": "2026-09-18 22:40:00+00",
+        "home_team": "Cincinnati Reds",
+        "away_team": "Chicago Cubs"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 824547,
+        "scheduled_start_utc": "2026-09-18 23:40:00+00",
+        "home_team": "Chicago White Sox",
+        "away_team": "Detroit Tigers"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 824790,
+        "scheduled_start_utc": "2026-09-18 23:05:00+00",
+        "home_team": "Baltimore Orioles",
+        "away_team": "Milwaukee Brewers"
+      },
+      {
+        "game_date": "2026-09-18",
+        "game_id": 825032,
+        "scheduled_start_utc": "2026-09-19 01:40:00+00",
+        "home_team": "Arizona Diamondbacks",
+        "away_team": "New York Yankees"
+      }
+    ],
+    "regression_fixture": "backend/mlb/tests/fixtures/bvp_september18_identity_v1.json",
+    "fixture_note": "Actual retained batter-game keys and earlier official schedule identities; synthetic feature values explicitly labelled, not a prediction rerun or repaired data.",
+    "source_snapshot_sha256": "0c7b27a296ebcb8b6313b1c7dcfd0a0e9923b048ab088fb321e2fb7cc01d0526"
+  },
+  "validation": {
+    "external_http_api_requests": 0,
+    "bvp_acquisition_runs": 0,
+    "database_writes": 0,
+    "immutable_manual_log_unchanged": true,
+    "retained_1937_row_stream_unchanged": true,
+    "exclusion_validator": "PASS_1937_RETAINED_91_EXCLUDED_1846_ELIGIBLE_142_BATTERS_13_GAMES",
+    "initial_schedule_retry_functions": "BYTE_SOURCE_UNCHANGED_FROM_d9950e1f",
+    "initial_schedule_retry_tests": "UNCHANGED",
+    "feature_calculation_functions": "BYTE_SOURCE_UNCHANGED",
+    "upsert_and_lock_behavior": "UNCHANGED",
+    "no_qualified_model_skip": "UNCHANGED",
+    "focused_test_result": "PASS",
+    "focused_test_count": 72,
+    "compilation": "PASS",
+    "installed_wrapper_and_lock_helper_syntax": "PASS",
+    "git_diff_check": "PASS",
+    "final_read_only_database_validator": "PASS_1937_UNCHANGED_91_EXCLUDED_1846_GAME_IDENTITY_ELIGIBLE",
+    "source_hashes": {
+      "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_identity_exclusions_v1.json": {
+        "post_sha256": "cb5d014c8ce9b82031fed3dce297d3b65d45f233a1d8fec05e56dd7dd1b69622",
+        "pre_sha256": null
+      },
+      "backend/domains/mlb/prop_workflow.py": {
+        "post_sha256": "67d5b140d591544a31315468b852828f5cf389aa5260a28e717e06e1406eed37",
+        "pre_sha256": "a49a56137a2afadf9e764b67deb4c76f05622466f0a9ab3bf8b96150f003f1eb"
+      },
+      "backend/mlb/model_trainer.py": {
+        "post_sha256": "20cb4e9983d3fa8b305c5ba1504f0248c45d2380eb052b9402c30cc8a8ba19fd",
+        "pre_sha256": "3069086fc5f598df46fb6543cd7eff468107b55bac89863fffb21326ada295b6"
+      },
+      "backend/mlb/scripts/refresh_mlb_bvp_pvb.py": {
+        "post_sha256": "5e6a9bf7a7204ee650b56c4e08b6b1918b06c6833788256e5ef5016c2f58de36",
+        "pre_sha256": "01472f9ea4f03cd26ed8ea95661d2578a9ce57c7677fc45e6e350ac0e7438866"
+      },
+      "backend/mlb/scripts/validate_mlb_bvp_identity_v1.py": {
+        "post_sha256": "69d514841ee21d342b0cee66ec138036dafb6df8048a41a7f9e9552f4a73cb82",
+        "pre_sha256": null
+      },
+      "backend/mlb/shared/bvp_identity.py": {
+        "post_sha256": "88542cbb8c6766f3c38dae6993895759cab5690236d486fb23f45ae0cc8126a9",
+        "pre_sha256": null
+      },
+      "backend/mlb/tests/fixtures/bvp_september18_identity_v1.json": {
+        "post_sha256": "c209c300e947c2a222047234661c1b6772eea4c63e5f26e61eca180018d538ee",
+        "pre_sha256": null
+      },
+      "backend/mlb/tests/test_bvp_canonical_identity.py": {
+        "post_sha256": "5829bfa1d90f29057039cbdf8fad8a072b34bc7738bb58d04495abfb7908f951",
+        "pre_sha256": null
+      },
+      "backend/mlb/v2_write_training_from_pfp.py": {
+        "post_sha256": "cb892b5db148ef658ca764b5fbd4dd18c2c2c27c2ba9004625512f8a453b8ca3",
+        "pre_sha256": "a1e3abde811f2cc2f60c2ca1a969fd793df0c3ebafe3cfed8002c765d5d88a16"
+      },
+      "docs/MLB BvP Acquisition Retry and Late-Admission Contract V1.md": {
+        "post_sha256": "744a08c796ab5b9cb201bccddb875da8f9939be772d8dfad96b5780d1f87b4e4",
+        "pre_sha256": "c95372e8350c5f4c45b0842f3cf3970bba43f9a49c0173850c3c8665f25934ff"
+      },
+      "docs/MLB BvP Canonical Slate Identity Contract V1.md": {
+        "post_sha256": "f6ea40d590deb037d9daf253020f7699d8919cbe364f328a7dcdbb6bcace73bb",
+        "pre_sha256": null
+      }
+    },
+    "protected_ledgers": "No task writes; natural scheduled daily runs may update operational/passive artifacts independently during this task."
+  },
+  "rollback": "With separate approval revert only this correction commit; no database row rollback, source re-acquisition, rekey, deletion, schedule/power/service change. Preserve original/manual logs and versioned exclusion receipt as historical evidence. Any exclusion-boundary rollback re-exposes raw identity risk and requires explicit review.",
+  "push": false
+}

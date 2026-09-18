@@ -25,9 +25,11 @@ import sys
 import threading
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from pathlib import Path
+import uuid
 from zoneinfo import ZoneInfo
 
 import requests
@@ -35,6 +37,7 @@ from urllib3.exceptions import NameResolutionError, NewConnectionError
 from urllib3.util import Timeout
 
 from backend.shared.db.pg import pg_connect
+from backend.mlb.shared import bvp_identity as identity
 
 
 ET = ZoneInfo("America/New_York")
@@ -234,6 +237,52 @@ class GameRow:
     away_team_id: int
     prob_sp_home: Optional[int]
     prob_sp_away: Optional[int]
+    official_game_id: Optional[int] = field(default=None, compare=False)
+    official_date: Optional[str] = field(default=None, compare=False)
+    scheduled_start_utc: Optional[str] = field(default=None, compare=False)
+    schedule_date: Optional[str] = field(default=None, compare=False)
+    game_state: str = field(default="", compare=False)
+    source_observed_at_utc: Optional[str] = field(default=None, compare=False)
+
+
+class IdentityCounters(defaultdict):
+    audit_path: Optional[Path] = None
+
+
+class IdentityAudit:
+    """Private, exclusive per-acquisition journal; fsync before feature admission."""
+    def __init__(self, slate_date: str):
+        folder = identity.ROOT / "artifacts/ops/bvp_identity_v1" / slate_date
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.path = folder / f"bvp_identity_{datetime.now(ZoneInfo('UTC')).strftime('%Y%m%dT%H%M%S%fZ')}_{os.getpid()}_{uuid.uuid4().hex}.jsonl"
+        descriptor = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        self.file = os.fdopen(descriptor, "w", encoding="utf-8")
+        self.slate_date = slate_date
+
+    def record(self, reason: str, game: Optional[GameRow] = None, **fields: Any) -> None:
+        record = {"contract": identity.CONTRACT, "slate_date": self.slate_date,
+                  "acquisition_timestamp_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
+                  "game_id": None, "batter_id": None, "pitcher_id": None,
+                  "team_id": None, "opponent_team_id": None,
+                  "reason_code": reason, **fields}
+        if game is not None:
+            record.update({"game_id": game.game_id, "official_game_id": game.official_game_id,
+                           "official_date": game.official_date, "schedule_date": game.schedule_date,
+                           "scheduled_start_utc": game.scheduled_start_utc,
+                           "home_team_id": game.home_team_id, "away_team_id": game.away_team_id,
+                           "source_observed_at_utc": game.source_observed_at_utc})
+        self.file.write(json.dumps(record, sort_keys=True, default=str) + "\n")
+        self.file.flush()
+        os.fsync(self.file.fileno())
+
+    def close(self) -> None:
+        self.file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
 
 def _parse_date(value: str) -> date:
@@ -286,20 +335,25 @@ def _fetch_schedule_games(game_date: str, *, timeout_sec: int, retries: int) -> 
         retries=retries,
     )
     out: List[GameRow] = []
+    observed = datetime.now(ZoneInfo("UTC")).isoformat()
     for day in data.get("dates") or []:
+        if not isinstance(day, dict) or not isinstance(day.get("games"), list):
+            raise identity.CanonicalSlateIdentityError("CANONICAL_IDENTITY_UNRESOLVED_SCHEDULE_DAY")
+        if not day["games"] and day.get("date") != game_date:
+            raise identity.CanonicalSlateIdentityError("CANONICAL_IDENTITY_UNRESOLVED_EMPTY_DAY_AUTHORITY")
         for g in day.get("games") or []:
             teams = (g or {}).get("teams") or {}
             home = ((teams.get("home") or {}).get("team") or {})
             away = ((teams.get("away") or {}).get("team") or {})
             game_pk = (g or {}).get("gamePk")
             if not game_pk:
-                continue
+                raise identity.CanonicalSlateIdentityError("CANONICAL_IDENTITY_UNRESOLVED_MISSING_GAME_ID")
             try:
                 game_id = int(game_pk)
                 home_id = int(home.get("id"))
                 away_id = int(away.get("id"))
             except Exception:
-                continue
+                raise identity.CanonicalSlateIdentityError("CANONICAL_IDENTITY_UNRESOLVED_GAME_TEAMS") from None
 
             sp_home_raw = ((teams.get("home") or {}).get("probablePitcher") or {}).get("id")
             sp_away_raw = ((teams.get("away") or {}).get("probablePitcher") or {}).get("id")
@@ -320,6 +374,12 @@ def _fetch_schedule_games(game_date: str, *, timeout_sec: int, retries: int) -> 
                     away_team_id=away_id,
                     prob_sp_home=sp_home,
                     prob_sp_away=sp_away,
+                    official_game_id=game_id,
+                    official_date=g.get("officialDate"),
+                    scheduled_start_utc=g.get("gameDate"),
+                    schedule_date=day.get("date"),
+                    game_state=str((g.get("status") or {}).get("detailedState") or ""),
+                    source_observed_at_utc=observed,
                 )
             )
     return out
@@ -389,11 +449,7 @@ WHERE gi.game_id = ANY(%s)
         new_home = existing.prob_sp_home if existing.prob_sp_home is not None else sp_home
         new_away = existing.prob_sp_away if existing.prob_sp_away is not None else sp_away
         if new_home != existing.prob_sp_home or new_away != existing.prob_sp_away:
-            by_game[game_id] = GameRow(
-                game_id=existing.game_id,
-                game_date=existing.game_date,
-                home_team_id=existing.home_team_id,
-                away_team_id=existing.away_team_id,
+            by_game[game_id] = replace(existing,
                 prob_sp_home=new_home,
                 prob_sp_away=new_away,
             )
@@ -403,13 +459,13 @@ WHERE gi.game_id = ANY(%s)
 
 
 def _map_games_to_local_game_ids(games: Sequence[GameRow], game_date: str) -> Tuple[List[GameRow], Dict[str, int]]:
-    """Align StatsAPI gamePk IDs to local mlb.game_info IDs by date + matchup.
+    """Optional local coverage only. NEVER replace the official MLB gamePk.
 
-    Local prediction flow keys by mlb.game_info.game_id. StatsAPI gamePk may
-    differ for the same matchup/date, so this remap keeps precomputed features
-    joinable in prepare_prop/predict paths.
+    Legacy telemetry name is retained; mapped is always zero. Date/team matches
+    cannot prove game identity, especially repeated series games/doubleheaders.
     """
-    counters: Dict[str, int] = defaultdict(int)
+    counters: Dict[str, int] = IdentityCounters(int)
+    counters.unmapped_game_ids = []
     if not games:
         return list(games), counters
 
@@ -419,46 +475,34 @@ def _map_games_to_local_game_ids(games: Sequence[GameRow], game_date: str) -> Tu
                 """
 SELECT game_id, home_team_id, away_team_id
 FROM mlb.game_info
-WHERE game_date = %s::date
+WHERE game_date = %s::date OR game_id = ANY(%s)
 """,
-                (str(game_date),),
+                (str(game_date), [g.game_id for g in games]),
             )
             rows = list(cur.fetchall() or [])
     except Exception:
         counters["local_game_id_query_errors"] += 1
+        counters["local_game_id_unmapped"] = len(games)
+        counters.unmapped_game_ids = [g.game_id for g in games]
         return list(games), counters
 
     counters["local_game_id_candidate_rows"] = len(rows)
-    by_matchup: Dict[Tuple[int, int], int] = {}
+    by_id: Dict[int, Tuple[int, int]] = {}
     for r in rows:
         try:
-            key = (int(r["home_team_id"]), int(r["away_team_id"]))
-            by_matchup[key] = int(r["game_id"])
+            by_id[int(r["game_id"])] = (int(r["home_team_id"]), int(r["away_team_id"]))
         except Exception:
             continue
 
     mapped: List[GameRow] = []
     for g in games:
-        local_game_id = by_matchup.get((int(g.home_team_id), int(g.away_team_id)))
-        if local_game_id is None:
+        if by_id.get(g.game_id) != (g.home_team_id, g.away_team_id):
             counters["local_game_id_unmapped"] += 1
+            counters.unmapped_game_ids.append(g.game_id)
             mapped.append(g)
             continue
-        if int(local_game_id) != int(g.game_id):
-            counters["local_game_id_mapped"] += 1
-            mapped.append(
-                GameRow(
-                    game_id=int(local_game_id),
-                    game_date=g.game_date,
-                    home_team_id=g.home_team_id,
-                    away_team_id=g.away_team_id,
-                    prob_sp_home=g.prob_sp_home,
-                    prob_sp_away=g.prob_sp_away,
-                )
-            )
-        else:
-            counters["local_game_id_already_aligned"] += 1
-            mapped.append(g)
+        counters["local_game_id_already_aligned"] += 1
+        mapped.append(g)
     return mapped, counters
 
 
@@ -540,13 +584,25 @@ def _extract_vs_player_stats(payload: Dict[str, Any]) -> Dict[str, float]:
     return out
 
 
-def _bvp_stats(hitter_id: int, pitcher_id: int, *, timeout_sec: int, retries: int) -> Dict[str, float]:
+def _bvp_stats(hitter_id: int, pitcher_id: int, *, timeout_sec: int, retries: int,
+               evidence: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
     url = (
         f"{STATS_BASE}/people/{int(hitter_id)}/stats"
         f"?group=hitting&stats=vsPlayer&opposingPlayerId={int(pitcher_id)}"
     )
     payload = _fetch_json(url, timeout_sec=timeout_sec, retries=retries)
-    return _extract_vs_player_stats(payload)
+    features = _extract_vs_player_stats(payload)
+    if evidence is not None:
+        evidence.update({"response_sha256": identity.stable_hash(payload),
+                         "response_observed_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
+                         "successful_response": True})
+        if not features:
+            evidence["empty_response_payload"] = payload
+            stats = payload.get("stats")
+            evidence["successful_empty_response_verified"] = isinstance(stats, list) and (
+                not stats or (isinstance(stats[0], dict) and isinstance(stats[0].get("splits"), list)
+                              and not stats[0]["splits"]))
+    return features
 
 
 def _upsert_rows(
@@ -611,10 +667,25 @@ def _build_rows_for_date(
     timeout_sec: int,
     retries: int,
 ) -> Tuple[List[Tuple[str, int, int, str, Dict[str, float], str, str]], Dict[str, int]]:
-    counters: Dict[str, int] = defaultdict(int)
+    counters: Dict[str, int] = IdentityCounters(int)
     rows: List[Tuple[str, int, int, str, Dict[str, float], str, str]] = []
 
     games = _fetch_schedule_games(game_date, timeout_sec=timeout_sec, retries=retries)
+    try:
+        games, rejected_games = identity.validate_slate(games, game_date)
+    except identity.CanonicalSlateIdentityError:
+        # Preserve failed authority without performing a roster/vsPlayer read.
+        with IdentityAudit(game_date) as audit:
+            for game in games:
+                audit.record("CANONICAL_IDENTITY_UNRESOLVED", game,
+                             source_branch="AUTHORITATIVE_SLATE_CONSTRUCTION_FAILED")
+            print(f"[bvp-refresh] identity_audit_path={audit.path.relative_to(identity.ROOT)} certification_status=CANONICAL_IDENTITY_UNRESOLVED")
+        raise
+    counters["intended_games"] = len(games) + sum(reason != "OFF_DATE_GAME_REJECTED" for _, reason in rejected_games)
+    counters["canonically_verified_games"] = len(games)
+    counters["off_date_rejected_games"] = sum(reason == "OFF_DATE_GAME_REJECTED" for _, reason in rejected_games)
+    counters["canonical_identity_unresolved_games"] = sum(reason == "CANONICAL_IDENTITY_UNRESOLVED" for _, reason in rejected_games)
+    source_games = {g.game_id: g for g in games}
     games, local_id_counters = _map_games_to_local_game_ids(games, game_date)
     for k, v in local_id_counters.items():
         counters[k] += int(v)
@@ -622,9 +693,45 @@ def _build_rows_for_date(
     for k, v in db_counters.items():
         counters[k] += int(v)
     counters["games"] = len(games)
+    if not games and not rejected_games:
+        return rows, counters  # Retain legitimate empty-slate behavior.
+    with IdentityAudit(game_date) as audit:
+        counters.audit_path = audit.path
+        print(f"[bvp-refresh] identity_audit_path={audit.path.relative_to(identity.ROOT)} contract={identity.CONTRACT}")
+        for game, reason in rejected_games:
+            audit.record(reason, game, source_branch="STATSAPI_CANONICAL_SCHEDULE", rows_rejected=0)
+        for game in games:
+            audit.record("CANONICAL_SLATE_IDENTITY_VALID", game, source_branch="STATSAPI_CANONICAL_SCHEDULE")
+            if game.game_id in getattr(local_id_counters, "unmapped_game_ids", []):
+                audit.record("OPTIONAL_LOCAL_ID_UNMAPPED", game, source_branch=(
+                    "LOCAL_ID_QUERY_FAILED_OFFICIAL_ID_RETAINED" if local_id_counters.get("local_game_id_query_errors")
+                    else "NO_EXACT_LOCAL_ID_OFFICIAL_ID_RETAINED"))
+            else:
+                # Coverage is optional; source membership never depends on it.
+                audit.record("OFFICIAL_GAME_ID_RETAINED", game, source_branch="NO_TEAM_DATE_SUBSTITUTION")
+        rows = _collect_rows_for_games(games, source_games, game_date, feature_set_tag,
+                                      model_tag, timeout_sec, retries, counters, audit)
+        rows, rejected_rows = identity.filter_prepared_rows(rows, games, game_date)
+        for rejection in rejected_rows:
+            audit.record(rejection["reason_code"], source_branch="PRE_WRITE_CANONICAL_BOUNDARY",
+                         **{k: v for k, v in rejection.items() if k != "reason_code"})
+        counters["off_date_rejected_rows"] = sum(r["reason_code"] == "OFF_DATE_GAME_REJECTED" for r in rejected_rows)
+        counters["canonical_identity_unresolved_rows"] = sum(r["reason_code"] == "CANONICAL_IDENTITY_UNRESOLVED" for r in rejected_rows)
+        counters["rows"] = len(rows)
+        audit.record("PRE_WRITE_IDENTITY_VALIDATION_COMPLETE", source_branch="PRE_WRITE_CANONICAL_BOUNDARY",
+                     rows_prepared=len(rows), feature_set_tag=feature_set_tag, model_tag=model_tag,
+                     prepared_row_stream_sha256=identity.stable_hash(rows), counters=dict(counters))
+    return rows, counters
+
+
+def _collect_rows_for_games(games, source_games, game_date, feature_set_tag, model_tag,
+                            timeout_sec, retries, counters, audit):
+    rows = []
 
     roster_cache: Dict[Tuple[int, str], List[int]] = {}
     bvp_cache: Dict[Tuple[int, int], Dict[str, float]] = {}
+    evidence_cache: Dict[Tuple[int, int], Dict[str, Any]] = {}
+    unresolved_games = set()
 
     for g in games:
         sides = (
@@ -632,9 +739,19 @@ def _build_rows_for_date(
             (g.away_team_id, g.prob_sp_home),
         )
         for team_id, opp_sp in sides:
+            opponent_id = g.away_team_id if team_id == g.home_team_id else g.home_team_id
+            request_identity = {"team_id": team_id, "opponent_team_id": opponent_id,
+                                "feature_set_tag": feature_set_tag, "model_tag": model_tag}
             if opp_sp is None:
                 counters["skip_no_opp_sp"] += 1
+                unresolved_games.add(g.game_id)
+                audit.record("OPPOSING_STARTER_UNRESOLVED", g, pitcher_id=None, batter_id=None,
+                             source_branch="STATSAPI_THEN_EXACT_OFFICIAL_ID_DB_FALLBACK",
+                             starter_resolution_status="FAILED_DB_QUERY" if counters.get("db_starter_query_errors") else "UNRESOLVED_AFTER_FALLBACK",
+                             **request_identity)
                 continue
+            if int(opp_sp) <= 0:
+                raise identity.CanonicalSlateIdentityError("CANONICAL_IDENTITY_UNRESOLVED_PITCHER_ID")
             roster_key = (team_id, game_date)
             if roster_key not in roster_cache:
                 try:
@@ -648,22 +765,39 @@ def _build_rows_for_date(
                 except Exception:
                     counters["roster_fetch_errors"] += 1
                     roster_cache[roster_key] = []
+                    audit.record("ROSTER_FETCH_FAILED", g, pitcher_id=opp_sp,
+                                 source_branch="STATSAPI_ACTIVE_ROSTER", **request_identity)
             hitters = roster_cache.get(roster_key) or []
             for hitter_id in hitters:
                 bvp_key = (hitter_id, int(opp_sp))
+                fresh_request = bvp_key not in bvp_cache
                 if bvp_key not in bvp_cache:
+                    evidence_cache[bvp_key] = {}
                     try:
                         bvp_cache[bvp_key] = _bvp_stats(
                             hitter_id,
                             int(opp_sp),
                             timeout_sec=timeout_sec,
                             retries=retries,
+                            evidence=evidence_cache[bvp_key],
                         )
                         counters["bvp_fetches"] += 1
                     except Exception:
                         counters["bvp_fetch_errors"] += 1
                         bvp_cache[bvp_key] = {}
+                        evidence_cache[bvp_key] = {"successful_response": False}
                 feats = bvp_cache.get(bvp_key) or {}
+                evidence = evidence_cache[bvp_key]
+                source = source_games[g.game_id]
+                source_pitcher = source.prob_sp_away if team_id == g.home_team_id else source.prob_sp_home
+                audit.record("BVP_RESPONSE_NONEMPTY" if feats else (
+                    "EMPTY_BVP_RESPONSE" if evidence.get("successful_empty_response_verified") else
+                    "EMPTY_BVP_RESPONSE_UNVERIFIABLE" if evidence.get("successful_response") else "BVP_REQUEST_FAILED"),
+                    g, batter_id=hitter_id, pitcher_id=int(opp_sp),
+                    source_branch="STATSAPI_VSPLAYER_REQUEST" if fresh_request else "IN_RUN_REQUEST_CACHE",
+                    starter_source_branch="STATSAPI_PROBABLE_STARTER" if source_pitcher is not None else "EXACT_OFFICIAL_ID_DB_FALLBACK",
+                    feature_payload_sha256=identity.stable_hash(feats),
+                    empty_response_is_zero_history=False, **request_identity, **evidence)
                 if not feats:
                     counters["empty_bvp_rows"] += 1
                     continue
@@ -680,14 +814,15 @@ def _build_rows_for_date(
                         )
                     )
                     counters["rows"] += 1
-    return rows, counters
+    counters["starter_unresolved_games"] = len(unresolved_games)
+    return rows
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Refresh MLB BvP/PvB features into prop_features_precomputed.")
-    ap.add_argument("--date", help="Single ET date (YYYY-MM-DD). Default: today ET.")
-    ap.add_argument("--from-date", help="Optional ET start date (YYYY-MM-DD).")
-    ap.add_argument("--to-date", help="Optional ET end date (YYYY-MM-DD).")
+    ap.add_argument("--date", help="Single America/Los_Angeles slate date (YYYY-MM-DD). Default: today PT.")
+    ap.add_argument("--from-date", help="Optional PT slate start date (YYYY-MM-DD).")
+    ap.add_argument("--to-date", help="Optional PT slate end date (YYYY-MM-DD).")
     ap.add_argument("--feature-set-tag", default="v1", help="feature_set_tag upsert key (default: v1).")
     ap.add_argument("--model-tag", default="bvp_pvb_refresh_v1", help="model_tag marker (default: bvp_pvb_refresh_v1).")
     ap.add_argument("--batch-size", type=int, default=1000)
@@ -705,11 +840,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise SystemExit("--to-date must be >= --from-date")
         dates = [d.isoformat() for d in _date_range(start, end)]
     else:
-        single = args.date or datetime.now(ET).date().isoformat()
+        single = args.date or datetime.now(identity.PT).date().isoformat()
         dates = [_parse_date(single).isoformat()]
 
     all_rows: List[Tuple[str, int, int, str, Dict[str, float], str, str]] = []
     total: Dict[str, int] = defaultdict(int)
+    audit_paths = []
 
     for d_iso in dates:
         rows, counters = _build_rows_for_date(
@@ -720,6 +856,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             retries=int(args.request_retries),
         )
         all_rows.extend(rows)
+        if getattr(counters, "audit_path", None):
+            audit_paths.append(counters.audit_path)
         for k, v in counters.items():
             total[k] += int(v)
         print(
@@ -737,6 +875,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         written = _upsert_rows(all_rows, batch_size=max(1, int(args.batch_size)))
         print(f"[bvp-refresh] upserted_rows={written}")
+        for path in audit_paths:
+            with path.open("a",encoding="utf-8") as audit:
+                audit.write(json.dumps({"contract":identity.CONTRACT,"reason_code":"DATABASE_WRITE_COMMITTED",
+                                        "acquisition_timestamp_utc":datetime.now(ZoneInfo("UTC")).isoformat(),
+                                        "rows_written_total":written},sort_keys=True)+"\n")
+                audit.flush()
+                os.fsync(audit.fileno())
 
     print(
         "[bvp-refresh] summary "
@@ -749,6 +894,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         f"db_starter_query_errors={total.get('db_starter_query_errors', 0)} "
         f"skip_no_opp_sp={total.get('skip_no_opp_sp', 0)}"
     )
+    rejected = sum(total.get(k, 0) for k in ("off_date_rejected_games", "canonical_identity_unresolved_games",
+                                             "off_date_rejected_rows", "canonical_identity_unresolved_rows"))
+    print("[bvp-refresh] identity_summary " + json.dumps({
+        "contract": identity.CONTRACT,
+        "certification_status": "PARTIAL_IDENTITY_REJECTIONS" if rejected else "CANONICAL_SLATE_IDENTITY_VALID",
+        "intended_games": total.get("intended_games", 0),
+        "canonically_verified_games": total.get("canonically_verified_games", 0),
+        "optional_local_id_unmapped_games": total.get("local_game_id_unmapped", 0),
+        "starter_unresolved_games": total.get("starter_unresolved_games", 0),
+        **{k: total.get(k, 0) for k in ("off_date_rejected_games", "canonical_identity_unresolved_games",
+                                       "off_date_rejected_rows", "canonical_identity_unresolved_rows")},
+        "rows_prepared": len(all_rows), "rows_written": written,
+    }, sort_keys=True))
     return 0
 
 
