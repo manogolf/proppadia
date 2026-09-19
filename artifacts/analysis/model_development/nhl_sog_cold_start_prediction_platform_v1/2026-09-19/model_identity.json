@@ -1,0 +1,11 @@
+{
+  "cold_start_cli_sha256": "bb9c7ec00becd7ca63c2abd043f9ef6f494cef57696385388a69a1418b6afca0",
+  "cold_start_core_sha256": "845c8d10d817ed793853dffe5d84fbc7726a785bbf7f4197376eb2a26d4fa664",
+  "frozen_poisson_scorer": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+  "frozen_poisson_scorer_sha256": "4a63ccdee67170b32daf2bb5d5652ed4728b9f3abe7f7fc67d832a94bdb465e1",
+  "legacy_denali_training_source": "backend/nhl/exports/train_nhl_sog_denali_pairings_v1__no_shiftcounts.csv",
+  "legacy_denali_training_source_sha256": "9908908e9c871f1192c985b20268712396c240b580ae941e0e389877fff3dcf0",
+  "operational_runner_sha256": "a905c30e021a90b0367e7bfcadaeb61b1cdbe7f9bc3c089aa759257138c855cc",
+  "selected_contract_sha256": "d3c9b25868ed221819808e8e0075c775cd6c72c6828d8602924452e5f01686f4",
+  "selected_model_is_promotion": false
+}

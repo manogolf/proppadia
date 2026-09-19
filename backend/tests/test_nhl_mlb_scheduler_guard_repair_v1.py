@@ -241,6 +241,7 @@ class SchedulerGuardRepairTest(unittest.TestCase):
 
     def test_main_lock_failure_keeps_exit_zero(self):
         with patch("sys.argv", ["runner", "--env-file", str(self.root / "absent")]), \
+             patch.object(nhl, "observe_sog_prediction_only", return_value=self.root / "prediction_status.json"), \
              patch.object(nhl, "observe", side_effect=RuntimeError("BUSY")), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(nhl.main(), 0)

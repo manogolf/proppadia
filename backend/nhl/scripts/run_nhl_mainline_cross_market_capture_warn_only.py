@@ -17,6 +17,7 @@ import pandas as pd
 import psycopg
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
+from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import observe as observe_sog_prediction_only
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -248,6 +249,17 @@ def main() -> int:
     now = utc_now()
     slate = now.astimezone(ZoneInfo("America/New_York")).date().isoformat() if args.slate_date == "today" else args.slate_date
     try:
+        # Independent, zero-credit prediction-only observation in the same already
+        # authorized MIDDAY/FINAL polling process. Its failure remains lane-local.
+        try:
+            observe_sog_prediction_only(
+                slate=slate, requested=args.phase,
+                dsn=os.environ.get("SUPABASE_DB_URL", "").strip(),
+                root=ROOT / "artifacts/operational/nhl/sog_prediction_only", now=now,
+            )
+        except Exception:
+            # Prediction-only observability must never block the unchanged market lane.
+            pass
         ready, reason = morning_capture_allowed(slate)
         if not ready:
             status_path = record_morning_not_ready(args.output_root, slate, reason)

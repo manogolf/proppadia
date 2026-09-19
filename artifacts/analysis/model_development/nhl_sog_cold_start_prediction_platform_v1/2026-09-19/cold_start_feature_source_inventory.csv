@@ -1,0 +1,11 @@
+source,coverage,timing,authority,identity_keys,leakage_risk,status
+nhl.skater_game_logs_raw snapshot,"144,225 rows; seasons 2023-2025",game-final retained,retained canonical NHL game-log store,"season,game_id,player_id,team_id",target outcome excluded from every feature; used only as replay label,CERTIFIED_WITH_STRICT_PRIOR_GATE
+prior-season all-situations TOI,"144,225/144,225",completed prior games,skater_game_logs_raw.toi_minutes,"game_id,player_id",LOW_STRICT_PRIOR,AVAILABLE
+prior-season situation TOI,shiftcharts retained only for season 2025; unavailable for 2023/2024 replay sources,completed games,shiftcharts/manpower tables,"game_id,player_id",LOW when available,PARTIAL_NOT_USED_FOR_CROSS_SEASON_REPLAY
+shots/SOG rate/attempts,"SOG 144,208; attempts 127,902",completed prior games,skater_game_logs_raw,"game_id,player_id",LOW_STRICT_PRIOR,AVAILABLE
+position,"144,225/144,225",current retained player reference; historical as-of timestamp absent,nhl.players,player_id,BOUNDED_TEMPORAL_PROVENANCE,AVAILABLE_WITH_QUALIFICATION
+team/opponent pace context,canonical team/opponent reconstructed deterministically from official game home/away IDs plus skater is_home; raw pre-2025 skater team_id not trusted,completed prior season only,nhl.games + skater_game_logs_raw.is_home,"season,game_id,player_id",LOW_STRICT_PRIOR_AFTER_CANONICAL_RECONSTRUCTION,AVAILABLE_WITH_EXPLICIT_IDENTITY_REPAIR
+preseason history,7 retained schedule games; no historical 2023-2025 preseason game logs,strictly prior only,nhl.games / game logs,"game_id,player_id",LOW once completed,PROSPECTIVE_ONLY_NOT_HISTORICALLY_EVALUABLE
+line assignment / confirmed lineup / injury / depth,no certified historical timestamped source,unavailable,none,none,HIGH_IF_INFERRED_FROM_OUTCOME,UNAVAILABLE_FAIL_CLOSED_OR_ROSTER_UNCONFIRMED
+minor/prior-league translation,no licensed certified historically testable source,unavailable,none,none,UNACCEPTABLE_IF_INVENTED,UNAVAILABLE_NOT_USED
+sportsbook odds,intentionally absent,not applicable,none,none,not applicable,NOT_REQUIRED

@@ -1,0 +1,39 @@
+{
+  "as_of": "2026-09-19",
+  "challengers_retained": [
+    "A_PRIOR_SEASON_CARRY_FORWARD",
+    "B_PRIOR_SEASON_RECENCY_WEIGHTED",
+    "C_MULTISEASON_SHRUNK_PLAYER",
+    "E_TEAM_CHANGE_AWARE",
+    "G_COLD_START_TO_CURRENT_SEASON_BLEND"
+  ],
+  "database_writes": 0,
+  "first_eligible_prospective_date": "2026-09-20_IF_CANONICAL_NONEMPTY_PREGAME_SLATE",
+  "network_market_requests": 0,
+  "paid_credits": 0,
+  "production_model_promoted": false,
+  "replay_seasons": [
+    2024,
+    2025
+  ],
+  "replay_target_player_games": 12220,
+  "retained_log_rows": 144225,
+  "scheduler_changes": 0,
+  "selected_contract": "D_PLAYER_ROLE_HIERARCHICAL",
+  "selection_reason": "A is strongest on returning-player common rows, but D supplies explicit sparse/old-history/rookie coverage with similar aggregate proper scores. E's aggregate proper-score change is negligible and G is mixed, so both remain shadow-only; F is implemented but unqualified. No single construction established stable superiority across both replay seasons, lines and depths.",
+  "september_19": "OPERATIONAL_OUTCOME_ONLY_RETROSPECTIVE_PREDICTIONS_FORBIDDEN",
+  "task": "NHL_SOG_COLD_START_PREDICTION_PLATFORM_V1",
+  "variant_not_historically_evaluable": {
+    "F_CURRENT_PRESEASON_UPDATE": "no retained 2023-2025 preseason game logs"
+  },
+  "variants_replayable": [
+    "A_PRIOR_SEASON_CARRY_FORWARD",
+    "B_PRIOR_SEASON_RECENCY_WEIGHTED",
+    "C_MULTISEASON_SHRUNK_PLAYER",
+    "D_PLAYER_ROLE_HIERARCHICAL",
+    "E_TEAM_CHANGE_AWARE",
+    "G_COLD_START_TO_CURRENT_SEASON_BLEND",
+    "CONTROL_FROZEN_ZERO_DEFAULT",
+    "CONTROL_POSITION_PRIOR"
+  ]
+}

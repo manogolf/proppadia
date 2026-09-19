@@ -1,0 +1,56 @@
+{
+  "contract_version": "NHL_SOG_COLD_START_PREDICTION_V1",
+  "frozen_at_utc": "2026-09-19T22:49:30Z",
+  "prospective_not_before_slate_date": "2026-09-20",
+  "model_family": "poisson_baseline",
+  "model_version": "baseline_v1_cold_start_shadow",
+  "lines": [1.5, 2.5, 3.5],
+  "selection_basis": "historical_2024_2025_opening_replay_only; no September 2026 outcomes",
+  "selected_arm": "D_PLAYER_ROLE_HIERARCHICAL",
+  "shadow_challenger_arms": [
+    "A_PRIOR_SEASON_CARRY_FORWARD",
+    "B_PRIOR_SEASON_RECENCY_WEIGHTED",
+    "C_MULTISEASON_SHRUNK_PLAYER",
+    "G_COLD_START_TO_CURRENT_SEASON_BLEND"
+  ],
+  "implemented_not_historically_qualified_arm": "F_CURRENT_PRESEASON_UPDATE",
+  "source_hierarchy": [
+    "latest completed NHL season player history",
+    "older retained NHL history with 0.5 season weight",
+    "certified position prior"
+  ],
+  "minimum_history": {
+    "adequate_prior_minutes": 300.0,
+    "sparse_prior_minutes": 0.01,
+    "recency_games": 20,
+    "position_prior_equivalent_minutes": 300.0,
+    "current_transition_appearances": 10
+  },
+  "weights": {
+    "older_season": 0.5,
+    "recency_per_game_decay": 0.9,
+    "current_preseason_equivalent_games": 5.0,
+    "team_context_log_weight": 0.0
+  },
+  "team_change_policy": "player history follows canonical player identity; current team controls eligibility only; historical replay did not justify a team-context probability tilt",
+  "transition_policy": "D remains selected during cold start; G is recorded as a gradual ten-appearance shadow challenger and cannot replace D without later prospective evidence",
+  "rookie_policy": "position-prior shadow prediction only when canonical position and active-roster identity are certified; otherwise exclude",
+  "lineup_policy": {
+    "included": ["CONFIRMED", "ACTIVE_ROSTER_UNCONFIRMED"],
+    "excluded": ["CONFIRMED_OUT", "SCRATCHED", "INACTIVE", "NOT_ON_ROSTER", "UNKNOWN_ROSTER"]
+  },
+  "missing_policy": "fail closed; never convert missing player and role history into zero expected SOG",
+  "prediction_phases": ["MIDDAY", "FINAL_PREGAME"],
+  "pregame_requirement": "prediction_timestamp_utc and input_cutoff_utc must precede scheduled_start_time_utc",
+  "market_dependency": "NONE",
+  "publication": "SHADOW_ONLY",
+  "wagering": "NOT_AUTHORIZED",
+  "promotion": "NOT_AUTHORIZED",
+  "grading": {
+    "official_final_required": true,
+    "appeared": "grade all 1.5/2.5/3.5 half-lines from official SOG",
+    "no_appearance": "NO_APPEARANCE_UNGRADED",
+    "late_scratch": "LATE_SCRATCH_UNGRADED",
+    "postponed": "POSTPONED_UNGRADED"
+  }
+}
