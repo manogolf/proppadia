@@ -62,6 +62,17 @@
     "calls": 0,
     "credits": 0
   },
+  "natural_followup": {
+    "midday_poll_status": "NOOP_MORNING_NOT_READY",
+    "midday_poll_paid_claims": 0,
+    "midday_poll_paid_calls": 0,
+    "midday_poll_credits": 0,
+    "mlb_1300_inline_bvp_status": "BVP_INLINE_SUCCESS_ALREADY_EXISTS",
+    "mlb_bvp_attempts_after_1300": 1,
+    "mlb_bvp_successes_after_1300": 1,
+    "mlb_bvp_rows_unchanged": 2678,
+    "mlb_1300_wrapper_exit": 0
+  },
   "classification": "NHL_MORNING_RECOVERY_FAIL",
   "third_recovery_authorized": false
 }

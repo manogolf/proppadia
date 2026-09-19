@@ -15,3 +15,9 @@ authorized.
 
 The operational poll now requires a durable successful morning receipt before
 it may evaluate or claim a paid MIDDAY or FINAL_PREGAME request.
+
+Natural follow-up confirmed that the MIDDAY poll returned
+`NOOP_MORNING_NOT_READY` with zero claims, calls, and credits. The 13:00 MLB
+run returned `BVP_INLINE_SUCCESS_ALREADY_EXISTS`; its attempt count remained
+one, its certified 2,678-row receipt remained unchanged, and the surrounding
+workflow completed with exit zero and released its locks.
