@@ -1,0 +1,6 @@
+term,season_2025_status,season_2026_status,conclusion
+MORNING,Not embedded in retained local logs; GitHub comment called 12:30 UTC Morning seed,Actual 07:30 prerequisite phase,PROVEN_CURRENT; PARTIAL_HISTORICAL
+MIDDAY,GitHub comment called 20:30 UTC Midday refresh; Automator 14:30 phase contract absent,Formal phase; AUTO gate is local 12:00-12:30,HISTORICAL_GITHUB_COMMENT_AND_CURRENT_CONTRACT; NOT_PROVEN_AUTOMATOR_LABEL
+FINAL_PREGAME,No exact season-2025 artifact phase label found,Formal new phase; AUTO gate is 20-75 minutes before first future start,SEASON_2026_REHEARSAL_AND_RUNTIME_LABEL
+PRE_PUCK,GitHub workflow comment named 00:45 UTC Pre-puck check,Not the current formal run_type,PROVEN_HISTORICAL_GITHUB_COMMENT_ONLY
+FINAL_SWEEP,GitHub workflow comment named 07:30 UTC PST final sweep; local-date relationship varies with DST,Not a formal capture phase,PROVEN_HISTORICAL_GITHUB_COMMENT_ONLY

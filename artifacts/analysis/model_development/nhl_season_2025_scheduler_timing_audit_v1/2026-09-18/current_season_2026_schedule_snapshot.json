@@ -1,0 +1,45 @@
+{
+  "as_of_local_date": "2026-09-18",
+  "conditional_shadow": {
+    "enabled": true,
+    "label": "com.proppadia.nhl.mainline-cross-market-shadow",
+    "last_exit_code": 0,
+    "launchctl_runs": 110,
+    "loaded": true,
+    "lock": "per-slate acquisition flock + create-only paid-attempt claim; prior attempt blocks automatic retry",
+    "phase_gate": "MIDDAY during 12:00-12:30 PT; FINAL_PREGAME when first future start is 20-75 minutes away",
+    "plist_sha256": "9cb03c63d20fe50cbc5dfcc3c50e9cb62a5a1c5445e08923ded59fd9b40cf2da",
+    "program": ".venv/bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py --slate-date today --phase AUTO --env-file backend/.env",
+    "schedule": "StartInterval=900 seconds from load/last dispatch; RunAtLoad=true",
+    "state": "not running",
+    "template_matches_installed": true
+  },
+  "important_correction": "07:30 is the only fixed NHL calendar run, but it is not the only automatic NHL activity; the loaded 900-second conditional poll can make one guarded MIDDAY and one guarded FINAL_PREGAME capture.",
+  "mlb_collision": {
+    "07:30_exact_collision": false,
+    "08:30_refresh": true,
+    "noon_or_final_conditional_overlap": "possible with other MLB windows depending first puck; isolated locks/outputs, shared host/network/database"
+  },
+  "morning": {
+    "enabled": true,
+    "keep_alive": false,
+    "label": "com.proppadia.nhl.morning-orchestration",
+    "last_exit_code": 0,
+    "launchctl_runs": 1,
+    "loaded": true,
+    "lock": "per-date orchestration/run identity",
+    "odds_capture": false,
+    "plist_sha256": "c50d2c746c2fe74a695cbd20e70c2ff08972ff9bb44c7319d6a8d862d27c39cb",
+    "program": ".venv/bin/python backend/nhl/scripts/run_nhl_morning_orchestration.py --slate-date today --env-file backend/.env",
+    "run_at_load": false,
+    "schedule": "07:30 local daily",
+    "state": "not running",
+    "template_matches_installed": true
+  },
+  "power": {
+    "displaysleep": 0,
+    "repeating_wake": "05:27 every day",
+    "requirement": "LaunchAgent calendar intervals do not wake sleeping Mac; current AC sleep=0 keeps host awake",
+    "sleep": 0
+  }
+}

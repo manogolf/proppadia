@@ -1,0 +1,138 @@
+{
+  "automator": {
+    "actual_start_clock_earliest_pt": "05:32:55",
+    "actual_start_clock_latest_pt": "20:30:08",
+    "dates": 124,
+    "dates_by_intended_window_count": {
+      "1": 34,
+      "2": 84
+    },
+    "dates_with_no_intended_window_but_other_invocation": 6,
+    "days_by_all_invocation_count": {
+      "1": 24,
+      "2": 77,
+      "3": 9,
+      "4": 6,
+      "5": 7,
+      "6": 1
+    },
+    "end_time_status": "UNRETAINED",
+    "failures_or_incomplete": 35,
+    "first_start_pt": "2025-12-09T14:30:04-08:00",
+    "full_pipeline_markers": 212,
+    "invocations_with_internal_retry": 34,
+    "last_start_pt": "2026-04-16T14:30:01-07:00",
+    "missing_dates_in_observed_span": [
+      "2026-02-14",
+      "2026-02-17",
+      "2026-02-20",
+      "2026-02-23",
+      "2026-02-24"
+    ],
+    "rows": 270,
+    "successes": 235,
+    "window_counts": {
+      "AUTOMATOR_0545": 106,
+      "AUTOMATOR_1430": 96,
+      "OUTSIDE_DOMINANT_WINDOWS": 68
+    },
+    "window_medians_pt": {
+      "AUTOMATOR_0545": "05:45:01",
+      "AUTOMATOR_1430": "14:30:02"
+    }
+  },
+  "coverage_conclusion": "153 historical bundles are 16:00 PT provider as-of backfills, not contemporaneous executions. Forty-two contemporaneous final daily files preserve mainly the later local run; early-versus-late paired coverage is unavailable.",
+  "current": {
+    "as_of_local_date": "2026-09-18",
+    "conditional_shadow": {
+      "enabled": true,
+      "label": "com.proppadia.nhl.mainline-cross-market-shadow",
+      "last_exit_code": 0,
+      "launchctl_runs": 110,
+      "loaded": true,
+      "lock": "per-slate acquisition flock + create-only paid-attempt claim; prior attempt blocks automatic retry",
+      "phase_gate": "MIDDAY during 12:00-12:30 PT; FINAL_PREGAME when first future start is 20-75 minutes away",
+      "plist_sha256": "9cb03c63d20fe50cbc5dfcc3c50e9cb62a5a1c5445e08923ded59fd9b40cf2da",
+      "program": ".venv/bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py --slate-date today --phase AUTO --env-file backend/.env",
+      "schedule": "StartInterval=900 seconds from load/last dispatch; RunAtLoad=true",
+      "state": "not running",
+      "template_matches_installed": true
+    },
+    "important_correction": "07:30 is the only fixed NHL calendar run, but it is not the only automatic NHL activity; the loaded 900-second conditional poll can make one guarded MIDDAY and one guarded FINAL_PREGAME capture.",
+    "mlb_collision": {
+      "07:30_exact_collision": false,
+      "08:30_refresh": true,
+      "noon_or_final_conditional_overlap": "possible with other MLB windows depending first puck; isolated locks/outputs, shared host/network/database"
+    },
+    "morning": {
+      "enabled": true,
+      "keep_alive": false,
+      "label": "com.proppadia.nhl.morning-orchestration",
+      "last_exit_code": 0,
+      "launchctl_runs": 1,
+      "loaded": true,
+      "lock": "per-date orchestration/run identity",
+      "odds_capture": false,
+      "plist_sha256": "c50d2c746c2fe74a695cbd20e70c2ff08972ff9bb44c7319d6a8d862d27c39cb",
+      "program": ".venv/bin/python backend/nhl/scripts/run_nhl_morning_orchestration.py --slate-date today --env-file backend/.env",
+      "run_at_load": false,
+      "schedule": "07:30 local daily",
+      "state": "not running",
+      "template_matches_installed": true
+    },
+    "power": {
+      "displaysleep": 0,
+      "repeating_wake": "05:27 every day",
+      "requirement": "LaunchAgent calendar intervals do not wake sleeping Mac; current AC sleep=0 keeps host awake",
+      "sleep": 0
+    }
+  },
+  "github": {
+    "cancelled": 1,
+    "failure": 105,
+    "first_start_utc": "2025-09-27T02:19:49Z",
+    "last_start_utc": "2025-11-03T07:36:47Z",
+    "manual_dispatch": 100,
+    "row_level_actual_timing": "NOT_RETAINED_LOCALLY",
+    "runs": 186,
+    "scheduled": 86,
+    "success": 80
+  },
+  "historical_windows": {
+    "automator": "05:45 and 14:30 PT dominant; 202 scheduled-window logs plus 68 other invocations",
+    "github": "configuration changed: 03:15 PDT; then 04:15/22:15 PDT; then four UTC windows with DST-dependent PT"
+  },
+  "odds": {
+    "closest_nonnegative_bundle_lead_minutes_by_source": {
+      "CONTEMPORANEOUS_FINAL_DAILY_ODDS_FILE": 15.617,
+      "HISTORICAL_ODDS_API_AS_OF_BUNDLE": 0.0
+    },
+    "contemporaneous_capture_rows": 42,
+    "historical_bundle_rows": 153,
+    "mainline_historical_objects": 0,
+    "market_object_counts": {
+      "CONTEMPORANEOUS_FINAL_DAILY_FILE|GOALIE_SAVES": 2208,
+      "CONTEMPORANEOUS_FINAL_DAILY_FILE|POINTS": 1927,
+      "CONTEMPORANEOUS_FINAL_DAILY_FILE|SOG": 4688,
+      "HISTORICAL_PROVIDER_AS_OF|GOALIE_SAVES": 5774,
+      "HISTORICAL_PROVIDER_AS_OF|POINTS": 5008,
+      "HISTORICAL_PROVIDER_AS_OF|SOG": 13017
+    },
+    "puck_line_historical_objects": 0
+  },
+  "phase_conclusion": "MIDDAY existed as a GitHub comment and is a formal 2026 gate; FINAL_PREGAME is a season-2026 formal phase, not a proven season-2025 Automator label.",
+  "recommendation": "NO_NEW_SCHEDULE_REQUIRED: retain 07:30 morning plus the existing guarded 900-second AUTO poll for one noon MIDDAY and one 20-75-minute FINAL_PREGAME capture.",
+  "season_convention": "season 2025 includes January-April 2026",
+  "task_id": "NHL_SEASON_2025_SCHEDULER_TIMING_AUDIT_V1",
+  "transition": {
+    "first_automator_start_pt": "2025-12-09T14:30:04-08:00",
+    "gap": "No automatic NHL invocation evidence retained for 2025-11-04 through 2025-12-08",
+    "last_github_run_utc": "2025-11-03T07:36:47Z"
+  },
+  "uncertainties": [
+    "GitHub per-run metadata was observed previously but raw response was not retained locally",
+    "Automator/Calendar source definition and exact end timestamps are missing",
+    "42 contemporaneous odds files are mutable final daily copies, so paired 05:45 versus 14:30 coverage cannot be measured",
+    "goalie confirmation and lineup improvement by time are not directly preserved"
+  ]
+}
