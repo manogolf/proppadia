@@ -32,6 +32,16 @@ if [[ "$rc" -eq 0 ]]; then
   exit 0
 fi
 
+# Exact dependency-only no-work: raw market capture occurred before scoring,
+# the scorer wrote no prediction artifact, and unrelated lanes must continue.
+if [[ "$rc" -eq 76 ]] && grep -Eq "^BVP_DEPENDENT_WIDE_NO_WORK_CERTIFIED slate_date=${slate_date} blocked_rows=[1-9][0-9]* market_snapshot_preserved=1$" "$stderr_file"; then
+  after="ABSENT"
+  [[ -f "$output" ]] && after="$(shasum -a 256 "$output" | awk '{print $1}')"
+  [[ "$after" == "$before" ]] || exit "$rc"
+  echo "[$(date -u +%FT%TZ)] SKIP MLB predictions-wide: BVP_DEPENDENCY_BLOCKED; independent lanes continue"
+  exit 0
+fi
+
 current_date="$(TZ=America/New_York date +%F)"
 marker="LATE_SLATE_NO_WORK_CERTIFIED slate_date=${slate_date} "
 if [[ "$slate_date" == "$current_date" ]] \

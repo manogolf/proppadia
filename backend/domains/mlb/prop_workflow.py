@@ -23,6 +23,7 @@ from backend.mlb.shared.team_name_map import (
 )
 from backend.shared.db.pg import pg_fetchone, pg_fetchall
 from backend.mlb.shared.bvp_identity import certified_rows
+from backend.mlb.shared.bvp_inline import BVPInlineUnavailable
 
 ET = ZoneInfo("America/New_York")
 _HORIZONS = ("d7", "d15", "d30")
@@ -158,6 +159,12 @@ ORDER BY
             game_id,
         ),
     ) or []
+    from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE
+    if str(game_date)>=EFFECTIVE_DATE:
+        # Historical fallback is not a certified same-date/current-game input.
+        # Leave unrelated rolling payloads and legacy replay behavior untouched.
+        rows=[r for r in rows if not any(str(k).startswith("bvp_") for k in (r.get("features") or {}))
+              or (str(r.get("game_date"))[:10]==str(game_date) and game_id is not None and r.get("game_id")==game_id)]
     eligible = certified_rows(rows)
     row = eligible[0] if eligible else {}
     features = row.get("features")
@@ -509,6 +516,8 @@ def predict_prop(prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
             "blend": result.get("blend"),
             "decision_threshold": decision_threshold,
         }
+    except BVPInlineUnavailable:
+        raise  # A governed dependency block must NEVER become heuristic output.
     except Exception:
         probability = None
 

@@ -1,0 +1,2050 @@
+#!/bin/zsh
+set -euo pipefail
+
+SCRIPT_MODE="run"
+MLB_CHECK_DATE_OVERRIDE=""
+MLB_CHECK_TOMORROW=0
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --check)
+      SCRIPT_MODE="check"
+      shift
+      ;;
+    --date)
+      if [[ "${2:-}" == "" ]]; then
+        echo "Usage: $0 [--check] [--date YYYY-MM-DD] [--tomorrow]" >&2
+        exit 2
+      fi
+      MLB_CHECK_DATE_OVERRIDE="$2"
+      shift 2
+      ;;
+    --tomorrow)
+      MLB_CHECK_TOMORROW=1
+      shift
+      ;;
+    *)
+      echo "Usage: $0 [--check] [--date YYYY-MM-DD] [--tomorrow]" >&2
+      exit 2
+      ;;
+  esac
+done
+if [[ "$SCRIPT_MODE" != "check" && ( "$MLB_CHECK_DATE_OVERRIDE" != "" || "$MLB_CHECK_TOMORROW" == "1" ) ]]; then
+  echo "--date/--tomorrow are only supported with --check" >&2
+  exit 2
+fi
+if [[ "$MLB_CHECK_DATE_OVERRIDE" != "" && "$MLB_CHECK_TOMORROW" == "1" ]]; then
+  echo "--date and --tomorrow are mutually exclusive" >&2
+  exit 2
+fi
+
+LA_WRAPPER_NAME="proppadia_mlb_refresh_daily.sh"
+REPO="$HOME/Projects/proppadia"
+cd "$REPO"
+
+source backend/mlb/scripts/launchagent_lock.zsh
+
+set -a
+source backend/.env
+set +a
+
+MLB_WRAPPER_RUN_STARTED_AT_UTC="$(date -u +%FT%TZ)"
+MLB_LAUNCHAGENT_SUMMARY_JSON="artifacts/analysis/mlb/launchagent_daily_summary_latest.json"
+MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON="artifacts/analysis/mlb/launchagent_rollover_check_latest.json"
+
+# Ensure psql is available when LaunchAgent PATH is minimal.
+PSQL_BIN="$(command -v psql || true)"
+if [[ -z "${PSQL_BIN}" ]]; then
+  for cand in /opt/homebrew/opt/libpq/bin/psql /usr/local/opt/libpq/bin/psql; do
+    if [[ -x "$cand" ]]; then
+      PSQL_BIN="$cand"
+      break
+    fi
+  done
+fi
+if [[ -z "${PSQL_BIN}" ]]; then
+  echo "[$(date -u +%FT%TZ)] ERROR psql not found (install libpq or add PATH)" >&2
+  if [[ "$SCRIPT_MODE" != "check" ]]; then
+    exit 127
+  fi
+fi
+
+MLB_DATE_ET="$(TZ=America/New_York date +%F)"
+if [[ "$SCRIPT_MODE" == "check" && "$MLB_CHECK_TOMORROW" == "1" ]]; then
+  MLB_DATE_ET="$(TZ=America/New_York date -v+1d +%F 2>/dev/null || TZ=America/New_York date -d "tomorrow" +%F)"
+elif [[ "$SCRIPT_MODE" == "check" && "$MLB_CHECK_DATE_OVERRIDE" != "" ]]; then
+  if ! date -j -f "%Y-%m-%d" "$MLB_CHECK_DATE_OVERRIDE" "+%F" >/dev/null 2>&1; then
+    echo "Invalid --date value: ${MLB_CHECK_DATE_OVERRIDE} (expected YYYY-MM-DD)" >&2
+    exit 2
+  fi
+  MLB_DATE_ET="$MLB_CHECK_DATE_OVERRIDE"
+fi
+MLB_LAUNCHAGENT_ROLLOVER_DATED_JSON="artifacts/analysis/mlb/launchagent_rollover_check_${MLB_DATE_ET}.json"
+if [[ "$SCRIPT_MODE" == "check" ]]; then
+  MLB_COMPLETED_SLATE_DATE="$(TZ=America/New_York date -j -v-1d -f "%Y-%m-%d" "$MLB_DATE_ET" +%F 2>/dev/null || date -d "${MLB_DATE_ET} -1 day" +%F)"
+elif [[ "${MLB_AGREEMENT_SEPARATION_CAPTURE_V4_ENABLED:-1}" == "1" ]]; then
+  MLB_COMPLETED_SLATE_DATE="${MLB_DAILY_RECONCILE_DATE:-$(TZ=America/New_York date -v-1d +%F 2>/dev/null || TZ=America/New_York date -d "yesterday" +%F)}"
+fi
+MLB_DAILY_BRIEF_REPORT_DATE="${MLB_DAILY_BRIEF_REPORT_DATE:-$MLB_DATE_ET}"
+MLB_DAILY_BRIEF_CURRENT_SLATE_DATE="${MLB_DAILY_BRIEF_CURRENT_SLATE_DATE:-$MLB_DATE_ET}"
+MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV="artifacts/analysis/mlb/execution_vs_model/${MLB_COMPLETED_SLATE_DATE}/reconcile_rows.csv"
+MLB_DAILY_BRIEF_PATH="artifacts/analysis/mlb/mlb_daily_ops_brief_${MLB_DAILY_BRIEF_REPORT_DATE}.md"
+MLB_DAILY_BRIEF_JSON="artifacts/analysis/mlb/mlb_daily_ops_brief_latest.json"
+MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON="artifacts/analysis/mlb/mlb_daily_ops_brief_input_refresh_latest.json"
+MLB_DAILY_INDEX_PATH="artifacts/analysis/mlb/daily/${MLB_DATE_ET}/INDEX.md"
+MLB_MORNING_WORKFLOW_AUDIT_JSON="artifacts/analysis/mlb/morning_workflow/morning_workflow_audit_latest.json"
+MLB_MORNING_WORKFLOW_AUDIT_MD="artifacts/analysis/mlb/morning_workflow_audit.md"
+MLB_MORNING_WORKFLOW_VALIDATION_MD="artifacts/analysis/mlb/morning_workflow_validation.md"
+MLB_MORNING_WORKFLOW_VALIDATION_CSV="artifacts/analysis/mlb/morning_workflow_validation.csv"
+MLB_MORNING_TIMING_TEMPLATE="artifacts/analysis/mlb/morning_timing_template.md"
+MLB_MORNING_GATE_SUMMARY="artifacts/analysis/mlb/morning_gate_summary.md"
+MLB_MORNING_WORKBENCH="artifacts/analysis/mlb/review_aids/performance/o15_morning_workbench.md"
+MLB_ENVIRONMENT_V2_BETA_DAILY_PROFILES="artifacts/analysis/mlb/environment_v2/daily/${MLB_DATE_ET}/environment_v2_beta_daily_profiles_${MLB_DATE_ET}.csv"
+MLB_ENVIRONMENT_V2_BETA_DAILY_SUMMARY_JSON="artifacts/analysis/mlb/environment_v2/daily/${MLB_DATE_ET}/environment_v2_beta_daily_summary_${MLB_DATE_ET}.json"
+MLB_ENVIRONMENT_V2_BETA_DAILY_HEALTH_MD="artifacts/analysis/mlb/environment_v2/daily/${MLB_DATE_ET}/environment_v2_beta_daily_health_${MLB_DATE_ET}.md"
+MLB_ENVIRONMENT_V2_BETA_RECONCILED_PROFILES="artifacts/analysis/mlb/environment_v2/daily/${MLB_COMPLETED_SLATE_DATE}/environment_v2_beta_daily_profiles_reconciled_${MLB_COMPLETED_SLATE_DATE}.csv"
+MLB_ENVIRONMENT_V2_BETA_RECONCILE_SUMMARY_JSON="artifacts/analysis/mlb/environment_v2/daily/${MLB_COMPLETED_SLATE_DATE}/environment_v2_beta_daily_reconcile_summary_${MLB_COMPLETED_SLATE_DATE}.json"
+MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV="artifacts/analysis/mlb/environment_v2/ledger/environment_v2_beta_profile_ledger.csv"
+MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON="artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_latest.json"
+MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON="artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_${MLB_DATE_ET}.json"
+MLB_DAILY_FEATURE_LINEAGE_HEALTH_MD="artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_${MLB_DATE_ET}.md"
+MLB_PA_FOUNDATION_HEALTH_JSON="artifacts/analysis/mlb/pa_foundation/pa_foundation_health_${MLB_DATE_ET}.json"
+MLB_PA_FOUNDATION_COVERAGE_CSV="artifacts/analysis/mlb/pa_foundation/pa_foundation_coverage_${MLB_DATE_ET}.csv"
+MLB_PA_FOUNDATION_PROPAGATION_JSON="artifacts/analysis/mlb/pa_foundation/pa_foundation_propagation_summary_${MLB_DATE_ET}.json"
+MLB_PA_FOUNDATION_PROPAGATION_CSV="artifacts/analysis/mlb/pa_foundation/pa_foundation_propagation_report_${MLB_DATE_ET}.csv"
+MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON="artifacts/analysis/mlb/expanded_o15_universe/expanded_o15_context_health_${MLB_DATE_ET}.json"
+MLB_DAILY_PREFLIGHT_JSON="artifacts/analysis/mlb/orchestration/mlb_daily_preflight_${MLB_DATE_ET}.json"
+MLB_PROJECT_INVARIANTS_JSON="artifacts/analysis/mlb/invariants/mlb_project_invariants_${MLB_DATE_ET}.json"
+MLB_IDENTITY_HEALTH_JSON="artifacts/analysis/mlb/identity/mlb_identity_health_summary.json"
+MLB_ONTOLOGY_HEALTH_JSON="artifacts/analysis/mlb/ontology/ontology_health.json"
+MLB_ACTUAL_WAGERS_BY_SOURCE_CSV="backend/mlb/exports/model_v2/reconcile/${MLB_COMPLETED_SLATE_DATE}/actual_wagers_by_source_${MLB_COMPLETED_SLATE_DATE}.csv"
+MLB_LOCAL_DAILY_TRACKING_ENABLED="${MLB_LOCAL_DAILY_TRACKING_ENABLED:-1}"
+MLB_ROLLING_CHECK_DAYS="${MLB_ROLLING_CHECK_DAYS:-10}"
+MLB_ROLLING_CHECK_MIN_COVERAGE_PCT="${MLB_ROLLING_CHECK_MIN_COVERAGE_PCT:-99}"
+MLB_ROLLING_CHECK_MIN_COMPARABLE="${MLB_ROLLING_CHECK_MIN_COMPARABLE:-100}"
+# MLB_DAILY_BVP_FALLBACK_ENABLED is superseded; it cannot bypass date authority.
+if [[ "${MLB_ENABLE_UBO5_TOTAL_BASES_ESTABLISHED_ROUTE:-0}" != "0" ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN UBO5_DECOMMISSIONED: old enable flag ignored; incumbent remains active" >&2
+fi
+MLB_RESEARCH_PA_OVERLAY_SHADOW="${MLB_RESEARCH_PA_OVERLAY_SHADOW:-0}"
+MLB_RESEARCH_HITS15_SUPPRESSION_SHADOW="${MLB_RESEARCH_HITS15_SUPPRESSION_SHADOW:-0}"
+# Hits 0.5 expected-PA research capture only. Set to 0 for immediate rollback;
+# production Hits generation and routing do not consume this flag.
+MLB_ENABLE_HITS05_LIVE_PA_SHADOW="${MLB_ENABLE_HITS05_LIVE_PA_SHADOW:-1}"
+
+MLB_RUN_TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
+MLB_RUN_TAG="local_daily_${MLB_RUN_TS_UTC}"
+MLB_BVP_INLINE_RESULT="artifacts/ops/bvp_inline_v1/results/${MLB_DATE_ET}/${MLB_RUN_TAG}.json"
+MLB_BVP_INLINE_RC=0
+MLB_ODDS_DAY_DIR="backend/mlb/exports/odds_history/${MLB_DATE_ET}"
+MLB_ODDS_CANONICAL_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops.json"
+MLB_ODDS_COMPAT_JSON="${MLB_ODDS_DAY_DIR}/odds_latest_compatible.json"
+MLB_ODDS_TAGGED_JSON="${MLB_ODDS_DAY_DIR}/odds_mlb_playerprops__${MLB_RUN_TAG}.json"
+MLB_BOOK_UPLOAD_CANONICAL_CSV="backend/mlb/data/processed/mlb_book_upload.csv"
+MLB_UPLOADS_DATED_DIR="backend/mlb/data/processed/mlb_uploads/${MLB_DATE_ET}"
+MLB_UPLOADS_DATED_BOOK_CSV="${MLB_UPLOADS_DATED_DIR}/05_book_upload_base.csv"
+MLB_LANE_DATE_DIR="backend/mlb/exports/model_v2/lanes/today/${MLB_DATE_ET}"
+MLB_SELECTOR_CSV="${MLB_LANE_DATE_DIR}/hits_lane_selector_${MLB_DATE_ET}.csv"
+MLB_SELECTOR_SUMMARY_JSON="${MLB_LANE_DATE_DIR}/hits_lane_selector_${MLB_DATE_ET}_summary.json"
+MLB_SELECTOR_UPLOAD_DIAGNOSTICS_JSON="${MLB_LANE_DATE_DIR}/hits_lane_selector_${MLB_DATE_ET}_upload_diagnostics.json"
+MLB_QUICK_CARD_HITS_CSV="${MLB_LANE_DATE_DIR}/quick_card_hits_${MLB_DATE_ET}.csv"
+MLB_UPLOAD_DATE_DIR="backend/mlb/exports/model_v2/upload/${MLB_DATE_ET}"
+MLB_RANKING_UPLOAD_CSV="${MLB_UPLOAD_DATE_DIR}/ranking_tool_upload_${MLB_DATE_ET}.csv"
+MLB_RANKING_UPLOAD_SUMMARY_JSON="${MLB_UPLOAD_DATE_DIR}/ranking_tool_upload_diagnostics_${MLB_DATE_ET}_summary.json"
+MLB_QUICK_CARD_UPLOAD_CSV="${MLB_UPLOAD_DATE_DIR}/quick_card_tool_upload_${MLB_DATE_ET}.csv"
+MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON="${MLB_UPLOAD_DATE_DIR}/quick_card_tool_upload_diagnostics_${MLB_DATE_ET}_summary.json"
+MLB_MODEL_VS_FADE_JSON="tmp/analysis/mlb_model_vs_fade_summary.json"
+MLB_QC_CANDIDATE_WATCH_JSON="artifacts/analysis/mlb/v2_qc_diagnostics/daily_candidate_watch.json"
+MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON="artifacts/analysis/mlb/v2_qc_diagnostics/overlap_role_profile_watch.json"
+MLB_OVERLAP_SNAPSHOT_CSV="artifacts/analysis/mlb/research_gap_analysis/overlap_daily_snapshot.csv"
+MLB_OVERLAP_FEATURE_MONITOR_CSV="artifacts/analysis/mlb/research_gap_analysis/overlap_feature_monitor.csv"
+MLB_ROSTER_REFRESH_RETRY_ATTEMPTS="${MLB_ROSTER_REFRESH_RETRY_ATTEMPTS:-4}"
+MLB_ROSTER_REFRESH_RETRY_SLEEP_SEC="${MLB_ROSTER_REFRESH_RETRY_SLEEP_SEC:-60}"
+
+upload_prep_command="make mlb-daily-upload-prep MLB_UPLOAD_PREP_DATE=${MLB_DATE_ET} MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"
+full_slate_reconcile_command="make mlb-full-slate-performance MLB_DATE=${MLB_COMPLETED_SLATE_DATE} MLB_FULL_SLATE_MIN_RESOLVED_ROWS=1"
+actual_reconcile_command=".venv/bin/python -m backend.mlb.scripts.compare_mlb_model_v2_upload_vs_actual --date ${MLB_COMPLETED_SLATE_DATE}"
+ubo5_closeout_command="DECOMMISSIONED_NOT_INVOKED"
+ubo5_consensus_closeout_command="DECOMMISSIONED_NOT_INVOKED"
+ubo5_broad_records_command="DECOMMISSIONED_NOT_INVOKED"
+ubo5_history_refresh_command="DECOMMISSIONED_NOT_INVOKED"
+ubo5_closeout_manifest="backend/mlb/exports/model_v2/ubo5_tb15/${MLB_COMPLETED_SLATE_DATE}/ubo5_tb15_closeout_current.json"
+ubo5_complete_outcome_manifest="backend/mlb/exports/model_v2/ubo5_tb15/${MLB_COMPLETED_SLATE_DATE}/ubo5_tb15_complete_outcome_audit_current.json"
+ubo5_consensus_closeout_manifest="backend/mlb/exports/model_v2/ubo5_tb15/${MLB_COMPLETED_SLATE_DATE}/ubo5_tb15_consensus_closeout_current.json"
+ubo5_daily_record_csv="backend/mlb/exports/model_v2/ubo5_tb15/daily_record/ubo5_tb15_daily_record.csv"
+model_vs_fade_command="make mlb-model-vs-fade MLB_MODEL_VS_FADE_ROWS_CSV=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}"
+ops_brief_command="MLB_DAILY_BRIEF_REPORT_DATE=${MLB_DAILY_BRIEF_REPORT_DATE} MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE=${MLB_COMPLETED_SLATE_DATE} MLB_DAILY_BRIEF_CURRENT_SLATE_DATE=${MLB_DAILY_BRIEF_CURRENT_SLATE_DATE} MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV} MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT=0 MLB_DAILY_BRIEF_REQUIRE_FRESH_BVP_IMPACT=0 MLB_ENABLE_HITS05_LIVE_PA_SHADOW=${MLB_ENABLE_HITS05_LIVE_PA_SHADOW} MLB_HITS05_LIVE_PA_SHADOW_RUN_TAG=${MLB_RUN_TAG}_live_pa_shadow MLB_HITS05_LIVE_PA_SHADOW_CURRENT_PARENT_DIR=artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/${MLB_DATE_ET}/${MLB_RUN_TAG} make mlb-daily-ops-brief"
+final_ops_brief_command="MLB_DAILY_BRIEF_REFRESH_INPUTS=0 ${ops_brief_command}"
+overlap_qc_watches_command="make mlb-refresh-v2-qc-candidate-watch; make mlb-refresh-overlap-role-profile-watch; make mlb-capture-overlap-snapshot MLB_OVERLAP_SNAPSHOT_DATE=${MLB_COMPLETED_SLATE_DATE}; make mlb-overlap-monitor MLB_OVERLAP_OPS_DATE=${MLB_COMPLETED_SLATE_DATE}"
+feature_lineage_health_command="make mlb-daily-feature-lineage-health MLB_DAILY_BRIEF_CURRENT_SLATE_DATE=${MLB_DATE_ET}"
+pa_refresh_command="make mlb-refresh-player-pa MLB_PA_DATE_FROM=${MLB_COMPLETED_SLATE_DATE} MLB_PA_DATE_TO=${MLB_COMPLETED_SLATE_DATE} MLB_PA_ONLY_MISSING=1 MLB_SEASON_REQUIRE_REGULAR=1"
+pa_health_command="make mlb-pa-foundation-health DATE=${MLB_DATE_ET}"
+pa_propagation_command="make mlb-pa-foundation-propagate DATE=${MLB_DATE_ET} MLB_PA_FOUNDATION_PROPAGATION_COMPLETED_DATE=${MLB_COMPLETED_SLATE_DATE}"
+daily_health_gates_command="make mlb-daily-health-gates MLB_DAILY_PREFLIGHT_DATE=${MLB_DATE_ET}"
+base_health_gates_command="make mlb-expanded-o15-universe MLB_EXPANDED_O15_UNIVERSE_DATE= MLB_EXPANDED_O15_UNIVERSE_DATE_FROM= MLB_EXPANDED_O15_UNIVERSE_DATE_TO=; make mlb-expanded-o15-context-health MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE=${MLB_DATE_ET}; make mlb-identity-health; make mlb-o15-ontology-health MLB_O15_ONTOLOGY_HEALTH_DATE=${MLB_DATE_ET}"
+project_invariants_command="make mlb-project-invariants MLB_PROJECT_INVARIANTS_DATE=${MLB_DATE_ET}"
+daily_preflight_command="make mlb-daily-preflight MLB_DAILY_PREFLIGHT_DATE=${MLB_DATE_ET}"
+environment_v2_beta_daily_command="make mlb-environment-v2-beta-daily MLB_ENVIRONMENT_V2_BETA_DAILY_DATE=${MLB_DATE_ET} MLB_ENVIRONMENT_V2_BETA_DAILY_WRAPPER_MODE=daily_wrapper"
+environment_v2_beta_reconcile_command="make mlb-environment-v2-beta-reconcile MLB_ENVIRONMENT_V2_BETA_RECONCILE_DATE=${MLB_COMPLETED_SLATE_DATE}"
+daily_index_command="make mlb-daily-index MLB_DAILY_INDEX_DATE=${MLB_DATE_ET} MLB_DAILY_INDEX_COMPLETED_SLATE_DATE=${MLB_COMPLETED_SLATE_DATE}"
+morning_workflow_audit_command="make mlb-morning-workflow-audit MLB_MORNING_WORKFLOW_AUDIT_DATE=${MLB_DATE_ET}"
+
+write_launchagent_summary() {
+  local wrapper_rc="${1:-0}"
+  set +e
+  MLB_WRAPPER_RC="$wrapper_rc" \
+  MLB_BVP_INLINE_RESULT="$MLB_BVP_INLINE_RESULT" \
+  MLB_BVP_INLINE_RC="$MLB_BVP_INLINE_RC" \
+  MLB_WRAPPER_RUN_STARTED_AT_UTC="$MLB_WRAPPER_RUN_STARTED_AT_UTC" \
+  MLB_CURRENT_SLATE_DATE="$MLB_DATE_ET" \
+  MLB_WRAPPER_RUN_STARTED_AT_UTC="$MLB_WRAPPER_RUN_STARTED_AT_UTC" \
+  MLB_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE" \
+  MLB_DAILY_BRIEF_REPORT_DATE="$MLB_DAILY_BRIEF_REPORT_DATE" \
+  MLB_LAUNCHAGENT_SUMMARY_JSON="$MLB_LAUNCHAGENT_SUMMARY_JSON" \
+  MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV="$MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV" \
+  MLB_ACTUAL_WAGERS_BY_SOURCE_CSV="$MLB_ACTUAL_WAGERS_BY_SOURCE_CSV" \
+  MLB_MODEL_VS_FADE_JSON="$MLB_MODEL_VS_FADE_JSON" \
+  MLB_DAILY_BRIEF_PATH="$MLB_DAILY_BRIEF_PATH" \
+  MLB_DAILY_BRIEF_JSON="$MLB_DAILY_BRIEF_JSON" \
+  MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON="$MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON" \
+  MLB_DAILY_INDEX_PATH="$MLB_DAILY_INDEX_PATH" \
+  MLB_MORNING_WORKFLOW_AUDIT_JSON="$MLB_MORNING_WORKFLOW_AUDIT_JSON" \
+  MLB_MORNING_WORKFLOW_AUDIT_MD="$MLB_MORNING_WORKFLOW_AUDIT_MD" \
+  MLB_MORNING_WORKFLOW_VALIDATION_MD="$MLB_MORNING_WORKFLOW_VALIDATION_MD" \
+  MLB_MORNING_WORKFLOW_VALIDATION_CSV="$MLB_MORNING_WORKFLOW_VALIDATION_CSV" \
+  MLB_MORNING_TIMING_TEMPLATE="$MLB_MORNING_TIMING_TEMPLATE" \
+  MLB_MORNING_GATE_SUMMARY="$MLB_MORNING_GATE_SUMMARY" \
+  MLB_MORNING_WORKBENCH="$MLB_MORNING_WORKBENCH" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON" \
+  MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON="$MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON" \
+  MLB_PROJECT_INVARIANTS_JSON="$MLB_PROJECT_INVARIANTS_JSON" \
+  MLB_IDENTITY_HEALTH_JSON="$MLB_IDENTITY_HEALTH_JSON" \
+  MLB_ONTOLOGY_HEALTH_JSON="$MLB_ONTOLOGY_HEALTH_JSON" \
+  MLB_SELECTOR_CSV="$MLB_SELECTOR_CSV" \
+  MLB_SELECTOR_SUMMARY_JSON="$MLB_SELECTOR_SUMMARY_JSON" \
+  MLB_SELECTOR_UPLOAD_DIAGNOSTICS_JSON="$MLB_SELECTOR_UPLOAD_DIAGNOSTICS_JSON" \
+  MLB_QUICK_CARD_HITS_CSV="$MLB_QUICK_CARD_HITS_CSV" \
+  MLB_RANKING_UPLOAD_CSV="$MLB_RANKING_UPLOAD_CSV" \
+  MLB_RANKING_UPLOAD_SUMMARY_JSON="$MLB_RANKING_UPLOAD_SUMMARY_JSON" \
+  MLB_QUICK_CARD_UPLOAD_CSV="$MLB_QUICK_CARD_UPLOAD_CSV" \
+  MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON="$MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON" \
+  MLB_QC_CANDIDATE_WATCH_JSON="$MLB_QC_CANDIDATE_WATCH_JSON" \
+  MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON="$MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON" \
+  MLB_OVERLAP_SNAPSHOT_CSV="$MLB_OVERLAP_SNAPSHOT_CSV" \
+  MLB_OVERLAP_FEATURE_MONITOR_CSV="$MLB_OVERLAP_FEATURE_MONITOR_CSV" \
+  MLB_FULL_SLATE_RECONCILE_COMMAND="$full_slate_reconcile_command" \
+  MLB_ACTUAL_RECONCILE_COMMAND="$actual_reconcile_command" \
+  MLB_UBO5_CLOSEOUT_COMMAND="$ubo5_closeout_command" \
+  MLB_UBO5_CONSENSUS_CLOSEOUT_COMMAND="$ubo5_consensus_closeout_command" \
+  MLB_UBO5_BROAD_RECORDS_COMMAND="$ubo5_broad_records_command" \
+  MLB_UBO5_CLOSEOUT_MANIFEST="$ubo5_closeout_manifest" \
+  MLB_UBO5_DAILY_RECORD_CSV="$ubo5_daily_record_csv" \
+  MLB_UBO5_CLOSEOUT_ATTEMPTED="${ubo5_closeout_attempted:-false}" \
+  MLB_UBO5_CLOSEOUT_RC="${ubo5_closeout_rc:-0}" \
+  MLB_UBO5_CLOSEOUT_STATUS="${ubo5_closeout_status:-not_attempted}" \
+  MLB_UBO5_CONSENSUS_CLOSEOUT_ATTEMPTED="${ubo5_consensus_closeout_attempted:-false}" \
+  MLB_UBO5_CONSENSUS_CLOSEOUT_RC="${ubo5_consensus_closeout_rc:-0}" \
+  MLB_UBO5_CONSENSUS_CLOSEOUT_STATUS="${ubo5_consensus_closeout_status:-not_attempted}" \
+  MLB_UBO5_CONSENSUS_CLOSEOUT_MANIFEST="$ubo5_consensus_closeout_manifest" \
+  MLB_UBO5_BROAD_RECORDS_ATTEMPTED="${ubo5_broad_records_attempted:-false}" \
+  MLB_UBO5_BROAD_RECORDS_RC="${ubo5_broad_records_rc:-0}" \
+  MLB_UBO5_BROAD_RECORDS_STATUS="${ubo5_broad_records_status:-not_attempted}" \
+  MLB_UBO5_COMPLETE_OUTCOME_MANIFEST="$ubo5_complete_outcome_manifest" \
+  MLB_UBO5_COMPLETE_OUTCOME_STATUS="${ubo5_complete_outcome_status:-not_attempted}" \
+  MLB_UBO5_HISTORY_REFRESH_COMMAND="$ubo5_history_refresh_command" \
+  MLB_UBO5_HISTORY_REFRESH_ATTEMPTED="${ubo5_history_refresh_attempted:-false}" \
+  MLB_UBO5_HISTORY_REFRESH_RC="${ubo5_history_refresh_rc:-0}" \
+  MLB_UBO5_HISTORY_REFRESH_STATUS="${ubo5_history_refresh_status:-not_attempted}" \
+  MLB_MODEL_VS_FADE_COMMAND="$model_vs_fade_command" \
+  MLB_OPS_BRIEF_COMMAND="$ops_brief_command" \
+  MLB_FINAL_OPS_BRIEF_COMMAND="$final_ops_brief_command" \
+  MLB_OVERLAP_QC_WATCHES_COMMAND="$overlap_qc_watches_command" \
+  MLB_UPLOAD_PREP_COMMAND="$upload_prep_command" \
+  MLB_RECONCILE_BUILD_ATTEMPTED="${reconcile_build_attempted:-false}" \
+  MLB_RECONCILE_BUILD_STATUS="${reconcile_build_status:-not_started}" \
+  MLB_RECONCILE_REUSED_EXISTING="${reconcile_reused_existing:-false}" \
+  MLB_RECONCILE_CREATE_RC="${reconcile_create_rc:-0}" \
+  MLB_ACTUAL_RECONCILE_BUILD_ATTEMPTED="${actual_reconcile_build_attempted:-false}" \
+  MLB_ACTUAL_RECONCILE_BUILD_STATUS="${actual_reconcile_build_status:-not_started}" \
+  MLB_ACTUAL_RECONCILE_REUSED_EXISTING="${actual_reconcile_reused_existing:-false}" \
+  MLB_ACTUAL_RECONCILE_RC="${actual_reconcile_rc:-0}" \
+  MLB_MODEL_VS_FADE_RC="${model_vs_fade_rc:-0}" \
+  MLB_OVERLAP_QC_WATCHES_RC="${overlap_qc_watches_rc:-0}" \
+  MLB_BRIEF_RC="${brief_rc:-0}" \
+  MLB_FINAL_BRIEF_RENDERED="${final_brief_rendered:-false}" \
+  MLB_FINAL_BRIEF_RC="${final_brief_rc:-0}" \
+  MLB_UPLOAD_PREP_RC="${hits_lane_selector_rc:-0}" \
+  MLB_RANKING_UPLOAD_STATUS="${ranking_upload_status:-not_run}" \
+  MLB_QUICK_CARD_UPLOAD_STATUS="${quick_card_upload_status:-not_run}" \
+  MLB_RANKING_UNKNOWN_EVENT_ROWS="${ranking_unknown_event_rows:-0}" \
+  MLB_QUICK_CARD_UNKNOWN_EVENT_ROWS="${quick_card_unknown_event_rows:-0}" \
+  MLB_PUBLIC_CATALOG_FETCH_ATTEMPTED="${public_catalog_fetch_attempted:-false}" \
+  MLB_PUBLIC_CATALOG_FETCH_SUCCEEDED="${public_catalog_fetch_succeeded:-false}" \
+  MLB_UPLOAD_PREP_SUMMARY_PATHS="${upload_prep_summary_paths:-}" \
+  MLB_FEATURE_LINEAGE_HEALTH_COMMAND="$feature_lineage_health_command" \
+  MLB_PA_REFRESH_COMMAND="$pa_refresh_command" \
+  MLB_PA_HEALTH_COMMAND="$pa_health_command" \
+  MLB_PA_PROPAGATION_COMMAND="$pa_propagation_command" \
+  MLB_PA_REFRESH_RC="${pa_refresh_rc:-0}" \
+  MLB_PA_FOUNDATION_HEALTH_JSON="$MLB_PA_FOUNDATION_HEALTH_JSON" \
+  MLB_PA_FOUNDATION_COVERAGE_CSV="$MLB_PA_FOUNDATION_COVERAGE_CSV" \
+  MLB_PA_FOUNDATION_PROPAGATION_JSON="$MLB_PA_FOUNDATION_PROPAGATION_JSON" \
+  MLB_PA_FOUNDATION_PROPAGATION_CSV="$MLB_PA_FOUNDATION_PROPAGATION_CSV" \
+  MLB_PA_HEALTH_RC="${pa_health_rc:-0}" \
+  MLB_DAILY_HEALTH_GATES_COMMAND="$daily_health_gates_command" \
+  MLB_BASE_HEALTH_GATES_COMMAND="$base_health_gates_command" \
+  MLB_PROJECT_INVARIANTS_COMMAND="$project_invariants_command" \
+  MLB_DAILY_PREFLIGHT_COMMAND="$daily_preflight_command" \
+  MLB_DAILY_PREFLIGHT_JSON="$MLB_DAILY_PREFLIGHT_JSON" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_COMMAND="$environment_v2_beta_daily_command" \
+  MLB_ENVIRONMENT_V2_BETA_RECONCILE_COMMAND="$environment_v2_beta_reconcile_command" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_PROFILES="$MLB_ENVIRONMENT_V2_BETA_DAILY_PROFILES" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_SUMMARY_JSON="$MLB_ENVIRONMENT_V2_BETA_DAILY_SUMMARY_JSON" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_HEALTH_MD="$MLB_ENVIRONMENT_V2_BETA_DAILY_HEALTH_MD" \
+  MLB_ENVIRONMENT_V2_BETA_RECONCILED_PROFILES="$MLB_ENVIRONMENT_V2_BETA_RECONCILED_PROFILES" \
+  MLB_ENVIRONMENT_V2_BETA_RECONCILE_SUMMARY_JSON="$MLB_ENVIRONMENT_V2_BETA_RECONCILE_SUMMARY_JSON" \
+  MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV="$MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV" \
+  MLB_DAILY_INDEX_COMMAND="$daily_index_command" \
+  MLB_MORNING_WORKFLOW_AUDIT_COMMAND="$morning_workflow_audit_command" \
+  MLB_DAILY_INDEX_RC="${daily_index_rc:-0}" \
+  MLB_MORNING_WORKFLOW_AUDIT_RC="${morning_workflow_audit_rc:-0}" \
+  MLB_DAILY_INDEX_RENDERED="${daily_index_rendered:-false}" \
+  MLB_MORNING_WORKFLOW_AUDIT_RENDERED="${morning_workflow_audit_rendered:-false}" \
+  MLB_FEATURE_LINEAGE_HEALTH_RC="${feature_lineage_health_rc:-0}" \
+  MLB_FEATURE_LINEAGE_HEALTH_STATUS="${feature_lineage_health_status:-not_run}" \
+  MLB_COMPLETED_FINALIZED_DATA_INITIAL_RC="${completed_finalized_data_initial_rc:-0}" \
+  MLB_COMPLETED_FINALIZED_DATA_FINAL_RC="${completed_finalized_data_final_rc:-0}" \
+  MLB_COMPLETED_FINALIZED_DATA_INGEST_ATTEMPTED="${completed_finalized_data_ingest_attempted:-false}" \
+  MLB_COMPLETED_FINALIZED_DATA_INGEST_RC="${completed_finalized_data_ingest_rc:-0}" \
+  MLB_COMPLETED_FINALIZED_DATA_STATUS="${completed_finalized_data_status:-not_checked}" \
+  MLB_BRIEF_WRITTEN="${brief_written:-false}" \
+  .venv/bin/python - <<'PY'
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+def env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default)
+
+def as_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+def as_int(value: str) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return 0
+
+def file_info(path_value: str) -> dict:
+    path = Path(path_value) if path_value else Path("")
+    exists = bool(path_value) and path.exists()
+    return {
+        "path": path_value,
+        "exists": exists,
+        "size": path.stat().st_size if exists and path.is_file() else 0,
+    }
+
+def load_json(path_value: str) -> dict:
+    if not path_value:
+        return {}
+    path = Path(path_value)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"_load_error": f"{type(exc).__name__}: {exc}"}
+
+wrapper_rc = as_int(env("MLB_WRAPPER_RC", "0"))
+ranking_summary = load_json(env("MLB_RANKING_UPLOAD_SUMMARY_JSON"))
+quick_summary = load_json(env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON"))
+input_refresh = load_json(env("MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON"))
+feature_lineage_health = load_json(env("MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON"))
+
+full_slate_exists = file_info(env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"))["exists"] and file_info(env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"))["size"] > 0
+actual_exists = file_info(env("MLB_ACTUAL_WAGERS_BY_SOURCE_CSV"))["exists"] and file_info(env("MLB_ACTUAL_WAGERS_BY_SOURCE_CSV"))["size"] > 0
+brief_written = file_info(env("MLB_DAILY_BRIEF_PATH"))["exists"]
+
+def phase(name, command="", rc=0, status="", outputs=None, env_vars=None, success="", hard_fail="", warning="", inputs=None):
+    return {
+        "phase": name,
+        "command": command,
+        "required_env_vars": env_vars or [],
+        "expected_inputs": inputs or [],
+        "status": status or ("success" if rc == 0 else "failed"),
+        "rc": rc,
+        "expected_outputs": outputs or [],
+        "success_criteria": success,
+        "hard_fail_criteria": hard_fail,
+        "non_blocking_warning_criteria": warning,
+    }
+
+phases = [
+    phase(
+        "governed inline BvP acquisition",
+        "bin/mlb_bvp_inline_daily_hook.sh",
+        as_int(env("MLB_BVP_INLINE_RC", "0")),
+        "warning" if as_int(env("MLB_BVP_INLINE_RC", "0")) else (load_json(env("MLB_BVP_INLINE_RESULT")) or {}).get("status", "NOT_INVOKED"),
+        [file_info(env("MLB_BVP_INLINE_RESULT"))],
+        success="MLB_BVP_DAILY_INLINE_ACQUISITION_V1: certified once-date success or governed skip; actual collection times retained.",
+        warning="BvP failure remains visible; independent lanes continue, declared BvP consumers fail closed.",
+    ),
+    phase(
+        "date ownership",
+        status="success",
+        outputs=[],
+        success="current_slate_date is today ET and completed_slate_date is yesterday ET unless explicitly overridden.",
+        hard_fail="invalid or empty date variables.",
+        warning="manual override differs from ET defaults.",
+        inputs=["system ET date", "optional MLB_DAILY_RECONCILE_DATE override"],
+    ),
+    phase(
+        "completed-slate full-slate reconcile",
+        env("MLB_FULL_SLATE_RECONCILE_COMMAND"),
+        as_int(env("MLB_RECONCILE_CREATE_RC", "0")),
+        "success" if full_slate_exists else env("MLB_RECONCILE_BUILD_STATUS", "missing"),
+        [file_info(env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"))],
+        ["MLB_COMPLETED_SLATE_DATE", "MLB_FULL_SLATE_MIN_RESOLVED_ROWS"],
+        "reconcile_rows.csv exists and is non-empty.",
+        "missing/non-empty reconcile rows after rebuild attempt.",
+        "existing non-empty file reused.",
+        inputs=["completed_slate_date", "graded/stat-derived outcome inputs"],
+    ),
+    phase(
+        "completed-slate actual wager/source reconcile",
+        env("MLB_ACTUAL_RECONCILE_COMMAND"),
+        as_int(env("MLB_ACTUAL_RECONCILE_RC", "0")),
+        "success" if actual_exists else env("MLB_ACTUAL_RECONCILE_BUILD_STATUS", "missing"),
+        [file_info(env("MLB_ACTUAL_WAGERS_BY_SOURCE_CSV"))],
+        ["MLB_COMPLETED_SLATE_DATE"],
+        "actual_wagers_by_source CSV exists and is non-empty.",
+        "actual wager reconcile command fails or output remains missing/empty.",
+        "actual-wager watches may remain stale if source data is unavailable.",
+        inputs=["completed_slate_date", "8rain graded download", "timestamped upload provenance"],
+    ),
+    phase(
+        "UBO-5 TB1.5 pending closeouts",
+        env("MLB_UBO5_CLOSEOUT_COMMAND"),
+        as_int(env("MLB_UBO5_CLOSEOUT_RC", "0")),
+        env("MLB_UBO5_CLOSEOUT_STATUS", "not_attempted"),
+        [
+            file_info(env("MLB_UBO5_CLOSEOUT_MANIFEST")),
+            file_info(env("MLB_UBO5_DAILY_RECORD_CSV")),
+        ],
+        ["MLB_COMPLETED_SLATE_DATE"],
+        "newly reconciled date and existing non-FINAL closeouts are attempted; cumulative record refreshes.",
+        "none; UBO-5 closeout is non-blocking for the broader daily workflow.",
+        "nonzero closeout rc is retained in wrapper summary and logs.",
+        inputs=[env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"), "certified exact-ID player outcomes"],
+    ),
+    phase(
+        "model-vs-fade refresh",
+        env("MLB_MODEL_VS_FADE_COMMAND"),
+        as_int(env("MLB_MODEL_VS_FADE_RC", "0")),
+        "success" if file_info(env("MLB_MODEL_VS_FADE_JSON"))["exists"] else "missing",
+        [file_info(env("MLB_MODEL_VS_FADE_JSON"))],
+        ["MLB_MODEL_VS_FADE_ROWS_CSV"],
+        "model-vs-fade JSON refreshes from completed-slate reconcile rows.",
+        "command failure when reconcile rows are available.",
+        "skipped if completed-slate reconcile rows are unavailable.",
+        inputs=[env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV")],
+    ),
+    phase(
+        "overlap/QC watches",
+        env("MLB_OVERLAP_QC_WATCHES_COMMAND"),
+        as_int(env("MLB_OVERLAP_QC_WATCHES_RC", "0")),
+        "success" if as_int(env("MLB_OVERLAP_QC_WATCHES_RC", "0")) == 0 else "warning",
+        [
+            file_info(env("MLB_QC_CANDIDATE_WATCH_JSON")),
+            file_info(env("MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON")),
+            file_info(env("MLB_OVERLAP_SNAPSHOT_CSV")),
+            file_info(env("MLB_OVERLAP_FEATURE_MONITOR_CSV")),
+        ],
+        ["MLB_COMPLETED_SLATE_DATE"],
+        "watch artifacts refresh or existing artifacts remain inspectable.",
+        "none; monitoring phase is non-blocking.",
+        "nonzero watch rc or stale focused segments are surfaced in Ops Brief/source health.",
+        inputs=["completed-slate reconcile rows", "actual wager/source reconcile artifacts", "candidate/upload diagnostics"],
+    ),
+    phase(
+        "ops brief input refresh",
+        env("MLB_OPS_BRIEF_COMMAND"),
+        as_int(env("MLB_BRIEF_RC", "0")),
+        input_refresh.get("status") or ("present" if file_info(env("MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON"))["exists"] else "missing"),
+        [file_info(env("MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON"))],
+        ["MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE", "MLB_DAILY_BRIEF_CURRENT_SLATE_DATE", "MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"],
+        "input refresh status JSON is written and dependencies are labeled fresh/stale/missing.",
+        "none here; brief generation continues with source diagnostics.",
+        "refresh_failed/dependency_missing/stale_after_refresh are actionable source-health warnings.",
+        inputs=["completed-slate reconcile rows", "model-vs-fade summary", "postgrade alerts", "model performance", "reporting alignment", "hits environment", "watch artifacts"],
+    ),
+    phase(
+        "ops brief write",
+        env("MLB_OPS_BRIEF_COMMAND"),
+        as_int(env("MLB_BRIEF_RC", "0")),
+        "success" if brief_written else "failed",
+        [file_info(env("MLB_DAILY_BRIEF_PATH")), file_info(env("MLB_DAILY_BRIEF_JSON"))],
+        ["MLB_DAILY_BRIEF_REPORT_DATE"],
+        "dated markdown brief and latest JSON are written.",
+        "brief artifact missing after report command.",
+        "brief rc may be nonzero when WARN/FAIL status is intentionally reported.",
+        inputs=["ops brief input refresh status", "daily brief source artifacts"],
+    ),
+    phase(
+        "current-slate lane selector",
+        env("MLB_UPLOAD_PREP_COMMAND"),
+        as_int(env("MLB_UPLOAD_PREP_RC", "0")),
+        "success" if file_info(env("MLB_SELECTOR_SUMMARY_JSON"))["exists"] else "failed",
+        [file_info(env("MLB_SELECTOR_CSV")), file_info(env("MLB_SELECTOR_SUMMARY_JSON")), file_info(env("MLB_SELECTOR_UPLOAD_DIAGNOSTICS_JSON")), file_info(env("MLB_QUICK_CARD_HITS_CSV"))],
+        ["MLB_DATE_ET"],
+        "selector and lane summary artifacts are written for current slate.",
+        "selector command fails before diagnostics are written.",
+        "pregame mode reports results unavailable until outcomes exist.",
+        inputs=["current-slate predictions/slate output", "current-slate odds snapshot", "PDS/player context"],
+    ),
+    phase(
+        "current-slate ranking upload prep",
+        env("MLB_UPLOAD_PREP_COMMAND"),
+        as_int(env("MLB_UPLOAD_PREP_RC", "0")),
+        env("MLB_RANKING_UPLOAD_STATUS", "unknown"),
+        [file_info(env("MLB_RANKING_UPLOAD_CSV")), file_info(env("MLB_RANKING_UPLOAD_SUMMARY_JSON"))],
+        ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH"],
+        "ranking upload CSV has paired rows and no blank HOME/AWAY.",
+        "all rows fail event resolution or output validation fails.",
+        "partial_success excludes unknown-event candidates with diagnostics.",
+        inputs=["ranking upload input", "8rain public/catalog cache", "player/team/market catalog mappings"],
+    ),
+    phase(
+        "current-slate Quick Card upload prep",
+        env("MLB_UPLOAD_PREP_COMMAND"),
+        as_int(env("MLB_UPLOAD_PREP_RC", "0")),
+        env("MLB_QUICK_CARD_UPLOAD_STATUS", "unknown"),
+        [file_info(env("MLB_QUICK_CARD_UPLOAD_CSV")), file_info(env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON"))],
+        ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH"],
+        "Quick Card upload CSV has paired rows and no blank HOME/AWAY.",
+        "all rows fail event resolution or output validation fails.",
+        "partial_success excludes unknown-event candidates with diagnostics.",
+        inputs=["Quick Card hits candidates", "8rain public/catalog cache", "player/team/market catalog mappings"],
+    ),
+    phase(
+        "current-slate 8rain public catalog fetch",
+        env("MLB_UPLOAD_PREP_COMMAND"),
+        as_int(env("MLB_UPLOAD_PREP_RC", "0")),
+        "success" if as_bool(env("MLB_PUBLIC_CATALOG_FETCH_SUCCEEDED", "false")) else ("attempted_failed" if as_bool(env("MLB_PUBLIC_CATALOG_FETCH_ATTEMPTED", "false")) else "not_attempted"),
+        [file_info(env("MLB_RANKING_UPLOAD_SUMMARY_JSON")), file_info(env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON"))],
+        ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"],
+        "only documented public catalog endpoint is fetched when explicitly enabled.",
+        "upload prep cannot resolve events and no valid paired rows remain.",
+        "unknown-event rows are excluded and logged when partial coverage remains.",
+        inputs=["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1", "documented app.8rainstation.com public catalog endpoint"],
+    ),
+    phase(
+        "completed-slate PA refresh",
+        env("MLB_PA_REFRESH_COMMAND"),
+        as_int(env("MLB_PA_REFRESH_RC", "0")),
+        "success" if as_int(env("MLB_PA_REFRESH_RC", "0")) == 0 else "warning",
+        [file_info("artifacts/analysis/mlb/research_gap_analysis/pa_backfill_validation.json"), file_info("artifacts/analysis/mlb/research_gap_analysis/pa_backfill_validation.md")],
+        ["MLB_COMPLETED_SLATE_DATE", "MLB_PA_ONLY_MISSING=1"],
+        "completed-slate PA is refreshed blank-only after finalized player_stats are available.",
+        "none; PA remains passive context and health surfaces staleness.",
+        "nonzero rc means PA foundation health may remain stale.",
+        inputs=["completed-slate finalized player_stats", "StatsAPI boxscore PA components"],
+    ),
+    phase(
+        "PA foundation health",
+        env("MLB_PA_HEALTH_COMMAND"),
+        as_int(env("MLB_PA_HEALTH_RC", "0")),
+        "success" if as_int(env("MLB_PA_HEALTH_RC", "0")) == 0 else "warning",
+        [file_info(env("MLB_PA_FOUNDATION_HEALTH_JSON")), file_info(env("MLB_PA_FOUNDATION_COVERAGE_CSV"))],
+        ["DATE"],
+        "PA source/downstream health artifacts are written.",
+        "none; PA health is informational/WARN-only.",
+        "WARN indicates stale source or downstream propagation gaps.",
+        inputs=["player_stats PA", "player_derived_stats rolling PA", "downstream artifacts"],
+    ),
+    phase(
+        "current-slate feature lineage health",
+        env("MLB_FEATURE_LINEAGE_HEALTH_COMMAND"),
+        as_int(env("MLB_FEATURE_LINEAGE_HEALTH_RC", "0")),
+        env("MLB_FEATURE_LINEAGE_HEALTH_STATUS", feature_lineage_health.get("status", "not_run")),
+        [file_info(env("MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON")), file_info(env("MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON"))],
+        ["MLB_DAILY_BRIEF_CURRENT_SLATE_DATE"],
+        "critical passive model-context fields are present through current-slate artifacts.",
+        "slate/selector critical context columns are missing.",
+        "diagnostic artifacts may warn if missing before upload prep or if null rates exceed threshold.",
+        inputs=["slate output", "lane selector output", "ranking upload input", "Quick Card output", "upload diagnostics"],
+    ),
+    phase(
+        "daily index write",
+        env("MLB_DAILY_INDEX_COMMAND"),
+        as_int(env("MLB_DAILY_INDEX_RC", "0")),
+        "success" if file_info(env("MLB_DAILY_INDEX_PATH"))["exists"] else "failed",
+        [file_info(env("MLB_DAILY_INDEX_PATH"))],
+        ["MLB_DAILY_INDEX_DATE", "MLB_DAILY_INDEX_COMPLETED_SLATE_DATE"],
+        "dated Daily Index markdown is written after final Ops Brief.",
+        "Daily Index missing or command exits nonzero.",
+        "none; Ops Brief without Daily Index is a wrapper failure.",
+        inputs=["final Ops Brief", "preflight", "current-slate board artifacts", "identity/project invariant health"],
+    ),
+    phase(
+        "morning workflow audit",
+        env("MLB_MORNING_WORKFLOW_AUDIT_COMMAND"),
+        as_int(env("MLB_MORNING_WORKFLOW_AUDIT_RC", "0")),
+        "success" if file_info(env("MLB_MORNING_WORKFLOW_AUDIT_JSON"))["exists"] else "failed",
+        [file_info(env("MLB_MORNING_WORKFLOW_AUDIT_JSON")), file_info(env("MLB_MORNING_WORKFLOW_VALIDATION_MD")), file_info(env("MLB_MORNING_WORKFLOW_VALIDATION_CSV"))],
+        ["MLB_MORNING_WORKFLOW_AUDIT_DATE"],
+        "Morning OS handoffs validate with zero broken links, missing artifacts, blockers, and requested-gap failures.",
+        "audit command exits nonzero or validation artifacts are missing.",
+        "none; broken Morning OS is a wrapper failure.",
+        inputs=["Home Screen", "Ops Brief", "Morning Workbench", "candidate CSVs", "timing template"],
+    ),
+    phase(
+        "final summary",
+        status="success" if wrapper_rc == 0 else "failed",
+        rc=wrapper_rc,
+        outputs=[file_info(env("MLB_LAUNCHAGENT_SUMMARY_JSON"))],
+        success="machine-readable launchagent summary JSON is written.",
+        hard_fail="wrapper exits nonzero.",
+        warning="non-blocking phases may have warning statuses.",
+        inputs=["all phase rc/status variables", "key output artifact stats"],
+    ),
+]
+
+summary = {
+    "run_started_at": env("MLB_WRAPPER_RUN_STARTED_AT_UTC"),
+    "run_finished_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    "wrapper_rc": wrapper_rc,
+    "current_slate_date": env("MLB_CURRENT_SLATE_DATE"),
+    "completed_slate_date": env("MLB_COMPLETED_SLATE_DATE"),
+    "report_date": env("MLB_DAILY_BRIEF_REPORT_DATE"),
+    "full_slate_reconcile_exists": full_slate_exists,
+    "actual_reconcile_exists": actual_exists,
+    "ubo5_closeout_attempted": as_bool(env("MLB_UBO5_CLOSEOUT_ATTEMPTED", "false")),
+    "ubo5_closeout_rc": as_int(env("MLB_UBO5_CLOSEOUT_RC", "0")),
+    "ubo5_closeout_status": env("MLB_UBO5_CLOSEOUT_STATUS", "not_attempted"),
+    "ubo5_consensus_closeout_attempted": as_bool(env("MLB_UBO5_CONSENSUS_CLOSEOUT_ATTEMPTED", "false")),
+    "ubo5_consensus_closeout_rc": as_int(env("MLB_UBO5_CONSENSUS_CLOSEOUT_RC", "0")),
+    "ubo5_consensus_closeout_status": env("MLB_UBO5_CONSENSUS_CLOSEOUT_STATUS", "not_attempted"),
+    "ubo5_broad_records_attempted": as_bool(env("MLB_UBO5_BROAD_RECORDS_ATTEMPTED", "false")),
+    "ubo5_broad_records_rc": as_int(env("MLB_UBO5_BROAD_RECORDS_RC", "0")),
+    "ubo5_broad_records_status": env("MLB_UBO5_BROAD_RECORDS_STATUS", "not_attempted"),
+    "ubo5_complete_outcome_status": env("MLB_UBO5_COMPLETE_OUTCOME_STATUS", "not_attempted"),
+    "ubo5_complete_outcome_health": load_json(env("MLB_UBO5_COMPLETE_OUTCOME_MANIFEST")),
+    "ubo5_history_refresh_attempted": as_bool(env("MLB_UBO5_HISTORY_REFRESH_ATTEMPTED", "false")),
+    "ubo5_history_refresh_rc": as_int(env("MLB_UBO5_HISTORY_REFRESH_RC", "0")),
+    "ubo5_history_refresh_status": env("MLB_UBO5_HISTORY_REFRESH_STATUS", "not_attempted"),
+    "ops_brief_written": brief_written,
+    "final_ops_brief_rendered": as_bool(env("MLB_FINAL_BRIEF_RENDERED", "false")),
+    "final_ops_brief_rc": as_int(env("MLB_FINAL_BRIEF_RC", "0")),
+    "upload_prep_rc": as_int(env("MLB_UPLOAD_PREP_RC", "0")),
+    "ranking_upload_status": env("MLB_RANKING_UPLOAD_STATUS", "not_run"),
+    "quick_card_upload_status": env("MLB_QUICK_CARD_UPLOAD_STATUS", "not_run"),
+    "ranking_unknown_event_rows": as_int(env("MLB_RANKING_UNKNOWN_EVENT_ROWS", "0")),
+    "quick_card_unknown_event_rows": as_int(env("MLB_QUICK_CARD_UNKNOWN_EVENT_ROWS", "0")),
+    "public_catalog_fetch_attempted": as_bool(env("MLB_PUBLIC_CATALOG_FETCH_ATTEMPTED", "false")),
+    "public_catalog_fetch_succeeded": as_bool(env("MLB_PUBLIC_CATALOG_FETCH_SUCCEEDED", "false")),
+    "upload_prep_summary_paths": [p for p in env("MLB_UPLOAD_PREP_SUMMARY_PATHS").split(",") if p],
+    "feature_lineage_health_status": env("MLB_FEATURE_LINEAGE_HEALTH_STATUS", feature_lineage_health.get("status", "not_run")),
+    "feature_lineage_health_rc": as_int(env("MLB_FEATURE_LINEAGE_HEALTH_RC", "0")),
+    "daily_index_rendered": as_bool(env("MLB_DAILY_INDEX_RENDERED", "false")),
+    "daily_index_rc": as_int(env("MLB_DAILY_INDEX_RC", "0")),
+    "morning_workflow_audit_rendered": as_bool(env("MLB_MORNING_WORKFLOW_AUDIT_RENDERED", "false")),
+    "morning_workflow_audit_rc": as_int(env("MLB_MORNING_WORKFLOW_AUDIT_RC", "0")),
+    "completed_finalized_data_status": env("MLB_COMPLETED_FINALIZED_DATA_STATUS", "not_checked"),
+    "completed_finalized_data_ingest_attempted": as_bool(env("MLB_COMPLETED_FINALIZED_DATA_INGEST_ATTEMPTED", "false")),
+    "completed_finalized_data_initial_rc": as_int(env("MLB_COMPLETED_FINALIZED_DATA_INITIAL_RC", "0")),
+    "completed_finalized_data_ingest_rc": as_int(env("MLB_COMPLETED_FINALIZED_DATA_INGEST_RC", "0")),
+    "completed_finalized_data_final_rc": as_int(env("MLB_COMPLETED_FINALIZED_DATA_FINAL_RC", "0")),
+    "commands": {
+        "completed_slate_full_slate_reconcile": env("MLB_FULL_SLATE_RECONCILE_COMMAND"),
+        "completed_slate_actual_wager_source_reconcile": env("MLB_ACTUAL_RECONCILE_COMMAND"),
+        "ubo5_tb15_pending_closeouts": env("MLB_UBO5_CLOSEOUT_COMMAND"),
+        "ubo5_tb15_consensus_pending_closeouts": env("MLB_UBO5_CONSENSUS_CLOSEOUT_COMMAND"),
+        "ubo5_tb15_broad_pending_closeouts": env("MLB_UBO5_BROAD_RECORDS_COMMAND"),
+        "model_vs_fade_refresh": env("MLB_MODEL_VS_FADE_COMMAND"),
+        "ops_brief": env("MLB_OPS_BRIEF_COMMAND"),
+        "overlap_qc_watches": env("MLB_OVERLAP_QC_WATCHES_COMMAND"),
+        "current_slate_upload_prep": env("MLB_UPLOAD_PREP_COMMAND"),
+        "feature_lineage_health": env("MLB_FEATURE_LINEAGE_HEALTH_COMMAND"),
+        "pa_refresh": env("MLB_PA_REFRESH_COMMAND"),
+        "pa_health": env("MLB_PA_HEALTH_COMMAND"),
+        "pa_propagation": env("MLB_PA_PROPAGATION_COMMAND"),
+        "daily_index": env("MLB_DAILY_INDEX_COMMAND"),
+        "morning_workflow_audit": env("MLB_MORNING_WORKFLOW_AUDIT_COMMAND"),
+    },
+    "key_outputs": {
+        "full_slate_reconcile_rows": file_info(env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV")),
+        "actual_wagers_by_source": file_info(env("MLB_ACTUAL_WAGERS_BY_SOURCE_CSV")),
+        "ubo5_tb15_closeout_manifest": file_info(env("MLB_UBO5_CLOSEOUT_MANIFEST")),
+        "ubo5_tb15_consensus_closeout_manifest": file_info(env("MLB_UBO5_CONSENSUS_CLOSEOUT_MANIFEST")),
+        "ubo5_tb15_daily_record": file_info(env("MLB_UBO5_DAILY_RECORD_CSV")),
+        "model_vs_fade": file_info(env("MLB_MODEL_VS_FADE_JSON")),
+        "ops_brief_md": file_info(env("MLB_DAILY_BRIEF_PATH")),
+        "ops_brief_json": file_info(env("MLB_DAILY_BRIEF_JSON")),
+        "ops_brief_input_refresh": file_info(env("MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON")),
+        "selector_summary": file_info(env("MLB_SELECTOR_SUMMARY_JSON")),
+        "ranking_upload": file_info(env("MLB_RANKING_UPLOAD_CSV")),
+        "ranking_upload_summary": file_info(env("MLB_RANKING_UPLOAD_SUMMARY_JSON")),
+        "quick_card_upload": file_info(env("MLB_QUICK_CARD_UPLOAD_CSV")),
+        "quick_card_upload_summary": file_info(env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON")),
+        "feature_lineage_health": file_info(env("MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON")),
+        "expanded_o15_context_health": file_info(env("MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON")),
+        "project_invariants": file_info(env("MLB_PROJECT_INVARIANTS_JSON")),
+        "identity_health": file_info(env("MLB_IDENTITY_HEALTH_JSON")),
+        "ontology_health": file_info(env("MLB_ONTOLOGY_HEALTH_JSON")),
+        "daily_index": file_info(env("MLB_DAILY_INDEX_PATH")),
+        "morning_workflow_audit": file_info(env("MLB_MORNING_WORKFLOW_AUDIT_JSON")),
+        "morning_workflow_validation_md": file_info(env("MLB_MORNING_WORKFLOW_VALIDATION_MD")),
+        "morning_workflow_validation_csv": file_info(env("MLB_MORNING_WORKFLOW_VALIDATION_CSV")),
+        "qc_candidate_watch": file_info(env("MLB_QC_CANDIDATE_WATCH_JSON")),
+        "overlap_role_profile_watch": file_info(env("MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON")),
+        "overlap_snapshot": file_info(env("MLB_OVERLAP_SNAPSHOT_CSV")),
+        "overlap_feature_monitor": file_info(env("MLB_OVERLAP_FEATURE_MONITOR_CSV")),
+    },
+    "phases": phases,
+}
+
+out = Path(env("MLB_LAUNCHAGENT_SUMMARY_JSON"))
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(f"[{summary['run_finished_at']}] INFO launchagent_summary_json={out}")
+PY
+  set -e
+}
+
+trap 'wrapper_rc=$?; release_launchagent_locks; write_launchagent_summary "$wrapper_rc"; exit "$wrapper_rc"' EXIT
+
+if [[ "$SCRIPT_MODE" == "check" ]]; then
+	  set +e
+	  MLB_CURRENT_SLATE_DATE="$MLB_DATE_ET" \
+	  MLB_WRAPPER_RUN_STARTED_AT_UTC="$MLB_WRAPPER_RUN_STARTED_AT_UTC" \
+	  MLB_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE" \
+  MLB_DAILY_BRIEF_REPORT_DATE="$MLB_DAILY_BRIEF_REPORT_DATE" \
+  MLB_LAUNCHAGENT_SUMMARY_JSON="$MLB_LAUNCHAGENT_SUMMARY_JSON" \
+  MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON="$MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON" \
+  MLB_LAUNCHAGENT_ROLLOVER_DATED_JSON="$MLB_LAUNCHAGENT_ROLLOVER_DATED_JSON" \
+  MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV="$MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV" \
+  MLB_ACTUAL_WAGERS_BY_SOURCE_CSV="$MLB_ACTUAL_WAGERS_BY_SOURCE_CSV" \
+  MLB_UBO5_CLOSEOUT_COMMAND="$ubo5_closeout_command" \
+  MLB_UBO5_CLOSEOUT_MANIFEST="$ubo5_closeout_manifest" \
+  MLB_UBO5_DAILY_RECORD_CSV="$ubo5_daily_record_csv" \
+  MLB_MODEL_VS_FADE_JSON="$MLB_MODEL_VS_FADE_JSON" \
+  MLB_DAILY_BRIEF_PATH="$MLB_DAILY_BRIEF_PATH" \
+  MLB_DAILY_BRIEF_JSON="$MLB_DAILY_BRIEF_JSON" \
+  MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON="$MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON" \
+  MLB_DAILY_INDEX_PATH="$MLB_DAILY_INDEX_PATH" \
+  MLB_MORNING_WORKFLOW_AUDIT_JSON="$MLB_MORNING_WORKFLOW_AUDIT_JSON" \
+  MLB_MORNING_WORKFLOW_AUDIT_MD="$MLB_MORNING_WORKFLOW_AUDIT_MD" \
+  MLB_MORNING_WORKFLOW_VALIDATION_MD="$MLB_MORNING_WORKFLOW_VALIDATION_MD" \
+  MLB_MORNING_WORKFLOW_VALIDATION_CSV="$MLB_MORNING_WORKFLOW_VALIDATION_CSV" \
+  MLB_MORNING_TIMING_TEMPLATE="$MLB_MORNING_TIMING_TEMPLATE" \
+  MLB_MORNING_GATE_SUMMARY="$MLB_MORNING_GATE_SUMMARY" \
+  MLB_MORNING_WORKBENCH="$MLB_MORNING_WORKBENCH" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON" \
+  MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON="$MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON" \
+  MLB_PROJECT_INVARIANTS_JSON="$MLB_PROJECT_INVARIANTS_JSON" \
+  MLB_IDENTITY_HEALTH_JSON="$MLB_IDENTITY_HEALTH_JSON" \
+  MLB_ONTOLOGY_HEALTH_JSON="$MLB_ONTOLOGY_HEALTH_JSON" \
+  MLB_SELECTOR_CSV="$MLB_SELECTOR_CSV" \
+  MLB_SELECTOR_SUMMARY_JSON="$MLB_SELECTOR_SUMMARY_JSON" \
+  MLB_RANKING_UPLOAD_CSV="$MLB_RANKING_UPLOAD_CSV" \
+  MLB_RANKING_UPLOAD_SUMMARY_JSON="$MLB_RANKING_UPLOAD_SUMMARY_JSON" \
+  MLB_QUICK_CARD_UPLOAD_CSV="$MLB_QUICK_CARD_UPLOAD_CSV" \
+  MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON="$MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON" \
+  MLB_QC_CANDIDATE_WATCH_JSON="$MLB_QC_CANDIDATE_WATCH_JSON" \
+  MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON="$MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON" \
+  MLB_OVERLAP_SNAPSHOT_CSV="$MLB_OVERLAP_SNAPSHOT_CSV" \
+  MLB_OVERLAP_FEATURE_MONITOR_CSV="$MLB_OVERLAP_FEATURE_MONITOR_CSV" \
+  MLB_FULL_SLATE_RECONCILE_COMMAND="$full_slate_reconcile_command" \
+  MLB_ACTUAL_RECONCILE_COMMAND="$actual_reconcile_command" \
+  MLB_MODEL_VS_FADE_COMMAND="$model_vs_fade_command" \
+  MLB_OPS_BRIEF_COMMAND="$ops_brief_command" \
+  MLB_FINAL_OPS_BRIEF_COMMAND="$final_ops_brief_command" \
+  MLB_OVERLAP_QC_WATCHES_COMMAND="$overlap_qc_watches_command" \
+  MLB_UPLOAD_PREP_COMMAND="$upload_prep_command" \
+  MLB_FEATURE_LINEAGE_HEALTH_COMMAND="$feature_lineage_health_command" \
+  MLB_PA_REFRESH_COMMAND="$pa_refresh_command" \
+  MLB_PA_HEALTH_COMMAND="$pa_health_command" \
+  MLB_PA_PROPAGATION_COMMAND="$pa_propagation_command" \
+  MLB_PA_FOUNDATION_HEALTH_JSON="$MLB_PA_FOUNDATION_HEALTH_JSON" \
+  MLB_PA_FOUNDATION_COVERAGE_CSV="$MLB_PA_FOUNDATION_COVERAGE_CSV" \
+  MLB_PA_FOUNDATION_PROPAGATION_JSON="$MLB_PA_FOUNDATION_PROPAGATION_JSON" \
+  MLB_PA_FOUNDATION_PROPAGATION_CSV="$MLB_PA_FOUNDATION_PROPAGATION_CSV" \
+  MLB_DAILY_HEALTH_GATES_COMMAND="$daily_health_gates_command" \
+  MLB_BASE_HEALTH_GATES_COMMAND="$base_health_gates_command" \
+  MLB_PROJECT_INVARIANTS_COMMAND="$project_invariants_command" \
+  MLB_DAILY_PREFLIGHT_COMMAND="$daily_preflight_command" \
+  MLB_DAILY_PREFLIGHT_JSON="$MLB_DAILY_PREFLIGHT_JSON" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_COMMAND="$environment_v2_beta_daily_command" \
+  MLB_ENVIRONMENT_V2_BETA_RECONCILE_COMMAND="$environment_v2_beta_reconcile_command" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_PROFILES="$MLB_ENVIRONMENT_V2_BETA_DAILY_PROFILES" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_SUMMARY_JSON="$MLB_ENVIRONMENT_V2_BETA_DAILY_SUMMARY_JSON" \
+  MLB_ENVIRONMENT_V2_BETA_DAILY_HEALTH_MD="$MLB_ENVIRONMENT_V2_BETA_DAILY_HEALTH_MD" \
+  MLB_ENVIRONMENT_V2_BETA_RECONCILED_PROFILES="$MLB_ENVIRONMENT_V2_BETA_RECONCILED_PROFILES" \
+  MLB_ENVIRONMENT_V2_BETA_RECONCILE_SUMMARY_JSON="$MLB_ENVIRONMENT_V2_BETA_RECONCILE_SUMMARY_JSON" \
+  MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV="$MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV" \
+  MLB_DAILY_INDEX_COMMAND="$daily_index_command" \
+  MLB_MORNING_WORKFLOW_AUDIT_COMMAND="$morning_workflow_audit_command" \
+  MLB_DAILY_INDEX_PATH="$MLB_DAILY_INDEX_PATH" \
+  MLB_MORNING_WORKFLOW_AUDIT_JSON="$MLB_MORNING_WORKFLOW_AUDIT_JSON" \
+  MLB_MORNING_WORKFLOW_AUDIT_MD="$MLB_MORNING_WORKFLOW_AUDIT_MD" \
+  MLB_MORNING_WORKFLOW_VALIDATION_MD="$MLB_MORNING_WORKFLOW_VALIDATION_MD" \
+  MLB_MORNING_WORKFLOW_VALIDATION_CSV="$MLB_MORNING_WORKFLOW_VALIDATION_CSV" \
+  MLB_MORNING_TIMING_TEMPLATE="$MLB_MORNING_TIMING_TEMPLATE" \
+  MLB_MORNING_GATE_SUMMARY="$MLB_MORNING_GATE_SUMMARY" \
+  MLB_MORNING_WORKBENCH="$MLB_MORNING_WORKBENCH" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON" \
+  MLB_PSQL_BIN="$PSQL_BIN" \
+  .venv/bin/python - <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+def env(name, default=""):
+    return os.environ.get(name, default)
+
+def now_utc():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+def classify_path(path_value, owner="wrapper"):
+    path = Path(path_value) if path_value else Path("")
+    exists = bool(path_value) and path.exists()
+    size = path.stat().st_size if exists and path.is_file() else 0
+    if exists and size > 0:
+        classification = "exists"
+    elif owner == "wrapper":
+        classification = "missing_but_buildable_by_wrapper"
+    elif owner == "env":
+        classification = "env_missing"
+    elif owner == "unsafe":
+        classification = "unsafe"
+    else:
+        classification = "missing_and_not_built_by_wrapper"
+    return {"path": path_value, "exists": exists, "size": size, "classification": classification}
+
+def command_unsafe(command):
+    reasons = []
+    if "MLB_ALLOW_8RAIN_LIVE_REFRESH" in command or "--allow-8rain-live-refresh" in command:
+        reasons.append("old 8rain live-refresh flag present")
+    if "8rain" in command.lower() and "MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1" not in command:
+        reasons.append("8rain command lacks explicit public catalog fetch opt-in")
+    return reasons
+
+phases = [
+    ("date ownership", "computed in wrapper", [], ["system ET date or --check simulation date"], [], True),
+    ("completed-slate full-slate reconcile", env("MLB_FULL_SLATE_RECONCILE_COMMAND"), ["MLB_COMPLETED_SLATE_DATE", "MLB_FULL_SLATE_MIN_RESOLVED_ROWS"], ["completed_slate_date", "graded/stat-derived outcome inputs"], [env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV")], True),
+    ("completed-slate actual wager/source reconcile", env("MLB_ACTUAL_RECONCILE_COMMAND"), ["MLB_COMPLETED_SLATE_DATE"], ["completed_slate_date", "8rain graded download", "timestamped upload provenance"], [env("MLB_ACTUAL_WAGERS_BY_SOURCE_CSV")], True),
+    ("model-vs-fade refresh", env("MLB_MODEL_VS_FADE_COMMAND"), ["MLB_MODEL_VS_FADE_ROWS_CSV"], [env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV")], [env("MLB_MODEL_VS_FADE_JSON")], True),
+    ("Environment v2-beta postgame research reconcile", env("MLB_ENVIRONMENT_V2_BETA_RECONCILE_COMMAND"), ["MLB_ENVIRONMENT_V2_BETA_RECONCILE_DATE"], ["completed-slate Environment v2-beta daily profiles", "completed-slate reconcile rows"], [env("MLB_ENVIRONMENT_V2_BETA_RECONCILED_PROFILES"), env("MLB_ENVIRONMENT_V2_BETA_RECONCILE_SUMMARY_JSON"), env("MLB_ENVIRONMENT_V2_BETA_LEDGER_CSV")], True),
+    ("completed-slate PA refresh", env("MLB_PA_REFRESH_COMMAND"), ["MLB_PA_DATE_FROM", "MLB_PA_DATE_TO", "MLB_PA_ONLY_MISSING"], ["completed-slate finalized player_stats", "StatsAPI boxscore PA components"], ["artifacts/analysis/mlb/research_gap_analysis/pa_backfill_validation.json", "artifacts/analysis/mlb/research_gap_analysis/pa_backfill_validation.md"], True),
+    ("PA foundation propagation", env("MLB_PA_PROPAGATION_COMMAND"), ["DATE", "MLB_PA_FOUNDATION_PROPAGATION_COMPLETED_DATE"], ["review-aid boards", "expanded O1.5 rows", "Environment v2 daily profiles", "completed-slate reconcile rows"], [env("MLB_PA_FOUNDATION_PROPAGATION_JSON"), env("MLB_PA_FOUNDATION_PROPAGATION_CSV")], True),
+    ("PA foundation health", env("MLB_PA_HEALTH_COMMAND"), ["DATE"], ["player_stats PA", "player_derived_stats rolling PA", "downstream artifacts"], [env("MLB_PA_FOUNDATION_HEALTH_JSON"), env("MLB_PA_FOUNDATION_COVERAGE_CSV")], True),
+    ("overlap/QC watches", env("MLB_OVERLAP_QC_WATCHES_COMMAND"), ["MLB_COMPLETED_SLATE_DATE"], ["completed-slate reconcile rows", "actual wager/source reconcile artifacts", "candidate/upload diagnostics"], [env("MLB_QC_CANDIDATE_WATCH_JSON"), env("MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON"), env("MLB_OVERLAP_SNAPSHOT_CSV"), env("MLB_OVERLAP_FEATURE_MONITOR_CSV")], True),
+    ("ops brief input refresh", env("MLB_OPS_BRIEF_COMMAND"), ["MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE", "MLB_DAILY_BRIEF_CURRENT_SLATE_DATE", "MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"], ["completed-slate reconcile rows", "model-vs-fade summary", "postgrade alerts", "model performance", "reporting alignment", "hits environment", "watch artifacts"], [env("MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON")], True),
+    ("ops brief write", env("MLB_OPS_BRIEF_COMMAND"), ["MLB_DAILY_BRIEF_REPORT_DATE"], ["ops brief input refresh status", "daily brief source artifacts"], [env("MLB_DAILY_BRIEF_PATH"), env("MLB_DAILY_BRIEF_JSON")], True),
+    ("current-slate MLB game/source refresh", "make mlb-roster-refresh-all; make mlb-stat-derived-refresh; make mlb-check-rolling-integrity", ["MLB_DATE_ET"], ["MLB current slate", "local player/stat/derived sources", "rolling integrity inputs"], [], True),
+    ("current-slate lineup and starter refresh", ".venv/bin/python -m backend.mlb.scripts.build_mlb_hits05_current_nonmarket_parent_producer --allow-statsapi (governed official lineup/starter capture inside parent producer)", ["MLB_DATE_ET", "MLB_RUN_TAG"], ["official MLB schedule/boxscore lineage", "probable starter/current lineup state"], [f"artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/{env('MLB_CURRENT_SLATE_DATE')}/${{MLB_RUN_TAG}}"], True),
+    ("current-slate predictions-wide generation", "make mlb-predictions-wide MLB_DATE=$MLB_DATE_ET", ["MLB_DATE_ET"], ["current-slate odds/player prop inputs", "production model artifacts"], [f"backend/mlb/exports/odds_history/{env('MLB_CURRENT_SLATE_DATE')}/mlb_predictions_wide_calibrated__${{MLB_RUN_TAG}}.csv"], True),
+    ("Hits 0.5 current nonmarket parent generation", ".venv/bin/python -m backend.mlb.scripts.build_mlb_hits05_current_nonmarket_parent_producer --date $MLB_DATE_ET --run-tag $MLB_RUN_TAG --cutoff $(date -u +%FT%TZ) --output-dir artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/$MLB_DATE_ET/$MLB_RUN_TAG --allow-statsapi --mode research_only", ["MLB_DATE_ET", "MLB_RUN_TAG"], ["predictions-wide completed", "governed official lineup/starter state", "strict-prior local stats"], [f"artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/{env('MLB_CURRENT_SLATE_DATE')}/${{MLB_RUN_TAG}}"], True),
+    ("Hits 0.5 feature-contract validation and candidate scoring", "same Hits 0.5 current nonmarket parent producer invocation", ["MLB_DATE_ET", "MLB_RUN_TAG"], ["frozen 54-feature manifest", "candidate model models_out/latest/hits_05_full_spine.joblib"], [f"artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/{env('MLB_CURRENT_SLATE_DATE')}/${{MLB_RUN_TAG}}/hits05_scored_current_rows_{env('MLB_CURRENT_SLATE_DATE')}.csv"], True),
+    ("slate-output generation and Hits 0.5 hybrid routing", "make mlb-slate-output MLB_DATE=$MLB_DATE_ET", ["MLB_DATE_ET"], ["predictions-wide artifact", "latest valid Hits 0.5 current parent artifact"], [f"backend/mlb/exports/odds_history/{env('MLB_CURRENT_SLATE_DATE')}/mlb_slate_output__${{MLB_RUN_TAG}}.csv"], True),
+    ("downstream archive/reporting after hybrid routing", "make mlb-book-upload; downstream wrapper reporting/Ops Brief steps", ["MLB_DATE_ET", "MLB_RUN_TAG"], ["run-tagged slate output with hits05 route provenance"], [env("MLB_DAILY_BRIEF_PATH"), env("MLB_DAILY_BRIEF_JSON")], True),
+    ("current-slate lane selector", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_DATE_ET"], ["current-slate predictions/slate output", "current-slate odds snapshot", "PDS/player context"], [env("MLB_SELECTOR_CSV"), env("MLB_SELECTOR_SUMMARY_JSON")], True),
+    ("current-slate ranking upload prep", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"], ["ranking upload input", "8rain public/catalog cache", "player/team/market catalog mappings"], [env("MLB_RANKING_UPLOAD_CSV"), env("MLB_RANKING_UPLOAD_SUMMARY_JSON")], True),
+    ("current-slate Quick Card upload prep", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"], ["Quick Card hits candidates", "8rain public/catalog cache", "player/team/market catalog mappings"], [env("MLB_QUICK_CARD_UPLOAD_CSV"), env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON")], True),
+    ("current-slate 8rain public catalog fetch", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"], ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1", "documented app.8rainstation.com public catalog endpoint"], [env("MLB_RANKING_UPLOAD_SUMMARY_JSON"), env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON")], True),
+    ("Environment v2-beta daily research capture", env("MLB_ENVIRONMENT_V2_BETA_DAILY_COMMAND"), ["MLB_ENVIRONMENT_V2_BETA_DAILY_DATE"], ["current-slate O1.5 review artifacts", "environment v1.1 component fields"], [env("MLB_ENVIRONMENT_V2_BETA_DAILY_PROFILES"), env("MLB_ENVIRONMENT_V2_BETA_DAILY_SUMMARY_JSON"), env("MLB_ENVIRONMENT_V2_BETA_DAILY_HEALTH_MD")], True),
+    ("current-slate feature lineage health", env("MLB_FEATURE_LINEAGE_HEALTH_COMMAND"), ["MLB_DAILY_BRIEF_CURRENT_SLATE_DATE"], ["slate output", "lane selector output", "ranking upload input", "Quick Card output", "upload diagnostics"], [env("MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON"), env("MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON")], True),
+    ("base health gates before Home/Audit", env("MLB_BASE_HEALTH_GATES_COMMAND"), ["MLB_DAILY_PREFLIGHT_DATE"], ["expanded universe rows", "context health", "identity health", "ontology health"], [env("MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON"), env("MLB_IDENTITY_HEALTH_JSON"), env("MLB_ONTOLOGY_HEALTH_JSON")], True),
+    ("final ops brief render", env("MLB_FINAL_OPS_BRIEF_COMMAND"), ["MLB_DAILY_BRIEF_REFRESH_INPUTS=0", "MLB_DAILY_BRIEF_REPORT_DATE"], ["final feature-lineage health", "final upload-prep diagnostics", "refreshed completed-slate artifacts"], [env("MLB_DAILY_BRIEF_PATH"), env("MLB_DAILY_BRIEF_JSON")], True),
+    ("initial daily index write before invariants", env("MLB_DAILY_INDEX_COMMAND"), ["MLB_DAILY_INDEX_DATE", "MLB_DAILY_INDEX_COMPLETED_SLATE_DATE"], ["final Ops Brief", "review boards", "base health artifacts"], [env("MLB_DAILY_INDEX_PATH")], False),
+    ("initial morning workflow audit before invariants", env("MLB_MORNING_WORKFLOW_AUDIT_COMMAND"), ["MLB_MORNING_WORKFLOW_AUDIT_DATE"], ["Home Screen", "Ops Brief", "Morning Workbench", "candidate CSVs", "timing template"], [env("MLB_MORNING_WORKFLOW_AUDIT_JSON"), env("MLB_MORNING_WORKFLOW_VALIDATION_MD"), env("MLB_MORNING_WORKFLOW_VALIDATION_CSV")], False),
+    ("project invariants after Home/Audit", env("MLB_PROJECT_INVARIANTS_COMMAND"), ["MLB_PROJECT_INVARIANTS_DATE"], ["current-date Daily Index", "current-date Morning Workflow Audit", "base health artifacts"], [env("MLB_PROJECT_INVARIANTS_JSON")], True),
+    ("daily preflight after invariants", env("MLB_DAILY_PREFLIGHT_COMMAND"), ["MLB_DAILY_PREFLIGHT_DATE"], ["current-slate artifacts", "expanded context health", "project invariants"], [env("MLB_DAILY_PREFLIGHT_JSON")], True),
+    ("daily index refresh after invariants/preflight", env("MLB_DAILY_INDEX_COMMAND"), ["MLB_DAILY_INDEX_DATE", "MLB_DAILY_INDEX_COMPLETED_SLATE_DATE"], ["project invariants", "preflight", "review boards", "health artifacts"], [env("MLB_DAILY_INDEX_PATH")], False),
+    ("final morning workflow audit", env("MLB_MORNING_WORKFLOW_AUDIT_COMMAND"), ["MLB_MORNING_WORKFLOW_AUDIT_DATE"], ["refreshed Home Screen", "Ops Brief", "Morning Workbench", "candidate CSVs", "timing template"], [env("MLB_MORNING_WORKFLOW_AUDIT_JSON"), env("MLB_MORNING_WORKFLOW_VALIDATION_MD"), env("MLB_MORNING_WORKFLOW_VALIDATION_CSV"), env("MLB_MORNING_TIMING_TEMPLATE"), env("MLB_MORNING_GATE_SUMMARY"), env("MLB_MORNING_WORKBENCH")], False),
+    ("final daily index refresh", env("MLB_DAILY_INDEX_COMMAND"), ["MLB_DAILY_INDEX_DATE", "MLB_DAILY_INDEX_COMPLETED_SLATE_DATE"], ["final Morning Workflow Audit"], [env("MLB_DAILY_INDEX_PATH")], False),
+    ("final summary", "write launchagent check summaries", [], ["all phase rc/status variables", "key output artifact stats"], [env("MLB_LAUNCHAGENT_SUMMARY_JSON"), env("MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON"), env("MLB_LAUNCHAGENT_ROLLOVER_DATED_JSON")], True),
+]
+
+env_checks = [
+    {"name": "backend/.env", "present": Path("backend/.env").exists()},
+    {"name": ".venv/bin/python", "present": Path(".venv/bin/python").exists()},
+    {"name": "SUPABASE_DB_URL", "present": bool(env("SUPABASE_DB_URL"))},
+    {"name": "psql", "present": bool(env("MLB_PSQL_BIN"))},
+]
+
+phase_rows = []
+for name, command, required_env, expected_inputs, outputs, wrapper_owned in phases:
+    output_rows = [classify_path(path, "wrapper" if wrapper_owned else "external") for path in outputs]
+    for reason in command_unsafe(command):
+        output_rows.append({"path": command, "exists": False, "size": 0, "classification": "unsafe", "reason": reason})
+    classes = {row["classification"] for row in output_rows}
+    if "unsafe" in classes:
+        status = "unsafe"
+    elif "missing_and_not_built_by_wrapper" in classes:
+        status = "missing_unowned"
+    elif "env_missing" in classes:
+        status = "env_missing"
+    elif "missing_but_buildable_by_wrapper" in classes:
+        status = "will_build"
+    else:
+        status = "ready"
+    phase_rows.append({
+        "phase": name,
+        "command": command,
+        "required_env_vars": required_env,
+        "expected_inputs": expected_inputs,
+        "expected_outputs": output_rows,
+        "check_status": status,
+    })
+
+env_missing_count = sum(1 for item in env_checks if not item["present"])
+unsafe_count = sum(1 for phase in phase_rows for item in phase["expected_outputs"] if item["classification"] == "unsafe")
+missing_unowned_count = sum(1 for phase in phase_rows for item in phase["expected_outputs"] if item["classification"] == "missing_and_not_built_by_wrapper")
+morning_workflow_invalid_count = 0
+morning_workflow_payload = {}
+mw_path = Path(env("MLB_MORNING_WORKFLOW_AUDIT_JSON"))
+if mw_path.exists():
+    try:
+        morning_workflow_payload = json.loads(mw_path.read_text(encoding="utf-8"))
+    except Exception:
+        morning_workflow_invalid_count += 1
+if not morning_workflow_payload:
+    morning_workflow_invalid_count += 1
+else:
+    if morning_workflow_payload.get("status") != "pass":
+        morning_workflow_invalid_count += 1
+    for key in ("broken_links", "missing_artifacts", "workflow_blockers"):
+        try:
+            if int(morning_workflow_payload.get(key) or 0) > 0:
+                morning_workflow_invalid_count += 1
+        except Exception:
+            morning_workflow_invalid_count += 1
+validation_csv = Path(env("MLB_MORNING_WORKFLOW_VALIDATION_CSV"))
+if validation_csv.exists():
+    import csv as _csv
+    for row in _csv.DictReader(validation_csv.open(newline="", encoding="utf-8")):
+        if row.get("category") == "requested_gap" and row.get("status") != "PASS":
+            morning_workflow_invalid_count += 1
+else:
+    morning_workflow_invalid_count += 1
+phases_ready = sum(1 for phase in phase_rows if phase["check_status"] == "ready")
+phases_will_build = sum(1 for phase in phase_rows if phase["check_status"] == "will_build")
+phases_missing_unowned = sum(1 for phase in phase_rows if phase["check_status"] == "missing_unowned")
+final_status = "fail" if env_missing_count or unsafe_count or missing_unowned_count or morning_workflow_invalid_count else "pass"
+
+summary = {
+    "run_started_at": env("MLB_WRAPPER_RUN_STARTED_AT_UTC"),
+    "run_finished_at": now_utc(),
+    "check_mode": True,
+    "simulated_current_slate_date": env("MLB_CURRENT_SLATE_DATE"),
+    "simulated_completed_slate_date": env("MLB_COMPLETED_SLATE_DATE"),
+    "phases_total": len(phase_rows),
+    "phases_ready": phases_ready,
+    "phases_will_build": phases_will_build,
+    "phases_missing_unowned": phases_missing_unowned,
+    "env_missing_count": env_missing_count,
+    "unsafe_count": unsafe_count,
+    "missing_unowned_count": missing_unowned_count,
+    "morning_workflow_invalid_count": morning_workflow_invalid_count,
+    "morning_workflow_status": morning_workflow_payload.get("status", "missing") if morning_workflow_payload else "missing",
+    "final_check_status": final_status,
+    "env_checks": [{"name": item["name"], "present": item["present"], "classification": "exists" if item["present"] else "env_missing"} for item in env_checks],
+    "phases": phase_rows,
+}
+
+for path_value in [env("MLB_LAUNCHAGENT_SUMMARY_JSON"), env("MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON"), env("MLB_LAUNCHAGENT_ROLLOVER_DATED_JSON")]:
+    path = Path(path_value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+print("LaunchAgent MLB Daily Workflow Check")
+print(f"simulated_current_slate_date={summary['simulated_current_slate_date']}")
+print(f"simulated_completed_slate_date={summary['simulated_completed_slate_date']}")
+print(f"phases_total={summary['phases_total']}")
+print(f"phases_ready={phases_ready}")
+print(f"phases_will_build={phases_will_build}")
+print(f"phases_missing_unowned={phases_missing_unowned}")
+print(f"env_missing_count={env_missing_count}")
+print(f"unsafe_count={unsafe_count}")
+print(f"morning_workflow_invalid_count={morning_workflow_invalid_count}")
+print(f"morning_workflow_status={morning_workflow_payload.get('status', 'missing') if morning_workflow_payload else 'missing'}")
+print(f"final_check_status={final_status}")
+print(f"summary_json={env('MLB_LAUNCHAGENT_SUMMARY_JSON')}")
+print(f"rollover_latest_json={env('MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON')}")
+print(f"rollover_dated_json={env('MLB_LAUNCHAGENT_ROLLOVER_DATED_JSON')}")
+for idx, phase in enumerate(phase_rows, start=1):
+    print("")
+    print(f"{idx}. {phase['phase']} [{phase['check_status']}]")
+    print(f"command: {phase['command']}")
+    print(f"env_vars: {', '.join(phase['required_env_vars']) if phase['required_env_vars'] else '(none)'}")
+    print(f"expected_inputs: {', '.join(phase['expected_inputs']) if phase['expected_inputs'] else '(none)'}")
+    if phase["expected_outputs"]:
+        print("expected_outputs:")
+        for item in phase["expected_outputs"]:
+            print(f"  - {item['path']} | exists={str(item['exists']).lower()} size={item['size']} classification={item['classification']}")
+    else:
+        print("expected_outputs: (none)")
+sys.exit(0 if final_status == "pass" else 1)
+PY
+  check_rc=$?
+  set -e
+  trap - EXIT
+  exit "$check_rc"
+fi
+
+if [[ "$SCRIPT_MODE" == "check" ]]; then
+  MLB_CURRENT_SLATE_DATE="$MLB_DATE_ET" \
+  MLB_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE" \
+  MLB_DAILY_BRIEF_REPORT_DATE="$MLB_DAILY_BRIEF_REPORT_DATE" \
+  MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV="$MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV" \
+  MLB_ACTUAL_WAGERS_BY_SOURCE_CSV="$MLB_ACTUAL_WAGERS_BY_SOURCE_CSV" \
+  MLB_UBO5_CLOSEOUT_COMMAND="$ubo5_closeout_command" \
+  MLB_UBO5_CLOSEOUT_MANIFEST="$ubo5_closeout_manifest" \
+  MLB_UBO5_DAILY_RECORD_CSV="$ubo5_daily_record_csv" \
+  MLB_MODEL_VS_FADE_JSON="$MLB_MODEL_VS_FADE_JSON" \
+  MLB_DAILY_BRIEF_PATH="$MLB_DAILY_BRIEF_PATH" \
+  MLB_DAILY_BRIEF_JSON="$MLB_DAILY_BRIEF_JSON" \
+  MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON="$MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON" \
+  MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON" \
+  MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON="$MLB_EXPANDED_O15_CONTEXT_HEALTH_JSON" \
+  MLB_PROJECT_INVARIANTS_JSON="$MLB_PROJECT_INVARIANTS_JSON" \
+  MLB_IDENTITY_HEALTH_JSON="$MLB_IDENTITY_HEALTH_JSON" \
+  MLB_ONTOLOGY_HEALTH_JSON="$MLB_ONTOLOGY_HEALTH_JSON" \
+  MLB_SELECTOR_CSV="$MLB_SELECTOR_CSV" \
+  MLB_SELECTOR_SUMMARY_JSON="$MLB_SELECTOR_SUMMARY_JSON" \
+  MLB_RANKING_UPLOAD_CSV="$MLB_RANKING_UPLOAD_CSV" \
+  MLB_RANKING_UPLOAD_SUMMARY_JSON="$MLB_RANKING_UPLOAD_SUMMARY_JSON" \
+  MLB_QUICK_CARD_UPLOAD_CSV="$MLB_QUICK_CARD_UPLOAD_CSV" \
+  MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON="$MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON" \
+  MLB_QC_CANDIDATE_WATCH_JSON="$MLB_QC_CANDIDATE_WATCH_JSON" \
+  MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON="$MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON" \
+  MLB_OVERLAP_SNAPSHOT_CSV="$MLB_OVERLAP_SNAPSHOT_CSV" \
+  MLB_OVERLAP_FEATURE_MONITOR_CSV="$MLB_OVERLAP_FEATURE_MONITOR_CSV" \
+  MLB_FULL_SLATE_RECONCILE_COMMAND="$full_slate_reconcile_command" \
+  MLB_ACTUAL_RECONCILE_COMMAND="$actual_reconcile_command" \
+  MLB_MODEL_VS_FADE_COMMAND="$model_vs_fade_command" \
+  MLB_OPS_BRIEF_COMMAND="$ops_brief_command" \
+  MLB_FINAL_OPS_BRIEF_COMMAND="$final_ops_brief_command" \
+  MLB_OVERLAP_QC_WATCHES_COMMAND="$overlap_qc_watches_command" \
+  MLB_UPLOAD_PREP_COMMAND="$upload_prep_command" \
+  MLB_FINAL_OPS_BRIEF_COMMAND="$final_ops_brief_command" \
+  .venv/bin/python - <<'PY'
+import os
+from pathlib import Path
+
+def env(name: str) -> str:
+    return os.environ.get(name, "")
+
+def info(path_value: str) -> str:
+    path = Path(path_value)
+    if path_value and path.exists():
+        size = path.stat().st_size if path.is_file() else 0
+        return f"exists=true size={size}"
+    return "exists=false size=0"
+
+phases = [
+    ("date ownership", "computed in wrapper", [], []),
+    ("completed-slate full-slate reconcile", env("MLB_FULL_SLATE_RECONCILE_COMMAND"), ["MLB_COMPLETED_SLATE_DATE", "MLB_FULL_SLATE_MIN_RESOLVED_ROWS"], [env("MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV")]),
+    ("completed-slate actual wager/source reconcile", env("MLB_ACTUAL_RECONCILE_COMMAND"), ["MLB_COMPLETED_SLATE_DATE"], [env("MLB_ACTUAL_WAGERS_BY_SOURCE_CSV")]),
+    ("model-vs-fade refresh", env("MLB_MODEL_VS_FADE_COMMAND"), ["MLB_MODEL_VS_FADE_ROWS_CSV"], [env("MLB_MODEL_VS_FADE_JSON")]),
+    ("ops brief input refresh", env("MLB_OPS_BRIEF_COMMAND"), ["MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE", "MLB_DAILY_BRIEF_CURRENT_SLATE_DATE", "MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV"], [env("MLB_DAILY_BRIEF_INPUT_REFRESH_STATUS_JSON")]),
+    ("ops brief write", env("MLB_OPS_BRIEF_COMMAND"), ["MLB_DAILY_BRIEF_REPORT_DATE"], [env("MLB_DAILY_BRIEF_PATH"), env("MLB_DAILY_BRIEF_JSON")]),
+    ("current-slate lane selector", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_DATE_ET"], [env("MLB_SELECTOR_CSV"), env("MLB_SELECTOR_SUMMARY_JSON")]),
+    ("current-slate ranking upload prep", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"], [env("MLB_RANKING_UPLOAD_CSV"), env("MLB_RANKING_UPLOAD_SUMMARY_JSON")]),
+    ("current-slate Quick Card upload prep", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"], [env("MLB_QUICK_CARD_UPLOAD_CSV"), env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON")]),
+    ("current-slate 8rain public catalog fetch", env("MLB_UPLOAD_PREP_COMMAND"), ["MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"], [env("MLB_RANKING_UPLOAD_SUMMARY_JSON"), env("MLB_QUICK_CARD_UPLOAD_SUMMARY_JSON")]),
+    ("overlap/QC watches", env("MLB_OVERLAP_QC_WATCHES_COMMAND"), ["MLB_COMPLETED_SLATE_DATE"], [env("MLB_QC_CANDIDATE_WATCH_JSON"), env("MLB_OVERLAP_ROLE_PROFILE_WATCH_JSON"), env("MLB_OVERLAP_SNAPSHOT_CSV"), env("MLB_OVERLAP_FEATURE_MONITOR_CSV")]),
+    ("final summary", "write launchagent_daily_summary_latest.json", [], ["artifacts/analysis/mlb/launchagent_daily_summary_latest.json"]),
+]
+
+print("LaunchAgent MLB Daily Workflow Check")
+print(f"current_slate_date={env('MLB_CURRENT_SLATE_DATE')}")
+print(f"completed_slate_date={env('MLB_COMPLETED_SLATE_DATE')}")
+print(f"report_date={env('MLB_DAILY_BRIEF_REPORT_DATE')}")
+for idx, (name, command, env_vars, outputs) in enumerate(phases, start=1):
+    print("")
+    print(f"{idx}. {name}")
+    print(f"command: {command}")
+    print(f"env_vars: {', '.join(env_vars) if env_vars else '(none)'}")
+    if outputs:
+        print("expected_outputs:")
+        for path in outputs:
+            print(f"  - {path} | {info(path)}")
+    else:
+        print("expected_outputs: (none)")
+PY
+  exit 0
+fi
+
+if ! acquire_launchagent_lock "mlb-daily-refresh" "${MLB_DAILY_REFRESH_SELF_LOCK_WAIT_SEC:-900}" "${MLB_DAILY_REFRESH_STALE_SEC:-21600}"; then
+  echo "[$(date -u +%FT%TZ)] WARN another daily MLB refresh appears active; skipping duplicate run" >&2
+  exit 0
+fi
+if ! acquire_launchagent_lock "mlb-pipeline" "${MLB_PIPELINE_LOCK_WAIT_SEC:-1800}" "${MLB_PIPELINE_LOCK_STALE_SEC:-21600}"; then
+  echo "[$(date -u +%FT%TZ)] ERROR unable to acquire shared MLB pipeline lock for daily refresh" >&2
+  exit 75
+fi
+
+# Durable moneyline shadow lifecycle. The hook owns the database-authoritative
+# once-per-date guard; failures remain visible but never abort the MLB pipeline.
+set +e
+bin/mlb_public_game_moneyline_daily_hook.sh "$MLB_DATE_ET"
+moneyline_lifecycle_rc=$?
+set -e
+if [[ "$moneyline_lifecycle_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN MLB moneyline lifecycle hook failed rc=${moneyline_lifecycle_rc}; continuing normal daily refresh" >&2
+elif [[ "${MLB_AGREEMENT_SEPARATION_CAPTURE_V4_ENABLED:-1}" == "1" ]]; then
+  # Frozen v4 agreement-separation capture. Launch only after the durable
+  # moneyline commit barrier. It is disowned so API latency or failure cannot
+  # delay, fail, or change the established workflow.
+  agreement_capture_result="artifacts/ops/mlb_public_game_moneyline_daily_${MLB_DATE_ET}_latest.json"
+  agreement_capture_log="artifacts/ops/mlb_market_strong_agreement_live_capture_v4_${MLB_DATE_ET}_${MLB_RUN_TAG}.log"
+  bin/mlb_market_strong_agreement_live_capture_v4.sh \
+    "$MLB_DATE_ET" "$MLB_RUN_TAG" "$agreement_capture_result" \
+    </dev/null >>"$agreement_capture_log" 2>&1 &!
+  echo "[$(date -u +%FT%TZ)] INFO launched isolated MLB agreement-separation live capture slate_date=${MLB_DATE_ET} run_identity=${MLB_RUN_TAG} log=${agreement_capture_log}"
+else
+  echo "[$(date -u +%FT%TZ)] INFO isolated MLB agreement-separation live capture disabled"
+fi
+
+# Optional fixed-cohort research hook. Default disabled; failures are logged and
+# never abort or corrupt the normal daily pipeline. Set
+# MLB_CLEANROOM_FIXED_COHORT_ENABLED=1 in backend/.env to opt in.
+set +e
+bin/mlb_cleanroom_fixed_cohort_optional_hook.sh
+fixed_cohort_hook_rc=$?
+set -e
+if [[ "$fixed_cohort_hook_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN optional fixed-cohort hook failed rc=${fixed_cohort_hook_rc}" >&2
+fi
+
+# Schedule-relative V2 research hook. It derives the selected wrapper from the
+# official schedule and is nonblocking to the normal MLB pipeline.
+set +e
+bin/mlb_cleanroom_schedule_cohort_optional_hook.sh
+schedule_cohort_hook_rc=$?
+set -e
+if [[ "$schedule_cohort_hook_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN optional schedule-cohort V2 hook failed rc=${schedule_cohort_hook_rc}" >&2
+fi
+
+echo "[$(date -u +%FT%TZ)] START local daily MLB refresh+capture (MLB_DATE_ET=${MLB_DATE_ET} pid=$$ ppid=${PPID:-} cwd=$(pwd) xpc=${XPC_SERVICE_NAME:-manual})"
+echo "[$(date -u +%FT%TZ)] INFO daily env PATH=${PATH:-} python=$({ command -v .venv/bin/python || true; } 2>/dev/null) make=$({ command -v make || true; } 2>/dev/null) psql=${PSQL_BIN:-}"
+echo "[$(date -u +%FT%TZ)] INFO daily workflow dates completed_slate_date=${MLB_COMPLETED_SLATE_DATE} current_slate_date=${MLB_DAILY_BRIEF_CURRENT_SLATE_DATE} report_date=${MLB_DAILY_BRIEF_REPORT_DATE}"
+
+# 1) Keep player/derived data fresh locally.
+roster_rc=0
+for attempt in $(seq 1 "$MLB_ROSTER_REFRESH_RETRY_ATTEMPTS"); do
+  echo "[$(date -u +%FT%TZ)] START roster refresh attempt ${attempt}/${MLB_ROSTER_REFRESH_RETRY_ATTEMPTS}"
+  set +e
+  MLB_ROSTER_DATE="$MLB_DATE_ET" \
+  make mlb-roster-refresh-all
+  roster_rc=$?
+  set -e
+  if [[ "$roster_rc" -eq 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] DONE roster refresh attempt ${attempt}/${MLB_ROSTER_REFRESH_RETRY_ATTEMPTS}"
+    break
+  fi
+  if [[ "$attempt" -lt "$MLB_ROSTER_REFRESH_RETRY_ATTEMPTS" ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN roster refresh failed rc=${roster_rc}; retrying in ${MLB_ROSTER_REFRESH_RETRY_SLEEP_SEC}s" >&2
+    sleep "$MLB_ROSTER_REFRESH_RETRY_SLEEP_SEC"
+  fi
+done
+if [[ "$roster_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] ERROR roster refresh failed after ${MLB_ROSTER_REFRESH_RETRY_ATTEMPTS} attempts rc=${roster_rc}" >&2
+  exit "$roster_rc"
+fi
+
+# Governed BvP stage after roster refresh, before any dependent feature/scorer.
+# The child owns the BvP-specific lock; the shared pipeline lock stays here.
+set +e
+bin/mlb_bvp_inline_daily_hook.sh "$MLB_DATE_ET" "$MLB_RUN_TAG" \
+  "$MLB_WRAPPER_RUN_STARTED_AT_UTC" "$MLB_BVP_INLINE_RESULT"
+MLB_BVP_INLINE_RC=$?
+set -e
+if [[ "$MLB_BVP_INLINE_RC" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN BvP inline acquisition not certified rc=${MLB_BVP_INLINE_RC} result=${MLB_BVP_INLINE_RESULT}; independent lanes continue; BvP-dependent admission fails closed" >&2
+fi
+
+MLB_STAT_DAYS_AGO=2 \
+MLB_STAT_SKIP_EXISTING_DATES=1 \
+MLB_STAT_DERIVED_DAYS=7 \
+MLB_STAT_DERIVED_MIN=0 \
+MLB_SEASON_REQUIRE_REGULAR=1 \
+make mlb-stat-derived-refresh
+
+# 1b) Verify rolling windows are populated + moving.
+MLB_ROLLING_CHECK_DAYS="$MLB_ROLLING_CHECK_DAYS" \
+MLB_ROLLING_CHECK_MIN_COVERAGE_PCT="$MLB_ROLLING_CHECK_MIN_COVERAGE_PCT" \
+MLB_ROLLING_CHECK_MIN_COMPARABLE="$MLB_ROLLING_CHECK_MIN_COMPARABLE" \
+make mlb-check-rolling-integrity
+
+# 2) Build daily capture chain locally. TB 1.5 remains incumbent-only and the
+# same run also freezes the model-independent BetOnline TB 1.5 market ledger.
+MLB_RUN_TAG="$MLB_RUN_TAG" \
+bin/mlb_predictions_wide_guarded.sh \
+  --slate-date "$MLB_DATE_ET" \
+  --output "backend/mlb/data/processed/mlb_predictions_wide_calibrated.csv" \
+  -- make mlb-predictions-wide MLB_DATE="$MLB_DATE_ET"
+
+# Hits 0.5 full-spine replacement parent. This is bounded to the existing
+# five daily windows: no extra capture window is added. The step is fail-closed:
+# if official/governed lineup or starter sources are unavailable, malformed, or
+# incomplete, slate output keeps incumbent Hits 0.5 predictions with explicit
+# route/fallback provenance. The parent uses only official/governed baseball
+# sources and strict-prior local stats; sportsbook rows never define features.
+MLB_HITS05_PARENT_WINDOW_ID="$(TZ=America/Los_Angeles date +%H%M)_pt"
+MLB_HITS05_PARENT_OUTPUT_DIR="artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/${MLB_DATE_ET}/${MLB_RUN_TAG}"
+echo "[$(date -u +%FT%TZ)] START Hits 0.5 current parent producer (date=${MLB_DATE_ET} run_tag=${MLB_RUN_TAG} window=${MLB_HITS05_PARENT_WINDOW_ID})"
+set +e
+.venv/bin/python -m backend.mlb.scripts.build_mlb_hits05_current_nonmarket_parent_producer \
+  --date "$MLB_DATE_ET" \
+  --run-tag "$MLB_RUN_TAG" \
+  --cutoff "$(date -u +%FT%TZ)" \
+  --output-dir "$MLB_HITS05_PARENT_OUTPUT_DIR" \
+  --allow-statsapi \
+  --mode research_only
+hits05_parent_rc=$?
+set -e
+if [[ "$hits05_parent_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN Hits 0.5 current parent producer failed rc=${hits05_parent_rc}; incumbent fallback remains active" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE Hits 0.5 current parent producer output_dir=${MLB_HITS05_PARENT_OUTPUT_DIR}"
+fi
+
+# Parallel private Hits 0.5 sportsbook-independent full-board shadow. This
+# consumes the governed lineup/starter identity source but separately scores
+# the exact frozen Hits artifact. It does not affect slate output, uploads,
+# wagering, or public behavior and remains nonblocking to the daily refresh.
+MLB_HITS05_FULL_BOARD_CAPTURE_TIMESTAMP="$(date -u +%FT%TZ)"
+set +e
+bin/mlb_hits05_full_board_shadow_daily_hook.sh \
+  "$MLB_DATE_ET" \
+  "$MLB_RUN_TAG" \
+  "$MLB_HITS05_FULL_BOARD_CAPTURE_TIMESTAMP"
+hits05_full_board_shadow_rc=$?
+set -e
+if [[ "$hits05_full_board_shadow_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN Hits 0.5 full-board shadow hook failed rc=${hits05_full_board_shadow_rc}; continuing normal daily refresh without retrospective reconstruction" >&2
+fi
+
+bin/mlb_slate_output_guarded.sh MLB_DATE="$MLB_DATE_ET"
+
+# Keep reconcile-compatible snapshot in sync and preserve run-specific odds snapshot.
+if [[ -f "${MLB_ODDS_CANONICAL_JSON}" ]]; then
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_COMPAT_JSON}"
+  cp -f "${MLB_ODDS_CANONICAL_JSON}" "${MLB_ODDS_TAGGED_JSON}"
+  echo "[$(date -u +%FT%TZ)] INFO odds snapshot synced -> ${MLB_ODDS_COMPAT_JSON} + ${MLB_ODDS_TAGGED_JSON}"
+  MLB_BETONLINE_CAPTURE_INTEGRITY_ROOT="${MLB_BETONLINE_CAPTURE_INTEGRITY_ROOT:-artifacts/analysis/mlb/betonline_capture_integrity}"
+  set +e
+  .venv/bin/python -m backend.mlb.scripts.validate_mlb_betonline_semantic_capture_completeness \
+    --odds-json "${MLB_ODDS_TAGGED_JSON}" \
+    --slate-date "${MLB_DATE_ET}" \
+    --run-tag "${MLB_RUN_TAG}" \
+    --scheduled-window "$(TZ=America/Los_Angeles date +%H:%M)" \
+    --expected-run-time "${MLB_RUN_TS_UTC}" \
+    --normalized-odds-path "${MLB_ODDS_COMPAT_JSON}" \
+    --output-root "${MLB_BETONLINE_CAPTURE_INTEGRITY_ROOT}" \
+    --write-run-status \
+    --write-daily-summary
+  betonline_semantic_rc=$?
+  set -e
+  if [[ "$betonline_semantic_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN BetOnline semantic capture validation failed rc=${betonline_semantic_rc}; preserved partial odds artifacts remain available but BetOnline economics must fail closed without direct prices" >&2
+  fi
+else
+  echo "[$(date -u +%FT%TZ)] WARN missing odds snapshot after predictions-wide: ${MLB_ODDS_CANONICAL_JSON}" >&2
+fi
+
+# Preserve authentic full-game totals as a separate append-only research
+# snapshot. This is intentionally nonblocking to the unrelated MLB refresh.
+set +e
+bin/mlb_full_game_totals_daily_hook.sh "$MLB_DATE_ET" "$MLB_RUN_TAG"
+full_game_totals_rc=$?
+set -e
+if [[ "$full_game_totals_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN MLB full-game totals market capture failed rc=${full_game_totals_rc}; unrelated refresh stages continue" >&2
+fi
+
+# Force local upload build (no remote artifact dependency for day-to-day runs).
+MLB_BOOK_UPLOAD_REMOTE_FETCH_FIRST=0 \
+MLB_BOOK_UPLOAD_REMOTE_FETCH_REQUIRED=0 \
+MLB_BOOK_UPLOAD_REMOTE_FETCH_ONLY=0 \
+MLB_ARCHIVE_RUN_TAG="$MLB_RUN_TAG" \
+bin/mlb_predictive_command_guarded.sh \
+  --stage "MLB book upload" \
+  --operation production_upload_generation \
+  --status-file "/tmp/mlb-book-upload-${MLB_RUN_TAG}.status" \
+  -- make mlb-book-upload MLB_DATE="$MLB_DATE_ET"
+book_upload_guard_status="$(cat "/tmp/mlb-book-upload-${MLB_RUN_TAG}.status" 2>/dev/null || true)"
+
+if [[ "${book_upload_guard_status}" == SKIPPED* ]]; then
+  predictive_outputs_available=false
+elif [[ ! -f "${MLB_BOOK_UPLOAD_CANONICAL_CSV}" ]]; then
+  echo "[$(date -u +%FT%TZ)] ERROR missing canonical upload CSV after mlb-book-upload: ${MLB_BOOK_UPLOAD_CANONICAL_CSV}" >&2
+  exit 1
+else
+  predictive_outputs_available=true
+fi
+
+# Research-only, default-off prospective PA opportunity shadow capture.
+# Runs after run-tagged prediction/slate/upload artifacts exist and before downstream surfaces.
+# If MLB_RESEARCH_PA_PARENT_SOURCE_MANIFEST points to a refreshed canonical PA source
+# manifest, generate exact run-bound PA parents first and pass them into the shadow
+# capture. Source freshness is explicit; the wrapper does not assume or acquire PA history.
+if [[ "${MLB_RESEARCH_PA_OVERLAY_SHADOW:-0}" == "1" ]]; then
+  echo "[$(date -u +%FT%TZ)] START research PA opportunity shadow capture (date=${MLB_DATE_ET} run_tag=${MLB_RUN_TAG})"
+  pa_source_args=()
+  if [[ "${MLB_RESEARCH_PA_PARENT_SOURCE_MANIFEST:-}" != "" ]]; then
+    MLB_RESEARCH_PA_PARENT_OUTPUT_DIR="${MLB_RESEARCH_PA_PARENT_OUTPUT_DIR:-artifacts/analysis/mlb/research/pa_opportunity_parents/${MLB_DATE_ET}/${MLB_RUN_TAG}}"
+    MLB_RESEARCH_PA_PARENT_CUTOFF="${MLB_RESEARCH_PA_PARENT_CUTOFF:-$(date -u +%FT%TZ)}"
+    echo "[$(date -u +%FT%TZ)] START research PA parent generation (source_manifest=${MLB_RESEARCH_PA_PARENT_SOURCE_MANIFEST})"
+    set +e
+    .venv/bin/python -m backend.mlb.scripts.build_mlb_prediction_time_pa_opportunity_parents \
+      --date "$MLB_DATE_ET" \
+      --run-tag "$MLB_RUN_TAG" \
+      --prediction-cutoff "$MLB_RESEARCH_PA_PARENT_CUTOFF" \
+      --run-bound-population "${MLB_ODDS_DAY_DIR}/mlb_predictions_wide_calibrated__${MLB_RUN_TAG}.csv" \
+      --source-manifest "$MLB_RESEARCH_PA_PARENT_SOURCE_MANIFEST" \
+      --output-root "$MLB_RESEARCH_PA_PARENT_OUTPUT_DIR"
+    pa_parent_rc=$?
+    set -e
+    pa_parent_artifact="${MLB_RESEARCH_PA_PARENT_OUTPUT_DIR}/run_bound_pa_parent_artifact_${MLB_DATE_ET}_${MLB_RUN_TAG}.csv"
+    if [[ "$pa_parent_rc" -ne 0 ]]; then
+      echo "[$(date -u +%FT%TZ)] WARN research PA parent generation failed rc=${pa_parent_rc}; shadow capture will fail closed without PA source" >&2
+    elif [[ -s "$pa_parent_artifact" && "$(wc -l < "$pa_parent_artifact" | tr -d ' ')" -gt 1 ]]; then
+      pa_source_args=(--pa-source "$pa_parent_artifact")
+      echo "[$(date -u +%FT%TZ)] DONE research PA parent generation (pa_source=${pa_parent_artifact})"
+    else
+      echo "[$(date -u +%FT%TZ)] WARN research PA parent generation produced no complete parents; shadow capture will fail closed without PA source" >&2
+    fi
+  else
+    echo "[$(date -u +%FT%TZ)] WARN MLB_RESEARCH_PA_PARENT_SOURCE_MANIFEST not set; shadow capture will fail closed without PA source" >&2
+  fi
+  set +e
+  .venv/bin/python -m backend.mlb.scripts.capture_mlb_prospective_run_bound_pa_opportunity_overlay \
+    --date "$MLB_DATE_ET" \
+    --run-tag "$MLB_RUN_TAG" \
+    --slate-output "${MLB_ODDS_DAY_DIR}/mlb_slate_output__${MLB_RUN_TAG}.csv" \
+    --prediction-wide "${MLB_ODDS_DAY_DIR}/mlb_predictions_wide_calibrated__${MLB_RUN_TAG}.csv" \
+    --book-upload "${MLB_ODDS_DAY_DIR}/mlb_book_upload__${MLB_RUN_TAG}.csv" \
+    "${pa_source_args[@]}" \
+    --output-dir "artifacts/analysis/mlb/research/pa_opportunity_shadow/${MLB_DATE_ET}/${MLB_RUN_TAG}" \
+    --mode research_only
+  pa_shadow_rc=$?
+  set -e
+  if [[ "$pa_shadow_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN research PA opportunity shadow capture failed rc=${pa_shadow_rc}; continuing normal daily workflow" >&2
+  else
+    echo "[$(date -u +%FT%TZ)] DONE research PA opportunity shadow capture"
+  fi
+fi
+
+# Research-only, default-off Hits U1.5 affirmative pitcher-suppression shadow capture.
+# Runs after run-tagged prediction/slate/upload/odds artifacts exist and before downstream surfaces.
+# The shadow output is not consumed by production; missing suppression evidence fails closed.
+if [[ "${MLB_RESEARCH_HITS15_SUPPRESSION_SHADOW:-0}" == "1" ]]; then
+  echo "[$(date -u +%FT%TZ)] START research Hits U1.5 pitcher-suppression shadow capture (date=${MLB_DATE_ET} run_tag=${MLB_RUN_TAG})"
+  suppression_source_args=()
+  if [[ "${MLB_RESEARCH_HITS15_SUPPRESSION_SOURCE_MANIFEST:-}" != "" ]]; then
+    suppression_source_args=(--suppression-source "$MLB_RESEARCH_HITS15_SUPPRESSION_SOURCE_MANIFEST")
+  else
+    echo "[$(date -u +%FT%TZ)] WARN MLB_RESEARCH_HITS15_SUPPRESSION_SOURCE_MANIFEST not set; suppression shadow will fail closed without affirmative evidence source" >&2
+  fi
+  set +e
+  .venv/bin/python -m backend.mlb.scripts.capture_mlb_hits15_pitcher_suppression_shadow \
+    --date "$MLB_DATE_ET" \
+    --run-tag "$MLB_RUN_TAG" \
+    --slate-output "${MLB_ODDS_DAY_DIR}/mlb_slate_output__${MLB_RUN_TAG}.csv" \
+    --prediction-artifact "${MLB_ODDS_DAY_DIR}/mlb_predictions_wide_calibrated__${MLB_RUN_TAG}.csv" \
+    --book-upload "${MLB_ODDS_DAY_DIR}/mlb_book_upload__${MLB_RUN_TAG}.csv" \
+    --odds-snapshot "${MLB_ODDS_TAGGED_JSON}" \
+    --prediction-cutoff "$(date -u +%FT%TZ)" \
+    "${suppression_source_args[@]}" \
+    --output-root "artifacts/analysis/model_development/mlb_hits15_prospective_suppression_shadow/2026-07-17" \
+    --mode shadow
+  suppression_shadow_rc=$?
+  set -e
+  if [[ "$suppression_shadow_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN research Hits U1.5 pitcher-suppression shadow capture failed rc=${suppression_shadow_rc}; continuing normal daily workflow" >&2
+  else
+    echo "[$(date -u +%FT%TZ)] DONE research Hits U1.5 pitcher-suppression shadow capture"
+  fi
+fi
+
+if [[ "${predictive_outputs_available}" == "true" ]]; then
+  echo "[$(date -u +%FT%TZ)] START mlb-tmp-focus (MLB_TMP_FOCUS_DATE=${MLB_DATE_ET})"
+  MLB_TMP_FOCUS_DATE="$MLB_DATE_ET" make mlb-tmp-focus
+  if [[ ! -f "${MLB_UPLOADS_DATED_BOOK_CSV}" ]]; then
+    echo "[$(date -u +%FT%TZ)] ERROR missing dated upload CSV after mlb-tmp-focus: ${MLB_UPLOADS_DATED_BOOK_CSV}" >&2
+    exit 1
+  fi
+  echo "[$(date -u +%FT%TZ)] DONE mlb-tmp-focus (dated_folder=${MLB_UPLOADS_DATED_DIR})"
+else
+  echo "[$(date -u +%FT%TZ)] SKIP MLB tmp-focus upload staging: NO_QUALIFIED_MLB_MODEL operation=production_upload_generation"
+fi
+
+# 2c) Refresh prop regime context, then rebuild /mlb/today workspace staging + materialized views for current ET slate.
+# The Prop Outlook card reads prop_regime_combined_signal.csv at request time.
+echo "[$(date -u +%FT%TZ)] START mlb-prop-regime-validation"
+make mlb-prop-regime-validation
+
+if [[ ! -d "${MLB_ODDS_DAY_DIR}" ]]; then
+  echo "[$(date -u +%FT%TZ)] ERROR missing odds day directory for /mlb/today workspace: ${MLB_ODDS_DAY_DIR}" >&2
+  exit 1
+fi
+
+echo "[$(date -u +%FT%TZ)] START mlb-today workspace build (slate_date=${MLB_DATE_ET})"
+set +e
+.venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py --slate-date "$MLB_DATE_ET" --odds-root "backend/mlb/exports/odds_history"
+today_workspace_build_rc=$?
+
+today_workspace_mv_rc=0
+if [[ "$today_workspace_build_rc" -eq 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] START mlb-today workspace materialized view refresh (slate_date=${MLB_DATE_ET})"
+  "$PSQL_BIN" "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+REFRESH MATERIALIZED VIEW mlb.today_market_snapshot;
+REFRESH MATERIALIZED VIEW mlb.today_market_timing_signal;
+REFRESH MATERIALIZED VIEW mlb.today_player_context;
+REFRESH MATERIALIZED VIEW mlb.today_workspace_mlb;
+SQL
+  today_workspace_mv_rc=$?
+else
+  echo "[$(date -u +%FT%TZ)] WARN mlb-today workspace build failed rc=${today_workspace_build_rc}; continuing to daily reports/uploads" >&2
+fi
+set -e
+if [[ "$today_workspace_build_rc" -eq 0 && "$today_workspace_mv_rc" -eq 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] DONE mlb-today workspace refresh (slate_date=${MLB_DATE_ET})"
+elif [[ "$today_workspace_mv_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-today workspace materialized view refresh failed rc=${today_workspace_mv_rc}; continuing to daily reports/uploads" >&2
+fi
+
+# 2b) Daily analysis monitors (best effort; keep core daily run resilient).
+set +e
+MLB_HITS_ENV_AS_OF_DATE="$MLB_DATE_ET" \
+MLB_HITS_ENV_SLATE_DATE="$MLB_DATE_ET" \
+MLB_HITS_ENV_STARTER_BASELINE_SEASONS="${MLB_HITS_ENV_STARTER_BASELINE_SEASONS:-3}" \
+MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS="${MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS:-5}" \
+MLB_HITS_ENV_STARTER_BASELINE_DECAY="${MLB_HITS_ENV_STARTER_BASELINE_DECAY:-0.70}" \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST7="${MLB_HITS_ENV_SLATE_WEIGHT_LAST7:-0.50}" \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST15="${MLB_HITS_ENV_SLATE_WEIGHT_LAST15:-0.30}" \
+MLB_HITS_ENV_SLATE_WEIGHT_LAST30="${MLB_HITS_ENV_SLATE_WEIGHT_LAST30:-0.20}" \
+MLB_HITS_ENV_SLATE_FACTOR_MIN="${MLB_HITS_ENV_SLATE_FACTOR_MIN:-0.70}" \
+MLB_HITS_ENV_SLATE_FACTOR_MAX="${MLB_HITS_ENV_SLATE_FACTOR_MAX:-1.30}" \
+make mlb-hits-environment-report
+hits_env_rc=$?
+
+hits_lane_selector_rc=0
+upload_prep_started=false
+upload_prep_command="make mlb-daily-upload-prep MLB_UPLOAD_PREP_DATE=${MLB_DATE_ET} MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1"
+ranking_upload_status=not_run
+quick_card_upload_status=not_run
+ranking_unknown_event_rows=0
+quick_card_unknown_event_rows=0
+public_catalog_fetch_attempted=false
+public_catalog_fetch_succeeded=false
+upload_prep_summary_paths=""
+model_vs_fade_rc=0
+overlap_qc_watches_rc=0
+brief_rc=0
+
+reconcile_rows_exists_before_brief=false
+reconcile_rows_size=0
+reconcile_build_attempted=false
+reconcile_build_status=not_attempted
+reconcile_reused_existing=false
+reconcile_create_rc=0
+actual_reconcile_exists_before_brief=false
+actual_reconcile_size=0
+actual_reconcile_build_attempted=false
+actual_reconcile_build_status=not_attempted
+actual_reconcile_reused_existing=false
+actual_reconcile_rc=0
+ubo5_closeout_attempted=false
+ubo5_closeout_rc=0
+ubo5_history_refresh_attempted=false
+ubo5_history_refresh_rc=0
+ubo5_history_refresh_status=not_attempted
+ubo5_closeout_status=not_attempted
+ubo5_consensus_closeout_attempted=false
+ubo5_consensus_closeout_rc=0
+ubo5_consensus_closeout_status=not_attempted
+ubo5_broad_records_attempted=false
+ubo5_broad_records_rc=0
+ubo5_broad_records_status=not_attempted
+ubo5_complete_outcome_status=not_attempted
+completed_finalized_data_initial_rc=0
+completed_finalized_data_final_rc=0
+completed_finalized_data_ingest_attempted=false
+completed_finalized_data_ingest_rc=0
+completed_finalized_data_status=not_checked
+
+pa_refresh_rc=0
+pa_health_rc=0
+pa_propagation_rc=0
+
+echo "[$(date -u +%FT%TZ)] START completed-slate pre-guard blank-only PA refresh (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+set +e
+make mlb-refresh-player-pa MLB_PA_DATE_FROM="$MLB_COMPLETED_SLATE_DATE" MLB_PA_DATE_TO="$MLB_COMPLETED_SLATE_DATE" MLB_PA_ONLY_MISSING=1 MLB_SEASON_REQUIRE_REGULAR=1
+pa_refresh_rc=$?
+set -e
+if [[ "$pa_refresh_rc" -ne 0 ]]; then
+  completed_finalized_data_status=source_not_ready
+  completed_finalized_data_final_rc="$pa_refresh_rc"
+  echo "[$(date -u +%FT%TZ)] WARN completed-slate pre-guard PA refresh failed rc=${pa_refresh_rc}; exact completeness and player-prop reconciliation will fail closed" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE completed-slate pre-guard blank-only PA refresh (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+  echo "[$(date -u +%FT%TZ)] START completed-slate finalized data check (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+  set +e
+  make mlb-check-finalized-training-data MLB_DATE="$MLB_COMPLETED_SLATE_DATE" MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS=1
+  completed_finalized_data_initial_rc=$?
+  set -e
+  if [[ "$completed_finalized_data_initial_rc" -eq 0 ]]; then
+    completed_finalized_data_status=already_present
+    completed_finalized_data_final_rc=0
+    echo "[$(date -u +%FT%TZ)] DONE completed-slate finalized data check status=already_present date=${MLB_COMPLETED_SLATE_DATE}"
+  else
+    completed_finalized_data_ingest_attempted=true
+    echo "[$(date -u +%FT%TZ)] WARN completed-slate finalized data incomplete date=${MLB_COMPLETED_SLATE_DATE}; running bounded exact-game recovery" >&2
+    set +e
+    make mlb-player-stats-recover-date MLB_DATE="$MLB_COMPLETED_SLATE_DATE"
+    completed_player_stats_recovery_rc=$?
+    set -e
+    if [[ "$completed_player_stats_recovery_rc" -ne 0 ]]; then
+      completed_finalized_data_status=source_not_ready
+      completed_finalized_data_final_rc="$completed_player_stats_recovery_rc"
+      echo "[$(date -u +%FT%TZ)] WARN COMPLETED_GAME_PLAYER_STATS_INCOMPLETE date=${MLB_COMPLETED_SLATE_DATE} recovery_rc=${completed_player_stats_recovery_rc}; broad ingestion refused" >&2
+    else
+      echo "[$(date -u +%FT%TZ)] DONE bounded exact-game player_stats recovery; running canonical exact-date derived refresh"
+      set +e
+      make mlb-stat-derived-backfill MLB_STAT_FROM_DATE="$MLB_COMPLETED_SLATE_DATE" MLB_STAT_TO_DATE="$MLB_COMPLETED_SLATE_DATE" MLB_STAT_SKIP_EXISTING_DATES=0 MLB_STAT_DERIVED_DAYS=2 MLB_STAT_DERIVED_MIN=1 MLB_SEASON_REQUIRE_REGULAR=1
+      completed_finalized_data_ingest_rc=$?
+      make mlb-check-finalized-training-data MLB_DATE="$MLB_COMPLETED_SLATE_DATE" MLB_RECONCILE_FINALIZED_CHECK_PLAYER_STATS=1
+      completed_finalized_data_final_rc=$?
+      set -e
+      if [[ "$completed_finalized_data_final_rc" -eq 0 ]]; then
+        completed_finalized_data_status=ingested
+        echo "[$(date -u +%FT%TZ)] DONE completed-slate finalized data ingestion date=${MLB_COMPLETED_SLATE_DATE} ingest_rc=${completed_finalized_data_ingest_rc}"
+      else
+        completed_finalized_data_status=source_not_ready
+        echo "[$(date -u +%FT%TZ)] WARN completed-slate finalized data still unavailable date=${MLB_COMPLETED_SLATE_DATE} ingest_rc=${completed_finalized_data_ingest_rc} final_check_rc=${completed_finalized_data_final_rc}; reconcile will be skipped" >&2
+      fi
+    fi
+  fi
+fi
+
+# Canonical prospective player-prop outcome sidecar. Prediction ledgers remain
+# immutable; exact completed-game completeness is the admission authority.
+prospective_outcome_reconcile_rc=0
+if [[ "${completed_finalized_data_status}" != "source_not_ready" ]]; then
+  echo "[$(date -u +%FT%TZ)] START canonical prospective outcome reconciliation (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+  set +e
+  make mlb-reconcile-prospective-lineage-outcomes MLB_DATE="$MLB_COMPLETED_SLATE_DATE"
+  prospective_outcome_reconcile_rc=$?
+  set -e
+  if [[ "$prospective_outcome_reconcile_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN canonical prospective outcome reconciliation failed rc=${prospective_outcome_reconcile_rc}; prediction lineage remains unchanged" >&2
+  else
+    echo "[$(date -u +%FT%TZ)] DONE canonical prospective outcome reconciliation (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+  fi
+else
+  prospective_outcome_reconcile_rc="$completed_finalized_data_final_rc"
+  echo "[$(date -u +%FT%TZ)] WARN skipping canonical prospective outcome reconciliation; exact completeness unavailable completed_slate_date=${MLB_COMPLETED_SLATE_DATE}" >&2
+fi
+
+# Private totals prospective-shadow lifecycle. The current-slate two-provider
+# market capture has already run, and completed-slate official sources have now
+# been checked/recovered. The hook grades pending final rows first. Runs that
+# started before 08:30 PT are the primary scoring pass; 08:30 and later runs
+# score only missing pregame identities. Any failure is visible and nonblocking.
+set +e
+bin/mlb_totals_prospective_shadow_daily_hook.sh \
+  "$MLB_DATE_ET" \
+  "$MLB_COMPLETED_SLATE_DATE" \
+  "$MLB_RUN_TAG" \
+  "$MLB_WRAPPER_RUN_STARTED_AT_UTC" \
+  auto
+totals_shadow_lifecycle_rc=$?
+set -e
+if [[ "$totals_shadow_lifecycle_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN MLB totals prospective shadow lifecycle hook failed rc=${totals_shadow_lifecycle_rc}; continuing normal daily refresh and preserving retry eligibility" >&2
+fi
+
+if [[ -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" ]]; then
+  reconcile_rows_size="$(wc -c < "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" | tr -d '[:space:]')"
+  if [[ "${reconcile_rows_size}" -gt 0 ]]; then
+    reconcile_rows_exists_before_brief=true
+    reconcile_reused_existing=true
+    echo "[$(date -u +%FT%TZ)] INFO completed-slate reconcile rows reused reconcile_rows_csv=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV} reconcile_rows_size=${reconcile_rows_size}"
+  else
+    echo "[$(date -u +%FT%TZ)] WARN completed-slate reconcile rows file is empty reconcile_rows_csv=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}; rebuilding" >&2
+  fi
+fi
+if [[ "${reconcile_reused_existing}" != "true" && "${completed_finalized_data_status}" == "source_not_ready" ]]; then
+  reconcile_build_status=source_not_ready
+  reconcile_create_rc="$completed_finalized_data_final_rc"
+  echo "[$(date -u +%FT%TZ)] WARN skipping completed-slate reconcile artifact build; finalized data source-not-ready completed_slate_date=${MLB_COMPLETED_SLATE_DATE}" >&2
+elif [[ "${reconcile_reused_existing}" != "true" ]]; then
+  reconcile_build_attempted=true
+  echo "[$(date -u +%FT%TZ)] START completed-slate reconcile artifact build (completed_slate_date=${MLB_COMPLETED_SLATE_DATE} expected=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV})"
+  set +e
+  make mlb-full-slate-performance MLB_DATE="$MLB_COMPLETED_SLATE_DATE" MLB_FULL_SLATE_MIN_RESOLVED_ROWS=1
+  reconcile_create_rc=$?
+  set -e
+  if [[ -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" ]]; then
+    reconcile_rows_size="$(wc -c < "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" | tr -d '[:space:]')"
+  else
+    reconcile_rows_size=0
+  fi
+  if [[ "$reconcile_create_rc" -eq 0 && -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" && "${reconcile_rows_size}" -gt 0 ]]; then
+    reconcile_rows_exists_before_brief=true
+    reconcile_build_status=rebuilt
+    echo "[$(date -u +%FT%TZ)] DONE completed-slate reconcile artifact build reconcile_rows_csv=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV} reconcile_rows_size=${reconcile_rows_size}"
+  else
+    reconcile_build_status=failed_or_empty
+    echo "[$(date -u +%FT%TZ)] WARN completed-slate reconcile artifact unavailable rc=${reconcile_create_rc} expected=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV} reconcile_rows_size=${reconcile_rows_size}; brief will report dependency/source-not-ready" >&2
+  fi
+fi
+
+# Finalize only already-frozen historical TB1.5 populations after exact-ID
+# reconciliation. The target skips FINAL dates and cannot create populations.
+if [[ -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" && "${reconcile_rows_size}" -gt 0 ]]; then
+  set +e
+  make mlb-finalize-frozen-tb15-populations
+  frozen_tb15_finalize_rc=$?
+  set -e
+  if [[ "$frozen_tb15_finalize_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN frozen historical TB1.5 finalization failed rc=${frozen_tb15_finalize_rc}" >&2
+  fi
+fi
+
+# Historical frozen populations are finalized by the shared exact-ID
+# reconciliation lifecycle. The retired scoring, board, history-refresh, and
+# UBO-specific closeout builders are not invoked by the daily wrapper.
+
+# O1.5 prospective Run 1 is retained for historical manual replay only.
+# No governed producer is creating new rows, and remaining Run 1 rows are
+# blocked after official reconcile rather than pending automatic grading.
+o15_prospective_grade_rc=0
+o15_prospective_grade_status=removed_from_routine_wrapper
+echo "[$(date -u +%FT%TZ)] INFO O1.5 prospective grader not invoked in routine wrapper; retained manual target mlb-o15-prospective-grade"
+
+if [[ -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" && "${reconcile_rows_size}" -gt 0 ]]; then
+  if [[ -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" ]]; then
+    actual_reconcile_size="$(wc -c < "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" | tr -d '[:space:]')"
+    if [[ "${actual_reconcile_size}" -gt 0 ]]; then
+      actual_reconcile_exists_before_brief=true
+      actual_reconcile_reused_existing=true
+      echo "[$(date -u +%FT%TZ)] INFO completed-slate actual wager reconcile reused actual_wagers_by_source_csv=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}"
+    else
+      echo "[$(date -u +%FT%TZ)] WARN completed-slate actual wager reconcile file is empty actual_wagers_by_source_csv=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}; rebuilding" >&2
+    fi
+  fi
+  if [[ "${actual_reconcile_reused_existing}" != "true" ]]; then
+    actual_reconcile_build_attempted=true
+    echo "[$(date -u +%FT%TZ)] START completed-slate actual wager reconcile (completed_slate_date=${MLB_COMPLETED_SLATE_DATE} expected=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV})"
+    set +e
+    .venv/bin/python -m backend.mlb.scripts.compare_mlb_model_v2_upload_vs_actual --date "$MLB_COMPLETED_SLATE_DATE"
+    actual_reconcile_rc=$?
+    set -e
+    if [[ -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" ]]; then
+      actual_reconcile_size="$(wc -c < "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" | tr -d '[:space:]')"
+    else
+      actual_reconcile_size=0
+    fi
+    if [[ "$actual_reconcile_rc" -eq 0 && -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" && "${actual_reconcile_size}" -gt 0 ]]; then
+      actual_reconcile_exists_before_brief=true
+      actual_reconcile_build_status=rebuilt
+      echo "[$(date -u +%FT%TZ)] DONE completed-slate actual wager reconcile actual_wagers_by_source_csv=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}"
+    else
+      actual_reconcile_build_status=failed_or_empty
+      echo "[$(date -u +%FT%TZ)] WARN completed-slate actual wager reconcile unavailable rc=${actual_reconcile_rc} expected=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}; actual-wager watches may remain stale" >&2
+    fi
+  fi
+
+  set +e
+  echo "[$(date -u +%FT%TZ)] START mlb-model-vs-fade completed-slate reconcile (${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV})"
+  make mlb-model-vs-fade MLB_MODEL_VS_FADE_ROWS_CSV="${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}"
+  model_vs_fade_rc=$?
+  set -e
+  if [[ "$model_vs_fade_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN mlb-model-vs-fade completed-slate reconcile failed rc=${model_vs_fade_rc}" >&2
+  else
+    echo "[$(date -u +%FT%TZ)] DONE mlb-model-vs-fade completed-slate reconcile (${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV})"
+  fi
+else
+  echo "[$(date -u +%FT%TZ)] WARN skipping model-vs-fade refresh; missing completed-slate reconcile rows (${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV})" >&2
+fi
+
+environment_v2_beta_reconcile_rc=0
+echo "[$(date -u +%FT%TZ)] START Environment v2-beta postgame research reconcile (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+set +e
+make mlb-environment-v2-beta-reconcile MLB_ENVIRONMENT_V2_BETA_RECONCILE_DATE="$MLB_COMPLETED_SLATE_DATE"
+environment_v2_beta_reconcile_rc=$?
+set -e
+if [[ "$environment_v2_beta_reconcile_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN Environment v2-beta postgame research reconcile rc=${environment_v2_beta_reconcile_rc}; research ledger may remain pending/stale" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE Environment v2-beta postgame research reconcile"
+fi
+
+echo "[$(date -u +%FT%TZ)] START overlap/QC watch refresh (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+set +e
+make mlb-refresh-v2-qc-candidate-watch
+watch_candidate_rc=$?
+make mlb-refresh-overlap-role-profile-watch
+watch_role_rc=$?
+make mlb-capture-overlap-snapshot MLB_OVERLAP_SNAPSHOT_DATE="$MLB_COMPLETED_SLATE_DATE"
+watch_snapshot_rc=$?
+make mlb-overlap-monitor MLB_OVERLAP_OPS_DATE="$MLB_COMPLETED_SLATE_DATE"
+watch_monitor_rc=$?
+set -e
+overlap_qc_watches_rc=0
+for rc in "$watch_candidate_rc" "$watch_role_rc" "$watch_snapshot_rc" "$watch_monitor_rc"; do
+  if [[ "$rc" -ne 0 ]]; then
+    overlap_qc_watches_rc="$rc"
+    break
+  fi
+done
+if [[ "$overlap_qc_watches_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN overlap/QC watch refresh nonzero rc=${overlap_qc_watches_rc} candidate_rc=${watch_candidate_rc} role_rc=${watch_role_rc} snapshot_rc=${watch_snapshot_rc} monitor_rc=${watch_monitor_rc}" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE overlap/QC watch refresh (completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+fi
+
+MLB_DAILY_BRIEF_REPORT_DATE="$MLB_DAILY_BRIEF_REPORT_DATE" \
+MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE" \
+MLB_DAILY_BRIEF_CURRENT_SLATE_DATE="$MLB_DAILY_BRIEF_CURRENT_SLATE_DATE" \
+MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV="$MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV" \
+MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT=0 \
+MLB_DAILY_BRIEF_REQUIRE_FRESH_BVP_IMPACT=0 \
+make mlb-daily-ops-brief
+brief_rc=$?
+set -e
+
+echo "[$(date -u +%FT%TZ)] START mlb-daily-upload-prep (MLB_DATE_ET=${MLB_DATE_ET})"
+upload_prep_started=true
+set +e
+bin/mlb_predictive_command_guarded.sh \
+  --stage "MLB daily upload prep" \
+  --operation production_ranking_and_routing \
+  --status-file "/tmp/mlb-daily-upload-prep-${MLB_RUN_TAG}.status" \
+  -- make mlb-daily-upload-prep MLB_UPLOAD_PREP_DATE="$MLB_DATE_ET" MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH=1
+hits_lane_selector_rc=$?
+set -e
+upload_prep_guard_status="$(cat "/tmp/mlb-daily-upload-prep-${MLB_RUN_TAG}.status" 2>/dev/null || true)"
+if [[ "$hits_lane_selector_rc" -eq 0 && "${upload_prep_guard_status}" != SKIPPED* ]]; then
+  echo "[$(date -u +%FT%TZ)] DONE mlb-daily-upload-prep (MLB_DATE_ET=${MLB_DATE_ET})"
+fi
+
+if [[ "${upload_prep_guard_status}" != SKIPPED* ]]; then
+upload_prep_summary_eval="$(
+  MLB_UPLOAD_PREP_DATE="$MLB_DATE_ET" .venv/bin/python - <<'PY'
+import json
+import os
+import shlex
+from pathlib import Path
+
+date_value = os.environ.get("MLB_UPLOAD_PREP_DATE", "")
+upload_dir = Path("backend/mlb/exports/model_v2/upload") / date_value
+ranking_summary = upload_dir / f"ranking_tool_upload_diagnostics_{date_value}_summary.json"
+quick_summary = upload_dir / f"quick_card_tool_upload_diagnostics_{date_value}_summary.json"
+
+def load(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+ranking = load(ranking_summary)
+quick = load(quick_summary)
+
+def bool_text(value) -> str:
+    return "true" if bool(value) else "false"
+
+def int_text(value) -> str:
+    try:
+        return str(int(value or 0))
+    except Exception:
+        return "0"
+
+attempted = bool(ranking.get("public_catalog_fetch_attempted")) or bool(quick.get("public_catalog_fetch_attempted"))
+succeeded = bool(ranking.get("public_catalog_fetch_succeeded")) or bool(quick.get("public_catalog_fetch_succeeded"))
+paths = [str(p) for p in (ranking_summary, quick_summary) if p.exists()]
+values = {
+    "ranking_upload_status": ranking.get("upload_status") or ranking.get("status") or ("missing_summary" if not ranking else "unknown"),
+    "quick_card_upload_status": quick.get("upload_status") or quick.get("status") or ("missing_summary" if not quick else "unknown"),
+    "ranking_unknown_event_rows": int_text(ranking.get("unknown_event_rows")),
+    "quick_card_unknown_event_rows": int_text(quick.get("unknown_event_rows")),
+    "public_catalog_fetch_attempted": bool_text(attempted),
+    "public_catalog_fetch_succeeded": bool_text(succeeded),
+    "upload_prep_summary_paths": ",".join(paths),
+}
+for key, value in values.items():
+    print(f"{key}={shlex.quote(str(value))}")
+PY
+)"
+eval "$upload_prep_summary_eval"
+else
+  upload_prep_started=false
+  ranking_upload_status=skipped_no_qualified_model
+  quick_card_upload_status=skipped_no_qualified_model
+  upload_prep_summary_paths=""
+fi
+
+environment_v2_beta_daily_rc=0
+echo "[$(date -u +%FT%TZ)] START Environment v2-beta daily research capture (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-environment-v2-beta-daily MLB_ENVIRONMENT_V2_BETA_DAILY_DATE="$MLB_DATE_ET" MLB_ENVIRONMENT_V2_BETA_DAILY_WRAPPER_MODE=daily_wrapper
+environment_v2_beta_daily_rc=$?
+set -e
+if [[ "$environment_v2_beta_daily_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN Environment v2-beta daily research capture rc=${environment_v2_beta_daily_rc}; research lane will be stale or missing" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE Environment v2-beta daily research capture"
+fi
+
+echo "[$(date -u +%FT%TZ)] START PA foundation propagation (current_slate_date=${MLB_DATE_ET} completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+set +e
+make mlb-pa-foundation-propagate DATE="$MLB_DATE_ET" MLB_PA_FOUNDATION_PROPAGATION_COMPLETED_DATE="$MLB_COMPLETED_SLATE_DATE"
+pa_propagation_rc=$?
+set -e
+if [[ "$pa_propagation_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN PA foundation propagation failed rc=${pa_propagation_rc}; PA remains informational only" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE PA foundation propagation"
+fi
+
+echo "[$(date -u +%FT%TZ)] START PA foundation health check (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-pa-foundation-health DATE="$MLB_DATE_ET"
+pa_health_rc=$?
+set -e
+if [[ "$pa_health_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN PA foundation health target failed rc=${pa_health_rc}; PA remains informational only" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE PA foundation health check"
+fi
+
+echo "[$(date -u +%FT%TZ)] START feature lineage health check (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-daily-feature-lineage-health MLB_DAILY_BRIEF_CURRENT_SLATE_DATE="$MLB_DATE_ET" MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON" MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_DATED_JSON" MLB_DAILY_FEATURE_LINEAGE_HEALTH_MD="$MLB_DAILY_FEATURE_LINEAGE_HEALTH_MD"
+feature_lineage_health_rc=$?
+set -e
+feature_lineage_health_status="missing"
+if [[ -f "$MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON" ]]; then
+  feature_lineage_health_status="$(.venv/bin/python - <<'PY'
+import json
+from pathlib import Path
+path = Path('artifacts/analysis/mlb/feature_lineage/daily_feature_lineage_health_latest.json')
+try:
+    print(json.loads(path.read_text()).get('status') or 'unknown')
+except Exception:
+    print('unreadable')
+PY
+)"
+fi
+if [[ "$feature_lineage_health_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN feature lineage health check rc=${feature_lineage_health_rc} status=${feature_lineage_health_status}" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE feature lineage health check status=${feature_lineage_health_status}"
+fi
+
+# Ordering contract: base health checks may run before Home/Audit, but project invariants
+# and daily preflight must wait until the current-date Home Screen and Morning Workflow
+# Audit have been generated. Otherwise cold-start mornings can fail on stale/missing
+# generated artifacts from the prior date.
+echo "[$(date -u +%FT%TZ)] START base health gates before Home/Audit (current_slate_date=${MLB_DATE_ET}; excludes project invariants)"
+set +e
+make mlb-expanded-o15-universe MLB_EXPANDED_O15_UNIVERSE_DATE="" MLB_EXPANDED_O15_UNIVERSE_DATE_FROM="" MLB_EXPANDED_O15_UNIVERSE_DATE_TO=""
+base_expanded_rc=$?
+make mlb-expanded-o15-context-health MLB_EXPANDED_O15_CONTEXT_HEALTH_DATE="$MLB_DATE_ET"
+base_context_rc=$?
+make mlb-identity-health
+base_identity_rc=$?
+make mlb-o15-ontology-health MLB_O15_ONTOLOGY_HEALTH_DATE="$MLB_DATE_ET"
+base_ontology_rc=$?
+set -e
+daily_health_gates_rc=0
+for rc in "$base_expanded_rc" "$base_context_rc" "$base_identity_rc" "$base_ontology_rc"; do
+  if [[ "$rc" -ne 0 ]]; then
+    daily_health_gates_rc="$rc"
+    break
+  fi
+done
+if [[ "$daily_health_gates_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN base health gates rc=${daily_health_gates_rc}; later preflight will surface diagnostics" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE base health gates before Home/Audit"
+fi
+
+final_brief_rendered=false
+final_brief_rc=0
+daily_index_rendered=false
+daily_index_rc=0
+echo "[$(date -u +%FT%TZ)] START final mlb-daily-ops-brief render after upload prep (current_slate_date=${MLB_DATE_ET})"
+set +e
+MLB_DAILY_BRIEF_REFRESH_INPUTS=0 \
+MLB_DAILY_BRIEF_REPORT_DATE="$MLB_DAILY_BRIEF_REPORT_DATE" \
+MLB_DAILY_BRIEF_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE" \
+MLB_DAILY_BRIEF_CURRENT_SLATE_DATE="$MLB_DAILY_BRIEF_CURRENT_SLATE_DATE" \
+MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV="$MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV" \
+MLB_DAILY_BRIEF_REFRESH_BVP_IMPACT=0 \
+MLB_DAILY_BRIEF_REQUIRE_FRESH_BVP_IMPACT=0 \
+make mlb-daily-ops-brief
+final_brief_rc=$?
+set -e
+final_brief_rendered=true
+if [[ "$final_brief_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN final mlb-daily-ops-brief render returned rc=${final_brief_rc} (status fail still writes outputs)" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE final mlb-daily-ops-brief render after upload prep"
+fi
+
+echo "[$(date -u +%FT%TZ)] START mlb-daily-index (current_slate_date=${MLB_DATE_ET} completed_slate_date=${MLB_COMPLETED_SLATE_DATE})"
+set +e
+make mlb-daily-index MLB_DAILY_INDEX_DATE="$MLB_DATE_ET" MLB_DAILY_INDEX_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE"
+daily_index_rc=$?
+set -e
+if [[ "$daily_index_rc" -eq 0 && -s "$MLB_DAILY_INDEX_PATH" ]]; then
+  daily_index_rendered=true
+  echo "[$(date -u +%FT%TZ)] DONE mlb-daily-index path=${MLB_DAILY_INDEX_PATH}"
+else
+  echo "[$(date -u +%FT%TZ)] ERROR mlb-daily-index failed rc=${daily_index_rc} path=${MLB_DAILY_INDEX_PATH}" >&2
+  exit 1
+fi
+
+morning_workflow_audit_rendered=false
+morning_workflow_audit_rc=0
+echo "[$(date -u +%FT%TZ)] START mlb-morning-workflow-audit (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-morning-workflow-audit MLB_MORNING_WORKFLOW_AUDIT_DATE="$MLB_DATE_ET"
+morning_workflow_audit_rc=$?
+set -e
+if [[ "$morning_workflow_audit_rc" -eq 0 && -s "$MLB_MORNING_WORKFLOW_AUDIT_JSON" && -s "$MLB_MORNING_WORKFLOW_VALIDATION_MD" && -s "$MLB_MORNING_WORKFLOW_VALIDATION_CSV" ]]; then
+  morning_workflow_audit_rendered=true
+  echo "[$(date -u +%FT%TZ)] DONE mlb-morning-workflow-audit"
+else
+  echo "[$(date -u +%FT%TZ)] ERROR mlb-morning-workflow-audit failed rc=${morning_workflow_audit_rc}" >&2
+  exit 1
+fi
+
+echo "[$(date -u +%FT%TZ)] START mlb-project-invariants after current Home/Audit artifacts exist (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-project-invariants MLB_PROJECT_INVARIANTS_DATE="$MLB_DATE_ET"
+project_invariants_rc=$?
+set -e
+if [[ "$project_invariants_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-project-invariants rc=${project_invariants_rc}; preflight and Morning Gate will surface diagnostics" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE mlb-project-invariants after current Home/Audit artifacts exist"
+fi
+
+echo "[$(date -u +%FT%TZ)] START mlb-daily-preflight after project invariants (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-daily-preflight MLB_DAILY_PREFLIGHT_DATE="$MLB_DATE_ET"
+mlb_daily_preflight_rc=$?
+set -e
+if [[ "$mlb_daily_preflight_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-daily-preflight rc=${mlb_daily_preflight_rc}; final Home Screen will surface diagnostics" >&2
+else
+  echo "[$(date -u +%FT%TZ)] DONE mlb-daily-preflight after project invariants"
+fi
+
+echo "[$(date -u +%FT%TZ)] START mlb-daily-index refresh after invariants/preflight"
+set +e
+make mlb-daily-index MLB_DAILY_INDEX_DATE="$MLB_DATE_ET" MLB_DAILY_INDEX_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE"
+daily_index_rc=$?
+set -e
+if [[ "$daily_index_rc" -eq 0 && -s "$MLB_DAILY_INDEX_PATH" ]]; then
+  echo "[$(date -u +%FT%TZ)] DONE mlb-daily-index refresh after invariants/preflight path=${MLB_DAILY_INDEX_PATH}"
+else
+  echo "[$(date -u +%FT%TZ)] ERROR mlb-daily-index refresh after invariants/preflight failed rc=${daily_index_rc} path=${MLB_DAILY_INDEX_PATH}" >&2
+  exit 1
+fi
+
+morning_workflow_audit_rendered=false
+morning_workflow_audit_rc=0
+echo "[$(date -u +%FT%TZ)] START final mlb-morning-workflow-audit after invariants/preflight (current_slate_date=${MLB_DATE_ET})"
+set +e
+make mlb-morning-workflow-audit MLB_MORNING_WORKFLOW_AUDIT_DATE="$MLB_DATE_ET"
+morning_workflow_audit_rc=$?
+set -e
+if [[ "$morning_workflow_audit_rc" -eq 0 && -s "$MLB_MORNING_WORKFLOW_AUDIT_JSON" && -s "$MLB_MORNING_WORKFLOW_VALIDATION_MD" && -s "$MLB_MORNING_WORKFLOW_VALIDATION_CSV" ]]; then
+  morning_workflow_audit_rendered=true
+  echo "[$(date -u +%FT%TZ)] DONE final mlb-morning-workflow-audit after invariants/preflight"
+else
+  echo "[$(date -u +%FT%TZ)] ERROR final mlb-morning-workflow-audit failed rc=${morning_workflow_audit_rc}" >&2
+  exit 1
+fi
+
+# Refresh the Home Screen after the final workflow audit so it shows current workflow health.
+echo "[$(date -u +%FT%TZ)] START final mlb-daily-index refresh after final Morning Workflow Audit"
+set +e
+make mlb-daily-index MLB_DAILY_INDEX_DATE="$MLB_DATE_ET" MLB_DAILY_INDEX_COMPLETED_SLATE_DATE="$MLB_COMPLETED_SLATE_DATE"
+daily_index_rc=$?
+set -e
+if [[ "$daily_index_rc" -eq 0 && -s "$MLB_DAILY_INDEX_PATH" ]]; then
+  echo "[$(date -u +%FT%TZ)] DONE final mlb-daily-index refresh path=${MLB_DAILY_INDEX_PATH}"
+else
+  echo "[$(date -u +%FT%TZ)] ERROR final mlb-daily-index refresh failed rc=${daily_index_rc} path=${MLB_DAILY_INDEX_PATH}" >&2
+  exit 1
+fi
+
+brief_written=false
+if [[ -f "${MLB_DAILY_BRIEF_PATH}" ]]; then
+  brief_written=true
+fi
+
+# Optional routine-market research sidecar. This runs only after the normal
+# decision-ready artifacts are complete and is nonblocking to production.
+routine_market_hook_rc=0
+set +e
+bin/mlb_cleanroom_routine_market_optional_hook.sh
+routine_market_hook_rc=$?
+set -e
+if [[ "$routine_market_hook_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN optional routine-market cohort hook failed rc=${routine_market_hook_rc}" >&2
+fi
+
+if [[ "$hits_env_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-hits-environment-report failed rc=${hits_env_rc}" >&2
+fi
+if [[ "$hits_lane_selector_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-hits-lane-selector-report failed rc=${hits_lane_selector_rc}" >&2
+fi
+if [[ "$brief_rc" -ne 0 ]]; then
+  echo "[$(date -u +%FT%TZ)] WARN mlb-daily-ops-brief returned rc=${brief_rc} (status fail still writes outputs)" >&2
+fi
+echo "[$(date -u +%FT%TZ)] SUMMARY daily workflow completed_slate_date=${MLB_COMPLETED_SLATE_DATE} current_slate_date=${MLB_DAILY_BRIEF_CURRENT_SLATE_DATE} completed_finalized_data_status=${completed_finalized_data_status} completed_finalized_data_ingest_attempted=${completed_finalized_data_ingest_attempted} completed_finalized_data_ingest_rc=${completed_finalized_data_ingest_rc} completed_finalized_data_final_rc=${completed_finalized_data_final_rc} reconcile_rows_csv=${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV} reconcile_rows_exists_before_brief=${reconcile_rows_exists_before_brief} reconcile_rows_size=${reconcile_rows_size} reconcile_build_attempted=${reconcile_build_attempted} reconcile_build_status=${reconcile_build_status} reconcile_reused_existing=${reconcile_reused_existing} reconcile_create_rc=${reconcile_create_rc} ubo5_history_refresh_attempted=${ubo5_history_refresh_attempted} ubo5_history_refresh_rc=${ubo5_history_refresh_rc} ubo5_history_refresh_status=${ubo5_history_refresh_status} ubo5_closeout_attempted=${ubo5_closeout_attempted} ubo5_closeout_rc=${ubo5_closeout_rc} ubo5_closeout_status=${ubo5_closeout_status} ubo5_broad_records_attempted=${ubo5_broad_records_attempted} ubo5_broad_records_rc=${ubo5_broad_records_rc} ubo5_broad_records_status=${ubo5_broad_records_status} ubo5_complete_outcome_status=${ubo5_complete_outcome_status} ubo5_consensus_closeout_attempted=${ubo5_consensus_closeout_attempted} ubo5_consensus_closeout_rc=${ubo5_consensus_closeout_rc} ubo5_consensus_closeout_status=${ubo5_consensus_closeout_status} actual_wagers_by_source_csv=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_exists_before_brief=${actual_reconcile_exists_before_brief} actual_reconcile_size=${actual_reconcile_size} actual_reconcile_build_attempted=${actual_reconcile_build_attempted} actual_reconcile_build_status=${actual_reconcile_build_status} actual_reconcile_reused_existing=${actual_reconcile_reused_existing} actual_reconcile_rc=${actual_reconcile_rc} brief_written=${brief_written} brief_path=${MLB_DAILY_BRIEF_PATH} upload_prep_command=${upload_prep_command} upload_prep_date=${MLB_DATE_ET} upload_prep_started=${upload_prep_started} upload_prep_rc=${hits_lane_selector_rc} ranking_upload_status=${ranking_upload_status} quick_card_upload_status=${quick_card_upload_status} ranking_unknown_event_rows=${ranking_unknown_event_rows} quick_card_unknown_event_rows=${quick_card_unknown_event_rows} public_catalog_fetch_attempted=${public_catalog_fetch_attempted} public_catalog_fetch_succeeded=${public_catalog_fetch_succeeded} upload_prep_summary_paths=${upload_prep_summary_paths} feature_lineage_health_rc=${feature_lineage_health_rc:-0} feature_lineage_health_status=${feature_lineage_health_status:-not_run} feature_lineage_health_json=${MLB_DAILY_FEATURE_LINEAGE_HEALTH_JSON} final_brief_rendered=${final_brief_rendered:-false} final_brief_rc=${final_brief_rc:-0} daily_index_rendered=${daily_index_rendered:-false} daily_index_rc=${daily_index_rc:-0} daily_index_path=${MLB_DAILY_INDEX_PATH} o15_prospective_grade_status=${o15_prospective_grade_status:-not_attempted} o15_prospective_grade_rc=${o15_prospective_grade_rc:-0}"
+
+# 3) Append local prod12 daily history snapshots (best effort).
+if [[ "${MLB_LOCAL_DAILY_TRACKING_ENABLED}" == "1" ]]; then
+  set +e
+  MLB_DATE="$MLB_DATE_ET" make mlb-prod12-track-daily
+  track_rc=$?
+  make mlb-prod12-ops-log
+  ops_rc=$?
+  set -e
+
+  if [[ "$track_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN mlb-prod12-track-daily failed rc=${track_rc}" >&2
+  fi
+  if [[ "$ops_rc" -ne 0 ]]; then
+    echo "[$(date -u +%FT%TZ)] WARN mlb-prod12-ops-log failed rc=${ops_rc}" >&2
+  fi
+else
+  echo "[$(date -u +%FT%TZ)] INFO local prod12 history tracking disabled (MLB_LOCAL_DAILY_TRACKING_ENABLED=${MLB_LOCAL_DAILY_TRACKING_ENABLED})"
+fi
+
+echo "[$(date -u +%FT%TZ)] DONE local daily MLB refresh+capture (MLB_DATE_ET=${MLB_DATE_ET})"

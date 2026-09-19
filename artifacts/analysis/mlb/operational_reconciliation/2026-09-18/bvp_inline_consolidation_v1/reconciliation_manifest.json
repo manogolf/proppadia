@@ -1,0 +1,163 @@
+{
+  "acquisition_invocations": 0,
+  "all_proppadia_plists_unchanged": {
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist": "1c5081079628e800ddaa15c2befa97a033fbbc1a317fd2e7379e5e5ba0f266e6",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.dh-forward-capture.plist": "86ce622b744c8b9eb89c2a7ee0030558903af65a94a7dd49836213e6cdd12215",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.dh-forward-grade.plist": "6d0c0c3b9a12472af5c09f74aa9b2431e687d59732bc938fadf1e2adaebfbacb",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.retrain.weekly.plist": "a9b39fc5e406b61e2e3ed7f6b2f0d6b0ba9527bb63cff0a21986113cbd94ae6d",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.starter-skill-workload.daily.plist": "45571af7c5c2d386cdeee5c986213c8f11dcee0bb48bf79d4cbbe256e14697d2",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.mainline-cross-market-shadow.plist": "9cb03c63d20fe50cbc5dfcc3c50e9cb62a5a1c5445e08923ded59fd9b40cf2da",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.morning-orchestration.plist": "c50d2c746c2fe74a695cbd20e70c2ff08972ff9bb44c7319d6a8d862d27c39cb",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.pregame-lineup-study.20260708.plist": "4de6abfe1842d13b9def0bf2c366ac204c3666b9b3c29413473f5db2938e624b",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.pregame-lineup-study.20260709.plist": "9e439bccd7039e49a621faa83ad38b4d3f31354c1e59799d4a8adebb4c759f0c"
+  },
+  "captured_at_utc": "2026-09-18T23:05:20.091091+00:00",
+  "contract": "MLB_BVP_DAILY_INLINE_ACQUISITION_V1",
+  "effective_date": "2026-09-19",
+  "external_requests": 0,
+  "historical_manifest_policy": "Historical audit/implementation snapshot manifests remain immutable. This reconciliation supersedes their current-installed-state assertions; only active Hits package governance binding is updated.",
+  "installed_after": {
+    "daily": {
+      "bytes": 126414,
+      "gid": 20,
+      "mode": "0o755",
+      "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+      "sha256": "7df06cfc8084653f2ab4f4e18fc8a6f6fc19188686a92a0016cb6097fa08d43a",
+      "uid": 501
+    },
+    "daily_plist": {
+      "bytes": 1338,
+      "gid": 20,
+      "mode": "0o644",
+      "path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist",
+      "sha256": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+      "uid": 501
+    },
+    "plist": {
+      "bytes": 891,
+      "gid": 20,
+      "mode": "0o644",
+      "path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist",
+      "sha256": "1c5081079628e800ddaa15c2befa97a033fbbc1a317fd2e7379e5e5ba0f266e6",
+      "uid": 501
+    },
+    "prewarm": {
+      "bytes": 7933,
+      "gid": 20,
+      "mode": "0o755",
+      "path": "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh",
+      "sha256": "91d43cb2393fc9e0a57bea0a309abeb2632b03100cb92210847f0f0b3f169149",
+      "uid": 501
+    }
+  },
+  "installed_at_utc": "2026-09-19T00:10:43.403594+00:00",
+  "installed_before": {
+    "daily": {
+      "bytes": 125384,
+      "gid": 20,
+      "mode": "0o755",
+      "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+      "sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
+      "uid": 501
+    },
+    "daily_plist": {
+      "bytes": 1338,
+      "gid": 20,
+      "mode": "0o644",
+      "path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist",
+      "sha256": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8",
+      "uid": 501
+    },
+    "plist": {
+      "bytes": 891,
+      "gid": 20,
+      "mode": "0o644",
+      "path": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.bvp.prewarm.daily.plist",
+      "sha256": "1c5081079628e800ddaa15c2befa97a033fbbc1a317fd2e7379e5e5ba0f266e6",
+      "uid": 501
+    },
+    "prewarm": {
+      "bytes": 7637,
+      "gid": 20,
+      "mode": "0o755",
+      "path": "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh",
+      "sha256": "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb",
+      "uid": 501
+    }
+  },
+  "launchctl_before_prepare": {
+    "com.proppadia.mlb.bvp.prewarm.daily": {
+      "enabled": true,
+      "last_exit_code": 2,
+      "loaded": true,
+      "state": "not running"
+    },
+    "com.proppadia.mlb.refresh.daily": {
+      "enabled": true,
+      "last_exit_code": 0,
+      "loaded": true,
+      "state": "not running"
+    }
+  },
+  "loaded_proppadia_labels_after": [
+    "com.proppadia.mlb.dh-forward-capture",
+    "com.proppadia.mlb.dh-forward-grade",
+    "com.proppadia.mlb.refresh.daily",
+    "com.proppadia.mlb.starter-skill-workload.daily",
+    "com.proppadia.nhl.mainline-cross-market-shadow",
+    "com.proppadia.nhl.morning-orchestration"
+  ],
+  "loaded_proppadia_labels_before": [
+    "com.proppadia.mlb.bvp.prewarm.daily",
+    "com.proppadia.mlb.dh-forward-capture",
+    "com.proppadia.mlb.dh-forward-grade",
+    "com.proppadia.mlb.refresh.daily",
+    "com.proppadia.mlb.starter-skill-workload.daily",
+    "com.proppadia.nhl.mainline-cross-market-shadow",
+    "com.proppadia.nhl.morning-orchestration"
+  ],
+  "ownership": "Daily and prewarm wrappers remain installed-owned; .txt files are non-executable deployment/rollback evidence, not tracked executable owners",
+  "production_acquisition_runs": 0,
+  "repeating_power_after": "Repeating power events:\n  wakepoweron at 5:27AM every day",
+  "repeating_power_before": "Repeating power events:\n  wakepoweron at 5:27AM every day",
+  "retirement": {
+    "direct_obsolete_invocation": "BLOCKED_EXIT_78_BEFORE_ANY_LOCK_ENV_OR_REQUEST",
+    "disabled": true,
+    "label": "com.proppadia.mlb.bvp.prewarm.daily",
+    "loaded": false,
+    "original_wrapper_body_preserved_under_retirement_guard": true,
+    "plist_bytes_unchanged": true
+  },
+  "state": "New local operational claims/receipts are necessary: existing identity journals cannot provide transactional date claims. No PostgreSQL schema change.",
+  "topology_before": {
+    "daily_label": "com.proppadia.mlb.refresh.daily",
+    "daily_schedule": [
+      {
+        "Hour": 5,
+        "Minute": 30
+      },
+      {
+        "Hour": 8,
+        "Minute": 30
+      },
+      {
+        "Hour": 11,
+        "Minute": 0
+      },
+      {
+        "Hour": 13,
+        "Minute": 0
+      },
+      {
+        "Hour": 16,
+        "Minute": 30
+      }
+    ],
+    "dedicated_label": "com.proppadia.mlb.bvp.prewarm.daily",
+    "dedicated_schedule": {
+      "Hour": 3,
+      "Minute": 30
+    }
+  }
+}

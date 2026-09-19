@@ -1827,6 +1827,13 @@ def _bvp_prewarm_failure_note(
     out_log: Path = Path("artifacts/ops/mlb_bvp_prewarm_daily.out.log"),
     err_log: Path = Path("artifacts/ops/mlb_bvp_prewarm_daily.err.log"),
 ) -> str:
+    from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE, read_status
+    if current_slate_date >= EFFECTIVE_DATE:
+        current=read_status(current_slate_date)
+        if current.get("certified") or current["status"]=="BVP_INLINE_NOT_DUE":
+            return ""
+        return (f"Current inline BvP acquisition: {current['status']}; {current.get('reason','certified same-date success')}. "
+                "Acquisition status is separate from governed downstream model/impact skips; retired prewarm stderr is excluded.")
     try:
         out_text = out_log.read_text(encoding="utf-8") if out_log.exists() else ""
         err_text = err_log.read_text(encoding="utf-8") if err_log.exists() else ""
@@ -2946,6 +2953,15 @@ def build_markdown(
         lines.append("1. No immediate actions suggested.")
     lines.append("")
 
+    from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE, read_status
+    if current_slate_date>=EFFECTIVE_DATE:
+        current_bvp=read_status(current_slate_date)
+        lines.append("## Governed inline BvP acquisition")
+        lines.append("")
+        lines.append(f"- Current slate `{current_slate_date}`: `{current_bvp['status']}`; certified `{current_bvp.get('certified',False)}`.")
+        lines.append(f"- Counts: `{json.dumps(current_bvp.get('counts',current_bvp.get('acquisition_evidence',{}).get('counts',{})),sort_keys=True)}`.")
+        lines.append("- Acquisition failures are not model skips. Downstream model/impact authorization remains unchanged; retired prewarm stderr is excluded.")
+        lines.append("")
     lines.append("## BvP Impact")
     lines.append(provenance("BvP Impact"))
     lines.append(
@@ -3504,6 +3520,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         model_vs_fade=model_vs_fade,
         freshness_audit=freshness_audit,
     )
+    from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE, read_status
+    current_inline_bvp=read_status(current_slate_date) if current_slate_date>=EFFECTIVE_DATE else {}
+    if current_inline_bvp and current_inline_bvp["status"] not in {"BVP_INLINE_NOT_DUE","BVP_INLINE_PRIMARY_SUCCESS","BVP_INLINE_RECOVERY_SUCCESS"}:
+        overall_issues.append("BVP_INLINE_ACQUISITION_NOT_CERTIFIED:"+current_inline_bvp["status"])
+        if overall_status=="pass": overall_status="warn"
     path_forward = _derive_path_forward(
         report_date=report_date,
         overall_status=overall_status,
@@ -3577,6 +3598,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"`{first_shadow.get('interpretation', 'PROCESS_VALIDATED_OUTCOME_SAMPLE_EARLY')}`.\n"
         )
 
+    from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE, read_status
+    bvp_inline=read_status(current_slate_date) if current_slate_date>=EFFECTIVE_DATE else {}
     payload: Dict[str, Any] = {
         "generated_at_utc": generated_at_utc,
         "report_date": report_date,
@@ -3595,6 +3618,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "model_performance": model_performance,
         "reporting_alignment": reporting_alignment,
         "bvp_impact": bvp_impact,
+        "bvp_inline_acquisition": bvp_inline,
         "hits_environment": hits_env,
         "hits_o15_watch_candidates": hits_o15_watch_candidates,
         "hits_o15_layered_candidates": hits_o15_layered_candidates,

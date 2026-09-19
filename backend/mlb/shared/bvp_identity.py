@@ -207,6 +207,9 @@ def certified_rows(rows: Sequence[Mapping], *, authority: Mapping[int, set[str]]
             continue
         if (dates.get(int(row["game_id"]), set()) == {str(row.get("game_date"))[:10]}
                 and forward_source_identity_valid(row)):
+            from backend.mlb.shared.bvp_inline import row_admitted
+            if not row_admitted(row):
+                continue
             output.append(row)
     return output
 

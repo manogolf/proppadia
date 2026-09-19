@@ -1,0 +1,17 @@
+{
+  "contract": "MLB_BVP_DAILY_INLINE_ACQUISITION_V1",
+  "effective_slate_date": "2026-09-19",
+  "automatic_attempts_per_date": 2,
+  "primary": "FIRST_ELIGIBLE_NATURAL_DAILY_WINDOW_AFTER_ROSTER_REFRESH; EXPECTED_0530_PT",
+  "recovery": "ONE_STRICTLY_LATER_NATURAL_WINDOW_AFTER_NON_SUCCESS",
+  "same_window_restart_retry": false,
+  "manual_recovery": "SAME_DURABLE_STATE; EXPLICIT_ONCE_ONLY_AUTHORIZATION_ID; CURRENT_DATE_ONLY",
+  "state_authority": "artifacts/ops/bvp_inline_v1/acquisition.sqlite3",
+  "state_kind": "LOCAL_OPERATIONAL_APPEND_ONLY_CLAIMS_EVENTS_RESULTS_AND_SUCCESS_RECEIPTS; NOT_BASEBALL_DATABASE_SCHEMA",
+  "canonical_collector_sha256": "5e6a9bf7a7204ee650b56c4e08b6b1918b06c6833788256e5ef5016c2f58de36",
+  "retained_retry_contract": "BVP_INITIAL_SCHEDULE_WAKE_RETRY_V1",
+  "identity_contract": "BVP_CANONICAL_SLATE_IDENTITY_V1",
+  "independent_lane_failure_policy": "WARN_AND_CONTINUE; NEVER_MODEL_SKIP_AN_ACQUISITION_FAILURE",
+  "dependent_lane_failure_policy": "FAIL_CLOSED_ON_MISSING_CERTIFIED_SAME_DATE_STATE_AND_REQUEST_ROW_RECEIPT",
+  "cutover_reason": "NO_REPEAT_OF_SEPTEMBER18_COMPLETED_MANUAL_ACQUISITION; NEXT_NATURAL_0530_VALIDATION"
+}

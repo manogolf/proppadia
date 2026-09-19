@@ -1131,6 +1131,12 @@ chmod +x "$HOME/bin/proppadia_mlb_refresh_daily.sh"
 
 ### Daily Local BvP Prewarm Job (T-90)
 
+**Retired September 18, 2026.** The installation commands below are historical
+reference only; do not reinstall or bootstrap this dedicated job. Current operation
+uses `MLB_BVP_DAILY_INLINE_ACQUISITION_V1` inside the unchanged daily workflow,
+effective September 19. See [current operator runbook](MLB%20BvP%20Daily%20Inline%20Operator%20Runbook%20V1.md)
+for canonical state, explicit manual authorization, retirement and coordinated rollback.
+
 Run BvP precompute + BvP impact as a separate job 90 minutes before the first daily capture run.
 
 Create/update prewarm runner script:

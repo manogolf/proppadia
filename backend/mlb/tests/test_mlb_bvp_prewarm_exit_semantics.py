@@ -1,4 +1,5 @@
 import os
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,16 @@ WRAPPER = Path(
         "/Users/jerrystrain/bin/proppadia_mlb_bvp_prewarm.sh",
     )
 )
+
+# After inline consolidation these are historical exit-semantics fixtures, not
+# permission to execute the retired installed wrapper or schedule acquisition.
+if (not os.environ.get("MLB_BVP_PREWARM_WRAPPER_UNDER_TEST") and WRAPPER.exists()
+        and "RETIRED_BVP_PREWARM" in WRAPPER.read_text()[:512]):
+    WRAPPER = Path(__file__).resolve().parents[3] / (
+        "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/"
+        "bvp_inline_consolidation_v1/bvp_prewarm.prechange.rollback-source.txt"
+    )
+    assert hashlib.sha256(WRAPPER.read_bytes()).hexdigest() == "23016b56dfc85eddf9f11eab12010388ddb833fa73bc994a367bac3a632fefdb"
 
 
 def _write_executable(path: Path, text: str) -> None:

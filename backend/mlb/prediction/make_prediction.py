@@ -453,6 +453,14 @@ def predict(*, prop_type: str, features: Dict[str, Any]) -> Dict[str, Any]:
     if not feat_cols:
         feat_cols = get_expected_features(prop, prefer="random_forest") or []
 
+    # Admission only: formulas/vectorization remain unchanged. Declared BvP
+    # inputs must not silently use an uncertified date or heuristic fallback.
+    from backend.mlb.shared.bvp_inline import BVPInlineUnavailable, EFFECTIVE_DATE, require_certified_date
+    bvp_columns=[str(c).removeprefix("isna__") for c in feat_cols if "bvp_" in str(c)]
+    require_certified_date(features.get("game_date", ""), dependency=bool(bvp_columns))
+    if str(features.get("game_date", ""))>=EFFECTIVE_DATE and any(_is_missing(features.get(c)) for c in bvp_columns):
+        raise BVPInlineUnavailable("BVP_DEPENDENT_LANE_BLOCKED_MISSING_CERTIFIED_ROW_FEATURES")
+
     # 2) strictly-filtered DF in correct order (no extra cols!)
     X = _vectorize(features, feat_cols)
 

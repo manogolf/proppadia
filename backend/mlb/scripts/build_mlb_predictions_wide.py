@@ -1119,6 +1119,9 @@ def _predict_rows(
                         feature_row.setdefault("d7_hits", None)
                     feature_rows.append(feature_row)
                     pred = prop_workflow.predict_prop(off.prop_type, prepared)
+                except prop_workflow.BVPInlineUnavailable:
+                    counts["skip_bvp_dependency_blocked"] += 1
+                    continue
                 except Exception:
                     counts["skip_predict_error"] += 1
                     continue
@@ -1529,6 +1532,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         wide = _to_wide(pred_rows)
         if wide.empty:
+            if pred_counts.get("skip_bvp_dependency_blocked",0) and not pred_counts.get("skip_predict_error",0):
+                print(f"BVP_DEPENDENT_WIDE_NO_WORK_CERTIFIED slate_date={slate_date} blocked_rows={pred_counts['skip_bvp_dependency_blocked']} market_snapshot_preserved=1",file=sys.stderr)
+                return 76
             print("[mlb-wide-pred] ERROR: no wide rows produced", file=sys.stderr)
             return 1
         if len(wide) < int(args.require_min_rows):
