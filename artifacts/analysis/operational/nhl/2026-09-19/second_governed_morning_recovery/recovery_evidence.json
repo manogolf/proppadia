@@ -1,0 +1,67 @@
+{
+  "authorization": "SECOND_GOVERNED_MORNING_RECOVERY_AFTER_PRE_MARKET_INFRASTRUCTURE_FAILURE",
+  "slate_date": "2026-09-19",
+  "attempt_history": [
+    {
+      "run_id": "20260919T143005.753458Z_b1040757",
+      "role": "ORIGINAL_0730",
+      "status": "FAILED_BLOCKING"
+    },
+    {
+      "run_id": "20260919T171148.828099Z_5f50042d",
+      "role": "FIRST_GOVERNED_RECOVERY",
+      "status": "FAILED_BLOCKING"
+    },
+    {
+      "run_id": "20260919T184431.192643Z_1c59a623",
+      "role": "SECOND_GOVERNED_RECOVERY_AFTER_PRE_MARKET_INFRASTRUCTURE_FAILURE",
+      "start_timestamp_utc": "2026-09-19T18:44:31.192898Z",
+      "end_timestamp_utc": "2026-09-19T18:53:47.243257Z",
+      "status": "FAILED_BLOCKING",
+      "exit_status": 1
+    }
+  ],
+  "environment_boundary": {
+    "placeholder_root_cause": "DATABASE_URL_ALIAS_WAS_COPIED_WITHOUT_EXPANSION",
+    "corrected": true,
+    "database_connection_and_target_check": "PASS",
+    "credential_in_argv": false,
+    "credential_in_health_artifact": false
+  },
+  "slate": {
+    "games": 7,
+    "first_puck_pt": "2026-09-19T16:00:00-07:00",
+    "canonical_game_spine_sha256": "16128f93edf4e7aef2fb6aae06f2d310c3d307e006249556017ffc74456969e1",
+    "duplicate_count": 0,
+    "identity_error_count": 0,
+    "game_type_error_count": 0
+  },
+  "second_recovery": {
+    "database_preflight": "PASS",
+    "schedule_fetch": "PASS",
+    "canonical_slate": "PASS",
+    "roster_history_shiftchart_path": "PASSED_PRIOR_PLACEHOLDER_FAILURE_POINT",
+    "blocking_stage": "05_stable_upstream_daily",
+    "blocking_reason": "SOG_SEASON_TOI_FEATURES_MISSING",
+    "blocking_counts": {
+      "rows": 410,
+      "null_5v5": 410,
+      "null_season_5v5": 410
+    }
+  },
+  "lane_readiness": {
+    "moneyline_puck_line": "NOT_STARTED",
+    "sog": "NOT_STARTED",
+    "points": "NOT_STARTED",
+    "goalie_saves": "NOT_STARTED",
+    "midday_market_capture_allowed": false,
+    "final_pregame_capture_allowed": false
+  },
+  "paid_market": {
+    "claims": 0,
+    "calls": 0,
+    "credits": 0
+  },
+  "classification": "NHL_MORNING_RECOVERY_FAIL",
+  "third_recovery_authorized": false
+}
