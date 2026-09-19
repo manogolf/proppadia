@@ -76,3 +76,22 @@ def test_validation_failure_releases_lock_and_secret_stays_out_of_artifacts(
         if payload.get("recovery_authorization")
     )
     assert recovered["recovery_authorization"] == MODULE.SECOND_RECOVERY_AUTHORIZATION
+
+
+def test_sog_cold_start_is_lane_local(tmp_path, monkeypatch):
+    output = tmp_path / "morning"
+    env_file = tmp_path / "valid.env"
+    env_file.write_text("SUPABASE_DB_URL=fixture-value\n")
+    monkeypatch.setattr(sys, "argv", [
+        str(PATH), "--slate-date", "2026-09-19", "--env-file", str(env_file),
+        "--output-root", str(output), "--fixture-scenario", "sog_cold_start",
+    ])
+    assert MODULE.main() == 0
+    health_path = next(output.rglob("morning_health.json"))
+    health = json.loads(health_path.read_text())
+    assert health["overall_status"] == "READY"
+    assert health["sog_prerequisite_readiness"] == "BLOCKED_LANE_LOCAL_SEASON_TOI_UNAVAILABLE"
+    assert health["downstream"]["SOG_MORNING_PREREQUISITES_READY"] is False
+    assert health["downstream"]["MAINLINE_MORNING_PREREQUISITES_READY"] is True
+    assert health["downstream"]["POINTS_MORNING_PREREQUISITES_READY"] is True
+    assert health["downstream"]["SAVES_MORNING_PREREQUISITES_READY"] is True

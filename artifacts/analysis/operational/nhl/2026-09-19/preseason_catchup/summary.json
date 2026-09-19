@@ -1,0 +1,57 @@
+{
+  "classification": "SEPTEMBER_19_PRESEASON_CATCHUP_PRESERVED_WITH_PARTIAL_MARKET_COVERAGE",
+  "slate_date": "2026-09-19",
+  "run_type": "SEPTEMBER_19_PRESEASON_CATCHUP",
+  "cold_start": {
+    "season_2026_games_before_slate": 0,
+    "season_2026_final_games_before_slate": 0,
+    "sog_feature_rows": 410,
+    "non_null_szn_5v5": 0,
+    "non_null_season_5v5": 0,
+    "classification": "EXPECTED_PRESEASON_COLD_START"
+  },
+  "games": [
+    {"game_id": 2026010001, "away": "DAL", "home": "STL", "start_pt": "2026-09-19T16:00:00-07:00"},
+    {"game_id": 2026010002, "away": "VGK", "home": "LAK", "start_pt": "2026-09-19T18:00:00-07:00"},
+    {"game_id": 2026010003, "away": "WPG", "home": "EDM", "start_pt": "2026-09-19T17:00:00-07:00"},
+    {"game_id": 2026010004, "away": "CHI", "home": "MIN", "start_pt": "2026-09-19T17:00:00-07:00"},
+    {"game_id": 2026010005, "away": "VAN", "home": "SEA", "start_pt": "2026-09-19T18:00:00-07:00"},
+    {"game_id": 2026010006, "away": "MTL", "home": "TOR", "start_pt": "2026-09-19T16:00:00-07:00"},
+    {"game_id": 2026010007, "away": "TOR", "home": "MTL", "start_pt": "2026-09-19T16:00:00-07:00"}
+  ],
+  "market_capture": {
+    "request_attempts": 4,
+    "successful_requests": 1,
+    "confirmed_credits": 4,
+    "conservative_max_credit_exposure": 12,
+    "h2h": {"status": "CAPTURED_PROVIDER_NO_TODAY_EVENTS", "provider_events": 33, "market_objects": 218, "outcomes": 436, "today_bound_games": 0},
+    "spreads": {"status": "CAPTURED_PROVIDER_NO_TODAY_EVENTS", "provider_events": 33, "market_objects": 199, "outcomes": 398, "today_bound_games": 0},
+    "sog": {"status": "UNAVAILABLE_FROZEN_BULK_ENDPOINT_HTTP_422", "raw_rows": 0},
+    "points": {"status": "UNAVAILABLE_FROZEN_BULK_ENDPOINT_HTTP_422", "raw_rows": 0},
+    "saves": {"status": "UNAVAILABLE_FROZEN_BULK_ENDPOINT_HTTP_422", "raw_rows": 0}
+  },
+  "predictions": {
+    "moneyline_games": 7,
+    "puck_line_games": 7,
+    "mainline_status": "PRESEASON_REHEARSAL_EXCLUDED_ALL_SIX_FEATURES_IMPUTED",
+    "sog_rows": 0,
+    "sog_status": "BLOCKED_SEASON_2026_5V5_TOI_UNAVAILABLE",
+    "points_feature_rows": 455,
+    "points_prediction_rows": 1365,
+    "points_ladder_pass_players": 455,
+    "saves_feature_rows": 42,
+    "saves_prediction_rows": 546,
+    "saves_starter_selections": 0
+  },
+  "timing": {
+    "mainline_request_start_utc": "2026-09-19T20:45:50.949631Z",
+    "mainline_capture_utc": "2026-09-19T20:45:51.164803Z",
+    "capture_attempt_sequence_complete_utc": "2026-09-19T20:46:47.798368Z",
+    "first_puck_utc": "2026-09-19T23:00:00Z",
+    "mainline_capture_lead_seconds": 8048.835197,
+    "attempt_sequence_completion_lead_seconds": 7992.201632
+  },
+  "later_capture": "FINAL_PREGAME_MAINLINE_REMAINS_POTENTIALLY_USEFUL_IF_PROVIDER_LISTS_TODAY_EVENTS; PLAYER_PROP_RETRY_BLOCKED_UNDER_CURRENT_FROZEN_ENDPOINT_BINDING",
+  "wagers": 0,
+  "publication_changes": 0
+}

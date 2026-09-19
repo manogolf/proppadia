@@ -42,7 +42,7 @@ def resolve_date(v):
  return date.fromisoformat(v).isoformat()
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","shadow_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0);ap.add_argument("--recovery-authorization",choices=[SECOND_RECOVERY_AUTHORIZATION])
+ ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","sog_cold_start","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","shadow_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0);ap.add_argument("--recovery-authorization",choices=[SECOND_RECOVERY_AUTHORIZATION])
  a=ap.parse_args(); slate=resolve_date(a.slate_date); season=int(slate[:4]) if int(slate[5:7])>=7 else int(slate[:4])-1
  if season not in {2025,2026}: raise SystemExit(f"WRONG_CANONICAL_SEASON_FOR_SEASON_2026_ORCHESTRATION:{season}")
  outroot=a.output_root.resolve(); lockdir=outroot/"locks";lockdir.mkdir(parents=True,exist_ok=True);lockpath=lockdir/f"{slate}.lock"
@@ -106,14 +106,24 @@ def main():
     status["stages"].append({"stage_id":sid,"command":"none","start_time":utc(),"end_time":utc(),"state":"SKIPPED_VALID_EMPTY_SLATE","exit_status":0,"input_identities":["04_canonical_slate_export"],"output_identities":[],"row_counts":{},"warnings":[],"failure_class":None,"downstream_allowed":True})
    status.update(team_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",player_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",mainline_prerequisite_readiness="VALID_EMPTY_SLATE",sog_prerequisite_readiness="VALID_EMPTY_SLATE",points_prerequisite_readiness="VALID_EMPTY_SLATE",saves_prerequisite_readiness="VALID_EMPTY_SLATE")
   else:
-   stage("05_stable_upstream_daily",[PY,"-m","backend.nhl.cli","daily","--morning-only"],["04_canonical_slate_export"],"FAIL_ROSTER_REFRESH" if scenario=="roster_failure" else ("FAIL_PREPARATION" if scenario=="preparation_failure" else None))
+   stable=stage("05_stable_upstream_daily",[PY,"-m","backend.nhl.cli","daily","--morning-only"],["04_canonical_slate_export"],"FAIL_ROSTER_REFRESH" if scenario=="roster_failure" else ("FAIL_PREPARATION" if scenario=="preparation_failure" else None))
+   sog_lane_blocked=scenario=="sog_cold_start"
+   if not scenario and not a.dry_run:
+    stable_stdout=(run/"05_stable_upstream_daily.stdout.log").read_text()
+    sog_lane_blocked="SOG_PREREQUISITE_BLOCKED_LANE_LOCAL" in stable_stdout
+    if sog_lane_blocked:
+     stable["state"]="PASS_WITH_BOUNDED_LIMITS";stable["warnings"].append("SOG_PREREQUISITE_BLOCKED_LANE_LOCAL");atomic_json(healthpath,status)
    stage("06_team_history_readiness",["internal","daily morning-only completed-game history stages"],["05_stable_upstream_daily"]);status["team_history_readiness"]="READY"
    stage("07_player_history_readiness",["internal","daily morning-only roster/SOG history stages"],["06_team_history_readiness"]);status["player_history_readiness"]="READY"
    stage("08_mainline_prerequisites",["internal","canonical spine plus team history"],["06_team_history_readiness"]);status["mainline_prerequisite_readiness"]="READY"
-   stage("09_sog_prerequisites",["internal","canonical spine plus player history"],["07_player_history_readiness"]);status["sog_prerequisite_readiness"]="READY"
+   if sog_lane_blocked:
+    status["stages"].append({"stage_id":"09_sog_prerequisites","command":"internal lane-local gate","start_time":utc(),"end_time":utc(),"state":"SKIPPED_BLOCKED_LANE_LOCAL","exit_status":0,"input_identities":["07_player_history_readiness"],"output_identities":[],"row_counts":{},"warnings":["SEASON_TOI_UNAVAILABLE"],"failure_class":None,"downstream_allowed":False})
+    status["sog_prerequisite_readiness"]="BLOCKED_LANE_LOCAL_SEASON_TOI_UNAVAILABLE"
+   else:
+    stage("09_sog_prerequisites",["internal","canonical spine plus player history"],["07_player_history_readiness"]);status["sog_prerequisite_readiness"]="READY"
    stage("10_points_prerequisites",["internal","canonical spine plus strict-prior Points feature export"],["07_player_history_readiness"]);status["points_prerequisite_readiness"]="READY_FOR_IMMUTABLE_SNAPSHOT"
    stage("11_saves_prerequisites",["internal","canonical spine plus complete strict-prior goalie feature and roster identity snapshot"],["07_player_history_readiness"]);status["saves_prerequisite_readiness"]="READY_FOR_IMMUTABLE_SNAPSHOT"
-   status["downstream"].update(MAINLINE_MORNING_PREREQUISITES_READY=True,SOG_MORNING_PREREQUISITES_READY=True,POINTS_MORNING_PREREQUISITES_READY=True,SAVES_MORNING_PREREQUISITES_READY=True,MIDDAY_MARKET_CAPTURE_ALLOWED=True,FINAL_PREGAME_CAPTURE_ALLOWED=True)
+   status["downstream"].update(MAINLINE_MORNING_PREREQUISITES_READY=True,SOG_MORNING_PREREQUISITES_READY=not sog_lane_blocked,POINTS_MORNING_PREREQUISITES_READY=True,SAVES_MORNING_PREREQUISITES_READY=True,MIDDAY_MARKET_CAPTURE_ALLOWED=True,FINAL_PREGAME_CAPTURE_ALLOWED=True)
   shadow=warn_stage("12_cross_market_shadow_status",[PY,ROOT/"backend/nhl/scripts/run_nhl_cross_market_shadow_warn_only.py","--slate-date",slate],["04_canonical_slate_export"],"SIMULATED_CROSS_MARKET_SHADOW_FAILURE" if scenario=="shadow_failure" else None)
   status["cross_market_shadow_readiness"]="WARN_ONLY_FAILURE" if shadow["state"]=="FAILED_WARN_ONLY" else "READY_NOT_ACTIVATED"
   if scenario=="interrupted":raise KeyboardInterrupt

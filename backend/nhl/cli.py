@@ -1401,9 +1401,20 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
     null_5v5 = int(row["null_5v5"])
     null_season_5v5 = int(row["null_season_5v5"])
 
-    # allow a couple misses (callups), but not systemic failure
-    if n > 0 and (null_5v5 > 0.20 * n or null_season_5v5 > 0.20 * n):
+    # Allow a couple misses (callups), but not systemic failure. During the
+    # morning-only preparation boundary this is a SOG-lane prerequisite, not a
+    # reason to suppress independently viable Points/Saves exports.
+    sog_prerequisite_blocked = n > 0 and (
+        null_5v5 > 0.20 * n or null_season_5v5 > 0.20 * n
+    )
+    if sog_prerequisite_blocked and not morning_only:
         raise AssertionError(f"[SOG] season TOI features missing too often for {slate}: {row}")
+    if sog_prerequisite_blocked:
+        print(
+            "SOG_PREREQUISITE_BLOCKED_LANE_LOCAL "
+            f"slate={slate} n={n} null_5v5={null_5v5} "
+            f"null_season_5v5={null_season_5v5}"
+        )
 
     # After seed_sog_features_for_slate + pairings fills
 
@@ -1420,8 +1431,9 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
 
     # 4a) SOG Denali features → backend/nhl/exports/daily/sog_features/
     sog_feat_path = DAILY_SOG_FEATURES_DIR / f"sog_features_{slate}_denali.csv"
-    # --- ensure TOI/shift “season” features are populated before exporting Denali SOG slate features ---
-    export_sog_denali_features(db, slate, sog_feat_path)
+    # Never create a prediction input from a blocked SOG prerequisite.
+    if not sog_prerequisite_blocked:
+        export_sog_denali_features(db, slate, sog_feat_path)
 
     # 4b) Saves / Points exporters
     saves_csv  = psql_stdout(SQL_DIR / "export_saves_from_denali.sql", vars={"slate_date": slate})
