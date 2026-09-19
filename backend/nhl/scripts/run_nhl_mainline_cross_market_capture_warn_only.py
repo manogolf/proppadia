@@ -21,6 +21,7 @@ from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
+MORNING_ROOT = ROOT / "artifacts/operational/nhl/morning"
 
 
 def load_env(path: Path) -> None:
@@ -135,6 +136,35 @@ def durable_json(path: Path, payload: dict, *, create_only: bool = False) -> Non
             temporary.unlink(missing_ok=True)
 
 
+def morning_capture_allowed(slate: str, morning_root: Path = MORNING_ROOT) -> tuple[bool, str]:
+    """Fail closed until a durable successful morning receipt enables capture."""
+    health_files = sorted((morning_root / slate / "runs").glob("*/morning_health.json"))
+    for path in reversed(health_files):
+        try:
+            health = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        downstream = health.get("downstream") or {}
+        if (health.get("overall_status") == "READY"
+                and downstream.get("MIDDAY_MARKET_CAPTURE_ALLOWED") is True
+                and downstream.get("FINAL_PREGAME_CAPTURE_ALLOWED") is True):
+            return True, f"MORNING_READY_RECEIPT:{health.get('orchestration_run_id')}"
+    return False, "MORNING_READINESS_RECEIPT_ABSENT_OR_BLOCKED"
+
+
+def record_morning_not_ready(root: Path, slate: str, reason: str) -> Path:
+    stamp = utc_now().strftime("%Y%m%dT%H%M%S.%fZ") + "_" + uuid.uuid4().hex
+    status = root / "orchestration_status" / slate / f"capture_{stamp}.json"
+    with acquisition_lock(root, slate):
+        durable_json(status, {
+            "slate_date": slate, "warning_only": True, "phase": None,
+            "status": "NOOP_MORNING_NOT_READY", "gate_reason": reason,
+            "historical_odds_calls": 0, "live_calls": 0,
+            "live_credits_consumed": 0, "player_prop_execution_allowed": False,
+        })
+    return status
+
+
 def observe(root: Path, slate: str, requested: str, force: bool, dsn: str) -> Path:
     """One WARN-only entry; --force is the existing explicit operator override.
 
@@ -218,8 +248,12 @@ def main() -> int:
     now = utc_now()
     slate = now.astimezone(ZoneInfo("America/New_York")).date().isoformat() if args.slate_date == "today" else args.slate_date
     try:
-        status_path = observe(args.output_root, slate, args.phase, args.force,
-                              os.environ.get("SUPABASE_DB_URL", "").strip())
+        ready, reason = morning_capture_allowed(slate)
+        if not ready:
+            status_path = record_morning_not_ready(args.output_root, slate, reason)
+        else:
+            status_path = observe(args.output_root, slate, args.phase, args.force,
+                                  os.environ.get("SUPABASE_DB_URL", "").strip())
         print(status_path)
     except Exception as error:
         # Lock/claim/status failures never permit acquisition; remain WARN-only.

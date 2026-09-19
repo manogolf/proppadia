@@ -223,6 +223,22 @@ class SchedulerGuardRepairTest(unittest.TestCase):
         self.assertEqual(nhl.phase_for(schedule, final, "AUTO", False)[0], "FINAL_PREGAME")
         self.assertIsNone(nhl.phase_for(schedule, datetime(2026, 10, 21, 2, 0, tzinfo=timezone.utc), "AUTO", False)[0])
 
+    def test_failed_morning_receipt_blocks_paid_phase_before_claim(self):
+        morning = self.root / "morning" / SLATE / "runs" / "failed"
+        morning.mkdir(parents=True)
+        (morning / "morning_health.json").write_text(json.dumps({
+            "orchestration_run_id": "failed", "overall_status": "FAILED_BLOCKING",
+            "downstream": {"MIDDAY_MARKET_CAPTURE_ALLOWED": False,
+                           "FINAL_PREGAME_CAPTURE_ALLOWED": False},
+        }))
+        ready, reason = nhl.morning_capture_allowed(SLATE, self.root / "morning")
+        self.assertFalse(ready)
+        status = nhl.record_morning_not_ready(self.root, SLATE, reason)
+        result = json.loads(status.read_text())
+        self.assertEqual(result["status"], "NOOP_MORNING_NOT_READY")
+        self.assertEqual(result["live_calls"], 0)
+        self.assertEqual(list(self.root.glob("paid_attempt_claims/*/*.claim.json")), [])
+
     def test_main_lock_failure_keeps_exit_zero(self):
         with patch("sys.argv", ["runner", "--env-file", str(self.root / "absent")]), \
              patch.object(nhl, "observe", side_effect=RuntimeError("BUSY")), \
