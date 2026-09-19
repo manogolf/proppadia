@@ -14,6 +14,10 @@ At 13:45:50.949 PT the catch-up claimed and made one frozen `us,us2` h2h+spreads
 
 The frozen bulk request form for SOG, Points, and Saves was rejected with HTTP 422. Each family has one durable failed claim, no raw payload, and no automatic retry. The successful request confirms 4 credits; the conservative maximum exposure including the rejected attempts is 12 credits.
 
+The retained 422 artifacts did not contain response bodies, so their precise provider code could not be recovered from those files. The official provider contract and the already-established repository event transport resolve the cause as `INVALID_MARKET`: non-featured player props are unsupported on the bulk sports odds endpoint and must use `/events/{eventId}/odds`.
+
+At 13:59:41.535 PT, a create-only free event-list request was made to obtain provider event IDs. It returned HTTP 200, cost 0 credits, and preserved its body and quota headers. The quota-used value remained 48,929, proving the three earlier HTTP 422 responses consumed 0 credits. The list contained 33 events from September 29 through October 10, but none of September 19's seven certified games. Consequently no safe event-specific request could be made: all three prop families are `PROVIDER_EVENT_NOT_LISTED_GENUINELY_UNAVAILABLE`, not rejected event requests. The check completed 2:00:18.278 before first puck with zero duplicate or timing-invalid requests.
+
 ## Predictions
 
 - Mainline: 7 Moneyline and 7 puck-line shadow predictions. All six opening-season inputs were fit-median imputed, every row is `PRESEASON_REHEARSAL_EXCLUDED`, and no wager was produced.

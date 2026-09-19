@@ -30,6 +30,24 @@
     "points": {"status": "UNAVAILABLE_FROZEN_BULK_ENDPOINT_HTTP_422", "raw_rows": 0},
     "saves": {"status": "UNAVAILABLE_FROZEN_BULK_ENDPOINT_HTTP_422", "raw_rows": 0}
   },
+  "event_specific_followup": {
+    "event_list_request_start_utc": "2026-09-19T20:59:41.535065Z",
+    "event_list_response_utc": "2026-09-19T20:59:41.721683Z",
+    "event_list_http_status": 200,
+    "event_list_credits": 0,
+    "provider_event_count": 33,
+    "provider_event_time_range_utc": ["2026-09-29T21:00:47Z", "2026-10-10T22:10:00Z"],
+    "september_19_events_bound": 0,
+    "event_specific_request_count": 0,
+    "event_specific_credits": 0,
+    "total_confirmed_recovery_credits": 4,
+    "sog": "PROVIDER_EVENT_NOT_LISTED_GENUINELY_UNAVAILABLE",
+    "points": "PROVIDER_EVENT_NOT_LISTED_GENUINELY_UNAVAILABLE",
+    "saves": "PROVIDER_EVENT_NOT_LISTED_GENUINELY_UNAVAILABLE",
+    "duplicate_requests": 0,
+    "timing_violations": 0,
+    "lead_seconds_before_first_puck": 7218.278317
+  },
   "predictions": {
     "moneyline_games": 7,
     "puck_line_games": 7,
