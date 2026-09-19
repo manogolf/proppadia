@@ -108,7 +108,8 @@
     },
     {
       "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
-      "sha256": "7df06cfc8084653f2ab4f4e18fc8a6f6fc19188686a92a0016cb6097fa08d43a",
+      "sha256": "10ee0b9f85a5529f51c13237aef8d6c6325c5cfab2ae51093e6b3c977015059f",
+      "authority_propagation_previous_sha256": "7df06cfc8084653f2ab4f4e18fc8a6f6fc19188686a92a0016cb6097fa08d43a",
       "inline_acquisition_previous_sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
       "installation": "installed_daily_wrapper",
       "previous_sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
@@ -121,6 +122,14 @@
         "bvp_fallback_replaced_intentionally": true,
         "complete_reverse_diff_validation": "test_rollback_topology_and_unrelated_daily_bytes",
         "reconciliation": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_inline_consolidation_v1/reconciliation_manifest.json"
+      },
+      "authority_propagation_change_provenance": {
+        "contract": "MLB_BVP_DAILY_INLINE_ACQUISITION_V1",
+        "authorization": "user-directed explicit authority propagation correction, September 19 2026",
+        "ambient_xpc_authority_removed": true,
+        "installed_diff_scope": "one AUTOMATIC_DAILY_WRAPPER argument added to the existing inline hook invocation",
+        "rollback_bytes": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_inline_consolidation_v1/daily_wrapper.authorized-postchange.installation-evidence.txt",
+        "reconciliation": "artifacts/analysis/mlb/operational_reconciliation/2026-09-19/bvp_inline_authority_propagation_v1/reconciliation_manifest.json"
       },
       "prior_change_provenance": {
         "authorization_commit": "ce5c7f5b",

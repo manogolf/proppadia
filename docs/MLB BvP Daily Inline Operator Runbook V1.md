@@ -54,6 +54,11 @@ It acquires the shared pipeline lock, then the BvP-specific hook lock; the hook
 never reacquires the shared lock. It preserves actual timestamps and refuses
 previously certified dates or repeated authorization IDs.
 
+The installed daily wrapper explicitly supplies `AUTOMATIC_DAILY_WRAPPER` and
+the manual wrapper supplies `AUTHORIZED_MANUAL_RECOVERY`. Do not invoke the
+hook directly or substitute an ambient `XPC_SERVICE_NAME`; missing or unknown
+authority is a fail-closed governed skip and cannot create an attempt.
+
 ## Exact rollback evidence
 
 Package: `artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_inline_consolidation_v1`.

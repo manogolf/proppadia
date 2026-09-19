@@ -1,0 +1,38 @@
+{
+  "contract": "MLB_BVP_DAILY_INLINE_ACQUISITION_V1",
+  "change": "EXPLICIT_INVOCATION_AUTHORITY_PROPAGATION",
+  "installed_at_utc": "2026-09-19T17:22:36Z",
+  "installed_wrapper": {
+    "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+    "pre_sha256": "7df06cfc8084653f2ab4f4e18fc8a6f6fc19188686a92a0016cb6097fa08d43a",
+    "post_sha256": "10ee0b9f85a5529f51c13237aef8d6c6325c5cfab2ae51093e6b3c977015059f",
+    "rollback_bytes": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_inline_consolidation_v1/daily_wrapper.authorized-postchange.installation-evidence.txt",
+    "change_scope": "Pass AUTOMATIC_DAILY_WRAPPER as the fifth argument to the governed inline hook."
+  },
+  "tracked_sources": {
+    "backend/mlb/scripts/run_mlb_bvp_inline_daily.py": {
+      "pre_sha256": "b85f5d7d8b5a3d6262f3ac39df75cb88b0877412d99612f8074771b65ddabc1c",
+      "post_sha256": "4f5451d4e3f6105dd775e4d223909210f0ae166d749519abeba34a2f5666d23f"
+    },
+    "bin/mlb_bvp_inline_daily_hook.sh": {
+      "pre_sha256": "fb7e70c4e3d3f1c6477d71904776b3289bb51890af4e2d6324a04f0c6dcce70b",
+      "post_sha256": "210420b14cb8041f6c0e89a87041d8c33242a0eb80671100096e582827f4f782"
+    },
+    "bin/mlb_bvp_inline_manual_recovery.sh": {
+      "pre_sha256": "8c0b671eab2812a84d83303e63c9cd49ab14a12afeb8f424a0d76365295228b9",
+      "post_sha256": "8eee0937a73caac7f4b7a5a7aba7475faf96190184a3a7ad190c2b8b92c576f4"
+    },
+    "backend/mlb/config/bvp_inline_acquisition_v1.json": {
+      "pre_sha256": "c701f980ae05c44f01b490b009eff414b2b149805db167ddf3265896181c9771",
+      "post_sha256": "af001c10e2b9f0750309ef988e746ee5c27680102d51eb09fa5110ff001ea6d4"
+    }
+  },
+  "authority_values": {
+    "automatic": "AUTOMATIC_DAILY_WRAPPER",
+    "authorized_manual": "AUTHORIZED_MANUAL_RECOVERY"
+  },
+  "xpc_service_name_is_authority": false,
+  "network_requests_during_implementation": 0,
+  "production_acquisition_runs_during_implementation": 0,
+  "rollback": "After separate authorization and while the daily job is idle, restore the exact installed wrapper bytes from rollback_bytes and revert the authority-propagation commit; retain all operational evidence and database rows."
+}

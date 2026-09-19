@@ -27,6 +27,13 @@ schemas and historical data are unchanged. Source acquisition target remains
 `mlb-bvp-pvb-refresh` / `refresh_mlb_bvp_pvb.py`; the inline adapter calls its
 canonical implementation directly without running legacy downstream prewarm work.
 
+Invocation authority is explicit. The installed daily wrapper passes
+`AUTOMATIC_DAILY_WRAPPER` through the hook; the separately authorized manual
+wrapper passes `AUTHORIZED_MANUAL_RECOVERY` plus its authorization ID. The
+Python child never infers authority from `XPC_SERVICE_NAME` or another ambient
+launchd variable. Missing, conflicting, or unrecognized authority fails closed
+before a durable attempt claim.
+
 Current qualified MLB model authority is `NO_QUALIFIED_MLB_MODEL`. Acquisition is
 independent of that authority; model application and impact remain governed skips.
 The current independent Hits parent model uses player-stat inputs, not BvP rows.

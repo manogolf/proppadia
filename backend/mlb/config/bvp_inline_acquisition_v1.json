@@ -6,6 +6,11 @@
   "recovery": "ONE_STRICTLY_LATER_NATURAL_WINDOW_AFTER_NON_SUCCESS",
   "same_window_restart_retry": false,
   "manual_recovery": "SAME_DURABLE_STATE; EXPLICIT_ONCE_ONLY_AUTHORIZATION_ID; CURRENT_DATE_ONLY",
+  "invocation_authority_contract": {
+    "automatic": "AUTOMATIC_DAILY_WRAPPER",
+    "manual": "AUTHORIZED_MANUAL_RECOVERY",
+    "ambient_launchd_environment_is_authority": false
+  },
   "state_authority": "artifacts/ops/bvp_inline_v1/acquisition.sqlite3",
   "state_kind": "LOCAL_OPERATIONAL_APPEND_ONLY_CLAIMS_EVENTS_RESULTS_AND_SUCCESS_RECEIPTS; NOT_BASEBALL_DATABASE_SCHEMA",
   "canonical_collector_sha256": "5e6a9bf7a7204ee650b56c4e08b6b1918b06c6833788256e5ef5016c2f58de36",

@@ -198,6 +198,45 @@ def test_delayed_dispatch_retains_actual_window_and_collection_time():
     assert adapter.natural_window("2026-09-19T15:40:00Z")=="0830"
 
 
+def test_explicit_automatic_authority_survives_launchd_environment_loss(monkeypatch):
+    monkeypatch.delenv("XPC_SERVICE_NAME", raising=False)
+    called=Mock(return_value=b.result("BVP_INLINE_NOT_DUE", "FIXTURE_ACCEPTED"))
+    monkeypatch.setattr(adapter.state, "run_inline", called)
+    result=adapter.dispatch_for_authority(
+        DAY,"fixture","2026-09-19T12:30:00Z",adapter.AUTOMATIC_AUTHORITY,
+        acquire=Mock(),
+    )
+    assert result["reason"]=="FIXTURE_ACCEPTED"
+    assert called.call_args.kwargs=={"trigger":"automatic","authorization_id":None}
+
+
+def test_explicit_authority_manual_and_fail_closed_states(monkeypatch):
+    called=Mock(return_value=b.result("BVP_INLINE_NOT_DUE", "FIXTURE_ACCEPTED"))
+    monkeypatch.setattr(adapter.state, "run_inline", called)
+    accepted=adapter.dispatch_for_authority(
+        DAY,"fixture","2026-09-19T18:00:00Z",adapter.MANUAL_AUTHORITY,
+        "USER_APPROVAL_1",acquire=Mock(),
+    )
+    assert accepted["reason"]=="FIXTURE_ACCEPTED"
+    assert called.call_args.kwargs=={
+        "trigger":"manual","authorization_id":"USER_APPROVAL_1",
+    }
+    called.reset_mock()
+    assert adapter.dispatch_for_authority(
+        DAY,"fixture","2026-09-19T18:00:00Z",adapter.MANUAL_AUTHORITY,
+        acquire=Mock(),
+    )["reason"]=="EXPLICIT_MANUAL_AUTHORIZATION_REQUIRED"
+    assert adapter.dispatch_for_authority(
+        DAY,"fixture","2026-09-19T18:00:00Z","FORGED_AUTHORITY",
+        acquire=Mock(),
+    )["reason"]=="UNRECOGNIZED_INVOCATION_AUTHORITY"
+    assert adapter.dispatch_for_authority(
+        DAY,"fixture","2026-09-19T18:00:00Z",adapter.AUTOMATIC_AUTHORITY,
+        "CONFLICTING_ID",acquire=Mock(),
+    )["reason"]=="AUTHORITY_ARGUMENT_CONFLICT"
+    called.assert_not_called()
+
+
 def test_wake_retry_source_and_feature_formulas_unchanged():
     path="backend/mlb/scripts/refresh_mlb_bvp_pvb.py"
     previous=subprocess.run(["git","show","1c36620785837e057f89b263d3ab88f28c723469:"+path],capture_output=True,text=True,check=True).stdout
@@ -370,7 +409,7 @@ def test_actual_hook_owns_only_specific_lock_and_preserves_parent_shared_lock(tm
     python=venv/"python"
     python.write_text('#!/bin/zsh\nset -eu\n[[ -d artifacts/ops/locks/mlb-pipeline.lock ]]\n[[ -d artifacts/ops/locks/mlb-bvp-prewarm.lock ]]\n[[ "$MLB_BVP_INLINE_LOCK_CONTEXT" == SHARED_PIPELINE_HELD_AND_BVP_SPECIFIC_HELD ]]\nprint BOTH_LOCKS_HELD\nexit 0\n')
     python.chmod(0o755)
-    code='source backend/mlb/scripts/launchagent_lock.zsh\ntrap release_launchagent_locks EXIT\nacquire_launchagent_lock mlb-pipeline 0 14400\n'+str(ROOT/"bin/mlb_bvp_inline_daily_hook.sh")+' 2026-09-19 fixture 2026-09-19T12:30:00Z unused.json\n[[ -d artifacts/ops/locks/mlb-pipeline.lock ]]\n[[ ! -d artifacts/ops/locks/mlb-bvp-prewarm.lock ]]\nprint PARENT_LOCK_PRESERVED\n'
+    code='source backend/mlb/scripts/launchagent_lock.zsh\ntrap release_launchagent_locks EXIT\nacquire_launchagent_lock mlb-pipeline 0 14400\n'+str(ROOT/"bin/mlb_bvp_inline_daily_hook.sh")+' 2026-09-19 fixture 2026-09-19T12:30:00Z unused.json AUTOMATIC_DAILY_WRAPPER\n[[ -d artifacts/ops/locks/mlb-pipeline.lock ]]\n[[ ! -d artifacts/ops/locks/mlb-bvp-prewarm.lock ]]\nprint PARENT_LOCK_PRESERVED\n'
     p=subprocess.run(["zsh","-c",code],cwd=tmp_path,capture_output=True,text=True)
     assert p.returncode==0 and "BOTH_LOCKS_HELD" in p.stdout and "PARENT_LOCK_PRESERVED" in p.stdout
     assert not list((tmp_path/"artifacts/ops/locks").glob("*.lock"))

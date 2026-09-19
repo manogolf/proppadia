@@ -13,4 +13,5 @@ acquire_launchagent_lock "mlb-pipeline" 0 "${MLB_PIPELINE_STALE_SEC:-14400}" || 
 started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 run_tag="manual_bvp_inline_$(date -u +%Y%m%dT%H%M%SZ)_$$"
 bin/mlb_bvp_inline_daily_hook.sh "$1" "$run_tag" "$started" \
-  "artifacts/ops/bvp_inline_v1/runs/$1/${run_tag}.json" "$2"
+  "artifacts/ops/bvp_inline_v1/runs/$1/${run_tag}.json" \
+  "AUTHORIZED_MANUAL_RECOVERY" "$2"

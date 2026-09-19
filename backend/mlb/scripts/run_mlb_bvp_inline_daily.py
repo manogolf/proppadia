@@ -220,21 +220,50 @@ def natural_window(started_at):
     return next((w for w in reversed(state.WINDOWS) if w<=local.strftime("%H%M")),"NOT_DUE")
 
 
+AUTOMATIC_AUTHORITY = "AUTOMATIC_DAILY_WRAPPER"
+MANUAL_AUTHORITY = "AUTHORIZED_MANUAL_RECOVERY"
+
+
+def dispatch_for_authority(slate_date, run_tag, started_at, authority,
+                           manual_authorization_id=None, acquire=canonical_acquire):
+    """Translate an explicit caller declaration into the durable state contract.
+
+    XPC_SERVICE_NAME and every other ambient launchd variable are deliberately
+    irrelevant. Unknown, conflicting, or incomplete declarations fail before a
+    durable attempt can be claimed.
+    """
+    if authority == AUTOMATIC_AUTHORITY and not manual_authorization_id:
+        trigger = "automatic"
+    elif authority == MANUAL_AUTHORITY and manual_authorization_id:
+        trigger = "manual"
+    elif authority == MANUAL_AUTHORITY:
+        return state.result("BVP_INLINE_NOT_DUE", "EXPLICIT_MANUAL_AUTHORIZATION_REQUIRED")
+    elif authority == AUTOMATIC_AUTHORITY:
+        return state.result("BVP_INLINE_NOT_DUE", "AUTHORITY_ARGUMENT_CONFLICT")
+    else:
+        return state.result("BVP_INLINE_NOT_DUE", "UNRECOGNIZED_INVOCATION_AUTHORITY")
+    return state.run_inline(
+        slate_date, run_tag, natural_window(started_at), acquire,
+        trigger=trigger, authorization_id=manual_authorization_id,
+    )
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--date",required=True); p.add_argument("--run-tag",required=True)
     p.add_argument("--started-at",required=True); p.add_argument("--output",required=True,type=Path)
+    p.add_argument("--invocation-authority",required=True)
     p.add_argument("--manual-authorization-id")
     args=p.parse_args()
     # The shell hook verifies inherited shared lock and owns the BvP-specific lock.
     if os.getenv("MLB_BVP_INLINE_LOCK_CONTEXT")!="SHARED_PIPELINE_HELD_AND_BVP_SPECIFIC_HELD":
         print(state.encoded(state.result("BVP_INLINE_NOT_DUE","GOVERNED_LOCK_CONTEXT_REQUIRED")))
         return 2
-    natural=os.getenv("XPC_SERVICE_NAME")=="com.proppadia.mlb.refresh.daily"
-    trigger="automatic" if natural and not args.manual_authorization_id else "manual"
     try:
-        record=state.run_inline(args.date,args.run_tag,natural_window(args.started_at),canonical_acquire,
-            trigger=trigger,authorization_id=args.manual_authorization_id)
+        record=dispatch_for_authority(
+            args.date,args.run_tag,args.started_at,args.invocation_authority,
+            args.manual_authorization_id,
+        )
     except Exception as error:
         record=state.result("BVP_INLINE_PRIMARY_FAILED","DURABLE_CLAIM_OR_STATE_WRITE_FAILED",error_class=type(error).__name__)
     args.output.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
