@@ -18,6 +18,7 @@ import psycopg
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
 from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import observe as observe_sog_prediction_only
+from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -162,6 +163,7 @@ def record_morning_not_ready(root: Path, slate: str, reason: str) -> Path:
             "status": "NOOP_MORNING_NOT_READY", "gate_reason": reason,
             "historical_odds_calls": 0, "live_calls": 0,
             "live_credits_consumed": 0, "player_prop_execution_allowed": False,
+            **observer_provenance(Path(__file__)),
         })
     return status
 
@@ -177,7 +179,8 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str) -> Pa
     status_path = status_dir / f"capture_{stamp}.json"
     result = {"slate_date": slate, "warning_only": True,
               "player_prop_execution_allowed": True, "historical_odds_calls": 0,
-              "live_calls": 0, "live_credits_consumed": 0}
+              "live_calls": 0, "live_credits_consumed": 0,
+              **observer_provenance(Path(__file__))}
     with acquisition_lock(root, slate):
         claim = None
         try:

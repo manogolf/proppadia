@@ -18,10 +18,10 @@ import pandas as pd
 import psycopg
 
 from backend.nhl.sog_cold_start.core import build_predictions, sha256_file
+from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 
 ROOT=Path(__file__).resolve().parents[3]
 DEFAULT_ROOT=ROOT/"artifacts/operational/nhl/sog_prediction_only"
-MORNING_ROOT=ROOT/"artifacts/operational/nhl/morning"
 
 def utc_now()->datetime:return datetime.now(timezone.utc)
 def load_env(path:Path)->None:
@@ -46,13 +46,6 @@ def phase_for(schedule:pd.DataFrame,now:datetime,requested:str)->tuple[str|None,
     if 20<=minutes<=75:return "FINAL_PREGAME",f"FIRST_START_IN_{minutes:.1f}_MINUTES"
     if local.hour==12 and local.minute<=30:return "MIDDAY","LOCAL_MIDDAY_WINDOW"
     return None,f"OUTSIDE_PREDICTION_WINDOW_FIRST_START_IN_{minutes:.1f}_MINUTES"
-def morning_ready(slate:str)->tuple[bool,str]:
-    for path in reversed(sorted((MORNING_ROOT/slate/"runs").glob("*/morning_health.json"))):
-        try:data=json.loads(path.read_text())
-        except (OSError,ValueError):continue
-        if data.get("overall_status")=="READY" and data.get("downstream",{}).get("MAINLINE_MORNING_PREREQUISITES_READY") is True:
-            return True,f"MORNING_READY:{data.get('orchestration_run_id')}"
-    return False,"MORNING_CANONICAL_SPINE_NOT_READY"
 @contextlib.contextmanager
 def lock(root:Path,slate:str,phase:str):
     p=root/"locks"/f"{slate}_{phase}.lock";p.parent.mkdir(parents=True,exist_ok=True)
@@ -99,14 +92,15 @@ def write_manifest(directory:Path)->None:
     files=sorted(p for p in directory.iterdir() if p.is_file() and p.name!="SHA256SUMS");(directory/"SHA256SUMS").write_text("".join(f"{sha256_file(p)}  {p.name}\n" for p in files))
 def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)->Path:
     now=now or utc_now();status_dir=root/"status"/slate;status_dir.mkdir(parents=True,exist_ok=True);stamp=now.strftime("%Y%m%dT%H%M%S.%fZ")+"_"+uuid.uuid4().hex[:8];status_path=status_dir/f"prediction_{stamp}.json"
-    result={"slate_date":slate,"status":"RUNNING","market_requests":0,"paid_credits":0,"warning_only":True}
+    result={"slate_date":slate,"status":"RUNNING","market_requests":0,"paid_credits":0,"warning_only":True,
+            "morning_readiness_dependency":"NONE_PREDICTION_ONLY",
+            "provider_event_dependency":"NONE","market_credential_access":False,
+            **observer_provenance(Path(__file__),now)}
     if slate<="2026-09-19":
         result.update(status="NOOP_RETROSPECTIVE_FORBIDDEN",gate_reason="SEPTEMBER_19_RETROSPECTIVE_PREDICTION_FORBIDDEN")
         durable_json(status_path,result);return status_path
     try:
         if not dsn:raise RuntimeError("SUPABASE_DB_URL_MISSING")
-        ready,reason=morning_ready(slate);result["morning_gate"]=reason
-        if not ready:result["status"]="NOOP_MORNING_NOT_READY";durable_json(status_path,result);return status_path
         schedule,features=export_features(dsn,slate,now);phase,reason=phase_for(schedule,now,requested);result.update(phase=phase,phase_gate=reason)
         if phase is None:result["status"]="NOOP_OUTSIDE_WINDOW";durable_json(status_path,result);return status_path
         with lock(root,slate,phase):

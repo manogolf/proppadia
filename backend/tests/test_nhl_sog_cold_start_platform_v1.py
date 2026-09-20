@@ -1,11 +1,17 @@
 import tempfile
 import unittest
+import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
 from backend.nhl.sog_cold_start.core import build_predictions, grade_predictions
 from backend.nhl.sog_cold_start.cli import main as cli_main
+from backend.nhl.scripts.preflight_nhl_sog_prediction_only_v1 import run_preflight
+from backend.nhl.scripts import run_nhl_sog_prediction_only_warn_only as observer
 
 
 def features(slate="2026-09-20"):
@@ -14,6 +20,29 @@ def features(slate="2026-09-20"):
 
 
 class ColdStartTest(unittest.TestCase):
+    def test_no_network_market_independence_preflight(self):
+        with patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
+             patch.dict(os.environ, {"ODDS_API_KEY": "fixture-secret"}):
+            result=run_preflight("2026-09-20",datetime(2026,9,20,18,0,tzinfo=timezone.utc))
+        self.assertEqual(result["network_requests"],0)
+        self.assertFalse(result["credential_access"])
+        self.assertFalse(result["morning_readiness_blocks_prediction"])
+        self.assertEqual(result["selected_arm"],"D_PLAYER_ROLE_HIERARCHICAL")
+        self.assertEqual(result["historical_e_arm_status"],"HISTORICAL_DIAGNOSTIC_SHADOW_NOT_EMITTED_BY_OPERATIONAL_CONTRACT")
+
+    def test_prediction_observer_does_not_consult_morning_gate(self):
+        with tempfile.TemporaryDirectory(prefix="sog_observer_gate_") as raw:
+            root=Path(raw)
+            schedule,fixture=__import__("backend.nhl.scripts.preflight_nhl_sog_prediction_only_v1",fromlist=["fixture"]).fixture("2026-09-20")
+            with patch.object(observer,"export_features",return_value=(schedule,fixture)), \
+                 patch("socket.socket",side_effect=AssertionError("NETWORK_FORBIDDEN")), \
+                 patch.dict(os.environ,{"PROPPADIA_INVOCATION_ORIGIN":"VALIDATION_TEST","PROPPADIA_VALIDATION_ID":"sog_gate_fixture"}):
+                status=observer.observe(slate="2026-09-20",requested="AUTO",dsn="fixture",root=root,now=datetime(2026,9,20,18,0,tzinfo=timezone.utc))
+            payload=json.loads(status.read_text())
+            self.assertEqual(payload["status"],"CAPTURED")
+            self.assertEqual(payload["morning_readiness_dependency"],"NONE_PREDICTION_ONLY")
+            self.assertEqual(payload["invocation_classification"],"VALIDATION_TEST")
+            self.assertEqual(payload["market_requests"],0)
     def test_prediction_only_no_zero_fill_and_three_line_ladder(self):
         p,i,e=build_predictions(features(),slate_date="2026-09-20",phase="MIDDAY",prediction_timestamp_utc="2026-09-20T18:01:00Z",input_cutoff_utc="2026-09-20T18:01:00Z")
         self.assertEqual(i.player_id.nunique(),2);self.assertEqual(len(p),len(i)*3);self.assertEqual(len(e),1)

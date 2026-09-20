@@ -1,0 +1,6 @@
+artifact_timestamp_utc,artifact_timestamp_pt,classification,origin,evidence,status
+2026-09-19T22:49:25.556940Z,2026-09-19T15:49:25.556940-07:00,CODEX_VALIDATION_SMOKE_TEST,focused cold-start validator and unittest launch,"Codex session tool call at 22:49:25.034Z; production-root status written by test_main_lock_failure_keeps_exit_zero",RESOLVED
+2026-09-19T22:53:12.430519Z,2026-09-19T15:53:12.430519-07:00,CODEX_VALIDATION_SMOKE_TEST,focused validator/unittest rerun,"retained Codex validation session; same production-root test defect",RESOLVED
+2026-09-19T22:54:03.101258Z,2026-09-19T15:54:03.101258-07:00,CODEX_VALIDATION_SMOKE_TEST,unittest and compilation rerun,"retained Codex validation session; same production-root test defect",RESOLVED
+2026-09-19T22:55:07.577477Z,2026-09-19T15:55:07.577477-07:00,CODEX_VALIDATION_SMOKE_TEST,focused validator/unittest rerun,"retained Codex validation session; same production-root test defect",RESOLVED
+2026-09-19T22:57:56.927433Z,2026-09-19T15:57:56.927433-07:00,CODEX_VALIDATION_SMOKE_TEST,final validator/unittest/diff rerun,"retained Codex validation session; same production-root test defect",RESOLVED

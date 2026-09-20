@@ -1,0 +1,40 @@
+{
+  "artifact_contract": "NHL_SEPTEMBER20_READINESS_AND_POSTGAME_COMMAND_V1",
+  "created_for_local_date": "2026-09-19",
+  "live_preflight": {
+    "all_retained_games_final": false,
+    "canonical_games": 7,
+    "database_writes": 0,
+    "external_requests": 0,
+    "mode": "PREFLIGHT_READ_ONLY",
+    "paid_credits": 0,
+    "readiness": "NOT_READY_UNFINISHED_OR_UNAVAILABLE",
+    "retained_state_counts": {
+      "SCHEDULED": 7
+    },
+    "started_at_local": "2026-09-19T16:57:53-07:00",
+    "started_at_utc": "2026-09-19T23:57:53Z"
+  },
+  "observer_invocations": {
+    "resolved_as_codex_validation_smoke_tests": 5,
+    "unresolved": 0
+  },
+  "postgame": {
+    "command": "bin/nhl_postgame_reconcile.sh --execute --date 2026-09-19",
+    "execution_started": false,
+    "preflight_command": "bin/nhl_postgame_reconcile.sh --preflight --date 2026-09-19"
+  },
+  "sog_prediction_only": {
+    "morning_readiness_dependency": "NONE_PREDICTION_ONLY",
+    "odds_api_dependency": false,
+    "selected_arm": "D_PLAYER_ROLE_HIERARCHICAL",
+    "status": "MARKET_INDEPENDENCE_VERIFIED"
+  },
+  "validation": {
+    "compilation": "PASS",
+    "focused_tests": 27,
+    "focused_tests_failed": 0,
+    "git_diff_check": "PASS",
+    "network_requests_during_offline_validation": 0
+  }
+}
