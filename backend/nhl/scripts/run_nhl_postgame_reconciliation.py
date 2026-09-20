@@ -83,24 +83,32 @@ def read_only_preflight(dsn: str, slate_date: str) -> tuple[dict[str, object], i
     return payload, 0 if complete else 2
 
 
-def fetch_official(slate_date: str) -> tuple[pd.DataFrame, dict[int, dict], int]:
-    response = requests.get(f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30)
-    response.raise_for_status()
-    payload = response.json()
-    raw_games = []
-    for day in payload.get("gameWeek", []):
-        raw_games.extend(day.get("games") or [])
-    raw_games.extend(payload.get("games") or [])
-    seen, games = set(), []
-    for item in raw_games:
-        if item.get("gameDate") and str(item.get("gameDate")) != slate_date:
+def official_games_for_slate(payload: dict, slate_date: str) -> pd.DataFrame:
+    """Flatten only the requested schedule day.
+
+    NHL's schedule response assigns the authoritative date to each ``gameWeek``
+    parent.  Child games commonly omit ``gameDate``; a child value must not move
+    a game into or out of its authoritative parent day.  The legacy top-level
+    ``games`` shape has no parent, so it requires an exact child date.
+    """
+    rows: list[dict[str, object]] = []
+    for day in payload.get("gameWeek", []) or []:
+        if str(day.get("date") or "") != slate_date:
             continue
-        gid = int(item.get("id") or item.get("gamePk") or item.get("gameId"))
-        if gid in seen:
-            continue
-        seen.add(gid)
+        for item in day.get("games") or []:
+            rows.append(item)
+    for item in payload.get("games", []) or []:
+        if str(item.get("gameDate") or "") == slate_date:
+            rows.append(item)
+
+    games = []
+    for item in rows:
+        raw_id = item.get("id") or item.get("gamePk") or item.get("gameId")
+        if raw_id is None:
+            raise RuntimeError("OFFICIAL_GAME_IDENTITY_MISSING")
         games.append({
-            "game_id": gid, "game_state": str(item.get("gameState") or item.get("gameScheduleState") or "").upper(),
+            "game_id": int(raw_id),
+            "game_state": str(item.get("gameState") or item.get("gameScheduleState") or "").upper(),
             "home_team_id": int((item.get("homeTeam") or {}).get("id")),
             "away_team_id": int((item.get("awayTeam") or {}).get("id")),
             "home_score": (item.get("homeTeam") or {}).get("score"),
@@ -109,19 +117,50 @@ def fetch_official(slate_date: str) -> tuple[pd.DataFrame, dict[int, dict], int]
     official = pd.DataFrame(games, columns=[
         "game_id", "game_state", "home_team_id", "away_team_id", "home_score", "away_score",
     ])
+    if official.game_id.duplicated().any():
+        duplicate_ids = sorted(official.loc[official.game_id.duplicated(False), "game_id"].astype(int).unique())
+        raise RuntimeError(f"OFFICIAL_DUPLICATE_GAME_IDENTITY:{duplicate_ids}")
+    return official
+
+
+def fetch_official(slate_date: str, canonical_game_ids: set[int]) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
+    expected_ids = {int(value) for value in canonical_game_ids}
+    response = requests.get(f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30)
+    response.raise_for_status()
+    official = official_games_for_slate(response.json(), slate_date)
+    actual_ids = set(official.game_id.astype(int))
+    if actual_ids != expected_ids:
+        missing = sorted(expected_ids - actual_ids)
+        unexpected = sorted(actual_ids - expected_ids)
+        raise RuntimeError(
+            "OFFICIAL_GAME_SET_MISMATCH_BEFORE_BOXSCORE_REQUESTS:"
+            f"expected={len(expected_ids)}:actual={len(actual_ids)}:"
+            f"missing={missing}:unexpected={unexpected}"
+        )
     boxes: dict[int, dict] = {}
-    calls = 1
-    for gid in official.game_id.astype(int).tolist() if len(official) else []:
+    for gid in sorted(expected_ids):
         box = requests.get(f"https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore", timeout=30)
         box.raise_for_status()
         boxes[gid] = box.json()
-        calls += 1
-    return official, boxes, calls
+    requests_made = {
+        "schedule_requests_expected": 1,
+        "schedule_requests_actual": 1,
+        "game_requests_expected": len(expected_ids),
+        "game_requests_actual": len(boxes),
+        "official_requests_expected": 1 + len(expected_ids),
+        "official_requests_actual": 1 + len(boxes),
+    }
+    if requests_made["official_requests_actual"] != requests_made["official_requests_expected"]:
+        raise RuntimeError(f"OFFICIAL_REQUEST_COUNT_MISMATCH:{requests_made}")
+    return official, boxes, requests_made
 
 
 def _run(command: list[str], slate_date: str, dsn: str) -> None:
     env = os.environ.copy()
-    env.update({"SLATE_DATE": slate_date, "SUPABASE_DB_URL": dsn})
+    # Some retained collectors prefer DATABASE_URL while others prefer
+    # SUPABASE_DB_URL.  Resolve both to the already validated DSN so a literal
+    # shell-style alias from an env file cannot leak into a child process.
+    env.update({"SLATE_DATE": slate_date, "SUPABASE_DB_URL": dsn, "DATABASE_URL": dsn})
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
@@ -258,7 +297,8 @@ def main() -> int:
     try:
         with reconciliation_lock(args.output_root, slate_date):
             canonical = canonical_slate(dsn, slate_date)
-            official, boxes, calls = fetch_official(slate_date)
+            canonical_ids = set(canonical.game_id.astype(int))
+            official, boxes, request_counts = fetch_official(slate_date, canonical_ids)
             validate_final_slate(canonical, official, slate_date)
             destination, disposition = publish_reconciliation(
                 canonical=canonical, official=official, boxscores=boxes, slate_date=slate_date,
@@ -268,7 +308,9 @@ def main() -> int:
             )
         print(json.dumps({
             "status": disposition, "output": str(destination),
-            "official_nhl_requests": calls, "bookmaker_requests": 0, "paid_credits": 0,
+            "official_nhl_requests": request_counts["official_requests_actual"],
+            "official_request_counts": request_counts,
+            "bookmaker_requests": 0, "paid_credits": 0,
         }, indent=2, sort_keys=True))
         return 0
     except RuntimeError as error:

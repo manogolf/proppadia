@@ -17,6 +17,7 @@ import pandas as pd
 import psycopg
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
+from backend.nhl.scripts.nhl_prediction_only_common import observe as observe_independent_prediction_only
 from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import observe as observe_sog_prediction_only
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 
@@ -24,6 +25,34 @@ from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
 MORNING_ROOT = ROOT / "artifacts/operational/nhl/morning"
+
+
+def observe_prediction_only_lanes(slate: str, requested: str, dsn: str,
+                                  now: datetime) -> dict[str, str]:
+    """Run independent lane snapshots before consulting any paid-market gate."""
+    results: dict[str, str] = {}
+    for lane in ("POINTS", "SAVES"):
+        try:
+            path = observe_independent_prediction_only(
+                lane=lane, season=2026, slate_date=slate, requested_phase=requested,
+                observation_timestamp=now, canonical_run_identifier=None, dsn=dsn,
+                output_root=ROOT / "artifacts/operational/nhl" / f"{lane.lower()}_prediction_only",
+            )
+            results[lane] = str(path)
+        except Exception as error:
+            # Each publisher normally emits its own FAILED_WARN_ONLY status. This
+            # boundary additionally prevents an unexpected lane defect from
+            # suppressing another prediction lane or changing paid-market flow.
+            results[lane] = f"FAILED_WARN_ONLY:{type(error).__name__}:{error}"
+    try:
+        path = observe_sog_prediction_only(
+            slate=slate, requested=requested, dsn=dsn,
+            root=ROOT / "artifacts/operational/nhl/sog_prediction_only", now=now,
+        )
+        results["SOG"] = str(path)
+    except Exception as error:
+        results["SOG"] = f"FAILED_WARN_ONLY:{type(error).__name__}:{error}"
+    return results
 
 
 def load_env(path: Path) -> None:
@@ -252,17 +281,12 @@ def main() -> int:
     now = utc_now()
     slate = now.astimezone(ZoneInfo("America/New_York")).date().isoformat() if args.slate_date == "today" else args.slate_date
     try:
-        # Independent, zero-credit prediction-only observation in the same already
-        # authorized MIDDAY/FINAL polling process. Its failure remains lane-local.
-        try:
-            observe_sog_prediction_only(
-                slate=slate, requested=args.phase,
-                dsn=os.environ.get("SUPABASE_DB_URL", "").strip(),
-                root=ROOT / "artifacts/operational/nhl/sog_prediction_only", now=now,
-            )
-        except Exception:
-            # Prediction-only observability must never block the unchanged market lane.
-            pass
+        # All odds-independent predictions run before the market-readiness gate.
+        # Their immutable status records remain lane-local and never authorize a
+        # request, candidate, upload, execution, or retry.
+        observe_prediction_only_lanes(
+            slate, args.phase, os.environ.get("SUPABASE_DB_URL", "").strip(), now,
+        )
         ready, reason = morning_capture_allowed(slate)
         if not ready:
             status_path = record_morning_not_ready(args.output_root, slate, reason)

@@ -12,6 +12,11 @@ from backend.nhl.postgame_reconcile.core import (
     reconciliation_lock,
     validate_final_slate,
 )
+from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
+    _run,
+    fetch_official,
+    official_games_for_slate,
+)
 
 
 SLATE = "2026-09-19"
@@ -48,6 +53,37 @@ def boxscore(saves=25):
             "goalies": [{"playerId": 202, "saves": 20, "shotsAgainst": 23, "toi": "60:00"}],
         },
     }}}
+
+
+def schedule_game(game_id, *, state="FINAL", child_date=None, home=19, away=25):
+    row = {
+        "id": game_id, "gameState": state,
+        "homeTeam": {"id": home, "score": 3},
+        "awayTeam": {"id": away, "score": 2},
+    }
+    if child_date is not None:
+        row["gameDate"] = child_date
+    return row
+
+
+def week_fixture(target_games=None):
+    target_games = [schedule_game(2026010001)] if target_games is None else target_games
+    return {"gameWeek": [
+        {"date": "2026-09-18", "games": [schedule_game(2026010998)]},
+        {"date": SLATE, "games": target_games},
+        {"date": "2026-09-20", "games": [schedule_game(2026010999)]},
+    ]}
+
+
+class Response:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
 
 
 def prediction_tree(root: Path):
@@ -138,6 +174,71 @@ class PostgameReconciliationTest(unittest.TestCase):
                 raise RuntimeError("fixture")
         with reconciliation_lock(self.out, SLATE):
             self.assertTrue(True)
+
+    def test_parent_day_filters_seven_day_response_with_requested_date_in_middle(self):
+        payload = {"gameWeek": [
+            {"date": f"2026-09-{day:02d}", "games": [schedule_game(2026010000 + day)]}
+            for day in range(16, 23)
+        ]}
+        result = official_games_for_slate(payload, SLATE)
+        self.assertEqual(result.game_id.astype(int).tolist(), [2026010019])
+
+    def test_parent_date_is_authoritative_when_child_date_absent_or_misleading(self):
+        payload = week_fixture([
+            schedule_game(2026010001),
+            schedule_game(2026010002, child_date="2026-09-20"),
+        ])
+        result = official_games_for_slate(payload, SLATE)
+        self.assertEqual(result.game_id.astype(int).tolist(), [2026010001, 2026010002])
+
+    def test_duplicate_game_identity_fails_before_boxscore_requests(self):
+        payload = week_fixture([schedule_game(2026010001), schedule_game(2026010001)])
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.requests.get",
+                   return_value=Response(payload)) as request:
+            with self.assertRaisesRegex(RuntimeError, "OFFICIAL_DUPLICATE_GAME_IDENTITY"):
+                fetch_official(SLATE, {2026010001})
+        self.assertEqual(request.call_count, 1)
+
+    def test_missing_or_unexpected_game_fails_before_boxscore_requests(self):
+        for games, expected in [([], {2026010001}),
+                                ([schedule_game(2026010001), schedule_game(2026010002)], {2026010001})]:
+            with self.subTest(games=len(games)):
+                with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.requests.get",
+                           return_value=Response(week_fixture(games))) as request:
+                    with self.assertRaisesRegex(RuntimeError, "OFFICIAL_GAME_SET_MISMATCH_BEFORE_BOXSCORE_REQUESTS"):
+                        fetch_official(SLATE, expected)
+                self.assertEqual(request.call_count, 1)
+
+    def test_exact_request_count_and_only_canonical_boxscores(self):
+        payload = week_fixture([schedule_game(2026010001), schedule_game(2026010002)])
+        urls = []
+        def get(url, timeout):
+            urls.append(url)
+            return Response(payload if "/schedule/" in url else {"game": url})
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.requests.get", side_effect=get):
+            official_frame, boxes, counts = fetch_official(SLATE, {2026010001, 2026010002})
+        self.assertEqual(set(official_frame.game_id.astype(int)), {2026010001, 2026010002})
+        self.assertEqual(set(boxes), {2026010001, 2026010002})
+        self.assertEqual(counts, {
+            "schedule_requests_expected": 1, "schedule_requests_actual": 1,
+            "game_requests_expected": 2, "game_requests_actual": 2,
+            "official_requests_expected": 3, "official_requests_actual": 3,
+        })
+        self.assertEqual(len(urls), 3)
+        self.assertFalse(any("2026010998" in url or "2026010999" in url for url in urls))
+
+    def test_unfinished_requested_game_is_rejected(self):
+        frame = official_games_for_slate(week_fixture([schedule_game(2026010001, state="LIVE")]), SLATE)
+        with self.assertRaisesRegex(RuntimeError, "ADMITTED_GAMES_NOT_OFFICIAL_FINAL"):
+            validate_final_slate(canonical(), frame, SLATE)
+
+    def test_child_collectors_receive_resolved_database_aliases(self):
+        with patch.dict(os.environ, {"DATABASE_URL": "${SUPABASE_DB_URL}"}, clear=False), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.subprocess.run") as run:
+            _run(["fixture-command"], SLATE, "postgresql://resolved.example/database")
+        child = run.call_args.kwargs["env"]
+        self.assertEqual(child["SUPABASE_DB_URL"], "postgresql://resolved.example/database")
+        self.assertEqual(child["DATABASE_URL"], "postgresql://resolved.example/database")
 
 
 if __name__ == "__main__":
