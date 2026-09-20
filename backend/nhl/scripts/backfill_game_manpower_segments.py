@@ -42,6 +42,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import psycopg
 import requests
 
+from backend.nhl.official_request_journal import ENV_REQUIRED, official_get
+
 API = "https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play"
 SRC = "pbp_situation_breakdown"
 
@@ -115,7 +117,11 @@ def advantage_label(ctx: SitCtx) -> str:
 
 def fetch_pbp(game_id: int, timeout_s: int = 30) -> Dict[str, Any]:
     url = API.format(game_id=game_id)
-    r = requests.get(url, timeout=timeout_s)
+    r = official_get(
+        url, timeout=timeout_s, stage="PLAY_BY_PLAY_COLLECTION",
+        endpoint_family="PLAY_BY_PLAY",
+        identity={"slate_date": os.environ.get("SLATE_DATE"), "game_id": int(game_id)},
+    )
     r.raise_for_status()
     return r.json()
 
@@ -395,6 +401,8 @@ def main() -> None:
         except Exception as e:
             total_games_err += 1
             print(f"[{i}/{len(game_ids)}] game_id={gid} ERROR: {e}", file=sys.stderr)
+            if os.environ.get(ENV_REQUIRED) == "1":
+                raise
             # continue processing other games
 
     if conn is not None:

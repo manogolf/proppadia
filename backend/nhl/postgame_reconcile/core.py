@@ -10,7 +10,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -237,7 +237,10 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
                            boxscores: dict[int, dict], slate_date: str,
                            prediction_root: Path, output_root: Path,
                            collector: Callable[[], None] | None = None,
-                           observed_at: str | None = None) -> tuple[Path, str]:
+                           observed_at: str | None = None,
+                           request_journal: Path | None = None,
+                           request_accounting_factory: Callable[[], dict[str, Any]] | None = None,
+                           ) -> tuple[Path, str]:
     observed_at = observed_at or datetime.now(timezone.utc).isoformat()
     validated = validate_final_slate(canonical, official, slate_date)
     games, skaters, goalies = build_outcomes(validated, boxscores, observed_at)
@@ -258,6 +261,17 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         raise RuntimeError("CONFLICTING_RETAINED_OUTCOME")
     if collector is not None:
         collector()
+    request_accounting = request_accounting_factory() if request_accounting_factory else None
+    if request_accounting is not None:
+        expected_authority = 1 + len(validated)
+        if request_journal is None or not request_journal.is_file():
+            raise RuntimeError("OFFICIAL_REQUEST_JOURNAL_MISSING")
+        if request_accounting.get("authority_boundary_logical_requests") != expected_authority:
+            raise RuntimeError("OFFICIAL_REQUEST_AUTHORITY_TOTAL_MISMATCH")
+        if request_accounting.get("unexpected_requests") != 0:
+            raise RuntimeError("OFFICIAL_REQUEST_UNEXPECTED_IDENTITY")
+        if request_accounting.get("total_logical_requests", 0) <= 0:
+            raise RuntimeError("OFFICIAL_REQUEST_TOTAL_RECONCILIATION_FAILED")
     day_root.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".reconciliation.incomplete.", dir=day_root))
     try:
@@ -279,11 +293,21 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             "strict_prior_update_status": "COMPLETE_AFTER_ALL_FINAL_AND_COLLECTOR_SUCCESS",
             "odds_api_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
         }
+        if request_accounting is not None:
+            summary["official_request_accounting"] = request_accounting
+            packaged_journal = staging / "official_request_journal.jsonl"
+            shutil.copyfile(request_journal, packaged_journal)
+            os.chmod(packaged_journal, 0o600)
+            (staging / "official_request_accounting.json").write_text(
+                json.dumps(request_accounting, indent=2, sort_keys=True) + "\n"
+            )
         (staging / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
         (staging / "report.md").write_text(
             f"# NHL postgame reconciliation — {slate_date}\n\n"
             f"Status: COMPLETE\n\nGames: {len(games)}; skaters: {len(skaters)}; goalies: {len(goalies)}.\n\n"
             "September 19 SOG is outcome-only and has no prediction grade. All preseason lanes remain non-evaluation.\n"
+            + ("\nOfficial NHL request accounting is reconciled end to end in "
+               "official_request_accounting.json.\n" if request_accounting is not None else "")
         )
         manifest_files = sorted(path for path in staging.iterdir() if path.is_file())
         (staging / "SHA256SUMS").write_text("".join(f"{_sha(path)}  {path.name}\n" for path in manifest_files))

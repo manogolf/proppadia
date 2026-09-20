@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import psycopg
 import requests
 
+from backend.nhl.official_request_journal import ENV_REQUIRED, official_get
+
 
 SHIFTCHARTS_URL = "https://api.nhle.com/stats/rest/en/shiftcharts"
 DEFAULT_TIMEOUT_SEC = 30
@@ -111,7 +113,11 @@ def get_latest_team_map_for_games(conn, game_ids: List[int]) -> Dict[Tuple[int, 
 
 def fetch_shiftcharts(game_id: int) -> List[Dict[str, Any]]:
     params = {"cayenneExp": f"gameId={game_id}"}
-    r = requests.get(SHIFTCHARTS_URL, params=params, timeout=DEFAULT_TIMEOUT_SEC)
+    r = official_get(
+        SHIFTCHARTS_URL, params=params, timeout=DEFAULT_TIMEOUT_SEC,
+        stage="SHIFT_CHART_COLLECTION", endpoint_family="SHIFT_CHART",
+        identity={"slate_date": os.environ.get("SLATE_DATE"), "game_id": int(game_id)},
+    )
     r.raise_for_status()
     payload = r.json()
     data = payload.get("data", [])
@@ -439,6 +445,8 @@ def main() -> None:
             total_errors += 1
             conn.rollback()
             print(f"[shiftcharts] ⚠️ game_id={gid} failed: {e}")
+            if os.environ.get(ENV_REQUIRED) == "1":
+                raise
             continue
 
 

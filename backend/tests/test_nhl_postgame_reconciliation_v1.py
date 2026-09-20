@@ -7,6 +7,12 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from backend.nhl.official_request_journal import (
+    ENV_CACHE, ENV_GAME_HASH, ENV_GAME_IDS, ENV_JOURNAL, ENV_REQUIRED,
+    ENV_RUN_ID, ENV_SLATE, canonical_game_set_hash, official_get,
+    summarize_journal,
+)
+
 from backend.nhl.postgame_reconcile.core import (
     publish_reconciliation,
     reconciliation_lock,
@@ -239,6 +245,47 @@ class PostgameReconciliationTest(unittest.TestCase):
         child = run.call_args.kwargs["env"]
         self.assertEqual(child["SUPABASE_DB_URL"], "postgresql://resolved.example/database")
         self.assertEqual(child["DATABASE_URL"], "postgresql://resolved.example/database")
+
+    def test_completed_package_contains_exact_end_to_end_accounting(self):
+        request_root = self.root / "requests"
+        game_hash = canonical_game_set_hash([2026010001])
+        env = {
+            ENV_REQUIRED: "1", ENV_RUN_ID: "package_fixture",
+            ENV_JOURNAL: str(request_root / "journal.jsonl"),
+            ENV_CACHE: str(request_root / "cache"), ENV_SLATE: SLATE,
+            ENV_GAME_HASH: game_hash, ENV_GAME_IDS: "2026010001",
+        }
+        schedule = week_fixture()
+        responses = [Response(schedule), Response({"id": 2026010001})]
+        for response in responses:
+            response.content = json.dumps(response.payload).encode()
+            response.status_code = 200
+        class Session:
+            headers = {}
+            def get(self, url, **kwargs):
+                return responses.pop(0)
+            def close(self):
+                return None
+        with patch.dict(os.environ, env, clear=False), \
+             patch("backend.nhl.official_request_journal.requests.Session", side_effect=Session):
+            official_get("x", timeout=1, stage="AUTH", endpoint_family="SCHEDULE",
+                         identity={"slate_date": SLATE}, authority_boundary=True,
+                         preserve_response=True)
+            official_get("x", timeout=1, stage="AUTH", endpoint_family="BOXSCORE",
+                         identity={"slate_date": SLATE, "game_id": 2026010001},
+                         authority_boundary=True, preserve_response=True)
+            destination, state = self.publish(
+                request_journal=Path(env[ENV_JOURNAL]),
+                request_accounting_factory=lambda: summarize_journal(
+                    Path(env[ENV_JOURNAL]), run_id="package_fixture", expected_game_hash=game_hash,
+                ),
+            )
+        self.assertEqual(state, "COMPLETE_NEW_APPEND_ONLY")
+        accounting = json.loads((destination / "official_request_accounting.json").read_text())
+        summary = json.loads((destination / "summary.json").read_text())
+        self.assertEqual(accounting["total_logical_requests"], 2)
+        self.assertEqual(summary["official_request_accounting"], accounting)
+        self.assertIn("official_request_journal.jsonl", (destination / "SHA256SUMS").read_text())
 
 
 if __name__ == "__main__":

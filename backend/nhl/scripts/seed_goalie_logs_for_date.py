@@ -21,6 +21,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import psycopg
 
+from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+
 # ---------------- Env & date ----------------
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
 if not DB_URL:
@@ -135,7 +137,14 @@ def game_ids_from_db(conn, date_str: str) -> List[int]:
 
 def game_ids_from_api(date_str: str) -> List[int]:
     url = f"{API_SCHEDULE}/{date_str}"
-    r = S.get(url, timeout=12); r.raise_for_status()
+    context = RequestContext.from_env()
+    r = official_get(
+        url, timeout=12, session=S, stage="GOALIE_COLLECTION",
+        endpoint_family="SCHEDULE", identity={"slate_date": date_str},
+        max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+        backoff_seconds=0.5, request_class="FALLBACK",
+        reuse_preserved=context is not None,
+    ); r.raise_for_status()
     data = r.json()
     games = []
     if isinstance(data, dict) and "gameWeek" in data:
@@ -152,7 +161,14 @@ def game_ids_from_api(date_str: str) -> List[int]:
 # ---------------- Boxscore (api-web) ----------------
 def fetch_boxscore_api(game_pk: int) -> Dict[str, Any]:
     url = API_BOXSCORE.format(gamePk=int(game_pk))
-    r = S.get(url, timeout=15); r.raise_for_status()
+    context = RequestContext.from_env()
+    r = official_get(
+        url, timeout=15, session=S, stage="GOALIE_COLLECTION",
+        endpoint_family="BOXSCORE",
+        identity={"slate_date": SLATE_DATE, "game_id": int(game_pk)},
+        max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+        backoff_seconds=0.5, reuse_preserved=context is not None,
+    ); r.raise_for_status()
     return r.json()
 
 def iter_goalies_from_box(box: Dict[str, Any]) -> Iterable[Tuple[Optional[int], str, Optional[int], Optional[int], Optional[float]]]:
@@ -232,6 +248,8 @@ def main():
             try:
                 box = fetch_boxscore_api(gpk)
             except Exception as e:
+                if os.environ.get(ENV_REQUIRED) == "1":
+                    raise
                 print(f"[{gpk}] boxscore fetch failed: {e}", file=sys.stderr)
                 continue
 

@@ -26,6 +26,8 @@ from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 import psycopg
 
+from backend.nhl.official_request_journal import RequestContext, official_get
+
 ET = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
 
@@ -78,7 +80,17 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
     data = None
     selected_url = None
     last_err = None
+    context = RequestContext.from_env()
+    if context is not None:
+        selected_url = candidates[0]
+        data = official_get(
+            selected_url, timeout=12, session=s, stage="SCHEDULE_INGESTION",
+            endpoint_family="SCHEDULE", identity={"slate_date": date_str},
+            reuse_preserved=True,
+        ).json()
     for url in candidates:
+        if context is not None:
+            break
         try:
             r = s.get(url, timeout=12); r.raise_for_status()
             data = r.json()

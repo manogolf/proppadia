@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,19 @@ import pandas as pd
 import psycopg
 import requests
 
+from backend.nhl.official_request_journal import (
+    ENV_CACHE,
+    ENV_GAME_HASH,
+    ENV_GAME_IDS,
+    ENV_JOURNAL,
+    ENV_REQUIRED,
+    ENV_RUN_ID,
+    ENV_SLATE,
+    RequestContext,
+    canonical_game_set_hash,
+    official_get,
+    summarize_journal,
+)
 from backend.nhl.postgame_reconcile.core import (
     reconciliation_lock,
     publish_reconciliation,
@@ -125,7 +139,12 @@ def official_games_for_slate(payload: dict, slate_date: str) -> pd.DataFrame:
 
 def fetch_official(slate_date: str, canonical_game_ids: set[int]) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
     expected_ids = {int(value) for value in canonical_game_ids}
-    response = requests.get(f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30)
+    response = official_get(
+        f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30,
+        stage="POSTGAME_AUTHORITY", endpoint_family="SCHEDULE",
+        identity={"slate_date": slate_date}, authority_boundary=True,
+        preserve_response=True,
+    )
     response.raise_for_status()
     official = official_games_for_slate(response.json(), slate_date)
     actual_ids = set(official.game_id.astype(int))
@@ -139,7 +158,12 @@ def fetch_official(slate_date: str, canonical_game_ids: set[int]) -> tuple[pd.Da
         )
     boxes: dict[int, dict] = {}
     for gid in sorted(expected_ids):
-        box = requests.get(f"https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore", timeout=30)
+        box = official_get(
+            f"https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore", timeout=30,
+            stage="POSTGAME_AUTHORITY", endpoint_family="BOXSCORE",
+            identity={"slate_date": slate_date, "game_id": gid},
+            authority_boundary=True, preserve_response=True,
+        )
         box.raise_for_status()
         boxes[gid] = box.json()
     requests_made = {
@@ -161,6 +185,10 @@ def _run(command: list[str], slate_date: str, dsn: str) -> None:
     # SUPABASE_DB_URL.  Resolve both to the already validated DSN so a literal
     # shell-style alias from an env file cannot leak into a child process.
     env.update({"SLATE_DATE": slate_date, "SUPABASE_DB_URL": dsn, "DATABASE_URL": dsn})
+    if env.get(ENV_REQUIRED) == "1":
+        # Fail before spawning a network-capable child if the shared governed
+        # context is absent, inconsistent, or has been partially overwritten.
+        RequestContext.from_env(required=True)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
@@ -298,6 +326,19 @@ def main() -> int:
         with reconciliation_lock(args.output_root, slate_date):
             canonical = canonical_slate(dsn, slate_date)
             canonical_ids = set(canonical.game_id.astype(int))
+            game_hash = canonical_game_set_hash(canonical_ids)
+            started = datetime.now(timezone.utc)
+            run_id = f"nhlpostgame_{slate_date.replace('-', '')}_{started.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
+            request_root = args.output_root / "request_runs" / slate_date / run_id
+            context_values = {
+                ENV_REQUIRED: "1", ENV_RUN_ID: run_id,
+                ENV_JOURNAL: str(request_root / "official_request_journal.jsonl"),
+                ENV_CACHE: str(request_root / "preserved_responses"),
+                ENV_SLATE: slate_date, ENV_GAME_HASH: game_hash,
+                ENV_GAME_IDS: ",".join(str(value) for value in sorted(canonical_ids)),
+            }
+            os.environ.update(context_values)
+            RequestContext.from_env(required=True)
             official, boxes, request_counts = fetch_official(slate_date, canonical_ids)
             validate_final_slate(canonical, official, slate_date)
             destination, disposition = publish_reconciliation(
@@ -305,11 +346,17 @@ def main() -> int:
                 prediction_root=args.prediction_root / slate_date, output_root=args.output_root,
                 collector=lambda: governed_collectors(dsn, slate_date),
                 observed_at=datetime.now(timezone.utc).isoformat(),
+                request_journal=Path(context_values[ENV_JOURNAL]),
+                request_accounting_factory=lambda: summarize_journal(
+                    Path(context_values[ENV_JOURNAL]), run_id=run_id,
+                    expected_game_hash=game_hash,
+                ),
             )
+            accounting = json.loads((destination / "official_request_accounting.json").read_text())
         print(json.dumps({
             "status": disposition, "output": str(destination),
-            "official_nhl_requests": request_counts["official_requests_actual"],
-            "official_request_counts": request_counts,
+            "authority_boundary_request_counts": request_counts,
+            "official_request_accounting": accounting,
             "bookmaker_requests": 0, "paid_credits": 0,
         }, indent=2, sort_keys=True))
         return 0

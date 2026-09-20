@@ -46,6 +46,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+
 # ---------------- Env / args ----------------
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
 if not DB_URL:
@@ -164,7 +166,13 @@ def get_schedule(date_str: str):
     We also ensure the start time falls on date_str in ET.
     """
     url = f"{BASE_SCHEDULE}/{date_str}"
-    r = S.get(url, timeout=15); r.raise_for_status()
+    context = RequestContext.from_env()
+    r = official_get(
+        url, timeout=15, session=S, stage="SKATER_COLLECTION",
+        endpoint_family="SCHEDULE", identity={"slate_date": date_str},
+        max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+        backoff_seconds=0.5, reuse_preserved=context is not None,
+    ); r.raise_for_status()
     data = r.json()
 
     games_in = []
@@ -196,7 +204,14 @@ def get_boxscore(game_pk: int):
     Returns gamecenter JSON. Skater stats live under playerByGameStats.{homeTeam,awayTeam}.
     """
     url = f"{BASE_BOXSCORE}/{game_pk}/boxscore"
-    r = S.get(url, timeout=20)
+    context = RequestContext.from_env()
+    r = official_get(
+        url, timeout=20, session=S, stage="SKATER_COLLECTION",
+        endpoint_family="BOXSCORE",
+        identity={"slate_date": SLATE_DATE, "game_id": int(game_pk)},
+        max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+        backoff_seconds=0.5, reuse_preserved=context is not None,
+    )
     if r.status_code == 404:
         return None
     r.raise_for_status()
@@ -248,21 +263,27 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
       - If name is missing, try to resolve from NHL API by player id.
     """
     import json
-    from urllib.request import urlopen, Request
 
     def _fetch_player_full_name_by_id(pid: int) -> str | None:
         # NHL "player landing" endpoint (authoritative for name)
         # If this ever changes, the curl test below will tell you immediately.
         url = f"https://api-web.nhle.com/v1/player/{pid}/landing"
         try:
-            req = Request(url, headers={"User-Agent": "proppadia/1.0"})
-            with urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            response = official_get(
+                url, timeout=10, session=S, stage="SKATER_COLLECTION",
+                endpoint_family="PLAYER_LANDING",
+                identity={"slate_date": SLATE_DATE, "player_id": int(pid)},
+                max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+                backoff_seconds=0.5,
+            )
+            data = response.json()
             first = (data.get("firstName") or {}).get("default") or ""
             last  = (data.get("lastName")  or {}).get("default") or ""
             nm = f"{first} {last}".strip()
             return nm or None
         except Exception:
+            if os.environ.get(ENV_REQUIRED) == "1":
+                raise
             return None
 
     raw_name = (full_name or "").strip()
@@ -485,7 +506,14 @@ def refresh_roster_status_from_box(conn, gpk: int):
     """
 
     def _box(g):
-        r = requests.get(f"{BASE_BOXSCORE}/{g}/boxscore", timeout=20)
+        context = RequestContext.from_env()
+        r = official_get(
+            f"{BASE_BOXSCORE}/{g}/boxscore", timeout=20, session=S,
+            stage="SKATER_ROSTER_ALIGNMENT", endpoint_family="BOXSCORE",
+            identity={"slate_date": SLATE_DATE, "game_id": int(g)},
+            max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+            backoff_seconds=0.5, reuse_preserved=context is not None,
+        )
         r.raise_for_status()
         return r.json()
 
@@ -753,6 +781,8 @@ def main():
                                     team_id=int(team_id_val) if team_id_val is not None else None,
                                 )
                             except Exception as e:
+                                if os.environ.get(ENV_REQUIRED) == "1":
+                                    raise
                                 print(
                                     f"[seed_skater_logs] warn: ensure_player_exists failed for nhl_id={nhl_id_val}: {e}"
                                 )
@@ -790,6 +820,8 @@ def main():
                 except Exception:
                     pass
                 print(f"[{gpk}] ERROR: {e}", file=sys.stderr)
+                if os.environ.get(ENV_REQUIRED) == "1":
+                    raise
 
     print(f"Done. Upserted total {inserted_total} skater rows for {SLATE_DATE}; skipped_no_map={skipped_no_map_total}")
 

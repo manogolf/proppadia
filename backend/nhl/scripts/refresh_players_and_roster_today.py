@@ -58,6 +58,8 @@ import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
+from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+
 # ---------------- Config ----------------
 ET = ZoneInfo("America/New_York")
 SLATE_DATE = os.environ.get("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
@@ -93,6 +95,7 @@ def _session() -> requests.Session:
     return s
 
 S = _session()
+ROSTER_RESPONSE_VARIANT_BY_TEAM: dict[str, tuple[str, str]] = {}
 
 # ---------------- Helpers ----------------
 PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
@@ -128,7 +131,13 @@ def _safe_str(v):
 
 def fetch_player_name_strict(nhl_pid: int | str) -> str | None:
     try:
-        resp = S.get(f"{BASE}/player/{nhl_pid}/landing", timeout=8)
+        resp = official_get(
+            f"{BASE}/player/{nhl_pid}/landing", timeout=8, session=S,
+            stage="ROSTER_COLLECTION", endpoint_family="PLAYER_LANDING",
+            identity={"slate_date": SLATE_DATE, "player_id": int(nhl_pid)},
+            max_attempts=7, retry_statuses={429, 500, 502, 503, 504},
+            backoff_seconds=0.75,
+        )
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
@@ -143,6 +152,8 @@ def fetch_player_name_strict(nhl_pid: int | str) -> str | None:
             if nm and not is_placeholder(nm):
                 return nm
     except Exception:
+        if os.environ.get(ENV_REQUIRED) == "1":
+            raise
         pass
     return None
 
@@ -387,8 +398,41 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
         f"{BASE}/roster/{tri}/{season}",
     ]
 
-    for url in urls:
-        resp = S.get(url, timeout=20)
+    reused = ROSTER_RESPONSE_VARIANT_BY_TEAM.get(tri)
+    if reused is not None:
+        url, variant = reused
+        resp = official_get(
+            url, timeout=20, session=S, stage="ROSTER_COLLECTION",
+            endpoint_family="ROSTER",
+            identity={"slate_date": when_iso, "team": tri, "roster_variant": variant},
+            request_class="PRIMARY" if variant == "current" else "FALLBACK",
+            reuse_preserved=True,
+        )
+        resp.raise_for_status()
+        j = resp.json() or {}
+        out: list[dict] = []
+        _append_from_section(out, j.get("forwards"), "F")
+        _append_from_section(out, j.get("defensemen") or j.get("defense"), "D")
+        _append_from_section(out, j.get("goalies"), "G")
+        if not out and isinstance(j.get("roster"), dict):
+            roster = j["roster"]
+            _append_from_section(out, roster.get("forwards"), "F")
+            _append_from_section(out, roster.get("defensemen") or roster.get("defense"), "D")
+            _append_from_section(out, roster.get("goalies"), "G")
+        if not out:
+            raise RuntimeError("PRESERVED_ROSTER_RESPONSE_BECAME_EMPTY")
+        return out
+
+    for index, url in enumerate(urls):
+        variant = "current" if index == 0 else str(season)
+        resp = official_get(
+            url, timeout=20, session=S, stage="ROSTER_COLLECTION",
+            endpoint_family="ROSTER", identity={"slate_date": when_iso, "team": tri,
+                                                  "roster_variant": variant},
+            max_attempts=7, retry_statuses={429, 500, 502, 503, 504},
+            backoff_seconds=0.75, request_class="PRIMARY" if index == 0 else "FALLBACK",
+            preserve_response=True,
+        )
         if resp.status_code == 404:
             continue
         resp.raise_for_status()
@@ -409,6 +453,8 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
             _append_from_section(out, r.get("goalies"), "G")
 
         if out:
+            if RequestContext.from_env() is not None:
+                ROSTER_RESPONSE_VARIANT_BY_TEAM[tri] = (url, variant)
             return out
 
     return []
@@ -480,6 +526,8 @@ def main():
                         try:
                             roster = fetch_roster(tri, SLATE_DATE) or []
                         except Exception as e:
+                            if os.environ.get(ENV_REQUIRED) == "1":
+                                raise
                             print(f"[warn] roster fetch failed for {tri}: {e}")
                             roster = []
 
@@ -512,6 +560,8 @@ def main():
                 if players_stage or roster_rows:
                     source = "API"
             except Exception as e:
+                if os.environ.get(ENV_REQUIRED) == "1":
+                    raise
                 print(f"[warn] NHL API fetch failed: {e}")
 
         # 3) Decide path & write

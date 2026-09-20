@@ -35,6 +35,8 @@ from typing import Any, Dict, Iterable, Optional, Tuple, List
 import psycopg
 import requests
 
+from backend.nhl.official_request_journal import RequestContext, official_get
+
 
 BOX_URL = "https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
 UA = "proppadia-pp-toi-canonical/1.0"
@@ -180,7 +182,15 @@ def extract_pp_toi_minutes_from_db(cur, game_id: int) -> Dict[int, float]:
 
 def fetch_boxscore(game_id: int, timeout: int = 30) -> Dict[str, Any]:
     url = BOX_URL.format(game_id=game_id)
-    r = requests.get(url, headers={"User-Agent": UA}, timeout=timeout)
+    context = RequestContext.from_env()
+    session = requests.Session()
+    session.headers.update({"User-Agent": UA})
+    r = official_get(
+        url, timeout=timeout, session=session, stage="PP_TOI_COLLECTION",
+        endpoint_family="BOXSCORE",
+        identity={"slate_date": os.environ.get("SLATE_DATE"), "game_id": int(game_id)},
+        reuse_preserved=context is not None,
+    )
     r.raise_for_status()
     return r.json()
 
