@@ -49,12 +49,12 @@ def _passing_inventory() -> dict:
             },
         ],
         "lanes": {name: dict(zeroes) for name in REQUIRED_CLOSE_LANES},
-        "proper_scores": {},
-        "bvp_acquisition_identity_status": {},
-        "feature_lineage_health": {},
-        "market_coverage": {},
-        "agreement_study_progress": {},
-        "api_credit_accounting": {},
+        "proper_scores": {"status": "PASS"},
+        "bvp_acquisition_identity_status": {"status": "PASS"},
+        "feature_lineage_health": {"status": "PASS"},
+        "market_coverage": {"status": "PASS"},
+        "agreement_study_progress": {"status": "PASS"},
+        "api_credit_accounting": {"status": "PASS"},
         "outstanding_unresolved_rows": [],
         "model_qualification_publication_status": {
             "model_promoted": False,
@@ -93,6 +93,11 @@ def test_all_star_is_known_but_excluded() -> None:
     assert result.eligible_for_phase_evaluation is False
 
 
+def test_unknown_source_fails_closed() -> None:
+    with pytest.raises(PhaseContractError, match="UNKNOWN_GAME_TYPE_SOURCE"):
+        normalize_source_game_type("R", season=2026, source="DATE_GUESS")
+
+
 def test_passing_close_inventory_authorizes() -> None:
     report = validate_close_inventory(_passing_inventory())
     assert report["passed"] is True
@@ -128,3 +133,9 @@ def test_lane_leakage_or_ungraded_rows_block_close() -> None:
     assert report["passed"] is False
     assert "MONEYLINE:postseason_rows_in_regular_outputs" in report["failed_checks"]
     assert "RAW_TOTALS:ungraded_eligible_predictions" in report["failed_checks"]
+
+
+def test_non_hex_source_identity_blocks_close() -> None:
+    payload = _passing_inventory()
+    payload["source_config_identities"][0]["sha256"] = "z" * 64
+    assert validate_close_inventory(payload)["passed"] is False

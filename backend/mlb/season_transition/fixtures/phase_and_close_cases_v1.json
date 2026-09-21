@@ -5,6 +5,48 @@
     "retrosheet_retained_gameinfo": "backend/mlb/data/external/retrosheet/raw/csv_release_through_2025/extracted/gameinfo.csv",
     "note": "Named historical identities are retained local records. Synthetic 2026 IDs exercise future transition rules and make no source-byte claim."
   },
+  "retained_source_files": [
+    {
+      "path": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-03-26_2026-07-21.json",
+      "sha256": "6cf64c0cf2f363b7aa144dd058f3d7dbd7853e833c1122be104dbfee9851acc1"
+    },
+    {
+      "path": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-07-23_2026-07-26.json",
+      "sha256": "e3906af52a533ddc608fed3f238c98f1aca8373364b5626ecffc5f944c1929e6"
+    },
+    {
+      "path": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-07-27_2026-07-27.json",
+      "sha256": "e18020098eac2675c50bbec4e722d339525b25a2a0af0b4896fe272d80dbcb75"
+    },
+    {
+      "path": "backend/mlb/data/external/retrosheet/raw/csv_release_through_2025/extracted/gameinfo.csv",
+      "sha256": "ce7fca848a56d411716781bf90bb4b307354cd0b67c6164872729ad2adb34351"
+    }
+  ],
+  "retained_inventory_expectations": {
+    "statsapi_schedule_paths": [
+      "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-03-26_2026-07-21.json",
+      "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-07-23_2026-07-26.json",
+      "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-07-27_2026-07-27.json"
+    ],
+    "statsapi_game_types": {"R": 79},
+    "statsapi_detailed_states": {"Final": 78, "Postponed": 1},
+    "statsapi_relationship_fields": {"rescheduledFrom": 3, "rescheduleDate": 1},
+    "retrosheet_gameinfo_path": "backend/mlb/data/external/retrosheet/raw/csv_release_through_2025/extracted/gameinfo.csv",
+    "retrosheet_game_types": {
+      "regular": 220190,
+      "exhibition": 2371,
+      "worldseries": 707,
+      "lcs": 693,
+      "divisionseries": 522,
+      "allstar": 165,
+      "championship": 132,
+      "wildcard": 73,
+      "playoff": 23,
+      "Regular": 1
+    },
+    "retrosheet_suspended_rows": 203
+  },
   "phase_cases": [
     {
       "case_id": "statsapi_spring_training",

@@ -8,14 +8,18 @@ inventory.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
+import re
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
 CONTRACT_NAME = "MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 PHASES = frozenset({"PRESEASON", "REGULAR_SEASON", "POSTSEASON"})
 POSTSEASON_ROUNDS = frozenset(
     {
@@ -121,8 +125,14 @@ def normalize_source_game_type(
     raw = _clean(raw_game_type)
     if not raw:
         raise PhaseContractError("AUTHORITATIVE_GAME_TYPE_MISSING")
-    if int(season) <= 0:
+    try:
+        season_number = int(season)
+    except (TypeError, ValueError):
+        raise PhaseContractError("AUTHORITATIVE_SEASON_MISSING") from None
+    if season_number <= 0:
         raise PhaseContractError("AUTHORITATIVE_SEASON_MISSING")
+    if source_name not in {"MLB_STATSAPI", "RETROSHEET"}:
+        raise PhaseContractError(f"UNKNOWN_GAME_TYPE_SOURCE:{source_name}")
 
     if source_name == "RETROSHEET":
         key = raw.casefold()
@@ -148,11 +158,11 @@ def normalize_source_game_type(
         source=source_name,
         raw_game_type=raw,
         source_label=label,
-        season=int(season),
+        season=season_number,
         phase=phase,
         postseason_round=round_name,
         source_round=raw_round,
-        season_name=f"MLB_{int(season)}_{phase}" if phase else None,
+        season_name=f"MLB_{season_number}_{phase}" if phase else None,
         eligible_for_phase_evaluation=eligible,
         decision=decision,
     )
@@ -257,15 +267,25 @@ def validate_close_inventory(payload: Mapping[str, Any]) -> dict[str, Any]:
         "source_config_identities",
     )
     for section in required_sections:
-        _check(checks, f"freeze_section:{section}", section in payload, "present" if section in payload else "missing")
+        present = section in payload
+        populated = present and (section == "outstanding_unresolved_rows" or bool(payload.get(section)))
+        detail = "populated" if populated else "empty" if present else "missing"
+        _check(checks, f"freeze_section:{section}", populated, detail)
 
     identities = payload.get("source_config_identities") or []
-    bad_hashes = [str(row.get("identity") or "unnamed") for row in identities if len(_clean(row.get("sha256"))) != 64]
+    bad_hashes = [
+        str(row.get("identity") or "unnamed")
+        for row in identities
+        if re.fullmatch(r"[0-9a-f]{64}", _clean(row.get("sha256"))) is None
+    ]
     _check(checks, "source_config_sha256", bool(identities) and not bad_hashes, ",".join(bad_hashes) or f"rows={len(identities)}")
 
     qualification = payload.get("model_qualification_publication_status") or {}
-    prohibited = bool(qualification.get("model_promoted") or qualification.get("published") or qualification.get("wagering_authorized"))
-    _check(checks, "no_promotion_publication_wagering", not prohibited, json.dumps(qualification, sort_keys=True))
+    frozen_false = all(
+        qualification.get(field) is False
+        for field in ("model_promoted", "published", "wagering_authorized")
+    )
+    _check(checks, "no_promotion_publication_wagering", frozen_false, json.dumps(qualification, sort_keys=True))
 
     passed = all(row["status"] == "PASS" for row in checks)
     return {
@@ -280,6 +300,57 @@ def validate_close_inventory(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def validate_fixture_suite(payload: Mapping[str, Any]) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+    for source_file in payload.get("retained_source_files") or []:
+        relative_path = Path(str(source_file.get("path") or ""))
+        path = REPO_ROOT / relative_path
+        expected_hash = _clean(source_file.get("sha256"))
+        actual_hash = sha256_file(path) if path.is_file() else "MISSING"
+        _check(
+            checks,
+            f"retained_source_sha256:{relative_path}",
+            actual_hash == expected_hash,
+            actual_hash,
+        )
+
+    inventory = payload.get("retained_inventory_expectations") or {}
+    statsapi_types: Counter[str] = Counter()
+    statsapi_statuses: Counter[str] = Counter()
+    statsapi_relationships: Counter[str] = Counter()
+    for relative in inventory.get("statsapi_schedule_paths") or []:
+        schedule = json.loads((REPO_ROOT / str(relative)).read_text(encoding="utf-8"))
+        for block in schedule.get("dates") or []:
+            for game in block.get("games") or []:
+                statsapi_types[_clean(game.get("gameType")) or "<MISSING>"] += 1
+                statsapi_statuses[_clean((game.get("status") or {}).get("detailedState")) or "<MISSING>"] += 1
+                for field in ("rescheduledFrom", "rescheduleDate", "resumeDate", "resumedFrom"):
+                    if field in game:
+                        statsapi_relationships[field] += 1
+    for check_name, actual, expected in (
+        ("retained_statsapi_game_types", statsapi_types, inventory.get("statsapi_game_types") or {}),
+        ("retained_statsapi_statuses", statsapi_statuses, inventory.get("statsapi_detailed_states") or {}),
+        ("retained_statsapi_relationships", statsapi_relationships, inventory.get("statsapi_relationship_fields") or {}),
+    ):
+        _check(checks, check_name, dict(actual) == expected, json.dumps(dict(actual), sort_keys=True))
+
+    retrosheet_path = inventory.get("retrosheet_gameinfo_path")
+    if retrosheet_path:
+        with (REPO_ROOT / str(retrosheet_path)).open(newline="", encoding="utf-8-sig") as handle:
+            retrosheet_rows = list(csv.DictReader(handle))
+        retrosheet_types = Counter(_clean(row.get("gametype")) or "<MISSING>" for row in retrosheet_rows)
+        suspended_count = sum(bool(_clean(row.get("suspend"))) for row in retrosheet_rows)
+        _check(
+            checks,
+            "retained_retrosheet_game_types",
+            dict(retrosheet_types) == (inventory.get("retrosheet_game_types") or {}),
+            json.dumps(dict(retrosheet_types), sort_keys=True),
+        )
+        _check(
+            checks,
+            "retained_retrosheet_suspended_rows",
+            suspended_count == inventory.get("retrosheet_suspended_rows"),
+            str(suspended_count),
+        )
+
     for case in payload.get("phase_cases") or []:
         case_id = str(case.get("case_id"))
         try:
@@ -340,7 +411,7 @@ def validate_fixture_suite(payload: Mapping[str, Any]) -> dict[str, Any]:
             "agreement_study_progress",
             "api_credit_accounting",
         ):
-            premature_payload[section] = {}
+            premature_payload[section] = {"status": "FIXTURE_PASS"}
         premature_payload["outstanding_unresolved_rows"] = []
         premature_payload["model_qualification_publication_status"] = {
             "model_promoted": False,

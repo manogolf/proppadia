@@ -99,7 +99,7 @@ The close package must freeze:
 3. Canonical game identities are unique.
 4. Every required lane is present and both its manifest and ledger pass.
 5. Every lane reports zero ungraded eligible predictions, duplicate prediction identities, duplicate outcome identities, post-start violations, outcome-leakage violations, and postseason rows in regular outputs.
-6. Every required freeze section and valid source/config SHA-256 identity is present.
+6. Every required freeze section is populated (the unresolved-row list may validly be empty), and every source/config identity has a lowercase hexadecimal SHA-256.
 7. Model promotion, publication, and wagering remain false.
 
 Postseason rows can coexist in storage but cannot appear in the frozen regular population or regular reports.
