@@ -1,0 +1,15 @@
+lane,readiness,postseason_expected_behavior,blocking_correction
+Canonical schedule,BLOCKED,"May collect raw schedule but cannot certify phase in canonical tables",Activate prepared schema and producer changes after dry-run/backfill validation
+Moneyline,BLOCKED,"Would score postseason schedule rows but phase would be ambiguous in immutable/reporting lineage",Add phase gate and canonical join before postseason
+RAW Totals,BLOCKED,"May score when context is available but cannot separate phase reliably",Add canonical phase admission/report join
+Totals C,BLOCKED,"Can inherit RAW rows but has no phase boundary",Add canonical phase join and separate reports
+Full-board Hits,CONDITIONAL,"Raw schedule gameType is retained and postseason can run when lineup/starter inputs exist",Remove default-to-R and enforce phase validator
+BvP,CONDITIONAL,"Collection can continue by exact gamePk where source inputs remain valid",Require canonical phase join and preserve round/series context externally
+Feature lineage,CONDITIONAL,"Existing hashes/identity can continue",Add phase and postseason-context coverage checks
+Pinnacle,CONDITIONAL,"Main-market capture can continue with exact event binding",Require canonical phase split in reports
+BetOnline,CONDITIONAL,"Player-prop capture can continue where exact game/player binding succeeds",Require canonical phase split; do not relax identity gates
+Agreement study,BLOCKED,"Current month-based label would call October/November postseason without source proof",Replace date-derived regime with source phase and preserve late-season regular cohort
+Daily reports / Ops Brief / indexes,BLOCKED,"Would pool or ambiguously label rows",Implement separate regular/postseason partitions before postseason publication
+Grading,BLOCKED,"Can grade finals but does not consistently enforce phase membership",Add exact phase parity and regular-certification exclusion
+Research/export,BLOCKED,"Some tools default missing type to R or use date windows",Remove defaults/date reconstruction and require explicit cohort
+Scheduler,CONDITIONAL,"Jobs run on no-game/offseason dates and may still perform unnecessary work",Keep schedules unchanged now; add future source-type/slate-aware paid-call gate

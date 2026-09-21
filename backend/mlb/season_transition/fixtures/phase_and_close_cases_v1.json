@@ -1,0 +1,166 @@
+{
+  "contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1",
+  "fixture_provenance": {
+    "statsapi_retained_schedule": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-03-26_2026-07-21.json",
+    "retrosheet_retained_gameinfo": "backend/mlb/data/external/retrosheet/raw/csv_release_through_2025/extracted/gameinfo.csv",
+    "note": "Named historical identities are retained local records. Synthetic 2026 IDs exercise future transition rules and make no source-byte claim."
+  },
+  "phase_cases": [
+    {
+      "case_id": "statsapi_spring_training",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "S",
+      "expected": {"phase": "PRESEASON", "postseason_round": null}
+    },
+    {
+      "case_id": "statsapi_exhibition",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "E",
+      "expected": {"phase": "PRESEASON", "postseason_round": null}
+    },
+    {
+      "case_id": "retained_regular_season_WAS202509280",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "regular",
+      "expected": {"phase": "REGULAR_SEASON", "postseason_round": null}
+    },
+    {
+      "case_id": "retained_wild_card_NYA202510020",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "wildcard",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "WILD_CARD"}
+    },
+    {
+      "case_id": "retained_division_series_MIL202510110",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "divisionseries",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "DIVISION_SERIES"}
+    },
+    {
+      "case_id": "retained_lcs_TOR202510200",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "lcs",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "LEAGUE_CHAMPIONSHIP_SERIES"}
+    },
+    {
+      "case_id": "retained_world_series_TOR202511010",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "worldseries",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "WORLD_SERIES"}
+    },
+    {
+      "case_id": "retained_legacy_playoff_LAN201810010",
+      "source": "RETROSHEET",
+      "season": 2018,
+      "raw_game_type": "playoff",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "PLAYOFFS_UNSPECIFIED"}
+    },
+    {
+      "case_id": "statsapi_modern_wild_card_code",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "F",
+      "source_round": "Wild Card",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "WILD_CARD"}
+    },
+    {
+      "case_id": "statsapi_division_series_code",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "D",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "DIVISION_SERIES"}
+    },
+    {
+      "case_id": "statsapi_lcs_code",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "L",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "LEAGUE_CHAMPIONSHIP_SERIES"}
+    },
+    {
+      "case_id": "statsapi_world_series_code",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "W",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "WORLD_SERIES"}
+    },
+    {
+      "case_id": "retained_all_star_NLS202507150",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "allstar",
+      "expected": {"phase": null, "postseason_round": null, "decision": "SPECIAL_GAME_EXCLUDED_FAIL_CLOSED"}
+    },
+    {
+      "case_id": "postponed_rescheduled_regular_824490",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "R",
+      "expected": {"phase": "REGULAR_SEASON", "postseason_round": null}
+    },
+    {
+      "case_id": "retained_suspended_resumed_regular_CIN202508020",
+      "source": "RETROSHEET",
+      "season": 2025,
+      "raw_game_type": "regular",
+      "expected": {"phase": "REGULAR_SEASON", "postseason_round": null}
+    },
+    {
+      "case_id": "late_calendar_regular_not_postseason",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "R",
+      "expected": {"phase": "REGULAR_SEASON", "postseason_round": null}
+    },
+    {
+      "case_id": "early_calendar_postseason_not_regular",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "F",
+      "expected": {"phase": "POSTSEASON", "postseason_round": "WILD_CARD"}
+    },
+    {
+      "case_id": "unknown_game_type_fails_closed",
+      "source": "MLB_STATSAPI",
+      "season": 2026,
+      "raw_game_type": "Z",
+      "expected": {"error": "UNKNOWN_STATSAPI_GAME_TYPE"}
+    }
+  ],
+  "mixed_report_case": {
+    "games": [
+      {"game_pk": 910001, "season": 2026, "source": "MLB_STATSAPI", "raw_game_type": "R"},
+      {"game_pk": 910002, "season": 2026, "source": "MLB_STATSAPI", "raw_game_type": "F"},
+      {"game_pk": 910003, "season": 2026, "source": "MLB_STATSAPI", "raw_game_type": "D"},
+      {"game_pk": 910004, "season": 2026, "source": "MLB_STATSAPI", "raw_game_type": "A"}
+    ],
+    "expected_regular_game_pks": [910001]
+  },
+  "future_strict_prior_case": {
+    "season": 2026,
+    "event_game_type": "W",
+    "event_date": "2026-11-01",
+    "feature_as_of_date": "2027-03-25",
+    "regular_evaluation_membership": false
+  },
+  "premature_close_inventory": {
+    "fixture_fill_passing_lanes": true,
+    "contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1",
+    "season": 2026,
+    "canonical_regular_season_games": [
+      {
+        "game_pk": 920001,
+        "source_game_type": "R",
+        "season_phase": "REGULAR_SEASON",
+        "close_disposition": "SCHEDULED"
+      }
+    ]
+  }
+}

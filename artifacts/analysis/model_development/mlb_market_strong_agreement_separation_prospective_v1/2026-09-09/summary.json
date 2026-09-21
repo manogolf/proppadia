@@ -1,19 +1,19 @@
 {
   "agreement_coefficient_clustered": {
-    "ci_2_5": -9.941879170904253,
-    "ci_97_5": 2.7456222867277216,
-    "coefficient": -0.32596526224067873
+    "ci_2_5": -1.6728666814509467,
+    "ci_97_5": 3.688192002916256,
+    "coefficient": 0.5575570476490846
   },
-  "agreement_resolved_games": 12,
+  "agreement_resolved_games": 21,
   "best_price_composite": false,
   "blocked_out_of_time_games": 0,
   "book_selected_by_roi": false,
   "bookmaker_cells_do_not_inflate_effective_sample_size": true,
-  "bookmaker_price_cells": 850,
+  "bookmaker_price_cells": 1240,
   "classification": "SEPARATION_EVIDENCE_INSUFFICIENT",
   "decision_made": false,
-  "effective_outcome_count": 23,
-  "eligible_resolved_unique_games": 23,
+  "effective_outcome_count": 35,
+  "eligible_resolved_unique_games": 35,
   "evidence_gate": {
     "agreement_games": false,
     "eligible_resolved_games": false,
@@ -24,24 +24,24 @@
   },
   "evidence_requirement_met": false,
   "late_season_regime_counts": {
-    "LATE_SEASON_SEPTEMBER": 85
+    "LATE_SEASON_SEPTEMBER": 124
   },
-  "planned_expected_credit_cost": 60,
-  "planned_request_dates": 6,
+  "planned_expected_credit_cost": 90,
+  "planned_request_dates": 9,
   "primary_contrast": {
-    "ci_2_5": -0.5416666666666667,
-    "ci_97_5": 0.2571428571428571,
-    "win_rate_difference": -0.06060606060606066
+    "ci_2_5": -0.20915032679738554,
+    "ci_97_5": 0.38003846153846166,
+    "win_rate_difference": 0.09523809523809523
   },
   "prior_56_20_rows_included": false,
   "production_changes": false,
   "prospective_horizon_status": "ACTIVE_REMAINDER_OF_2026",
   "public_prediction_changes": false,
   "report_status": "INTERIM_DESCRIPTIVE",
-  "risk_rows": 85,
+  "risk_rows": 124,
   "scheduler_changes": false,
   "study_id": "MLB_MARKET_STRONG_AGREEMENT_SEPARATION_PROSPECTIVE_V1",
   "user_access_or_fillability": "UNKNOWN_NOT_ESTABLISHED",
   "wagering": false,
-  "without_agreement_resolved_games": 11
+  "without_agreement_resolved_games": 14
 }

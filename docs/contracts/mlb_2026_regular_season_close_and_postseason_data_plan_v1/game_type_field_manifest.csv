@@ -1,0 +1,23 @@
+source,retained_raw_field,retained_raw_value,retained_count,normalized_phase,postseason_round,retained_example,decision
+MLB StatsAPI schedule,dates[].games[].gameType,R,79,REGULAR_SEASON,,gamePk 824490,RAW_RETAINED_IN_LOCAL_SCHEDULE_ARCHIVES
+Retrosheet gameinfo.csv,gametype,regular,220190,REGULAR_SEASON,,WAS202509280,RAW_RETAINED
+Retrosheet gameinfo.csv,gametype,Regular,1,REGULAR_SEASON,,,RAW_RETAINED_CASE_VARIANT_NORMALIZED_CASE_INSENSITIVE
+Retrosheet gameinfo.csv,gametype,exhibition,2371,PRESEASON,,BIR194910022,RAW_RETAINED
+Retrosheet gameinfo.csv,gametype,wildcard,73,POSTSEASON,WILD_CARD,NYA202510020,RAW_RETAINED
+Retrosheet gameinfo.csv,gametype,divisionseries,522,POSTSEASON,DIVISION_SERIES,MIL202510110,RAW_RETAINED
+Retrosheet gameinfo.csv,gametype,lcs,693,POSTSEASON,LEAGUE_CHAMPIONSHIP_SERIES,TOR202510200,RAW_RETAINED
+Retrosheet gameinfo.csv,gametype,worldseries,707,POSTSEASON,WORLD_SERIES,TOR202511010,RAW_RETAINED
+Retrosheet gameinfo.csv,gametype,championship,132,POSTSEASON,CHAMPIONSHIP_UNSPECIFIED,BIR194810050,RAW_RETAINED_LEGACY
+Retrosheet gameinfo.csv,gametype,playoff,23,POSTSEASON,PLAYOFFS_UNSPECIFIED,LAN201810010,RAW_RETAINED_LEGACY
+Retrosheet gameinfo.csv,gametype,allstar,165,,,NLS202507150,SPECIAL_EXCLUDED_FAIL_CLOSED
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,S,n/a,PRESEASON,,,SPRING_TRAINING_SUPPORTED_NOT_PRESENT_IN_RETAINED_2026_SCHEDULE_SUBSET
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,E,n/a,PRESEASON,,,EXHIBITION_SUPPORTED_NOT_PRESENT_IN_RETAINED_2026_SCHEDULE_SUBSET
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,I,n/a,PRESEASON,,,INTRASQUAD_SUPPORTED_NOT_PRESENT_IN_RETAINED_2026_SCHEDULE_SUBSET
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,F,n/a,POSTSEASON,WILD_CARD,,POSTSEASON_SUPPORTED_NOT_YET_RETAINED_FOR_2026
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,D,n/a,POSTSEASON,DIVISION_SERIES,,POSTSEASON_SUPPORTED_NOT_YET_RETAINED_FOR_2026
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,L,n/a,POSTSEASON,LEAGUE_CHAMPIONSHIP_SERIES,,POSTSEASON_SUPPORTED_NOT_YET_RETAINED_FOR_2026
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,W,n/a,POSTSEASON,WORLD_SERIES,,POSTSEASON_SUPPORTED_NOT_YET_RETAINED_FOR_2026
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,P,n/a,POSTSEASON,PLAYOFFS_UNSPECIFIED,,LEGACY_POSTSEASON_SUPPORTED
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,C,n/a,POSTSEASON,CHAMPIONSHIP_UNSPECIFIED,,LEGACY_POSTSEASON_SUPPORTED
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,A,n/a,,,,ALL_STAR_SPECIAL_EXCLUDED_FAIL_CLOSED
+MLB StatsAPI supported contract,schedule.gameType / gameData.game.type,N,n/a,,,,LEGACY_SPECIAL_EXCLUDED_FAIL_CLOSED

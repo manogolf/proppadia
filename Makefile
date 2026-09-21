@@ -3601,3 +3601,19 @@ mlb-cleanroom-routine-history-multibook-price-evaluate:
 
 mlb-cleanroom-routine-history-multibook-price-status:
 	$(VENV_PY) -m backend.mlb.scripts.cleanroom_v1.historical_multibook_price status
+
+.PHONY: mlb-2026-season-transition-validate mlb-2026-regular-season-close-check
+
+# Offline/source-only transition validation. Makes no network or database calls.
+mlb-2026-season-transition-validate:
+	PYTHONPATH=. $(VENV_PY) -m backend.mlb.scripts.validate_mlb_2026_season_transition_v1
+
+# Check-only by design. The future close execution remains an explicit direct
+# command documented in the governed runbook.
+mlb-2026-regular-season-close-check:
+	@if [ -z "$(MLB_CLOSE_INVENTORY)" ]; then \
+		echo "mlb-2026-regular-season-close-check requires MLB_CLOSE_INVENTORY=/absolute/path/inventory.json"; \
+		exit 2; \
+	fi
+	PYTHONPATH=. $(VENV_PY) -m backend.mlb.scripts.prepare_mlb_2026_regular_season_close_v1 \
+		--inventory "$(MLB_CLOSE_INVENTORY)"
