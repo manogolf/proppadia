@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import random
+import re
 import uuid
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
@@ -21,6 +23,12 @@ from backend.mlb.shared.team_name_map import (
     getTeamIdFromAbbr,
     normalizeTeamAbbreviation,
 )
+from backend.mlb.season_transition.canonical_phase_v1 import (
+    PHASE_CORE_FIELDS,
+    PHASE_STORAGE_COLUMNS,
+    canonical_phase_record,
+)
+from backend.mlb.season_transition.contract_v1 import normalize_source_game_type
 from backend.shared.db.pg import pg_connect
 
 
@@ -83,9 +91,9 @@ ROLLING_METRIC_SOURCE_SQL = {
     "runs_rbis": "COALESCE(ps.runs_scored, 0) + COALESCE(ps.rbis, 0)",
 }
 
-# MLB StatsAPI gameType codes considered "in-season" for collection gates.
-# Keeps postseason rows when season mode excludes preseason.
-IN_SEASON_GAME_TYPES = {"R", "P", "F", "D", "L", "W"}
+# Retained compatibility export; filtering itself is performed through the
+# canonical source-type interpreter in _final_games.
+IN_SEASON_GAME_TYPES = {"R", "P", "F", "D", "L", "W", "C"}
 
 
 def _parse_date(s: str) -> date:
@@ -286,13 +294,16 @@ def _fetch_json(url: str) -> Dict[str, Any]:
     return r.json()
 
 
-def _fetch_schedule(date_iso: str) -> List[Dict[str, Any]]:
+def _fetch_schedule(date_iso: str) -> Tuple[List[Dict[str, Any]], str]:
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_iso}"
-    js = _fetch_json(url)
+    response = requests.get(url, timeout=25)
+    response.raise_for_status()
+    raw = response.content
+    js = response.json()
     dates = js.get("dates") or []
     if not dates:
-        return []
-    return (dates[0] or {}).get("games", []) or []
+        return [], hashlib.sha256(raw).hexdigest()
+    return (dates[0] or {}).get("games", []) or [], hashlib.sha256(raw).hexdigest()
 
 
 def _fetch_live_feed(game_id: int) -> Dict[str, Any]:
@@ -693,7 +704,13 @@ def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -
         return int((row or [0])[0] or 0)
 
 
-def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) -> int:
+def _upsert_game_info_min(
+    conn,
+    game: Dict[str, Any],
+    fallback_date_iso: str,
+    *,
+    source_sha256: str = "",
+) -> int:
     game_id = _to_int(game.get("gamePk"))
     if game_id is None:
         return 0
@@ -725,6 +742,7 @@ def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) ->
         away_team.get("abbreviation") or getFullTeamAbbreviationFromID(away_team_id)
     )
 
+    phase = canonical_phase_record(game, source_sha256=source_sha256)
     row = {
         "game_id": game_id,
         "game_time": game_time,
@@ -733,7 +751,97 @@ def _upsert_game_info_min(conn, game: Dict[str, Any], fallback_date_iso: str) ->
         "away_team_id": away_team_id,
         "home_team_abbr": home_team_abbr,
         "away_team_abbr": away_team_abbr,
+        **phase,
     }
+
+    phase_columns = set(PHASE_STORAGE_COLUMNS) | {"game_type_source_sha256"}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'mlb' AND table_name = 'game_info'
+              AND column_name = ANY(%s)
+            """,
+            (sorted(phase_columns),),
+        )
+        available = {
+            str((item or {}).get("column_name"))
+            for item in cur.fetchall()
+            if (item or {}).get("column_name")
+        }
+    if available and available != phase_columns:
+        missing = sorted(phase_columns - available)
+        raise RuntimeError(f"CANONICAL_PHASE_SCHEMA_PARTIAL:{','.join(missing)}")
+
+    if available:
+        if not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
+            raise RuntimeError("GAME_TYPE_SOURCE_SHA256_REQUIRED")
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source_season, source_game_type, season_phase,
+                       postseason_round, season_name
+                FROM mlb.game_info
+                WHERE game_id = %s
+                """,
+                (game_id,),
+            )
+            existing = cur.fetchone()
+        if existing:
+            conflicts = [
+                field
+                for field in PHASE_CORE_FIELDS
+                if existing.get(field) is not None and existing.get(field) != row.get(field)
+            ]
+            if conflicts:
+                raise RuntimeError(
+                    f"CANONICAL_GAME_PHASE_CONFLICT:{game_id}:{','.join(conflicts)}"
+                )
+        row["schedule_relationships"] = json.dumps(
+            row["schedule_relationships"], sort_keys=True, separators=(",", ":")
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO mlb.game_info (
+                    game_id, game_time, game_date, home_team_id, away_team_id,
+                    home_team_abbr, away_team_abbr, source_season,
+                    source_game_type, season_phase, postseason_round,
+                    season_name, source_round, schedule_relationships,
+                    game_type_source_sha256
+                ) VALUES (
+                    %(game_id)s, %(game_time)s, %(game_date)s,
+                    %(home_team_id)s, %(away_team_id)s,
+                    %(home_team_abbr)s, %(away_team_abbr)s,
+                    %(source_season)s, %(source_game_type)s,
+                    %(season_phase)s, %(postseason_round)s,
+                    %(season_name)s, %(source_round)s,
+                    %(schedule_relationships)s::jsonb,
+                    %(game_type_source_sha256)s
+                )
+                ON CONFLICT (game_id) DO UPDATE SET
+                    game_time = COALESCE(game_info.game_time, EXCLUDED.game_time),
+                    game_date = COALESCE(game_info.game_date, EXCLUDED.game_date),
+                    home_team_id = COALESCE(game_info.home_team_id, EXCLUDED.home_team_id),
+                    away_team_id = COALESCE(game_info.away_team_id, EXCLUDED.away_team_id),
+                    home_team_abbr = COALESCE(game_info.home_team_abbr, EXCLUDED.home_team_abbr),
+                    away_team_abbr = COALESCE(game_info.away_team_abbr, EXCLUDED.away_team_abbr),
+                    source_season = COALESCE(game_info.source_season, EXCLUDED.source_season),
+                    source_game_type = COALESCE(game_info.source_game_type, EXCLUDED.source_game_type),
+                    season_phase = COALESCE(game_info.season_phase, EXCLUDED.season_phase),
+                    postseason_round = COALESCE(game_info.postseason_round, EXCLUDED.postseason_round),
+                    season_name = COALESCE(game_info.season_name, EXCLUDED.season_name),
+                    source_round = COALESCE(game_info.source_round, EXCLUDED.source_round),
+                    schedule_relationships = game_info.schedule_relationships || EXCLUDED.schedule_relationships,
+                    game_type_source_sha256 = COALESCE(
+                        game_info.game_type_source_sha256,
+                        EXCLUDED.game_type_source_sha256
+                    )
+                """,
+                row,
+            )
+            return int(cur.rowcount or 0)
 
     with conn.cursor() as cur:
         cur.execute(
@@ -1045,8 +1153,17 @@ def _final_games(
         # Abstract/coded final state is authoritative; exact detailed text is not.
         if status.get("abstractGameState") != "Final" and status.get("codedGameState") != "F":
             continue
-        game_type = str((g.get("gameType") or "")).strip().upper()
-        if require_regular_season and game_type not in IN_SEASON_GAME_TYPES:
+        classification = normalize_source_game_type(
+            g.get("gameType"),
+            season=g.get("season"),
+            source="MLB_STATSAPI",
+            source_round=g.get("seriesDescription"),
+        )
+        game_type = classification.raw_game_type
+        if require_regular_season and classification.phase not in {
+            "REGULAR_SEASON",
+            "POSTSEASON",
+        }:
             continue
         try:
             out.append((int(g["gamePk"]), game_type))
@@ -1124,7 +1241,7 @@ def run(
                         print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
                         continue
 
-                schedule = _fetch_schedule(d_iso)
+                schedule, schedule_sha256 = _fetch_schedule(d_iso)
                 final_games_meta = _final_games(
                     schedule,
                     require_regular_season=require_regular_season,
@@ -1140,7 +1257,12 @@ def run(
                     sg = schedule_by_game_id.get(gid)
                     if sg is None:
                         continue
-                    game_info_upserts += _upsert_game_info_min(conn, sg, d_iso)
+                    game_info_upserts += _upsert_game_info_min(
+                        conn,
+                        sg,
+                        d_iso,
+                        source_sha256=schedule_sha256,
+                    )
                 existing_games = _existing_game_ids(conn, final_games)
 
                 missing_for_date = len(final_games) - len(existing_games)

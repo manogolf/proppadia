@@ -86,7 +86,7 @@ def repair(game,out):
  before=local_rows(game);run_id=str(uuid.uuid4());inserted=[];date=feed['gameData']['datetime']['officialDate'];game_info_existed=False
  with pg_connect() as conn:
   with conn.cursor() as cur:cur.execute('SELECT 1 FROM mlb.game_info WHERE game_id=%s',(game,));game_info_existed=cur.fetchone() is not None
-  schedule_game={'gamePk':game,'gameDate':feed['gameData']['datetime']['dateTime'],'teams':{'home':{'team':feed['gameData']['teams']['home']},'away':{'team':feed['gameData']['teams']['away']}}};_upsert_game_info_min(conn,schedule_game,date)
+  schedule_game={'gamePk':game,'gameDate':feed['gameData']['datetime']['dateTime'],'gameType':feed['gameData']['game'].get('type'),'season':feed['gameData']['game'].get('season'),'seriesDescription':feed['gameData']['game'].get('typeDescription'),'gameData':feed['gameData'],'teams':{'home':{'team':feed['gameData']['teams']['home']},'away':{'team':feed['gameData']['teams']['away']}}};_upsert_game_info_min(conn,schedule_game,date,source_sha256=manifest['source_sha256'])
   has_team=True;has_team_id=True;has_placeholder=True
   for x in rows:
    if x['repair_action']!='INSERT_MISSING_OFFICIAL_PARTICIPANT':continue

@@ -65,10 +65,10 @@ The detailed classifications are in [end_to_end_propagation_audit.csv](end_to_en
 
 The live read-only schema inspection on 2026-09-21 confirmed that `mlb.game_info`, `mlb_cleanroom_v1.games`, immutable Moneyline prediction/outcome tables, and `mlb.bvp_stats` have no authoritative phase fields. Consequently, the overall transition is **not ready for postseason activation**.
 
-Corrections required before postseason processing:
+Corrections and activation steps required before postseason processing:
 
 1. Apply the prepared canonical schema migration only after a dry-run and backup/recovery review.
-2. Update `insert_mlb_stat_derived._upsert_game_info_min` and cleanroom schedule ingestion to populate the canonical fields from the retained schedule payload. Cleanroom inserts must use named columns, not positional `VALUES`.
+2. Review and transactionally activate the source-hashed offline backfill proposal. Producer source now populates canonical fields, uses named game inserts, and fails closed on partial schema or invalid type, but neither migration nor backfill has been applied.
 3. Remove `row.get("game_type") or "R"` in the Full-board Hits scorer and every `fillna("R")`/`COALESCE(...,'R')` phase assumption in research/evaluation.
 4. Phase-gate Moneyline, RAW Totals, Totals C, and graders using exact canonical `gamePk`; preserve postseason separately.
 5. Replace `run_mlb_market_strong_agreement_separation_prospective_v1.late_season_regime`, which currently infers postseason from October/November, with canonical source phase.
@@ -214,8 +214,8 @@ The future implementation should gate paid calls after one free schedule/status 
 Run:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -m backend.mlb.scripts.validate_mlb_2026_season_transition_v1
-PYTHONPATH=. python3 -m pytest -q backend/mlb/tests/test_mlb_2026_season_transition_v1.py
+PYTHONPATH=. /Users/jerrystrain/Projects/proppadia/.venv/bin/python -m backend.mlb.scripts.validate_mlb_2026_season_transition_v1
+PYTHONPATH=. /Users/jerrystrain/Projects/proppadia/.venv/bin/python -m pytest -q backend/mlb/tests/test_mlb_2026_season_transition_v1.py
 ```
 
 The fixture suite covers regular-only semantics, mixed regular/postseason storage, every modern postseason round, retained postponed/rescheduled and suspended/resumed regular games, unknown/conflicting types, date-classification traps, an early close attempt, postseason exclusion from regular reports, and strict-prior future feature availability without evaluation contamination.

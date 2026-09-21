@@ -122,8 +122,8 @@ def normalize_source_game_type(
 ) -> PhaseClassification:
     """Normalize an authoritative raw type without using calendar dates."""
     source_name = _clean(source).upper()
-    raw = _clean(raw_game_type)
-    if not raw:
+    raw = "" if raw_game_type is None else str(raw_game_type)
+    if raw == "":
         raise PhaseContractError("AUTHORITATIVE_GAME_TYPE_MISSING")
     try:
         season_number = int(season)
@@ -142,16 +142,17 @@ def normalize_source_game_type(
         label = raw
         phase = phase or None
     else:
-        key = raw.upper()
+        # StatsAPI values are a one-character wire contract.  Do not trim,
+        # case-fold, substitute, or otherwise mutate the retained source byte.
+        key = raw
         if key not in GAME_TYPE_CONTRACT:
             raise PhaseContractError(f"UNKNOWN_STATSAPI_GAME_TYPE:{raw}")
         spec = GAME_TYPE_CONTRACT[key]
-        raw = key
         phase = spec["phase"]
         round_name = spec["postseason_round"]
         label = str(spec["label"])
 
-    raw_round = _clean(source_round) or None
+    raw_round = None if source_round is None else str(source_round)
     eligible = phase in PHASES
     decision = "CLASSIFIED_FROM_AUTHORITATIVE_SOURCE_TYPE" if eligible else "SPECIAL_GAME_EXCLUDED_FAIL_CLOSED"
     return PhaseClassification(
@@ -170,19 +171,37 @@ def normalize_source_game_type(
 
 def classify_schedule_game(game: Mapping[str, Any], *, season: int | None = None) -> PhaseClassification:
     """Classify one retained StatsAPI schedule/feed record and reject conflicts."""
-    schedule_type = _clean(game.get("gameType"))
+    schedule_value = game.get("gameType")
+    schedule_type = "" if schedule_value is None else str(schedule_value)
     game_data = game.get("gameData") or {}
-    feed_type = _clean((game_data.get("game") or {}).get("type"))
-    observed = {value.upper() for value in (schedule_type, feed_type) if value}
+    feed_value = (game_data.get("game") or {}).get("type")
+    feed_type = "" if feed_value is None else str(feed_value)
+    observed = {value for value in (schedule_type, feed_type) if value}
     if len(observed) > 1:
         raise PhaseContractError(f"CONFLICTING_AUTHORITATIVE_GAME_TYPES:{','.join(sorted(observed))}")
     raw_type = next(iter(observed), "")
-    source_season = season or game.get("season") or (game_data.get("game") or {}).get("season")
+    season_values = [
+        value
+        for value in (season, game.get("season"), (game_data.get("game") or {}).get("season"))
+        if value not in (None, "")
+    ]
     try:
-        season_number = int(source_season)
+        observed_seasons = {int(value) for value in season_values}
     except (TypeError, ValueError):
         raise PhaseContractError("AUTHORITATIVE_SEASON_MISSING") from None
-    source_round = game.get("seriesDescription") or (game_data.get("game") or {}).get("typeDescription")
+    if not observed_seasons:
+        raise PhaseContractError("AUTHORITATIVE_SEASON_MISSING")
+    if len(observed_seasons) > 1:
+        raise PhaseContractError(
+            "CONFLICTING_AUTHORITATIVE_SEASONS:"
+            + ",".join(str(value) for value in sorted(observed_seasons))
+        )
+    season_number = next(iter(observed_seasons))
+    source_round = (
+        game.get("seriesDescription")
+        if "seriesDescription" in game
+        else (game_data.get("game") or {}).get("typeDescription")
+    )
     return normalize_source_game_type(
         raw_type,
         season=season_number,

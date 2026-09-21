@@ -15,6 +15,12 @@ from pathlib import Path
 import psycopg
 import requests
 
+from backend.mlb.season_transition.canonical_phase_v1 import (
+    CanonicalGamePhaseIndex,
+    canonical_phase_record,
+    cleanroom_game_insert_sql,
+)
+
 MLB = "https://statsapi.mlb.com/api"
 ODDS = "https://api.the-odds-api.com/v4"
 
@@ -33,7 +39,7 @@ def raw_get(url: str, params: dict, path: Path) -> tuple[dict | list, str, datet
     return response.json(), hashlib.sha256(payload).hexdigest(), observed
 
 
-def insert_many(cur, sql: str, rows: list[tuple]) -> tuple[int, int]:
+def insert_many(cur, sql: str, rows: list[tuple] | list[dict]) -> tuple[int, int]:
     written = duplicates = 0
     for row in rows:
         cur.execute(sql, row)
@@ -81,18 +87,46 @@ def main() -> int:
             )
             raw_manifest.append(("MLB_STATS_API", args.date, run_tag, str(raw_dir / "schedule.json"), observed.isoformat(), schedule_sha, "PRESERVED"))
             games, team_ids = [], set()
+            phase_index = CanonicalGamePhaseIndex()
             for block in schedule.get("dates", []):
                 for game in block.get("games", []):
                     home = game["teams"]["home"]["team"]["id"]
                     away = game["teams"]["away"]["team"]["id"]
                     team_ids.update((home, away))
-                    games.append((game["gamePk"], slate, game["officialDate"], home, away,
-                                  game["gameDate"], game["status"]["detailedState"],
-                                  "MLB_STATS_API", observed, now(), schedule_sha))
-            w, d = insert_many(cur, """
-                INSERT INTO mlb_cleanroom_v1.games VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING
-            """, games)
+                    phase = canonical_phase_record(
+                        game,
+                        source_sha256=schedule_sha,
+                        source_path=str(raw_dir / "schedule.json"),
+                    )
+                    phase_index.add(phase)
+                    games.append({
+                        "game_pk": game["gamePk"],
+                        "slate_date": slate,
+                        "official_game_date": game["officialDate"],
+                        "home_team_mlb_id": home,
+                        "away_team_mlb_id": away,
+                        "scheduled_start_utc": game["gameDate"],
+                        "game_status": game["status"]["detailedState"],
+                        "source": "MLB_STATS_API",
+                        "source_observed_at_utc": observed,
+                        "ingested_at_utc": now(),
+                        "source_payload_sha256": schedule_sha,
+                        **phase,
+                        "schedule_relationships": json.dumps(
+                            phase["schedule_relationships"],
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ),
+                    })
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'mlb_cleanroom_v1' AND table_name = 'games'
+                """
+            )
+            game_table_columns = {str(row[0]) for row in cur.fetchall()}
+            w, d = insert_many(cur, cleanroom_game_insert_sql(game_table_columns), games)
             totals["received"] += len(games); totals["written"] += w; totals["duplicates"] += d
 
             teams_path = raw_dir / "teams.json"
@@ -115,7 +149,7 @@ def main() -> int:
             totals["received"] += len(team_rows); totals["written"] += w; totals["duplicates"] += d
 
             player_rows, lineup_rows, result_rows, fresh_players = [], [], [], {}
-            all_game_pks = [g[0] for g in games]
+            all_game_pks = [g["game_pk"] for g in games]
             # Include the latest completed slate directly from MLB.
             completed_dir = args.raw_root / "MLB_STATS_API" / args.completed_date / run_tag
             completed_schedule, completed_sha, completed_observed = raw_get(

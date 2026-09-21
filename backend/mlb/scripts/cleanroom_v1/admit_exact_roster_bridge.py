@@ -15,6 +15,12 @@ from pathlib import Path
 
 import psycopg
 
+from backend.mlb.season_transition.canonical_phase_v1 import (
+    CanonicalGamePhaseIndex,
+    canonical_phase_record,
+    cleanroom_game_insert_sql,
+)
+
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
@@ -43,6 +49,7 @@ def main() -> int:
     bridge_seen = set()
     bridge_rows, odds_rows = [], []
     game_rows, player_rows, lineup_rows = [], [], []
+    phase_index = CanonicalGamePhaseIndex()
     audit = []
 
     by_game: dict[int, list[dict]] = defaultdict(list)
@@ -57,12 +64,31 @@ def main() -> int:
         observed = now()
         home = feed["gameData"]["teams"]["home"]
         away = feed["gameData"]["teams"]["away"]
-        game_rows.append((
-            game_pk, official_date, official_date, home["id"], away["id"],
-            feed["gameData"]["datetime"]["dateTime"],
-            feed["gameData"]["status"]["detailedState"], "MLB_STATS_API_GAME_FEED",
-            observed, now(), feed_sha,
-        ))
+        phase = canonical_phase_record(
+            feed,
+            source_sha256=feed_sha,
+            source_path=str(feed_path),
+        )
+        phase_index.add(phase)
+        game_rows.append({
+            "game_pk": game_pk,
+            "slate_date": official_date,
+            "official_game_date": official_date,
+            "home_team_mlb_id": home["id"],
+            "away_team_mlb_id": away["id"],
+            "scheduled_start_utc": feed["gameData"]["datetime"]["dateTime"],
+            "game_status": feed["gameData"]["status"]["detailedState"],
+            "source": "MLB_STATS_API_GAME_FEED",
+            "source_observed_at_utc": observed,
+            "ingested_at_utc": now(),
+            "source_payload_sha256": feed_sha,
+            **phase,
+            "schedule_relationships": json.dumps(
+                phase["schedule_relationships"],
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        })
         for side in ("home", "away"):
             team_id = feed["gameData"]["teams"][side]["id"]
             box = feed["liveData"]["boxscore"]["teams"][side]
@@ -112,9 +138,16 @@ def main() -> int:
 
     with psycopg.connect(db_url, autocommit=False) as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'mlb_cleanroom_v1' AND table_name = 'games'
+                """
+            )
+            game_table_columns = {str(row[0]) for row in cur.fetchall()}
             statements = [
-                ("games", """INSERT INTO mlb_cleanroom_v1.games VALUES
-                  (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""", game_rows),
+                ("games", cleanroom_game_insert_sql(game_table_columns), game_rows),
                 ("players", """INSERT INTO mlb_cleanroom_v1.players VALUES
                   (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""", player_rows),
                 ("lineups", """INSERT INTO mlb_cleanroom_v1.lineup_snapshots VALUES
