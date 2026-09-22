@@ -1,0 +1,39 @@
+{
+  "contract": "MLB_2026_TRAINING_PHASE_ACTIVE_CUTOVER_EVIDENCE_CORRECTION_V1",
+  "superseded_evidence": {
+    "original_commit": "2c6831675d234fa95f1dd01062d4ecf17a115e4b",
+    "original_validation_report": {
+      "path": "docs/contracts/mlb_2026_training_phase_eligibility_active_cutover_v1/validation_report.json",
+      "bytes": 12411,
+      "sha256": "aef7f58c2497dd4192ba19dff2774536991df7b6405d323d9659a33d829b2a0e",
+      "preserved": true
+    },
+    "original_scheduler_and_safety_audit": {
+      "path": "docs/contracts/mlb_2026_training_phase_eligibility_active_cutover_v1/scheduler_and_safety_audit.json",
+      "bytes": 1079,
+      "sha256": "e1a26dae17ff14054780c98d8e1da17c90e6e2aa1d6c4e3b92376a175db1514b",
+      "preserved": true
+    },
+    "original_monitor_claim": {
+      "path_count": 444,
+      "actual_mlb_paths": 428,
+      "actual_nhl_paths": 16,
+      "mlb_paths_outside_scope": 110,
+      "identity_semantics": "METADATA_IDENTITY_ONLY_NOT_BYTE_IDENTITY"
+    }
+  },
+  "corrected_population": {
+    "unique_mlb_binary_paths": 538,
+    "extensions": {".joblib": 534, ".pkl": 4},
+    "nhl_paths": 0,
+    "inode_identities": 536,
+    "known_hard_linked_path_pairs": 2
+  },
+  "claims": {
+    "corrected_metadata_unchanged": true,
+    "evidence_of_model_mutation": false,
+    "exhaustive_538_file_byte_identity_proven": false,
+    "eligibility_and_lineage_validation_affected": false,
+    "existing_model_lineage_classifications_changed": false
+  }
+}

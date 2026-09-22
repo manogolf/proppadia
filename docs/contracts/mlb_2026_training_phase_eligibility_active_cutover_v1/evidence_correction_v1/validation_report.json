@@ -1,0 +1,555 @@
+{
+  "artifact_metadata_monitor": {
+    "artifact_path_count": 538,
+    "byte_identity_proven": false,
+    "extension_counts": {
+      ".joblib": 534,
+      ".pkl": 4
+    },
+    "hard_linked_path_groups": [
+      [
+        "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260611/latest/hits.joblib",
+        "models_out/archive/hits/hits-20260611T060831Z.joblib"
+      ],
+      [
+        "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260709/latest/hits.joblib",
+        "models_out/archive/hits/hits-20260709T061129Z.joblib"
+      ]
+    ],
+    "identity_semantics": "METADATA_IDENTITY_ONLY_NOT_BYTE_IDENTITY",
+    "inode_identity_count": 536,
+    "metadata_fields": [
+      "path",
+      "bytes",
+      "mtime_ns",
+      "device",
+      "inode",
+      "source"
+    ],
+    "metadata_state_sha256": "a6f38a2cf78f8008d994e809ef8a4e02464b8d3a746c1b65d39aeb1723dbb4d2",
+    "model_content_hashes_computed": 0,
+    "nhl_path_count": 0,
+    "source_counts": {
+      "hits_residual_ranker": 1,
+      "legacy_mlb_models_bundle": 39,
+      "mlb_tagged_model_development_research": 70,
+      "models_out_excluding_nhl": 428
+    }
+  },
+  "artifact_population_reconciliation": {
+    "corrected_mlb_binary_path_count": 538,
+    "corrected_path_population_sha256": "374c1513b057f665359da92e13f9791296b7ef8a72bc389e3f969cf49933daa4",
+    "mlb_paths_omitted_by_original_monitor": [
+      "artifacts/analysis/model_development/mlb_cc_0001_execution_2026-07-10/model_artifacts/mlb_cc_0001_control.joblib",
+      "artifacts/analysis/model_development/mlb_cc_0001_execution_2026-07-10/model_artifacts/mlb_cc_0001_pa_challenger.joblib",
+      "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260611/latest/hits.joblib",
+      "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260709/latest/hits.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/deterministic_replay/fitted_artifacts/variant_a/variant_a_logistic_regression_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/deterministic_replay/fitted_artifacts/variant_a/variant_a_preprocessing_state.pkl",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/deterministic_replay/fitted_artifacts/variant_a/variant_a_preprocessor_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/deterministic_replay/fitted_artifacts/variant_d/variant_d_logistic_regression_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/deterministic_replay/fitted_artifacts/variant_d/variant_d_preprocessing_state.pkl",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/deterministic_replay/fitted_artifacts/variant_d/variant_d_preprocessor_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/fitted_artifacts/variant_a/variant_a_logistic_regression_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/fitted_artifacts/variant_a/variant_a_preprocessing_state.pkl",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/fitted_artifacts/variant_a/variant_a_preprocessor_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/fitted_artifacts/variant_d/variant_d_logistic_regression_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/fitted_artifacts/variant_d/variant_d_preprocessing_state.pkl",
+      "artifacts/analysis/model_development/mlb_collective_bundle_v1_bounded_offline_process_validation/2026-07-13/fitted_artifacts/variant_d/variant_d_preprocessor_NON_PRODUCTION_PROCESS_VALIDATION.joblib",
+      "artifacts/analysis/model_development/mlb_dh_forward_scorer_passage_2d1/2026-08-04/immutable_forward_scorer.joblib",
+      "artifacts/analysis/model_development/mlb_historical_bundle_no_promotion_training_dry_run/2026-07-13/model_artifacts/variant_a_process_validation_model_2026-07-13.joblib",
+      "artifacts/analysis/model_development/mlb_historical_bundle_no_promotion_training_dry_run/2026-07-13/model_artifacts/variant_b_process_validation_model_2026-07-13.joblib",
+      "artifacts/analysis/model_development/mlb_historical_bundle_no_promotion_training_dry_run/2026-07-13/model_artifacts/variant_c_process_validation_model_2026-07-13.joblib",
+      "artifacts/analysis/model_development/mlb_historical_bundle_no_promotion_training_dry_run/2026-07-13/model_artifacts/variant_d_process_validation_model_2026-07-13.joblib",
+      "artifacts/analysis/model_development/mlb_historical_selected_proposition_abd_no_promotion_training_dry_run/2026-07-14/model_artifacts/variant_a_process_validation_model_2026-07-14.joblib",
+      "artifacts/analysis/model_development/mlb_historical_selected_proposition_abd_no_promotion_training_dry_run/2026-07-14/model_artifacts/variant_b_process_validation_model_2026-07-14.joblib",
+      "artifacts/analysis/model_development/mlb_historical_selected_proposition_abd_no_promotion_training_dry_run/2026-07-14/model_artifacts/variant_d_process_validation_model_2026-07-14.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260325.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260330.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260406.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260413.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260420.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260427.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260504.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260511.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260518.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260525.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260601.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260608.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260615.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260622.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260629.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260706.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260720.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260727.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260803.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_2026_first_principles_season_rebuild_v1/2026-08-14/fitted_models/FIT_20260810.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_event_process_architecture_v1/2026-07-21/hit_b_per_pa_hit_component.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_event_process_architecture_v1/2026-07-21/hit_c_per_pa_hit_component.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_event_process_architecture_v1/2026-07-21/hit_e_per_pa_hit_component.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_event_process_architecture_v1/2026-07-21/pa_distribution_component.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_event_process_architecture_v2/2026-07-21/event_process_v2_specification.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_full_spine_replacement_candidate/2026-07-19/HITS05_FULL_SPINE_O05_CALIBRATOR_RESEARCH_ONLY.joblib",
+      "artifacts/analysis/model_development/mlb_hits05_full_spine_replacement_candidate/2026-07-19/HITS05_FULL_SPINE_REPLACEMENT_CANDIDATE_RESEARCH_ONLY.joblib",
+      "artifacts/analysis/model_development/mlb_hits_15_direct_pa_champion_challenger_pilot/2026-07-17/research_only_model_artifacts/research_only_control_process_logistic_2026-07-17.joblib",
+      "artifacts/analysis/model_development/mlb_hits_15_direct_pa_champion_challenger_pilot/2026-07-17/research_only_model_artifacts/research_only_pa_challenger_logistic_2026-07-17.joblib",
+      "artifacts/analysis/model_development/mlb_hits_full_nonmarket_spine_model_reconstruction/2026-07-19/candidate_a_poisson_count_research_only.joblib",
+      "artifacts/analysis/model_development/mlb_hits_full_nonmarket_spine_model_reconstruction/2026-07-19/candidate_b_overdispersed_count_research_only.joblib",
+      "artifacts/analysis/model_development/mlb_hits_full_nonmarket_spine_model_reconstruction/2026-07-19/candidate_c_ordinal_cumulative_research_only.joblib",
+      "artifacts/analysis/model_development/mlb_hits_full_nonmarket_spine_model_reconstruction/2026-07-19/candidate_d_fixed_multiclass_research_only.joblib",
+      "artifacts/analysis/model_development/mlb_hits_market_independent_reconstruction/2026-07-18/candidate_a_multiclass_hgb_artifact.joblib",
+      "artifacts/analysis/model_development/mlb_hits_market_independent_reconstruction/2026-07-18/candidate_b_ordinal_hgb_artifact.joblib",
+      "artifacts/analysis/model_development/mlb_hits_market_independent_reconstruction/2026-07-18/candidate_c_poisson_artifact.joblib",
+      "artifacts/analysis/model_development/mlb_hits_production_model_reconstruction/2026-07-18/HITS_REBUILD_V1_O05_artifact.joblib",
+      "artifacts/analysis/model_development/mlb_hits_production_model_reconstruction/2026-07-18/HITS_REBUILD_V1_O15_BASEBALL_ONLY_artifact.joblib",
+      "artifacts/analysis/model_development/mlb_hits_production_model_reconstruction/2026-07-18/HITS_REBUILD_V1_O15_MARKET_ANCHORED_artifact.joblib",
+      "artifacts/analysis/model_development/mlb_hits_total_bases_research_archive/total_bases/tb15/ubo5/mlb_ubo5_total_bases_15_production_activation/2026-07-23/fault_fixture_bad_feature_order.joblib",
+      "artifacts/analysis/model_development/mlb_hits_total_bases_research_archive/total_bases/tb15/ubo5/mlb_ubo5_total_bases_15_production_activation/2026-07-23/fault_fixture_invalid_probability.joblib",
+      "artifacts/analysis/model_development/mlb_ubo5_total_bases_15_artifact_live_contract_recovery/2026-07-23/original_ubo5_total_bases_multinomial.joblib",
+      "artifacts/analysis/model_development/mlb_unified_batter_outcome_v1_coherent_revision/2026-07-23/final_artifacts/coherent_terminal_model.joblib",
+      "artifacts/analysis/model_development/mlb_unified_batter_outcome_v1_coherent_revision/2026-07-23/final_artifacts/pa_opportunity_model.joblib",
+      "artifacts/analysis/model_development/mlb_unified_batter_outcome_v1_coherent_revision/2026-07-23/stage_a_freeze/selected_pa_model_stage_a.joblib",
+      "artifacts/analysis/model_development/mlb_unified_batter_outcome_v1_coherent_revision/2026-07-23/stage_a_freeze/selected_terminal_model_stage_a.joblib",
+      "artifacts/mlb_models_bundle/archive/doubles/doubles-20250817T004518Z.joblib",
+      "artifacts/mlb_models_bundle/archive/doubles/doubles-20250817T012716Z.joblib",
+      "artifacts/mlb_models_bundle/archive/earned_runs/earned_runs-20250817T012716Z.joblib",
+      "artifacts/mlb_models_bundle/archive/hits/hits-20250817T012717Z.joblib",
+      "artifacts/mlb_models_bundle/archive/hits/hits-20250817T022509Z.joblib",
+      "artifacts/mlb_models_bundle/archive/hits_allowed/hits_allowed-20250817T012718Z.joblib",
+      "artifacts/mlb_models_bundle/archive/hits_runs_rbis/hits_runs_rbis-20250817T012719Z.joblib",
+      "artifacts/mlb_models_bundle/archive/home_runs/home_runs-20250817T012720Z.joblib",
+      "artifacts/mlb_models_bundle/archive/outs_recorded/outs_recorded-20250817T012724Z.joblib",
+      "artifacts/mlb_models_bundle/archive/rbis/rbis-20250817T012724Z.joblib",
+      "artifacts/mlb_models_bundle/archive/runs_rbis/runs_rbis-20250817T012725Z.joblib",
+      "artifacts/mlb_models_bundle/archive/runs_scored/runs_scored-20250817T012726Z.joblib",
+      "artifacts/mlb_models_bundle/archive/singles/singles-20250817T012726Z.joblib",
+      "artifacts/mlb_models_bundle/archive/stolen_bases/stolen_bases-20250817T012727Z.joblib",
+      "artifacts/mlb_models_bundle/archive/strikeouts_batting/strikeouts_batting-20250817T012727Z.joblib",
+      "artifacts/mlb_models_bundle/archive/strikeouts_pitching/strikeouts_pitching-20250817T012728Z.joblib",
+      "artifacts/mlb_models_bundle/archive/total_bases/total_bases-20250817T012729Z.joblib",
+      "artifacts/mlb_models_bundle/archive/triples/triples-20250817T012218Z.joblib",
+      "artifacts/mlb_models_bundle/archive/triples/triples-20250817T012729Z.joblib",
+      "artifacts/mlb_models_bundle/archive/walks/walks-20250817T012730Z.joblib",
+      "artifacts/mlb_models_bundle/archive/walks_allowed/walks_allowed-20250817T012730Z.joblib",
+      "artifacts/mlb_models_bundle/latest/doubles.joblib",
+      "artifacts/mlb_models_bundle/latest/earned_runs.joblib",
+      "artifacts/mlb_models_bundle/latest/hits.joblib",
+      "artifacts/mlb_models_bundle/latest/hits_allowed.joblib",
+      "artifacts/mlb_models_bundle/latest/hits_runs_rbis.joblib",
+      "artifacts/mlb_models_bundle/latest/home_runs.joblib",
+      "artifacts/mlb_models_bundle/latest/outs_recorded.joblib",
+      "artifacts/mlb_models_bundle/latest/rbis.joblib",
+      "artifacts/mlb_models_bundle/latest/runs_rbis.joblib",
+      "artifacts/mlb_models_bundle/latest/runs_scored.joblib",
+      "artifacts/mlb_models_bundle/latest/singles.joblib",
+      "artifacts/mlb_models_bundle/latest/stolen_bases.joblib",
+      "artifacts/mlb_models_bundle/latest/strikeouts_batting.joblib",
+      "artifacts/mlb_models_bundle/latest/strikeouts_pitching.joblib",
+      "artifacts/mlb_models_bundle/latest/total_bases.joblib",
+      "artifacts/mlb_models_bundle/latest/triples.joblib",
+      "artifacts/mlb_models_bundle/latest/walks.joblib",
+      "artifacts/mlb_models_bundle/latest/walks_allowed.joblib",
+      "backend/mlb/exports/model_v2/ranking/hits_residual_ranker.joblib"
+    ],
+    "mlb_paths_omitted_by_original_monitor_count": 110,
+    "mlb_paths_omitted_by_original_monitor_sha256": "6a564a0c3760890cf3a91a92be4000a9b267be24994c3ff4c72e2461b19ce0a0",
+    "original_monitor_evidence_status": "SUPERSEDED_BY_MLB_2026_TRAINING_PHASE_ACTIVE_CUTOVER_EVIDENCE_CORRECTION_V1",
+    "original_monitor_mlb_path_count": 428,
+    "original_monitor_nhl_path_count": 16,
+    "original_monitor_nhl_paths": [
+      "models_out/nhl/sog_player_denali/0_5/lr.joblib",
+      "models_out/nhl/sog_player_denali/0_5/rf.joblib",
+      "models_out/nhl/sog_player_denali/1_5/lr.joblib",
+      "models_out/nhl/sog_player_denali/1_5/rf.joblib",
+      "models_out/nhl/sog_player_denali/2_5/lr.joblib",
+      "models_out/nhl/sog_player_denali/2_5/rf.joblib",
+      "models_out/nhl/sog_player_denali/3_5/lr.joblib",
+      "models_out/nhl/sog_player_denali/3_5/rf.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/1_5/lr.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/1_5/rf.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/sog_player_denali/0_5/lr.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/sog_player_denali/0_5/rf.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/sog_player_denali/2_5/lr.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/sog_player_denali/2_5/rf.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/sog_player_denali/3_5/lr.joblib",
+      "models_out/nhl/sog_player_denali_pairings_v1/sog_player_denali/3_5/rf.joblib"
+    ],
+    "original_monitor_path_count": 444
+  },
+  "checks": {
+    "all_dependency_free_tests": true,
+    "all_source_modes_gated": true,
+    "atomic_immutable_manifest_write": true,
+    "completed_binding_precedes_registration": true,
+    "corrected_population_counts_exact": true,
+    "corrected_population_matches_design_inventory": true,
+    "frozen_counts_exact": true,
+    "input_binding_precedes_pipeline": true,
+    "manifest_contracts_present": true,
+    "metadata_monitor_explicitly_not_byte_identity": true,
+    "no_calendar_phase_inference": true,
+    "no_independent_phase_mapping": true,
+    "original_monitor_scope_reconciled": true,
+    "retained_hashes_invariant": true,
+    "static_validation_deterministic": true,
+    "zero_model_fit_during_validation": true,
+    "zero_operational_artifact_mutation": true
+  },
+  "checks_failed": 0,
+  "checks_passed": 17,
+  "contract_name": "MLB_2026_TRAINING_PHASE_ACTIVE_CUTOVER_EVIDENCE_CORRECTION_V1",
+  "evidence_correction": {
+    "eligibility_and_lineage_validation_affected": false,
+    "evidence_of_model_mutation": false,
+    "exhaustive_538_file_byte_identity_proven": false,
+    "existing_model_lineage_classifications_changed": false,
+    "monitored_metadata_unchanged": true,
+    "original_444_claim_superseded": true,
+    "original_report_path": "docs/contracts/mlb_2026_training_phase_eligibility_active_cutover_v1/validation_report.json",
+    "original_report_preserved": true
+  },
+  "frozen_reproduction": {
+    "admitted_game_pks": 2341,
+    "admitted_rows": 459604,
+    "blocked_rows": 0,
+    "excluded_preseason_game_pks": 471,
+    "excluded_preseason_rows": 141162,
+    "input_game_pks": 2812,
+    "input_rows": 600766,
+    "invariant_hashes": {
+      "retained_feature_source_row_commitment": {
+        "after_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+        "before_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+        "identical": true
+      },
+      "retained_row_order": {
+        "after_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+        "before_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+        "identical": true
+      },
+      "retained_target_projection": {
+        "after_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+        "before_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+        "identical": true
+      }
+    }
+  },
+  "parent_contract_name": "MLB_2026_TRAINING_PHASE_ELIGIBILITY_ACTIVE_CUTOVER_V1",
+  "safety": {
+    "database_connections": 0,
+    "existing_model_content_hashes_computed": 0,
+    "model_fit_calls": 0,
+    "model_train_commands": 0,
+    "network_requests": 0,
+    "operational_artifact_writes": 0,
+    "paid_requests": 0,
+    "synthetic_temporary_artifacts_only": true
+  },
+  "static_validation": {
+    "atomic_no_overwrite_publish": true,
+    "completed_binding_before_latest": true,
+    "fit_ordering": {
+      "fetch_before_input_binding": true,
+      "input_binding_before_pipeline": true
+    },
+    "input_manifest_contract_present": true,
+    "no_calendar_phase_inference": true,
+    "no_independent_phase_mapping": true,
+    "result_manifest_contract_present": true,
+    "source_modes_gated": {
+      "_fetch_base_and_merge": true,
+      "_fetch_from_view": true,
+      "_fetch_reconcile_and_merge": true
+    }
+  },
+  "static_validation_sha256": "e9d5f3c3be14d4e4ea6520ac340f4461e7ff72de7b0fdf27e2b8d85c059c6b5b",
+  "status": "PASS",
+  "tests": {
+    "executed": 47,
+    "failed": 0,
+    "intended": 47,
+    "model_metadata_state_after": {
+      "artifact_path_count": 538,
+      "byte_identity_proven": false,
+      "extension_counts": {
+        ".joblib": 534,
+        ".pkl": 4
+      },
+      "hard_linked_path_groups": [
+        [
+          "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260611/latest/hits.joblib",
+          "models_out/archive/hits/hits-20260611T060831Z.joblib"
+        ],
+        [
+          "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260709/latest/hits.joblib",
+          "models_out/archive/hits/hits-20260709T061129Z.joblib"
+        ]
+      ],
+      "identity_semantics": "METADATA_IDENTITY_ONLY_NOT_BYTE_IDENTITY",
+      "inode_identity_count": 536,
+      "metadata_fields": [
+        "path",
+        "bytes",
+        "mtime_ns",
+        "device",
+        "inode",
+        "source"
+      ],
+      "metadata_state_sha256": "a6f38a2cf78f8008d994e809ef8a4e02464b8d3a746c1b65d39aeb1723dbb4d2",
+      "model_content_hashes_computed": 0,
+      "nhl_path_count": 0,
+      "source_counts": {
+        "hits_residual_ranker": 1,
+        "legacy_mlb_models_bundle": 39,
+        "mlb_tagged_model_development_research": 70,
+        "models_out_excluding_nhl": 428
+      }
+    },
+    "model_metadata_state_before": {
+      "artifact_path_count": 538,
+      "byte_identity_proven": false,
+      "extension_counts": {
+        ".joblib": 534,
+        ".pkl": 4
+      },
+      "hard_linked_path_groups": [
+        [
+          "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260611/latest/hits.joblib",
+          "models_out/archive/hits/hits-20260611T060831Z.joblib"
+        ],
+        [
+          "artifacts/analysis/model_development/mlb_cc_0001_prepared_vector_reconstruction/2026-07-10/model_replay_dirs/hits_20260709/latest/hits.joblib",
+          "models_out/archive/hits/hits-20260709T061129Z.joblib"
+        ]
+      ],
+      "identity_semantics": "METADATA_IDENTITY_ONLY_NOT_BYTE_IDENTITY",
+      "inode_identity_count": 536,
+      "metadata_fields": [
+        "path",
+        "bytes",
+        "mtime_ns",
+        "device",
+        "inode",
+        "source"
+      ],
+      "metadata_state_sha256": "a6f38a2cf78f8008d994e809ef8a4e02464b8d3a746c1b65d39aeb1723dbb4d2",
+      "model_content_hashes_computed": 0,
+      "nhl_path_count": 0,
+      "source_counts": {
+        "hits_residual_ranker": 1,
+        "legacy_mlb_models_bundle": 39,
+        "mlb_tagged_model_development_research": 70,
+        "models_out_excluding_nhl": 428
+      }
+    },
+    "model_metadata_unchanged": true,
+    "module_counts": {
+      "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1": 13,
+      "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1": 7,
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1": 12,
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1": 15
+    },
+    "module_coverage_exact": true,
+    "modules": [
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1",
+      "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1",
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1",
+      "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1"
+    ],
+    "passed": 47,
+    "runner": "PYTHON_STDLIB_UNITTEST_ACTUAL_ASSERTION_EXECUTION",
+    "scenarios": [
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_absent_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_conflicting_consumer_type_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_duplicate_and_conflicting_authority_block",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_missing_game_pk_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_postseason_excluded_from_regular_evaluation",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_preseason_excluded_from_regular_evaluation",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_probability_and_pick_invariance_for_shared_rows",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_proposal_hash_mismatch_blocks_before_parse",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_repeated_load_is_deterministic",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_source_manifest_hash_mismatch_blocks_before_parse",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_special_and_unknown_types_fail_closed",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_stale_authority_window_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_valid_regular_season_admission",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_all_allowed_extensions_are_handled",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_all_four_mlb_inventory_sources_are_included",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_current_reconciliation_and_identity_claims_are_exact",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_hard_linked_paths_remain_separate_path_records",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_nhl_paths_are_excluded",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_path_and_inode_identity_counts_are_distinct",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_active_cutover_evidence_correction_v1.ActiveCutoverEvidenceCorrectionTests.test_unrelated_files_are_excluded",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_all_trainer_source_modes_have_active_gate_and_fit_ordering",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_committed_frozen_counts_and_hashes_remain_exact",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_input_manifest_is_deterministic_and_tamper_evident",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_interrupted_manifest_creation_leaves_no_valid_run",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_missing_authority_stops_before_feature_aggregation",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_model_trainer_writes_verified_input_binding_before_fit",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_ordinary_training_path_cannot_bypass_gate_evidence",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_preseason_never_reaches_feature_aggregation_or_fit",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_result_publication_requires_completed_binding_and_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_tampered_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_validation_uses_only_synthetic_temporary_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_view_authority_failure_cannot_fall_back",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_authority_hash_mismatch_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_conflicting_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_deterministic_repeated_execution_and_stable_order",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_dry_run_cannot_fit_or_write_operational_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_duplicate_authority_blocks_before_rows",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_exact_expected_frozen_counts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_existing_hits_authority_pilot_remains_valid",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_missing_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_missing_game_pk_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_ordinary_invocation_remains_on_training_path",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_postseason_exclusion",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_preseason_exclusion",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_regular_season_admission",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_retained_feature_target_and_order_hash_invariance",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_unknown_and_special_type_block",
+        "status": "PASSED"
+      }
+    ],
+    "skipped": 0,
+    "successful": true,
+    "unexecuted": 0
+  }
+}

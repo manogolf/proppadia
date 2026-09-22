@@ -2,6 +2,8 @@
 
 Status: **READY; ACTIVE FOR FUTURE ORDINARY TRAINING; NO MODEL TRAINED**
 
+> **Evidence correction:** The original 444-artifact safety observation below is preserved historical evidence but used an overbroad/underinclusive population. `evidence_correction_v1/` supersedes its scope and interpretation: the original monitor covered 428 MLB plus 16 NHL paths and omitted 110 MLB binaries. The corrected metadata-only population is 538 MLB paths / 536 inode identities. No exhaustive byte-identity claim is made.
+
 ## Outcome
 
 The ordinary `backend/mlb/model_trainer.py` path now applies the committed backend-neutral `MLB_REGULAR_SEASON_TRAINING_ELIGIBILITY_V1` helper at each row-source boundary. Only exact-`gamePk` records with verified `REGULAR_SEASON` authority proceed. `PRESEASON` and `POSTSEASON` are deterministic exclusions; missing, special, unknown, conflicting, duplicate, stale, or hash-invalid authority stops the run. There is no date inference and no missing-type-to-`R` fallback.
@@ -37,7 +39,7 @@ The exclusions are the already-proven 440 `S` and 31 `E` gamePks. The committed 
 
 ## Validation
 
-The dependency-free standard-library runner executed 40 of 40 intended scenarios: 40 passed, 0 failed, 0 skipped, and 0 unexecuted. This comprises 12 active-cutover tests, 15 committed dry-run tests, and 13 existing Hits authority tests. Thirteen aggregate checks passed. The 444 discovered model artifacts had the same pre/post state hash, and instrumentation observed zero fit calls, training commands, operational writes, database connections, network requests, or paid requests.
+The original dependency-free standard-library runner executed 40 of 40 intended scenarios: 40 passed, 0 failed, 0 skipped, and 0 unexecuted. This comprises 12 active-cutover tests, 15 committed dry-run tests, and 13 existing Hits authority tests. Thirteen aggregate checks passed. Its 444-path metadata population had the same pre/post state hash, and instrumentation observed zero fit calls, training commands, operational writes, database connections, network requests, or paid requests. The preserved 444-path result is superseded for artifact-population scope and must not be interpreted as byte identity; see `evidence_correction_v1/`.
 
 ## Limitations and next action
 

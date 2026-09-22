@@ -31,17 +31,17 @@ def main() -> int:
 
     validation = json.loads((PACKAGE / "validation_report.json").read_text())
     tests = validation["tests"]
-    check(validation["status"] == "PASS", "aggregate validation passed")
+    check(validation["status"] == "PASS", "preserved original validation passed")
     check(
         (tests["intended"], tests["executed"], tests["passed"]) == (40, 40, 40)
         and tests["failed"] == tests["skipped"] == tests["unexecuted"] == 0,
-        "all intended assertions executed",
+        "preserved original assertions executed",
     )
     check(
         tests["model_artifacts_unchanged"]
         and tests["model_artifact_state_before"]
         == tests["model_artifact_state_after"],
-        "model artifacts unchanged",
+        "preserved original metadata state unchanged",
     )
     check(
         validation["safety"]
@@ -54,7 +54,7 @@ def main() -> int:
             "paid_requests": 0,
             "synthetic_temporary_artifacts_only": True,
         },
-        "zero fitting and operational writes",
+        "preserved original zero fitting and operational writes",
     )
     frozen = json.loads((PACKAGE / "frozen_reproduction.json").read_text())
     result = frozen["authority_result"]
@@ -75,7 +75,7 @@ def main() -> int:
     with (PACKAGE / "source_evidence_manifest.csv").open(newline="") as handle:
         sources = list(csv.DictReader(handle))
     check(
-        len(sources) == 6
+        len(sources) == 7
         and all(
             (ROOT / row["path"]).stat().st_size == int(row["bytes"])
             and digest(ROOT / row["path"]) == row["sha256"]
@@ -91,6 +91,53 @@ def main() -> int:
         and not result_contract["certification_allowed_without_complete_binding"]
         and not result_contract["publication_allowed_without_complete_binding"],
         "lineage gates fail closed",
+    )
+    correction = json.loads(
+        (PACKAGE / "evidence_correction_v1/validation_report.json").read_text()
+    )
+    correction_tests = correction["tests"]
+    metadata = correction["artifact_metadata_monitor"]
+    reconciliation = correction["artifact_population_reconciliation"]
+    claims = correction["evidence_correction"]
+    check(correction["status"] == "PASS", "evidence correction passed")
+    check(
+        (
+            correction_tests["intended"],
+            correction_tests["executed"],
+            correction_tests["passed"],
+        )
+        == (47, 47, 47)
+        and correction_tests["failed"]
+        == correction_tests["skipped"]
+        == correction_tests["unexecuted"]
+        == 0,
+        "corrected assertions executed",
+    )
+    check(
+        metadata["artifact_path_count"] == 538
+        and metadata["extension_counts"] == {".joblib": 534, ".pkl": 4}
+        and metadata["nhl_path_count"] == 0
+        and metadata["inode_identity_count"] == 536
+        and len(metadata["hard_linked_path_groups"]) == 2,
+        "corrected MLB artifact population",
+    )
+    check(
+        reconciliation["original_monitor_mlb_path_count"] == 428
+        and reconciliation["original_monitor_nhl_path_count"] == 16
+        and reconciliation["mlb_paths_omitted_by_original_monitor_count"] == 110,
+        "original scope reconciled",
+    )
+    check(
+        correction_tests["model_metadata_unchanged"]
+        and metadata["identity_semantics"]
+        == "METADATA_IDENTITY_ONLY_NOT_BYTE_IDENTITY"
+        and metadata["model_content_hashes_computed"] == 0
+        and metadata["byte_identity_proven"] is False
+        and claims["evidence_of_model_mutation"] is False
+        and claims["exhaustive_538_file_byte_identity_proven"] is False
+        and claims["eligibility_and_lineage_validation_affected"] is False
+        and claims["existing_model_lineage_classifications_changed"] is False,
+        "corrected claims bounded",
     )
     manifest = [
         line.split("  ", 1)
@@ -114,7 +161,7 @@ def main() -> int:
                 "checks_passed": len(checks),
                 "checks_failed": 0,
                 "checks": checks,
-                "classification": "TRAINING_PHASE_ACTIVE_CUTOVER_READY",
+                "classification": "ACTIVE_CUTOVER_EVIDENCE_CORRECTED",
             },
             indent=2,
             sort_keys=True,
