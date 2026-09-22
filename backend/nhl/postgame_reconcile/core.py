@@ -360,6 +360,50 @@ def build_outcomes(validated: pd.DataFrame, boxscores: dict[int, dict], observed
     return game_frame, skater_frame, goalie_frame
 
 
+def validate_staging_identity_sets(
+    *, expected_games: list[int], expected_skaters: list[tuple[int, int]],
+    expected_goalies: list[tuple[int, int]], expected_starters: list[tuple[int, int]],
+    actual_games: list[int], actual_skaters: list[tuple[int, int]],
+    actual_goalies: list[tuple[int, int]], actual_starters: list[tuple[int, int]],
+) -> dict[str, Any]:
+    """Require exact official/stage identity equality before downstream work."""
+    categories = {
+        "games": (expected_games, actual_games),
+        "skaters": (expected_skaters, actual_skaters),
+        "goalies": (expected_goalies, actual_goalies),
+        "starters": (expected_starters, actual_starters),
+    }
+    diagnostics: dict[str, Any] = {}
+    failed = False
+    for label, (expected_raw, actual_raw) in categories.items():
+        expected = [tuple(value) if isinstance(value, tuple) else int(value)
+                    for value in expected_raw]
+        actual = [tuple(value) if isinstance(value, tuple) else int(value)
+                  for value in actual_raw]
+        expected_set, actual_set = set(expected), set(actual)
+        duplicate_actual = sorted({value for value in actual if actual.count(value) > 1})
+        missing = sorted(expected_set - actual_set)
+        extra = sorted(actual_set - expected_set)
+        diagnostics[label] = {
+            "expected": len(expected_set), "actual": len(actual_set),
+            "missing": missing, "extra": extra, "duplicates": duplicate_actual,
+        }
+        failed = failed or bool(missing or extra or duplicate_actual)
+    if failed:
+        raise RuntimeError(
+            "NHL_POSTGAME_STAGING_IDENTITY_SET_MISMATCH:"
+            + json.dumps(diagnostics, sort_keys=True, separators=(",", ":")))
+    return {
+        "contract_version": "NHL_POSTGAME_STAGING_COMPLETENESS_V1",
+        "status": "EXACT_IDENTITY_SET_EQUALITY",
+        "games": diagnostics["games"]["actual"],
+        "skater_appearances": diagnostics["skaters"]["actual"],
+        "goalie_appearances": diagnostics["goalies"]["actual"],
+        "confirmed_starters": diagnostics["starters"]["actual"],
+        "diagnostics": diagnostics,
+    }
+
+
 def _pregame(frame: pd.DataFrame, timestamp_col: str, schedule: pd.DataFrame) -> pd.DataFrame:
     spine = schedule[["game_id", "scheduled_start_time_utc", "game_type_code"]].rename(columns={
         "scheduled_start_time_utc": "canonical_scheduled_start_time_utc",
@@ -518,9 +562,6 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
     observed_at = observed_at or datetime.now(timezone.utc).isoformat()
     validated = validate_final_slate(canonical, official, slate_date)
     games, skaters, goalies = build_outcomes(validated, boxscores, observed_at)
-    grades = (grade_operational_sources(source_binding, canonical, games, skaters, goalies, observed_at)
-              if source_binding is not None else
-              grade_catchup(prediction_root, canonical, games, skaters, goalies))
     identity = _hash_bytes(json.dumps({
         "contract": CONTRACT, "slate_date": slate_date,
         "games": _frame_hash(games), "skaters": _frame_hash(skaters), "goalies": _frame_hash(goalies),
@@ -537,6 +578,9 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         raise RuntimeError("CONFLICTING_RETAINED_OUTCOME")
     if collector is not None:
         collector()
+    grades = (grade_operational_sources(source_binding, canonical, games, skaters, goalies, observed_at)
+              if source_binding is not None else
+              grade_catchup(prediction_root, canonical, games, skaters, goalies))
     request_accounting = request_accounting_factory() if request_accounting_factory else None
     if request_accounting is not None:
         expected_authority = 1 + len(validated)
@@ -591,7 +635,8 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             summary["sog_missing_prospective_participants"] = len(grades["sog_missing_predictions"])
         if request_lineage is not None:
             lineage = json.loads(json.dumps(request_lineage))
-            if lineage.get("contract_version") == "NHL_POSTGAME_REQUEST_LINEAGE_V3":
+            if lineage.get("contract_version") in {
+                    "NHL_POSTGAME_REQUEST_LINEAGE_V3", "NHL_POSTGAME_REQUEST_LINEAGE_V4"}:
                 response_sources = lineage.get("response_sources") or []
                 failed_ancestors = lineage.get("failed_ancestors") or []
                 source_ids = [row.get("source_run_id") for row in response_sources]
@@ -599,8 +644,12 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
                 roles = [row.get("role") for row in response_sources]
                 if (len(source_ids) != len(set(source_ids))
                         or len(failed_ids) != len(set(failed_ids))
-                        or sorted(roles) != ["AUTHORITY_RESPONSE_SOURCE",
-                                             "ROSTER_RESPONSE_SOURCE"]
+                        or sorted(roles) != (["AUTHORITY_RESPONSE_SOURCE",
+                                              "ROSTER_RESPONSE_SOURCE"]
+                                             if lineage["contract_version"].endswith("V3")
+                                             else ["AUTHORITY_RESPONSE_SOURCE",
+                                                   "PLAYER_IDENTITY_RESPONSE_SOURCE",
+                                                   "ROSTER_RESPONSE_SOURCE"])
                         or any(row.get("role") != "FAILED_EXECUTION_ANCESTOR"
                                for row in failed_ancestors)):
                     raise RuntimeError("REQUEST_LINEAGE_INVALID")

@@ -21,6 +21,7 @@ from backend.nhl.postgame_reconcile.core import (
     publish_reconciliation,
     reconciliation_lock,
     resolve_operational_sources,
+    validate_staging_identity_sets,
     validate_final_slate,
 )
 from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
@@ -369,10 +370,16 @@ class PostgameReconciliationTest(unittest.TestCase):
         database.assert_not_called()
         network.assert_not_called()
 
-    def test_september_20_typed_sources_and_three_ancestors_preflight_is_fully_local(self):
+    def test_hard_coded_external_mapping_inventory_is_removed(self):
+        text = Path("backend/nhl/scripts/run_nhl_postgame_reconciliation.py").read_text()
+        self.assertNotIn("SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS", text)
+        self.assertIn("database_mapping_coverage\": \"UNVERIFIED", text)
+
+    def test_september_20_typed_sources_and_four_ancestors_preflight_is_fully_local(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
         third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
+        fourth = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
         output = []
         with patch.object(sys, "argv", ["run_nhl_postgame_reconciliation.py",
                                         "2026-09-20", "--local-input-preflight",
@@ -380,9 +387,12 @@ class PostgameReconciliationTest(unittest.TestCase):
                                         f"AUTHORITY_RESPONSE_SOURCE={original}",
                                         "--response-source",
                                         f"ROSTER_RESPONSE_SOURCE={third}",
+                                        "--response-source",
+                                        f"PLAYER_IDENTITY_RESPONSE_SOURCE={fourth}",
                                         "--lineage-request-run-id", original,
                                         "--lineage-request-run-id", second,
-                                        "--lineage-request-run-id", third]), \
+                                        "--lineage-request-run-id", third,
+                                        "--lineage-request-run-id", fourth]), \
              patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
              patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
              patch("builtins.print", side_effect=lambda value: output.append(value)):
@@ -393,16 +403,158 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(payload["status"], "LOCAL_INPUTS_VALID")
         self.assertEqual(payload["source_binding"]["canonical_games"], 7)
         roles = [row["role"] for row in payload["request_lineage"]["response_sources"]]
-        self.assertEqual(roles, ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"])
-        self.assertEqual(len(payload["request_lineage"]["failed_ancestors"]), 3)
+        self.assertEqual(roles, ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE",
+                                 "PLAYER_IDENTITY_RESPONSE_SOURCE"])
+        self.assertEqual(len(payload["request_lineage"]["failed_ancestors"]), 4)
         self.assertEqual(payload["request_lineage"]["failed_ancestors"][1]["reuse_records"], 9)
-        self.assertEqual(payload["conditional_player_lookups"]["player_ids"], [8484537])
+        self.assertEqual(payload["conditional_player_lookups"]["database_mapping_coverage"],
+                         "UNVERIFIED")
         self.assertEqual(payload["conditional_player_lookups"]["localized_roster_names_retained"], 548)
-        self.assertEqual(payload["topology"]["logical_operations"], 60)
-        self.assertEqual(payload["topology"]["new_network_operations"], 15)
-        self.assertEqual(payload["topology"]["preserved_response_reuses"], 45)
+        self.assertEqual(payload["topology"]["logical_operations"],
+                         "REQUIRES_DATABASE_IDENTITY_PREFLIGHT")
+        self.assertEqual(payload["topology"]["database_mapping_coverage"], "UNVERIFIED")
         self.assertEqual(payload["database_requests"], 0)
         self.assertEqual(payload["external_requests"], 0)
+
+    def test_staging_identity_gate_requires_exact_252_28_14_sets(self):
+        games = list(range(1, 8))
+        skaters = [(game_id, game_id * 1000 + index)
+                   for game_id in games for index in range(36)]
+        goalies = [(game_id, game_id * 100 + index)
+                   for game_id in games for index in range(4)]
+        starters = [(game_id, game_id * 100 + index)
+                    for game_id in games for index in (0, 2)]
+        result = validate_staging_identity_sets(
+            expected_games=games, expected_skaters=skaters,
+            expected_goalies=goalies, expected_starters=starters,
+            actual_games=games, actual_skaters=skaters,
+            actual_goalies=goalies, actual_starters=starters)
+        self.assertEqual((result["games"], result["skater_appearances"],
+                          result["goalie_appearances"], result["confirmed_starters"]),
+                         (7, 252, 28, 14))
+        with self.assertRaisesRegex(RuntimeError, "STAGING_IDENTITY_SET_MISMATCH"):
+            validate_staging_identity_sets(
+                expected_games=games, expected_skaters=skaters,
+                expected_goalies=goalies, expected_starters=starters,
+                actual_games=games, actual_skaters=skaters[:-1] + [(7, 999999)],
+                actual_goalies=goalies[:-1], actual_starters=starters)
+
+    def test_database_preflight_topology_is_63_46_17_without_run_or_network(self):
+        original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
+        second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
+        third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
+        fourth = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
+        argv = [
+            "run_nhl_postgame_reconciliation.py", "2026-09-20",
+            "--database-identity-preflight",
+            "--response-source", f"AUTHORITY_RESPONSE_SOURCE={original}",
+            "--response-source", f"ROSTER_RESPONSE_SOURCE={third}",
+            "--response-source", f"PLAYER_IDENTITY_RESPONSE_SOURCE={fourth}",
+            "--lineage-request-run-id", original,
+            "--lineage-request-run-id", second,
+            "--lineage-request-run-id", third,
+            "--lineage-request-run-id", fourth,
+            "--authorized-player-lookup-id", "8484537",
+            "--authorized-player-lookup-id", "8485525",
+            "--authorized-player-lookup-id", "8486221",
+        ]
+        partition = {
+            "contract_version": "NHL_DATABASE_IDENTITY_PREFLIGHT_V1",
+            "status": "DATABASE_IDENTITY_PREFLIGHT_VALID",
+            "partition_sha256": "a" * 64,
+            "numeric_identity_provenance": [],
+            "numeric_identity_provenance_sha256": "c" * 64,
+            "authorized_new_official_lookup_ids": [8484537, 8485525, 8486221],
+            "classification": {
+                "exact_mapping": list(range(241)),
+                "deterministic_same_number_bind": list(range(35)),
+                "numeric_identity_proven_bind": [],
+                "preserved_response_resolution": [8485386],
+                "new_official_lookup": [8484537, 8485525, 8486221],
+                "conflict": [],
+            },
+        }
+        output = []
+        with patch.object(sys, "argv", argv), \
+             patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://offline.invalid/test"}), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.database_identity_preflight",
+                   return_value=partition) as database, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.official_get") as network, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.RequestContext.from_env") as context, \
+             patch("builtins.print", side_effect=lambda value: output.append(value)):
+            code = reconciliation_main()
+        self.assertEqual(code, 0)
+        database.assert_called_once()
+        network.assert_not_called()
+        context.assert_not_called()
+        payload = json.loads(output[-1])
+        self.assertFalse(payload["request_run_created"])
+        self.assertEqual(payload["topology"]["logical_operations"], 63)
+        self.assertEqual(payload["topology"]["preserved_response_reuses"], 46)
+        self.assertEqual(payload["topology"]["new_network_operations"], 17)
+
+    def test_lookup_set_mismatch_stops_before_run_creation_and_network(self):
+        original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
+        second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
+        third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
+        fourth = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
+        argv = [
+            "run_nhl_postgame_reconciliation.py", "2026-09-20", "--execute",
+            "--response-source", f"AUTHORITY_RESPONSE_SOURCE={original}",
+            "--response-source", f"ROSTER_RESPONSE_SOURCE={third}",
+            "--response-source", f"PLAYER_IDENTITY_RESPONSE_SOURCE={fourth}",
+            "--lineage-request-run-id", original, "--lineage-request-run-id", second,
+            "--lineage-request-run-id", third, "--lineage-request-run-id", fourth,
+            "--authorized-player-lookup-id", "8484537",
+        ]
+        failed_partition = {
+            "contract_version": "NHL_DATABASE_IDENTITY_PREFLIGHT_V1",
+            "status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+            "failure": "AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH:actual=[1, 2]:authorized=[1]",
+            "partition_sha256": "b" * 64,
+            "classification": {
+                "exact_mapping": [3], "deterministic_same_number_bind": [4],
+                "numeric_identity_proven_bind": [],
+                "preserved_response_resolution": [8485386],
+                "new_official_lookup": [1, 2], "conflict": [],
+            },
+            "classification_records": [
+                {"nhl_id": value, "classification": classification}
+                for classification, values in {
+                    "exact_mapping": [3], "deterministic_same_number_bind": [4],
+                    "numeric_identity_proven_bind": [],
+                    "preserved_response_resolution": [8485386],
+                    "new_official_lookup": [1, 2], "conflict": [],
+                }.items() for value in values
+            ],
+            "roster_absent_partition": {
+                "exact_mapping": [3], "deterministic_same_number_bind": [4],
+                "numeric_identity_proven_bind": [],
+                "preserved_response_resolution": [8485386],
+                "new_official_lookup": [1, 2], "conflict": [],
+            },
+        }
+        output = []
+        with patch.object(sys, "argv", argv), \
+             patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://offline.invalid/test"}), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.database_identity_preflight",
+                   return_value=failed_partition), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.official_get") as network, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.RequestContext.from_env") as context, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.reconciliation_lock") as lock, \
+             patch("builtins.print", side_effect=lambda value: output.append(value)):
+            code = reconciliation_main()
+        self.assertEqual(code, 5)
+        payload = json.loads(output[-1])
+        self.assertEqual(payload["failure"], failed_partition["failure"])
+        self.assertEqual(payload["database_preflight"]["classification_records"],
+                         failed_partition["classification_records"])
+        self.assertFalse(payload["request_run_created"])
+        self.assertEqual(payload["database_writes"], 0)
+        self.assertEqual(payload["external_requests"], 0)
+        network.assert_not_called()
+        context.assert_not_called()
+        lock.assert_not_called()
 
     def test_failed_ancestor_alteration_cycle_and_game_set_mismatch_are_rejected(self):
         repository = Path(__file__).resolve().parents[2]

@@ -30,11 +30,13 @@ from backend.nhl.official_request_journal import (
     official_get,
     read_journal,
     verify_payload_identity,
+    verify_player_identity_response_run,
     verify_preserved_response_run,
     verify_roster_response_run,
 )
 from backend.nhl.player_external_identity import (
     PlayerIdentityConflict,
+    is_abbreviated_player_name,
     localized_text,
     resolve_player_external_identity,
 )
@@ -44,8 +46,10 @@ from backend.nhl.scripts.refresh_players_and_roster_today import (
 )
 from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
     REQUEST_RUN_RECEIPTS,
+    classify_database_identity_rows,
     local_conditional_lookup_inventory,
 )
+from backend.nhl.scripts.seed_goalie_logs_for_date import resolve_goalie_player_id
 from backend.nhl.scripts.seed_skater_logs_for_date import resolve_skater_player_id
 
 
@@ -54,6 +58,7 @@ RUNS = (ROOT / "artifacts/operational/nhl/postgame_reconciliation/"
         "request_runs/2026-09-20")
 ORIGINAL = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
 THIRD = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
+FOURTH = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
 GAMES = list(range(2026010008, 2026010015))
 
 
@@ -141,6 +146,17 @@ def _bindings():
     return authority, roster
 
 
+def _player_binding():
+    receipt = REQUEST_RUN_RECEIPTS[FOURTH]
+    return verify_player_identity_response_run(
+        RUNS / FOURTH, expected_run_id=FOURTH, slate_date="2026-09-20",
+        game_ids=GAMES, expected_player_id=receipt["player_id"],
+        repository_root=ROOT, expected_journal_sha256=receipt["journal_sha256"],
+        expected_tree_fingerprint=receipt["tree_fingerprint"],
+        expected_object_sha256=receipt["object_sha256"],
+        expected_index_sha256=receipt["index_sha256"])
+
+
 class RosterAndPlayerIdentityTest(unittest.TestCase):
     def test_plain_and_localized_names(self):
         self.assertEqual(localized_text("  Jack Hughes  "), "Jack Hughes")
@@ -161,6 +177,18 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             verify_payload_identity(
                 "PLAYER_LANDING", identity,
                 json.dumps({"playerId": 8482103}).encode())
+
+    def test_fourth_run_is_reusable_only_for_ethan_czata_identity(self):
+        binding = _player_binding()
+        self.assertEqual(binding["role"], "PLAYER_IDENTITY_RESPONSE_SOURCE")
+        self.assertEqual(len(binding["responses"]), 1)
+        claim = binding["responses"][0]
+        self.assertEqual(claim["resource_identity"], {
+            "slate_date": "2026-09-20", "player_id": 8485386})
+        self.assertEqual(claim["object_sha256"],
+                         "69733de66231bda93e5deb6c5d013aa3ce6a146835c1ae301ffdc2be477fb7b4")
+        self.assertEqual(claim["index_sha256"],
+                         "797f6100afd0c418f366c914e464ecb311768923f3b80fab48f18d55d33aa99f")
 
     def test_all_548_roster_names_are_retained_without_landing_backfill(self):
         unused, roster = _bindings()
@@ -247,13 +275,16 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         self.assertIsNone(pid)
         self.assertFalse(learned)
 
-    def test_typed_sources_resolve_22_objects_and_only_one_conditional_lookup(self):
+    def test_typed_sources_resolve_23_objects_and_local_coverage_is_unverified(self):
         authority, roster = _bindings()
-        ledger = build_typed_response_source_ledger([authority, roster])
+        player = _player_binding()
+        ledger = build_typed_response_source_ledger([authority, roster, player])
         inventory = local_conditional_lookup_inventory(authority, roster)
-        self.assertEqual(ledger["declared_response_identities"], 22)
+        self.assertEqual(ledger["declared_response_identities"], 23)
         self.assertEqual(inventory["localized_roster_names_retained"], 548)
-        self.assertEqual(inventory["player_ids"], [8484537])
+        self.assertEqual(inventory["participating_nhl_ids"], 280)
+        self.assertEqual(inventory["database_mapping_coverage"], "UNVERIFIED")
+        self.assertNotIn("player_ids", inventory)
         self.assertEqual(roster["unpreserved_player_landing_responses"], 250)
 
         with tempfile.TemporaryDirectory(prefix="nhl_typed_sources_") as temp:
@@ -267,7 +298,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             }
             with patch.dict(os.environ, env, clear=True), \
                  patch("backend.nhl.official_request_journal.requests.Session") as network:
-                for source in (authority, roster):
+                for source in (authority, roster, player):
                     for claim in source["responses"]:
                         official_get(
                             "unused", timeout=1, stage="FIXTURE",
@@ -286,10 +317,224 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
                         reuse_preserved=True)
                 network.assert_not_called()
             rows = read_journal(Path(env[ENV_JOURNAL]))
-            self.assertEqual(len(rows), 24)
+            self.assertEqual(len(rows), 25)
             self.assertEqual(sum(row["event_kind"] == "PRESERVED_RESPONSE_REUSE"
-                                 for row in rows), 22)
+                                 for row in rows), 23)
             self.assertEqual(rows[-1]["event_kind"], "REQUEST_REJECTED")
+
+    def test_audited_unicode_abbreviation_rule(self):
+        authority, unused = _bindings()
+        names = []
+        for claim in authority["responses"]:
+            if claim["endpoint_family"] != "BOXSCORE":
+                continue
+            payload = json.loads((Path(authority["source_cache"]) / "objects" /
+                                  f"{claim['object_sha256']}.json").read_bytes())
+            for side in ("homeTeam", "awayTeam"):
+                team = (payload.get("playerByGameStats") or {}).get(side) or {}
+                for section in ("forwards", "defense", "goalies"):
+                    for row in team.get(section) or []:
+                        names.append(row["name"]["default"])
+        self.assertEqual(len(names), 280)
+        self.assertTrue(all(is_abbreviated_player_name(name) for name in names))
+        for name in ("E. Czata", "O. Wiesblatt", "J. O'Brien",
+                     "J. Smith-Jones", "M. St. Louis"):
+            self.assertTrue(is_abbreviated_player_name(name), name)
+        for name in ("Ethan Czata", "J Czata"):
+            self.assertFalse(is_abbreviated_player_name(name), name)
+
+    def test_database_partition_fixture_and_lookup_authorization(self):
+        authority, roster = _bindings()
+        inventory = local_conditional_lookup_inventory(authority, roster)
+        absent = set(inventory["roster_absent_ids"])
+        preserved = {8485386}
+        lookups = {8484537, 8485525, 8486221}
+        numeric_proven = {
+            8481681, 8481827, 8482167, 8483436, 8483442, 8483494,
+            8483652, 8483684, 8484217, 8484219, 8484222, 8484433,
+            8484760, 8485007, 8485010, 8485080, 8485375, 8485387,
+            8485412, 8485563, 8485594, 8486044, 8486229,
+        }
+        goalie_binds = {8482472, 8482867, 8482949, 8484181,
+                        8484391, 8484900, 8484996}
+        absent_bind_candidates = sorted(
+            absent - preserved - lookups - numeric_proven - set(inventory["goalie_ids"]))[:5]
+        roster_present_bind_candidates = sorted(
+            set(inventory["participant_ids"]) - absent - set(inventory["goalie_ids"]))[:8]
+        deterministic = (set(absent_bind_candidates) | goalie_binds
+                         | set(roster_present_bind_candidates))
+        exact = (set(inventory["participant_ids"]) - deterministic - numeric_proven
+                 - preserved - lookups)
+        player_rows = [
+            {"player_id": player_id, "full_name": f"Player {player_id}",
+             "first_name": "Full", "last_name": f"Name-{player_id}",
+             "team_id": None, "position": "G" if player_id in inventory["goalie_ids"] else "F"}
+            for player_id in sorted(exact | deterministic)
+        ] + [
+            {"player_id": player_id, "full_name": "A. Player",
+             "first_name": None, "last_name": None, "team_id": None, "position": "F"}
+            for player_id in sorted(numeric_proven)
+        ]
+        external_rows = [
+            {"player_id": player_id, "provider": "nhl",
+             "provider_player_id": str(player_id)}
+            for player_id in sorted(exact)
+        ]
+        result = classify_database_identity_rows(
+            inventory=inventory, player_rows=player_rows, external_rows=external_rows,
+            preserved_player_ids=preserved, authorized_lookup_ids=lookups,
+            slate_date="2026-09-20")
+        self.assertEqual(result["roster_absent_classification_counts"], {
+            "exact_mapping": 22, "deterministic_same_number_bind": 5,
+            "numeric_identity_proven_bind": 23,
+            "preserved_response_resolution": 1, "new_official_lookup": 3,
+            "conflict": 0,
+        })
+        self.assertEqual(result["classification"]["new_official_lookup"],
+                         [8484537, 8485525, 8486221])
+        self.assertEqual(result["classification"]["preserved_response_resolution"], [8485386])
+        self.assertEqual(len(result["classification"]["exact_mapping"]), 233)
+        self.assertEqual(len(result["classification"]["deterministic_same_number_bind"]), 20)
+        self.assertEqual(result["classification"]["numeric_identity_proven_bind"],
+                         sorted(numeric_proven))
+        self.assertEqual(len(result["numeric_identity_provenance"]), 23)
+        self.assertTrue(all(row["mapping"] == {
+            "internal_player_id": row["player_id"], "provider": "nhl",
+            "provider_external_id": str(row["player_id"]),
+        } for row in result["numeric_identity_provenance"]))
+        self.assertEqual(result["status"], "DATABASE_IDENTITY_PREFLIGHT_VALID")
+        self.assertTrue(result["partition_complete_and_mutually_exclusive"])
+        self.assertTrue(result["roster_absent_partition_complete"])
+        self.assertEqual(sum(result["roster_absent_classification_counts"].values()), 54)
+        self.assertEqual(len({player_id for values in result["roster_absent_partition"].values()
+                              for player_id in values}), 54)
+        deterministic_record = next(
+            row for row in result["classification_records"]
+            if row["nhl_id"] in deterministic)
+        self.assertEqual(deterministic_record["authoritative_name_source"],
+                         "FIRST_LAST_COLUMNS")
+        connection = _Connection()
+        for player_id in (result["classification"]["deterministic_same_number_bind"]
+                          + result["classification"]["numeric_identity_proven_bind"]):
+            resolve_player_external_identity(
+                connection, player_id=player_id, provider="nhl",
+                provider_player_id=player_id)
+        self.assertEqual(len(connection.rows), 43)
+        before = list(connection.rows)
+        with self.assertRaisesRegex(PlayerIdentityConflict, "EXTERNAL_ID_PLAYER_CONFLICT"):
+            resolve_player_external_identity(
+                connection, player_id=9999999, provider="nhl",
+                provider_player_id=result["classification"]
+                ["deterministic_same_number_bind"][0])
+        self.assertEqual(connection.rows, before)
+        mismatch = classify_database_identity_rows(
+            inventory=inventory, player_rows=player_rows,
+            external_rows=external_rows, preserved_player_ids=preserved,
+            authorized_lookup_ids={8484537}, slate_date="2026-09-20")
+        self.assertEqual(mismatch["status"], "FAILED_CLOSED_DATABASE_PREFLIGHT")
+        self.assertIn("AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH", mismatch["failure"])
+        self.assertEqual(len(mismatch["classification_records"]), 280)
+        self.assertEqual(sum(mismatch["roster_absent_classification_counts"].values()), 54)
+
+        # Replaying zero, some, or all deterministic bindings changes only the
+        # exact/bind counts.  It must never expand the authorized network set.
+        bind_candidates = sorted(deterministic | numeric_proven)
+        for completed in (0, len(bind_candidates) // 2, len(bind_candidates)):
+            progressed_external = external_rows + [
+                {"player_id": player_id, "provider": "nhl",
+                 "provider_player_id": str(player_id)}
+                for player_id in bind_candidates[:completed]
+            ]
+            progressed = classify_database_identity_rows(
+                inventory=inventory, player_rows=player_rows,
+                external_rows=progressed_external, preserved_player_ids=preserved,
+                authorized_lookup_ids=lookups, slate_date="2026-09-20")
+            self.assertEqual(progressed["status"], "DATABASE_IDENTITY_PREFLIGHT_VALID")
+            self.assertEqual(progressed["classification"]["new_official_lookup"],
+                             [8484537, 8485525, 8486221])
+            self.assertEqual(progressed["classification"]["preserved_response_resolution"],
+                             [8485386])
+            self.assertEqual(len(progressed["classification"]["exact_mapping"]),
+                             len(exact) + completed)
+            self.assertEqual(
+                len(progressed["classification"]["deterministic_same_number_bind"])
+                + len(progressed["classification"]["numeric_identity_proven_bind"]),
+                len(bind_candidates) - completed)
+            self.assertEqual(progressed["goalie_partition_coverage"], 28)
+
+        conflicted_external = external_rows + [{
+            "player_id": 9999999, "provider": "nhl",
+            "provider_player_id": str(bind_candidates[0]),
+        }]
+        conflict = classify_database_identity_rows(
+            inventory=inventory, player_rows=player_rows,
+            external_rows=conflicted_external, preserved_player_ids=preserved,
+            authorized_lookup_ids=lookups, slate_date="2026-09-20")
+        self.assertEqual(conflict["status"], "FAILED_CLOSED_DATABASE_PREFLIGHT")
+        self.assertIn(bind_candidates[0], conflict["classification"]["conflict"])
+        self.assertIn("DATABASE_IDENTITY_CONFLICT", conflict["failure"])
+
+        internal_conflict_id = min(numeric_proven)
+        internal_conflict = classify_database_identity_rows(
+            inventory=inventory, player_rows=player_rows,
+            external_rows=external_rows + [{
+                "player_id": internal_conflict_id, "provider": "nhl",
+                "provider_player_id": "9999999",
+            }], preserved_player_ids=preserved,
+            authorized_lookup_ids=lookups, slate_date="2026-09-20")
+        self.assertIn(internal_conflict_id,
+                      internal_conflict["classification"]["conflict"])
+        self.assertIn("DATABASE_IDENTITY_CONFLICT", internal_conflict["failure"])
+
+        # A same-number row does not bind from database state alone.
+        database_only_inventory = copy.deepcopy(inventory)
+        database_only_id = min(numeric_proven)
+        database_only_inventory["official_numeric_identity_evidence"].pop(
+            str(database_only_id))
+        database_only = classify_database_identity_rows(
+            inventory=database_only_inventory, player_rows=player_rows,
+            external_rows=external_rows, preserved_player_ids=preserved,
+            authorized_lookup_ids=lookups, slate_date="2026-09-20")
+        self.assertIn(database_only_id,
+                      database_only["classification"]["new_official_lookup"])
+        original_name = next(row["full_name"] for row in player_rows
+                             if row["player_id"] == database_only_id)
+        self.assertEqual(original_name, "A. Player")
+
+    def test_numeric_identity_provenance_fails_closed_on_tampering_or_wrong_slate(self):
+        authority, roster = _bindings()
+        cases = []
+        changed_index = copy.deepcopy(authority)
+        next(row for row in changed_index["responses"]
+             if row["endpoint_family"] == "BOXSCORE")["index_sha256"] = "0" * 64
+        cases.append((changed_index, "INDEX_CHANGED"))
+        changed_object = copy.deepcopy(authority)
+        next(row for row in changed_object["responses"]
+             if row["endpoint_family"] == "BOXSCORE")["object_sha256"] = "0" * 64
+        cases.append((changed_object, "INDEX_IDENTITY_MISMATCH"))
+        changed_journal = copy.deepcopy(authority)
+        changed_journal["source_journal_sha256"] = "0" * 64
+        cases.append((changed_journal, "JOURNAL_CHANGED"))
+        changed_tree = copy.deepcopy(authority)
+        changed_tree["tree_fingerprint"] = "0" * 64
+        cases.append((changed_tree, "TREE_CHANGED"))
+        wrong_date = copy.deepcopy(authority)
+        next(row for row in wrong_date["responses"]
+             if row["endpoint_family"] == "BOXSCORE")["resource_identity"][
+                 "slate_date"] = "2026-09-21"
+        cases.append((wrong_date, "GAME_SET_MISMATCH"))
+        wrong_game_set = copy.deepcopy(authority)
+        wrong_game_set["canonical_game_set_hash"] = "0" * 64
+        cases.append((wrong_game_set, "GAME_SET_MISMATCH"))
+        for changed, failure in cases:
+            with self.subTest(failure=failure), self.assertRaisesRegex(RuntimeError, failure):
+                local_conditional_lookup_inventory(changed, roster)
+
+    def test_goalie_resolution_is_exact_id_only_and_never_silent_alias(self):
+        self.assertEqual(resolve_goalie_player_id(8485525, {8485525: 8485525}), 8485525)
+        self.assertIsNone(resolve_goalie_player_id(8485525, {}))
+        with self.assertRaisesRegex(RuntimeError, "NOT_SAME_NUMBER"):
+            resolve_goalie_player_id(8485525, {8485525: 8482103})
 
     def test_typed_sources_reject_overlap_wrong_family_and_tampered_claim(self):
         authority, roster = _bindings()

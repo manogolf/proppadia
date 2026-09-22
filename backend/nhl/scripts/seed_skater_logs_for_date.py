@@ -48,6 +48,8 @@ from urllib3.util.retry import Retry
 
 from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
 from backend.nhl.player_external_identity import (
+    ABBREVIATED_PLAYER_NAME_RE,
+    is_abbreviated_player_name,
     localized_text,
     resolve_player_external_identity,
 )
@@ -223,7 +225,7 @@ def get_boxscore(game_pk: int):
 
 # ---------------- DB helpers ----------------
 
-NAME_INITIAL_RE = re.compile(r"^([A-Za-z])[.\s-]*([A-Za-z][A-Za-z\-\s'’]+)$")
+NAME_INITIAL_RE = ABBREVIATED_PLAYER_NAME_RE
 
 def _strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
@@ -342,11 +344,12 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
         else:
             # Missing or abbreviated names require exact-ID landing evidence.
             if ((not raw_name) or raw_name.startswith("Player ")
-                    or NAME_INITIAL_RE.match(_norm_name(raw_name))):
+                    or is_abbreviated_player_name(raw_name)):
                 resolved = _fetch_player_full_name_by_id(nhl_id)
                 if resolved:
                     raw_name = resolved.strip()
-            if not raw_name or raw_name.startswith("Player ") or NAME_INITIAL_RE.match(_norm_name(raw_name)):
+            if (not raw_name or raw_name.startswith("Player ")
+                    or is_abbreviated_player_name(raw_name)):
                 raise ValueError(
                     f"Refusing to insert unresolved name for nhl_id={nhl_id}: {raw_name!r}"
                 )
@@ -754,6 +757,9 @@ def main():
                         external_ids=ext_map, roster_names=roster_map)
 
                     if pid is None:
+                        if os.environ.get(ENV_REQUIRED) == "1":
+                            raise RuntimeError(
+                                f"UNPREPARED_SKATER_EXTERNAL_ID:{gpk}:{s.get('nhl_id')}")
                         # Auto-heal nhl.players so future runs can map this skater.
                         # ✅ Use the fields we *actually have* from the boxscore now.
                         nhl_id_val = s.get("nhl_id")

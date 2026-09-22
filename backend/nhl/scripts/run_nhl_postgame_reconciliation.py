@@ -7,6 +7,7 @@ existing postgame collectors; it never imports or calls a bookmaker client.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -35,19 +36,32 @@ from backend.nhl.official_request_journal import (
     canonical_game_set_hash,
     build_typed_response_source_ledger,
     official_get,
+    read_journal,
+    request_run_tree_fingerprint,
+    sha256_bytes,
     summarize_journal,
+    verify_payload_identity,
     verify_failed_execution_ancestor,
     verify_failed_request_ancestor,
     verify_preserved_response_run,
+    verify_player_identity_response_run,
     verify_roster_response_run,
 )
 from backend.nhl.postgame_reconcile.core import (
+    build_outcomes,
     reconciliation_lock,
     publish_reconciliation,
     resolve_operational_sources,
+    validate_staging_identity_sets,
     validate_final_slate,
 )
-from backend.nhl.player_external_identity import localized_text
+from backend.nhl.player_external_identity import (
+    authoritative_player_name,
+    create_or_verify_player,
+    is_authoritative_local_name,
+    localized_text,
+    resolve_player_external_identity,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -80,22 +94,16 @@ REQUEST_RUN_RECEIPTS = {
         "teams": ["ANA", "BOS", "CAR", "CGY", "COL", "FLA", "NJD",
                   "NSH", "NYI", "SEA", "SJS", "TBL", "UTA", "WSH"],
     },
+    "nhlpostgame_20260920_20260922T181726727181Z_70f0280d": {
+        "roles": ["PLAYER_IDENTITY_RESPONSE_SOURCE", "FAILED_EXECUTION_ANCESTOR"],
+        "slate_date": "2026-09-20",
+        "journal_sha256": "cf32772ebd2c5116e05f9ae12ac8da821c1277e16f8432aa27e8c37bd89d1c0e",
+        "tree_fingerprint": "31c676ce2e3cc606d7e469be42d899fc6961735889b99bdc90145058bacdaca0",
+        "player_id": 8485386,
+        "object_sha256": "69733de66231bda93e5deb6c5d013aa3ce6a146835c1ae301ffdc2be477fb7b4",
+        "index_sha256": "797f6100afd0c418f366c914e464ecb311768923f3b80fab48f18d55d33aa99f",
+    },
 }
-
-# Frozen result of the separately authorized 2026-09-22 read-only identity
-# audit.  Local-only preflight verifies the immutable roster/boxscore-derived
-# difference against this exact set and never treats live database state as
-# source evidence.
-SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS = frozenset({
-    8475718, 8477380, 8477401, 8477467, 8477981, 8478146, 8478477,
-    8479291, 8479370, 8479423, 8481004, 8481064, 8481115, 8481681,
-    8481827, 8482167, 8482623, 8482749, 8482866, 8483010, 8483012,
-    8483436, 8483442, 8483494, 8483497, 8483652, 8483668, 8483684,
-    8483857, 8484123, 8484168, 8484217, 8484219, 8484222, 8484433,
-    8484760, 8484923, 8485007, 8485010, 8485080, 8485370, 8485375,
-    8485378, 8485386, 8485387, 8485412, 8485525, 8485563, 8485594,
-    8486035, 8486044, 8486221, 8486229,
-})
 
 
 def _receipt(run_id: str, *, role: str, slate_date: str) -> dict[str, object]:
@@ -122,7 +130,8 @@ def _parse_response_source_specs(values: list[str]) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for value in values:
         role, separator, run_id = value.partition("=")
-        if (not separator or role not in {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}
+        if (not separator or role not in {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE",
+                                          "PLAYER_IDENTITY_RESPONSE_SOURCE"}
                 or not run_id):
             raise RuntimeError(f"TYPED_RESPONSE_SOURCE_ARGUMENT_INVALID:{value}")
         if role in parsed:
@@ -223,20 +232,82 @@ def official_games_for_slate(payload: dict, slate_date: str) -> pd.DataFrame:
 
 def local_conditional_lookup_inventory(authority: dict[str, object],
                                        roster: dict[str, object]) -> dict[str, object]:
-    participants: set[int] = set()
+    participants: dict[int, dict[str, object]] = {}
+    authority_cache = Path(str(authority["source_cache"]))
+    authority_root = authority_cache.parent
+    journal_path = authority_root / "official_request_journal.jsonl"
+    boxscore_claims = [claim for claim in authority["responses"]
+                       if claim["endpoint_family"] == "BOXSCORE"]
+    if (canonical_game_set_hash(
+            claim["resource_identity"]["game_id"] for claim in boxscore_claims)
+            != authority["canonical_game_set_hash"]
+            or any(str(claim["resource_identity"].get("slate_date")) != "2026-09-20"
+                   for claim in boxscore_claims)):
+        raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_GAME_SET_MISMATCH")
+    if sha256_bytes(journal_path.read_bytes()) != authority["source_journal_sha256"]:
+        raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_JOURNAL_CHANGED")
+    if request_run_tree_fingerprint(authority_root, repository_root=ROOT) != authority["tree_fingerprint"]:
+        raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_TREE_CHANGED")
+    journal_records = read_journal(journal_path)
     for claim in authority["responses"]:
         if claim["endpoint_family"] != "BOXSCORE":
             continue
-        body = (Path(str(authority["source_cache"])) / "objects" /
-                f"{claim['object_sha256']}.json").read_bytes()
+        identity = claim["resource_identity"]
+        index_token = sha256_bytes(json.dumps({
+            "endpoint_family": "BOXSCORE", "identity": identity,
+        }, sort_keys=True, separators=(",", ":")).encode())
+        index_path = authority_cache / "index" / f"{index_token}.json"
+        if not index_path.is_file() or sha256_bytes(index_path.read_bytes()) != claim["index_sha256"]:
+            raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_INDEX_CHANGED")
+        index = json.loads(index_path.read_text())
+        if (index.get("endpoint_family") != "BOXSCORE" or index.get("identity") != identity
+                or index.get("response_sha256") != claim["object_sha256"]
+                or index.get("response_bytes") != claim["response_bytes"]
+                or index.get("object_name") != f"{claim['object_sha256']}.json"):
+            raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_INDEX_IDENTITY_MISMATCH")
+        object_path = authority_cache / "objects" / f"{claim['object_sha256']}.json"
+        if not object_path.is_file():
+            raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_OBJECT_MISSING")
+        body = object_path.read_bytes()
+        if (sha256_bytes(body) != claim["object_sha256"]
+                or len(body) != claim["response_bytes"]):
+            raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_OBJECT_CHANGED")
+        verify_payload_identity("BOXSCORE", identity, body)
+        journal_row = next((row for row in journal_records
+                            if row.get("endpoint_family") == "BOXSCORE"
+                            and row.get("resource_identity") == identity), None)
+        if (journal_row is None or journal_row.get("response_sha256") != claim["object_sha256"]
+                or journal_row.get("response_bytes") != claim["response_bytes"]
+                or journal_row.get("canonical_game_set_hash") != authority["canonical_game_set_hash"]
+                or journal_row.get("run_id") != authority["source_run_id"]):
+            raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_JOURNAL_IDENTITY_MISMATCH")
         payload = json.loads(body)
         for side in ("homeTeam", "awayTeam"):
             team = (payload.get("playerByGameStats") or {}).get(side) or {}
             for section in ("forwards", "defense", "defensemen", "goalies"):
-                for row in team.get(section) or []:
+                for row_index, row in enumerate(team.get(section) or []):
                     raw = row.get("playerId") or row.get("id")
                     if raw is not None:
-                        participants.add(int(raw))
+                        player_id = int(raw)
+                        role = "goalie" if section == "goalies" else "skater"
+                        entry = participants.setdefault(
+                            player_id, {"roles": set(), "team_ids": set(), "evidence": []})
+                        entry["roles"].add(role)
+                        team_id = (payload.get(side) or {}).get("id")
+                        if team_id is not None:
+                            entry["team_ids"].add(int(team_id))
+                        entry["evidence"].append({
+                            "player_id": player_id,
+                            "game_id": int(identity["game_id"]),
+                            "authority_source_run": authority["source_run_id"],
+                            "response_object_sha256": claim["object_sha256"],
+                            "response_index_sha256": claim["index_sha256"],
+                            "source_journal_sha256": authority["source_journal_sha256"],
+                            "request_run_tree_fingerprint": authority["tree_fingerprint"],
+                            "canonical_game_set_hash": authority["canonical_game_set_hash"],
+                            "json_identity_locator":
+                                f"$.playerByGameStats.{side}.{section}[{row_index}].playerId",
+                        })
     roster_ids: set[int] = set()
     named = 0
     for claim in roster["responses"]:
@@ -253,25 +324,281 @@ def local_conditional_lookup_inventory(authority: dict[str, object],
                     named += 1
     if len(roster_ids) != 548 or named != 548:
         raise RuntimeError(f"SEPTEMBER_20_ROSTER_NAME_INVENTORY_MISMATCH:{len(roster_ids)}:{named}")
-    absent_from_rosters = participants - roster_ids
-    expected_absent = SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS | {8484537}
-    if absent_from_rosters != expected_absent:
+    participant_ids = set(participants)
+    skaters = sorted(player_id for player_id, value in participants.items()
+                     if value["roles"] == {"skater"})
+    goalies = sorted(player_id for player_id, value in participants.items()
+                     if value["roles"] == {"goalie"})
+    ambiguous = sorted(player_id for player_id, value in participants.items()
+                       if len(value["roles"]) != 1)
+    absent_from_rosters = participant_ids - roster_ids
+    if ambiguous:
+        raise RuntimeError(f"PARTICIPANT_ROLE_CONFLICT:{ambiguous}")
+    if len(participant_ids) != 280 or len(skaters) != 252 or len(goalies) != 28:
         raise RuntimeError(
-            f"CONDITIONAL_LOOKUP_ROSTER_DIFFERENCE_CHANGED:{sorted(absent_from_rosters)}")
-    missing = sorted(absent_from_rosters - SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS)
-    if missing != [8484537]:
-        raise RuntimeError(f"CONDITIONAL_LOOKUP_INVENTORY_CHANGED:{missing}")
+            f"SEPTEMBER_20_PARTICIPANT_INVENTORY_MISMATCH:"
+            f"{len(participant_ids)}:{len(skaters)}:{len(goalies)}")
+    if len(absent_from_rosters) != 54:
+        raise RuntimeError(
+            f"SEPTEMBER_20_ROSTER_ABSENCE_INVENTORY_MISMATCH:{len(absent_from_rosters)}")
     return {
-        "contract_version": "NHL_CONDITIONAL_PLAYER_LOOKUP_PREFLIGHT_V1",
-        "participating_nhl_ids": len(participants), "verified_roster_ids": len(roster_ids),
+        "contract_version": "NHL_LOCAL_PARTICIPANT_INVENTORY_V2",
+        "participating_nhl_ids": len(participant_ids), "verified_roster_ids": len(roster_ids),
         "localized_roster_names_retained": named,
         "absent_from_verified_rosters": len(absent_from_rosters),
-        "audited_exact_external_mapping_exclusions":
-            len(SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS),
-        "player_ids": missing, "logical_operations": len(missing),
-        "new_network_operations": len(missing),
-        "status": "EXACT_GENUINE_CONDITIONAL_LOOKUP_INVENTORY",
+        "participant_ids": sorted(participant_ids), "skater_ids": skaters,
+        "goalie_ids": goalies, "roster_absent_ids": sorted(absent_from_rosters),
+        "participant_team_ids": {
+            str(player_id): sorted(value["team_ids"])
+            for player_id, value in sorted(participants.items())
+        },
+        "official_numeric_identity_evidence": {
+            str(player_id): sorted(value["evidence"], key=lambda row: (
+                row["game_id"], row["json_identity_locator"]))
+            for player_id, value in sorted(participants.items())
+        },
+        "database_mapping_coverage": "UNVERIFIED",
+        "status": "IMMUTABLE_LOCAL_EVIDENCE_VALID_DATABASE_COVERAGE_UNVERIFIED",
     }
+
+
+def _identity_partition_digest(payload: dict[str, object]) -> str:
+    normalized = {key: value for key, value in payload.items()
+                  if key not in {"partition_sha256", "transaction"}}
+    return hashlib.sha256(json.dumps(
+        normalized, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def classify_database_identity_rows(
+    *, inventory: dict[str, object], player_rows: list[dict[str, object]],
+    external_rows: list[dict[str, object]], preserved_player_ids: set[int],
+    authorized_lookup_ids: set[int], slate_date: str,
+) -> dict[str, object]:
+    participant_ids = {int(value) for value in inventory["participant_ids"]}
+    goalie_ids = {int(value) for value in inventory["goalie_ids"]}
+    player_by_id = {int(row["player_id"]): row for row in player_rows}
+    by_internal: dict[int, list[dict[str, object]]] = {}
+    by_external: dict[int, list[dict[str, object]]] = {}
+    for row in external_rows:
+        if str(row.get("provider")) != "nhl":
+            continue
+        internal = int(row["player_id"])
+        try:
+            external = int(str(row["provider_player_id"]))
+        except ValueError:
+            continue
+        by_internal.setdefault(internal, []).append(row)
+        by_external.setdefault(external, []).append(row)
+
+    categories = {name: [] for name in (
+        "exact_mapping", "deterministic_same_number_bind",
+        "numeric_identity_proven_bind",
+        "preserved_response_resolution", "new_official_lookup", "conflict")}
+    official_numeric_evidence = {
+        int(player_id): list(evidence)
+        for player_id, evidence in
+        dict(inventory.get("official_numeric_identity_evidence") or {}).items()
+    }
+    numeric_provenance: list[dict[str, object]] = []
+    records: list[dict[str, object]] = []
+    for player_id in sorted(participant_ids):
+        internal_rows = by_internal.get(player_id, [])
+        external_rows_for_id = by_external.get(player_id, [])
+        exact = [row for row in external_rows_for_id
+                 if int(row["player_id"]) == player_id]
+        disagreements = [row for row in internal_rows
+                         if str(row["provider_player_id"]) != str(player_id)]
+        disagreements.extend(row for row in external_rows_for_id
+                             if int(row["player_id"]) != player_id)
+        player = player_by_id.get(player_id)
+        first_name = str((player or {}).get("first_name") or "").strip()
+        last_name = str((player or {}).get("last_name") or "").strip()
+        component_name = f"{first_name} {last_name}".strip()
+        full_name = str((player or {}).get("full_name") or "").strip()
+        authoritative_name_value = (
+            component_name if first_name and last_name
+            and is_authoritative_local_name(component_name)
+            else full_name if is_authoritative_local_name(full_name) else "")
+        authoritative_name = bool(authoritative_name_value)
+        if disagreements or len(exact) > 1:
+            category = "conflict"
+        elif len(exact) == 1:
+            category = "exact_mapping"
+        elif player is not None and authoritative_name:
+            category = "deterministic_same_number_bind"
+        elif player is not None and official_numeric_evidence.get(player_id):
+            evidence = official_numeric_evidence[player_id]
+            required_evidence_fields = {
+                "player_id", "game_id", "authority_source_run",
+                "response_object_sha256", "response_index_sha256",
+                "source_journal_sha256", "request_run_tree_fingerprint",
+                "canonical_game_set_hash", "json_identity_locator",
+            }
+            if any(not required_evidence_fields.issubset(set(row))
+                   or int(row["player_id"]) != player_id for row in evidence):
+                category = "conflict"
+            else:
+                category = "numeric_identity_proven_bind"
+                numeric_provenance.append({
+                    "player_id": player_id,
+                    "evidence": evidence,
+                    "mapping": {
+                        "internal_player_id": player_id,
+                        "provider": "nhl",
+                        "provider_external_id": str(player_id),
+                    },
+                })
+        elif player_id in preserved_player_ids:
+            category = "preserved_response_resolution"
+        else:
+            category = "new_official_lookup"
+        categories[category].append(player_id)
+        roles = (["goalie"] if player_id in goalie_ids
+                 else ["skater"])
+        records.append({
+            "nhl_id": player_id, "roles": roles, "classification": category,
+            "player_row_exists": player is not None,
+            "authoritative_local_name": authoritative_name,
+            "authoritative_name_source": (
+                "FIRST_LAST_COLUMNS" if authoritative_name_value == component_name
+                and bool(component_name) else "FULL_NAME_COLUMN"
+                if authoritative_name_value else None),
+            "internal_player_id": player_id if player is not None else None,
+            "exact_external_mapping": len(exact) == 1,
+        })
+    actual_lookups = set(categories["new_official_lookup"])
+
+    roster_absent = {int(value) for value in inventory["roster_absent_ids"]}
+    absent_partition = {
+        name: sorted(roster_absent.intersection(values))
+        for name, values in categories.items()
+    }
+    absent_counts = {name: len(values) for name, values in absent_partition.items()}
+    goalie_partition = {
+        name: sorted(goalie_ids.intersection(values))
+        for name, values in categories.items()
+    }
+    goalie_preparation = {
+        name: values for name, values in goalie_partition.items()
+        if name != "exact_mapping"
+    }
+    flattened = [player_id for values in categories.values() for player_id in values]
+    partition_complete = (len(flattened) == len(participant_ids)
+                          and len(set(flattened)) == len(participant_ids)
+                          and set(flattened) == participant_ids)
+    roster_absent_complete = (
+        sum(absent_counts.values()) == len(roster_absent)
+        and set(player_id for values in absent_partition.values()
+                for player_id in values) == roster_absent)
+    failure = None
+    if categories["conflict"]:
+        failure = f"DATABASE_IDENTITY_CONFLICT:{categories['conflict']}"
+    elif not partition_complete or not roster_absent_complete:
+        failure = "DATABASE_IDENTITY_PARTITION_NOT_MUTUALLY_EXCLUSIVE_COMPLETE"
+    elif categories["preserved_response_resolution"] != [8485386]:
+        failure = (
+            "SEPTEMBER_20_PRESERVED_PLAYER_PARTITION_MISMATCH:"
+            f"{categories['preserved_response_resolution']}")
+    elif actual_lookups != authorized_lookup_ids:
+        failure = (
+            "AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH:"
+            f"actual={sorted(actual_lookups)}:authorized={sorted(authorized_lookup_ids)}")
+    if slate_date == "2026-09-20":
+        allowed_goalie_resolution = (
+            set(goalie_partition["exact_mapping"])
+            | set(goalie_partition["deterministic_same_number_bind"])
+            | set(goalie_partition["numeric_identity_proven_bind"])
+        )
+        if failure is None and (
+                sum(len(values) for values in goalie_partition.values()) != 28
+                or goalie_partition["new_official_lookup"] != [8485525]
+                or goalie_partition["preserved_response_resolution"]
+                or goalie_partition["conflict"]
+                or allowed_goalie_resolution != goalie_ids - {8485525}):
+            failure = f"SEPTEMBER_20_GOALIE_IDENTITY_PARTITION_MISMATCH:{goalie_preparation}"
+    if (failure is None and 8482103 in participant_ids
+            and 8482103 not in categories["exact_mapping"]):
+        failure = "PROTECTED_PLAYER_8482103_MAPPING_NOT_EXACT"
+
+    payload: dict[str, object] = {
+        "contract_version": "NHL_DATABASE_IDENTITY_PREFLIGHT_V1",
+        "status": ("DATABASE_IDENTITY_PREFLIGHT_VALID" if failure is None
+                   else "FAILED_CLOSED_DATABASE_PREFLIGHT"),
+        "slate_date": slate_date, "participant_count": len(participant_ids),
+        "classification": categories, "classification_records": records,
+        "partition_complete_and_mutually_exclusive": partition_complete,
+        "roster_absent_partition_complete": roster_absent_complete,
+        "roster_absent_partition": absent_partition,
+        "roster_absent_classification_counts": absent_counts,
+        "goalie_partition": goalie_partition,
+        "goalie_partition_coverage": sum(len(values) for values in goalie_partition.values()),
+        "goalie_identity_preparation": goalie_preparation,
+        "numeric_identity_provenance": numeric_provenance,
+        "numeric_identity_provenance_sha256": sha256_bytes(json.dumps(
+            numeric_provenance, sort_keys=True, separators=(",", ":")).encode()),
+        "authorized_new_official_lookup_ids": sorted(authorized_lookup_ids),
+        "lookup_authorization_matches": actual_lookups == authorized_lookup_ids,
+        "observed_identity_evidence": {
+            str(player_id): next(row for row in records if row["nhl_id"] == player_id)
+            for player_id in (8477467, 8478477, 8483010)
+        },
+        "database_writes": 0, "official_network_requests": 0,
+    }
+    if failure is not None:
+        payload["failure"] = failure
+    payload["partition_sha256"] = _identity_partition_digest(payload)
+    return payload
+
+
+def database_identity_preflight(
+    dsn: str, *, inventory: dict[str, object], preserved_player_ids: set[int],
+    authorized_lookup_ids: set[int], slate_date: str,
+) -> dict[str, object]:
+    """Inspect live mappings once, read-only, and always explicitly roll back."""
+    participant_ids = sorted({int(value) for value in inventory["participant_ids"]})
+    connection = psycopg.connect(dsn)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("BEGIN TRANSACTION READ ONLY")
+            cursor.execute("SHOW transaction_read_only")
+            if str(cursor.fetchone()[0]).lower() != "on":
+                raise RuntimeError("DATABASE_IDENTITY_PREFLIGHT_NOT_READ_ONLY")
+            cursor.execute(
+                """
+                SELECT player_id, full_name, first_name, last_name, team_id, position
+                FROM nhl.players
+                WHERE player_id = ANY(%s)
+                ORDER BY player_id
+                """, (participant_ids,))
+            columns = [item.name for item in cursor.description]
+            player_rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            cursor.execute(
+                """
+                SELECT player_id, provider, provider_player_id
+                FROM nhl.player_external_ids
+                WHERE provider = 'nhl'
+                  AND (player_id = ANY(%s)
+                       OR (provider_player_id ~ '^[0-9]+$'
+                           AND provider_player_id::bigint = ANY(%s)))
+                ORDER BY player_id, provider_player_id
+                """, (participant_ids, participant_ids))
+            columns = [item.name for item in cursor.description]
+            external_rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            result = classify_database_identity_rows(
+                inventory=inventory, player_rows=player_rows,
+                external_rows=external_rows, preserved_player_ids=preserved_player_ids,
+                authorized_lookup_ids=authorized_lookup_ids, slate_date=slate_date)
+        connection.rollback()
+        result["transaction"] = {
+            "read_only": True, "transactions": 1, "read_queries": 2,
+            "writes": 0, "explicitly_rolled_back": True, "closed": True,
+        }
+        return result
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_authority: bool = False) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
@@ -418,12 +745,139 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
         connection.commit()
 
 
-def governed_collectors(dsn: str, slate_date: str) -> None:
+def prepare_participant_identities(
+    dsn: str, *, slate_date: str, inventory: dict[str, object],
+    partition: dict[str, object],
+) -> dict[str, object]:
+    """Bind verified identities before either appearance collector runs."""
+    categories = partition["classification"]
+    deterministic = [int(value) for value in categories["deterministic_same_number_bind"]]
+    numeric_proven = [int(value) for value in categories["numeric_identity_proven_bind"]]
+    preserved = [int(value) for value in categories["preserved_response_resolution"]]
+    new_lookups = [int(value) for value in categories["new_official_lookup"]]
+    responses: dict[int, str] = {}
+    for player_id in preserved + new_lookups:
+        reuse = player_id in set(preserved)
+        response = official_get(
+            f"https://api-web.nhle.com/v1/player/{player_id}/landing",
+            timeout=10, stage="PLAYER_IDENTITY_PREPARATION",
+            endpoint_family="PLAYER_LANDING",
+            identity={"slate_date": slate_date, "player_id": player_id},
+            max_attempts=1, retry_statuses=(), preserve_response=not reuse,
+            reuse_preserved=reuse,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        returned_id = payload.get("playerId") or payload.get("id")
+        if returned_id is None or int(returned_id) != player_id:
+            raise RuntimeError(f"PLAYER_LANDING_IDENTITY_MISMATCH:{player_id}:{returned_id}")
+        responses[player_id] = authoritative_player_name(
+            payload.get("firstName"), payload.get("lastName"))
+
+    goalies = {int(value) for value in inventory["goalie_ids"]}
+    teams = {int(key): [int(value) for value in values]
+             for key, values in inventory["participant_team_ids"].items()}
+    with psycopg.connect(dsn) as connection:
+        with connection.transaction():
+            for player_id in deterministic + numeric_proven:
+                resolve_player_external_identity(
+                    connection, player_id=player_id, provider="nhl",
+                    provider_player_id=player_id)
+            for player_id, full_name in responses.items():
+                team_ids = teams.get(player_id, [])
+                create_or_verify_player(
+                    connection, player_id=player_id, full_name=full_name,
+                    team_id=team_ids[0] if len(team_ids) == 1 else None,
+                    position="G" if player_id in goalies else "F")
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT player_id, provider_player_id
+                    FROM nhl.player_external_ids
+                    WHERE player_id = 8482103 AND provider = 'nhl'
+                    FOR KEY SHARE
+                    """)
+                protected = cursor.fetchall()
+                if protected != [(8482103, "8482103")]:
+                    raise RuntimeError("PROTECTED_PLAYER_8482103_MAPPING_CHANGED")
+    return {
+        "contract_version": "NHL_PARTICIPANT_IDENTITY_PREPARATION_V1",
+        "deterministic_binds": deterministic,
+        "numeric_identity_proven_binds": numeric_proven,
+        "preserved_response_resolutions": preserved,
+        "new_official_lookup_resolutions": new_lookups,
+        "partition_sha256": partition["partition_sha256"],
+        "status": "IDENTITIES_PREPARED",
+    }
+
+
+def verify_staging_completeness(
+    dsn: str, *, slate_date: str, games: pd.DataFrame,
+    skaters: pd.DataFrame, goalies: pd.DataFrame,
+) -> dict[str, object]:
+    with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT game_id, player_id
+            FROM nhl.import_skater_logs_stage
+            WHERE game_date = %s::date
+            ORDER BY game_id, player_id
+            """, (slate_date,))
+        staged_skaters = [(int(game_id), int(player_id))
+                          for game_id, player_id in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT game_id, player_id, toi_minutes
+            FROM nhl.import_goalie_logs_stage
+            WHERE game_date = %s::date
+            ORDER BY game_id, player_id
+            """, (slate_date,))
+        staged_goalie_rows = [(int(game_id), int(player_id), float(toi or 0.0))
+                              for game_id, player_id, toi in cursor.fetchall()]
+        connection.rollback()
+    staged_goalies = [(game_id, player_id) for game_id, player_id, unused in staged_goalie_rows]
+    expected_team = {(int(row.game_id), int(row.goalie_id)): int(row.team_id)
+                     for row in goalies.itertuples(index=False)}
+    ranked: dict[tuple[int, int], list[tuple[float, int]]] = {}
+    for game_id, player_id, toi in staged_goalie_rows:
+        team_id = expected_team.get((game_id, player_id))
+        if team_id is not None:
+            ranked.setdefault((game_id, team_id), []).append((toi, player_id))
+    actual_starters = [(game_id, max(rows)[1])
+                       for (game_id, unused_team), rows in sorted(ranked.items()) if rows]
+    return validate_staging_identity_sets(
+        expected_games=games.game_id.astype(int).tolist(),
+        expected_skaters=list(skaters[["game_id", "player_id"]]
+                             .itertuples(index=False, name=None)),
+        expected_goalies=list(goalies[["game_id", "goalie_id"]]
+                             .itertuples(index=False, name=None)),
+        expected_starters=list(goalies.loc[goalies.actual_start_flag,
+                                           ["game_id", "goalie_id"]]
+                               .itertuples(index=False, name=None)),
+        actual_games=sorted({game_id for game_id, unused in staged_skaters}
+                            | {game_id for game_id, unused in staged_goalies}),
+        actual_skaters=staged_skaters, actual_goalies=staged_goalies,
+        actual_starters=actual_starters,
+    )
+
+
+def governed_collectors(
+    dsn: str, slate_date: str, *, inventory: dict[str, object] | None = None,
+    identity_partition: dict[str, object] | None = None,
+    games: pd.DataFrame | None = None, skaters: pd.DataFrame | None = None,
+    goalies: pd.DataFrame | None = None,
+) -> None:
     python = str(ROOT / ".venv/bin/python")
     _run([python, str(SCRIPTS / "import_schedule_today.py")], slate_date, dsn)
     _run([python, str(SCRIPTS / "refresh_players_and_roster_today.py")], slate_date, dsn)
+    if inventory is not None and identity_partition is not None:
+        prepare_participant_identities(
+            dsn, slate_date=slate_date, inventory=inventory, partition=identity_partition)
     _run([python, str(SCRIPTS / "seed_goalie_logs_for_date.py")], slate_date, dsn)
     _run([python, str(SCRIPTS / "seed_skater_logs_for_date.py")], slate_date, dsn)
+    if all(value is not None for value in (games, skaters, goalies)):
+        verify_staging_completeness(
+            dsn, slate_date=slate_date, games=games, skaters=skaters, goalies=goalies)
     _run([python, str(SCRIPTS / "ingest_shiftcharts_for_date.py"), "--date", slate_date], slate_date, dsn)
     _promote_stage(dsn, slate_date)
     _run([python, str(SCRIPTS / "backfill_game_manpower_segments.py"), "--start-date", slate_date,
@@ -441,6 +895,7 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--preflight", action="store_true")
     mode.add_argument("--local-input-preflight", action="store_true")
+    mode.add_argument("--database-identity-preflight", action="store_true")
     mode.add_argument("--execute", action="store_true")
     parser.add_argument("--date", dest="slate_date")
     parser.add_argument("date_arg", nargs="?")
@@ -451,7 +906,10 @@ def main() -> int:
     parser.add_argument("--response-source", action="append", default=[])
     parser.add_argument("--reuse-request-run-id")
     parser.add_argument("--lineage-request-run-id", action="append", default=[])
+    parser.add_argument("--authorized-player-lookup-id", action="append", type=int, default=[])
     args = parser.parse_args()
+    if len(args.authorized_player_lookup_id) != len(set(args.authorized_player_lookup_id)):
+        parser.error("duplicate --authorized-player-lookup-id")
     slate_date = args.slate_date or args.date_arg
     if not slate_date:
         parser.error("provide --date YYYY-MM-DD or positional YYYY-MM-DD")
@@ -462,6 +920,7 @@ def main() -> int:
     source_binding = None
     authority_binding = None
     roster_binding = None
+    player_binding = None
     response_source_ledger = None
     conditional_inventory = None
     topology = None
@@ -470,7 +929,8 @@ def main() -> int:
         try:
             source_binding = resolve_operational_sources(
                 slate_date=slate_date, operational_root=args.operational_root)
-            if ((args.execute and slate_date == "2026-09-20")
+            if (((args.execute or args.database_identity_preflight)
+                 and slate_date == "2026-09-20")
                     or args.response_source or args.reuse_request_run_id
                     or args.lineage_request_run_id):
                 typed_sources = _parse_response_source_specs(args.response_source)
@@ -481,6 +941,8 @@ def main() -> int:
                         "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6",
                     "ROSTER_RESPONSE_SOURCE":
                         "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9",
+                    "PLAYER_IDENTITY_RESPONSE_SOURCE":
+                        "nhlpostgame_20260920_20260922T181726727181Z_70f0280d",
                 }
                 if slate_date == "2026-09-20" and typed_sources != required_sources:
                     raise RuntimeError("SEPTEMBER_20_TYPED_RESPONSE_SOURCES_REQUIRED")
@@ -488,6 +950,7 @@ def main() -> int:
                     "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6",
                     "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b",
                     "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9",
+                    "nhlpostgame_20260920_20260922T181726727181Z_70f0280d",
                 ]
                 if (slate_date == "2026-09-20"
                         and args.lineage_request_run_id != required_ancestors):
@@ -519,8 +982,23 @@ def main() -> int:
                     expected_tree_fingerprint=roster_receipt["tree_fingerprint"],
                     expected_response_set_sha256=roster_receipt["response_set_sha256"],
                 )
+                player_receipt = _receipt(
+                    typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+                    role="PLAYER_IDENTITY_RESPONSE_SOURCE", slate_date=slate_date)
+                player_binding = verify_player_identity_response_run(
+                    args.output_root / "request_runs" / slate_date /
+                    typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+                    expected_run_id=typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+                    slate_date=slate_date, game_ids=source_binding["game_ids"],
+                    expected_player_id=int(player_receipt["player_id"]),
+                    repository_root=ROOT,
+                    expected_journal_sha256=player_receipt["journal_sha256"],
+                    expected_tree_fingerprint=player_receipt["tree_fingerprint"],
+                    expected_object_sha256=player_receipt["object_sha256"],
+                    expected_index_sha256=player_receipt["index_sha256"],
+                )
                 response_source_ledger = build_typed_response_source_ledger(
-                    [authority_binding, roster_binding])
+                    [authority_binding, roster_binding, player_binding])
                 conditional_inventory = local_conditional_lookup_inventory(
                     authority_binding, roster_binding)
                 topology = {
@@ -528,14 +1006,17 @@ def main() -> int:
                     "base_logical_operations": 59,
                     "authority_response_identities": len(authority_binding["responses"]),
                     "roster_response_identities": len(roster_binding["responses"]),
+                    "player_identity_response_identities": len(player_binding["responses"]),
                     "authority_source_reuse_events": 31,
                     "roster_source_reuse_events": 14,
-                    "preserved_response_reuses": 45,
+                    "player_identity_source_reuse_events": 1,
+                    "preserved_response_reuses": "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
                     "required_shift_pbp_network_operations": 14,
                     "conditional_player_lookup_network_operations":
-                        conditional_inventory["new_network_operations"],
-                    "logical_operations": 59 + conditional_inventory["logical_operations"],
-                    "new_network_operations": 14 + conditional_inventory["new_network_operations"],
+                        "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
+                    "logical_operations": "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
+                    "new_network_operations": "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
+                    "database_mapping_coverage": "UNVERIFIED",
                 }
                 ancestors = []
                 for ancestor_run_id in args.lineage_request_run_id:
@@ -552,25 +1033,32 @@ def main() -> int:
                             expected_tree_fingerprint=receipt["tree_fingerprint"],
                         )
                     else:
+                        failure_class = {
+                            required_ancestors[0]: "IMMUTABLE_MAINLINE_RUN_CARDINALITY:0",
+                            required_ancestors[2]: "PLAYER_EXTERNAL_IDENTITY_TRANSACTION_ABORT",
+                            required_ancestors[3]: "PLAYER_AUTHORITATIVE_NAME_INVALID",
+                        }[ancestor_run_id]
                         ancestor = verify_failed_request_ancestor(
                             ancestor_root, expected_run_id=ancestor_run_id,
                             game_ids=source_binding["game_ids"], repository_root=ROOT,
                             expected_journal_sha256=receipt["journal_sha256"],
                             expected_tree_fingerprint=receipt["tree_fingerprint"],
-                            failure_class=("IMMUTABLE_MAINLINE_RUN_CARDINALITY:0"
-                                           if ancestor_run_id == required_ancestors[0]
-                                           else "PLAYER_EXTERNAL_IDENTITY_TRANSACTION_ABORT"),
+                            failure_class=failure_class,
                             response_source=(authority_binding
                                              if ancestor_run_id == required_ancestors[2] else None),
+                            response_sources=([authority_binding, roster_binding]
+                                              if ancestor_run_id == required_ancestors[3]
+                                              else None),
                         )
                     ancestors.append(ancestor)
                 request_lineage = {
-                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V3",
+                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V4",
                     "slate_date": slate_date,
                     "canonical_game_set_hash": authority_binding["canonical_game_set_hash"],
                     "response_sources": [
                         _public_response_source(authority_binding),
                         _public_response_source(roster_binding),
+                        _public_response_source(player_binding),
                     ],
                     "failed_ancestors": ancestors,
                     "out_of_band_diagnostic_requests": [{
@@ -615,6 +1103,78 @@ def main() -> int:
     if not dsn:
         print(json.dumps({"status": "FAILED", "failure": "DATABASE_URL_MISSING"}))
         return 3
+    identity_partition = None
+    if args.database_identity_preflight or (args.execute and slate_date != "2026-09-19"):
+        if conditional_inventory is None or player_binding is None:
+            print(json.dumps({"status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+                              "failure": "DATABASE_IDENTITY_PREFLIGHT_SOURCES_REQUIRED"},
+                             indent=2, sort_keys=True))
+            return 5
+        preserved_ids = {
+            int(response["resource_identity"]["player_id"])
+            for response in player_binding["responses"]
+        }
+        try:
+            identity_partition = database_identity_preflight(
+                dsn, inventory=conditional_inventory,
+                preserved_player_ids=preserved_ids,
+                authorized_lookup_ids=set(args.authorized_player_lookup_id),
+                slate_date=slate_date)
+        except Exception as error:
+            print(json.dumps({
+                "status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+                "failure": f"{type(error).__name__}:{error}",
+                "request_run_created": False, "database_writes": 0,
+                "external_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+            }, indent=2, sort_keys=True))
+            return 5
+        if identity_partition["status"] != "DATABASE_IDENTITY_PREFLIGHT_VALID":
+            print(json.dumps({
+                "status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+                "failure": identity_partition.get(
+                    "failure", "DATABASE_IDENTITY_PREFLIGHT_INVALID_WITHOUT_REASON"),
+                "request_run_created": False,
+                "database_preflight": identity_partition,
+                "database_transactions": 1, "database_read_queries": 2,
+                "database_writes": 0,
+                "external_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+            }, indent=2, sort_keys=True))
+            return 5
+        topology = {
+            **(topology or {}),
+            "database_mapping_coverage": "VERIFIED_READ_ONLY",
+            "preserved_response_reuses": 46,
+            "conditional_player_lookup_network_operations":
+                len(identity_partition["classification"]["new_official_lookup"]),
+            "logical_operations": 59
+                + len(identity_partition["classification"]["preserved_response_resolution"])
+                + len(identity_partition["classification"]["new_official_lookup"]),
+            "new_network_operations": 14
+                + len(identity_partition["classification"]["new_official_lookup"]),
+            "identity_partition_sha256": identity_partition["partition_sha256"],
+        }
+        if request_lineage is not None:
+            request_lineage["database_identity_preflight"] = {
+                "contract_version": identity_partition["contract_version"],
+                "partition_sha256": identity_partition["partition_sha256"],
+                "status": identity_partition["status"],
+                "authorized_new_official_lookup_ids":
+                    identity_partition["authorized_new_official_lookup_ids"],
+                "numeric_identity_provenance":
+                    identity_partition["numeric_identity_provenance"],
+                "numeric_identity_provenance_sha256":
+                    identity_partition["numeric_identity_provenance_sha256"],
+            }
+    if args.database_identity_preflight:
+        print(json.dumps({
+            "status": "DATABASE_IDENTITY_PREFLIGHT_VALID",
+            "request_run_created": False, "database_preflight": identity_partition,
+            "topology": topology, "database_transactions": 1,
+            "database_read_queries": 2, "database_writes": 0,
+            "external_requests": 0,
+            "bookmaker_requests": 0, "paid_credits": 0,
+        }, indent=2, sort_keys=True))
+        return 0
     if not args.execute:
         payload, code = read_only_preflight(dsn, slate_date)
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -649,11 +1209,16 @@ def main() -> int:
             RequestContext.from_env(required=True)
             official, boxes, request_counts = fetch_official(
                 slate_date, canonical_ids, reuse_authority=authority_binding is not None)
-            validate_final_slate(canonical, official, slate_date)
+            validated = validate_final_slate(canonical, official, slate_date)
+            expected_games, expected_skaters, expected_goalies = build_outcomes(
+                validated, boxes, datetime.now(timezone.utc).isoformat())
             destination, disposition = publish_reconciliation(
                 canonical=canonical, official=official, boxscores=boxes, slate_date=slate_date,
                 prediction_root=args.prediction_root / slate_date, output_root=args.output_root,
-                collector=lambda: governed_collectors(dsn, slate_date),
+                collector=lambda: governed_collectors(
+                    dsn, slate_date, inventory=conditional_inventory,
+                    identity_partition=identity_partition, games=expected_games,
+                    skaters=expected_skaters, goalies=expected_goalies),
                 observed_at=datetime.now(timezone.utc).isoformat(),
                 request_journal=Path(context_values[ENV_JOURNAL]),
                 request_accounting_factory=lambda: summarize_journal(

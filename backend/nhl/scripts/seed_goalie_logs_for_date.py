@@ -10,8 +10,8 @@ Sources (in this order):
   (No statsapi.* usage)
 
 Mapping:
-- Prefer name match against nhl.roster_status for that game
-- Fallback to nhl.player_external_ids (provider='nhl', provider_player_id)
+- Resolve only the prepared exact nhl.player_external_ids binding.
+- Governed runs fail closed instead of silently skipping an appearance.
 """
 
 import os, sys, datetime as dt
@@ -128,6 +128,20 @@ def external_map(conn, nhl_ids: List[int]) -> Dict[int, int]:
             except (TypeError, ValueError):
                 pass
         return mp
+
+
+def resolve_goalie_player_id(nhl_id: int | None,
+                             external_ids: Dict[int, int]) -> int | None:
+    if nhl_id is None:
+        return None
+    provider_id = int(nhl_id)
+    player_id = external_ids.get(provider_id)
+    if player_id is None:
+        return None
+    if int(player_id) != provider_id:
+        raise RuntimeError(
+            f"GOALIE_EXTERNAL_ID_NOT_SAME_NUMBER:{provider_id}:{player_id}")
+    return provider_id
 
 def game_ids_from_db(conn, date_str: str) -> List[int]:
     sql = "SELECT game_id::bigint FROM nhl.games WHERE game_date = %s ORDER BY game_id"
@@ -253,8 +267,6 @@ def main():
                 print(f"[{gpk}] boxscore fetch failed: {e}", file=sys.stderr)
                 continue
 
-            roster_map = roster_name_map(conn, gpk)  # name -> (player_id, team_id)
-
             # collect raw goalie rows from API
             raw_goalies = list(iter_goalies_from_box(box))
             nhl_ids = [int(x[0]) for x in raw_goalies if x[0] is not None]
@@ -262,15 +274,10 @@ def main():
 
             rows = []
             for nhl_id, full_name, saves, shots_against, toi_min in raw_goalies:
-                pid = None
-                nm = normalize_name(full_name)
-                # first: roster match
-                if nm in roster_map:
-                    pid = roster_map[nm][0]
-                # fallback: external id
-                if pid is None and nhl_id is not None:
-                    pid = ext_map.get(int(nhl_id))
+                pid = resolve_goalie_player_id(nhl_id, ext_map)
                 if pid is None:
+                    if os.environ.get(ENV_REQUIRED) == "1":
+                        raise RuntimeError(f"UNPREPARED_GOALIE_EXTERNAL_ID:{gpk}:{nhl_id}")
                     skipped_no_map += 1
                     continue
                 rows.append((

@@ -249,7 +249,8 @@ class RequestContext:
                 role = str(source.get("role") or "")
                 if (not SAFE_TOKEN.fullmatch(run_id)
                         or not re.fullmatch(r"[0-9a-f]{64}", journal_hash)
-                        or role not in {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}):
+                        or role not in {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE",
+                                       "PLAYER_IDENTITY_RESPONSE_SOURCE"}):
                     raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_SOURCE_INVALID")
                 if role in roles:
                     raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_ROLE_DUPLICATE")
@@ -263,9 +264,11 @@ class RequestContext:
                 for claim in source.get("responses") or []:
                     family = str(claim.get("endpoint_family") or "")
                     identity = claim.get("resource_identity") or {}
-                    allowed_families = ({"SCHEDULE", "BOXSCORE"}
-                                        if role == "AUTHORITY_RESPONSE_SOURCE"
-                                        else {"ROSTER"})
+                    allowed_families = {
+                        "AUTHORITY_RESPONSE_SOURCE": {"SCHEDULE", "BOXSCORE"},
+                        "ROSTER_RESPONSE_SOURCE": {"ROSTER"},
+                        "PLAYER_IDENTITY_RESPONSE_SOURCE": {"PLAYER_LANDING"},
+                    }[role]
                     if family not in allowed_families:
                         raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_WRONG_FAMILY")
                     key = response_identity_key(family, identity)
@@ -798,15 +801,87 @@ def verify_roster_response_run(
     }
 
 
+def verify_player_identity_response_run(
+    request_root: Path, *, expected_run_id: str, slate_date: str,
+    game_ids: Iterable[int], expected_player_id: int,
+    repository_root: Path, expected_journal_sha256: str,
+    expected_tree_fingerprint: str, expected_object_sha256: str,
+    expected_index_sha256: str,
+) -> dict[str, Any]:
+    """Verify one failed run as a one-player, immutable landing-response source."""
+    journal = request_root / "official_request_journal.jsonl"
+    cache = request_root / "preserved_responses"
+    if request_root.name != expected_run_id or not journal.is_file() or not cache.is_dir():
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_RUN_INCOMPLETE")
+    journal_digest = sha256_file(journal)
+    tree = request_run_tree_fingerprint(request_root, repository_root=repository_root)
+    if journal_digest != expected_journal_sha256 or tree != expected_tree_fingerprint:
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_IMMUTABLE_RECEIPT_MISMATCH")
+    game_hash = canonical_game_set_hash(game_ids)
+    records = read_journal(journal)
+    if (not records or any(row.get("run_id") != expected_run_id for row in records)
+            or any(row.get("canonical_game_set_hash") != game_hash for row in records)):
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_JOURNAL_IDENTITY_MISMATCH")
+    identity = {"slate_date": slate_date, "player_id": int(expected_player_id)}
+    landing = [row for row in records if row.get("event_kind") == "NETWORK_ATTEMPT"
+               and row.get("endpoint_family") == "PLAYER_LANDING"]
+    if (len(landing) != 1 or landing[0].get("resource_identity") != identity
+            or landing[0].get("final_disposition") != "SUCCESS"
+            or int(landing[0].get("http_status") or 0) != 200
+            or not landing[0].get("response_preserved")):
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_ATTEMPT_INVALID")
+    index = cache / "index" / f"{sha256_bytes(response_identity_key('PLAYER_LANDING', identity).encode())}.json"
+    if not index.is_file() or sha256_file(index) != expected_index_sha256:
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_INDEX_MISMATCH")
+    metadata = json.loads(index.read_text())
+    if metadata.get("endpoint_family") != "PLAYER_LANDING" or metadata.get("identity") != identity:
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_INDEX_IDENTITY_MISMATCH")
+    object_path = cache / "objects" / str(metadata.get("object_name") or "")
+    if not object_path.is_file():
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_OBJECT_MISSING")
+    body = object_path.read_bytes()
+    digest = sha256_bytes(body)
+    if (digest != expected_object_sha256 or digest != metadata.get("response_sha256")
+            or len(body) != int(metadata.get("response_bytes") or -1)
+            or landing[0].get("response_sha256") != digest
+            or int(landing[0].get("response_bytes") or -1) != len(body)):
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_RESPONSE_HASH_MISMATCH")
+    verify_payload_identity("PLAYER_LANDING", identity, body)
+    indexes = {path.name for path in (cache / "index").glob("*.json")}
+    objects = {path.name for path in (cache / "objects").glob("*.json")}
+    if indexes != {index.name} or objects != {object_path.name}:
+        raise RuntimeError("PLAYER_IDENTITY_SOURCE_CACHE_OBJECT_SET_MISMATCH")
+    binding = {
+        "endpoint_family": "PLAYER_LANDING", "resource_identity": identity,
+        "index_sha256": expected_index_sha256, "object_sha256": digest,
+        "response_bytes": len(body),
+    }
+    return {
+        "contract_version": "NHL_TYPED_RESPONSE_SOURCE_V1",
+        "role": "PLAYER_IDENTITY_RESPONSE_SOURCE", "source_run_id": expected_run_id,
+        "source_journal_sha256": journal_digest, "tree_fingerprint": tree,
+        "canonical_game_set_hash": game_hash, "source_cache": str(cache),
+        "responses": [binding], "response_set_sha256": sha256_bytes(json.dumps(
+            [binding], sort_keys=True, separators=(",", ":")).encode()),
+        "player_identity_responses": 1,
+    }
+
+
 def build_typed_response_source_ledger(sources: Iterable[dict[str, Any]]) -> dict[str, Any]:
     prepared = list(sources)
     roles = [str(source.get("role") or "") for source in prepared]
-    if sorted(roles) != ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"]:
+    if (set(roles) not in (
+            {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"},
+            {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE",
+             "PLAYER_IDENTITY_RESPONSE_SOURCE"})):
         raise RuntimeError("TYPED_RESPONSE_SOURCE_ROLES_INVALID")
     claimed: set[str] = set()
     for source in prepared:
-        allowed = ({"SCHEDULE", "BOXSCORE"}
-                   if source["role"] == "AUTHORITY_RESPONSE_SOURCE" else {"ROSTER"})
+        allowed = {
+            "AUTHORITY_RESPONSE_SOURCE": {"SCHEDULE", "BOXSCORE"},
+            "ROSTER_RESPONSE_SOURCE": {"ROSTER"},
+            "PLAYER_IDENTITY_RESPONSE_SOURCE": {"PLAYER_LANDING"},
+        }[source["role"]]
         for response in source.get("responses") or []:
             if response.get("endpoint_family") not in allowed:
                 raise RuntimeError("TYPED_RESPONSE_SOURCE_WRONG_FAMILY")
@@ -825,6 +900,7 @@ def verify_failed_request_ancestor(
     repository_root: Path, expected_journal_sha256: str,
     expected_tree_fingerprint: str, failure_class: str,
     response_source: dict[str, Any] | None = None,
+    response_sources: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     journal = request_root / "official_request_journal.jsonl"
     if request_root.name != expected_run_id or not journal.is_file():
@@ -840,19 +916,29 @@ def verify_failed_request_ancestor(
         raise RuntimeError("FAILED_ANCESTOR_JOURNAL_IDENTITY_MISMATCH")
     reuses = [row for row in records if row.get("event_kind") == "PRESERVED_RESPONSE_REUSE"]
     relationship = None
-    if response_source is not None:
-        allowed = {(row["index_sha256"], row["object_sha256"], int(row["response_bytes"]))
-                   for row in response_source["responses"]}
+    declared_sources = list(response_sources or ([] if response_source is None
+                                                  else [response_source]))
+    if declared_sources:
+        allowed = {
+            (str(source["source_run_id"]), str(source["source_journal_sha256"])): {
+                (row["index_sha256"], row["object_sha256"], int(row["response_bytes"]))
+                for row in source["responses"]
+            }
+            for source in declared_sources
+        }
         for row in reuses:
             key = (row.get("source_response_index_sha256"),
                    row.get("source_response_object_sha256"), int(row.get("response_bytes") or 0))
-            if (row.get("source_run_id") != response_source["source_run_id"]
-                    or row.get("source_journal_sha256") != response_source["source_journal_sha256"]
-                    or key not in allowed or row.get("response_sha256") != key[1]):
+            source_key = (str(row.get("source_run_id") or ""),
+                          str(row.get("source_journal_sha256") or ""))
+            if (source_key not in allowed or key not in allowed[source_key]
+                    or row.get("response_sha256") != key[1]):
                 raise RuntimeError("FAILED_ANCESTOR_REUSE_CHAIN_INVALID")
         relationship = {
-            "response_source_run_id": response_source["source_run_id"],
-            "response_source_set_sha256": response_source["response_set_sha256"],
+            "response_sources": [{
+                "response_source_run_id": source["source_run_id"],
+                "response_source_set_sha256": source["response_set_sha256"],
+            } for source in declared_sources],
             "reuse_chain_verified": True,
         }
     return {
