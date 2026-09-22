@@ -1,0 +1,74 @@
+{
+  "check_count": 11,
+  "checks": [
+    {
+      "check": "exact_436_rows",
+      "detail": 436,
+      "status": "PASS"
+    },
+    {
+      "check": "unique_game_pks",
+      "detail": 436,
+      "status": "PASS"
+    },
+    {
+      "check": "exact_input_population",
+      "detail": "fe7272e25a0f4d159118af6b02a8fb7b49160c0820bd03ed89c4158601f85587",
+      "status": "PASS"
+    },
+    {
+      "check": "all_classifications_known",
+      "detail": {
+        "CURRENT_DATE_NOT_TERMINAL": 16,
+        "FUTURE_SCHEDULED": 72,
+        "PAST_DATE_NO_RETAINED_TERMINAL_EVIDENCE": 0,
+        "PAST_DATE_ONLY_STALE_NONTERMINAL_EVIDENCE": 0,
+        "PAST_DATE_TERMINAL_EVIDENCE_FOUND_ELSEWHERE": 348,
+        "RELATED_GAME_DISPOSITION_REQUIRES_REVIEW": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "past_local_recoveries_exact",
+      "detail": 348,
+      "status": "PASS"
+    },
+    {
+      "check": "current_exact",
+      "detail": 16,
+      "status": "PASS"
+    },
+    {
+      "check": "future_exact",
+      "detail": 72,
+      "status": "PASS"
+    },
+    {
+      "check": "no_source_completion",
+      "detail": 0,
+      "status": "PASS"
+    },
+    {
+      "check": "no_unprovable_identity",
+      "detail": 0,
+      "status": "PASS"
+    },
+    {
+      "check": "all_terminal_evidence_hashes_verify",
+      "detail": [],
+      "status": "PASS"
+    },
+    {
+      "check": "zero_external_actions",
+      "detail": {
+        "database": 0,
+        "network": 0,
+        "pipelines": 0
+      },
+      "status": "PASS"
+    }
+  ],
+  "contract_name": "MLB_2026_CLOSE_BLOCKER_TEMPORAL_COVERAGE_AUDIT_V1",
+  "failed_checks": [],
+  "passed": true
+}

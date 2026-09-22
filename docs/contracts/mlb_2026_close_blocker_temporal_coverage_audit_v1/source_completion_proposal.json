@@ -1,0 +1,12 @@
+{
+  "game_pks": [],
+  "hashing_method": "SHA-256 over unmodified response bytes",
+  "idempotence_guard": "No request is justified. If evidence changes, predeclare exact request identity and refuse overwrite of an existing different response.",
+  "immutable_storage_path": null,
+  "paid_credit_count": 0,
+  "paid_provider_requests": 0,
+  "proposed_date_range": null,
+  "provider": "NONE",
+  "request_count": 0,
+  "source_completion_required": false
+}

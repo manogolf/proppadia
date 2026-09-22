@@ -1,0 +1,58 @@
+{
+  "corroborating_nonterminal_sources": {
+    "canonical_outcome_ledgers": {
+      "acceptance_note": "Scores, prop outcomes, grading statuses, and market-result labels were not treated as authoritative game-terminal status.",
+      "accepted_game_terminal_rows": 0,
+      "candidate_files": 43,
+      "distinct_blocker_game_pks": 348,
+      "matching_rows": 17034,
+      "readable_files_with_game_pk_field": 43
+    },
+    "full_slate_result_artifacts": {
+      "acceptance_note": "Scores, prop outcomes, grading statuses, and market-result labels were not treated as authoritative game-terminal status.",
+      "accepted_game_terminal_rows": 0,
+      "candidate_files": 81,
+      "distinct_blocker_game_pks": 0,
+      "matching_rows": 0,
+      "readable_files_with_game_pk_field": 58
+    },
+    "immutable_grading_inputs": {
+      "acceptance_note": "Scores, prop outcomes, grading statuses, and market-result labels were not treated as authoritative game-terminal status.",
+      "accepted_game_terminal_rows": 0,
+      "candidate_files": 50,
+      "distinct_blocker_game_pks": 348,
+      "matching_rows": 14542,
+      "readable_files_with_game_pk_field": 50
+    },
+    "moneyline_population_evidence": {
+      "acceptance_note": "Population-only Moneyline snapshots contain no per-game authoritative terminal-status field and were not used as terminal proof.",
+      "accepted_game_terminal_rows": 0,
+      "candidate_files": 2
+    },
+    "other_outcome_ledgers": {
+      "acceptance_note": "Scores, prop outcomes, grading statuses, and market-result labels were not treated as authoritative game-terminal status.",
+      "accepted_game_terminal_rows": 0,
+      "candidate_files": 24,
+      "distinct_blocker_game_pks": 0,
+      "matching_rows": 0,
+      "readable_files_with_game_pk_field": 12
+    }
+  },
+  "statsapi_live_game_feeds": {
+    "authoritative_terminal_blocker_game_pks": 348,
+    "blocker_observations": 793,
+    "candidate_files": 1619,
+    "distinct_blocker_game_pks": 348,
+    "embedded_filename_hash_failures": 0,
+    "invalid_exact_game_pk_identities": 0
+  },
+  "statsapi_schedule_responses": {
+    "authoritative_terminal_blocker_game_pks": 0,
+    "blocker_observations": 1916,
+    "candidate_files": 484,
+    "cleanroom_schedule_files": 126,
+    "distinct_blocker_game_pks": 436,
+    "structured_statsapi_schedule_files": 470
+  },
+  "terminal_acceptance_rule": "Exact root gamePk plus matching gameData.game.pk, source game type R, source season 2026, abstract state Final, and detailed state Final or Completed Early. A score or grading result alone is insufficient."
+}
