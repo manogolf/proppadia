@@ -19,6 +19,13 @@ from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     MODEL_VERSION, SNAPSHOT_CLASS, append_context, append_prediction, append_prediction_with_context, canonical_identity,
     connect_ledger, contexts_for_date, counts, payload_hash, rows_for_date,
 )
+from backend.mlb.totals_predictions.phase_gating_v1 import (
+    REGULAR_SEASON,
+    partition_totals_rows,
+    require_evaluation_phase,
+    verified_totals_phase_authority,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 ROOT = Path(__file__).resolve().parents[3]
 EXPERIMENT = "MLB_TOTALS_PROSPECTIVE_SHADOW_V1"
@@ -130,20 +137,49 @@ def report_markdown(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)+"\n"
 
 
-def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=True); candidate = load_candidate(); connection = connect_ledger(ledger_path); before = counts(connection)
+def run(
+    game_date: str,
+    output_dir: Path,
+    ledger_path: Path,
+    *,
+    evaluation_phase: str = REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
+    phase_authority = phase_authority or verified_totals_phase_authority()
+    if evaluation_phase != REGULAR_SEASON:
+        output_dir = output_dir / "postseason"
+    output_dir.mkdir(parents=True, exist_ok=True); candidate = load_candidate()
     snapshot_slug = game_date.replace("-", "_")
     payload, observed, schedule_hash = fetch_hydrated_schedule(game_date); schedule = normalize_schedule(payload, observed, schedule_hash); history = build_history(); env = dynamic_environment(history, game_date)
+    phase_partitions = partition_totals_rows(
+        schedule, authority=phase_authority, unique_identity_fields=("game_pk",)
+    )
+    connection = connect_ledger(ledger_path); before = counts(connection)
     markets, market_files = market_inventory(game_date); existing = {row["game_pk"]: row for row in rows_for_date(connection, game_date)}; attempts = []
-    for schedule_row in schedule:
+    decision_by_game = {decision.game_pk: decision for decision in phase_partitions.decisions}
+    for excluded in phase_partitions.excluded_preseason + phase_partitions.excluded_special:
+        game_pk = int(excluded["game_pk"])
+        decision = decision_by_game[game_pk]
+        attempts.append({"canonical_identity": canonical_identity(game_date, game_pk),
+            "ledger_action": decision.decision_code, "game_pk": game_pk,
+            "source_game_type": decision.source_game_type,
+            "normalized_phase": decision.normalized_phase,
+            "postseason_round": decision.postseason_round})
+    for schedule_row in phase_partitions.admitted:
         game_pk = int(schedule_row["game_pk"]); identity = canonical_identity(game_date, game_pk)
+        phase_decision = decision_by_game[game_pk]
         if game_pk in existing:
             attempts.append({"canonical_identity": identity, "ledger_action": "EXISTING_IMMUTABLE",
-                "context_action": "EXISTING_CONTEXT_NOT_RECONSTRUCTED", "game_pk": game_pk}); continue
+                "context_action": "EXISTING_CONTEXT_NOT_RECONSTRUCTED", "game_pk": game_pk,
+                "source_game_type": phase_decision.source_game_type, "normalized_phase": phase_decision.normalized_phase,
+                "postseason_round": phase_decision.postseason_round}); continue
         context = attach_context(schedule_row, history, observed)
         if pd.Timestamp(context["scheduled_start_utc"]) <= pd.Timestamp(observed):
             attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_POST_START",
-                "rejection_reason": "PREGAME_CUTOFF_FAILED", "game_pk": context["game_pk"]}); continue
+                "rejection_reason": "PREGAME_CUTOFF_FAILED", "game_pk": context["game_pk"],
+                "source_game_type": phase_decision.source_game_type, "normalized_phase": phase_decision.normalized_phase,
+                "postseason_round": phase_decision.postseason_round}); continue
         if context["data_quality_status"] != "TOTALS_CONTEXT_COMPLETE":
             reasons = []
             for side in ("away", "home"):
@@ -160,6 +196,8 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
                     reasons.append(f"{side.upper()}_{bullpen_status}")
             attempts.append({"canonical_identity": identity, "ledger_action": "REJECTED_CONTEXT_NOT_COMPLETE",
                 "game_pk": context["game_pk"], "rejection_reasons": reasons,
+                "source_game_type": phase_decision.source_game_type, "normalized_phase": phase_decision.normalized_phase,
+                "postseason_round": phase_decision.postseason_round,
                 "retry_status": ("RETRYABLE_SAME_DAY_IF_OFFICIAL_PROBABLE_POSTS" if any("PROBABLE_PITCHER_UNAVAILABLE" in reason for reason in reasons)
                                  else "RETRYABLE_SAME_DAY_IF_OFFICIAL_HISTORY_ADVANCES" if any("BULLPEN_HISTORY_STALE" in reason for reason in reasons)
                                  else "NOT_RETRYABLE_WITHOUT_CONTEXT_REPAIR")}); continue
@@ -186,8 +224,18 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
             **probabilities, **market, "feature_state_hash": canonical_hash(feature_state), "schedule_source_sha256": schedule_hash,
             "official_schedule_observed_at_utc": observed, "grading_status": "UNGRADED_OUTCOME_SEPARATE_LEDGER"}
         action, context_action = append_prediction_with_context(connection, row, feature_state)
-        attempts.append({"canonical_identity": identity, "ledger_action": action, "context_action": context_action, "game_pk": context["game_pk"]})
-    rows = rows_for_date(connection, game_date); contexts = contexts_for_date(connection, game_date); after = counts(connection)
+        attempts.append({"canonical_identity": identity, "ledger_action": action, "context_action": context_action, "game_pk": context["game_pk"],
+            "source_game_type": phase_decision.source_game_type, "normalized_phase": phase_decision.normalized_phase,
+            "postseason_round": phase_decision.postseason_round})
+    retained_rows = rows_for_date(connection, game_date)
+    ledger_partitions = partition_totals_rows(
+        retained_rows, authority=phase_authority,
+        unique_identity_fields=("game_pk",),
+    )
+    rows = list(ledger_partitions.selected(evaluation_phase))
+    if not rows:
+        raise RuntimeError(f"NO_TOTALS_PREDICTIONS_FOR_{evaluation_phase}")
+    contexts = contexts_for_date(connection, game_date); after = counts(connection)
 
     flat = []
     for row in rows:
@@ -229,13 +277,21 @@ def run(game_date: str, output_dir: Path, ledger_path: Path) -> dict[str, Any]:
     values = [row["expected_total"] for row in rows]
     (output_dir/"concise_mlb_totals_prospective_shadow_v1.md").write_text(f"# MLB Totals Prospective Shadow v1\n\n`{declaration}`\n\n- Snapshot date / admitted games: {game_date} / {len(rows)}\n- Context complete: {sum(row['context_quality_state']=='TOTALS_CONTEXT_COMPLETE' for row in rows)}/{len(rows)}\n- Certified paired markets: {market_count}/{len(rows)}\n- Expected-total range: {min(values):.3f}–{max(values):.3f}\n- Ledger before/after: {before} / {after}\n- Outcomes accessed during prediction: 0\n- Public/deployment status: unchanged; shadow only\n")
     hash_path=output_dir/"reproducibility_hashes.sha256";hash_path.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in sorted(output_dir.iterdir()) if path != hash_path))
-    return {"declaration":declaration,"rows":len(rows),"new_rows":sum(x["ledger_action"]=="APPENDED_NEW" for x in attempts),"context_complete":sum(row["context_quality_state"]=="TOTALS_CONTEXT_COMPLETE" for row in rows),
+    return {"declaration":declaration,"rows":len(rows),
+        "new_rows":sum(x["ledger_action"]=="APPENDED_NEW" and x.get("normalized_phase")==evaluation_phase for x in attempts),
+        "collection_new_rows":sum(x["ledger_action"]=="APPENDED_NEW" for x in attempts),
+        "evaluation_phase": evaluation_phase,
+        "context_complete":sum(row["context_quality_state"]=="TOTALS_CONTEXT_COMPLETE" for row in rows),
+        "phase_partition_counts": phase_partitions.counts(),
+        "ledger_phase_partition_counts": ledger_partitions.counts(),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
         "certified_markets":market_count,"expected_total_min":min(values),"expected_total_max":max(values),"ledger_before":before,"ledger_after":after,"attempts":attempts,"outcomes_accessed":0}
 
 
 def main() -> None:
     parser=argparse.ArgumentParser();parser.add_argument("--date",required=True);parser.add_argument("--output-dir",type=Path,required=True);parser.add_argument("--ledger-path",type=Path,default=DEFAULT_LEDGER)
-    args=parser.parse_args();print(json.dumps(run(args.date,args.output_dir,args.ledger_path),indent=2,default=str))
+    parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
+    args=parser.parse_args();print(json.dumps(run(args.date,args.output_dir,args.ledger_path,evaluation_phase=args.evaluation_phase),indent=2,default=str))
 
 
 if __name__=="__main__":main()

@@ -1,0 +1,15 @@
+{
+  "cross_lane_phase_consistency": "READY_EXACT_GAME_PK",
+  "historical_restatement_requirement": "NOT_REQUIRED_RETAINED_ROWS_ALL_AUTHORITATIVE_REGULAR_SEASON",
+  "market_roi_effect": "NONE_NO_ROI_RECALCULATION",
+  "model_selector_publication_status": "UNCHANGED_SHADOW_ONLY_UNQUALIFIED_UNPUBLISHED",
+  "postseason_code_readiness": "READY_SYNTHETIC_FIXTURES_ONLY",
+  "postseason_operational_readiness": "BLOCKED_PENDING_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_ON_ORDINARY_PATH",
+  "prediction_quality_effect": "NONE_MEMBERSHIP_AND_REPORTING_ONLY",
+  "raw_totals_regular_season_integrity": "READY",
+  "remaining_blockers": [
+    "actual authoritative postseason game has not passed through ordinary RAW and C paths",
+    "current frozen authority supports only through 2026-09-27 and contains no postseason rows"
+  ],
+  "totals_c_regular_season_integrity": "READY"
+}

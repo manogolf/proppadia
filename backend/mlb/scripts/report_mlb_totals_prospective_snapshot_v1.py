@@ -20,6 +20,13 @@ from backend.mlb.totals_predictions.live_context_bridge_v1 import (
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     append_context, append_prediction, canonical_identity, connect_ledger, contexts_for_date, counts, rows_for_date,
 )
+from backend.mlb.totals_predictions.phase_gating_v1 import (
+    REGULAR_SEASON,
+    partition_totals_rows,
+    require_evaluation_phase,
+    verified_totals_phase_authority,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LEDGER = ROOT / "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3"
@@ -98,14 +105,38 @@ def context_reasons(context: dict[str, Any]) -> list[str]:
     return reasons
 
 
-def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path: Path) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=True)
+def run(
+    game_date: str,
+    output_dir: Path,
+    ledger_path: Path,
+    market_ledger_path: Path,
+    *,
+    evaluation_phase: str = REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
+    phase_authority = phase_authority or verified_totals_phase_authority()
     slug = game_date.replace("-", "_")
-    ledger = connect_ledger(ledger_path); before = counts(ledger); predictions = rows_for_date(ledger, game_date)
-    if not predictions: raise RuntimeError("NO_FROZEN_TOTALS_PREDICTIONS")
+    if evaluation_phase != REGULAR_SEASON:
+        slug = f"{slug}_{evaluation_phase.lower()}"
+        output_dir = output_dir / "postseason"
+    ledger = connect_ledger(ledger_path); before = counts(ledger); retained_predictions = rows_for_date(ledger, game_date)
+    if not retained_predictions: raise RuntimeError("NO_FROZEN_TOTALS_PREDICTIONS")
+    prediction_partitions = partition_totals_rows(
+        retained_predictions, authority=phase_authority,
+        unique_identity_fields=("game_pk",),
+    )
+    predictions = list(prediction_partitions.selected(evaluation_phase))
+    if not predictions:
+        raise RuntimeError(f"NO_FROZEN_TOTALS_PREDICTIONS_FOR_{evaluation_phase}")
     contexts = contexts_for_date(ledger, game_date); prediction_by_game = {int(row["game_pk"]): row for row in predictions}
     payload, schedule_observed, schedule_hash = fetch_hydrated_schedule(game_date)
-    schedule = normalize_schedule(payload, schedule_observed, schedule_hash); history = build_history()
+    retained_schedule = normalize_schedule(payload, schedule_observed, schedule_hash)
+    schedule_partitions = partition_totals_rows(
+        retained_schedule, authority=phase_authority, unique_identity_fields=("game_pk",)
+    )
+    schedule = list(schedule_partitions.selected(evaluation_phase)); history = build_history()
+    output_dir.mkdir(parents=True, exist_ok=True)
     frozen_cutoff = min(utc(row["prediction_timestamp_utc"]) for row in predictions)
     discovery, prediction_rows = [], []
     for schedule_row in schedule:
@@ -194,7 +225,11 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
     candidate = load_candidate(); largest = [{"game_pk": row["game_pk"], "matchup": f"{row['away_team']} @ {row['home_team']}",
         "model_minus_consensus_line": row["model_minus_consensus_line"]} for row in owner[:5]]
     summary = {"declaration": "AUGUST_7_TOTALS_SNAPSHOT_PARTIAL_CONTEXT" if len(predictions) < len(schedule) else "AUGUST_7_TOTALS_PROSPECTIVE_SNAPSHOT_FROZEN",
-        "game_date": game_date, "games_discovered": len(schedule), "pregame_eligible": sum(row["discovery_status"] != "REJECTED_GAME_ALREADY_STARTED" for row in discovery),
+        "game_date": game_date, "evaluation_phase": evaluation_phase,
+        "prediction_phase_partition_counts": prediction_partitions.counts(),
+        "schedule_phase_partition_counts": schedule_partitions.counts(),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
+        "games_discovered": len(schedule), "pregame_eligible": sum(row["discovery_status"] != "REJECTED_GAME_ALREADY_STARTED" for row in discovery),
         "games_captured": len(predictions), "context_complete_games": len(predictions), "rejected_games": len(schedule)-len(predictions),
         "rejection_reasons": dict(Counter(row["rejection_reason"] for row in discovery if row["rejection_reason"])),
         "prediction_min": min(float(row["expected_total"]) for row in predictions), "prediction_max": max(float(row["expected_total"]) for row in predictions),
@@ -217,7 +252,8 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
 def main() -> None:
     parser=argparse.ArgumentParser();parser.add_argument("--date",required=True);parser.add_argument("--output-dir",type=Path,required=True)
     parser.add_argument("--ledger-path",type=Path,default=DEFAULT_LEDGER);parser.add_argument("--market-ledger-path",type=Path,default=DEFAULT_MARKET_LEDGER)
-    args=parser.parse_args();print(json.dumps(run(args.date,args.output_dir,args.ledger_path,args.market_ledger_path),indent=2))
+    parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
+    args=parser.parse_args();print(json.dumps(run(args.date,args.output_dir,args.ledger_path,args.market_ledger_path,evaluation_phase=args.evaluation_phase),indent=2))
 
 
 if __name__=="__main__":main()

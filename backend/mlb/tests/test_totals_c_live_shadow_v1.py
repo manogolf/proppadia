@@ -19,11 +19,16 @@ from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     connect_ledger as connect_raw,
     payload_hash as raw_hash,
 )
+from backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1 import StubAuthority, record
 
 
 ROOT = Path(__file__).resolve().parents[3]
 MONEYLINE = ROOT / "backend/mlb/config/public_game_predictions/MLB_GAME_PYTHAGOREAN_LOG5_V1.json"
 LAUNCH_OUTPUT = ROOT / "artifacts/analysis/model_development/mlb_totals_count_confidence_only_live_shadow_launch_v1/2026-08-16"
+
+
+def phase_authority(*game_pks: int) -> StubAuthority:
+    return StubAuthority({game_pk: record(game_pk, "R", "REGULAR_SEASON") for game_pk in game_pks})
 
 
 def raw_fixture(raw_path: Path, game_pk: int = 900001, *, scheduled: str = "2026-08-17T23:00:00Z", fresh: bool = True):
@@ -70,7 +75,7 @@ def test_exact_frozen_subject_and_no_raw_intercept():
 def test_primary_score_uses_exact_raw_context_and_freezes_mean_median_distribution(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_prediction, context = raw_fixture(raw_path)
-    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z")
+    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z", phase_authority=phase_authority(900001))
     assert result["new_rows"] == result["rows"] == 1 and result["outcomes_accessed"] == 0
     connection = ledger.connect_ledger(c_path)
     row = ledger.predictions_for_date(connection, "2026-08-17")[0]
@@ -88,10 +93,11 @@ def test_primary_score_uses_exact_raw_context_and_freezes_mean_median_distributi
 def test_duplicate_identity_is_immutable_and_missing_only_adds_only_new_raw_identity(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_fixture(raw_path)
-    first = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z")
-    repeat = scorer.score_from_raw("2026-08-17", "SCORE_MISSING", "run-0830", raw_path, c_path, "2026-08-17T15:31:00Z")
+    authority = phase_authority(900001, 900002)
+    first = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z", phase_authority=authority)
+    repeat = scorer.score_from_raw("2026-08-17", "SCORE_MISSING", "run-0830", raw_path, c_path, "2026-08-17T15:31:00Z", phase_authority=authority)
     raw_fixture(raw_path, 900002)
-    retry = scorer.score_from_raw("2026-08-17", "SCORE_MISSING", "run-1100", raw_path, c_path, "2026-08-17T18:01:00Z")
+    retry = scorer.score_from_raw("2026-08-17", "SCORE_MISSING", "run-1100", raw_path, c_path, "2026-08-17T18:01:00Z", phase_authority=authority)
     assert first["new_rows"] == 1 and repeat["new_rows"] == 0 and retry["new_rows"] == 1
     assert ledger.counts(ledger.connect_ledger(c_path))["duplicate_prediction_identities"] == 0
 
@@ -99,7 +105,7 @@ def test_duplicate_identity_is_immutable_and_missing_only_adds_only_new_raw_iden
 def test_post_start_and_pre_start_date_admission_guards(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_fixture(raw_path, scheduled="2026-08-17T13:00:00Z")
-    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "late", raw_path, c_path, "2026-08-17T13:00:01Z")
+    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "late", raw_path, c_path, "2026-08-17T13:00:01Z", phase_authority=phase_authority(900001))
     assert result["new_rows"] == 0 and result["attempts"][0]["rejection_reason"] == "PREGAME_CUTOFF_FAILED"
     before = scorer.score_from_raw("2026-08-16", "PRIMARY_SCORE", "before", raw_path, c_path, "2026-08-16T12:00:00Z")
     assert before == {"status": "C_LIVE_SHADOW_NOT_STARTED", "game_date": "2026-08-16", "new_rows": 0, "rows": 0}
@@ -108,7 +114,7 @@ def test_post_start_and_pre_start_date_admission_guards(tmp_path):
 def test_stale_bullpen_source_fails_closed_and_remains_retryable(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_fixture(raw_path, fresh=False)
-    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "stale", raw_path, c_path, "2026-08-17T12:31:00Z")
+    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "stale", raw_path, c_path, "2026-08-17T12:31:00Z", phase_authority=phase_authority(900001))
     assert result["new_rows"] == 0
     assert result["attempts"][0]["ledger_action"] == "REJECTED_BULLPEN_HISTORY_STALE"
     assert result["attempts"][0]["retry_status"] == "RETRYABLE_SAME_DAY"
@@ -117,7 +123,8 @@ def test_stale_bullpen_source_fails_closed_and_remains_retryable(tmp_path):
 def test_outcome_sidecar_is_separate_and_prediction_trigger_is_append_only(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_prediction, _ = raw_fixture(raw_path)
-    scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z")
+    authority = phase_authority(900001)
+    scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z", phase_authority=authority)
     raw_connection = connect_raw(raw_path)
     raw_grade = {
         "game_date": "2026-08-17", "game_pk": 900001, "official_final_total": 9, "regulation_nine_total": 9,
@@ -127,7 +134,7 @@ def test_outcome_sidecar_is_separate_and_prediction_trigger_is_append_only(tmp_p
     assert append_raw_outcome(raw_connection, raw_identity("2026-08-17", 900001), raw_grade, "2026-08-18T12:00:00Z") == "APPENDED_NEW"
     c_connection = ledger.connect_ledger(c_path)
     prediction_before = ledger.predictions_for_date(c_connection, "2026-08-17")
-    result = daily.grade_date("2026-08-17", c_path, raw_path)
+    result = daily.grade_date("2026-08-17", c_path, raw_path, phase_authority=authority)
     assert result["new_outcome_rows"] == 1 and result["prediction_rows_unchanged"] is True
     assert ledger.predictions_for_date(c_connection, "2026-08-17") == prediction_before
     assert ledger.outcomes_for_date(c_connection, "2026-08-17")[0]["official_final_total"] == 9
@@ -138,7 +145,7 @@ def test_outcome_sidecar_is_separate_and_prediction_trigger_is_append_only(tmp_p
 def test_watch_and_regime_schema_defaults_to_normal_when_metadata_is_unavailable(tmp_path):
     raw_path, c_path = tmp_path / "raw.sqlite3", tmp_path / "c.sqlite3"
     raw_fixture(raw_path)
-    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z")
+    result = scorer.score_from_raw("2026-08-17", "PRIMARY_SCORE", "run-0530", raw_path, c_path, "2026-08-17T12:31:00Z", phase_authority=phase_authority(900001))
     assert result["regime_classification"] == "NORMAL_COMPETITIVE_REGIME"
     assert result["C_REGIME"] == "NORMAL"
     connection = ledger.connect_ledger(c_path)

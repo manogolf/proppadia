@@ -14,6 +14,7 @@ from backend.mlb.scripts.grade_mlb_totals_prospective_shadow_v1 import run as gr
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import run as score
 from backend.mlb.totals_predictions.live_context_bridge_v1 import load_candidate
 from backend.mlb.totals_predictions.prospective_shadow_v1 import connect_ledger, counts
+from backend.mlb.totals_predictions.phase_gating_v1 import REGULAR_SEASON, require_evaluation_phase
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LEDGER = ROOT / "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3"
@@ -44,7 +45,9 @@ def pending_grade_dates(connection: sqlite3.Connection, completed_through: str) 
 def run(
     slate_date: str, completed_through: str, mode: str, wrapper_started_at_utc: str,
     output_root: Path, ledger_path: Path, market_ledger_path: Path,
+    evaluation_phase: str = REGULAR_SEASON,
 ) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
     candidate = load_candidate()
     if candidate["canonical_model_hash"] != MODEL_HASH:
         raise RuntimeError("TOTALS_MODEL_HASH_MISMATCH")
@@ -56,17 +59,21 @@ def run(
     connection = connect_ledger(ledger_path); before = counts(connection)
     grading = []
     for date_value in pending_grade_dates(connection, completed_through):
-        grading.append(grade(date_value, output_root/date_value, ledger_path, market_ledger_path, allow_partial=True))
+        grading.append(grade(date_value, output_root/date_value, ledger_path, market_ledger_path,
+                             allow_partial=True, evaluation_phase=evaluation_phase))
     scoring = None; markets = None
     if resolved_mode in (PRIMARY_SCORE, SCORE_MISSING):
-        scoring = score(slate_date, output_root/slate_date, ledger_path)
-        markets = attach_markets(slate_date, output_root/slate_date, ledger_path, market_ledger_path)
+        scoring = score(slate_date, output_root/slate_date, ledger_path,
+                        evaluation_phase=evaluation_phase)
+        markets = attach_markets(slate_date, output_root/slate_date, ledger_path, market_ledger_path,
+                                 evaluation_phase=evaluation_phase)
     after = counts(connect_ledger(ledger_path))
     return {
         "status": "TOTALS_SHADOW_DAILY_LIFECYCLE_COMPLETE",
         "slate_date": slate_date, "completed_through": completed_through,
         "requested_mode": mode, "resolved_mode": resolved_mode,
         "wrapper_started_at_utc": wrapper_started_at_utc,
+        "evaluation_phase": evaluation_phase,
         "grading_dates_attempted": [row["game_date"] for row in grading],
         "new_outcome_rows": sum(int(row["new_outcome_rows"]) for row in grading),
         "grading": grading, "scoring": scoring, "market_attachment": markets,
@@ -84,10 +91,11 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--ledger-path", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument("--market-ledger-path", type=Path, default=DEFAULT_MARKET_LEDGER)
+    parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args()
     result = run(args.slate_date, args.completed_through, args.mode, args.wrapper_started_at_utc,
-                 args.output_root, args.ledger_path, args.market_ledger_path)
+                 args.output_root, args.ledger_path, args.market_ledger_path, args.evaluation_phase)
     text = json.dumps(result, indent=2, default=str)
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True); args.output_json.write_text(text+"\n")

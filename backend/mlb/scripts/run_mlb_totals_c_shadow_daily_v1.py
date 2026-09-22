@@ -19,6 +19,14 @@ from backend.mlb.totals_predictions.c_shadow_v1 import (
     append_outcome, canonical_identity, connect_ledger, counts, outcomes_for_date, payload_hash, predictions_for_date,
 )
 from backend.mlb.totals_predictions.prospective_shadow_v1 import payload_hash as raw_payload_hash
+from backend.mlb.totals_predictions.phase_gating_v1 import (
+    REGULAR_SEASON,
+    classify_totals_row,
+    partition_totals_rows,
+    require_evaluation_phase,
+    verified_totals_phase_authority,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 
 def now_utc() -> str:
@@ -42,14 +50,28 @@ def raw_outcomes(game_date: str, raw_ledger_path: Path) -> dict[int, dict[str, A
         payload = json.loads(payload_json)
         if raw_payload_hash(payload) != digest:
             raise RuntimeError(f"RAW_OUTCOME_PAYLOAD_HASH_MISMATCH_{identity}")
-        output[int(game_pk)] = {"raw_identity": identity, "payload": payload, "payload_sha256": digest, "raw_graded_at_utc": graded}
+        output[int(game_pk)] = {"raw_identity": identity, "game_date": game_date,
+            "game_pk": int(game_pk), "payload": payload, "payload_sha256": digest,
+            "raw_graded_at_utc": graded}
     return output
 
 
-def grade_date(game_date: str, c_ledger_path: Path, raw_ledger_path: Path) -> dict[str, Any]:
+def grade_date(
+    game_date: str,
+    c_ledger_path: Path,
+    raw_ledger_path: Path,
+    *,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    phase_authority = phase_authority or verified_totals_phase_authority()
     connection = connect_ledger(c_ledger_path)
-    predictions = predictions_for_date(connection, game_date)
-    hashes_before = {int(row["game_pk"]): payload_hash(row) for row in predictions}
+    retained_predictions = predictions_for_date(connection, game_date)
+    phase_partitions = partition_totals_rows(
+        retained_predictions, authority=phase_authority,
+        unique_identity_fields=("source_raw_identity",),
+    )
+    predictions = list(phase_partitions.admitted)
+    hashes_before = {int(row["game_pk"]): payload_hash(row) for row in retained_predictions}
     sources = raw_outcomes(game_date, raw_ledger_path)
     graded_at = now_utc()
     actions, deferred = [], []
@@ -59,6 +81,12 @@ def grade_date(game_date: str, c_ledger_path: Path, raw_ledger_path: Path) -> di
         if source is None:
             deferred.append({"game_pk": game_pk, "reason": "RAW_CANONICAL_OFFICIAL_FINAL_NOT_YET_ATTACHED"})
             continue
+        c_phase = classify_totals_row(prediction, authority=phase_authority)
+        raw_phase = classify_totals_row(source, authority=phase_authority)
+        if (c_phase.source_game_type, c_phase.normalized_phase, c_phase.postseason_round) != (
+            raw_phase.source_game_type, raw_phase.normalized_phase, raw_phase.postseason_round
+        ):
+            raise RuntimeError(f"TOTALS_CROSS_LANE_PHASE_CONFLICT_{game_pk}")
         raw_grade = source["payload"]
         payload = {
             "experiment": EXPERIMENT, "game_date": game_date, "game_pk": game_pk,
@@ -75,23 +103,50 @@ def grade_date(game_date: str, c_ledger_path: Path, raw_ledger_path: Path) -> di
         }
         identity = canonical_identity(game_date, game_pk)
         action = append_outcome(connection, identity, payload, graded_at)
-        actions.append({"game_pk": game_pk, "ledger_action": action})
+        actions.append({"game_pk": game_pk, "ledger_action": action,
+                        "normalized_phase": c_phase.normalized_phase})
     hashes_after = {int(row["game_pk"]): payload_hash(row) for row in predictions_for_date(connection, game_date)}
     if hashes_before != hashes_after:
         raise RuntimeError("C_PREDICTION_LEDGER_MUTATED_DURING_GRADING")
     return {
-        "game_date": game_date, "predictions": len(predictions), "official_outcomes": len(outcomes_for_date(connection, game_date)),
+        "game_date": game_date, "collection_predictions": len(predictions),
+        "collection_official_outcomes": len(outcomes_for_date(connection, game_date)),
+        "collection_new_outcome_rows": sum(row["ledger_action"] == "APPENDED_NEW" for row in actions),
+        "predictions": len(predictions),
+        "official_outcomes": len(outcomes_for_date(connection, game_date)),
         "new_outcome_rows": sum(row["ledger_action"] == "APPENDED_NEW" for row in actions),
         "deferred_rows": len(deferred), "deferred": deferred, "prediction_rows_unchanged": True,
+        "phase_partition_counts": phase_partitions.counts(),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
     }
 
 
-def cluster_counts(connection: sqlite3.Connection) -> dict[str, Any]:
-    rows = connection.execute("""SELECT p.game_date,COUNT(DISTINCT p.canonical_identity),COUNT(DISTINCT o.canonical_identity)
-      FROM totals_c_shadow_predictions p LEFT JOIN totals_c_shadow_outcomes o USING(canonical_identity)
-      GROUP BY p.game_date ORDER BY p.game_date""").fetchall()
-    completed = {game_date for game_date, predictions, outcomes in rows if predictions > 0 and predictions == outcomes}
-    pending = {game_date for game_date, predictions, outcomes in rows if predictions > 0 and predictions != outcomes}
+def cluster_counts(
+    connection: sqlite3.Connection,
+    *,
+    evaluation_phase: str = REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
+    phase_authority = phase_authority or verified_totals_phase_authority()
+    retained = [json.loads(row[0]) for row in connection.execute(
+        "SELECT prediction_payload_json FROM totals_c_shadow_predictions ORDER BY game_date,game_pk"
+    )]
+    partitions = partition_totals_rows(
+        retained, authority=phase_authority,
+        unique_identity_fields=("source_raw_identity",),
+    )
+    selected = list(partitions.selected(evaluation_phase))
+    outcome_ids = {row[0] for row in connection.execute(
+        "SELECT canonical_identity FROM totals_c_shadow_outcomes"
+    )}
+    by_date: dict[str, list[dict[str, Any]]] = {}
+    for row in selected:
+        by_date.setdefault(str(row["game_date"]), []).append(row)
+    completed = {date for date, rows in by_date.items() if all(
+        canonical_identity(date, int(row["game_pk"])) in outcome_ids for row in rows
+    )}
+    pending = set(by_date) - completed
     latest_watch = {}
     for game_date, classification in connection.execute("""SELECT w.game_date,w.regime_classification
       FROM totals_c_shadow_watch_observations w JOIN (
@@ -117,12 +172,17 @@ def cluster_counts(connection: sqlite3.Connection) -> dict[str, Any]:
         "completed_primary_clusters_to_next_checkpoint": (
             max(0, 8 - len(primary)) if len(primary) < 8 else (max(0, 12 - len(primary)) if len(primary) < 12 else 0)
         ),
+        "evaluation_phase": evaluation_phase,
+        "phase_partition_counts": partitions.counts(),
     }
 
 
 def run(slate_date: str, completed_through: str, mode: str, wrapper_started_at_utc: str, run_tag: str,
         output_root: Path = OUTPUT_ROOT, c_ledger_path: Path = C_LEDGER, raw_ledger_path: Path = RAW_LEDGER,
-        raw_lifecycle_json: Path | None = None) -> dict[str, Any]:
+        raw_lifecycle_json: Path | None = None, evaluation_phase: str = REGULAR_SEASON,
+        phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
+    phase_authority = phase_authority or verified_totals_phase_authority()
     resolved = resolve_mode(mode, wrapper_started_at_utc)
     if resolved in (PRIMARY_SCORE, SCORE_MISSING):
         current_et = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
@@ -133,14 +193,14 @@ def run(slate_date: str, completed_through: str, mode: str, wrapper_started_at_u
         raise RuntimeError("C_RAW_LIFECYCLE_MODE_MISMATCH")
     connection = connect_ledger(c_ledger_path)
     before = counts(connection)
-    grading = [grade_date(day, c_ledger_path, raw_ledger_path) for day in pending_dates(connection, completed_through)]
+    grading = [grade_date(day, c_ledger_path, raw_ledger_path, phase_authority=phase_authority) for day in pending_dates(connection, completed_through)]
     scoring = None
     if resolved in (PRIMARY_SCORE, SCORE_MISSING) and slate_date >= START_DATE:
         raw_attempts = ((raw_lifecycle.get("scoring") or {}).get("attempts") or []) if raw_lifecycle else []
-        scoring = score_from_raw(slate_date, resolved, run_tag, raw_ledger_path, c_ledger_path, raw_attempts=raw_attempts)
+        scoring = score_from_raw(slate_date, resolved, run_tag, raw_ledger_path, c_ledger_path, raw_attempts=raw_attempts, phase_authority=phase_authority)
     after_connection = connect_ledger(c_ledger_path)
     after = counts(after_connection)
-    clusters = cluster_counts(after_connection)
+    clusters = cluster_counts(after_connection, evaluation_phase=evaluation_phase, phase_authority=phase_authority)
     output_root.mkdir(parents=True, exist_ok=True)
     status = "TOTALS_C_SHADOW_DAILY_LIFECYCLE_COMPLETE" if slate_date >= START_DATE else "TOTALS_C_SHADOW_ARMED_AWAITING_START_DATE"
     return {
@@ -148,10 +208,15 @@ def run(slate_date: str, completed_through: str, mode: str, wrapper_started_at_u
         "requested_mode": mode, "resolved_mode": resolved, "scoring_run_tag": run_tag,
         "wrapper_started_at_utc": wrapper_started_at_utc, "shadow_start_date": START_DATE,
         "grading_dates_attempted": [row["game_date"] for row in grading],
-        "new_outcome_rows": sum(row["new_outcome_rows"] for row in grading), "grading": grading, "scoring": scoring,
+        "collection_new_outcome_rows": sum(row["collection_new_outcome_rows"] for row in grading),
+        "new_outcome_rows": sum(row["collection_new_outcome_rows"] for row in grading),
+        "new_outcome_rows_scope": "COLLECTION_NOT_COMBINED_PHASE_CERTIFICATION",
+        "grading": grading, "scoring": scoring,
         "ledger_before": before, "ledger_after": after, "cluster_status": clusters,
         "model_name": MODEL_NAME, "model_hash": MODEL_HASH, "artifact_sha256": ARTIFACT_SHA256,
         "raw_control_unchanged": True, "v1_intercept_policy": "DO_NOT_APPLY_RAW_INTERCEPT_TO_C",
+        "evaluation_phase": evaluation_phase,
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
         "public_status": "PRIVATE_SHADOW_ONLY_NOT_PUBLIC", "ev_roi_wager_outputs": 0,
     }
 
@@ -163,10 +228,12 @@ def main() -> None:
     parser.add_argument("--wrapper-started-at-utc", required=True); parser.add_argument("--run-tag", required=True)
     parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT); parser.add_argument("--c-ledger-path", type=Path, default=C_LEDGER)
     parser.add_argument("--raw-ledger-path", type=Path, default=RAW_LEDGER); parser.add_argument("--raw-lifecycle-json", type=Path)
+    parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args()
     result = run(args.slate_date, args.completed_through, args.mode, args.wrapper_started_at_utc, args.run_tag,
-                 args.output_root, args.c_ledger_path, args.raw_ledger_path, args.raw_lifecycle_json)
+                 args.output_root, args.c_ledger_path, args.raw_ledger_path, args.raw_lifecycle_json,
+                 args.evaluation_phase)
     text = json.dumps(result, indent=2, default=str)
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)

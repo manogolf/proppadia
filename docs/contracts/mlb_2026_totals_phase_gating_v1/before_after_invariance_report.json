@@ -1,0 +1,31 @@
+{
+  "after": {
+    "market_inputs_sha256": "4e98c6794b8663e0680ce63f24d6cdfbf6abc142bc21b1351c9b4925807a34fa",
+    "raw_feature_inputs_sha256": "fef17fccf6ef0a9b28ae35457e3479d83ec40a85821ac9a118416191f7fb1850",
+    "raw_outcome_inputs_sha256": "560644a012ed0113d41c314680ff4f5795a609c1d24ad272b080dac01e308cc7",
+    "raw_prediction_inputs_sha256": "056687f7b13a12daa6673416acbe41694686d79a82f533d04ad5195c745d00a5",
+    "raw_proper_score_inputs_sha256": "90809900807f53ca7c7f19f1672d047991c2ac0aee1685f44fb842ebb5c5bf41",
+    "raw_regular_membership_sha256": "f057e96906da93f46f6241f79836c7fb573aef6f09bb060896b40aaf46745767",
+    "totals_c_outcome_inputs_sha256": "0181af807ea96340a662dc41bea407ae57c7ff3861083fd59d06c7cc23d3f66b",
+    "totals_c_prediction_inputs_sha256": "21d99d266f18bab4150ff3987a4878ae2af7405d145ea5b50849e44f88dff7ca",
+    "totals_c_proper_score_inputs_sha256": "30a69220545967ca91e0ce5163d5ccc7bc3ade85b9f02716015ab2c4eec98e65",
+    "totals_c_regular_membership_sha256": "d7d3c06acf102c39b8ec04a95c445e24ead7bcbb7e51dacca5d1394fc6dc63be"
+  },
+  "before": {
+    "market_inputs_sha256": "4e98c6794b8663e0680ce63f24d6cdfbf6abc142bc21b1351c9b4925807a34fa",
+    "raw_feature_inputs_sha256": "fef17fccf6ef0a9b28ae35457e3479d83ec40a85821ac9a118416191f7fb1850",
+    "raw_outcome_inputs_sha256": "560644a012ed0113d41c314680ff4f5795a609c1d24ad272b080dac01e308cc7",
+    "raw_prediction_inputs_sha256": "056687f7b13a12daa6673416acbe41694686d79a82f533d04ad5195c745d00a5",
+    "raw_proper_score_inputs_sha256": "90809900807f53ca7c7f19f1672d047991c2ac0aee1685f44fb842ebb5c5bf41",
+    "raw_regular_membership_sha256": "f057e96906da93f46f6241f79836c7fb573aef6f09bb060896b40aaf46745767",
+    "totals_c_outcome_inputs_sha256": "0181af807ea96340a662dc41bea407ae57c7ff3861083fd59d06c7cc23d3f66b",
+    "totals_c_prediction_inputs_sha256": "21d99d266f18bab4150ff3987a4878ae2af7405d145ea5b50849e44f88dff7ca",
+    "totals_c_proper_score_inputs_sha256": "30a69220545967ca91e0ce5163d5ccc7bc3ade85b9f02716015ab2c4eec98e65",
+    "totals_c_regular_membership_sha256": "d7d3c06acf102c39b8ec04a95c445e24ead7bcbb7e51dacca5d1394fc6dc63be"
+  },
+  "ledger_files_byte_unchanged": true,
+  "market_roi_effect": "NO_NEW_ROI_CALCULATION_RETAINED_MARKET_INPUTS_UNCHANGED",
+  "membership_effect": "NONE_RETAINED_COHORTS_ARE_100_PERCENT_AUTHORITATIVE_REGULAR_SEASON",
+  "prediction_quality_effect": "NONE_MEMBERSHIP_AND_REPORTING_ONLY",
+  "result": "PASS"
+}

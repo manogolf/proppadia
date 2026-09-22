@@ -25,6 +25,13 @@ from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     connect_ledger as connect_prediction_ledger,
     rows_for_date,
 )
+from backend.mlb.totals_predictions.phase_gating_v1 import (
+    REGULAR_SEASON,
+    partition_totals_rows,
+    require_evaluation_phase,
+    verified_totals_phase_authority,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PREDICTION_LEDGER = ROOT / "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3"
@@ -43,11 +50,30 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader(); writer.writerows(rows)
 
 
-def run(game_date: str, output_dir: Path, prediction_ledger_path: Path, market_ledger_path: Path) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=True)
+def run(
+    game_date: str,
+    output_dir: Path,
+    prediction_ledger_path: Path,
+    market_ledger_path: Path,
+    *,
+    evaluation_phase: str = REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
     created_at = now_utc()
+    phase_authority = phase_authority or verified_totals_phase_authority()
+    retained_predictions = rows_for_date(connect_prediction_ledger(prediction_ledger_path), game_date)
+    phase_partitions = partition_totals_rows(
+        retained_predictions, authority=phase_authority,
+        unique_identity_fields=("game_pk",),
+    )
+    predictions = list(phase_partitions.selected(evaluation_phase))
+    if not predictions:
+        raise RuntimeError(f"NO_TOTALS_PREDICTIONS_FOR_{evaluation_phase}")
+    if evaluation_phase != REGULAR_SEASON:
+        output_dir = output_dir / "postseason"
+    output_dir.mkdir(parents=True, exist_ok=True)
     market_ledger = connect_ledger(market_ledger_path)
-    predictions = rows_for_date(connect_prediction_ledger(prediction_ledger_path), game_date)
     markets = market_rows(market_ledger, game_date)
     before = ledger_counts(market_ledger)
     attachment_rows: list[dict[str, Any]] = []
@@ -93,7 +119,8 @@ def run(game_date: str, output_dir: Path, prediction_ledger_path: Path, market_l
             "model_p_over_consensus_line": probabilities["p_over_market_line"], "model_p_under_consensus_line": probabilities["p_under_market_line"]})
     after = ledger_counts(market_ledger)
     summary = {
-        "game_date": game_date, "prediction_rows": len(predictions), "captured_market_rows_available": len(markets),
+        "game_date": game_date, "evaluation_phase": evaluation_phase,
+        "prediction_rows": len(predictions), "captured_market_rows_available": len(markets),
         "predictions_with_market": len({int(row["game_pk"]) for row in attachment_rows}),
         "market_unavailable_predictions": len(unavailable),
         "new_all_book_bridge_rows": after["all_book_bridge_rows"] - before["all_book_bridge_rows"],
@@ -101,6 +128,8 @@ def run(game_date: str, output_dir: Path, prediction_ledger_path: Path, market_l
         "bookmaker_eu_prediction_coverage": len({int(row["game_pk"]) for row in attachment_rows
             if row.get("bookmaker_key") == "sportsgameodds:bookmakereu"}),
         "canonical_consensus_predictions": len(canonical_consensus),
+        "phase_partition_counts": phase_partitions.counts(),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
         "ledger_before": before, "ledger_after": after, "outcomes_accessed": 0,
     }
     slug = game_date.replace("-", "_")
@@ -117,8 +146,9 @@ def main() -> None:
     parser.add_argument("--date", required=True); parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--prediction-ledger-path", type=Path, default=DEFAULT_PREDICTION_LEDGER)
     parser.add_argument("--market-ledger-path", type=Path, default=DEFAULT_MARKET_LEDGER)
+    parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
     args = parser.parse_args()
-    print(json.dumps(run(args.date, args.output_dir, args.prediction_ledger_path, args.market_ledger_path), indent=2))
+    print(json.dumps(run(args.date, args.output_dir, args.prediction_ledger_path, args.market_ledger_path, evaluation_phase=args.evaluation_phase), indent=2))
 
 
 if __name__ == "__main__":

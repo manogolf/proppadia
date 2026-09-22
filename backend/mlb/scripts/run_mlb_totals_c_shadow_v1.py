@@ -20,6 +20,11 @@ from backend.mlb.totals_predictions.c_shadow_v1 import (
 )
 from backend.mlb.totals_predictions.live_context_bridge_v1 import distribution
 from backend.mlb.totals_predictions.prospective_shadow_v1 import payload_hash as raw_payload_hash
+from backend.mlb.totals_predictions.phase_gating_v1 import (
+    partition_totals_rows,
+    verified_totals_phase_authority,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -139,7 +144,7 @@ def raw_rows(game_date: str, raw_ledger_path: Path) -> list[dict[str, Any]]:
         if pd.Timestamp(predicted) >= pd.Timestamp(scheduled):
             raise RuntimeError(f"RAW_SOURCE_POST_START_{identity}")
         output.append({
-            "raw_identity": identity, "game_pk": int(game_pk), "scheduled_start_utc": scheduled,
+            "raw_identity": identity, "game_date": game_date, "game_pk": int(game_pk), "scheduled_start_utc": scheduled,
             "raw_prediction_timestamp_utc": predicted, "feature_state_hash": feature_hash,
             "schedule_source_hash": schedule_hash, "market_source_hash": market_hash,
             "raw_prediction_sha256": prediction_sha, "raw_context_sha256": context_sha,
@@ -250,14 +255,21 @@ def watch_payload(game_date: str, run_tag: str, observed: str, source_rows: list
 
 def score_from_raw(game_date: str, scoring_mode: str, run_tag: str, raw_ledger_path: Path = RAW_LEDGER,
                    c_ledger_path: Path = C_LEDGER, observed_at_utc: str | None = None,
-                   raw_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+                   raw_attempts: list[dict[str, Any]] | None = None,
+                   phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, Any]:
     if game_date < START_DATE:
         return {"status": "C_LIVE_SHADOW_NOT_STARTED", "game_date": game_date, "new_rows": 0, "rows": 0}
     if scoring_mode not in ("PRIMARY_SCORE", "SCORE_MISSING"):
         raise ValueError(f"C_SCORING_MODE_INVALID_{scoring_mode}")
+    phase_authority = phase_authority or verified_totals_phase_authority()
     artifact = load_artifact()
     observed = observed_at_utc or now_utc()
-    source_rows = raw_rows(game_date, raw_ledger_path)
+    retained_source_rows = raw_rows(game_date, raw_ledger_path)
+    phase_partitions = partition_totals_rows(
+        retained_source_rows, authority=phase_authority,
+        unique_identity_fields=("raw_identity",),
+    )
+    source_rows = list(phase_partitions.admitted)
     connection = connect_ledger(c_ledger_path)
     before = counts(connection)
     existing = {int(row["game_pk"]): row for row in predictions_for_date(connection, game_date)}
@@ -333,6 +345,8 @@ def score_from_raw(game_date: str, scoring_mode: str, run_tag: str, raw_ledger_p
         "deployment_watch_status": watches["deployment_watch_status"], "regime_classification": watches["regime_classification"],
         "C_REGIME": watches["C_REGIME"],
         "watch_action": watch_action, "ledger_before": before, "ledger_after": after,
+        "phase_partition_counts": phase_partitions.counts(),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
         "model_name": MODEL_NAME, "model_hash": MODEL_HASH, "artifact_sha256": ARTIFACT_SHA256,
         "raw_control_hash": RAW_MODEL_HASH, "outcomes_accessed": 0, "public_side_effects": 0,
     }

@@ -1,0 +1,14 @@
+sequence,lane,component,path,role,phase_behavior,scope
+1,RAW+C,StatsAPI schedule normalizer,backend/mlb/totals_predictions/live_context_bridge_v1.py,prediction input,requires exact StatsAPI gameType; no default,MODIFIED
+2,RAW,prospective scorer,backend/mlb/scripts/run_mlb_totals_prospective_shadow_v1.py,prediction/scoring,preflights whole schedule before feature aggregation or ledger mutation,MODIFIED
+3,RAW,append-only RAW ledger,backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3,prediction/context/outcome storage,unchanged; exact-gamePk join at consumption; no phase column,INSPECTED_UNCHANGED
+4,RAW,retained market attachment,backend/mlb/scripts/attach_mlb_totals_shadow_existing_markets_v1.py,market attachment,preflight before market-ledger mutation; both collection phases admitted,MODIFIED
+5,RAW,official-final grader,backend/mlb/scripts/grade_mlb_totals_prospective_shadow_v1.py,outcome grading/proper scores/calibration/market comparison,"collects admitted outcomes; reports exactly one explicit phase, regular by default",MODIFIED
+6,RAW,snapshot report,backend/mlb/scripts/report_mlb_totals_prospective_snapshot_v1.py,report/export,exact phase partition selected explicitly; no combined output,MODIFIED
+7,RAW,daily lifecycle,backend/mlb/scripts/run_mlb_totals_prospective_shadow_daily_v1.py,ordinary orchestration,regular default; explicit postseason shadow option,MODIFIED
+8,C,C scorer from RAW,backend/mlb/scripts/run_mlb_totals_c_shadow_v1.py,RAW-to-C derivation/prediction,preflights RAW exact gamePk before C feature scoring,MODIFIED
+9,C,append-only C ledger,backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3,prediction/context/outcome/watch storage,unchanged; exact-gamePk join at consumption; no phase column,INSPECTED_UNCHANGED
+10,C,C daily lifecycle,backend/mlb/scripts/run_mlb_totals_c_shadow_daily_v1.py,grading and checkpoint reporting,RAW/C phase agreement required; cluster metrics partitioned explicitly,MODIFIED
+11,C,8/12-cluster formal reviews,"backend/mlb/scripts/run_mlb_totals_c_{8,12}_cluster_formal_forward_review_v1.py",frozen historical evaluations,fixed August cohorts reconciled as 100% regular; no prospective intake,INSPECTED_UNCHANGED
+12,RAW+C,installed daily hook,bin/mlb_totals_prospective_shadow_daily_hook.sh,RAW then C orchestration,genuinely coupled; ordinary default remains regular shadow,INSPECTED_UNCHANGED
+-,OUT_OF_SCOPE,"Pinnacle, BetOnline, agreement, Ops Brief, shared daily indexes",multiple,downstream/other lanes,not changed or certified by this task,EXPLICITLY_OUT_OF_SCOPE

@@ -1,0 +1,83 @@
+{
+  "authority": {
+    "conflicting": 0,
+    "duplicate": 0,
+    "missing": 0,
+    "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+    "records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
+    "supported_through_date": "2026-09-27",
+    "unknown": 0
+  },
+  "cross_lane": {
+    "identity_conflicts": 0,
+    "intersection": 467,
+    "raw_only": 141,
+    "totals_c_only": 0
+  },
+  "hash_invariance": true,
+  "hashes_after_regular_gate": {
+    "market_inputs_sha256": "4e98c6794b8663e0680ce63f24d6cdfbf6abc142bc21b1351c9b4925807a34fa",
+    "raw_feature_inputs_sha256": "fef17fccf6ef0a9b28ae35457e3479d83ec40a85821ac9a118416191f7fb1850",
+    "raw_outcome_inputs_sha256": "560644a012ed0113d41c314680ff4f5795a609c1d24ad272b080dac01e308cc7",
+    "raw_prediction_inputs_sha256": "056687f7b13a12daa6673416acbe41694686d79a82f533d04ad5195c745d00a5",
+    "raw_proper_score_inputs_sha256": "90809900807f53ca7c7f19f1672d047991c2ac0aee1685f44fb842ebb5c5bf41",
+    "raw_regular_membership_sha256": "f057e96906da93f46f6241f79836c7fb573aef6f09bb060896b40aaf46745767",
+    "totals_c_outcome_inputs_sha256": "0181af807ea96340a662dc41bea407ae57c7ff3861083fd59d06c7cc23d3f66b",
+    "totals_c_prediction_inputs_sha256": "21d99d266f18bab4150ff3987a4878ae2af7405d145ea5b50849e44f88dff7ca",
+    "totals_c_proper_score_inputs_sha256": "30a69220545967ca91e0ce5163d5ccc7bc3ade85b9f02716015ab2c4eec98e65",
+    "totals_c_regular_membership_sha256": "d7d3c06acf102c39b8ec04a95c445e24ead7bcbb7e51dacca5d1394fc6dc63be"
+  },
+  "hashes_before_gate": {
+    "market_inputs_sha256": "4e98c6794b8663e0680ce63f24d6cdfbf6abc142bc21b1351c9b4925807a34fa",
+    "raw_feature_inputs_sha256": "fef17fccf6ef0a9b28ae35457e3479d83ec40a85821ac9a118416191f7fb1850",
+    "raw_outcome_inputs_sha256": "560644a012ed0113d41c314680ff4f5795a609c1d24ad272b080dac01e308cc7",
+    "raw_prediction_inputs_sha256": "056687f7b13a12daa6673416acbe41694686d79a82f533d04ad5195c745d00a5",
+    "raw_proper_score_inputs_sha256": "90809900807f53ca7c7f19f1672d047991c2ac0aee1685f44fb842ebb5c5bf41",
+    "raw_regular_membership_sha256": "f057e96906da93f46f6241f79836c7fb573aef6f09bb060896b40aaf46745767",
+    "totals_c_outcome_inputs_sha256": "0181af807ea96340a662dc41bea407ae57c7ff3861083fd59d06c7cc23d3f66b",
+    "totals_c_prediction_inputs_sha256": "21d99d266f18bab4150ff3987a4878ae2af7405d145ea5b50849e44f88dff7ca",
+    "totals_c_proper_score_inputs_sha256": "30a69220545967ca91e0ce5163d5ccc7bc3ade85b9f02716015ab2c4eec98e65",
+    "totals_c_regular_membership_sha256": "d7d3c06acf102c39b8ec04a95c445e24ead7bcbb7e51dacca5d1394fc6dc63be"
+  },
+  "ledger_file_sha256_after": {
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "5deba9bc7c4aad9140b434404276558bf5381138f710fa2677fb0ac8c4ca3f01",
+    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d2fb9c0ce6fcba5548a151a7b41574519cb0a3728abb7facc380ea0e8b74b53a",
+    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "c5bd726c5fb3b71be8d86a1a9ee424708b0c5f11cd77edfcb1cc0079dc94037a"
+  },
+  "ledger_file_sha256_before": {
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "5deba9bc7c4aad9140b434404276558bf5381138f710fa2677fb0ac8c4ca3f01",
+    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d2fb9c0ce6fcba5548a151a7b41574519cb0a3728abb7facc380ea0e8b74b53a",
+    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "c5bd726c5fb3b71be8d86a1a9ee424708b0c5f11cd77edfcb1cc0079dc94037a"
+  },
+  "ledger_files_byte_unchanged": true,
+  "market": {
+    "retained_rows_for_raw_population": 42738
+  },
+  "raw_totals": {
+    "context_rows": 608,
+    "distinct_game_pks": 608,
+    "earliest_date": "2026-08-06",
+    "latest_date": "2026-09-20",
+    "outcome_rows": 597,
+    "phase_counts": {
+      "REGULAR_SEASON": 608
+    },
+    "prediction_rows": 608
+  },
+  "totals_c": {
+    "distinct_game_pks": 467,
+    "earliest_date": "2026-08-17",
+    "latest_date": "2026-09-20",
+    "outcome_rows": 452,
+    "phase_counts": {
+      "REGULAR_SEASON": 467
+    },
+    "prediction_rows": 467
+  },
+  "violations": {
+    "conflicting": 0,
+    "duplicate": 0,
+    "missing": 0,
+    "nonregular": 0
+  }
+}

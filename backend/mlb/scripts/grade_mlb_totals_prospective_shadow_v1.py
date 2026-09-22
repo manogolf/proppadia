@@ -19,6 +19,13 @@ from backend.mlb.totals_predictions.live_context_bridge_v1 import distribution
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     append_outcome, canonical_identity, connect_ledger, counts, outcomes_for_date, rows_for_date,
 )
+from backend.mlb.totals_predictions.phase_gating_v1 import (
+    REGULAR_SEASON,
+    partition_totals_rows,
+    require_evaluation_phase,
+    verified_totals_phase_authority,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LEDGER = ROOT / "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3"
@@ -104,20 +111,45 @@ def selected_market_rows(connection: sqlite3.Connection, game_date: str) -> tupl
     return primary, bookmaker
 
 
-def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path: Path, *, allow_partial: bool = False) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=True); connection = connect_ledger(ledger_path); before = counts(connection)
-    predictions = rows_for_date(connection, game_date)
-    if not predictions: raise RuntimeError("NO_FROZEN_TOTALS_PREDICTIONS")
-    hashes_before = {row["game_pk"]: hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest() for row in predictions}
+def run(
+    game_date: str,
+    output_dir: Path,
+    ledger_path: Path,
+    market_ledger_path: Path,
+    *,
+    allow_partial: bool = False,
+    evaluation_phase: str = REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    require_evaluation_phase(evaluation_phase)
+    phase_authority = phase_authority or verified_totals_phase_authority()
+    connection = connect_ledger(ledger_path); before = counts(connection)
+    retained_predictions = rows_for_date(connection, game_date)
+    if not retained_predictions: raise RuntimeError("NO_FROZEN_TOTALS_PREDICTIONS")
+    prediction_partitions = partition_totals_rows(
+        retained_predictions, authority=phase_authority,
+        unique_identity_fields=("game_pk",),
+    )
+    collection_predictions = list(prediction_partitions.admitted)
+    predictions = list(prediction_partitions.selected(evaluation_phase))
+    phase_by_game = {decision.game_pk: decision for decision in prediction_partitions.decisions}
+    hashes_before = {row["game_pk"]: hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest() for row in retained_predictions}
+    if evaluation_phase != REGULAR_SEASON:
+        output_dir = output_dir / "postseason"
+    output_dir.mkdir(parents=True, exist_ok=True)
     graded_at = now_utc(); actions = []; deferred = []
-    for row in predictions:
+    for row in collection_predictions:
         try:
             result = official_final(game_date, int(row["game_pk"]))
         except RuntimeError as exc:
             reason = str(exc)
             source_absent = reason.startswith("OFFICIAL_FINAL_SOURCE_COUNT_") and reason.rsplit("_", 1)[-1] == "0"
             if allow_partial and (source_absent or reason.startswith("GAME_NOT_OFFICIALLY_FINAL_")):
+                decision = phase_by_game[int(row["game_pk"])]
                 deferred.append({"game_pk": int(row["game_pk"]), "away_team": row["away_team"], "home_team": row["home_team"],
+                                 "source_game_type": decision.source_game_type,
+                                 "normalized_phase": decision.normalized_phase,
+                                 "postseason_round": decision.postseason_round,
                                  "grading_status": "DEFERRED_OFFICIAL_FINAL_UNAVAILABLE", "reason": reason})
                 continue
             raise
@@ -131,11 +163,20 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
             "crps_final": crps(expected, result["official_final_total"]), **threshold_scores(expected, result["official_final_total"])}
         action = append_outcome(connection, canonical_identity(game_date, int(row["game_pk"])), payload, graded_at)
         actions.append({**payload, "ledger_action": action})
-    outcomes = outcomes_for_date(connection, game_date); after = counts(connection)
+    retained_outcomes = outcomes_for_date(connection, game_date); after = counts(connection)
+    outcome_partitions = partition_totals_rows(
+        retained_outcomes, authority=phase_authority,
+        unique_identity_fields=("canonical_identity",),
+    )
+    outcomes = list(outcome_partitions.selected(evaluation_phase))
+    deferred = [row for row in deferred if row["normalized_phase"] == evaluation_phase]
     hashes_after = {row["game_pk"]: hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest() for row in rows_for_date(connection, game_date)}
     if hashes_before != hashes_after: raise RuntimeError("PREDICTION_LEDGER_MUTATED")
     by_game = {int(row["game_pk"]): row for row in outcomes}
-    market = sqlite3.connect(market_ledger_path); primary, bookmaker = selected_market_rows(market, game_date)
+    selected_game_pks = {int(row["game_pk"]) for row in predictions}
+    market = sqlite3.connect(market_ledger_path); all_primary, all_bookmaker = selected_market_rows(market, game_date)
+    primary = [row for row in all_primary if int(row["game_id"]) in selected_game_pks]
+    bookmaker = [row for row in all_bookmaker if int(row["game_id"]) in selected_game_pks]
     market_results = []
     for source_class, rows in (("MULTIBOOK_PRIMARY", primary), ("BOOKMAKER_EU_SUPPLEMENTAL", bookmaker)):
         for row in rows:
@@ -187,22 +228,30 @@ def run(game_date: str, output_dir: Path, ledger_path: Path, market_ledger_path:
             "signed_bias": mean(float(row["total_line"])-float(row["official_final_total"]) for row in rows), "source_class": rows[0]["source_class"]})
     complete = len(outcomes) == len(predictions)
     summary = {"decision": "TOTALS_PROSPECTIVE_GRADE_COMPLETE" if complete else "TOTALS_PROSPECTIVE_GRADE_PENDING_OFFICIAL_FINALS", "game_date": game_date, "frozen_predictions": len(predictions),
-        "official_finals": len(outcomes), "new_outcome_rows": sum(a["ledger_action"] == "APPENDED_NEW" for a in actions),
+        "official_finals": len(outcomes),
+        "new_outcome_rows": sum(a["ledger_action"] == "APPENDED_NEW" and phase_by_game[int(a["game_pk"])].normalized_phase == evaluation_phase for a in actions),
+        "collection_new_outcome_rows": sum(a["ledger_action"] == "APPENDED_NEW" for a in actions),
         "deferred_rows": len(deferred), "deferred": deferred,
         "model_mae_final": model_mae, "model_signed_bias_final": model_bias, "model_mae_regulation_nine": reg_mae, "model_crps_final": model_crps,
         "consensus_market_mae": consensus_mae, "consensus_market_signed_bias": consensus_bias,
         "model_closer_than_consensus": model_closer, "consensus_closer_than_model": consensus_closer, "ties": ties,
         "primary_multibook_rows": len(primary), "primary_books": len({row["bookmaker_key"] for row in primary}), "bookmaker_eu_rows": len(bookmaker),
+        "evaluation_phase": evaluation_phase,
+        "prediction_phase_partition_counts": prediction_partitions.counts(),
+        "outcome_phase_partition_counts": outcome_partitions.counts(),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
         "ledger_before": before, "ledger_after": after, "duplicate_outcome_identities": after["duplicate_outcome_identities"],
         "prediction_rows_unchanged": True, "market_timing": "POST_PREDICTION_MARKET_OBSERVATION", "public_status": "SHADOW_ONLY_NOT_PUBLIC"}
     slug = game_date.replace("-", "_")
+    if evaluation_phase != REGULAR_SEASON:
+        slug = f"{slug}_{evaluation_phase.lower()}"
     write_csv(output_dir/f"{slug}_totals_grading.csv", outcomes); write_csv(output_dir/f"{slug}_multibook_market_results.csv", market_results)
     write_csv(output_dir/f"{slug}_multibook_consensus.csv", consensus_rows); write_csv(output_dir/f"{slug}_book_specific_metrics.csv", book_metrics)
     write_csv(output_dir/f"{slug}_grading_deferred.csv", deferred)
     (output_dir/f"{slug}_totals_grade_summary.json").write_text(json.dumps(summary, indent=2)+"\n")
     metric = lambda value, signed=False: "PENDING" if value is None else (f"{value:+.6f}" if signed else f"{value:.6f}")
     (output_dir/f"{slug}_totals_grade_report.md").write_text(
-        f"# {game_date} totals prospective grade\n\n" f"`{summary['decision']}`\n\n- Frozen games/finals: {len(predictions)}/{len(outcomes)}\n"
+        f"# {game_date} totals prospective {evaluation_phase.lower()} grade\n\n" f"`{summary['decision']}`\n\n- Frozen games/finals: {len(predictions)}/{len(outcomes)}\n"
         f"- Model final-score MAE / signed bias / CRPS: {metric(model_mae)} / {metric(model_bias, True)} / {metric(model_crps)}\n"
         f"- Model regulation-nine MAE: {metric(reg_mae)}\n- Consensus MAE / signed bias: {metric(consensus_mae)} / {metric(consensus_bias, True)}\n"
         f"- Model closer / consensus closer / ties: {model_closer}/{consensus_closer}/{ties}\n"
@@ -217,7 +266,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(); parser.add_argument("--date", required=True); parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--ledger-path", type=Path, default=DEFAULT_LEDGER); parser.add_argument("--market-ledger-path", type=Path, default=DEFAULT_MARKET_LEDGER)
     parser.add_argument("--allow-partial", action="store_true")
-    args = parser.parse_args(); print(json.dumps(run(args.date, args.output_dir, args.ledger_path, args.market_ledger_path, allow_partial=args.allow_partial), indent=2))
+    parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
+    args = parser.parse_args(); print(json.dumps(run(args.date, args.output_dir, args.ledger_path, args.market_ledger_path, allow_partial=args.allow_partial, evaluation_phase=args.evaluation_phase), indent=2))
 
 
 if __name__ == "__main__": main()

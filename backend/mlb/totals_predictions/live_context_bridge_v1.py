@@ -57,6 +57,12 @@ def normalize_schedule(payload: dict[str, Any], observed_at_utc: str, source_sha
     rows = []
     for day in payload.get("dates", []):
         for game in day.get("games", []):
+            game_pk = int(game["gamePk"])
+            source_game_type = game.get("gameType")
+            if not isinstance(source_game_type, str) or not source_game_type:
+                raise TotalsLiveContextError(
+                    f"AUTHORITATIVE_GAME_TYPE_REQUIRED_{game_pk}"
+                )
             sides = {}
             for side in ("away", "home"):
                 entry = game.get("teams", {}).get(side, {})
@@ -76,7 +82,8 @@ def normalize_schedule(payload: dict[str, Any], observed_at_utc: str, source_sha
                 }
             venue = game.get("venue") or {}
             rows.append({
-                "game_pk": int(game["gamePk"]), "game_date": game.get("officialDate", day.get("date")),
+                "game_pk": game_pk, "game_date": game.get("officialDate", day.get("date")),
+                "source_game_type": source_game_type,
                 "scheduled_start_utc": game["gameDate"], "game_number": int(game.get("gameNumber", 1)),
                 "doubleheader_state": game.get("doubleHeader", "N"),
                 "official_game_status": game.get("status", {}).get("detailedState", "UNKNOWN"),
