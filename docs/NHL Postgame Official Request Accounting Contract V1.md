@@ -213,12 +213,18 @@ For September 20 the original eight-response run is both an authority source
 and a failed ancestor; the third run is both a 14-response roster source and a
 failed ancestor. The second run is lineage evidence only: its nine reuse records
 must resolve to the original objects and its roster 307 remains non-reusable.
-A completed package records all three response-source roles and all four
+A completed package records all three response-source roles and all five
 distinct failed-ancestor roles, their hashes and relationships, plus the completed
 execution's run ID, journal hash, and game-set hash. A run may appear once in
 each of the independent source and failed-ancestor collections without forming
 a cycle. The standalone redirect diagnostic is out-of-band accounting, not a
 request-run ancestor or fabricated journal record.
+
+The fifth failed ancestor is
+`nhlpostgame_20260920_20260922T204231536641Z_75b7fb99`. Its staging-set
+failure and immutable journal/tree receipts are mandatory lineage for any
+eventual September 20 completed package. A V4/four-ancestor lineage is no
+longer sufficient for that slate.
 
 ## Player identity resolution
 
@@ -250,3 +256,47 @@ workflow requires exact identity-set equality between official outcomes and
 staging: seven games, 252 skater appearances, 28 goalie appearances and 14
 confirmed starters. Missing, extra, duplicate or conflicting identities are
 reported by game and fail closed.
+
+## Authoritative skater staging synchronization
+
+Staging correction is a separate governed operation; full reconciliation never
+invokes it implicitly. Both modes first verify the allowlisted authority run's
+journal hash, request-tree fingerprint, canonical game-set hash, schedule and
+boxscore resource identities, index hashes, object hashes and lengths, slate
+date, and exact official numeric player IDs. The reconstructed authority set
+must contain seven games, 36 unique skaters per game, 252 unique skater
+appearances, 28 goalie appearances and 14 postgame starters.
+
+Read-only inventory:
+
+```sh
+bin/nhl_postgame_reconcile.sh YYYY-MM-DD \
+  --staging-set-preflight \
+  --authority-response-source-run-id GOVERNED_AUTHORITY_RUN
+```
+
+The preflight opens one repeatable-read read-only transaction, creates no
+request run, and reports the existing, missing and extra identity sets plus
+deterministic hashes. Its `authorized_extra_set_digest` binds the slate,
+canonical game-set hash, expected identity-set hash and complete extra set.
+
+Separately authorized correction:
+
+```sh
+bin/nhl_postgame_reconcile.sh YYYY-MM-DD \
+  --correct-staging-set \
+  --authority-response-source-run-id GOVERNED_AUTHORITY_RUN \
+  --authorized-extra-set-digest PREFLIGHT_DIGEST
+```
+
+Correction uses one serializable transaction and takes a
+`SHARE ROW EXCLUSIVE` lock on `nhl.import_skater_logs_stage` before reading the
+target set. It validates the live extra-set digest before creating its temporary
+expected table or changing live rows, upserts the exact official rows, and
+deletes only rows satisfying both the supplied `game_date` and membership in
+the verified canonical game set that are absent from the temporary expected
+set. It then rechecks exact `7/252/28/14` equality before commit. Digest drift,
+lock failure, source alteration, unexpected deletion, or any later validation
+error rolls back the entire transaction. Replaying an already synchronized set
+has an empty extra set and performs zero deletions. No player-specific exception
+is permitted.

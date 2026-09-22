@@ -31,6 +31,49 @@ CONTRACT = "NHL_POSTGAME_RECONCILIATION_V1"
 FINAL_STATES = {"FINAL", "OFF"}
 SUPPORTED_GAME_TYPES = {1, 2, 3}
 PROSPECTIVE_PROP_NOT_BEFORE = "2026-09-21"
+SEPTEMBER_20_REQUIRED_FAILED_ANCESTORS = [
+    "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6",
+    "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b",
+    "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9",
+    "nhlpostgame_20260920_20260922T181726727181Z_70f0280d",
+    "nhlpostgame_20260920_20260922T204231536641Z_75b7fb99",
+]
+
+
+def validate_request_lineage(lineage: dict[str, Any], *, slate_date: str) -> None:
+    """Validate typed response sources and all required failed ancestors."""
+    version = lineage.get("contract_version")
+    if version in {"NHL_POSTGAME_REQUEST_LINEAGE_V3",
+                   "NHL_POSTGAME_REQUEST_LINEAGE_V4",
+                   "NHL_POSTGAME_REQUEST_LINEAGE_V5"}:
+        response_sources = lineage.get("response_sources") or []
+        failed_ancestors = lineage.get("failed_ancestors") or []
+        source_ids = [row.get("source_run_id") for row in response_sources]
+        failed_ids = [row.get("run_id") for row in failed_ancestors]
+        roles = [row.get("role") for row in response_sources]
+        expected_roles = (["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"]
+                          if version.endswith("V3") else
+                          ["AUTHORITY_RESPONSE_SOURCE",
+                           "PLAYER_IDENTITY_RESPONSE_SOURCE",
+                           "ROSTER_RESPONSE_SOURCE"])
+        if (len(source_ids) != len(set(source_ids))
+                or len(failed_ids) != len(set(failed_ids))
+                or sorted(roles) != expected_roles
+                or any(row.get("role") != "FAILED_EXECUTION_ANCESTOR"
+                       for row in failed_ancestors)):
+            raise RuntimeError("REQUEST_LINEAGE_INVALID")
+        if slate_date == "2026-09-20":
+            if (version != "NHL_POSTGAME_REQUEST_LINEAGE_V5"
+                    or failed_ids != SEPTEMBER_20_REQUIRED_FAILED_ANCESTORS):
+                raise RuntimeError("SEPTEMBER_20_ALL_FIVE_FAILED_ANCESTORS_REQUIRED")
+        return
+    ancestors = lineage.get("ancestors") or []
+    ancestor_ids = [row.get("source_run_id") or row.get("run_id")
+                    for row in ancestors]
+    if (len(ancestor_ids) != len(set(ancestor_ids))
+            or sum(row.get("role") == "AUTHORITY_RESPONSE_SOURCE"
+                   for row in ancestors) != 1):
+        raise RuntimeError("REQUEST_LINEAGE_INVALID")
 
 
 def _verify_manifest(run: Path) -> dict[str, str]:
@@ -635,32 +678,7 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             summary["sog_missing_prospective_participants"] = len(grades["sog_missing_predictions"])
         if request_lineage is not None:
             lineage = json.loads(json.dumps(request_lineage))
-            if lineage.get("contract_version") in {
-                    "NHL_POSTGAME_REQUEST_LINEAGE_V3", "NHL_POSTGAME_REQUEST_LINEAGE_V4"}:
-                response_sources = lineage.get("response_sources") or []
-                failed_ancestors = lineage.get("failed_ancestors") or []
-                source_ids = [row.get("source_run_id") for row in response_sources]
-                failed_ids = [row.get("run_id") for row in failed_ancestors]
-                roles = [row.get("role") for row in response_sources]
-                if (len(source_ids) != len(set(source_ids))
-                        or len(failed_ids) != len(set(failed_ids))
-                        or sorted(roles) != (["AUTHORITY_RESPONSE_SOURCE",
-                                              "ROSTER_RESPONSE_SOURCE"]
-                                             if lineage["contract_version"].endswith("V3")
-                                             else ["AUTHORITY_RESPONSE_SOURCE",
-                                                   "PLAYER_IDENTITY_RESPONSE_SOURCE",
-                                                   "ROSTER_RESPONSE_SOURCE"])
-                        or any(row.get("role") != "FAILED_EXECUTION_ANCESTOR"
-                               for row in failed_ancestors)):
-                    raise RuntimeError("REQUEST_LINEAGE_INVALID")
-            else:
-                ancestors = lineage.get("ancestors") or []
-                ancestor_ids = [row.get("source_run_id") or row.get("run_id")
-                                for row in ancestors]
-                if (len(ancestor_ids) != len(set(ancestor_ids))
-                        or sum(row.get("role") == "AUTHORITY_RESPONSE_SOURCE"
-                               for row in ancestors) != 1):
-                    raise RuntimeError("REQUEST_LINEAGE_INVALID")
+            validate_request_lineage(lineage, slate_date=slate_date)
             if request_accounting is None or request_journal is None:
                 raise RuntimeError("REQUEST_LINEAGE_REQUIRES_COMPLETED_JOURNAL")
             lineage["completed_request_run"] = {

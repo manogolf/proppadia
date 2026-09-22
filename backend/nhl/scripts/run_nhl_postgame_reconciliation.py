@@ -55,6 +55,11 @@ from backend.nhl.postgame_reconcile.core import (
     validate_staging_identity_sets,
     validate_final_slate,
 )
+from backend.nhl.postgame_reconcile.staging_sync import (
+    load_verified_authoritative_staging_set,
+    staging_set_preflight,
+    synchronize_staging_set,
+)
 from backend.nhl.player_external_identity import (
     authoritative_player_name,
     create_or_verify_player,
@@ -78,6 +83,7 @@ REQUEST_RUN_RECEIPTS = {
         "slate_date": "2026-09-20",
         "journal_sha256": "2994ef2bd162c483eacc20b02cf83cd0938fb5f79fd76d208ce57981ed473cb7",
         "tree_fingerprint": "c6e6402b2eba12a8efb30a60df607324cf8684361d357fb5340cfc9051fa7110",
+        "game_ids": list(range(2026010008, 2026010015)),
     },
     "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b": {
         "roles": ["FAILED_EXECUTION_ANCESTOR"],
@@ -102,6 +108,12 @@ REQUEST_RUN_RECEIPTS = {
         "player_id": 8485386,
         "object_sha256": "69733de66231bda93e5deb6c5d013aa3ce6a146835c1ae301ffdc2be477fb7b4",
         "index_sha256": "797f6100afd0c418f366c914e464ecb311768923f3b80fab48f18d55d33aa99f",
+    },
+    "nhlpostgame_20260920_20260922T204231536641Z_75b7fb99": {
+        "roles": ["FAILED_EXECUTION_ANCESTOR"],
+        "slate_date": "2026-09-20",
+        "journal_sha256": "c562388b7eb019a985b3bc8ca34ef7ddd337c22bd1993324625ffdf2c2231686",
+        "tree_fingerprint": "c80bca51f32cf170638955770d0142a0af52c8810087c233aeaad39be4a75ae9",
     },
 }
 
@@ -896,6 +908,8 @@ def main() -> int:
     mode.add_argument("--preflight", action="store_true")
     mode.add_argument("--local-input-preflight", action="store_true")
     mode.add_argument("--database-identity-preflight", action="store_true")
+    mode.add_argument("--staging-set-preflight", action="store_true")
+    mode.add_argument("--correct-staging-set", action="store_true")
     mode.add_argument("--execute", action="store_true")
     parser.add_argument("--date", dest="slate_date")
     parser.add_argument("date_arg", nargs="?")
@@ -907,6 +921,8 @@ def main() -> int:
     parser.add_argument("--reuse-request-run-id")
     parser.add_argument("--lineage-request-run-id", action="append", default=[])
     parser.add_argument("--authorized-player-lookup-id", action="append", type=int, default=[])
+    parser.add_argument("--authority-response-source-run-id")
+    parser.add_argument("--authorized-extra-set-digest")
     args = parser.parse_args()
     if len(args.authorized_player_lookup_id) != len(set(args.authorized_player_lookup_id)):
         parser.error("duplicate --authorized-player-lookup-id")
@@ -917,6 +933,68 @@ def main() -> int:
         date.fromisoformat(slate_date)
     except ValueError:
         parser.error("date must be YYYY-MM-DD")
+    if args.staging_set_preflight or args.correct_staging_set:
+        if not args.authority_response_source_run_id:
+            parser.error("staging-set mode requires --authority-response-source-run-id")
+        if args.correct_staging_set and not args.authorized_extra_set_digest:
+            parser.error("--correct-staging-set requires --authorized-extra-set-digest")
+        if args.staging_set_preflight and args.authorized_extra_set_digest:
+            parser.error("read-only staging preflight does not accept a write authorization digest")
+        if (args.response_source or args.reuse_request_run_id
+                or args.lineage_request_run_id or args.authorized_player_lookup_id):
+            parser.error("staging-set mode is separate from reconciliation response/lineage arguments")
+        try:
+            receipt = _receipt(
+                args.authority_response_source_run_id,
+                role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate_date)
+            game_ids = [int(value) for value in receipt.get("game_ids") or []]
+            if len(game_ids) != 7:
+                raise RuntimeError("STAGING_SYNC_RECEIPT_GAME_SET_MISSING")
+            request_root = (args.output_root / "request_runs" / slate_date /
+                            args.authority_response_source_run_id)
+            evidence = load_verified_authoritative_staging_set(
+                request_root, source_run_id=args.authority_response_source_run_id,
+                slate_date=slate_date, game_ids=game_ids, repository_root=ROOT,
+                expected_journal_sha256=str(receipt["journal_sha256"]),
+                expected_tree_fingerprint=str(receipt["tree_fingerprint"]),
+            )
+        except Exception as error:
+            print(json.dumps({
+                "status": "FAILED_CLOSED_STAGING_SOURCE_VALIDATION",
+                "failure": f"{type(error).__name__}:{error}",
+                "request_run_created": False, "database_transactions": 0,
+                "database_writes": 0, "external_requests": 0,
+                "bookmaker_requests": 0, "paid_credits": 0,
+            }, indent=2, sort_keys=True))
+            return 5
+        load_env(args.env_file)
+        dsn = (os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or "").strip()
+        if not dsn:
+            print(json.dumps({
+                "status": "FAILED_CLOSED_STAGING_DATABASE_CONFIGURATION",
+                "failure": "DATABASE_URL_MISSING", "request_run_created": False,
+                "database_transactions": 0, "database_writes": 0,
+                "external_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+            }, indent=2, sort_keys=True))
+            return 3
+        try:
+            if args.staging_set_preflight:
+                result = staging_set_preflight(dsn, evidence)
+            else:
+                result = synchronize_staging_set(
+                    dsn, evidence,
+                    authorized_extra_digest=str(args.authorized_extra_set_digest))
+        except Exception as error:
+            print(json.dumps({
+                "status": "FAILED_CLOSED_STAGING_SET",
+                "failure": f"{type(error).__name__}:{error}",
+                "request_run_created": False,
+                "database_writes": 0 if args.staging_set_preflight else "ROLLED_BACK",
+                "external_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+            }, indent=2, sort_keys=True))
+            return 5
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     source_binding = None
     authority_binding = None
     roster_binding = None
@@ -951,6 +1029,7 @@ def main() -> int:
                     "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b",
                     "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9",
                     "nhlpostgame_20260920_20260922T181726727181Z_70f0280d",
+                    "nhlpostgame_20260920_20260922T204231536641Z_75b7fb99",
                 ]
                 if (slate_date == "2026-09-20"
                         and args.lineage_request_run_id != required_ancestors):
@@ -1037,6 +1116,7 @@ def main() -> int:
                             required_ancestors[0]: "IMMUTABLE_MAINLINE_RUN_CARDINALITY:0",
                             required_ancestors[2]: "PLAYER_EXTERNAL_IDENTITY_TRANSACTION_ABORT",
                             required_ancestors[3]: "PLAYER_AUTHORITATIVE_NAME_INVALID",
+                            required_ancestors[4]: "NHL_POSTGAME_STAGING_IDENTITY_SET_MISMATCH",
                         }[ancestor_run_id]
                         ancestor = verify_failed_request_ancestor(
                             ancestor_root, expected_run_id=ancestor_run_id,
@@ -1046,13 +1126,16 @@ def main() -> int:
                             failure_class=failure_class,
                             response_source=(authority_binding
                                              if ancestor_run_id == required_ancestors[2] else None),
-                            response_sources=([authority_binding, roster_binding]
-                                              if ancestor_run_id == required_ancestors[3]
-                                              else None),
+                            response_sources=(
+                                [authority_binding, roster_binding]
+                                if ancestor_run_id == required_ancestors[3]
+                                else [authority_binding, roster_binding, player_binding]
+                                if ancestor_run_id == required_ancestors[4]
+                                else None),
                         )
                     ancestors.append(ancestor)
                 request_lineage = {
-                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V4",
+                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V5",
                     "slate_date": slate_date,
                     "canonical_game_set_hash": authority_binding["canonical_game_set_hash"],
                     "response_sources": [

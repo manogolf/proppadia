@@ -63,6 +63,13 @@ is `UNQUALIFIED_SHADOW_DIAGNOSTIC_ONLY`. Arms are never pooled. Participating
 skaters without a prospective row are explicitly excluded and no retrospective
 prediction is manufactured.
 
+Postgame staging repair is not prediction creation and cannot continue into
+grading or publication. The separate `--staging-set-preflight` and
+`--correct-staging-set` modes consume only verified preserved official
+boxscores, create no retrospective predictions or prices, and return before
+shift/play-by-play acquisition, prediction grading, package publication or any
+model-promotion path.
+
 ## SOG arm E clarification
 
 `E_TEAM_CHANGE_AWARE` is historical diagnostic-only. It is not in the operational frozen shadow set. The operational set remains selected D with A/B/C/G comparators; no September 20 E rows are added or reconstructed.

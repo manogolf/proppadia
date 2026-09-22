@@ -375,11 +375,12 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertNotIn("SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS", text)
         self.assertIn("database_mapping_coverage\": \"UNVERIFIED", text)
 
-    def test_september_20_typed_sources_and_four_ancestors_preflight_is_fully_local(self):
+    def test_september_20_typed_sources_and_five_ancestors_preflight_is_fully_local(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
         third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
         fourth = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
+        fifth = "nhlpostgame_20260920_20260922T204231536641Z_75b7fb99"
         output = []
         with patch.object(sys, "argv", ["run_nhl_postgame_reconciliation.py",
                                         "2026-09-20", "--local-input-preflight",
@@ -392,7 +393,8 @@ class PostgameReconciliationTest(unittest.TestCase):
                                         "--lineage-request-run-id", original,
                                         "--lineage-request-run-id", second,
                                         "--lineage-request-run-id", third,
-                                        "--lineage-request-run-id", fourth]), \
+                                        "--lineage-request-run-id", fourth,
+                                        "--lineage-request-run-id", fifth]), \
              patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
              patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
              patch("builtins.print", side_effect=lambda value: output.append(value)):
@@ -405,7 +407,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         roles = [row["role"] for row in payload["request_lineage"]["response_sources"]]
         self.assertEqual(roles, ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE",
                                  "PLAYER_IDENTITY_RESPONSE_SOURCE"])
-        self.assertEqual(len(payload["request_lineage"]["failed_ancestors"]), 4)
+        self.assertEqual(len(payload["request_lineage"]["failed_ancestors"]), 5)
         self.assertEqual(payload["request_lineage"]["failed_ancestors"][1]["reuse_records"], 9)
         self.assertEqual(payload["conditional_player_lookups"]["database_mapping_coverage"],
                          "UNVERIFIED")
@@ -444,6 +446,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
         third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
         fourth = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
+        fifth = "nhlpostgame_20260920_20260922T204231536641Z_75b7fb99"
         argv = [
             "run_nhl_postgame_reconciliation.py", "2026-09-20",
             "--database-identity-preflight",
@@ -454,6 +457,7 @@ class PostgameReconciliationTest(unittest.TestCase):
             "--lineage-request-run-id", second,
             "--lineage-request-run-id", third,
             "--lineage-request-run-id", fourth,
+            "--lineage-request-run-id", fifth,
             "--authorized-player-lookup-id", "8484537",
             "--authorized-player-lookup-id", "8485525",
             "--authorized-player-lookup-id", "8486221",
@@ -498,6 +502,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
         third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
         fourth = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
+        fifth = "nhlpostgame_20260920_20260922T204231536641Z_75b7fb99"
         argv = [
             "run_nhl_postgame_reconciliation.py", "2026-09-20", "--execute",
             "--response-source", f"AUTHORITY_RESPONSE_SOURCE={original}",
@@ -505,6 +510,7 @@ class PostgameReconciliationTest(unittest.TestCase):
             "--response-source", f"PLAYER_IDENTITY_RESPONSE_SOURCE={fourth}",
             "--lineage-request-run-id", original, "--lineage-request-run-id", second,
             "--lineage-request-run-id", third, "--lineage-request-run-id", fourth,
+            "--lineage-request-run-id", fifth,
             "--authorized-player-lookup-id", "8484537",
         ]
         failed_partition = {
