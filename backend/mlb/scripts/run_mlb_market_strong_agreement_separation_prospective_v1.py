@@ -19,6 +19,8 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 from backend.app.deps import pg_connect
+from backend.mlb.markets import agreement_phase_gating_v1 as phase_gate
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 from backend.mlb.scripts import acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1 as hardened
 
 
@@ -180,11 +182,9 @@ def no_vig(home: float, away: float) -> tuple[float, float]:
     return h/(h+a), a/(h+a)
 
 
-def late_season_regime(game_date: str) -> str:
-    month = int(str(game_date)[5:7])
-    if month == 9: return "LATE_SEASON_SEPTEMBER"
-    if month in (10, 11): return "POSTSEASON_CALENDAR_WINDOW"
-    return "OFFSEASON_CALENDAR_WINDOW"
+def prospective_study_regime() -> str:
+    """A non-phase legacy ledger label; governed phase is always joined by gamePk."""
+    return "PROSPECTIVE_STUDY_HORIZON"
 
 
 def freeze_payload(frozen_at: str) -> dict[str, Any]:
@@ -210,11 +210,12 @@ def freeze_payload(frozen_at: str) -> dict[str, Any]:
             key: reason for _, key, _, _, reason in hardened.BOOKS
         },
         "reference_book_selected_before_prospective_outcomes": True,
-        "admission": {"all_provider events and all immutable predictions on an acquired date": True,
+        "admission": {"all_exact_gamePk_predictions_on_an_acquired_date": True,
                       "risk_states": sorted(RISK_STATES), "two_sided_prices_required": True,
                       "returned_snapshot_must_not_exceed_request": True,
                       "book_and_market_update_must_be_strictly_pregame": True,
-                      "identity": "exact normalized home/away plus unique closest start within three hours",
+                      "identity": ("authoritative MLB gamePk from the immutable prediction; provider team/start "
+                                   "matching attaches prices but never creates game identity"),
                       "missing_model_or_price_is_classified_not_dropped": True},
         "grading": {"authority": "mlb.public_game_moneyline_outcomes", "one_outcome_per_game": True,
                     "bookmaker_rows_do_not_increase_effective_sample_size": True,
@@ -237,8 +238,11 @@ def freeze_payload(frozen_at: str) -> dict[str, Any]:
                 "harmful: win-rate upper bound below 0 or both out-of-time score-difference lower bounds above 0"),
             "SEPARATION_EVIDENCE_INSUFFICIENT": "evidence gate unmet or powered results remain mixed/inconclusive",
         },
-        "late_season_regime": ("Remainder-of-2026 fixed horizon; September, postseason-calendar, and offseason-calendar "
-                               "windows reported separately; no pooling with the prior 56-20 cohort"),
+        "phase_gating": ("exact-gamePk canonical authority; regular-season evidence and postseason shadow "
+                         "evidence are disjoint; preseason, special, missing, stale, conflicting, and duplicate "
+                         "authority fail closed; no calendar phase inference"),
+        "late_season_regime": ("descriptive authoritative regular-season slice only; it is not an independent "
+                               "certification cohort and is never pooled with the prior 56-20 cohort"),
         "early_stopping": False,
         "decision_not_before_utc_date": "2027-01-01",
         "constraints": {"threshold_optimization": False, "best_price": False, "book_selection_by_roi": False,
@@ -292,7 +296,21 @@ def initialize(output: Path, ledger: Path) -> dict[str, Any]:
 
 def verify_freeze(output: Path, ledger: Path) -> dict[str, Any]:
     freeze = json.loads((output / "pre_outcome_freeze.json").read_text())
-    if freeze != freeze_payload(freeze["frozen_at_utc"]): raise RuntimeError("Pre-outcome freeze changed")
+    # Existing V1/V4 freezes are immutable pre-control evidence and retain the
+    # superseded calendar-regime wording.  The ledger hash below proves their
+    # identity; validate the scientific contract fields without rewriting that
+    # history.  Newly initialized freezes use the canonical gamePk phase gate.
+    expected = freeze_payload(freeze["frozen_at_utc"])
+    invariant_keys = (
+        "study_id", "prospective_start_game_date", "prospective_end_game_date",
+        "prior_56_20_rows_admitted", "model", "market", "agreement_indicator",
+        "bookmakers", "bookmaker_selection_used_outcomes",
+        "reference_book_selected_before_prospective_outcomes", "grading",
+        "uncertainty", "blocked_date_fit", "evidence_requirement", "decision_rule",
+        "early_stopping", "decision_not_before_utc_date", "constraints",
+    )
+    if any(freeze.get(key) != expected.get(key) for key in invariant_keys):
+        raise RuntimeError("Pre-outcome freeze scientific contract changed")
     with sqlite3.connect(ledger) as conn:
         schema(conn)
         row = conn.execute("SELECT freeze_sha256 FROM study_metadata WHERE study_id=?", (freeze["study_id"],)).fetchone()
@@ -410,7 +428,7 @@ def classify_risk(prediction: pd.Series | None, event: dict[str, Any] | None, re
             "market_strong_side": None, "selected_market_probability": None,
             "selected_model_probability": None, "model_strong_side": prediction.model_strong_side if prediction is not None else None,
             "agreement_indicator": None, "risk_state": "IDENTITY_MISMATCH", "risk_set_eligible": 0,
-            "late_season_regime": late_season_regime(game_date),
+            "late_season_regime": prospective_study_regime(),
             "prediction_payload_sha256": prediction.prediction_payload_sha256 if prediction is not None else None,
             "raw_response_sha256": raw_sha}
     price_rows: list[dict[str, Any]] = []
@@ -468,7 +486,11 @@ def classify_risk(prediction: pd.Series | None, event: dict[str, Any] | None, re
     return base, price_rows
 
 
-def ingest_response(output: Path, ledger: Path, game_date: str, requested: str, raw_path: Path) -> dict[str, int]:
+def ingest_response(
+    output: Path, ledger: Path, game_date: str, requested: str, raw_path: Path,
+    *, evaluation_phase: str = phase_gate.REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, int]:
     payload = json.loads(raw_path.read_text()); returned = iso(payload["timestamp"])
     if pd.to_datetime(returned, utc=True) > pd.to_datetime(requested, utc=True):
         raise RuntimeError("Provider returned a snapshot after the requested timestamp")
@@ -479,6 +501,11 @@ def ingest_response(output: Path, ledger: Path, game_date: str, requested: str, 
     events = [event for event in events if belongs_to_date(event)]
     with sqlite3.connect(ledger) as conn:
         predictions = pd.read_sql_query("SELECT * FROM predictions WHERE game_date=? ORDER BY game_id", conn, params=(game_date,))
+        prediction_rows = predictions.to_dict("records")
+        phase_gate.require_snapshot_membership(
+            prediction_rows, evaluation_phase, authority=phase_authority,
+            require_freshness=True,
+        )
         matched_event_ids: set[str] = set(); risk_inserted = prices_inserted = 0
         for _, prediction in predictions.iterrows():
             event = select_event(events, prediction)
@@ -486,16 +513,17 @@ def ingest_response(output: Path, ledger: Path, game_date: str, requested: str, 
             risk, prices = classify_risk(prediction, event, requested, returned, raw_sha)
             risk_inserted += immutable_insert(conn, "risk_set", "game_key", risk)
             for values in prices: prices_inserted += immutable_insert(conn, "bookmaker_prices", ("game_key", "bookmaker_key"), values)
-        for event in events:
-            if str(event.get("id")) in matched_event_ids: continue
-            risk, prices = classify_risk(None, event, requested, returned, raw_sha)
-            risk_inserted += immutable_insert(conn, "risk_set", "game_key", risk)
-            for values in prices: prices_inserted += immutable_insert(conn, "bookmaker_prices", ("game_key", "bookmaker_key"), values)
+        # Provider-only events lack authoritative gamePk identity and therefore
+        # cannot enter either governed evaluation cohort.
         conn.commit()
     return {"risk_rows_inserted": risk_inserted, "price_rows_inserted": prices_inserted}
 
 
-def reconcile_successful_response(output: Path, ledger: Path, game_date: str) -> dict[str, int]:
+def reconcile_successful_response(
+    output: Path, ledger: Path, game_date: str,
+    *, evaluation_phase: str = phase_gate.REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, int]:
     """Parse an already-preserved successful response without issuing another request."""
     verify_freeze(output, ledger)
     request_id = f"PROSPECTIVE_H2H_{game_date}"
@@ -509,14 +537,30 @@ def reconcile_successful_response(output: Path, ledger: Path, game_date: str) ->
         raise RuntimeError("Preserved successful raw response is missing")
     if row.raw_sha256 and file_sha(raw_path) != row.raw_sha256:
         raise RuntimeError("Preserved successful raw response hash mismatch")
-    return ingest_response(output, ledger, game_date, row.requested_timestamp_utc, raw_path)
+    return ingest_response(
+        output, ledger, game_date, row.requested_timestamp_utc, raw_path,
+        evaluation_phase=evaluation_phase, phase_authority=phase_authority,
+    )
 
 
-def acquire_date(output: Path, ledger: Path, game_date: str, ceiling: int, timeout: int) -> dict[str, Any]:
+def acquire_date(
+    output: Path, ledger: Path, game_date: str, ceiling: int, timeout: int,
+    *, evaluation_phase: str = phase_gate.REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
     verify_freeze(output, ledger)
     if not (PROSPECTIVE_START <= game_date <= PROSPECTIVE_END): raise ValueError("game date outside frozen horizon")
     with sqlite3.connect(ledger) as conn:
-        schema(conn); establish_authorization(conn, ceiling); requested = requested_timestamp(conn, game_date); conn.commit()
+        schema(conn)
+        predictions = pd.read_sql_query(
+            "SELECT * FROM predictions WHERE game_date=? ORDER BY game_id", conn,
+            params=(game_date,),
+        )
+        phase_gate.require_snapshot_membership(
+            predictions.to_dict("records"), evaluation_phase,
+            authority=phase_authority, require_freshness=True,
+        )
+        establish_authorization(conn, ceiling); requested = requested_timestamp(conn, game_date); conn.commit()
     prior = request_terminal_rows(output); request_id = f"PROSPECTIVE_H2H_{game_date}"
     request_rows = prior[prior.request_id.eq(request_id)]
     if len(request_rows[request_rows.status.eq("SUCCESS")]):
@@ -568,14 +612,27 @@ def acquire_date(output: Path, ledger: Path, game_date: str, ceiling: int, timeo
     if not response.ok: raise RuntimeError(error)
     if last > EXPECTED_COST_PER_DATE: raise RuntimeError("Observed request cost exceeded expected cost")
     return {"request_id": request_id, "status": "SUCCESS", "x_requests_last": last,
-            **ingest_response(output, ledger, game_date, requested, raw_path)}
+            **ingest_response(
+                output, ledger, game_date, requested, raw_path,
+                evaluation_phase=evaluation_phase, phase_authority=phase_authority,
+            )}
 
 
-def grade(output: Path, ledger: Path, through_date: str) -> dict[str, int]:
+def grade(
+    output: Path, ledger: Path, through_date: str,
+    *, evaluation_phase: str = phase_gate.REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, int]:
     verify_freeze(output, ledger)
     with sqlite3.connect(ledger) as conn:
         candidates = pd.read_sql_query("SELECT game_key,game_date,game_id,market_strong_side FROM risk_set WHERE game_id IS NOT NULL AND game_date<=?",
                                        conn, params=(through_date,))
+    if candidates.empty: return {"source_rows": 0, "inserted_rows": 0}
+    partitions = phase_gate.partition_agreement_rows(
+        candidates.to_dict("records"), authority=phase_authority,
+        require_freshness=True, unique_identity_fields=("game_key",),
+    )
+    candidates = pd.DataFrame(partitions.selected(evaluation_phase), columns=candidates.columns)
     if candidates.empty: return {"source_rows": 0, "inserted_rows": 0}
     sql = """
       SELECT game_date::text,game_id,official_winner,payload_sha256,grading_timestamp_utc
@@ -688,6 +745,47 @@ def agreement_coefficient_interval(resolved: pd.DataFrame) -> dict[str, float]:
             "ci_97_5": float(np.quantile(draws, .975))}
 
 
+def phase_partitioned_credit_accounting(
+    claims: pd.DataFrame,
+    predictions: pd.DataFrame,
+    *,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, dict[str, dict[str, int]]]:
+    """Separate provider claims and study-credit cost by exact-gamePk phase."""
+    partitions = phase_gate.partition_agreement_rows(
+        predictions.to_dict("records"), authority=phase_authority,
+        require_freshness=True, unique_identity_fields=("game_key",),
+    )
+    decisions = {decision.game_pk: decision for decision in partitions.decisions}
+    phases_by_date: dict[str, set[str]] = {}
+    for row in predictions.to_dict("records") if len(predictions) else ():
+        decision = decisions[int(row["game_id"])]
+        phases_by_date.setdefault(str(row["game_date"]), set()).add(
+            decision.normalized_phase or ""
+        )
+    claim_counts = {name: {"LIVE": 0, "HISTORICAL_RECOVERY": 0}
+                    for name in sorted(phase_gate.EVALUATION_PHASES)}
+    credit_costs = {name: {"LIVE": 0, "HISTORICAL_RECOVERY": 0}
+                    for name in sorted(phase_gate.EVALUATION_PHASES)}
+    for claim in claims.to_dict("records"):
+        phases = phases_by_date.get(str(claim["game_date"]), set())
+        if len(phases) != 1:
+            raise phase_gate.AgreementPhaseGateError(
+                "AGREEMENT_STUDY_CREDIT_PHASE_UNPROVABLE", detail=str(claim["game_date"])
+            )
+        claim_phase = next(iter(phases))
+        mode = str(claim["capture_mode"])
+        if claim_phase not in claim_counts or mode not in claim_counts[claim_phase]:
+            raise phase_gate.AgreementPhaseGateError(
+                "AGREEMENT_STUDY_CREDIT_MODE_UNKNOWN", detail=mode
+            )
+        claim_counts[claim_phase][mode] += 1
+        observed = pd.to_numeric(claim.get("x_requests_last"), errors="coerce")
+        reserved = 1 if mode == "LIVE" else EXPECTED_COST_PER_DATE
+        credit_costs[claim_phase][mode] += int(observed) if pd.notna(observed) else reserved
+    return {"provider_request_claim_counts": claim_counts, "study_credit_costs": credit_costs}
+
+
 def clustered_group_difference(frame: pd.DataFrame, value_column: str) -> dict[str, float]:
     """Agreement-minus-no-agreement difference with date-cluster resampling."""
     unavailable = {"difference": math.nan, "ci_2_5": math.nan, "ci_97_5": math.nan}
@@ -710,13 +808,60 @@ def clustered_group_difference(frame: pd.DataFrame, value_column: str) -> dict[s
             "ci_97_5": float(np.quantile(draws, .975)) if draws else math.nan}
 
 
-def report(output: Path, ledger: Path) -> dict[str, Any]:
+def report(
+    output: Path, ledger: Path,
+    *, evaluation_phase: str = phase_gate.REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    phase_gate.require_evaluation_phase(evaluation_phase)
     freeze = verify_freeze(output, ledger)
     with sqlite3.connect(ledger) as conn:
         predictions = pd.read_sql_query("SELECT * FROM predictions ORDER BY game_date,game_key", conn)
         risk = pd.read_sql_query("SELECT * FROM risk_set ORDER BY game_date,game_key", conn)
         prices = pd.read_sql_query("SELECT * FROM bookmaker_prices ORDER BY bookmaker_key,game_key", conn)
         outcomes = pd.read_sql_query("SELECT * FROM outcomes ORDER BY game_key", conn)
+        try:
+            claims = pd.read_sql_query(
+                """SELECT c.game_date,c.capture_mode,
+                   (SELECT e.x_requests_last FROM live_capture_events_v4 e
+                    WHERE e.study_id=c.study_id AND e.game_date=c.game_date
+                      AND e.capture_mode=c.capture_mode AND e.x_requests_last<>''
+                    ORDER BY e.recorded_at_utc DESC,e.event_id DESC LIMIT 1) AS x_requests_last
+                   FROM live_capture_claims_v4 c ORDER BY c.game_date,c.capture_mode""", conn
+            )
+        except (sqlite3.OperationalError, pd.errors.DatabaseError):
+            claims = pd.DataFrame(columns=["game_date", "capture_mode", "x_requests_last"])
+    all_predictions = predictions.copy()
+    prediction_partitions = phase_gate.partition_agreement_rows(
+        predictions.to_dict("records"), authority=phase_authority,
+        require_freshness=True, unique_identity_fields=("game_key",),
+    )
+    risk_partitions = phase_gate.partition_agreement_rows(
+        risk.to_dict("records"), authority=phase_authority,
+        require_freshness=True, unique_identity_fields=("game_key",),
+    )
+    phase_counts = risk_partitions.counts()
+    selected_predictions = prediction_partitions.selected(evaluation_phase)
+    selected_risk = risk_partitions.selected(evaluation_phase)
+    predictions = pd.DataFrame(selected_predictions, columns=predictions.columns)
+    risk = pd.DataFrame(selected_risk, columns=risk.columns)
+    decisions = {
+        decision.game_pk: decision for decision in risk_partitions.decisions
+        if decision.evaluation_partition == evaluation_phase
+    }
+    if len(risk):
+        risk["source_game_type"] = risk.game_id.map(lambda value: decisions[int(value)].source_game_type)
+        risk["normalized_phase"] = risk.game_id.map(lambda value: decisions[int(value)].normalized_phase)
+        risk["postseason_round"] = risk.game_id.map(lambda value: decisions[int(value)].postseason_round)
+        risk["late_season_regime"] = (
+            "LATE_SEASON_REGULAR_SEASON_DESCRIPTIVE"
+            if evaluation_phase == phase_gate.REGULAR_SEASON else "POSTSEASON_SHADOW"
+        )
+    selected_keys = set(risk.game_key) if len(risk) else set()
+    prices = prices[prices.game_key.isin(selected_keys)].copy() if len(prices) else prices
+    outcomes = outcomes[outcomes.game_key.isin(selected_keys)].copy() if len(outcomes) else outcomes
+    credit_accounting = phase_partitioned_credit_accounting(
+        claims, all_predictions, phase_authority=phase_authority)
     plan_rows = []
     requests = request_terminal_rows(output)
     if len(predictions):
@@ -885,6 +1030,10 @@ def report(output: Path, ledger: Path) -> dict[str, Any]:
     horizon_status = ("NOT_STARTED" if today < PROSPECTIVE_START else
                       "CLOSED" if horizon_complete else "ACTIVE_REMAINDER_OF_2026")
     summary = {"study_id": freeze["study_id"], "report_status": "INTERIM_DESCRIPTIVE" if not decision_made else "FINAL_DECISION",
+               "evaluation_phase": evaluation_phase, "phase_partition_counts": phase_counts,
+               "provider_request_claim_counts_by_phase_and_mode":
+                   credit_accounting["provider_request_claim_counts"],
+               "study_credit_costs_by_phase_and_mode": credit_accounting["study_credit_costs"],
                "classification": classification, "decision_made": decision_made, "evidence_requirement_met": evidence_met,
                "evidence_gate": gate, "risk_rows": len(risk), "eligible_resolved_unique_games": len(resolved),
                "agreement_resolved_games": agreement_n, "without_agreement_resolved_games": no_agreement_n,
@@ -934,6 +1083,8 @@ def main() -> None:
     parser.add_argument("--reconcile-date")
     parser.add_argument("--grade", action="store_true"); parser.add_argument("--report", action="store_true")
     parser.add_argument("--through-date", default=date.today().isoformat()); parser.add_argument("--authorized-credit-ceiling", type=int)
+    parser.add_argument("--evaluation-phase", choices=sorted(phase_gate.EVALUATION_PHASES),
+                        default=phase_gate.REGULAR_SEASON)
     parser.add_argument("--timeout", type=int, default=60); args = parser.parse_args()
     output = args.output if args.output.is_absolute() else ROOT/args.output
     ledger = args.ledger if args.ledger.is_absolute() else ROOT/args.ledger
@@ -942,11 +1093,17 @@ def main() -> None:
     if args.ingest_predictions: result["predictions"] = ingest_predictions(output, ledger, args.through_date)
     if args.acquire_date:
         if args.authorized_credit_ceiling is None: raise RuntimeError("--authorized-credit-ceiling is required for acquisition")
-        result["acquisition"] = acquire_date(output, ledger, args.acquire_date, args.authorized_credit_ceiling, args.timeout)
+        result["acquisition"] = acquire_date(
+            output, ledger, args.acquire_date, args.authorized_credit_ceiling, args.timeout,
+            evaluation_phase=args.evaluation_phase,
+        )
     if args.reconcile_date:
-        result["reconciliation"] = reconcile_successful_response(output, ledger, args.reconcile_date)
-    if args.grade: result["grading"] = grade(output, ledger, args.through_date)
-    if args.report or args.initialize: result["report"] = report(output, ledger)
+        result["reconciliation"] = reconcile_successful_response(
+            output, ledger, args.reconcile_date, evaluation_phase=args.evaluation_phase)
+    if args.grade: result["grading"] = grade(output, ledger, args.through_date,
+                                               evaluation_phase=args.evaluation_phase)
+    if args.report or args.initialize: result["report"] = report(
+        output, ledger, evaluation_phase=args.evaluation_phase)
     if not any((args.initialize, args.ingest_predictions, args.acquire_date, args.reconcile_date,
                 args.grade, args.report)):
         parser.error("choose at least one action")

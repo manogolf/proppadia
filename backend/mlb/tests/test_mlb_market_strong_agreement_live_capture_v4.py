@@ -27,7 +27,7 @@ def snapshot(barrier="2026-09-10T12:30:00Z"):
 def prediction_row(**changes):
     row = {
         "game_date": "2026-09-10",
-        "game_id": 1,
+        "game_id": 823088,
         "scheduled_start_utc": "2026-09-10T23:00:00Z",
         "prediction_timestamp_utc": "2026-09-10T12:29:55Z",
         "prediction_cutoff_utc": "2026-09-10T12:00:00Z",
@@ -127,7 +127,7 @@ class LiveCaptureV4Test(unittest.TestCase):
         with patch.object(capture, "pg_connect", return_value=FakeConnection(cursor)):
             loaded = capture.load_prediction_snapshot("2026-09-10", 1)
         self.assertEqual(loaded.expected_rows, 1)
-        self.assertEqual(loaded.rows[0].game_id, 1)
+        self.assertEqual(loaded.rows[0].game_id, 823088)
         self.assertEqual(loaded.rows[0].model_hash, capture.v1.MODEL_HASH)
         self.assertEqual(loaded.barrier_utc, "2026-09-10T12:30:00Z")
         self.assertNotIn("outcome", cursor.sql.lower())
@@ -182,7 +182,7 @@ class LiveCaptureV4Test(unittest.TestCase):
         self.assertFalse(result["live_date_is_operationally_eligible"])
         self.assertEqual(result["first_eligible_prospective_date"], "2026-09-11")
         self.assertEqual(result["validated_prediction_identities"], [{
-            "game_date": "2026-09-10", "game_id": 1,
+            "game_date": "2026-09-10", "game_id": 823088,
             "model_version": capture.v1.MODEL,
             "prediction_snapshot_class": capture.v1.SNAPSHOT,
         }])

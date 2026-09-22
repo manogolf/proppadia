@@ -1,0 +1,8 @@
+{
+  "current_separation_classification": "SEPARATION_EVIDENCE_INSUFFICIENT",
+  "late_season_cohort": "DESCRIPTIVE_ONLY_NOT_AN_INDEPENDENT_CERTIFICATION_COHORT",
+  "ordinary_capture_horizon": "V4 remains frozen through 2026-09-27; any postseason operation requires separate authorization and fresh authority",
+  "postseason_operational_readiness": "BLOCKED_NO_ACTUAL_AUTHORITATIVE_POSTSEASON_OBSERVATION",
+  "smallest_next_action": "Allow ordinary retained-source collection; after the first authoritative postseason game, run the no-network preflight and synthetic-equivalent validator before any separately authorized capture.",
+  "stale_committed_summary": "PRESERVED_NOT_REWRITTEN; LIVE_LEDGER_IS_AUTHORITATIVE"
+}

@@ -1,0 +1,86 @@
+{
+  "authority": {
+    "authority_interface": "MLB_CANONICAL_GAME_PHASE_AUTHORITY_V1",
+    "authority_records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
+    "backend": "MLB_2026_HASHED_PROPOSAL_AUTHORITY_V1",
+    "conflicting_count": 0,
+    "duplicate_identity_count": 0,
+    "missing_count": 0,
+    "phase_contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1",
+    "phase_contract_sha256": "eed52e24d123c24e0fbbff21249705d653d77787eab98eb756d5c9752a481c19",
+    "phase_contract_version": "contract_v1",
+    "phase_counts": {
+      "PRESEASON": 489,
+      "REGULAR_SEASON": 2430
+    },
+    "proposal_count": 2919,
+    "proposal_path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl",
+    "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+    "source_file_count": 464,
+    "source_manifest_path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/retained_source_manifest.jsonl",
+    "source_manifest_sha256": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100",
+    "source_observation_count": 9092,
+    "source_type_counts": {
+      "E": 38,
+      "R": 2430,
+      "S": 451
+    },
+    "supported_from_date": "2026-02-20",
+    "supported_season": 2026,
+    "supported_through_date": "2026-09-27",
+    "unknown_count": 0
+  },
+  "current_separation_classification": "SEPARATION_EVIDENCE_INSUFFICIENT",
+  "historical_56_20_included": false,
+  "ledger": {
+    "bytes": 778240,
+    "matches_prechange_sha256": true,
+    "metadata_and_content_unchanged_during_validation": true,
+    "path": "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3",
+    "prechange_sha256": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "sha256_after_validation": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "sha256_before_validation": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855"
+  },
+  "live_counts": {
+    "bookmaker_price_cells": 1550,
+    "claims": 11,
+    "distinct_prediction_gamePks": 158,
+    "distinct_risk_gamePks": 155,
+    "eligible_risk_rows": 42,
+    "events": 23,
+    "outcomes": 35,
+    "predictions": 158,
+    "provenance_rows": 155,
+    "risk_rows": 155
+  },
+  "phase_counts": {
+    "outcomes": {
+      "REGULAR_SEASON": 35
+    },
+    "prediction_gamePks": {
+      "REGULAR_SEASON": 158
+    },
+    "risk_rows": {
+      "REGULAR_SEASON": 155
+    }
+  },
+  "provider_and_study_credit_reconciliation": {
+    "pre_request_fail_closed_events": 1,
+    "recovery_claims": 0,
+    "recovery_observed_study_credits": 0,
+    "routine_claims": 11,
+    "routine_observed_study_credits": 11
+  },
+  "retained_raw_source_files": 33,
+  "retained_raw_source_manifest_sha256": "d503b2083bcbb1f59e56a4b87f4bc6a20440fa7d7d7c1749f5d21150a1294761",
+  "table_hashes": {
+    "bookmaker_prices": "688db90da6ca8a4b8081327037288572c1f9da6135f32ef3695baf2e75aba847",
+    "capture_provenance_v4": "343a6ecbacd5ec29b5cf9d300e81604bbe2fc17f3146ee1b028c08839d833950",
+    "live_capture_claims_v4": "5752f805aab6faf9d1ec375385a44cdb06850d20162207ed4f321a34bb4026cd",
+    "live_capture_events_v4": "8cbc1a3f39b8fbbe6b31925c0b42b92e9c8d2bab598efdfae7b41c2643d6858f",
+    "outcomes": "fc60d78ee40903f287a740471ba3a0e1313074bbccb1a6fcfcf013165ca6748a",
+    "predictions": "1fd79e5452c57a175a0d2ee56f828d8bd572587cd770de72fa836352ec3494ba",
+    "risk_set": "faa47124f43aba6b722046e41d133537a29d83186864c84e4ce8c5987bfff535"
+  },
+  "violations": []
+}

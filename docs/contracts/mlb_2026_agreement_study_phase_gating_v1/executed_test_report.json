@@ -1,0 +1,199 @@
+{
+  "canonical_interpreter": "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
+  "executed": 47,
+  "failed": 0,
+  "intended": 47,
+  "passed": 47,
+  "results": [
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_all_supported_postseason_rounds_are_shadow_only",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_bounded_path_has_no_default_to_r_or_calendar_phase_logic",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_exact_gamepk_required_and_capture_rejects_cross_phase_snapshot",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_mixed_phase_date_credit_is_unprovable",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_preseason_special_missing_stale_conflict_and_duplicate_fail_closed",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_provider_only_event_cannot_enter_immutable_risk_ledger",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_regular_after_nominal_close_and_relationships_use_authority",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_regular_and_postseason_metrics_and_credits_are_disjoint",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_zero_calendar_reconstruction_and_hash_invariance",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_failed_september_10_date_is_not_retried_live",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_fourth_historical_recovery_is_stopped_before_network",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_http_failure_is_redacted_and_allows_one_historical_recovery",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_idempotency_blocks_a_second_charged_call_for_date",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_invalid_or_missing_quota_cost_stops_future_dates",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_live_timing_fails_closed_without_reading_credential_or_calling",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_accepts_actual_dictionary_row_contract_by_name",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_duplicate_prediction_key",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_incorrect_game_date",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_malformed_timestamp",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_missing_required_key",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_null_required_value",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_tuple_shape_descriptively",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_loader_rejects_unexpected_model_identity_or_hash",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_no_network_preflight_stops_before_claim_credit_credential_and_files",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_success_preserves_raw_safe_params_quota_and_pregame_prices",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_successful_incomplete_response_is_classified_and_not_recoverable",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4.LiveCaptureV4Test.test_transport_exception_is_sanitized",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_feasibility_v2.AgreementSeparationFeasibilityV2Test.test_amendment_retains_long_target_and_has_nonpromotional_layer",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_feasibility_v2.AgreementSeparationFeasibilityV2Test.test_cost_evidence_uses_observed_headers",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_feasibility_v2.AgreementSeparationFeasibilityV2Test.test_power_derivation_reproduces_separate_group_ceiling",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_live_timing_v3.AgreementSeparationLiveTimingV3Test.test_acquisition_options_reconcile",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_live_timing_v3.AgreementSeparationLiveTimingV3Test.test_failure_recovery_cannot_choose_on_price_or_outcome",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_live_timing_v3.AgreementSeparationLiveTimingV3Test.test_freeze_is_post_commit_and_nonpromotional",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_acquisition_requires_separate_positive_authorization",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_agreement_and_nonagreement_states_are_frozen",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_append_only_composite_bookmaker_identity",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_clustered_economic_contrast_uses_one_row_per_game_and_book",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_empty_initialized_study_is_interim_insufficient",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_freeze_is_fixed_and_excludes_prior_cohort",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_market_update_after_snapshot_is_not_admitted",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_missing_model_and_price_states_are_retained",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_no_vig_and_paid_break_even_are_distinct",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_outcome_grade_accepts_dict_rows_and_is_idempotent",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_request_ledger_redacts_and_retains_quota",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationTest.test_unknown_charge_state_refuses_retry_before_credential_access",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_validate_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationValidatorTest.test_additional_append_only_trigger_does_not_hide_required_base_triggers",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_validate_mlb_market_strong_agreement_separation_prospective_v1.ProspectiveAgreementSeparationValidatorTest.test_empty_pre_outcome_package_passes_without_decision",
+      "status": "PASSED"
+    }
+  ],
+  "skipped": 0,
+  "successful": true
+}

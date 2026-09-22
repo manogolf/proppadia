@@ -1,0 +1,27 @@
+{
+  "acquisition_accounting_is_not_interchangeable": {
+    "committed_v1_historical_plan_dates": 9,
+    "committed_v1_historical_planned_credits": 90,
+    "interpretation": "V1 historical expected-cost planning and V4 live observed usage are different controls and are reported separately",
+    "live_v4_observed_credits": 11,
+    "live_v4_routine_claims": 11
+  },
+  "classification_impact": "NONE_EVIDENCE_GATE_REMAINS_UNMET",
+  "committed_summary_counts": {
+    "bookmaker_price_cells": 1240,
+    "effective_outcome_count": 35,
+    "risk_rows": 124
+  },
+  "committed_summary_path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/summary.json",
+  "decision": "COMMITTED_DAILY_SUMMARY_STALE_DO_NOT_REWRITE",
+  "deltas_live_minus_summary": {
+    "bookmaker_price_cells": 310,
+    "effective_outcome_count": 0,
+    "risk_rows": 31
+  },
+  "live_immutable_ledger_counts": {
+    "bookmaker_price_cells": 1550,
+    "effective_outcome_count": 35,
+    "risk_rows": 155
+  }
+}

@@ -18,6 +18,8 @@ from typing import Any, Callable
 import pandas as pd
 
 from backend.app.deps import pg_connect
+from backend.mlb.markets import agreement_phase_gating_v1 as phase_gate
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 from backend.mlb.scripts import acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1 as hardened
 from backend.mlb.scripts import run_mlb_market_strong_agreement_separation_prospective_v1 as v1
 
@@ -314,6 +316,11 @@ def prediction_snapshot_from_rows(
     return PredictionSnapshot(game_date, barrier, expected_rows, tuple(parsed_rows))
 
 
+def snapshot_phase_rows(snapshot: PredictionSnapshot) -> tuple[dict[str, Any], ...]:
+    """Expose only exact identity/date fields needed by the shared phase gate."""
+    return tuple({"game_id": row.game_id, "game_date": row.game_date} for row in snapshot.rows)
+
+
 def load_prediction_snapshot(game_date: str, expected_rows: int) -> PredictionSnapshot:
     sql = """
       SELECT game_date::text,game_id,scheduled_start_utc,prediction_timestamp_utc,prediction_cutoff_utc,
@@ -403,7 +410,9 @@ def validate_authorization_read_only(conn: sqlite3.Connection, freeze_path: Path
 
 def preflight_capture(*, game_date: str, run_identity: str, snapshot: PredictionSnapshot,
                       ledger: Path = LEDGER, runtime: Path = RUNTIME,
-                      freeze_path: Path = FREEZE) -> dict[str, Any]:
+                      freeze_path: Path = FREEZE,
+                      evaluation_phase: str = phase_gate.REGULAR_SEASON,
+                      phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, Any]:
     """Reach the live request boundary without writes, claims, credentials, or network access."""
     if not START_DATE <= game_date <= END_DATE:
         raise ValueError("game date outside frozen regular-season capture horizon")
@@ -411,6 +420,10 @@ def preflight_capture(*, game_date: str, run_identity: str, snapshot: Prediction
         raise ValueError("prediction snapshot date mismatch")
     if snapshot.expected_rows <= 0 or len(snapshot.rows) != snapshot.expected_rows:
         raise RuntimeError("Preflight requires a complete non-empty durable prediction snapshot")
+    decisions = phase_gate.require_snapshot_membership(
+        snapshot_phase_rows(snapshot), evaluation_phase,
+        authority=phase_authority, require_freshness=True,
+    )
     if not ledger.is_file():
         raise RuntimeError("V4 ledger is absent; read-only preflight cannot initialize it")
 
@@ -462,6 +475,10 @@ def preflight_capture(*, game_date: str, run_identity: str, snapshot: Prediction
             for row in snapshot.rows
         ],
         "validated_frozen_model_hash": v1.MODEL_HASH,
+        "evaluation_phase": evaluation_phase,
+        "authoritative_game_types": sorted({decision.source_game_type for decision in decisions}),
+        "postseason_rounds": sorted({decision.postseason_round for decision in decisions
+                                      if decision.postseason_round}),
         "request_start_window_utc": [snapshot.barrier_utc,
             latest.isoformat().replace("+00:00", "Z")],
         "endpoint": url,
@@ -539,16 +556,19 @@ def live_classify(prediction: pd.Series | None, event: dict[str, Any] | None, re
 
 def ingest_events(conn: sqlite3.Connection, game_date: str, events: list[dict[str, Any]],
                   request_started: str, returned: str, raw_sha: str, mode: str,
-                  request_event_id: str) -> dict[str, int]:
+                  request_event_id: str, *,
+                  evaluation_phase: str = phase_gate.REGULAR_SEASON,
+                  phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, int]:
     predictions = pd.read_sql_query("SELECT * FROM predictions WHERE game_date=? ORDER BY game_id", conn,
                                     params=(game_date,))
-    matched: set[str] = set()
+    phase_gate.require_snapshot_membership(
+        predictions.to_dict("records"), evaluation_phase,
+        authority=phase_authority, require_freshness=True,
+    )
     risk_count = price_count = 0
     historical = mode == "HISTORICAL_RECOVERY"
     for _, prediction in predictions.iterrows():
         event = v1.select_event(events, prediction)
-        if event:
-            matched.add(str(event.get("id")))
         if historical:
             risk, prices = v1.classify_risk(prediction, event, request_started, returned, raw_sha)
         else:
@@ -561,39 +581,15 @@ def ingest_events(conn: sqlite3.Connection, game_date: str, events: list[dict[st
                       "raw_response_sha256": raw_sha}
         provenance["row_sha256"] = digest(provenance)
         v1.immutable_insert(conn, "capture_provenance_v4", "game_key", provenance)
-    for event in events:
-        if str(event.get("id")) in matched:
-            continue
-        start = pd.to_datetime(event.get("commence_time"), utc=True, errors="coerce")
-        if pd.isna(start) or start.tz_convert("America/New_York").date().isoformat() != game_date:
-            continue
-        if historical:
-            risk, prices = v1.classify_risk(None, event, request_started, returned, raw_sha)
-        else:
-            risk, prices = live_classify(None, event, request_started, returned, raw_sha)
-        # v1 derives provider-only dates in Pacific time; retain the frozen MLB slate date here.
-        old_key = risk["game_key"]
-        risk["game_date"] = game_date
-        risk["game_key"] = f"MLB_PROVIDER|{game_date}|{event.get('id')}"
-        risk["row_sha256"] = digest({key: value for key, value in risk.items() if key != "row_sha256"})
-        for price in prices:
-            price["game_key"] = risk["game_key"]
-            price["row_sha256"] = digest({key: value for key, value in price.items() if key != "row_sha256"})
-        del old_key
-        risk_count += v1.immutable_insert(conn, "risk_set", "game_key", risk)
-        for price in prices:
-            price_count += v1.immutable_insert(conn, "bookmaker_prices", ("game_key", "bookmaker_key"), price)
-        provenance = {"game_key": risk["game_key"], "study_id": STUDY_ID, "game_date": game_date,
-                      "capture_mode": mode, "request_event_id": request_event_id,
-                      "raw_response_sha256": raw_sha}
-        provenance["row_sha256"] = digest(provenance)
-        v1.immutable_insert(conn, "capture_provenance_v4", "game_key", provenance)
+    # Unmatched provider events have no exact MLB gamePk and are not study rows.
     return {"risk_rows_inserted": risk_count, "price_rows_inserted": price_count}
 
 
 def _response_capture(conn: sqlite3.Connection, response: Any, *, game_date: str, mode: str,
                       run_identity: str, barrier: str, started: str, received: str,
-                      target: str, raw_path: Path, params_path: Path, headers_path: Path) -> dict[str, Any]:
+                      target: str, raw_path: Path, params_path: Path, headers_path: Path,
+                      evaluation_phase: str = phase_gate.REGULAR_SEASON,
+                      phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, Any]:
     raw_path.parent.mkdir(parents=True, exist_ok=True)
     with raw_path.open("xb") as handle:
         handle.write(hardened.redact_sensitive_bytes(response.content)); handle.flush(); os.fsync(handle.fileno())
@@ -629,7 +625,8 @@ def _response_capture(conn: sqlite3.Connection, response: Any, *, game_date: str
         return {"status": "INVALID_RESPONSE", "event_id": event_id, "x_requests_last": last}
     event_id = append_event(conn, **common, status="SUCCESS_RESPONSE_PRESERVED", returned_snapshot_utc=returned)
     counts = ingest_events(conn, game_date, events, started if mode == "LIVE" else target,
-                           returned, common["raw_sha256"], mode, event_id)
+                           returned, common["raw_sha256"], mode, event_id,
+                           evaluation_phase=evaluation_phase, phase_authority=phase_authority)
     conn.commit()
     status = "SUCCESS_VALID_CAPTURE" if last == (1 if mode == "LIVE" else 10) else "SUCCESS_COST_MISMATCH"
     return {"status": status, "event_id": event_id, "x_requests_last": last, **counts}
@@ -638,11 +635,17 @@ def _response_capture(conn: sqlite3.Connection, response: Any, *, game_date: str
 def execute_capture(*, game_date: str, run_identity: str, mode: str, snapshot: PredictionSnapshot,
                     ledger: Path = LEDGER, runtime: Path = RUNTIME, freeze_path: Path = FREEZE,
                     getter: Callable[..., Any] = hardened.safe_get,
-                    clock: Callable[[], str] = now_utc, timeout: int = 30) -> dict[str, Any]:
+                    clock: Callable[[], str] = now_utc, timeout: int = 30,
+                    evaluation_phase: str = phase_gate.REGULAR_SEASON,
+                    phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, Any]:
     if not START_DATE <= game_date <= END_DATE:
         raise ValueError("game date outside frozen regular-season capture horizon")
     if snapshot.game_date != game_date:
         raise ValueError("prediction snapshot date mismatch")
+    phase_gate.require_snapshot_membership(
+        snapshot_phase_rows(snapshot), evaluation_phase,
+        authority=phase_authority, require_freshness=True,
+    )
     ledger.parent.mkdir(parents=True, exist_ok=True)
     mode = mode.upper()
     if mode not in {"LIVE", "HISTORICAL_RECOVERY"}:
@@ -729,7 +732,8 @@ def execute_capture(*, game_date: str, run_identity: str, mode: str, snapshot: P
         conn.row_factory = sqlite3.Row; schema(conn)
         result = _response_capture(conn, response, game_date=game_date, mode=mode, run_identity=run_identity,
             barrier=snapshot.barrier_utc, started=started, received=received, target=target,
-            raw_path=raw_path, params_path=params_path, headers_path=headers_path)
+            raw_path=raw_path, params_path=params_path, headers_path=headers_path,
+            evaluation_phase=evaluation_phase, phase_authority=phase_authority)
     return {**result, "charged_request": True,
             "authorization_stop_required": result.get("x_requests_last") is None or
                 prior_cost + int(result.get("x_requests_last") or 0) > TOTAL_CEILING}

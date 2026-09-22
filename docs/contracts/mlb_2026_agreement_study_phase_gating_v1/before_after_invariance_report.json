@@ -1,0 +1,16 @@
+{
+  "byte_identical": true,
+  "ledger_sha256_after": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+  "ledger_sha256_before": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+  "membership_effect": "NONE_RETAINED_POPULATION_ALL_AUTHORITATIVE_REGULAR_SEASON",
+  "prediction_probability_price_outcome_effect": "NONE_IMMUTABLE_LEDGER_UNCHANGED",
+  "table_hashes_after": {
+    "bookmaker_prices": "688db90da6ca8a4b8081327037288572c1f9da6135f32ef3695baf2e75aba847",
+    "capture_provenance_v4": "343a6ecbacd5ec29b5cf9d300e81604bbe2fc17f3146ee1b028c08839d833950",
+    "live_capture_claims_v4": "5752f805aab6faf9d1ec375385a44cdb06850d20162207ed4f321a34bb4026cd",
+    "live_capture_events_v4": "8cbc1a3f39b8fbbe6b31925c0b42b92e9c8d2bab598efdfae7b41c2643d6858f",
+    "outcomes": "fc60d78ee40903f287a740471ba3a0e1313074bbccb1a6fcfcf013165ca6748a",
+    "predictions": "1fd79e5452c57a175a0d2ee56f828d8bd572587cd770de72fa836352ec3494ba",
+    "risk_set": "faa47124f43aba6b722046e41d133537a29d83186864c84e4ce8c5987bfff535"
+  }
+}

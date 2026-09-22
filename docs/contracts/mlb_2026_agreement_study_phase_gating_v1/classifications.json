@@ -1,0 +1,17 @@
+{
+  "current_separation_classification": "SEPARATION_EVIDENCE_INSUFFICIENT",
+  "historical_56_20_separation": "PRESERVED_EXCLUDED_FROM_PROSPECTIVE_EVIDENCE",
+  "late_season_cohort_status": "DESCRIPTIVE_ONLY_NOT_INDEPENDENTLY_CERTIFYING",
+  "market_comparison_effect": "NONE_RETAINED_MARKET_ROWS_AND_PRICES_UNCHANGED",
+  "postseason_code_readiness": "READY_SYNTHETIC_FIXTURES_ONLY",
+  "postseason_operational_readiness": "BLOCKED_PENDING_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_ON_ORDINARY_PATH",
+  "prediction_quality_effect": "NONE_MEMBERSHIP_AND_REPORTING_ONLY",
+  "prospective_regular_season_study_integrity": "READY_EXACT_GAME_PK_AUTHORITY",
+  "remaining_blockers": [
+    "actual authoritative postseason game has not passed through the ordinary path",
+    "current frozen authority supports only through 2026-09-27 and contains no postseason rows",
+    "V4 ordinary capture horizon remains frozen through 2026-09-27",
+    "committed daily summary is stale relative to the append-only ledger and remains preserved"
+  ],
+  "study_credit_integrity": "READY_PHASE_AND_CAPTURE_MODE_SEPARATED_NO_RULE_CHANGE"
+}

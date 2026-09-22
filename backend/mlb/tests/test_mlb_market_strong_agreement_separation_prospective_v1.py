@@ -12,7 +12,7 @@ from backend.mlb.scripts import run_mlb_market_strong_agreement_separation_prosp
 
 def prediction(home_probability=0.65, away_probability=0.35, strong_side="HOME"):
     return pd.Series({
-        "game_key": "MLB|2026-09-10|1", "game_date": "2026-09-10", "game_id": 1,
+        "game_key": "MLB|2026-09-10|823088", "game_date": "2026-09-10", "game_id": 823088,
         "scheduled_start_utc": "2026-09-10T23:00:00Z", "home_team": "Home Club", "away_team": "Away Club",
         "home_model_probability": home_probability, "away_model_probability": away_probability,
         "model_strong_side": strong_side, "prediction_payload_sha256": "a"*64,
@@ -37,7 +37,7 @@ class ProspectiveAgreementSeparationTest(unittest.TestCase):
             def __exit__(self, *_): return False
             def execute(self, *_): return None
             def fetchall(self):
-                return [{"game_date": "2026-09-11", "game_id": 1,
+                return [{"game_date": "2026-09-11", "game_id": 823088,
                          "official_winner": "Home Club", "payload_sha256": "c"*64,
                          "grading_timestamp_utc": "2026-09-12T12:00:00Z"}]
 
@@ -50,7 +50,7 @@ class ProspectiveAgreementSeparationTest(unittest.TestCase):
             base = Path(tmp); out, ledger = base/"out", base/"ledger.sqlite3"
             study.initialize(out, ledger)
             risk = {
-                "game_key": "MLB|2026-09-11|1", "game_date": "2026-09-11", "game_id": 1,
+                "game_key": "MLB|2026-09-11|823088", "game_date": "2026-09-11", "game_id": 823088,
                 "provider_event_id": "provider-1", "scheduled_start_utc": "2026-09-11T23:00:00Z",
                 "home_team": "Home Club", "away_team": "Away Club",
                 "requested_timestamp_utc": "2026-09-11T12:30:00Z",
@@ -171,7 +171,7 @@ class ProspectiveAgreementSeparationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp); out, ledger = base/"out", base/"ledger.sqlite3"
             study.initialize(out, ledger)
-            values = {"game_key": "MLB|2026-09-10|1", "game_date": "2026-09-10", "game_id": 1,
+            values = {"game_key": "MLB|2026-09-10|823088", "game_date": "2026-09-10", "game_id": 823088,
                       "scheduled_start_utc": "2026-09-10T23:00:00Z",
                       "prediction_timestamp_utc": "2026-09-10T12:30:00Z",
                       "prediction_cutoff_utc": "2026-09-10T12:00:00Z", "home_team": "Home Club",

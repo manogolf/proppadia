@@ -1,0 +1,38 @@
+[
+  {
+    "consumer": "V1 prediction observation loader",
+    "phase_behavior": "observation preserved; exact gamePk gate required before acquisition",
+    "role": "immutable prediction input",
+    "source": "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py"
+  },
+  {
+    "consumer": "V1 historical response reconciliation",
+    "phase_behavior": "explicit phase snapshot; provider-only events rejected",
+    "role": "market attachment/risk rows",
+    "source": "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py"
+  },
+  {
+    "consumer": "V4 routine/recovery capture",
+    "phase_behavior": "gate before ledger writes, credential read, or provider request",
+    "role": "claims, raw response, market attachment",
+    "source": "backend/mlb/scripts/capture_mlb_market_strong_agreement_live_v4.py"
+  },
+  {
+    "consumer": "V1 outcome grader",
+    "phase_behavior": "explicit exact-gamePk regular or postseason cohort",
+    "role": "official outcome attachment",
+    "source": "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py"
+  },
+  {
+    "consumer": "V1 metrics/report",
+    "phase_behavior": "regular and postseason reports are mutually exclusive",
+    "role": "proper score, calibration, economics, separation",
+    "source": "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py"
+  },
+  {
+    "consumer": "V4 claim accounting",
+    "phase_behavior": "phase joined transiently by prediction gamePk; mixed phase date fails closed",
+    "role": "routine/recovery usage and study credit",
+    "source": "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py"
+  }
+]
