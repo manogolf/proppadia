@@ -20,9 +20,11 @@ from backend.nhl.official_request_journal import (
     ENV_SOURCE_CACHE,
     ENV_SOURCE_JOURNAL_SHA256,
     ENV_SOURCE_RUN_ID,
+    ROSTER_REDIRECT_POLICY,
     RequestContext,
     canonical_game_set_hash,
     official_get,
+    official_season_id,
     read_journal,
     summarize_journal,
     verify_preserved_response_run,
@@ -34,9 +36,10 @@ GAMES = list(range(2026010001, 2026010008))
 
 
 class FakeResponse:
-    def __init__(self, payload, status=200):
-        self.content = json.dumps(payload).encode()
+    def __init__(self, payload, status=200, headers=None, content=None):
+        self.content = json.dumps(payload).encode() if content is None else content
         self.status_code = status
+        self.headers = headers or {}
 
 
 class FakeSession:
@@ -130,6 +133,127 @@ class OfficialRequestAccountingTest(unittest.TestCase):
         self.assertEqual(summary["failed_attempts"], 3)
         self.assertEqual(summary["fallback_attempts"], 1)
 
+    def test_roster_redirect_is_one_logical_operation_and_two_distinct_attempts(self):
+        current = "https://api-web.nhle.com/v1/roster/NJD/current"
+        destination = "https://api-web.nhle.com/v1/roster/NJD/20262027"
+        outcomes = [
+            FakeResponse({}, 307, {"Location": destination}, content=b""),
+            FakeResponse({"forwards": [{"id": 1}]}),
+        ]
+        response = self.call(
+            outcomes, url=current, timeout=1, stage="ROSTER_COLLECTION",
+            endpoint_family="ROSTER",
+            identity={"slate_date": SLATE, "team": "NJD", "roster_variant": "current"},
+            preserve_response=True,
+            redirect_policy={"policy": ROSTER_REDIRECT_POLICY, "team": "NJD",
+                             "repository_season": 2026},
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = read_journal(Path(self.env[ENV_JOURNAL]))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["logical_request_id"] for row in rows}, {rows[0]["logical_request_id"]})
+        self.assertEqual([row["attempt_number"] for row in rows], [1, 2])
+        self.assertEqual(rows[0]["final_disposition"], "ALLOWED_REDIRECT")
+        self.assertEqual(rows[1]["attempt_reason"], "REDIRECT_FOLLOW")
+        self.assertEqual(rows[0]["redirect_location"], destination)
+        self.assertFalse(rows[0]["response_preserved"])
+        self.assertTrue(rows[1]["response_preserved"])
+        self.assertEqual(len(list((self.root / "cache/objects").iterdir())), 1)
+        summary = summarize_journal(Path(self.env[ENV_JOURNAL]), run_id="fixture_run",
+                                    expected_game_hash=self.env[ENV_GAME_HASH])
+        self.assertEqual(summary["allowed_redirects"], 1)
+        self.assertEqual(summary["total_network_attempts"], 2)
+        self.assertEqual(summary["successful_responses"], 1)
+        self.assertEqual(summary["failed_attempts"], 0)
+        self.assertEqual(summary["retries"], 0)
+        self.assertEqual(summary["fallback_attempts"], 0)
+
+    def test_roster_redirect_allowlist_rejects_without_fallback_or_preservation(self):
+        current = "https://api-web.nhle.com/v1/roster/NJD/current"
+        rejected = {
+            "HOST": "https://example.com/v1/roster/NJD/20262027",
+            "DOWNGRADE": "http://api-web.nhle.com/v1/roster/NJD/20262027",
+            "FOUR_DIGIT": "https://api-web.nhle.com/v1/roster/NJD/2026",
+            "WRONG_SEASON": "https://api-web.nhle.com/v1/roster/NJD/20272028",
+            "WRONG_TEAM": "https://api-web.nhle.com/v1/roster/NYR/20262027",
+            "QUERY": "https://api-web.nhle.com/v1/roster/NJD/20262027?x=1",
+            "FRAGMENT": "https://api-web.nhle.com/v1/roster/NJD/20262027#x",
+            "CREDENTIALS": "https://user:pass@api-web.nhle.com/v1/roster/NJD/20262027",
+            "NONSTANDARD_PORT": "https://api-web.nhle.com:444/v1/roster/NJD/20262027",
+        }
+        for label, location in rejected.items():
+            with self.subTest(label=label):
+                Path(self.env[ENV_JOURNAL]).unlink(missing_ok=True)
+                with self.assertRaises(RuntimeError):
+                    self.call(
+                        [FakeResponse({}, 307, {"Location": location}, content=b"")],
+                        url=current, timeout=1, stage="ROSTER_COLLECTION",
+                        endpoint_family="ROSTER",
+                        identity={"slate_date": SLATE, "team": "NJD",
+                                  "roster_variant": "current"},
+                        preserve_response=True,
+                        redirect_policy={"policy": ROSTER_REDIRECT_POLICY, "team": "NJD",
+                                         "repository_season": 2026},
+                    )
+                rows = read_journal(Path(self.env[ENV_JOURNAL]))
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["final_disposition"], "REDIRECT_REJECTED")
+                self.assertFalse(rows[0]["response_preserved"])
+        self.assertEqual(official_season_id(2026), "20262027")
+        roster_source = Path("backend/nhl/scripts/refresh_players_and_roster_today.py").read_text()
+        self.assertIn("f\"{BASE}/roster/{tri}/{official_season}\"", roster_source)
+
+    def test_relative_308_roster_redirect_is_normalized_and_accepted(self):
+        response = self.call(
+            [FakeResponse({}, 308, {"Location": "/v1/roster/NJD/20262027"}, content=b""),
+             FakeResponse({"goalies": [{"id": 1}]})],
+            url="https://api-web.nhle.com/v1/roster/NJD/current", timeout=1,
+            stage="ROSTER_COLLECTION", endpoint_family="ROSTER",
+            identity={"slate_date": SLATE, "team": "NJD", "roster_variant": "current"},
+            redirect_policy={"policy": ROSTER_REDIRECT_POLICY, "team": "NJD",
+                             "repository_season": 2026},
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = read_journal(Path(self.env[ENV_JOURNAL]))
+        self.assertEqual(rows[0]["redirect_location"],
+                         "https://api-web.nhle.com/v1/roster/NJD/20262027")
+        self.assertEqual(rows[1]["request_target"]["path"], "/v1/roster/NJD/20262027")
+
+    def test_roster_redirect_missing_malformed_loop_and_max_hop_fail_closed(self):
+        current = "https://api-web.nhle.com/v1/roster/NJD/current"
+        destination = "https://api-web.nhle.com/v1/roster/NJD/20262027"
+        cases = [
+            ([FakeResponse({}, 302,
+                           {"Location": "https://api-web.nhle.com/v1/roster/NJD/20262027"},
+                           content=b"")], "STATUS_NOT_ALLOWLISTED"),
+            ([FakeResponse({}, 307, {}, content=b"")], "LOCATION_MISSING"),
+            ([FakeResponse({}, 307, {"Location": "https://api-web.nhle.com:bad/x"}, content=b"")],
+             "LOCATION_MALFORMED"),
+            ([FakeResponse({}, 307, {"Location": destination}, content=b""),
+              FakeResponse({}, 308, {"Location": current}, content=b"")], "REDIRECT_LOOP"),
+            ([FakeResponse({}, 307, {"Location": destination}, content=b""),
+              FakeResponse({}, 307,
+                           {"Location": "https://api-web.nhle.com/v1/roster/NJD/20272028"},
+                           content=b"")], "MAX_HOPS"),
+        ]
+        for outcomes, expected in cases:
+            with self.subTest(expected=expected):
+                Path(self.env[ENV_JOURNAL]).unlink(missing_ok=True)
+                with self.assertRaisesRegex(RuntimeError, expected):
+                    self.call(
+                        outcomes, url=current, timeout=1, stage="ROSTER_COLLECTION",
+                        endpoint_family="ROSTER",
+                        identity={"slate_date": SLATE, "team": "NJD",
+                                  "roster_variant": "current"},
+                        preserve_response=True,
+                        redirect_policy={"policy": ROSTER_REDIRECT_POLICY, "team": "NJD",
+                                         "repository_season": 2026},
+                    )
+                rows = read_journal(Path(self.env[ENV_JOURNAL]))
+                self.assertIn(len(rows), {1, 2})
+                self.assertEqual(rows[-1]["final_disposition"], "REDIRECT_REJECTED")
+                self.assertFalse((self.root / "cache/objects").exists())
+
     def test_preserved_reuse_and_hash_mismatch_fail_closed(self):
         with patch.dict(os.environ, self.env, clear=False), \
              patch("backend.nhl.official_request_journal.requests.Session",
@@ -199,6 +323,42 @@ class OfficialRequestAccountingTest(unittest.TestCase):
         rows = read_journal(Path(target_env[ENV_JOURNAL]))
         self.assertTrue(all(row["cross_run_reuse"] for row in rows))
         self.assertTrue(all(row["source_run_id"] == source_run for row in rows))
+
+    def test_original_september_20_authority_objects_reuse_without_network(self):
+        repository = Path(__file__).resolve().parents[2]
+        source_run = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
+        game_ids = list(range(2026010008, 2026010015))
+        source_root = (repository / "artifacts/operational/nhl/postgame_reconciliation/"
+                       "request_runs/2026-09-20" / source_run)
+        binding = verify_preserved_response_run(
+            source_root, expected_run_id=source_run, slate_date="2026-09-20",
+            game_ids=game_ids, repository_root=repository,
+            expected_journal_sha256="2994ef2bd162c483eacc20b02cf83cd0938fb5f79fd76d208ce57981ed473cb7",
+            expected_tree_fingerprint="c6e6402b2eba12a8efb30a60df607324cf8684361d357fb5340cfc9051fa7110")
+        target = self.root / "real-source-target"
+        target_env = {
+            ENV_REQUIRED: "1", ENV_RUN_ID: "real_source_target",
+            ENV_JOURNAL: str(target / "journal.jsonl"), ENV_CACHE: str(target / "cache"),
+            ENV_SLATE: "2026-09-20", ENV_GAME_HASH: canonical_game_set_hash(game_ids),
+            ENV_GAME_IDS: ",".join(map(str, game_ids)),
+            ENV_SOURCE_CACHE: binding["source_cache"], ENV_SOURCE_RUN_ID: source_run,
+            ENV_SOURCE_JOURNAL_SHA256: binding["source_journal_sha256"],
+        }
+        with patch.dict(os.environ, target_env, clear=True), \
+             patch("backend.nhl.official_request_journal.requests.Session") as transport:
+            official_get("unused", timeout=1, stage="AUTH", endpoint_family="SCHEDULE",
+                         identity={"slate_date": "2026-09-20"}, authority_boundary=True,
+                         reuse_preserved=True)
+            for game_id in game_ids:
+                official_get("unused", timeout=1, stage="AUTH", endpoint_family="BOXSCORE",
+                             identity={"slate_date": "2026-09-20", "game_id": game_id},
+                             authority_boundary=True, reuse_preserved=True)
+            transport.assert_not_called()
+        summary = summarize_journal(Path(target_env[ENV_JOURNAL]), run_id="real_source_target",
+                                    expected_game_hash=target_env[ENV_GAME_HASH])
+        self.assertEqual(summary["authority_boundary_logical_requests"], 8)
+        self.assertEqual(summary["total_network_attempts"], 0)
+        self.assertEqual(summary["cache_reuse_events"], 8)
 
     def test_tampered_cross_run_source_fails_without_network_fallback(self):
         source_run = "tampered_source_fixture"

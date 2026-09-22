@@ -1,5 +1,7 @@
 import json
+import hashlib
 import os
+import shutil
 import tempfile
 import unittest
 import sys
@@ -11,7 +13,8 @@ import pandas as pd
 from backend.nhl.official_request_journal import (
     ENV_CACHE, ENV_GAME_HASH, ENV_GAME_IDS, ENV_JOURNAL, ENV_REQUIRED,
     ENV_RUN_ID, ENV_SLATE, canonical_game_set_hash, official_get,
-    summarize_journal,
+    summarize_journal, verify_failed_execution_ancestor,
+    verify_preserved_response_run,
 )
 
 from backend.nhl.postgame_reconcile.core import (
@@ -282,6 +285,16 @@ class PostgameReconciliationTest(unittest.TestCase):
                 request_accounting_factory=lambda: summarize_journal(
                     Path(env[ENV_JOURNAL]), run_id="package_fixture", expected_game_hash=game_hash,
                 ),
+                request_lineage={
+                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V2",
+                    "canonical_game_set_hash": game_hash,
+                    "ancestors": [
+                        {"role": "AUTHORITY_RESPONSE_SOURCE",
+                         "source_run_id": "source_fixture"},
+                        {"role": "FAILED_EXECUTION_ANCESTOR",
+                         "run_id": "second_failed_fixture"},
+                    ],
+                },
             )
         self.assertEqual(state, "COMPLETE_NEW_APPEND_ONLY")
         accounting = json.loads((destination / "official_request_accounting.json").read_text())
@@ -289,6 +302,15 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(accounting["total_logical_requests"], 2)
         self.assertEqual(summary["official_request_accounting"], accounting)
         self.assertIn("official_request_journal.jsonl", (destination / "SHA256SUMS").read_text())
+        lineage = json.loads((destination / "request_lineage.json").read_text())
+        self.assertEqual(lineage["completed_request_run"]["role"], "COMPLETED_EXECUTION")
+        self.assertEqual(lineage["completed_request_run"]["run_id"], "package_fixture")
+        self.assertEqual([row["role"] for row in lineage["ancestors"]],
+                         ["AUTHORITY_RESPONSE_SOURCE", "FAILED_EXECUTION_ANCESTOR"])
+        self.assertEqual(
+            lineage["completed_request_run"]["journal_sha256"],
+            hashlib.sha256(Path(env[ENV_JOURNAL]).read_bytes()).hexdigest())
+        self.assertIn("request_lineage.json", (destination / "SHA256SUMS").read_text())
 
     def test_september_20_local_only_source_binding_is_exact(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
@@ -335,6 +357,74 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(code, 5)
         database.assert_not_called()
         network.assert_not_called()
+
+    def test_september_20_two_ancestor_preflight_is_fully_local(self):
+        original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
+        second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
+        output = []
+        with patch.object(sys, "argv", ["run_nhl_postgame_reconciliation.py",
+                                        "2026-09-20", "--local-input-preflight",
+                                        "--reuse-request-run-id", original,
+                                        "--lineage-request-run-id", second]), \
+             patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
+             patch("builtins.print", side_effect=lambda value: output.append(value)):
+            code = reconciliation_main()
+        self.assertEqual(code, 0)
+        database.assert_not_called()
+        payload = json.loads(output[-1])
+        self.assertEqual(payload["status"], "LOCAL_INPUTS_VALID")
+        self.assertEqual(payload["source_binding"]["canonical_games"], 7)
+        roles = [row["role"] for row in payload["request_lineage"]["ancestors"]]
+        self.assertEqual(roles, ["AUTHORITY_RESPONSE_SOURCE", "FAILED_EXECUTION_ANCESTOR"])
+        self.assertEqual(payload["request_lineage"]["ancestors"][1]["reuse_records"], 9)
+        self.assertEqual(payload["database_requests"], 0)
+        self.assertEqual(payload["external_requests"], 0)
+
+    def test_failed_ancestor_alteration_cycle_and_game_set_mismatch_are_rejected(self):
+        repository = Path(__file__).resolve().parents[2]
+        runs = repository / "artifacts/operational/nhl/postgame_reconciliation/request_runs/2026-09-20"
+        original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
+        second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
+        game_ids = list(range(2026010008, 2026010015))
+        source = verify_preserved_response_run(
+            runs / original, expected_run_id=original, slate_date="2026-09-20",
+            game_ids=game_ids, repository_root=repository,
+            expected_journal_sha256="2994ef2bd162c483eacc20b02cf83cd0938fb5f79fd76d208ce57981ed473cb7",
+            expected_tree_fingerprint="c6e6402b2eba12a8efb30a60df607324cf8684361d357fb5340cfc9051fa7110")
+        common = dict(
+            expected_run_id=second, slate_date="2026-09-20", game_ids=game_ids,
+            response_source=source, repository_root=repository,
+            expected_journal_sha256="30625a8088ea6837e2293b9339a8b38787a044ba7d0b7033ab54965ec695459c",
+            expected_tree_fingerprint="fe6a4cb817f3e291447b187af68749eee6a733a854886cb6420a90303a019b84")
+        with self.assertRaisesRegex(RuntimeError, "GAME_SET_HASH_MISMATCH"):
+            verify_failed_execution_ancestor(runs / second, **{**common, "game_ids": [999]})
+        with self.assertRaisesRegex(RuntimeError, "REQUEST_LINEAGE_CYCLE"):
+            verify_failed_execution_ancestor(
+                runs / second, **{**common, "response_source": {**source, "source_run_id": second}})
+        altered = self.root / second
+        shutil.copytree(runs / second, altered)
+        with (altered / "official_request_journal.jsonl").open("a") as handle:
+            handle.write("\n")
+        with self.assertRaisesRegex(RuntimeError, "JOURNAL_CHANGED"):
+            verify_failed_execution_ancestor(altered, **common)
+
+    def test_september_19_completed_package_identity_is_unchanged(self):
+        repository = Path(__file__).resolve().parents[2]
+        package = (repository / "artifacts/operational/nhl/postgame_reconciliation/2026-09-19/"
+                   "reconciliation=75d3f2ec2d50f53ee792")
+        complete = package / "RUN_COMPLETE.json"
+        self.assertEqual(json.loads(complete.read_text())["substantive_identity"],
+                         "75d3f2ec2d50f53ee79232954f6e5d0de1a97c4dc23d21994bfea0c247d0ce86")
+        self.assertEqual(hashlib.sha256(complete.read_bytes()).hexdigest(),
+                         "126a7d99365c8a7c070c07bae3da200ff986ccac44a8a825a6a0040a47d6dc08")
+
+    def test_schedule_and_roster_database_writes_are_idempotent_upserts(self):
+        schedule = Path("backend/nhl/scripts/import_schedule_today.py").read_text()
+        roster = Path("backend/nhl/scripts/refresh_players_and_roster_today.py").read_text()
+        self.assertIn("ON CONFLICT (team) DO UPDATE", schedule)
+        self.assertIn("ON CONFLICT (game_id) DO UPDATE", schedule)
+        self.assertIn("ON CONFLICT (game_id, team_id, player_id)", roster)
 
 
 if __name__ == "__main__":

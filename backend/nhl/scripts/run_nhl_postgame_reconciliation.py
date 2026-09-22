@@ -34,6 +34,7 @@ from backend.nhl.official_request_journal import (
     canonical_game_set_hash,
     official_get,
     summarize_journal,
+    verify_failed_execution_ancestor,
     verify_preserved_response_run,
 )
 from backend.nhl.postgame_reconcile.core import (
@@ -51,6 +52,38 @@ DEFAULT_OPERATIONAL_ROOT = ROOT / "artifacts/operational/nhl"
 SCRIPTS = ROOT / "backend/nhl/scripts"
 SQL = ROOT / "backend/nhl/sql"
 FINAL_STATES = {"FINAL", "OFF"}
+
+REQUEST_RUN_RECEIPTS = {
+    "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6": {
+        "role": "AUTHORITY_RESPONSE_SOURCE",
+        "slate_date": "2026-09-20",
+        "journal_sha256": "2994ef2bd162c483eacc20b02cf83cd0938fb5f79fd76d208ce57981ed473cb7",
+        "tree_fingerprint": "c6e6402b2eba12a8efb30a60df607324cf8684361d357fb5340cfc9051fa7110",
+    },
+    "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b": {
+        "role": "FAILED_EXECUTION_ANCESTOR",
+        "slate_date": "2026-09-20",
+        "journal_sha256": "30625a8088ea6837e2293b9339a8b38787a044ba7d0b7033ab54965ec695459c",
+        "tree_fingerprint": "fe6a4cb817f3e291447b187af68749eee6a733a854886cb6420a90303a019b84",
+    },
+}
+
+
+def _receipt(run_id: str, *, role: str, slate_date: str) -> dict[str, str]:
+    receipt = REQUEST_RUN_RECEIPTS.get(run_id)
+    if receipt is None:
+        raise RuntimeError(f"REQUEST_RUN_RECEIPT_NOT_ALLOWLISTED:{run_id}")
+    if receipt["role"] != role or receipt["slate_date"] != slate_date:
+        raise RuntimeError(f"REQUEST_RUN_RECEIPT_ROLE_OR_DATE_MISMATCH:{run_id}")
+    return receipt
+
+
+def _public_response_source(binding: dict[str, object]) -> dict[str, object]:
+    return {key: binding[key] for key in (
+        "contract_version", "role", "source_run_id", "source_journal_sha256",
+        "tree_fingerprint", "canonical_game_set_hash", "authority_responses",
+        "response_set_sha256",
+    )}
 
 
 def load_env(path: Path) -> None:
@@ -318,6 +351,7 @@ def main() -> int:
     parser.add_argument("--prediction-root", type=Path, default=DEFAULT_PREDICTION_ROOT)
     parser.add_argument("--operational-root", type=Path, default=DEFAULT_OPERATIONAL_ROOT)
     parser.add_argument("--reuse-request-run-id")
+    parser.add_argument("--lineage-request-run-id", action="append", default=[])
     args = parser.parse_args()
     slate_date = args.slate_date or args.date_arg
     if not slate_date:
@@ -327,20 +361,55 @@ def main() -> int:
     except ValueError:
         parser.error("date must be YYYY-MM-DD")
     source_binding = None
-    reuse_lineage = None
+    reuse_binding = None
+    request_lineage = None
     if slate_date != "2026-09-19":
         try:
             source_binding = resolve_operational_sources(
                 slate_date=slate_date, operational_root=args.operational_root)
-            if args.execute:
+            if args.execute or args.reuse_request_run_id or args.lineage_request_run_id:
                 if not args.reuse_request_run_id:
                     raise RuntimeError("EXPLICIT_REUSE_REQUEST_RUN_ID_REQUIRED")
+                required_second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
+                if (args.execute and slate_date == "2026-09-20"
+                        and args.lineage_request_run_id != [required_second]):
+                    raise RuntimeError("SEPTEMBER_20_FAILED_EXECUTION_ANCESTOR_REQUIRED")
+                if len(args.lineage_request_run_id) != len(set(args.lineage_request_run_id)):
+                    raise RuntimeError("DUPLICATE_LINEAGE_REQUEST_RUN_ID")
+                if args.reuse_request_run_id in args.lineage_request_run_id:
+                    raise RuntimeError("REQUEST_LINEAGE_CYCLE")
+                source_receipt = _receipt(
+                    args.reuse_request_run_id, role="AUTHORITY_RESPONSE_SOURCE",
+                    slate_date=slate_date)
                 prior_root = (args.output_root / "request_runs" / slate_date /
                               args.reuse_request_run_id)
-                reuse_lineage = verify_preserved_response_run(
+                reuse_binding = verify_preserved_response_run(
                     prior_root, expected_run_id=args.reuse_request_run_id,
                     slate_date=slate_date, game_ids=source_binding["game_ids"],
+                    repository_root=ROOT,
+                    expected_journal_sha256=source_receipt["journal_sha256"],
+                    expected_tree_fingerprint=source_receipt["tree_fingerprint"],
                 )
+                ancestors = [_public_response_source(reuse_binding)]
+                for ancestor_run_id in args.lineage_request_run_id:
+                    receipt = _receipt(
+                        ancestor_run_id, role="FAILED_EXECUTION_ANCESTOR",
+                        slate_date=slate_date)
+                    ancestors.append(verify_failed_execution_ancestor(
+                        args.output_root / "request_runs" / slate_date / ancestor_run_id,
+                        expected_run_id=ancestor_run_id, slate_date=slate_date,
+                        game_ids=source_binding["game_ids"], response_source=reuse_binding,
+                        repository_root=ROOT,
+                        expected_journal_sha256=receipt["journal_sha256"],
+                        expected_tree_fingerprint=receipt["tree_fingerprint"],
+                    ))
+                request_lineage = {
+                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V2",
+                    "slate_date": slate_date,
+                    "canonical_game_set_hash": reuse_binding["canonical_game_set_hash"],
+                    "authority_response_source_run_id": reuse_binding["source_run_id"],
+                    "ancestors": ancestors,
+                }
         except RuntimeError as error:
             print(json.dumps({"status": "FAILED_CLOSED_LOCAL_INPUT", "failure": str(error),
                               "database_requests": 0, "external_requests": 0,
@@ -354,7 +423,8 @@ def main() -> int:
                               "external_requests": 0}, indent=2, sort_keys=True))
         else:
             print(json.dumps({"status": "LOCAL_INPUTS_VALID", "database_requests": 0,
-                              "external_requests": 0, "source_binding": source_binding},
+                              "external_requests": 0, "source_binding": source_binding,
+                              "request_lineage": request_lineage},
                              indent=2, sort_keys=True))
         return 0
     load_env(args.env_file)
@@ -383,11 +453,11 @@ def main() -> int:
                 ENV_SLATE: slate_date, ENV_GAME_HASH: game_hash,
                 ENV_GAME_IDS: ",".join(str(value) for value in sorted(canonical_ids)),
             }
-            if reuse_lineage is not None:
+            if reuse_binding is not None:
                 context_values.update({
-                    ENV_SOURCE_CACHE: reuse_lineage["source_cache"],
-                    ENV_SOURCE_RUN_ID: reuse_lineage["source_run_id"],
-                    ENV_SOURCE_JOURNAL_SHA256: reuse_lineage["source_journal_sha256"],
+                    ENV_SOURCE_CACHE: reuse_binding["source_cache"],
+                    ENV_SOURCE_RUN_ID: reuse_binding["source_run_id"],
+                    ENV_SOURCE_JOURNAL_SHA256: reuse_binding["source_journal_sha256"],
                 })
             else:
                 for key in (ENV_SOURCE_CACHE, ENV_SOURCE_RUN_ID, ENV_SOURCE_JOURNAL_SHA256):
@@ -395,7 +465,7 @@ def main() -> int:
             os.environ.update(context_values)
             RequestContext.from_env(required=True)
             official, boxes, request_counts = fetch_official(
-                slate_date, canonical_ids, reuse_authority=reuse_lineage is not None)
+                slate_date, canonical_ids, reuse_authority=reuse_binding is not None)
             validate_final_slate(canonical, official, slate_date)
             destination, disposition = publish_reconciliation(
                 canonical=canonical, official=official, boxscores=boxes, slate_date=slate_date,
@@ -408,7 +478,7 @@ def main() -> int:
                     expected_game_hash=game_hash,
                 ),
                 source_binding=source_binding,
-                request_lineage=reuse_lineage,
+                request_lineage=request_lineage,
             )
             accounting = json.loads((destination / "official_request_accounting.json").read_text())
         print(json.dumps({

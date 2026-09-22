@@ -590,10 +590,24 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             }
             summary["sog_missing_prospective_participants"] = len(grades["sog_missing_predictions"])
         if request_lineage is not None:
+            lineage = json.loads(json.dumps(request_lineage))
+            ancestors = lineage.get("ancestors") or []
+            ancestor_ids = [row.get("source_run_id") or row.get("run_id") for row in ancestors]
+            if (len(ancestor_ids) != len(set(ancestor_ids))
+                    or sum(row.get("role") == "AUTHORITY_RESPONSE_SOURCE" for row in ancestors) != 1):
+                raise RuntimeError("REQUEST_LINEAGE_INVALID")
+            if request_accounting is None or request_journal is None:
+                raise RuntimeError("REQUEST_LINEAGE_REQUIRES_COMPLETED_JOURNAL")
+            lineage["completed_request_run"] = {
+                "role": "COMPLETED_EXECUTION",
+                "run_id": request_accounting["run_id"],
+                "journal_sha256": _sha(request_journal),
+                "canonical_game_set_hash": lineage["canonical_game_set_hash"],
+            }
             (staging / "request_lineage.json").write_text(
-                json.dumps(request_lineage, indent=2, sort_keys=True) + "\n"
+                json.dumps(lineage, indent=2, sort_keys=True) + "\n"
             )
-            summary["request_lineage"] = request_lineage
+            summary["request_lineage"] = lineage
         (staging / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
         (staging / "report.md").write_text(
             f"# NHL postgame reconciliation — {slate_date}\n\n"

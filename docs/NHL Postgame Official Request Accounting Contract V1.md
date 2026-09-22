@@ -11,7 +11,9 @@ postgame reconciliation.
 - `network_attempt`: one actual HTTP transport attempt. Retries are separate
   attempts under the same logical request.
 - `successful_response`: a network attempt returning an accepted HTTP status.
-- `failed_attempt`: a transport exception or non-success HTTP response.
+- `failed_attempt`: a transport exception or rejected/non-success terminal HTTP
+  response. An allowlisted redirect is accounted separately and is not a
+  success, failure, retry, or fallback.
 - `fallback_attempt`: an attempt against an explicitly secondary endpoint or
   endpoint variant.
 - `cache_hit` / `preserved_response_reuse`: a content-addressed response was
@@ -27,7 +29,7 @@ postgame reconciliation.
 | `run_nhl_postgame_reconciliation.fetch_official` | schedule/date | yes | one authority attempt | content-addressed; reused by schedule ingestion and skater schedule discovery |
 | same | boxscore/game | yes, one per canonical game | one authority attempt | content-addressed; reused by goalie and both skater boxscore consumers |
 | `import_schedule_today.fetch_schedule_for_date` | schedule/date | yes | standalone: up to six attempts per candidate and two fallback forms; governed reconciliation: reuse required | exact authority schedule reuse |
-| `refresh_players_and_roster_today.fetch_roster` | roster/team | yes | up to seven attempts; season roster is fallback after current roster | distinct endpoint; repeated team/date use within the same slate reuses its verified response |
+| `refresh_players_and_roster_today.fetch_roster` | roster/team | yes | up to seven attempts; one governed `current`-to-eight-digit-season redirect hop; direct eight-digit season roster is fallback after terminal 404 only | distinct endpoint; repeated team/date use within the same slate reuses its verified terminal response |
 | `refresh_players_and_roster_today.fetch_player_name_strict` | player landing/player | conditional | up to seven attempts | distinct endpoint; only for missing names |
 | `seed_goalie_logs_for_date.game_ids_from_api` | schedule/date | DB-empty fallback only | up to six attempts | governed reconciliation reuses authority schedule |
 | `seed_goalie_logs_for_date.fetch_boxscore_api` | boxscore/game | yes | standalone up to six attempts | governed reconciliation reuses authority boxscore |
@@ -50,7 +52,29 @@ attempt or reuse is one append-and-fsync JSON record. Records contain sanitized
 resource identities, timings, PID, stage, endpoint family, attempt number,
 retry/fallback class, status or typed error, response length/hash, duration and
 disposition. URLs, headers, credentials, query strings and command lines are not
-recorded.
+recorded. Governed roster redirects additionally record sanitized source and
+destination targets and the destination SHA-256; credentials, arbitrary query
+data, and headers remain excluded.
+
+## Governed roster redirect policy
+
+Automatic redirect following remains disabled globally. Only a `307` or `308`
+from `https://api-web.nhle.com/v1/roster/TEAM/current` may create one destination
+attempt under the same logical operation. The normalized destination must be
+HTTPS on exactly `api-web.nhle.com`, use no nonstandard port, credentials,
+query, or fragment, retain the same three-letter team, and have the exact path
+`/v1/roster/TEAM/YYYYYYYY`, where `YYYYYYYY` is the official eight-digit season
+ID (repository season `2026` maps to `20262027`). Relative locations are
+normalized before validation. Missing or malformed locations, other statuses,
+foreign hosts, downgrade, team or season drift, loops, and a second hop fail
+closed.
+
+The redirect response and destination request are separate sequential
+`NETWORK_ATTEMPT` records with one logical request ID. The first disposition is
+`ALLOWED_REDIRECT`; the second has reason `REDIRECT_FOLLOW`. An allowed redirect
+increments redirect and network-attempt counts, but not retry, fallback,
+success, or failure counts. A 3xx body is never preserved. Redirect rejection
+cannot activate the explicit fallback or any implicit network request.
 
 Authority schedule and boxscore bodies are stored as mode-`0600`,
 content-addressed objects. Reuse requires matching endpoint family, date/game
@@ -134,3 +158,23 @@ Reuse has no implicit network fallback. The new journal records one
 source run ID, source-journal SHA-256, index SHA-256, object SHA-256, and a
 cross-run marker. The completed package records the source run and complete
 response-set lineage. The failed source run remains byte-for-byte unchanged.
+
+## Multi-ancestor request lineage
+
+When more than one failed execution precedes completion, the authority-response
+source remains explicit through `--reuse-request-run-id`; each additional failed
+execution is supplied separately through repeatable `--lineage-request-run-id`.
+Before creating a new request run or accessing the database or network, the
+reconciler verifies each allowlisted receipt: run and slate identity, journal
+SHA-256, full request-tree fingerprint, canonical game-set hash, response
+indexes, objects, lengths and hashes, and the reuse-chain relationship.
+Duplicate ancestors, cycles, altered evidence, and game-set mismatch fail
+closed.
+
+For September 20 the original eight-response run is the authority source. The
+second failed execution is lineage evidence only: its nine reuse records must
+resolve to the original objects and its roster 307 remains non-reusable. A
+completed package records the authority-source role, every failed-ancestor role,
+their hashes and relationships, plus the completed execution's run ID, journal
+hash, and game-set hash. The standalone redirect diagnostic is not a request-run
+ancestor and never enters this lineage.

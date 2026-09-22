@@ -58,7 +58,13 @@ import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+from backend.nhl.official_request_journal import (
+    ENV_REQUIRED,
+    ROSTER_REDIRECT_POLICY,
+    RequestContext,
+    official_get,
+    official_season_id,
+)
 
 # ---------------- Config ----------------
 ET = ZoneInfo("America/New_York")
@@ -393,9 +399,10 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
     """
     tri = str(team_tri).upper()
     season = season_start_year_from_date(when_iso)
+    official_season = official_season_id(season)
     urls = [
         f"{BASE}/roster/{tri}/current",
-        f"{BASE}/roster/{tri}/{season}",
+        f"{BASE}/roster/{tri}/{official_season}",
     ]
 
     reused = ROSTER_RESPONSE_VARIANT_BY_TEAM.get(tri)
@@ -424,7 +431,7 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
         return out
 
     for index, url in enumerate(urls):
-        variant = "current" if index == 0 else str(season)
+        variant = "current" if index == 0 else official_season
         resp = official_get(
             url, timeout=20, session=S, stage="ROSTER_COLLECTION",
             endpoint_family="ROSTER", identity={"slate_date": when_iso, "team": tri,
@@ -432,6 +439,8 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
             max_attempts=7, retry_statuses={429, 500, 502, 503, 504},
             backoff_seconds=0.75, request_class="PRIMARY" if index == 0 else "FALLBACK",
             preserve_response=True,
+            redirect_policy=({"policy": ROSTER_REDIRECT_POLICY, "team": tri,
+                              "repository_season": season} if index == 0 else None),
         )
         if resp.status_code == 404:
             continue

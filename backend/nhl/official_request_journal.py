@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -33,6 +34,8 @@ ENV_SOURCE_RUN_ID = "NHL_OFFICIAL_RESPONSE_SOURCE_RUN_ID"
 ENV_SOURCE_JOURNAL_SHA256 = "NHL_OFFICIAL_RESPONSE_SOURCE_JOURNAL_SHA256"
 CONTRACT = "NHL_OFFICIAL_REQUEST_JOURNAL_V1"
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]+$")
+ROSTER_REDIRECT_POLICY = "NHL_ROSTER_CURRENT_TO_OFFICIAL_SEASON_V1"
+ROSTER_TEAM = re.compile(r"^[A-Z]{3}$")
 
 
 def utc_now() -> str:
@@ -43,9 +46,96 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def request_run_tree_fingerprint(request_root: Path, *, repository_root: Path) -> str:
+    base = repository_root.resolve()
+    lines = []
+    for path in sorted(item for item in request_root.rglob("*") if item.is_file()):
+        try:
+            relative = path.resolve().relative_to(base).as_posix()
+        except ValueError as error:
+            raise RuntimeError("REQUEST_RUN_OUTSIDE_REPOSITORY") from error
+        lines.append(f"{sha256_file(path)}  {relative}\n")
+    return sha256_bytes("".join(lines).encode())
+
+
 def canonical_game_set_hash(game_ids: Iterable[int]) -> str:
     payload = json.dumps(sorted({int(value) for value in game_ids}), separators=(",", ":"))
     return sha256_bytes(payload.encode())
+
+
+def official_season_id(repository_season: int) -> str:
+    season = int(repository_season)
+    if season < 2000 or season > 2999:
+        raise RuntimeError("OFFICIAL_ROSTER_REPOSITORY_SEASON_INVALID")
+    return f"{season:04d}{season + 1:04d}"
+
+
+def _sanitized_target(url: str) -> dict[str, Any]:
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("OFFICIAL_REDIRECT_LOCATION_MALFORMED") from error
+    return {"scheme": parsed.scheme.lower(), "host": (parsed.hostname or "").lower(),
+            "port": port, "path": parsed.path}
+
+
+def _validate_roster_redirect_source(url: str, policy: dict[str, Any]) -> tuple[str, int]:
+    if policy.get("policy") != ROSTER_REDIRECT_POLICY:
+        raise RuntimeError("OFFICIAL_REDIRECT_POLICY_UNKNOWN")
+    team = str(policy.get("team") or "").upper()
+    if not ROSTER_TEAM.fullmatch(team):
+        raise RuntimeError("OFFICIAL_ROSTER_TEAM_INVALID")
+    try:
+        season = int(policy.get("repository_season"))
+        parsed = urlsplit(url)
+        port = parsed.port
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("OFFICIAL_ROSTER_REDIRECT_SOURCE_MALFORMED") from error
+    if (parsed.scheme.lower() != "https" or (parsed.hostname or "").lower() != "api-web.nhle.com"
+            or port not in (None, 443) or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment or parsed.path != f"/v1/roster/{team}/current"):
+        raise RuntimeError("OFFICIAL_ROSTER_REDIRECT_SOURCE_NOT_ALLOWLISTED")
+    return team, season
+
+
+def _resolve_roster_redirect(location: str | None, *, source_url: str,
+                             team: str, repository_season: int,
+                             visited: set[str]) -> tuple[str, dict[str, Any]]:
+    if not location:
+        raise RuntimeError("OFFICIAL_REDIRECT_LOCATION_MISSING")
+    try:
+        normalized = urljoin(source_url, location)
+        parsed = urlsplit(normalized)
+        port = parsed.port
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("OFFICIAL_REDIRECT_LOCATION_MALFORMED") from error
+    expected_path = f"/v1/roster/{team}/{official_season_id(repository_season)}"
+    if normalized in visited:
+        raise RuntimeError("OFFICIAL_REDIRECT_LOOP")
+    if parsed.scheme.lower() != "https":
+        raise RuntimeError("OFFICIAL_REDIRECT_HTTPS_REQUIRED")
+    if (parsed.hostname or "").lower() != "api-web.nhle.com":
+        raise RuntimeError("OFFICIAL_REDIRECT_HOST_NOT_ALLOWLISTED")
+    if port not in (None, 443):
+        raise RuntimeError("OFFICIAL_REDIRECT_NONSTANDARD_PORT")
+    if parsed.username is not None or parsed.password is not None:
+        raise RuntimeError("OFFICIAL_REDIRECT_CREDENTIALS_FORBIDDEN")
+    if parsed.query:
+        raise RuntimeError("OFFICIAL_REDIRECT_QUERY_FORBIDDEN")
+    if parsed.fragment:
+        raise RuntimeError("OFFICIAL_REDIRECT_FRAGMENT_FORBIDDEN")
+    if parsed.path != expected_path:
+        raise RuntimeError("OFFICIAL_REDIRECT_ROSTER_IDENTITY_MISMATCH")
+    return normalized, _sanitized_target(normalized)
 
 
 def verify_payload_identity(family: str, identity: dict[str, Any], body: bytes) -> None:
@@ -255,13 +345,20 @@ def official_get(
     max_attempts: int = 1, retry_statuses: Iterable[int] = (), backoff_seconds: float = 0.0,
     request_class: str = "PRIMARY", authority_boundary: bool = False,
     preserve_response: bool = False, reuse_preserved: bool = False,
+    redirect_policy: dict[str, Any] | None = None,
 ) -> Any:
     """GET an official JSON response with exact governed attempt accounting."""
     context = RequestContext.from_env()
     if context is None:
         return _unguarded_get(session, url, timeout=timeout, **({"params": params} if params else {}))
+    redirect_team = None
+    redirect_season = None
     try:
         context.validate_identity(identity)
+        if redirect_policy is not None:
+            if endpoint_family != "ROSTER" or params:
+                raise RuntimeError("OFFICIAL_REDIRECT_POLICY_SCOPE_INVALID")
+            redirect_team, redirect_season = _validate_roster_redirect_source(url, redirect_policy)
     except RuntimeError as error:
         context.append({
             "event_kind": "REQUEST_REJECTED", "timestamp_utc": utc_now(), "pid": os.getpid(),
@@ -290,13 +387,25 @@ def official_get(
         return PreservedResponse(body)
 
     retry_statuses = {int(value) for value in retry_statuses}
-    for attempt in range(1, max_attempts + 1):
+    current_url = url
+    visited = {url}
+    redirect_hop = 0
+    attempt = 0
+    attempt_in_target = 1
+    retry_number = 0
+    attempt_reason = "INITIAL"
+    while True:
+        attempt += 1
         start_utc, started = utc_now(), time.monotonic()
         status = None
         body = b""
         digest = None
         error_name = None
         response = None
+        redirect_target = None
+        redirect_location = None
+        redirect_error = None
+        follow_redirect = False
         try:
             # A fresh default Session has no urllib3 retry policy.  This ensures
             # each transport attempt is visible to this loop and the journal.
@@ -305,7 +414,7 @@ def official_get(
                 if session is not None and getattr(session, "headers", None):
                     transport.headers.update(dict(session.headers))
                 response = transport.get(
-                    url, timeout=timeout, allow_redirects=False,
+                    current_url, timeout=timeout, allow_redirects=False,
                     **({"params": params} if params else {}),
                 )
             finally:
@@ -313,26 +422,73 @@ def official_get(
             status = int(response.status_code)
             body = bytes(response.content)
             digest = sha256_bytes(body)
-            success = 200 <= status < 300
-            retryable = status in retry_statuses and attempt < max_attempts
-            disposition = "SUCCESS" if success else ("RETRYABLE_HTTP_ERROR" if retryable else "HTTP_ERROR")
+            if 300 <= status < 400 and redirect_policy is not None:
+                try:
+                    if status not in {307, 308}:
+                        raise RuntimeError("OFFICIAL_REDIRECT_STATUS_NOT_ALLOWLISTED")
+                    location = response.headers.get("Location")
+                    if redirect_hop >= 1:
+                        candidate = urljoin(current_url, location) if location else ""
+                        if candidate in visited:
+                            raise RuntimeError("OFFICIAL_REDIRECT_LOOP")
+                        raise RuntimeError("OFFICIAL_REDIRECT_MAX_HOPS_EXCEEDED")
+                    normalized, redirect_target = _resolve_roster_redirect(
+                        location, source_url=current_url, team=str(redirect_team),
+                        repository_season=int(redirect_season), visited=visited,
+                    )
+                    redirect_location = normalized
+                    follow_redirect = True
+                    success = False
+                    retryable = False
+                    disposition = "ALLOWED_REDIRECT"
+                except RuntimeError as error:
+                    redirect_error = str(error)
+                    success = False
+                    retryable = False
+                    disposition = "REDIRECT_REJECTED"
+            else:
+                success = 200 <= status < 300
+                retryable = status in retry_statuses and attempt_in_target < max_attempts
+                disposition = "SUCCESS" if success else ("RETRYABLE_HTTP_ERROR" if retryable else "HTTP_ERROR")
         except Exception as error:  # transport failure, recorded before retry/raise
             error_name = f"{type(error).__name__}:{error}"
             success = False
-            retryable = attempt < max_attempts
+            retryable = attempt_in_target < max_attempts
             disposition = "TRANSPORT_ERROR_RETRY" if retryable else "TRANSPORT_ERROR_EXHAUSTED"
-        context.append({
+        record = {
             "event_kind": "NETWORK_ATTEMPT", "timestamp_utc": utc_now(),
             "request_start_utc": start_utc, "request_end_utc": utc_now(), "pid": os.getpid(),
             "logical_request_id": logical_id, "caller_stage": stage,
             "endpoint_family": endpoint_family, "resource_identity": identity,
             "attempt_number": attempt, "request_class": request_class,
+            "attempt_reason": attempt_reason, "retry_number": retry_number,
+            "redirect_hop": redirect_hop,
             "authority_boundary": authority_boundary, "http_status": status,
             "transport_error": error_name, "response_bytes": len(body) if body else 0,
             "response_sha256": digest, "duration_ms": round((time.monotonic() - started) * 1000, 3),
             "cache_hit": False, "response_preserved": bool(preserve_response and success),
             "final_disposition": disposition,
-        })
+        }
+        if redirect_policy is not None:
+            record["request_target"] = _sanitized_target(current_url)
+        if redirect_target is not None and redirect_location is not None:
+            record.update({
+                "redirect_location": redirect_location,
+                "redirect_target": redirect_target,
+                "redirect_target_sha256": sha256_bytes(redirect_location.encode()),
+            })
+        if redirect_error is not None:
+            record["redirect_rejection"] = redirect_error
+        context.append(record)
+        if redirect_error is not None:
+            raise RuntimeError(redirect_error)
+        if follow_redirect:
+            current_url = str(redirect_location)
+            visited.add(current_url)
+            redirect_hop = 1
+            attempt_in_target = 1
+            attempt_reason = "REDIRECT_FOLLOW"
+            continue
         if success:
             if preserve_response:
                 context.preserve(endpoint_family, identity, body)
@@ -341,9 +497,11 @@ def official_get(
             if response is not None:
                 return PreservedResponse(body, int(status))
             raise RuntimeError(error_name or f"OFFICIAL_HTTP_STATUS_{status}")
+        retry_number += 1
+        attempt_in_target += 1
+        attempt_reason = "RETRY"
         if backoff_seconds:
-            time.sleep(backoff_seconds * (2 ** (attempt - 1)))
-    raise AssertionError("unreachable")
+            time.sleep(backoff_seconds * (2 ** (retry_number - 1)))
 
 
 def read_journal(path: Path) -> list[dict[str, Any]]:
@@ -351,7 +509,10 @@ def read_journal(path: Path) -> list[dict[str, Any]]:
 
 
 def verify_preserved_response_run(request_root: Path, *, expected_run_id: str,
-                                  slate_date: str, game_ids: Iterable[int]) -> dict[str, Any]:
+                                  slate_date: str, game_ids: Iterable[int],
+                                  repository_root: Path | None = None,
+                                  expected_journal_sha256: str | None = None,
+                                  expected_tree_fingerprint: str | None = None) -> dict[str, Any]:
     """Verify a failed authority run as an immutable, exact eight-response source."""
     if request_root.name != expected_run_id or not SAFE_TOKEN.fullmatch(expected_run_id):
         raise RuntimeError("PRESERVED_SOURCE_RUN_ID_MISMATCH")
@@ -360,6 +521,12 @@ def verify_preserved_response_run(request_root: Path, *, expected_run_id: str,
     if not journal.is_file() or not cache.is_dir():
         raise RuntimeError("PRESERVED_SOURCE_RUN_INCOMPLETE")
     journal_digest = sha256_bytes(journal.read_bytes())
+    if expected_journal_sha256 is not None and journal_digest != expected_journal_sha256:
+        raise RuntimeError("PRESERVED_SOURCE_JOURNAL_CHANGED")
+    tree_fingerprint = (request_run_tree_fingerprint(request_root, repository_root=repository_root)
+                        if repository_root is not None else None)
+    if expected_tree_fingerprint is not None and tree_fingerprint != expected_tree_fingerprint:
+        raise RuntimeError("PRESERVED_SOURCE_TREE_FINGERPRINT_MISMATCH")
     ids = sorted({int(value) for value in game_ids})
     expected_hash = canonical_game_set_hash(ids)
     records = read_journal(journal)
@@ -431,11 +598,92 @@ def verify_preserved_response_run(request_root: Path, *, expected_run_id: str,
         raise RuntimeError("PRESERVED_SOURCE_CACHE_OBJECT_SET_MISMATCH")
     return {
         "contract_version": "NHL_CROSS_RUN_PRESERVED_RESPONSE_REUSE_V1",
+        "role": "AUTHORITY_RESPONSE_SOURCE",
         "source_run_id": expected_run_id, "source_journal_sha256": journal_digest,
+        "tree_fingerprint": tree_fingerprint,
         "canonical_game_set_hash": expected_hash, "authority_responses": len(response_bindings),
         "source_cache": str(cache), "responses": response_bindings,
         "response_set_sha256": sha256_bytes(json.dumps(
             response_bindings, sort_keys=True, separators=(",", ":")).encode()),
+    }
+
+
+def verify_failed_execution_ancestor(
+    request_root: Path, *, expected_run_id: str, slate_date: str,
+    game_ids: Iterable[int], response_source: dict[str, Any],
+    repository_root: Path, expected_journal_sha256: str,
+    expected_tree_fingerprint: str,
+) -> dict[str, Any]:
+    if request_root.name != expected_run_id or not SAFE_TOKEN.fullmatch(expected_run_id):
+        raise RuntimeError("FAILED_ANCESTOR_RUN_ID_MISMATCH")
+    journal = request_root / "official_request_journal.jsonl"
+    if not journal.is_file():
+        raise RuntimeError("FAILED_ANCESTOR_JOURNAL_MISSING")
+    journal_digest = sha256_bytes(journal.read_bytes())
+    if journal_digest != expected_journal_sha256:
+        raise RuntimeError("FAILED_ANCESTOR_JOURNAL_CHANGED")
+    tree_fingerprint = request_run_tree_fingerprint(request_root, repository_root=repository_root)
+    if tree_fingerprint != expected_tree_fingerprint:
+        raise RuntimeError("FAILED_ANCESTOR_TREE_FINGERPRINT_MISMATCH")
+    ids = sorted({int(value) for value in game_ids})
+    game_hash = canonical_game_set_hash(ids)
+    records = read_journal(journal)
+    if not records or any(row.get("run_id") != expected_run_id for row in records):
+        raise RuntimeError("FAILED_ANCESTOR_JOURNAL_RUN_ID_MISMATCH")
+    if any(row.get("canonical_game_set_hash") != game_hash for row in records):
+        raise RuntimeError("FAILED_ANCESTOR_GAME_SET_HASH_MISMATCH")
+    source_run_id = str(response_source["source_run_id"])
+    if source_run_id == expected_run_id:
+        raise RuntimeError("REQUEST_LINEAGE_CYCLE")
+    source_journal_hash = str(response_source["source_journal_sha256"])
+    source_responses = {
+        (row["index_sha256"], row["object_sha256"], int(row["response_bytes"]))
+        for row in response_source["responses"]
+    }
+    reuses = [row for row in records if row.get("event_kind") == "PRESERVED_RESPONSE_REUSE"]
+    if not reuses:
+        raise RuntimeError("FAILED_ANCESTOR_REUSE_CHAIN_MISSING")
+    for row in reuses:
+        if (row.get("source_run_id") != source_run_id
+                or row.get("source_journal_sha256") != source_journal_hash
+                or not row.get("cross_run_reuse")):
+            raise RuntimeError("FAILED_ANCESTOR_REUSE_SOURCE_MISMATCH")
+        key = (row.get("source_response_index_sha256"),
+               row.get("source_response_object_sha256"), int(row.get("response_bytes") or 0))
+        if key not in source_responses or row.get("response_sha256") != key[1]:
+            raise RuntimeError("FAILED_ANCESTOR_REUSE_OBJECT_MISMATCH")
+    failures = [row for row in records if row.get("event_kind") == "NETWORK_ATTEMPT"
+                and row.get("final_disposition") != "SUCCESS"]
+    if not failures:
+        raise RuntimeError("FAILED_ANCESTOR_FAILURE_EVIDENCE_MISSING")
+    if any(row.get("response_preserved") for row in failures):
+        raise RuntimeError("FAILED_ANCESTOR_FAILURE_MARKED_REUSABLE")
+    response_cache = request_root / "preserved_responses"
+    cache_files = list(response_cache.rglob("*")) if response_cache.exists() else []
+    if any(path.is_file() for path in cache_files):
+        raise RuntimeError("FAILED_ANCESTOR_UNEXPECTED_RESPONSE_OBJECT")
+    roster_redirects = [row for row in failures if row.get("endpoint_family") == "ROSTER"
+                        and int(row.get("http_status") or 0) in {307, 308}]
+    if not roster_redirects:
+        raise RuntimeError("FAILED_ANCESTOR_ROSTER_REDIRECT_MISSING")
+    return {
+        "contract_version": "NHL_FAILED_EXECUTION_ANCESTOR_V1",
+        "role": "FAILED_EXECUTION_ANCESTOR", "run_id": expected_run_id,
+        "journal_sha256": journal_digest, "tree_fingerprint": tree_fingerprint,
+        "canonical_game_set_hash": game_hash, "journal_records": len(records),
+        "reuse_records": len(reuses), "failed_network_attempts": len(failures),
+        "relationship": {
+            "authority_response_source_run_id": source_run_id,
+            "authority_response_source_journal_sha256": source_journal_hash,
+            "authority_response_set_sha256": response_source["response_set_sha256"],
+            "reuse_chain_verified": True,
+        },
+        "non_reusable_roster_redirects": [{
+            "http_status": int(row["http_status"]),
+            "resource_identity": row["resource_identity"],
+            "response_sha256": row.get("response_sha256"),
+            "response_bytes": int(row.get("response_bytes") or 0),
+        } for row in roster_redirects],
     }
 
 
@@ -478,20 +726,29 @@ def summarize_journal(path: Path, *, run_id: str, expected_game_hash: str) -> di
     authority = {row.get("logical_request_id") for row in attempts + reuses
                  if row.get("authority_boundary") and row.get("logical_request_id")}
     successes = [row for row in attempts if row.get("final_disposition") == "SUCCESS"]
-    failed = [row for row in attempts if row.get("final_disposition") != "SUCCESS"]
+    redirects = [row for row in attempts if row.get("final_disposition") == "ALLOWED_REDIRECT"]
+    failed = [row for row in attempts
+              if row.get("final_disposition") not in {"SUCCESS", "ALLOWED_REDIRECT"}]
     families: dict[str, dict[str, int]] = {}
     identities: dict[str, dict[str, int]] = {}
     for row in attempts + reuses:
         family = str(row.get("endpoint_family"))
-        bucket = families.setdefault(family, {"logical_requests": 0, "network_attempts": 0, "reuses": 0})
+        bucket = families.setdefault(
+            family, {"logical_requests": 0, "network_attempts": 0,
+                     "reuses": 0, "redirects": 0})
         if row.get("event_kind") == "NETWORK_ATTEMPT":
             bucket["network_attempts"] += 1
+            bucket["redirects"] += int(row.get("final_disposition") == "ALLOWED_REDIRECT")
         else:
             bucket["reuses"] += 1
         identity_key = json.dumps(row.get("resource_identity") or {}, sort_keys=True, separators=(",", ":"))
-        identity_bucket = identities.setdefault(identity_key, {"logical_requests": 0, "network_attempts": 0, "reuses": 0})
+        identity_bucket = identities.setdefault(
+            identity_key, {"logical_requests": 0, "network_attempts": 0,
+                           "reuses": 0, "redirects": 0})
         if row.get("event_kind") == "NETWORK_ATTEMPT":
             identity_bucket["network_attempts"] += 1
+            identity_bucket["redirects"] += int(
+                row.get("final_disposition") == "ALLOWED_REDIRECT")
         else:
             identity_bucket["reuses"] += 1
     for family, bucket in families.items():
@@ -506,7 +763,11 @@ def summarize_journal(path: Path, *, run_id: str, expected_game_hash: str) -> di
         "authority_boundary_logical_requests": len(authority),
         "total_logical_requests": len(logical), "total_network_attempts": len(attempts),
         "successful_responses": len(successes), "failed_attempts": len(failed),
-        "retries": sum(1 for row in attempts if int(row.get("attempt_number") or 0) > 1),
+        "allowed_redirects": len(redirects),
+        "retries": sum(1 for row in attempts
+                       if (row.get("attempt_reason") == "RETRY"
+                           or ("attempt_reason" not in row
+                               and int(row.get("attempt_number") or 0) > 1))),
         "fallback_attempts": sum(1 for row in attempts if row.get("request_class") == "FALLBACK"),
         "cache_reuse_events": len(reuses), "unexpected_requests": len(rejected),
         "counts_by_endpoint_family": dict(sorted(families.items())),
