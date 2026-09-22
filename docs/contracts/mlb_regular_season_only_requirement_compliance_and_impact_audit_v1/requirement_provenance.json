@@ -1,0 +1,86 @@
+{
+  "audit": "MLB_REGULAR_SEASON_ONLY_REQUIREMENT_COMPLIANCE_AND_IMPACT_AUDIT_V1",
+  "as_of_head": "0ef19ac4d2cf5d141853605abaa246a77397f652",
+  "earliest_authoritative_requirement": {
+    "commit": "7f22c7623ff5b94462749f51e29288c26e473e03",
+    "commit_timestamp": "2026-02-15T19:31:54-08:00",
+    "commit_subject": "Add preseason cleanup flow and regular-season stat-derived lock",
+    "source_artifacts": [
+      "docs/Season Activation Runbook.md",
+      "backend/mlb/scripts/insert_mlb_stat_derived.py",
+      "backend/mlb/tests/test_insert_mlb_stat_derived.py"
+    ],
+    "exact_requirement": "Enable the regular-season-only stat-derived lock before Opening Day; admit only a final game whose authoritative raw StatsAPI gameType equals R; exclude Spring Training, postseason, and missing type.",
+    "intended_lanes": [
+      "stat-derived generation",
+      "downstream regular-season evaluation and model-quality evidence fed by stat-derived rows"
+    ],
+    "implementation_at_introduction": {
+      "classification": "RAW_TYPE_ENFORCED",
+      "positive_membership": "gameType == R",
+      "missing_type_behavior": "excluded",
+      "calendar_inference": false
+    },
+    "test_at_introduction": {
+      "regular_selected": true,
+      "spring_training_rejected": true,
+      "postseason_rejected": true,
+      "missing_rejected": true
+    }
+  },
+  "preservation_assessment": {
+    "later_design": "VIOLATED_UNIFORMLY_IN_19_OF_24_MAPPED_CONSUMERS",
+    "later_implementation": "MIXED",
+    "later_testing": "DID_NOT_ENUMERATE_ALL_24_CONSUMERS",
+    "later_certification": "BOUNDED_CANONICAL_COVERAGE_DID_NOT_PROVE_CONSUMER_ENFORCEMENT",
+    "post_control_corrections_are_prior_compliance_evidence": false
+  },
+  "control_history": [
+    {
+      "commit": "4d83b49b95749345a1eaefff4392a77597d3e587",
+      "date": "2026-02-16",
+      "event": "Opening Day must-have retained regular-only lock and required preseason/regular quality segmentation",
+      "preservation": "PRESERVED"
+    },
+    {
+      "commit": "d5a5a4f466123c658aa18b1b7cf3b43283c1f5be",
+      "date": "2026-03-29",
+      "event": "First repository missing-type-to-R compatibility fallback",
+      "preservation": "VIOLATED"
+    },
+    {
+      "commit": "28ec66a2334cfa423a4939a1ae0b0cbe4a84ab24",
+      "date": "2026-09-21",
+      "event": "General fail-closed authoritative phase contract established",
+      "preservation": "STRENGTHENED_CANONICAL_CONTRACT_ONLY"
+    },
+    {
+      "commit": "01c610c4ed88c2a7fa814cce3dae6d3e25a5aa46",
+      "date": "2026-09-21",
+      "event": "Stat-derived selector widened to accept regular season or postseason while bounded canonical certification passed",
+      "preservation": "VIOLATED_AND_NOT_REJECTED_BY_CERTIFICATION"
+    },
+    {
+      "commit": "0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13",
+      "date": "2026-09-21",
+      "event": "Hits candidate evaluator corrected",
+      "preservation": "POST_CONTROL_CORRECTION_NOT_RETROACTIVE_PROOF"
+    },
+    {
+      "commit": "0ef19ac4d2cf5d141853605abaa246a77397f652",
+      "date": "2026-09-22",
+      "event": "Hits correction finding bounded to tested cohort",
+      "preservation": "POST_CONTROL_AUDIT_NOT_REPOSITORY_WIDE_PROOF"
+    }
+  ],
+  "classification_rules": {
+    "authoritative_regular_membership": "Exact gamePk must join to retained authoritative type R and normalized phase REGULAR_SEASON.",
+    "prohibited_proxies": [
+      "calendar date",
+      "missing-type default",
+      "model participation",
+      "market availability"
+    ],
+    "failure_behavior": "Missing, unknown, or conflicting authority fails closed."
+  }
+}

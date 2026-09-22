@@ -1,0 +1,228 @@
+{
+  "audit": "MLB_REGULAR_SEASON_ONLY_REQUIREMENT_COMPLIANCE_AND_IMPACT_AUDIT_V1",
+  "authority": {
+    "path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl",
+    "distinct_game_pks": 2919,
+    "source_type_counts": {"E": 38, "R": 2430, "S": 451},
+    "phase_counts": {"PRESEASON": 489, "REGULAR_SEASON": 2430},
+    "missing": 0,
+    "unknown": 0,
+    "conflicting": 0,
+    "date_inference_used": false
+  },
+  "interpretation": "Rows are counted at each retained lane table's native grain. Authoritative regular rows are native rows whose exact gamePk joined to type R. Totals across components must not be treated as a deduplicated cross-lane population.",
+  "fully_reconciled_populations": [
+    {
+      "lane": "Hits candidate frozen evaluation",
+      "component": "evaluated player-game rows",
+      "evidence": "docs/contracts/mlb_2026_game_phase_file_authority_hits_pilot_v1/validation_report.json",
+      "total_rows": 7564, "distinct_game_pks": 651, "authoritative_regular_rows": 7564,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0,
+      "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0,
+      "default_or_calendar_exercise_is_directly_observable": false,
+      "affected_game_pks": [], "earliest_governed_date": "2026-05-08", "latest_governed_date": "2026-08-02",
+      "authoritative_coverage_pct": 100.0, "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Full-board Hits", "component": "eligibility observations",
+      "evidence": "backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3",
+      "total_rows": 18592, "distinct_game_pks": 394, "authoritative_regular_rows": 18592,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-24", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Full-board Hits", "component": "predictions",
+      "evidence": "backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3",
+      "total_rows": 5877, "distinct_game_pks": 358, "authoritative_regular_rows": 5877,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-24", "latest_governed_date": "2026-09-21", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Full-board Hits", "component": "outcomes",
+      "evidence": "backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3",
+      "total_rows": 5868, "distinct_game_pks": 357, "authoritative_regular_rows": 5868,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-24", "latest_governed_date": "2026-09-20", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Moneyline", "component": "immutable predictions",
+      "evidence": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/database_population_snapshot.json",
+      "total_rows": 633, "distinct_game_pks": 633, "authoritative_regular_rows": 633,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-05", "latest_governed_date": "2026-09-21", "authoritative_coverage_pct": 100.0,
+      "certification_status": "UNAFFECTED_AND_PROVEN"
+    },
+    {
+      "lane": "Moneyline", "component": "immutable outcomes",
+      "evidence": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/database_population_snapshot.json",
+      "total_rows": 630, "distinct_game_pks": 630, "authoritative_regular_rows": 630,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-05", "latest_governed_date": "2026-09-20", "authoritative_coverage_pct": 100.0,
+      "certification_status": "UNAFFECTED_AND_PROVEN"
+    },
+    {
+      "lane": "RAW Totals", "component": "predictions",
+      "evidence": "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3",
+      "total_rows": 608, "distinct_game_pks": 608, "authoritative_regular_rows": 608,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-06", "latest_governed_date": "2026-09-20", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "RAW Totals", "component": "outcomes",
+      "evidence": "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3",
+      "total_rows": 597, "distinct_game_pks": 597, "authoritative_regular_rows": 597,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-06", "latest_governed_date": "2026-09-20", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Totals C", "component": "predictions",
+      "evidence": "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3",
+      "total_rows": 467, "distinct_game_pks": 467, "authoritative_regular_rows": 467,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-17", "latest_governed_date": "2026-09-20", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Totals C", "component": "outcomes",
+      "evidence": "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3",
+      "total_rows": 452, "distinct_game_pks": 452, "authoritative_regular_rows": 452,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-08-17", "latest_governed_date": "2026-09-19", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Agreement separation", "component": "predictions",
+      "evidence": "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3",
+      "total_rows": 158, "distinct_game_pks": 158, "authoritative_regular_rows": 158,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-09-11", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Agreement separation", "component": "risk rows",
+      "evidence": "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3",
+      "total_rows": 155, "distinct_game_pks": 155, "authoritative_regular_rows": 155,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "calendar_labeled_rows": 155, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-09-11", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Agreement separation", "component": "outcomes",
+      "evidence": "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3",
+      "total_rows": 35, "distinct_game_pks": 35, "authoritative_regular_rows": 35,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-09-11", "latest_governed_date": "2026-09-18", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Agreement separation", "component": "bookmaker prices",
+      "evidence": "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3",
+      "total_rows": 1550, "distinct_game_pks": 155, "authoritative_regular_rows": 1550,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-09-11", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Main-market retained history", "component": "full game total snapshots",
+      "evidence": "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3",
+      "total_rows": 43579, "distinct_game_pks": 632, "authoritative_regular_rows": 43579,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-03-25", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Main-market retained history", "component": "main discoveries",
+      "evidence": "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3",
+      "total_rows": 7033, "distinct_game_pks": 627, "authoritative_regular_rows": 7033,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-03-25", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Main-market retained history", "component": "supplemental consensus",
+      "evidence": "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3",
+      "total_rows": 6485, "distinct_game_pks": 628, "authoritative_regular_rows": 6485,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-03-25", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "Main-market retained history", "component": "supplemental snapshots",
+      "evidence": "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3",
+      "total_rows": 38533, "distinct_game_pks": 629, "authoritative_regular_rows": 38533,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-03-25", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "External normalized platform", "component": "2026 games",
+      "evidence": "backend/mlb/data/external/normalized/v1/games/season=2026/part-000.parquet",
+      "total_rows": 1528, "distinct_game_pks": 1528, "authoritative_regular_rows": 1528,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "raw_statsapi_rows": 1527, "raw_statsapi_rows_with_present_R_type": 1527,
+      "default_or_calendar_exercise_is_directly_observable": true,
+      "affected_game_pks": [], "earliest_governed_date": "2026-03-25", "latest_governed_date": "2026-09-22", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "External Tier A certification", "component": "protected holdout 2026",
+      "evidence": "artifacts/analysis/model_development/mlb_external_batter_event_certified_core/2026-07-22/tier_a_protected_holdout_manifest.parquet",
+      "total_rows": 36862, "distinct_game_pks": 1281, "authoritative_regular_rows": 36862,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": false,
+      "affected_game_pks": [], "earliest_governed_date": "2026-03-25", "latest_governed_date": "2026-06-30", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    },
+    {
+      "lane": "External Tier A certification", "component": "final untouched holdout 2026",
+      "evidence": "artifacts/analysis/model_development/mlb_external_batter_event_certified_core/2026-07-22/tier_a_final_untouched_holdout_manifest.parquet",
+      "total_rows": 6834, "distinct_game_pks": 237, "authoritative_regular_rows": 6834,
+      "preseason_rows": 0, "postseason_rows": 0, "special_or_unknown_rows": 0, "rows_lacking_exact_game_pk": 0, "rows_lacking_authoritative_type": 0,
+      "rows_admitted_only_through_default_or_calendar_rule": 0, "default_or_calendar_exercise_is_directly_observable": false,
+      "affected_game_pks": [], "earliest_governed_date": "2026-07-01", "latest_governed_date": "2026-07-21", "authoritative_coverage_pct": 100.0,
+      "certification_status": "RESULT_SAME_BUT_CONTROL_VIOLATED"
+    }
+  ],
+  "partially_reconciled_controls": [
+    {
+      "lane": "Full-board parent schedules", "observations": 4328, "distinct_game_pks": 884,
+      "authoritative_R_observations": 4328, "missing_type_observations": 0, "source_file_count": 320,
+      "scope_limit": "Proves retained parent schedule inputs only; not every research or reporting derivative."
+    },
+    {
+      "lane": "UBO5 retained StatsAPI feeds", "observations": 1603, "distinct_game_pks": 1603,
+      "authoritative_R_observations": 1603, "missing_type_observations": 0, "source_file_count": 1603,
+      "scope_limit": "Proves retained feed source types only; downstream completed-history/research input membership is not manifest-complete."
+    }
+  ],
+  "aggregate_findings": {
+    "fully_reconciled_component_count": 21,
+    "components_with_realized_nonregular_rows": 0,
+    "affected_game_pk_count": 0,
+    "metrics_proven_to_require_restatement": 0,
+    "repository_wide_proof": false
+  }
+}

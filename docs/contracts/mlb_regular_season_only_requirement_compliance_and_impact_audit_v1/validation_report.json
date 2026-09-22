@@ -1,0 +1,27 @@
+{
+  "audit": "MLB_REGULAR_SEASON_ONLY_REQUIREMENT_COMPLIANCE_AND_IMPACT_AUDIT_V1",
+  "status": "PASS",
+  "validator": "validate_audit.py",
+  "interpreter": "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
+  "expected_head": "0ef19ac4d2cf5d141853605abaa246a77397f652",
+  "checks_passed": 47,
+  "checks_failed": 0,
+  "consumer_counts": {
+    "compliant": 3,
+    "violating": 19,
+    "unprovable": 0,
+    "not_applicable": 2,
+    "total": 24
+  },
+  "fully_reconciled_component_count": 21,
+  "realized_affected_row_count": 0,
+  "realized_affected_game_pk_count": 0,
+  "metrics_requiring_restatement": 0,
+  "repository_wide_proof": false,
+  "network_requests": 0,
+  "database_connections": 0,
+  "database_writes": 0,
+  "files_outside_review_package_modified": 0,
+  "staged_files": 0,
+  "classification": "REGULAR_SEASON_EVIDENCE_PARTIALLY_UNPROVABLE"
+}
