@@ -1,0 +1,144 @@
+{
+  "consumers": [
+    {
+      "classification": "ACTIVE_CORE",
+      "consumer": "immutable probability and official-final grade construction",
+      "path": "backend/mlb/public_game_predictions/pythagorean_log5_v1.py",
+      "phase_gating_result": "grade append is phase-gated; probability formula unchanged",
+      "source_sha256": "f0b7dbb03a191dd9d7325f95c1b7e1f35904619acbfb766f12c207921ee2f4f4"
+    },
+    {
+      "classification": "ACTIVE_CORE",
+      "consumer": "Postgres prediction/outcome durability",
+      "path": "backend/mlb/public_game_predictions/durable_store_v1.py",
+      "phase_gating_result": "ungraded outcomes partitioned before grading; final write boundary rechecks authority",
+      "source_sha256": "80149607046451d1d20823cd83a99d89738ee73ee863d66c18f95f4f641ac675"
+    },
+    {
+      "classification": "ACTIVE_CORE",
+      "consumer": "ordinary score/grade lifecycle",
+      "path": "backend/mlb/scripts/run_mlb_public_game_moneyline_daily_v1.py",
+      "phase_gating_result": "inherits gated durable fetch and gated outcome write",
+      "source_sha256": "a30c227c3ed24c5e9cc60bc1eb7dd082c9edbac6343b2764b7d97d7fc213e72d"
+    },
+    {
+      "classification": "ACTIVE_CORE",
+      "consumer": "manual local/durable grading adapter",
+      "path": "backend/mlb/scripts/grade_mlb_public_game_pythagorean_log5_v1.py",
+      "phase_gating_result": "requires partition before either append path",
+      "source_sha256": "ac6129a157bb2ece43d7a3e05d03c3a9daf9ca25f19d24f0a1081791db59b7f5"
+    },
+    {
+      "classification": "ACTIVE_PROJECTION",
+      "consumer": "public immutable prediction projection",
+      "path": "backend/app/services/mlb/public_game_prediction_service.py",
+      "phase_gating_result": "joins raw type, normalized phase, postseason round without ledger mutation",
+      "source_sha256": "d61eb4e48807d5f08393dfab264b45244f7feac74924e45e3d72c24ec0deb087"
+    },
+    {
+      "classification": "ACTIVE_SHARED_REPORT_LOADER",
+      "consumer": "accuracy/calibration/Brier/log-loss and market/ROI research reports",
+      "path": "backend/mlb/scripts/audit_mlb_moneyline_probability_region_premise_v1.py",
+      "phase_gating_result": "default regular-only exact-gamePk partition; postseason callable as a distinct partition",
+      "source_sha256": "a0e9e05ed4cb5baa0501f4bd56a3479c254676a567bfb3f67e3bc0297202d7b0"
+    },
+    {
+      "classification": "ACTIVE_INDIRECT",
+      "consumer": "manual append-only STRONG observer and hypothetical ROI report",
+      "path": "backend/mlb/scripts/observe_mlb_strong_moneyline_shadow_v1.py",
+      "phase_gating_result": "inherits regular-only shared loader",
+      "source_sha256": "f1e15b72d27c50dd7a4aa5341a285c50fa36d56e7245a66ff82dcff5f21fefcf"
+    },
+    {
+      "classification": "ACTIVE_INDIRECT",
+      "consumer": "manual append-only class observer and hypothetical ROI report",
+      "path": "backend/mlb/scripts/observe_mlb_moneyline_strength_classes_shadow_v1.py",
+      "phase_gating_result": "inherits regular-only shared loader",
+      "source_sha256": "0e5c87e4ce9d7d23140bf5c9d80ecb9b2afd8b422afc7f8cfaf10491d74efc1a"
+    },
+    {
+      "classification": "RESEARCH_INDIRECT",
+      "consumer": "Moneyline information research",
+      "path": "backend/mlb/scripts/analyze_mlb_strong_moneyline_independent_information_v1.py",
+      "phase_gating_result": "inherits shared regular-only loader",
+      "source_sha256": "37ae95101ca29162a81b06d98953a0c85aa427c64f81f5b4a70292dc1fdb291e"
+    },
+    {
+      "classification": "RESEARCH_INDIRECT",
+      "consumer": "Moneyline price recovery research",
+      "path": "backend/mlb/scripts/audit_mlb_betonline_moneyline_capture_recovery_joint_strength_repricing_v1.py",
+      "phase_gating_result": "inherits shared regular-only loader",
+      "source_sha256": "3be81a5961f3651524c53e196893cffc84943cc05d5b0d9f8e130ee9fec276c4"
+    },
+    {
+      "classification": "RESEARCH_INDIRECT",
+      "consumer": "Moneyline joint-strength research",
+      "path": "backend/mlb/scripts/audit_mlb_joint_strength_incremental_value_executability_v1.py",
+      "phase_gating_result": "inherits shared regular-only loader",
+      "source_sha256": "33452887c6b6065a26edaed3a67137e4afcbf3aada5f92d03f3570e8d7f84d68"
+    },
+    {
+      "classification": "EXCLUDED_CROSS_LANE",
+      "consumer": "cross-lane EV provenance",
+      "path": "backend/mlb/scripts/audit_mlb_across_board_apparent_ev_provenance_economic_value_v1.py",
+      "phase_gating_result": "not modified; requested scope exclusion",
+      "source_sha256": "9933b8026d0b48738735c40b8e8520778f70346f0b959238588d32c4c1cff243"
+    },
+    {
+      "classification": "EXCLUDED_AGREEMENT",
+      "consumer": "agreement study",
+      "path": "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py",
+      "phase_gating_result": "not modified; requested scope exclusion",
+      "source_sha256": "eee0257f8af4631b869e550f1e3061e8e658a1b1e133239dc7c0e3081eb07560"
+    },
+    {
+      "classification": "EXCLUDED_AGREEMENT",
+      "consumer": "agreement capture",
+      "path": "backend/mlb/scripts/capture_mlb_market_strong_agreement_live_v4.py",
+      "phase_gating_result": "not modified; requested scope exclusion",
+      "source_sha256": "0dcf89085e554dd3640c7dab14dc82f4104fbb101fa92a868cae93e7edfbbcfd"
+    },
+    {
+      "classification": "IMMUTABLE_LEGACY_RESEARCH",
+      "consumer": "one-off residual model-development report",
+      "path": "backend/mlb/scripts/run_mlb_pinnacle_anchored_moneyline_residual_v1.py",
+      "phase_gating_result": "not rerun or rewritten; future rerun must use shared gate",
+      "source_sha256": "e1cec1b064e54c508af5e08e512ffba26d9c80999030eb1bce27a030a12021e5"
+    },
+    {
+      "classification": "IMMUTABLE_LEGACY_CERTIFICATION",
+      "consumer": "one-off foundation certification export",
+      "path": "backend/mlb/scripts/certify_mlb_standalone_prediction_foundations_v1.py",
+      "phase_gating_result": "preserved; future certification must use phase-bound input manifest",
+      "source_sha256": "b9669a4c1d90ef971a574b472d2892e9576cb63c4a63728a13d160f6f0f2e092"
+    },
+    {
+      "classification": "NON_EVALUATION_INPUT",
+      "consumer": "price attachment",
+      "path": "backend/mlb/scripts/capture_mlb_pinnacle_main_markets_v1.py",
+      "phase_gating_result": "captures immutable exact-gamePk prices; evaluation partition is downstream",
+      "source_sha256": "b756db8e0b9f6575aa80cd708a9d31efcd8d46b9e0437b8c88679e480d3c5aa1"
+    },
+    {
+      "classification": "NON_EVALUATION_INPUT",
+      "consumer": "price attachment",
+      "path": "backend/mlb/scripts/capture_mlb_bookmaker_eu_supplemental_v1.py",
+      "phase_gating_result": "captures immutable exact-gamePk prices; evaluation partition is downstream",
+      "source_sha256": "ef3feee85923d59c573aae653b2a9ea95b5d960eda829224d478e3c74b42bb6e"
+    },
+    {
+      "classification": "NON_EVALUATION_INPUT",
+      "consumer": "provider trial attachment",
+      "path": "backend/mlb/scripts/run_mlb_main_market_provider_replacement_trial_v1.py",
+      "phase_gating_result": "not a certification/evaluation total",
+      "source_sha256": "f9039c43a50fa6352e6164bbed74051bd1c9d504a73b7aca77b44751d338a398"
+    },
+    {
+      "classification": "EXCLUDED_GENERAL_OPS",
+      "consumer": "general Ops index",
+      "path": "backend/mlb/scripts/report_mlb_ops_current_state_alignment_v1.py",
+      "phase_gating_result": "not modified; requested scope exclusion",
+      "source_sha256": "eb24b988d612adaa2c9b67ba6b10ce1d034133447c63e0e5cd9ee25c22b7f0f1"
+    }
+  ]
+}

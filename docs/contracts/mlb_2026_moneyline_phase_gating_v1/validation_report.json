@@ -1,0 +1,21 @@
+{
+  "checks": {
+    "all_retained_groups_regular": true,
+    "authority_2919": true,
+    "database_connections": true,
+    "database_writes": true,
+    "dependency_free_tests": true,
+    "network_requests": true,
+    "outcome_content_equivalent": true,
+    "prediction_content_equivalent": true,
+    "price_content_equivalent": true,
+    "retained_market_rows_regular": true,
+    "retained_outcome_rows_regular": true,
+    "retained_prediction_rows_regular": true
+  },
+  "database_write_count": 0,
+  "network_request_count": 0,
+  "operational_database_connection_count": 0,
+  "pipeline_run_count": 0,
+  "status": "PASS"
+}

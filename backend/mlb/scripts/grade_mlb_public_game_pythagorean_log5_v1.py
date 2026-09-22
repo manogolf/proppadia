@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from backend.mlb.public_game_predictions.durable_store_v1 import append_outcome_grade
+from backend.mlb.public_game_predictions.phase_gating_v1 import partition_moneyline_rows
 from backend.mlb.public_game_predictions.pythagorean_log5_v1 import RUNTIME_ROOT, append_grading_rows
 
 
@@ -18,6 +19,11 @@ def main() -> int:
     parser.add_argument("--write-durable", action="store_true")
     args = parser.parse_args()
     rows = json.loads(args.grading_rows_json.read_text(encoding="utf-8"))
+    partitions = partition_moneyline_rows(
+        rows,
+        unique_identity_fields=("game_date", "game_id", "winner_model_version", "prediction_snapshot_class"),
+    )
+    rows = list(partitions.admitted)
     if args.write_durable:
         appended=sum(int(append_outcome_grade(row)) for row in rows)
         destination="POSTGRES_MLB_PUBLIC_GAME_MONEYLINE_OUTCOMES"

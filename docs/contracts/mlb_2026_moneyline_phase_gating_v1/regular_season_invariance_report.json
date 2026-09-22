@@ -1,0 +1,49 @@
+{
+  "immutable_ledger_writes": 0,
+  "metric_artifact": {
+    "byte_identical": true,
+    "limitation": "aggregate artifact is immutable but its historical input manifest is not exact-gamePk bound",
+    "path": "artifacts/analysis/model_development/mlb_standalone_prediction_foundation_certification_v1/2026-08-12/moneyline_prospective_evidence.csv",
+    "sha256_after": "4b32eb26881d20095049d92a5e861722882c827852ec0400ebb8baa03eb325f9",
+    "sha256_before": "4b32eb26881d20095049d92a5e861722882c827852ec0400ebb8baa03eb325f9"
+  },
+  "outcome": {
+    "content_equivalent": true,
+    "distinct_game_pks": 630,
+    "invalid_rows": 0,
+    "membership_content_sha256_after_regular_gate": "8262c1117b5e4df9ba65c989161522687fac047b1229f516941a8884a16c502e",
+    "membership_content_sha256_before": "8262c1117b5e4df9ba65c989161522687fac047b1229f516941a8884a16c502e",
+    "postseason_rows": 0,
+    "preseason_rows": 0,
+    "regular_rows": 630,
+    "rows": 630,
+    "source_rowset_sha256": "e3950f45408d5eb345cb029703f7d3ac3bbb10d435fb8108c7f0307da04f5168"
+  },
+  "prediction": {
+    "content_equivalent": true,
+    "distinct_game_pks": 633,
+    "invalid_rows": 0,
+    "membership_content_sha256_after_regular_gate": "dfa49f3c72e51e7aab63e557119f335010933d2e646939b644391b2d2ffde52b",
+    "membership_content_sha256_before": "dfa49f3c72e51e7aab63e557119f335010933d2e646939b644391b2d2ffde52b",
+    "postseason_rows": 0,
+    "preseason_rows": 0,
+    "regular_rows": 633,
+    "rows": 633,
+    "source_rowset_sha256": "d7551f95bb78fab9db29e7c057cac5f29f3dc1a0d47a87171c49b39dad2e149d"
+  },
+  "price": {
+    "content_equivalent": true,
+    "database_file_content_not_committed": true,
+    "distinct_game_pks": 630,
+    "earliest_capture_utc": "2026-08-06T22:22:26Z",
+    "latest_capture_utc": "2026-09-22T20:24:19.501649Z",
+    "membership_content_sha256_after_regular_gate": "b94902cba5466904eddf8a10c6a5c7b03d8e1b727d5d2f7e3d1ebdb08257a07b",
+    "membership_content_sha256_before": "b94902cba5466904eddf8a10c6a5c7b03d8e1b727d5d2f7e3d1ebdb08257a07b",
+    "phase_row_counts": {
+      "REGULAR_SEASON": 15489
+    },
+    "rows": 15489,
+    "source": "supplemental_main_market_snapshots:MONEYLINE"
+  },
+  "probability_or_pick_recomputation": 0
+}

@@ -268,11 +268,14 @@ def append_prediction_rows(rows: list[dict[str, Any]], path: Path) -> int:
 
 
 def append_grading_rows(rows: list[dict[str, Any]], path: Path) -> int:
+    from .phase_gating_v1 import require_evaluation_row
+
     seen = {_identity(row) for row in _read_jsonl(path)}
     admitted = []
     for row in rows:
         if row.get("official_status") != "Final":
             raise PublicGamePredictionError("GRADING_REQUIRES_OFFICIAL_FINAL")
+        require_evaluation_row(row)
         key = _identity(row)
         if key not in seen:
             seen.add(key)

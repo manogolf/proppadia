@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows
+from backend.mlb.public_game_predictions.phase_gating_v1 import classify_moneyline_row
 from backend.mlb.public_game_predictions.pythagorean_log5_v1 import (
     DISCLOSURE,
     MODEL_NAME,
@@ -44,6 +45,7 @@ def _public_row(row: dict[str, Any], requested_date: str) -> dict[str, Any]:
     ))
     if not all(identity.split("|")):
         raise PublicGamePredictionError("PUBLIC_PREDICTION_IDENTITY_INCOMPLETE")
+    phase = classify_moneyline_row(row)
     return {
         "immutable_prediction_identity": identity,
         "game_id": int(row["game_id"]),
@@ -60,6 +62,11 @@ def _public_row(row: dict[str, Any], requested_date: str) -> dict[str, Any]:
         "model_version": MODEL_VERSION,
         "model_hash": CERTIFIED_MODEL_HASH,
         "prediction_timestamp_utc": row["prediction_timestamp_utc"],
+        # These values are joined at read time and remain absent from the
+        # immutable Moneyline prediction ledger.
+        "authoritative_game_type": phase.source_game_type,
+        "normalized_phase": phase.normalized_phase,
+        "postseason_round": phase.postseason_round,
     }
 
 

@@ -1,0 +1,14 @@
+{
+  "historical_restatement_requirement": "NOT_REQUIRED",
+  "market_roi_effect": "NONE_FOR_RETAINED_REGULAR_COHORT_PARTITIONED_PROSPECTIVELY",
+  "moneyline_postseason_code_readiness": "READY_SYNTHETIC_CONTROL_FLOW_ONLY",
+  "moneyline_postseason_operational_readiness": "BLOCKED_NO_RETAINED_AUTHORITATIVE_POSTSEASON_GAME",
+  "moneyline_regular_season_integrity": "READY",
+  "prediction_quality_effect": "NONE_MEMBERSHIP_ONLY",
+  "remaining_downstream_blockers": [
+    "first real retained authoritative postseason game is not yet present",
+    "ordinary prediction/outcome/price retention window has not validated postseason operation",
+    "legacy aggregate metric artifacts lack immutable exact-gamePk input-manifest binding",
+    "excluded agreement and cross-lane reports require separate authorized cutovers"
+  ]
+}

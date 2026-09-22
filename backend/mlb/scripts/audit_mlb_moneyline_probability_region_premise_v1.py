@@ -19,6 +19,11 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from backend.app.deps import pg_connect
+from backend.mlb.public_game_predictions.phase_gating_v1 import (
+    POSTSEASON,
+    REGULAR_SEASON,
+    partition_moneyline_rows,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -105,7 +110,37 @@ def write_csv(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, index=False, float_format="%.12f", na_rep="")
 
 
-def load_predictions(cutoff: str | None) -> pd.DataFrame:
+def _phase_partition_frame(
+    frame: pd.DataFrame,
+    *,
+    evaluation_phase: str = REGULAR_SEASON,
+    authority: Any = None,
+) -> pd.DataFrame:
+    """Exact-gamePk phase join for all Moneyline metric/report consumers."""
+    if evaluation_phase not in {REGULAR_SEASON, POSTSEASON}:
+        raise RuntimeError(f"MONEYLINE_EVALUATION_PHASE_INVALID:{evaluation_phase}")
+    records = frame.to_dict("records")
+    partitions = partition_moneyline_rows(
+        records,
+        authority=authority,
+        unique_identity_fields=("game_date", "game_id", "model_version", "prediction_snapshot_class"),
+    )
+    selected = partitions.regular_season if evaluation_phase == REGULAR_SEASON else partitions.postseason
+    selected_ids = {
+        (str(row["game_date"]), int(row["game_id"]), str(row["model_version"]), str(row["prediction_snapshot_class"]))
+        for row in selected
+    }
+    mask = frame.apply(
+        lambda row: (
+            str(row["game_date"]), int(row["game_id"]), str(row["model_version"]),
+            str(row["prediction_snapshot_class"]),
+        ) in selected_ids,
+        axis=1,
+    )
+    return frame.loc[mask].copy()
+
+
+def load_predictions(cutoff: str | None, *, evaluation_phase: str = REGULAR_SEASON) -> pd.DataFrame:
     sql = """
       SELECT p.game_date::text AS game_date,p.game_id,p.model_version,
              p.prediction_snapshot_class,p.scheduled_start_utc,p.prediction_timestamp_utc,
@@ -134,21 +169,29 @@ def load_predictions(cutoff: str | None) -> pd.DataFrame:
     frame["home_win_probability"] = frame.home_win_probability.astype(float)
     frame["away_win_probability"] = frame.away_win_probability.astype(float)
     frame["resolved"] = frame.official_winner.notna()
-    return frame
+    return _phase_partition_frame(frame, evaluation_phase=evaluation_phase)
 
 
-def latest_resolved_cutoff() -> str:
+def latest_resolved_cutoff(*, evaluation_phase: str = REGULAR_SEASON) -> str:
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute("""
-          SELECT MAX(p.game_date)::text AS cutoff
+          SELECT p.game_date::text AS game_date,p.game_id,p.model_version,
+                 p.prediction_snapshot_class
           FROM mlb.public_game_moneyline_predictions p
           JOIN mlb.public_game_moneyline_outcomes o
             USING (game_date,game_id,model_version,prediction_snapshot_class)
           WHERE p.model_version=%s AND p.prediction_snapshot_class=%s
             AND p.admission_status=%s
+          ORDER BY p.game_date,p.game_id
         """, (MODEL, SNAPSHOT, ADMISSION))
-        row = cur.fetchone()
-    return str(row["cutoff"])
+        rows = cur.fetchall()
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        raise RuntimeError("canonical resolved prediction stream is empty")
+    frame = _phase_partition_frame(frame, evaluation_phase=evaluation_phase)
+    if frame.empty:
+        raise RuntimeError(f"MONEYLINE_{evaluation_phase}_RESOLVED_STREAM_EMPTY")
+    return str(frame.game_date.max())
 
 
 def load_market_observations(cutoff: str) -> tuple[pd.DataFrame, pd.DataFrame]:

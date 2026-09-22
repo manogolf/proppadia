@@ -8,6 +8,11 @@ from typing import Any, Iterable
 
 from backend.app.deps import pg_connect
 
+from .phase_gating_v1 import (
+    EVALUATION_PHASES,
+    classify_moneyline_row,
+    require_evaluation_row,
+)
 from .pythagorean_log5_v1 import MODEL_VERSION, PublicGamePredictionError
 from .state_v1 import OfficialFinalGame
 
@@ -230,18 +235,29 @@ def fetch_ungraded_final_predictions(cutoff_utc: str, *, game_date: str | None =
             AND o.game_id IS NULL
           ORDER BY p.game_date,p.scheduled_start_utc,p.game_id
         """,(cutoff_utc,MODEL_VERSION,cutoff_utc,game_date,game_date))
-        return [{
+        rows = [{
             'prediction':_value(row,'prediction_payload',0),
             'official_home_runs':int(_value(row,'official_home_runs',1)),
             'official_away_runs':int(_value(row,'official_away_runs',2)),
             'official_source_identity':str(_value(row,'official_source_identity',3)),
             'official_source_sha256':str(_value(row,'official_source_sha256',4)),
         } for row in cur.fetchall()]
+    # Evaluation eligibility is deliberately joined after the immutable DB
+    # read.  No phase value is copied into either Moneyline ledger.
+    admitted = []
+    for item in rows:
+        decision = classify_moneyline_row(item['prediction'])
+        if decision.evaluation_partition in EVALUATION_PHASES:
+            admitted.append(item)
+    return admitted
 
 
 def append_outcome_grade(grade: dict[str, Any]) -> bool:
     if grade.get('official_status')!='Final':
         raise PublicGamePredictionError('GRADING_REQUIRES_OFFICIAL_FINAL')
+    # This is the last write boundary.  It independently prevents a caller
+    # from bypassing the ordinary fetch/grade path with an unpartitioned row.
+    require_evaluation_row(grade)
     payload_hash=canonical_payload_hash(grade)
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute("""
