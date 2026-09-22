@@ -1,0 +1,92 @@
+{
+  "after": {
+    "cohort_rows": 7564,
+    "distinct_game_pks": 651,
+    "hashes": {
+      "cohort_identity_sha256": "f5c8663a1abfd744b8da4b5e44d096b9d2bb5a8ca61f0bc0a5aaa7f18c455c40",
+      "outcome_values_sha256": "204603647e10cfb937aeda6ed806641e3d833e9c4fb921a3a83019d3b3b67d22",
+      "prediction_values_sha256": "a0337d0450c05db5af8800db903d4c8458858d79197a9bdefa91d99a35434753"
+    },
+    "metrics": {
+      "accuracy_pct_at_0_5": 57.218403,
+      "auc": 0.5404937507,
+      "brier_score": 0.244818025934,
+      "correct_at_0_5": 4328,
+      "log_loss": 0.683024373973,
+      "rows": 7564
+    }
+  },
+  "authority": {
+    "authority_records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
+    "classifier_sha256": "eed52e24d123c24e0fbbff21249705d653d77787eab98eb756d5c9752a481c19",
+    "phase_counts": {
+      "PRESEASON": 489,
+      "REGULAR_SEASON": 2430
+    },
+    "proposal_count": 2919,
+    "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+    "source_file_count": 464,
+    "source_manifest_sha256": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100",
+    "source_observation_count": 9092,
+    "source_type_counts": {
+      "E": 38,
+      "R": 2430,
+      "S": 451
+    },
+    "violations": {
+      "conflicting": 0,
+      "duplicate_identity": 0,
+      "missing": 0,
+      "unknown": 0
+    }
+  },
+  "before": {
+    "cohort_rows": 7564,
+    "distinct_game_pks": 651,
+    "hashes": {
+      "cohort_identity_sha256": "f5c8663a1abfd744b8da4b5e44d096b9d2bb5a8ca61f0bc0a5aaa7f18c455c40",
+      "outcome_values_sha256": "204603647e10cfb937aeda6ed806641e3d833e9c4fb921a3a83019d3b3b67d22",
+      "prediction_values_sha256": "a0337d0450c05db5af8800db903d4c8458858d79197a9bdefa91d99a35434753"
+    },
+    "metrics": {
+      "accuracy_pct_at_0_5": 57.218403,
+      "auc": 0.5404937507,
+      "brier_score": 0.244818025934,
+      "correct_at_0_5": 4328,
+      "log_loss": 0.683024373973,
+      "rows": 7564
+    }
+  },
+  "contract_name": "MLB_2026_GAME_PHASE_FILE_AUTHORITY_HITS_PILOT_V1",
+  "database_connections": 0,
+  "database_writes": 0,
+  "failed_checks": [],
+  "network_requests": 0,
+  "pilot_validator": {
+    "failed": 0,
+    "passed": 9,
+    "status": "PASS"
+  },
+  "probability_invariance": "PASS",
+  "source_completion_validator": {
+    "failed": 0,
+    "passed": 14,
+    "status": "PASS"
+  },
+  "status": "PASS",
+  "tests": {
+    "canonical_dependency_free_scenarios": {
+      "failed": 0,
+      "passed": 25,
+      "skipped": 0,
+      "unexecuted": 0,
+      "validator_checks": 13,
+      "validator_status": "PASS"
+    },
+    "pilot_unittest": {
+      "failed": 0,
+      "passed": 13,
+      "skipped": 0
+    }
+  }
+}

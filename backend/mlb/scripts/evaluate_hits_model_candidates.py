@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import warnings
+from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
@@ -15,6 +17,12 @@ import pandas as pd
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
 from backend._legacy.scripts.recompute_mlb_training_predictions import _actual_side, _build_features, _score_probability
+from backend.mlb.season_transition.game_phase_authority_v1 import (
+    CanonicalGamePhaseAuthority,
+    GamePhaseAuthorityError,
+    HashedProposalAuthority,
+    source_type_is_recognized,
+)
 from backend.shared.db.pg import pg_fetchall
 import backend.mlb.prediction.make_prediction as mp
 
@@ -43,6 +51,7 @@ SELECT
   m.is_home,
   m.game_day_of_week,
   m.time_of_day_bucket,
+  to_jsonb(m)->>'game_type' AS legacy_source_game_type,
   row_to_json(pds)::jsonb AS pds_stats
 FROM mlb.model_training_props m
 LEFT JOIN mlb.player_derived_stats pds
@@ -54,9 +63,21 @@ WHERE lower(trim(m.prop_type)) = lower(trim(%s))
   AND (m.team IS NULL OR m.team = '' OR m.team ~ '^[0-9]+$')
   AND m.game_date::date >= %s::date
   AND m.game_date::date <= %s::date
-  AND (%s::boolean = FALSE OR COALESCE(NULLIF(upper(trim(to_jsonb(m)->>'game_type')), ''), 'R') = 'R')
 ORDER BY m.game_date DESC, m.id DESC
 """
+
+
+PHASE_GATE_DECISIONS = (
+    "ADMITTED_REGULAR_SEASON",
+    "EXCLUDED_PRESEASON",
+    "EXCLUDED_POSTSEASON",
+    "BLOCKED_MISSING_GAME_PK",
+    "BLOCKED_ABSENT_AUTHORITY",
+    "BLOCKED_SPECIAL_TYPE",
+    "BLOCKED_UNKNOWN_TYPE",
+    "BLOCKED_CONFLICTING_TYPE",
+    "BLOCKED_STALE_AUTHORITY",
+)
 
 
 def _decile_bucket(p: float) -> str:
@@ -80,7 +101,6 @@ def _fetch_rows(
     prop_source: str,
     from_date: str,
     to_date: str,
-    require_regular_season: bool,
 ) -> pd.DataFrame:
     # Pull in small chunks to avoid statement_timeout on long ranges.
     start = datetime.fromisoformat(str(from_date)).date()
@@ -96,7 +116,6 @@ def _fetch_rows(
                 prop_source,
                 cur.isoformat(),
                 chunk_end.isoformat(),
-                bool(require_regular_season),
             ),
         )
         if part:
@@ -109,6 +128,154 @@ def _fetch_rows(
         df = df.drop_duplicates(subset=["id"], keep="first")
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     return df
+
+
+def _legacy_regular_season_admission(raw_type: Any) -> bool:
+    """Reproduce the superseded SQL predicate for bounded comparison only."""
+
+    if raw_type is None or (not isinstance(raw_type, str) and pd.isna(raw_type)):
+        value = "R"
+    else:
+        value = str(raw_type).strip().upper() or "R"
+    return value == "R"
+
+
+def _canonical_hash(value: Any) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _phase_gate_decision(
+    row: Dict[str, Any],
+    authority: CanonicalGamePhaseAuthority,
+) -> tuple[str, int | None]:
+    game_pk_value = row.get("game_id")
+    try:
+        record = authority.lookup_exact(game_pk_value)
+    except GamePhaseAuthorityError as exc:
+        error_decisions = {
+            "GAME_PHASE_GAME_PK_MISSING": "BLOCKED_MISSING_GAME_PK",
+            "GAME_PHASE_ABSENT": "BLOCKED_ABSENT_AUTHORITY",
+            "GAME_PHASE_SPECIAL_EXCLUDED": "BLOCKED_SPECIAL_TYPE",
+            "GAME_PHASE_CONFLICT_BLOCKED": "BLOCKED_CONFLICTING_TYPE",
+            "GAME_PHASE_CORRECTION_REVIEW_REQUIRED": "BLOCKED_CONFLICTING_TYPE",
+            "GAME_PHASE_AUTHORITY_STALE": "BLOCKED_STALE_AUTHORITY",
+        }
+        return error_decisions.get(exc.code, "BLOCKED_UNKNOWN_TYPE"), exc.game_pk
+
+    raw_type = row.get("legacy_source_game_type")
+    raw_missing = raw_type is None or (
+        not isinstance(raw_type, str) and pd.isna(raw_type)
+    ) or (isinstance(raw_type, str) and raw_type == "")
+    if not raw_missing:
+        if not source_type_is_recognized(raw_type):
+            return "BLOCKED_UNKNOWN_TYPE", record.game_pk
+        if raw_type != record.source_game_type:
+            return "BLOCKED_CONFLICTING_TYPE", record.game_pk
+
+    if record.season_phase == "REGULAR_SEASON":
+        return "ADMITTED_REGULAR_SEASON", record.game_pk
+    if record.season_phase == "PRESEASON":
+        return "EXCLUDED_PRESEASON", record.game_pk
+    if record.season_phase == "POSTSEASON":
+        return "EXCLUDED_POSTSEASON", record.game_pk
+    return "BLOCKED_UNKNOWN_TYPE", record.game_pk
+
+
+def _apply_regular_season_authority(
+    df_rows: pd.DataFrame,
+    *,
+    authority: CanonicalGamePhaseAuthority,
+) -> tuple[pd.DataFrame, Dict[str, Any]]:
+    """Apply exact-gamePk positive membership before model scoring.
+
+    Missing/unknown/conflicting authority is recorded separately from expected
+    preseason/postseason exclusions.  The caller must abort when the report's
+    blocked row count is non-zero.
+    """
+
+    decisions: Counter[str] = Counter()
+    game_pks_by_decision: defaultdict[str, set[int]] = defaultdict(set)
+    admitted_indexes: List[Any] = []
+    legacy_admitted_game_pks: set[int] = set()
+    newly_excluded_or_blocked_game_pks: set[int] = set()
+
+    for row_index, row in df_rows.iterrows():
+        row_dict = row.to_dict()
+        decision, game_pk = _phase_gate_decision(row_dict, authority)
+        decisions[decision] += 1
+        if game_pk is not None:
+            game_pks_by_decision[decision].add(int(game_pk))
+        legacy_admitted = _legacy_regular_season_admission(
+            row_dict.get("legacy_source_game_type")
+        )
+        if legacy_admitted and game_pk is not None:
+            legacy_admitted_game_pks.add(int(game_pk))
+        if decision == "ADMITTED_REGULAR_SEASON":
+            admitted_indexes.append(row_index)
+        elif legacy_admitted and game_pk is not None:
+            newly_excluded_or_blocked_game_pks.add(int(game_pk))
+
+    decision_row_counts = {
+        decision: int(decisions.get(decision, 0)) for decision in PHASE_GATE_DECISIONS
+    }
+    decision_game_pks = {
+        decision: sorted(game_pks_by_decision.get(decision, set()))
+        for decision in PHASE_GATE_DECISIONS
+    }
+    blocked_row_count = sum(
+        count for decision, count in decision_row_counts.items() if decision.startswith("BLOCKED_")
+    )
+    excluded_row_count = sum(
+        count for decision, count in decision_row_counts.items() if decision.startswith("EXCLUDED_")
+    )
+    valid_input_game_pks = sorted(
+        {
+            int(value)
+            for value in df_rows.get("game_id", pd.Series(dtype="object")).tolist()
+            if value is not None
+            and not (not isinstance(value, str) and pd.isna(value))
+            and str(value).strip()
+        }
+    )
+    row_identities = [
+        {
+            "id": str(row.get("id")),
+            "game_pk": None
+            if row.get("game_id") is None
+            or (not isinstance(row.get("game_id"), str) and pd.isna(row.get("game_id")))
+            else int(row.get("game_id")),
+        }
+        for row in df_rows.to_dict(orient="records")
+    ]
+    admitted = df_rows.loc[admitted_indexes].copy()
+    report = {
+        "authority": authority.metadata.to_dict(),
+        "gate": "POSITIVE_REGULAR_SEASON_MEMBERSHIP",
+        "input_row_count": int(len(df_rows)),
+        "input_distinct_game_pk_count": len(valid_input_game_pks),
+        "input_game_pks": valid_input_game_pks,
+        "input_identity_sha256": _canonical_hash(row_identities),
+        "legacy_admitted_distinct_game_pk_count": len(legacy_admitted_game_pks),
+        "admitted_row_count": int(len(admitted)),
+        "admitted_distinct_game_pk_count": len(
+            game_pks_by_decision.get("ADMITTED_REGULAR_SEASON", set())
+        ),
+        "excluded_row_count": int(excluded_row_count),
+        "blocked_row_count": int(blocked_row_count),
+        "decision_row_counts": decision_row_counts,
+        "decision_game_pks": decision_game_pks,
+        "newly_excluded_or_blocked_game_pks": sorted(
+            newly_excluded_or_blocked_game_pks
+        ),
+    }
+    return admitted, report
 
 
 def _score_all_rows_for_model(
@@ -346,15 +513,41 @@ def main() -> int:
 
     # Fetch once across all requested cohorts.
     fetch_from = args.monthly_from or args.gate_from
-    df_rows = _fetch_rows(
+    authority: CanonicalGamePhaseAuthority | None = None
+    if args.require_regular_season:
+        authority = HashedProposalAuthority()
+        authority.require_supported_window(fetch_from, args.gate_to)
+
+    df_fetched = _fetch_rows(
         prop_type=str(args.prop_type),
         prop_source=str(args.prop_source),
         from_date=str(fetch_from),
         to_date=str(args.gate_to),
-        require_regular_season=bool(args.require_regular_season),
     )
-    if df_rows.empty:
+    if df_fetched.empty:
         raise RuntimeError("no rows fetched for requested cohort range")
+
+    phase_gate_report: Dict[str, Any] | None = None
+    if authority is not None:
+        df_rows, phase_gate_report = _apply_regular_season_authority(
+            df_fetched,
+            authority=authority,
+        )
+        phase_gate_path = out_dir / "phase_gate_report.json"
+        phase_gate_path.write_text(
+            json.dumps(phase_gate_report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        if int(phase_gate_report["blocked_row_count"]) > 0:
+            raise RuntimeError(
+                "canonical game-phase authority blocked evaluation; "
+                f"see {phase_gate_path}"
+            )
+    else:
+        df_rows = df_fetched
+
+    if df_rows.empty:
+        raise RuntimeError("no rows admitted for requested cohort range")
 
     leaderboard_rows: List[Dict[str, Any]] = []
     manifest: Dict[str, Any] = {
@@ -364,7 +557,9 @@ def main() -> int:
         "gate_window": {"from": args.gate_from, "to": args.gate_to},
         "monthly_from": args.monthly_from,
         "require_regular_season": bool(args.require_regular_season),
+        "rows_fetched_before_phase_gate": int(len(df_fetched)),
         "rows_fetched": int(len(df_rows)),
+        "phase_gate": phase_gate_report,
         "candidates": [],
         "files": {},
     }

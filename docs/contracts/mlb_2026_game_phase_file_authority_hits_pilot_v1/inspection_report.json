@@ -1,0 +1,45 @@
+{
+  "call_site_count_outside_target": 0,
+  "consumer": "backend/mlb/scripts/evaluate_hits_model_candidates.py",
+  "consumer_behavior": {
+    "modifies_stored_predictions": false,
+    "performs_evaluation_probability_scoring": true,
+    "probability_change_required": false,
+    "writes_evaluation_artifacts_only": true
+  },
+  "contract_name": "MLB_2026_GAME_PHASE_FILE_AUTHORITY_HITS_PILOT_V1",
+  "database_connections_during_inspection": 0,
+  "exact_game_pk": {
+    "available": true,
+    "column": "mlb.model_training_props.game_id",
+    "constraint_evidence": "bigint NOT NULL; game_id > 0 check; game_info foreign key in retained schema",
+    "selected_by_consumer": true
+  },
+  "frozen_retained_input": {
+    "distinct_game_pks": 651,
+    "earliest_game_date": "2026-05-08",
+    "latest_game_date": "2026-08-02",
+    "path": "artifacts/analysis/model_development/mlb_hits_standalone_prediction_evidence_review_stage1/2026-08-14/frozen_hits_review_population.csv",
+    "rows": 7564,
+    "sha256": "7c94ead53af9669c1164e41fcd9714edd0656dc02d6550f0c773aa1a3c1147fd"
+  },
+  "legacy_behavior": {
+    "effect": "missing or empty game_type is admitted as regular season",
+    "predicate": "COALESCE(NULLIF(upper(trim(to_jsonb(m)->>'game_type')), ''), 'R') = 'R'"
+  },
+  "network_requests_during_inspection": 0,
+  "season_scope": {
+    "authority_from": "2026-02-20",
+    "authority_through": "2026-09-27",
+    "authority_year": 2026,
+    "non_regular_mode_changed": false,
+    "regular_mode_outside_scope": "GAME_PHASE_AUTHORITY_STALE"
+  },
+  "stop_conditions": {
+    "ambiguous_game_identity": false,
+    "exact_game_pk_unavailable": false,
+    "expands_consumer_scope": false,
+    "probability_computation_change_required": false,
+    "unscopable_unsupported_seasons": false
+  }
+}
