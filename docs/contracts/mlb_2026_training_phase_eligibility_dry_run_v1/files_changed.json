@@ -1,0 +1,14 @@
+{
+  "contract_name": "MLB_2026_TRAINING_PHASE_ELIGIBILITY_DRY_RUN_V1",
+  "governed_source_and_tests": [
+    "backend/mlb/model_trainer.py",
+    "backend/mlb/scripts/build_mlb_training_phase_eligibility_dry_run_v1.py",
+    "backend/mlb/scripts/validate_mlb_training_phase_eligibility_dry_run_v1.py",
+    "backend/mlb/season_transition/training_phase_eligibility_v1.py",
+    "backend/mlb/tests/test_mlb_training_phase_eligibility_dry_run_v1.py"
+  ],
+  "ordinary_selector_changed": false,
+  "operational_data_changed": false,
+  "other_consumers_changed": false,
+  "freeze_package_changed": false
+}

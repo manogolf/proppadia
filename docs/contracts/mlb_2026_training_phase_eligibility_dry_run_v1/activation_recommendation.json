@@ -1,0 +1,18 @@
+{
+  "active_selector_cutover_authorized": false,
+  "active_selector_cutover_justified_for_separate_review": true,
+  "basis": {
+    "admitted_game_pks": 2341,
+    "admitted_rows": 459604,
+    "all_retained_hashes_identical": true,
+    "blocked_identities": 0,
+    "excluded_preseason_game_pks": 471,
+    "excluded_preseason_rows": 141162,
+    "input_game_pks": 2812,
+    "input_rows": 600766,
+    "model_fit_calls": 0,
+    "operational_artifact_writes": 0
+  },
+  "smallest_next_action": "Separately authorize and review a model_trainer-only active selector cutover at all three actual input modes before feature aggregation; require actual-frame gate evidence and retained feature/target parity before any fit.",
+  "status": "DRY_RUN_PASSED_SELECTOR_REMAINS_INACTIVE"
+}

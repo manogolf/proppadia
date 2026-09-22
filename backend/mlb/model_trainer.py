@@ -1355,8 +1355,19 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
 
 
 # ---- CLI ---------------------------------------------------------------------
-if __name__ == "__main__":
-    import argparse, sys
+def _run_training_phase_eligibility_dry_run() -> Dict[str, Any]:
+    """Run the frozen selector comparison without entering a training path."""
+
+    from backend.mlb.scripts.build_mlb_training_phase_eligibility_dry_run_v1 import (
+        EVIDENCE_DIR,
+        execute_dry_run,
+    )
+
+    return execute_dry_run(output_dir=EVIDENCE_DIR)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    import argparse
     from backend.mlb.shared.model_authority import assert_predictive_model_qualified
 
     parser = argparse.ArgumentParser()
@@ -1364,7 +1375,20 @@ if __name__ == "__main__":
     parser.add_argument("--days-back", type=int, default=DEFAULT_DAYS_BACK)
     parser.add_argument("--limit", type=int, default=DEFAULT_ROW_LIMIT)
     parser.add_argument("--quiet", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--phase-eligibility-dry-run",
+        action="store_true",
+        help=(
+            "offline frozen-population phase membership comparison; "
+            "never fits or writes model artifacts"
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    if args.phase_eligibility_dry_run:
+        report = _run_training_phase_eligibility_dry_run()
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report.get("status") == "PASS" else 1
 
     assert_predictive_model_qualified("retired_model_training")
 
@@ -1390,4 +1414,8 @@ if __name__ == "__main__":
                 print(f"❌ {p}: {e}")
 
     print(json.dumps({"trained": trained, "skipped": skipped, "props": props, "results": results}, indent=2))
-    sys.exit(0)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

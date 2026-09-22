@@ -1,0 +1,255 @@
+{
+  "checks": [
+    {
+      "check": "dependency_free_tests",
+      "detail": {
+        "executed": 15,
+        "failed": 0,
+        "intended": 15,
+        "module": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1",
+        "passed": 15,
+        "runner": "PYTHON_STDLIB_UNITTEST_ACTUAL_ASSERTION_EXECUTION",
+        "scenarios": [
+          {
+            "scenario": "test_authority_hash_mismatch_blocks",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_conflicting_authority_blocks",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_deterministic_repeated_execution_and_stable_order",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_dry_run_cannot_fit_or_write_operational_artifacts",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_duplicate_authority_blocks_before_rows",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_exact_expected_frozen_counts",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_existing_hits_authority_pilot_remains_valid",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_missing_authority_blocks",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_missing_game_pk_blocks",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_ordinary_invocation_remains_on_training_path",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_postseason_exclusion",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_preseason_exclusion",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_regular_season_admission",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_retained_feature_target_and_order_hash_invariance",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "test_unknown_and_special_type_block",
+            "status": "PASSED"
+          }
+        ],
+        "skipped": 0,
+        "successful": true,
+        "unexecuted": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "exact_frozen_counts",
+      "detail": {
+        "admitted_game_pks": 2341,
+        "admitted_rows": 459604,
+        "excluded_preseason_game_pks": 471,
+        "excluded_preseason_rows": 141162,
+        "input_game_pks": 2812,
+        "input_rows": 600766
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "zero_unresolved_authority",
+      "detail": {
+        "BLOCKED_ABSENT_AUTHORITY": 0,
+        "BLOCKED_AUTHORITY_HASH_MISMATCH": 0,
+        "BLOCKED_CONFLICTING_TYPE": 0,
+        "BLOCKED_DUPLICATE_AUTHORITY": 0,
+        "BLOCKED_MISSING_GAME_PK": 0,
+        "BLOCKED_SPECIAL_TYPE": 0,
+        "BLOCKED_STALE_AUTHORITY": 0,
+        "BLOCKED_UNKNOWN_TYPE": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "membership_only_hash_invariance",
+      "detail": {
+        "retained_feature_source_row_commitment": {
+          "after_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+          "before_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+          "identical": true
+        },
+        "retained_row_order": {
+          "after_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+          "before_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+          "identical": true
+        },
+        "retained_target_projection": {
+          "after_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+          "before_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+          "identical": true
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "stable_order_and_no_date_default",
+      "detail": {
+        "calendar_inference": false,
+        "missing_type_default": false,
+        "stable_input_order_preserved": true
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "zero_fit_training_and_operational_writes",
+      "detail": {
+        "database_connections": 0,
+        "dataset_writes": 0,
+        "model_artifact_writes": 0,
+        "model_fit_calls": 0,
+        "model_score_calls": 0,
+        "model_train_calls": 0,
+        "network_requests": 0,
+        "operational_artifact_writes": 0,
+        "paid_requests": 0,
+        "prediction_writes": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "exact_exclusion_ledger",
+      "detail": {
+        "row_sum": 141162,
+        "rows": 471,
+        "type_counts": {
+          "E": 31,
+          "S": 440
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "ordinary_selector_not_activated",
+      "detail": {
+        "active_selector_cutover_authorized": false,
+        "ordinary_trainer_selector_activated": false
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "shared_helper_reuses_authority_interface",
+      "detail": "no independent type map or calendar classification",
+      "status": "PASS"
+    }
+  ],
+  "checks_failed": 0,
+  "checks_passed": 9,
+  "contract_name": "MLB_2026_TRAINING_PHASE_ELIGIBILITY_DRY_RUN_V1",
+  "status": "PASS",
+  "tests": {
+    "executed": 15,
+    "failed": 0,
+    "intended": 15,
+    "module": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1",
+    "passed": 15,
+    "runner": "PYTHON_STDLIB_UNITTEST_ACTUAL_ASSERTION_EXECUTION",
+    "scenarios": [
+      {
+        "scenario": "test_authority_hash_mismatch_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_conflicting_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_deterministic_repeated_execution_and_stable_order",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_dry_run_cannot_fit_or_write_operational_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_duplicate_authority_blocks_before_rows",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_exact_expected_frozen_counts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_existing_hits_authority_pilot_remains_valid",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_missing_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_missing_game_pk_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_ordinary_invocation_remains_on_training_path",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_postseason_exclusion",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_preseason_exclusion",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_regular_season_admission",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_retained_feature_target_and_order_hash_invariance",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "test_unknown_and_special_type_block",
+        "status": "PASSED"
+      }
+    ],
+    "skipped": 0,
+    "successful": true,
+    "unexecuted": 0
+  }
+}

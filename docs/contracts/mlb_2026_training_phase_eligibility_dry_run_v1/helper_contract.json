@@ -1,0 +1,25 @@
+{
+  "admission_rule": "exact gamePk lookup and authoritative season_phase == REGULAR_SEASON",
+  "backend_interface": "CanonicalGamePhaseAuthority",
+  "blocked_reasons": [
+    "BLOCKED_MISSING_GAME_PK",
+    "BLOCKED_ABSENT_AUTHORITY",
+    "BLOCKED_SPECIAL_TYPE",
+    "BLOCKED_UNKNOWN_TYPE",
+    "BLOCKED_CONFLICTING_TYPE",
+    "BLOCKED_DUPLICATE_AUTHORITY",
+    "BLOCKED_AUTHORITY_HASH_MISMATCH",
+    "BLOCKED_STALE_AUTHORITY"
+  ],
+  "calendar_inference": false,
+  "contract_name": "MLB_REGULAR_SEASON_TRAINING_ELIGIBILITY_V1",
+  "excluded_reasons": [
+    "EXCLUDED_PRESEASON",
+    "EXCLUDED_POSTSEASON"
+  ],
+  "feature_or_target_logic": false,
+  "function": "backend.mlb.season_transition.training_phase_eligibility_v1.filter_regular_season_membership",
+  "missing_type_default": false,
+  "mutation_rule": "preserve admitted mapping objects and stable input order",
+  "unresolved_behavior": "enumerate all rows then raise EligibilityGateBlocked and return no partial admitted result"
+}
