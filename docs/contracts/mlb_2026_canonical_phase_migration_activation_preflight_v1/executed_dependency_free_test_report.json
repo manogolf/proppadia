@@ -1,0 +1,74 @@
+{
+  "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+  "executed_scenarios": 15,
+  "failed": 0,
+  "gate_status": "PASS",
+  "intended_scenarios": 15,
+  "passed": 15,
+  "results": [
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_activation_plan_blocks_on_unexecuted_rehearsal",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_ignored_authoritative_response_identity",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_loader_handles_append_only_trigger_transactionally",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_loader_is_guarded_named_and_exact_game_pk_only",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_migration_has_no_default_or_calendar_phase_inference",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_migration_is_transaction_neutral_and_idempotent_by_construction",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_migration_preserves_authoritative_fields",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_operational_counts_and_proposed_mutations_exact",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_operational_migration_is_not_applied",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_operational_snapshot_is_read_only_and_secret_free",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_population_has_zero_classification_conflicts",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_population_transition_exact",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_rehearsal_blocker_is_explicit_and_no_production_mutation_occurred",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_rollback_is_transaction_neutral_and_guarded",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1.CanonicalPhaseMigrationPreflightTests.test_writers_use_named_columns_and_fail_on_partial_schema",
+      "status": "PASSED"
+    }
+  ],
+  "runner": "PYTHON_STANDARD_LIBRARY_UNITTEST_ACTUAL_ASSERTIONS",
+  "skipped": 0,
+  "target_module": "backend.mlb.tests.test_mlb_canonical_phase_migration_activation_preflight_v1",
+  "unexecuted": 0
+}

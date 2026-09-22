@@ -1,0 +1,364 @@
+{
+  "activation_gate": "BLOCKED",
+  "check_count": 20,
+  "checks": [
+    {
+      "check": "ignored_authoritative_response_identity",
+      "detail": {
+        "bytes": 642447,
+        "sha256": "3ca8bff9e4361676ad3b34c5166f23f4d180d809083557ad8498062a9febd091"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "population_transition_exact",
+      "detail": {
+        "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+        "duplicate_identity_conflict_count": 0,
+        "final_population_count": 2919,
+        "missing_count": 0,
+        "net_new_canonical_count": 18,
+        "net_new_canonical_game_pks": [
+          831432,
+          831444,
+          831455,
+          831463,
+          831526,
+          831555,
+          831559,
+          831564,
+          831608,
+          831612,
+          831629,
+          831632,
+          831723,
+          831761,
+          831852,
+          831938,
+          831940,
+          832043
+        ],
+        "phase_inference_from_dates": false,
+        "previously_classified_overlap_count": 1,
+        "previously_classified_overlap_game_pks": [
+          823244
+        ],
+        "prior_missing_count": 471,
+        "prior_union_count": 2901,
+        "resolved_prior_missing_count": 471,
+        "response_distinct_game_pk_count": 490,
+        "returned_outside_prior_missing_count": 19,
+        "returned_outside_prior_missing_game_pks": [
+          823244,
+          831432,
+          831444,
+          831455,
+          831463,
+          831526,
+          831555,
+          831559,
+          831564,
+          831608,
+          831612,
+          831629,
+          831632,
+          831723,
+          831761,
+          831852,
+          831938,
+          831940,
+          832043
+        ],
+        "source_conflict_count": 0,
+        "unknown_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "operational_snapshot_read_only_secret_free",
+      "detail": {
+        "database_writes": 0,
+        "engine": {
+          "current_user": "postgres",
+          "database": "postgres",
+          "is_in_recovery": false,
+          "server_version_num": "150008",
+          "session_user": "postgres",
+          "transaction_isolation": "repeatable read",
+          "transaction_read_only": "on",
+          "transaction_snapshot_utc": "2026-09-22 02:13:31.429905+00:00",
+          "version": "PostgreSQL 15.8 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 13.2.0, 64-bit"
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "operational_target_exact",
+      "detail": {
+        "credentials_recorded": false,
+        "database": "postgres",
+        "engine": "PostgreSQL",
+        "host": "aws-0-us-west-1.pooler.supabase.com",
+        "port": 5432,
+        "target_identity_sha256": "5fe30ccd585f3ccb9781999afafab6d42d793aee336998421e395cb5e9c5fb7d"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "operational_schema_and_counts",
+      "detail": {
+        "mlb.game_info": {
+          "distinct_game_pk_count": 10337,
+          "duplicate_game_pk_extra_row_count": 0,
+          "duplicate_game_pk_group_count": 0,
+          "row_count": 10337
+        },
+        "mlb_cleanroom_v1.games": {
+          "distinct_game_pk_count": 86,
+          "duplicate_game_pk_extra_row_count": 504,
+          "duplicate_game_pk_group_count": 85,
+          "row_count": 590
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "migration_not_applied",
+      "detail": {
+        "canonical_view": null,
+        "matching_migration_versions": [],
+        "migration_tracking_relations": [
+          {
+            "table_name": "schema_migrations",
+            "table_schema": "auth"
+          },
+          {
+            "table_name": "schema_migrations",
+            "table_schema": "realtime"
+          },
+          {
+            "table_name": "migrations",
+            "table_schema": "storage"
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "operational_locks_nonblocking",
+      "detail": {
+        "advisory_locks": [],
+        "relation_locks": []
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "cleanroom_immutability_trigger_recorded",
+      "detail": [
+        {
+          "definition": "CREATE TRIGGER reject_mutation BEFORE DELETE OR UPDATE ON mlb_cleanroom_v1.games FOR EACH ROW EXECUTE FUNCTION mlb_cleanroom_v1.reject_mutation()",
+          "enabled": "O",
+          "function_definition": "CREATE OR REPLACE FUNCTION mlb_cleanroom_v1.reject_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  RAISE EXCEPTION 'mlb_cleanroom_v1 source tables are append-only';\nEND $function$\n",
+          "trigger_name": "reject_mutation"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "check": "proposed_mutation_counts_exact",
+      "detail": {
+        "mlb.game_info": {
+          "deletes": 0,
+          "inserts": 0,
+          "unchanged_nonproposal_rows": 7528,
+          "updates": 2809
+        },
+        "mlb_cleanroom_v1.games": {
+          "deletes": 0,
+          "distinct_game_pks_updated": 86,
+          "inserts": 0,
+          "updates": 590
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "activation_loader_inputs_exact_and_source_hashed",
+      "detail": {
+        "conflicting_count": 0,
+        "duplicate_identity_count": 0,
+        "missing_count": 0,
+        "phase_counts": {
+          "PRESEASON": 489,
+          "REGULAR_SEASON": 2430
+        },
+        "proposal_count": 2919,
+        "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+        "source_file_count": 464,
+        "source_manifest_sha256": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100",
+        "source_type_counts": {
+          "E": 38,
+          "R": 2430,
+          "S": 451
+        },
+        "unknown_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "migration_static_hardening",
+      "detail": {
+        "caller_owned_atomic_transaction_required": true,
+        "existing_rows_allowed_unclassified_until_backfill": true,
+        "future_rows_contract_constrained": true,
+        "idempotent_columns": true,
+        "idempotent_indexes": true,
+        "idempotent_view": true,
+        "named_column_writer_compatibility": true,
+        "no_calendar_derived_phase": true,
+        "no_default_to_r": true,
+        "rollback_drops_only_v1_objects": true,
+        "rollback_transaction_neutral": true,
+        "transaction_neutral_body": true
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "isolated_rehearsal_blocker_exact",
+      "detail": {
+        "blocker": "LOCAL_POSTGRES_SERVER_BINARY_ABSENT",
+        "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+        "detail": "initdb=/opt/homebrew/opt/libpq/bin/initdb; pg_ctl=/opt/homebrew/opt/libpq/bin/pg_ctl; required_companion_server=/opt/homebrew/opt/libpq/bin/postgres",
+        "environment": "DISPOSABLE_LOCAL_POSTGRESQL_CLUSTER_UNAVAILABLE",
+        "initial_failed_attempt_created_rows": false,
+        "initial_failed_attempt_created_schema": false,
+        "production_database_ddl_dml": 0,
+        "required_rehearsal_scenarios_unexecuted": [
+          "first_migration",
+          "repeated_migration",
+          "canonical_backfill",
+          "repeated_backfill",
+          "rollback",
+          "reactivation_after_rollback",
+          "concurrent_writer_compatibility",
+          "database_enforced_invalid_type_failure",
+          "exact_game_pk_join",
+          "zero_unintended_row_creation_or_deletion"
+        ],
+        "smallest_remediation": "provide an isolated disposable PostgreSQL server with matching major-version semantics; do not install it or use the operational target under this task",
+        "status": "BLOCKED"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "runtime_claims_fail_closed",
+      "detail": {
+        "runtime_concurrent_writer_proven": false,
+        "runtime_idempotence_proven": false,
+        "runtime_rehearsal_status": "BLOCKED",
+        "runtime_rollback_proven": false
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "preflight_assertions_reexecuted",
+      "detail": {
+        "failed": 0,
+        "passed": 15,
+        "skipped": 0,
+        "unexecuted": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "canonical_phase_assertions_still_pass",
+      "detail": {
+        "failed": 0,
+        "passed": 25,
+        "skipped": 0,
+        "unexecuted": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "existing_phase_validator",
+      "detail": {
+        "check_count": 13,
+        "status": "PASS"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "source_completion_validator",
+      "detail": {
+        "check_count": 14,
+        "failed_checks": [],
+        "status": "PASS"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "activation_and_rollback_commands_prepared",
+      "detail": "backup, activation, validation, smoke, decision, and rollback commands present",
+      "status": "PASS"
+    },
+    {
+      "check": "activation_gate_blocked_exactly",
+      "detail": {
+        "blockers": [
+          {
+            "code": "ISOLATED_POSTGRES_REHEARSAL_NOT_EXECUTED",
+            "detail": "LOCAL_POSTGRES_SERVER_BINARY_ABSENT",
+            "unexecuted_scenarios": [
+              "first_migration",
+              "repeated_migration",
+              "canonical_backfill",
+              "repeated_backfill",
+              "rollback",
+              "reactivation_after_rollback",
+              "concurrent_writer_compatibility",
+              "database_enforced_invalid_type_failure",
+              "exact_game_pk_join",
+              "zero_unintended_row_creation_or_deletion"
+            ]
+          },
+          {
+            "code": "POST_ACTIVATION_WRITER_COMPATIBILITY_NOT_RUNTIME_PROVEN",
+            "detail": "static compatibility passes, but local PostgreSQL execution is unavailable"
+          }
+        ],
+        "status": "BLOCKED",
+        "thresholds": {
+          "disabled_trigger_at_commit": 0,
+          "duplicate_identity_conflict": 0,
+          "hash_mismatch": 0,
+          "missing_source_type": 0,
+          "phase_mismatch": 0,
+          "row_creation": 0,
+          "row_deletion": 0,
+          "source_conflict": 0,
+          "unexpected_game_pk": 0,
+          "unexpected_relation_lock": 0,
+          "unexpected_row_count": 0,
+          "unknown_source_type": 0,
+          "unverified_source_file": 0,
+          "waiting_activation_lock": 0,
+          "writer_incompatibility": 0
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "sha256_manifest",
+      "detail": [],
+      "status": "PASS"
+    }
+  ],
+  "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+  "failed_checks": [],
+  "operational_database_writes": 0,
+  "paid_credits": 0,
+  "passed_check_count": 20,
+  "provider_requests": 0,
+  "status": "PASS"
+}

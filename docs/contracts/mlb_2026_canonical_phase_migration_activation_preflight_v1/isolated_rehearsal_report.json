@@ -1,0 +1,23 @@
+{
+  "blocker": "LOCAL_POSTGRES_SERVER_BINARY_ABSENT",
+  "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+  "detail": "initdb=/opt/homebrew/opt/libpq/bin/initdb; pg_ctl=/opt/homebrew/opt/libpq/bin/pg_ctl; required_companion_server=/opt/homebrew/opt/libpq/bin/postgres",
+  "environment": "DISPOSABLE_LOCAL_POSTGRESQL_CLUSTER_UNAVAILABLE",
+  "initial_failed_attempt_created_rows": false,
+  "initial_failed_attempt_created_schema": false,
+  "production_database_ddl_dml": 0,
+  "required_rehearsal_scenarios_unexecuted": [
+    "first_migration",
+    "repeated_migration",
+    "canonical_backfill",
+    "repeated_backfill",
+    "rollback",
+    "reactivation_after_rollback",
+    "concurrent_writer_compatibility",
+    "database_enforced_invalid_type_failure",
+    "exact_game_pk_join",
+    "zero_unintended_row_creation_or_deletion"
+  ],
+  "smallest_remediation": "provide an isolated disposable PostgreSQL server with matching major-version semantics; do not install it or use the operational target under this task",
+  "status": "BLOCKED"
+}

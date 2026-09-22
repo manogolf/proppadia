@@ -1,7 +1,11 @@
 -- PREPARED ONLY. Do not apply before the activation preflight in the V1 runbook.
 -- Canonical game tables retain authoritative source type once; downstream
 -- lanes join mlb.canonical_game_phase_v1 by exact gamePk/game_id.
-BEGIN;
+--
+-- TRANSACTION-NEUTRAL BODY: the governed activation loader executes this file
+-- inside the same transaction as the exact-gamePk backfill. Manual execution
+-- must use psql --single-transaction --set ON_ERROR_STOP=1. Never execute this
+-- file without an enclosing transaction.
 
 ALTER TABLE mlb.game_info
   ADD COLUMN IF NOT EXISTS source_season integer,
@@ -166,5 +170,3 @@ COMMENT ON COLUMN mlb_cleanroom_v1.games.source_game_type IS
   'Exact authoritative MLB StatsAPI gameType. Never reconstructed from a date.';
 COMMENT ON COLUMN mlb_cleanroom_v1.games.schedule_relationships IS
   'Raw rescheduled/resumed relationship fields retained from authoritative schedule source.';
-
-COMMIT;

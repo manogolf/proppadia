@@ -1,0 +1,29 @@
+{
+  "caller_owned_atomic_transaction_required": true,
+  "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+  "existing_rows_allowed_unclassified_until_backfill": true,
+  "future_rows_contract_constrained": true,
+  "idempotent_columns": true,
+  "idempotent_indexes": true,
+  "idempotent_view": true,
+  "migration_path": "backend/mlb/sql/migrations/20260921_prepare_mlb_season_phase_contract_v1.sql",
+  "migration_sha256": "212233451cb8f7478e7ef92792c0026f834ae392ff6bd6baa58ad94ac2e8de39",
+  "named_column_writer_compatibility": true,
+  "no_calendar_derived_phase": true,
+  "no_default_to_r": true,
+  "preserved_fields": {
+    "schedule_relationships": 2,
+    "source_game_type": 2,
+    "source_round": 2,
+    "source_season": 2
+  },
+  "rollback_drops_only_v1_objects": true,
+  "rollback_path": "backend/mlb/sql/migrations/20260921_rollback_mlb_season_phase_contract_v1.sql",
+  "rollback_sha256": "a382bd80f7104bdf144a5a51f52269851aad12362e007e62e37870942d68c488",
+  "rollback_transaction_neutral": true,
+  "runtime_concurrent_writer_proven": false,
+  "runtime_idempotence_proven": false,
+  "runtime_rehearsal_status": "BLOCKED",
+  "runtime_rollback_proven": false,
+  "transaction_neutral_body": true
+}

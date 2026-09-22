@@ -1,5 +1,6 @@
 -- PREPARED ROLLBACK ONLY. This removes only V1 phase-contract objects.
-BEGIN;
+-- TRANSACTION-NEUTRAL BODY: execute only through the governed rollback command
+-- or psql --single-transaction --set ON_ERROR_STOP=1.
 
 DROP VIEW IF EXISTS mlb.canonical_game_phase_v1;
 
@@ -33,5 +34,3 @@ ALTER TABLE mlb_cleanroom_v1.games
   DROP COLUMN IF EXISTS season_phase,
   DROP COLUMN IF EXISTS source_game_type,
   DROP COLUMN IF EXISTS source_season;
-
-COMMIT;

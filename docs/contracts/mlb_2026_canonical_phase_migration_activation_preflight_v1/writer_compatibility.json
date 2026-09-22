@@ -1,0 +1,23 @@
+{
+  "backfill_trigger_strategy": "under nonblocking exclusive maintenance lock, verify exact trigger/function, disable only reject_mutation, update phase columns by exact gamePk, re-enable before commit; any error rolls back trigger state and data",
+  "cleanroom_append_only_trigger": [
+    {
+      "definition": "CREATE TRIGGER reject_mutation BEFORE DELETE OR UPDATE ON mlb_cleanroom_v1.games FOR EACH ROW EXECUTE FUNCTION mlb_cleanroom_v1.reject_mutation()",
+      "enabled": "O",
+      "function_definition": "CREATE OR REPLACE FUNCTION mlb_cleanroom_v1.reject_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  RAISE EXCEPTION 'mlb_cleanroom_v1 source tables are append-only';\nEND $function$\n",
+      "trigger_name": "reject_mutation"
+    }
+  ],
+  "cleanroom_writers": [
+    "backend/mlb/scripts/cleanroom_v1/run_cleanroom_source_cycle.py",
+    "backend/mlb/scripts/cleanroom_v1/admit_exact_roster_bridge.py"
+  ],
+  "contract_name": "MLB_2026_CANONICAL_PHASE_MIGRATION_ACTIVATION_PREFLIGHT_V1",
+  "current_schema_state": "LEGACY_COMPLETE",
+  "current_writer_compatibility": "PASS_STATIC_AND_OPERATIONAL_SCHEMA",
+  "game_info_writer": "backend/mlb/scripts/insert_mlb_stat_derived.py",
+  "named_columns_only": true,
+  "partial_schema_behavior": "FAIL_CLOSED",
+  "post_activation_writer_compatibility": "UNPROVEN_PENDING_ISOLATED_POSTGRES_REHEARSAL",
+  "post_migration_schema_state": "ACTIVATED_COMPLETE"
+}
