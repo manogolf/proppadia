@@ -16,7 +16,7 @@ Env:
 from __future__ import annotations
 
 
-import os, io, json
+import os, io, json, hashlib, subprocess, uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -37,6 +37,24 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score
 from pandas.api.types import is_numeric_dtype
+
+from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.training_phase_eligibility_v1 import (
+    ADMITTED_REGULAR_SEASON,
+    filter_regular_season_membership,
+)
+from backend.mlb.training_run_lineage_v1 import (
+    INPUT_MANIFEST_CONTRACT,
+    RESULT_MANIFEST_CONTRACT,
+    build_input_manifest,
+    build_result_manifest,
+    canonical_sha256,
+    file_sha256,
+    frame_projection_sha256,
+    load_and_verify_manifest,
+    require_completed_result_binding,
+    write_manifest_immutable,
+)
 
 # ---- .env (optional) ---------------------------------------------------------
 try:
@@ -262,6 +280,124 @@ def _load_feature_spec() -> Dict[str, Any]:
 def _chunked(xs: List[Any], n: int) -> List[List[Any]]:
     return [xs[i:i+n] for i in range(0, len(xs), n)]
 
+
+_PHASE_AUTHORITY: Optional[HashedProposalAuthority] = None
+
+
+def _verified_phase_authority() -> HashedProposalAuthority:
+    global _PHASE_AUTHORITY
+    if _PHASE_AUTHORITY is None:
+        _PHASE_AUTHORITY = HashedProposalAuthority()
+    return _PHASE_AUTHORITY
+
+
+def _source_snapshot(
+    frame: pd.DataFrame,
+    *,
+    source_identity: str,
+    artifact_path: Path | None = None,
+) -> Dict[str, Any]:
+    fields = sorted(str(column) for column in frame.columns)
+    hashes: Dict[str, str] = {
+        "selected_source_rows_sha256": frame_projection_sha256(frame, fields),
+        "source_contract_sha256": canonical_sha256(
+            {"source_identity": source_identity, "ordered_fields": fields}
+        ),
+    }
+    artifact: Dict[str, Any] | None = None
+    if artifact_path is not None:
+        resolved = artifact_path.resolve()
+        hashes["source_artifact_sha256"] = file_sha256(resolved)
+        artifact = {
+            "path": str(resolved),
+            "bytes": resolved.stat().st_size,
+        }
+    return {
+        "identity": source_identity,
+        "row_count_before_phase_gate": int(len(frame)),
+        "ordered_fields": fields,
+        "hashes": hashes,
+        "artifact": artifact,
+    }
+
+
+def _apply_active_training_phase_gate(
+    frame: pd.DataFrame,
+    *,
+    source_identity: str,
+    artifact_path: Path | None = None,
+) -> pd.DataFrame:
+    """Filter exact gamePk membership before any in-process feature work."""
+
+    if "game_id" not in frame.columns:
+        raise RuntimeError("TRAINING_PHASE_EXACT_GAME_PK_MISSING:game_id")
+    source_type_field = next(
+        (
+            field
+            for field in (
+                "source_game_type",
+                "game_type",
+                "legacy_source_game_type",
+            )
+            if field in frame.columns
+        ),
+        None,
+    )
+    snapshot = _source_snapshot(
+        frame,
+        source_identity=source_identity,
+        artifact_path=artifact_path,
+    )
+    game_values = frame["game_id"].tolist()
+    source_type_values = (
+        frame[source_type_field].tolist()
+        if source_type_field
+        else [None] * len(frame)
+    )
+    gate_rows = (
+        {
+            "__row_position": position,
+            "game_id": game_id,
+            "source_game_type": source_type,
+        }
+        for position, (game_id, source_type) in enumerate(
+            zip(game_values, source_type_values)
+        )
+    )
+    result = filter_regular_season_membership(
+        gate_rows,
+        game_pk_field="game_id",
+        source_type_field="source_game_type",
+        authority=_verified_phase_authority(),
+        consumer_identity="backend/mlb/model_trainer.py::ORDINARY_ACTIVE_GATE",
+        input_identity=source_identity,
+        row_identity_fields=("__row_position", "game_id"),
+        invariant_field_groups={"row_order": ("__row_position", "game_id")},
+    )
+    admitted_positions = [
+        int(row["__row_position"]) for row in result.admitted_rows
+    ]
+    admitted = frame.iloc[admitted_positions].copy()
+    report = dict(result.report)
+    if report["decision_row_counts"][ADMITTED_REGULAR_SEASON] != len(admitted):
+        raise RuntimeError("TRAINING_PHASE_ADMISSION_COUNT_MISMATCH")
+    admitted.attrs["phase_eligibility_gate_report"] = report
+    admitted.attrs["training_source_snapshot"] = snapshot
+    return admitted
+
+
+def _preserve_training_evidence(
+    transformed: pd.DataFrame,
+    source: pd.DataFrame,
+) -> pd.DataFrame:
+    transformed.attrs["phase_eligibility_gate_report"] = source.attrs[
+        "phase_eligibility_gate_report"
+    ]
+    transformed.attrs["training_source_snapshot"] = source.attrs[
+        "training_source_snapshot"
+    ]
+    return transformed
+
 def _pg_data(resp):
     """Normalize PostgREST response to a list of rows across supabase-py versions."""
     # supabase-py v2 returns object with .data
@@ -445,10 +581,19 @@ def _fetch_from_view(sb: Optional[Client], prop_type: str, days_back: int, limit
         resp = q.execute()                      # ← ensure we actually execute
         rows = _pg_data(resp)
         print(f"[trainer] source=view:{FEATURE_VIEW} prop={prop_type} rows={len(rows)}")
-        return pd.DataFrame(rows)
     except Exception as e:
         print(f"[trainer] view fetch failed ({FEATURE_VIEW}) for {prop_type}: {e}")
         return None
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return frame
+    # Keep authority failures outside the source-access fallback boundary.  A
+    # missing, stale, conflicting, or tampered authority must stop training;
+    # it must never select a different data source as an implicit recovery.
+    return _apply_active_training_phase_gate(
+        frame,
+        source_identity=f"view:{FEATURE_VIEW}:prop={str(prop_type).strip().lower()}",
+    )
 
 
 def _fetch_base_rows_pg(prop_type: str, since_date: str, limit: int) -> List[Dict[str, Any]]:
@@ -491,8 +636,18 @@ def _fetch_base_and_merge(sb: Optional[Client], prop_type: str, days_back: int, 
         print(f"[trainer] source=fallback:base empty prop={prop_type}")
         return df
 
-    df = _add_time_features(df)
-    df = _merge_derived_features(sb, df, feat_cols)
+    gated = _apply_active_training_phase_gate(
+        df,
+        source_identity=(
+            "mlb.model_training_props:"
+            f"prop={str(prop_type).strip().lower()}:since={since_date}:limit={int(limit)}"
+        ),
+    )
+    df = _preserve_training_evidence(_add_time_features(gated), gated)
+    df = _preserve_training_evidence(
+        _merge_derived_features(sb, df, feat_cols),
+        gated,
+    )
     print(f"[trainer] source=fallback:base+merge prop={prop_type} rows={len(df)}")
     return df
 
@@ -835,16 +990,27 @@ def _fetch_reconcile_and_merge(sb: Optional[Client], prop_type: str, days_back: 
     if int(limit) > 0:
         out = out.head(int(limit))
 
-    out = _add_time_features(out)
+    gated = _apply_active_training_phase_gate(
+        out,
+        source_identity=(
+            f"reconcile_csv:{path.resolve()}:"
+            f"prop={str(prop_type).strip().lower()}:limit={int(limit)}"
+        ),
+        artifact_path=path,
+    )
+    out = _preserve_training_evidence(_add_time_features(gated), gated)
     if TRAIN_MARKET_ONLY:
         # Keep this profile clean-room: no player_derived_stats/BvP hydration.
         for f in feat_cols:
             if f not in out.columns:
                 out[f] = np.nan
         print(f"[trainer] source=reconcile_csv market_only=1 prop={prop_type} rows={len(out)} file={path}")
-        return out
+        return _preserve_training_evidence(out, gated)
 
-    out = _merge_derived_features(sb, out, feat_cols)
+    out = _preserve_training_evidence(
+        _merge_derived_features(sb, out, feat_cols),
+        gated,
+    )
     print(f"[trainer] source=reconcile_csv prop={prop_type} rows={len(out)} file={path}")
     return out
 
@@ -862,7 +1028,11 @@ def fetch_training_rows(
     if TRAIN_FEATURE_SOURCE in {"reconcile", "reconcile_csv"}:
         df = _fetch_reconcile_and_merge(sb, prop_type, days_back, limit, feat_cols)
         if not df.empty and prop_key == "total_bases":
-            df = _add_total_bases_component_features(df, quiet=quiet)
+            before = df
+            df = _preserve_training_evidence(
+                _add_total_bases_component_features(df, quiet=quiet),
+                before,
+            )
         if not df.empty:
             return df
         if not RECONCILE_FALLBACK_BASE_MERGE:
@@ -872,12 +1042,20 @@ def fetch_training_rows(
     if TRAIN_FEATURE_SOURCE == "view":
         df = _fetch_from_view(sb, prop_type, days_back, limit, feat_cols)
         if isinstance(df, pd.DataFrame) and not df.empty and prop_key == "total_bases":
-            df = _add_total_bases_component_features(df, quiet=quiet)
+            before = df
+            df = _preserve_training_evidence(
+                _add_total_bases_component_features(df, quiet=quiet),
+                before,
+            )
         if df is not None:
             return df
     df = _fetch_base_and_merge(sb, prop_type, days_back, limit, feat_cols)
     if not df.empty and prop_key == "total_bases":
-        df = _add_total_bases_component_features(df, quiet=quiet)
+        before = df
+        df = _preserve_training_evidence(
+            _add_total_bases_component_features(df, quiet=quiet),
+            before,
+        )
     return df
 
 
@@ -1055,6 +1233,128 @@ def build_pipeline(num_cols: List[str], cat_cols: List[str]):
     return pipe_lr, pipe_rf
 
 
+def _repository_commit() -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=Path(__file__).resolve().parents[2],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return completed.stdout.strip()
+
+
+def _new_training_run_identity(prop_type: str) -> str:
+    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%fZ")
+    return f"mlb-{str(prop_type).strip().lower()}-{timestamp}-{uuid.uuid4().hex}"
+
+
+def _identity_fields(frame: pd.DataFrame) -> List[str]:
+    fields = [
+        field
+        for field in ("id", "game_id", "prop_type", "player_id", "line", "prop_value")
+        if field in frame.columns
+    ]
+    if "game_id" not in fields:
+        raise RuntimeError("TRAINING_LINEAGE_EXACT_GAME_PK_MISSING")
+    return fields
+
+
+def _create_training_input_binding(
+    *,
+    prop_type: str,
+    days_back: int,
+    limit: int,
+    frame: pd.DataFrame,
+    train_frame: pd.DataFrame,
+    validation_frame: pd.DataFrame,
+    feature_columns: List[str],
+    numeric_features: List[str],
+    categorical_features: List[str],
+    split_method: str,
+    gate_report: Dict[str, Any],
+    source_snapshot: Dict[str, Any],
+) -> tuple[str, Dict[str, Any], Path]:
+    game_values = pd.to_numeric(frame["game_id"], errors="coerce")
+    if game_values.isna().any() or not (game_values > 0).all():
+        raise RuntimeError("TRAINING_LINEAGE_EXACT_GAME_PK_INVALID")
+    admitted_game_pks = sorted({int(value) for value in game_values.tolist()})
+    identity_fields = _identity_fields(frame)
+    row_order_sha256 = frame_projection_sha256(frame, identity_fields)
+    feature_sha256 = frame_projection_sha256(frame, feature_columns)
+    target_sha256 = frame_projection_sha256(frame, ["y"])
+    run_identity = _new_training_run_identity(prop_type)
+    trainer_path = Path(__file__).resolve()
+    trainer_config = {
+        "entrypoint": str(trainer_path.relative_to(trainer_path.parents[2])),
+        "entrypoint_sha256": file_sha256(trainer_path),
+        "prop_type": str(prop_type),
+        "days_back": int(days_back),
+        "limit": int(limit),
+        "feature_source": TRAIN_FEATURE_SOURCE,
+        "training_profile": "market_only" if TRAIN_MARKET_ONLY else TRAIN_PROFILE,
+        "feature_view": FEATURE_VIEW or None,
+        "reconcile_rows_csv": RECONCILE_ROWS_CSV if TRAIN_FEATURE_SOURCE in {"reconcile", "reconcile_csv"} else None,
+        "reconcile_bookmaker": RECONCILE_BOOKMAKER or None,
+        "reconcile_require_two_sided": bool(RECONCILE_REQUIRE_TWO_SIDED),
+        "bvp_feature_set_tag": BVP_FEATURE_SET_TAG,
+    }
+    split_definition = {
+        "method": split_method,
+        "train_fraction": 0.8,
+        "stratified_fallback_random_state": 42,
+        "train_row_count": int(len(train_frame)),
+        "validation_row_count": int(len(validation_frame)),
+        "train_identity_sha256": frame_projection_sha256(train_frame, identity_fields),
+        "validation_identity_sha256": frame_projection_sha256(
+            validation_frame, identity_fields
+        ),
+    }
+    manifest = build_input_manifest(
+        run_identity=run_identity,
+        code_commit=_repository_commit(),
+        trainer_config=trainer_config,
+        admitted_game_pks=admitted_game_pks,
+        admitted_row_count=int(len(frame)),
+        gate_report=gate_report,
+        source_snapshot=source_snapshot,
+        canonical_row_order_sha256=row_order_sha256,
+        retained_feature_sha256=feature_sha256,
+        retained_target_sha256=target_sha256,
+        feature_contract={
+            "ordered_features": list(feature_columns),
+            "numeric_features": list(numeric_features),
+            "categorical_features": list(categorical_features),
+            "contract_sha256": canonical_sha256(
+                {
+                    "ordered_features": feature_columns,
+                    "numeric_features": numeric_features,
+                    "categorical_features": categorical_features,
+                }
+            ),
+        },
+        target_contract={
+            "field": "y",
+            "definition": "actual over side; binary 1=over and 0=under",
+            "allowed_values": [0, 1],
+            "target_sha256": target_sha256,
+        },
+        split_definition=split_definition,
+    )
+    run_dir = (MODELS_DIR / "training_runs" / run_identity).resolve()
+    input_path = run_dir / "input_manifest.json"
+    write_manifest_immutable(
+        input_path,
+        manifest,
+        contract=INPUT_MANIFEST_CONTRACT,
+    )
+    verified = load_and_verify_manifest(input_path, INPUT_MANIFEST_CONTRACT)
+    if verified != manifest:
+        raise RuntimeError("TRAINING_LINEAGE_INPUT_MANIFEST_VERIFY_MISMATCH")
+    return run_identity, manifest, input_path
+
+
 # ---- Trainer -----------------------------------------------------------------
 def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=DEFAULT_ROW_LIMIT, quiet=True):
     from backend.mlb.shared.model_authority import assert_predictive_model_qualified
@@ -1092,6 +1392,12 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         if not quiet:
             print(f"⏭️  {prop_type}: no training rows.")
         return None
+    phase_gate_report = df.attrs.get("phase_eligibility_gate_report")
+    source_snapshot = df.attrs.get("training_source_snapshot")
+    if not isinstance(phase_gate_report, dict) or not isinstance(source_snapshot, dict):
+        raise RuntimeError("TRAINING_PHASE_ACTIVE_GATE_EVIDENCE_MISSING")
+    if phase_gate_report.get("gate_status") != "PASS":
+        raise RuntimeError("TRAINING_PHASE_ACTIVE_GATE_NOT_PASSED")
 
     # 3) prep labels/weights
     df = _prep_frame(df, prop_type=prop_type, quiet=quiet)
@@ -1180,6 +1486,7 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
 
     # 5) stratified split (ensures both classes in val)
     # --- time-based holdout first, with stratified fallback if needed ---
+    split_method = "TIME_ORDERED_80_20"
     if "game_date" in df.columns:
         df = df.sort_values("game_date")
     else:
@@ -1194,6 +1501,7 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
         (train_idx, val_idx), = sss.split(df[cols_used], df["y"])
         train_df, val_df = df.iloc[train_idx], df.iloc[val_idx]
+        split_method = "STRATIFIED_SHUFFLE_80_20_RANDOM_STATE_42"
 
     # 6) drop all-null features in the actual fit frame before any imputer fit.
     train_df, num_used, cat_used, _ = drop_all_null_fit_features(
@@ -1208,6 +1516,21 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         if not quiet:
             print(f"⏭️  {prop_type}: no usable features after train-split null pruning; skipping.")
         return None
+
+    run_identity, input_manifest, input_manifest_path = _create_training_input_binding(
+        prop_type=prop_type,
+        days_back=int(days_back),
+        limit=int(limit),
+        frame=df,
+        train_frame=train_df,
+        validation_frame=val_df,
+        feature_columns=cols_used,
+        numeric_features=num_used,
+        categorical_features=cat_used,
+        split_method=split_method,
+        gate_report=phase_gate_report,
+        source_snapshot=source_snapshot,
+    )
 
     X_tr, y_tr, w_tr = train_df[cols_used], train_df["y"], train_df["sample_weight"]
     X_v,  y_v,  w_v  =  val_df[cols_used],  val_df["y"],  val_df["sample_weight"]
@@ -1282,13 +1605,14 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
     best_model = pipe_rf if (auc_rf >= (auc_lr if not np.isnan(auc_lr) else -1)) else pipe_lr
 
     # 6) serialize with exact lists we used
+    completed_at_utc = datetime.utcnow().isoformat() + "Z"
     payload = {
         "best": best_model,
         "lr": pipe_lr,
         "rf": pipe_rf,
         "meta": {
             "prop_type": prop_type,
-            "trained_at": datetime.utcnow().isoformat(),
+            "trained_at": completed_at_utc,
             "days_back": days_back,
             "limit": limit,
             "auc_lr": float(auc_lr) if not np.isnan(auc_lr) else None,
@@ -1300,16 +1624,69 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
             "features_cat": cat_used,
             "training_profile": "market_only" if TRAIN_MARKET_ONLY else "legacy",
             "reconcile_bookmaker": RECONCILE_BOOKMAKER or None,
+            "training_run_identity": run_identity,
+            "input_manifest_sha256": input_manifest["manifest_sha256"],
         },
     }
     buf = io.BytesIO()
     joblib.dump(payload, buf, compress=3)
     model_bytes = buf.getvalue()
+    model_sha256 = hashlib.sha256(model_bytes).hexdigest()
 
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     latest_path  = (LATEST_DIR / f"{prop_type}.joblib").resolve()
     archive_path = (ARCHIVE_DIR / prop_type / f"{prop_type}-{ts}.joblib").resolve()
+    run_dir = input_manifest_path.parent
+    run_model_path = run_dir / "model.joblib"
+    evaluation_result_path = run_dir / "evaluation_summary.json"
+    result_manifest_path = run_dir / "result_manifest.json"
 
+    # Preserve the fitted artifact under the immutable run identity, bind it to
+    # the verified input manifest, and only then expose mutable latest/index
+    # registration paths.
+    _atomic_write_bytes(run_model_path, model_bytes)
+    if file_sha256(run_model_path) != model_sha256:
+        raise RuntimeError("TRAINING_LINEAGE_MODEL_ARTIFACT_HASH_MISMATCH")
+    evaluation_summary = {
+        "run_identity": run_identity,
+        "input_manifest_sha256": input_manifest["manifest_sha256"],
+        "prop_type": prop_type,
+        "validation_row_count": int(len(val_df)),
+        "auc_lr": None if np.isnan(auc_lr) else float(auc_lr),
+        "auc_rf": None if np.isnan(auc_rf) else float(auc_rf),
+        "decision_threshold": float(best_thr),
+        "validation_weighted_accuracy": float(best_score),
+        "completed_at_utc": completed_at_utc,
+    }
+    evaluation_bytes = (
+        json.dumps(evaluation_summary, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    _atomic_write_bytes(evaluation_result_path, evaluation_bytes)
+    evaluation_sha256 = file_sha256(evaluation_result_path)
+    result_manifest = build_result_manifest(
+        input_manifest=input_manifest,
+        model_artifacts=[
+            {
+                "path": str(run_model_path),
+                "sha256": model_sha256,
+                "bytes": len(model_bytes),
+            }
+        ],
+        result_artifacts=[
+            {
+                "path": str(evaluation_result_path),
+                "sha256": evaluation_sha256,
+                "bytes": len(evaluation_bytes),
+            }
+        ],
+        completed_at_utc=completed_at_utc,
+    )
+    write_manifest_immutable(
+        result_manifest_path,
+        result_manifest,
+        contract=RESULT_MANIFEST_CONTRACT,
+    )
+    require_completed_result_binding(input_manifest_path, result_manifest_path)
     _atomic_write_bytes(latest_path, model_bytes)
     _atomic_write_bytes(archive_path, model_bytes)
 
@@ -1325,7 +1702,7 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
             index = {}
     index[prop_type] = {
         "prop_type": prop_type,
-        "trained_at": datetime.utcnow().isoformat(),
+        "trained_at": completed_at_utc,
         "file": latest_path.name,
         "auc_lr": None if np.isnan(auc_lr) else float(auc_lr),
         "auc_rf": None if np.isnan(auc_rf) else float(auc_rf),
@@ -1337,6 +1714,13 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         "features_cat": cat_used,
         "training_profile": "market_only" if TRAIN_MARKET_ONLY else "legacy",
         "reconcile_bookmaker": RECONCILE_BOOKMAKER or None,
+        "training_run_identity": run_identity,
+        "input_manifest_path": str(input_manifest_path),
+        "input_manifest_sha256": input_manifest["manifest_sha256"],
+        "result_manifest_path": str(result_manifest_path),
+        "result_manifest_sha256": result_manifest["manifest_sha256"],
+        "model_artifact_sha256": model_sha256,
+        "evaluation_result_sha256": evaluation_sha256,
     }
     _atomic_write_bytes(index_path, json.dumps(index, indent=2).encode("utf-8"))
 
@@ -1350,6 +1734,11 @@ def train_models_for_prop(prop_type: str, *, days_back=DEFAULT_DAYS_BACK, limit=
         "auc_rf": auc_rf,
         "latest_path": str(latest_path),
         "archive_path": str(archive_path),
+        "input_manifest_path": str(input_manifest_path),
+        "result_manifest_path": str(result_manifest_path),
+        "input_manifest_sha256": input_manifest["manifest_sha256"],
+        "result_manifest_sha256": result_manifest["manifest_sha256"],
+        "evaluation_result_path": str(evaluation_result_path),
         "rows": int(len(df)),
     }
 
@@ -1398,7 +1787,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     props = [args.prop] if args.prop else PROP_TYPES
     results = []
-    trained = skipped = 0
+    trained = skipped = failed = 0
 
     for p in props:
         try:
@@ -1409,12 +1798,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 skipped += 1
         except Exception as e:
-            skipped += 1
+            failed += 1
             if not args.quiet:
                 print(f"❌ {p}: {e}")
 
-    print(json.dumps({"trained": trained, "skipped": skipped, "props": props, "results": results}, indent=2))
-    return 0
+    print(
+        json.dumps(
+            {
+                "trained": trained,
+                "skipped": skipped,
+                "failed": failed,
+                "props": props,
+                "results": results,
+            },
+            indent=2,
+        )
+    )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

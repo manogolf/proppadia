@@ -1,0 +1,25 @@
+{
+  "contract": "MLB_IMMUTABLE_TRAINING_INPUT_MANIFEST_V1",
+  "creation_point": "after final membership/preprocessing/split feature selection and before pipeline construction or fitting",
+  "publication": "canonical JSON to a unique run path using fsynced temporary file and no-overwrite hard-link",
+  "verification": "manifest self-hash is re-read and verified before fitting",
+  "required_bindings": [
+    "training run identity",
+    "code commit",
+    "trainer and configuration identity",
+    "exact admitted gamePk population",
+    "admitted and excluded row/game counts by phase decision",
+    "source snapshot identities and hashes",
+    "authority contract and manifest hashes",
+    "canonical row-order hash",
+    "retained feature hash",
+    "retained target hash",
+    "feature contract",
+    "target contract",
+    "train/validation split definition",
+    "explicit exclusions"
+  ],
+  "fit_allowed_without_complete_verified_manifest": false,
+  "interrupted_publish_creates_valid_manifest": false,
+  "overwrite_different_manifest": false
+}

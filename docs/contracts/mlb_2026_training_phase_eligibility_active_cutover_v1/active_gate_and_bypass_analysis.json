@@ -1,0 +1,50 @@
+{
+  "active_gate": {
+    "authority_backend": "HashedProposalAuthority implementing CanonicalGamePhaseAuthority",
+    "helper": "backend.mlb.season_transition.training_phase_eligibility_v1.filter_regular_season_membership",
+    "membership_key": "exact gamePk carried as game_id",
+    "source_boundaries": [
+      {
+        "function": "_fetch_reconcile_and_merge",
+        "ordering": "after source selection/deduplication/limit; before time features and derived-feature hydration"
+      },
+      {
+        "function": "_fetch_base_and_merge",
+        "ordering": "immediately after base rows; before time features and derived-feature hydration"
+      },
+      {
+        "function": "_fetch_from_view",
+        "ordering": "immediately after returned rows; authority failures are outside the source-access fallback handler"
+      }
+    ],
+    "downstream_guard": "train_models_for_prop requires PASS gate evidence and a source snapshot before preprocessing",
+    "admitted": ["REGULAR_SEASON"],
+    "excluded": ["PRESEASON", "POSTSEASON"],
+    "blocking": [
+      "missing gamePk",
+      "absent authority",
+      "special source type",
+      "unknown source type",
+      "conflicting source type",
+      "duplicate authority identity",
+      "stale authority",
+      "authority hash mismatch"
+    ],
+    "calendar_inference": false,
+    "missing_type_default_to_R": false
+  },
+  "bypass_analysis": {
+    "ordinary_cli": "model_trainer.main -> train_models_for_prop -> fetch_training_rows",
+    "ordinary_wrapper": "backend/mlb/retrain_all_models.py delegates to model_trainer",
+    "make_targets": [
+      "mlb-hybrid-window-refresh",
+      "mlb-retrain-bol-market-only",
+      "mlb-retrain-broad-reconcile"
+    ],
+    "all_ordinary_source_modes_gated": true,
+    "direct_ungated_frame_rejected": true,
+    "view_authority_failure_fallback_rejected": true,
+    "lower_level_research_pipeline_imports_in_scope": false,
+    "remaining_bypass_in_ordinary_trainer": false
+  }
+}

@@ -1,0 +1,266 @@
+{
+  "checks": {
+    "all_dependency_free_tests": true,
+    "all_source_modes_gated": true,
+    "atomic_immutable_manifest_write": true,
+    "completed_binding_precedes_registration": true,
+    "frozen_counts_exact": true,
+    "input_binding_precedes_pipeline": true,
+    "manifest_contracts_present": true,
+    "no_calendar_phase_inference": true,
+    "no_independent_phase_mapping": true,
+    "retained_hashes_invariant": true,
+    "static_validation_deterministic": true,
+    "zero_model_fit_during_validation": true,
+    "zero_operational_artifact_mutation": true
+  },
+  "checks_failed": 0,
+  "checks_passed": 13,
+  "contract_name": "MLB_2026_TRAINING_PHASE_ELIGIBILITY_ACTIVE_CUTOVER_V1",
+  "frozen_reproduction": {
+    "admitted_game_pks": 2341,
+    "admitted_rows": 459604,
+    "blocked_rows": 0,
+    "excluded_preseason_game_pks": 471,
+    "excluded_preseason_rows": 141162,
+    "input_game_pks": 2812,
+    "input_rows": 600766,
+    "invariant_hashes": {
+      "retained_feature_source_row_commitment": {
+        "after_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+        "before_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+        "identical": true
+      },
+      "retained_row_order": {
+        "after_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+        "before_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+        "identical": true
+      },
+      "retained_target_projection": {
+        "after_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+        "before_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+        "identical": true
+      }
+    }
+  },
+  "safety": {
+    "database_connections": 0,
+    "model_fit_calls": 0,
+    "model_train_commands": 0,
+    "network_requests": 0,
+    "operational_artifact_writes": 0,
+    "paid_requests": 0,
+    "synthetic_temporary_artifacts_only": true
+  },
+  "static_validation": {
+    "atomic_no_overwrite_publish": true,
+    "completed_binding_before_latest": true,
+    "fit_ordering": {
+      "fetch_before_input_binding": true,
+      "input_binding_before_pipeline": true
+    },
+    "input_manifest_contract_present": true,
+    "no_calendar_phase_inference": true,
+    "no_independent_phase_mapping": true,
+    "result_manifest_contract_present": true,
+    "source_modes_gated": {
+      "_fetch_base_and_merge": true,
+      "_fetch_from_view": true,
+      "_fetch_reconcile_and_merge": true
+    }
+  },
+  "static_validation_sha256": "e9d5f3c3be14d4e4ea6520ac340f4461e7ff72de7b0fdf27e2b8d85c059c6b5b",
+  "status": "PASS",
+  "tests": {
+    "executed": 40,
+    "failed": 0,
+    "intended": 40,
+    "model_artifact_state_after": {
+      "artifact_count": 444,
+      "state_sha256": "e8bee42bedc071616d733ead307496ddbdc70d7f8c1481b6c934d8dcec56a022"
+    },
+    "model_artifact_state_before": {
+      "artifact_count": 444,
+      "state_sha256": "e8bee42bedc071616d733ead307496ddbdc70d7f8c1481b6c934d8dcec56a022"
+    },
+    "model_artifacts_unchanged": true,
+    "module_counts": {
+      "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1": 13,
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1": 12,
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1": 15
+    },
+    "module_coverage_exact": true,
+    "modules": [
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1",
+      "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1",
+      "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1"
+    ],
+    "passed": 40,
+    "runner": "PYTHON_STDLIB_UNITTEST_ACTUAL_ASSERTION_EXECUTION",
+    "scenarios": [
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_absent_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_conflicting_consumer_type_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_duplicate_and_conflicting_authority_block",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_missing_game_pk_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_postseason_excluded_from_regular_evaluation",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_preseason_excluded_from_regular_evaluation",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_probability_and_pick_invariance_for_shared_rows",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_proposal_hash_mismatch_blocks_before_parse",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_repeated_load_is_deterministic",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_source_manifest_hash_mismatch_blocks_before_parse",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_special_and_unknown_types_fail_closed",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_stale_authority_window_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1.GamePhaseFileAuthorityHitsPilotTests.test_valid_regular_season_admission",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_all_trainer_source_modes_have_active_gate_and_fit_ordering",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_committed_frozen_counts_and_hashes_remain_exact",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_input_manifest_is_deterministic_and_tamper_evident",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_interrupted_manifest_creation_leaves_no_valid_run",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_missing_authority_stops_before_feature_aggregation",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_model_trainer_writes_verified_input_binding_before_fit",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_ordinary_training_path_cannot_bypass_gate_evidence",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_preseason_never_reaches_feature_aggregation_or_fit",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_result_publication_requires_completed_binding_and_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_tampered_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_validation_uses_only_synthetic_temporary_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_active_cutover_v1.TrainingPhaseActiveCutoverTests.test_view_authority_failure_cannot_fall_back",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_authority_hash_mismatch_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_conflicting_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_deterministic_repeated_execution_and_stable_order",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_dry_run_cannot_fit_or_write_operational_artifacts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_duplicate_authority_blocks_before_rows",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_exact_expected_frozen_counts",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_existing_hits_authority_pilot_remains_valid",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_missing_authority_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_missing_game_pk_blocks",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_ordinary_invocation_remains_on_training_path",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_postseason_exclusion",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_preseason_exclusion",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_regular_season_admission",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_retained_feature_target_and_order_hash_invariance",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_training_phase_eligibility_dry_run_v1.TrainingPhaseEligibilityDryRunTests.test_unknown_and_special_type_block",
+        "status": "PASSED"
+      }
+    ],
+    "skipped": 0,
+    "successful": true,
+    "unexecuted": 0
+  }
+}

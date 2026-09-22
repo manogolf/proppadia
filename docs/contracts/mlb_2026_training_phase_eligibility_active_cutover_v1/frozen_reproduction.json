@@ -1,0 +1,21 @@
+{
+  "authority_result": {
+    "input": {"rows": 600766, "distinct_game_pks": 2812},
+    "admitted_regular_season": {"rows": 459604, "distinct_game_pks": 2341},
+    "excluded_preseason": {
+      "rows": 141162,
+      "distinct_game_pks": 471,
+      "source_game_type_game_counts": {"S": 440, "E": 31}
+    },
+    "excluded_postseason": {"rows": 0, "distinct_game_pks": 0},
+    "missing_unknown_conflicting_duplicate": {"rows": 0, "distinct_game_pks": 0}
+  },
+  "retained_invariance": {
+    "feature_source_row_commitment_sha256": "2e5431d3d62dfe57462e28886085926466d1f557faa7a064f51df8a2f35dbccd",
+    "target_projection_sha256": "c8f1d572a343a0f97dd43b4441ff80c2660ad6bbe780ba27f9859bf567aace97",
+    "row_order_sha256": "66b27c8788a9dd788bd0a86cd1383814c231fceda17517f4ea426f437e60ef8f",
+    "all_before_after_identical": true
+  },
+  "source": "committed MLB_2026_TRAINING_PHASE_ELIGIBILITY_DRY_RUN_V1 evidence",
+  "recomputed_features_or_targets": false
+}

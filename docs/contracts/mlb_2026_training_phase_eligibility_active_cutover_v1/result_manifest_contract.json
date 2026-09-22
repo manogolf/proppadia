@@ -1,0 +1,16 @@
+{
+  "contract": "MLB_IMMUTABLE_TRAINING_RESULT_MANIFEST_V1",
+  "creation_point": "after a future successful fit and run-scoped artifact hashing; before mutable registration",
+  "required_bindings": [
+    "training run identity",
+    "input-manifest hash",
+    "model artifact path, byte count and SHA-256",
+    "evaluation/result artifact path, byte count and SHA-256",
+    "COMPLETED_BOUND status",
+    "completion timestamp"
+  ],
+  "verification": "re-read both manifests and verify every bound artifact path, size and SHA-256",
+  "registration_allowed_without_complete_binding": false,
+  "certification_allowed_without_complete_binding": false,
+  "publication_allowed_without_complete_binding": false
+}

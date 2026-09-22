@@ -1,0 +1,27 @@
+{
+  "inspection_timestamp_utc": "2026-09-22T17:31:34Z",
+  "scheduler_findings": {
+    "weekly_launchagent_label": "com.proppadia.mlb.retrain.weekly",
+    "weekly_launchagent_disabled": true,
+    "weekly_launchagent_loaded": false,
+    "weekly_wrapper_exit_guard": 78,
+    "weekly_wrapper_training_chain_reachable": false,
+    "prod12_weekly_retrain_default": "MLB_WEEKLY_RETRAIN_CADENCE_ENABLED=0",
+    "daily_refresh_enabled": true,
+    "daily_refresh_invokes_model_trainer": false,
+    "automatic_training_active_during_cutover": false
+  },
+  "task_activity": {
+    "model_training_commands": 0,
+    "fit_calls": 0,
+    "model_artifacts_before": 444,
+    "model_artifacts_after": 444,
+    "model_artifact_state_sha256_before": "e8bee42bedc071616d733ead307496ddbdc70d7f8c1481b6c934d8dcec56a022",
+    "model_artifact_state_sha256_after": "e8bee42bedc071616d733ead307496ddbdc70d7f8c1481b6c934d8dcec56a022",
+    "operational_artifact_writes": 0,
+    "database_connections": 0,
+    "network_requests": 0,
+    "paid_requests": 0,
+    "temporary_synthetic_artifacts_only": true
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "contract_name": "MLB_2026_TRAINING_PHASE_ELIGIBILITY_ACTIVE_CUTOVER_V1",
+  "source_and_test_files": [
+    {
+      "change": "modified",
+      "path": "backend/mlb/model_trainer.py",
+      "purpose": "activate the shared eligibility gate and require input/result lineage binding"
+    },
+    {
+      "change": "added",
+      "path": "backend/mlb/training_run_lineage_v1.py",
+      "purpose": "deterministic immutable training input and result manifest contracts"
+    },
+    {
+      "change": "added",
+      "path": "backend/mlb/tests/test_mlb_training_phase_eligibility_active_cutover_v1.py",
+      "purpose": "dependency-free synthetic active-cutover assertions"
+    },
+    {
+      "change": "added",
+      "path": "backend/mlb/scripts/validate_mlb_training_phase_eligibility_active_cutover_v1.py",
+      "purpose": "combined dependency-free test and safety validator"
+    }
+  ],
+  "compact_contract_package": "docs/contracts/mlb_2026_training_phase_eligibility_active_cutover_v1/",
+  "unrelated_files_modified_by_this_task": [],
+  "operational_artifacts_modified": []
+}
