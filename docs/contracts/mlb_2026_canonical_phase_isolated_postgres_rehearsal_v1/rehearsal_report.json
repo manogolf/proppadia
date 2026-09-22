@@ -1,0 +1,143 @@
+{
+  "blocker": {
+    "code": "INSTALLED_ACTIVE_POSTGRESQL_15_8_RUNTIME_UNAVAILABLE",
+    "detail": "No Docker, Podman, OrbStack, or Colima executable/application is installed or active, and no PostgreSQL server binary is installed. The available libpq 17.6 client utilities do not include postgres.",
+    "smallest_justified_next_action": "Provide an already-installed and active compatible container runtime with the official postgres:15.8 image available, or an isolated PostgreSQL 15.8 server binary, then rerun this rehearsal without using the operational database."
+  },
+  "cleanup": {
+    "container_removed": false,
+    "container_was_created": false,
+    "disposable_data_location_removed": false,
+    "disposable_data_location_was_created": false,
+    "pulled_image_removed": false,
+    "unrelated_resources_modified": false
+  },
+  "contract_name": "MLB_2026_CANONICAL_PHASE_ISOLATED_POSTGRES_REHEARSAL_V1",
+  "database_execution": {
+    "actual_cleanroom_updates": null,
+    "actual_game_info_updates": null,
+    "actual_row_deletes": null,
+    "actual_row_inserts": null,
+    "expected_cleanroom_updates": 590,
+    "expected_game_info_updates": 2809,
+    "expected_row_deletes": 0,
+    "expected_row_inserts": 0,
+    "isolated_database_connections": 0,
+    "operational_database_connections": 0,
+    "operational_database_ddl_statements": 0,
+    "operational_database_dml_statements": 0
+  },
+  "executed_at_utc": "2026-09-22T02:44:09Z",
+  "image_pull": {
+    "authorized_maximum": 1,
+    "count": 0,
+    "occurred": false
+  },
+  "rehearsal_assertions": {
+    "abort_paths_restore_trigger": "UNEXECUTED_BLOCKING_FAILURE",
+    "append_only_trigger_identity_verified_before_disable": "UNEXECUTED_BLOCKING_FAILURE",
+    "database_rejects_injected_failures": "UNEXECUTED_BLOCKING_FAILURE",
+    "exact_game_pk_join_prevents_cross_game_contamination": "UNEXECUTED_BLOCKING_FAILURE",
+    "no_calendar_derived_classification": "UNEXECUTED_BLOCKING_FAILURE",
+    "no_missing_type_default_to_r": "UNEXECUTED_BLOCKING_FAILURE",
+    "only_governed_trigger_disabled": "UNEXECUTED_BLOCKING_FAILURE",
+    "repeat_activation_zero_mutations": "UNEXECUTED_BLOCKING_FAILURE",
+    "rollback_preserves_original_schema_and_data": "UNEXECUTED_BLOCKING_FAILURE",
+    "trigger_reenabled_before_commit": "UNEXECUTED_BLOCKING_FAILURE"
+  },
+  "repository_safety": {
+    "dh_publish_lock_unchanged": true,
+    "head": "2fac8ba026e4d6ce68156cfd096fef90711acc53",
+    "required_commit_is_ancestor": true,
+    "staged_files_clean_before_work": true,
+    "tracked_files_clean_before_work": true,
+    "untracked_venv_symlink_unchanged": true
+  },
+  "scenario_counts": {
+    "blocked_unexecuted": 10,
+    "failed": 0,
+    "passed": 0,
+    "total_intended": 10
+  },
+  "scenarios": [
+    {
+      "name": "initial_migration",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "repeat_migration_idempotence",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "initial_canonical_backfill",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "repeat_backfill_idempotence",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "rollback",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "activation_after_rollback",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "concurrent_writer_compatibility",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "missing_type_database_enforced_failure",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "unknown_and_conflicting_type_database_enforced_failure",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    },
+    {
+      "name": "duplicate_exact_game_pk_and_trigger_restoration_failures",
+      "status": "UNEXECUTED_BLOCKING_FAILURE"
+    }
+  ],
+  "source_changes": [],
+  "status": "BLOCKED",
+  "tests_and_validators": {
+    "canonical_dependency_free_tests": {
+      "failed": 0,
+      "passed": 25,
+      "skipped": 0,
+      "status": "PASS",
+      "unexecuted": 0
+    },
+    "canonical_game_phase_activation_validator": {
+      "checks": 13,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "canonical_phase_coverage_validator": {
+      "checks": 12,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "migration_preflight_dependency_free_tests": {
+      "failed": 0,
+      "passed": 15,
+      "skipped": 0,
+      "status": "PASS",
+      "unexecuted": 0
+    },
+    "migration_preflight_validator": {
+      "activation_gate": "BLOCKED",
+      "checks": 20,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "source_completion_validator": {
+      "checks": 14,
+      "failed": 0,
+      "status": "PASS"
+    }
+  }
+}

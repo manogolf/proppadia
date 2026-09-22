@@ -1,0 +1,84 @@
+{
+  "active_compatible_runtime_available": false,
+  "architecture": "arm64",
+  "cached_image_inventory": {
+    "inspection_performed": false,
+    "reason": "No compatible container runtime executable is installed; no runtime was started or installed."
+  },
+  "container_image": {
+    "architecture": null,
+    "immutable_digest": null,
+    "immutable_image_id": null,
+    "pull_count": 0,
+    "storage_impact_bytes": 0,
+    "tag": "postgres:15.8"
+  },
+  "contract_name": "MLB_2026_CANONICAL_PHASE_ISOLATED_POSTGRES_REHEARSAL_V1",
+  "disk": {
+    "available_bytes": 122060800000,
+    "available_kibibytes": 119200000,
+    "filesystem": "/dev/disk3s5",
+    "minimum_required_bytes": 3221225472,
+    "minimum_satisfied": true,
+    "mount": "/System/Volumes/Data"
+  },
+  "discovered_at_utc": "2026-09-22T02:44:09Z",
+  "network_and_credentials": {
+    "container_image_pull_count": 0,
+    "operational_credentials_loaded": false,
+    "operational_dsn_used": false,
+    "paid_credits": 0,
+    "paid_provider_request_count": 0,
+    "sports_provider_request_count": 0
+  },
+  "postgresql": {
+    "client_only_bin_directory": "/opt/homebrew/opt/libpq/bin",
+    "client_tools": {
+      "initdb": "17.6",
+      "pg_ctl": "17.6",
+      "psql": "17.6"
+    },
+    "exact_15_8_server_available": false,
+    "postgres_server_binary": null,
+    "server_process_active": false
+  },
+  "process_scan": {
+    "active_matching_processes": [],
+    "patterns": [
+      "Docker",
+      "dockerd",
+      "containerd",
+      "podman",
+      "colima",
+      "orbstack",
+      "orbctl",
+      "postgres"
+    ]
+  },
+  "runtime_inventory": {
+    "colima": {
+      "active": false,
+      "application_found": false,
+      "executable_found": false
+    },
+    "docker": {
+      "active": false,
+      "application_found": false,
+      "executable_found": false,
+      "socket_found": false
+    },
+    "orbstack": {
+      "active": false,
+      "application_found": false,
+      "executable_found": false
+    },
+    "podman": {
+      "active": false,
+      "application_found": false,
+      "executable_found": false,
+      "socket_found": false
+    }
+  },
+  "status": "BLOCKED",
+  "storage_or_runtime_mutations": 0
+}
