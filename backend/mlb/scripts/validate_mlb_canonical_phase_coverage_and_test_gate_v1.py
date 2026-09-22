@@ -70,40 +70,65 @@ def validate(package: Path) -> dict[str, Any]:
     source_manifest = read_jsonl(population_dir / "authoritative_schedule_source_manifest.jsonl")
     universe = reconciliation["canonical_universe"]
     authoritative = reconciliation["authoritative_schedule_summary"]
+    completed = bool(universe["fully_classified"])
+    expected_universe = (
+        {
+            "distinct": 2919,
+            "classified": 2919,
+            "missing": 0,
+            "source_files": 464,
+            "observations": 9092,
+            "types": {"E": 38, "R": 2430, "S": 451},
+            "phases": {"PRESEASON": 489, "REGULAR_SEASON": 2430},
+        }
+        if completed
+        else {
+            "distinct": 2901,
+            "classified": 2430,
+            "missing": 471,
+            "source_files": 463,
+            "observations": 8602,
+            "types": {"R": 2430},
+            "phases": {"REGULAR_SEASON": 2430},
+        }
+    )
     check(
         "canonical_population_counts",
-        universe["distinct_game_pk_count"] == 2901
-        and universe["authoritatively_classified_count"] == 2430
-        and universe["missing_authoritative_type_count"] == 471,
+        universe["distinct_game_pk_count"] == expected_universe["distinct"]
+        and universe["authoritatively_classified_count"] == expected_universe["classified"]
+        and universe["missing_authoritative_type_count"] == expected_universe["missing"],
         universe,
     )
     check(
         "authoritative_schedule_counts",
-        authoritative["source_file_count"] == 463
-        and authoritative["observation_count"] == 8602
-        and authoritative["distinct_game_pk_count"] == 2430
-        and authoritative["source_game_type_counts"] == {"R": 2430}
-        and authoritative["season_phase_counts"] == {"REGULAR_SEASON": 2430}
+        authoritative["source_file_count"] == expected_universe["source_files"]
+        and authoritative["observation_count"] == expected_universe["observations"]
+        and authoritative["distinct_game_pk_count"] == expected_universe["classified"]
+        and authoritative["source_game_type_counts"] == expected_universe["types"]
+        and authoritative["season_phase_counts"] == expected_universe["phases"]
         and authoritative["special_event_count"] == 0,
         authoritative,
     )
     missing_ids = [int(row["game_pk"]) for row in missing]
     check(
         "missing_ledger_exact",
-        len(missing_ids) == 471
-        and len(set(missing_ids)) == 471
+        len(missing_ids) == expected_universe["missing"]
+        and len(set(missing_ids)) == expected_universe["missing"]
         and missing_ids == universe["missing_authoritative_type_game_pks"],
         {"rows": len(missing_ids), "unique": len(set(missing_ids))},
     )
     check("conflict_ledger_empty", conflicts == [], {"rows": len(conflicts)})
     check(
         "proposal_is_subset",
-        reconciliation["offline_proposal_is_retained_file_subset"] is True
+        reconciliation["offline_proposal_is_retained_file_subset"] is (not completed)
         and next(
             row for row in reconciliation["populations"]
-            if row["source"] == "offline_phase_proposal_97"
-        )["distinct_game_pk_count"] == 97,
-        "97 < 2430",
+            if row["source"] in {
+                "offline_phase_proposal_97",
+                "offline_canonical_phase_proposal",
+            }
+        )["distinct_game_pk_count"] == (2919 if completed else 97),
+        "complete proposal" if completed else "97-game retained subset",
     )
 
     source_hash_failures = []
@@ -113,7 +138,7 @@ def validate(package: Path) -> dict[str, Any]:
             source_hash_failures.append(row["source_path"])
     check(
         "retained_schedule_source_hashes",
-        len(source_manifest) == 463 and not source_hash_failures,
+        len(source_manifest) == expected_universe["source_files"] and not source_hash_failures,
         {"manifest_rows": len(source_manifest), "failures": source_hash_failures},
     )
 
@@ -126,20 +151,25 @@ def validate(package: Path) -> dict[str, Any]:
     )
     acquisition = read_json(population_dir / "source_completion_acquisition_proposal.json")
     check(
-        "source_completion_is_unexecuted_and_free",
-        acquisition["status"] == "PROPOSED_NOT_EXECUTED"
+        "source_completion_state_is_consistent_and_free",
+        acquisition["status"] == ("NOT_REQUIRED" if completed else "PROPOSED_NOT_EXECUTED")
         and acquisition["execution_authorized"] is False
-        and acquisition["expected_request_count"] == 1
+        and acquisition["expected_request_count"] == (0 if completed else 1)
         and acquisition["expected_paid_credit_count"] == 0
-        and acquisition["expected_target_game_pk_count"] == 471,
+        and acquisition["expected_target_game_pk_count"] == expected_universe["missing"],
         acquisition,
     )
     recommendation = read_json(population_dir / "activation_recommendation.json")
     check(
-        "activation_gate_blocked",
-        recommendation["recommendation"] == "CANONICAL_PHASE_ACTIVATION_GATE_BLOCKED"
-        and summary["gate_status"] == "BLOCKED"
-        and universe["fully_classified"] is False,
+        "activation_gate_state",
+        recommendation["recommendation"]
+        == (
+            "CANONICAL_PHASE_ACTIVATION_GATE_READY"
+            if completed
+            else "CANONICAL_PHASE_ACTIVATION_GATE_BLOCKED"
+        )
+        and summary["gate_status"] == ("READY" if completed else "BLOCKED")
+        and universe["fully_classified"] is completed,
         recommendation,
     )
 

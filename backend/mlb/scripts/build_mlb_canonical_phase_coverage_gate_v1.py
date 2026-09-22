@@ -303,7 +303,7 @@ def build(database_snapshot: Path, proposal_path: Path) -> dict[str, Any]:
     ]
     populations.append(
         _population_report(
-            "offline_phase_proposal_97",
+            "offline_canonical_phase_proposal",
             proposal_ids,
             proposal_dates,
             proposal_ids,
@@ -456,16 +456,20 @@ def build(database_snapshot: Path, proposal_path: Path) -> dict[str, Any]:
     )
     missing_game_pks = sorted(missing_ids)
     source_completion_proposal = {
-        "status": "PROPOSED_NOT_EXECUTED",
+        "status": "PROPOSED_NOT_EXECUTED" if missing_ids else "NOT_REQUIRED",
         "execution_authorized": False,
         "purpose": "complete authoritative source type only; never infer phase from date",
         "provider": "MLB StatsAPI",
         "endpoint": "https://statsapi.mlb.com/api/v1/schedule",
-        "parameters": {
-            "sportId": 1,
-            "startDate": min(missing_dates, default=None),
-            "endDate": max(missing_dates, default=None),
-        },
+        "parameters": (
+            {
+                "sportId": 1,
+                "startDate": min(missing_dates),
+                "endDate": max(missing_dates),
+            }
+            if missing_ids
+            else None
+        ),
         "expected_request_count": 1 if missing_ids else 0,
         "expected_paid_credit_count": 0,
         "expected_target_game_pk_count": len(missing_game_pks),
@@ -474,8 +478,9 @@ def build(database_snapshot: Path, proposal_path: Path) -> dict[str, Any]:
         ).hexdigest(),
         "storage_path": (
             "backend/mlb/data/external/statsapi/raw/2026/"
-            f"schedule_{min(missing_dates, default='UNKNOWN')}_"
-            f"{max(missing_dates, default='UNKNOWN')}.json"
+            f"schedule_{min(missing_dates)}_{max(missing_dates)}.json"
+            if missing_ids
+            else None
         ),
         "hashing_method": "SHA-256 over exact HTTP response bytes before JSON parsing",
         "idempotence_guard": (
@@ -484,8 +489,12 @@ def build(database_snapshot: Path, proposal_path: Path) -> dict[str, Any]:
             "season=2026, an exact contract_v1 gameType, zero conflicting types, and a source hash"
         ),
         "smallest_request_rationale": (
-            "one free inclusive StatsAPI schedule range spans every observed identity date for "
-            "the missing set; dates scope acquisition only and do not classify phase"
+            (
+                "one free inclusive StatsAPI schedule range spans every observed identity date for "
+                "the missing set; dates scope acquisition only and do not classify phase"
+            )
+            if missing_ids
+            else "no source-completion acquisition is required because the missing set is empty"
         ),
     }
     return {

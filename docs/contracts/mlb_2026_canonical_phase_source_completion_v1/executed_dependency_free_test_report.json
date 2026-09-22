@@ -1,0 +1,186 @@
+{
+  "contract_name": "MLB_2026_CANONICAL_PHASE_COVERAGE_AND_TEST_GATE_V1",
+  "executed_scenarios": 25,
+  "existing_validator_check_count": 13,
+  "existing_validator_status": "PASS",
+  "failed": 0,
+  "gate_status": "PASS",
+  "intended_scenarios": 25,
+  "missing_test_functions": [],
+  "missing_validator_mappings": [],
+  "passed": 25,
+  "results": [
+    {
+      "scenario": "test_all_postseason_rounds[1:raw_type='F',round_name='WILD_CARD']",
+      "status": "PASSED",
+      "test_function": "test_all_postseason_rounds"
+    },
+    {
+      "scenario": "test_all_postseason_rounds[2:raw_type='D',round_name='DIVISION_SERIES']",
+      "status": "PASSED",
+      "test_function": "test_all_postseason_rounds"
+    },
+    {
+      "scenario": "test_all_postseason_rounds[3:raw_type='L',round_name='LEAGUE_CHAMPIONSHIP_SERIES']",
+      "status": "PASSED",
+      "test_function": "test_all_postseason_rounds"
+    },
+    {
+      "scenario": "test_all_postseason_rounds[4:raw_type='W',round_name='WORLD_SERIES']",
+      "status": "PASSED",
+      "test_function": "test_all_postseason_rounds"
+    },
+    {
+      "scenario": "test_all_postseason_rounds[5:raw_type='P',round_name='PLAYOFFS_UNSPECIFIED']",
+      "status": "PASSED",
+      "test_function": "test_all_postseason_rounds"
+    },
+    {
+      "scenario": "test_all_postseason_rounds[6:raw_type='C',round_name='CHAMPIONSHIP_UNSPECIFIED']",
+      "status": "PASSED",
+      "test_function": "test_all_postseason_rounds"
+    },
+    {
+      "scenario": "test_regular_after_nominal_close_remains_regular",
+      "status": "PASSED",
+      "test_function": "test_regular_after_nominal_close_remains_regular"
+    },
+    {
+      "scenario": "test_postponed_rescheduled_relationships_are_exact",
+      "status": "PASSED",
+      "test_function": "test_postponed_rescheduled_relationships_are_exact"
+    },
+    {
+      "scenario": "test_suspended_resumed_relationships_are_exact",
+      "status": "PASSED",
+      "test_function": "test_suspended_resumed_relationships_are_exact"
+    },
+    {
+      "scenario": "test_special_games_are_preserved_but_excluded[1:raw_type='A']",
+      "status": "PASSED",
+      "test_function": "test_special_games_are_preserved_but_excluded"
+    },
+    {
+      "scenario": "test_special_games_are_preserved_but_excluded[2:raw_type='N']",
+      "status": "PASSED",
+      "test_function": "test_special_games_are_preserved_but_excluded"
+    },
+    {
+      "scenario": "test_missing_or_nonexact_unknown_type_fails_closed[1:raw_type=None]",
+      "status": "PASSED",
+      "test_function": "test_missing_or_nonexact_unknown_type_fails_closed"
+    },
+    {
+      "scenario": "test_missing_or_nonexact_unknown_type_fails_closed[2:raw_type='']",
+      "status": "PASSED",
+      "test_function": "test_missing_or_nonexact_unknown_type_fails_closed"
+    },
+    {
+      "scenario": "test_missing_or_nonexact_unknown_type_fails_closed[3:raw_type='r']",
+      "status": "PASSED",
+      "test_function": "test_missing_or_nonexact_unknown_type_fails_closed"
+    },
+    {
+      "scenario": "test_missing_or_nonexact_unknown_type_fails_closed[4:raw_type='X']",
+      "status": "PASSED",
+      "test_function": "test_missing_or_nonexact_unknown_type_fails_closed"
+    },
+    {
+      "scenario": "test_missing_or_nonexact_unknown_type_fails_closed[5:raw_type=' R']",
+      "status": "PASSED",
+      "test_function": "test_missing_or_nonexact_unknown_type_fails_closed"
+    },
+    {
+      "scenario": "test_conflicting_schedule_and_feed_types_fail_closed",
+      "status": "PASSED",
+      "test_function": "test_conflicting_schedule_and_feed_types_fail_closed"
+    },
+    {
+      "scenario": "test_duplicate_game_pk_conflict_fails_closed",
+      "status": "PASSED",
+      "test_function": "test_duplicate_game_pk_conflict_fails_closed"
+    },
+    {
+      "scenario": "test_exact_game_pk_join_has_no_date_or_team_fallback",
+      "status": "PASSED",
+      "test_function": "test_exact_game_pk_join_has_no_date_or_team_fallback"
+    },
+    {
+      "scenario": "test_cleanroom_insert_is_named_and_partial_schema_fails",
+      "status": "PASSED",
+      "test_function": "test_cleanroom_insert_is_named_and_partial_schema_fails"
+    },
+    {
+      "scenario": "test_no_game_producer_uses_positional_insert",
+      "status": "PASSED",
+      "test_function": "test_no_game_producer_uses_positional_insert"
+    },
+    {
+      "scenario": "test_zero_date_based_phase_reconstruction",
+      "status": "PASSED",
+      "test_function": "test_zero_date_based_phase_reconstruction"
+    },
+    {
+      "scenario": "test_prepared_migration_persists_both_tables_and_join_is_exact",
+      "status": "PASSED",
+      "test_function": "test_prepared_migration_persists_both_tables_and_join_is_exact"
+    },
+    {
+      "scenario": "test_offline_builder_is_deterministic_and_source_hashed",
+      "status": "PASSED",
+      "test_function": "test_offline_builder_is_deterministic_and_source_hashed"
+    },
+    {
+      "scenario": "test_propagation_audit_distinguishes_current_and_post_activation",
+      "status": "PASSED",
+      "test_function": "test_propagation_audit_distinguishes_current_and_post_activation"
+    }
+  ],
+  "runner": "DEPENDENCY_FREE_STDLIB_ACTUAL_ASSERTION_EXECUTION",
+  "skipped": 0,
+  "target_module": "backend.mlb.tests.test_mlb_canonical_game_phase_activation_v1",
+  "unexecuted": 0,
+  "validator_coverage_map": {
+    "all_postseason_rounds": [
+      "test_all_postseason_rounds"
+    ],
+    "all_star_and_special_exclusion": [
+      "test_special_games_are_preserved_but_excluded"
+    ],
+    "duplicate_game_pk_conflict": [
+      "test_duplicate_game_pk_conflict_fails_closed"
+    ],
+    "exact_game_pk_join": [
+      "test_exact_game_pk_join_has_no_date_or_team_fallback"
+    ],
+    "missing_unknown_conflicting_types": [
+      "test_missing_or_nonexact_unknown_type_fails_closed",
+      "test_conflicting_schedule_and_feed_types_fail_closed"
+    ],
+    "offline_source_hashed_proposal": [
+      "test_offline_builder_is_deterministic_and_source_hashed"
+    ],
+    "positional_insert_regression": [
+      "test_cleanroom_insert_is_named_and_partial_schema_fails",
+      "test_no_game_producer_uses_positional_insert"
+    ],
+    "postponed_rescheduled": [
+      "test_postponed_rescheduled_relationships_are_exact"
+    ],
+    "prepared_schema_and_exact_join_view": [
+      "test_prepared_migration_persists_both_tables_and_join_is_exact"
+    ],
+    "regular_after_nominal_close": [
+      "test_regular_after_nominal_close_remains_regular"
+    ],
+    "suspended_resumed": [
+      "test_suspended_resumed_relationships_are_exact"
+    ],
+    "two_state_propagation_audit": [
+      "test_propagation_audit_distinguishes_current_and_post_activation"
+    ],
+    "zero_date_based_reconstruction": [
+      "test_zero_date_based_phase_reconstruction"
+    ]
+  }
+}

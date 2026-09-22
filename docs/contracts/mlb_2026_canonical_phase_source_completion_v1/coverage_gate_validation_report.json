@@ -1,0 +1,129 @@
+{
+  "check_count": 12,
+  "checks": [
+    {
+      "check": "actual_assertions_reexecuted",
+      "detail": "PASS",
+      "status": "PASS"
+    },
+    {
+      "check": "test_counts_exact",
+      "detail": {
+        "executed_scenarios": 25,
+        "failed": 0,
+        "intended_scenarios": 25,
+        "passed": 25,
+        "skipped": 0,
+        "unexecuted": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "validator_reconciliation",
+      "detail": "13 checks fully mapped",
+      "status": "PASS"
+    },
+    {
+      "check": "canonical_population_counts",
+      "detail": {
+        "authoritatively_classified_count": 2919,
+        "distinct_game_pk_count": 2919,
+        "fully_classified": true,
+        "missing_authoritative_type_count": 0,
+        "missing_authoritative_type_game_pks": []
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "authoritative_schedule_counts",
+      "detail": {
+        "consistent_duplicate_observation_count": 6173,
+        "distinct_game_pk_count": 2919,
+        "duplicate_identity_conflict_count": 0,
+        "earliest_scheduled_date": "2026-02-20",
+        "latest_scheduled_date": "2026-09-27",
+        "missing_or_unknown_observation_count": 0,
+        "observation_count": 9092,
+        "season_phase_counts": {
+          "PRESEASON": 489,
+          "REGULAR_SEASON": 2430
+        },
+        "source_file_count": 464,
+        "source_game_type_counts": {
+          "E": 38,
+          "R": 2430,
+          "S": 451
+        },
+        "special_event_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "missing_ledger_exact",
+      "detail": {
+        "rows": 0,
+        "unique": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "conflict_ledger_empty",
+      "detail": {
+        "rows": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "proposal_is_subset",
+      "detail": "complete proposal",
+      "status": "PASS"
+    },
+    {
+      "check": "retained_schedule_source_hashes",
+      "detail": {
+        "failures": [],
+        "manifest_rows": 464
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "database_snapshot_identity",
+      "detail": "6c821faf73f52b30cefe97c290ec1e0a4f6e6249d9bddfb1e9288788021aed5a",
+      "status": "PASS"
+    },
+    {
+      "check": "source_completion_state_is_consistent_and_free",
+      "detail": {
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule",
+        "execution_authorized": false,
+        "expected_paid_credit_count": 0,
+        "expected_request_count": 0,
+        "expected_target_game_pk_count": 0,
+        "expected_target_game_pks_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "hashing_method": "SHA-256 over exact HTTP response bytes before JSON parsing",
+        "idempotence_guard": "refuse overwrite when target path exists; verify and reuse identical bytes; after parsing require every target gamePk exactly once or consistently duplicated, season=2026, an exact contract_v1 gameType, zero conflicting types, and a source hash",
+        "parameters": null,
+        "provider": "MLB StatsAPI",
+        "purpose": "complete authoritative source type only; never infer phase from date",
+        "smallest_request_rationale": "no source-completion acquisition is required because the missing set is empty",
+        "status": "NOT_REQUIRED",
+        "storage_path": null
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "activation_gate_state",
+      "detail": {
+        "blocking_reasons": [],
+        "exact_next_step": "Proceed to the separately governed migration activation preflight.",
+        "recommendation": "CANONICAL_PHASE_ACTIVATION_GATE_READY"
+      },
+      "status": "PASS"
+    }
+  ],
+  "contract_name": "MLB_2026_CANONICAL_PHASE_COVERAGE_AND_TEST_GATE_V1",
+  "database_writes": 0,
+  "failed_checks": [],
+  "network_requests": 0,
+  "status": "PASS"
+}

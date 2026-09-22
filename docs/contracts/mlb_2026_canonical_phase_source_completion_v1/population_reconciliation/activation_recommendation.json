@@ -1,0 +1,5 @@
+{
+  "blocking_reasons": [],
+  "exact_next_step": "Proceed to the separately governed migration activation preflight.",
+  "recommendation": "CANONICAL_PHASE_ACTIVATION_GATE_READY"
+}

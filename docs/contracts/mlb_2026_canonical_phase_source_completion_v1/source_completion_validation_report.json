@@ -1,0 +1,210 @@
+{
+  "check_count": 14,
+  "checks": [
+    {
+      "check": "single_free_request_receipt",
+      "detail": {
+        "acquisition_identity_sha256": "b19445bf3d7587ca4de2c3bae89b982a86bc04a3779df202fbc6cfcfd7a2d611",
+        "atomic_write": true,
+        "contract_name": "MLB_2026_CANONICAL_PHASE_SOURCE_COMPLETION_V1",
+        "existing_response_reused": false,
+        "expected_target_game_pk_count": 471,
+        "hashing_method": "SHA-256 over exact HTTP response bytes before JSON parsing",
+        "http_status": 200,
+        "overwrite_performed": false,
+        "paid_credit_count": 0,
+        "paid_provider_request_count": 0,
+        "proposal_path": "docs/contracts/mlb_2026_canonical_phase_coverage_and_test_gate_v1/population_reconciliation/source_completion_acquisition_proposal.json",
+        "proposal_sha256": "1e79ab68959a0642b87f524734fa88df970f84a6b06134634d3a3d3aadcb7258",
+        "provider": "MLB StatsAPI",
+        "raw_response_byte_count": 642447,
+        "raw_response_path": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-02-20_2026-03-25.json",
+        "raw_response_sha256": "3ca8bff9e4361676ad3b34c5166f23f4d180d809083557ad8498062a9febd091",
+        "request_completed_at_utc": "2026-09-22T01:17:17.776856Z",
+        "request_count": 1,
+        "request_parameters": {
+          "endDate": "2026-03-25",
+          "sportId": 1,
+          "startDate": "2026-02-20"
+        },
+        "request_started_at_utc": "2026-09-22T01:17:17.248811Z",
+        "request_url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-02-20&endDate=2026-03-25",
+        "response_headers": {
+          "age": "0",
+          "cache-control": "max-age=120, public, stale-while-revalidate=30, stale-if-error=86400",
+          "content-length": "642447",
+          "content-type": "application/json;charset=UTF-8",
+          "date": "Tue, 22 Sep 2026 01:17:17 GMT",
+          "via": "1.1 google, 1.1 varnish, 1.1 varnish",
+          "x-cache": "MISS, MISS"
+        },
+        "response_url": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-02-20&endDate=2026-03-25",
+        "retry_count": 0,
+        "status": "SUCCESS"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "immutable_raw_response_identity",
+      "detail": {
+        "bytes": 642447,
+        "path": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-02-20_2026-03-25.json",
+        "sha256": "3ca8bff9e4361676ad3b34c5166f23f4d180d809083557ad8498062a9febd091"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "authorized_proposal_exact",
+      "detail": {
+        "parameters": {
+          "endDate": "2026-03-25",
+          "sportId": 1,
+          "startDate": "2026-02-20"
+        },
+        "proposal_sha256": "1e79ab68959a0642b87f524734fa88df970f84a6b06134634d3a3d3aadcb7258"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "authoritative_response_contract_classification",
+      "detail": {
+        "distinct": 490,
+        "observations": 490,
+        "phases": {
+          "PRESEASON": 489,
+          "REGULAR_SEASON": 1
+        },
+        "types": {
+          "E": 38,
+          "R": 1,
+          "S": 451
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "prior_471_fully_resolved",
+      "detail": {
+        "prior_missing": 471,
+        "resolved": 471,
+        "unresolved": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "outside_prior_missing_ledger_exact",
+      "detail": {
+        "count": 19,
+        "game_pks": [
+          823244,
+          831432,
+          831444,
+          831455,
+          831463,
+          831526,
+          831555,
+          831559,
+          831564,
+          831608,
+          831612,
+          831629,
+          831632,
+          831723,
+          831761,
+          831852,
+          831938,
+          831940,
+          832043
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "source_completion_reconciliation_ready",
+      "detail": {
+        "current_missing_classification_count": 0,
+        "duplicate_identity_conflict_count": 0,
+        "source_conflict_count": 0,
+        "unknown_or_invalid_response_observation_count": 0,
+        "unresolved_prior_missing_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "canonical_backfill_proposal_complete",
+      "detail": {
+        "phases": {
+          "PRESEASON": 489,
+          "REGULAR_SEASON": 2430
+        },
+        "rows": 2919,
+        "types": {
+          "E": 38,
+          "R": 2430,
+          "S": 451
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "backfill_inner_manifest",
+      "detail": [],
+      "status": "PASS"
+    },
+    {
+      "check": "coverage_gate_validation",
+      "detail": {
+        "checks": 12,
+        "failed": [],
+        "status": "PASS"
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "dependency_free_assertions_reexecuted",
+      "detail": {
+        "failed": 0,
+        "gate_status": "PASS",
+        "passed": 25,
+        "skipped": 0,
+        "unexecuted": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "zero_remaining_classification_violations",
+      "detail": {
+        "conflicts": 0,
+        "missing": 0,
+        "universe": {
+          "authoritatively_classified_count": 2919,
+          "distinct_game_pk_count": 2919,
+          "fully_classified": true,
+          "missing_authoritative_type_count": 0,
+          "missing_authoritative_type_game_pks": []
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "one_shot_no_retry_implementation",
+      "detail": {
+        "opener_call_sites": 1,
+        "request_count": 1,
+        "retry_count": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "package_sha256_manifest",
+      "detail": [],
+      "status": "PASS"
+    }
+  ],
+  "contract_name": "MLB_2026_CANONICAL_PHASE_SOURCE_COMPLETION_V1",
+  "database_writes": 0,
+  "failed_checks": [],
+  "network_requests_during_validation": 0,
+  "passed_check_count": 14,
+  "status": "PASS"
+}

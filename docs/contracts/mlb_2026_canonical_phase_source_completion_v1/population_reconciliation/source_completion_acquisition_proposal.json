@@ -1,0 +1,16 @@
+{
+  "endpoint": "https://statsapi.mlb.com/api/v1/schedule",
+  "execution_authorized": false,
+  "expected_paid_credit_count": 0,
+  "expected_request_count": 0,
+  "expected_target_game_pk_count": 0,
+  "expected_target_game_pks_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "hashing_method": "SHA-256 over exact HTTP response bytes before JSON parsing",
+  "idempotence_guard": "refuse overwrite when target path exists; verify and reuse identical bytes; after parsing require every target gamePk exactly once or consistently duplicated, season=2026, an exact contract_v1 gameType, zero conflicting types, and a source hash",
+  "parameters": null,
+  "provider": "MLB StatsAPI",
+  "purpose": "complete authoritative source type only; never infer phase from date",
+  "smallest_request_rationale": "no source-completion acquisition is required because the missing set is empty",
+  "status": "NOT_REQUIRED",
+  "storage_path": null
+}
