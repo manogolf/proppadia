@@ -116,3 +116,21 @@ Immutable evidence:
 Future completed reconciliation packages must contain
 `official_request_journal.jsonl` and `official_request_accounting.json`, both
 covered by the package manifest.
+
+## Cross-run authority-response reuse
+
+A later execution may reuse an earlier failed run's authority schedule and
+boxscores only when the operator supplies that request-run ID explicitly with
+`--reuse-request-run-id`. Before a request run is created or any database or
+network access occurs, the reconciler verifies the source journal's run ID and
+canonical game-set hash, the exact schedule-plus-game identity set, every cache
+index, object name, byte length, object SHA-256, response identity, and the
+journal's recorded response length/hash. The source must contain exactly one
+successful preserved authority response for the schedule and each canonical
+game. Missing, extra, conflicting, or altered evidence fails closed.
+
+Reuse has no implicit network fallback. The new journal records one
+`PRESERVED_RESPONSE_REUSE` event for each authority operation, including the
+source run ID, source-journal SHA-256, index SHA-256, object SHA-256, and a
+cross-run marker. The completed package records the source run and complete
+response-set lineage. The failed source run remains byte-for-byte unchanged.

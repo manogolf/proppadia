@@ -17,11 +17,15 @@ from backend.nhl.official_request_journal import (
     ENV_REQUIRED,
     ENV_RUN_ID,
     ENV_SLATE,
+    ENV_SOURCE_CACHE,
+    ENV_SOURCE_JOURNAL_SHA256,
+    ENV_SOURCE_RUN_ID,
     RequestContext,
     canonical_game_set_hash,
     official_get,
     read_journal,
     summarize_journal,
+    verify_preserved_response_run,
 )
 
 
@@ -146,6 +150,80 @@ class OfficialRequestAccountingTest(unittest.TestCase):
                              endpoint_family="BOXSCORE",
                              identity={"slate_date": SLATE, "game_id": GAMES[0]},
                              reuse_preserved=True)
+
+    def test_explicit_cross_run_eight_response_reuse_has_zero_network_attempts(self):
+        source_run = "failed_source_fixture"
+        source_root = self.root / source_run
+        source_env = dict(self.env)
+        source_env.update({
+            ENV_RUN_ID: source_run,
+            ENV_JOURNAL: str(source_root / "official_request_journal.jsonl"),
+            ENV_CACHE: str(source_root / "preserved_responses"),
+        })
+        outcomes = [FakeResponse(schedule_payload())] + [FakeResponse({"id": gid}) for gid in GAMES]
+        with patch.dict(os.environ, source_env, clear=True), \
+             patch("backend.nhl.official_request_journal.requests.Session",
+                   side_effect=lambda: FakeSession(outcomes)):
+            official_get("x", timeout=1, stage="AUTH", endpoint_family="SCHEDULE",
+                         identity={"slate_date": SLATE}, authority_boundary=True,
+                         preserve_response=True)
+            for gid in GAMES:
+                official_get("x", timeout=1, stage="AUTH", endpoint_family="BOXSCORE",
+                             identity={"slate_date": SLATE, "game_id": gid},
+                             authority_boundary=True, preserve_response=True)
+        lineage = verify_preserved_response_run(
+            source_root, expected_run_id=source_run, slate_date=SLATE, game_ids=GAMES)
+        target_env = dict(self.env)
+        target_env.update({
+            ENV_RUN_ID: "target_fixture",
+            ENV_JOURNAL: str(self.root / "target/journal.jsonl"),
+            ENV_CACHE: str(self.root / "target/cache"),
+            ENV_SOURCE_CACHE: lineage["source_cache"],
+            ENV_SOURCE_RUN_ID: source_run,
+            ENV_SOURCE_JOURNAL_SHA256: lineage["source_journal_sha256"],
+        })
+        with patch.dict(os.environ, target_env, clear=True), \
+             patch("backend.nhl.official_request_journal.requests.Session") as transport:
+            official_get("unused", timeout=1, stage="AUTH", endpoint_family="SCHEDULE",
+                         identity={"slate_date": SLATE}, authority_boundary=True,
+                         reuse_preserved=True)
+            for gid in GAMES:
+                official_get("unused", timeout=1, stage="AUTH", endpoint_family="BOXSCORE",
+                             identity={"slate_date": SLATE, "game_id": gid},
+                             authority_boundary=True, reuse_preserved=True)
+            transport.assert_not_called()
+        summary = summarize_journal(Path(target_env[ENV_JOURNAL]), run_id="target_fixture",
+                                    expected_game_hash=target_env[ENV_GAME_HASH])
+        self.assertEqual(summary["total_network_attempts"], 0)
+        self.assertEqual(summary["cache_reuse_events"], 8)
+        rows = read_journal(Path(target_env[ENV_JOURNAL]))
+        self.assertTrue(all(row["cross_run_reuse"] for row in rows))
+        self.assertTrue(all(row["source_run_id"] == source_run for row in rows))
+
+    def test_tampered_cross_run_source_fails_without_network_fallback(self):
+        source_run = "tampered_source_fixture"
+        source_root = self.root / source_run
+        source_env = dict(self.env)
+        source_env.update({ENV_RUN_ID: source_run,
+                           ENV_JOURNAL: str(source_root / "official_request_journal.jsonl"),
+                           ENV_CACHE: str(source_root / "preserved_responses")})
+        outcomes = [FakeResponse(schedule_payload())] + [FakeResponse({"id": gid}) for gid in GAMES]
+        with patch.dict(os.environ, source_env, clear=True), \
+             patch("backend.nhl.official_request_journal.requests.Session",
+                   side_effect=lambda: FakeSession(outcomes)):
+            official_get("x", timeout=1, stage="AUTH", endpoint_family="SCHEDULE",
+                         identity={"slate_date": SLATE}, authority_boundary=True,
+                         preserve_response=True)
+            for gid in GAMES:
+                official_get("x", timeout=1, stage="AUTH", endpoint_family="BOXSCORE",
+                             identity={"slate_date": SLATE, "game_id": gid},
+                             authority_boundary=True, preserve_response=True)
+        next((source_root / "preserved_responses/objects").iterdir()).write_bytes(b"{}")
+        with patch("backend.nhl.official_request_journal.requests.Session") as transport:
+            with self.assertRaisesRegex(RuntimeError, "PRESERVED_SOURCE_(RESPONSE|JOURNAL_RESPONSE)_HASH_MISMATCH"):
+                verify_preserved_response_run(
+                    source_root, expected_run_id=source_run, slate_date=SLATE, game_ids=GAMES)
+            transport.assert_not_called()
 
     def test_unrelated_game_and_missing_configuration_fail_before_network(self):
         with patch.dict(os.environ, self.env, clear=False), \

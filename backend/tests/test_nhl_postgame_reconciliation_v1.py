@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,11 +17,13 @@ from backend.nhl.official_request_journal import (
 from backend.nhl.postgame_reconcile.core import (
     publish_reconciliation,
     reconciliation_lock,
+    resolve_operational_sources,
     validate_final_slate,
 )
 from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
     _run,
     fetch_official,
+    main as reconciliation_main,
     official_games_for_slate,
 )
 
@@ -286,6 +289,52 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(accounting["total_logical_requests"], 2)
         self.assertEqual(summary["official_request_accounting"], accounting)
         self.assertIn("official_request_journal.jsonl", (destination / "SHA256SUMS").read_text())
+
+    def test_september_20_local_only_source_binding_is_exact(self):
+        operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
+        with patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database:
+            binding = resolve_operational_sources(
+                slate_date="2026-09-20", operational_root=operational)
+        database.assert_not_called()
+        self.assertEqual(binding["canonical_games"], 7)
+        self.assertEqual(binding["cross_market"]["moneyline_rows"], 7)
+        self.assertEqual(binding["cross_market"]["puck_line_rows"], 7)
+        self.assertEqual(binding["sog"]["prediction_rows"], 5517)
+        self.assertEqual(binding["sog"]["players"], 408)
+        self.assertEqual(binding["sog"]["exclusions"], 45)
+        self.assertEqual(binding["points"], {
+            "status": "NO_PROSPECTIVE_POINTS_PREDICTIONS",
+            "reason": "PROSPECTIVE_NOT_BEFORE_2026-09-21",
+        })
+        self.assertEqual(binding["saves"], {
+            "status": "NO_PROSPECTIVE_SAVES_PREDICTIONS",
+            "reason": "PROSPECTIVE_NOT_BEFORE_2026-09-21",
+        })
+
+    def test_corrupt_local_manifest_fails_before_database_or_official_request(self):
+        operational = self.root / "operational"
+        run = (operational / "cross_market_shadow/season=2026/slate_date=2026-09-20/"
+               "run_type=FINAL_PREGAME/state=fixture")
+        run.mkdir(parents=True)
+        (run / "SHA256SUMS").write_text("0" * 64 + "  missing.csv\n")
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.official_get") as network:
+            with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_SOURCE_HASH_MISMATCH"):
+                resolve_operational_sources(slate_date="2026-09-20", operational_root=operational)
+        database.assert_not_called()
+        network.assert_not_called()
+
+    def test_september_20_execute_requires_explicit_source_run_before_database(self):
+        with patch.object(sys, "argv", ["run_nhl_postgame_reconciliation.py",
+                                        "2026-09-20", "--execute"]), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.official_get") as network, \
+             patch("builtins.print"):
+            code = reconciliation_main()
+        self.assertEqual(code, 5)
+        database.assert_not_called()
+        network.assert_not_called()
 
 
 if __name__ == "__main__":

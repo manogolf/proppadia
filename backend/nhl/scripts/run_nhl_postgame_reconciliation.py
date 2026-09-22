@@ -27,14 +27,19 @@ from backend.nhl.official_request_journal import (
     ENV_REQUIRED,
     ENV_RUN_ID,
     ENV_SLATE,
+    ENV_SOURCE_CACHE,
+    ENV_SOURCE_JOURNAL_SHA256,
+    ENV_SOURCE_RUN_ID,
     RequestContext,
     canonical_game_set_hash,
     official_get,
     summarize_journal,
+    verify_preserved_response_run,
 )
 from backend.nhl.postgame_reconcile.core import (
     reconciliation_lock,
     publish_reconciliation,
+    resolve_operational_sources,
     validate_final_slate,
 )
 
@@ -42,6 +47,7 @@ from backend.nhl.postgame_reconcile.core import (
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
 DEFAULT_PREDICTION_ROOT = ROOT / "artifacts/operational/nhl/preseason_catchup"
+DEFAULT_OPERATIONAL_ROOT = ROOT / "artifacts/operational/nhl"
 SCRIPTS = ROOT / "backend/nhl/scripts"
 SQL = ROOT / "backend/nhl/sql"
 FINAL_STATES = {"FINAL", "OFF"}
@@ -137,13 +143,13 @@ def official_games_for_slate(payload: dict, slate_date: str) -> pd.DataFrame:
     return official
 
 
-def fetch_official(slate_date: str, canonical_game_ids: set[int]) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
+def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_authority: bool = False) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
     expected_ids = {int(value) for value in canonical_game_ids}
     response = official_get(
         f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30,
         stage="POSTGAME_AUTHORITY", endpoint_family="SCHEDULE",
         identity={"slate_date": slate_date}, authority_boundary=True,
-        preserve_response=True,
+        preserve_response=not reuse_authority, reuse_preserved=reuse_authority,
     )
     response.raise_for_status()
     official = official_games_for_slate(response.json(), slate_date)
@@ -162,7 +168,8 @@ def fetch_official(slate_date: str, canonical_game_ids: set[int]) -> tuple[pd.Da
             f"https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore", timeout=30,
             stage="POSTGAME_AUTHORITY", endpoint_family="BOXSCORE",
             identity={"slate_date": slate_date, "game_id": gid},
-            authority_boundary=True, preserve_response=True,
+            authority_boundary=True, preserve_response=not reuse_authority,
+            reuse_preserved=reuse_authority,
         )
         box.raise_for_status()
         boxes[gid] = box.json()
@@ -174,6 +181,9 @@ def fetch_official(slate_date: str, canonical_game_ids: set[int]) -> tuple[pd.Da
         "official_requests_expected": 1 + len(expected_ids),
         "official_requests_actual": 1 + len(boxes),
     }
+    if reuse_authority:
+        requests_made.update({"network_attempts": 0,
+                              "preserved_response_reuses": 1 + len(boxes)})
     if requests_made["official_requests_actual"] != requests_made["official_requests_expected"]:
         raise RuntimeError(f"OFFICIAL_REQUEST_COUNT_MISMATCH:{requests_made}")
     return official, boxes, requests_made
@@ -299,12 +309,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--preflight", action="store_true")
+    mode.add_argument("--local-input-preflight", action="store_true")
     mode.add_argument("--execute", action="store_true")
     parser.add_argument("--date", dest="slate_date")
     parser.add_argument("date_arg", nargs="?")
     parser.add_argument("--env-file", type=Path, default=ROOT / "backend/.env")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--prediction-root", type=Path, default=DEFAULT_PREDICTION_ROOT)
+    parser.add_argument("--operational-root", type=Path, default=DEFAULT_OPERATIONAL_ROOT)
+    parser.add_argument("--reuse-request-run-id")
     args = parser.parse_args()
     slate_date = args.slate_date or args.date_arg
     if not slate_date:
@@ -313,6 +326,37 @@ def main() -> int:
         date.fromisoformat(slate_date)
     except ValueError:
         parser.error("date must be YYYY-MM-DD")
+    source_binding = None
+    reuse_lineage = None
+    if slate_date != "2026-09-19":
+        try:
+            source_binding = resolve_operational_sources(
+                slate_date=slate_date, operational_root=args.operational_root)
+            if args.execute:
+                if not args.reuse_request_run_id:
+                    raise RuntimeError("EXPLICIT_REUSE_REQUEST_RUN_ID_REQUIRED")
+                prior_root = (args.output_root / "request_runs" / slate_date /
+                              args.reuse_request_run_id)
+                reuse_lineage = verify_preserved_response_run(
+                    prior_root, expected_run_id=args.reuse_request_run_id,
+                    slate_date=slate_date, game_ids=source_binding["game_ids"],
+                )
+        except RuntimeError as error:
+            print(json.dumps({"status": "FAILED_CLOSED_LOCAL_INPUT", "failure": str(error),
+                              "database_requests": 0, "external_requests": 0,
+                              "bookmaker_requests": 0, "paid_credits": 0},
+                             indent=2, sort_keys=True))
+            return 5
+    if args.local_input_preflight:
+        if source_binding is None:
+            print(json.dumps({"status": "LEGACY_SEPTEMBER_19_BINDING_UNCHANGED",
+                              "slate_date": slate_date, "database_requests": 0,
+                              "external_requests": 0}, indent=2, sort_keys=True))
+        else:
+            print(json.dumps({"status": "LOCAL_INPUTS_VALID", "database_requests": 0,
+                              "external_requests": 0, "source_binding": source_binding},
+                             indent=2, sort_keys=True))
+        return 0
     load_env(args.env_file)
     dsn = (os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or "").strip()
     if not dsn:
@@ -326,6 +370,8 @@ def main() -> int:
         with reconciliation_lock(args.output_root, slate_date):
             canonical = canonical_slate(dsn, slate_date)
             canonical_ids = set(canonical.game_id.astype(int))
+            if source_binding is not None and canonical_ids != set(source_binding["game_ids"]):
+                raise RuntimeError("DATABASE_CANONICAL_GAME_SET_DIFFERS_FROM_IMMUTABLE_LOCAL_SPINE")
             game_hash = canonical_game_set_hash(canonical_ids)
             started = datetime.now(timezone.utc)
             run_id = f"nhlpostgame_{slate_date.replace('-', '')}_{started.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
@@ -337,9 +383,19 @@ def main() -> int:
                 ENV_SLATE: slate_date, ENV_GAME_HASH: game_hash,
                 ENV_GAME_IDS: ",".join(str(value) for value in sorted(canonical_ids)),
             }
+            if reuse_lineage is not None:
+                context_values.update({
+                    ENV_SOURCE_CACHE: reuse_lineage["source_cache"],
+                    ENV_SOURCE_RUN_ID: reuse_lineage["source_run_id"],
+                    ENV_SOURCE_JOURNAL_SHA256: reuse_lineage["source_journal_sha256"],
+                })
+            else:
+                for key in (ENV_SOURCE_CACHE, ENV_SOURCE_RUN_ID, ENV_SOURCE_JOURNAL_SHA256):
+                    os.environ.pop(key, None)
             os.environ.update(context_values)
             RequestContext.from_env(required=True)
-            official, boxes, request_counts = fetch_official(slate_date, canonical_ids)
+            official, boxes, request_counts = fetch_official(
+                slate_date, canonical_ids, reuse_authority=reuse_lineage is not None)
             validate_final_slate(canonical, official, slate_date)
             destination, disposition = publish_reconciliation(
                 canonical=canonical, official=official, boxscores=boxes, slate_date=slate_date,
@@ -351,6 +407,8 @@ def main() -> int:
                     Path(context_values[ENV_JOURNAL]), run_id=run_id,
                     expected_game_hash=game_hash,
                 ),
+                source_binding=source_binding,
+                request_lineage=reuse_lineage,
             )
             accounting = json.loads((destination / "official_request_accounting.json").read_text())
         print(json.dumps({

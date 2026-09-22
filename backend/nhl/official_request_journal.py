@@ -28,6 +28,9 @@ ENV_CACHE = "NHL_OFFICIAL_RESPONSE_CACHE"
 ENV_SLATE = "NHL_REQUESTED_SLATE_DATE"
 ENV_GAME_HASH = "NHL_CANONICAL_GAME_SET_HASH"
 ENV_GAME_IDS = "NHL_CANONICAL_GAME_IDS"
+ENV_SOURCE_CACHE = "NHL_OFFICIAL_RESPONSE_SOURCE_CACHE"
+ENV_SOURCE_RUN_ID = "NHL_OFFICIAL_RESPONSE_SOURCE_RUN_ID"
+ENV_SOURCE_JOURNAL_SHA256 = "NHL_OFFICIAL_RESPONSE_SOURCE_JOURNAL_SHA256"
 CONTRACT = "NHL_OFFICIAL_REQUEST_JOURNAL_V1"
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]+$")
 
@@ -71,6 +74,9 @@ class RequestContext:
     slate_date: str
     game_set_hash: str
     game_ids: frozenset[int]
+    source_cache_dir: Path | None = None
+    source_run_id: str | None = None
+    source_journal_sha256: str | None = None
 
     @classmethod
     def from_env(cls, *, required: bool | None = None) -> "RequestContext | None":
@@ -96,10 +102,29 @@ class RequestContext:
             raise RuntimeError("OFFICIAL_REQUEST_GAME_IDS_INVALID") from error
         if not ids or canonical_game_set_hash(ids) != values["hash"]:
             raise RuntimeError("OFFICIAL_REQUEST_CANONICAL_GAME_SET_HASH_MISMATCH")
+        source_values = {
+            "cache": os.environ.get(ENV_SOURCE_CACHE, "").strip(),
+            "run_id": os.environ.get(ENV_SOURCE_RUN_ID, "").strip(),
+            "journal_sha256": os.environ.get(ENV_SOURCE_JOURNAL_SHA256, "").strip(),
+        }
+        if any(source_values.values()) and not all(source_values.values()):
+            raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_CONFIG_INCOMPLETE")
+        if source_values["run_id"] and not SAFE_TOKEN.fullmatch(source_values["run_id"]):
+            raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_RUN_ID_INVALID")
+        if source_values["journal_sha256"] and not re.fullmatch(r"[0-9a-f]{64}", source_values["journal_sha256"]):
+            raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_JOURNAL_HASH_INVALID")
+        if source_values["cache"]:
+            source_journal = Path(source_values["cache"]).parent / "official_request_journal.jsonl"
+            if (not source_journal.is_file() or
+                    sha256_bytes(source_journal.read_bytes()) != source_values["journal_sha256"]):
+                raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_JOURNAL_CHANGED")
         context = cls(
             run_id=values["run_id"], journal_path=Path(values["journal"]),
             cache_dir=Path(values["cache"]), slate_date=values["slate"],
             game_set_hash=values["hash"], game_ids=ids,
+            source_cache_dir=Path(source_values["cache"]) if source_values["cache"] else None,
+            source_run_id=source_values["run_id"] or None,
+            source_journal_sha256=source_values["journal_sha256"] or None,
         )
         context._ensure_storage()
         return context
@@ -136,12 +161,12 @@ class RequestContext:
         finally:
             os.close(descriptor)
 
-    def _cache_index(self, family: str, identity: dict[str, Any]) -> Path:
+    def _cache_index(self, family: str, identity: dict[str, Any], cache_dir: Path | None = None) -> Path:
         token = sha256_bytes(json.dumps(
             {"endpoint_family": family, "identity": identity},
             sort_keys=True, separators=(",", ":"),
         ).encode())
-        return self.cache_dir / "index" / f"{token}.json"
+        return (cache_dir or self.cache_dir) / "index" / f"{token}.json"
 
     def preserve(self, family: str, identity: dict[str, Any], body: bytes) -> tuple[Path, str]:
         verify_payload_identity(family, identity, body)
@@ -178,20 +203,33 @@ class RequestContext:
                 os.close(descriptor)
         return object_path, digest
 
-    def reuse(self, family: str, identity: dict[str, Any]) -> tuple[bytes, str]:
-        index_path = self._cache_index(family, identity)
+    def reuse(self, family: str, identity: dict[str, Any]) -> tuple[bytes, str, dict[str, Any]]:
+        cache_dir = self.cache_dir
+        index_path = self._cache_index(family, identity, cache_dir)
+        cross_run = False
+        if not index_path.is_file() and self.source_cache_dir is not None:
+            cache_dir = self.source_cache_dir
+            index_path = self._cache_index(family, identity, cache_dir)
+            cross_run = True
         if not index_path.is_file():
             raise RuntimeError("PRESERVED_RESPONSE_NOT_FOUND")
         metadata = json.loads(index_path.read_text())
         if metadata.get("endpoint_family") != family or metadata.get("identity") != identity:
             raise RuntimeError("PRESERVED_RESPONSE_IDENTITY_MISMATCH")
-        object_path = self.cache_dir / "objects" / str(metadata.get("object_name", ""))
+        object_path = cache_dir / "objects" / str(metadata.get("object_name", ""))
         body = object_path.read_bytes()
         digest = sha256_bytes(body)
         if digest != metadata.get("response_sha256") or len(body) != metadata.get("response_bytes"):
             raise RuntimeError("PRESERVED_RESPONSE_HASH_MISMATCH")
         verify_payload_identity(family, identity, body)
-        return body, digest
+        provenance = {
+            "source_run_id": self.source_run_id if cross_run else self.run_id,
+            "source_journal_sha256": self.source_journal_sha256 if cross_run else None,
+            "source_response_index_sha256": sha256_bytes(index_path.read_bytes()),
+            "source_response_object_sha256": digest,
+            "cross_run_reuse": cross_run,
+        }
+        return body, digest, provenance
 
 
 class PreservedResponse:
@@ -235,7 +273,7 @@ def official_get(
     logical_id = uuid.uuid4().hex
     if reuse_preserved:
         started = time.monotonic()
-        body, digest = context.reuse(endpoint_family, identity)
+        body, digest, provenance = context.reuse(endpoint_family, identity)
         context.append({
             "event_kind": "PRESERVED_RESPONSE_REUSE", "timestamp_utc": utc_now(),
             "request_start_utc": utc_now(), "request_end_utc": utc_now(), "pid": os.getpid(),
@@ -247,6 +285,7 @@ def official_get(
             "duration_ms": round((time.monotonic() - started) * 1000, 3),
             "cache_hit": True, "response_preserved": True,
             "final_disposition": "PRESERVED_RESPONSE_REUSE",
+            **provenance,
         })
         return PreservedResponse(body)
 
@@ -309,6 +348,95 @@ def official_get(
 
 def read_journal(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def verify_preserved_response_run(request_root: Path, *, expected_run_id: str,
+                                  slate_date: str, game_ids: Iterable[int]) -> dict[str, Any]:
+    """Verify a failed authority run as an immutable, exact eight-response source."""
+    if request_root.name != expected_run_id or not SAFE_TOKEN.fullmatch(expected_run_id):
+        raise RuntimeError("PRESERVED_SOURCE_RUN_ID_MISMATCH")
+    journal = request_root / "official_request_journal.jsonl"
+    cache = request_root / "preserved_responses"
+    if not journal.is_file() or not cache.is_dir():
+        raise RuntimeError("PRESERVED_SOURCE_RUN_INCOMPLETE")
+    journal_digest = sha256_bytes(journal.read_bytes())
+    ids = sorted({int(value) for value in game_ids})
+    expected_hash = canonical_game_set_hash(ids)
+    records = read_journal(journal)
+    if len(records) != 1 + len(ids):
+        raise RuntimeError(f"PRESERVED_SOURCE_JOURNAL_CARDINALITY:{len(records)}")
+    if any(row.get("run_id") != expected_run_id for row in records):
+        raise RuntimeError("PRESERVED_SOURCE_JOURNAL_RUN_ID_MISMATCH")
+    if any(row.get("canonical_game_set_hash") != expected_hash for row in records):
+        raise RuntimeError("PRESERVED_SOURCE_GAME_SET_HASH_MISMATCH")
+    expected = [("SCHEDULE", {"slate_date": slate_date})] + [
+        ("BOXSCORE", {"slate_date": slate_date, "game_id": gid}) for gid in ids
+    ]
+    actual = [(row.get("endpoint_family"), row.get("resource_identity")) for row in records]
+    if (sorted(actual, key=lambda value: json.dumps(value, sort_keys=True)) !=
+            sorted(expected, key=lambda value: json.dumps(value, sort_keys=True))):
+        raise RuntimeError("PRESERVED_SOURCE_RESPONSE_IDENTITY_SET_MISMATCH")
+    if any(row.get("event_kind") != "NETWORK_ATTEMPT" or
+           row.get("final_disposition") != "SUCCESS" or
+           not row.get("authority_boundary") or not row.get("response_preserved")
+           for row in records):
+        raise RuntimeError("PRESERVED_SOURCE_AUTHORITY_RECORD_INVALID")
+    response_bindings: list[dict[str, Any]] = []
+    expected_indexes: set[str] = set()
+    expected_objects: set[str] = set()
+    for family, identity in expected:
+        token = sha256_bytes(json.dumps(
+            {"endpoint_family": family, "identity": identity},
+            sort_keys=True, separators=(",", ":"),
+        ).encode())
+        index = cache / "index" / f"{token}.json"
+        if not index.is_file():
+            raise RuntimeError("PRESERVED_SOURCE_INDEX_MISSING")
+        metadata = json.loads(index.read_text())
+        if metadata.get("endpoint_family") != family or metadata.get("identity") != identity:
+            raise RuntimeError("PRESERVED_SOURCE_INDEX_IDENTITY_MISMATCH")
+        object_path = cache / "objects" / str(metadata.get("object_name", ""))
+        if not object_path.is_file():
+            raise RuntimeError("PRESERVED_SOURCE_OBJECT_MISSING")
+        body = object_path.read_bytes()
+        digest = sha256_bytes(body)
+        if digest != metadata.get("response_sha256") or len(body) != metadata.get("response_bytes"):
+            raise RuntimeError("PRESERVED_SOURCE_RESPONSE_HASH_MISMATCH")
+        verify_payload_identity(family, identity, body)
+        if family == "SCHEDULE":
+            payload = json.loads(body)
+            schedule_ids: set[int] = set()
+            for day in payload.get("gameWeek", []) or []:
+                if str(day.get("date") or "") == slate_date:
+                    schedule_ids.update(int(game.get("id") or game.get("gamePk") or game.get("gameId"))
+                                        for game in day.get("games", []) or [])
+            schedule_ids.update(int(game.get("id") or game.get("gamePk") or game.get("gameId"))
+                                for game in payload.get("games", []) or []
+                                if str(game.get("gameDate") or "") == slate_date)
+            if schedule_ids != set(ids):
+                raise RuntimeError("PRESERVED_SOURCE_SCHEDULE_GAME_SET_MISMATCH")
+        journal_row = next(row for row in records
+                           if row.get("endpoint_family") == family and row.get("resource_identity") == identity)
+        if journal_row.get("response_sha256") != digest or journal_row.get("response_bytes") != len(body):
+            raise RuntimeError("PRESERVED_SOURCE_JOURNAL_RESPONSE_MISMATCH")
+        expected_indexes.add(index.name); expected_objects.add(object_path.name)
+        response_bindings.append({
+            "endpoint_family": family, "resource_identity": identity,
+            "index_sha256": sha256_bytes(index.read_bytes()),
+            "object_sha256": digest, "response_bytes": len(body),
+        })
+    actual_indexes = {path.name for path in (cache / "index").glob("*.json")}
+    actual_objects = {path.name for path in (cache / "objects").glob("*.json")}
+    if actual_indexes != expected_indexes or actual_objects != expected_objects:
+        raise RuntimeError("PRESERVED_SOURCE_CACHE_OBJECT_SET_MISMATCH")
+    return {
+        "contract_version": "NHL_CROSS_RUN_PRESERVED_RESPONSE_REUSE_V1",
+        "source_run_id": expected_run_id, "source_journal_sha256": journal_digest,
+        "canonical_game_set_hash": expected_hash, "authority_responses": len(response_bindings),
+        "source_cache": str(cache), "responses": response_bindings,
+        "response_set_sha256": sha256_bytes(json.dumps(
+            response_bindings, sort_keys=True, separators=(",", ":")).encode()),
+    }
 
 
 def summarize_journal(path: Path, *, run_id: str, expected_game_hash: str) -> dict[str, Any]:
