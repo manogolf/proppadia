@@ -1,0 +1,94 @@
+{
+  "authorized_command": "HOMEBREW_NO_AUTO_UPDATE=1 brew install postgresql@15",
+  "contract_name": "MLB_2026_CANONICAL_PHASE_LOCAL_POSTGRES15_REHEARSAL_V1",
+  "dependencies": {
+    "declared_build_dependencies": [
+      "gettext",
+      "pkgconf"
+    ],
+    "declared_runtime_dependencies": [
+      "gettext",
+      "icu4c@78",
+      "krb5",
+      "lz4",
+      "openssl@3",
+      "readline",
+      "zstd"
+    ],
+    "installed_by_attempt": [],
+    "present_before_and_after": {
+      "ca-certificates": "2025-09-09",
+      "gettext": "0.26",
+      "krb5": "1.22.1",
+      "libunistring": "1.3",
+      "lz4": "1.10.0",
+      "openssl@3": "3.6.0",
+      "pkgconf": "2.5.1",
+      "readline": "8.3.1",
+      "xz": "5.8.1",
+      "zstd": "1.5.7"
+    },
+    "still_absent_after_attempt": [
+      "icu4c@78",
+      "json-c"
+    ]
+  },
+  "disk": {
+    "cellar_kibibytes_after": 615248,
+    "cellar_kibibytes_before": 615248,
+    "cellar_kibibytes_delta": 0,
+    "filesystem_available_kibibytes_after": 119409596,
+    "filesystem_available_kibibytes_before": 119413020,
+    "filesystem_available_kibibytes_observed_delta": -3424,
+    "homebrew_prefix_kibibytes_after": 902260,
+    "homebrew_prefix_kibibytes_before": 902260,
+    "homebrew_prefix_kibibytes_delta": 0,
+    "minimum_three_gibibytes_satisfied": true,
+    "note": "The small filesystem-wide availability change is not attributed to a formula installation; the Homebrew prefix and Cellar measurements were unchanged."
+  },
+  "formula": {
+    "available_stable_version": "15.19",
+    "bottle_metadata_present_for_supported_arm64_macos_versions": true,
+    "disabled": false,
+    "formula_source_sha256": "15252588950ebd8a4e6015e886006b567b4805a86f07de4dadc47d603f03ac0a",
+    "installed_after_attempt": false,
+    "installed_before_attempt": false,
+    "keg_only": true,
+    "major_version": 15,
+    "prefix_path_if_installed": "/opt/homebrew/opt/postgresql@15"
+  },
+  "homebrew": {
+    "administrative_bypass_used": false,
+    "doctor_blocking_errors_outside_sandbox": [],
+    "doctor_exit_code": 1,
+    "doctor_warnings": [
+      "macOS 27 is a pre-release Tier 2 configuration",
+      "some unrelated installed formulae are deprecated or disabled"
+    ],
+    "prefix_writable_without_sudo": true,
+    "sudo_used": false,
+    "version": "5.0.11"
+  },
+  "host_architecture": "arm64",
+  "installation": {
+    "attempt_count": 1,
+    "automatic_update_disabled": true,
+    "completed_at_utc": "2026-09-22T03:09:29Z",
+    "error": "postgresql@15: no bottle available",
+    "exit_code": 1,
+    "formula_metadata_fetched": true,
+    "postgresql_archive_or_bottle_downloaded": false,
+    "result": "FAILED_NO_BOTTLE_AVAILABLE",
+    "retry_count": 0,
+    "source_build_attempted": false
+  },
+  "persistent_service": {
+    "brew_service_present_after": false,
+    "brew_service_present_before": false,
+    "launchctl_registration_present_after": false,
+    "launchctl_registration_present_before": false,
+    "postgres_process_active_after": false,
+    "postgres_process_active_before": false
+  },
+  "status": "BLOCKED"
+}
