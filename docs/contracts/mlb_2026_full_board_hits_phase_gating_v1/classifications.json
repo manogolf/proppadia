@@ -1,0 +1,15 @@
+{
+  "full_board_hits_postseason_code_readiness": "READY_SYNTHETIC_ALL_SUPPORTED_ROUNDS",
+  "full_board_hits_postseason_operational_readiness": "BLOCKED_NO_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_OBSERVED_THROUGH_ORDINARY_PATH",
+  "full_board_hits_regular_season_integrity": "READY_EXACT_GAME_PK_GATE_RETAINED_MEMBERSHIP_IDENTICAL",
+  "historical_restatement_requirement": "NOT_REQUIRED_FOR_RETAINED_FULL_BOARD_COHORT",
+  "market_roi_effect": "NONE_NO_MARKET_OR_ROI_RECALCULATION",
+  "prediction_quality_effect": "NONE_MEMBERSHIP_AND_REPORTING_CORRECTION_ONLY",
+  "remaining_blockers": [
+    "An actual authoritative 2026 postseason game must traverse the ordinary score/attach/grade/report path before operational readiness.",
+    "The source-hashed authority must be prospectively extended to include that game before the ordinary path can admit it.",
+    "The absent Hits-under artifact remains absent; no fallback, selector, Quick Card, registration, certification, or publication path was activated.",
+    "Other Hits consumers remain outside this bounded cutover and require their own exact-gamePk review."
+  ],
+  "selector_publication_status": "UNCHANGED_GOVERNED_UNAVAILABLE"
+}

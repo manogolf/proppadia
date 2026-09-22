@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import REGULAR_SEASON
 from backend.mlb.scripts.attach_mlb_hits05_full_board_markets_v1 import attach_date
 from backend.mlb.scripts.grade_mlb_hits05_full_board_shadow_v1 import COMPLETENESS_ROOT, grade_date
 from backend.mlb.scripts.report_mlb_hits05_full_board_shadow_v1 import build_report
@@ -72,7 +73,7 @@ def run_daily(slate_date: str, run_tag: str, ledger_path: Path, capture_time: da
             grading = {"status": "FAIL_CLOSED_GRADING_PENDING", "date": prior, "reason": f"{type(exc).__name__}:{exc}"}
     else:
         grading = {"status": "PENDING_CANONICAL_COMPLETENESS", "date": prior}
-    progress = build_report(ledger_path)
+    progress = build_report(ledger_path, evaluation_phase=REGULAR_SEASON)
     validation = validate(ledger_path, PACKAGE / "sha256_manifest.json")
     result = {
         "status": "PASS" if validation["status"] == "PASS" else "FAIL_CLOSED_VALIDATION",

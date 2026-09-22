@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import partition_full_board_hits_rows
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 from backend.mlb.scripts.build_mlb_reconcile_rows import _load_actual_values
 from backend.mlb.scripts.reconcile_mlb_prospective_lineage_outcomes import require_complete
 
@@ -26,11 +28,23 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def grade_date(slate_date: str, ledger_path: Path, grading_timestamp: str | None = None) -> dict[str, Any]:
+def grade_date(
+    slate_date: str,
+    ledger_path: Path,
+    grading_timestamp: str | None = None,
+    *,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
     completeness = COMPLETENESS_ROOT / slate_date / f"player_stats_date_completeness_{slate_date}.csv"
     require_complete(slate_date, completeness)
     connection = ledger.connect_ledger(ledger_path)
     predictions = ledger.predictions_for_date(connection, slate_date)
+    partitions = partition_full_board_hits_rows(
+        predictions,
+        authority=phase_authority,
+        unique_identity_fields=("canonical_identity",),
+    )
+    predictions = list(partitions.admitted)
     actuals = _load_actual_values(from_date=slate_date, to_date=slate_date)
     source_state = {
         "contract": OUTCOME_CONTRACT,

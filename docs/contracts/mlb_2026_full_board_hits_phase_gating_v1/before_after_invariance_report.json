@@ -1,0 +1,39 @@
+{
+  "existing_progress_report_sha256": "add4c9a7eef3c17b041cda14fd6c70b1e7eb795dc7f1e6af5c5758ba3cc77dad",
+  "feature_context_hash": {
+    "canonical_rows_sha256": "18e9a53772d9c5cc5066f2fe99bc504f280f82ee6ede92a2b53bf45ecf0bbb31",
+    "rows": 6039
+  },
+  "market_metric_input": {
+    "rows": 21944,
+    "sha256": "6b647e7e4b6b21354ace062053b54d8cde07abc29affa53b169aca898920e464"
+  },
+  "market_roi_effect": "NONE_NO_PRICE_OR_OUTCOME_CHANGE_AND_NO_ROI_CLAIM",
+  "membership_before": {
+    "rows": 6039,
+    "sha256": "d06cbda39cbc7871e989df938c04550fc4d7aacdc55ccf83be6dec8961efa4e0"
+  },
+  "metric_input_hash_after_regular_gate": "d06cbda39cbc7871e989df938c04550fc4d7aacdc55ccf83be6dec8961efa4e0",
+  "metric_input_hash_before": "d06cbda39cbc7871e989df938c04550fc4d7aacdc55ccf83be6dec8961efa4e0",
+  "metric_input_hash_identical": true,
+  "outcome_and_grading_hash": {
+    "canonical_rows_sha256": "95d3d5ea48a97015a70c9fe51cd1b10ab0613f69e2bf5f4103b24e276ae99660",
+    "rows": 5877
+  },
+  "prediction_probability_and_baseline_hash": {
+    "canonical_rows_sha256": "5fd43683ebe8eaec017bd2899bf14e0219a50e437530598dec9478a00023f8b8",
+    "rows": 6039
+  },
+  "prediction_quality_effect": "NONE_MEMBERSHIP_ONLY_NO_PROBABILITY_OR_FEATURE_CHANGE",
+  "price_hash": {
+    "canonical_rows_sha256": "86df51961b5b78a7672c769b2bcd417563c2a5edd45ab7b380edc327c84b89a1",
+    "rows": 21944
+  },
+  "regular_membership_after_exact_game_pk_gate": {
+    "rows": 6039,
+    "sha256": "d06cbda39cbc7871e989df938c04550fc4d7aacdc55ccf83be6dec8961efa4e0"
+  },
+  "retained_membership_identical": true,
+  "retained_report_bytes_rewritten": false,
+  "scope": "retained Full-board Hits shadow ledger only"
+}

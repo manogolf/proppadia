@@ -1,0 +1,13 @@
+sequence,component,path,role,phase_behavior,task_scope
+1,governed lineup/schedule parent artifacts,artifacts/analysis/model_development/mlb_hits05_current_nonmarket_parent_producer/<date>/<run>/,prediction input,StatsAPI gameType is checked against exact-gamePk authority before scoring,IN_SCOPE_RUNTIME_INPUT
+2,Full-board scorer,backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py,prediction generation/loading,regular and postseason collection admitted; preseason/special excluded; authority failures abort before ledger access,MODIFIED
+3,append-only Full-board ledger,backend/mlb/hits05_full_board_shadow/ledger_v1.py,predictions/features/outcomes/markets/ranks/runs,no duplicated phase column; consumers join authority by exact gamePk,INSPECTED_UNCHANGED
+4,market attachment,backend/mlb/scripts/attach_mlb_hits05_full_board_markets_v1.py,price attachment,all attachable candidates are phase-preflighted before first append,MODIFIED
+5,outcome grader,backend/mlb/scripts/grade_mlb_hits05_full_board_shadow_v1.py,outcome grading,exact-gamePk phase partition completes before actual-value loading or outcome append,MODIFIED
+6,progress reporter,backend/mlb/scripts/report_mlb_hits05_full_board_shadow_v1.py,candidate/evaluation loading and reporting,regular default and explicit postseason shadow are disjoint; combined evaluation is unavailable,MODIFIED
+7,daily lane orchestrator,backend/mlb/scripts/run_mlb_hits05_full_board_shadow_daily_v1.py,score/attach/grade/report caller,ordinary progress report explicitly requests REGULAR_SEASON,MODIFIED_NOT_EXECUTED
+8,Full-board validator,backend/mlb/scripts/validate_mlb_hits05_full_board_shadow_v1.py,append-only/integrity validation,validates ledger mechanics; phase validation is added by this V1 gate validator,INSPECTED_UNCHANGED
+9,private scheduler hook,bin/mlb_hits05_full_board_shadow_daily_hook.sh,only tracked direct ordinary caller,invokes daily shadow only; no selector/public path,INSPECTED_UNCHANGED_NOT_EXECUTED
+10,retained progress exports,artifacts/analysis/mlb/hits05_full_board_shadow/,daily and latest reports,retained bytes are read-only evidence; no report was rewritten,READ_ONLY_RECONCILIATION
+-,frozen bounded Hits evaluator pilot,backend/mlb/scripts/evaluate_hits_model_candidates.py,"separate 7,564-row / 651-gamePk cohort",post-control authority gate and explicit legacy comparator remain preserved; no extrapolation to Full-board Hits,EXPLICITLY_OUT_OF_SCOPE_PRESERVED
+-,"BvP, Totals, agreement study, Ops Brief, shared daily indexes, lane selector, Quick Card",multiple,adjacent consumers,not used or changed by this bounded cutover,EXPLICITLY_OUT_OF_SCOPE

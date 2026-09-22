@@ -24,7 +24,13 @@ import pandas as pd
 
 from backend.domains.mlb import prop_workflow
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import (
+    EVALUATION_PHASES,
+    classify_full_board_hits_row,
+    verified_full_board_hits_phase_authority,
+)
 from backend.mlb.prediction import make_prediction as prediction_runtime
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     normalizeTeamAbbreviation,
@@ -242,6 +248,9 @@ def _row_bound_prepare_context(row: dict[str, Any]) -> Iterator[None]:
 
 
 def prepare_baseball_features(row: dict[str, Any]) -> dict[str, Any]:
+    game_type = clean(row.get("game_type"))
+    if not game_type:
+        raise RuntimeError("AUTHORITATIVE_GAME_TYPE_REQUIRED")
     payload = {
         "player_id": int(row["player_id"]),
         "player_name": row["player_name"],
@@ -249,7 +258,7 @@ def prepare_baseball_features(row: dict[str, Any]) -> dict[str, Any]:
         "team_abbr": row["team"],
         "game_date": row["slate_date"],
         "game_id": int(row["game_id"]),
-        "game_type": row.get("game_type") or "R",
+        "game_type": game_type,
         "game_time": row["scheduled_start_utc"],
         "is_home": bool(row["is_home"]),
         "home_team_code": row["home_team"],
@@ -337,7 +346,10 @@ def classify_lineup_rows(
     parent_dir: Path,
     slate_date: str,
     capture_time: datetime,
+    *,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Path]]:
+    phase_authority = phase_authority or verified_full_board_hits_phase_authority()
     lineup_path = _find_one(parent_dir, f"hits05_lineup_source_ledger_{slate_date}.csv")
     team_status_candidates = sorted((parent_dir / "governed_lineup_capture").glob(f"lineup_team_status_{slate_date}.csv"))
     team_status_path = team_status_candidates[0] if len(team_status_candidates) == 1 else None
@@ -433,6 +445,19 @@ def classify_lineup_rows(
                 reason = "TEAM_SCHEDULE_IDENTITY_MISMATCH"
                 team_id = opponent_id = None
                 opponent = ""
+        phase_decision = None
+        if not reason:
+            assert schedule_row is not None and game_id is not None
+            phase_decision = classify_full_board_hits_row(
+                {
+                    "game_id": game_id,
+                    "slate_date": slate_date,
+                    "game_type": schedule_row["game_type"],
+                },
+                authority=phase_authority,
+            )
+            if phase_decision.evaluation_partition not in EVALUATION_PHASES:
+                reason = phase_decision.decision_code
         observation = {
             "slate_date": slate_date,
             "game_id": game_id,
@@ -450,6 +475,7 @@ def classify_lineup_rows(
         if reason:
             continue
         assert schedule_row is not None and game_id is not None and player_id is not None and start is not None
+        assert phase_decision is not None and phase_decision.source_game_type is not None
         eligible.append({
             "slate_date": slate_date,
             "game_id": game_id,
@@ -463,7 +489,7 @@ def classify_lineup_rows(
             "home_team": schedule_row["home_team"],
             "away_team": schedule_row["away_team"],
             "scheduled_start_utc": iso(start),
-            "game_type": schedule_row["game_type"],
+            "game_type": phase_decision.source_game_type,
             "doubleheader": schedule_row["doubleheader"],
             "game_number": schedule_row["game_number"],
             "lineup_slot": int(integer(source.get("lineup_slot")) or 0),
@@ -480,6 +506,9 @@ def classify_lineup_rows(
             "parser_version": clean(source.get("parser_version")),
         })
     artifacts = {"lineup": lineup_path, "schedule": schedule_path, "machine": machine_path}
+    metadata = phase_authority.metadata
+    artifacts["phase_authority_proposal"] = ROOT / metadata.proposal_path
+    artifacts["phase_authority_source_manifest"] = ROOT / metadata.source_manifest_path
     if team_status_path:
         artifacts["team_status"] = team_status_path
     return eligible, observations, artifacts
@@ -605,6 +634,7 @@ def score_board(
     ledger_path: Path,
     evidence_mode: str = "PROSPECTIVE",
     history_provider: HistoryProvider = strict_prior_hitter_history,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
 ) -> dict[str, Any]:
     if evidence_mode == "PROSPECTIVE" and slate_date < ledger.EXPERIMENT_START_DATE:
         return {
@@ -615,7 +645,12 @@ def score_board(
             "outcomes_accessed": 0,
         }
     verified_model_bundle()
-    eligible, observations, artifacts = classify_lineup_rows(parent_dir, slate_date, capture_time)
+    eligible, observations, artifacts = classify_lineup_rows(
+        parent_dir,
+        slate_date,
+        capture_time,
+        phase_authority=phase_authority,
+    )
     connection = ledger.connect_ledger(ledger_path)
     for observation in observations:
         observation["run_tag"] = run_tag

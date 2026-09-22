@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import (
+    EVALUATION_PHASES,
+    FullBoardHitsPhaseGateError,
+    classify_full_board_hits_row,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -47,7 +53,13 @@ def _american_probability(price: float | None) -> float | None:
     return 100.0 / (price + 100.0) if price > 0 else (-price) / ((-price) + 100.0)
 
 
-def attach_date(slate_date: str, ledger_path: Path, lineage_path: Path | None = None) -> dict[str, Any]:
+def attach_date(
+    slate_date: str,
+    ledger_path: Path,
+    lineage_path: Path | None = None,
+    *,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
     path = lineage_path or LINEAGE_ROOT / slate_date / "prediction_lineage_ledger.csv"
     if not path.exists():
         return {"status": "NO_MARKET_LINEAGE_AVAILABLE", "slate_date": slate_date, "observations_added": 0}
@@ -58,6 +70,7 @@ def attach_date(slate_date: str, ledger_path: Path, lineage_path: Path | None = 
     by_book: dict[str, int] = {}
     with path.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
+    prepared: list[tuple[str, str, dict[str, Any]]] = []
     for row in rows:
         try:
             identity = json.loads(row.get("canonical_row_identity") or "{}")
@@ -70,6 +83,13 @@ def attach_date(slate_date: str, ledger_path: Path, lineage_path: Path | None = 
             canonical = ledger.canonical_identity(slate_date, game_id, player_id)
             if canonical not in predictions:
                 no_prediction += 1
+                continue
+            phase_decision = classify_full_board_hits_row(
+                {"game_id": game_id, "slate_date": slate_date},
+                authority=phase_authority,
+            )
+            if phase_decision.evaluation_partition not in EVALUATION_PHASES:
+                rejected += 1
                 continue
             observed = _dt(row.get("odds_snapshot_timestamp"))
             start = _dt(row.get("scheduled_game_start"))
@@ -102,14 +122,21 @@ def attach_date(slate_date: str, ledger_path: Path, lineage_path: Path | None = 
                 "created_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "population_admission_dependency": False,
             }
-            action = ledger.append_market_observation(connection, canonical, payload)
-            if action == "APPENDED_NEW":
-                added += 1
-                by_book[book] = by_book.get(book, 0) + 1
-            elif action == "EXISTING_IMMUTABLE":
-                existing += 1
+            prepared.append((canonical, book, payload))
+        except FullBoardHitsPhaseGateError:
+            raise
         except Exception:
             rejected += 1
+    # Phase and identity validation completes for the entire candidate file
+    # before the first append.  A stale, absent, conflicting, or duplicate
+    # authority therefore cannot leave a partially attached market file.
+    for canonical, book, payload in prepared:
+        action = ledger.append_market_observation(connection, canonical, payload)
+        if action == "APPENDED_NEW":
+            added += 1
+            by_book[book] = by_book.get(book, 0) + 1
+        elif action == "EXISTING_IMMUTABLE":
+            existing += 1
     return {
         "status": "PASS",
         "slate_date": slate_date,

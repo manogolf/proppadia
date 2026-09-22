@@ -14,6 +14,13 @@ from typing import Any
 import numpy as np
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import (
+    EVALUATION_PHASES,
+    POSTSEASON,
+    REGULAR_SEASON,
+    partition_full_board_hits_rows,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -87,9 +94,16 @@ def _calibration(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {"supported": True, "intercept": float(beta[0]), "slope": float(beta[1])}
 
 
-def build_report(ledger_path: Path) -> dict[str, Any]:
+def build_report(
+    ledger_path: Path,
+    *,
+    evaluation_phase: str = REGULAR_SEASON,
+    phase_authority: CanonicalGamePhaseAuthority | None = None,
+) -> dict[str, Any]:
+    if evaluation_phase not in EVALUATION_PHASES:
+        raise ValueError(f"FULL_BOARD_HITS_EVALUATION_PHASE_INVALID:{evaluation_phase}")
     connection = ledger.connect_ledger(ledger_path)
-    rows = [dict(row) for row in connection.execute(
+    all_rows = [dict(row) for row in connection.execute(
         """SELECT p.canonical_identity,p.slate_date,p.game_id,p.player_id,p.probability_over,
                   p.baseline_population_probability,p.baseline_hitter_shrunk_probability,
                   o.actual_hits,o.appearance_status,o.outcome_status
@@ -98,6 +112,16 @@ def build_report(ledger_path: Path) -> dict[str, Any]:
            WHERE json_extract(p.prediction_payload_json,'$.evidence_mode')='PROSPECTIVE'
            ORDER BY p.slate_date,p.game_id,p.player_id"""
     ).fetchall()]
+    phase_partitions = partition_full_board_hits_rows(
+        all_rows,
+        authority=phase_authority,
+        unique_identity_fields=("canonical_identity",),
+    )
+    rows = list(
+        phase_partitions.regular_season
+        if evaluation_phase == REGULAR_SEASON
+        else phase_partitions.postseason
+    )
     market_by_identity: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in connection.execute("SELECT canonical_identity,market_payload_json FROM hits05_full_board_market_observations"):
         market_by_identity[row[0]].append(json.loads(row[1]))
@@ -178,9 +202,14 @@ def build_report(ledger_path: Path) -> dict[str, Any]:
         "experiment_id": ledger.EXPERIMENT_ID,
         "model_semantic_id": ledger.MODEL_ID,
         "model_artifact_sha256": ledger.MODEL_HASH,
+        "evaluation_phase": evaluation_phase,
+        "phase_partition_contract": "EXACT_GAME_PK_CANONICAL_AUTHORITY_FAIL_CLOSED_V1",
+        "phase_partition_counts": phase_partitions.counts(),
+        "authority_proposal_sha256": phase_partitions.decisions[0].authority_proposal_sha256 if phase_partitions.decisions else None,
+        "authority_records_sha256": phase_partitions.decisions[0].authority_records_sha256 if phase_partitions.decisions else None,
         "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "evidence_horizon": {"minimum_game_date_clusters": MIN_CLUSTERS, "target_appearance_resolved_rows": TARGET_RESOLVED, "minimum_upper_decile_rows": MIN_UPPER_TAIL, "horizon_satisfied": horizon},
-        "counts": {**ledger.counts(connection), "prospective_predictions": len(rows), "appearance_resolved": len(resolved), "no_appearance_unresolved": len(no_appearance), "qualifying_game_date_clusters": len(dates)},
+        "counts": {**ledger.counts(connection), "all_phase_prospective_predictions": len(all_rows), "prospective_predictions": len(rows), "appearance_resolved": len(resolved), "no_appearance_unresolved": len(no_appearance), "qualifying_game_date_clusters": len(dates)},
         "population_evaluations": evaluations,
         "no_appearance_population": {
             "rows": len(no_appearance),
@@ -205,12 +234,18 @@ def build_report(ledger_path: Path) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
-    parser.add_argument("--out", type=Path, default=DEFAULT_REPORT_ROOT / "progress_latest.json")
+    parser.add_argument("--evaluation-phase", choices=sorted(EVALUATION_PHASES), default=REGULAR_SEASON)
+    parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    report = build_report(args.ledger)
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"report": str(args.out.relative_to(ROOT)), **report}, indent=2, sort_keys=True))
+    report = build_report(args.ledger, evaluation_phase=args.evaluation_phase)
+    output = args.out or DEFAULT_REPORT_ROOT / (
+        "progress_latest.json"
+        if args.evaluation_phase == REGULAR_SEASON
+        else "postseason_shadow_progress_latest.json"
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps({"report": str(output.relative_to(ROOT)), **report}, indent=2, sort_keys=True))
     return 0
 
 

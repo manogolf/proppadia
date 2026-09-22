@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
 from backend.mlb.scripts.attach_mlb_hits05_full_board_markets_v1 import attach_date
@@ -196,8 +198,13 @@ class Hits05FullBoardShadowV1Test(unittest.TestCase):
             writer = csv.DictWriter(handle, fieldnames=list(row))
             writer.writeheader(); writer.writerow(row)
         before = ledger.counts(ledger.connect_ledger(self.ledger))["prediction_rows"]
-        result = attach_date("2099-01-02", self.ledger, lineage)
-        repeated = attach_date("2099-01-02", self.ledger, lineage)
+        admitted = SimpleNamespace(evaluation_partition="REGULAR_SEASON")
+        with patch(
+            "backend.mlb.scripts.attach_mlb_hits05_full_board_markets_v1.classify_full_board_hits_row",
+            return_value=admitted,
+        ):
+            result = attach_date("2099-01-02", self.ledger, lineage)
+            repeated = attach_date("2099-01-02", self.ledger, lineage)
         after = ledger.counts(ledger.connect_ledger(self.ledger))["prediction_rows"]
         self.assertEqual(result["observations_added"], 1)
         self.assertEqual(repeated["observations_existing"], 1)

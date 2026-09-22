@@ -1,0 +1,64 @@
+{
+  "checks": [
+    {
+      "check": "authority_population",
+      "status": "PASS"
+    },
+    {
+      "check": "retained_union_authority",
+      "status": "PASS"
+    },
+    {
+      "check": "retained_union_all_regular",
+      "status": "PASS"
+    },
+    {
+      "check": "retained_metric_membership_hash_invariance",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger_read_only_unchanged",
+      "status": "PASS"
+    },
+    {
+      "check": "missing_type_default_removed",
+      "status": "PASS",
+      "violations": []
+    },
+    {
+      "check": "pilot_scope_preserved",
+      "status": "PASS"
+    },
+    {
+      "check": "dependency_free_tests",
+      "status": "PASS"
+    },
+    {
+      "check": "git_diff_check",
+      "detail": "",
+      "status": "PASS"
+    },
+    {
+      "check": "selector_quick_card_not_in_changed_sources",
+      "status": "PASS"
+    },
+    {
+      "check": "postseason_operational_readiness_not_overclaimed",
+      "status": "PASS"
+    }
+  ],
+  "contract": "MLB_2026_FULL_BOARD_HITS_PHASE_GATING_V1",
+  "retained_violations": [],
+  "source_files": [
+    "backend/mlb/hits05_full_board_shadow/phase_gating_v1.py",
+    "backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py",
+    "backend/mlb/scripts/attach_mlb_hits05_full_board_markets_v1.py",
+    "backend/mlb/scripts/grade_mlb_hits05_full_board_shadow_v1.py",
+    "backend/mlb/scripts/report_mlb_hits05_full_board_shadow_v1.py",
+    "backend/mlb/scripts/run_mlb_hits05_full_board_shadow_daily_v1.py",
+    "backend/mlb/scripts/validate_mlb_2026_full_board_hits_phase_gating_v1.py",
+    "backend/mlb/tests/test_mlb_2026_full_board_hits_phase_gating_v1.py",
+    "backend/mlb/tests/test_hits05_full_board_shadow_v1.py"
+  ],
+  "status": "PASS"
+}

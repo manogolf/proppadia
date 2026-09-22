@@ -1,0 +1,23 @@
+{
+  "assertions_executed": true,
+  "command": [
+    "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
+    "-m",
+    "unittest",
+    "backend.mlb.tests.test_mlb_2026_full_board_hits_phase_gating_v1",
+    "backend.mlb.tests.test_hits05_full_board_shadow_v1",
+    "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1"
+  ],
+  "dependency_free_runner": "unittest",
+  "failed": 0,
+  "output_tail": [
+    "..................................",
+    "----------------------------------------------------------------------",
+    "Ran 34 tests in 2.285s",
+    "",
+    "OK"
+  ],
+  "passed": 34,
+  "returncode": 0,
+  "skipped": 0
+}

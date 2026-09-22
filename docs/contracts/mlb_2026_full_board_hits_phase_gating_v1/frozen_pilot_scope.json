@@ -1,0 +1,11 @@
+{
+  "classification": "RESULT_SAME_BUT_CONTROL_VIOLATED",
+  "frozen_scope": {
+    "distinct_game_pks": 651,
+    "rows": 7564,
+    "rule": "Do not extrapolate to Full-board Hits or any other Hits consumer, prediction construction, Moneyline, Totals, grading, agreement reporting, seasons, or date ranges."
+  },
+  "path": "docs/contracts/mlb_2026_game_phase_file_authority_hits_pilot_v1/post_control_correction_audit.json",
+  "relationship_to_this_cutover": "PRESERVED_SEPARATE_NOT_USED_AS_FULL_BOARD_INVARIANCE_EVIDENCE",
+  "sha256": "9bd91e83e0bfe19f59389adb03dcda73ea7a8b122a6c2a3adb52ad34d7b672fa"
+}
