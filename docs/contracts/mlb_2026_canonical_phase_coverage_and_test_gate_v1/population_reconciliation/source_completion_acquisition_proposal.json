@@ -1,0 +1,20 @@
+{
+  "endpoint": "https://statsapi.mlb.com/api/v1/schedule",
+  "execution_authorized": false,
+  "expected_paid_credit_count": 0,
+  "expected_request_count": 1,
+  "expected_target_game_pk_count": 471,
+  "expected_target_game_pks_sha256": "3fd0199caa8240d43d0c89ceb99da124444686162c59c0b9bf7ebfc8ef624eb8",
+  "hashing_method": "SHA-256 over exact HTTP response bytes before JSON parsing",
+  "idempotence_guard": "refuse overwrite when target path exists; verify and reuse identical bytes; after parsing require every target gamePk exactly once or consistently duplicated, season=2026, an exact contract_v1 gameType, zero conflicting types, and a source hash",
+  "parameters": {
+    "endDate": "2026-03-25",
+    "sportId": 1,
+    "startDate": "2026-02-20"
+  },
+  "provider": "MLB StatsAPI",
+  "purpose": "complete authoritative source type only; never infer phase from date",
+  "smallest_request_rationale": "one free inclusive StatsAPI schedule range spans every observed identity date for the missing set; dates scope acquisition only and do not classify phase",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "storage_path": "backend/mlb/data/external/statsapi/raw/2026/schedule_2026-02-20_2026-03-25.json"
+}

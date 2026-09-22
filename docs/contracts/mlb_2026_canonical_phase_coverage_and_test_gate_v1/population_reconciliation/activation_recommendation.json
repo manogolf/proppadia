@@ -1,0 +1,7 @@
+{
+  "blocking_reasons": [
+    "471 canonical gamePks lack retained authoritative type"
+  ],
+  "exact_next_step": "Review and separately authorize the unexecuted one-request free StatsAPI source-completion proposal; retain and hash its bytes, rebuild this gate, and require missing/conflict counts of zero before migration activation.",
+  "recommendation": "CANONICAL_PHASE_ACTIVATION_GATE_BLOCKED"
+}
