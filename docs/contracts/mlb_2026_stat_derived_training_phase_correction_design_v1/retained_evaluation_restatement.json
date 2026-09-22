@@ -1,0 +1,54 @@
+{
+  "decision": "TWO_RETAINED_ARTIFACTS_DETERMINISTICALLY_RESTATABLE_NO_RESTATEMENT_EXECUTED",
+  "authority_proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+  "artifacts": [
+    {
+      "path": "tmp/mlb_base_vs_market_rows_anybook_full.csv",
+      "artifact_sha256": "dfb047a0ac62d5ce6133ae7c3dd0f8f4e9324e67c7959ea26e131395b1f1c864",
+      "total_2026_rows": 70521,
+      "total_2026_game_pks": 468,
+      "regular_rows": 69652,
+      "regular_game_pks": 443,
+      "preseason_rows": 869,
+      "preseason_game_pks": 25,
+      "source_type_rows": {"R": 69652, "S": 734, "E": 135},
+      "source_type_game_pks": {"R": 443, "S": 20, "E": 5},
+      "exact_game_pk_complete": true,
+      "retained_field_counts": {"model_probability": 60681, "model_pick_outcome": 58362, "over_under_outcome": 68202, "over_price": 60057, "under_price": 36186, "model_pick_pnl": 35706},
+      "restatement": "FILTER_RETAINED_ROWS_ONLY",
+      "metric_effect": "EXISTING_RECORDED_METRICS_UNCHANGED_EXCLUDED_PRESEASON_OUTSIDE_DENOMINATORS",
+      "manufacture_policy": "NEVER_FILL_MISSING_PREDICTIONS_OUTCOMES_OR_PRICES"
+    },
+    {
+      "path": "tmp/mlb_base_vs_market_rows_anybook_one_sided_rows.csv",
+      "artifact_sha256": "4c473e8b7bce46b5d731628690c042586e884fee93634bb3d26f6bedb7bfb092",
+      "total_2026_rows": 71768,
+      "total_2026_game_pks": 1852,
+      "regular_rows": 55252,
+      "regular_game_pks": 1381,
+      "preseason_rows": 16516,
+      "preseason_game_pks": 471,
+      "source_type_rows": {"R": 55252, "S": 15517, "E": 999},
+      "source_type_game_pks": {"R": 1381, "S": 440, "E": 31},
+      "exact_game_pk_complete": true,
+      "retained_field_counts": {"model_probability": 26260, "model_pick_outcome": 25370, "over_under_outcome": 70878, "over_price": 23871, "under_price": 0, "model_pick_pnl": 1091},
+      "restatement": "FILTER_RETAINED_ROWS_ONLY",
+      "metric_effect": "EXISTING_RECORDED_METRICS_UNCHANGED_EXCLUDED_PRESEASON_OUTSIDE_DENOMINATORS",
+      "manufacture_policy": "NEVER_FILL_MISSING_PREDICTIONS_OUTCOMES_OR_PRICES"
+    }
+  ],
+  "required_restatement_guards": [
+    "verify original artifact hash",
+    "verify complete phase authority hash chain",
+    "filter exact gamePk only",
+    "write a new versioned artifact and never overwrite the original",
+    "preserve retained-row prediction outcome and price hashes",
+    "preserve missing values",
+    "bind the derivative and every result to an immutable manifest"
+  ],
+  "not_restatable_without_more_lineage": [
+    "unbound historical model certification claims",
+    "derived diagnostics lacking exact input manifests",
+    "any result inferred only from model or artifact creation date"
+  ]
+}

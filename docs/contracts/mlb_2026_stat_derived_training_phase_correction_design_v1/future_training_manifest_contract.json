@@ -1,0 +1,33 @@
+{
+  "contract": "MLB_IMMUTABLE_TRAINING_RUN_MANIFEST_V1",
+  "certification_rule": "NO_MODEL_OR_RESULT_CERTIFICATION_WITHOUT_A_VALID_COMPLETE_BINDING",
+  "canonicalization": "UTF-8 JSON with sorted keys and compact separators; SHA-256 over the manifest body excluding manifest_sha256",
+  "required_fields": {
+    "run_identity": ["run_id", "created_at_utc", "purpose", "proposition", "run_kind"],
+    "code": ["repository_commit", "tracked_worktree_clean", "entrypoint", "entrypoint_sha256", "dependency_lock_sha256", "interpreter_identity"],
+    "input_population": ["exact_game_pk_list", "exact_game_pk_count", "row_count", "ordered_row_identity_contract", "deterministic_row_sha256", "population_sha256"],
+    "phase_authority": ["interface_identity", "backend_identity", "authority_snapshot_identity", "proposal_or_snapshot_sha256", "source_manifest_sha256", "phase_contract_sha256", "supported_window", "admitted_regular_game_pk_sha256", "excluded_counts", "blocked_counts"],
+    "source_data": ["source_artifacts", "source_artifact_sha256s", "database_snapshot_or_query_identity", "query_sha256", "extraction_timestamp_utc"],
+    "learning_contract": ["feature_contract_identity", "feature_contract_sha256", "ordered_features", "target_contract_identity", "target_definition", "row_deduplication_contract", "random_seed", "split_contract"],
+    "windows": ["training_from", "training_through", "validation_from", "validation_through", "evaluation_from", "evaluation_through", "strict_prior_policy"],
+    "exclusions": ["excluded_game_pks_by_reason", "excluded_row_counts_by_reason", "missing_unknown_special_conflict_duplicate_counts"],
+    "outputs": ["model_artifact_path", "model_artifact_sha256", "result_artifact_paths", "result_artifact_sha256s", "prediction_population_sha256", "result_population_sha256"],
+    "binding": ["parent_run_manifest_sha256", "manifest_sha256", "certification_status"]
+  },
+  "row_identity_minimum": ["exact_gamePk", "prop_type", "player_id", "line_or_target_identity", "stable_source_row_identity"],
+  "ordering_rule": "Sort by the declared canonical row-identity tuple before hashing; serialize nulls and numeric values under a versioned canonical encoding.",
+  "phase_rule": "Only exact gamePk authority with positive REGULAR_SEASON membership is admitted; all unresolved authority conditions fail closed.",
+  "immutability_rule": "A manifest and every referenced source/output hash are immutable. Corrections create a new manifest with predecessor and supersession fields; they never overwrite the prior binding.",
+  "result_rule": "Every result artifact must name exactly one training/evaluation run manifest hash and must hash its own exact input and output populations.",
+  "certification_abort_conditions": [
+    "missing required field",
+    "hash mismatch",
+    "dirty or unrecorded code state",
+    "missing exact gamePk",
+    "phase authority stale or incomplete",
+    "missing unknown special conflicting or duplicate authority",
+    "input population mismatch",
+    "model or result artifact hash mismatch",
+    "result lacks exact parent run-manifest binding"
+  ]
+}

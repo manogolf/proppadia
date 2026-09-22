@@ -1,0 +1,12 @@
+source_identity,total_rows,distinct_game_pks,regular_rows,regular_game_pks,preseason_rows,preseason_game_pks,preseason_S_rows,preseason_S_game_pks,preseason_E_rows,preseason_E_game_pks,postseason_rows,postseason_game_pks,special_unknown_rows,missing_authority_rows,rows_lacking_game_pk,duplicate_identity_conflicts,source_conflicts,decision
+mlb.model_training_props::2026,600766,2812,459604,2341,141162,471,132609,440,8553,31,0,0,0,0,0,0,0,CORRECT_MEMBERSHIP_PRESERVE_OBSERVATIONS
+tmp/mlb_base_vs_market_rows.csv::2026,360,8,360,8,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+tmp/mlb_base_vs_market_rows_anybook.csv::2026,85177,951,85177,951,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+tmp/mlb_base_vs_market_rows_anybook_2026-03-31.csv::2026,2372,14,2372,14,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+tmp/mlb_base_vs_market_rows_anybook_full.csv::2026,70521,468,69652,443,869,25,734,20,135,5,0,0,0,0,0,0,0,DETERMINISTIC_RESTATEMENT_AVAILABLE
+tmp/mlb_base_vs_market_rows_anybook_one_sided_rows.csv::2026,71768,1852,55252,1381,16516,471,15517,440,999,31,0,0,0,0,0,0,0,DETERMINISTIC_RESTATEMENT_AVAILABLE
+tmp/mlb_base_vs_market_rows_anybook_single_book_two_sided_rows.csv::2026,31144,912,31144,912,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+tmp/mlb_base_vs_market_rows_anybook_window.csv::2026,22175,202,22175,202,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+tmp/mlb_base_vs_market_rows_bol_20260325_20260417.csv::2026,8104,197,8104,197,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+tmp/mlb_base_vs_market_rows_mybookie.csv::2026,2372,14,2372,14,0,0,0,0,0,0,0,0,0,0,0,0,0,NO_MEMBERSHIP_CHANGE
+frozen_hits_review_population.csv::2026,7564,651,7564,651,0,0,0,0,0,0,0,0,0,0,0,0,0,PROVEN_REGULAR_BOUNDED_COHORT
