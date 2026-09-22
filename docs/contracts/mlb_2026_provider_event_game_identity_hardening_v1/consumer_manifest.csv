@@ -1,0 +1,6 @@
+lane,source_entrypoint,binding_boundary,prospective_write,identity_key,phase_handling,scope_result
+BETONLINE_GENERAL_PLAYER_PROPS,backend/mlb/scripts/build_mlb_predictions_wide.py,backend/mlb/identity/provider_event_game_binding_v1.py,prospective lineage and existing wide output,provider+provider_event_id+gamePk,none; downstream exact-gamePk authority join,PROSPECTIVE_HARDENED
+PINNACLE_MAIN_MARKETS,backend/mlb/scripts/capture_mlb_pinnacle_main_markets_v1.py,backend/mlb/identity/provider_event_game_binding_v1.py,existing market ledgers plus immutable binding receipt,provider+provider_event_id+gamePk,none; downstream exact-gamePk authority join,PROSPECTIVE_HARDENED
+PROSPECTIVE_FEATURE_LINEAGE,backend/mlb/shared/prospective_lineage.py,mandatory binding receipt fields,append-only prediction lineage,canonical row identity including provider_event_id,none,PROSPECTIVE_HARDENED
+RETAINED_PLAYER_PROP_HISTORY,backend/mlb/exports/odds_history,offline replay only; no writes,none,retained provider event ID,none,HISTORICAL_UNBOUND_PRESERVED
+RETAINED_PINNACLE_HISTORY,backend/mlb/exports/market_history/full_game_totals,offline reconciliation only; no writes,none,retained provider event ID and gamePk,none,636_MAPPINGS_UNCHANGED

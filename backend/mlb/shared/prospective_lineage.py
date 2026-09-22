@@ -22,7 +22,11 @@ MANDATORY = ("run_tag","prediction_timestamp","scheduled_game_start","normal_dec
  "calibration_method","calibration_artifact_path","calibration_artifact_sha256","configuration_sha256",
  "probability_orientation_contract","proposition_contract_version","odds_snapshot_path","odds_snapshot_sha256",
  "odds_snapshot_timestamp","bookmaker_key","price_over_american","price_under_american","selected_side",
- "selected_side_executable_price","selected_side_no_vig_probability","model_selected_side_probability","canonical_row_identity")
+ "selected_side_executable_price","selected_side_no_vig_probability","model_selected_side_probability","canonical_row_identity",
+ "provider_name","provider_event_id","provider_event_game_binding_identity","provider_event_binding_status",
+ "provider_event_binding_contract_version","provider_event_binding_receipt_path","provider_event_binding_receipt_sha256",
+ "official_schedule_source_path","official_schedule_source_sha256","official_schedule_observation_timestamp_utc",
+ "provider_snapshot_path","provider_snapshot_sha256")
 
 
 def _jsonable(v: Any) -> Any:
@@ -88,7 +92,7 @@ def validate(row: dict[str,Any]) -> tuple[str,str]:
     identity=row.get("canonical_row_identity")
     try: ident=json.loads(identity) if isinstance(identity,str) else identity
     except Exception: ident={}
-    if not all(ident.get(k) not in (None,"") for k in ("game_date","game_id","player_id","prop_type","line","selected_side","bookmaker_key","snapshot_run_tag")):
+    if not all(ident.get(k) not in (None,"") for k in ("game_date","game_id","player_id","prop_type","line","selected_side","bookmaker_key","snapshot_run_tag","provider_event_id")):
         return "LINEAGE_BLOCKED_IDENTITY","canonical identity incomplete"
     missing=[k for k in MANDATORY if row.get(k) in (None,"")]
     if missing: return "LINEAGE_BLOCKED_OTHER_MANDATORY_FIELD",",".join(missing)

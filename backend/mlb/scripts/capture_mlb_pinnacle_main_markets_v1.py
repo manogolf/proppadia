@@ -14,7 +14,17 @@ import requests
 
 from backend.mlb.markets.bookmaker_eu_supplemental_v1 import (
     append_attachment, append_consensus, append_event_discovery, append_market, build_consensus,
-    connect_ledger, mark_first_observed_prices, market_rows, no_vig,
+    connect_ledger, mark_first_observed_prices, market_rows, no_vig, normalize_team,
+)
+from backend.mlb.identity.provider_event_game_binding_v1 import (
+    BindingRegistry,
+    EvidenceSource,
+    OfficialGameCandidate,
+    ProviderEvent,
+    ProviderEventGameIdentityError,
+    load_receipt_registry,
+    resolve_binding,
+    write_receipts_immutable,
 )
 from backend.mlb.markets.full_game_total_capture_v1 import (
     append_market as append_total_market, attach_all_markets,
@@ -24,6 +34,7 @@ from backend.mlb.markets.pinnacle_main_market_capture_v1 import (
     BOOKMAKER_KEY, MARKETS, PROVIDER, REQUEST_CLASS, RUN_LINE_MODEL_STATUS, eastern_date, parse_events,
 )
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows
+from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
 from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import probability_fields
 from backend.mlb.totals_predictions.live_context_bridge_v1 import fetch_hydrated_schedule, normalize_schedule
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
@@ -143,16 +154,78 @@ def _attach(conn: Any, game_date: str, rows: list[dict[str, Any]], created: str)
 def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFAULT_LEDGER) -> dict[str, Any]:
     events, source = fetch(game_date, run_tag)
     schedule = []
+    binding_root = ROOT / "backend/mlb/exports/provider_event_game_bindings"
     schedule_dates = {game_date} | {
         eastern_date(event["commence_time"]) for event in events if event.get("commence_time")
         and eastern_date(event["commence_time"]) >= game_date
     }
     for schedule_date in sorted(schedule_dates):
-        schedule_payload, observed, schedule_sha = fetch_hydrated_schedule(schedule_date)
-        schedule.extend(normalize_schedule(schedule_payload, observed, schedule_sha))
+        schedule_path = (
+            binding_root / "schedule_sources" / schedule_date
+            / f"statsapi_hydrated__pinnacle__{run_tag}__{schedule_date}.json"
+        )
+        schedule_payload, observed, schedule_sha = fetch_hydrated_schedule(schedule_date, schedule_path)
+        schedule.extend(normalize_schedule(
+            schedule_payload, observed, schedule_sha, _display_path(schedule_path)
+        ))
+    authority = HashedProposalAuthority()
+    registry: BindingRegistry = load_receipt_registry(binding_root)
+    provider_snapshot = EvidenceSource(
+        path=str(source["raw_response_path"]), sha256=str(source["raw_response_sha256"])
+    )
+    receipts = {}
+    identity_failures = []
+    for event in events:
+        event_id = str(event.get("id") or "").strip()
+        candidates = [
+            OfficialGameCandidate(
+                game_pk=int(game["game_pk"]),
+                home_team=normalize_team(game.get("home_team_name")),
+                away_team=normalize_team(game.get("away_team_name")),
+                scheduled_start_utc=str(game.get("scheduled_start_utc") or ""),
+                game_number=int(game["game_number"]) if game.get("game_number") is not None else None,
+                doubleheader_indicator=str(game.get("doubleheader_state") or "") or None,
+                source_game_type=str(game.get("source_game_type") or "") or None,
+                schedule_source=EvidenceSource(
+                    path=str(game.get("source_path") or ""),
+                    sha256=str(game.get("source_sha256") or ""),
+                ),
+                schedule_observation_timestamp_utc=str(game.get("source_observed_at_utc") or "") or None,
+            )
+            for game in schedule
+        ]
+        try:
+            receipt = resolve_binding(
+                event=ProviderEvent(
+                    provider=PROVIDER,
+                    provider_event_id=event_id,
+                    home_team=normalize_team(event.get("home_team")),
+                    away_team=normalize_team(event.get("away_team")),
+                    commence_time_raw=str(event.get("commence_time") or "") or None,
+                    game_number=event.get("game_number") or event.get("gameNumber"),
+                ),
+                candidates=candidates,
+                provider_snapshot=provider_snapshot,
+                authority=authority,
+                observation_timestamp_utc=str(source["fetch_timestamp_utc"]),
+                registry=registry,
+                root=ROOT,
+            )
+            receipts[event_id] = receipt
+        except ProviderEventGameIdentityError as exc:
+            identity_failures.append({
+                "provider_event_id": event_id,
+                "failure_code": exc.code,
+                "detail": exc.detail,
+            })
+    receipt_path = (
+        binding_root / PROVIDER / game_date / f"pinnacle__{run_tag}.jsonl"
+    )
+    receipt_sha = write_receipts_immutable(receipt_path, receipts.values())
     rows, audit = parse_events(events=events, schedule=schedule, game_date=game_date,
         fetched_at_utc=source["fetch_timestamp_utc"], run_tag=run_tag,
-        raw_source_path=source["raw_response_path"], raw_source_sha256=source["raw_response_sha256"])
+        raw_source_path=source["raw_response_path"], raw_source_sha256=source["raw_response_sha256"],
+        binding_receipts=receipts, require_verified_bindings=True)
     conn = connect_ledger(ledger_path); total_conn = connect_total_ledger(ledger_path)
     discovery_actions = []
     for item in audit:
@@ -204,10 +277,17 @@ def run(game_date: str, run_tag: str, output_dir: Path, ledger_path: Path = DEFA
         "future_totals_rows": sum(row["market_type"] == "FULL_GAME_TOTAL" for row in future_rows),
         "future_run_line_rows": sum(row["market_type"] == "RUN_LINE" for row in future_rows),
         "event_discoveries": len(discovery_actions), "new_event_discoveries": discovery_actions.count("APPENDED_NEW"),
+        "provider_event_binding_receipt_path": _display_path(receipt_path),
+        "provider_event_binding_receipt_sha256": receipt_sha,
+        "provider_event_bindings_certified": len(receipts),
+        "provider_event_identity_failures": len(identity_failures),
         "outcomes_accessed": 0}
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "pinnacle_capture_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     (output_dir / "pinnacle_identity_audit.json").write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n")
+    (output_dir / "pinnacle_identity_blocked_events.json").write_text(
+        json.dumps(identity_failures, indent=2, sort_keys=True) + "\n"
+    )
     (output_dir / "pinnacle_model_attachments.json").write_text(json.dumps({"totals": totals_attach, "moneyline": money_attach,
         "run_line": RUN_LINE_MODEL_STATUS}, indent=2, sort_keys=True) + "\n")
     print(json.dumps(summary, indent=2, sort_keys=True)); return summary

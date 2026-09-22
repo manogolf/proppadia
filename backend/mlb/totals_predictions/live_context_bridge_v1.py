@@ -23,7 +23,7 @@ OFFICIAL_FINAL_ROOT = REPO_ROOT / "artifacts/analysis/mlb/player_stats_completen
 BULLPEN_FEATURE_GENERATION = "BULLPEN_RECENCY_FRESHNESS_INVARIANT_V1"
 SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
 SCHEDULE_HYDRATE = "probablePitcher,venue,team"
-SCHEDULE_FIELDS = "dates,date,games,gamePk,gameDate,officialDate,status,abstractGameState,detailedState,teams,away,home,team,id,name,probablePitcher,fullName,venue,gameNumber,doubleHeader"
+SCHEDULE_FIELDS = "dates,date,games,gamePk,gameDate,officialDate,gameType,status,abstractGameState,detailedState,teams,away,home,team,id,name,probablePitcher,fullName,venue,gameNumber,doubleHeader"
 MODEL_VERSION = "DIRECT_NEGATIVE_BINOMIAL"
 GOVERNED_STARTER_HISTORY_TIERS = frozenset({
     "DIRECT_STARTER_HISTORY",
@@ -41,7 +41,7 @@ def canonical_hash(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
-def fetch_hydrated_schedule(game_date: str) -> tuple[dict[str, Any], str, str]:
+def fetch_hydrated_schedule(game_date: str, retain_path: Path | None = None) -> tuple[dict[str, Any], str, str]:
     observed = datetime.now(timezone.utc).isoformat()
     query = urlencode({"sportId": 1, "date": game_date, "hydrate": SCHEDULE_HYDRATE, "fields": SCHEDULE_FIELDS})
     with urlopen(Request(f"{SCHEDULE_URL}?{query}", headers={"User-Agent": "proppadia-totals-live-context-v1"}), timeout=45) as response:
@@ -50,10 +50,23 @@ def fetch_hydrated_schedule(game_date: str) -> tuple[dict[str, Any], str, str]:
     lowered = raw.lower()
     if b'"score"' in lowered or b'"runs"' in lowered or b'"iswinner"' in lowered:
         raise TotalsLiveContextError("OUTCOME_FIELD_PRESENT_IN_LIVE_SCHEDULE")
+    if retain_path is not None:
+        retain_path.parent.mkdir(parents=True, exist_ok=True)
+        if retain_path.exists():
+            if retain_path.read_bytes() != raw:
+                raise TotalsLiveContextError(f"IMMUTABLE_SCHEDULE_EVIDENCE_CONFLICT_{retain_path}")
+        else:
+            with retain_path.open("xb") as handle:
+                handle.write(raw)
     return json.loads(raw), observed, hashlib.sha256(raw).hexdigest()
 
 
-def normalize_schedule(payload: dict[str, Any], observed_at_utc: str, source_sha256: str) -> list[dict[str, Any]]:
+def normalize_schedule(
+    payload: dict[str, Any],
+    observed_at_utc: str,
+    source_sha256: str,
+    source_path: str = "",
+) -> list[dict[str, Any]]:
     rows = []
     for day in payload.get("dates", []):
         for game in day.get("games", []):
@@ -97,6 +110,7 @@ def normalize_schedule(payload: dict[str, Any], observed_at_utc: str, source_sha
                 "home_probable_pitcher_status": sides["home"]["probable_pitcher_status"],
                 "venue_id": venue.get("id"), "venue_name": venue.get("name"),
                 "source_observed_at_utc": observed_at_utc, "source_sha256": source_sha256,
+                "source_path": source_path,
             })
     identities = [(r["game_pk"], r["game_number"]) for r in rows]
     if len(identities) != len(set(identities)):

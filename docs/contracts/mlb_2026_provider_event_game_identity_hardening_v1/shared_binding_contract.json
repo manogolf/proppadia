@@ -1,0 +1,27 @@
+{
+  "accepted_status": "EXACT_GAME_PK_AUTHORITY_CERTIFIED",
+  "candidate_rules": [
+    "exact oriented normalized teams",
+    "valid start within 600 seconds when supplied",
+    "official game number equality when supplied",
+    "exactly one remaining gamePk",
+    "canonical authority lookup succeeds",
+    "schedule raw game type agrees with authority raw game type"
+  ],
+  "contract_name": "MLB_PROVIDER_EVENT_GAME_IDENTITY_BINDING_V1",
+  "contract_version": "provider_event_game_binding_v1",
+  "forbidden_rules": [
+    "first same-team candidate",
+    "calendar-derived phase",
+    "team/date-only doubleheader selection",
+    "missing-type-to-R fallback",
+    "mutable or hash-unverified evidence"
+  ],
+  "phase_columns_added": 0,
+  "receipt_format": "canonical sorted JSON Lines",
+  "required_evidence": [
+    "provider snapshot path and SHA-256",
+    "official schedule path and SHA-256",
+    "canonical exact-gamePk authority"
+  ]
+}

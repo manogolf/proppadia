@@ -7,7 +7,7 @@ from backend.mlb.shared import prospective_lineage as p
 
 
 def certified_row():
-    identity={"game_date":"2026-08-04","game_id":1,"player_id":2,"prop_type":"hits","line":0.5,"selected_side":"over","bookmaker_key":"book","snapshot_run_tag":"run"}
+    identity={"game_date":"2026-08-04","game_id":1,"player_id":2,"prop_type":"hits","line":0.5,"selected_side":"over","bookmaker_key":"book","snapshot_run_tag":"run","provider_event_id":"event-1"}
     row={k:"x" for k in p.MANDATORY}
     row.update({"canonical_row_identity":p.canonical_json(identity),"selected_side":"over","price_over_american":-120,
                 "price_under_american":100,"model_artifact_sha256":"a"*64,"feature_vector_sha256":"b"*64,

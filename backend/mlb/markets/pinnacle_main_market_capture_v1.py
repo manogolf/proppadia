@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 from backend.mlb.markets.bookmaker_eu_supplemental_v1 import (
     american_decimal, american_implied, iso, no_vig, normalize_team, utc,
 )
+from backend.mlb.identity.provider_event_game_binding_v1 import BindingReceipt
 
 PROVIDER = "THE_ODDS_API"
 BOOKMAKER_KEY = "pinnacle"
@@ -93,11 +94,27 @@ def _parse_market(event: dict[str, Any], market: dict[str, Any]) -> dict[str, An
 
 
 def parse_events(*, events: Iterable[dict[str, Any]], schedule: list[dict[str, Any]], game_date: str,
-                 fetched_at_utc: str, run_tag: str, raw_source_path: str, raw_source_sha256: str):
+                 fetched_at_utc: str, run_tag: str, raw_source_path: str, raw_source_sha256: str,
+                 binding_receipts: Mapping[str, BindingReceipt] | None = None,
+                 require_verified_bindings: bool = False):
     rows, audit = [], []
     fetched = utc(fetched_at_utc)
     for event in events:
-        game, status, candidate_ids = bind_event(event, schedule, fetched_at_utc)
+        event_id = str(event.get("id") or "").strip()
+        receipt = (binding_receipts or {}).get(event_id)
+        if require_verified_bindings:
+            game = next(
+                (row for row in schedule if receipt is not None and int(row["game_pk"]) == receipt.game_pk),
+                None,
+            )
+            status = (
+                "BINDING_NOT_CERTIFIED" if receipt is None or game is None
+                else "POST_START" if fetched >= utc(game["scheduled_start_utc"])
+                else "CERTIFIED_EXACT_OR_DETERMINISTIC"
+            )
+            candidate_ids = [receipt.game_pk] if receipt is not None else []
+        else:
+            game, status, candidate_ids = bind_event(event, schedule, fetched_at_utc)
         event_date = eastern_date(event["commence_time"]) if event.get("commence_time") else None
         classification = (
             "PAST_OR_STARTED" if status == "POST_START"
@@ -150,6 +167,17 @@ def parse_events(*, events: Iterable[dict[str, Any]], schedule: list[dict[str, A
                        "timing_status": "PREGAME_CERTIFIED", "observation_timing_class": observation_timing_class,
                        "source_run_tag": run_tag, "request_class": REQUEST_CLASS,
                        "raw_source_path": raw_source_path, "raw_source_sha256": raw_source_sha256, **parsed}
+                if receipt is not None:
+                    row.update({
+                        "provider_event_game_binding_identity": receipt.binding_identity_sha256,
+                        "provider_event_binding_status": receipt.binding_status,
+                        "provider_event_binding_contract_version": receipt.resolver_contract_version,
+                        "official_schedule_source_path": receipt.official_schedule_source_path,
+                        "official_schedule_source_sha256": receipt.official_schedule_source_sha256,
+                        "official_schedule_observation_timestamp_utc": receipt.official_schedule_observation_timestamp_utc,
+                        "provider_snapshot_path": receipt.provider_snapshot_path,
+                        "provider_snapshot_sha256": receipt.provider_snapshot_sha256,
+                    })
                 row["canonical_market_identity"] = (
                     f"{PROVIDER}|{BOOKMAKER_KEY}|{row['game_id']}|{row['market_type']}|"
                     f"{row['line_key']}|{fetched_at_utc}"

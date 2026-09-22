@@ -41,7 +41,19 @@ if str(REPO_ROOT) not in sys.path:
 
 from backend.app.services.mlb import market_odds_service
 from backend.domains.mlb import prop_workflow
-from backend.mlb.shared.mlb_api_v2 import GameLite, fetch_schedule_by_date
+from backend.mlb.shared.mlb_api_v2 import GameLite, fetch_schedule_by_date_with_evidence
+from backend.mlb.identity.provider_event_game_binding_v1 import (
+    BindingReceipt,
+    BindingRegistry,
+    EvidenceSource,
+    OfficialGameCandidate,
+    ProviderEvent,
+    ProviderEventGameIdentityError,
+    load_receipt_registry,
+    resolve_binding,
+    write_receipts_immutable,
+)
+from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
@@ -363,6 +375,7 @@ class Offer:
     away_team_name: str
     home_team_abbr: str
     away_team_abbr: str
+    game_number: Optional[int]
     prop_type: str
     player_name: str
     line: float
@@ -386,6 +399,7 @@ class ResolvedOffer:
     team_id: int
     is_home: bool
     game: GameLite
+    binding: BindingReceipt
 
 
 def _load_player_rows(*, active_only: bool) -> tuple[Dict[int, PlayerRow], Dict[Tuple[str, str], List[PlayerRow]]]:
@@ -538,8 +552,11 @@ def _parse_event_team_abbrs(event: Dict[str, Any], team_name_rev: Dict[str, str]
     return home_abbr, away_abbr
 
 
-def _build_schedule_maps(slate_date: str) -> tuple[Dict[int, Dict[str, Any]], Dict[Tuple[str, str], List[GameLite]]]:
-    games = fetch_schedule_by_date(slate_date)
+def _build_schedule_maps(
+    slate_date: str,
+    schedule_evidence_path: Path,
+) -> tuple[Dict[int, Dict[str, Any]], Dict[Tuple[str, str], List[GameLite]], EvidenceSource, str]:
+    games, source = fetch_schedule_by_date_with_evidence(slate_date, schedule_evidence_path)
     by_team: Dict[int, Dict[str, Any]] = {}
     by_pair: Dict[Tuple[str, str], List[GameLite]] = defaultdict(list)
 
@@ -586,7 +603,10 @@ def _build_schedule_maps(slate_date: str) -> tuple[Dict[int, Dict[str, Any]], Di
         by_team.setdefault(int(g.home_team_id), _ctx_for(int(g.home_team_id), True))
         by_team.setdefault(int(g.away_team_id), _ctx_for(int(g.away_team_id), False))
 
-    return by_team, by_pair
+    return (
+        by_team, by_pair, EvidenceSource(path=source["path"], sha256=source["sha256"]),
+        source["observed_at_utc"],
+    )
 
 
 def _late_slate_all_games_started(
@@ -614,32 +634,6 @@ def _late_slate_all_games_started(
         if starts_at.tzinfo is None or captured_at.tzinfo is None or starts_at > captured_at:
             return False, len(unique_games)
     return True, len(unique_games)
-
-
-def _choose_game_for_event(
-    *,
-    pair_games: List[GameLite],
-    commence_time: Optional[str],
-) -> Optional[GameLite]:
-    if not pair_games:
-        return None
-    if len(pair_games) == 1 or not commence_time:
-        return pair_games[0]
-    try:
-        event_dt = datetime.fromisoformat(str(commence_time).replace("Z", "+00:00"))
-    except Exception:
-        return pair_games[0]
-
-    def _dist(g: GameLite) -> float:
-        if not g.game_time:
-            return float("inf")
-        try:
-            gdt = datetime.fromisoformat(g.game_time)
-            return abs((gdt - event_dt.astimezone(gdt.tzinfo)).total_seconds())
-        except Exception:
-            return float("inf")
-
-    return sorted(pair_games, key=_dist)[0]
 
 
 def _flatten_market_snapshot(
@@ -680,6 +674,7 @@ def _flatten_market_snapshot(
             "away_team_name": _clean_str(ev.get("away_team")) or "",
             "home_team_abbr": home_abbr,
             "away_team_abbr": away_abbr,
+            "game_number": ev.get("game_number") or ev.get("gameNumber"),
         }
 
         for book in ev.get("bookmakers") or []:
@@ -803,6 +798,7 @@ def _flatten_market_snapshot(
                 away_team_name=str(meta.get("away_team_name") or ""),
                 home_team_abbr=str(home_abbr),
                 away_team_abbr=str(away_abbr),
+                game_number=meta.get("game_number"),
                 prop_type=str(prop_type),
                 player_name=display_name,
                 line=float(line),
@@ -828,9 +824,16 @@ def _resolve_offers(
     offers: Sequence[Offer],
     by_name_team: Dict[Tuple[str, str], List[PlayerRow]],
     by_pair_games: Dict[Tuple[str, str], List[GameLite]],
+    schedule_source: EvidenceSource,
+    schedule_observation_timestamp_utc: str,
+    provider_snapshot: EvidenceSource,
+    authority: Any,
+    observation_timestamp_utc: str,
+    registry: BindingRegistry,
 ) -> tuple[List[ResolvedOffer], Dict[str, int]]:
     counts: Dict[str, int] = defaultdict(int)
     resolved: List[ResolvedOffer] = []
+    binding_by_event: Dict[str, BindingReceipt | ProviderEventGameIdentityError] = {}
 
     for off in offers:
         key_home = (_norm_name(off.player_name), off.home_team_abbr)
@@ -859,10 +862,47 @@ def _resolve_offers(
             continue
 
         pair_games = by_pair_games.get((off.home_team_abbr, off.away_team_abbr), [])
-        game = _choose_game_for_event(pair_games=pair_games, commence_time=off.commence_time)
-        if game is None:
-            counts["skip_game_not_found"] += 1
+        cached = binding_by_event.get(off.event_id)
+        if cached is None:
+            official_candidates = [
+                OfficialGameCandidate(
+                    game_pk=int(game.game_id),
+                    home_team=str(off.home_team_abbr),
+                    away_team=str(off.away_team_abbr),
+                    scheduled_start_utc=str(game.game_time or ""),
+                    game_number=game.game_number,
+                    doubleheader_indicator=game.doubleheader_indicator,
+                    source_game_type=game.game_type,
+                    schedule_source=schedule_source,
+                    schedule_observation_timestamp_utc=schedule_observation_timestamp_utc,
+                )
+                for game in pair_games
+            ]
+            try:
+                cached = resolve_binding(
+                    event=ProviderEvent(
+                        provider="THE_ODDS_API",
+                        provider_event_id=off.event_id,
+                        home_team=off.home_team_abbr,
+                        away_team=off.away_team_abbr,
+                        commence_time_raw=off.commence_time,
+                        game_number=off.game_number,
+                    ),
+                    candidates=official_candidates,
+                    provider_snapshot=provider_snapshot,
+                    authority=authority,
+                    observation_timestamp_utc=observation_timestamp_utc,
+                    registry=registry,
+                )
+            except ProviderEventGameIdentityError as exc:
+                cached = exc
+            binding_by_event[off.event_id] = cached
+        if isinstance(cached, ProviderEventGameIdentityError):
+            counts[f"skip_identity_{cached.code.lower()}"] += 1
             continue
+        game = next((item for item in pair_games if int(item.game_id) == cached.game_pk), None)
+        if game is None:
+            raise RuntimeError(f"certified binding missing selected schedule row: {cached.game_pk}")
 
         resolved.append(
             ResolvedOffer(
@@ -872,6 +912,7 @@ def _resolve_offers(
                 team_id=team_id,
                 is_home=bool(is_home),
                 game=game,
+                binding=cached,
             )
         )
         counts["resolved"] += 1
@@ -1138,6 +1179,7 @@ def _predict_rows(
 
                 rows.append(
                     {
+                        "provider_event_id": off.event_id,
                         "player_id": int(item.player.player_id),
                         "player_name": item.player.player_name,
                         "team_id": int(item.team_id),
@@ -1174,6 +1216,7 @@ def _predict_rows(
                         "line": float(off.line), "selected_side": side,
                         "bookmaker_key": _clean_str(off.bookmaker_key),
                         "snapshot_run_tag": lineage_context["run_tag"],
+                        "provider_event_id": off.event_id,
                     }
                     model_id = lineage.model_identity(str(off.prop_type))
                     feature_serial = lineage.canonical_json(prepared)
@@ -1200,6 +1243,18 @@ def _predict_rows(
                         "odds_snapshot_path": lineage_context["odds_snapshot_path"],
                         "odds_snapshot_sha256": lineage_context["odds_snapshot_sha256"],
                         "odds_snapshot_timestamp": lineage_context["odds_snapshot_timestamp"],
+                        "provider_name": item.binding.provider,
+                        "provider_event_id": item.binding.provider_event_id,
+                        "provider_event_game_binding_identity": item.binding.binding_identity_sha256,
+                        "provider_event_binding_status": item.binding.binding_status,
+                        "provider_event_binding_contract_version": item.binding.resolver_contract_version,
+                        "provider_event_binding_receipt_path": lineage_context["binding_receipt_path"],
+                        "provider_event_binding_receipt_sha256": lineage_context["binding_receipt_sha256"],
+                        "official_schedule_source_path": item.binding.official_schedule_source_path,
+                        "official_schedule_source_sha256": item.binding.official_schedule_source_sha256,
+                        "official_schedule_observation_timestamp_utc": item.binding.official_schedule_observation_timestamp_utc,
+                        "provider_snapshot_path": item.binding.provider_snapshot_path,
+                        "provider_snapshot_sha256": item.binding.provider_snapshot_sha256,
                         "bookmaker_key": _clean_str(off.bookmaker_key) or "",
                         "market_provider_origin_family": "the_odds_api",
                         "price_over_american": off.price_over_american,
@@ -1445,12 +1500,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
 
     try:
+        if not odds_snapshot_in and not odds_snapshot_out:
+            raise RuntimeError(
+                "provider identity binding requires --odds-snapshot-in or --odds-snapshot-out"
+            )
         by_player_id, by_name_team = _load_player_rows(active_only=not bool(args.include_inactive))
         print(f"[mlb-wide-pred] player index rows={len(by_player_id)}")
 
-        by_team_ctx, by_pair_games = _build_schedule_maps(str(slate_date))
+        binding_run_token = re.sub(r"[^A-Za-z0-9_.-]+", "_", run_tag)
+        binding_root = REPO_ROOT / "backend/mlb/exports/provider_event_game_bindings"
+        schedule_evidence_path = (
+            binding_root / "schedule_sources" / str(slate_date)
+            / f"statsapi_schedule__{binding_run_token}.json"
+        )
+        by_team_ctx, by_pair_games, schedule_source, schedule_observed_at = _build_schedule_maps(
+            str(slate_date), schedule_evidence_path
+        )
         print(f"[mlb-wide-pred] schedule contexts={len(by_team_ctx)} pair_games={len(by_pair_games)}")
 
+        write_meta: Dict[str, Any] = {}
         if odds_snapshot_in:
             if not odds_snapshot_in.exists():
                 raise FileNotFoundError(f"missing odds snapshot file: {odds_snapshot_in}")
@@ -1471,7 +1539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     f"earliest={alias_paths.get('earliest')} mid={alias_paths.get('mid')} final={alias_paths.get('final')}"
                 )
 
-        frozen_snapshot = odds_snapshot_in or odds_snapshot_out
+        frozen_snapshot = odds_snapshot_in or Path(str(write_meta["tagged_path"]))
         snapshot_sha = lineage.hash_file(frozen_snapshot) if frozen_snapshot and frozen_snapshot.is_file() else ""
         snapshot_ts = ""
         if frozen_snapshot and frozen_snapshot.is_file():
@@ -1480,6 +1548,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 snapshot_ts = str(raw_snapshot.get("captured_at_utc") or "") if isinstance(raw_snapshot, dict) else ""
             except Exception:
                 snapshot_ts = ""
+        if not frozen_snapshot or not snapshot_sha or not snapshot_ts:
+            raise RuntimeError("provider snapshot provenance is incomplete")
+        provider_snapshot_source = EvidenceSource(
+            path=str(frozen_snapshot.resolve()), sha256=snapshot_sha
+        )
         git_commit, git_dirty = lineage.git_identity(REPO_ROOT)
         from backend.mlb.shared.semantic_model_registry import effective_inference_config
         safe_config = effective_inference_config()
@@ -1502,10 +1575,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         print(f"[mlb-wide-pred] offers_unique={len(offers)} flatten_counts={flatten_counts}")
 
+        authority = HashedProposalAuthority()
+        registry = load_receipt_registry(binding_root)
         resolved_offers, resolve_counts = _resolve_offers(
             offers=offers,
             by_name_team=by_name_team,
             by_pair_games=by_pair_games,
+            schedule_source=schedule_source,
+            schedule_observation_timestamp_utc=schedule_observed_at,
+            provider_snapshot=provider_snapshot_source,
+            authority=authority,
+            observation_timestamp_utc=snapshot_ts,
+            registry=registry,
         )
         resolved_offers, pitcher_policy_counts = _apply_pitcher_experience_policy(
             resolved_offers=resolved_offers,
@@ -1518,6 +1599,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for k, v in pitcher_policy_counts.items():
                 resolve_counts[k] = int(resolve_counts.get(k, 0)) + int(v)
         print(f"[mlb-wide-pred] resolved_offers={len(resolved_offers)} resolve_counts={resolve_counts}")
+
+        receipt_path = (
+            binding_root / "THE_ODDS_API" / str(slate_date)
+            / f"player_props__{binding_run_token}.jsonl"
+        )
+        unique_receipts = {
+            item.binding.binding_identity_sha256: item.binding for item in resolved_offers
+        }
+        receipt_sha = write_receipts_immutable(receipt_path, unique_receipts.values())
+        lineage_context["binding_receipt_path"] = str(receipt_path.resolve())
+        lineage_context["binding_receipt_sha256"] = receipt_sha
 
         pred_rows, pred_counts, feature_rows = _predict_rows(
             resolved_offers,

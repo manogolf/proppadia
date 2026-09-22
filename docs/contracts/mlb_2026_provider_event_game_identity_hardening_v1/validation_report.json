@@ -1,0 +1,130 @@
+{
+  "checks": [
+    {
+      "detail": "2919",
+      "name": "authority population",
+      "passed": true
+    },
+    {
+      "detail": "464",
+      "name": "schedule sources verified",
+      "passed": true
+    },
+    {
+      "detail": "2340",
+      "name": "player event population",
+      "passed": true
+    },
+    {
+      "detail": "2211",
+      "name": "BetOnline event population",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "player reconstructable",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "player ambiguous",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "player unavailable",
+      "passed": true
+    },
+    {
+      "detail": "15",
+      "name": "exact blocked population",
+      "passed": true
+    },
+    {
+      "detail": "636",
+      "name": "Pinnacle event population",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "Pinnacle mappings invariant",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "historical rows untouched",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "zero acquisition",
+      "passed": true
+    },
+    {
+      "detail": "2976",
+      "name": "historical exact row count",
+      "passed": true
+    },
+    {
+      "detail": "15",
+      "name": "blocked ledger exact row count",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "blocked ledger classifications",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "no silent historical upgrade",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "shared resolver offline",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "shared resolver phase-neutral",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "unsafe player chooser removed",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "Pinnacle verified gate active",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "provider request count unchanged",
+      "passed": true
+    },
+    {
+      "detail": "returncode=0;tests=22",
+      "name": "dependency-free tests",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "package SHA-256 manifest",
+      "passed": true
+    },
+    {
+      "detail": "",
+      "name": "source SHA-256 manifest",
+      "passed": true
+    }
+  ],
+  "contract": "MLB_2026_PROVIDER_EVENT_GAME_IDENTITY_HARDENING_V1",
+  "dependency_free_tests_failed": 0,
+  "dependency_free_tests_passed": 22,
+  "failed": 0,
+  "passed": 24,
+  "skipped": 0
+}

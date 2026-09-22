@@ -1,0 +1,21 @@
+{
+  "authority_game_pks": 2919,
+  "betonline_events": 2211,
+  "blocked_events": 15,
+  "historical_rows_modified": 0,
+  "network_requests": 0,
+  "paid_credits": 0,
+  "paid_requests": 0,
+  "pinnacle_classifications": {
+    "RECONSTRUCTABLE_BUT_PREVIOUSLY_UNBOUND": 636
+  },
+  "pinnacle_events": 636,
+  "pinnacle_unique_event_game_pairs": 636,
+  "player_prop_classifications": {
+    "AMBIGUOUS": 2,
+    "RECONSTRUCTABLE_BUT_PREVIOUSLY_UNBOUND": 2325,
+    "UNAVAILABLE": 13
+  },
+  "player_prop_events": 2340,
+  "verified_schedule_source_files": 464
+}
