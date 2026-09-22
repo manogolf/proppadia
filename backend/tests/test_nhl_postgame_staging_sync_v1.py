@@ -183,10 +183,11 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         missing = sync.diff_staging_identities(
             evidence, evidence["skater_identities"][:-1])
         self.assertEqual(len(missing["missing_identities"]), 1)
-        with self.assertRaisesRegex(RuntimeError, "EXISTING_DUPLICATE"):
-            sync.diff_staging_identities(
-                evidence, list(evidence["skater_identities"]) +
-                [tuple(evidence["skater_identities"][0])])
+        duplicate = sync.diff_staging_identities(
+            evidence, list(evidence["skater_identities"]) +
+            [tuple(evidence["skater_identities"][0])])
+        self.assertEqual(duplicate["duplicate_natural_key_count"], 1)
+        self.assertEqual(duplicate["duplicate_natural_keys"][0]["multiplicity"], 2)
 
     def test_malformed_or_duplicate_official_identity_fails(self):
         binding = verify_preserved_response_run(
@@ -237,10 +238,12 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
              patch.object(sync, "_fetch_canonical_game_ids", return_value=evidence["game_ids"]), \
              patch.object(sync, "_fetch_target_skater_identities",
                           return_value=list(connection.working)), \
+             patch.object(sync, "_fetch_goalie_stage_identities",
+                          return_value=list(evidence["goalie_identities"])), \
              patch.object(sync, "_materialize_expected_rows") as materialize, \
              patch.object(sync, "_upsert_expected_rows") as upsert, \
              patch.object(sync, "_delete_extra_rows") as delete:
-            with self.assertRaisesRegex(RuntimeError, "AUTHORIZED_EXTRA_SET_DIGEST_MISMATCH"):
+            with self.assertRaisesRegex(RuntimeError, "AUTHORIZED_V2_DIGEST_MISMATCH"):
                 sync.synchronize_staging_set(
                     "offline", evidence, authorized_extra_digest="f" * 64,
                     connection_factory=lambda *args, **kwargs: connection)
@@ -254,6 +257,10 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         extra = extra or []
         connection = FakeConnection(list(evidence["skater_identities"]) + extra)
         difference = sync.diff_staging_identities(evidence, connection.working)
+        goalie_inventory = sync._identity_inventory(
+            evidence["goalie_identities"], evidence["goalie_identities"])
+        authorization = sync.correction_authorization_digest(
+            evidence, skaters=difference, goalies=goalie_inventory)
 
         def delete(*unused_args, **unused_kwargs):
             for identity in difference["extra_identities"]:
@@ -269,8 +276,9 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
 
         staged_goalies = (list(evidence["goalie_identities"])
                           if staged_goalies is None else staged_goalies)
-        if final_failure:
-            staged_goalies = list(evidence["goalie_identities"][:-1])
+        goalie_reads = ([list(evidence["goalie_identities"]),
+                         list(evidence["goalie_identities"][:-1])]
+                        if final_failure else [staged_goalies, staged_goalies])
         with patch.object(sync, "_begin_correction"), \
              patch.object(sync, "_fetch_canonical_game_ids", return_value=evidence["game_ids"]), \
              patch.object(sync, "_fetch_target_skater_identities", side_effect=fetch), \
@@ -278,7 +286,7 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
              patch.object(sync, "_upsert_expected_rows", side_effect=upsert), \
              patch.object(sync, "_delete_extra_rows", side_effect=delete), \
              patch.object(sync, "_fetch_goalie_stage_identities",
-                          return_value=staged_goalies):
+                          side_effect=goalie_reads):
             injector = ((lambda: (_ for _ in ()).throw(RuntimeError("simulated")))
                         if fail else None)
             if fail or final_failure:
@@ -286,13 +294,13 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, expected_error):
                     sync.synchronize_staging_set(
                         "offline", evidence,
-                        authorized_extra_digest=difference["authorized_extra_set_digest"],
+                        authorized_extra_digest=authorization,
                         connection_factory=lambda *args, **kwargs: connection,
                         failure_injector=injector)
                 return evidence, connection, None
             result = sync.synchronize_staging_set(
                 "offline", evidence,
-                authorized_extra_digest=difference["authorized_extra_set_digest"],
+                authorized_extra_digest=authorization,
                 connection_factory=lambda *args, **kwargs: connection)
             return evidence, connection, result
 
@@ -418,6 +426,8 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
              patch.object(sync, "_fetch_canonical_game_ids", return_value=evidence["game_ids"]), \
              patch.object(sync, "_fetch_target_skater_identities",
                           return_value=sorted(connection.working)), \
+             patch.object(sync, "_fetch_goalie_stage_identities",
+                          return_value=list(evidence["goalie_identities"])) as goalie_query, \
              patch.object(sync, "_materialize_expected_rows") as mutation:
             result = sync.staging_set_preflight(
                 "offline", evidence,
@@ -425,14 +435,109 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         mutation.assert_not_called()
         self.assertFalse(connection.committed)
         self.assertTrue(connection.closed)
-        self.assertEqual(result["extra_identities"], [[103, 99999999]]
-                         if isinstance(result["extra_identities"][0], list)
+        extra_identities = result["skaters"]["extra_identities"]
+        self.assertEqual(extra_identities, [[103, 99999999]]
+                         if isinstance(extra_identities[0], list)
                          else [(103, 99999999)])
-        for key in ("existing_identity_set_sha256", "missing_identity_set_sha256",
-                    "extra_identity_set_sha256", "authorized_extra_set_digest"):
-            self.assertRegex(result[key], r"^[0-9a-f]{64}$")
+        self.assertEqual(result["contract_version"],
+                         "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2")
+        goalie_query.assert_called_once()
+        for inventory in (result["skaters"], result["goalies"]):
+            for key in ("expected_identity_set_sha256", "existing_identity_set_sha256",
+                        "missing_identity_set_sha256", "extra_identity_set_sha256",
+                        "duplicate_inventory_sha256"):
+                self.assertRegex(inventory[key], r"^[0-9a-f]{64}$")
+        self.assertRegex(result["authorized_correction_digest"], r"^[0-9a-f]{64}$")
+        self.assertEqual(result["goalies"]["expected_count"], 28)
+        self.assertEqual(result["goalies"]["existing_count"], 28)
         self.assertFalse(result["request_run_created"])
         self.assertEqual(result["database_writes"], 0)
+
+    def test_all_null_goalie_team_values_do_not_affect_combined_preflight(self):
+        evidence = synthetic_evidence()
+        connection = FakeConnection(evidence["skater_identities"])
+        staged_rows = [(game_id, player_id, None)
+                       for game_id, player_id in evidence["goalie_identities"]]
+        projected = sync._natural_goalie_identities(staged_rows)
+        with patch.object(sync, "_begin_read_only"), \
+             patch.object(sync, "_fetch_canonical_game_ids", return_value=evidence["game_ids"]), \
+             patch.object(sync, "_fetch_target_skater_identities",
+                          return_value=list(evidence["skater_identities"])), \
+             patch.object(sync, "_fetch_goalie_stage_identities",
+                          return_value=projected):
+            result = sync.staging_set_preflight(
+                "offline", evidence,
+                connection_factory=lambda *args, **kwargs: connection)
+        self.assertEqual(result["goalies"]["existing_count"], 28)
+        self.assertEqual(result["goalies"]["missing_identities"], [])
+        self.assertEqual(result["goalies"]["extra_identities"], [])
+        self.assertEqual(result["goalies"]["duplicate_natural_keys"], [])
+
+    def test_goalie_inventory_differences_and_duplicate_hashes_are_deterministic(self):
+        evidence = synthetic_evidence()
+        expected = list(evidence["goalie_identities"])
+        altered = expected[:-1] + [(evidence["game_ids"][0], 99999999)] + [expected[0]]
+        first = sync._identity_inventory(expected, altered)
+        second = sync._identity_inventory(expected, reversed(altered))
+        self.assertEqual(first, second)
+        self.assertEqual(first["missing_count"], 1)
+        self.assertEqual(first["extra_count"], 1)
+        self.assertEqual(first["duplicate_natural_key_count"], 1)
+        self.assertEqual(first["duplicate_excess_row_count"], 1)
+        for key in ("expected_identity_set_sha256", "existing_identity_set_sha256",
+                    "missing_identity_set_sha256", "extra_identity_set_sha256",
+                    "duplicate_inventory_sha256"):
+            self.assertRegex(first[key], r"^[0-9a-f]{64}$")
+
+    def test_v2_digest_changes_for_either_staging_surface(self):
+        evidence = synthetic_evidence()
+        skaters = sync._identity_inventory(
+            evidence["skater_identities"], evidence["skater_identities"])
+        goalies = sync._identity_inventory(
+            evidence["goalie_identities"], evidence["goalie_identities"])
+        baseline = sync.correction_authorization_digest(
+            evidence, skaters=skaters, goalies=goalies)
+        changed_skaters = sync._identity_inventory(
+            evidence["skater_identities"], evidence["skater_identities"][:-1])
+        changed_goalies = sync._identity_inventory(
+            evidence["goalie_identities"], evidence["goalie_identities"][:-1])
+        self.assertNotEqual(
+            baseline, sync.correction_authorization_digest(
+                evidence, skaters=changed_skaters, goalies=goalies))
+        self.assertNotEqual(
+            baseline, sync.correction_authorization_digest(
+                evidence, skaters=skaters, goalies=changed_goalies))
+
+    def test_former_v1_digest_is_rejected_before_any_mutation(self):
+        evidence = synthetic_evidence()
+        connection = FakeConnection(evidence["skater_identities"])
+        former_digest = "a31471ce386197a1b754d5a10bf8058db3ba501ad65258e9a81b2bd42895a7bf"
+        with patch.object(sync, "_begin_correction"), \
+             patch.object(sync, "_fetch_canonical_game_ids", return_value=evidence["game_ids"]), \
+             patch.object(sync, "_fetch_target_skater_identities",
+                          return_value=list(evidence["skater_identities"])), \
+             patch.object(sync, "_fetch_goalie_stage_identities",
+                          return_value=list(evidence["goalie_identities"])), \
+             patch.object(sync, "_materialize_expected_rows") as materialize, \
+             patch.object(sync, "_upsert_expected_rows") as upsert, \
+             patch.object(sync, "_delete_extra_rows") as delete:
+            with self.assertRaisesRegex(RuntimeError, "AUTHORIZED_V2_DIGEST_MISMATCH"):
+                sync.synchronize_staging_set(
+                    "offline", evidence, authorized_extra_digest=former_digest,
+                    connection_factory=lambda *args, **kwargs: connection)
+        materialize.assert_not_called(); upsert.assert_not_called(); delete.assert_not_called()
+        self.assertFalse(connection.committed)
+        self.assertTrue(connection.closed)
+
+    def test_both_stage_queries_are_governed_by_date_and_game_set(self):
+        for function in (sync._fetch_target_skater_identities,
+                         sync._fetch_goalie_stage_identities):
+            source = inspect.getsource(function)
+            self.assertIn("game_date=%s::date", source)
+            self.assertIn("game_id=ANY(%s)", source)
+        goalie_source = inspect.getsource(sync._fetch_goalie_stage_identities)
+        self.assertNotIn("team_id", goalie_source)
+        self.assertNotIn("toi_minutes", goalie_source)
 
     def test_correction_cli_cannot_continue_into_reconciliation(self):
         evidence = synthetic_evidence()
@@ -456,6 +561,42 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertEqual(code, 0)
         child.assert_not_called(); network.assert_not_called(); publish.assert_not_called()
         self.assertEqual(json.loads(output[-1])["status"], "STAGING_SET_SYNCHRONIZED")
+
+    def test_v2_preflight_cli_creates_no_request_run_or_operational_artifact(self):
+        evidence = synthetic_evidence()
+        result = {
+            "contract_version": sync.PREFLIGHT_CONTRACT,
+            "status": "STAGING_SET_PREFLIGHT_VALID",
+            "request_run_created": False,
+            "database_writes": 0,
+            "external_requests": 0,
+        }
+        output = []
+        with tempfile.TemporaryDirectory(prefix="nhl_preflight_v2_output_") as tmp:
+            output_root = Path(tmp) / "operational"
+            argv = [
+                "run_nhl_postgame_reconciliation.py", SLATE,
+                "--staging-set-preflight",
+                "--authority-response-source-run-id", SOURCE_RUN,
+                "--output-root", str(output_root),
+            ]
+            with patch.object(sys, "argv", argv), \
+                 patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://offline.invalid/test"}), \
+                 patch("backend.nhl.scripts.run_nhl_postgame_reconciliation."
+                       "load_verified_authoritative_staging_set", return_value=evidence), \
+                 patch("backend.nhl.scripts.run_nhl_postgame_reconciliation."
+                       "staging_set_preflight", return_value=result), \
+                 patch("backend.nhl.scripts.run_nhl_postgame_reconciliation._run") as child, \
+                 patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.official_get") as network, \
+                 patch("backend.nhl.scripts.run_nhl_postgame_reconciliation."
+                       "publish_reconciliation") as publish, \
+                 patch("builtins.print", side_effect=lambda value: output.append(value)):
+                code = reconciliation_main()
+            self.assertEqual(code, 0)
+            child.assert_not_called(); network.assert_not_called(); publish.assert_not_called()
+            self.assertFalse(output_root.exists())
+            self.assertEqual(json.loads(output[-1])["contract_version"],
+                             "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2")
 
     def test_september_20_lineage_requires_fifth_failed_run(self):
         sources = [

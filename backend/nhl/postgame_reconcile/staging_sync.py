@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import re
+from collections import Counter
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,8 @@ from backend.nhl.postgame_reconcile.core import validate_staging_identity_sets
 
 
 CONTRACT = "NHL_AUTHORITATIVE_SKATER_STAGING_SYNC_V1"
-PREFLIGHT_CONTRACT = "NHL_AUTHORITATIVE_SKATER_STAGING_PREFLIGHT_V1"
+PREFLIGHT_CONTRACT = "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2"
+AUTHORIZATION_CONTRACT = "NHL_AUTHORITATIVE_STAGING_CORRECTION_AUTHORIZATION_V2"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -51,6 +53,97 @@ def authorized_extra_set_digest(
         "expected_identity_set_sha256": str(expected_identity_set_sha256),
         "extra_identities": [[int(game_id), int(player_id)]
                              for game_id, player_id in sorted(set(extra_identities))],
+    }
+    return hashlib.sha256(_canonical_json(payload)).hexdigest()
+
+
+def _identity_inventory(
+    expected_identities: Iterable[tuple[int, int]],
+    existing_identities: Iterable[tuple[int, int]],
+) -> dict[str, object]:
+    expected_rows = sorted((int(game_id), int(player_id))
+                           for game_id, player_id in expected_identities)
+    existing_rows = sorted((int(game_id), int(player_id))
+                           for game_id, player_id in existing_identities)
+    if len(expected_rows) != len(set(expected_rows)):
+        raise RuntimeError("AUTHORITATIVE_EXPECTED_DUPLICATE_IDENTITY")
+    expected_set, existing_set = set(expected_rows), set(existing_rows)
+    missing, extra = sorted(expected_set - existing_set), sorted(existing_set - expected_set)
+    duplicate_rows = [
+        {"game_id": game_id, "player_id": player_id, "multiplicity": multiplicity}
+        for (game_id, player_id), multiplicity in sorted(Counter(existing_rows).items())
+        if multiplicity > 1
+    ]
+    return {
+        "expected_count": len(expected_rows),
+        "existing_count": len(existing_rows),
+        "missing_count": len(missing),
+        "extra_count": len(extra),
+        "duplicate_natural_key_count": len(duplicate_rows),
+        "duplicate_excess_row_count": sum(int(row["multiplicity"]) - 1
+                                          for row in duplicate_rows),
+        "expected_identities": expected_rows,
+        "existing_identities": existing_rows,
+        "missing_identities": missing,
+        "extra_identities": extra,
+        "duplicate_natural_keys": duplicate_rows,
+        "expected_identity_set_sha256": identity_set_sha256(expected_set),
+        "existing_identity_set_sha256": identity_set_sha256(existing_set),
+        "missing_identity_set_sha256": identity_set_sha256(missing),
+        "extra_identity_set_sha256": identity_set_sha256(extra),
+        "duplicate_inventory_sha256": hashlib.sha256(
+            _canonical_json(duplicate_rows)).hexdigest(),
+    }
+
+
+def _required_cardinalities(evidence: dict[str, object]) -> dict[str, int]:
+    game_ids = [int(value) for value in evidence["game_ids"]]
+    skaters = [tuple(value) for value in evidence["skater_identities"]]
+    official_goalies, official_starters, official_teams = _authoritative_goalie_contract(
+        evidence["goalie_rows"], game_ids=game_ids)
+    if (len(game_ids) != 7 or len(set(game_ids)) != 7
+            or len(skaters) != 252 or len(set(skaters)) != 252
+            or any(evidence["per_game"].get(str(game_id)) !=
+                   {"skaters": 36, "goalies": 4} for game_id in game_ids)
+            or official_goalies != [tuple(value) for value in evidence["goalie_identities"]]
+            or official_starters != [tuple(value) for value in evidence["starter_identities"]]
+            or official_teams != evidence["goalie_team_membership"]):
+        raise RuntimeError("AUTHORITATIVE_STAGING_CARDINALITY_CONTRACT_MISMATCH")
+    return {
+        "canonical_games": 7,
+        "skater_appearances": 252,
+        "skaters_per_game": 36,
+        "goalie_appearances": 28,
+        "goalies_per_game": 4,
+        "official_teams_per_game": 2,
+        "confirmed_starters": 14,
+    }
+
+
+def correction_authorization_digest(
+    evidence: dict[str, object], *, skaters: dict[str, object],
+    goalies: dict[str, object],
+) -> str:
+    inventory_keys = (
+        "expected_identity_set_sha256", "existing_identity_set_sha256",
+        "missing_identity_set_sha256", "extra_identity_set_sha256",
+        "duplicate_inventory_sha256",
+    )
+    payload = {
+        "contract_version": AUTHORIZATION_CONTRACT,
+        "slate_date": str(evidence["slate_date"]),
+        "canonical_game_set_sha256": str(evidence["canonical_game_set_sha256"]),
+        "authority_source_run_id": str(evidence["authority_source_run_id"]),
+        "authority_response_set_sha256": str(evidence["authority_response_set_sha256"]),
+        "required_cardinalities": _required_cardinalities(evidence),
+        "skaters": {
+            "hashes": {key: str(skaters[key]) for key in inventory_keys},
+            "duplicate_natural_keys": skaters["duplicate_natural_keys"],
+        },
+        "goalies": {
+            "hashes": {key: str(goalies[key]) for key in inventory_keys},
+            "duplicate_natural_keys": goalies["duplicate_natural_keys"],
+        },
     }
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
@@ -311,29 +404,7 @@ def load_verified_authoritative_staging_set(
 def diff_staging_identities(
     evidence: dict[str, object], existing_identities: Iterable[tuple[int, int]],
 ) -> dict[str, object]:
-    expected_list = [(int(game_id), int(player_id))
-                     for game_id, player_id in evidence["skater_identities"]]
-    existing_list = [(int(game_id), int(player_id))
-                     for game_id, player_id in existing_identities]
-    if len(existing_list) != len(set(existing_list)):
-        raise RuntimeError("STAGING_SYNC_EXISTING_DUPLICATE_IDENTITY")
-    expected, existing = set(expected_list), set(existing_list)
-    missing, extra = sorted(expected - existing), sorted(existing - expected)
-    authorization = authorized_extra_set_digest(
-        slate_date=str(evidence["slate_date"]),
-        canonical_game_set_sha256=str(evidence["canonical_game_set_sha256"]),
-        expected_identity_set_sha256=str(evidence["expected_identity_set_sha256"]),
-        extra_identities=extra,
-    )
-    return {
-        "existing_identities": sorted(existing),
-        "missing_identities": missing,
-        "extra_identities": extra,
-        "existing_identity_set_sha256": identity_set_sha256(existing),
-        "missing_identity_set_sha256": identity_set_sha256(missing),
-        "extra_identity_set_sha256": identity_set_sha256(extra),
-        "authorized_extra_set_digest": authorization,
-    }
+    return _identity_inventory(evidence["skater_identities"], existing_identities)
 
 
 def _begin_read_only(connection: Any) -> None:
@@ -407,21 +478,27 @@ def staging_set_preflight(
         database_games = _fetch_canonical_game_ids(connection, str(evidence["slate_date"]))
         if database_games != game_ids:
             raise RuntimeError("STAGING_SYNC_DATABASE_CANONICAL_GAME_SET_MISMATCH")
-        existing = _fetch_target_skater_identities(
+        existing_skaters = _fetch_target_skater_identities(
             connection, slate_date=str(evidence["slate_date"]), game_ids=game_ids,
             for_update=False)
-        difference = diff_staging_identities(evidence, existing)
+        existing_goalies = _fetch_goalie_stage_identities(
+            connection, slate_date=str(evidence["slate_date"]), game_ids=game_ids)
+        skaters = _identity_inventory(evidence["skater_identities"], existing_skaters)
+        goalies = _identity_inventory(evidence["goalie_identities"], existing_goalies)
+        authorization = correction_authorization_digest(
+            evidence, skaters=skaters, goalies=goalies)
         connection.rollback()
         return {
             "contract_version": PREFLIGHT_CONTRACT,
             "status": "STAGING_SET_PREFLIGHT_VALID",
             "slate_date": evidence["slate_date"],
             "canonical_games": len(game_ids),
-            "expected_skater_appearances": len(evidence["skater_identities"]),
-            "existing_skater_appearances": len(difference["existing_identities"]),
-            "missing_skater_appearances": len(difference["missing_identities"]),
-            "extra_skater_appearances": len(difference["extra_identities"]),
-            **difference,
+            "required_cardinalities": _required_cardinalities(evidence),
+            "skaters": skaters,
+            "goalies": goalies,
+            "confirmed_starter_identities": evidence["starter_identities"],
+            "official_goalie_team_membership": evidence["goalie_team_membership"],
+            "authorized_correction_digest": authorization,
             "source_evidence": {
                 key: evidence[key] for key in (
                     "authority_source_run_id", "authority_source_journal_sha256",
@@ -550,7 +627,7 @@ def synchronize_staging_set(
     failure_injector: Callable[[], None] | None = None,
 ) -> dict[str, object]:
     if not HEX64.fullmatch(str(authorized_extra_digest)):
-        raise RuntimeError("STAGING_SYNC_AUTHORIZED_EXTRA_DIGEST_INVALID")
+        raise RuntimeError("STAGING_SYNC_AUTHORIZED_V2_DIGEST_INVALID")
     connection = connection_factory(dsn, autocommit=False)
     committed = False
     try:
@@ -561,15 +638,24 @@ def synchronize_staging_set(
             raise RuntimeError("STAGING_SYNC_DATABASE_CANONICAL_GAME_SET_MISMATCH")
         before = _fetch_target_skater_identities(
             connection, slate_date=slate_date, game_ids=game_ids, for_update=True)
-        difference = diff_staging_identities(evidence, before)
-        if difference["authorized_extra_set_digest"] != authorized_extra_digest:
-            raise RuntimeError("STAGING_SYNC_AUTHORIZED_EXTRA_SET_DIGEST_MISMATCH")
+        staged_goalies_before = _fetch_goalie_stage_identities(
+            connection, slate_date=slate_date, game_ids=game_ids)
+        skater_inventory = _identity_inventory(evidence["skater_identities"], before)
+        goalie_inventory = _identity_inventory(
+            evidence["goalie_identities"], staged_goalies_before)
+        authorization = correction_authorization_digest(
+            evidence, skaters=skater_inventory, goalies=goalie_inventory)
+        if authorization != authorized_extra_digest:
+            raise RuntimeError("STAGING_SYNC_AUTHORIZED_V2_DIGEST_MISMATCH")
+        if (skater_inventory["duplicate_natural_keys"]
+                or goalie_inventory["duplicate_natural_keys"]):
+            raise RuntimeError("STAGING_SYNC_DUPLICATE_NATURAL_KEYS")
 
         _materialize_expected_rows(connection, list(evidence["skater_rows"]))
         upserted = _upsert_expected_rows(connection)
         deleted = _delete_extra_rows(
             connection, slate_date=slate_date, game_ids=game_ids)
-        if deleted != difference["extra_identities"]:
+        if deleted != skater_inventory["extra_identities"]:
             raise RuntimeError("STAGING_SYNC_DELETED_SET_MISMATCH")
         if failure_injector is not None:
             failure_injector()
@@ -585,8 +671,9 @@ def synchronize_staging_set(
             "contract_version": CONTRACT,
             "status": "STAGING_SET_SYNCHRONIZED",
             "slate_date": slate_date,
-            "authorized_extra_set_digest": authorized_extra_digest,
-            "before": difference,
+            "authorization_contract_version": AUTHORIZATION_CONTRACT,
+            "authorized_correction_digest": authorized_extra_digest,
+            "before": {"skaters": skater_inventory, "goalies": goalie_inventory},
             "upserted_rows": upserted,
             "deleted_identities": deleted,
             "deleted_rows": len(deleted),

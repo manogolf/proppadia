@@ -275,10 +275,22 @@ bin/nhl_postgame_reconcile.sh YYYY-MM-DD \
   --authority-response-source-run-id GOVERNED_AUTHORITY_RUN
 ```
 
-The preflight opens one repeatable-read read-only transaction, creates no
-request run, and reports the existing, missing and extra identity sets plus
-deterministic hashes. Its `authorized_extra_set_digest` binds the slate,
-canonical game-set hash, expected identity-set hash and complete extra set.
+The `NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2` preflight opens one repeatable-read
+read-only transaction, creates no request run, and queries canonical games plus
+both scoped staging surfaces. Skaters and goalies are inventoried separately as
+natural `(game_id, player_id)` identities. Each inventory reports the complete
+expected and existing rows, missing and extra sets, duplicate natural keys with
+multiplicities, counts, and deterministic hashes for every set and the duplicate
+inventory. Both staging queries require the supplied date and membership in the
+verified canonical game set. The goalie query does not select staged team or TOI.
+
+Its `authorized_correction_digest` uses
+`NHL_AUTHORITATIVE_STAGING_CORRECTION_AUTHORIZATION_V2` and binds the slate,
+canonical game-set hash, authority source run, authority response-set identity,
+all five skater hashes, all five goalie hashes, both duplicate inventories, and
+the required `7/252/36/28/4/2/14` cardinalities. Any change to either staging
+surface changes this digest. The former skater-only V1 digest cannot authorize a
+correction.
 
 Separately authorized correction:
 
@@ -286,13 +298,14 @@ Separately authorized correction:
 bin/nhl_postgame_reconcile.sh YYYY-MM-DD \
   --correct-staging-set \
   --authority-response-source-run-id GOVERNED_AUTHORITY_RUN \
-  --authorized-extra-set-digest PREFLIGHT_DIGEST
+  --authorized-extra-set-digest V2_PREFLIGHT_AUTHORIZED_CORRECTION_DIGEST
 ```
 
 Correction uses one serializable transaction and takes a
 `SHARE ROW EXCLUSIVE` lock on `nhl.import_skater_logs_stage` before reading the
-target set. It validates the live extra-set digest before creating its temporary
-expected table or changing live rows, upserts the exact official rows, and
+target set. Before creating its temporary expected table or changing live rows,
+it inventories both staging surfaces again and requires exact agreement with the
+V2 correction-authorization digest. It then upserts the exact official rows and
 deletes only rows satisfying both the supplied `game_date` and membership in
 the verified canonical game set that are absent from the temporary expected
 set. It then rechecks exact `7/252/28/14` equality before commit. Digest drift,
