@@ -1,0 +1,81 @@
+{
+  "classification": "RESULT_SAME_BUT_CONTROL_VIOLATED",
+  "consumer": "backend/mlb/scripts/evaluate_hits_model_candidates.py",
+  "control_history": [
+    {
+      "commit": "d5a5a4f466123c658aa18b1b7cf3b43283c1f5be",
+      "event": "MISSING_TYPE_TO_R_FIRST_ENTERED_REPOSITORY",
+      "timestamp": "2026-03-29T07:58:02-07:00"
+    },
+    {
+      "commit": "5b24d71143fe120c41f9d1b40bc60bbb5cfbf8de",
+      "event": "EVALUATOR_INTRODUCED_WITH_FALLBACK",
+      "timestamp": "2026-04-24T15:34:28-07:00"
+    },
+    {
+      "commit": "28ec66a2334cfa423a4939a1ae0b0cbe4a84ab24",
+      "event": "FAIL_CLOSED_PHASE_CONTRACT_INTRODUCED",
+      "timestamp": "2026-09-21T10:34:04-07:00"
+    },
+    {
+      "commit": "01c610c4ed88c2a7fa814cce3dae6d3e25a5aa46",
+      "event": "CANONICAL_PHASE_CERTIFICATION_INTRODUCED",
+      "timestamp": "2026-09-21T15:43:03-07:00"
+    },
+    {
+      "commit": "3aec4975adb2aa0753e51bd1714245243956376b",
+      "event": "EVALUATOR_DEFECT_IDENTIFIED_IN_SIDECAR_DESIGN",
+      "timestamp": "2026-09-21T20:53:06-07:00"
+    },
+    {
+      "commit": "0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13",
+      "event": "POST_CONTROL_CORRECTION",
+      "timestamp": "2026-09-21T21:23:55-07:00"
+    }
+  ],
+  "file_lineage": {
+    "corrected_blob": "1dc75e1b912c4840667e62877bc1594895551252",
+    "corrected_sha256": "199516873946c1d5c0a4106c4a40929a7153d503a54ae6a520820475fb9b3070",
+    "introducing_blob": "de3ede5896750e6b6b070e1179785b5d92b9039f",
+    "introducing_sha256": "58382c566f2334d9ed44d0d705876ae404e06c8787f48feb201ed861a74ae199",
+    "last_pre_correction_blob": "17e82e9aeda06df0251ba12a9a4dae1086639fb4",
+    "last_pre_correction_sha256": "22148d2719a249e9e3d9403d283539597f7affb052d1828fb47e7b419d3bdda4"
+  },
+  "frozen_evidence": {
+    "after_rows": 7564,
+    "before_rows": 7564,
+    "cohort_identity_sha256_after": "f5c8663a1abfd744b8da4b5e44d096b9d2bb5a8ca61f0bc0a5aaa7f18c455c40",
+    "cohort_identity_sha256_before": "f5c8663a1abfd744b8da4b5e44d096b9d2bb5a8ca61f0bc0a5aaa7f18c455c40",
+    "distinct_game_pks": 651,
+    "from_date": "2026-05-08",
+    "newly_excluded_or_blocked_game_pks": [],
+    "outcome_values_sha256_after": "204603647e10cfb937aeda6ed806641e3d833e9c4fb921a3a83019d3b3b67d22",
+    "outcome_values_sha256_before": "204603647e10cfb937aeda6ed806641e3d833e9c4fb921a3a83019d3b3b67d22",
+    "prediction_values_sha256_after": "a0337d0450c05db5af8800db903d4c8458858d79197a9bdefa91d99a35434753",
+    "prediction_values_sha256_before": "a0337d0450c05db5af8800db903d4c8458858d79197a9bdefa91d99a35434753",
+    "season": 2026,
+    "through_date": "2026-08-02"
+  },
+  "non_extrapolation": [
+    "other Hits consumers",
+    "prediction construction",
+    "Full-board Hits",
+    "external modeling splits",
+    "Moneyline",
+    "Totals",
+    "grading",
+    "agreement reporting",
+    "earlier seasons",
+    "untested date ranges"
+  ],
+  "post_control_correction_commit": "0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13",
+  "posture": "CORRECTION_IS_NOT_EVIDENCE_OF_PRIOR_COMPLIANCE",
+  "reason_certification_did_not_reject": [
+    "canonical source scan omitted evaluator",
+    "producer scan omitted downstream evaluator",
+    "activation blocker inventory omitted evaluator",
+    "no dedicated pre-correction evaluator test",
+    "no repository call site executed evaluator in certification",
+    "source-completion validation reused the bounded canonical checks"
+  ]
+}

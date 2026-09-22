@@ -1,7 +1,13 @@
 {
+  "audit_classification": "RESULT_SAME_BUT_CONTROL_VIOLATED",
   "blocked_game_pks": [],
   "excluded_postseason_game_pks": [],
   "excluded_preseason_game_pks": [],
   "newly_excluded_or_blocked_game_pks": [],
-  "status": "EMPTY_NO_VIOLATIONS_ON_FROZEN_RETAINED_INPUT"
+  "scope": {
+    "consumer": "backend/mlb/scripts/evaluate_hits_model_candidates.py",
+    "from_date": "2026-05-08",
+    "through_date": "2026-08-02"
+  },
+  "status": "EMPTY_LEDGER_DOES_NOT_ESTABLISH_PRIOR_CONTROL_COMPLIANCE"
 }

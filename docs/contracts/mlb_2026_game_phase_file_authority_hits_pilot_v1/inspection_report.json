@@ -1,5 +1,13 @@
 {
+  "audit_classification": "RESULT_SAME_BUT_CONTROL_VIOLATED",
   "call_site_count_outside_target": 0,
+  "certification_gap": {
+    "activation_blocker_inventory_omitted_this_consumer": true,
+    "dedicated_pre_correction_test_present": false,
+    "evaluator_executed_by_canonical_certification": false,
+    "reason_not_rejected": "Canonical certification scanned the classifier, canonical index, offline builder and selected producers; it did not enumerate or execute this evaluator's SQL predicate.",
+    "repository_call_site_present": false
+  },
   "consumer": "backend/mlb/scripts/evaluate_hits_model_candidates.py",
   "consumer_behavior": {
     "modifies_stored_predictions": false,
@@ -8,6 +16,15 @@
     "writes_evaluation_artifacts_only": true
   },
   "contract_name": "MLB_2026_GAME_PHASE_FILE_AUTHORITY_HITS_PILOT_V1",
+  "control_history": {
+    "canonical_activation_certification_commit": "01c610c4ed88c2a7fa814cce3dae6d3e25a5aa46",
+    "correction_commit": "0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13",
+    "correction_posture": "POST_CONTROL_CORRECTION_NOT_RETROACTIVE_COMPLIANCE",
+    "evaluator_introducing_commit": "5b24d71143fe120c41f9d1b40bc60bbb5cfbf8de",
+    "fail_closed_contract_commit": "28ec66a2334cfa423a4939a1ae0b0cbe4a84ab24",
+    "first_repository_fallback_commit": "d5a5a4f466123c658aa18b1b7cf3b43283c1f5be",
+    "sidecar_defect_discovery_commit": "3aec4975adb2aa0753e51bd1714245243956376b"
+  },
   "database_connections_during_inspection": 0,
   "exact_game_pk": {
     "available": true,
@@ -28,6 +45,18 @@
     "predicate": "COALESCE(NULLIF(upper(trim(to_jsonb(m)->>'game_type')), ''), 'R') = 'R'"
   },
   "network_requests_during_inspection": 0,
+  "non_extrapolation": [
+    "other Hits consumers",
+    "prediction construction",
+    "Full-board Hits",
+    "external modeling splits",
+    "Moneyline",
+    "Totals",
+    "grading",
+    "agreement reporting",
+    "earlier seasons",
+    "untested date ranges"
+  ],
   "season_scope": {
     "authority_from": "2026-02-20",
     "authority_through": "2026-09-27",

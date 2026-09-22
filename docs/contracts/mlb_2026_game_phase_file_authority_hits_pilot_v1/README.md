@@ -1,6 +1,16 @@
 # MLB 2026 Game Phase File Authority Hits Pilot V1
 
-Status: **VALIDATED; LOCALLY IMPLEMENTED; DATABASE NOT USED**
+Status: **POST-CONTROL CORRECTION VALIDATED; PRIOR CONTROL VIOLATION PRESERVED**
+
+## Audit classification
+
+For only the frozen retained cohort described below, the provisional audit classification is:
+
+`RESULT_SAME_BUT_CONTROL_VIOLATED`
+
+Commit `0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13` is post-control correction evidence. It does not establish that the implementation before that commit complied with the already-established fail-closed requirement. The unchanged result on the frozen cohort establishes outcome parity only: the pre-correction evaluator still contained an impermissible missing-type-to-`R` fallback.
+
+This classification is not evidence about other Hits consumers, prediction construction, Full-board Hits, external modeling splits, Moneyline, Totals, grading, agreement reporting, earlier seasons, or any untested date range.
 
 ## Scope
 
@@ -54,6 +64,17 @@ Before and after results are identical:
 - probability invariance: pass;
 - all recorded evaluation metrics: identical.
 
+These equalities do not cure or excuse the historical control violation. Every gamePk in the tested population was authoritatively regular season, so this cohort could demonstrate invariance but could not demonstrate the pre-correction control was safe for preseason, postseason, special, missing, unknown, conflicting, absent, or stale identities.
+
+## Preserved introducing history and control gap
+
+- The exact fallback first entered the repository in commit `d5a5a4f466123c658aa18b1b7cf3b43283c1f5be` on 2026-03-29 in the legacy recompute path. Its inline rationale was an optional Spring Training exclusion that remained compatible with databases where `model_training_props.game_type` did not yet exist. That compatibility choice treated missing type as `R`.
+- The fallback entered `evaluate_hits_model_candidates.py` when that file was created by commit `5b24d71143fe120c41f9d1b40bc60bbb5cfbf8de` on 2026-04-24. The introducing commit message, `Commit all pending changes`, records no narrower scientific justification.
+- The fail-closed phase contract was added by `28ec66a2334cfa423a4939a1ae0b0cbe4a84ab24` on 2026-09-21, and canonical activation certification followed in `01c610c4ed88c2a7fa814cce3dae6d3e25a5aa46`.
+- Certification did not reject the evaluator because its static zero-default/date scan covered only `contract_v1.py`, `canonical_phase_v1.py`, and the offline backfill builder. Producer checks covered selected game writers. Neither control enumerated or executed `evaluate_hits_model_candidates.py`, which had no repository call site or dedicated test.
+- The activation blocker inventory named Full-board Hits and external normalized-game fallbacks but omitted this evaluator. Later sidecar-design tracing in `3aec4975adb2aa0753e51bd1714245243956376b` found and classified the evaluator defect.
+- Commit `0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13` removed the fallback from this evaluator and added the exact-gamePk authority gate. It is a correction after the control existed, not proof of prior compliance.
+
 ## Validation
 
 - Pilot dependency-free `unittest` runner: 13 passed, 0 failed, 0 skipped.
@@ -65,4 +86,4 @@ Before and after results are identical:
 
 ## Cutover conclusion
 
-The pilot justifies a separately reviewed, one-consumer-at-a-time cutover for consumers whose exact gamePks and complete evaluation window are covered by a verified authority package. It does not justify a prospective postseason consumer cutover while this proposal contains no postseason games or any consumer window beyond 2026-09-27.
+This pilot proves only that the corrected evaluator preserves results for the frozen 2026-05-08 through 2026-08-02 cohort. It does not, by itself, justify or validate another consumer cutover. Each additional consumer and date range requires its own historical-control audit, exact-gamePk coverage proof, and bounded before/after validation. Prospective postseason use remains unsupported because this proposal contains no postseason games.

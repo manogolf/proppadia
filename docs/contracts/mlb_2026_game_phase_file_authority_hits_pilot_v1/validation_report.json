@@ -1,4 +1,5 @@
 {
+  "audit_classification": "RESULT_SAME_BUT_CONTROL_VIOLATED",
   "after": {
     "cohort_rows": 7564,
     "distinct_game_pks": 651,
@@ -58,10 +59,24 @@
     }
   },
   "contract_name": "MLB_2026_GAME_PHASE_FILE_AUTHORITY_HITS_PILOT_V1",
+  "control_posture": "POST_CONTROL_CORRECTION_NOT_RETROACTIVE_COMPLIANCE",
+  "correction_commit": "0ae9d87f4e7cd7a758e87862dcca6d579f1bcd13",
   "database_connections": 0,
   "database_writes": 0,
   "failed_checks": [],
   "network_requests": 0,
+  "non_extrapolation": [
+    "other Hits consumers",
+    "prediction construction",
+    "Full-board Hits",
+    "external modeling splits",
+    "Moneyline",
+    "Totals",
+    "grading",
+    "agreement reporting",
+    "earlier seasons",
+    "untested date ranges"
+  ],
   "pilot_validator": {
     "failed": 0,
     "passed": 9,
@@ -72,6 +87,14 @@
     "failed": 0,
     "passed": 14,
     "status": "PASS"
+  },
+  "tested_scope": {
+    "consumer": "backend/mlb/scripts/evaluate_hits_model_candidates.py",
+    "distinct_game_pks": 651,
+    "from_date": "2026-05-08",
+    "rows": 7564,
+    "season": 2026,
+    "through_date": "2026-08-02"
   },
   "status": "PASS",
   "tests": {
