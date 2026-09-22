@@ -7,7 +7,7 @@
     },
     {
       "path": "backend/mlb/season_transition/regular_season_close_inventory_v1.py",
-      "purpose": "Build and validate the source-hashed disposition inventory"
+      "purpose": "Build and validate the source-hashed schedule and exact-gamePk live-feed disposition inventory"
     },
     {
       "path": "backend/mlb/scripts/build_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
@@ -23,7 +23,7 @@
     },
     {
       "path": "backend/mlb/tests/test_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
-      "purpose": "Ten deterministic close-inventory scenarios"
+      "purpose": "Eighteen deterministic close-inventory and local-live-feed scenarios"
     },
     {
       "path": "Makefile",
@@ -36,6 +36,14 @@
     {
       "path": "docs/contracts/mlb_2026_regular_season_close_and_postseason_data_plan_v1/sha256_manifest.txt",
       "purpose": "Refresh hashes for the superseded runbook and hardened command"
+    },
+    {
+      "path": "docs/contracts/mlb_2026_close_blocker_temporal_coverage_audit_v1/blocker_classification.csv",
+      "purpose": "Bind the reviewed 348 retained terminal live feeds and exact 88-game remainder"
+    },
+    {
+      "path": "docs/contracts/mlb_2026_authoritative_close_inventory_local_evidence_correction_v1/",
+      "purpose": "Record before/after reconciliation, validation, and governed correction evidence"
     }
   ],
   "behavior_unchanged": [

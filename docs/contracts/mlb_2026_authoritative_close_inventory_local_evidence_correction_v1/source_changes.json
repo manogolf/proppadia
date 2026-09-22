@@ -1,0 +1,31 @@
+{
+  "contract_name": "MLB_2026_AUTHORITATIVE_CLOSE_INVENTORY_LOCAL_EVIDENCE_CORRECTION_V1",
+  "files": [
+    {
+      "path": "backend/mlb/season_transition/regular_season_close_inventory_v1.py",
+      "purpose": "Load hash-bound audited live feeds, reconcile authoritative status, and fail closed"
+    },
+    {
+      "path": "backend/mlb/scripts/validate_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
+      "purpose": "Enforce corrected counts, exact temporal remainder, and expanded tests"
+    },
+    {
+      "path": "backend/mlb/tests/test_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
+      "purpose": "Cover live-feed recovery, ordering, conflicts, identity, idempotence, score rejection, and no date inference"
+    },
+    {
+      "path": "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/",
+      "purpose": "Store the rebuilt canonical inventory, 88-game ledger, manifest, and validation report"
+    },
+    {
+      "path": "docs/contracts/mlb_2026_authoritative_close_inventory_local_evidence_correction_v1/",
+      "purpose": "Store bounded correction reconciliation and validation evidence"
+    }
+  ],
+  "operational_actions": {
+    "api_requests": 0,
+    "close_executions": 0,
+    "database_connections": 0,
+    "pipelines_or_schedules_run": 0
+  }
+}

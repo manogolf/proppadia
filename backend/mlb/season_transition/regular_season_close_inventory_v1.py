@@ -9,11 +9,13 @@ or publication side effect.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -42,9 +44,28 @@ DEFAULT_PACKAGE_PATH = REPO_ROOT / PACKAGE_RELATIVE_PATH
 DEFAULT_DISPOSITION_SUPPLEMENT_MANIFEST_PATH = (
     DEFAULT_PACKAGE_PATH / "disposition_source_supplement_manifest.jsonl"
 )
+TEMPORAL_AUDIT_LEDGER_RELATIVE_PATH = (
+    "docs/contracts/mlb_2026_close_blocker_temporal_coverage_audit_v1/"
+    "blocker_classification.csv"
+)
+EXPECTED_TEMPORAL_AUDIT_LEDGER_SHA256 = (
+    "881eac4bacab6cdd7915f6b3d4c112726e0ffe0ade117c8c557272cef7e4b240"
+)
+EXPECTED_LOCAL_TERMINAL_RECOVERIES = 348
+EXPECTED_REMAINING_BLOCKERS = 88
+EXPECTED_CURRENT_DATE_BLOCKERS = 16
+EXPECTED_FUTURE_BLOCKERS = 72
+EXPECTED_DISPOSITION_COUNTS = {
+    "AUTHORITATIVELY_CANCELLED": 0,
+    "FINAL": 2316,
+    "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+    "SCHEDULED_NOT_FINAL": 88,
+    "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+    "UNRESOLVED_IDENTITY_OR_STATUS": 0,
+}
 
 EXPECTED_CLOSE_INVENTORY_MANIFEST_SHA256 = (
-    "f8bb9008e0ff4a0d8f9dc23e12f5a6e799476de58b699814e0466cd2458e756b"
+    "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59"
 )
 
 DISPOSITIONS = frozenset(
@@ -65,7 +86,6 @@ CLOSE_COMPLETE_DISPOSITIONS = frozenset(
         "SUSPENDED_RESUMED_IDENTITY_RESOLVED",
     }
 )
-FINAL_DETAILED_STATES = frozenset({"Final", "Completed Early"})
 CANCELLED_DETAILED_STATES = frozenset({"Cancelled", "Canceled"})
 KNOWN_NONTERMINAL_DETAILED_STATES = frozenset(
     {
@@ -109,6 +129,8 @@ class SourceObservation:
     source_path: str
     source_sha256: str
     game: Mapping[str, Any]
+    source_kind: str = "STATSAPI_SCHEDULE_RESPONSE"
+    observation_timestamp_utc: str | None = None
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -173,15 +195,64 @@ def _status(game: Mapping[str, Any]) -> dict[str, Any]:
     return {field: value.get(field) for field in STATUS_FIELDS}
 
 
-def _source_ref(observation: SourceObservation) -> dict[str, str]:
-    return {
+def _source_ref(observation: SourceObservation) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "path": observation.source_path,
         "sha256": observation.source_sha256,
+        "source_kind": observation.source_kind,
     }
+    if observation.observation_timestamp_utc is not None:
+        result["observation_timestamp_utc"] = observation.observation_timestamp_utc
+    return result
 
 
-def _observation_sort_key(observation: SourceObservation) -> tuple[str, bytes]:
-    return observation.source_path, canonical_json_bytes(observation.game)
+def _observation_sort_key(
+    observation: SourceObservation,
+) -> tuple[str, str, str, bytes]:
+    return (
+        observation.observation_timestamp_utc or "",
+        observation.source_kind,
+        observation.source_path,
+        canonical_json_bytes(observation.game),
+    )
+
+
+def _deduplicate_observations(
+    observations: Sequence[SourceObservation],
+) -> list[SourceObservation]:
+    """Make repeated ingestion of the same retained source idempotent."""
+
+    unique: dict[tuple[str, str, bytes], SourceObservation] = {}
+    for observation in sorted(observations, key=_observation_sort_key):
+        key = (
+            observation.source_path,
+            observation.source_sha256,
+            canonical_json_bytes(observation.game),
+        )
+        unique.setdefault(key, observation)
+    return sorted(unique.values(), key=_observation_sort_key)
+
+
+def _terminal_kind(status: Mapping[str, Any]) -> str | None:
+    detailed = str(status.get("detailedState") or "")
+    abstract = status.get("abstractGameState")
+    coded = status.get("codedGameState")
+    status_code = status.get("statusCode")
+    if (
+        abstract == "Final"
+        and coded == "F"
+        and status_code in {"F", "FR"}
+        and (detailed == "Final" or detailed.startswith("Completed Early"))
+    ):
+        return "FINAL"
+    if (
+        abstract == "Final"
+        and coded == "C"
+        and status_code == "C"
+        and detailed in CANCELLED_DETAILED_STATES
+    ):
+        return "CANCELLED"
+    return None
 
 
 def _score_outcome(game: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -268,7 +339,7 @@ def classify_authoritative_game(
 
     game_pk = authority_record.game_pk
     problems: list[str] = []
-    ordered = sorted(observations, key=_observation_sort_key)
+    ordered = _deduplicate_observations(observations)
     if not ordered:
         problems.append("NO_RETAINED_STATUS_OBSERVATION")
 
@@ -291,10 +362,9 @@ def classify_authoritative_game(
         if any(status[field] in (None, "") for field in STATUS_FIELDS[:-1]):
             problems.append("STATUS_FIELDS_MISSING")
         detailed = status["detailedState"]
-        if detailed not in (
-            FINAL_DETAILED_STATES
-            | CANCELLED_DETAILED_STATES
-            | KNOWN_NONTERMINAL_DETAILED_STATES
+        if (
+            _terminal_kind(status) is None
+            and detailed not in KNOWN_NONTERMINAL_DETAILED_STATES
         ):
             unknown_status = True
         status_groups[canonical_json_bytes(status)].append(obs)
@@ -302,12 +372,12 @@ def classify_authoritative_game(
         problems.append("UNKNOWN_AUTHORITATIVE_STATUS")
 
     final_observations = [
-        obs for obs in ordered if _status(obs.game)["detailedState"] in FINAL_DETAILED_STATES
+        obs for obs in ordered if _terminal_kind(_status(obs.game)) == "FINAL"
     ]
     cancelled_observations = [
         obs
         for obs in ordered
-        if _status(obs.game)["detailedState"] in CANCELLED_DETAILED_STATES
+        if _terminal_kind(_status(obs.game)) == "CANCELLED"
     ]
     if final_observations and cancelled_observations:
         problems.append("CONFLICTING_TERMINAL_STATUS")
@@ -315,9 +385,7 @@ def classify_authoritative_game(
     final_outcomes: dict[bytes, dict[str, Any]] = {}
     for obs in final_observations:
         outcome = _score_outcome(obs.game)
-        if outcome is None:
-            problems.append("FINAL_SCORE_OR_OUTCOME_MISSING")
-        else:
+        if outcome is not None:
             final_outcomes[canonical_json_bytes(outcome)] = outcome
     if len(final_outcomes) > 1:
         problems.append("CONFLICTING_FINAL_SCORE_OR_OUTCOME")
@@ -348,18 +416,23 @@ def classify_authoritative_game(
     if has_reschedule and has_resume:
         problems.append("CONFLICTING_RELATIONSHIP_MODES")
 
+    terminal_schedule_observations = [
+        observation
+        for observation in final_observations
+        if observation.source_kind == "STATSAPI_SCHEDULE_RESPONSE"
+    ]
     if problems:
         disposition = "UNRESOLVED_IDENTITY_OR_STATUS"
         reason = ";".join(sorted(set(problems)))
-    elif final_observations and has_resume:
+    elif terminal_schedule_observations and has_resume:
         disposition = "SUSPENDED_RESUMED_IDENTITY_RESOLVED"
         reason = "RETAINED_FINAL_OUTCOME_AND_COMPLETE_RESUME_IDENTITY"
-    elif final_observations and has_reschedule:
+    elif terminal_schedule_observations and has_reschedule:
         disposition = "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED"
         reason = "RETAINED_FINAL_OUTCOME_AND_COMPLETE_RESCHEDULE_IDENTITY"
     elif final_observations:
         disposition = "FINAL"
-        reason = "RETAINED_AUTHORITATIVE_FINAL_OUTCOME"
+        reason = "RETAINED_AUTHORITATIVE_TERMINAL_STATUS"
     elif cancelled_observations:
         disposition = "AUTHORITATIVELY_CANCELLED"
         reason = "RETAINED_AUTHORITATIVE_CANCELLATION"
@@ -377,15 +450,15 @@ def classify_authoritative_game(
         "In Progress": 6,
         "Manager challenge": 7,
         "Game Over": 8,
-        "Cancelled": 9,
-        "Canceled": 9,
-        "Final": 10,
-        "Completed Early": 10,
     }
     representative = max(
         ordered,
         key=lambda obs: (
-            status_rank.get(str(_status(obs.game)["detailedState"]), -1),
+            10
+            if _terminal_kind(_status(obs.game)) == "FINAL"
+            else 9
+            if _terminal_kind(_status(obs.game)) == "CANCELLED"
+            else status_rank.get(str(_status(obs.game)["detailedState"]), -1),
             _observation_sort_key(obs),
         ),
         default=None,
@@ -526,6 +599,226 @@ def _load_verified_observations(
     }
 
 
+def _statsapi_feed_timestamp(payload: Mapping[str, Any]) -> str | None:
+    metadata = payload.get("metaData")
+    value = metadata.get("timeStamp") if isinstance(metadata, Mapping) else None
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"\d{8}_\d{6}", value):
+        raise CloseInventoryError("CLOSE_INVENTORY_FEED_TIMESTAMP_INVALID")
+    try:
+        parsed = datetime.strptime(value, "%Y%m%d_%H%M%S").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError as exc:
+        raise CloseInventoryError("CLOSE_INVENTORY_FEED_TIMESTAMP_INVALID") from exc
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
+def _normalize_live_feed_game(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    game_pk = payload.get("gamePk")
+    game_data = payload.get("gameData")
+    if not isinstance(game_data, Mapping):
+        raise CloseInventoryError("CLOSE_INVENTORY_FEED_GAME_DATA_MISSING")
+    game = game_data.get("game")
+    if not isinstance(game, Mapping) or game.get("pk") != game_pk:
+        raise CloseInventoryError("CLOSE_INVENTORY_FEED_GAME_PK_MISMATCH")
+    date_time = game_data.get("datetime")
+    date_time = date_time if isinstance(date_time, Mapping) else {}
+    teams = game_data.get("teams")
+    teams = teams if isinstance(teams, Mapping) else {}
+    live_data = payload.get("liveData")
+    live_data = live_data if isinstance(live_data, Mapping) else {}
+    linescore = live_data.get("linescore")
+    linescore = linescore if isinstance(linescore, Mapping) else {}
+    scores = linescore.get("teams")
+    scores = scores if isinstance(scores, Mapping) else {}
+
+    normalized_teams: dict[str, Any] = {}
+    for side in ("away", "home"):
+        team = teams.get(side)
+        team = team if isinstance(team, Mapping) else {}
+        score = scores.get(side)
+        score = score if isinstance(score, Mapping) else {}
+        normalized_teams[side] = {
+            "team": {"id": team.get("id")},
+            "score": score.get("runs"),
+        }
+    return {
+        "gamePk": game_pk,
+        "gameType": game.get("type"),
+        "season": game.get("season"),
+        "gameDate": date_time.get("dateTime"),
+        "officialDate": date_time.get("officialDate"),
+        "status": game_data.get("status"),
+        "teams": normalized_teams,
+    }
+
+
+def _load_verified_live_feed_observations(
+    regular_records: Sequence[GamePhaseAuthorityRecord],
+    *,
+    temporal_audit_ledger_path: Path,
+    root: Path,
+    expected_ledger_sha256: str | None = EXPECTED_TEMPORAL_AUDIT_LEDGER_SHA256,
+    expected_recovery_count: int | None = EXPECTED_LOCAL_TERMINAL_RECOVERIES,
+    expected_remaining_count: int | None = EXPECTED_REMAINING_BLOCKERS,
+) -> tuple[dict[int, list[SourceObservation]], dict[str, Any], dict[str, list[int]]]:
+    """Load the audit-selected retained live feeds without date inference."""
+
+    try:
+        ledger_sha256 = file_sha256(temporal_audit_ledger_path)
+    except OSError as exc:
+        raise CloseInventoryError("CLOSE_INVENTORY_TEMPORAL_AUDIT_MISSING") from exc
+    if expected_ledger_sha256 is not None and ledger_sha256 != expected_ledger_sha256:
+        raise CloseInventoryError("CLOSE_INVENTORY_TEMPORAL_AUDIT_HASH_MISMATCH")
+    try:
+        with temporal_audit_ledger_path.open(
+            "r", encoding="utf-8", newline=""
+        ) as handle:
+            ledger_rows = list(csv.DictReader(handle))
+    except (OSError, csv.Error) as exc:
+        raise CloseInventoryError("CLOSE_INVENTORY_TEMPORAL_AUDIT_MALFORMED") from exc
+
+    authority_by_game_pk = {record.game_pk: record for record in regular_records}
+    observations: defaultdict[int, list[SourceObservation]] = defaultdict(list)
+    source_rows: list[dict[str, Any]] = []
+    seen_game_pks: set[int] = set()
+    seen_source_paths: set[str] = set()
+    recoveries: list[int] = []
+    current: list[int] = []
+    future: list[int] = []
+    for ledger_row in ledger_rows:
+        try:
+            game_pk = int(ledger_row.get("game_pk") or "")
+        except ValueError as exc:
+            raise CloseInventoryError(
+                "CLOSE_INVENTORY_TEMPORAL_AUDIT_GAME_PK_INVALID"
+            ) from exc
+        if game_pk in seen_game_pks:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_TEMPORAL_AUDIT_DUPLICATE_GAME_PK:{game_pk}"
+            )
+        seen_game_pks.add(game_pk)
+        if game_pk not in authority_by_game_pk:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_TEMPORAL_AUDIT_AUTHORITY_MISSING:{game_pk}"
+            )
+        classification = ledger_row.get("classification")
+        if classification == "CURRENT_DATE_NOT_TERMINAL":
+            current.append(game_pk)
+            continue
+        if classification == "FUTURE_SCHEDULED":
+            future.append(game_pk)
+            continue
+        if classification != "PAST_DATE_TERMINAL_EVIDENCE_FOUND_ELSEWHERE":
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_TEMPORAL_AUDIT_CLASSIFICATION_INVALID:{game_pk}"
+            )
+
+        source_path = str(ledger_row.get("terminal_evidence_path") or "")
+        source_sha256 = str(ledger_row.get("terminal_evidence_sha256") or "")
+        ledger_timestamp = str(
+            ledger_row.get("terminal_observation_timestamp_utc") or ""
+        )
+        if source_path in seen_source_paths:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_LIVE_FEED_PATH_DUPLICATE:{source_path}"
+            )
+        seen_source_paths.add(source_path)
+        if not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_LIVE_FEED_HASH_INVALID:{game_pk}"
+            )
+        path = _safe_repo_path(source_path, root=root)
+        try:
+            source_bytes = path.stat().st_size
+            actual_sha256 = file_sha256(path)
+            payload = json.loads(path.read_bytes())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_LIVE_FEED_MISSING_OR_MALFORMED:{game_pk}"
+            ) from exc
+        if actual_sha256 != source_sha256:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_LIVE_FEED_HASH_MISMATCH:{game_pk}"
+            )
+        if not isinstance(payload, Mapping) or payload.get("gamePk") != game_pk:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_FEED_GAME_PK_MISMATCH:{game_pk}"
+            )
+        normalized = _normalize_live_feed_game(payload)
+        record = authority_by_game_pk[game_pk]
+        if normalized.get("gameType") != record.source_game_type:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_FEED_GAME_TYPE_CONFLICT:{game_pk}"
+            )
+        try:
+            feed_season = int(normalized.get("season"))
+        except (TypeError, ValueError) as exc:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_FEED_SEASON_INVALID:{game_pk}"
+            ) from exc
+        if feed_season != record.source_season:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_FEED_SEASON_CONFLICT:{game_pk}"
+            )
+        if _terminal_kind(_status(normalized)) != "FINAL":
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_AUDITED_FEED_NOT_FINAL:{game_pk}"
+            )
+        observation_timestamp = _statsapi_feed_timestamp(payload)
+        if observation_timestamp != ledger_timestamp:
+            raise CloseInventoryError(
+                f"CLOSE_INVENTORY_FEED_TIMESTAMP_CONFLICT:{game_pk}"
+            )
+        observations[game_pk].append(
+            SourceObservation(
+                source_path=source_path,
+                source_sha256=source_sha256,
+                game=normalized,
+                source_kind="STATSAPI_LIVE_GAME_FEED",
+                observation_timestamp_utc=observation_timestamp,
+            )
+        )
+        source_rows.append(
+            {
+                "game_pk": game_pk,
+                "source_path": source_path,
+                "source_sha256": source_sha256,
+                "source_bytes": source_bytes,
+                "observation_timestamp_utc": observation_timestamp,
+            }
+        )
+        recoveries.append(game_pk)
+
+    if expected_recovery_count is not None and len(recoveries) != expected_recovery_count:
+        raise CloseInventoryError("CLOSE_INVENTORY_LOCAL_RECOVERY_COUNT_MISMATCH")
+    if expected_remaining_count is not None and len(current) + len(future) != expected_remaining_count:
+        raise CloseInventoryError("CLOSE_INVENTORY_REMAINING_BLOCKER_COUNT_MISMATCH")
+    if expected_remaining_count is not None and (
+        len(current) != EXPECTED_CURRENT_DATE_BLOCKERS
+        or len(future) != EXPECTED_FUTURE_BLOCKERS
+    ):
+        raise CloseInventoryError("CLOSE_INVENTORY_TEMPORAL_SPLIT_MISMATCH")
+    source_rows.sort(key=lambda row: (row["game_pk"], row["source_path"]))
+    return (
+        dict(observations),
+        {
+            "audit_ledger_path": str(temporal_audit_ledger_path.relative_to(root)),
+            "audit_ledger_sha256": ledger_sha256,
+            "source_file_count": len(source_rows),
+            "source_observation_count": len(source_rows),
+            "source_population_sha256": canonical_sha256(source_rows),
+        },
+        {
+            "locally_recovered_game_pks": sorted(recoveries),
+            "current_date_game_pks": sorted(current),
+            "future_game_pks": sorted(future),
+        },
+    )
+
+
 def build_authoritative_inventory(
     *,
     authority: HashedProposalAuthority | None = None,
@@ -550,7 +843,7 @@ def build_authoritative_inventory(
     ]
     if len(regular_records) != EXPECTED_REGULAR_SEASON:
         raise CloseInventoryError("CLOSE_INVENTORY_REGULAR_POPULATION_INVALID")
-    observations, disposition_sources = _load_verified_observations(
+    observations, schedule_sources = _load_verified_observations(
         regular_records,
         source_manifest_paths=(
             DEFAULT_SOURCE_MANIFEST_PATH,
@@ -558,11 +851,68 @@ def build_authoritative_inventory(
         ),
         root=root,
     )
+    live_feed_observations, live_feed_sources, temporal_coverage = (
+        _load_verified_live_feed_observations(
+            regular_records,
+            temporal_audit_ledger_path=root / TEMPORAL_AUDIT_LEDGER_RELATIVE_PATH,
+            root=root,
+        )
+    )
+    for game_pk, feed_observations in live_feed_observations.items():
+        observations.setdefault(game_pk, []).extend(feed_observations)
+    disposition_sources = {
+        "manifest_hashes": {
+            **schedule_sources["manifest_hashes"],
+            live_feed_sources["audit_ledger_path"]: live_feed_sources[
+                "audit_ledger_sha256"
+            ],
+        },
+        "source_file_count": schedule_sources["source_file_count"]
+        + live_feed_sources["source_file_count"],
+        "source_observation_count": schedule_sources["source_observation_count"]
+        + live_feed_sources["source_observation_count"],
+        "source_population_sha256": canonical_sha256(
+            {
+                "schedule_source_population_sha256": schedule_sources[
+                    "source_population_sha256"
+                ],
+                "live_feed_source_population_sha256": live_feed_sources[
+                    "source_population_sha256"
+                ],
+            }
+        ),
+        "schedule_sources": schedule_sources,
+        "live_feed_sources": live_feed_sources,
+    }
     rows = [
         classify_authoritative_game(record, observations.get(record.game_pk, []))
         for record in regular_records
     ]
     dispositions = Counter(row["close_disposition"] for row in rows)
+    disposition_counts = {
+        disposition: dispositions.get(disposition, 0)
+        for disposition in sorted(DISPOSITIONS)
+    }
+    scheduled_not_final_game_pks = [
+        row["game_pk"]
+        for row in rows
+        if row["close_disposition"] == "SCHEDULED_NOT_FINAL"
+    ]
+    expected_remaining = sorted(
+        temporal_coverage["current_date_game_pks"]
+        + temporal_coverage["future_game_pks"]
+    )
+    if disposition_counts != EXPECTED_DISPOSITION_COUNTS:
+        raise CloseInventoryError("CLOSE_INVENTORY_DISPOSITION_COUNTS_UNEXPECTED")
+    if scheduled_not_final_game_pks != expected_remaining:
+        raise CloseInventoryError("CLOSE_INVENTORY_REMAINING_BLOCKER_SET_MISMATCH")
+    recovered_rows = {
+        row["game_pk"]: row["close_disposition"]
+        for row in rows
+        if row["game_pk"] in temporal_coverage["locally_recovered_game_pks"]
+    }
+    if set(recovered_rows.values()) != {"FINAL"}:
+        raise CloseInventoryError("CLOSE_INVENTORY_LOCAL_RECOVERY_DISPOSITION_MISMATCH")
     summary = {
         "contract_name": CONTRACT_NAME,
         "season": 2026,
@@ -576,15 +926,8 @@ def build_authoritative_inventory(
             "conflicting": metadata.conflicting_count,
             "duplicate_identities": metadata.duplicate_identity_count,
         },
-        "disposition_counts": {
-            disposition: dispositions.get(disposition, 0)
-            for disposition in sorted(DISPOSITIONS)
-        },
-        "scheduled_not_final_game_pks": [
-            row["game_pk"]
-            for row in rows
-            if row["close_disposition"] == "SCHEDULED_NOT_FINAL"
-        ],
+        "disposition_counts": disposition_counts,
+        "scheduled_not_final_game_pks": scheduled_not_final_game_pks,
         "unresolved_game_pks": [
             row["game_pk"]
             for row in rows
@@ -596,6 +939,7 @@ def build_authoritative_inventory(
             if row["relationship_identities"]["raw_relationships"]
         ],
         "disposition_sources": disposition_sources,
+        "temporal_coverage": temporal_coverage,
     }
     return rows, summary
 
@@ -635,6 +979,19 @@ def make_inventory_manifest(
         ],
         "disposition_source_population_sha256": summary["disposition_sources"][
             "source_population_sha256"
+        ],
+        "disposition_source_details": summary["disposition_sources"],
+        "local_terminal_recovery_count": len(
+            summary["temporal_coverage"]["locally_recovered_game_pks"]
+        ),
+        "local_terminal_recovery_game_pks_sha256": canonical_sha256(
+            summary["temporal_coverage"]["locally_recovered_game_pks"]
+        ),
+        "current_date_nonterminal_game_pks": summary["temporal_coverage"][
+            "current_date_game_pks"
+        ],
+        "future_scheduled_game_pks": summary["temporal_coverage"][
+            "future_game_pks"
         ],
         "population_counts": summary["population_counts"],
         "disposition_counts": summary["disposition_counts"],
@@ -818,6 +1175,19 @@ def validate_close_inventory_package(
         "disposition_source_population_sha256": rebuilt_summary[
             "disposition_sources"
         ]["source_population_sha256"],
+        "disposition_source_details": rebuilt_summary["disposition_sources"],
+        "local_terminal_recovery_count": len(
+            rebuilt_summary["temporal_coverage"]["locally_recovered_game_pks"]
+        ),
+        "local_terminal_recovery_game_pks_sha256": canonical_sha256(
+            rebuilt_summary["temporal_coverage"]["locally_recovered_game_pks"]
+        ),
+        "current_date_nonterminal_game_pks": rebuilt_summary[
+            "temporal_coverage"
+        ]["current_date_game_pks"],
+        "future_scheduled_game_pks": rebuilt_summary["temporal_coverage"][
+            "future_game_pks"
+        ],
     }
     for field, expected_value in expected_disposition_source_values.items():
         if manifest.get(field) != expected_value:

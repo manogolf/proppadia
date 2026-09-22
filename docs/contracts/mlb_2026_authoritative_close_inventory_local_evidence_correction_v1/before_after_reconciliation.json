@@ -1,0 +1,36 @@
+{
+  "after": {
+    "close_inventory_manifest_sha256": "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59",
+    "disposition_counts": {
+      "AUTHORITATIVELY_CANCELLED": 0,
+      "FINAL": 2316,
+      "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+      "SCHEDULED_NOT_FINAL": 88,
+      "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+      "UNRESOLVED_IDENTITY_OR_STATUS": 0
+    },
+    "inventory_file_sha256": "013047c0503ac79f01c786801fadb45a42d221052b33de4fc7c801ca4a7ae48d",
+    "regular_season_game_pks": 2430
+  },
+  "before": {
+    "close_inventory_manifest_sha256": "f8bb9008e0ff4a0d8f9dc23e12f5a6e799476de58b699814e0466cd2458e756b",
+    "disposition_counts": {
+      "AUTHORITATIVELY_CANCELLED": 0,
+      "FINAL": 1968,
+      "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+      "SCHEDULED_NOT_FINAL": 436,
+      "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+      "UNRESOLVED_IDENTITY_OR_STATUS": 0
+    },
+    "inventory_file_sha256": "5c71e89fa2e64ad6a4920a39d758acd3ac31d423b501dd4232b78174c8ff5cc7",
+    "regular_season_game_pks": 2430
+  },
+  "canonical_population_change": 0,
+  "contract_name": "MLB_2026_AUTHORITATIVE_CLOSE_INVENTORY_LOCAL_EVIDENCE_CORRECTION_V1",
+  "local_terminal_recoveries": 348,
+  "remaining_current_date_nonterminal": 16,
+  "remaining_future_scheduled": 72,
+  "remaining_scheduled_not_final": 88,
+  "temporal_audit_ledger_sha256": "881eac4bacab6cdd7915f6b3d4c112726e0ffe0ade117c8c557272cef7e4b240",
+  "unresolved_after": 0
+}

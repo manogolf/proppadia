@@ -27,7 +27,7 @@ TEST_MODULE = (
     "backend.mlb.tests."
     "test_mlb_2026_authoritative_regular_season_close_inventory_v1"
 )
-EXPECTED_TEST_COUNT = 10
+EXPECTED_TEST_COUNT = 18
 
 
 class RecordingResult(unittest.TextTestResult):
@@ -158,8 +158,49 @@ def run_validation() -> dict[str, Any]:
         "premature_close_blocked",
         not close_report["close_ready"]
         and close_report["decision"] == "REGULAR_SEASON_CLOSE_BLOCKED"
-        and len(close_report["scheduled_not_final_game_pks"]) == 436,
-        close_report["decision"],
+        and len(close_report["scheduled_not_final_game_pks"]) == 88,
+        {
+            "decision": close_report["decision"],
+            "scheduled_not_final": len(
+                close_report["scheduled_not_final_game_pks"]
+            ),
+        },
+    )
+    _check(
+        checks,
+        "exact_corrected_disposition_counts",
+        summary["disposition_counts"]
+        == {
+            "AUTHORITATIVELY_CANCELLED": 0,
+            "FINAL": 2316,
+            "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+            "SCHEDULED_NOT_FINAL": 88,
+            "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+            "UNRESOLVED_IDENTITY_OR_STATUS": 0,
+        },
+        summary["disposition_counts"],
+    )
+    temporal_coverage = summary["temporal_coverage"]
+    _check(
+        checks,
+        "exact_348_local_terminal_recoveries",
+        len(temporal_coverage["locally_recovered_game_pks"]) == 348,
+        len(temporal_coverage["locally_recovered_game_pks"]),
+    )
+    _check(
+        checks,
+        "exact_88_temporal_remainder",
+        len(temporal_coverage["current_date_game_pks"]) == 16
+        and len(temporal_coverage["future_game_pks"]) == 72
+        and sorted(
+            temporal_coverage["current_date_game_pks"]
+            + temporal_coverage["future_game_pks"]
+        )
+        == summary["scheduled_not_final_game_pks"],
+        {
+            "current_date": len(temporal_coverage["current_date_game_pks"]),
+            "future": len(temporal_coverage["future_game_pks"]),
+        },
     )
     prohibited_command_fragments = (
         "--inventory",

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -17,6 +19,7 @@ from backend.mlb.season_transition.regular_season_close_inventory_v1 import (
     INVENTORY_FILENAME,
     MANIFEST_FILENAME,
     SourceObservation,
+    _load_verified_live_feed_observations,
     build_authoritative_inventory,
     canonical_json_bytes,
     classify_authoritative_game,
@@ -82,8 +85,93 @@ def _game(
     return game
 
 
-def _obs(game: dict[str, object], suffix: str = "one") -> SourceObservation:
-    return SourceObservation(f"{suffix}.json", "b" * 64, game)
+def _obs(
+    game: dict[str, object],
+    suffix: str = "one",
+    *,
+    source_kind: str = "STATSAPI_SCHEDULE_RESPONSE",
+    observed_at: str | None = None,
+) -> SourceObservation:
+    return SourceObservation(
+        f"{suffix}.json",
+        "b" * 64,
+        game,
+        source_kind=source_kind,
+        observation_timestamp_utc=observed_at,
+    )
+
+
+def _live_feed_payload(
+    *,
+    game_pk: int = 1,
+    nested_game_pk: int | None = None,
+    game_type: str = "R",
+    detailed: str = "Final",
+) -> dict[str, object]:
+    normalized = _game(game_pk=game_pk, detailed=detailed)
+    status = normalized["status"]
+    teams = normalized["teams"]
+    return {
+        "gamePk": game_pk,
+        "metaData": {"timeStamp": "20260602_010203"},
+        "gameData": {
+            "game": {
+                "pk": game_pk if nested_game_pk is None else nested_game_pk,
+                "type": game_type,
+                "season": "2026",
+            },
+            "datetime": {
+                "dateTime": "2026-06-01T23:00:00Z",
+                "officialDate": "2026-06-01",
+            },
+            "status": status,
+            "teams": {
+                "away": {"id": 10},
+                "home": {"id": 20},
+            },
+        },
+        "liveData": {
+            "linescore": {
+                "teams": {
+                    "away": {"runs": teams["away"]["score"]},
+                    "home": {"runs": teams["home"]["score"]},
+                }
+            }
+        },
+    }
+
+
+def _write_live_feed_fixture(
+    root: Path, payload: dict[str, object]
+) -> tuple[Path, str]:
+    feed_path = root / "retained" / "feed.json"
+    feed_path.parent.mkdir(parents=True)
+    feed_path.write_text(json.dumps(payload), encoding="utf-8")
+    feed_sha256 = hashlib.sha256(feed_path.read_bytes()).hexdigest()
+    ledger_path = root / "audit.csv"
+    with ledger_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "game_pk",
+                "classification",
+                "terminal_evidence_path",
+                "terminal_evidence_sha256",
+                "terminal_observation_timestamp_utc",
+            ],
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "game_pk": payload["gamePk"],
+                "classification": "PAST_DATE_TERMINAL_EVIDENCE_FOUND_ELSEWHERE",
+                "terminal_evidence_path": str(feed_path.relative_to(root)),
+                "terminal_evidence_sha256": feed_sha256,
+                "terminal_observation_timestamp_utc": "2026-06-02T01:02:03Z",
+            }
+        )
+    return ledger_path, hashlib.sha256(ledger_path.read_bytes()).hexdigest()
 
 
 class AuthoritativeRegularSeasonCloseInventoryTests(unittest.TestCase):
@@ -101,6 +189,136 @@ class AuthoritativeRegularSeasonCloseInventoryTests(unittest.TestCase):
         self.assertEqual(len(self.rows), 2430)
         self.assertEqual(self.summary["population_counts"]["total_classified_game_pks"], 2919)
         self.assertEqual(self.summary["population_counts"]["preseason_game_pks"], 489)
+        self.assertEqual(
+            self.summary["disposition_counts"],
+            {
+                "AUTHORITATIVELY_CANCELLED": 0,
+                "FINAL": 2316,
+                "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+                "SCHEDULED_NOT_FINAL": 88,
+                "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+                "UNRESOLVED_IDENTITY_OR_STATUS": 0,
+            },
+        )
+        self.assertEqual(
+            self.summary["scheduled_not_final_game_pks"],
+            sorted(
+                self.summary["temporal_coverage"]["current_date_game_pks"]
+                + self.summary["temporal_coverage"]["future_game_pks"]
+            ),
+        )
+
+    def test_authoritative_final_live_feed_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ledger, ledger_sha256 = _write_live_feed_fixture(
+                root, _live_feed_payload()
+            )
+            observations, metadata, coverage = _load_verified_live_feed_observations(
+                [_record()],
+                temporal_audit_ledger_path=ledger,
+                root=root,
+                expected_ledger_sha256=ledger_sha256,
+                expected_recovery_count=1,
+                expected_remaining_count=None,
+            )
+        row = classify_authoritative_game(_record(), observations[1])
+        self.assertEqual(row["close_disposition"], "FINAL")
+        self.assertEqual(metadata["source_file_count"], 1)
+        self.assertEqual(coverage["locally_recovered_game_pks"], [1])
+        self.assertEqual(
+            row["disposition_source_artifact"]["observation_timestamp_utc"],
+            "2026-06-02T01:02:03Z",
+        )
+
+    def test_nonterminal_observation_cannot_override_terminal_observation(self) -> None:
+        terminal = _obs(
+            _game(detailed="Final"),
+            "older-terminal",
+            source_kind="STATSAPI_LIVE_GAME_FEED",
+            observed_at="2026-06-02T01:02:03Z",
+        )
+        nonterminal = _obs(
+            _game(detailed="Scheduled"),
+            "newer-nonterminal",
+            observed_at="2026-06-03T01:02:03Z",
+        )
+        for observations in ([nonterminal, terminal], [terminal, nonterminal]):
+            row = classify_authoritative_game(_record(), observations)
+            self.assertEqual(row["close_disposition"], "FINAL")
+            self.assertEqual(row["authoritative_status"]["detailedState"], "Final")
+
+    def test_contradictory_terminal_dispositions_fail_closed(self) -> None:
+        row = classify_authoritative_game(
+            _record(),
+            [
+                _obs(_game(detailed="Final"), "final"),
+                _obs(_game(detailed="Cancelled"), "cancelled"),
+            ],
+        )
+        self.assertEqual(row["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
+        self.assertIn("CONFLICTING_TERMINAL_STATUS", row["disposition_reason"])
+
+    def test_live_feed_exact_game_pk_mismatch_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ledger, ledger_sha256 = _write_live_feed_fixture(
+                root, _live_feed_payload(nested_game_pk=2)
+            )
+            with self.assertRaisesRegex(CloseInventoryError, "GAME_PK_MISMATCH"):
+                _load_verified_live_feed_observations(
+                    [_record()],
+                    temporal_audit_ledger_path=ledger,
+                    root=root,
+                    expected_ledger_sha256=ledger_sha256,
+                    expected_recovery_count=1,
+                    expected_remaining_count=None,
+                )
+
+    def test_live_feed_game_type_conflict_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ledger, ledger_sha256 = _write_live_feed_fixture(
+                root, _live_feed_payload(game_type="S")
+            )
+            with self.assertRaisesRegex(CloseInventoryError, "GAME_TYPE_CONFLICT"):
+                _load_verified_live_feed_observations(
+                    [_record()],
+                    temporal_audit_ledger_path=ledger,
+                    root=root,
+                    expected_ledger_sha256=ledger_sha256,
+                    expected_recovery_count=1,
+                    expected_remaining_count=None,
+                )
+
+    def test_duplicate_retained_source_ingestion_is_idempotent(self) -> None:
+        terminal = _obs(
+            _game(detailed="Final"),
+            source_kind="STATSAPI_LIVE_GAME_FEED",
+            observed_at="2026-06-02T01:02:03Z",
+        )
+        once = classify_authoritative_game(_record(), [terminal])
+        repeated = classify_authoritative_game(_record(), [terminal, terminal])
+        self.assertEqual(once, repeated)
+
+    def test_score_without_terminal_status_is_rejected(self) -> None:
+        row = classify_authoritative_game(
+            _record(), [_obs(_game(detailed="Scheduled"))]
+        )
+        self.assertEqual(row["close_disposition"], "SCHEDULED_NOT_FINAL")
+        self.assertIsNone(row["final_outcome"])
+
+    def test_calendar_date_never_implies_terminal_status(self) -> None:
+        past = _game(detailed="Scheduled", officialDate="2001-01-01")
+        future = _game(detailed="Scheduled", officialDate="2099-01-01")
+        self.assertEqual(
+            classify_authoritative_game(_record(), [_obs(past)])["close_disposition"],
+            "SCHEDULED_NOT_FINAL",
+        )
+        self.assertEqual(
+            classify_authoritative_game(_record(), [_obs(future)])["close_disposition"],
+            "SCHEDULED_NOT_FINAL",
+        )
 
     def test_omitted_and_extra_game_pks_are_rejected(self) -> None:
         omitted = validate_inventory_rows(
@@ -217,7 +435,7 @@ class AuthoritativeRegularSeasonCloseInventoryTests(unittest.TestCase):
             self.rows, self.authority.records, expected_count=2430
         )
         self.assertFalse(report["close_ready"])
-        self.assertEqual(len(report["scheduled_not_final_game_pks"]), 436)
+        self.assertEqual(len(report["scheduled_not_final_game_pks"]), 88)
         with patch("sys.argv", ["close-check", "--inventory", "arbitrary.json"]):
             self.assertEqual(close_command.main(), 2)
 

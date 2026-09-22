@@ -1,20 +1,20 @@
 {
-  "check_count": 13,
+  "check_count": 16,
   "checks": [
     {
       "check": "tests_discovered",
-      "detail": 10,
+      "detail": 18,
       "status": "PASS"
     },
     {
       "check": "tests_all_executed",
       "detail": {
-        "discovered": 10,
-        "executed": 10,
+        "discovered": 18,
+        "executed": 18,
         "failed": 0,
-        "intended": 10,
+        "intended": 18,
         "module": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1",
-        "passed": 10,
+        "passed": 18,
         "runner": "PYTHON_STANDARD_LIBRARY_UNITTEST",
         "scenarios": [
           {
@@ -22,7 +22,31 @@
             "status": "PASSED"
           },
           {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_authoritative_final_live_feed_recovery",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_calendar_date_never_implies_terminal_status",
+            "status": "PASSED"
+          },
+          {
             "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_complete_2430_population_is_bound_to_authority",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_contradictory_terminal_dispositions_fail_closed",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_duplicate_retained_source_ingestion_is_idempotent",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_exact_game_pk_mismatch_fails_closed",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_game_type_conflict_fails_closed",
             "status": "PASSED"
           },
           {
@@ -31,6 +55,10 @@
           },
           {
             "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_missing_unknown_or_conflicting_status_is_unresolved",
+            "status": "PASSED"
+          },
+          {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_nonterminal_observation_cannot_override_terminal_observation",
             "status": "PASSED"
           },
           {
@@ -54,6 +82,10 @@
             "status": "PASSED"
           },
           {
+            "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_score_without_terminal_status_is_rejected",
+            "status": "PASSED"
+          },
+          {
             "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_suspended_resumed_game_preserves_exact_identity",
             "status": "PASSED"
           }
@@ -68,19 +100,19 @@
       "check": "tests_all_passed",
       "detail": {
         "failed": 0,
-        "passed": 10,
+        "passed": 18,
         "skipped": 0
       },
       "status": "PASS"
     },
     {
       "check": "deterministic_inventory_bytes",
-      "detail": 6534271,
+      "detail": 7214614,
       "status": "PASS"
     },
     {
       "check": "deterministic_manifest",
-      "detail": "f8bb9008e0ff4a0d8f9dc23e12f5a6e799476de58b699814e0466cd2458e756b",
+      "detail": "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59",
       "status": "PASS"
     },
     {
@@ -132,7 +164,35 @@
     },
     {
       "check": "premature_close_blocked",
-      "detail": "REGULAR_SEASON_CLOSE_BLOCKED",
+      "detail": {
+        "decision": "REGULAR_SEASON_CLOSE_BLOCKED",
+        "scheduled_not_final": 88
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "exact_corrected_disposition_counts",
+      "detail": {
+        "AUTHORITATIVELY_CANCELLED": 0,
+        "FINAL": 2316,
+        "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+        "SCHEDULED_NOT_FINAL": 88,
+        "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+        "UNRESOLVED_IDENTITY_OR_STATUS": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "check": "exact_348_local_terminal_recoveries",
+      "detail": 348,
+      "status": "PASS"
+    },
+    {
+      "check": "exact_88_temporal_remainder",
+      "detail": {
+        "current_date": 16,
+        "future": 72
+      },
       "status": "PASS"
     },
     {
@@ -162,14 +222,14 @@
   "database_connections": 0,
   "disposition_counts": {
     "AUTHORITATIVELY_CANCELLED": 0,
-    "FINAL": 1968,
+    "FINAL": 2316,
     "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
-    "SCHEDULED_NOT_FINAL": 436,
+    "SCHEDULED_NOT_FINAL": 88,
     "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
     "UNRESOLVED_IDENTITY_OR_STATUS": 0
   },
   "failed_checks": [],
-  "manifest_sha256": "f8bb9008e0ff4a0d8f9dc23e12f5a6e799476de58b699814e0466cd2458e756b",
+  "manifest_sha256": "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59",
   "network_requests": 0,
   "population_counts": {
     "conflicting": 0,
@@ -181,14 +241,14 @@
     "unknown": 0
   },
   "regular_season_close_executions": 0,
-  "scheduled_not_final_count": 436,
+  "scheduled_not_final_count": 88,
   "tests": {
-    "discovered": 10,
-    "executed": 10,
+    "discovered": 18,
+    "executed": 18,
     "failed": 0,
-    "intended": 10,
+    "intended": 18,
     "module": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1",
-    "passed": 10,
+    "passed": 18,
     "runner": "PYTHON_STANDARD_LIBRARY_UNITTEST",
     "scenarios": [
       {
@@ -196,7 +256,31 @@
         "status": "PASSED"
       },
       {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_authoritative_final_live_feed_recovery",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_calendar_date_never_implies_terminal_status",
+        "status": "PASSED"
+      },
+      {
         "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_complete_2430_population_is_bound_to_authority",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_contradictory_terminal_dispositions_fail_closed",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_duplicate_retained_source_ingestion_is_idempotent",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_exact_game_pk_mismatch_fails_closed",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_game_type_conflict_fails_closed",
         "status": "PASSED"
       },
       {
@@ -205,6 +289,10 @@
       },
       {
         "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_missing_unknown_or_conflicting_status_is_unresolved",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_nonterminal_observation_cannot_override_terminal_observation",
         "status": "PASSED"
       },
       {
@@ -225,6 +313,10 @@
       },
       {
         "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_rescheduled_regular_game_preserves_exact_identity",
+        "status": "PASSED"
+      },
+      {
+        "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_score_without_terminal_status_is_rejected",
         "status": "PASSED"
       },
       {
