@@ -1,0 +1,52 @@
+{
+  "audit": "MLB_2026_POSTSEASON_COLLECTION_IDENTITY_READINESS_AUDIT_V1",
+  "audit_timestamp_utc": "2026-09-22T22:37:47Z",
+  "bvp_inline": {
+    "attempts": 4,
+    "distinct_game_pks": 49,
+    "duplicate_success_dates": 0,
+    "identity_journal_files": 4,
+    "identity_journal_rows": 1426,
+    "later_same_date_status": "BVP_INLINE_SUCCESS_ALREADY_EXISTS",
+    "latest_date": "2026-09-22",
+    "results": 4,
+    "success_dates": 4,
+    "successes": 4
+  },
+  "feature_lineage": {
+    "distinct_game_pks": 674,
+    "files": 51,
+    "rows": 126962,
+    "rows_missing_feature_or_odds_snapshot_hash": 0,
+    "unique_canonical_row_identities": 126962
+  },
+  "head_at_extraction": "0b99d2b34162a3f597a18021a5882fad8e713fc5",
+  "head_at_final_validation": "005099d0b8a33847e7e3a1bd025f33d1507d31bf",
+  "network_requests": 0,
+  "operational_database_connections": 0,
+  "paid_credits": 0,
+  "paid_requests": 0,
+  "phase_authority": {
+    "authority_records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
+    "game_pks": 2919,
+    "postseason": 0,
+    "preseason": 489,
+    "regular_season": 2430,
+    "supported_through_date": "2026-09-27"
+  },
+  "pinnacle_population": {
+    "audit_files": 223,
+    "conflict_or_missing_events": 0,
+    "events": 636,
+    "events_with_noncertified_observation": 41,
+    "mapped_events": 636,
+    "observations": 3963
+  },
+  "player_prop_population": {
+    "betonline_events": 2211,
+    "events": 2340,
+    "files": 2404,
+    "unique_bytes": 946
+  },
+  "synthetic_fixture_scope": "identity logic only; not operational postseason evidence"
+}

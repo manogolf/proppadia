@@ -1,0 +1,134 @@
+{
+  "audit": "MLB_2026_POSTSEASON_COLLECTION_IDENTITY_READINESS_AUDIT_V1",
+  "checks": [
+    {
+      "check": "required_files",
+      "detail": "all present",
+      "status": "PASS"
+    },
+    {
+      "check": "ancestry_d362a872bd15",
+      "detail": "d362a872bd1555bb7b197d9a233e2ab606b18301",
+      "status": "PASS"
+    },
+    {
+      "check": "ancestry_19aff40e2b31",
+      "detail": "19aff40e2b316b44a8c354709a5fe8655c37c77e",
+      "status": "PASS"
+    },
+    {
+      "check": "ancestry_4d9de0ee4d0e",
+      "detail": "4d9de0ee4d0eecaec9f1b949f2c73cd1c2c9bcee",
+      "status": "PASS"
+    },
+    {
+      "check": "lane_count",
+      "detail": "10",
+      "status": "PASS"
+    },
+    {
+      "check": "lane_classifications_allowed",
+      "detail": "allowed",
+      "status": "PASS"
+    },
+    {
+      "check": "provider_event_population",
+      "detail": "2976",
+      "status": "PASS"
+    },
+    {
+      "check": "pinnacle_event_population",
+      "detail": "636",
+      "status": "PASS"
+    },
+    {
+      "check": "pinnacle_all_single_game_pk",
+      "detail": "636",
+      "status": "PASS"
+    },
+    {
+      "check": "player_prop_event_population",
+      "detail": "2340",
+      "status": "PASS"
+    },
+    {
+      "check": "betonline_event_population",
+      "detail": "2211",
+      "status": "PASS"
+    },
+    {
+      "check": "player_prop_binding_gap_explicit",
+      "detail": "all provider event IDs fail closed in audit",
+      "status": "PASS"
+    },
+    {
+      "check": "missing_binding_ledger_complete",
+      "detail": "2340",
+      "status": "PASS"
+    },
+    {
+      "check": "pinnacle_no_conflicting_binding",
+      "detail": "zero",
+      "status": "PASS"
+    },
+    {
+      "check": "zero_network_and_paid",
+      "detail": "{\"network_requests\": 0, \"paid_credits\": 0, \"paid_requests\": 0}",
+      "status": "PASS"
+    },
+    {
+      "check": "authority_population",
+      "detail": "{\"authority_records_sha256\": \"5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84\", \"game_pks\": 2919, \"postseason\": 0, \"preseason\": 489, \"regular_season\": 2430, \"supported_through_date\": \"2026-09-27\"}",
+      "status": "PASS"
+    },
+    {
+      "check": "bvp_exactly_once",
+      "detail": "{\"attempts\": 4, \"distinct_game_pks\": 49, \"duplicate_success_dates\": 0, \"identity_journal_files\": 4, \"identity_journal_rows\": 1426, \"later_same_date_status\": \"BVP_INLINE_SUCCESS_ALREADY_EXISTS\", \"latest_date\": \"2026-09-22\", \"results\": 4, \"success_dates\": 4, \"successes\": 4}",
+      "status": "PASS"
+    },
+    {
+      "check": "lineage_exact_hash_population",
+      "detail": "{\"distinct_game_pks\": 674, \"files\": 51, \"rows\": 126962, \"rows_missing_feature_or_odds_snapshot_hash\": 0, \"unique_canonical_row_identities\": 126962}",
+      "status": "PASS"
+    },
+    {
+      "check": "synthetic_pinnacle_doubleheader_exact_start",
+      "detail": "synthetic fixture; not operational readiness",
+      "status": "PASS"
+    },
+    {
+      "check": "synthetic_pinnacle_duplicate_candidates_fail_closed",
+      "detail": "synthetic fixture; not operational readiness",
+      "status": "PASS"
+    },
+    {
+      "check": "synthetic_pinnacle_rescheduled_start_preserves_game_pk",
+      "detail": "synthetic fixture; not operational readiness",
+      "status": "PASS"
+    },
+    {
+      "check": "synthetic_wide_invalid_time_first_game_defect_reproduced",
+      "detail": "synthetic fixture; not operational readiness",
+      "status": "PASS"
+    },
+    {
+      "check": "synthetic_wide_missing_time_first_game_defect_reproduced",
+      "detail": "synthetic fixture; not operational readiness",
+      "status": "PASS"
+    },
+    {
+      "check": "source_manifest",
+      "detail": "all source hashes match",
+      "status": "PASS"
+    },
+    {
+      "check": "package_manifest",
+      "detail": "all package hashes match",
+      "status": "PASS"
+    }
+  ],
+  "failed": 0,
+  "passed": 25,
+  "skipped": 0,
+  "validation_timestamp_utc": "2026-09-22T22:37:47Z"
+}

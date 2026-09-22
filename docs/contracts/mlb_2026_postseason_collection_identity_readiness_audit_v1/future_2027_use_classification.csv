@@ -1,0 +1,6 @@
+lane,2027_future_use_state,required_binding,2026_regular_season_certification_effect,notes
+StatsAPI schedule/game/outcome,READY_EXACT_GAME_PK,"exact gamePk+raw gameType+source hash+observation time",NONE,"Postseason observations can be strict-prior inputs only under feature-specific temporal rules."
+Inline BvP,READY_EXACT_GAME_PK,"existing exact gamePk/player/pitcher/source-observation/feature hash plus prospective phase join",EXCLUDED,"Retain postseason observations; do not admit them to 2026 regular metrics."
+BetOnline player props,CONDITIONAL_IDENTITY_NOT_PROVEN,"persist provider event id to exact gamePk mapping with retained official schedule hash",EXCLUDED,"Prices may support future research only after identity provenance is complete."
+Pinnacle main markets,CONDITIONAL_IDENTITY_NOT_PROVEN,"bind the official schedule response hash used for each accepted mapping",EXCLUDED,"Market observations are not model features unless a later governed contract says so."
+Prospective feature lineage,READY_EXACT_GAME_PK,"current game/player/time/feature/odds hashes plus canonical phase-manifest identity",EXCLUDED,"Postseason feature vectors may be retained but need strict-prior eligibility and phase labels before 2027 research."
