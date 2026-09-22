@@ -286,13 +286,21 @@ class PostgameReconciliationTest(unittest.TestCase):
                     Path(env[ENV_JOURNAL]), run_id="package_fixture", expected_game_hash=game_hash,
                 ),
                 request_lineage={
-                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V2",
+                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V3",
                     "canonical_game_set_hash": game_hash,
-                    "ancestors": [
+                    "response_sources": [
                         {"role": "AUTHORITY_RESPONSE_SOURCE",
-                         "source_run_id": "source_fixture"},
+                         "source_run_id": "first_failed_fixture"},
+                        {"role": "ROSTER_RESPONSE_SOURCE",
+                         "source_run_id": "third_failed_fixture"},
+                    ],
+                    "failed_ancestors": [
+                        {"role": "FAILED_EXECUTION_ANCESTOR",
+                         "run_id": "first_failed_fixture"},
                         {"role": "FAILED_EXECUTION_ANCESTOR",
                          "run_id": "second_failed_fixture"},
+                        {"role": "FAILED_EXECUTION_ANCESTOR",
+                         "run_id": "third_failed_fixture"},
                     ],
                 },
             )
@@ -305,8 +313,11 @@ class PostgameReconciliationTest(unittest.TestCase):
         lineage = json.loads((destination / "request_lineage.json").read_text())
         self.assertEqual(lineage["completed_request_run"]["role"], "COMPLETED_EXECUTION")
         self.assertEqual(lineage["completed_request_run"]["run_id"], "package_fixture")
-        self.assertEqual([row["role"] for row in lineage["ancestors"]],
-                         ["AUTHORITY_RESPONSE_SOURCE", "FAILED_EXECUTION_ANCESTOR"])
+        self.assertEqual([row["role"] for row in lineage["response_sources"]],
+                         ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"])
+        self.assertEqual([row["run_id"] for row in lineage["failed_ancestors"]],
+                         ["first_failed_fixture", "second_failed_fixture",
+                          "third_failed_fixture"])
         self.assertEqual(
             lineage["completed_request_run"]["journal_sha256"],
             hashlib.sha256(Path(env[ENV_JOURNAL]).read_bytes()).hexdigest())
@@ -358,14 +369,20 @@ class PostgameReconciliationTest(unittest.TestCase):
         database.assert_not_called()
         network.assert_not_called()
 
-    def test_september_20_two_ancestor_preflight_is_fully_local(self):
+    def test_september_20_typed_sources_and_three_ancestors_preflight_is_fully_local(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
+        third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
         output = []
         with patch.object(sys, "argv", ["run_nhl_postgame_reconciliation.py",
                                         "2026-09-20", "--local-input-preflight",
-                                        "--reuse-request-run-id", original,
-                                        "--lineage-request-run-id", second]), \
+                                        "--response-source",
+                                        f"AUTHORITY_RESPONSE_SOURCE={original}",
+                                        "--response-source",
+                                        f"ROSTER_RESPONSE_SOURCE={third}",
+                                        "--lineage-request-run-id", original,
+                                        "--lineage-request-run-id", second,
+                                        "--lineage-request-run-id", third]), \
              patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
              patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
              patch("builtins.print", side_effect=lambda value: output.append(value)):
@@ -375,9 +392,15 @@ class PostgameReconciliationTest(unittest.TestCase):
         payload = json.loads(output[-1])
         self.assertEqual(payload["status"], "LOCAL_INPUTS_VALID")
         self.assertEqual(payload["source_binding"]["canonical_games"], 7)
-        roles = [row["role"] for row in payload["request_lineage"]["ancestors"]]
-        self.assertEqual(roles, ["AUTHORITY_RESPONSE_SOURCE", "FAILED_EXECUTION_ANCESTOR"])
-        self.assertEqual(payload["request_lineage"]["ancestors"][1]["reuse_records"], 9)
+        roles = [row["role"] for row in payload["request_lineage"]["response_sources"]]
+        self.assertEqual(roles, ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"])
+        self.assertEqual(len(payload["request_lineage"]["failed_ancestors"]), 3)
+        self.assertEqual(payload["request_lineage"]["failed_ancestors"][1]["reuse_records"], 9)
+        self.assertEqual(payload["conditional_player_lookups"]["player_ids"], [8484537])
+        self.assertEqual(payload["conditional_player_lookups"]["localized_roster_names_retained"], 548)
+        self.assertEqual(payload["topology"]["logical_operations"], 60)
+        self.assertEqual(payload["topology"]["new_network_operations"], 15)
+        self.assertEqual(payload["topology"]["preserved_response_reuses"], 45)
         self.assertEqual(payload["database_requests"], 0)
         self.assertEqual(payload["external_requests"], 0)
 

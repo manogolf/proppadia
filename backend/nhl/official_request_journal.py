@@ -32,6 +32,7 @@ ENV_GAME_IDS = "NHL_CANONICAL_GAME_IDS"
 ENV_SOURCE_CACHE = "NHL_OFFICIAL_RESPONSE_SOURCE_CACHE"
 ENV_SOURCE_RUN_ID = "NHL_OFFICIAL_RESPONSE_SOURCE_RUN_ID"
 ENV_SOURCE_JOURNAL_SHA256 = "NHL_OFFICIAL_RESPONSE_SOURCE_JOURNAL_SHA256"
+ENV_RESPONSE_SOURCE_LEDGER = "NHL_OFFICIAL_RESPONSE_SOURCE_LEDGER_JSON"
 CONTRACT = "NHL_OFFICIAL_REQUEST_JOURNAL_V1"
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]+$")
 ROSTER_REDIRECT_POLICY = "NHL_ROSTER_CURRENT_TO_OFFICIAL_SEASON_V1"
@@ -69,6 +70,11 @@ def request_run_tree_fingerprint(request_root: Path, *, repository_root: Path) -
 def canonical_game_set_hash(game_ids: Iterable[int]) -> str:
     payload = json.dumps(sorted({int(value) for value in game_ids}), separators=(",", ":"))
     return sha256_bytes(payload.encode())
+
+
+def response_identity_key(family: str, identity: dict[str, Any]) -> str:
+    return json.dumps({"endpoint_family": family, "identity": identity},
+                      sort_keys=True, separators=(",", ":"))
 
 
 def official_season_id(repository_season: int) -> str:
@@ -154,6 +160,20 @@ def verify_payload_identity(family: str, identity: dict[str, Any], body: bytes) 
         raw = payload.get("id") or payload.get("gameId") or payload.get("gamePk")
         if raw is None or int(raw) != expected:
             raise RuntimeError("OFFICIAL_RESPONSE_BOXSCORE_GAME_MISMATCH")
+    elif family == "PLAYER_LANDING":
+        expected = int(identity["player_id"])
+        raw = payload.get("playerId") or payload.get("id")
+        if raw is None or int(raw) != expected:
+            raise RuntimeError("OFFICIAL_RESPONSE_PLAYER_ID_MISMATCH")
+    elif family == "ROSTER":
+        sections = [payload.get(name) or [] for name in
+                    ("forwards", "defensemen", "defense", "goalies")]
+        if not any(sections) and isinstance(payload.get("roster"), dict):
+            roster = payload["roster"]
+            sections = [roster.get(name) or [] for name in
+                        ("forwards", "defensemen", "defense", "goalies")]
+        if not any(sections):
+            raise RuntimeError("OFFICIAL_RESPONSE_ROSTER_EMPTY")
 
 
 @dataclass(frozen=True)
@@ -167,6 +187,7 @@ class RequestContext:
     source_cache_dir: Path | None = None
     source_run_id: str | None = None
     source_journal_sha256: str | None = None
+    response_sources: tuple[dict[str, Any], ...] = ()
 
     @classmethod
     def from_env(cls, *, required: bool | None = None) -> "RequestContext | None":
@@ -208,6 +229,52 @@ class RequestContext:
             if (not source_journal.is_file() or
                     sha256_bytes(source_journal.read_bytes()) != source_values["journal_sha256"]):
                 raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_JOURNAL_CHANGED")
+        ledger_raw = os.environ.get(ENV_RESPONSE_SOURCE_LEDGER, "").strip()
+        if ledger_raw and any(source_values.values()):
+            raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_CONFIG_CONFLICT")
+        response_sources: list[dict[str, Any]] = []
+        claimed: set[str] = set()
+        if ledger_raw:
+            try:
+                ledger = json.loads(ledger_raw)
+            except json.JSONDecodeError as error:
+                raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_INVALID_JSON") from error
+            if ledger.get("contract_version") != "NHL_TYPED_RESPONSE_SOURCE_LEDGER_V1":
+                raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_CONTRACT_INVALID")
+            roles: set[str] = set()
+            for source in ledger.get("sources") or []:
+                run_id = str(source.get("source_run_id") or "")
+                journal_hash = str(source.get("source_journal_sha256") or "")
+                cache = Path(str(source.get("source_cache") or ""))
+                role = str(source.get("role") or "")
+                if (not SAFE_TOKEN.fullmatch(run_id)
+                        or not re.fullmatch(r"[0-9a-f]{64}", journal_hash)
+                        or role not in {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}):
+                    raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_SOURCE_INVALID")
+                if role in roles:
+                    raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_ROLE_DUPLICATE")
+                roles.add(role)
+                if source.get("canonical_game_set_hash") != values["hash"]:
+                    raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_GAME_SET_MISMATCH")
+                journal = cache.parent / "official_request_journal.jsonl"
+                if not journal.is_file() or sha256_file(journal) != journal_hash:
+                    raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_JOURNAL_CHANGED")
+                claims: dict[str, dict[str, Any]] = {}
+                for claim in source.get("responses") or []:
+                    family = str(claim.get("endpoint_family") or "")
+                    identity = claim.get("resource_identity") or {}
+                    allowed_families = ({"SCHEDULE", "BOXSCORE"}
+                                        if role == "AUTHORITY_RESPONSE_SOURCE"
+                                        else {"ROSTER"})
+                    if family not in allowed_families:
+                        raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_WRONG_FAMILY")
+                    key = response_identity_key(family, identity)
+                    if key in claimed:
+                        raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_OVERLAP")
+                    claimed.add(key); claims[key] = claim
+                if not claims:
+                    raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_EMPTY_SOURCE")
+                response_sources.append({**source, "source_cache": str(cache), "claims": claims})
         context = cls(
             run_id=values["run_id"], journal_path=Path(values["journal"]),
             cache_dir=Path(values["cache"]), slate_date=values["slate"],
@@ -215,6 +282,7 @@ class RequestContext:
             source_cache_dir=Path(source_values["cache"]) if source_values["cache"] else None,
             source_run_id=source_values["run_id"] or None,
             source_journal_sha256=source_values["journal_sha256"] or None,
+            response_sources=tuple(response_sources),
         )
         context._ensure_storage()
         return context
@@ -297,12 +365,32 @@ class RequestContext:
         cache_dir = self.cache_dir
         index_path = self._cache_index(family, identity, cache_dir)
         cross_run = False
-        if not index_path.is_file() and self.source_cache_dir is not None:
+        source_run_id = self.run_id
+        source_journal_sha256 = None
+        expected_claim = None
+        if not index_path.is_file() and self.response_sources:
+            key = response_identity_key(family, identity)
+            matches = [(source, source["claims"][key]) for source in self.response_sources
+                       if key in source["claims"]]
+            if len(matches) > 1:
+                raise RuntimeError("PRESERVED_RESPONSE_SOURCE_OVERLAP")
+            if not matches:
+                raise RuntimeError("PRESERVED_RESPONSE_NOT_DECLARED")
+            source, expected_claim = matches[0]
+            cache_dir = Path(source["source_cache"])
+            index_path = self._cache_index(family, identity, cache_dir)
+            source_run_id = str(source["source_run_id"])
+            source_journal_sha256 = str(source["source_journal_sha256"])
+            cross_run = True
+        elif not index_path.is_file() and self.source_cache_dir is not None:
             cache_dir = self.source_cache_dir
             index_path = self._cache_index(family, identity, cache_dir)
+            source_run_id = str(self.source_run_id)
+            source_journal_sha256 = self.source_journal_sha256
             cross_run = True
         if not index_path.is_file():
             raise RuntimeError("PRESERVED_RESPONSE_NOT_FOUND")
+        index_digest = sha256_bytes(index_path.read_bytes())
         metadata = json.loads(index_path.read_text())
         if metadata.get("endpoint_family") != family or metadata.get("identity") != identity:
             raise RuntimeError("PRESERVED_RESPONSE_IDENTITY_MISMATCH")
@@ -311,15 +399,24 @@ class RequestContext:
         digest = sha256_bytes(body)
         if digest != metadata.get("response_sha256") or len(body) != metadata.get("response_bytes"):
             raise RuntimeError("PRESERVED_RESPONSE_HASH_MISMATCH")
+        if expected_claim is not None and (
+                expected_claim.get("index_sha256") != index_digest
+                or expected_claim.get("object_sha256") != digest
+                or int(expected_claim.get("response_bytes") or -1) != len(body)):
+            raise RuntimeError("PRESERVED_RESPONSE_LEDGER_BINDING_MISMATCH")
         verify_payload_identity(family, identity, body)
         provenance = {
-            "source_run_id": self.source_run_id if cross_run else self.run_id,
-            "source_journal_sha256": self.source_journal_sha256 if cross_run else None,
-            "source_response_index_sha256": sha256_bytes(index_path.read_bytes()),
+            "source_run_id": source_run_id,
+            "source_journal_sha256": source_journal_sha256,
+            "source_response_index_sha256": index_digest,
             "source_response_object_sha256": digest,
             "cross_run_reuse": cross_run,
         }
         return body, digest, provenance
+
+    def has_declared_response(self, family: str, identity: dict[str, Any]) -> bool:
+        key = response_identity_key(family, identity)
+        return sum(key in source.get("claims", {}) for source in self.response_sources) == 1
 
 
 class PreservedResponse:
@@ -355,6 +452,10 @@ def official_get(
     redirect_season = None
     try:
         context.validate_identity(identity)
+        if (context.response_sources
+                and context.has_declared_response(endpoint_family, identity)
+                and not reuse_preserved):
+            raise RuntimeError("DECLARED_RESPONSE_REUSE_REQUIRED")
         if redirect_policy is not None:
             if endpoint_family != "ROSTER" or params:
                 raise RuntimeError("OFFICIAL_REDIRECT_POLICY_SCOPE_INVALID")
@@ -370,7 +471,19 @@ def official_get(
     logical_id = uuid.uuid4().hex
     if reuse_preserved:
         started = time.monotonic()
-        body, digest, provenance = context.reuse(endpoint_family, identity)
+        try:
+            body, digest, provenance = context.reuse(endpoint_family, identity)
+        except RuntimeError as error:
+            context.append({
+                "event_kind": "REQUEST_REJECTED", "timestamp_utc": utc_now(),
+                "pid": os.getpid(), "logical_request_id": logical_id,
+                "caller_stage": stage, "endpoint_family": endpoint_family,
+                "resource_identity": identity, "attempt_number": 0,
+                "request_class": request_class, "authority_boundary": authority_boundary,
+                "cache_hit": False, "response_preserved": False,
+                "final_disposition": str(error),
+            })
+            raise
         context.append({
             "event_kind": "PRESERVED_RESPONSE_REUSE", "timestamp_utc": utc_now(),
             "request_start_utc": utc_now(), "request_end_utc": utc_now(), "pid": os.getpid(),
@@ -605,6 +718,150 @@ def verify_preserved_response_run(request_root: Path, *, expected_run_id: str,
         "source_cache": str(cache), "responses": response_bindings,
         "response_set_sha256": sha256_bytes(json.dumps(
             response_bindings, sort_keys=True, separators=(",", ":")).encode()),
+    }
+
+
+def verify_roster_response_run(
+    request_root: Path, *, expected_run_id: str, slate_date: str,
+    game_ids: Iterable[int], expected_teams: Iterable[str],
+    repository_root: Path, expected_journal_sha256: str,
+    expected_tree_fingerprint: str, expected_response_set_sha256: str,
+) -> dict[str, Any]:
+    journal = request_root / "official_request_journal.jsonl"
+    cache = request_root / "preserved_responses"
+    if request_root.name != expected_run_id or not journal.is_file() or not cache.is_dir():
+        raise RuntimeError("ROSTER_SOURCE_RUN_INCOMPLETE")
+    journal_digest = sha256_file(journal)
+    tree = request_run_tree_fingerprint(request_root, repository_root=repository_root)
+    if journal_digest != expected_journal_sha256 or tree != expected_tree_fingerprint:
+        raise RuntimeError("ROSTER_SOURCE_IMMUTABLE_RECEIPT_MISMATCH")
+    game_hash = canonical_game_set_hash(game_ids)
+    records = read_journal(journal)
+    if (not records or any(row.get("run_id") != expected_run_id for row in records)
+            or any(row.get("canonical_game_set_hash") != game_hash for row in records)):
+        raise RuntimeError("ROSTER_SOURCE_JOURNAL_IDENTITY_MISMATCH")
+    teams = sorted({str(team).upper() for team in expected_teams})
+    expected = [("ROSTER", {"slate_date": slate_date, "team": team,
+                             "roster_variant": "current"}) for team in teams]
+    bindings: list[dict[str, Any]] = []
+    expected_indexes: set[str] = set()
+    expected_objects: set[str] = set()
+    for family, identity in expected:
+        rows = [row for row in records if row.get("endpoint_family") == family
+                and row.get("resource_identity") == identity]
+        terminal = [row for row in rows if row.get("final_disposition") == "SUCCESS"]
+        redirects = [row for row in rows if row.get("final_disposition") == "ALLOWED_REDIRECT"]
+        if (len(terminal) != 1 or len(redirects) != 1
+                or int(redirects[0].get("http_status") or 0) not in {307, 308}
+                or not terminal[0].get("response_preserved")):
+            raise RuntimeError("ROSTER_SOURCE_ATTEMPT_SEQUENCE_INVALID")
+        index = cache / "index" / f"{sha256_bytes(response_identity_key(family, identity).encode())}.json"
+        if not index.is_file():
+            raise RuntimeError("ROSTER_SOURCE_INDEX_MISSING")
+        metadata = json.loads(index.read_text())
+        if metadata.get("endpoint_family") != family or metadata.get("identity") != identity:
+            raise RuntimeError("ROSTER_SOURCE_INDEX_IDENTITY_MISMATCH")
+        object_path = cache / "objects" / str(metadata.get("object_name") or "")
+        if not object_path.is_file():
+            raise RuntimeError("ROSTER_SOURCE_OBJECT_MISSING")
+        body = object_path.read_bytes(); digest = sha256_bytes(body)
+        if (digest != metadata.get("response_sha256") or len(body) != metadata.get("response_bytes")
+                or terminal[0].get("response_sha256") != digest
+                or int(terminal[0].get("response_bytes") or -1) != len(body)):
+            raise RuntimeError("ROSTER_SOURCE_RESPONSE_HASH_MISMATCH")
+        verify_payload_identity(family, identity, body)
+        expected_indexes.add(index.name); expected_objects.add(object_path.name)
+        bindings.append({
+            "endpoint_family": family, "resource_identity": identity,
+            "index_sha256": sha256_file(index), "object_sha256": digest,
+            "response_bytes": len(body),
+        })
+    if ({path.name for path in (cache / "index").glob("*.json")} != expected_indexes
+            or {path.name for path in (cache / "objects").glob("*.json")} != expected_objects):
+        raise RuntimeError("ROSTER_SOURCE_CACHE_OBJECT_SET_MISMATCH")
+    landing = [row for row in records if row.get("endpoint_family") == "PLAYER_LANDING"]
+    if (any(row.get("response_preserved") for row in landing)
+            or len({int(row["resource_identity"]["player_id"]) for row in landing}) != len(landing)):
+        raise RuntimeError("ROSTER_SOURCE_LANDING_REUSE_INVALID")
+    response_set = sha256_bytes(json.dumps(
+        bindings, sort_keys=True, separators=(",", ":")).encode())
+    if response_set != expected_response_set_sha256:
+        raise RuntimeError("ROSTER_SOURCE_RESPONSE_SET_MISMATCH")
+    return {
+        "contract_version": "NHL_TYPED_RESPONSE_SOURCE_V1",
+        "role": "ROSTER_RESPONSE_SOURCE", "source_run_id": expected_run_id,
+        "source_journal_sha256": journal_digest, "tree_fingerprint": tree,
+        "canonical_game_set_hash": game_hash, "source_cache": str(cache),
+        "responses": bindings, "response_set_sha256": response_set,
+        "roster_responses": len(bindings),
+        "unpreserved_player_landing_responses": len(landing),
+    }
+
+
+def build_typed_response_source_ledger(sources: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    prepared = list(sources)
+    roles = [str(source.get("role") or "") for source in prepared]
+    if sorted(roles) != ["AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"]:
+        raise RuntimeError("TYPED_RESPONSE_SOURCE_ROLES_INVALID")
+    claimed: set[str] = set()
+    for source in prepared:
+        allowed = ({"SCHEDULE", "BOXSCORE"}
+                   if source["role"] == "AUTHORITY_RESPONSE_SOURCE" else {"ROSTER"})
+        for response in source.get("responses") or []:
+            if response.get("endpoint_family") not in allowed:
+                raise RuntimeError("TYPED_RESPONSE_SOURCE_WRONG_FAMILY")
+            key = response_identity_key(response["endpoint_family"], response["resource_identity"])
+            if key in claimed:
+                raise RuntimeError("TYPED_RESPONSE_SOURCE_OVERLAP")
+            claimed.add(key)
+    if len({source.get("source_run_id") for source in prepared}) != len(prepared):
+        raise RuntimeError("TYPED_RESPONSE_SOURCE_DUPLICATE_RUN")
+    return {"contract_version": "NHL_TYPED_RESPONSE_SOURCE_LEDGER_V1",
+            "sources": prepared, "declared_response_identities": len(claimed)}
+
+
+def verify_failed_request_ancestor(
+    request_root: Path, *, expected_run_id: str, game_ids: Iterable[int],
+    repository_root: Path, expected_journal_sha256: str,
+    expected_tree_fingerprint: str, failure_class: str,
+    response_source: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    journal = request_root / "official_request_journal.jsonl"
+    if request_root.name != expected_run_id or not journal.is_file():
+        raise RuntimeError("FAILED_ANCESTOR_RUN_INCOMPLETE")
+    journal_digest = sha256_file(journal)
+    tree = request_run_tree_fingerprint(request_root, repository_root=repository_root)
+    if journal_digest != expected_journal_sha256 or tree != expected_tree_fingerprint:
+        raise RuntimeError("FAILED_ANCESTOR_IMMUTABLE_RECEIPT_MISMATCH")
+    game_hash = canonical_game_set_hash(game_ids)
+    records = read_journal(journal)
+    if (not records or any(row.get("run_id") != expected_run_id for row in records)
+            or any(row.get("canonical_game_set_hash") != game_hash for row in records)):
+        raise RuntimeError("FAILED_ANCESTOR_JOURNAL_IDENTITY_MISMATCH")
+    reuses = [row for row in records if row.get("event_kind") == "PRESERVED_RESPONSE_REUSE"]
+    relationship = None
+    if response_source is not None:
+        allowed = {(row["index_sha256"], row["object_sha256"], int(row["response_bytes"]))
+                   for row in response_source["responses"]}
+        for row in reuses:
+            key = (row.get("source_response_index_sha256"),
+                   row.get("source_response_object_sha256"), int(row.get("response_bytes") or 0))
+            if (row.get("source_run_id") != response_source["source_run_id"]
+                    or row.get("source_journal_sha256") != response_source["source_journal_sha256"]
+                    or key not in allowed or row.get("response_sha256") != key[1]):
+                raise RuntimeError("FAILED_ANCESTOR_REUSE_CHAIN_INVALID")
+        relationship = {
+            "response_source_run_id": response_source["source_run_id"],
+            "response_source_set_sha256": response_source["response_set_sha256"],
+            "reuse_chain_verified": True,
+        }
+    return {
+        "contract_version": "NHL_FAILED_REQUEST_ANCESTOR_V2",
+        "role": "FAILED_EXECUTION_ANCESTOR", "run_id": expected_run_id,
+        "failure_class": failure_class, "journal_sha256": journal_digest,
+        "tree_fingerprint": tree, "canonical_game_set_hash": game_hash,
+        "journal_records": len(records), "reuse_records": len(reuses),
+        "relationship": relationship,
     }
 
 

@@ -27,6 +27,7 @@ import psycopg
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from backend.nhl.player_external_identity import localized_text, resolve_player_external_identity
 
 ET = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
@@ -68,7 +69,7 @@ def _season_start_year(iso_date: str) -> int:
 
 
 def _safe_str(v):
-    return v.strip() if isinstance(v, str) and v.strip() else None
+    return localized_text(v)
 
 
 def _is_placeholder(name: str | None) -> bool:
@@ -248,14 +249,9 @@ def main() -> int:
                             )
                             updated_existing += 1
 
-                        cur.execute(
-                            """
-                            INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
-                            VALUES (%s::bigint, 'nhl', %s::text)
-                            ON CONFLICT (player_id, provider) DO NOTHING
-                            """,
-                            (pid, str(pid)),
-                        )
+                        resolve_player_external_identity(
+                            conn, player_id=pid, provider="nhl",
+                            provider_player_id=str(pid))
 
                 # Conservative guardrail:
                 # only mark inactive when nearly complete team fetch succeeds.

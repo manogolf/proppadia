@@ -47,6 +47,10 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+from backend.nhl.player_external_identity import (
+    localized_text,
+    resolve_player_external_identity,
+)
 
 # ---------------- Env / args ----------------
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
@@ -231,14 +235,14 @@ def _extract_box_name(p: dict) -> str:
     """
     Try first/last from boxscore player object; fall back to name.full/default; else empty.
     """
-    first = (p.get("firstName") or "").strip()
-    last  = (p.get("lastName")  or "").strip()
+    first = localized_text(p.get("firstName")) or ""
+    last  = localized_text(p.get("lastName")) or ""
     if first or last:
         return f"{first} {last}".strip()
 
     nm = p.get("name")
     if isinstance(nm, dict):
-        return (nm.get("full") or nm.get("default") or "").strip()
+        return localized_text(nm.get("full") or nm) or ""
     return (nm or "").strip()
 
 def _expand_initial_last(nm_norm: str, roster_map_keys: list[str]) -> str | None:
@@ -254,6 +258,27 @@ def _expand_initial_last(nm_norm: str, roster_map_keys: list[str]) -> str | None
     cands = [k for k in roster_map_keys
              if k.endswith(" " + last_norm) and k[0] == first_init]
     return cands[0] if len(cands) == 1 else None
+
+
+def resolve_skater_player_id(*, nhl_id: int | None, normalized_name: str,
+                             external_ids: dict[int, int],
+                             roster_names: dict[str, tuple[int, int]]) -> tuple[int | None, bool]:
+    """Resolve only exact provider identities; names may confirm, never merge."""
+    if nhl_id is None:
+        return None, False
+    provider_id = int(nhl_id)
+    if provider_id in external_ids:
+        return int(external_ids[provider_id]), False
+    candidate = None
+    if normalized_name in roster_names:
+        candidate = roster_names[normalized_name][0]
+    else:
+        expanded = _expand_initial_last(normalized_name, list(roster_names))
+        if expanded is not None:
+            candidate = roster_names[expanded][0]
+    if candidate is not None and int(candidate) == provider_id:
+        return provider_id, True
+    return None, False
 
 def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int | None):
     """
@@ -274,11 +299,14 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
                 endpoint_family="PLAYER_LANDING",
                 identity={"slate_date": SLATE_DATE, "player_id": int(pid)},
                 max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
-                backoff_seconds=0.5,
+                backoff_seconds=0.5, preserve_response=True,
             )
             data = response.json()
-            first = (data.get("firstName") or {}).get("default") or ""
-            last  = (data.get("lastName")  or {}).get("default") or ""
+            returned_id = data.get("playerId") or data.get("id")
+            if returned_id is not None and int(returned_id) != int(pid):
+                raise RuntimeError("PLAYER_LANDING_IDENTITY_MISMATCH")
+            first = localized_text(data.get("firstName")) or ""
+            last = localized_text(data.get("lastName")) or ""
             nm = f"{first} {last}".strip()
             return nm or None
         except Exception:
@@ -311,28 +339,26 @@ def ensure_player_exists(conn, nhl_id: int, full_name: str | None, team_id: int 
                     """,
                     (team_id, nhl_id),
                 )
-            return
-
-        # 2) Missing name → try to resolve via NHL API
-        if (not raw_name) or raw_name.startswith("Player "):
-            resolved = _fetch_player_full_name_by_id(nhl_id)
-            if resolved:
-                raw_name = resolved.strip()
-
-        # 3) Still no real name → refuse (same safety as before)
-        if not raw_name or raw_name.startswith("Player "):
-            raise ValueError(
-                f"Refusing to insert placeholder/empty name for nhl_id={nhl_id}: {raw_name!r}"
+        else:
+            # Missing or abbreviated names require exact-ID landing evidence.
+            if ((not raw_name) or raw_name.startswith("Player ")
+                    or NAME_INITIAL_RE.match(_norm_name(raw_name))):
+                resolved = _fetch_player_full_name_by_id(nhl_id)
+                if resolved:
+                    raw_name = resolved.strip()
+            if not raw_name or raw_name.startswith("Player ") or NAME_INITIAL_RE.match(_norm_name(raw_name)):
+                raise ValueError(
+                    f"Refusing to insert unresolved name for nhl_id={nhl_id}: {raw_name!r}"
+                )
+            cur.execute(
+                """
+                INSERT INTO nhl.players (player_id, full_name, team_id, position)
+                VALUES (%s, %s, %s, 'F')
+                """,
+                (nhl_id, raw_name, team_id),
             )
-
-        # 4) Insert
-        cur.execute(
-            """
-            INSERT INTO nhl.players (player_id, full_name, team_id, position)
-            VALUES (%s, %s, %s, 'F')
-            """,
-            (nhl_id, raw_name, team_id),
-        )
+    resolve_player_external_identity(
+        conn, player_id=nhl_id, provider="nhl", provider_player_id=nhl_id)
 
 def roster_name_map(conn, game_id: int):
     """
@@ -387,7 +413,7 @@ def external_map(conn, nhl_ids):
 # --- add/replace these helpers near your other utilities ---
 
 def _safe_str(v):
-    return v.strip() if isinstance(v, str) and v.strip() else ""
+    return localized_text(v) or ""
 
 def full_name_from_box_player(p: dict) -> str:
     """
@@ -413,17 +439,9 @@ def upsert_external_id(conn, player_id: int, nhl_id: int):
     """
     if nhl_id is None:
         return
-    sql = """
-      INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
-      VALUES (%s, 'nhl', %s)
-      ON CONFLICT (provider, provider_player_id) DO NOTHING
-    """
-    with conn.cursor() as cur:
-        try:
-            cur.execute(sql, (int(player_id), str(int(nhl_id))))
-        except Exception as e:
-            # Extremely rare; keep going
-            print(f"[learn-extid] WARN: player_id={player_id} nhl_id={nhl_id} -> {e}", file=sys.stderr)
+    return resolve_player_external_identity(
+        conn, player_id=int(player_id), provider="nhl",
+        provider_player_id=str(int(nhl_id)))
 
 
 def _stage_cols(conn) -> set[str]:
@@ -714,7 +732,6 @@ def main():
                     continue
 
                 roster_map = roster_name_map(conn, gpk)  # {norm_full_name -> (player_id, team_id)}
-                roster_keys = list(roster_map.keys())
 
                 skaters = list(_iter_skaters_from_box(box))
                 nhl_ids = [s["nhl_id"] for s in skaters if s["nhl_id"] is not None]
@@ -730,19 +747,11 @@ def main():
                     team_id_val = None
                     full_name_val = None
 
-                    # a) exact roster full-name match
-                    if s["nm"] in roster_map:
-                        pid = roster_map[s["nm"]][0]
-                        learned_from_roster = True
-                    else:
-                        # b) expand 'a. last' against roster names for this game
-                        alt = _expand_initial_last(s["nm"], roster_keys)
-                        if alt is not None:
-                            pid = roster_map[alt][0]
-                            learned_from_roster = True
-                        # c) fallback: learned external id
-                        elif s["nhl_id"] is not None:
-                            pid = ext_map.get(int(s["nhl_id"]))
+                    # Exact provider identity always wins. Name matching may
+                    # confirm the same numeric identity, never merge two IDs.
+                    pid, learned_from_roster = resolve_skater_player_id(
+                        nhl_id=s["nhl_id"], normalized_name=s["nm"],
+                        external_ids=ext_map, roster_names=roster_map)
 
                     if pid is None:
                         # Auto-heal nhl.players so future runs can map this skater.
@@ -787,8 +796,10 @@ def main():
                                     f"[seed_skater_logs] warn: ensure_player_exists failed for nhl_id={nhl_id_val}: {e}"
                                 )
 
-                        skipped_no_map += 1
-                        continue
+                        if nhl_id_val is None:
+                            skipped_no_map += 1
+                            continue
+                        pid = int(nhl_id_val)
 
                     # teach external id only when we matched via roster path
                     if learned_from_roster and s["nhl_id"] is not None:

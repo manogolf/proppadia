@@ -26,6 +26,7 @@ except Exception:
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from backend.nhl.player_external_identity import localized_text, resolve_player_external_identity
 
 # --------------------------- flags & env ---------------------------
 ET = ZoneInfo("America/New_York")
@@ -95,7 +96,11 @@ def _normalize_apiweb_roster(j: dict) -> list[dict]:
             if not pid:
                 continue
             pos = (p.get("positionCode") or p.get("position") or default_pos or "").upper()
-            out.append({"person": {"id": int(pid)}, "position": {"code": pos}})
+            out.append({
+                "person": {"id": int(pid)}, "position": {"code": pos},
+                "firstName": localized_text(p.get("firstName")),
+                "lastName": localized_text(p.get("lastName")),
+            })
     if not out and isinstance(j.get("roster"), dict):
         return _normalize_apiweb_roster(j["roster"])
     return out
@@ -139,9 +144,9 @@ def fetch_player_name(nhl_pid: str) -> str | None:
             if isinstance(v, str) and v.strip():
                 v = v.strip()
                 return None if is_placeholder(v) else v
-        first = j.get("firstName"); last = j.get("lastName")
-        if isinstance(first, str) and isinstance(last, str):
-            nm = f"{first.strip()} {last.strip()}".strip()
+        first = localized_text(j.get("firstName")); last = localized_text(j.get("lastName"))
+        if first or last:
+            nm = f"{first or ''} {last or ''}".strip()
             return None if is_placeholder(nm) else (nm or None)
     except Exception:
         pass
@@ -223,8 +228,11 @@ def main():
                             pos = norm_pos((item.get("position") or {}).get("code"))
                             team_id_int = _cast_int_or_none(tid)
 
-                            # Only fetch name if we might write players
-                            full_name = None if SKIP_PLAYERS else fetch_player_name(nhl_pid)
+                            first = localized_text(item.get("firstName"))
+                            last = localized_text(item.get("lastName"))
+                            full_name = f"{first or ''} {last or ''}".strip() or None
+                            if not SKIP_PLAYERS and not full_name:
+                                full_name = fetch_player_name(nhl_pid)
 
                             internal_pid = player_map_by_provider.get(nhl_pid)
 
@@ -245,12 +253,9 @@ def main():
                                     VALUES (%s::bigint, %s::text, %s::int, %s::text, 'active')
                                     ON CONFLICT (player_id) DO NOTHING
                                 """, (internal_pid, full_name, team_id_int, pos))
-                                # if inserted, seed mapping (explicit casts)
-                                cur.execute("""
-                                    INSERT INTO nhl.player_external_ids (player_id, provider, provider_player_id)
-                                    VALUES (%s::bigint, 'nhl', %s::text)
-                                    ON CONFLICT (player_id, provider) DO NOTHING
-                                """, (internal_pid, nhl_pid))
+                                resolve_player_external_identity(
+                                    conn, player_id=int(internal_pid), provider="nhl",
+                                    provider_player_id=nhl_pid)
                                 player_map_by_provider[nhl_pid] = internal_pid
                                 upserted_players += 1
                                 seeded_maps += 1

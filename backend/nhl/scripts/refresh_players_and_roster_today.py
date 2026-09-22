@@ -65,6 +65,7 @@ from backend.nhl.official_request_journal import (
     official_get,
     official_season_id,
 )
+from backend.nhl.player_external_identity import localized_text
 
 # ---------------- Config ----------------
 ET = ZoneInfo("America/New_York")
@@ -133,7 +134,7 @@ def _normalize_pos(code: str | None) -> str | None:
     return None
 
 def _safe_str(v):
-    return v.strip() if isinstance(v, str) and v.strip() else None
+    return localized_text(v)
 
 def fetch_player_name_strict(nhl_pid: int | str) -> str | None:
     try:
@@ -142,7 +143,7 @@ def fetch_player_name_strict(nhl_pid: int | str) -> str | None:
             stage="ROSTER_COLLECTION", endpoint_family="PLAYER_LANDING",
             identity={"slate_date": SLATE_DATE, "player_id": int(nhl_pid)},
             max_attempts=7, retry_statuses={429, 500, 502, 503, 504},
-            backoff_seconds=0.75,
+            backoff_seconds=0.75, preserve_response=True,
         )
         if resp.status_code == 404:
             return None
@@ -152,6 +153,9 @@ def fetch_player_name_strict(nhl_pid: int | str) -> str | None:
             v = _safe_str(j.get(k))
             if v and not is_placeholder(v):
                 return v
+        returned_id = j.get("playerId") or j.get("id")
+        if returned_id is not None and int(returned_id) != int(nhl_pid):
+            raise RuntimeError("PLAYER_LANDING_IDENTITY_MISMATCH")
         first, last = _safe_str(j.get("firstName")), _safe_str(j.get("lastName"))
         if first or last:
             nm = f"{first or ''} {last or ''}".strip()
@@ -163,18 +167,12 @@ def fetch_player_name_strict(nhl_pid: int | str) -> str | None:
         pass
     return None
 
-def _backfill_missing_names(players_stage: list[dict]) -> None:
+def _validate_roster_names(players_stage: list[dict]) -> None:
     need = [row for row in players_stage if not row.get("first_name") and not row.get("last_name")]
-    if not need:
-        return
-    MAX_LOOKUPS = 250
-    for row in need[:MAX_LOOKUPS]:
-        pid = row["player_id"]
-        nm = fetch_player_name_strict(pid)
-        if nm:
-            parts = nm.split(" ", 1)
-            row["first_name"] = parts[0]
-            row["last_name"]  = parts[1] if len(parts) > 1 else ""
+    if need:
+        identities = sorted({int(row["player_id"]) for row in need})
+        raise RuntimeError(
+            f"VERIFIED_ROSTER_NAMES_MISSING:{len(identities)}:{identities[:20]}")
 
 def upsert_players_from_stage(cur) -> None:
     with open(UPsertPlayersSQL, "r") as f:
@@ -406,6 +404,11 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
     ]
 
     reused = ROSTER_RESPONSE_VARIANT_BY_TEAM.get(tri)
+    context = RequestContext.from_env()
+    current_identity = {"slate_date": when_iso, "team": tri, "roster_variant": "current"}
+    if reused is None and context is not None and context.has_declared_response(
+            "ROSTER", current_identity):
+        reused = (urls[0], "current")
     if reused is not None:
         url, variant = reused
         resp = official_get(
@@ -578,9 +581,9 @@ def main():
             with conn.cursor() as cur:
                 if source == "API" and players_stage and roster_rows:
                     try:
-                        _backfill_missing_names(players_stage)
-                    except NameError:
-                        pass
+                        _validate_roster_names(players_stage)
+                    except NameError as error:
+                        raise RuntimeError("ROSTER_NAME_VALIDATOR_UNAVAILABLE") from error
 
                     cur.execute("TRUNCATE nhl.import_players_stage;")
                     cur.executemany("""

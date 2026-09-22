@@ -591,11 +591,27 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             summary["sog_missing_prospective_participants"] = len(grades["sog_missing_predictions"])
         if request_lineage is not None:
             lineage = json.loads(json.dumps(request_lineage))
-            ancestors = lineage.get("ancestors") or []
-            ancestor_ids = [row.get("source_run_id") or row.get("run_id") for row in ancestors]
-            if (len(ancestor_ids) != len(set(ancestor_ids))
-                    or sum(row.get("role") == "AUTHORITY_RESPONSE_SOURCE" for row in ancestors) != 1):
-                raise RuntimeError("REQUEST_LINEAGE_INVALID")
+            if lineage.get("contract_version") == "NHL_POSTGAME_REQUEST_LINEAGE_V3":
+                response_sources = lineage.get("response_sources") or []
+                failed_ancestors = lineage.get("failed_ancestors") or []
+                source_ids = [row.get("source_run_id") for row in response_sources]
+                failed_ids = [row.get("run_id") for row in failed_ancestors]
+                roles = [row.get("role") for row in response_sources]
+                if (len(source_ids) != len(set(source_ids))
+                        or len(failed_ids) != len(set(failed_ids))
+                        or sorted(roles) != ["AUTHORITY_RESPONSE_SOURCE",
+                                             "ROSTER_RESPONSE_SOURCE"]
+                        or any(row.get("role") != "FAILED_EXECUTION_ANCESTOR"
+                               for row in failed_ancestors)):
+                    raise RuntimeError("REQUEST_LINEAGE_INVALID")
+            else:
+                ancestors = lineage.get("ancestors") or []
+                ancestor_ids = [row.get("source_run_id") or row.get("run_id")
+                                for row in ancestors]
+                if (len(ancestor_ids) != len(set(ancestor_ids))
+                        or sum(row.get("role") == "AUTHORITY_RESPONSE_SOURCE"
+                               for row in ancestors) != 1):
+                    raise RuntimeError("REQUEST_LINEAGE_INVALID")
             if request_accounting is None or request_journal is None:
                 raise RuntimeError("REQUEST_LINEAGE_REQUIRES_COMPLETED_JOURNAL")
             lineage["completed_request_run"] = {

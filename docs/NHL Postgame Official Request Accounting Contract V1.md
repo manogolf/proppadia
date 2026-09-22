@@ -30,13 +30,13 @@ postgame reconciliation.
 | same | boxscore/game | yes, one per canonical game | one authority attempt | content-addressed; reused by goalie and both skater boxscore consumers |
 | `import_schedule_today.fetch_schedule_for_date` | schedule/date | yes | standalone: up to six attempts per candidate and two fallback forms; governed reconciliation: reuse required | exact authority schedule reuse |
 | `refresh_players_and_roster_today.fetch_roster` | roster/team | yes | up to seven attempts; one governed `current`-to-eight-digit-season redirect hop; direct eight-digit season roster is fallback after terminal 404 only | distinct endpoint; repeated team/date use within the same slate reuses its verified terminal response |
-| `refresh_players_and_roster_today.fetch_player_name_strict` | player landing/player | conditional | up to seven attempts | distinct endpoint; only for missing names |
+| `refresh_players_and_roster_today.fetch_player_name_strict` | player landing/player | conditional | up to seven attempts | exact-ID lookup only; never a bulk roster-name backfill |
 | `seed_goalie_logs_for_date.game_ids_from_api` | schedule/date | DB-empty fallback only | up to six attempts | governed reconciliation reuses authority schedule |
 | `seed_goalie_logs_for_date.fetch_boxscore_api` | boxscore/game | yes | standalone up to six attempts | governed reconciliation reuses authority boxscore |
 | `seed_skater_logs_for_date.get_schedule` | schedule/date | yes | standalone up to six attempts | governed reconciliation reuses authority schedule |
 | `seed_skater_logs_for_date.refresh_roster_status_from_box` | boxscore/game | yes | standalone up to six attempts | governed reconciliation reuses authority boxscore |
 | `seed_skater_logs_for_date.get_boxscore` | boxscore/game | yes | standalone up to six attempts | governed reconciliation reuses authority boxscore |
-| `seed_skater_logs_for_date.ensure_player_exists` | player landing/player | conditional | up to six attempts | distinct endpoint; only if the official boxscore lacks a usable name |
+| `seed_skater_logs_for_date.ensure_player_exists` | player landing/player | conditional | up to six attempts | exact-ID lookup only for a participant absent from verified roster names and exact external-ID mappings; response is preserved and returned ID must match |
 | `ingest_shiftcharts_for_date.fetch_shiftcharts` | shift chart/game | yes | one attempt | distinct response contract; not replaceable by boxscore |
 | `backfill_game_manpower_segments.fetch_pbp` | play-by-play/game | yes | one attempt | distinct response contract; not replaceable by boxscore |
 | `fill_pp_toi_minutes_for_date.fetch_boxscore` | boxscore/game | currently dormant in the executed DB-overlap path | one attempt if called | governed reconciliation requires authority boxscore reuse |
@@ -103,6 +103,16 @@ with 14 unique teams requires 14 roster network responses instead.
 Player-landing lookups, roster fallbacks, HTTP retries and failed attempts add
 explicit journal records. They are not hidden inside the baseline.
 
+For the verified September 20 evidence, the 59-operation base has 31 authority-
+source reuse events and 14 roster-source reuse events. Seven shift-chart and
+seven play-by-play operations require network access. The local roster/boxscore
+inventory contains 280 participating IDs and 548 fully named roster IDs; 54
+participants are absent from those current rosters, 53 have exact audited
+external-ID mappings, and only NHL ID `8484537` requires an authoritative
+conditional lookup. The evidenced topology is therefore 60 logical operations,
+45 preserved-response reuses, and 15 new network operations. These totals are a
+verified slate-specific preflight, not a forced universal expectation.
+
 ## September 19 historical boundary
 
 The completed September 19 package remains immutable. Its recorded count of
@@ -141,28 +151,33 @@ Future completed reconciliation packages must contain
 `official_request_journal.jsonl` and `official_request_accounting.json`, both
 covered by the package manifest.
 
-## Cross-run authority-response reuse
+## Typed multi-source response reuse
 
-A later execution may reuse an earlier failed run's authority schedule and
-boxscores only when the operator supplies that request-run ID explicitly with
-`--reuse-request-run-id`. Before a request run is created or any database or
-network access occurs, the reconciler verifies the source journal's run ID and
-canonical game-set hash, the exact schedule-plus-game identity set, every cache
-index, object name, byte length, object SHA-256, response identity, and the
-journal's recorded response length/hash. The source must contain exactly one
-successful preserved authority response for the schedule and each canonical
-game. Missing, extra, conflicting, or altered evidence fails closed.
+A later execution may use repeatable `--response-source ROLE=RUN_ID` arguments.
+The typed ledger permits `AUTHORITY_RESPONSE_SOURCE` only for the exact schedule
+and canonical boxscore identity set and `ROSTER_RESPONSE_SOURCE` only for its
+verified terminal roster identities. Before a request run is created or any
+database or network access occurs, the reconciler verifies each source journal,
+tree fingerprint, canonical game-set hash, endpoint family, resource identity,
+cache index, object name, byte length, object SHA-256, and journal response
+record. Missing, extra, overlapping, wrong-family, conflicting, or altered
+evidence fails closed.
+
+For September 20 the authority source is the original run's eight objects and
+the roster source is the third run's 14 terminal roster objects. The second
+run's rejected 307 and the third run's 250 unpreserved player-landing responses
+are not reusable. A declared reusable identity cannot fall through to network.
 
 Reuse has no implicit network fallback. The new journal records one
 `PRESERVED_RESPONSE_REUSE` event for each authority operation, including the
-source run ID, source-journal SHA-256, index SHA-256, object SHA-256, and a
+source role and run ID, source-journal SHA-256, index SHA-256, object SHA-256, and a
 cross-run marker. The completed package records the source run and complete
 response-set lineage. The failed source run remains byte-for-byte unchanged.
 
 ## Multi-ancestor request lineage
 
-When more than one failed execution precedes completion, the authority-response
-source remains explicit through `--reuse-request-run-id`; each additional failed
+When more than one failed execution precedes completion, response sources remain
+explicit through repeatable typed `--response-source` arguments; every failed
 execution is supplied separately through repeatable `--lineage-request-run-id`.
 Before creating a new request run or accessing the database or network, the
 reconciler verifies each allowlisted receipt: run and slate identity, journal
@@ -171,10 +186,23 @@ indexes, objects, lengths and hashes, and the reuse-chain relationship.
 Duplicate ancestors, cycles, altered evidence, and game-set mismatch fail
 closed.
 
-For September 20 the original eight-response run is the authority source. The
-second failed execution is lineage evidence only: its nine reuse records must
-resolve to the original objects and its roster 307 remains non-reusable. A
-completed package records the authority-source role, every failed-ancestor role,
-their hashes and relationships, plus the completed execution's run ID, journal
-hash, and game-set hash. The standalone redirect diagnostic is not a request-run
-ancestor and never enters this lineage.
+For September 20 the original eight-response run is both an authority source
+and a failed ancestor; the third run is both a 14-response roster source and a
+failed ancestor. The second run is lineage evidence only: its nine reuse records
+must resolve to the original objects and its roster 307 remains non-reusable.
+A completed package records both response-source roles and all three distinct
+failed-ancestor roles, their hashes and relationships, plus the completed
+execution's run ID, journal hash, and game-set hash. A run may appear once in
+each of the independent source and failed-ancestor collections without forming
+a cycle. The standalone redirect diagnostic is out-of-band accounting, not a
+request-run ancestor or fabricated journal record.
+
+## Player identity resolution
+
+Collectors bind NHL external IDs through one shared transaction-safe resolver.
+It inserts with conflict-safe SQL inside a savepoint, then reads and verifies
+both unique dimensions: `(player_id, provider)` and
+`(provider, provider_player_id)`. An exact mapping is idempotent. Either conflict
+direction fails closed without overwrite, and an unexpected SQL exception rolls
+back the savepoint before the surrounding transaction can continue. Names,
+including abbreviated names, never authorize merging distinct NHL IDs.
