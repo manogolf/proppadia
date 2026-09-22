@@ -300,3 +300,20 @@ lock failure, source alteration, unexpected deletion, or any later validation
 error rolls back the entire transaction. Replaying an already synchronized set
 has an empty extra set and performs zero deletions. No player-specific exception
 is permitted.
+
+Goalie post-write validation treats `(game_id, player_id)` as the complete
+staged natural identity. Nullable or incorrect `import_goalie_logs_stage.team_id`
+and staged TOI are never identity, team, or starter authority and are not
+modified by staging synchronization. Goalie team membership and the governed
+maximum-official-TOI starter for each team are derived exclusively from the
+already hash-verified authority boxscores. The evidence must contain four
+unique goalie identities and exactly two canonical teams per game, one unique
+maximum-TOI starter per official team, and exact `28`-goalie/`14`-starter totals.
+Missing or conflicting team membership, unusable or tied official TOI, an
+incomplete game/team group, or any missing, extra, or duplicate staged goalie
+identity fails closed and rolls back the complete skater transaction.
+
+A failed correction transaction creates no request run and is not a request-
+lineage ancestor. September 20 completion therefore continues to require the
+same five failed reconciliation ancestors; correction attempts are database
+transaction accounting only.

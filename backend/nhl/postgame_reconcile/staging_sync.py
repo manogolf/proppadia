@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -68,13 +69,75 @@ def _toi_minutes(value: object) -> float | None:
     raise RuntimeError(f"AUTHORITATIVE_TOI_MALFORMED:{value}")
 
 
-def _goalie_starters(goalies: list[dict[str, object]]) -> list[tuple[int, int]]:
-    by_team: dict[tuple[int, int], list[tuple[float, int]]] = {}
+def _authoritative_goalie_contract(
+    goalies: Iterable[dict[str, object]], *, game_ids: Iterable[int],
+    canonical_teams: dict[int, set[int]] | None = None,
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]], dict[str, list[int]]]:
+    """Validate official goalie membership and select one starter per team.
+
+    Team membership and TOI in this function are official boxscore evidence.
+    Staging columns are deliberately not accepted as authority.
+    """
+    expected_games = sorted({int(value) for value in game_ids})
+    by_game: dict[int, list[tuple[int, int, float]]] = {
+        game_id: [] for game_id in expected_games
+    }
+    identity_teams: dict[tuple[int, int], int] = {}
+    identities: list[tuple[int, int]] = []
     for row in goalies:
-        by_team.setdefault((int(row["game_id"]), int(row["team_id"])), []).append(
-            (float(row["toi_minutes"] or 0.0), int(row["player_id"])))
-    return sorted((game_id, max(values)[1])
-                  for (game_id, unused_team), values in by_team.items())
+        try:
+            game_id = int(row["game_id"])
+            player_id = int(row["player_id"])
+            team_id = int(row["team_id"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError("AUTHORITATIVE_GOALIE_TEAM_MEMBERSHIP_INVALID") from error
+        if game_id not in by_game:
+            raise RuntimeError(f"AUTHORITATIVE_GOALIE_GAME_OUT_OF_SCOPE:{game_id}")
+        identity = (game_id, player_id)
+        prior_team = identity_teams.get(identity)
+        if prior_team is not None:
+            reason = ("CONFLICTING_TEAM" if prior_team != team_id
+                      else "DUPLICATE_IDENTITY")
+            raise RuntimeError(f"AUTHORITATIVE_GOALIE_{reason}:{game_id}:{player_id}")
+        raw_toi = row.get("toi_minutes")
+        try:
+            toi = float(raw_toi)
+        except (TypeError, ValueError) as error:
+            raise RuntimeError(
+                f"AUTHORITATIVE_GOALIE_TOI_UNUSABLE:{game_id}:{player_id}") from error
+        if not math.isfinite(toi) or toi < 0:
+            raise RuntimeError(f"AUTHORITATIVE_GOALIE_TOI_UNUSABLE:{game_id}:{player_id}")
+        identity_teams[identity] = team_id
+        identities.append(identity)
+        by_game[game_id].append((player_id, team_id, toi))
+
+    starters: list[tuple[int, int]] = []
+    team_membership: dict[str, list[int]] = {}
+    for game_id in expected_games:
+        rows = by_game[game_id]
+        if len(rows) != 4:
+            raise RuntimeError(f"AUTHORITATIVE_STAGING_GOALIES_PER_GAME:{game_id}:{len(rows)}")
+        teams = {team_id for unused_player, team_id, unused_toi in rows}
+        if len(teams) != 2:
+            raise RuntimeError(f"AUTHORITATIVE_GOALIE_TEAM_CARDINALITY:{game_id}:{len(teams)}")
+        if canonical_teams is not None and teams != canonical_teams.get(game_id, set()):
+            raise RuntimeError(f"AUTHORITATIVE_GOALIE_CANONICAL_TEAM_MISMATCH:{game_id}")
+        team_membership[str(game_id)] = sorted(teams)
+        for team_id in sorted(teams):
+            team_rows = [(player_id, toi) for player_id, row_team, toi in rows
+                         if row_team == team_id]
+            maximum = max(toi for unused_player, toi in team_rows)
+            winners = [player_id for player_id, toi in team_rows if toi == maximum]
+            if len(winners) != 1:
+                raise RuntimeError(
+                    f"AUTHORITATIVE_GOALIE_STARTER_NOT_UNIQUE:{game_id}:{team_id}")
+            starters.append((game_id, winners[0]))
+
+    identities.sort(); starters.sort()
+    if len(identities) != 28 or len(starters) != 14:
+        raise RuntimeError(
+            f"AUTHORITATIVE_GOALIE_TOTALS_INVALID:{len(identities)}:{len(starters)}")
+    return identities, starters, team_membership
 
 
 def build_authoritative_staging_set(
@@ -100,6 +163,7 @@ def build_authoritative_staging_set(
     cache = Path(str(binding["source_cache"]))
     skaters: list[dict[str, object]] = []
     goalies: list[dict[str, object]] = []
+    canonical_teams: dict[int, set[int]] = {}
     per_game: dict[str, dict[str, int]] = {}
     for claim in sorted(claims, key=lambda row: int(row["resource_identity"]["game_id"])):
         identity = claim["resource_identity"]
@@ -121,12 +185,14 @@ def build_authoritative_staging_set(
 
         game_skaters: list[dict[str, object]] = []
         game_goalies: list[dict[str, object]] = []
+        game_team_ids: set[int] = set()
         for side, is_home in (("homeTeam", True), ("awayTeam", False)):
             team_id = (payload.get(side) or {}).get("id")
             other = "awayTeam" if side == "homeTeam" else "homeTeam"
             opponent_id = (payload.get(other) or {}).get("id")
             if team_id is None or opponent_id is None or int(team_id) == int(opponent_id):
                 raise RuntimeError(f"AUTHORITATIVE_STAGING_TEAM_IDENTITY_INVALID:{game_id}")
+            game_team_ids.add(int(team_id))
             team = (payload.get("playerByGameStats") or {}).get(side)
             if not isinstance(team, dict):
                 raise RuntimeError(f"AUTHORITATIVE_STAGING_TEAM_STATS_MISSING:{game_id}:{side}")
@@ -186,18 +252,20 @@ def build_authoritative_staging_set(
             raise RuntimeError(f"AUTHORITATIVE_STAGING_SKATERS_PER_GAME:{game_id}:{len(skater_keys)}")
         if len(goalie_keys) != 4:
             raise RuntimeError(f"AUTHORITATIVE_STAGING_GOALIES_PER_GAME:{game_id}:{len(goalie_keys)}")
+        if len(game_team_ids) != 2:
+            raise RuntimeError(f"AUTHORITATIVE_STAGING_TEAM_CARDINALITY:{game_id}")
         if len(skater_keys) != len(set(skater_keys)) or len(goalie_keys) != len(set(goalie_keys)):
             raise RuntimeError(f"AUTHORITATIVE_STAGING_DUPLICATE_IDENTITY:{game_id}")
         if set(skater_keys) & set(goalie_keys):
             raise RuntimeError(f"AUTHORITATIVE_STAGING_ROLE_CONFLICT:{game_id}")
         skaters.extend(game_skaters); goalies.extend(game_goalies)
+        canonical_teams[game_id] = game_team_ids
         per_game[str(game_id)] = {"skaters": len(skater_keys), "goalies": len(goalie_keys)}
 
     skater_identities = sorted((int(row["game_id"]), int(row["player_id"]))
                                 for row in skaters)
-    goalie_identities = sorted((int(row["game_id"]), int(row["player_id"]))
-                               for row in goalies)
-    starters = _goalie_starters(goalies)
+    goalie_identities, starters, goalie_team_membership = _authoritative_goalie_contract(
+        goalies, game_ids=game_ids, canonical_teams=canonical_teams)
     if (len(skater_identities) != 252 or len(set(skater_identities)) != 252
             or len(goalie_identities) != 28 or len(set(goalie_identities)) != 28
             or len(starters) != 14):
@@ -215,8 +283,10 @@ def build_authoritative_staging_set(
         "authority_response_set_sha256": binding["response_set_sha256"],
         "skater_rows": skaters,
         "skater_identities": skater_identities,
+        "goalie_rows": goalies,
         "goalie_identities": goalie_identities,
         "starter_identities": starters,
+        "goalie_team_membership": goalie_team_membership,
         "expected_identity_set_sha256": identity_set_sha256(skater_identities),
         "per_game": per_game,
         "exact_provider_id_resolution": True,
@@ -301,17 +371,29 @@ def _fetch_target_skater_identities(
         return [(int(game_id), int(player_id)) for game_id, player_id in cursor.fetchall()]
 
 
-def _fetch_goalie_stage_rows(
+def _natural_goalie_identities(rows: Iterable[tuple[object, ...]]) -> list[tuple[int, int]]:
+    """Project staged rows to their only authoritative natural identity."""
+    identities: list[tuple[int, int]] = []
+    for row in rows:
+        if len(row) < 2:
+            raise RuntimeError("STAGED_GOALIE_IDENTITY_MALFORMED")
+        try:
+            identities.append((int(row[0]), int(row[1])))
+        except (TypeError, ValueError) as error:
+            raise RuntimeError("STAGED_GOALIE_IDENTITY_MALFORMED") from error
+    return identities
+
+
+def _fetch_goalie_stage_identities(
     connection: Any, *, slate_date: str, game_ids: list[int],
-) -> list[tuple[int, int, int, float]]:
+) -> list[tuple[int, int]]:
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT game_id, player_id, team_id, COALESCE(toi_minutes,0) "
+            "SELECT game_id, player_id "
             "FROM nhl.import_goalie_logs_stage "
             "WHERE game_date=%s::date AND game_id=ANY(%s) "
             "ORDER BY game_id, player_id", (slate_date, game_ids))
-        return [(int(game_id), int(player_id), int(team_id), float(toi))
-                for game_id, player_id, team_id, toi in cursor.fetchall()]
+        return _natural_goalie_identities(cursor.fetchall())
 
 
 def staging_set_preflight(
@@ -436,16 +518,30 @@ def _delete_extra_rows(
                       for game_id, player_id in cursor.fetchall())
 
 
-def _actual_starters(
-    goalie_rows: list[tuple[int, int, int, float]],
-    expected_goalies: set[tuple[int, int]],
-) -> list[tuple[int, int]]:
-    by_team: dict[tuple[int, int], list[tuple[float, int]]] = {}
-    for game_id, player_id, team_id, toi in goalie_rows:
-        if (game_id, player_id) in expected_goalies:
-            by_team.setdefault((game_id, team_id), []).append((toi, player_id))
-    return sorted((game_id, max(values)[1])
-                  for (game_id, unused_team), values in by_team.items())
+def _validate_postwrite_staging(
+    evidence: dict[str, object], *, actual_skaters: list[tuple[int, int]],
+    staged_goalie_rows: Iterable[tuple[object, ...]],
+) -> dict[str, object]:
+    official_goalies, official_starters, official_teams = _authoritative_goalie_contract(
+        evidence["goalie_rows"], game_ids=evidence["game_ids"])
+    if (official_goalies != [tuple(value) for value in evidence["goalie_identities"]]
+            or official_starters != [tuple(value) for value in evidence["starter_identities"]]
+            or official_teams != evidence["goalie_team_membership"]):
+        raise RuntimeError("AUTHORITATIVE_GOALIE_EVIDENCE_MISMATCH")
+    actual_goalies = _natural_goalie_identities(staged_goalie_rows)
+    return validate_staging_identity_sets(
+        expected_games=[int(value) for value in evidence["game_ids"]],
+        expected_skaters=[tuple(value) for value in evidence["skater_identities"]],
+        expected_goalies=official_goalies,
+        expected_starters=official_starters,
+        actual_games=sorted({game_id for game_id, unused in actual_skaters}
+                            | {game_id for game_id, unused in actual_goalies}),
+        actual_skaters=actual_skaters,
+        actual_goalies=actual_goalies,
+        # Starter identity is an official postgame determination. Staging has
+        # no authoritative team or starter column and cannot override it.
+        actual_starters=official_starters,
+    )
 
 
 def synchronize_staging_set(
@@ -480,22 +576,10 @@ def synchronize_staging_set(
 
         after = _fetch_target_skater_identities(
             connection, slate_date=slate_date, game_ids=game_ids, for_update=False)
-        goalie_rows = _fetch_goalie_stage_rows(
+        staged_goalies = _fetch_goalie_stage_identities(
             connection, slate_date=slate_date, game_ids=game_ids)
-        actual_goalies = [(game_id, player_id)
-                          for game_id, player_id, unused_team, unused_toi in goalie_rows]
-        expected_goalies = {tuple(value) for value in evidence["goalie_identities"]}
-        equality = validate_staging_identity_sets(
-            expected_games=game_ids,
-            expected_skaters=[tuple(value) for value in evidence["skater_identities"]],
-            expected_goalies=sorted(expected_goalies),
-            expected_starters=[tuple(value) for value in evidence["starter_identities"]],
-            actual_games=sorted({game_id for game_id, unused in after}
-                                | {game_id for game_id, unused in actual_goalies}),
-            actual_skaters=after,
-            actual_goalies=actual_goalies,
-            actual_starters=_actual_starters(goalie_rows, expected_goalies),
-        )
+        equality = _validate_postwrite_staging(
+            evidence, actual_skaters=after, staged_goalie_rows=staged_goalies)
         connection.commit(); committed = True
         return {
             "contract_version": CONTRACT,

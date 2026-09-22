@@ -1,3 +1,4 @@
+import copy
 import inspect
 import json
 import os
@@ -43,7 +44,9 @@ def synthetic_evidence():
     game_ids = list(range(101, 108))
     skaters = []
     goalies = []
+    goalie_rows = []
     starters = []
+    goalie_team_membership = {}
     for game_id in game_ids:
         for index in range(36):
             skaters.append({
@@ -57,6 +60,15 @@ def synthetic_evidence():
         game_goalies = [(game_id, game_id * 100 + index) for index in range(4)]
         goalies.extend(game_goalies)
         starters.extend([game_goalies[1], game_goalies[3]])
+        teams = [game_id * 10 + 1, game_id * 10 + 2]
+        goalie_team_membership[str(game_id)] = teams
+        for index, (unused_game, player_id) in enumerate(game_goalies):
+            goalie_rows.append({
+                "game_id": game_id, "player_id": player_id,
+                "team_id": teams[0] if index < 2 else teams[1],
+                "toi_minutes": 10.0 if index % 2 == 0 else 50.0,
+                "official_identity_locator": f"goalies[{index}].playerId",
+            })
     identities = [(row["game_id"], row["player_id"]) for row in skaters]
     game_hash = sync.canonical_game_set_hash(game_ids)
     return {
@@ -66,7 +78,9 @@ def synthetic_evidence():
         "authority_source_tree_fingerprint": "b" * 64,
         "authority_response_set_sha256": "c" * 64,
         "skater_rows": skaters, "skater_identities": identities,
-        "goalie_identities": goalies, "starter_identities": starters,
+        "goalie_rows": goalie_rows, "goalie_identities": goalies,
+        "starter_identities": starters,
+        "goalie_team_membership": goalie_team_membership,
         "expected_identity_set_sha256": sync.identity_set_sha256(identities),
         "per_game": {str(game): {"skaters": 36, "goalies": 4} for game in game_ids},
         "exact_provider_id_resolution": True,
@@ -77,16 +91,20 @@ class FakeConnection:
     def __init__(self, identities=None):
         self.original = set(identities or [])
         self.working = set(self.original)
+        self.original_payload_version = "pre_correction"
+        self.working_payload_version = self.original_payload_version
         self.committed = False
         self.rollback_count = 0
         self.closed = False
 
     def commit(self):
         self.original = set(self.working)
+        self.original_payload_version = self.working_payload_version
         self.committed = True
 
     def rollback(self):
         self.working = set(self.original)
+        self.working_payload_version = self.original_payload_version
         self.rollback_count += 1
 
     def close(self):
@@ -144,6 +162,9 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertEqual(len(self.authority["skater_identities"]), 252)
         self.assertEqual(len(self.authority["goalie_identities"]), 28)
         self.assertEqual(len(self.authority["starter_identities"]), 14)
+        self.assertEqual(len(self.authority["goalie_rows"]), 28)
+        self.assertTrue(all(len(teams) == 2 for teams in
+                            self.authority["goalie_team_membership"].values()))
         self.assertTrue(all(value == {"skaters": 36, "goalies": 4}
                             for value in self.authority["per_game"].values()))
 
@@ -227,7 +248,8 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertFalse(connection.committed)
         self.assertTrue(connection.closed)
 
-    def _run_fake_sync(self, *, extra=None, fail=False):
+    def _run_fake_sync(self, *, extra=None, fail=False, staged_goalies=None,
+                       final_failure=False):
         evidence = synthetic_evidence()
         extra = extra or []
         connection = FakeConnection(list(evidence["skater_identities"]) + extra)
@@ -241,21 +263,27 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         def fetch(*unused_args, **unused_kwargs):
             return sorted(connection.working)
 
-        goalie_rows = []
-        for game_id, player_id in evidence["goalie_identities"]:
-            index = player_id - game_id * 100
-            goalie_rows.append((game_id, player_id, 1 if index < 2 else 2, float(index)))
+        def upsert(*unused_args, **unused_kwargs):
+            connection.working_payload_version = "authoritative"
+            return 252
+
+        staged_goalies = (list(evidence["goalie_identities"])
+                          if staged_goalies is None else staged_goalies)
+        if final_failure:
+            staged_goalies = list(evidence["goalie_identities"][:-1])
         with patch.object(sync, "_begin_correction"), \
              patch.object(sync, "_fetch_canonical_game_ids", return_value=evidence["game_ids"]), \
              patch.object(sync, "_fetch_target_skater_identities", side_effect=fetch), \
              patch.object(sync, "_materialize_expected_rows"), \
-             patch.object(sync, "_upsert_expected_rows", return_value=252), \
+             patch.object(sync, "_upsert_expected_rows", side_effect=upsert), \
              patch.object(sync, "_delete_extra_rows", side_effect=delete), \
-             patch.object(sync, "_fetch_goalie_stage_rows", return_value=goalie_rows):
+             patch.object(sync, "_fetch_goalie_stage_identities",
+                          return_value=staged_goalies):
             injector = ((lambda: (_ for _ in ()).throw(RuntimeError("simulated")))
                         if fail else None)
-            if fail:
-                with self.assertRaisesRegex(RuntimeError, "simulated"):
+            if fail or final_failure:
+                expected_error = "simulated" if fail else "STAGING_IDENTITY_SET_MISMATCH"
+                with self.assertRaisesRegex(RuntimeError, expected_error):
                     sync.synchronize_staging_set(
                         "offline", evidence,
                         authorized_extra_digest=difference["authorized_extra_set_digest"],
@@ -272,7 +300,10 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         evidence, connection, result = self._run_fake_sync(extra=[(103, 99999999)])
         self.assertTrue(connection.committed)
         self.assertEqual(result["deleted_identities"], [(103, 99999999)])
+        self.assertEqual(result["staging_equality"]["games"], 7)
         self.assertEqual(result["staging_equality"]["skater_appearances"], 252)
+        self.assertEqual(result["staging_equality"]["goalie_appearances"], 28)
+        self.assertEqual(result["staging_equality"]["confirmed_starters"], 14)
         unused, replay_connection, replay = self._run_fake_sync()
         self.assertTrue(replay_connection.committed)
         self.assertEqual(replay["deleted_rows"], 0)
@@ -283,7 +314,90 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertFalse(connection.committed)
         self.assertEqual(connection.working,
                          set(evidence["skater_identities"]) | {extra})
+        self.assertEqual(connection.working_payload_version, "pre_correction")
         self.assertGreaterEqual(connection.rollback_count, 1)
+
+    def test_final_goalie_validation_failure_rolls_back_skater_changes(self):
+        extra = (103, 99999999)
+        evidence, connection, unused = self._run_fake_sync(
+            extra=[extra], final_failure=True)
+        self.assertFalse(connection.committed)
+        self.assertEqual(connection.working,
+                         set(evidence["skater_identities"]) | {extra})
+        self.assertEqual(connection.working_payload_version, "pre_correction")
+        self.assertGreaterEqual(connection.rollback_count, 1)
+
+    def test_nullable_mixed_and_incorrect_staged_goalie_teams_are_non_authoritative(self):
+        evidence = synthetic_evidence()
+        identities = list(evidence["goalie_identities"])
+        all_null = [(game_id, player_id, None) for game_id, player_id in identities]
+        mixed = [(game_id, player_id, None if index % 2 else -999999)
+                 for index, (game_id, player_id) in enumerate(identities)]
+        for staged in (all_null, mixed):
+            result = sync._validate_postwrite_staging(
+                evidence, actual_skaters=list(evidence["skater_identities"]),
+                staged_goalie_rows=staged)
+            self.assertEqual(result["goalie_appearances"], 28)
+            self.assertEqual(result["confirmed_starters"], 14)
+
+    def test_staged_goalie_membership_differences_fail_closed(self):
+        evidence = synthetic_evidence()
+        identities = list(evidence["goalie_identities"])
+        cases = [
+            identities[:-1],
+            identities + [(evidence["game_ids"][0], 99999999)],
+            identities + [identities[0]],
+        ]
+        for staged in cases:
+            with self.subTest(staged_count=len(staged)):
+                with self.assertRaisesRegex(RuntimeError, "STAGING_IDENTITY_SET_MISMATCH"):
+                    sync._validate_postwrite_staging(
+                        evidence, actual_skaters=list(evidence["skater_identities"]),
+                        staged_goalie_rows=staged)
+
+    def test_official_goalie_membership_and_team_failures_are_closed(self):
+        evidence = synthetic_evidence()
+        missing_team = copy.deepcopy(evidence["goalie_rows"])
+        missing_team[0]["team_id"] = None
+        conflict = copy.deepcopy(evidence["goalie_rows"])
+        conflicting_row = dict(conflict[0])
+        conflicting_row["team_id"] = int(conflicting_row["team_id"]) + 1
+        conflict.append(conflicting_row)
+        incomplete = copy.deepcopy(evidence["goalie_rows"])
+        first_game = evidence["game_ids"][0]
+        first_team = incomplete[0]["team_id"]
+        for row in incomplete:
+            if row["game_id"] == first_game:
+                row["team_id"] = first_team
+        cases = [
+            (missing_team, "TEAM_MEMBERSHIP_INVALID"),
+            (conflict, "CONFLICTING_TEAM"),
+            (incomplete, "TEAM_CARDINALITY"),
+        ]
+        for rows, error in cases:
+            with self.subTest(error=error):
+                with self.assertRaisesRegex(RuntimeError, error):
+                    sync._authoritative_goalie_contract(
+                        rows, game_ids=evidence["game_ids"])
+
+    def test_official_goalie_tied_or_unusable_toi_fails_closed(self):
+        evidence = synthetic_evidence()
+        tied = copy.deepcopy(evidence["goalie_rows"])
+        tied[0]["toi_minutes"] = tied[1]["toi_minutes"]
+        unusable = copy.deepcopy(evidence["goalie_rows"])
+        unusable[0]["toi_minutes"] = None
+        for rows, error in ((tied, "STARTER_NOT_UNIQUE"),
+                            (unusable, "TOI_UNUSABLE")):
+            with self.subTest(error=error):
+                with self.assertRaisesRegex(RuntimeError, error):
+                    sync._authoritative_goalie_contract(
+                        rows, game_ids=evidence["game_ids"])
+
+    def test_goalie_stage_query_cannot_convert_nullable_team_id(self):
+        source = inspect.getsource(sync._fetch_goalie_stage_identities)
+        self.assertNotIn("team_id", source)
+        self.assertNotIn("toi_minutes", source)
+        self.assertNotIn("int(team_id)", source)
 
     def test_scope_and_concurrency_guards_are_structural(self):
         source = inspect.getsource(sync._delete_extra_rows)
@@ -357,6 +471,9 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "ALL_FIVE"):
             validate_request_lineage(
                 {**valid, "failed_ancestors": ancestors[:-1]}, slate_date=SLATE)
+        self.assertEqual(len(SEPTEMBER_20_REQUIRED_FAILED_ANCESTORS), 5)
+        self.assertTrue(all("staging" not in run_id.lower()
+                            for run_id in SEPTEMBER_20_REQUIRED_FAILED_ANCESTORS))
 
 
 if __name__ == "__main__":
