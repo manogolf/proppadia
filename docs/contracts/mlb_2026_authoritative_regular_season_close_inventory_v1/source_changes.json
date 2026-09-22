@@ -1,0 +1,50 @@
+{
+  "contract_name": "MLB_2026_AUTHORITATIVE_REGULAR_SEASON_CLOSE_INVENTORY_V1",
+  "files": [
+    {
+      "path": "backend/mlb/season_transition/game_phase_authority_v1.py",
+      "purpose": "Expose the already-verified authority population in exact gamePk order"
+    },
+    {
+      "path": "backend/mlb/season_transition/regular_season_close_inventory_v1.py",
+      "purpose": "Build and validate the source-hashed disposition inventory"
+    },
+    {
+      "path": "backend/mlb/scripts/build_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
+      "purpose": "Offline deterministic evidence builder"
+    },
+    {
+      "path": "backend/mlb/scripts/prepare_mlb_2026_regular_season_close_v1.py",
+      "purpose": "Pinned check-only close-readiness command"
+    },
+    {
+      "path": "backend/mlb/scripts/validate_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
+      "purpose": "Dependency-free validator and test runner"
+    },
+    {
+      "path": "backend/mlb/tests/test_mlb_2026_authoritative_regular_season_close_inventory_v1.py",
+      "purpose": "Ten deterministic close-inventory scenarios"
+    },
+    {
+      "path": "Makefile",
+      "purpose": "Remove caller-supplied inventory from the check target"
+    },
+    {
+      "path": "docs/contracts/mlb_2026_regular_season_close_and_postseason_data_plan_v1/README.md",
+      "purpose": "Mark the former arbitrary inventory and token interface superseded"
+    },
+    {
+      "path": "docs/contracts/mlb_2026_regular_season_close_and_postseason_data_plan_v1/sha256_manifest.txt",
+      "purpose": "Refresh hashes for the superseded runbook and hardened command"
+    }
+  ],
+  "behavior_unchanged": [
+    "game classification",
+    "predictions",
+    "outcomes",
+    "models",
+    "schedules",
+    "pipelines"
+  ],
+  "close_executed": false
+}

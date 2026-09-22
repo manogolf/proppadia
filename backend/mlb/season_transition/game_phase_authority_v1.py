@@ -616,6 +616,12 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
     def metadata(self) -> GamePhaseAuthorityMetadata:
         return self._metadata
 
+    @property
+    def records(self) -> tuple[GamePhaseAuthorityRecord, ...]:
+        """Return the verified authority population in exact gamePk order."""
+
+        return tuple(self._records[game_pk] for game_pk in sorted(self._records))
+
     def lookup_exact(self, game_pk: Any) -> GamePhaseAuthorityRecord:
         exact_game_pk = _coerce_game_pk(game_pk)
         record = self._records.get(exact_game_pk)

@@ -90,9 +90,13 @@ The close package must freeze:
 - model qualification, publication, and wagering status;
 - source/config identities and SHA-256 manifests.
 
-### Exact close authorization condition
+### Superseded close authorization design
 
-`REGULAR_SEASON_CLOSE_AUTHORIZED` is returned only when all of the following are true in one frozen inventory:
+The caller-supplied inventory and static-token design below was superseded by
+`MLB_2026_AUTHORITATIVE_REGULAR_SEASON_CLOSE_INVENTORY_V1`. It is retained as
+historical design context only and is not an executable close interface.
+
+The original design returned `REGULAR_SEASON_CLOSE_AUTHORIZED` only when all of the following were true in one frozen inventory:
 
 1. Every canonical row has authoritative `source_game_type=R` and normalized `season_phase=REGULAR_SEASON`.
 2. Every canonical row is `FINAL`, `CANCELLED`, `POSTPONED_AUTHORITATIVELY_DISPOSED` with a source reference, or `EXPLICITLY_UNRESOLVED` with a reason and operator acknowledgement. Any scheduled, preview, in-progress, delayed, or suspended/resume-pending row blocks close, regardless of nominal date.
@@ -104,28 +108,21 @@ The close package must freeze:
 
 Postseason rows can coexist in storage but cannot appear in the frozen regular population or regular reports.
 
-### Prepared command and runbook
+### Current check-only command
 
-Check only (safe now, read-only):
-
-```bash
-PYTHONPATH=. .venv/bin/python -m backend.mlb.scripts.prepare_mlb_2026_regular_season_close_v1 \
-  --inventory /absolute/path/to/frozen_close_inventory.json
-```
-
-Start from `backend/mlb/season_transition/close_inventory_template_v1.json`. Each lane object must provide `manifest_status`, `ledger_status`, and the six zero-valued violation/count fields enforced by the validator. Each canonical game row must provide `game_pk`, `source_game_type`, `season_phase`, and `close_disposition`, plus the required disposition reference or acknowledgement when applicable. The intentionally empty template fails until populated from frozen evidence.
-
-Future execution, only after the exact authorization condition is met and an operator explicitly declares completion:
+The command accepts no arguments and reads only the pinned, source-hashed
+canonical inventory. It always remains check-only and cannot write a close
+package:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -m backend.mlb.scripts.prepare_mlb_2026_regular_season_close_v1 \
-  --inventory /absolute/path/to/frozen_close_inventory.json \
-  --output-dir /absolute/path/to/new/immutable_close_package \
-  --execute-close \
-  --authorization-token MLB_2026_REGULAR_SEASON_COMPLETE
+PYTHONPATH=. .venv/bin/python -m backend.mlb.scripts.prepare_mlb_2026_regular_season_close_v1
 ```
 
-The output directory must not exist. The command writes only a local package, atomically, and never changes the database or runtime. This task did not invoke `--execute-close`.
+`backend/mlb/season_transition/close_inventory_template_v1.json` and the old
+authorization-token narrative are also historical only. There is no execution
+flag, caller-supplied population, static token, output directory, or close
+package writer in the current command. Actual closure requires a separate,
+future authorization and implementation.
 
 ## Fixed late-season reporting cohorts
 
