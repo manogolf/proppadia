@@ -26,9 +26,9 @@ from backend.nhl.official_request_journal import (
 from backend.nhl.postgame_reconcile.core import validate_staging_identity_sets
 
 
-CONTRACT = "NHL_AUTHORITATIVE_SKATER_STAGING_SYNC_V1"
-PREFLIGHT_CONTRACT = "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2"
-AUTHORIZATION_CONTRACT = "NHL_AUTHORITATIVE_STAGING_CORRECTION_AUTHORIZATION_V2"
+CONTRACT = "NHL_AUTHORITATIVE_STAGING_SYNC_V2"
+PREFLIGHT_CONTRACT = "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V3"
+AUTHORIZATION_CONTRACT = "NHL_AUTHORITATIVE_STAGING_CORRECTION_AUTHORIZATION_V3"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -101,22 +101,21 @@ def _required_cardinalities(evidence: dict[str, object]) -> dict[str, int]:
     skaters = [tuple(value) for value in evidence["skater_identities"]]
     official_goalies, official_starters, official_teams = _authoritative_goalie_contract(
         evidence["goalie_rows"], game_ids=game_ids)
-    if (len(game_ids) != 7 or len(set(game_ids)) != 7
-            or len(skaters) != 252 or len(set(skaters)) != 252
-            or any(evidence["per_game"].get(str(game_id)) !=
-                   {"skaters": 36, "goalies": 4} for game_id in game_ids)
+    if (not game_ids or len(game_ids) != len(set(game_ids))
+            or not skaters or len(skaters) != len(set(skaters))
+            or any(not evidence["per_game"].get(str(game_id), {}).get("skaters")
+                   or not evidence["per_game"].get(str(game_id), {}).get("goalies")
+                   for game_id in game_ids)
             or official_goalies != [tuple(value) for value in evidence["goalie_identities"]]
             or official_starters != [tuple(value) for value in evidence["starter_identities"]]
             or official_teams != evidence["goalie_team_membership"]):
         raise RuntimeError("AUTHORITATIVE_STAGING_CARDINALITY_CONTRACT_MISMATCH")
     return {
-        "canonical_games": 7,
-        "skater_appearances": 252,
-        "skaters_per_game": 36,
-        "goalie_appearances": 28,
-        "goalies_per_game": 4,
+        "canonical_games": len(game_ids),
+        "skater_appearances": len(skaters),
+        "goalie_appearances": len(official_goalies),
         "official_teams_per_game": 2,
-        "confirmed_starters": 14,
+        "confirmed_starters": len(official_starters),
     }
 
 
@@ -208,8 +207,8 @@ def _authoritative_goalie_contract(
     team_membership: dict[str, list[int]] = {}
     for game_id in expected_games:
         rows = by_game[game_id]
-        if len(rows) != 4:
-            raise RuntimeError(f"AUTHORITATIVE_STAGING_GOALIES_PER_GAME:{game_id}:{len(rows)}")
+        if not rows:
+            raise RuntimeError(f"AUTHORITATIVE_STAGING_GOALIES_PER_GAME:{game_id}:0")
         teams = {team_id for unused_player, team_id, unused_toi in rows}
         if len(teams) != 2:
             raise RuntimeError(f"AUTHORITATIVE_GOALIE_TEAM_CARDINALITY:{game_id}:{len(teams)}")
@@ -221,13 +220,13 @@ def _authoritative_goalie_contract(
                          if row_team == team_id]
             maximum = max(toi for unused_player, toi in team_rows)
             winners = [player_id for player_id, toi in team_rows if toi == maximum]
-            if len(winners) != 1:
+            if maximum <= 0 or len(winners) != 1:
                 raise RuntimeError(
                     f"AUTHORITATIVE_GOALIE_STARTER_NOT_UNIQUE:{game_id}:{team_id}")
             starters.append((game_id, winners[0]))
 
     identities.sort(); starters.sort()
-    if len(identities) != 28 or len(starters) != 14:
+    if len(starters) != len(expected_games) * 2:
         raise RuntimeError(
             f"AUTHORITATIVE_GOALIE_TOTALS_INVALID:{len(identities)}:{len(starters)}")
     return identities, starters, team_membership
@@ -238,8 +237,8 @@ def build_authoritative_staging_set(
 ) -> dict[str, object]:
     """Rebuild exact skater/goalie identities from verified response objects."""
     game_ids = sorted({int(value) for value in expected_game_ids})
-    if len(game_ids) != 7:
-        raise RuntimeError(f"AUTHORITATIVE_STAGING_GAME_CARDINALITY:{len(game_ids)}")
+    if not game_ids:
+        raise RuntimeError("AUTHORITATIVE_STAGING_GAME_CARDINALITY:0")
     game_hash = canonical_game_set_hash(game_ids)
     if (binding.get("role") != "AUTHORITY_RESPONSE_SOURCE"
             or binding.get("canonical_game_set_hash") != game_hash):
@@ -341,10 +340,10 @@ def build_authoritative_staging_set(
 
         skater_keys = [(int(row["game_id"]), int(row["player_id"])) for row in game_skaters]
         goalie_keys = [(int(row["game_id"]), int(row["player_id"])) for row in game_goalies]
-        if len(skater_keys) != 36:
-            raise RuntimeError(f"AUTHORITATIVE_STAGING_SKATERS_PER_GAME:{game_id}:{len(skater_keys)}")
-        if len(goalie_keys) != 4:
-            raise RuntimeError(f"AUTHORITATIVE_STAGING_GOALIES_PER_GAME:{game_id}:{len(goalie_keys)}")
+        if not skater_keys:
+            raise RuntimeError(f"AUTHORITATIVE_STAGING_SKATERS_PER_GAME:{game_id}:0")
+        if not goalie_keys:
+            raise RuntimeError(f"AUTHORITATIVE_STAGING_GOALIES_PER_GAME:{game_id}:0")
         if len(game_team_ids) != 2:
             raise RuntimeError(f"AUTHORITATIVE_STAGING_TEAM_CARDINALITY:{game_id}")
         if len(skater_keys) != len(set(skater_keys)) or len(goalie_keys) != len(set(goalie_keys)):
@@ -359,9 +358,9 @@ def build_authoritative_staging_set(
                                 for row in skaters)
     goalie_identities, starters, goalie_team_membership = _authoritative_goalie_contract(
         goalies, game_ids=game_ids, canonical_teams=canonical_teams)
-    if (len(skater_identities) != 252 or len(set(skater_identities)) != 252
-            or len(goalie_identities) != 28 or len(set(goalie_identities)) != 28
-            or len(starters) != 14):
+    if (len(skater_identities) != len(set(skater_identities))
+            or len(goalie_identities) != len(set(goalie_identities))
+            or len(starters) != len(game_ids) * 2):
         raise RuntimeError(
             f"AUTHORITATIVE_STAGING_TOTALS_INVALID:{len(set(skater_identities))}:"
             f"{len(set(goalie_identities))}:{len(starters)}")

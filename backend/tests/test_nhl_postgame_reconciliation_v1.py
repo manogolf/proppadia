@@ -18,6 +18,8 @@ from backend.nhl.official_request_journal import (
 )
 
 from backend.nhl.postgame_reconcile.core import (
+    _grade_points,
+    _grade_saves,
     publish_reconciliation,
     reconciliation_lock,
     resolve_operational_sources,
@@ -323,6 +325,48 @@ class PostgameReconciliationTest(unittest.TestCase):
             lineage["completed_request_run"]["journal_sha256"],
             hashlib.sha256(Path(env[ENV_JOURNAL]).read_bytes()).hexdigest())
         self.assertIn("request_lineage.json", (destination / "SHA256SUMS").read_text())
+
+    def test_september_21_points_and_saves_operational_sources_grade(self):
+        operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
+        binding = resolve_operational_sources(
+            slate_date="2026-09-21", operational_root=operational)
+        schedule = pd.read_csv(Path(binding["cross_market"]["run"]) /
+                               "schedule_event_identity.csv")
+        points_run = Path(binding["points"]["run"])
+        point_predictions = pd.read_csv(points_run / "immutable_predictions.csv")
+        point_outcomes = point_predictions[["game_id", "player_id"]].drop_duplicates()
+        point_outcomes["official_goals"] = 0
+        point_outcomes["official_assists"] = 0
+        point_outcomes["participation_state"] = "PARTICIPATED"
+        point_grades = _grade_points(points_run, schedule, point_outcomes)
+        self.assertEqual(len(point_grades["points"]), 1629)
+        self.assertTrue(point_grades["points"].grading_status.eq("SETTLED").all())
+        self.assertEqual(len(point_grades["points_participating"]), 1629)
+        self.assertEqual(len(point_grades["points_nonparticipants"]), 0)
+        self.assertEqual(len(point_grades["points_missing_predictions"]), 0)
+
+        saves_run = Path(binding["saves"]["run"])
+        save_predictions = pd.read_csv(
+            saves_run / "immutable_conditional_predictions.csv")
+        goalie_outcomes = save_predictions[["game_id", "goalie_id", "team"]].drop_duplicates()
+        starters = (goalie_outcomes.sort_values(["game_id", "team", "goalie_id"])
+                    .groupby(["game_id", "team"], as_index=False).head(1)
+                    [["game_id", "goalie_id"]])
+        starter_keys = set(starters.itertuples(index=False, name=None))
+        goalie_outcomes["team_id"] = goalie_outcomes.team.astype("category").cat.codes + 1
+        goalie_outcomes["official_saves"] = 0
+        goalie_outcomes["actual_start_flag"] = goalie_outcomes.apply(
+            lambda row: (int(row.game_id), int(row.goalie_id)) in starter_keys, axis=1)
+        goalie_outcomes["goalie_participation_state"] = goalie_outcomes.actual_start_flag.map(
+            {True: "STARTED", False: "RELIEF_APPEARANCE"})
+        goalie_outcomes["starter_identity_method"] = "UNIQUE_MAX_OFFICIAL_TOI_POSTGAME"
+        save_grades = _grade_saves(saves_run, schedule, goalie_outcomes)
+        self.assertEqual(len(save_grades["saves"]), 637)
+        self.assertEqual(save_grades["saves"].grading_status.eq("SETTLED").sum(), 208)
+        self.assertEqual(len(save_grades["saves_nonstarters"]), 429)
+        self.assertEqual(len(save_grades["saves_predicted_relief_appearances"]), 429)
+        self.assertEqual(len(save_grades["saves_unpredicted_starters"]), 0)
+        self.assertEqual(len(save_grades["saves_unpredicted_relief_appearances"]), 0)
 
     def test_september_20_local_only_source_binding_is_exact(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"

@@ -33,6 +33,7 @@ ENV_SOURCE_CACHE = "NHL_OFFICIAL_RESPONSE_SOURCE_CACHE"
 ENV_SOURCE_RUN_ID = "NHL_OFFICIAL_RESPONSE_SOURCE_RUN_ID"
 ENV_SOURCE_JOURNAL_SHA256 = "NHL_OFFICIAL_RESPONSE_SOURCE_JOURNAL_SHA256"
 ENV_RESPONSE_SOURCE_LEDGER = "NHL_OFFICIAL_RESPONSE_SOURCE_LEDGER_JSON"
+ENV_AUTHORIZED_PLAYER_LOOKUP_IDS = "NHL_AUTHORIZED_PLAYER_LOOKUP_IDS"
 CONTRACT = "NHL_OFFICIAL_REQUEST_JOURNAL_V1"
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]+$")
 ROSTER_REDIRECT_POLICY = "NHL_ROSTER_CURRENT_TO_OFFICIAL_SEASON_V1"
@@ -188,6 +189,7 @@ class RequestContext:
     source_run_id: str | None = None
     source_journal_sha256: str | None = None
     response_sources: tuple[dict[str, Any], ...] = ()
+    authorized_player_lookup_ids: frozenset[int] = frozenset()
 
     @classmethod
     def from_env(cls, *, required: bool | None = None) -> "RequestContext | None":
@@ -278,6 +280,12 @@ class RequestContext:
                 if not claims:
                     raise RuntimeError("OFFICIAL_RESPONSE_SOURCE_LEDGER_EMPTY_SOURCE")
                 response_sources.append({**source, "source_cache": str(cache), "claims": claims})
+        authorized_raw = os.environ.get(ENV_AUTHORIZED_PLAYER_LOOKUP_IDS, "").strip()
+        try:
+            authorized_players = frozenset(
+                int(value) for value in authorized_raw.split(",") if value)
+        except ValueError as error:
+            raise RuntimeError("OFFICIAL_AUTHORIZED_PLAYER_LOOKUP_IDS_INVALID") from error
         context = cls(
             run_id=values["run_id"], journal_path=Path(values["journal"]),
             cache_dir=Path(values["cache"]), slate_date=values["slate"],
@@ -286,6 +294,7 @@ class RequestContext:
             source_run_id=source_values["run_id"] or None,
             source_journal_sha256=source_values["journal_sha256"] or None,
             response_sources=tuple(response_sources),
+            authorized_player_lookup_ids=authorized_players,
         )
         context._ensure_storage()
         return context
@@ -459,6 +468,10 @@ def official_get(
     redirect_season = None
     try:
         context.validate_identity(identity)
+        if (endpoint_family == "PLAYER_LANDING" and not reuse_preserved
+                and int(identity.get("player_id") or -1)
+                not in context.authorized_player_lookup_ids):
+            raise RuntimeError("PLAYER_LANDING_NOT_EXPLICITLY_AUTHORIZED")
         if (context.response_sources
                 and context.has_declared_response(endpoint_family, identity)
                 and not reuse_preserved):
@@ -893,8 +906,6 @@ def build_typed_response_source_ledger(sources: Iterable[dict[str, Any]]) -> dic
             if key in claimed:
                 raise RuntimeError("TYPED_RESPONSE_SOURCE_OVERLAP")
             claimed.add(key)
-    if len({source.get("source_run_id") for source in prepared}) != len(prepared):
-        raise RuntimeError("TYPED_RESPONSE_SOURCE_DUPLICATE_RUN")
     return {"contract_version": "NHL_TYPED_RESPONSE_SOURCE_LEDGER_V1",
             "sources": prepared, "declared_response_identities": len(claimed)}
 

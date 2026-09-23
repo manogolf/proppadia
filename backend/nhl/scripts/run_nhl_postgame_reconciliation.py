@@ -23,6 +23,7 @@ import requests
 
 from backend.nhl.official_request_journal import (
     ENV_CACHE,
+    ENV_AUTHORIZED_PLAYER_LOOKUP_IDS,
     ENV_GAME_HASH,
     ENV_GAME_IDS,
     ENV_JOURNAL,
@@ -57,6 +58,7 @@ from backend.nhl.postgame_reconcile.core import (
     validate_final_slate,
 )
 from backend.nhl.postgame_reconcile.staging_sync import (
+    build_authoritative_staging_set,
     load_verified_authoritative_staging_set,
     staging_set_preflight,
     synchronize_staging_set,
@@ -151,6 +153,241 @@ def _parse_response_source_specs(values: list[str]) -> dict[str, str]:
             raise RuntimeError(f"TYPED_RESPONSE_SOURCE_ROLE_DUPLICATE:{role}")
         parsed[role] = run_id
     return parsed
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _acquisition_receipt_path(output_root: Path, slate_date: str, run_id: str) -> Path:
+    return output_root / "acquisition_receipts" / slate_date / f"{run_id}.json"
+
+
+def _claims_for_identities(cache: Path, identities: list[tuple[str, dict[str, object]]]) -> list[dict[str, object]]:
+    claims: list[dict[str, object]] = []
+    for family, identity in identities:
+        token = sha256_bytes(json.dumps(
+            {"endpoint_family": family, "identity": identity},
+            sort_keys=True, separators=(",", ":")).encode())
+        index = cache / "index" / f"{token}.json"
+        if not index.is_file():
+            raise RuntimeError("ACQUISITION_SOURCE_INDEX_MISSING")
+        metadata = json.loads(index.read_text())
+        object_path = cache / "objects" / str(metadata.get("object_name") or "")
+        if (metadata.get("endpoint_family") != family or metadata.get("identity") != identity
+                or not object_path.is_file()):
+            raise RuntimeError("ACQUISITION_SOURCE_INDEX_IDENTITY_MISMATCH")
+        body = object_path.read_bytes()
+        digest = sha256_bytes(body)
+        if digest != metadata.get("response_sha256") or len(body) != metadata.get("response_bytes"):
+            raise RuntimeError("ACQUISITION_SOURCE_RESPONSE_HASH_MISMATCH")
+        verify_payload_identity(family, identity, body)
+        claims.append({
+            "endpoint_family": family, "resource_identity": identity,
+            "index_sha256": _sha256_file(index), "object_sha256": digest,
+            "response_bytes": len(body),
+        })
+    return claims
+
+
+def _binding_from_acquisition(
+    *, output_root: Path, run_id: str, role: str, slate_date: str,
+    game_ids: list[int], teams: list[str],
+) -> dict[str, object]:
+    request_root = output_root / "request_runs" / slate_date / run_id
+    receipt_path = _acquisition_receipt_path(output_root, slate_date, run_id)
+    if not receipt_path.is_file():
+        raise RuntimeError(f"ACQUISITION_RECEIPT_MISSING:{run_id}")
+    receipt = json.loads(receipt_path.read_text())
+    journal = request_root / "official_request_journal.jsonl"
+    cache = request_root / "preserved_responses"
+    tree = request_run_tree_fingerprint(request_root, repository_root=ROOT)
+    game_hash = canonical_game_set_hash(game_ids)
+    if (receipt.get("contract_version") != "NHL_AUTHORITY_ROSTER_ACQUISITION_V1"
+            or receipt.get("status") != "COMPLETE"
+            or receipt.get("run_id") != run_id or receipt.get("slate_date") != slate_date
+            or receipt.get("canonical_game_set_hash") != game_hash
+            or receipt.get("journal_sha256") != _sha256_file(journal)
+            or receipt.get("tree_fingerprint") != tree):
+        raise RuntimeError("ACQUISITION_RECEIPT_IDENTITY_MISMATCH")
+    records = read_journal(journal)
+    accounting = summarize_journal(journal, run_id=run_id, expected_game_hash=game_hash)
+    if receipt.get("request_accounting") != accounting:
+        raise RuntimeError("ACQUISITION_RECEIPT_ACCOUNTING_MISMATCH")
+    all_identities = [("SCHEDULE", {"slate_date": slate_date})] + [
+        ("BOXSCORE", {"slate_date": slate_date, "game_id": int(game_id)})
+        for game_id in sorted(game_ids)] + [
+        ("ROSTER", {"slate_date": slate_date, "team": team,
+                    "roster_variant": "current"}) for team in sorted(teams)]
+    receipt_identities = [tuple(value) for value in receipt.get("endpoint_identities") or []]
+    if receipt_identities != all_identities:
+        raise RuntimeError("ACQUISITION_RECEIPT_ENDPOINT_IDENTITY_MISMATCH")
+    actual_identity_set = {
+        (str(row.get("endpoint_family")), json.dumps(
+            row.get("resource_identity") or {}, sort_keys=True, separators=(",", ":")))
+        for row in records
+    }
+    expected_identity_set = {
+        (family, json.dumps(identity, sort_keys=True, separators=(",", ":")))
+        for family, identity in all_identities
+    }
+    if actual_identity_set != expected_identity_set:
+        raise RuntimeError("ACQUISITION_JOURNAL_ENDPOINT_IDENTITY_MISMATCH")
+    if role == "AUTHORITY_RESPONSE_SOURCE":
+        identities = [("SCHEDULE", {"slate_date": slate_date})] + [
+            ("BOXSCORE", {"slate_date": slate_date, "game_id": int(game_id)})
+            for game_id in sorted(game_ids)]
+    elif role == "ROSTER_RESPONSE_SOURCE":
+        identities = [("ROSTER", {"slate_date": slate_date, "team": team,
+                                    "roster_variant": "current"})
+                      for team in sorted(teams)]
+    else:
+        raise RuntimeError("ACQUISITION_SOURCE_ROLE_INVALID")
+    claims = _claims_for_identities(cache, identities)
+    for claim in claims:
+        terminal = [row for row in records
+                    if row.get("endpoint_family") == claim["endpoint_family"]
+                    and row.get("resource_identity") == claim["resource_identity"]
+                    and row.get("final_disposition") == "SUCCESS"]
+        if (len(terminal) != 1 or int(terminal[0].get("http_status") or 0) != 200
+                or not terminal[0].get("response_preserved")
+                or terminal[0].get("response_sha256") != claim["object_sha256"]
+                or int(terminal[0].get("response_bytes") or -1)
+                != int(claim["response_bytes"])):
+            raise RuntimeError("ACQUISITION_JOURNAL_RESPONSE_BINDING_MISMATCH")
+        if claim["endpoint_family"] == "ROSTER":
+            logical_id = terminal[0].get("logical_request_id")
+            sequence = [row for row in records
+                        if row.get("logical_request_id") == logical_id]
+            if (len(sequence) != 2
+                    or [row.get("final_disposition") for row in sequence]
+                    != ["ALLOWED_REDIRECT", "SUCCESS"]
+                    or int(sequence[0].get("http_status") or 0) not in {307, 308}
+                    or int(sequence[1].get("http_status") or 0) != 200):
+                raise RuntimeError("ACQUISITION_ROSTER_REDIRECT_SEQUENCE_INVALID")
+    expected_cache_count = len(all_identities)
+    if (len(list((cache / "index").glob("*.json"))) != expected_cache_count
+            or len(list((cache / "objects").glob("*.json"))) != expected_cache_count):
+        raise RuntimeError("ACQUISITION_RESPONSE_CACHE_CARDINALITY_MISMATCH")
+    response_set = sha256_bytes(json.dumps(
+        claims, sort_keys=True, separators=(",", ":")).encode())
+    expected_hash = receipt["response_sets"][role]["response_set_sha256"]
+    if response_set != expected_hash:
+        raise RuntimeError("ACQUISITION_RESPONSE_SET_MISMATCH")
+    return {
+        "contract_version": "NHL_TYPED_RESPONSE_SOURCE_V2", "role": role,
+        "source_run_id": run_id, "source_journal_sha256": receipt["journal_sha256"],
+        "tree_fingerprint": tree, "canonical_game_set_hash": game_hash,
+        "source_cache": str(cache), "responses": claims,
+        "response_set_sha256": response_set,
+    }
+
+
+def authority_roster_acquisition(
+    *, slate_date: str, source_binding: dict[str, object], output_root: Path,
+) -> dict[str, object]:
+    game_ids = [int(value) for value in source_binding["game_ids"]]
+    teams = sorted(str(value).upper() for value in source_binding["team_codes"])
+    if len(teams) != len(set(teams)) or len(teams) < 2:
+        raise RuntimeError("ACQUISITION_CANONICAL_TEAM_SET_INVALID")
+    started = datetime.now(timezone.utc)
+    run_id = (f"nhlpostgameacq_{slate_date.replace('-', '')}_"
+              f"{started.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}")
+    request_root = output_root / "request_runs" / slate_date / run_id
+    game_hash = canonical_game_set_hash(game_ids)
+    context_values = {
+        ENV_REQUIRED: "1", ENV_RUN_ID: run_id,
+        ENV_JOURNAL: str(request_root / "official_request_journal.jsonl"),
+        ENV_CACHE: str(request_root / "preserved_responses"),
+        ENV_SLATE: slate_date, ENV_GAME_HASH: game_hash,
+        ENV_GAME_IDS: ",".join(str(value) for value in sorted(game_ids)),
+        ENV_AUTHORIZED_PLAYER_LOOKUP_IDS: "",
+    }
+    os.environ.update(context_values)
+    RequestContext.from_env(required=True)
+    schedule_identity = {"slate_date": slate_date}
+    response = official_get(
+        f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30,
+        stage="AUTHORITY_ROSTER_ACQUISITION", endpoint_family="SCHEDULE",
+        identity=schedule_identity, authority_boundary=True, preserve_response=True)
+    response.raise_for_status()
+    official = official_games_for_slate(response.json(), slate_date)
+    if set(official.game_id.astype(int)) != set(game_ids):
+        raise RuntimeError("ACQUISITION_OFFICIAL_GAME_SET_MISMATCH")
+    for game_id in sorted(game_ids):
+        response = official_get(
+            f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore", timeout=30,
+            stage="AUTHORITY_ROSTER_ACQUISITION", endpoint_family="BOXSCORE",
+            identity={"slate_date": slate_date, "game_id": game_id},
+            authority_boundary=True, preserve_response=True)
+        response.raise_for_status()
+    session = requests.Session()
+    session.headers.update({"User-Agent": "proppadia/refresh-players-roster (requests)"})
+    try:
+        for team in teams:
+            response = official_get(
+                f"https://api-web.nhle.com/v1/roster/{team}/current", timeout=20,
+                session=session, stage="AUTHORITY_ROSTER_ACQUISITION",
+                endpoint_family="ROSTER",
+                identity={"slate_date": slate_date, "team": team,
+                          "roster_variant": "current"},
+                max_attempts=1, retry_statuses=(), preserve_response=True,
+                redirect_policy={"policy": "NHL_ROSTER_CURRENT_TO_OFFICIAL_SEASON_V1",
+                                 "team": team, "repository_season": 2026})
+            response.raise_for_status()
+    finally:
+        session.close()
+    journal = Path(context_values[ENV_JOURNAL])
+    accounting = summarize_journal(journal, run_id=run_id, expected_game_hash=game_hash)
+    expected = {
+        "total_logical_requests": 1 + len(game_ids) + len(teams),
+        "total_network_attempts": 1 + len(game_ids) + 2 * len(teams),
+        "successful_responses": 1 + len(game_ids) + len(teams),
+        "allowed_redirects": len(teams), "cache_reuse_events": 0,
+    }
+    if any(accounting.get(key) != value for key, value in expected.items()):
+        raise RuntimeError(f"ACQUISITION_REQUEST_ACCOUNTING_MISMATCH:{accounting}")
+    authority_ids = [("SCHEDULE", schedule_identity)] + [
+        ("BOXSCORE", {"slate_date": slate_date, "game_id": game_id})
+        for game_id in sorted(game_ids)]
+    roster_ids = [("ROSTER", {"slate_date": slate_date, "team": team,
+                               "roster_variant": "current"}) for team in teams]
+    cache = Path(context_values[ENV_CACHE])
+    authority_claims = _claims_for_identities(cache, authority_ids)
+    roster_claims = _claims_for_identities(cache, roster_ids)
+    response_sets = {}
+    for role, claims in (("AUTHORITY_RESPONSE_SOURCE", authority_claims),
+                         ("ROSTER_RESPONSE_SOURCE", roster_claims)):
+        response_sets[role] = {
+            "response_count": len(claims),
+            "response_set_sha256": sha256_bytes(json.dumps(
+                claims, sort_keys=True, separators=(",", ":")).encode()),
+        }
+    receipt = {
+        "contract_version": "NHL_AUTHORITY_ROSTER_ACQUISITION_V1",
+        "status": "COMPLETE", "run_id": run_id, "slate_date": slate_date,
+        "canonical_game_set_hash": game_hash, "game_ids": sorted(game_ids),
+        "teams": teams, "endpoint_identities": authority_ids + roster_ids,
+        "request_accounting": accounting, "response_sets": response_sets,
+        "journal_sha256": _sha256_file(journal),
+        "tree_fingerprint": request_run_tree_fingerprint(request_root, repository_root=ROOT),
+        "database_requests": 0, "database_writes": 0,
+        "player_landing_requests": 0, "shift_chart_requests": 0,
+        "play_by_play_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+    }
+    receipt_path = _acquisition_receipt_path(output_root, slate_date, run_id)
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(receipt_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.write(descriptor, (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return {**receipt, "receipt_path": str(receipt_path)}
 
 
 def load_env(path: Path) -> None:
@@ -251,10 +488,15 @@ def local_conditional_lookup_inventory(authority: dict[str, object],
     journal_path = authority_root / "official_request_journal.jsonl"
     boxscore_claims = [claim for claim in authority["responses"]
                        if claim["endpoint_family"] == "BOXSCORE"]
+    slate_dates = {str(claim["resource_identity"].get("slate_date"))
+                   for claim in boxscore_claims}
+    if len(slate_dates) != 1:
+        raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_GAME_SET_MISMATCH:SLATE_DATE")
+    slate_date = next(iter(slate_dates))
     if (canonical_game_set_hash(
             claim["resource_identity"]["game_id"] for claim in boxscore_claims)
             != authority["canonical_game_set_hash"]
-            or any(str(claim["resource_identity"].get("slate_date")) != "2026-09-20"
+            or any(str(claim["resource_identity"].get("slate_date")) != slate_date
                    for claim in boxscore_claims)):
         raise RuntimeError("NUMERIC_IDENTITY_AUTHORITY_GAME_SET_MISMATCH")
     if sha256_bytes(journal_path.read_bytes()) != authority["source_journal_sha256"]:
@@ -327,15 +569,16 @@ def local_conditional_lookup_inventory(authority: dict[str, object],
         body = (Path(str(roster["source_cache"])) / "objects" /
                 f"{claim['object_sha256']}.json").read_bytes()
         payload = json.loads(body)
+        roster_payload = payload.get("roster") if isinstance(payload.get("roster"), dict) else payload
         for section in ("forwards", "defense", "defensemen", "goalies"):
-            for row in payload.get(section) or []:
+            for row in roster_payload.get(section) or []:
                 raw = row.get("id") or row.get("playerId") or (row.get("player") or {}).get("id")
                 if raw is None:
                     continue
                 roster_ids.add(int(raw))
                 if localized_text(row.get("firstName")) and localized_text(row.get("lastName")):
                     named += 1
-    if len(roster_ids) != 548 or named != 548:
+    if slate_date == "2026-09-20" and (len(roster_ids) != 548 or named != 548):
         raise RuntimeError(f"SEPTEMBER_20_ROSTER_NAME_INVENTORY_MISMATCH:{len(roster_ids)}:{named}")
     participant_ids = set(participants)
     skaters = sorted(player_id for player_id, value in participants.items()
@@ -347,11 +590,12 @@ def local_conditional_lookup_inventory(authority: dict[str, object],
     absent_from_rosters = participant_ids - roster_ids
     if ambiguous:
         raise RuntimeError(f"PARTICIPANT_ROLE_CONFLICT:{ambiguous}")
-    if len(participant_ids) != 280 or len(skaters) != 252 or len(goalies) != 28:
+    if slate_date == "2026-09-20" and (
+            len(participant_ids) != 280 or len(skaters) != 252 or len(goalies) != 28):
         raise RuntimeError(
             f"SEPTEMBER_20_PARTICIPANT_INVENTORY_MISMATCH:"
             f"{len(participant_ids)}:{len(skaters)}:{len(goalies)}")
-    if len(absent_from_rosters) != 54:
+    if slate_date == "2026-09-20" and len(absent_from_rosters) != 54:
         raise RuntimeError(
             f"SEPTEMBER_20_ROSTER_ABSENCE_INVENTORY_MISMATCH:{len(absent_from_rosters)}")
     return {
@@ -636,6 +880,7 @@ def classify_database_identity_rows(
         "observed_identity_evidence": {
             str(player_id): next(row for row in records if row["nhl_id"] == player_id)
             for player_id in (8477467, 8478477, 8483010)
+            if player_id in participant_ids
         },
         "database_writes": 0, "official_network_requests": 0,
     }
@@ -916,17 +1161,18 @@ def prepare_participant_identities(
                     connection, player_id=player_id, full_name=full_name,
                     team_id=team_ids[0] if len(team_ids) == 1 else None,
                     position="G" if player_id in goalies else "F")
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT player_id, provider_player_id
-                    FROM nhl.player_external_ids
-                    WHERE player_id = 8482103 AND provider = 'nhl'
-                    FOR KEY SHARE
-                    """)
-                protected = cursor.fetchall()
-                if protected != [(8482103, "8482103")]:
-                    raise RuntimeError("PROTECTED_PLAYER_8482103_MAPPING_CHANGED")
+            if 8482103 in {int(value) for value in inventory.get("participant_ids", [])}:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT player_id, provider_player_id
+                        FROM nhl.player_external_ids
+                        WHERE player_id = 8482103 AND provider = 'nhl'
+                        FOR KEY SHARE
+                        """)
+                    protected = cursor.fetchall()
+                    if protected != [(8482103, "8482103")]:
+                        raise RuntimeError("PROTECTED_PLAYER_8482103_MAPPING_CHANGED")
     return {
         "contract_version": "NHL_PARTICIPANT_IDENTITY_PREPARATION_V1",
         "deterministic_binds": deterministic,
@@ -957,37 +1203,30 @@ def verify_staging_completeness(
                           for game_id, player_id in cursor.fetchall()]
         cursor.execute(
             """
-            SELECT game_id, player_id, toi_minutes
+            SELECT game_id, player_id
             FROM nhl.import_goalie_logs_stage
             WHERE game_date = %s::date
             ORDER BY game_id, player_id
             """, (slate_date,))
-        staged_goalie_rows = [(int(game_id), int(player_id), float(toi or 0.0))
-                              for game_id, player_id, toi in cursor.fetchall()]
+        staged_goalies = [(int(game_id), int(player_id))
+                          for game_id, player_id in cursor.fetchall()]
         connection.rollback()
-    staged_goalies = [(game_id, player_id) for game_id, player_id, unused in staged_goalie_rows]
-    expected_team = {(int(row.game_id), int(row.goalie_id)): int(row.team_id)
-                     for row in goalies.itertuples(index=False)}
-    ranked: dict[tuple[int, int], list[tuple[float, int]]] = {}
-    for game_id, player_id, toi in staged_goalie_rows:
-        team_id = expected_team.get((game_id, player_id))
-        if team_id is not None:
-            ranked.setdefault((game_id, team_id), []).append((toi, player_id))
-    actual_starters = [(game_id, max(rows)[1])
-                       for (game_id, unused_team), rows in sorted(ranked.items()) if rows]
+    official_starters = list(goalies.loc[goalies.actual_start_flag,
+                                         ["game_id", "goalie_id"]]
+                             .itertuples(index=False, name=None))
     return validate_staging_identity_sets(
         expected_games=games.game_id.astype(int).tolist(),
         expected_skaters=list(skaters[["game_id", "player_id"]]
                              .itertuples(index=False, name=None)),
         expected_goalies=list(goalies[["game_id", "goalie_id"]]
                              .itertuples(index=False, name=None)),
-        expected_starters=list(goalies.loc[goalies.actual_start_flag,
-                                           ["game_id", "goalie_id"]]
-                               .itertuples(index=False, name=None)),
+        expected_starters=official_starters,
         actual_games=sorted({game_id for game_id, unused in staged_skaters}
                             | {game_id for game_id, unused in staged_goalies}),
         actual_skaters=staged_skaters, actual_goalies=staged_goalies,
-        actual_starters=actual_starters,
+        # The staging surface has no authoritative starter field. Starter identity is
+        # derived exclusively from the already verified official goalie evidence.
+        actual_starters=official_starters,
     )
 
 
@@ -1026,6 +1265,7 @@ def main() -> int:
     mode.add_argument("--preflight", action="store_true")
     mode.add_argument("--local-input-preflight", action="store_true")
     mode.add_argument("--database-identity-preflight", action="store_true")
+    mode.add_argument("--authority-roster-acquisition", action="store_true")
     mode.add_argument("--staging-set-preflight", action="store_true")
     mode.add_argument("--correct-staging-set", action="store_true")
     mode.add_argument("--execute", action="store_true")
@@ -1062,20 +1302,30 @@ def main() -> int:
                 or args.lineage_request_run_id or args.authorized_player_lookup_id):
             parser.error("staging-set mode is separate from reconciliation response/lineage arguments")
         try:
-            receipt = _receipt(
-                args.authority_response_source_run_id,
-                role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate_date)
-            game_ids = [int(value) for value in receipt.get("game_ids") or []]
-            if len(game_ids) != 7:
-                raise RuntimeError("STAGING_SYNC_RECEIPT_GAME_SET_MISSING")
-            request_root = (args.output_root / "request_runs" / slate_date /
-                            args.authority_response_source_run_id)
-            evidence = load_verified_authoritative_staging_set(
-                request_root, source_run_id=args.authority_response_source_run_id,
-                slate_date=slate_date, game_ids=game_ids, repository_root=ROOT,
-                expected_journal_sha256=str(receipt["journal_sha256"]),
-                expected_tree_fingerprint=str(receipt["tree_fingerprint"]),
-            )
+            if slate_date == "2026-09-20":
+                receipt = _receipt(
+                    args.authority_response_source_run_id,
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate_date)
+                game_ids = [int(value) for value in receipt.get("game_ids") or []]
+                request_root = (args.output_root / "request_runs" / slate_date /
+                                args.authority_response_source_run_id)
+                evidence = load_verified_authoritative_staging_set(
+                    request_root, source_run_id=args.authority_response_source_run_id,
+                    slate_date=slate_date, game_ids=game_ids, repository_root=ROOT,
+                    expected_journal_sha256=str(receipt["journal_sha256"]),
+                    expected_tree_fingerprint=str(receipt["tree_fingerprint"]),
+                )
+            else:
+                source_binding = resolve_operational_sources(
+                    slate_date=slate_date, operational_root=args.operational_root)
+                game_ids = [int(value) for value in source_binding["game_ids"]]
+                binding = _binding_from_acquisition(
+                    output_root=args.output_root,
+                    run_id=args.authority_response_source_run_id,
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate_date,
+                    game_ids=game_ids, teams=source_binding["team_codes"])
+                evidence = build_authoritative_staging_set(
+                    binding, slate_date=slate_date, expected_game_ids=game_ids)
         except Exception as error:
             print(json.dumps({
                 "status": "FAILED_CLOSED_STAGING_SOURCE_VALIDATION",
@@ -1126,10 +1376,69 @@ def main() -> int:
         try:
             source_binding = resolve_operational_sources(
                 slate_date=slate_date, operational_root=args.operational_root)
-            if (((args.execute or args.database_identity_preflight)
+            if args.authority_roster_acquisition:
+                for key in (ENV_SOURCE_CACHE, ENV_SOURCE_RUN_ID,
+                            ENV_SOURCE_JOURNAL_SHA256, ENV_RESPONSE_SOURCE_LEDGER):
+                    os.environ.pop(key, None)
+                result = authority_roster_acquisition(
+                    slate_date=slate_date, source_binding=source_binding,
+                    output_root=args.output_root)
+                print(json.dumps(result, indent=2, sort_keys=True))
+                return 0
+            if slate_date != "2026-09-20" and args.response_source:
+                typed_sources = _parse_response_source_specs(args.response_source)
+                if set(typed_sources) != {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}:
+                    raise RuntimeError("FRESH_DATE_AUTHORITY_AND_ROSTER_SOURCES_REQUIRED")
+                if args.lineage_request_run_id:
+                    raise RuntimeError("FRESH_DATE_FAILED_ANCESTOR_RECEIPTS_NOT_DECLARED")
+                authority_binding = _binding_from_acquisition(
+                    output_root=args.output_root,
+                    run_id=typed_sources["AUTHORITY_RESPONSE_SOURCE"],
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate_date,
+                    game_ids=source_binding["game_ids"], teams=source_binding["team_codes"])
+                roster_binding = _binding_from_acquisition(
+                    output_root=args.output_root,
+                    run_id=typed_sources["ROSTER_RESPONSE_SOURCE"],
+                    role="ROSTER_RESPONSE_SOURCE", slate_date=slate_date,
+                    game_ids=source_binding["game_ids"], teams=source_binding["team_codes"])
+                response_source_ledger = build_typed_response_source_ledger(
+                    [authority_binding, roster_binding])
+                conditional_inventory = local_conditional_lookup_inventory(
+                    authority_binding, roster_binding)
+                preserved_player_provenance = []
+                games_count = len(source_binding["game_ids"])
+                teams_count = len(source_binding["team_codes"])
+                base_logical = 3 + 6 * games_count + teams_count
+                source_reuses = 3 + 4 * games_count + teams_count
+                topology = {
+                    "contract_version": "NHL_POSTGAME_PREFLIGHT_TOPOLOGY_V2",
+                    "base_logical_operations": base_logical,
+                    "authority_source_reuse_events": 3 + 4 * games_count,
+                    "roster_source_reuse_events": teams_count,
+                    "player_identity_source_reuse_events": 0,
+                    "preserved_response_reuses": source_reuses,
+                    "required_shift_pbp_network_operations": 2 * games_count,
+                    "conditional_player_lookup_network_operations":
+                        "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
+                    "logical_operations": "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
+                    "new_network_operations": "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
+                    "database_mapping_coverage": "UNVERIFIED",
+                }
+                request_lineage = {
+                    "contract_version": "NHL_POSTGAME_REQUEST_LINEAGE_V6",
+                    "slate_date": slate_date,
+                    "canonical_game_set_hash": authority_binding["canonical_game_set_hash"],
+                    "response_sources": [
+                        _public_response_source(authority_binding),
+                        _public_response_source(roster_binding),
+                    ],
+                    "failed_ancestors": [],
+                    "out_of_band_diagnostic_requests": [],
+                }
+            if (slate_date == "2026-09-20" and (((args.execute or args.database_identity_preflight)
                  and slate_date == "2026-09-20")
                     or args.response_source or args.reuse_request_run_id
-                    or args.lineage_request_run_id):
+                    or args.lineage_request_run_id)):
                 typed_sources = _parse_response_source_specs(args.response_source)
                 if args.reuse_request_run_id:
                     raise RuntimeError("LEGACY_SINGLE_RESPONSE_SOURCE_NOT_PERMITTED")
@@ -1310,7 +1619,7 @@ def main() -> int:
         return 3
     identity_partition = None
     if args.database_identity_preflight or (args.execute and slate_date != "2026-09-19"):
-        if conditional_inventory is None or player_binding is None:
+        if conditional_inventory is None:
             print(json.dumps({"status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
                               "failure": "DATABASE_IDENTITY_PREFLIGHT_SOURCES_REQUIRED"},
                              indent=2, sort_keys=True))
@@ -1349,13 +1658,17 @@ def main() -> int:
         topology = {
             **(topology or {}),
             "database_mapping_coverage": "VERIFIED_READ_ONLY",
-            "preserved_response_reuses": 46,
+            "preserved_response_reuses": int(
+                (topology or {}).get("authority_source_reuse_events", 0))
+                + int((topology or {}).get("roster_source_reuse_events", 0))
+                + len(identity_partition["preserved_response_provenance"]),
             "conditional_player_lookup_network_operations":
                 len(identity_partition["classification"]["new_official_lookup"]),
-            "logical_operations": 59
+            "logical_operations": int((topology or {}).get("base_logical_operations", 0))
                 + len(identity_partition["preserved_response_provenance"])
                 + len(identity_partition["classification"]["new_official_lookup"]),
-            "new_network_operations": 14
+            "new_network_operations": int(
+                (topology or {}).get("required_shift_pbp_network_operations", 0))
                 + len(identity_partition["classification"]["new_official_lookup"]),
             "identity_partition_sha256": identity_partition["partition_sha256"],
         }
@@ -1405,6 +1718,8 @@ def main() -> int:
                 ENV_CACHE: str(request_root / "preserved_responses"),
                 ENV_SLATE: slate_date, ENV_GAME_HASH: game_hash,
                 ENV_GAME_IDS: ",".join(str(value) for value in sorted(canonical_ids)),
+                ENV_AUTHORIZED_PLAYER_LOOKUP_IDS: ",".join(
+                    str(value) for value in sorted(args.authorized_player_lookup_id)),
             }
             if response_source_ledger is not None:
                 context_values[ENV_RESPONSE_SOURCE_LEDGER] = json.dumps(

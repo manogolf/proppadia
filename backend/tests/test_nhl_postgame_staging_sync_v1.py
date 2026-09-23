@@ -168,6 +168,28 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertTrue(all(value == {"skaters": 36, "goalies": 4}
                             for value in self.authority["per_game"].values()))
 
+    def test_generalized_cardinalities_are_derived_from_authority(self):
+        evidence = synthetic_evidence()
+        removed_skaters = {game_id * 1000 + 35 for game_id in evidence["game_ids"]}
+        evidence["skater_rows"] = [row for row in evidence["skater_rows"]
+                                    if row["player_id"] not in removed_skaters]
+        evidence["skater_identities"] = [
+            (row["game_id"], row["player_id"]) for row in evidence["skater_rows"]]
+        removed_goalies = {game_id * 100 for game_id in evidence["game_ids"]}
+        evidence["goalie_rows"] = [row for row in evidence["goalie_rows"]
+                                   if row["player_id"] not in removed_goalies]
+        evidence["goalie_identities"] = [
+            (row["game_id"], row["player_id"]) for row in evidence["goalie_rows"]]
+        evidence["expected_identity_set_sha256"] = sync.identity_set_sha256(
+            evidence["skater_identities"])
+        evidence["per_game"] = {
+            str(game_id): {"skaters": 35, "goalies": 3}
+            for game_id in evidence["game_ids"]}
+        counts = sync._required_cardinalities(evidence)
+        self.assertEqual(counts["skater_appearances"], 245)
+        self.assertEqual(counts["goalie_appearances"], 21)
+        self.assertEqual(counts["confirmed_starters"], 14)
+
     def test_one_stale_row_is_derived_from_set_difference_without_hard_coding(self):
         evidence = synthetic_evidence()
         arbitrary_extra = (evidence["game_ids"][2], 99999999)
@@ -440,7 +462,7 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
                          if isinstance(extra_identities[0], list)
                          else [(103, 99999999)])
         self.assertEqual(result["contract_version"],
-                         "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2")
+                         "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V3")
         goalie_query.assert_called_once()
         for inventory in (result["skaters"], result["goalies"]):
             for key in ("expected_identity_set_sha256", "existing_identity_set_sha256",
@@ -595,8 +617,8 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
             self.assertEqual(code, 0)
             child.assert_not_called(); network.assert_not_called(); publish.assert_not_called()
             self.assertFalse(output_root.exists())
-            self.assertEqual(json.loads(output[-1])["contract_version"],
-                             "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V2")
+        self.assertEqual(json.loads(output[-1])["contract_version"],
+                         "NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V3")
 
     def test_september_20_lineage_requires_fifth_failed_run(self):
         sources = [

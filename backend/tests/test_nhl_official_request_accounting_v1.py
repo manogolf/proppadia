@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from backend.nhl.official_request_journal import (
     ENV_CACHE,
+    ENV_AUTHORIZED_PLAYER_LOOKUP_IDS,
     ENV_GAME_HASH,
     ENV_GAME_IDS,
     ENV_JOURNAL,
@@ -28,6 +29,10 @@ from backend.nhl.official_request_journal import (
     read_journal,
     summarize_journal,
     verify_preserved_response_run,
+)
+from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
+    _binding_from_acquisition,
+    authority_roster_acquisition,
 )
 
 
@@ -132,6 +137,120 @@ class OfficialRequestAccountingTest(unittest.TestCase):
         self.assertEqual(summary["retries"], 2)
         self.assertEqual(summary["failed_attempts"], 3)
         self.assertEqual(summary["fallback_attempts"], 1)
+
+    def test_player_landing_requires_explicit_id_before_transport(self):
+        env = {**self.env, ENV_AUTHORIZED_PLAYER_LOOKUP_IDS: ""}
+        with patch.dict(os.environ, env, clear=False), \
+             patch("backend.nhl.official_request_journal.requests.Session") as transport:
+            with self.assertRaisesRegex(RuntimeError, "NOT_EXPLICITLY_AUTHORIZED"):
+                official_get(
+                    "https://api-web.nhle.com/v1/player/8480000/landing",
+                    timeout=1, stage="IDENTITY", endpoint_family="PLAYER_LANDING",
+                    identity={"slate_date": SLATE, "player_id": 8480000})
+        transport.assert_not_called()
+        rows = read_journal(Path(self.env[ENV_JOURNAL]))
+        self.assertEqual(rows[-1]["event_kind"], "REQUEST_REJECTED")
+
+    def test_eight_game_acquisition_only_topology_and_shared_typed_source(self):
+        slate = "2026-09-21"
+        games = list(range(2026010015, 2026010023))
+        teams = ["BUF", "CBJ", "CHI", "COL", "DAL", "DET", "MIN", "MTL",
+                 "NJD", "NYR", "OTT", "PHI", "PIT", "STL", "WPG", "WSH"]
+        schedule = {"gameWeek": [{"date": slate, "games": [
+            {"id": game_id, "gameState": "FINAL",
+             "homeTeam": {"id": index * 2 + 1},
+             "awayTeam": {"id": index * 2 + 2}}
+            for index, game_id in enumerate(games)]}]}
+        outcomes = [FakeResponse(schedule)]
+        outcomes.extend(FakeResponse({"id": game_id}) for game_id in games)
+        for team in teams:
+            outcomes.extend([
+                FakeResponse({}, 307, {
+                    "Location": f"https://api-web.nhle.com/v1/roster/{team}/20262027"},
+                    content=b""),
+                FakeResponse({"forwards": [{"id": 8000000 + len(outcomes),
+                                             "firstName": {"default": "A"},
+                                             "lastName": {"default": "Player"}}]}),
+            ])
+        output = self.root / "postgame"
+        source = {"game_ids": games, "team_codes": teams}
+        with patch.dict(os.environ, {}, clear=True), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.ROOT", self.root), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database, \
+             patch("backend.nhl.official_request_journal.requests.Session",
+                   side_effect=lambda: FakeSession(outcomes)):
+            receipt = authority_roster_acquisition(
+                slate_date=slate, source_binding=source, output_root=output)
+        database.assert_not_called()
+        accounting = receipt["request_accounting"]
+        self.assertEqual(accounting["total_logical_requests"], 25)
+        self.assertEqual(accounting["total_network_attempts"], 41)
+        self.assertEqual(accounting["successful_responses"], 25)
+        self.assertEqual(accounting["allowed_redirects"], 16)
+        self.assertEqual(accounting["cache_reuse_events"], 0)
+        journal = read_journal(output / "request_runs" / slate / receipt["run_id"] /
+                               "official_request_journal.jsonl")
+        self.assertEqual({row["endpoint_family"] for row in journal},
+                         {"SCHEDULE", "BOXSCORE", "ROSTER"})
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.ROOT", self.root):
+            authority = _binding_from_acquisition(
+                output_root=output, run_id=receipt["run_id"],
+                role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate,
+                game_ids=games, teams=teams)
+            roster = _binding_from_acquisition(
+                output_root=output, run_id=receipt["run_id"],
+                role="ROSTER_RESPONSE_SOURCE", slate_date=slate,
+                game_ids=games, teams=teams)
+        self.assertEqual(authority["source_run_id"], roster["source_run_id"])
+        self.assertEqual(len(authority["responses"]), 9)
+        self.assertEqual(len(roster["responses"]), 16)
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.ROOT", self.root):
+            with self.assertRaises(RuntimeError):
+                _binding_from_acquisition(
+                    output_root=output, run_id=receipt["run_id"],
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate,
+                    game_ids=games[:-1], teams=teams)
+            with self.assertRaises(RuntimeError):
+                _binding_from_acquisition(
+                    output_root=output, run_id=receipt["run_id"],
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date="2026-09-22",
+                    game_ids=games, teams=teams)
+        journal_path = (output / "request_runs" / slate / receipt["run_id"] /
+                        "official_request_journal.jsonl")
+        journal_path.write_text(journal_path.read_text().replace(
+            '"response_bytes":', '"response_bytes": 1, "original_response_bytes":', 1))
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.ROOT", self.root):
+            with self.assertRaisesRegex(RuntimeError, "RECEIPT_IDENTITY_MISMATCH"):
+                _binding_from_acquisition(
+                    output_root=output, run_id=receipt["run_id"],
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate,
+                    game_ids=games, teams=teams)
+
+    def test_partial_acquisition_retains_journal_without_receipt_or_retry(self):
+        slate = "2026-09-21"
+        games = [2026010015]
+        teams = ["COL", "WPG"]
+        outcomes = [FakeResponse({"gameWeek": [{"date": slate, "games": [
+            {"id": games[0], "gameState": "FINAL",
+             "homeTeam": {"id": 1}, "awayTeam": {"id": 2}}]}]}),
+                    FakeResponse({"id": games[0]}), FakeResponse({}, 500)]
+        output = self.root / "partial"
+        with patch.dict(os.environ, {}, clear=True), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.ROOT", self.root), \
+             patch("backend.nhl.official_request_journal.requests.Session",
+                   side_effect=lambda: FakeSession(outcomes)):
+            with self.assertRaises(Exception):
+                authority_roster_acquisition(
+                    slate_date=slate,
+                    source_binding={"game_ids": games, "team_codes": teams},
+                    output_root=output)
+        runs = list((output / "request_runs" / slate).iterdir())
+        self.assertEqual(len(runs), 1)
+        journal = read_journal(runs[0] / "official_request_journal.jsonl")
+        self.assertEqual(len(journal), 3)
+        self.assertEqual(journal[-1]["attempt_number"], 1)
+        self.assertFalse((output / "acquisition_receipts" / slate /
+                          f"{runs[0].name}.json").exists())
 
     def test_roster_redirect_is_one_logical_operation_and_two_distinct_attempts(self):
         current = "https://api-web.nhle.com/v1/roster/NJD/current"

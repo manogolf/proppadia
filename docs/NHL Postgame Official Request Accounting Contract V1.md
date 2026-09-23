@@ -86,6 +86,40 @@ Completion requires the final accounting summary to reconcile exactly with the
 shared journal. A missing journal, mismatched run/game-set identity, unexpected
 date/game request or incorrect authority-boundary total blocks publication.
 
+## Fresh-date authority and roster acquisition
+
+`bin/nhl_postgame_reconcile.sh YYYY-MM-DD --authority-roster-acquisition`
+is the only acquisition-only entry point. It validates immutable local inputs
+before creating a request run, performs no database access, and permits only
+one schedule, one boxscore per canonical game, and one roster logical operation
+per unique team. Roster transport may follow the single allowlisted 307/308
+hop described above; retries, fallbacks, player landing, shifts and play-by-play
+are forbidden.
+
+A successful run emits `NHL_AUTHORITY_ROSTER_ACQUISITION_V1` outside the
+immutable request-run tree. The receipt binds the date, canonical game-set
+hash, endpoint identities, journal hash, request-run tree fingerprint and
+separate authority and roster response-set hashes. One acquisition run may be
+declared in both typed roles. A partial acquisition retains only its immutable
+request run and journal and is never treated as a completed response source.
+
+Fresh-date completed-package lineage uses
+`NHL_POSTGAME_REQUEST_LINEAGE_V6`. Source role and source run are distinct
+lineage dimensions, so the same verified acquisition run can supply disjoint
+authority and roster families without being mistaken for a failed execution
+ancestor. `PLAYER_IDENTITY_RESPONSE_SOURCE` is omitted when its declared
+identity inventory is empty.
+
+Every fresh player-landing network operation is checked against the repeatable
+operator-authorized player-ID set before transport. Preserved player-response
+reuse is separately verified and does not activate network fallback. Child
+collectors inherit the same transport gate and cannot issue an undeclared
+landing request.
+
+For eight games and sixteen unique teams, successful acquisition has exactly
+25 logical operations, 41 transport attempts, 25 terminal HTTP 200 responses,
+16 allowed redirects and zero reuse events.
+
 ## Expected September 19-shaped seven-game plan after reuse
 
 For seven games involving 12 unique teams (two teams repeat), the normal

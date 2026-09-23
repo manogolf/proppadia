@@ -47,6 +47,32 @@ conflict absence, and recomputed immutable prediction identities. The
 `--local-input-preflight` mode performs this validation with zero database and
 network access.
 
+Beginning with the September 21 prospective boundary, postgame binding also
+fully verifies the unique Points and Saves `FINAL_PREGAME` publications:
+manifest, run/date/game identity, schema, prestart timestamps, natural keys,
+prediction identities, model ladder and metadata cardinalities. Market
+attachment remains optional and has no effect on grading.
+
+Points rows join authoritative outcomes only on `(game_id, player_id)`.
+Participating rows settle the three half-point lines from official goals plus
+assists; nonparticipants, source exclusions, missing prospective predictions
+and unresolved rows remain explicit surfaces.
+
+Saves rows retain their conditional-on-start meaning. Official boxscore team
+membership and a unique maximum official TOI select exactly one starter per
+team. Only those starters settle the thirteen-line ladder. Predicted
+nonstarters, relief appearances, unpredicted starters and other unpredicted
+goalie outcomes remain separate. A tie, missing team, unusable TOI or identity
+conflict fails closed.
+
+Authoritative staging contract `NHL_AUTHORITATIVE_STAGING_SYNC_V2`, preflight
+`NHL_AUTHORITATIVE_STAGING_PREFLIGHT_V3`, and correction authorization
+`NHL_AUTHORITATIVE_STAGING_CORRECTION_AUTHORIZATION_V3` derive all skater,
+goalie and starter cardinalities from the verified official response set.
+They retain exact natural-key equality, date/game write scoping, locking,
+rollback and set-difference deletion gates without assuming a seven-game or
+36-skater/four-goalie shape.
+
 September 19 retains its completed catch-up binding and package identity. No
 compatibility copy is created for September 20. Because Points and Saves were
 not prospectively active before September 21, September 20 publishes
