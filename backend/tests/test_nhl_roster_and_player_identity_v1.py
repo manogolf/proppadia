@@ -8,7 +8,7 @@ import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # These legacy collector modules validate configuration at import time.  The
 # tests never connect; sentinel values permit importing their pure helpers.
@@ -48,6 +48,8 @@ from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
     REQUEST_RUN_RECEIPTS,
     classify_database_identity_rows,
     local_conditional_lookup_inventory,
+    prepare_participant_identities,
+    preserved_player_provenance_from_binding,
 )
 from backend.nhl.scripts.seed_goalie_logs_for_date import resolve_goalie_player_id
 from backend.nhl.scripts.seed_skater_logs_for_date import resolve_skater_player_id
@@ -157,6 +159,10 @@ def _player_binding():
         expected_index_sha256=receipt["index_sha256"])
 
 
+def _preserved_provenance():
+    return preserved_player_provenance_from_binding(_player_binding())
+
+
 class RosterAndPlayerIdentityTest(unittest.TestCase):
     def test_plain_and_localized_names(self):
         self.assertEqual(localized_text("  Jack Hughes  "), "Jack Hughes")
@@ -189,6 +195,17 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
                          "69733de66231bda93e5deb6c5d013aa3ce6a146835c1ae301ffdc2be477fb7b4")
         self.assertEqual(claim["index_sha256"],
                          "797f6100afd0c418f366c914e464ecb311768923f3b80fab48f18d55d33aa99f")
+        provenance = preserved_player_provenance_from_binding(binding)
+        self.assertEqual([row["player_id"] for row in provenance], [8485386])
+        self.assertEqual(provenance[0]["requested_and_returned_player_id"], 8485386)
+        self.assertEqual(provenance[0]["source_run_id"], FOURTH)
+        self.assertEqual(provenance[0]["response_object_sha256"],
+                         claim["object_sha256"])
+        with self.assertRaisesRegex(RuntimeError, "SOURCE_EMPTY"):
+            preserved_player_provenance_from_binding({**binding, "responses": []})
+        with self.assertRaisesRegex(RuntimeError, "CLAIM_INVALID"):
+            preserved_player_provenance_from_binding(
+                {**binding, "responses": binding["responses"] * 2})
 
     def test_all_548_roster_names_are_retained_without_landing_backfill(self):
         unused, roster = _bindings()
@@ -320,6 +337,22 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             self.assertEqual(len(rows), 25)
             self.assertEqual(sum(row["event_kind"] == "PRESERVED_RESPONSE_REUSE"
                                  for row in rows), 23)
+            player_reuses = [row for row in rows
+                             if row["event_kind"] == "PRESERVED_RESPONSE_REUSE"
+                             and row["endpoint_family"] == "PLAYER_LANDING"]
+            self.assertEqual(len(player_reuses), 1)
+            player_reuse = player_reuses[0]
+            player_claim = player["responses"][0]
+            self.assertTrue(player_reuse["cross_run_reuse"])
+            self.assertEqual(player_reuse["source_role"],
+                             "PLAYER_IDENTITY_RESPONSE_SOURCE")
+            self.assertEqual(player_reuse["source_run_id"], player["source_run_id"])
+            self.assertEqual(player_reuse["source_journal_sha256"],
+                             player["source_journal_sha256"])
+            self.assertEqual(player_reuse["source_response_index_sha256"],
+                             player_claim["index_sha256"])
+            self.assertEqual(player_reuse["source_response_object_sha256"],
+                             player_claim["object_sha256"])
             self.assertEqual(rows[-1]["event_kind"], "REQUEST_REJECTED")
 
     def test_audited_unicode_abbreviation_rule(self):
@@ -348,6 +381,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         inventory = local_conditional_lookup_inventory(authority, roster)
         absent = set(inventory["roster_absent_ids"])
         preserved = {8485386}
+        preserved_provenance = _preserved_provenance()
         lookups = {8484537, 8485525, 8486221}
         numeric_proven = {
             8481681, 8481827, 8482167, 8483436, 8483442, 8483494,
@@ -382,7 +416,8 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         ]
         result = classify_database_identity_rows(
             inventory=inventory, player_rows=player_rows, external_rows=external_rows,
-            preserved_player_ids=preserved, authorized_lookup_ids=lookups,
+            preserved_player_provenance=preserved_provenance,
+            authorized_lookup_ids=lookups,
             slate_date="2026-09-20")
         self.assertEqual(result["roster_absent_classification_counts"], {
             "exact_mapping": 22, "deterministic_same_number_bind": 5,
@@ -393,6 +428,11 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         self.assertEqual(result["classification"]["new_official_lookup"],
                          [8484537, 8485525, 8486221])
         self.assertEqual(result["classification"]["preserved_response_resolution"], [8485386])
+        self.assertEqual(
+            [(row["player_id"], row["replay_state"])
+             for row in result["preserved_response_provenance"]],
+            [(8485386, "PENDING_BIND_FROM_VERIFIED_RESPONSE")])
+        self.assertTrue(result["preserved_response_provenance_complete"])
         self.assertEqual(len(result["classification"]["exact_mapping"]), 233)
         self.assertEqual(len(result["classification"]["deterministic_same_number_bind"]), 20)
         self.assertEqual(result["classification"]["numeric_identity_proven_bind"],
@@ -429,7 +469,8 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         self.assertEqual(connection.rows, before)
         mismatch = classify_database_identity_rows(
             inventory=inventory, player_rows=player_rows,
-            external_rows=external_rows, preserved_player_ids=preserved,
+            external_rows=external_rows,
+            preserved_player_provenance=preserved_provenance,
             authorized_lookup_ids={8484537}, slate_date="2026-09-20")
         self.assertEqual(mismatch["status"], "FAILED_CLOSED_DATABASE_PREFLIGHT")
         self.assertIn("AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH", mismatch["failure"])
@@ -447,7 +488,8 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             ]
             progressed = classify_database_identity_rows(
                 inventory=inventory, player_rows=player_rows,
-                external_rows=progressed_external, preserved_player_ids=preserved,
+                external_rows=progressed_external,
+                preserved_player_provenance=preserved_provenance,
                 authorized_lookup_ids=lookups, slate_date="2026-09-20")
             self.assertEqual(progressed["status"], "DATABASE_IDENTITY_PREFLIGHT_VALID")
             self.assertEqual(progressed["classification"]["new_official_lookup"],
@@ -468,7 +510,8 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         }]
         conflict = classify_database_identity_rows(
             inventory=inventory, player_rows=player_rows,
-            external_rows=conflicted_external, preserved_player_ids=preserved,
+            external_rows=conflicted_external,
+            preserved_player_provenance=preserved_provenance,
             authorized_lookup_ids=lookups, slate_date="2026-09-20")
         self.assertEqual(conflict["status"], "FAILED_CLOSED_DATABASE_PREFLIGHT")
         self.assertIn(bind_candidates[0], conflict["classification"]["conflict"])
@@ -480,7 +523,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             external_rows=external_rows + [{
                 "player_id": internal_conflict_id, "provider": "nhl",
                 "provider_player_id": "9999999",
-            }], preserved_player_ids=preserved,
+            }], preserved_player_provenance=preserved_provenance,
             authorized_lookup_ids=lookups, slate_date="2026-09-20")
         self.assertIn(internal_conflict_id,
                       internal_conflict["classification"]["conflict"])
@@ -493,13 +536,117 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             str(database_only_id))
         database_only = classify_database_identity_rows(
             inventory=database_only_inventory, player_rows=player_rows,
-            external_rows=external_rows, preserved_player_ids=preserved,
+            external_rows=external_rows,
+            preserved_player_provenance=preserved_provenance,
             authorized_lookup_ids=lookups, slate_date="2026-09-20")
         self.assertIn(database_only_id,
                       database_only["classification"]["new_official_lookup"])
         original_name = next(row["full_name"] for row in player_rows
                              if row["player_id"] == database_only_id)
         self.assertEqual(original_name, "A. Player")
+
+        # Safe partial progress may move every bind and lookup into exact mapping.
+        # The declared player response remains provenance, not a second partition row.
+        replay_rows = player_rows + [
+            {"player_id": player_id, "full_name": f"Player {player_id}",
+             "first_name": "Full", "last_name": f"Name-{player_id}",
+             "team_id": None, "position": "G" if player_id in inventory["goalie_ids"] else "F"}
+            for player_id in sorted(preserved | lookups)
+        ]
+        replay_external = external_rows + [
+            {"player_id": player_id, "provider": "nhl",
+             "provider_player_id": str(player_id)}
+            for player_id in sorted(deterministic | numeric_proven | preserved | lookups)
+        ]
+        replay = classify_database_identity_rows(
+            inventory=inventory, player_rows=replay_rows,
+            external_rows=replay_external,
+            preserved_player_provenance=preserved_provenance,
+            authorized_lookup_ids=set(), slate_date="2026-09-20")
+        self.assertEqual(replay["status"], "DATABASE_IDENTITY_PREFLIGHT_VALID")
+        self.assertEqual(len(replay["classification"]["exact_mapping"]), 280)
+        self.assertEqual(replay["classification"]["preserved_response_resolution"], [])
+        self.assertEqual(replay["classification"]["new_official_lookup"], [])
+        self.assertEqual(replay["classification"]["conflict"], [])
+        self.assertEqual(replay["preserved_response_provenance"][0]["replay_state"],
+                         "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE")
+        self.assertEqual(sum(len(values) for values in replay["classification"].values()),
+                         280)
+
+        # Either uniqueness direction and duplicate exact rows remain fail-closed
+        # even for an identity backed by a valid preserved response.
+        for bad_rows in (
+            [{"player_id": 8485386, "provider": "nhl",
+              "provider_player_id": "9999999"}],
+            [{"player_id": 9999999, "provider": "nhl",
+              "provider_player_id": "8485386"}],
+            [{"player_id": 8485386, "provider": "nhl",
+              "provider_player_id": "8485386"},
+             {"player_id": 8485386, "provider": "nhl",
+              "provider_player_id": "8485386"}],
+        ):
+            with self.subTest(bad_rows=bad_rows):
+                conflicted = classify_database_identity_rows(
+                    inventory=inventory, player_rows=replay_rows,
+                    external_rows=[row for row in replay_external
+                                   if int(row["player_id"]) != 8485386
+                                   and str(row["provider_player_id"]) != "8485386"] + bad_rows,
+                    preserved_player_provenance=preserved_provenance,
+                    authorized_lookup_ids=set(), slate_date="2026-09-20")
+                self.assertEqual(conflicted["status"],
+                                 "FAILED_CLOSED_DATABASE_PREFLIGHT")
+                self.assertIn(8485386, conflicted["classification"]["conflict"])
+
+    def test_exact_replay_reuses_player_response_without_write_or_network(self):
+        provenance = _preserved_provenance()
+        partition = {
+            "partition_sha256": "a" * 64,
+            "classification": {
+                "exact_mapping": [8482103, 8485386],
+                "deterministic_same_number_bind": [],
+                "numeric_identity_proven_bind": [],
+                "preserved_response_resolution": [],
+                "new_official_lookup": [],
+                "conflict": [],
+            },
+            "preserved_response_provenance": [{
+                **provenance[0],
+                "primary_classification": "exact_mapping",
+                "replay_state": "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE",
+                "mapping": {"internal_player_id": 8485386, "provider": "nhl",
+                            "provider_external_id": "8485386"},
+            }],
+        }
+        inventory = {"goalie_ids": [], "participant_team_ids": {"8485386": [14]}}
+        response = MagicMock()
+        response.json.return_value = {
+            "playerId": 8485386,
+            "firstName": {"default": "Ethan"},
+            "lastName": {"default": "Czata"},
+        }
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [(8482103, "8482103")]
+        with patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.official_get",
+                   return_value=response) as official, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect",
+                   return_value=connection), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation."
+                   "resolve_player_external_identity") as bind, \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation."
+                   "create_or_verify_player") as create:
+            result = prepare_participant_identities(
+                "postgresql://offline.invalid/test", slate_date="2026-09-20",
+                inventory=inventory, partition=partition)
+        official.assert_called_once()
+        self.assertTrue(official.call_args.kwargs["reuse_preserved"])
+        self.assertFalse(official.call_args.kwargs["preserve_response"])
+        bind.assert_not_called()
+        create.assert_not_called()
+        self.assertEqual(result["preserved_response_provenance_reuses"], [8485386])
+        self.assertEqual(result["already_bound_exact_from_verified_response"], [8485386])
+        self.assertEqual(result["preserved_response_resolutions"], [])
 
     def test_numeric_identity_provenance_fails_closed_on_tampering_or_wrong_slate(self):
         authority, roster = _bindings()

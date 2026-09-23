@@ -119,16 +119,32 @@ full name. The new-lookup set must exactly equal repeatable explicit CLI
 authorizations.
 
 The September 20 gate requires complete, mutually exclusive coverage of all 54
-roster-absent participants. Exact-mapping, authoritative-name-bind and numeric-
-evidence-bind counts may shift as prior committed stages safely advance, so
-none is hard-coded.
-Preserved resolution must contain exactly `8485386`, conflicts must be empty,
-and the stable new-lookup set is `8484537`, `8485525` and `8486221`. All 28
-goalie appearances must likewise be covered, with `8485525` as the only goalie
-requiring a new lookup. The resulting topology is 63 logical operations, 46
-preserved-response reuses and 17 new network operations: seven shift charts,
-seven play-by-play responses and three player landing responses. Database binds
-are not HTTP operations.
+roster-absent participants. Exact-mapping, authoritative-name-bind, numeric-
+evidence-bind, pending-preserved-resolution and new-lookup counts may shift as
+prior committed stages safely advance, so none is hard-coded. Conflicts must be
+empty, and the new-lookup set must exactly equal the operator-authorized set.
+All 28 goalie appearances must likewise be covered; a safely completed prior
+bind may move a goalie from a bind or lookup category into exact mapping without
+invalidating replay.
+
+Every identity declared by `PLAYER_IDENTITY_RESPONSE_SOURCE` also appears
+exactly once in a separate preserved-response provenance overlay. That overlay
+does not change or double-count the mutually exclusive participant partition.
+An identity with no exact mapping is
+`PENDING_BIND_FROM_VERIFIED_RESPONSE`; an identity whose forward and reverse
+NHL mapping already agrees is
+`ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE`. Both states retain the verified
+source run, journal, tree, game set, response set, index, object, byte length and
+requested/returned player identity in the partition digest and package lineage.
+Any missing, altered, ambiguous, mismatched or conflicting evidence fails
+closed even when the live mapping is exact.
+
+Replay still journals one cross-run `PRESERVED_RESPONSE_REUSE` for every
+declared player-identity source response. An already-bound identity causes no
+player write and no player-landing network request. With all 280 September 20
+participants already mapped, the successful plan is 60 logical operations, 46
+preserved-response reuses and 14 new network operations: seven shift charts and
+seven play-by-play responses. Database binds are not HTTP operations.
 
 ## September 19 historical boundary
 
@@ -225,6 +241,12 @@ The fifth failed ancestor is
 failure and immutable journal/tree receipts are mandatory lineage for any
 eventual September 20 completed package. A V4/four-ancestor lineage is no
 longer sufficient for that slate.
+
+The later execution attempt that stopped during database identity preflight
+created no request-run directory or journal. It is therefore not a lineage
+ancestor. September 20 continues to require exactly the five retained failed
+request runs above; preflight and staging-correction transactions cannot be
+fabricated into request-run lineage.
 
 ## Player identity resolution
 

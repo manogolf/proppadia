@@ -441,7 +441,7 @@ class PostgameReconciliationTest(unittest.TestCase):
                 actual_games=games, actual_skaters=skaters[:-1] + [(7, 999999)],
                 actual_goalies=goalies[:-1], actual_starters=starters)
 
-    def test_database_preflight_topology_is_63_46_17_without_run_or_network(self):
+    def test_database_preflight_exact_replay_topology_is_60_46_14(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
         third = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
@@ -458,9 +458,6 @@ class PostgameReconciliationTest(unittest.TestCase):
             "--lineage-request-run-id", third,
             "--lineage-request-run-id", fourth,
             "--lineage-request-run-id", fifth,
-            "--authorized-player-lookup-id", "8484537",
-            "--authorized-player-lookup-id", "8485525",
-            "--authorized-player-lookup-id", "8486221",
         ]
         partition = {
             "contract_version": "NHL_DATABASE_IDENTITY_PREFLIGHT_V1",
@@ -468,13 +465,19 @@ class PostgameReconciliationTest(unittest.TestCase):
             "partition_sha256": "a" * 64,
             "numeric_identity_provenance": [],
             "numeric_identity_provenance_sha256": "c" * 64,
-            "authorized_new_official_lookup_ids": [8484537, 8485525, 8486221],
+            "preserved_response_provenance": [{
+                "player_id": 8485386,
+                "primary_classification": "exact_mapping",
+                "replay_state": "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE",
+            }],
+            "preserved_response_provenance_sha256": "d" * 64,
+            "authorized_new_official_lookup_ids": [],
             "classification": {
-                "exact_mapping": list(range(241)),
-                "deterministic_same_number_bind": list(range(35)),
+                "exact_mapping": list(range(280)),
+                "deterministic_same_number_bind": [],
                 "numeric_identity_proven_bind": [],
-                "preserved_response_resolution": [8485386],
-                "new_official_lookup": [8484537, 8485525, 8486221],
+                "preserved_response_resolution": [],
+                "new_official_lookup": [],
                 "conflict": [],
             },
         }
@@ -493,9 +496,12 @@ class PostgameReconciliationTest(unittest.TestCase):
         context.assert_not_called()
         payload = json.loads(output[-1])
         self.assertFalse(payload["request_run_created"])
-        self.assertEqual(payload["topology"]["logical_operations"], 63)
+        self.assertEqual(payload["topology"]["logical_operations"], 60)
         self.assertEqual(payload["topology"]["preserved_response_reuses"], 46)
-        self.assertEqual(payload["topology"]["new_network_operations"], 17)
+        self.assertEqual(payload["topology"]["new_network_operations"], 14)
+        lineage = payload["database_preflight"]["preserved_response_provenance"]
+        self.assertEqual(lineage[0]["replay_state"],
+                         "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE")
 
     def test_lookup_set_mismatch_stops_before_run_creation_and_network(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"

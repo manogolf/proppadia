@@ -370,6 +370,7 @@ class RequestContext:
         cross_run = False
         source_run_id = self.run_id
         source_journal_sha256 = None
+        source_role = None
         expected_claim = None
         if not index_path.is_file() and self.response_sources:
             key = response_identity_key(family, identity)
@@ -384,12 +385,14 @@ class RequestContext:
             index_path = self._cache_index(family, identity, cache_dir)
             source_run_id = str(source["source_run_id"])
             source_journal_sha256 = str(source["source_journal_sha256"])
+            source_role = str(source["role"])
             cross_run = True
         elif not index_path.is_file() and self.source_cache_dir is not None:
             cache_dir = self.source_cache_dir
             index_path = self._cache_index(family, identity, cache_dir)
             source_run_id = str(self.source_run_id)
             source_journal_sha256 = self.source_journal_sha256
+            source_role = None
             cross_run = True
         if not index_path.is_file():
             raise RuntimeError("PRESERVED_RESPONSE_NOT_FOUND")
@@ -409,6 +412,7 @@ class RequestContext:
             raise RuntimeError("PRESERVED_RESPONSE_LEDGER_BINDING_MISMATCH")
         verify_payload_identity(family, identity, body)
         provenance = {
+            "source_role": source_role,
             "source_run_id": source_run_id,
             "source_journal_sha256": source_journal_sha256,
             "source_response_index_sha256": index_digest,

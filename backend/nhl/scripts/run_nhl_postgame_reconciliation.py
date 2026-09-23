@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -381,13 +382,72 @@ def _identity_partition_digest(payload: dict[str, object]) -> str:
         normalized, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def preserved_player_provenance_from_binding(
+    binding: dict[str, object],
+) -> list[dict[str, object]]:
+    """Project a verified typed player source into immutable DB-preflight evidence."""
+    if binding.get("role") != "PLAYER_IDENTITY_RESPONSE_SOURCE":
+        raise RuntimeError("PRESERVED_PLAYER_SOURCE_ROLE_INVALID")
+    source_fields = {
+        "source_run_id": str(binding.get("source_run_id") or ""),
+        "source_journal_sha256": str(binding.get("source_journal_sha256") or ""),
+        "request_run_tree_fingerprint": str(binding.get("tree_fingerprint") or ""),
+        "canonical_game_set_hash": str(binding.get("canonical_game_set_hash") or ""),
+        "response_set_sha256": str(binding.get("response_set_sha256") or ""),
+    }
+    if (not re.fullmatch(r"[A-Za-z0-9_.:-]+", source_fields["source_run_id"])
+            or any(not re.fullmatch(r"[0-9a-f]{64}", value)
+                   for key, value in source_fields.items() if key != "source_run_id")):
+        raise RuntimeError("PRESERVED_PLAYER_SOURCE_IDENTITY_INVALID")
+    rows: list[dict[str, object]] = []
+    seen: set[int] = set()
+    responses = list(binding.get("responses") or [])
+    if not responses:
+        raise RuntimeError("PRESERVED_PLAYER_SOURCE_EMPTY")
+    for response in responses:
+        identity = dict(response.get("resource_identity") or {})
+        if response.get("endpoint_family") != "PLAYER_LANDING":
+            raise RuntimeError("PRESERVED_PLAYER_SOURCE_FAMILY_INVALID")
+        try:
+            player_id = int(identity["player_id"])
+            response_bytes = int(response["response_bytes"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError("PRESERVED_PLAYER_SOURCE_CLAIM_INVALID") from error
+        index_sha256 = str(response.get("index_sha256") or "")
+        object_sha256 = str(response.get("object_sha256") or "")
+        if (player_id in seen or response_bytes <= 0
+                or not re.fullmatch(r"[0-9a-f]{64}", index_sha256)
+                or not re.fullmatch(r"[0-9a-f]{64}", object_sha256)):
+            raise RuntimeError("PRESERVED_PLAYER_SOURCE_CLAIM_INVALID")
+        seen.add(player_id)
+        rows.append({
+            "player_id": player_id,
+            "source_role": "PLAYER_IDENTITY_RESPONSE_SOURCE",
+            **source_fields,
+            "response_index_sha256": index_sha256,
+            "response_object_sha256": object_sha256,
+            "response_bytes": response_bytes,
+            "resource_identity": identity,
+            # verify_player_identity_response_run already parsed the retained body
+            # and required its returned player ID to equal this requested ID.
+            "requested_and_returned_player_id": player_id,
+        })
+    return sorted(rows, key=lambda row: int(row["player_id"]))
+
+
 def classify_database_identity_rows(
     *, inventory: dict[str, object], player_rows: list[dict[str, object]],
-    external_rows: list[dict[str, object]], preserved_player_ids: set[int],
+    external_rows: list[dict[str, object]],
+    preserved_player_provenance: list[dict[str, object]],
     authorized_lookup_ids: set[int], slate_date: str,
 ) -> dict[str, object]:
     participant_ids = {int(value) for value in inventory["participant_ids"]}
     goalie_ids = {int(value) for value in inventory["goalie_ids"]}
+    preserved_ids = [int(row["player_id"]) for row in preserved_player_provenance]
+    preserved_id_set = set(preserved_ids)
+    if (len(preserved_ids) != len(set(preserved_ids))
+            or not preserved_id_set.issubset(participant_ids)):
+        raise RuntimeError("PRESERVED_PLAYER_PROVENANCE_IDENTITY_SET_INVALID")
     player_by_id = {int(row["player_id"]): row for row in player_rows}
     by_internal: dict[int, list[dict[str, object]]] = {}
     by_external: dict[int, list[dict[str, object]]] = {}
@@ -436,6 +496,8 @@ def classify_database_identity_rows(
             category = "conflict"
         elif len(exact) == 1:
             category = "exact_mapping"
+        elif player_id in preserved_id_set:
+            category = "preserved_response_resolution"
         elif player is not None and authoritative_name:
             category = "deterministic_same_number_bind"
         elif player is not None and official_numeric_evidence.get(player_id):
@@ -460,8 +522,6 @@ def classify_database_identity_rows(
                         "provider_external_id": str(player_id),
                     },
                 })
-        elif player_id in preserved_player_ids:
-            category = "preserved_response_resolution"
         else:
             category = "new_official_lookup"
         categories[category].append(player_id)
@@ -502,31 +562,50 @@ def classify_database_identity_rows(
         sum(absent_counts.values()) == len(roster_absent)
         and set(player_id for values in absent_partition.values()
                 for player_id in values) == roster_absent)
+    primary_by_id = {int(row["nhl_id"]): str(row["classification"])
+                     for row in records}
+    provenance_overlay: list[dict[str, object]] = []
+    overlay_failure = None
+    for source in preserved_player_provenance:
+        player_id = int(source["player_id"])
+        primary = primary_by_id.get(player_id)
+        if primary == "preserved_response_resolution":
+            replay_state = "PENDING_BIND_FROM_VERIFIED_RESPONSE"
+        elif primary == "exact_mapping":
+            replay_state = "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE"
+        else:
+            overlay_failure = (
+                "PRESERVED_PLAYER_PROVENANCE_PRIMARY_PARTITION_MISMATCH:"
+                f"{player_id}:{primary}")
+            replay_state = "INVALID"
+        provenance_overlay.append({
+            **source,
+            "primary_classification": primary,
+            "replay_state": replay_state,
+            "mapping": {
+                "internal_player_id": player_id,
+                "provider": "nhl",
+                "provider_external_id": str(player_id),
+            },
+        })
+    overlay_ids = [int(row["player_id"]) for row in provenance_overlay]
+    overlay_complete = (overlay_ids == sorted(preserved_ids)
+                        and len(overlay_ids) == len(set(overlay_ids)))
     failure = None
     if categories["conflict"]:
         failure = f"DATABASE_IDENTITY_CONFLICT:{categories['conflict']}"
     elif not partition_complete or not roster_absent_complete:
         failure = "DATABASE_IDENTITY_PARTITION_NOT_MUTUALLY_EXCLUSIVE_COMPLETE"
-    elif categories["preserved_response_resolution"] != [8485386]:
-        failure = (
-            "SEPTEMBER_20_PRESERVED_PLAYER_PARTITION_MISMATCH:"
-            f"{categories['preserved_response_resolution']}")
+    elif not overlay_complete or overlay_failure is not None:
+        failure = overlay_failure or "PRESERVED_PLAYER_PROVENANCE_OVERLAY_INCOMPLETE"
     elif actual_lookups != authorized_lookup_ids:
         failure = (
             "AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH:"
             f"actual={sorted(actual_lookups)}:authorized={sorted(authorized_lookup_ids)}")
     if slate_date == "2026-09-20":
-        allowed_goalie_resolution = (
-            set(goalie_partition["exact_mapping"])
-            | set(goalie_partition["deterministic_same_number_bind"])
-            | set(goalie_partition["numeric_identity_proven_bind"])
-        )
         if failure is None and (
                 sum(len(values) for values in goalie_partition.values()) != 28
-                or goalie_partition["new_official_lookup"] != [8485525]
-                or goalie_partition["preserved_response_resolution"]
-                or goalie_partition["conflict"]
-                or allowed_goalie_resolution != goalie_ids - {8485525}):
+                or goalie_partition["conflict"]):
             failure = f"SEPTEMBER_20_GOALIE_IDENTITY_PARTITION_MISMATCH:{goalie_preparation}"
     if (failure is None and 8482103 in participant_ids
             and 8482103 not in categories["exact_mapping"]):
@@ -548,6 +627,10 @@ def classify_database_identity_rows(
         "numeric_identity_provenance": numeric_provenance,
         "numeric_identity_provenance_sha256": sha256_bytes(json.dumps(
             numeric_provenance, sort_keys=True, separators=(",", ":")).encode()),
+        "preserved_response_provenance": provenance_overlay,
+        "preserved_response_provenance_complete": overlay_complete,
+        "preserved_response_provenance_sha256": sha256_bytes(json.dumps(
+            provenance_overlay, sort_keys=True, separators=(",", ":")).encode()),
         "authorized_new_official_lookup_ids": sorted(authorized_lookup_ids),
         "lookup_authorization_matches": actual_lookups == authorized_lookup_ids,
         "observed_identity_evidence": {
@@ -563,7 +646,8 @@ def classify_database_identity_rows(
 
 
 def database_identity_preflight(
-    dsn: str, *, inventory: dict[str, object], preserved_player_ids: set[int],
+    dsn: str, *, inventory: dict[str, object],
+    preserved_player_provenance: list[dict[str, object]],
     authorized_lookup_ids: set[int], slate_date: str,
 ) -> dict[str, object]:
     """Inspect live mappings once, read-only, and always explicitly roll back."""
@@ -598,7 +682,8 @@ def database_identity_preflight(
             external_rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
             result = classify_database_identity_rows(
                 inventory=inventory, player_rows=player_rows,
-                external_rows=external_rows, preserved_player_ids=preserved_player_ids,
+                external_rows=external_rows,
+                preserved_player_provenance=preserved_player_provenance,
                 authorized_lookup_ids=authorized_lookup_ids, slate_date=slate_date)
         connection.rollback()
         result["transaction"] = {
@@ -765,18 +850,48 @@ def prepare_participant_identities(
     categories = partition["classification"]
     deterministic = [int(value) for value in categories["deterministic_same_number_bind"]]
     numeric_proven = [int(value) for value in categories["numeric_identity_proven_bind"]]
-    preserved = [int(value) for value in categories["preserved_response_resolution"]]
+    pending_preserved = [int(value) for value in categories["preserved_response_resolution"]]
     new_lookups = [int(value) for value in categories["new_official_lookup"]]
+    provenance = list(partition.get("preserved_response_provenance") or [])
+    pending_from_overlay = sorted(
+        int(row["player_id"]) for row in provenance
+        if row.get("replay_state") == "PENDING_BIND_FROM_VERIFIED_RESPONSE")
+    exact_replay = sorted(
+        int(row["player_id"]) for row in provenance
+        if row.get("replay_state") == "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE")
+    if (pending_from_overlay != sorted(pending_preserved)
+            or len(pending_from_overlay) + len(exact_replay) != len(provenance)
+            or any(player_id not in set(categories["exact_mapping"])
+                   for player_id in exact_replay)):
+        raise RuntimeError("PRESERVED_PLAYER_PROVENANCE_EXECUTION_MISMATCH")
     responses: dict[int, str] = {}
-    for player_id in preserved + new_lookups:
-        reuse = player_id in set(preserved)
+    for row in provenance:
+        player_id = int(row["player_id"])
         response = official_get(
             f"https://api-web.nhle.com/v1/player/{player_id}/landing",
             timeout=10, stage="PLAYER_IDENTITY_PREPARATION",
             endpoint_family="PLAYER_LANDING",
             identity={"slate_date": slate_date, "player_id": player_id},
-            max_attempts=1, retry_statuses=(), preserve_response=not reuse,
-            reuse_preserved=reuse,
+            max_attempts=1, retry_statuses=(), preserve_response=False,
+            reuse_preserved=True,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        returned_id = payload.get("playerId") or payload.get("id")
+        if returned_id is None or int(returned_id) != player_id:
+            raise RuntimeError(f"PLAYER_LANDING_IDENTITY_MISMATCH:{player_id}:{returned_id}")
+        full_name = authoritative_player_name(
+            payload.get("firstName"), payload.get("lastName"))
+        if player_id in pending_from_overlay:
+            responses[player_id] = full_name
+    for player_id in new_lookups:
+        response = official_get(
+            f"https://api-web.nhle.com/v1/player/{player_id}/landing",
+            timeout=10, stage="PLAYER_IDENTITY_PREPARATION",
+            endpoint_family="PLAYER_LANDING",
+            identity={"slate_date": slate_date, "player_id": player_id},
+            max_attempts=1, retry_statuses=(), preserve_response=True,
+            reuse_preserved=False,
         )
         response.raise_for_status()
         payload = response.json()
@@ -816,7 +931,10 @@ def prepare_participant_identities(
         "contract_version": "NHL_PARTICIPANT_IDENTITY_PREPARATION_V1",
         "deterministic_binds": deterministic,
         "numeric_identity_proven_binds": numeric_proven,
-        "preserved_response_resolutions": preserved,
+        "preserved_response_resolutions": pending_preserved,
+        "preserved_response_provenance_reuses": sorted(
+            int(row["player_id"]) for row in provenance),
+        "already_bound_exact_from_verified_response": exact_replay,
         "new_official_lookup_resolutions": new_lookups,
         "partition_sha256": partition["partition_sha256"],
         "status": "IDENTITIES_PREPARED",
@@ -1001,6 +1119,7 @@ def main() -> int:
     player_binding = None
     response_source_ledger = None
     conditional_inventory = None
+    preserved_player_provenance = None
     topology = None
     request_lineage = None
     if slate_date != "2026-09-19":
@@ -1076,6 +1195,8 @@ def main() -> int:
                     expected_object_sha256=player_receipt["object_sha256"],
                     expected_index_sha256=player_receipt["index_sha256"],
                 )
+                preserved_player_provenance = preserved_player_provenance_from_binding(
+                    player_binding)
                 response_source_ledger = build_typed_response_source_ledger(
                     [authority_binding, roster_binding, player_binding])
                 conditional_inventory = local_conditional_lookup_inventory(
@@ -1088,7 +1209,8 @@ def main() -> int:
                     "player_identity_response_identities": len(player_binding["responses"]),
                     "authority_source_reuse_events": 31,
                     "roster_source_reuse_events": 14,
-                    "player_identity_source_reuse_events": 1,
+                    "player_identity_source_reuse_events":
+                        len(preserved_player_provenance),
                     "preserved_response_reuses": "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
                     "required_shift_pbp_network_operations": 14,
                     "conditional_player_lookup_network_operations":
@@ -1193,14 +1315,15 @@ def main() -> int:
                               "failure": "DATABASE_IDENTITY_PREFLIGHT_SOURCES_REQUIRED"},
                              indent=2, sort_keys=True))
             return 5
-        preserved_ids = {
-            int(response["resource_identity"]["player_id"])
-            for response in player_binding["responses"]
-        }
+        if preserved_player_provenance is None:
+            print(json.dumps({"status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+                              "failure": "PRESERVED_PLAYER_PROVENANCE_REQUIRED"},
+                             indent=2, sort_keys=True))
+            return 5
         try:
             identity_partition = database_identity_preflight(
                 dsn, inventory=conditional_inventory,
-                preserved_player_ids=preserved_ids,
+                preserved_player_provenance=preserved_player_provenance,
                 authorized_lookup_ids=set(args.authorized_player_lookup_id),
                 slate_date=slate_date)
         except Exception as error:
@@ -1230,7 +1353,7 @@ def main() -> int:
             "conditional_player_lookup_network_operations":
                 len(identity_partition["classification"]["new_official_lookup"]),
             "logical_operations": 59
-                + len(identity_partition["classification"]["preserved_response_resolution"])
+                + len(identity_partition["preserved_response_provenance"])
                 + len(identity_partition["classification"]["new_official_lookup"]),
             "new_network_operations": 14
                 + len(identity_partition["classification"]["new_official_lookup"]),
@@ -1247,6 +1370,10 @@ def main() -> int:
                     identity_partition["numeric_identity_provenance"],
                 "numeric_identity_provenance_sha256":
                     identity_partition["numeric_identity_provenance_sha256"],
+                "preserved_response_provenance":
+                    identity_partition["preserved_response_provenance"],
+                "preserved_response_provenance_sha256":
+                    identity_partition["preserved_response_provenance_sha256"],
             }
     if args.database_identity_preflight:
         print(json.dumps({
