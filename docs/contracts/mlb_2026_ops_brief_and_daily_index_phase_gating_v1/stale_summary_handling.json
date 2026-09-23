@@ -1,0 +1,27 @@
+{
+  "governing_authority": "LIVE_IMMUTABLE_LEDGER",
+  "historical_56_20": "SEPARATE_HISTORICAL_COHORT_NOT_CURRENT_PROSPECTIVE_EVIDENCE",
+  "live_counts": {
+    "bookmaker_price_cells": 1550,
+    "claims": 11,
+    "distinct_prediction_gamePks": 158,
+    "distinct_risk_gamePks": 155,
+    "eligible_risk_rows": 42,
+    "events": 23,
+    "outcomes": 35,
+    "predictions": 158,
+    "provenance_rows": 155,
+    "risk_rows": 155
+  },
+  "result": "STALE_SUMMARY_PRESERVED_BUT_CANNOT_OVERRIDE_LEDGER",
+  "stale_summary": {
+    "counts": {
+      "bookmaker_price_cells": 1240,
+      "effective_outcome_count": 35,
+      "risk_rows": 124
+    },
+    "decision": "COMMITTED_DAILY_SUMMARY_STALE_DO_NOT_REWRITE",
+    "may_override_ledger": false,
+    "path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/summary.json"
+  }
+}

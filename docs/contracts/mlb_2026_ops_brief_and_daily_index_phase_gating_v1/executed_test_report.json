@@ -1,0 +1,196 @@
+{
+  "all_intended_scenarios_executed": true,
+  "canonical_interpreter": "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
+  "failed": 0,
+  "modules": [
+    "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1",
+    "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1",
+    "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1"
+  ],
+  "passed": 45,
+  "runner": "unittest_standard_library",
+  "runner_output": "test_all_supported_postseason_rounds_are_one_shadow_partition (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_all_supported_postseason_rounds_are_one_shadow_partition) ... ok\ntest_current_control_binds_governing_sources_and_close (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_current_control_binds_governing_sources_and_close) ... ok\ntest_current_control_is_deterministic (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_current_control_is_deterministic) ... ok\ntest_daily_index_renders_phase_control_without_daily_evidence_side_effects (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_daily_index_renders_phase_control_without_daily_evidence_side_effects) ... ok\ntest_duplicate_reporting_identity_fails_closed (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_duplicate_reporting_identity_fails_closed) ... ok\ntest_empty_postseason_is_explicit_not_omission_or_synthetic (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_empty_postseason_is_explicit_not_omission_or_synthetic) ... ok\ntest_missing_and_invalid_game_pk_fail_closed (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_missing_and_invalid_game_pk_fail_closed) ... ok\ntest_missing_stale_conflicting_and_duplicate_authority_fail_closed (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_missing_stale_conflicting_and_duplicate_authority_fail_closed) ... ok\ntest_ops_brief_and_daily_index_use_shared_renderer (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_ops_brief_and_daily_index_use_shared_renderer) ... ok\ntest_ops_brief_renders_phase_control_and_suppresses_unbound_metrics (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_ops_brief_renders_phase_control_and_suppresses_unbound_metrics) ... ok\ntest_phase_blocked_payload_preserves_only_provenance (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_phase_blocked_payload_preserves_only_provenance) ... ok\ntest_postponed_rescheduled_and_suspended_resumed_remain_regular (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_postponed_rescheduled_and_suspended_resumed_remain_regular) ... ok\ntest_preseason_is_excluded_and_special_fails_closed (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_preseason_is_excluded_and_special_fails_closed) ... ok\ntest_regular_postseason_and_late_regular_are_separate (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_regular_postseason_and_late_regular_are_separate) ... ok\ntest_required_ten_classifications_are_present (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_required_ten_classifications_are_present) ... ok\ntest_stale_report_date_fails_before_governing_counts_are_rendered (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_stale_report_date_fails_before_governing_counts_are_rendered) ... ok\ntest_unavailable_control_suppresses_all_phase_totals (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_unavailable_control_suppresses_all_phase_totals) ... ok\ntest_zero_calendar_phase_reconstruction (backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_zero_calendar_phase_reconstruction) ... ok\ntest_authoritative_cancelled_game_is_an_accepted_terminal_disposition (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_authoritative_cancelled_game_is_an_accepted_terminal_disposition) ... ok\ntest_authoritative_final_live_feed_recovery (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_authoritative_final_live_feed_recovery) ... ok\ntest_calendar_date_never_implies_terminal_status (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_calendar_date_never_implies_terminal_status) ... ok\ntest_complete_2430_population_is_bound_to_authority (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_complete_2430_population_is_bound_to_authority) ... ok\ntest_contradictory_terminal_dispositions_fail_closed (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_contradictory_terminal_dispositions_fail_closed) ... ok\ntest_duplicate_retained_source_ingestion_is_idempotent (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_duplicate_retained_source_ingestion_is_idempotent) ... ok\ntest_live_feed_exact_game_pk_mismatch_fails_closed (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_exact_game_pk_mismatch_fails_closed) ... ok\ntest_live_feed_game_type_conflict_fails_closed (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_game_type_conflict_fails_closed) ... ok\ntest_manifest_and_inventory_tampering_fail_closed (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_manifest_and_inventory_tampering_fail_closed) ... ok\ntest_missing_unknown_or_conflicting_status_is_unresolved (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_missing_unknown_or_conflicting_status_is_unresolved) ... ok\ntest_nonterminal_observation_cannot_override_terminal_observation (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_nonterminal_observation_cannot_override_terminal_observation) ... ok\ntest_omitted_and_extra_game_pks_are_rejected (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_omitted_and_extra_game_pks_are_rejected) ... ok\ntest_premature_close_is_blocked_and_command_rejects_arguments (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_premature_close_is_blocked_and_command_rejects_arguments) ... ok\ntest_preseason_or_postseason_contamination_is_rejected (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_preseason_or_postseason_contamination_is_rejected) ... ok\ntest_repeated_build_is_deterministic (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_repeated_build_is_deterministic) ... ok\ntest_rescheduled_regular_game_preserves_exact_identity (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_rescheduled_regular_game_preserves_exact_identity) ... ok\ntest_score_without_terminal_status_is_rejected (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_score_without_terminal_status_is_rejected) ... ok\ntest_suspended_resumed_game_preserves_exact_identity (backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_suspended_resumed_game_preserves_exact_identity) ... ok\ntest_all_supported_postseason_rounds_are_shadow_only (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_all_supported_postseason_rounds_are_shadow_only) ... ok\ntest_bounded_path_has_no_default_to_r_or_calendar_phase_logic (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_bounded_path_has_no_default_to_r_or_calendar_phase_logic) ... ok\ntest_exact_gamepk_required_and_capture_rejects_cross_phase_snapshot (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_exact_gamepk_required_and_capture_rejects_cross_phase_snapshot) ... ok\ntest_mixed_phase_date_credit_is_unprovable (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_mixed_phase_date_credit_is_unprovable) ... ok\ntest_preseason_special_missing_stale_conflict_and_duplicate_fail_closed (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_preseason_special_missing_stale_conflict_and_duplicate_fail_closed) ... ok\ntest_provider_only_event_cannot_enter_immutable_risk_ledger (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_provider_only_event_cannot_enter_immutable_risk_ledger) ... ok\ntest_regular_after_nominal_close_and_relationships_use_authority (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_regular_after_nominal_close_and_relationships_use_authority) ... ok\ntest_regular_and_postseason_metrics_and_credits_are_disjoint (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_regular_and_postseason_metrics_and_credits_are_disjoint) ... ok\ntest_zero_calendar_reconstruction_and_hash_invariance (backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_zero_calendar_reconstruction_and_hash_invariance) ... ok\n\n----------------------------------------------------------------------\nRan 45 tests in 39.481s\n\nOK\n",
+  "scenarios": [
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_all_supported_postseason_rounds_are_one_shadow_partition",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_current_control_binds_governing_sources_and_close",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_current_control_is_deterministic",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_daily_index_renders_phase_control_without_daily_evidence_side_effects",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_duplicate_reporting_identity_fails_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_empty_postseason_is_explicit_not_omission_or_synthetic",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_missing_and_invalid_game_pk_fail_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_missing_stale_conflicting_and_duplicate_authority_fail_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_ops_brief_and_daily_index_use_shared_renderer",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_ops_brief_renders_phase_control_and_suppresses_unbound_metrics",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_phase_blocked_payload_preserves_only_provenance",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_postponed_rescheduled_and_suspended_resumed_remain_regular",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_preseason_is_excluded_and_special_fails_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_regular_postseason_and_late_regular_are_separate",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_required_ten_classifications_are_present",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_stale_report_date_fails_before_governing_counts_are_rendered",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_unavailable_control_suppresses_all_phase_totals",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1.OpsBriefAndDailyIndexPhaseGatingV1Tests.test_zero_calendar_phase_reconstruction",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_authoritative_cancelled_game_is_an_accepted_terminal_disposition",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_authoritative_final_live_feed_recovery",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_calendar_date_never_implies_terminal_status",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_complete_2430_population_is_bound_to_authority",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_contradictory_terminal_dispositions_fail_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_duplicate_retained_source_ingestion_is_idempotent",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_exact_game_pk_mismatch_fails_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_live_feed_game_type_conflict_fails_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_manifest_and_inventory_tampering_fail_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_missing_unknown_or_conflicting_status_is_unresolved",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_nonterminal_observation_cannot_override_terminal_observation",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_omitted_and_extra_game_pks_are_rejected",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_premature_close_is_blocked_and_command_rejects_arguments",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_preseason_or_postseason_contamination_is_rejected",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_repeated_build_is_deterministic",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_rescheduled_regular_game_preserves_exact_identity",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_score_without_terminal_status_is_rejected",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_authoritative_regular_season_close_inventory_v1.AuthoritativeRegularSeasonCloseInventoryTests.test_suspended_resumed_game_preserves_exact_identity",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_all_supported_postseason_rounds_are_shadow_only",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_bounded_path_has_no_default_to_r_or_calendar_phase_logic",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_exact_gamepk_required_and_capture_rejects_cross_phase_snapshot",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_mixed_phase_date_credit_is_unprovable",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_preseason_special_missing_stale_conflict_and_duplicate_fail_closed",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_provider_only_event_cannot_enter_immutable_risk_ledger",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_regular_after_nominal_close_and_relationships_use_authority",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_regular_and_postseason_metrics_and_credits_are_disjoint",
+      "status": "passed"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1.AgreementStudyPhaseGatingV1Tests.test_zero_calendar_reconstruction_and_hash_invariance",
+      "status": "passed"
+    }
+  ],
+  "skipped": 0
+}

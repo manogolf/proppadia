@@ -14,6 +14,14 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from backend.mlb.reporting.phase_reporting_v1 import (
+    PhaseReportingError,
+    build_current_phase_reporting_control,
+    build_unavailable_phase_reporting_control,
+    render_phase_reporting_classification_footer,
+    render_phase_reporting_markdown,
+)
+
 
 ET = ZoneInfo("America/New_York")
 ROOTS = [
@@ -299,11 +307,25 @@ def _load_latest_research_snapshot(out_root: Path) -> tuple[dict[str, str], str]
     return rows[-1], ""
 
 
-def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
+def _write_daily_index(
+    date: str,
+    completed_date: str,
+    out_root: Path,
+    *,
+    phase_reporting: dict[str, Any] | None = None,
+) -> None:
     daily_dir = out_root / "daily" / date
     daily_dir.mkdir(parents=True, exist_ok=True)
     index_path = daily_dir / "INDEX.md"
     generated = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    if phase_reporting is None:
+        try:
+            phase_reporting = build_current_phase_reporting_control(report_date=date)
+        except PhaseReportingError as exc:
+            phase_reporting = build_unavailable_phase_reporting_control(
+                report_date=date,
+                reason=str(exc),
+            )
     boards = _board_rows(date)
     ops_latest = out_root / "mlb_daily_ops_brief_latest.md"
     ops_dated = out_root / f"mlb_daily_ops_brief_{date}.md"
@@ -495,6 +517,9 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
         f"- System Ready? `{gate['status']}`",
         f"- Safe to Begin? `{gate['safe_to_begin']}`",
         f"- Reason: {gate['reason']}",
+        "",
+        *render_phase_reporting_markdown(phase_reporting),
+        "- Scope note: all other counts on this home screen are navigation, availability, or source-health counts unless explicitly bound to an exact-gamePk phase partition.",
         "",
         f"▶ {_dashboard_link(index_path, ops_dated if ops_dated.exists() else ops_latest, 'Start Morning Review', True, link_items)}",
         "",
@@ -788,6 +813,7 @@ def _write_daily_index(date: str, completed_date: str, out_root: Path) -> None:
         lines.append("## Link Check")
         lines.append("")
         lines.append(f"- Broken required links: `{len(broken_required)}`")
+    lines.extend(render_phase_reporting_classification_footer(phase_reporting))
     index_body = "\n".join(lines) + "\n"
     (daily_dir / "INDEX.md").write_text(index_body, encoding="utf-8")
     (out_root / "home_screen_prototype.md").write_text(index_body, encoding="utf-8")

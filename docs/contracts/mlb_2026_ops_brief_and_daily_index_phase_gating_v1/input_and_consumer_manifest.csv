@@ -1,0 +1,16 @@
+surface,input,source_path,classification,identity,reporting_use
+both,canonical game-phase proposal,docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl,GOVERNING_AUTHORITY,exact gamePk,regular/postseason/preseason partitions
+both,regular-season close inventory,docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/authoritative_regular_season_games.jsonl,GOVERNING_LEDGER,exact gamePk,close status and late-season descriptive completeness
+both,agreement immutable SQLite ledger,backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3,GOVERNING_LEDGER,exact gamePk,phase-separated prospective agreement status
+both,agreement committed daily summary,artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/summary.json,STALE_CACHE_REJECTED_AS_AUTHORITY,aggregate only,preserved; cannot override live ledger
+ops_brief,model-vs-fade summary,tmp/analysis/mlb_model_vs_fade_summary.json,LEGACY_UNPARTITIONED_SUMMARY,not proven,metrics suppressed from certification
+ops_brief,ops-current-state moneyline/totals,artifacts/analysis/mlb/ops_current_state/<DATE>/mlb_ops_current_state_summary.json,PHASE_UNBOUND_GENERATED_SUMMARY,aggregate only,metrics suppressed
+ops_brief,Pinnacle capture summary,backend/mlb/exports/market_history/full_game_totals/<DATE>/*/pinnacle/pinnacle_capture_summary.json,COLLECTION_STATUS_ONLY,not exposed by aggregate,not market/ROI evidence
+ops_brief,postgrade alerts,artifacts/analysis/mlb/mlb_postgrade_alerts_latest.json,INACTIVE_LEGACY_STATUS,not applicable,historical context only
+ops_brief,pipeline and ops histories,artifacts/mlb_pipeline_history.jsonl; artifacts/mlb_prod12_ops_history.jsonl,OPERATIONAL_HEALTH,not applicable,not evaluation evidence
+ops_brief,Hits environment and candidate boards,artifacts/analysis/mlb/review_aids/**,SOURCE_HEALTH_OR_REVIEW_ONLY,not asserted by this layer,not evaluation certification
+ops_brief,legacy model performance,backend/mlb/exports/model_performance/*.csv,LEGACY_UNPARTITIONED_SUMMARY,not proven,cannot enter governed phase totals
+ops_brief,review-aid performance,artifacts/analysis/mlb/review_aids/performance/review_aid_performance_summary.json,LEGACY_UNPARTITIONED_SUMMARY,not proven,cannot enter governed phase totals
+ops_brief,Total Bases shadow evaluation,artifacts/analysis/mlb/model_quality/total_bases_shadow/evaluation/total_bases_shadow_evaluation_summary.json,LEGACY_UNPARTITIONED_SUMMARY,not proven,cannot enter governed phase totals
+daily_index,artifact row/link counts,artifacts/analysis/mlb/**,NAVIGATION_OR_AVAILABILITY_ONLY,not applicable,not evaluation evidence
+both,historical 56-20 cohort,separate frozen historical contract,HISTORICAL_SEPARATE,frozen cohort,never prospective agreement evidence

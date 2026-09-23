@@ -1,0 +1,12 @@
+{
+  "agreement_study_status": "SEPARATION_EVIDENCE_INSUFFICIENT",
+  "game_type_integrity": "EXACT_GAME_PK_AUTHORITY_VERIFIED",
+  "late_season_regular_season_completeness": "BLOCKED_OUTSTANDING_GAMES",
+  "model_selector_publication_status": "NO_QUALIFIED_MLB_MODEL_SELECTOR_RANKING_QUICK_CARD_UNAVAILABLE",
+  "offseason_readiness": "BLOCKED_UNTIL_REGULAR_SEASON_CLOSE_CONTRACT_PASSES",
+  "outstanding_games": "88",
+  "postseason_collection_status": "CODE_READY_OPERATIONALLY_UNVALIDATED",
+  "postseason_evaluation_status": "NO_AUTHORITATIVE_POSTSEASON_EVIDENCE",
+  "regular_season_close_readiness": "REGULAR_SEASON_CLOSE_BLOCKED",
+  "requests_and_credits": "REPORTING_USED_ZERO_REQUESTS_ZERO_PAID_CREDITS"
+}

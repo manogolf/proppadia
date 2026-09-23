@@ -1,0 +1,78 @@
+{
+  "agreement_reporting": {
+    "after": {
+      "authority": "LIVE_IMMUTABLE_LEDGER",
+      "live_counts": {
+        "bookmaker_price_cells": 1550,
+        "claims": 11,
+        "distinct_prediction_gamePks": 158,
+        "distinct_risk_gamePks": 155,
+        "eligible_risk_rows": 42,
+        "events": 23,
+        "outcomes": 35,
+        "predictions": 158,
+        "provenance_rows": 155,
+        "risk_rows": 155
+      },
+      "stale_summary_may_override": false
+    },
+    "before": "STALE_COMMITTED_SUMMARY_COULD_BE_DISPLAYED_WITHOUT_LEDGER_PRIORITY"
+  },
+  "canonical_phase_and_count_reporting": {
+    "after": {
+      "POSTSEASON": 0,
+      "PRESEASON": 489,
+      "REGULAR_SEASON": 2430,
+      "conflicting": 0,
+      "duplicate_identities": 0,
+      "missing": 0,
+      "total": 2919,
+      "unknown": 0
+    },
+    "before": "UNPARTITIONED_OR_NOT_EXPOSED_AS_ONE_GOVERNED_CONTROL"
+  },
+  "close_status": {
+    "after": {
+      "accepted_dispositions": 2342,
+      "decision": "REGULAR_SEASON_CLOSE_BLOCKED",
+      "outstanding": 88,
+      "population": 2430,
+      "unresolved": 0
+    },
+    "before": "NOT_BOUND_ON_BOTH_REPORT_SURFACES"
+  },
+  "evidence_mutation": "NONE_PRESENTATION_ONLY",
+  "late_season_completeness": {
+    "after": {
+      "certification_effect": "DESCRIPTIVE_ONLY_NOT_INDEPENDENTLY_CERTIFYING",
+      "definition": "authoritative REGULAR_SEASON and scheduled date >= 2026-09-01",
+      "disposition_counts": {
+        "FINAL": 277,
+        "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 1,
+        "SCHEDULED_NOT_FINAL": 88
+      },
+      "game_pks": 366
+    },
+    "before": "DATE_CONTEXT_NOT_BOUND_TO_CANONICAL_CLOSE_POPULATION"
+  },
+  "market_and_roi": {
+    "after": "NONE_NO_MARKET_OR_ROI_RECOMPUTATION",
+    "before": "LEGACY_PHASE_UNBOUND_AGGREGATES_DISPLAYED"
+  },
+  "model_selector_publication": {
+    "after": "NO_QUALIFIED_MLB_MODEL_SELECTOR_RANKING_QUICK_CARD_UNAVAILABLE",
+    "before": "GOVERNANCE_FRAGMENTED_ACROSS_SECTIONS"
+  },
+  "postseason_reporting": {
+    "after": "NO_AUTHORITATIVE_EVIDENCE",
+    "before": "NO_EXPLICIT_EMPTY_AUTHORITATIVE_PARTITION"
+  },
+  "prediction_quality": {
+    "after": "NONE_REPORTING_MEMBERSHIP_ONLY",
+    "before": "LEGACY_PHASE_UNBOUND_AGGREGATES_DISPLAYED"
+  },
+  "stale_summary_handling": {
+    "after": "COMMITTED_DAILY_SUMMARY_STALE_DO_NOT_REWRITE",
+    "before": "GENERATED_SUMMARY_NOT_EXPLICITLY_SUBORDINATED"
+  }
+}

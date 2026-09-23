@@ -1,0 +1,136 @@
+{
+  "agreement": {
+    "authority": "LIVE_IMMUTABLE_LEDGER",
+    "historical_56_20": "PRESERVED_SEPARATE_NOT_PROSPECTIVE_EVIDENCE",
+    "ledger_path": "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3",
+    "ledger_sha256": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "live_counts": {
+      "bookmaker_price_cells": 1550,
+      "claims": 11,
+      "distinct_prediction_gamePks": 158,
+      "distinct_risk_gamePks": 155,
+      "eligible_risk_rows": 42,
+      "events": 23,
+      "outcomes": 35,
+      "predictions": 158,
+      "provenance_rows": 155,
+      "risk_rows": 155
+    },
+    "package_manifest_path": "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/sha256_manifest.txt",
+    "package_manifest_sha256": "9464b3ec2653d42aa413b36795c3096f8824b6d669b703673ec4c50b050cc74b",
+    "phase_game_pk_counts": {
+      "EXCLUDED_PRESEASON": 0,
+      "LATE_SEASON_REGULAR_SEASON": 158,
+      "POSTSEASON": 0,
+      "REGULAR_SEASON": 158
+    },
+    "phase_risk_row_counts": {
+      "POSTSEASON": 0,
+      "REGULAR_SEASON": 155
+    },
+    "stale_summary": {
+      "counts": {
+        "bookmaker_price_cells": 1240,
+        "effective_outcome_count": 35,
+        "risk_rows": 124
+      },
+      "decision": "COMMITTED_DAILY_SUMMARY_STALE_DO_NOT_REWRITE",
+      "may_override_ledger": false,
+      "path": "artifacts/analysis/model_development/mlb_market_strong_agreement_separation_prospective_v1/2026-09-09/summary.json"
+    },
+    "verified_manifest_entries": 12
+  },
+  "authority": {
+    "authority_interface": "MLB_CANONICAL_GAME_PHASE_AUTHORITY_V1",
+    "authority_records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
+    "backend": "MLB_2026_HASHED_PROPOSAL_AUTHORITY_V1",
+    "conflicting_count": 0,
+    "duplicate_identity_count": 0,
+    "missing_count": 0,
+    "phase_contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1",
+    "phase_contract_sha256": "eed52e24d123c24e0fbbff21249705d653d77787eab98eb756d5c9752a481c19",
+    "phase_contract_version": "contract_v1",
+    "phase_counts": {
+      "PRESEASON": 489,
+      "REGULAR_SEASON": 2430
+    },
+    "proposal_count": 2919,
+    "proposal_path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl",
+    "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+    "source_file_count": 464,
+    "source_manifest_path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/retained_source_manifest.jsonl",
+    "source_manifest_sha256": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100",
+    "source_observation_count": 9092,
+    "source_type_counts": {
+      "E": 38,
+      "R": 2430,
+      "S": 451
+    },
+    "supported_from_date": "2026-02-20",
+    "supported_season": 2026,
+    "supported_through_date": "2026-09-27",
+    "unknown_count": 0
+  },
+  "authority_freshness": "CURRENT_FOR_REPORT_DATE",
+  "canonical_population": {
+    "POSTSEASON": 0,
+    "PRESEASON": 489,
+    "REGULAR_SEASON": 2430,
+    "conflicting": 0,
+    "duplicate_identities": 0,
+    "missing": 0,
+    "total": 2919,
+    "unknown": 0
+  },
+  "classifications": {
+    "agreement_study_status": "SEPARATION_EVIDENCE_INSUFFICIENT",
+    "game_type_integrity": "EXACT_GAME_PK_AUTHORITY_VERIFIED",
+    "late_season_regular_season_completeness": "BLOCKED_OUTSTANDING_GAMES",
+    "model_selector_publication_status": "NO_QUALIFIED_MLB_MODEL_SELECTOR_RANKING_QUICK_CARD_UNAVAILABLE",
+    "offseason_readiness": "BLOCKED_UNTIL_REGULAR_SEASON_CLOSE_CONTRACT_PASSES",
+    "outstanding_games": "88",
+    "postseason_collection_status": "CODE_READY_OPERATIONALLY_UNVALIDATED",
+    "postseason_evaluation_status": "NO_AUTHORITATIVE_POSTSEASON_EVIDENCE",
+    "regular_season_close_readiness": "REGULAR_SEASON_CLOSE_BLOCKED",
+    "requests_and_credits": "REPORTING_USED_ZERO_REQUESTS_ZERO_PAID_CREDITS"
+  },
+  "close": {
+    "accepted_disposition_game_pks": 2342,
+    "canonical_regular_season_game_pks": 2430,
+    "check_only": true,
+    "close_package_created": false,
+    "decision": "REGULAR_SEASON_CLOSE_BLOCKED",
+    "disposition_counts": {
+      "FINAL": 2316,
+      "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+      "SCHEDULED_NOT_FINAL": 88,
+      "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1
+    },
+    "inventory_path": "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/authoritative_regular_season_games.jsonl",
+    "inventory_sha256": "013047c0503ac79f01c786801fadb45a42d221052b33de4fc7c801ca4a7ae48d",
+    "late_season_regular_season": {
+      "certification_effect": "DESCRIPTIVE_ONLY_NOT_INDEPENDENTLY_CERTIFYING",
+      "definition": "authoritative REGULAR_SEASON and scheduled date >= 2026-09-01",
+      "disposition_counts": {
+        "FINAL": 277,
+        "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 1,
+        "SCHEDULED_NOT_FINAL": 88
+      },
+      "game_pks": 366
+    },
+    "manifest_sha256": "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59",
+    "outstanding_game_pks": 88,
+    "unresolved_game_pks": 0
+  },
+  "contract_name": "MLB_2026_OPS_BRIEF_AND_DAILY_INDEX_PHASE_GATING_V1",
+  "historical_56_20": "SEPARATE_HISTORICAL_COHORT_NOT_CURRENT_PROSPECTIVE_EVIDENCE",
+  "market_roi_effect": "NONE_NO_MARKET_OR_ROI_RECOMPUTATION",
+  "partitions": {
+    "LATE_SEASON_REGULAR_SEASON": "DESCRIPTIVE_SUBSET_OF_REGULAR_SEASON",
+    "POSTSEASON": "NO_AUTHORITATIVE_EVIDENCE",
+    "REGULAR_SEASON": "AUTHORITATIVE_ONLY",
+    "UNAVAILABLE_OR_BLOCKED": "FAIL_CLOSED"
+  },
+  "prediction_quality_effect": "NONE_REPORTING_MEMBERSHIP_ONLY",
+  "report_date": "2026-09-22"
+}

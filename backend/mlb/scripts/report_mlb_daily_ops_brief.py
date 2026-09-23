@@ -12,6 +12,14 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from backend.mlb.reporting.phase_reporting_v1 import (
+    PhaseReportingError,
+    build_current_phase_reporting_control,
+    build_unavailable_phase_reporting_control,
+    render_phase_reporting_classification_footer,
+    render_phase_reporting_markdown,
+)
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -100,6 +108,24 @@ def _pct(v: Any, digits: int = 2) -> str:
     if f is None:
         return "n/a"
     return f"{f * 100:.{digits}f}%"
+
+
+def _phase_blocked_reporting_payload(
+    *, source_name: str, source_paths: Sequence[str], historical: bool = False
+) -> Dict[str, Any]:
+    """Retain source provenance without exporting phase-unbound aggregates."""
+
+    return {
+        "reporting_status": (
+            "HISTORICAL_SEPARATE_UNPARTITIONED_NOT_CURRENT_EVIDENCE"
+            if historical
+            else "UNAVAILABLE_PHASE_UNBOUND"
+        ),
+        "source_name": source_name,
+        "source_paths": list(source_paths),
+        "source_preserved": True,
+        "metrics_exposed": False,
+    }
 
 
 def _num_fmt(v: Any, digits: int = 2) -> str:
@@ -2437,6 +2463,7 @@ def build_markdown(
     path_forward: Sequence[Dict[str, str]],
     source_states: Dict[str, Any],
     freshness_audit: Sequence[Dict[str, Any]],
+    phase_reporting: Optional[Dict[str, Any]] = None,
 ) -> str:
     freshness_by_section = {str(row.get("section") or ""): row for row in freshness_audit}
 
@@ -2467,6 +2494,16 @@ def build_markdown(
     if overall_issues:
         lines.append(f"- Issues: `{', '.join(overall_issues)}`")
     lines.append("")
+    if phase_reporting is None:
+        phase_reporting = build_unavailable_phase_reporting_control(
+            report_date=report_date,
+            reason="PHASE_REPORTING_CONTROL_NOT_SUPPLIED",
+        )
+    lines.extend(render_phase_reporting_markdown(phase_reporting))
+    lines.append(
+        "- Scope note: counts outside Canonical Game Phase Control are operational/source-health observations only unless their section explicitly names an exact-gamePk phase partition."
+    )
+    lines.append("")
     lines.append("## Morning Workflow Handoff")
     lines.append("")
     lines.append("- Real Ops Brief status: existing section order is preserved; full three-phase body rewrite remains prototype-only.")
@@ -2486,9 +2523,8 @@ def build_markdown(
         f"Legacy postgrade alerts: `{postgrade.get('critical_count',0)} critical / {postgrade.get('warning_count',0)} warning`"
     )
     lines.append(
-        f"- Legacy Model vs Fade ({model_vs_fade.get('window_game_date_min') or 'n/a'} to "
-        f"{model_vs_fade.get('window_game_date_max') or 'n/a'}, paired={model_vs_fade.get('paired_bets','n/a')}): "
-        f"model ROI `{_pct(model_vs_fade.get('model_roi_1u'))}` vs fade ROI `{_pct(model_vs_fade.get('fade_roi_1u'))}`"
+        "- Legacy Model vs Fade: `LEGACY_UNPARTITIONED_NOT_CERTIFICATION_EVIDENCE`; "
+        "retained source is not recomputed or admitted to regular-season, postseason, market, or ROI totals."
     )
     lines.append(
         f"- Hits Environment: signal `{hits_env.get('league_signal','n/a')}`, "
@@ -2515,20 +2551,17 @@ def build_markdown(
     ml_evidence = aligned.get("moneyline_cumulative") if isinstance(aligned.get("moneyline_cumulative"), dict) else {}
     totals_evidence = aligned.get("totals_cumulative") if isinstance(aligned.get("totals_cumulative"), dict) else {}
     lines.append("## Active MLB Prediction Authority")
-    lines.append("- Moneyline: `MONEYLINE_STANDALONE_PREDICTION_CERTIFIED` / `MONEYLINE_PUBLIC_PREDICTION_READY`; " +
+    lines.append("- Moneyline: immutable shadow remains governed; " +
                  f"public feature flag `{'enabled' if public_enabled else 'absent/false in this runtime'}`; " +
-                 f"current frozen rows `{moneyline_raw.get('predictions_written', 0)}`; betting authority `NO_QUALIFIED_MLB_BETTING_MODEL`.")
+                 "unpartitioned current-row count `UNAVAILABLE_PHASE_UNBOUND`; betting authority `NO_QUALIFIED_MLB_BETTING_MODEL`.")
     if ml_evidence:
-        lines.append(f"  - Prospective evidence: `{ml_evidence.get('wins', 0)}-{ml_evidence.get('losses', 0)}`; Brier `{ml_evidence.get('brier')}`; log loss `{ml_evidence.get('log_loss')}`; STRONG `{ml_evidence.get('strong_record')}`.")
+        lines.append("  - Prospective evidence summary: `UNAVAILABLE_PHASE_UNBOUND`; the retained aggregate cannot override an exact-gamePk governed ledger.")
     lines.append("- Totals: `TOTALS_STANDALONE_PREDICTION_VALID_WITH_LIMITATIONS`; point foundation `RAW_V1`; " +
                  "fair-probability foundation `V1_INTERCEPT`; display `TOTALS_PRIVATE_ONLY`; " +
-                 f"current frozen `{totals_scoring.get('rows', 0)}`, pending/fail-closed `{len(pending)}`.")
+                 "unpartitioned current/pending counts `UNAVAILABLE_PHASE_UNBOUND`.")
     if totals_evidence:
-        lines.append(f"  - Cumulative raw: MAE `{totals_evidence.get('raw_mae')}`, forecast-minus-actual bias `{totals_evidence.get('raw_bias')}`, CRPS `{totals_evidence.get('raw_crps')}`; " +
-                     f"intercept diagnostic: MAE `{totals_evidence.get('intercept_mae')}`, bias `{totals_evidence.get('intercept_bias')}`, CRPS `{totals_evidence.get('intercept_crps')}`.")
-    lines.append(f"- Pinnacle: mapped `{pinnacle_raw.get('games_mapped', 0)}`; moneyline `{pinnacle_raw.get('moneyline_coverage', 0)}`; " +
-                 f"totals `{pinnacle_raw.get('totals_coverage', 0)}`; run line `{pinnacle_raw.get('run_line_coverage', 0)}`; " +
-                 f"identity rejects `{pinnacle_raw.get('identity_rejects', 0)}`.")
+        lines.append("  - Cumulative scoring summary: `UNAVAILABLE_PHASE_UNBOUND`; no combined regular/postseason metric is displayed.")
+    lines.append("- Pinnacle: acquisition summary `UNAVAILABLE_PHASE_UNBOUND`; retained raw collection is distinct from phase-gated evaluation, market comparison, or ROI.")
     lines.append("- Player props: `NO_QUALIFIED_MLB_PROP_MODEL`; collection and research-shadow activity below do not confer prediction authority.")
     lines.append("")
 
@@ -2547,8 +2580,8 @@ def build_markdown(
         lines.append("- Degraded prop lanes:")
         for d in degraded:
             lines.append(
-                f"  - `{d.get('prop_type')}`: `{d.get('reason')}` "
-                f"(accuracy `{d.get('accuracy_pct')}` vs min `{d.get('min_accuracy_pct')}`; total `{d.get('total')}`)"
+                f"  - `{d.get('prop_type')}`: `{d.get('reason')}`; legacy accuracy/count "
+                "`UNAVAILABLE_PHASE_UNBOUND`."
             )
     else:
         lines.append("- Degraded prop lanes: none")
@@ -2591,34 +2624,9 @@ def build_markdown(
 
     lines.append("## Model vs Fade")
     lines.append(provenance("Model vs Fade"))
-    lines.append("- Authority: `INACTIVE_LEGACY` — no qualified MLB betting model currently consumes this surface.")
-    lines.append(
-        f"- Source window: `{model_vs_fade.get('window_game_date_min') or 'n/a'}` to "
-        f"`{model_vs_fade.get('window_game_date_max') or 'n/a'}`"
-    )
+    lines.append("- Authority: `INACTIVE_LEGACY_UNPARTITIONED` — no qualified MLB betting model currently consumes this surface.")
+    lines.append("- Metrics, record, paired count, win rate, ROI, and alert comparison: `UNAVAILABLE_PHASE_UNBOUND`.")
     lines.append(f"- Rows CSV: `{model_vs_fade.get('rows_csv') or 'n/a'}`")
-    lines.append(f"- Paired bets: `{model_vs_fade.get('paired_bets','n/a')}`")
-    lines.append(
-        f"- Model: win rate `{_pct(model_vs_fade.get('model_win_rate'))}`, ROI `{_pct(model_vs_fade.get('model_roi_1u'))}`"
-    )
-    lines.append(
-        f"- Fade: win rate `{_pct(model_vs_fade.get('fade_win_rate'))}`, ROI `{_pct(model_vs_fade.get('fade_roi_1u'))}`"
-    )
-    lines.append(
-        f"- Delta (fade - model): `{_pct(model_vs_fade.get('delta_fade_minus_model_1u'))}` | "
-        f"fade_beating_model_alert `{model_vs_fade.get('fade_beating_model_alert')}`"
-    )
-    alert_state = model_vs_fade.get("alert_state") or {}
-    if alert_state:
-        lines.append(
-            f"- Alert state: active `{alert_state.get('alert_active')}`, "
-            f"source_date `{alert_state.get('alert_source_date','n/a')}`, "
-            f"generated_at `{alert_state.get('alert_generated_at','n/a')}`, "
-            f"last_changed_at `{alert_state.get('alert_last_changed_at','n/a')}`, "
-            f"age_days `{alert_state.get('alert_age_days','n/a')}`, "
-            f"new_today `{alert_state.get('alert_is_new_today')}`, "
-            f"persistent `{alert_state.get('alert_is_persistent')}`"
-        )
     lines.append("")
 
     lines.append("## Prop Outlook Freshness")
@@ -2639,15 +2647,7 @@ def build_markdown(
     lines.append(provenance("Model Performance By Prop"))
     lines.append(f"- Rolling summary CSV: `{model_performance.get('summary_path','n/a')}`")
     lines.append(f"- Daily performance CSV: `{model_performance.get('daily_path','n/a')}`")
-    lines.append(
-        f"- source_type `{model_performance.get('source_type','n/a')}` | "
-        f"active prop count `{model_performance.get('active_prop_count','n/a')}` | "
-        f"missing_reason count `{model_performance.get('missing_reason_count','n/a')}`"
-    )
-    lines.append(
-        f"- Critical props: `{', '.join(model_performance.get('critical_props') or []) or 'none'}`"
-    )
-    lines.append(f"- Watch props: `{', '.join(model_performance.get('watch_props') or []) or 'none'}`")
+    lines.append("- Performance counts, critical/watch classifications, accuracy, and calibration: `UNAVAILABLE_PHASE_UNBOUND`.")
     lines.append("")
 
     lines.append("## Hits Over 1.5 Watch Candidates")
@@ -2842,18 +2842,13 @@ def build_markdown(
     lines.append("")
 
     lines.append("## Hits O1.5 Prospective Run 1 Utility")
-    lines.append("- Scope: historical frozen Run 1 process evidence only; not a production selector, upload rule, or active candidate capture.")
+    lines.append("- Scope: historical frozen Run 1 process evidence only; separate from current regular/postseason reporting and not a production selector, upload rule, or active candidate capture.")
     lines.append(
         f"- Status: `{o15_prospective_status.get('status') or 'n/a'}` | "
         f"automatic wrapper `{o15_prospective_status.get('automatic_wrapper_status') or 'n/a'}` | "
         f"producer active `{o15_prospective_status.get('candidate_producer_active')}`"
     )
-    lines.append(
-        f"- Frozen rows `{o15_prospective_status.get('frozen_prediction_rows', 0)}` | "
-        f"graded `{o15_prospective_status.get('graded_rows', 0)}` | "
-        f"pending `{o15_prospective_status.get('pending_rows', 0)}` | "
-        f"blocked/manual-review `{o15_prospective_status.get('blocked_rows', 0)}`"
-    )
+    lines.append("- Frozen/graded/pending outcome counts: `HISTORICAL_SEPARATE_UNPARTITIONED_NOT_CURRENT_EVIDENCE`.")
     lines.append(
         f"- Latest frozen date `{o15_prospective_status.get('latest_frozen_candidate_date') or 'n/a'}` | "
         f"latest grading date `{o15_prospective_status.get('latest_grading_date') or 'n/a'}` | "
@@ -2869,43 +2864,8 @@ def build_markdown(
 
     lines.append("## Review Aid Performance")
     lines.append(provenance("Review Aid Performance"))
-    lines.append("- Scope: review aid outcome tracking only; not a production rule, selector, upload filter, or threshold change.")
-    lines.append(
-        f"- Status: `{review_aid_performance.get('status') or 'n/a'}` | "
-        f"latest completed slate `{review_aid_performance.get('latest_completed_slate') or 'n/a'}` | "
-        f"board rows `{review_aid_performance.get('board_rows_loaded', 'n/a')}` | "
-        f"matched `{review_aid_performance.get('matched_rows', 'n/a')}`"
-    )
-
-    def perf_line(label: str, row: Dict[str, Any]) -> str:
-        descriptions = {
-            "o1.5 Layer 4": "QC + d7/d15 + starter context",
-            "o1.5 Layer 3": "d7/d15 + starter context",
-            "o1.5 alternate Layer A": "alternate d7/d15 + favorable starter, no QC",
-            "u1.5 Layer 4": "QC + d7/d15 + starter context",
-            "u1.5 Layer 3": "d7/d15 + starter context",
-            "u1.5 Layer 2": "d7/d15 form only",
-        }
-        display_label = f"{label} ({descriptions[label]})" if label in descriptions else label
-        if not row:
-            return f"- {display_label}: no latest completed slate rows."
-        denominator = str(row.get("denominator") or "").strip()
-        denominator_note = f"; denominator `{denominator}`" if denominator else ""
-        return (
-            f"- {display_label}: `{row.get('wins', 0)}-{row.get('losses', 0)}-{row.get('pushes', 0)}` "
-            f"ROI `{_pct(row.get('roi'))}` over `{row.get('resolved', 0)}` resolved "
-            f"(rows `{row.get('rows', 0)}`{denominator_note})."
-        )
-
-    callouts = review_aid_performance.get("callouts") if isinstance(review_aid_performance.get("callouts"), dict) else {}
-    lines.append("- Layer = review-aid provenance, not A/A-style hitter/starter tier.")
-    lines.append(perf_line("o1.5 Layer 4", callouts.get("o15_layer_4_latest") or {}))
-    lines.append(perf_line("o1.5 Layer 3", callouts.get("o15_layer_3_latest") or {}))
-    lines.append(perf_line("o1.5 alternate Layer A", callouts.get("o15_alternate_layer_a_latest") or {}))
-    lines.append(perf_line("u1.5 Layer 4", callouts.get("u15_layer_4_latest") or {}))
-    lines.append(perf_line("u1.5 Layer 3", callouts.get("u15_layer_3_latest") or {}))
-    lines.append(perf_line("u1.5 Layer 2", callouts.get("u15_layer_2_latest") or {}))
-    lines.append(perf_line("u1.5 A/A", callouts.get("u15_aa_latest") or {}))
+    lines.append("- Scope: legacy review-aid outcome tracking; not a production rule, selector, upload filter, or threshold change.")
+    lines.append("- Board/matched/resolved counts, records, win rates, and ROI: `UNAVAILABLE_PHASE_UNBOUND`.")
     if str(review_aid_performance.get("status") or "") == "source_not_ready":
         lines.append(f"- Source-not-ready detail: {review_aid_performance.get('status_detail') or 'n/a'}")
     lines.append("")
@@ -2922,18 +2882,8 @@ def build_markdown(
             "- Scope: reconstructed all-market research audit from execution reconcile rows; "
             "not actual generated board artifact performance and not a production rule, selector, upload filter, or threshold change."
         )
-        lines.append(
-            f"- Latest completed slate: `{hits_15_tier_backtest.get('latest_completed_slate') or 'n/a'}` | "
-            f"source `artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json`."
-        )
-        lines.append("| board | window | tier | resolved | WR | ROI | sample |")
-        lines.append("|---|---|---:|---:|---:|---:|---|")
-        for board, rows in (("o1.5", tier_top_o15), ("u1.5", tier_top_u15)):
-            for row in rows:
-                lines.append(
-                    f"| {board} | `{row.get('window')}` | `{row.get('tier')}` | `{row.get('resolved', 0)}` | "
-                    f"`{_pct(row.get('wr'))}` | `{_pct(row.get('roi'))}` | `{row.get('sample_warning') or 'n/a'}` |"
-                )
+        lines.append("- Reconstructed resolved counts, win rates, and ROI: `UNAVAILABLE_PHASE_UNBOUND`.")
+        lines.append("- Source preserved: `artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json`.")
         lines.append("")
 
     lines.append("## Path Forward")
@@ -3166,6 +3116,7 @@ def build_markdown(
     _append_hits05_full_spine_section(lines, hits05_full_spine, ops_brief_md_path=ops_brief_md_path)
     _append_betonline_capture_integrity_section(lines, betonline_capture_integrity, ops_brief_md_path=ops_brief_md_path)
     _append_rolling_candidate_obs_section(lines, rolling_candidate_obs, ops_brief_md_path=ops_brief_md_path)
+    lines.extend(render_phase_reporting_classification_footer(phase_reporting))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -3274,6 +3225,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     report_date = _date_key(args.report_date) or date.today().isoformat()
     completed_slate_date = _date_key(args.completed_slate_date) or _previous_date(report_date)
     current_slate_date = _date_key(args.current_slate_date) or report_date
+    try:
+        phase_reporting = build_current_phase_reporting_control(
+            report_date=current_slate_date
+        )
+    except PhaseReportingError as exc:
+        phase_reporting = build_unavailable_phase_reporting_control(
+            report_date=current_slate_date,
+            reason=str(exc),
+        )
     rolling_candidate_obs_mode = _resolve_rolling_candidate_obs_mode(
         args.rolling_candidate_obs_mode or os.environ.get("MLB_ENABLE_ROLLING_CANDIDATE_OBS"),
         force_enabled=args.enable_rolling_candidate_obs,
@@ -3571,6 +3531,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         path_forward=path_forward,
         source_states=source_states,
         freshness_audit=freshness_audit,
+        phase_reporting=phase_reporting,
     )
 
     # Research-only expected-PA pilot observability. Missing pilot state is
@@ -3586,17 +3547,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         except Exception:
             pa_shadow = {"status": "SOURCE_OR_GRADING_DEFECT"}
     first_shadow = pa_shadow.get("first_slate", {}) if isinstance(pa_shadow, dict) else {}
-    window_shadow = pa_shadow.get("window_verification", []) if isinstance(pa_shadow, dict) else []
     if pa_shadow:
         md_text += (
             "\n## HITS 0.5 EXPECTED-PA RESEARCH SHADOW — NO PRODUCTION OR WAGER EFFECT\n\n"
-            f"- Current capture: {len(window_shadow)}/5 window paths reported; "
+            "- Current capture and prior-slate grading counts: "
+            "`HISTORICAL_SEPARATE_UNPARTITIONED_NOT_CURRENT_EVIDENCE`; "
             f"model contract `{pa_shadow.get('contract_sha256', 'unknown')}`.\n"
-            f"- Prior-slate grading: {first_shadow.get('resolved_rows', 0)} resolved, "
-            f"{first_shadow.get('unresolved_rows', 0)} unresolved.\n"
             "- Pilot progress: bounded review not complete; status "
             f"`{first_shadow.get('interpretation', 'PROCESS_VALIDATED_OUTCOME_SAMPLE_EARLY')}`.\n"
         )
+        md_text += "\n".join(
+            render_phase_reporting_classification_footer(phase_reporting)
+        ).rstrip() + "\n"
 
     from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE, read_status
     bvp_inline=read_status(current_slate_date) if current_slate_date>=EFFECTIVE_DATE else {}
@@ -3610,12 +3572,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "issues": overall_issues,
         "source_states": source_states,
         "freshness_audit": freshness_audit,
+        "phase_reporting": phase_reporting,
         "pipeline": pipeline,
         "ops": ops,
         "postgrade": postgrade,
-        "model_vs_fade": model_vs_fade,
+        "model_vs_fade": _phase_blocked_reporting_payload(
+            source_name="model_vs_fade",
+            source_paths=[str(paths["model_vs_fade_json"])],
+        ),
         "prop_regime": prop_regime,
-        "model_performance": model_performance,
+        "model_performance": _phase_blocked_reporting_payload(
+            source_name="model_performance",
+            source_paths=[
+                str(paths["model_performance_summary_csv"]),
+                str(paths["model_performance_daily_csv"]),
+            ],
+        ),
         "reporting_alignment": reporting_alignment,
         "bvp_impact": bvp_impact,
         "bvp_inline_acquisition": bvp_inline,
@@ -3624,16 +3596,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "hits_o15_layered_candidates": hits_o15_layered_candidates,
         "hits_u15_favorite_audit": hits_u15_favorite_audit,
         "hits_o15_alternate_discovery": hits_o15_alternate_discovery,
-        "hits_15_tier_backtest": hits_15_tier_backtest,
-        "review_aid_performance": review_aid_performance,
-        "total_bases_shadow_summary": total_bases_shadow_summary,
-        "total_bases_shadow_evaluation": total_bases_shadow_evaluation,
+        "hits_15_tier_backtest": _phase_blocked_reporting_payload(
+            source_name="hits_15_tier_backtest",
+            source_paths=[str(paths["hits_15_tier_backtest_json"])],
+            historical=True,
+        ),
+        "review_aid_performance": _phase_blocked_reporting_payload(
+            source_name="review_aid_performance",
+            source_paths=[str(paths["review_aid_performance_json"])],
+        ),
+        "total_bases_shadow_summary": _phase_blocked_reporting_payload(
+            source_name="total_bases_shadow_summary",
+            source_paths=[str(paths["total_bases_shadow_summary_json"])],
+        ),
+        "total_bases_shadow_evaluation": _phase_blocked_reporting_payload(
+            source_name="total_bases_shadow_evaluation",
+            source_paths=[str(paths["total_bases_shadow_evaluation_json"])],
+        ),
         "feature_lineage_health": feature_lineage_health,
         "today_workspace": today_workspace,
         "betonline_capture_integrity": betonline_capture_integrity,
         "hits05_full_spine": hits05_full_spine,
-        "o15_prospective_status": o15_prospective_status,
-        "hits05_expected_pa_research_shadow": pa_shadow,
+        "o15_prospective_status": _phase_blocked_reporting_payload(
+            source_name="o15_prospective_status",
+            source_paths=[str(o15_prospective_status.get("machine_json") or "")],
+            historical=True,
+        ),
+        "hits05_expected_pa_research_shadow": _phase_blocked_reporting_payload(
+            source_name="hits05_expected_pa_research_shadow",
+            source_paths=[str(pa_shadow_path)],
+            historical=True,
+        ),
         "input_refresh_status": input_refresh_status,
         "path_forward": path_forward,
         "outputs": {
@@ -3688,6 +3681,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 path_forward=path_forward,
                 source_states=source_states,
                 freshness_audit=freshness_audit,
+                phase_reporting=phase_reporting,
             )
         dated_md.write_text(dated_md_text, encoding="utf-8")
 

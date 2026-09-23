@@ -1,0 +1,50 @@
+{
+  "all_governing_source_hashes_identical": true,
+  "historical_reports_rewritten": false,
+  "network_requests": 0,
+  "paid_credits": 0,
+  "prediction_outcome_price_credit_metric_evidence": {
+    "agreement_table_hashes": {
+      "bookmaker_prices": "688db90da6ca8a4b8081327037288572c1f9da6135f32ef3695baf2e75aba847",
+      "capture_provenance_v4": "343a6ecbacd5ec29b5cf9d300e81604bbe2fc17f3146ee1b028c08839d833950",
+      "live_capture_claims_v4": "5752f805aab6faf9d1ec375385a44cdb06850d20162207ed4f321a34bb4026cd",
+      "live_capture_events_v4": "8cbc1a3f39b8fbbe6b31925c0b42b92e9c8d2bab598efdfae7b41c2643d6858f",
+      "outcomes": "fc60d78ee40903f287a740471ba3a0e1313074bbccb1a6fcfcf013165ca6748a",
+      "predictions": "1fd79e5452c57a175a0d2ee56f828d8bd572587cd770de72fa836352ec3494ba",
+      "risk_set": "faa47124f43aba6b722046e41d133537a29d83186864c84e4ce8c5987bfff535"
+    },
+    "changed": false,
+    "ledger_sha256_after": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "ledger_sha256_before": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "provider_and_study_credit_reconciliation": {
+      "pre_request_fail_closed_events": 1,
+      "recovery_claims": 0,
+      "recovery_observed_study_credits": 0,
+      "routine_claims": 11,
+      "routine_observed_study_credits": 11
+    }
+  },
+  "presentation_changed": true,
+  "source_hashes_after": {
+    "backend/mlb/config/model_authority.json": "d11165fad2f0e46cbb0c30c3cad91f30ad474eb90262308c83638951aedc489a",
+    "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/retained_gamepk_population.csv": "62797307b1bad2cb2f021a54563d09304b904ce39dc07648d938dfe1638cc7d9",
+    "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/retained_reconciliation.json": "b45b62e604cf9a88acd2139242674792aff1345279e9443d0ab261cb4737b504",
+    "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/summary_staleness_report.json": "adf8127acfb25ab82b59fe785f0bda58cb1051f5ec3f083c85d5f418f050f8e8",
+    "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/authoritative_regular_season_games.jsonl": "013047c0503ac79f01c786801fadb45a42d221052b33de4fc7c801ca4a7ae48d",
+    "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/close_inventory_manifest.json": "09e32b322842e02e201a383423f7940be8cec470b1b7b748ec1d7651a464d1ef",
+    "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+    "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/retained_source_manifest.jsonl": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100"
+  },
+  "source_hashes_before": {
+    "backend/mlb/config/model_authority.json": "d11165fad2f0e46cbb0c30c3cad91f30ad474eb90262308c83638951aedc489a",
+    "backend/mlb/exports/model_v2/mlb_market_strong_agreement_separation_prospective_v1.sqlite3": "0ef31f5dee181d8707a7d963b329186955d7984ceb0f72a233df0356b27e6855",
+    "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/retained_gamepk_population.csv": "62797307b1bad2cb2f021a54563d09304b904ce39dc07648d938dfe1638cc7d9",
+    "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/retained_reconciliation.json": "b45b62e604cf9a88acd2139242674792aff1345279e9443d0ab261cb4737b504",
+    "docs/contracts/mlb_2026_agreement_study_phase_gating_v1/summary_staleness_report.json": "adf8127acfb25ab82b59fe785f0bda58cb1051f5ec3f083c85d5f418f050f8e8",
+    "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/authoritative_regular_season_games.jsonl": "013047c0503ac79f01c786801fadb45a42d221052b33de4fc7c801ca4a7ae48d",
+    "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v1/close_inventory_manifest.json": "09e32b322842e02e201a383423f7940be8cec470b1b7b748ec1d7651a464d1ef",
+    "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
+    "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/retained_source_manifest.jsonl": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100"
+  }
+}
