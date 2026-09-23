@@ -25,9 +25,11 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     EXPECTED_PROPOSAL_COUNT,
     EXPECTED_SOURCE_MANIFEST_SHA256,
     EXPECTED_TYPE_COUNTS,
+    EXPECTED_V1_DESCRIPTOR_SHA256,
     GamePhaseAuthorityRecord,
     HashedProposalAuthority,
     REPO_ROOT,
+    load_v1_authority,
 )
 
 
@@ -826,7 +828,9 @@ def build_authoritative_inventory(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Build all 2,430 rows after verifying the frozen phase authority."""
 
-    authority = authority or HashedProposalAuthority(root=root)
+    # The close population is an immutable V1 contract.  It deliberately does
+    # not follow the active selection when future postseason snapshots exist.
+    authority = authority or load_v1_authority(root=root)
     metadata = authority.metadata
     if (
         metadata.proposal_count != EXPECTED_TOTAL_CLASSIFIED
@@ -1147,7 +1151,8 @@ def validate_close_inventory_package(
     if file_sha256(inventory_path) != manifest.get("inventory_sha256"):
         raise CloseInventoryError("CLOSE_INVENTORY_FILE_HASH_MISMATCH")
     rows = _read_jsonl(inventory_path)
-    authority = authority or HashedProposalAuthority()
+    # No-argument close validation is explicitly V1-pinned and check-only.
+    authority = authority or load_v1_authority()
     metadata = authority.metadata
     rebuilt_rows, rebuilt_summary = build_authoritative_inventory(authority=authority)
     if rows != rebuilt_rows:
@@ -1253,4 +1258,5 @@ def authority_expectations() -> dict[str, Any]:
         "type_counts": EXPECTED_TYPE_COUNTS,
         "phase_counts": EXPECTED_PHASE_COUNTS,
         "source_manifest_sha256": EXPECTED_SOURCE_MANIFEST_SHA256,
+        "v1_descriptor_sha256": EXPECTED_V1_DESCRIPTOR_SHA256,
     }

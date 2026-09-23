@@ -1,0 +1,33 @@
+{
+  "activation_authorized": false,
+  "blockers": [
+    {
+      "code": "NO_ACTUAL_RETAINED_POSTSEASON_AUTHORITY_EVIDENCE",
+      "resolution": "Wait for an already-authorized ordinary retention window; do not make a task-specific request."
+    },
+    {
+      "code": "NO_REVIEWED_CHILD_SNAPSHOT",
+      "resolution": "After retained evidence exists, build a candidate offline and review every hash and V1 invariant."
+    },
+    {
+      "code": "SEPARATE_ACTIVATION_AUTHORIZATION_REQUIRED",
+      "resolution": "Review and authorize one atomic active-selection change."
+    },
+    {
+      "code": "ORDINARY_LANE_VALIDATION_NOT_OBSERVED",
+      "resolution": "After authorized activation, validate each lane in its own naturally eligible ordinary window without replay acquisition."
+    },
+    {
+      "code": "AGREEMENT_V4_FROZEN_THROUGH_2026_09_27",
+      "resolution": "Do not reopen under authority activation; any new agreement study needs independent governance."
+    },
+    {
+      "code": "REGULAR_SEASON_CLOSE_REMAINS_BLOCKED",
+      "resolution": "The V1-pinned check-only close contract must pass under separate close authorization."
+    }
+  ],
+  "candidate_snapshot_created": false,
+  "current_active_snapshot": "MLB_2026_GAME_PHASE_AUTHORITY_V1",
+  "current_active_descriptor_sha256": "543fda06d3c066bb6f0608ee8c05987829216fa441459a8fc08b4f87ee8c245a",
+  "postseason_game_pks_in_active_authority": 0
+}

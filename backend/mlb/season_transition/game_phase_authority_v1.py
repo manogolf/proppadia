@@ -15,7 +15,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime
 from numbers import Integral, Real
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -26,6 +26,13 @@ from backend.mlb.season_transition.contract_v1 import (
     PHASES,
     PhaseContractError,
     normalize_source_game_type,
+)
+from backend.mlb.season_transition.phase_authority_snapshot_v1 import (
+    ACTIVE_SELECTION_PATH,
+    V1_DESCRIPTOR_PATH,
+    SnapshotDescriptorError,
+    load_active_descriptor,
+    verify_descriptor_chain,
 )
 
 
@@ -43,6 +50,12 @@ EXPECTED_PROPOSAL_SHA256 = (
 )
 EXPECTED_SOURCE_MANIFEST_SHA256 = (
     "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100"
+)
+EXPECTED_V1_DESCRIPTOR_SHA256 = (
+    "543fda06d3c066bb6f0608ee8c05987829216fa441459a8fc08b4f87ee8c245a"
+)
+EXPECTED_V1_AUTHORITY_RECORDS_SHA256 = (
+    "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84"
 )
 EXPECTED_PROPOSAL_COUNT = 2919
 EXPECTED_SOURCE_FILE_COUNT = 464
@@ -102,9 +115,12 @@ class GamePhaseAuthorityRecord:
     source_hashes: tuple[str, ...]
     phase_decision: str
     authority_status: str
+    scheduled_start_utc: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
+        if value["scheduled_start_utc"] is None:
+            value.pop("scheduled_start_utc")
         value["schedule_relationships"] = dict(self.schedule_relationships)
         value["source_paths"] = list(self.source_paths)
         value["source_hashes"] = list(self.source_hashes)
@@ -135,6 +151,11 @@ class GamePhaseAuthorityMetadata:
     unknown_count: int = 0
     conflicting_count: int = 0
     duplicate_identity_count: int = 0
+    snapshot_id: str = ""
+    snapshot_status: str = ""
+    snapshot_descriptor_path: str = ""
+    snapshot_descriptor_sha256: str = ""
+    parent_descriptor_sha256: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
@@ -484,6 +505,24 @@ def validate_proposal_records(
             if classification.phase in PHASES
             else "SPECIAL_EXCLUDED"
         )
+        scheduled_start_value = row.get("scheduled_start_utc")
+        scheduled_start_utc: str | None = None
+        if scheduled_start_value not in (None, ""):
+            scheduled_start_utc = str(scheduled_start_value)
+            try:
+                parsed_start = datetime.fromisoformat(
+                    scheduled_start_utc.replace("Z", "+00:00")
+                )
+            except ValueError:
+                raise GamePhaseAuthorityError(
+                    "GAME_PHASE_PROPOSAL_SCHEDULED_START_INVALID",
+                    game_pk=game_pk,
+                ) from None
+            if parsed_start.tzinfo is None or parsed_start.year != required_season:
+                raise GamePhaseAuthorityError(
+                    "GAME_PHASE_PROPOSAL_SCHEDULED_START_INVALID",
+                    game_pk=game_pk,
+                )
         record = GamePhaseAuthorityRecord(
             game_pk=game_pk,
             source_season=source_season,
@@ -499,6 +538,7 @@ def validate_proposal_records(
             source_hashes=source_hashes,
             phase_decision=classification.decision,
             authority_status=authority_status,
+            scheduled_start_utc=scheduled_start_utc,
         )
         records[game_pk] = record
         source_type_counts[record.source_game_type] += 1
@@ -535,7 +575,12 @@ def validate_proposal_records(
 
 
 class HashedProposalAuthority(CanonicalGamePhaseAuthority):
-    """Validated 2026 file-backed authority selected by the design contract."""
+    """Validated file-backed authority selected by an immutable descriptor.
+
+    The no-argument operational path resolves exactly one active selection and
+    never falls back.  Explicit legacy proposal/manifest arguments remain only
+    for existing tamper tests and frozen V1 reproduction.
+    """
 
     def __init__(
         self,
@@ -545,6 +590,10 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
         expected_proposal_sha256: str = EXPECTED_PROPOSAL_SHA256,
         expected_source_manifest_sha256: str = EXPECTED_SOURCE_MANIFEST_SHA256,
         root: Path = REPO_ROOT,
+        descriptor_path: Path | None = None,
+        expected_descriptor_sha256: str | None = None,
+        selection_path: Path = ACTIVE_SELECTION_PATH,
+        allow_candidate: bool = False,
     ) -> None:
         contract_sha256 = _sha256(PHASE_CONTRACT_PATH)
         if (
@@ -558,6 +607,88 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
                     f"sha256={contract_sha256}"
                 ),
             )
+        root = root.resolve()
+        legacy_override = (
+            proposal_path.resolve() != DEFAULT_PROPOSAL_PATH.resolve()
+            or source_manifest_path.resolve() != DEFAULT_SOURCE_MANIFEST_PATH.resolve()
+            or expected_proposal_sha256 != EXPECTED_PROPOSAL_SHA256
+            or expected_source_manifest_sha256 != EXPECTED_SOURCE_MANIFEST_SHA256
+        )
+        if descriptor_path is not None and legacy_override:
+            raise GamePhaseAuthorityError(
+                "GAME_PHASE_DESCRIPTOR_AND_LEGACY_INPUT_CONFLICT"
+            )
+
+        verified_descriptor = None
+        if descriptor_path is not None:
+            if expected_descriptor_sha256 is None:
+                raise GamePhaseAuthorityError(
+                    "GAME_PHASE_DESCRIPTOR_EXPECTED_HASH_REQUIRED"
+                )
+            try:
+                verified_descriptor = verify_descriptor_chain(
+                    descriptor_path,
+                    expected_sha256=expected_descriptor_sha256,
+                    root=root,
+                    allow_candidate=allow_candidate,
+                )
+            except SnapshotDescriptorError as exc:
+                raise GamePhaseAuthorityError(exc.code, detail=exc.detail) from exc
+        elif not legacy_override:
+            try:
+                verified_descriptor = load_active_descriptor(
+                    selection_path=selection_path,
+                    root=root,
+                )
+            except SnapshotDescriptorError as exc:
+                raise GamePhaseAuthorityError(exc.code, detail=exc.detail) from exc
+
+        descriptor_data: Mapping[str, Any] = {}
+        if verified_descriptor is not None:
+            root_descriptor = verified_descriptor
+            while root_descriptor.parent is not None:
+                root_descriptor = root_descriptor.parent
+            if (
+                root_descriptor.sha256 != EXPECTED_V1_DESCRIPTOR_SHA256
+                or root_descriptor.data.get("snapshot_id")
+                != "MLB_2026_GAME_PHASE_AUTHORITY_V1"
+                or root_descriptor.data.get("proposal_sha256")
+                != EXPECTED_PROPOSAL_SHA256
+                or root_descriptor.data.get("source_manifest_sha256")
+                != EXPECTED_SOURCE_MANIFEST_SHA256
+            ):
+                raise GamePhaseAuthorityError(
+                    "GAME_PHASE_ROOT_DESCRIPTOR_NOT_GOVERNED_V1"
+                )
+            descriptor_data = verified_descriptor.data
+            proposal_path = verified_descriptor.proposal_path
+            source_manifest_path = verified_descriptor.source_manifest_path
+            expected_proposal_sha256 = str(descriptor_data["proposal_sha256"])
+            expected_source_manifest_sha256 = str(
+                descriptor_data["source_manifest_sha256"]
+            )
+            expected_proposal_count = int(descriptor_data["row_count"])
+            expected_source_file_count = int(descriptor_data["source_file_count"])
+            expected_source_observation_count = int(
+                descriptor_data["source_observation_count"]
+            )
+            expected_type_counts = dict(descriptor_data["raw_game_type_counts"])
+            expected_phase_counts = dict(descriptor_data["normalized_phase_counts"])
+            supported_from_date = date.fromisoformat(
+                str(descriptor_data["scheduled_date_from"])
+            )
+            supported_through_date = date.fromisoformat(
+                str(descriptor_data["scheduled_date_through"])
+            )
+        else:
+            expected_proposal_count = EXPECTED_PROPOSAL_COUNT
+            expected_source_file_count = EXPECTED_SOURCE_FILE_COUNT
+            expected_source_observation_count = EXPECTED_SOURCE_OBSERVATION_COUNT
+            expected_type_counts = EXPECTED_TYPE_COUNTS
+            expected_phase_counts = EXPECTED_PHASE_COUNTS
+            supported_from_date = SUPPORTED_FROM_DATE
+            supported_through_date = SUPPORTED_THROUGH_DATE
+
         proposal_path = proposal_path.resolve()
         source_manifest_path = source_manifest_path.resolve()
         proposal_sha256 = _sha256(proposal_path)
@@ -572,13 +703,13 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
             source_manifest_path,
             root=root,
             expected_sha256=expected_source_manifest_sha256,
-            expected_count=EXPECTED_SOURCE_FILE_COUNT,
+            expected_count=expected_source_file_count,
         )
-        if observation_count != EXPECTED_SOURCE_OBSERVATION_COUNT:
+        if observation_count != expected_source_observation_count:
             raise GamePhaseAuthorityError(
                 "GAME_PHASE_SOURCE_OBSERVATION_COUNT_MISMATCH",
                 detail=(
-                    f"expected={EXPECTED_SOURCE_OBSERVATION_COUNT};"
+                    f"expected={expected_source_observation_count};"
                     f"actual={observation_count}"
                 ),
             )
@@ -586,21 +717,62 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
         records, validation = validate_proposal_records(
             rows,
             source_hash_by_path=source_hash_by_path,
-            expected_count=EXPECTED_PROPOSAL_COUNT,
-            expected_type_counts=EXPECTED_TYPE_COUNTS,
-            expected_phase_counts=EXPECTED_PHASE_COUNTS,
+            expected_count=expected_proposal_count,
+            expected_type_counts=expected_type_counts,
+            expected_phase_counts=expected_phase_counts,
         )
+        classification_rows = [
+            {
+                key: row.get(key)
+                for key in (
+                    "game_pk",
+                    "source_season",
+                    "source_game_type",
+                    "season_phase",
+                    "postseason_round",
+                    "season_name",
+                    "source_round",
+                    "schedule_relationships",
+                )
+            }
+            for row in rows
+        ]
+        if verified_descriptor is not None:
+            classification_sha256 = hashlib.sha256(
+                _canonical_json(classification_rows)
+            ).hexdigest()
+            if classification_sha256 != descriptor_data["classification_sha256"]:
+                raise GamePhaseAuthorityError(
+                    "GAME_PHASE_DESCRIPTOR_CLASSIFICATION_HASH_MISMATCH"
+                )
+            if verified_descriptor.parent is None:
+                if (
+                    proposal_sha256 != EXPECTED_PROPOSAL_SHA256
+                    or expected_source_manifest_sha256
+                    != EXPECTED_SOURCE_MANIFEST_SHA256
+                    or validation["authority_records_sha256"]
+                    != EXPECTED_V1_AUTHORITY_RECORDS_SHA256
+                    or descriptor_data["v1_proposal_sha256"]
+                    != EXPECTED_PROPOSAL_SHA256
+                    or descriptor_data["v1_source_manifest_sha256"]
+                    != EXPECTED_SOURCE_MANIFEST_SHA256
+                    or descriptor_data["v1_authority_records_sha256"]
+                    != EXPECTED_V1_AUTHORITY_RECORDS_SHA256
+                ):
+                    raise GamePhaseAuthorityError(
+                        "GAME_PHASE_V1_DESCRIPTOR_INVARIANT_MISMATCH"
+                    )
         self._records = records
         self._metadata = GamePhaseAuthorityMetadata(
             authority_interface=AUTHORITY_INTERFACE_NAME,
             backend=FILE_BACKEND_NAME,
             supported_season=SUPPORTED_SEASON,
-            supported_from_date=SUPPORTED_FROM_DATE.isoformat(),
-            supported_through_date=SUPPORTED_THROUGH_DATE.isoformat(),
-            proposal_path=str(proposal_path.relative_to(root.resolve())),
+            supported_from_date=supported_from_date.isoformat(),
+            supported_through_date=supported_through_date.isoformat(),
+            proposal_path=str(proposal_path.relative_to(root)),
             proposal_sha256=proposal_sha256,
             proposal_count=len(records),
-            source_manifest_path=str(source_manifest_path.relative_to(root.resolve())),
+            source_manifest_path=str(source_manifest_path.relative_to(root)),
             source_manifest_sha256=expected_source_manifest_sha256,
             source_file_count=len(source_hash_by_path),
             source_observation_count=observation_count,
@@ -610,6 +782,19 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
             source_type_counts=validation["source_type_counts"],
             phase_counts=validation["phase_counts"],
             authority_records_sha256=validation["authority_records_sha256"],
+            snapshot_id=str(descriptor_data.get("snapshot_id") or ""),
+            snapshot_status=str(descriptor_data.get("snapshot_status") or ""),
+            snapshot_descriptor_path=(
+                str(verified_descriptor.path.relative_to(root))
+                if verified_descriptor is not None
+                else ""
+            ),
+            snapshot_descriptor_sha256=(
+                verified_descriptor.sha256 if verified_descriptor is not None else ""
+            ),
+            parent_descriptor_sha256=str(
+                descriptor_data.get("parent_descriptor_sha256") or ""
+            ),
         )
 
     @property
@@ -658,3 +843,32 @@ def source_type_is_recognized(raw_type: Any) -> bool:
     """Exact StatsAPI wire-value check for consumer conflict auditing."""
 
     return isinstance(raw_type, str) and raw_type in GAME_TYPE_CONTRACT
+
+
+class VersionedFileAuthority(HashedProposalAuthority):
+    """Explicit descriptor loader used for candidate validation and rollback tests."""
+
+    def __init__(
+        self,
+        *,
+        descriptor_path: Path,
+        expected_descriptor_sha256: str,
+        root: Path = REPO_ROOT,
+        allow_candidate: bool = False,
+    ) -> None:
+        super().__init__(
+            root=root,
+            descriptor_path=descriptor_path,
+            expected_descriptor_sha256=expected_descriptor_sha256,
+            allow_candidate=allow_candidate,
+        )
+
+
+def load_v1_authority(*, root: Path = REPO_ROOT) -> VersionedFileAuthority:
+    """Load the exact immutable V1 descriptor, bypassing active selection."""
+
+    return VersionedFileAuthority(
+        descriptor_path=root / V1_DESCRIPTOR_PATH.relative_to(REPO_ROOT),
+        expected_descriptor_sha256=EXPECTED_V1_DESCRIPTOR_SHA256,
+        root=root,
+    )
