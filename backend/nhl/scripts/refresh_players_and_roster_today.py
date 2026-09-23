@@ -18,6 +18,7 @@ Env:
   NHL_FETCH_DISABLE=1  # force offline path
 """
 
+import json
 import os, sys, datetime as dt, re
 from zoneinfo import ZoneInfo
 import datetime as dt, os, sys
@@ -66,6 +67,11 @@ from backend.nhl.official_request_journal import (
     official_season_id,
 )
 from backend.nhl.player_external_identity import localized_text
+from backend.nhl.player_stage_normalizer import (
+    PlayerStageConflict,
+    normalize_player_stage_rows,
+    normalize_position as _normalize_pos,
+)
 
 # ---------------- Config ----------------
 ET = ZoneInfo("America/New_York")
@@ -123,16 +129,6 @@ def season_start_year_from_date(iso_date: str) -> int:
     start = y if m >= 7 else y - 1
     return int(start)
 
-def _normalize_pos(code: str | None) -> str | None:
-    if not code:
-        return None
-    c = str(code).upper().strip()
-    if c in {"G", "GOALIE"}: return "G"
-    if c in {"D", "LD", "RD", "DEF", "DEFENSE", "DEFENCE"}: return "D"
-    if c in {"C", "L", "R", "LW", "RW", "F", "W", "CENTER", "LEFT WING", "RIGHT WING", "FORWARD"}:
-        return "F"
-    return None
-
 def _safe_str(v):
     return localized_text(v)
 
@@ -177,6 +173,29 @@ def _validate_roster_names(players_stage: list[dict]) -> None:
 def upsert_players_from_stage(cur) -> None:
     with open(UPsertPlayersSQL, "r") as f:
         cur.execute(f.read())
+
+
+def stage_and_upsert_players(cur, players_stage: list[dict]) -> dict[str, int]:
+    """Normalize the full player batch before performing any player DML."""
+    try:
+        normalized, counts = normalize_player_stage_rows(players_stage)
+    except PlayerStageConflict as error:
+        print("[player-upsert-normalization] " + json.dumps(
+            error.counts, sort_keys=True, separators=(",", ":")))
+        raise
+
+    _validate_roster_names(normalized)
+    print("[player-upsert-normalization] " + json.dumps(
+        counts, sort_keys=True, separators=(",", ":")))
+    cur.execute("TRUNCATE nhl.import_players_stage;")
+    cur.executemany("""
+        INSERT INTO nhl.import_players_stage
+            (player_id, team_id, first_name, last_name, "position", shoots_catches, active)
+        VALUES (%(player_id)s, %(team_id)s, %(first_name)s, %(last_name)s,
+                %(position)s, %(shoots_catches)s, %(active)s)
+    """, normalized)
+    upsert_players_from_stage(cur)
+    return counts
 
 def roster_status_has_column(cur, column_name: str) -> bool:
     cur.execute(
@@ -580,19 +599,7 @@ def main():
         with conn.transaction():
             with conn.cursor() as cur:
                 if source == "API" and players_stage and roster_rows:
-                    try:
-                        _validate_roster_names(players_stage)
-                    except NameError as error:
-                        raise RuntimeError("ROSTER_NAME_VALIDATOR_UNAVAILABLE") from error
-
-                    cur.execute("TRUNCATE nhl.import_players_stage;")
-                    cur.executemany("""
-                        INSERT INTO nhl.import_players_stage
-                            (player_id, team_id, first_name, last_name, "position", shoots_catches, active)
-                        VALUES (%(player_id)s, %(team_id)s, %(first_name)s, %(last_name)s,
-                                %(position)s, %(shoots_catches)s, %(active)s)
-                    """, players_stage)
-                    upsert_players_from_stage(cur)
+                    stage_and_upsert_players(cur, players_stage)
 
                     roster_rows = _dedupe_roster_rows(roster_rows)
                     cur.execute("""
