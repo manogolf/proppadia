@@ -116,7 +116,6 @@ def execute_tests() -> dict[str, Any]:
         "skipped": skipped,
         "all_intended_scenarios_executed": failed == 0 and skipped == 0,
         "scenarios": result.scenarios,
-        "runner_output": stream.getvalue(),
     }
 
 
@@ -374,6 +373,9 @@ def main() -> int:
     checks = {
         "canonical_interpreter": Path(sys.executable).resolve() == CANONICAL_PYTHON.resolve(),
         "all_tests_passed": tests["failed"] == 0 and tests["skipped"] == 0,
+        "deterministic_test_evidence_excludes_wall_clock_output": (
+            "runner_output" not in tests
+        ),
         "governing_sources_unchanged": before == after,
         "canonical_population_2919": control["canonical_population"]["total"] == 2919,
         "regular_population_2430": control["canonical_population"]["REGULAR_SEASON"] == 2430,

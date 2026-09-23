@@ -7,6 +7,7 @@
     "canonical_population_2919": true,
     "close_check_only_and_blocked": true,
     "close_outstanding_88": true,
+    "deterministic_test_evidence_excludes_wall_clock_output": true,
     "governing_sources_unchanged": true,
     "postseason_population_zero_explicit": true,
     "preseason_population_489": true,
@@ -16,7 +17,7 @@
   },
   "contract_name": "MLB_2026_OPS_BRIEF_AND_DAILY_INDEX_PHASE_GATING_V1",
   "failed_checks": 0,
-  "passed_checks": 13,
+  "passed_checks": 14,
   "status": "PASS",
   "test_counts": {
     "failed": 0,
