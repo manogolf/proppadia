@@ -1,0 +1,14 @@
+lane,current_authority_use,no_change,refreshed_manifest_only,consumer_configuration_update,code_change,ordinary_window_validation,postseason_collection_state,postseason_evaluation_state,reason
+Moneyline,exact-gamePk phase partition,NO,YES,YES,NO,YES,raw game/outcome collection can continue,shadow only,"Shared loader/config supplies new snapshot; lane logic already separates postseason"
+Full-board Hits,exact-gamePk gate before scoring/grading/reporting,NO,YES,YES,NO,YES,conditional on naturally available player/market inputs,shadow only,"No model or threshold change; actual market path remains unobserved postseason"
+RAW Totals,exact-gamePk shared Totals gate,NO,YES,YES,NO,YES,conditional on ordinary source inputs,shadow only,"Gate already partitions postseason"
+Totals C,derived row must share RAW exact gamePk authority,NO,YES,YES,NO,YES,conditional on RAW identity,shadow only,"No independent authority or phase column"
+agreement study,phase gate plus V4 acquisition freeze,NO,YES,YES,YES,YES,blocked under V4 after 2026-09-27,code-ready shadow,"Separate acquisition authorization/config is required; authority extension grants none"
+BvP,official gamePk retained and joined later,YES,NO,NO,NO,YES,ready exact gamePk,excluded from regular metrics and available for governed future use,"Exactly-once acquisition is phase-neutral"
+player-prop/BetOnline identity,provider receipt requires active authority,NO,YES,YES,NO,YES,prospectively ready after activation,downstream lane-specific,"Raw schedule/provider evidence is retained before binding; absent authority blocks normalized output"
+Pinnacle,provider receipt requires active authority,NO,YES,YES,NO,YES,prospectively ready after activation,downstream lane-specific,"Already-fetched schedule bytes are retained and hash-bound"
+feature lineage,exact gamePk plus authority records hash in binding,NO,YES,YES,NO,YES,ready when provider binding succeeds,not an evaluation cohort,"Future rows bind new hash; old lineage remains unchanged"
+Ops Brief and daily index,active authority plus close checker,NO,YES,YES,YES,YES,not a collector,separate partitions after close decoupling,"Current close checker rejects an extended total population"
+close inventory/checker,V1 exact population and disposition manifest,YES,NO,NO,YES,YES,not a collector,regular-season close only,"Pin it explicitly to V1 or prove unchanged 2430 regular set under version-aware code"
+training eligibility,active authority admits only regular season,NO,YES,YES,NO,YES,not a collector,postseason excluded,"Interface already fail-closes and future training manifest stores hashes"
+
