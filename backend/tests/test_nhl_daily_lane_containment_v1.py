@@ -55,6 +55,21 @@ def write_prediction(path: Path) -> None:
         "1,2026010037,2026-09-24,0.5,0.5\n")
 
 
+def fake_prepare_scoring_input(**kwargs):
+    path = Path(kwargs["output_path"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("fixture\n")
+    return {"path": str(path.resolve()), "row_count": 1}
+
+
+def fake_validate_prediction_output(**_kwargs):
+    return {
+        "validated_prediction_identity": True,
+        "natural_identity_count": 1,
+        "conditional_prediction_count": 1,
+    }
+
+
 def test_212_of_713_is_only_a_legacy_sog_block():
     gate = evaluate_legacy_sog_toi_gate(
         population_rows=713, null_5v5=212, null_season_5v5=212)
@@ -256,7 +271,7 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
         values = list(map(str, command))
         if "--out" in values:
             out = Path(values[values.index("--out") + 1])
-            if "score_nhl_props.py" in values[1] or "score_points_phoenix.py" in values[1]:
+            if "score_nhl_saves_with_lineage.py" in values[1] or "score_nhl_points_with_lineage.py" in values[1]:
                 write_prediction(out)
             elif "build_saves_with_market.py" in values[1] or "build_points_with_market.py" in values[1]:
                 out.parent.mkdir(parents=True, exist_ok=True)
@@ -271,6 +286,8 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
     ), patch.object(cli, "run", side_effect=fake_run), patch.object(
         cli, "export_names_csv", return_value=names), patch.object(
         cli, "run_optional_odds_observation", return_value=odds), patch.object(
+        cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
+        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
         cli, "refresh_sog_residual_dataset") as residual, patch.object(
         cli, "refresh_sog_reconcile_artifacts") as reconcile, patch.object(
         cli, "build_sog") as build_sog:
@@ -336,9 +353,9 @@ def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, 
     def fake_run(command, **_kwargs):
         values = list(map(str, command))
         script = values[1] if len(values) > 1 else ""
-        if failed_lane == "points" and "score_points_phoenix.py" in script:
+        if failed_lane == "points" and "score_nhl_points_with_lineage.py" in script:
             raise RuntimeError("points failed")
-        if failed_lane == "saves" and "score_nhl_props.py" in script:
+        if failed_lane == "saves" and "score_nhl_saves_with_lineage.py" in script:
             raise RuntimeError("saves failed")
         if "--out" in values:
             out = Path(values[values.index("--out") + 1])
@@ -357,7 +374,9 @@ def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, 
                         EXPORTS_ODDS_HISTORY_DIR=tmp_path / "archive"), patch.object(
         cli, "run", side_effect=fake_run), patch.object(
         cli, "export_names_csv", return_value=names), patch.object(
-        cli, "run_optional_odds_observation", side_effect=no_odds):
+        cli, "run_optional_odds_observation", side_effect=no_odds), patch.object(
+        cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
+        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output):
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=False,
             odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],
@@ -400,7 +419,9 @@ def test_odds_failure_is_warning_and_preserves_current_predictions(tmp_path):
         EXPORTS_ODDS_HISTORY_DIR=tmp_path / "archive",
     ), patch.object(cli, "run", side_effect=fake_run), patch.object(
         cli, "export_names_csv", return_value=names), patch.object(
-        cli, "run_optional_odds_observation", side_effect=RuntimeError("provider failed")):
+        cli, "run_optional_odds_observation", side_effect=RuntimeError("provider failed")), patch.object(
+        cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
+        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output):
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=True,
             odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],

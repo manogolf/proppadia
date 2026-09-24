@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -36,11 +37,30 @@ from typing import Any, Dict, List, Optional, Tuple
 import psycopg
 
 
+LINEAGE_FIELDS = (
+    "game_date", "game_start_utc", "home_team_id", "away_team_id",
+    "parent_daily_run_id", "feature_input_cutoff_utc", "canonical_game_set_hash",
+)
+
+
+def lineage_values(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Retain validated file lineage through wide-to-long payload expansion."""
+    return {field: row.get(field) for field in LINEAGE_FIELDS if field in row}
+
+
 def require_db_url() -> str:
     db = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or os.environ.get("DB")
     if not db:
         raise SystemExit("Missing DB URL. Set SUPABASE_DB_URL (preferred) or DATABASE_URL or DB.")
     return db
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _to_int(x: Any) -> Optional[int]:
@@ -167,6 +187,9 @@ def main() -> None:
     ap.add_argument("--model-family", default=None, help="Override nhl.predictions.model_family")
     ap.add_argument("--model-version", default=None, help="Override nhl.predictions.model_version")
     ap.add_argument("--feature-hash",  default=None, help="Override nhl.predictions.feature_hash")
+    ap.add_argument(
+        "--expected-sha256", default=None,
+        help="Fail before connecting unless the prediction artifact has this exact hash")
 
     args = ap.parse_args()
 
@@ -180,6 +203,8 @@ def main() -> None:
     csv_path = Path(args.pred_csv)
     if not csv_path.exists():
         raise SystemExit(f"Missing CSV: {csv_path}")
+    if args.expected_sha256 and sha256_file(csv_path) != args.expected_sha256:
+        raise SystemExit(f"Prediction artifact hash mismatch: {csv_path}")
 
     rows, cols = read_rows(csv_path)
 
@@ -273,6 +298,7 @@ def main() -> None:
                             "model_params": {},  # jsonb NOT NULL
                             "feature_hash": default_feature_hash,
                             "model_version": default_model_version,
+                            **lineage_values(r),
                         }
                     )
         else:
@@ -301,6 +327,7 @@ def main() -> None:
                         "model_params": {},  # jsonb NOT NULL
                         "feature_hash": default_feature_hash,
                         "model_version": default_model_version,
+                        **lineage_values(r),
                     }
                 )
 

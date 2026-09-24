@@ -58,6 +58,12 @@ from backend.nhl.daily_orchestration import (
     evaluate_legacy_sog_toi_gate,
     verify_roster_observation_reuse,
 )
+from backend.nhl.prediction_lineage import (
+    POINTS_LINES,
+    SAVES_LINES,
+    prepare_scoring_input,
+    validate_prediction_output,
+)
 
 
 # ---------- bootstrap env ----------
@@ -1192,28 +1198,47 @@ def _run_independent_daily_lanes(
         recorder.start_lane("saves")
         _ACTIVE_DAILY_LANE = "saves"
         try:
-            recorder.lane("saves").inputs.append(artifact_identity(
-                EXPORTS_DIR / "train_goalie_saves_v2.csv"))
+            saves_source_csv = EXPORTS_DIR / "train_goalie_saves_v2.csv"
+            recorder.lane("saves").inputs.append(artifact_identity(saves_source_csv))
             saves_model_dir = MODELS_DIR / "latest" / "goalie_saves"
             if not saves_model_dir.exists():
                 raise RuntimeError(f"SAVES_MODEL_MISSING:{saves_model_dir}")
+            saves_cutoff = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            saves_input_csv = prediction_run_dir / "saves_scoring_input.csv"
+            saves_input_identity = prepare_scoring_input(
+                source_path=saves_source_csv, output_path=saves_input_csv,
+                canonical_games=canonical_games, slate=slate,
+                parent_daily_run_id=daily_run_id,
+                feature_input_cutoff_utc=saves_cutoff,
+                expected_game_set_hash=recorder.canonical_game_set_hash,
+            )
+            saves_input_identity.update(artifact_identity(saves_input_csv))
+            recorder.lane("saves").inputs.append(saves_input_identity)
             saves_pred_csv = prediction_run_dir / "saves_predictions.csv"
             run([
-                PY, SCRIPTS_DIR / "score_nhl_props.py",
+                PY, SCRIPTS_DIR / "score_nhl_saves_with_lineage.py",
                 "--model-dir", saves_model_dir,
-                "--csv", EXPORTS_DIR / "train_goalie_saves_v2.csv",
+                "--csv", saves_input_csv,
                 "--feature-json", "backend/nhl/features/feature_metadata_nhl.json",
                 "--feature-key", "goalie_saves",
                 "--line", "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5",
                 "--out", saves_pred_csv,
             ])
-            prediction_identities["saves"] = _require_current_prediction_artifact(
-                saves_pred_csv, slate=slate, expected_sha256=None)
+            saves_validation = validate_prediction_output(
+                path=saves_pred_csv, lane="saves", canonical_games=canonical_games,
+                slate=slate, parent_daily_run_id=daily_run_id,
+                feature_input_cutoff_utc=saves_cutoff,
+                expected_game_set_hash=recorder.canonical_game_set_hash,
+                expected_lines=SAVES_LINES,
+            )
+            prediction_identities["saves"] = artifact_identity(saves_pred_csv)
+            prediction_identities["saves"].update(saves_validation)
             run([
                 PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
                 "--pred-csv", saves_pred_csv, "--project", "nhl",
                 "--prop", "goalie_saves", "--model-family", "phoenix",
                 "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
+                "--expected-sha256", prediction_identities["saves"]["sha256"],
             ])
             recorder.finish_lane(
                 "saves", outputs=[prediction_identities["saves"]],
@@ -1228,22 +1253,41 @@ def _run_independent_daily_lanes(
         recorder.start_lane("points")
         _ACTIVE_DAILY_LANE = "points"
         try:
-            recorder.lane("points").inputs.append(artifact_identity(
-                EXPORTS_DIR / "train_nhl_points_v2.csv"))
+            points_source_csv = EXPORTS_DIR / "train_nhl_points_v2.csv"
+            recorder.lane("points").inputs.append(artifact_identity(points_source_csv))
+            points_cutoff = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            points_input_csv = prediction_run_dir / "points_scoring_input.csv"
+            points_input_identity = prepare_scoring_input(
+                source_path=points_source_csv, output_path=points_input_csv,
+                canonical_games=canonical_games, slate=slate,
+                parent_daily_run_id=daily_run_id,
+                feature_input_cutoff_utc=points_cutoff,
+                expected_game_set_hash=recorder.canonical_game_set_hash,
+            )
+            points_input_identity.update(artifact_identity(points_input_csv))
+            recorder.lane("points").inputs.append(points_input_identity)
             points_pred_csv = prediction_run_dir / "points_predictions.csv"
             run([
-                PY, SCRIPTS_DIR / "score_points_phoenix.py",
-                "--features-csv", EXPORTS_DIR / "train_nhl_points_v2.csv",
+                PY, SCRIPTS_DIR / "score_nhl_points_with_lineage.py",
+                "--features-csv", points_input_csv,
                 "--model-root", MODELS_DIR / "latest" / "points",
                 "--out", points_pred_csv,
             ])
-            prediction_identities["points"] = _require_current_prediction_artifact(
-                points_pred_csv, slate=slate, expected_sha256=None)
+            points_validation = validate_prediction_output(
+                path=points_pred_csv, lane="points", canonical_games=canonical_games,
+                slate=slate, parent_daily_run_id=daily_run_id,
+                feature_input_cutoff_utc=points_cutoff,
+                expected_game_set_hash=recorder.canonical_game_set_hash,
+                expected_lines=POINTS_LINES,
+            )
+            prediction_identities["points"] = artifact_identity(points_pred_csv)
+            prediction_identities["points"].update(points_validation)
             run([
                 PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
                 "--pred-csv", points_pred_csv, "--project", "nhl",
                 "--prop", "player_points", "--model-family", "phoenix",
                 "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
+                "--expected-sha256", prediction_identities["points"]["sha256"],
             ])
             recorder.finish_lane(
                 "points", outputs=[prediction_identities["points"]],

@@ -205,6 +205,8 @@ class CanonicalGame:
     away_team: str
     home_aliases: tuple[str, ...] = ()
     away_aliases: tuple[str, ...] = ()
+    home_team_id: int | None = None
+    away_team_id: int | None = None
 
 
 @dataclass
@@ -575,6 +577,8 @@ def load_canonical_slate(*, slate_date: str, raw_schedule_path: Path,
             home_team=str(home.get("abbrev") or home.get("triCode") or ""),
             away_team=str(away.get("abbrev") or away.get("triCode") or ""),
             home_aliases=_team_aliases(home), away_aliases=_team_aliases(away),
+            home_team_id=int(home["id"]) if home.get("id") is not None else None,
+            away_team_id=int(away["id"]) if away.get("id") is not None else None,
         ))
     out.sort(key=lambda game: (game.start_time_utc, game.game_id))
     if len(out) != int(health.get("normalized_game_count") or 0):
