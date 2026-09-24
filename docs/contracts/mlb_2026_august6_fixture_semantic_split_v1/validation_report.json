@@ -1,0 +1,54 @@
+{
+  "contract": "MLB_2026_AUGUST6_FIXTURE_SEMANTIC_SPLIT_V1",
+  "ancestry": {
+    "required_commit": "ba114f341491bf4d832463b91717b9ee7b98d78f",
+    "present_in_head_ancestry": true
+  },
+  "original_fixture": {
+    "path": "backend/mlb/tests/fixtures/public_game_predictions_v1/august6_schedule.json",
+    "recovered_from": "0dd77d6f616e9b7a777118cf523eb103e3377f8a^",
+    "git_blob": "0ec6565ea82327e3cf930e89e6d16cb2b0b41d49",
+    "sha256": "fc3a5e482c90825fdf1b8dbb9e3485d5db49beea1c338fd5620de34f0122bdad",
+    "game_count": 11,
+    "purpose": "IMMUTABLE_MONEYLINE_FROZEN_BEHAVIOR"
+  },
+  "enriched_fixture": {
+    "path": "backend/mlb/tests/fixtures/totals_live_context_v1/august6_enriched_live_context_schedule.json",
+    "sha256": "66593c8fc050743ab52730ea689c08bf75c5b0afd06bf31981649a324b818fb2",
+    "game_count": 11,
+    "purpose": "TOTALS_ENRICHED_LIVE_CONTEXT"
+  },
+  "validation": {
+    "canonical_interpreter": "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
+    "pytest_version": "8.3.5_TEMPORARY_LOCAL_SHIM_ONLY",
+    "required_test_modules": 6,
+    "tests_passed": 132,
+    "tests_failed": 0,
+    "tests_excluded": 0,
+    "semantic_validator": "PASS",
+    "exact_game_foundation_validator": "PASS",
+    "compilation": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "effects": {
+    "production_source_changed": false,
+    "moneyline_probabilities_changed": false,
+    "production_source_selection_changed": false,
+    "database_effect": "NONE",
+    "pipeline_effect": "NONE",
+    "api_requests": 0,
+    "database_connections": 0
+  },
+  "classifications": {
+    "ORIGINAL_MONEYLINE_FIXTURE_INTEGRITY": "VERIFIED_EXACT_PRE_0DD77D6F_GIT_BLOB",
+    "ENRICHED_FIXTURE_SEMANTIC_ISOLATION": "VERIFIED_TOTALS_LIVE_CONTEXT_ONLY",
+    "CONSUMER_FIXTURE_ASSIGNMENT": "VERIFIED",
+    "MONEYLINE_BEHAVIOR_EFFECT": "NONE",
+    "EXACT_GAME_FOUNDATION_EFFECT": "COMPACT_STATUS_AND_MANIFEST_ONLY_SOURCE_UNCHANGED",
+    "COMPLETE_HARDENING_SUITE_STATUS": "GREEN",
+    "DATABASE_EFFECT": "NONE",
+    "PIPELINE_EFFECT": "NONE",
+    "STAT_DERIVED_RETRY": "BLOCKED",
+    "EXACT_GAME_MIGRATION": "NOT_APPLIED"
+  }
+}

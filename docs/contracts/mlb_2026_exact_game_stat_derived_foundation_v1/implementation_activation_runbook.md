@@ -61,7 +61,7 @@ HISTORICAL_EXACT_GAME_FEATURE_STATE_UNPROVABLE
 - Historical immutable cutoffs are absent for the retained 824785/824784 reconstruction population.
 - The 3,025 unresolved-authority multi-game player/date groups remain outside historical certification.
 - Game 824785/824784 database reconciliation and stat-derived retry remain unauthorized and blocked.
-- The independent `august6_schedule.json` fixture binding mismatch remains unresolved; the complete hardening suite is not green.
+- The independent `august6_schedule.json` mismatch was resolved by `MLB_2026_AUGUST6_FIXTURE_SEMANTIC_SPLIT_V1`; the immutable Moneyline bytes and enriched Totals bytes now have separate paths and bindings. The complete hardening suite is green under that later contract.
 
 ## Required classifications
 

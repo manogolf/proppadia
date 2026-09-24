@@ -1,0 +1,21 @@
+{
+  "contract": "MLB_2026_AUGUST6_FIXTURE_SEMANTIC_SPLIT_V1",
+  "bindings": {
+    "IMMUTABLE_MONEYLINE_FROZEN_BEHAVIOR": {
+      "path": "backend/mlb/tests/fixtures/public_game_predictions_v1/august6_schedule.json",
+      "sha256": "fc3a5e482c90825fdf1b8dbb9e3485d5db49beea1c338fd5620de34f0122bdad",
+      "git_blob": "0ec6565ea82327e3cf930e89e6d16cb2b0b41d49",
+      "source_commit": "0dd77d6f616e9b7a777118cf523eb103e3377f8a^",
+      "semantic_contract": "EXACT_11_GAME_TEAM_TIME_IDENTITY_WITHOUT_LIVE_STATUS_STARTER_OR_VENUE_CONTEXT"
+    },
+    "TOTALS_ENRICHED_LIVE_CONTEXT": {
+      "path": "backend/mlb/tests/fixtures/totals_live_context_v1/august6_enriched_live_context_schedule.json",
+      "sha256": "66593c8fc050743ab52730ea689c08bf75c5b0afd06bf31981649a324b818fb2",
+      "source_commit": "0dd77d6f616e9b7a777118cf523eb103e3377f8a",
+      "semantic_contract": "EXACT_11_GAME_STATUS_PROBABLE_PITCHER_AND_VENUE_LIVE_CONTEXT"
+    }
+  },
+  "production_runtime_change": false,
+  "database_effect": "NONE",
+  "pipeline_effect": "NONE"
+}
