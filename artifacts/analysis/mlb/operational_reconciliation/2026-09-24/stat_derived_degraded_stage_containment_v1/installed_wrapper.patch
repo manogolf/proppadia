@@ -1,0 +1,32 @@
+--- a/proppadia_mlb_refresh_daily.sh
++++ b/proppadia_mlb_refresh_daily.sh
+@@ -1177,0 +1178,4 @@
++MLB_STAT_DERIVED_FAILURE_BOUNDARY="MLB_STAT_DERIVED_STAGE_BOUNDARY run_identity=${MLB_RUN_TAG}"
++MLB_STAT_DERIVED_FAILURE_LOG="${MLB_STAT_DERIVED_FAILURE_LOG:-artifacts/ops/mlb_refresh_daily.err.log}"
++echo "${MLB_STAT_DERIVED_FAILURE_BOUNDARY}" >&2
++set +e
+@@ -1183,0 +1188,24 @@
++MLB_STAT_DERIVED_RC=$?
++set -e
++if [[ "$MLB_STAT_DERIVED_RC" -ne 0 ]]; then
++  echo "[$(date -u +%FT%TZ)] ERROR stat-derived stage failed rc=${MLB_STAT_DERIVED_RC}; activating fail-closed degraded containment" >&2
++  set +e
++  .venv/bin/python -m backend.mlb.scripts.contain_mlb_stat_derived_failure \
++    --slate-date "$MLB_DATE_ET" \
++    --completed-slate-date "$MLB_COMPLETED_SLATE_DATE" \
++    --run-identity "$MLB_RUN_TAG" \
++    --wrapper-started-at-utc "$MLB_WRAPPER_RUN_STARTED_AT_UTC" \
++    --stat-derived-rc "$MLB_STAT_DERIVED_RC" \
++    --failure-boundary "$MLB_STAT_DERIVED_FAILURE_BOUNDARY" \
++    --failure-log "$MLB_STAT_DERIVED_FAILURE_LOG" \
++    --bvp-inline-rc "$MLB_BVP_INLINE_RC" \
++    --bvp-inline-result "$MLB_BVP_INLINE_RESULT"
++  MLB_STAT_DERIVED_CONTAINMENT_RC=$?
++  set -e
++  if [[ "$MLB_STAT_DERIVED_CONTAINMENT_RC" -ne 0 ]]; then
++    echo "[$(date -u +%FT%TZ)] ERROR stat-derived degraded containment failed rc=${MLB_STAT_DERIVED_CONTAINMENT_RC}; original_stat_derived_rc=${MLB_STAT_DERIVED_RC}" >&2
++  else
++    echo "[$(date -u +%FT%TZ)] ERROR DEGRADED_STAT_DERIVED_FAILED_INDEPENDENT_STAGES_COMPLETED original_stat_derived_rc=${MLB_STAT_DERIVED_RC}" >&2
++  fi
++  exit "$MLB_STAT_DERIVED_RC"
++fi

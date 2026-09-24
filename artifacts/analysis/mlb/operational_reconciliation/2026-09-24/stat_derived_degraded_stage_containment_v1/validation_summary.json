@@ -1,0 +1,39 @@
+{
+  "contract": "MLB_2026_STAT_DERIVED_DEGRADED_STAGE_CONTAINMENT_V1",
+  "validated_at_utc": "2026-09-24T17:10:14Z",
+  "status": "PASS",
+  "ancestry": {
+    "ba114f341491bf4d832463b91717b9ee7b98d78f": true,
+    "d9355290da210a17a8fce503a3059d1d985aabc4": true
+  },
+  "installed_wrapper": {
+    "prechange_sha256": "10ee0b9f85a5529f51c13237aef8d6c6325c5cfab2ae51093e6b3c977015059f",
+    "postchange_sha256": "3229ba332c391a7ad019d1c020377dae5539d914fe79227a62ef1cd28456e74c",
+    "syntax": "PASS",
+    "rollback_patch_dry_run": "PASS"
+  },
+  "focused_tests": {
+    "framework": "python_stdlib_unittest",
+    "run": 10,
+    "passed": 10,
+    "failed": 0
+  },
+  "contract_validator": "PASS",
+  "git_diff_check": "PASS",
+  "stage_counts": {
+    "true_data_dependency": 10,
+    "proven_independent_including_exit_trap": 3,
+    "unknown_requires_proof": 2
+  },
+  "ordinary_hook_hashes": {
+    "bin/mlb_full_game_totals_daily_hook.sh": "dbb2f0fb141fb1fb0ac238c22ee12a729828213239619d054b3f790ccb241959",
+    "bin/mlb_totals_prospective_shadow_daily_hook.sh": "1983d3f25679350d5fbdd62da9f62d41cd37784ecc7a59a0f23440c5c8b65245"
+  },
+  "live_api_calls": 0,
+  "provider_credits_used": 0,
+  "database_connections": 0,
+  "database_writes": 0,
+  "pipeline_runs": 0,
+  "manual_stat_derived_retries": 0,
+  "natural_containment_validation": "PENDING"
+}

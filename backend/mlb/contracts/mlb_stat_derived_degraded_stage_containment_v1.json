@@ -1,0 +1,23 @@
+{
+  "contract": "MLB_2026_STAT_DERIVED_DEGRADED_STAGE_CONTAINMENT_V1",
+  "overall_classification": "DEGRADED_STAT_DERIVED_FAILED_INDEPENDENT_STAGES_COMPLETED",
+  "known_defect": "POSTPONED_AS_FINAL_ADMISSION_PLUS_UNORDERED_DELETE_INSERT_CTE",
+  "failed_stage": "mlb-stat-derived-refresh",
+  "stages_after_failure": [
+    {"sequence": 1, "name": "mlb-check-rolling-integrity", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 2, "name": "predictions-wide-and-player-prop-capture", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 3, "name": "hits-current-parent", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 4, "name": "hits-full-board-shadow", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 5, "name": "slate-output-and-betonline-validation", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 6, "name": "full-game-totals-daily-hook", "classification": "PROVEN_INDEPENDENT"},
+    {"sequence": 7, "name": "book-upload-selector-ranking-quick-card", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 8, "name": "prediction-bound-research-shadows", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 9, "name": "tmp-focus-prop-regime-today-workspace", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 10, "name": "completed-slate-finalized-data-and-outcomes", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 11, "name": "totals-prospective-shadow-daily-hook", "classification": "PROVEN_INDEPENDENT"},
+    {"sequence": 12, "name": "environment-pa-lineage-health-and-daily-reports", "classification": "TRUE_DATA_DEPENDENCY"},
+    {"sequence": 13, "name": "optional-routine-market-sidecar", "classification": "UNKNOWN_REQUIRES_PROOF"},
+    {"sequence": 14, "name": "local-prod12-history-tracking", "classification": "UNKNOWN_REQUIRES_PROOF"},
+    {"sequence": 15, "name": "wrapper-summary-and-lock-release", "classification": "PROVEN_INDEPENDENT"}
+  ]
+}
