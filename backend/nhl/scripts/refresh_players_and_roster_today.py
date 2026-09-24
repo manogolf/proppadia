@@ -20,7 +20,9 @@ Env:
 
 import json
 import os, sys, datetime as dt, re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 import datetime as dt, os, sys
 
@@ -117,6 +119,7 @@ def _session() -> requests.Session:
 S = _session()
 ROSTER_RESPONSE_VARIANT_BY_TEAM: dict[str, tuple[str, str]] = {}
 ROSTER_SOURCE_RESPONSES: list[dict] = []
+DATABASE_TRANSACTION_ENTERED = False
 
 # ---------------- Helpers ----------------
 PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
@@ -205,54 +208,204 @@ def stage_and_upsert_players(cur, players_stage: list[dict]) -> dict[str, int]:
     upsert_players_from_stage(cur)
     return counts
 
-def roster_status_has_column(cur, column_name: str) -> bool:
+ROSTER_STATUS_KEY_COLUMNS = ("game_id", "team_id", "player_id")
+ROSTER_STATUS_OPTIONAL_COLUMNS = ("active_flag", "line_role", "pp_unit", "asof_ts")
+
+
+class RosterStatusConflict(RuntimeError):
+    """One roster natural key has contradictory protected source values."""
+
+    def __init__(self, *, conflicts: list[dict[str, Any]], counts: dict[str, int]):
+        self.conflicts = conflicts
+        self.counts = counts
+        detail = ";".join(
+            f"{'/'.join(map(str, item['key']))}:{','.join(item['fields'])}"
+            for item in conflicts
+        )
+        super().__init__(f"ROSTER_STATUS_PROTECTED_CONFLICT:{detail}")
+
+
+def _nullable_roster_text(value: Any, *, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"ROSTER_STATUS_{field.upper()}_NOT_TEXT")
+    value = value.strip()
+    return value or None
+
+
+def normalize_roster_status_rows(
+    rows: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Collapse a roster batch before staging it for database mutation.
+
+    API/reuse rows do not yet have a game id, so their pre-expansion natural
+    key is ``(game_date, team_id, player_id)``. Rows that already carry a game
+    id use the destination key ``(game_id, team_id, player_id)``. Nullable role
+    values can complement one another; different non-null values are protected
+    conflicts and reject the complete batch.
+    """
+    grouped: dict[tuple[Any, int, int], list[dict[str, Any]]] = {}
+    source_count = 0
+    for source in rows:
+        date_or_game = source.get("game_id")
+        key_name = "game_id"
+        if date_or_game is None:
+            date_or_game = source.get("game_date")
+            key_name = "game_date"
+        if date_or_game is None:
+            raise ValueError("ROSTER_STATUS_GAME_IDENTITY_MISSING")
+        if key_name == "game_id":
+            try:
+                date_or_game = int(date_or_game)
+            except (TypeError, ValueError) as error:
+                raise ValueError("ROSTER_STATUS_GAME_ID_INVALID") from error
+        else:
+            try:
+                date_or_game = dt.date.fromisoformat(str(date_or_game)).isoformat()
+            except ValueError as error:
+                raise ValueError("ROSTER_STATUS_GAME_DATE_INVALID") from error
+        try:
+            team_id = int(source["team_id"])
+            player_id = int(source["player_id"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("ROSTER_STATUS_NATURAL_KEY_INVALID") from error
+
+        active = source.get("active_flag")
+        if not isinstance(active, bool):
+            raise ValueError(
+                f"ROSTER_STATUS_ACTIVE_FLAG_NOT_BOOLEAN:{date_or_game}/{team_id}/{player_id}")
+        normalized = {
+            key_name: date_or_game,
+            "team_id": team_id,
+            "player_id": player_id,
+            "active_flag": active,
+            "line_role": _nullable_roster_text(source.get("line_role"), field="line_role"),
+            "pp_unit": _nullable_roster_text(source.get("pp_unit"), field="pp_unit"),
+        }
+        grouped.setdefault((date_or_game, team_id, player_id), []).append(normalized)
+        source_count += 1
+
+    counts = {
+        "source_rows": source_count,
+        "unique_identities": len(grouped),
+        "duplicate_source_rows": source_count - len(grouped),
+        "exact_rows_collapsed": 0,
+        "complementary_groups_merged": 0,
+        "conflicting_groups_rejected": 0,
+    }
+    output: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
+    for key in sorted(grouped):
+        group = grouped[key]
+        signatures = {
+            (row["active_flag"], row["line_role"], row["pp_unit"])
+            for row in group
+        }
+        counts["exact_rows_collapsed"] += len(group) - len(signatures)
+        fields: list[str] = []
+        merged: dict[str, Any] = {
+            ("game_id" if "game_id" in group[0] else "game_date"): key[0],
+            "team_id": key[1],
+            "player_id": key[2],
+        }
+        for field in ("active_flag", "line_role", "pp_unit"):
+            values = {row[field] for row in group if row[field] is not None}
+            if len(values) > 1:
+                fields.append(field)
+            else:
+                merged[field] = next(iter(values), None)
+        if fields:
+            conflicts.append({"key": key, "fields": sorted(fields)})
+            continue
+        if len(signatures) > 1:
+            counts["complementary_groups_merged"] += 1
+        output.append(merged)
+
+    counts["conflicting_groups_rejected"] = len(conflicts)
+    if conflicts:
+        raise RosterStatusConflict(conflicts=conflicts, counts=counts)
+    return output, counts
+
+
+def roster_status_columns(cur) -> frozenset[str]:
     cur.execute(
         """
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.columns
-          WHERE table_schema = 'nhl'
-            AND table_name = 'roster_status'
-            AND column_name = %s
-        ) AS has_col
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'nhl'
+          AND table_name = 'roster_status'
+        ORDER BY ordinal_position
         """,
-        (column_name,),
     )
-    row = cur.fetchone()
-    return bool(row["has_col"] if isinstance(row, dict) else row[0])
+    columns = frozenset(
+        str(row["column_name"] if isinstance(row, dict) else row[0])
+        for row in cur.fetchall()
+    )
+    missing = sorted(set(ROSTER_STATUS_KEY_COLUMNS) - columns)
+    if missing:
+        raise RuntimeError(f"ROSTER_STATUS_REQUIRED_COLUMNS_MISSING:{','.join(missing)}")
+    return columns
 
 
-def _roster_status_upsert_parts(*, has_line_role: bool, has_pp_unit: bool, source_alias: str) -> tuple[str, str, str]:
+def _roster_status_upsert_parts(
+    *, target_columns: Iterable[str], source_alias: str,
+) -> tuple[str, str, str]:
     """
     Build INSERT cols / SELECT cols / UPDATE SET fragments for nhl.roster_status
     while tolerating optional columns on older DB schemas.
     """
-    insert_cols = ["game_id", "team_id", "player_id", "active_flag"]
-    select_cols = [
-        f"{source_alias}.game_id",
-        f"{source_alias}.team_id",
-        f"{source_alias}.player_id",
-        f"{source_alias}.active_flag",
-    ]
-    update_set = ["active_flag = EXCLUDED.active_flag"]
+    target_columns = frozenset(target_columns)
+    missing = sorted(set(ROSTER_STATUS_KEY_COLUMNS) - target_columns)
+    if missing:
+        raise RuntimeError(f"ROSTER_STATUS_REQUIRED_COLUMNS_MISSING:{','.join(missing)}")
+    insert_cols = list(ROSTER_STATUS_KEY_COLUMNS)
+    select_cols = [f"{source_alias}.{column}" for column in ROSTER_STATUS_KEY_COLUMNS]
+    update_set: list[str] = []
 
-    if has_line_role:
-        insert_cols.append("line_role")
-        select_cols.append(f"{source_alias}.line_role")
-        update_set.append("line_role = COALESCE(EXCLUDED.line_role, nhl.roster_status.line_role)")
+    if "active_flag" in target_columns:
+        insert_cols.append("active_flag")
+        select_cols.append(f"{source_alias}.active_flag")
+        update_set.append("active_flag = EXCLUDED.active_flag")
 
-    if has_pp_unit:
-        insert_cols.append("pp_unit")
-        select_cols.append(f"{source_alias}.pp_unit")
-        update_set.append("pp_unit = EXCLUDED.pp_unit")
+    for column in ("line_role", "pp_unit"):
+        if column in target_columns:
+            insert_cols.append(column)
+            select_cols.append(f"{source_alias}.{column}")
+            update_set.append(
+                f"{column} = COALESCE(EXCLUDED.{column}, nhl.roster_status.{column})")
 
-    insert_cols.append("asof_ts")
-    select_cols.append("now()")
-    update_set.append("asof_ts = now()")
+    if "asof_ts" in target_columns:
+        insert_cols.append("asof_ts")
+        select_cols.append("now()")
+        update_set.append("asof_ts = now()")
 
     return ", ".join(insert_cols), ", ".join(select_cols), ",\n              ".join(update_set)
 
-def merge_roster_status_from_temp(cur, slate_date: str):
+
+def _roster_conflict_predicate(target_columns: Iterable[str], source_alias: str) -> str:
+    protected = [column for column in ("line_role", "pp_unit") if column in target_columns]
+    if not protected:
+        return "FALSE"
+    return " OR ".join(
+        f"({source_alias}.{column} IS NOT NULL "
+        f"AND existing.{column} IS NOT NULL "
+        f"AND {source_alias}.{column} IS DISTINCT FROM existing.{column})"
+        for column in protected
+    )
+
+def _on_conflict_sql(update_set: str) -> str:
+    if not update_set:
+        return "ON CONFLICT (game_id, team_id, player_id) DO NOTHING"
+    return (
+        "ON CONFLICT (game_id, team_id, player_id) DO UPDATE\n"
+        f"          SET {update_set}"
+    )
+
+
+def merge_roster_status_from_temp(
+    cur, slate_date: str, *, target_columns: Iterable[str] | None = None,
+) -> int | None:
     """
     Merge roster rows either from tmp_import_roster (if present) or,
     as a fallback, from slate feature views for the given slate_date.
@@ -266,26 +419,28 @@ def merge_roster_status_from_temp(cur, slate_date: str):
     row = cur.fetchone()
     has_tmp = bool(row["has_tmp"] if isinstance(row, dict) else row[0])
 
-    has_line_role = roster_status_has_column(cur, "line_role")
-    has_pp_unit = roster_status_has_column(cur, "pp_unit")
+    target_columns = (
+        frozenset(target_columns) if target_columns is not None else roster_status_columns(cur)
+    )
 
     if has_tmp:
         # NOTE: tmp_import_roster has (game_date, team_id, player_id, active_flag, pp_unit).
         # Resolve the target game_id from date+team, then enforce player FK.
         insert_cols, select_cols, update_set = _roster_status_upsert_parts(
-            has_line_role=has_line_role,
-            has_pp_unit=has_pp_unit,
+            target_columns=target_columns,
             source_alias="s",
         )
+        conflict_predicate = _roster_conflict_predicate(target_columns, "checked")
+        on_conflict = _on_conflict_sql(update_set)
         cur.execute(f"""
         WITH src AS (
-          SELECT DISTINCT
+          SELECT
             g.game_id,
             r.team_id,
             r.player_id,
-            COALESCE(r.active_flag, TRUE) AS active_flag,
-            NULL::text                    AS line_role,
-            COALESCE(r.pp_unit, 'None')   AS pp_unit
+            COALESCE(r.active_flag, TRUE)::boolean AS active_flag,
+            NULL::text                           AS line_role,
+            r.pp_unit::text                      AS pp_unit
           FROM tmp_import_roster r
           JOIN nhl.games g
             ON g.game_date = r.game_date::date
@@ -293,49 +448,46 @@ def merge_roster_status_from_temp(cur, slate_date: str):
           WHERE g.game_date = %s::date
         ),
         src_checked AS (
-          SELECT s.*
+          SELECT DISTINCT
+            s.game_id, s.team_id, s.player_id,
+            s.active_flag, s.line_role, s.pp_unit
           FROM src s
           JOIN nhl.players p ON p.player_id = s.player_id  -- FK guard
-        )
-        INSERT INTO nhl.roster_status (
-          {insert_cols}
-        )
-        SELECT
-          {select_cols}
-        FROM src_checked s
-        ON CONFLICT (game_id, team_id, player_id)
-        DO UPDATE
-          SET {update_set};
-        """, (slate_date,))
-    else:
-        insert_cols, select_cols, update_set = _roster_status_upsert_parts(
-            has_line_role=has_line_role,
-            has_pp_unit=has_pp_unit,
-            source_alias="sc",
-        )
-        cur.execute(f"""
-        WITH f AS (
-          SELECT game_id, team_id, player_id
-            FROM nhl.v_slate_sog_features   WHERE game_date = %s::date
-          UNION
-          SELECT game_id, team_id, player_id
-            FROM nhl.v_slate_saves_features WHERE game_date = %s::date
         ),
-        src_checked AS (
-          SELECT f.*
-          FROM f
-          JOIN nhl.players p ON p.player_id = f.player_id  -- FK guard
+        protected_conflicts AS (
+          SELECT checked.game_id, checked.team_id, checked.player_id
+          FROM src_checked checked
+          JOIN nhl.roster_status existing
+            USING (game_id, team_id, player_id)
+          WHERE {conflict_predicate}
+        ),
+        conflict_guard AS (
+          SELECT CAST(
+            CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_PROTECTED_CONFLICT' END
+            AS integer
+          ) AS ok
+          FROM protected_conflicts
+        ),
+        guarded_source AS (
+          SELECT checked.game_id, checked.team_id, checked.player_id,
+                 checked.active_flag, checked.line_role, checked.pp_unit
+          FROM src_checked checked
+          CROSS JOIN conflict_guard guard
+          WHERE guard.ok = 1
         )
         INSERT INTO nhl.roster_status (
           {insert_cols}
         )
         SELECT
           {select_cols}
-        FROM src_checked sc
-        ON CONFLICT (game_id, team_id, player_id)
-        DO UPDATE
-          SET {update_set};
-        """, (slate_date, slate_date))
+        FROM guarded_source s
+        {on_conflict};
+        """, (slate_date,))
+        affected = getattr(cur, "rowcount", None)
+        return int(affected) if isinstance(affected, int) and affected >= 0 else None
+    else:
+        return upsert_roster_status_from_features(
+            cur, slate_date, target_columns=target_columns)["roster_status_upsert_rows"]
 
 def ensure_players_exist(cur, player_ids: list[int]) -> None:
     """
@@ -374,48 +526,137 @@ def ensure_players_exist(cur, player_ids: list[int]) -> None:
         print(f"[warn] players: {unresolved} missing player_ids had no safe name; they will be skipped by FK guard")
 
 def _dedupe_roster_rows(rows: list[dict]) -> list[dict]:
-    seen = set()
-    out = []
-    for r in rows:
-        k = (int(r["team_id"]), int(r["player_id"]))
-        if k in seen:
-            continue
-        seen.add(k)
-        out.append(r)
-    return out
+    """Compatibility wrapper for callers that only need normalized rows."""
+    return normalize_roster_status_rows(rows)[0]
 
-def upsert_roster_status_from_features(cur, slate_date: str) -> None:
+def _feature_roster_source_sql() -> str:
+    """Explicit governed fallback source with a stable, typed column contract."""
+    return """
+      SELECT
+        f.game_id::bigint AS game_id,
+        f.team_id::bigint AS team_id,
+        f.player_id::bigint AS player_id,
+        TRUE::boolean AS active_flag,
+        NULL::text AS line_role,
+        NULL::text AS pp_unit
+      FROM nhl.v_slate_sog_features f
+      JOIN nhl.games g
+        ON g.game_id = f.game_id
+       AND g.game_date = %s::date
+       AND (g.home_team_id = f.team_id OR g.away_team_id = f.team_id)
+      WHERE f.game_date = %s::date
+      UNION ALL
+      SELECT
+        f.game_id::bigint AS game_id,
+        f.team_id::bigint AS team_id,
+        f.player_id::bigint AS player_id,
+        TRUE::boolean AS active_flag,
+        NULL::text AS line_role,
+        NULL::text AS pp_unit
+      FROM nhl.v_slate_saves_features f
+      JOIN nhl.games g
+        ON g.game_id = f.game_id
+       AND g.game_date = %s::date
+       AND (g.home_team_id = f.team_id OR g.away_team_id = f.team_id)
+      WHERE f.game_date = %s::date
+    """
+
+
+def upsert_roster_status_from_features(
+    cur, slate_date: str, *, target_columns: Iterable[str] | None = None,
+) -> dict[str, int]:
     """Offline UPSERT directly from feature views (no temp table), FK-safe."""
-    has_line_role = roster_status_has_column(cur, "line_role")
-    has_pp_unit = roster_status_has_column(cur, "pp_unit")
+    target_columns = (
+        frozenset(target_columns) if target_columns is not None else roster_status_columns(cur)
+    )
     insert_cols, select_cols, update_set = _roster_status_upsert_parts(
-        has_line_role=has_line_role,
-        has_pp_unit=has_pp_unit,
+        target_columns=target_columns,
         source_alias="sc",
     )
+    source_sql = _feature_roster_source_sql()
+    source_params = (slate_date, slate_date, slate_date, slate_date)
+    conflict_predicate = _roster_conflict_predicate(target_columns, "checked")
+    on_conflict = _on_conflict_sql(update_set)
     cur.execute(f"""
-    WITH f AS (
-      SELECT game_id, team_id, player_id
-        FROM nhl.v_slate_sog_features   WHERE game_date = %s
-      UNION
-      SELECT game_id, team_id, player_id
-        FROM nhl.v_slate_saves_features WHERE game_date = %s
+    WITH source_rows AS ({source_sql}),
+    source_validation AS (
+      SELECT CAST(
+        CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_NATURAL_KEY_INVALID' END
+        AS integer
+      ) AS ok
+      FROM source_rows
+      WHERE game_id IS NULL OR team_id IS NULL OR player_id IS NULL
+    ),
+    normalized AS (
+      SELECT game_id, team_id, player_id,
+             TRUE::boolean AS active_flag,
+             NULL::text AS line_role,
+             NULL::text AS pp_unit
+      FROM source_rows
+      CROSS JOIN source_validation validation
+      WHERE validation.ok = 1
+      GROUP BY game_id, team_id, player_id
     ),
     src_checked AS (
-      SELECT f.*
-      FROM f
-      JOIN nhl.players p ON p.player_id = f.player_id  -- FK guard
+      SELECT n.game_id, n.team_id, n.player_id,
+             n.active_flag, n.line_role, n.pp_unit
+      FROM normalized n
+      JOIN nhl.players p ON p.player_id = n.player_id  -- FK guard
+    ),
+    protected_conflicts AS (
+      SELECT checked.game_id, checked.team_id, checked.player_id
+      FROM src_checked checked
+      JOIN nhl.roster_status existing USING (game_id, team_id, player_id)
+      WHERE {conflict_predicate}
+    ),
+    conflict_guard AS (
+      SELECT CAST(
+        CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_PROTECTED_CONFLICT' END
+        AS integer
+      ) AS ok
+      FROM protected_conflicts
+    ),
+    guarded_source AS (
+      SELECT checked.game_id, checked.team_id, checked.player_id,
+             checked.active_flag, checked.line_role, checked.pp_unit
+      FROM src_checked checked
+      CROSS JOIN conflict_guard guard
+      WHERE guard.ok = 1
     )
-    INSERT INTO nhl.roster_status (
-      {insert_cols}
+    upserted AS (
+      INSERT INTO nhl.roster_status (
+        {insert_cols}
+      )
+      SELECT
+        {select_cols}
+      FROM guarded_source sc
+      {on_conflict}
+      RETURNING game_id
     )
     SELECT
-      {select_cols}
-    FROM src_checked sc
-    ON CONFLICT (game_id, team_id, player_id)
-    DO UPDATE SET
-      {update_set};
-    """, (slate_date, slate_date))
+      (SELECT COUNT(*)::int FROM source_rows) AS source_rows,
+      (SELECT COUNT(*)::int FROM normalized) AS unique_identities,
+      (
+        (SELECT COUNT(*)::int FROM source_rows)
+        - (SELECT COUNT(*)::int FROM normalized)
+      ) AS exact_rows_collapsed,
+      0::int AS complementary_groups_merged,
+      0::int AS conflicting_groups_rejected,
+      (SELECT COUNT(*)::int FROM upserted) AS roster_status_upsert_rows;
+    """, source_params)
+    row = cur.fetchone()
+    if row is None:
+        raise RuntimeError("ROSTER_FEATURE_NORMALIZATION_COUNTS_MISSING")
+    names = (
+        "source_rows", "unique_identities", "exact_rows_collapsed",
+        "complementary_groups_merged", "conflicting_groups_rejected",
+        "roster_status_upsert_rows",
+    )
+    counts = {
+        name: int(row[name] if isinstance(row, dict) else row[index])
+        for index, name in enumerate(names)
+    }
+    return counts
 
 def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
     """
@@ -539,8 +780,12 @@ def _append_from_section(out: list[dict], section: list | None, default_pos: str
 
 # ---------------- Main ----------------
 def main():
+    global DATABASE_TRANSACTION_ENTERED
+    DATABASE_TRANSACTION_ENTERED = False
     source = "features-fallback"
     normalizer_counts: dict[str, int] = {}
+    roster_normalizer_counts: dict[str, int] = {}
+    roster_status_upsert_rows = -1
     roster_observation_reference: dict | None = None
     with psycopg.connect(DB_URL, prepare_threshold=None, row_factory=dict_row) as conn:
         try:
@@ -613,7 +858,7 @@ def main():
                 })
                 roster_rows.append({
                     "game_date": SLATE_DATE, "team_id": team_ids[team],
-                    "player_id": int(row["player_id"]), "active_flag": True, "pp_unit": "None",
+                    "player_id": int(row["player_id"]), "active_flag": True, "pp_unit": None,
                 })
             if not players_stage or not roster_rows:
                 raise RuntimeError("ROSTER_REUSE_SNAPSHOT_EMPTY")
@@ -657,7 +902,7 @@ def main():
                                 "team_id": int(team_id),
                                 "player_id": pid,
                                 "active_flag": True,
-                                "pp_unit": "None",
+                                "pp_unit": None,
                             })
                 if players_stage or roster_rows:
                     source = "API"
@@ -689,13 +934,29 @@ def main():
         elif observation_root and source != "REUSED_IMMUTABLE_OBSERVATION":
             raise RuntimeError("ROSTER_OBSERVATION_REQUIRES_OFFICIAL_RESPONSES")
 
+        # Normalize the complete roster batch before any player, stage, or
+        # roster-status DML. Source inclusion establishes active membership;
+        # neither official roster payload supplies line/PP roles.
+        if source in {"API", "REUSED_IMMUTABLE_OBSERVATION"} and roster_rows:
+            try:
+                roster_rows, roster_normalizer_counts = normalize_roster_status_rows(roster_rows)
+            except RosterStatusConflict as error:
+                print("[roster-status-normalization] " + json.dumps(
+                    error.counts, sort_keys=True, separators=(",", ":")))
+                raise
+            print("[roster-status-normalization] " + json.dumps(
+                roster_normalizer_counts, sort_keys=True, separators=(",", ":")))
+
         # 3) Decide path & write
         with conn.transaction():
+            DATABASE_TRANSACTION_ENTERED = True
             with conn.cursor() as cur:
                 if source in {"API", "REUSED_IMMUTABLE_OBSERVATION"} and players_stage and roster_rows:
+                    # Validate the destination contract before any stage/player
+                    # mutation in this transaction.
+                    target_columns = roster_status_columns(cur)
                     normalizer_counts = stage_and_upsert_players(cur, players_stage)
 
-                    roster_rows = _dedupe_roster_rows(roster_rows)
                     cur.execute("""
                         CREATE TEMP TABLE tmp_import_roster (
                           game_date date,
@@ -710,24 +971,18 @@ def main():
                         VALUES (%(game_date)s, %(team_id)s, %(player_id)s, %(active_flag)s, %(pp_unit)s)
                     """, roster_rows)
 
-                    merge_roster_status_from_temp(cur, SLATE_DATE)
+                    merged_rows = merge_roster_status_from_temp(
+                        cur, SLATE_DATE, target_columns=target_columns)
+                    roster_status_upsert_rows = -1 if merged_rows is None else merged_rows
 
                 else:
-                    cur.execute("""
-                        WITH f AS (
-                          SELECT game_id, team_id, player_id
-                            FROM nhl.v_slate_sog_features   WHERE game_date = %s
-                          UNION
-                          SELECT game_id, team_id, player_id
-                            FROM nhl.v_slate_saves_features WHERE game_date = %s
-                        )
-                        SELECT DISTINCT player_id FROM f
-                    """, (SLATE_DATE, SLATE_DATE))
-                    rows = cur.fetchall()
-                    pids = [int(r["player_id"] if isinstance(r, dict) else r[0]) for r in rows]
-
-                    ensure_players_exist(cur, pids)
-                    upsert_roster_status_from_features(cur, SLATE_DATE)
+                    # The offline contract is feature-view-only. Missing player
+                    # dimensions are excluded by the FK guard; no provider or
+                    # identity manufacturing is allowed in this path.
+                    roster_normalizer_counts = upsert_roster_status_from_features(
+                        cur, SLATE_DATE)
+                    roster_status_upsert_rows = roster_normalizer_counts[
+                        "roster_status_upsert_rows"]
 
                 cur.execute("""
                     SELECT COUNT(*) AS cnt
@@ -740,8 +995,8 @@ def main():
                 print(f"Refreshed players & roster_status for {SLATE_DATE} (source={source})")
                 print(f"✅ roster_status rows present for {SLATE_DATE}: {total_rs}")
 
-        print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({
-            "schema_version": "NHL_ROSTER_CHILD_SUMMARY_V1",
+        child_summary = {
+            "schema_version": "NHL_ROSTER_CHILD_SUMMARY_V2",
             "status": "COMPLETE",
             "normalizer_counts": normalizer_counts,
             "roster_observation": (
@@ -757,8 +1012,38 @@ def main():
                 "roster_status_rows_present": int(total_rs),
                 "players_stage_rows": len(players_stage),
                 "roster_stage_rows": len(roster_rows),
+                "roster_normalizer_counts": roster_normalizer_counts,
             },
-        }, sort_keys=True, separators=(",", ":")))
+            "database_write_capable": True,
+            "database_write_status": "COMMITTED",
+            "transaction_disposition": "COMMITTED",
+            "database_row_counts": {
+                "roster_status_upsert_rows": int(roster_status_upsert_rows),
+                "players_stage_rows": len(players_stage),
+                "roster_stage_rows": len(roster_rows),
+            },
+            "database_row_counts_complete": (
+                source == "features-fallback" and roster_status_upsert_rows >= 0
+            ),
+        }
+    # The connection context has committed successfully before COMMITTED is
+    # emitted for the parent recorder.
+    print("NHL_CHILD_SUMMARY_JSON=" + json.dumps(
+        child_summary, sort_keys=True, separators=(",", ":")))
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException as error:
+        rolled_back = DATABASE_TRANSACTION_ENTERED
+        print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({
+            "schema_version": "NHL_ROSTER_CHILD_SUMMARY_V2",
+            "status": "FAILED",
+            "database_write_capable": True,
+            "database_write_status": "ROLLED_BACK" if rolled_back else "UNKNOWN",
+            "transaction_disposition": "ROLLED_BACK" if rolled_back else "UNKNOWN",
+            "database_row_counts": {},
+            "database_row_counts_complete": False,
+            "error_type": type(error).__name__,
+        }, sort_keys=True, separators=(",", ":")))
+        raise

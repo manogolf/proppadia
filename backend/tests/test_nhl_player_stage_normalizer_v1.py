@@ -61,6 +61,14 @@ class _RosterMergeCursor(_RecordingCursor):
             return {"has_col": False}
         raise AssertionError(self.last_sql)
 
+    def fetchall(self):
+        if "information_schema.columns" in self.last_sql:
+            return [
+                {"column_name": name}
+                for name in ("game_id", "team_id", "player_id", "active_flag", "asof_ts")
+            ]
+        raise AssertionError(self.last_sql)
+
 
 class _FixtureTransaction:
     def __init__(self, state):

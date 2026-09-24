@@ -445,8 +445,56 @@ def assert_sog_rollups_present(db_url: str, slate_date: str, *, min_ok_frac: flo
             f"frac_ok={frac_ok:.3f} (n={n}, n_d10_ok={n_d10_ok})"
         )
 
-def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
+_DATABASE_WRITE_CAPABLE_SCRIPTS = {
+    "refresh_all_team_rosters.py",
+    "seed_goalie_logs_for_date.py",
+    "refresh_players_and_roster_today.py",
+    "seed_skater_logs_for_date.py",
+    "ingest_shiftcharts_for_date.py",
+    "backfill_game_manpower_segments.py",
+    "fill_pp_toi_minutes_for_date.py",
+    "import_schedule_today.py",
+    "import_roster_today.py",
+    "load_nhl_predictions_generic.py",
+    "load_sog_predictions_denali.py",
+}
+
+
+def _command_is_database_write_capable(cmd: Sequence[str]) -> bool:
+    if any(Path(token).name in _DATABASE_WRITE_CAPABLE_SCRIPTS for token in cmd):
+        return True
+    if cmd and Path(cmd[0]).name == "psql":
+        if "-f" in cmd:
+            return True
+        sql_parts = [cmd[index + 1] for index, token in enumerate(cmd[:-1]) if token == "-c"]
+        mutation = re.compile(
+            r"\b(?:INSERT|UPDATE|DELETE|TRUNCATE|MERGE|REFRESH|CREATE|ALTER|DROP)\b",
+            re.I,
+        )
+        return any(mutation.search(sql) for sql in sql_parts)
+    return False
+
+
+def _structured_child_summary(stdout: str | None) -> dict[str, Any]:
+    structured: dict[str, Any] = {}
+    for line in (stdout or "").splitlines():
+        if line.startswith("NHL_CHILD_SUMMARY_JSON="):
+            value = json.loads(line.split("=", 1)[1])
+            if not isinstance(value, dict):
+                raise RuntimeError("NHL_CHILD_SUMMARY_NOT_OBJECT")
+            structured.update(value)
+    return structured
+
+
+def run(
+    cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True,
+    database_write_capable: bool | None = None,
+):
     cmd = [str(c) for c in cmd]
+    write_capable = (
+        _command_is_database_write_capable(cmd)
+        if database_write_capable is None else bool(database_write_capable)
+    )
     cmd_for_log = _format_cmd_for_log(cmd)
     print("▶", cmd_for_log)
     e = os.environ.copy()
@@ -462,24 +510,27 @@ def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
                 "exit_status": int(result.returncode),
                 "duration_ms": round((time.monotonic() - started) * 1000),
                 "status": "COMPLETE",
+                "database_write_capable": write_capable,
             }
-            for line in (result.stdout or "").splitlines():
-                if line.startswith("NHL_CHILD_SUMMARY_JSON="):
-                    structured = json.loads(line.split("=", 1)[1])
-                    if not isinstance(structured, dict):
-                        raise RuntimeError("NHL_CHILD_SUMMARY_NOT_OBJECT")
-                    summary.update(structured)
+            summary.update(_structured_child_summary(result.stdout))
+            summary["database_write_capable"] = bool(
+                write_capable or summary.get("database_write_capable"))
             _ACTIVE_DAILY_RECORDER.record_child(summary)
         return result
     except sp.CalledProcessError as exc:
         if _ACTIVE_DAILY_RECORDER is not None:
-            _ACTIVE_DAILY_RECORDER.record_child({
+            summary = {
                 "lane": _ACTIVE_DAILY_LANE,
                 "command_identity": cmd_for_log,
                 "exit_status": int(exc.returncode),
                 "duration_ms": round((time.monotonic() - started) * 1000),
                 "status": "FAILED",
-            })
+                "database_write_capable": write_capable,
+            }
+            summary.update(_structured_child_summary(exc.stdout))
+            summary["database_write_capable"] = bool(
+                write_capable or summary.get("database_write_capable"))
+            _ACTIVE_DAILY_RECORDER.record_child(summary)
         print(f"[run] COMMAND FAILED: {cmd_for_log}", file=sys.stderr)
         if exc.stdout:
             print("[run] --- stdout ---", file=sys.stderr)
@@ -547,7 +598,7 @@ def run_psql_file(sql_file: Path, *, vars: dict[str, str] | None = None):
     cmd += ["-c", "SET statement_timeout=0;"]
     cmd += ["-f", str(sql_file)]
 
-    run(cmd, env=_psql_env())
+    run(cmd, env=_psql_env(), database_write_capable=True)
 
 def run_psql_file_to_path(
     sql_file: Path,
@@ -1611,8 +1662,12 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         )
     roster_result = run(
         [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env=roster_env)
-    structured = next((child for child in reversed(recorder.children)
-                       if child.get("schema_version") == "NHL_ROSTER_CHILD_SUMMARY_V1"), None)
+    structured = next((
+        child for child in reversed(recorder.children)
+        if child.get("schema_version") in {
+            "NHL_ROSTER_CHILD_SUMMARY_V1", "NHL_ROSTER_CHILD_SUMMARY_V2",
+        }
+    ), None)
     if structured:
         if recorder.roster_observation is None and structured.get("roster_observation"):
             recorder.roster_observation = {
@@ -1623,7 +1678,6 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         recorder.finish_lane(
             "roster", status="REUSED" if reuse_roster_observation else "COMPLETE",
             outputs=[recorder.roster_observation] if recorder.roster_observation else [],
-            database_rows_written=True,
             database_stage_summary=structured.get("database_stage_summary") or {},
         )
     else:

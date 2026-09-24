@@ -16,7 +16,17 @@ from backend.nhl.daily_capture import sha256_file, verify_package
 
 UTC = timezone.utc
 PACIFIC = ZoneInfo("America/Los_Angeles")
-RECEIPT_SCHEMA = "NHL_COMPREHENSIVE_DAILY_RUN_RECEIPT_V1"
+RECEIPT_SCHEMA = "NHL_COMPREHENSIVE_DAILY_RUN_RECEIPT_V2"
+DATABASE_WRITE_STATUSES = (
+    "NONE", "COMMITTED", "ROLLED_BACK", "POSSIBLE_UNQUANTIFIED", "UNKNOWN",
+)
+_DATABASE_WRITE_STATUS_PRECEDENCE = {
+    "NONE": 0,
+    "ROLLED_BACK": 1,
+    "UNKNOWN": 2,
+    "POSSIBLE_UNQUANTIFIED": 3,
+    "COMMITTED": 4,
+}
 LEGACY_SOG_TOI_REASON = (
     "LEGACY_SOG_SEASON_TOI_UNAVAILABLE_FOR_ROSTER_SKATER_WITHOUT_"
     "QUALIFYING_SAME_SEASON_SHIFT_HISTORY"
@@ -92,7 +102,12 @@ class LaneResult:
     ended_at_utc: str | None = None
     inputs: list[dict[str, Any]] = field(default_factory=list)
     outputs: list[dict[str, Any]] = field(default_factory=list)
-    database_rows_written: bool = False
+    # Compatibility projection: True means committed writes are proven, False
+    # means zero committed writes are proven, and None means the status cannot
+    # truthfully be reduced to a boolean.
+    database_rows_written: bool | None = False
+    database_write_status: str = "NONE"
+    database_write_children: list[dict[str, Any]] = field(default_factory=list)
     database_stage_summary: dict[str, Any] = field(default_factory=dict)
     provider_requests: int = 0
     credits_consumed: int | None = 0
@@ -152,7 +167,12 @@ class DailyRunRecorder:
         lane.ended_at_utc = _iso_utc(_utc_now())
         lane.outputs.extend(dict(value) for value in outputs)
         if database_rows_written is not None:
-            lane.database_rows_written = bool(database_rows_written)
+            # Once child-level evidence exists it is authoritative. Legacy
+            # boolean callers cannot upgrade POSSIBLE_UNQUANTIFIED to a false
+            # claim of quantified committed writes.
+            if not lane.database_write_children:
+                requested_status = "COMMITTED" if database_rows_written else "NONE"
+                self._merge_lane_database_write_status(lane, requested_status)
         if database_stage_summary is not None:
             lane.database_stage_summary.update(dict(database_stage_summary))
         if provider_requests is not None:
@@ -178,8 +198,98 @@ class DailyRunRecorder:
             "lane", "command_identity", "exit_status", "duration_ms", "status",
             "schema_version", "normalizer_counts", "roster_observation",
             "roster_manifest_sha256", "database_stage_summary",
+            "database_write_capable", "database_write_status",
+            "transaction_disposition", "database_row_counts",
+            "database_row_counts_complete", "error_type",
         }
-        self.children.append({key: value[key] for key in allowed if key in value})
+        child = {key: value[key] for key in allowed if key in value}
+        status = self._classify_child_database_write(child)
+        child["database_write_status"] = status
+        child.setdefault("database_write_capable", False)
+        child.setdefault(
+            "transaction_disposition",
+            "UNKNOWN" if child["database_write_capable"] else "NOT_APPLICABLE",
+        )
+        child.setdefault("database_row_counts", {})
+        child.setdefault("database_row_counts_complete", False)
+        self.children.append(child)
+        lane_name = child.get("lane")
+        if lane_name in self.lanes and child.get("database_write_capable"):
+            event = {
+                key: child[key]
+                for key in (
+                    "command_identity", "exit_status", "transaction_disposition",
+                    "database_write_status", "database_row_counts",
+                )
+            }
+            event["database_row_counts_complete"] = child[
+                "database_row_counts_complete"]
+            event["lane"] = str(lane_name)
+            lane = self.lane(str(lane_name))
+            lane.database_write_children.append(event)
+            self._merge_lane_database_write_status(lane, status)
+
+    @staticmethod
+    def _classify_child_database_write(child: Mapping[str, Any]) -> str:
+        if not bool(child.get("database_write_capable")):
+            return "NONE"
+        explicit = child.get("database_write_status")
+        if explicit is not None and explicit not in DATABASE_WRITE_STATUSES:
+            raise ValueError(f"DATABASE_WRITE_STATUS_INVALID:{explicit}")
+        exit_status = int(child.get("exit_status", 1))
+        row_counts = child.get("database_row_counts")
+        counts = []
+        all_counts_quantified = isinstance(row_counts, Mapping) and bool(row_counts)
+        if isinstance(row_counts, Mapping):
+            for value in row_counts.values():
+                if isinstance(value, bool):
+                    all_counts_quantified = False
+                    continue
+                if isinstance(value, int) and value >= 0:
+                    counts.append(value)
+                else:
+                    all_counts_quantified = False
+
+        if exit_status == 0:
+            if (
+                child.get("database_row_counts_complete") is True
+                and all_counts_quantified
+                and all(value == 0 for value in counts)
+            ):
+                return "NONE"
+            if counts and any(value > 0 for value in counts):
+                return "COMMITTED"
+            if explicit == "NONE":
+                # NONE without affirmative zero counts is not proof of no write.
+                return "POSSIBLE_UNQUANTIFIED"
+            if explicit in {"ROLLED_BACK", "UNKNOWN"}:
+                return explicit
+            return "POSSIBLE_UNQUANTIFIED"
+
+        if explicit == "ROLLED_BACK" or child.get("transaction_disposition") == "ROLLED_BACK":
+            return "ROLLED_BACK"
+        return "UNKNOWN"
+
+    @staticmethod
+    def _merge_lane_database_write_status(lane: LaneResult, status: str) -> None:
+        if status not in DATABASE_WRITE_STATUSES:
+            raise ValueError(f"DATABASE_WRITE_STATUS_INVALID:{status}")
+        if _DATABASE_WRITE_STATUS_PRECEDENCE[status] > _DATABASE_WRITE_STATUS_PRECEDENCE[
+                lane.database_write_status]:
+            lane.database_write_status = status
+        lane.database_rows_written = {
+            "NONE": False,
+            "ROLLED_BACK": False,
+            "COMMITTED": True,
+            "POSSIBLE_UNQUANTIFIED": None,
+            "UNKNOWN": None,
+        }[lane.database_write_status]
+
+    def database_write_status(self) -> str:
+        return max(
+            (lane.database_write_status for lane in self.lanes.values()),
+            key=_DATABASE_WRITE_STATUS_PRECEDENCE.__getitem__,
+        )
 
     def set_canonical(self, *, slate_date: str, season: int,
                       game_ids: Iterable[int], game_set_hash: str) -> None:
@@ -218,6 +328,12 @@ class DailyRunRecorder:
             "roster_observation": self.roster_observation,
             "odds_observation": self.odds_observation,
             "child_summaries": self.children,
+            "database_write_status": self.database_write_status(),
+            "database_write_children": [
+                event
+                for name in LANE_NAMES
+                for event in self.lanes[name].database_write_children
+            ],
             "failure": self.failure,
             "final_classification": self.classification(),
         }
