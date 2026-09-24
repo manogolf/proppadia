@@ -1,0 +1,14 @@
+{
+  "schema_version": "MLB_MONEYLINE_POSTPONED_RESCHEDULED_REMAINING_BLOCKERS_V1",
+  "implementation_blockers": [],
+  "operational_certification_blockers": [
+    "NEXT_NATURAL_WINDOW_NOT_YET_OBSERVED_WITH_V1_RECEIPT"
+  ],
+  "out_of_scope": [
+    "RAW_TOTALS_GAME_824462",
+    "OTHER_LANE_FAILURES",
+    "PREEXISTING_AUGUST6_FIXTURE_HASH_MISMATCH",
+    "LOCAL_TEST_ENVIRONMENT_DEPENDENCIES"
+  ],
+  "next_action": "OBSERVE_NEXT_NATURAL_MLB_WINDOW_WITHOUT_MANUAL_RETRY"
+}

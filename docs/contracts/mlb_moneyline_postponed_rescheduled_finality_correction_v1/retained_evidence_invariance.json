@@ -1,0 +1,30 @@
+{
+  "schema_version": "MLB_MONEYLINE_RETAINED_EVIDENCE_INVARIANCE_V1",
+  "as_of_utc": "2026-09-24T00:53:19Z",
+  "baseline_head": "18fbf61f6343fa9f1aa43eaf49de2545a6051591",
+  "database_accessed": false,
+  "external_requests": 0,
+  "pipelines_run": 0,
+  "september_23": {
+    "status": "NATURAL_1630_PARTIAL_IMMUTABLE_ARTIFACT_EXISTS",
+    "path": "artifacts/ops/mlb_public_game_moneyline_daily_2026-09-23_latest.json",
+    "sha256": "b1f209e41bded57342cdf7492d776743888d7e9e1c94240926558721f99e533e",
+    "prediction_cutoff_utc": "2026-09-23T23:34:03.744117Z",
+    "rows": 16,
+    "admitted": 7,
+    "rejected": 9,
+    "predictions_written": 7,
+    "reconstructed_by_this_change": 0
+  },
+  "daily_latest_artifacts": {
+    "count": 50,
+    "ordered_path_and_sha256_stream_sha256": "680efb6716bf46e6ec6e2bb611bbc374da1906bcafc7637db3a0f4616ea9c72d"
+  },
+  "unchanged_authority_hashes": {
+    "backend/mlb/config/public_game_predictions/MLB_GAME_PYTHAGOREAN_LOG5_V1.json": "afc257a5ede1c5bc352dcb1e990b710272d472cd62d2dadfb7dafb7254b35722",
+    "backend/mlb/public_game_predictions/pythagorean_log5_v1.py": "f0b7dbb03a191dd9d7325f95c1b7e1f35904619acbfb766f12c207921ee2f4f4",
+    "backend/mlb/public_game_predictions/durable_store_v1.py": "80149607046451d1d20823cd83a99d89738ee73ee863d66c18f95f4f641ac675",
+    "backend/mlb/public_game_predictions/phase_gating_v1.py": "9f750fe8dcd980269cad473021e68107d578b243bfd8b6572c3e122169f2ec10"
+  },
+  "classification": "RETAINED_COHORT_UNCHANGED"
+}

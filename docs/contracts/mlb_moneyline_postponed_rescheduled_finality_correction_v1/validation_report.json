@@ -1,0 +1,67 @@
+{
+  "schema_version": "MLB_MONEYLINE_POSTPONED_RESCHEDULED_FINALITY_VALIDATION_V1",
+  "root_cause": "PREEXISTING_DEFECT_TRIGGERED_BY_NEW_DATA_CONDITION",
+  "timing_gate": {
+    "status": "PASS",
+    "september_23_1630_window_end_utc": "2026-09-24T00:05:15Z",
+    "launchagent_state_after_window": "not running",
+    "locks_released": true
+  },
+  "required_ancestry": {
+    "0ce53313e7930b3e4c81ce56634ece6f4cd2a5b9": "PASS",
+    "4fe80cef754ea5a790b03f3a53636ba8919395b8": "PASS"
+  },
+  "tests": [
+    {
+      "command": "python3 -m pytest -q backend/mlb/tests/test_mlb_moneyline_postponed_rescheduled_finality_v1.py",
+      "result": "30 passed"
+    },
+    {
+      "command": "python3 -m pytest -q backend/mlb/tests/test_public_game_prediction_hardening_v1.py -k 'not all_self_contained_fixture_hashes_are_bound'",
+      "result": "30 passed, 1 deselected"
+    },
+    {
+      "command": "python3 -m pytest -q backend/mlb/tests/test_mlb_2026_moneyline_phase_gating_v1.py -k 'not shared_report_loader_selects_only_requested_partition'",
+      "result": "18 passed, 1 deselected"
+    },
+    {
+      "command": ".venv/bin/python -m py_compile backend/mlb/public_game_predictions/finality_v1.py backend/mlb/scripts/run_mlb_public_game_moneyline_daily_v1.py",
+      "result": "PASS"
+    },
+    {
+      "command": "zsh -n bin/mlb_public_game_moneyline_daily_hook.sh",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "environmental_or_baseline_limitations": [
+    {
+      "test": "test_13_all_self_contained_fixture_hashes_are_bound",
+      "classification": "PREEXISTING_HEAD_FIXTURE_HASH_MISMATCH",
+      "detail": "august6_schedule.json is byte-identical to HEAD at SHA-256 66593c8f..., while the frozen config expects fc3a5e48...; neither file was changed"
+    },
+    {
+      "test": "test_shared_report_loader_selects_only_requested_partition",
+      "classification": "LOCAL_SCIPY_BINARY_IMPORT_FAILURE",
+      "detail": "unrelated scipy _propack binary could not load; the other 18 phase-gating tests passed"
+    },
+    {
+      "tests": "public_game_prediction_pythagorean_log5_v1 and baseline_v1",
+      "classification": "LOCAL_TEST_ENVIRONMENT_DEPENDENCY_MISSING",
+      "detail": "system pytest environment lacks fastapi; active project .venv lacks pytest"
+    }
+  ],
+  "safety": {
+    "live_api_calls": 0,
+    "operational_database_connections": 0,
+    "production_pipeline_runs": 0,
+    "september_23_reconstruction": 0,
+    "schedule_changes": 0,
+    "model_or_probability_changes": 0,
+    "agreement_claims_or_credits": 0
+  },
+  "future_natural_window_validation_readiness": "READY"
+}

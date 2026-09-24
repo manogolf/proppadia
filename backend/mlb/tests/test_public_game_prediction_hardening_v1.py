@@ -103,7 +103,8 @@ def test_08c_state_replay_after_cutoff_is_stable():
 
 
 def test_08d_official_feed_uses_last_play_completion_time():
-    feed={'gamePk':1,'gameData':{'status':{'abstractGameState':'Final'},
+    feed={'gamePk':1,'gameData':{'status':{'abstractGameState':'Final','detailedState':'Final',
+          'codedGameState':'F','statusCode':'F'},
           'datetime':{'officialDate':'2026-08-05','dateTime':'2026-08-05T17:00:00Z'},
           'game':{'gameNumber':1},'teams':{'home':{'id':110},'away':{'id':111}}},
           'liveData':{'linescore':{'teams':{'home':{'runs':5},'away':{'runs':3}}},
@@ -325,7 +326,10 @@ def test_18_runner_guard_advances_finals_and_grading_then_skips_scoring(monkeypa
     monkeypatch.setattr(daily_runner,'score_schedule_payload',lambda *_args,**_kwargs:pytest.fail('scoring called'))
     output=tmp_path/'skip.json'
     monkeypatch.setattr(sys,'argv',['runner','--mlb-date','2026-08-05','--write-durable',
-                                   '--skip-if-designated-snapshot-exists','--output-json',str(output)])
+                                   '--skip-if-designated-snapshot-exists',
+                                   '--retained-source-dir',str(tmp_path/'feeds'),
+                                   '--retained-history-dir',str(tmp_path/'history'),
+                                   '--output-json',str(output)])
     assert daily_runner.main()==0
     payload=json.loads(output.read_text())
     assert payload['status']=='SKIPPED'
