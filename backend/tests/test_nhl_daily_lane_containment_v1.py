@@ -70,6 +70,34 @@ def fake_validate_prediction_output(**_kwargs):
     }
 
 
+def fake_attachment_audit(**kwargs):
+    attachment = Path(kwargs["attachment_path"])
+    return {
+        "schema_version": "NHL_ATTACHMENT_INTEGRITY_V1",
+        "lane": kwargs["lane"],
+        "status": "PASS",
+        "prediction_artifact_sha256": kwargs["expected_prediction_sha256"],
+        "attachment_sha256": sha256_file(attachment),
+        "odds_observation_manifest_sha256": kwargs["expected_odds_manifest_sha256"],
+        "counts": {
+            "prediction_row_count": 1, "attachment_row_count": 1,
+            "unique_prediction_key_count": 1, "unique_attachment_key_count": 1,
+            "duplicate_prediction_key_count": 0, "duplicate_attachment_key_count": 0,
+            "missing_prediction_key_count": 0, "extra_attachment_key_count": 0,
+            "matched_count": 0, "unmatched_count": 1, "ambiguous_count": 0,
+        },
+        "checks": {"fixture": True},
+    }
+
+
+def fake_odds_lineage(**kwargs):
+    return {
+        "odds_observation_path": str(Path(kwargs["observation_dir"]).resolve()),
+        "odds_observation_manifest_sha256": kwargs["expected_manifest_sha256"],
+        "odds_raw_response_sha256": sha256_file(Path(kwargs["odds_json"])),
+    }
+
+
 def test_212_of_713_is_only_a_legacy_sog_block():
     gate = evaluate_legacy_sog_toi_gate(
         population_rows=713, null_5v5=212, null_season_5v5=212)
@@ -278,6 +306,8 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
                 out.write_text("player_id,game_date\n1,2026-09-24\n")
                 unmatched = Path(values[values.index("--unmatched") + 1])
                 unmatched.write_text("player_id\n")
+                if "--ambiguous" in values:
+                    Path(values[values.index("--ambiguous") + 1]).write_text("prediction_index\n")
         return subprocess.CompletedProcess(values, 0, "", "")
 
     with patch.multiple(
@@ -288,6 +318,8 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
         cli, "run_optional_odds_observation", return_value=odds), patch.object(
         cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
         cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
+        cli, "validate_odds_observation", side_effect=fake_odds_lineage), patch.object(
+        cli, "audit_attachment_files", side_effect=fake_attachment_audit), patch.object(
         cli, "refresh_sog_residual_dataset") as residual, patch.object(
         cli, "refresh_sog_reconcile_artifacts") as reconcile, patch.object(
         cli, "build_sog") as build_sog:
@@ -364,6 +396,8 @@ def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, 
             elif "build_" in script:
                 out.write_text("player_id,game_date\n1,2026-09-24\n")
                 Path(values[values.index("--unmatched") + 1]).write_text("player_id\n")
+                if "--ambiguous" in values:
+                    Path(values[values.index("--ambiguous") + 1]).write_text("prediction_index\n")
         return subprocess.CompletedProcess(values, 0, "", "")
 
     def no_odds(**_kwargs):
@@ -376,7 +410,8 @@ def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, 
         cli, "export_names_csv", return_value=names), patch.object(
         cli, "run_optional_odds_observation", side_effect=no_odds), patch.object(
         cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
-        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output):
+        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
+        cli, "audit_attachment_files", side_effect=fake_attachment_audit):
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=False,
             odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],
@@ -412,6 +447,8 @@ def test_odds_failure_is_warning_and_preserves_current_predictions(tmp_path):
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_text("player_id,game_date\n1,2026-09-24\n")
                 Path(values[values.index("--unmatched") + 1]).write_text("player_id\n")
+                if "--ambiguous" in values:
+                    Path(values[values.index("--ambiguous") + 1]).write_text("prediction_index\n")
         return subprocess.CompletedProcess(values, 0, "", "")
 
     with patch.multiple(
@@ -421,7 +458,8 @@ def test_odds_failure_is_warning_and_preserves_current_predictions(tmp_path):
         cli, "export_names_csv", return_value=names), patch.object(
         cli, "run_optional_odds_observation", side_effect=RuntimeError("provider failed")), patch.object(
         cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
-        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output):
+        cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
+        cli, "audit_attachment_files", side_effect=fake_attachment_audit):
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=True,
             odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],

@@ -304,6 +304,7 @@ class DailyRunRecorder:
         warning_statuses = {
             "BLOCKED_LANE_LOCAL", "FAILED_NONBLOCKING", "COMPLETE_WITH_BOUNDED_LIMITS",
             "SKIPPED_UPSTREAM_LANE_BLOCKED", "READY_WITH_ODDS_WARNING",
+            "FAILED_NONBLOCKING_INTEGRITY",
         }
         if any(lane.status in warning_statuses for lane in self.lanes.values()):
             return "READY_WITH_BOUNDED_LANE_WARNING"

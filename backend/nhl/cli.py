@@ -64,6 +64,11 @@ from backend.nhl.prediction_lineage import (
     prepare_scoring_input,
     validate_prediction_output,
 )
+from backend.nhl.attachment_integrity import (
+    AttachmentIntegrityError,
+    audit_attachment_files,
+    validate_odds_observation,
+)
 
 
 # ---------- bootstrap env ----------
@@ -171,9 +176,18 @@ def archive_site_artifacts(
                 PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv",
             ])
     if "saves" in completed_lanes:
-        artifacts.extend([SITE_DIR / "saves_with_market.csv", SITE_DIR / "unmatched_saves.csv"])
+        artifacts.extend([
+            SITE_DIR / "saves_with_market.csv",
+            SITE_DIR / "unmatched_saves.csv",
+            SITE_DIR / "ambiguous_saves_alias_matches.csv",
+            SITE_DIR / "saves_attachment_integrity.json",
+        ])
     if "points" in completed_lanes:
-        artifacts.extend([SITE_DIR / "points_with_market.csv", SITE_DIR / "unmatched_points.csv"])
+        artifacts.extend([
+            SITE_DIR / "points_with_market.csv",
+            SITE_DIR / "unmatched_points.csv",
+            SITE_DIR / "points_attachment_integrity.json",
+        ])
     # Odds evidence is already immutable inside odds_result.observation_dir and
     # is referenced by hash from the parent receipt.  Do not copy mutable
     # compatibility filenames for comprehensive (explicit lane-set) runs.
@@ -1069,6 +1083,22 @@ def _require_current_prediction_artifact(
     return identity
 
 
+def _write_attachment_integrity_report(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    temporary.replace(path)
+    identity = artifact_identity(path)
+    identity.update(payload.get("counts") or {})
+    identity["status"] = payload.get("status")
+    identity["attachment_sha256"] = payload.get("attachment_sha256")
+    identity["prediction_artifact_sha256"] = payload.get("prediction_artifact_sha256")
+    identity["odds_observation_manifest_sha256"] = payload.get(
+        "odds_observation_manifest_sha256")
+    return identity
+
+
 def build_sog(slate: str, *, odds_json: Path | None = None,
               events_json: Path | None = None, pred_path: Path | None = None,
               expected_pred_sha256: str | None = None):
@@ -1110,7 +1140,10 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
 
 def build_saves(slate: str, *, odds_json: Path | None = None,
                 pred_path: Path | None = None,
-                expected_pred_sha256: str | None = None):
+                expected_pred_sha256: str | None = None,
+                parent_daily_run_id: str | None = None,
+                odds_observation_dir: Path | None = None,
+                expected_odds_manifest_sha256: str | None = None):
     # Ensure names exist (build_saves can be called standalone)
     names_csv = export_names_csv(slate)
 
@@ -1124,15 +1157,31 @@ def build_saves(slate: str, *, odds_json: Path | None = None,
             "--names", names_csv,
             "--out", SITE_DIR / "saves_with_market.csv",
             "--unmatched", SITE_DIR / "unmatched_saves.csv",
+            "--ambiguous", SITE_DIR / "ambiguous_saves_alias_matches.csv",
+            "--integrity-report", SITE_DIR / "saves_attachment_integrity.json",
         ]
+    if parent_daily_run_id is not None and expected_pred_sha256 is not None:
+        command.extend([
+            "--strict-current-run",
+            "--parent-run-id", str(parent_daily_run_id),
+            "--expected-pred-sha256", str(expected_pred_sha256),
+        ])
     if odds_json is not None:
         command.extend(["--odds-json", odds_json])
+        command.extend(["--odds-observation-dir", odds_observation_dir])
+        command.extend([
+            "--expected-odds-manifest-sha256",
+            str(expected_odds_manifest_sha256 or ""),
+        ])
     run(command, env={"SLATE_DATE": slate})
 
 
 def build_points(slate: str, *, odds_json: Path | None = None,
                  events_json: Path | None = None, pred_path: Path | None = None,
-                 expected_pred_sha256: str | None = None):
+                 expected_pred_sha256: str | None = None,
+                 parent_daily_run_id: str | None = None,
+                 odds_observation_dir: Path | None = None,
+                 expected_odds_manifest_sha256: str | None = None):
     args = [
         PY,
         SCRIPTS_DIR / "build_points_with_market.py",
@@ -1149,11 +1198,22 @@ def build_points(slate: str, *, odds_json: Path | None = None,
     _require_current_prediction_artifact(
         pred_path, slate=slate, expected_sha256=expected_pred_sha256)
     args += ["--pred", pred_path]
+    if parent_daily_run_id is not None and expected_pred_sha256 is not None:
+        args += [
+            "--parent-run-id", str(parent_daily_run_id),
+            "--expected-pred-sha256", str(expected_pred_sha256),
+        ]
 
     # Only include names if we actually have them (and don't assume location)
     names_path = export_names_csv(slate)
     if names_path.exists():
         args += ["--names", names_path]
+
+    if odds_json is not None:
+        args += [
+            "--odds-observation-dir", str(odds_observation_dir),
+            "--expected-odds-manifest-sha256", str(expected_odds_manifest_sha256 or ""),
+        ]
 
     run(args)
 
@@ -1341,12 +1401,26 @@ def _run_independent_daily_lanes(
         odds_result is not None and odds_result.classification.startswith("CAPTURED_"))
     odds_path = odds_result.observation_dir / "raw_response.json" if captured else None
     events_path = odds_result.observation_dir / "events_response.json" if captured else None
+    odds_lineage: dict[str, Any] = {}
+    odds_integrity_error: AttachmentIntegrityError | None = None
+    if captured and odds_result is not None and odds_path is not None:
+        try:
+            odds_lineage = validate_odds_observation(
+                observation_dir=odds_result.observation_dir,
+                odds_json=odds_path,
+                expected_manifest_sha256=odds_result.manifest_sha256,
+                expected_parent_daily_run_id=daily_run_id,
+                expected_slate_date=slate,
+            )
+        except AttachmentIntegrityError as error:
+            odds_integrity_error = error
 
     attachment_specs = [
         ("sog_attachment", "legacy_sog", legacy_sog_prediction, build_sog),
         ("saves_attachment", "saves", prediction_identities.get("saves"), build_saves),
         ("points_attachment", "points", prediction_identities.get("points"), build_points),
     ]
+    attachment_contexts: dict[str, dict[str, Any]] = {}
     for attachment_lane, prediction_lane, identity, builder in attachment_specs:
         if identity is None or recorder.lane(prediction_lane).status != "COMPLETE":
             recorder.finish_lane(
@@ -1359,6 +1433,8 @@ def _run_independent_daily_lanes(
         recorder.start_lane(attachment_lane, inputs=attachment_inputs)
         _ACTIVE_DAILY_LANE = attachment_lane
         try:
+            if prediction_lane in {"saves", "points"} and odds_integrity_error is not None:
+                raise odds_integrity_error
             kwargs: dict[str, Any] = {
                 "odds_json": odds_path,
                 "pred_path": Path(identity["path"]),
@@ -1366,19 +1442,87 @@ def _run_independent_daily_lanes(
             }
             if attachment_lane in {"sog_attachment", "points_attachment"}:
                 kwargs["events_json"] = events_path
+            if attachment_lane == "saves_attachment":
+                kwargs.update({
+                    "parent_daily_run_id": daily_run_id,
+                    "odds_observation_dir": (
+                        odds_result.observation_dir if captured and odds_result else None),
+                    "expected_odds_manifest_sha256": (
+                        odds_result.manifest_sha256 if captured and odds_result else None),
+                })
+            if attachment_lane == "points_attachment":
+                kwargs.update({
+                    "parent_daily_run_id": daily_run_id,
+                    "odds_observation_dir": (
+                        odds_result.observation_dir if captured and odds_result else None),
+                    "expected_odds_manifest_sha256": (
+                        odds_result.manifest_sha256 if captured and odds_result else None),
+                })
             builder(slate, **kwargs)
             prefix = {"sog_attachment": "sog", "saves_attachment": "saves", "points_attachment": "points"}[attachment_lane]
+            attachment_path = SITE_DIR / f"{prefix}_with_market.csv"
             outputs = [
-                artifact_identity(SITE_DIR / f"{prefix}_with_market.csv"),
+                artifact_identity(attachment_path),
                 artifact_identity(SITE_DIR / f"unmatched_{prefix}.csv"),
             ]
+            if prediction_lane in {"saves", "points"}:
+                expected_odds_manifest = (
+                    odds_result.manifest_sha256 if captured and odds_result else None)
+                integrity = audit_attachment_files(
+                    lane=prediction_lane,
+                    prediction_path=Path(identity["path"]),
+                    attachment_path=attachment_path,
+                    expected_prediction_sha256=identity["sha256"],
+                    expected_parent_daily_run_id=daily_run_id,
+                    expected_odds_manifest_sha256=expected_odds_manifest,
+                )
+                integrity.update(odds_lineage)
+                unmatched_path = SITE_DIR / f"unmatched_{prefix}.csv"
+                integrity["unmatched_path"] = str(unmatched_path.resolve())
+                integrity["unmatched_sha256"] = sha256_file(unmatched_path)
+                if attachment_lane == "saves_attachment":
+                    ambiguous_path = SITE_DIR / "ambiguous_saves_alias_matches.csv"
+                    integrity["ambiguous_inventory_path"] = str(ambiguous_path.resolve())
+                    integrity["ambiguous_inventory_sha256"] = sha256_file(ambiguous_path)
+                report_path = SITE_DIR / f"{prefix}_attachment_integrity.json"
+                report_identity = _write_attachment_integrity_report(report_path, integrity)
+                outputs.append(report_identity)
+                if attachment_lane == "saves_attachment":
+                    outputs.append(artifact_identity(
+                        SITE_DIR / "ambiguous_saves_alias_matches.csv"))
+                attachment_contexts[attachment_lane] = {
+                    "lane": prediction_lane,
+                    "prediction_path": Path(identity["path"]),
+                    "attachment_path": attachment_path,
+                    "expected_prediction_sha256": identity["sha256"],
+                    "expected_parent_daily_run_id": daily_run_id,
+                    "expected_odds_manifest_sha256": expected_odds_manifest,
+                    "expected_counts": integrity["counts"],
+                }
             recorder.finish_lane(attachment_lane, outputs=outputs)
+        except AttachmentIntegrityError as error:
+            recorder.finish_lane(
+                attachment_lane, status="FAILED_NONBLOCKING_INTEGRITY",
+                reason=f"{type(error).__name__}:{error}")
         except Exception as error:
             recorder.fail_lane(attachment_lane, error, blocking=False)
 
     recorder.start_lane("research_integrity")
     _ACTIVE_DAILY_LANE = "research_integrity"
     research_warnings: list[str] = []
+    for attachment_lane, context in attachment_contexts.items():
+        try:
+            independent = audit_attachment_files(**{
+                key: value for key, value in context.items() if key != "expected_counts"
+            })
+            if independent["counts"] != context["expected_counts"]:
+                raise AttachmentIntegrityError("ATTACHMENT_INDEPENDENT_COUNT_MISMATCH")
+        except AttachmentIntegrityError as error:
+            recorder.finish_lane(
+                attachment_lane, status="FAILED_NONBLOCKING_INTEGRITY",
+                reason=f"RESEARCH_INTEGRITY:{type(error).__name__}:{error}")
+            research_warnings.append(
+                f"{attachment_lane.upper()}_INTEGRITY:{type(error).__name__}:{error}")
     if recorder.lane("legacy_sog").status == "COMPLETE":
         for label, callback in (
             ("SOG_RESIDUAL_REFRESH", lambda: refresh_sog_residual_dataset(slate=slate)),

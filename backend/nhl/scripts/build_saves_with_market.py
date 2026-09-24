@@ -19,10 +19,19 @@ full_name, player_id, game_id, team_id, line, p_over,
 price_over, p_over_mkt, edge_over, fair_over, game_date
 """
 from __future__ import annotations
-import argparse, json, math, os, sys, re
+import argparse, json, math, os, sys, re, uuid
 from pathlib import Path
 import pandas as pd
 import unicodedata as ud
+
+from backend.nhl.attachment_integrity import (
+    AttachmentIntegrityError,
+    canonical_attachment_keys,
+    stable_candidate_identity,
+    validate_attachment_frame,
+    validate_odds_observation,
+)
+from backend.nhl.daily_capture import sha256_file
 
 # -------------------- util --------------------
 
@@ -30,19 +39,40 @@ def die(msg: str, code: int = 2):
     print(f"[saves_with_market] FATAL: {msg}", file=sys.stderr)
     sys.exit(code)
 
-# JS-identical normalizeName():
-# - NFD, drop combining marks
-# - keep [a-zA-Z0-9\\s'.-], drop others
-# - collapse spaces, trim, lowercase
 def norm_name(s: str) -> str:
+    """Deterministic comparison form for accents, punctuation, and suffixes."""
     if not isinstance(s, str):
         return ""
-    s = ud.normalize("NFD", s)
+    s = ud.normalize("NFKD", s)
     s = "".join(ch for ch in s if ud.category(ch) != "Mn")  # strip accents
-    s = s.replace(".", "")
-    s = re.sub(r"[^a-zA-Z0-9\s'.-]", "", s)
+    s = s.replace("’", "'").replace("-", " ").replace("'", "").replace(".", "")
+    s = re.sub(r"[^a-zA-Z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip().lower()
-    return s
+    parts = s.split()
+    while parts and parts[-1] in {"jr", "sr", "ii", "iii", "iv", "v"}:
+        parts.pop()
+    return " ".join(parts)
+
+
+def aliases_for_name(full_name: str) -> list[dict[str, object]]:
+    """Return ranked aliases; rank can only choose equivalent matches."""
+    base = norm_name(full_name)
+    if not base:
+        return []
+    aliases: list[dict[str, object]] = [
+        {"alias_value": str(full_name).strip(), "alias_type": "AUTHORITATIVE_FULL_NAME",
+         "alias_rank": 0, "normalized_alias": base},
+        {"alias_value": base, "alias_type": "NORMALIZED_FULL_NAME",
+         "alias_rank": 1, "normalized_alias": base},
+    ]
+    parts = base.split()
+    if len(parts) >= 2:
+        aliases.append({
+            "alias_value": f"{parts[0][0]} {parts[-1]}",
+            "alias_type": "INITIAL_LAST", "alias_rank": 2,
+            "normalized_alias": f"{parts[0][0]} {parts[-1]}",
+        })
+    return aliases
 
 def line_key(x) -> str:
     """Canonical text key for a line. Matches the site’s dropdown keys."""
@@ -119,13 +149,23 @@ def melt_preds_wide_to_long(pred: pd.DataFrame) -> pd.DataFrame:
     long = long[pd.to_numeric(long["p_over"], errors="coerce").notna()].copy()
     return long
 
-def parse_odds_prices(raw) -> pd.DataFrame | None:
-    """Return median Over price per (name_norm, line_str) for player_total_saves."""
+def parse_odds_candidates(raw) -> pd.DataFrame:
+    """Return provider identities and ranked lookup aliases without expanding predictions."""
     if raw is None:
-        return None
-    recs = []
-    def walk(x):
+        return pd.DataFrame(columns=[
+            "normalized_alias", "provider_player_identity", "provider_player_name",
+            "market_identity", "line_str", "price_over", "source_quote_count",
+        ])
+    quotes: list[dict[str, object]] = []
+
+    def walk(x, *, event_id: str = "", bookmaker_key: str = ""):
         if isinstance(x, dict):
+            next_event_id = event_id
+            next_bookmaker_key = bookmaker_key
+            if "commence_time" in x and x.get("id") is not None:
+                next_event_id = str(x.get("id"))
+            if "markets" in x and x.get("key") is not None:
+                next_bookmaker_key = str(x.get("key"))
             if x.get("key") == "player_total_saves":
                 for o in x.get("outcomes",[]) or []:
                     if o.get("name") != "Over":
@@ -133,36 +173,118 @@ def parse_odds_prices(raw) -> pd.DataFrame | None:
                     base_name = (o.get("description") or o.get("player") or "").strip()
                     pt = o.get("point")
                     pr = o.get("price")
-
-                    # Build aliases: full normalized name + "initial last" normalized name
-                    aliases = set()
-                    nm_full = norm_name(base_name)
-                    if nm_full:
-                        aliases.add(nm_full)
-
-                    # initial + last (e.g., "Nikita Kucherov" -> "n kucherov")
-                    if nm_full:
-                        parts = nm_full.split()
-                        if len(parts) >= 2:
-                            aliases.add(f"{parts[0][0]} {parts[-1]}")
-
-                    if aliases and (pt is not None) and (pr is not None):
-                        for nm in aliases:
-                            recs.append({"name_norm": nm, "line_str": line_key(pt), "price": float(pr)})
+                    provider_identity = norm_name(base_name)
+                    if provider_identity and (pt is not None) and (pr is not None):
+                        quotes.append({
+                            "event_id": next_event_id,
+                            "bookmaker_key": next_bookmaker_key,
+                            "provider_player_identity": provider_identity,
+                            "provider_player_name": base_name,
+                            "line_str": line_key(pt),
+                            "price": float(pr),
+                        })
             for v in x.values():
-                walk(v)
+                walk(v, event_id=next_event_id, bookmaker_key=next_bookmaker_key)
         elif isinstance(x, list):
             for it in x:
-                walk(it)
+                walk(it, event_id=event_id, bookmaker_key=bookmaker_key)
     walk(raw)
-    if not recs:
-        return None
-    od = pd.DataFrame(recs)
-    med = (
-        od.groupby(["name_norm","line_str"], as_index=False)
-          .agg(price_over=("price","median"))
+    if not quotes:
+        return pd.DataFrame(columns=[
+            "normalized_alias", "provider_player_identity", "provider_player_name",
+            "market_identity", "line_str", "price_over", "source_quote_count",
+        ])
+    quote_frame = pd.DataFrame(quotes)
+    markets = (
+        quote_frame.groupby(
+            ["event_id", "provider_player_identity", "line_str"], as_index=False,
+            dropna=False,
+        ).agg(
+            price_over=("price", "median"),
+            provider_player_name=("provider_player_name", "first"),
+            source_quote_count=("price", "size"),
+        )
     )
-    return med
+    candidates: list[dict[str, object]] = []
+    for row in markets.to_dict("records"):
+        market_identity = stable_candidate_identity([
+            row["event_id"], row["provider_player_identity"], row["line_str"], "OVER",
+        ])
+        for alias in aliases_for_name(str(row["provider_player_name"])):
+            candidates.append({
+                **alias,
+                "provider_player_identity": row["provider_player_identity"],
+                "provider_player_name": row["provider_player_name"],
+                "market_identity": market_identity,
+                "line_str": row["line_str"],
+                "price_over": row["price_over"],
+                "source_quote_count": int(row["source_quote_count"]),
+            })
+    return pd.DataFrame(candidates)
+
+
+def build_match_candidates(predictions: pd.DataFrame, odds: pd.DataFrame) -> pd.DataFrame:
+    """Build the many-row alias search relation without changing prediction grain."""
+    rows: list[dict[str, object]] = []
+    for prediction_index, full_name, line in predictions[["full_name", "line"]].itertuples():
+        for alias in aliases_for_name(full_name):
+            rows.append({"prediction_index": prediction_index, "line_str": line_key(line), **alias})
+    aliases = pd.DataFrame(rows)
+    if aliases.empty or odds.empty:
+        return pd.DataFrame(columns=[
+            "prediction_index", "alias_value", "alias_type", "alias_rank",
+            "normalized_alias", "provider_player_identity", "provider_player_name",
+            "market_identity", "line_str", "price_over", "source_quote_count",
+        ])
+    return aliases.merge(odds, on=["normalized_alias", "line_str"], how="inner",
+                         suffixes=("_prediction", "_odds"))
+
+
+def reduce_match_candidates(
+    predictions: pd.DataFrame, candidates: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Reduce candidate matches to exactly one decision per prediction row."""
+    result = predictions.copy()
+    result["attachment_status"] = "UNMATCHED"
+    result["price_over"] = pd.NA
+    result["matched_alias_type"] = ""
+    result["matched_alias_value"] = ""
+    result["matched_provider_player_identity"] = ""
+    result["matched_market_identity"] = ""
+    result["alias_candidate_count"] = 0
+    result["distinct_market_candidate_count"] = 0
+    result["matched_alias_types"] = ""
+    ambiguous_rows: list[dict[str, object]] = []
+    if candidates.empty:
+        return result, pd.DataFrame(columns=list(candidates.columns))
+
+    for prediction_index, group in candidates.groupby("prediction_index", sort=False):
+        exact = group.drop_duplicates(subset=["market_identity", "price_over"]).copy()
+        result.loc[prediction_index, "alias_candidate_count"] = len(group)
+        result.loc[prediction_index, "distinct_market_candidate_count"] = len(exact)
+        if len(exact) == 1:
+            equivalent = group[
+                (group["market_identity"] == exact.iloc[0]["market_identity"])
+                & (group["price_over"] == exact.iloc[0]["price_over"])
+            ].sort_values(["alias_rank_prediction", "alias_type_prediction", "alias_value_prediction"])
+            selected = equivalent.iloc[0]
+            result.loc[prediction_index, "attachment_status"] = "MATCHED"
+            result.loc[prediction_index, "price_over"] = selected["price_over"]
+            result.loc[prediction_index, "matched_alias_type"] = selected["alias_type_prediction"]
+            result.loc[prediction_index, "matched_alias_value"] = selected["alias_value_prediction"]
+            result.loc[prediction_index, "matched_provider_player_identity"] = selected["provider_player_identity"]
+            result.loc[prediction_index, "matched_market_identity"] = selected["market_identity"]
+            result.loc[prediction_index, "matched_alias_types"] = "|".join(
+                sorted(set(equivalent["alias_type_prediction"].astype(str))))
+            continue
+        result.loc[prediction_index, "attachment_status"] = "AMBIGUOUS_ALIAS_MATCH"
+        for row in exact.sort_values(
+            ["market_identity", "price_over", "alias_rank_prediction"]
+        ).to_dict("records"):
+            ambiguous_rows.append({**row, "prediction_index": prediction_index})
+    ambiguous_columns = list(candidates.columns)
+    ambiguous = pd.DataFrame(ambiguous_rows, columns=ambiguous_columns)
+    return result, ambiguous
 
 # -------------------- main --------------------
 
@@ -173,6 +295,13 @@ def main():
     ap.add_argument("--odds-json", default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--unmatched", required=True)
+    ap.add_argument("--ambiguous", default=None)
+    ap.add_argument("--integrity-report", default=None)
+    ap.add_argument("--strict-current-run", action="store_true")
+    ap.add_argument("--parent-run-id", default=None)
+    ap.add_argument("--expected-pred-sha256", default=None)
+    ap.add_argument("--odds-observation-dir", default=None)
+    ap.add_argument("--expected-odds-manifest-sha256", default=None)
     args = ap.parse_args()
 
     slate = os.environ.get("SLATE_DATE")
@@ -181,88 +310,103 @@ def main():
 
     out_path = Path(args.out); out_path.parent.mkdir(parents=True, exist_ok=True)
     unmatched_path = Path(args.unmatched); unmatched_path.parent.mkdir(parents=True, exist_ok=True)
+    ambiguous_path = Path(args.ambiguous or out_path.with_name("ambiguous_saves_alias_matches.csv"))
+    report_path = Path(args.integrity_report or out_path.with_name("saves_attachment_integrity.json"))
+    pred_path = Path(args.pred)
+
+    if args.strict_current_run:
+        required = {
+            "parent-run-id": args.parent_run_id,
+            "expected-pred-sha256": args.expected_pred_sha256,
+            "integrity-report": args.integrity_report,
+            "ambiguous": args.ambiguous,
+        }
+        missing = sorted(name for name, value in required.items() if not value)
+        if missing:
+            raise AttachmentIntegrityError(
+                f"STRICT_CURRENT_RUN_ARGUMENTS_MISSING:{','.join(missing)}")
+        if sha256_file(pred_path) != args.expected_pred_sha256:
+            raise AttachmentIntegrityError("PREDICTION_ARTIFACT_HASH_MISMATCH")
 
     # --- load & reshape predictions ---
-    pred_wide = read_csv_required(Path(args.pred))
+    pred_wide = read_csv_required(pred_path)
+    if args.strict_current_run:
+        if "parent_daily_run_id" not in pred_wide.columns:
+            raise AttachmentIntegrityError("PREDICTION_PARENT_RUN_ID_MISSING")
+        parent_ids = set(pred_wide["parent_daily_run_id"].fillna("").astype(str))
+        if parent_ids != {args.parent_run_id}:
+            raise AttachmentIntegrityError("PREDICTION_PARENT_RUN_ID_MISMATCH")
     long = melt_preds_wide_to_long(pred_wide)   # player_id, game_id, line, p_over
+    expected_prediction_count = len(long)
 
-    # --- carry full_name from predictions if present (goalies may not be in names export) ---
-    carry_cols = [c for c in ["player_id", "game_id", "full_name", "team_id", "game_date"] if c in pred_wide.columns]
-    if "full_name" in carry_cols:
-        carry = pred_wide[carry_cols].drop_duplicates(subset=["player_id", "game_id"])
-        long = long.merge(carry, on=["player_id", "game_id"], how="left", suffixes=("", "_pred"))
+    carry_cols = [column for column in [
+        "player_id", "game_id", "full_name", "team_id", "game_date",
+    ] if column in pred_wide.columns]
+    carry = pred_wide[carry_cols].drop_duplicates(subset=["player_id", "game_id"])
+    long = long.merge(carry, on=["player_id", "game_id"], how="left")
 
-
-    # --- load names (merge first, filter after) ---
+    # Names are enrichment only; they cannot create prediction rows.
     names = read_csv_required(Path(args.names))
     keep = [c for c in ["player_id","game_id","team_id","full_name","game_date"] if c in names.columns]
-    names = names[keep].copy()
+    names = names[keep].drop_duplicates().copy()
 
     keys = [k for k in ["player_id","game_id"] if k in long.columns and k in names.columns]
     if not keys:
         die("cannot merge names: missing both player_id and game_id in one of the files")
-    df = long.merge(names, on=keys, how="left", suffixes=("",""))
-    # Prefer full_name from predictions when present; fall back to names export
-    if "full_name_x" in df.columns and "full_name_y" in df.columns:
-        df["full_name"] = df["full_name_x"].fillna(df["full_name_y"])
-        df = df.drop(columns=["full_name_x", "full_name_y"])
+    conflicting_name_keys = names.groupby(keys, dropna=False).agg(
+        full_name_count=("full_name", lambda values: values.dropna().astype(str).nunique())
+    ) if "full_name" in names.columns else pd.DataFrame()
+    if not conflicting_name_keys.empty and (conflicting_name_keys["full_name_count"] > 1).any():
+        raise AttachmentIntegrityError("NAMES_ENRICHMENT_IDENTITY_CONFLICT")
+    names = names.drop_duplicates(subset=keys, keep="first")
+    df = long.merge(names, on=keys, how="left", suffixes=("_pred", "_names"))
+    for column in ("full_name", "team_id", "game_date"):
+        pred_column, names_column = f"{column}_pred", f"{column}_names"
+        if pred_column in df.columns and names_column in df.columns:
+            df[column] = df[pred_column].combine_first(df[names_column])
+        elif pred_column in df.columns:
+            df[column] = df[pred_column]
+        elif names_column in df.columns:
+            df[column] = df[names_column]
 
-
-    # post-merge filter by SLATE_DATE if game_date exists
     if "game_date" in df.columns:
         df = df[df["game_date"].astype(str) == slate].copy()
-
-    # canonical keys for join with odds
-    df["name_norm"] = df.get("full_name", "").map(norm_name)
-    df["line_str"]  = df["line"].map(line_key)
-
-    # NEW: alias keys (full + initial-last) to match odds formatting differences
-    def aliases_for_name(full_name: str) -> list[str]:
-        base = norm_name(full_name)
-        if not base:
-            return [""]
-        parts = base.split()
-        if len(parts) >= 2:
-            first, last = parts[0], parts[-1]
-            initial_last = f"{first[0]} {last}" if first else last
-            return list(dict.fromkeys([base, initial_last]))  # preserve order, unique
-        return [base]
-
-    df["alias_key"] = df["full_name"].map(lambda x: aliases_for_name(x))
-    df = df.explode("alias_key")
-    df["alias_key"] = df["alias_key"].astype(str)
-
-
-    # --- odds (median Over price) ---
-    odds_raw = load_odds_json(Path(args.odds_json) if args.odds_json else None)
-    med_prices = parse_odds_prices(odds_raw)
-
-    if med_prices is not None:
-        # Primary exact string-key merge
-        df = df.merge(med_prices, on=["name_norm","line_str"], how="left")
-
-        # Fallback: numeric key rounded to 1 decimal (guards against weird provider float strings)
-        if df["price_over"].isna().any():
-            mleft = df[df["price_over"].isna()][["name_norm","line"]].copy()
-            mleft["line_dec1"] = pd.to_numeric(mleft["line"], errors="coerce").round(1)
-
-            mright = med_prices.copy()
-            mright["line_dec1"] = pd.to_numeric(mright["line_str"], errors="coerce").round(1)
-            mright = mright[["name_norm","line_dec1","price_over"]].drop_duplicates()
-
-            if not mleft.empty and not mright.empty:
-                df = df.merge(
-                    mright,
-                    left_on=["name_norm", df["line"].round(1)],
-                    right_on=["name_norm","line_dec1"],
-                    how="left",
-                    suffixes=("","_num")
-                )
-                # prefer exact match if present; else numeric fallback
-                df["price_over"] = df["price_over"].where(df["price_over"].notna(), df["price_over_num"])
-                df = df.drop(columns=[c for c in ["key_1","line_dec1","price_over_num"] if c in df.columns])
     else:
-        df["price_over"] = pd.NA
+        raise AttachmentIntegrityError("PREDICTION_GAME_DATE_MISSING")
+    df = df.reset_index(drop=True)
+    if args.strict_current_run and len(df) != expected_prediction_count:
+        raise AttachmentIntegrityError(
+            "PREDICTION_ROWS_LOST_DURING_NAME_ENRICHMENT_OR_SLATE_FILTER")
+
+    prediction_frame = df[["game_date", "game_id", "player_id", "line"]].copy()
+    prediction_keys = canonical_attachment_keys(prediction_frame)
+    if len(prediction_keys) != len(set(prediction_keys)):
+        raise AttachmentIntegrityError("PREDICTION_NATURAL_KEY_DUPLICATE")
+
+    odds_lineage: dict[str, object] = {}
+    odds_raw = load_odds_json(Path(args.odds_json) if args.odds_json else None)
+    if args.odds_json:
+        if args.strict_current_run and not (
+            args.odds_observation_dir and args.expected_odds_manifest_sha256
+        ):
+            raise AttachmentIntegrityError("STRICT_CURRENT_RUN_ODDS_LINEAGE_MISSING")
+        if args.odds_observation_dir:
+            odds_lineage = validate_odds_observation(
+                observation_dir=Path(args.odds_observation_dir),
+                odds_json=Path(args.odds_json),
+                expected_manifest_sha256=args.expected_odds_manifest_sha256,
+                expected_parent_daily_run_id=args.parent_run_id,
+                expected_slate_date=slate,
+            )
+    odds_candidates = parse_odds_candidates(odds_raw)
+    candidates = build_match_candidates(df, odds_candidates)
+    df, ambiguous = reduce_match_candidates(df, candidates)
+
+    df["parent_daily_run_id"] = args.parent_run_id or ""
+    df["prediction_artifact_sha256"] = args.expected_pred_sha256 or sha256_file(pred_path)
+    df["odds_observation_manifest_sha256"] = odds_lineage.get(
+        "odds_observation_manifest_sha256", "")
+    df["odds_raw_response_sha256"] = odds_lineage.get("odds_raw_response_sha256", "")
 
     # compute market prob, edge, fair odds
     df["p_over"] = pd.to_numeric(df["p_over"], errors="coerce")
@@ -276,24 +420,68 @@ def main():
     df["edge_over"] = [edge(a,b) for a,b in zip(df["p_over"], df["p_over_mkt"])]
     df["fair_over"] = df["p_over"].map(prob_to_american)
 
-    # unmatched (no price)
-    unmatched = df[df["price_over"].isna()].copy()
+    unmatched = df[df["attachment_status"] != "MATCHED"].copy()
     unmatched_cols = [c for c in ["full_name","player_id","game_id","team_id","line","p_over","game_date"] if c in df.columns]
-    unmatched[unmatched_cols].to_csv(unmatched_path, index=False)
 
-    # final select
     out_cols = [c for c in [
         "full_name","player_id","game_id","team_id",
-        "line","p_over","price_over","p_over_mkt","edge_over","fair_over","game_date"
+        "line","p_over","price_over","p_over_mkt","edge_over","fair_over","game_date",
+        "attachment_status", "matched_alias_type", "matched_alias_value",
+        "matched_provider_player_identity", "matched_market_identity", "alias_candidate_count",
+        "distinct_market_candidate_count", "matched_alias_types",
+        "parent_daily_run_id", "prediction_artifact_sha256",
+        "odds_observation_manifest_sha256", "odds_raw_response_sha256",
     ] if c in df.columns]
-    df[out_cols].to_csv(out_path, index=False)
+    output = df[out_cols].copy()
+    expected_odds_manifest = (
+        args.expected_odds_manifest_sha256 if args.odds_json else None
+    )
+    validation = validate_attachment_frame(
+        prediction_frame=prediction_frame,
+        attachment_frame=output,
+        expected_parent_daily_run_id=args.parent_run_id if args.strict_current_run else None,
+        expected_prediction_sha256=args.expected_pred_sha256 if args.strict_current_run else None,
+        expected_odds_manifest_sha256=expected_odds_manifest,
+    )
+
+    token = uuid.uuid4().hex
+    staged_out = out_path.with_name(f".{out_path.name}.{token}.tmp")
+    staged_unmatched = unmatched_path.with_name(f".{unmatched_path.name}.{token}.tmp")
+    staged_ambiguous = ambiguous_path.with_name(f".{ambiguous_path.name}.{token}.tmp")
+    staged_report = report_path.with_name(f".{report_path.name}.{token}.tmp")
+    output.to_csv(staged_out, index=False)
+    unmatched[unmatched_cols].to_csv(staged_unmatched, index=False)
+    ambiguous.to_csv(staged_ambiguous, index=False)
+    report = {
+        "schema_version": "NHL_ATTACHMENT_INTEGRITY_V1",
+        "lane": "saves",
+        "status": "PASS",
+        "canonical_key_columns": ["game_date", "game_id", "player_id", "line"],
+        "parent_daily_run_id": args.parent_run_id,
+        "prediction_artifact_path": str(pred_path.resolve()),
+        "prediction_artifact_sha256": args.expected_pred_sha256 or sha256_file(pred_path),
+        "attachment_path": str(out_path.resolve()),
+        "attachment_sha256": sha256_file(staged_out),
+        "unmatched_sha256": sha256_file(staged_unmatched),
+        "ambiguous_inventory_sha256": sha256_file(staged_ambiguous),
+        **odds_lineage,
+        **validation,
+    }
+    staged_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    for staged, final in (
+        (staged_out, out_path), (staged_unmatched, unmatched_path),
+        (staged_ambiguous, ambiguous_path), (staged_report, report_path),
+    ):
+        staged.replace(final)
 
     # logs
-    kept = len(df)
-    matched = kept - len(unmatched)
+    kept = len(output)
+    matched = int(output["attachment_status"].eq("MATCHED").sum())
+    ambiguous_count = int(output["attachment_status"].eq("AMBIGUOUS_ALIAS_MATCH").sum())
     lines_present = sorted(df["line"].dropna().unique().tolist())
     print(f"[saves_with_market] filter SLATE_DATE={slate}: kept {kept}")
     print(f"[saves_with_market] rows={kept}  matched_prices={matched}/{kept}")
+    print(f"[saves_with_market] ambiguous_alias_matches={ambiguous_count}")
     print(f"[saves_with_market] lines present: {lines_present}")
     print(f"[saves_with_market] ✅ wrote: {out_path}")
     print(f"[saves_with_market]     unmatched: {unmatched_path}  rows={len(unmatched)}")

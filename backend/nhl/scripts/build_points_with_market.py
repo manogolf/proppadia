@@ -6,6 +6,9 @@ from pathlib import Path
 import unicodedata as ud
 import pandas as pd
 
+from backend.nhl.attachment_integrity import AttachmentIntegrityError, validate_odds_observation
+from backend.nhl.daily_capture import sha256_file
+
 
 # ------------------ small helpers ------------------
 
@@ -190,6 +193,10 @@ def main():
         "--strict-current-run", action="store_true",
         help="Require explicit prediction/name inputs and disable auxiliary mutable name sources.",
     )
+    ap.add_argument("--parent-run-id", default=None)
+    ap.add_argument("--expected-pred-sha256", default=None)
+    ap.add_argument("--odds-observation-dir", default=None)
+    ap.add_argument("--expected-odds-manifest-sha256", default=None)
     args = ap.parse_args()
 
     slate = os.environ.get("SLATE_DATE", "").strip()
@@ -204,6 +211,17 @@ def main():
     have_preds = bool(args.pred and args.names and Path(args.pred).exists() and Path(args.names).exists())
     if args.strict_current_run and not have_preds:
         die("strict current-run mode requires existing --pred and --names artifacts")
+    if args.strict_current_run:
+        required = {
+            "parent-run-id": args.parent_run_id,
+            "expected-pred-sha256": args.expected_pred_sha256,
+        }
+        missing = sorted(name for name, value in required.items() if not value)
+        if missing:
+            raise AttachmentIntegrityError(
+                f"STRICT_CURRENT_RUN_ARGUMENTS_MISSING:{','.join(missing)}")
+        if sha256_file(Path(args.pred)) != args.expected_pred_sha256:
+            raise AttachmentIntegrityError("PREDICTION_ARTIFACT_HASH_MISMATCH")
 
     if not have_preds:
         # -------- ODDS-ONLY MODE --------
@@ -238,6 +256,11 @@ def main():
 
     # -------- PREDICTIONS MERGE MODE --------
     pred_wide = read_csv_required(Path(args.pred))
+    if args.strict_current_run:
+        if "parent_daily_run_id" not in pred_wide.columns:
+            raise AttachmentIntegrityError("PREDICTION_PARENT_RUN_ID_MISSING")
+        if set(pred_wide["parent_daily_run_id"].fillna("").astype(str)) != {args.parent_run_id}:
+            raise AttachmentIntegrityError("PREDICTION_PARENT_RUN_ID_MISMATCH")
     long = melt_preds(pred_wide)  # player_id, game_id, line, p_over
 
     names = read_csv_required(Path(args.names))
@@ -294,6 +317,21 @@ def main():
     else:
         df["price_over"] = pd.NA  # no odds available
 
+    odds_lineage: dict[str, str] = {}
+    if args.odds_json:
+        if args.strict_current_run and not (
+            args.odds_observation_dir and args.expected_odds_manifest_sha256
+        ):
+            raise AttachmentIntegrityError("STRICT_CURRENT_RUN_ODDS_LINEAGE_MISSING")
+        if args.odds_observation_dir:
+            odds_lineage = validate_odds_observation(
+                observation_dir=Path(args.odds_observation_dir),
+                odds_json=Path(args.odds_json),
+                expected_manifest_sha256=args.expected_odds_manifest_sha256,
+                expected_parent_daily_run_id=args.parent_run_id,
+                expected_slate_date=slate,
+            )
+
     # Metrics
     df["p_over"] = pd.to_numeric(df["p_over"], errors="coerce")
     df["p_over_mkt"] = df["price_over"].map(american_to_prob)
@@ -331,6 +369,12 @@ def main():
         "p_over","price_over","p_over_mkt","edge_over","fair_over","game_date",
     ] if c in df.columns]
     out_df = df[keep_cols].copy()
+    if args.strict_current_run:
+        out_df["parent_daily_run_id"] = args.parent_run_id
+        out_df["prediction_artifact_sha256"] = args.expected_pred_sha256
+        out_df["odds_observation_manifest_sha256"] = odds_lineage.get(
+            "odds_observation_manifest_sha256", "")
+        out_df["odds_raw_response_sha256"] = odds_lineage.get("odds_raw_response_sha256", "")
     out_df.to_csv(out, index=False)
 
     um_cols = [c for c in ["full_name","player_id","game_id","team_id","line","p_over","game_date"] if c in out_df.columns]
