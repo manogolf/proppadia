@@ -149,7 +149,7 @@ def archive_site_artifacts(
             SITE_DIR / "events_today.json",
             SITE_DIR / "odds_observation_latest.json",
         ])
-        if odds_result.classification in {"CAPTURED_NONEMPTY", "CAPTURED_UNMATCHED"}:
+        if odds_result.classification == "CAPTURED_NONEMPTY":
             artifacts.append(SITE_DIR / "odds_latest.json")
     copied: list[str] = []
 
@@ -931,7 +931,8 @@ def run_optional_odds_observation(*, with_odds: bool, **kwargs) -> OddsObservati
 def daily_health_for_odds(*, requested: bool,
                           result: OddsObservationResult | None) -> str:
     if requested and result is not None and result.classification in {
-        "FAILED_PROVIDER", "FAILED_MALFORMED_RESPONSE", "SKIPPED_NO_AUTHORIZATION"
+        "FAILED_PROVIDER", "FAILED_MALFORMED_RESPONSE", "FAILED_BUDGET_GUARD",
+        "SKIPPED_NO_AUTHORIZATION", "SKIPPED_BUDGET_GUARD",
     }:
         return "READY_WITH_ODDS_WARNING"
     return "READY"

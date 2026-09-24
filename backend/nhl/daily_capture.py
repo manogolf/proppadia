@@ -29,13 +29,25 @@ UTC = timezone.utc
 ODDS_CONTRACT = "NHL_ODDS_RESEARCH_OBSERVATION_V1"
 ROSTER_CONTRACT = "NHL_ROSTER_RESEARCH_OBSERVATION_V1"
 PLANNER_CONTRACT = "NHL_FIRST_PUCK_PHASE_PLANNER_V1"
+ODDS_REQUEST_PLANNER_CONTRACT = "NHL_CANONICAL_EVENT_ODDS_REQUEST_PLAN_V2"
+# The NHL has 32 clubs, so a normal full-league slate can contain no more than
+# 16 games.  This is an absolute corruption guard, not a target request count;
+# the per-capture limit is always the smaller canonical/selected count.
+NHL_ABSOLUTE_GAME_REQUEST_CEILING = 16
+ODDS_BINDING_TOLERANCE_MINUTES = 15
+DEFAULT_ODDS_CREDIT_RULES = {
+    "events_discovery": 0,
+    "event_odds": "MARKETS_X_REGIONS",
+}
 ODDS_CLASSIFICATIONS = {
     "CAPTURED_NONEMPTY",
     "CAPTURED_VALID_EMPTY",
     "CAPTURED_UNMATCHED",
     "FAILED_PROVIDER",
     "FAILED_MALFORMED_RESPONSE",
+    "FAILED_BUDGET_GUARD",
     "SKIPPED_NO_AUTHORIZATION",
+    "SKIPPED_BUDGET_GUARD",
 }
 PHASES = ("EARLY", "REFRESH", "FINAL_PREGAME")
 SENSITIVE_KEY = re.compile(
@@ -226,6 +238,48 @@ class ProviderCapture:
     credits_consumed: int | None = None
     credits_remaining: int | None = None
     transport_response_bodies: list[bytes] = field(default_factory=list)
+    bindings: list[dict[str, Any]] = field(default_factory=list)
+    request_plan: dict[str, Any] | None = None
+    credit_accounting: list[dict[str, Any]] = field(default_factory=list)
+
+
+class BudgetGuardError(RuntimeError):
+    """A deterministic request or credit bound could not be proven locally."""
+
+
+@dataclass(frozen=True)
+class OddsRequestPlan:
+    planner_contract_version: str
+    canonical_game_set_hash: str
+    canonical_game_count: int
+    canonical_game_ids: tuple[int, ...]
+    selected_canonical_game_ids: tuple[int, ...]
+    selected_provider_event_ids: tuple[str, ...]
+    request_pairs: tuple[tuple[int, str], ...]
+    markets: tuple[str, ...]
+    regions: tuple[str, ...]
+    maximum_discovery_requests: int
+    maximum_paid_requests: int
+    maximum_total_attempts: int
+    credits_per_paid_request: int
+    discovery_credit_cost: int
+    maximum_credits: int
+    absolute_paid_request_ceiling: int
+    missing_canonical_game_ids: tuple[int, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        value["canonical_game_ids"] = list(self.canonical_game_ids)
+        value["selected_canonical_game_ids"] = list(self.selected_canonical_game_ids)
+        value["selected_provider_event_ids"] = list(self.selected_provider_event_ids)
+        value["request_pairs"] = [
+            {"canonical_game_id": game_id, "provider_event_id": event_id}
+            for game_id, event_id in self.request_pairs
+        ]
+        value["markets"] = list(self.markets)
+        value["regions"] = list(self.regions)
+        value["missing_canonical_game_ids"] = list(self.missing_canonical_game_ids)
+        return value
 
 
 @dataclass(frozen=True)
@@ -294,8 +348,8 @@ class RequestsOddsProvider:
             )
             return None, exchange, b""
 
-    def capture(self, *, days_from: int, markets: str, regions: str,
-                odds_format: str) -> ProviderCapture:
+    def discover_events(self, *, days_from: int) -> ProviderCapture:
+        """Make the one allowed free discovery attempt and nothing else."""
         event_params = {"dateFormat": "iso", "daysFrom": int(days_from), "apiKey": self.api_key}
         events, event_exchange, event_body = self._get_json(f"{self.BASE}/events", event_params)
         exchanges = [event_exchange]
@@ -317,57 +371,170 @@ class RequestsOddsProvider:
                 None, [], [], exchanges, event_body, empty_reason="NO_EVENTS",
                 transport_response_bodies=[event_body],
             )
+        return ProviderCapture(
+            None, events, [], exchanges, b"[]\n",
+            transport_response_bodies=[event_body],
+        )
 
+    @staticmethod
+    def _quota_header(exchange: HttpExchange, name: str) -> tuple[str, int | None]:
+        raw = exchange.headers.get(name)
+        if raw is None:
+            return "MISSING", None
+        try:
+            value = int(str(raw).strip())
+        except (TypeError, ValueError):
+            return "MALFORMED", None
+        return ("VALID", value) if value >= 0 else ("MALFORMED", None)
+
+    def capture_plan(
+        self, *, plan: OddsRequestPlan, discovery: ProviderCapture, odds_format: str,
+    ) -> ProviderCapture:
+        """Execute only the immutable paid requests enumerated by ``plan``."""
+        plan_dict = plan.as_dict()
+        pairs = tuple(plan.request_pairs)
+        if (
+            len(pairs) != plan.maximum_paid_requests
+            or len({game_id for game_id, _ in pairs}) != len(pairs)
+            or len({event_id for _, event_id in pairs}) != len(pairs)
+            or tuple(game_id for game_id, _ in pairs) != plan.selected_canonical_game_ids
+            or tuple(event_id for _, event_id in pairs) != plan.selected_provider_event_ids
+            or plan.maximum_paid_requests > min(
+                plan.canonical_game_count, plan.absolute_paid_request_ceiling)
+            or plan.maximum_total_attempts != plan.maximum_discovery_requests + len(pairs)
+            or plan.maximum_credits != (
+                plan.discovery_credit_cost + len(pairs) * plan.credits_per_paid_request)
+        ):
+            raise BudgetGuardError("ODDS_REQUEST_PLAN_CONTRACT_INVALID")
+
+        exchanges = list(discovery.exchanges)
+        bodies = list(discovery.transport_response_bodies)
         odds_payload: list[dict[str, Any]] = []
-        raw_bodies: list[bytes] = []
-        for event in events:
-            event_id = str(event.get("id") or "").strip()
-            if not event_id:
-                return ProviderCapture(
-                    "FAILED_MALFORMED_RESPONSE", events, odds_payload, exchanges,
-                    _json_bytes(odds_payload), error_type="EVENT_ID_MISSING",
-                    error_message="provider event lacks an id",
-                    transport_response_bodies=[event_body, *raw_bodies],
-                )
+        accounting: list[dict[str, Any]] = []
+        consumed = 0
+        remaining: int | None = None
+
+        if len(exchanges) != 1 or len(bodies) != 1:
+            raise BudgetGuardError("ODDS_DISCOVERY_ATTEMPT_CARDINALITY_INVALID")
+        discovery_status, discovery_actual = self._quota_header(exchanges[0], "x-requests-last")
+        if discovery_status == "MALFORMED" or (
+            discovery_actual is not None and discovery_actual > plan.discovery_credit_cost
+        ):
+            return ProviderCapture(
+                "FAILED_BUDGET_GUARD", discovery.events, [], exchanges, b"[]\n",
+                error_type="DISCOVERY_CREDIT_ACCOUNTING_CONTRADICTION",
+                error_message="discovery credit header exceeds or contradicts the immutable plan",
+                credits_consumed=discovery_actual, transport_response_bodies=bodies,
+                request_plan=plan_dict,
+                credit_accounting=[{
+                    "request_kind": "DISCOVERY", "header_status": discovery_status,
+                    "planned_credits": plan.discovery_credit_cost,
+                    "actual_credits": discovery_actual,
+                }],
+            )
+        consumed += discovery_actual if discovery_actual is not None else plan.discovery_credit_cost
+        accounting.append({
+            "request_kind": "DISCOVERY", "header_status": discovery_status,
+            "planned_credits": plan.discovery_credit_cost,
+            "actual_credits": discovery_actual,
+            "accounted_credits": discovery_actual if discovery_actual is not None else plan.discovery_credit_cost,
+        })
+
+        planned_ids = set(plan.selected_provider_event_ids)
+        requested_ids: set[str] = set()
+        for request_index, (game_id, event_id) in enumerate(pairs, start=1):
+            # These checks immediately precede transport.  A mutated, duplicate,
+            # or out-of-plan request cannot reach the network.
+            if event_id not in planned_ids or event_id in requested_ids:
+                raise BudgetGuardError("ODDS_REQUEST_OUTSIDE_IMMUTABLE_PLAN")
+            if request_index > plan.maximum_paid_requests:
+                raise BudgetGuardError("ODDS_PAID_REQUEST_COUNT_CEILING_REACHED")
+            planned_cumulative = (
+                plan.discovery_credit_cost + request_index * plan.credits_per_paid_request)
+            if planned_cumulative > plan.maximum_credits:
+                raise BudgetGuardError("ODDS_PLANNED_CREDIT_CEILING_REACHED")
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", event_id):
+                raise BudgetGuardError("ODDS_PROVIDER_EVENT_ID_UNSAFE")
+
             params = {
-                "regions": regions, "markets": markets,
+                "regions": ",".join(plan.regions), "markets": ",".join(plan.markets),
                 "oddsFormat": odds_format, "apiKey": self.api_key,
             }
-            payload, exchange, body = self._get_json(f"{self.BASE}/events/{event_id}/odds", params)
+            payload, exchange, body = self._get_json(
+                f"{self.BASE}/events/{event_id}/odds", params)
             exchanges.append(exchange)
-            raw_bodies.append(body)
+            bodies.append(body)
+            requested_ids.add(event_id)
+
+            header_status, actual = self._quota_header(exchange, "x-requests-last")
+            accounted = actual if actual is not None else plan.credits_per_paid_request
+            consumed += accounted
+            remaining_status, parsed_remaining = self._quota_header(exchange, "x-requests-remaining")
+            if remaining_status == "VALID":
+                remaining = parsed_remaining
+            accounting.append({
+                "request_kind": "EVENT_ODDS", "request_index": request_index,
+                "canonical_game_id": game_id, "provider_event_id": event_id,
+                "header_status": header_status,
+                "planned_credits": plan.credits_per_paid_request,
+                "actual_credits": actual, "accounted_credits": accounted,
+                "remaining_header_status": remaining_status,
+                "credits_remaining": parsed_remaining,
+            })
+            contradiction = (
+                header_status == "MALFORMED"
+                or (actual is not None and actual > plan.credits_per_paid_request)
+                or consumed > plan.maximum_credits
+            )
+            if contradiction:
+                return ProviderCapture(
+                    "FAILED_BUDGET_GUARD", discovery.events, odds_payload, exchanges,
+                    _json_bytes(odds_payload),
+                    error_type="PAID_CREDIT_ACCOUNTING_CONTRADICTION",
+                    error_message="paid credit header exceeds or contradicts the immutable plan",
+                    credits_consumed=consumed, credits_remaining=remaining,
+                    transport_response_bodies=bodies, request_plan=plan_dict,
+                    credit_accounting=accounting,
+                )
             if exchange.status is None or not (200 <= exchange.status < 300):
                 return ProviderCapture(
-                    "FAILED_PROVIDER", events, odds_payload, exchanges, _json_bytes(odds_payload),
-                    error_type=exchange.error_type, error_message=exchange.error_message,
-                    transport_response_bodies=[event_body, *raw_bodies],
+                    "FAILED_PROVIDER", discovery.events, odds_payload, exchanges,
+                    _json_bytes(odds_payload), error_type=exchange.error_type,
+                    error_message=exchange.error_message, credits_consumed=consumed,
+                    credits_remaining=remaining, transport_response_bodies=bodies,
+                    request_plan=plan_dict, credit_accounting=accounting,
                 )
             if not isinstance(payload, dict):
                 return ProviderCapture(
-                    "FAILED_MALFORMED_RESPONSE", events, odds_payload, exchanges, _json_bytes(odds_payload),
+                    "FAILED_MALFORMED_RESPONSE", discovery.events, odds_payload, exchanges,
+                    _json_bytes(odds_payload),
                     error_type=exchange.error_type or "INVALID_ODDS_PAYLOAD",
                     error_message=exchange.error_message or "event odds response must be a JSON object",
-                    transport_response_bodies=[event_body, *raw_bodies],
+                    credits_consumed=consumed, credits_remaining=remaining,
+                    transport_response_bodies=bodies, request_plan=plan_dict,
+                    credit_accounting=accounting,
+                )
+            response_event_id = str(payload.get("id") or event_id).strip()
+            if response_event_id != event_id:
+                return ProviderCapture(
+                    "FAILED_MALFORMED_RESPONSE", discovery.events, odds_payload, exchanges,
+                    _json_bytes(odds_payload), error_type="ODDS_EVENT_ID_MISMATCH",
+                    error_message="event odds response identity differs from the immutable plan",
+                    credits_consumed=consumed, credits_remaining=remaining,
+                    transport_response_bodies=bodies, request_plan=plan_dict,
+                    credit_accounting=accounting,
                 )
             odds_payload.append(payload)
 
-        final_headers = exchanges[-1].headers if exchanges else {}
-        def _integer(name: str) -> int | None:
-            try:
-                return int(final_headers[name])
-            except (KeyError, TypeError, ValueError):
-                return None
-        credit_values = []
-        for exchange in exchanges:
-            try:
-                credit_values.append(int(exchange.headers["x-requests-last"]))
-            except (KeyError, TypeError, ValueError):
-                pass
+        raw_response = (
+            discovery.raw_response_bytes
+            if not discovery.events and not pairs else _json_bytes(odds_payload)
+        )
         return ProviderCapture(
-            None, events, odds_payload, exchanges, _json_bytes(odds_payload),
-            credits_consumed=sum(credit_values) if credit_values else None,
-            credits_remaining=_integer("x-requests-remaining"),
-            transport_response_bodies=[event_body, *raw_bodies],
+            None, discovery.events, odds_payload, exchanges, raw_response,
+            credits_consumed=consumed, credits_remaining=remaining,
+            transport_response_bodies=bodies, request_plan=plan_dict,
+            credit_accounting=accounting,
         )
 
 
@@ -451,9 +618,19 @@ def _market_rows(payload: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
-def _bind_events(events: Sequence[Mapping[str, Any]], games: Sequence[CanonicalGame]) -> list[dict[str, Any]]:
+def _bind_events(
+    events: Sequence[Mapping[str, Any]], games: Sequence[CanonicalGame], *, slate_date: str,
+) -> list[dict[str, Any]]:
+    """Return a complete inventory and select only unique one-to-one identities."""
     bindings: list[dict[str, Any]] = []
+    event_id_counts: dict[str, int] = {}
     for event in events:
+        event_id = str(event.get("id") or "").strip()
+        if event_id:
+            event_id_counts[event_id] = event_id_counts.get(event_id, 0) + 1
+
+    for source_index, event in enumerate(events):
+        event_id = str(event.get("id") or "").strip()
         home = _norm_team(str(event.get("home_team") or event.get("homeTeam") or ""))
         away = _norm_team(str(event.get("away_team") or event.get("awayTeam") or ""))
         commence_raw = event.get("commence_time")
@@ -466,18 +643,133 @@ def _bind_events(events: Sequence[Mapping[str, Any]], games: Sequence[CanonicalG
             home_aliases = {_norm_team(x) for x in (game.home_aliases or (game.home_team,))}
             away_aliases = {_norm_team(x) for x in (game.away_aliases or (game.away_team,))}
             scheduled = datetime.fromisoformat(game.start_time_utc.replace("Z", "+00:00")).astimezone(UTC)
-            time_matches = commence is not None and abs((commence - scheduled).total_seconds()) <= 15 * 60
+            time_matches = commence is not None and abs((commence - scheduled).total_seconds()) <= ODDS_BINDING_TOLERANCE_MINUTES * 60
             if home in home_aliases and away in away_aliases and time_matches:
                 matches.append(game.game_id)
+        if not event_id:
+            status = "UNMATCHED_MISSING_PROVIDER_EVENT_ID"
+        elif event_id_counts[event_id] > 1:
+            status = "DUPLICATE_PROVIDER_EVENT_ID"
+        elif commence is None:
+            status = "UNMATCHED_INVALID_START_TIME"
+        elif commence.astimezone(PACIFIC).date().isoformat() != slate_date:
+            status = "UNMATCHED_OUTSIDE_PACIFIC_SLATE"
+            matches = []
+        elif len(matches) > 1:
+            status = "AMBIGUOUS_MULTIPLE_CANONICAL_GAMES"
+        elif not matches:
+            status = "UNMATCHED"
+        else:
+            status = "CANDIDATE"
         bindings.append({
-            "provider_event_id": str(event.get("id") or ""),
+            "source_event_index": source_index,
+            "provider_event_id": event_id,
             "provider_home_team": event.get("home_team") or event.get("homeTeam"),
             "provider_away_team": event.get("away_team") or event.get("awayTeam"),
             "provider_commence_time": commence_raw,
             "canonical_game_ids": matches,
-            "binding_status": "MATCHED" if len(matches) == 1 else ("AMBIGUOUS" if matches else "UNMATCHED"),
+            "binding_status": status,
         })
+
+    contenders: dict[int, list[int]] = {}
+    for index, row in enumerate(bindings):
+        if row["binding_status"] == "CANDIDATE":
+            contenders.setdefault(int(row["canonical_game_ids"][0]), []).append(index)
+    for game_id, indexes in contenders.items():
+        if len(indexes) == 1:
+            bindings[indexes[0]]["binding_status"] = "MATCHED"
+            bindings[indexes[0]]["canonical_game_id"] = game_id
+        else:
+            for index in indexes:
+                bindings[index]["binding_status"] = "AMBIGUOUS_CANONICAL_COMPETITION"
     return bindings
+
+
+def _request_values(raw: str, *, label: str) -> tuple[str, ...]:
+    values = tuple(value.strip() for value in str(raw).split(",") if value.strip())
+    if not values or len(values) != len(set(values)):
+        raise BudgetGuardError(f"ODDS_{label}_CONTRACT_INVALID")
+    return values
+
+
+def derive_odds_credit_bound(
+    *, paid_request_count: int, markets: Sequence[str], regions: Sequence[str],
+    credit_rules: Mapping[str, Any] | None = None,
+) -> tuple[int, int, int]:
+    """Return discovery, per-event, and total deterministic credit ceilings."""
+    rules = dict(DEFAULT_ODDS_CREDIT_RULES if credit_rules is None else credit_rules)
+    discovery = rules.get("events_discovery")
+    event_rule = rules.get("event_odds")
+    if not isinstance(discovery, int) or discovery < 0:
+        raise BudgetGuardError("ODDS_DISCOVERY_CREDIT_FORMULA_UNKNOWN")
+    if event_rule != "MARKETS_X_REGIONS":
+        raise BudgetGuardError("ODDS_EVENT_CREDIT_FORMULA_UNKNOWN")
+    per_paid = len(tuple(markets)) * len(tuple(regions))
+    if per_paid <= 0 or paid_request_count < 0:
+        raise BudgetGuardError("ODDS_CREDIT_INPUT_INVALID")
+    return discovery, per_paid, discovery + int(paid_request_count) * per_paid
+
+
+def preflight_odds_request_budget(
+    *, canonical_games: Sequence[CanonicalGame], markets: str, regions: str,
+    credit_rules: Mapping[str, Any] | None = None,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Prove the worst-case bound before even the discovery request is allowed."""
+    game_ids = [int(game.game_id) for game in canonical_games]
+    if len(game_ids) != len(set(game_ids)):
+        raise BudgetGuardError("ODDS_CANONICAL_SLATE_DUPLICATE_GAME_ID")
+    if len(game_ids) > NHL_ABSOLUTE_GAME_REQUEST_CEILING:
+        raise BudgetGuardError("ODDS_CANONICAL_SLATE_EXCEEDS_ABSOLUTE_SAFETY_CEILING")
+    market_values = _request_values(markets, label="MARKETS")
+    region_values = _request_values(regions, label="REGIONS")
+    derive_odds_credit_bound(
+        paid_request_count=len(game_ids), markets=market_values,
+        regions=region_values, credit_rules=credit_rules)
+    return market_values, region_values
+
+
+def build_odds_request_plan(
+    *, events: Sequence[Mapping[str, Any]], canonical_games: Sequence[CanonicalGame],
+    slate_date: str, markets: str, regions: str,
+    credit_rules: Mapping[str, Any] | None = None,
+) -> tuple[OddsRequestPlan, list[dict[str, Any]]]:
+    market_values, region_values = preflight_odds_request_budget(
+        canonical_games=canonical_games, markets=markets, regions=regions,
+        credit_rules=credit_rules)
+    game_ids = tuple(sorted(int(game.game_id) for game in canonical_games))
+    bindings = _bind_events(events, canonical_games, slate_date=slate_date)
+    selected = sorted(
+        (
+            (int(row["canonical_game_id"]), str(row["provider_event_id"]))
+            for row in bindings if row["binding_status"] == "MATCHED"
+        ),
+        key=lambda value: (value[0], value[1]),
+    )
+    selected_games = tuple(game_id for game_id, _ in selected)
+    selected_events = tuple(event_id for _, event_id in selected)
+    if len(selected) > min(len(game_ids), NHL_ABSOLUTE_GAME_REQUEST_CEILING):
+        raise BudgetGuardError("ODDS_SELECTED_EVENTS_EXCEED_REQUEST_CEILING")
+    if len(selected_games) != len(set(selected_games)) or len(selected_events) != len(set(selected_events)):
+        raise BudgetGuardError("ODDS_REQUEST_PLAN_NOT_ONE_TO_ONE")
+    discovery_cost, per_paid, maximum_credits = derive_odds_credit_bound(
+        paid_request_count=len(selected), markets=market_values,
+        regions=region_values, credit_rules=credit_rules)
+    missing = tuple(sorted(set(game_ids) - set(selected_games)))
+    plan = OddsRequestPlan(
+        planner_contract_version=ODDS_REQUEST_PLANNER_CONTRACT,
+        canonical_game_set_hash=canonical_game_set_hash(game_ids),
+        canonical_game_count=len(game_ids), canonical_game_ids=game_ids,
+        selected_canonical_game_ids=selected_games,
+        selected_provider_event_ids=selected_events, request_pairs=tuple(selected),
+        markets=market_values, regions=region_values,
+        maximum_discovery_requests=1, maximum_paid_requests=len(selected),
+        maximum_total_attempts=1 + len(selected),
+        credits_per_paid_request=per_paid, discovery_credit_cost=discovery_cost,
+        maximum_credits=maximum_credits,
+        absolute_paid_request_ceiling=NHL_ABSOLUTE_GAME_REQUEST_CEILING,
+        missing_canonical_game_ids=missing,
+    )
+    return plan, bindings
 
 
 def _existing_observation(day_root: Path, phase: str) -> OddsObservationResult | None:
@@ -485,8 +777,9 @@ def _existing_observation(day_root: Path, phase: str) -> OddsObservationResult |
         return None
     for directory in sorted(day_root.glob("observation=*")):
         summary_path = directory / "observation_summary.json"
-        marker = directory / "RUN_COMPLETE.json"
-        if not summary_path.is_file() or not marker.is_file():
+        complete = (directory / "RUN_COMPLETE.json").is_file()
+        attempted = (directory / "ATTEMPT_COMPLETE.json").is_file()
+        if not summary_path.is_file() or not (complete or attempted):
             continue
         summary = json.loads(summary_path.read_text())
         if summary.get("phase") == phase:
@@ -506,6 +799,7 @@ def capture_odds_observation(
     days_from: int = 1,
     markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
     regions: str = "us,us2", odds_format: str = "american",
+    credit_rules: Mapping[str, Any] | None = None,
 ) -> OddsObservationResult:
     phase = str(phase).upper()
     if phase not in PHASES:
@@ -526,49 +820,166 @@ def capture_odds_observation(
     observation_name = f"observation={observed.strftime('%Y%m%dT%H%M%S.%fZ')}_{stable_id}"
     final = day_root / observation_name
     staging = day_root / f".{observation_name}.incomplete"
-    claim = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}" / f"phase={phase}.claim.json"
-    claim_payload = {
-        "schema_version": ODDS_CONTRACT, "season": int(season), "slate_date": slate_date,
-        "phase": phase, "invocation_id": invocation_id,
-        "parent_daily_run_id": parent_daily_run_id,
-        "observation_name": observation_name, "claim_timestamp_utc": iso_utc(observed),
-        "canonical_game_set_hash": game_hash,
+    claim_root = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}"
+    claim = claim_root / f"phase={phase}.claim.json"
+    lease = claim_root / f"phase={phase}.lease.json"
+    # The lease is acquired before discovery, while the immutable acquisition
+    # claim is created only after discovery has fixed the exact paid plan.
+    if claim.exists():
+        existing = _existing_observation(day_root, phase)
+        if existing is not None:
+            return existing
+        raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}")
+    lease_payload = {
+        "schema_version": ODDS_REQUEST_PLANNER_CONTRACT, "season": int(season),
+        "slate_date": slate_date, "phase": phase, "invocation_id": invocation_id,
+        "lease_timestamp_utc": iso_utc(observed),
+        "authorization": "AT_MOST_ONE_DISCOVERY_THEN_IMMUTABLE_PLAN",
         "stale_or_failed_claim_policy": "FAIL_CLOSED_NO_AUTOMATIC_RETRY",
     }
     try:
-        _write_create_only(claim, _json_bytes(claim_payload))
+        _write_create_only(lease, _json_bytes(lease_payload))
     except FileExistsError as error:
         existing = _existing_observation(day_root, phase)
         if existing is not None:
             return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}") from error
 
+    claim_base = {
+        "schema_version": ODDS_CONTRACT, "planner_contract_version": ODDS_REQUEST_PLANNER_CONTRACT,
+        "season": int(season), "slate_date": slate_date,
+        "phase": phase, "invocation_id": invocation_id,
+        "parent_daily_run_id": parent_daily_run_id,
+        "observation_name": observation_name, "claim_timestamp_utc": iso_utc(observed),
+        "canonical_game_set_hash": game_hash, "canonical_game_count": len(game_ids),
+        "canonical_game_ids": sorted(game_ids),
+        "stale_or_failed_claim_policy": "FAIL_CLOSED_NO_AUTOMATIC_RETRY",
+    }
+
     staging.mkdir(parents=True, exist_ok=False)
     request_started = utc_now()
+    plan: OddsRequestPlan | None = None
+    bindings: list[dict[str, Any]] = []
+    claim_payload: dict[str, Any]
     if not authorized or provider is None:
+        try:
+            plan, bindings = build_odds_request_plan(
+                events=[], canonical_games=canonical_games, slate_date=slate_date,
+                markets=markets, regions=regions, credit_rules=credit_rules)
+            plan_payload = plan.as_dict()
+            # No transport is authorized, so the executable ceilings are zero.
+            plan_payload.update({
+                "maximum_discovery_requests": 0, "maximum_paid_requests": 0,
+                "maximum_total_attempts": 0, "maximum_credits": 0,
+                "selected_canonical_game_ids": [], "selected_provider_event_ids": [],
+                "request_pairs": [],
+            })
+        except BudgetGuardError as error:
+            plan_payload = {
+                "planner_contract_version": ODDS_REQUEST_PLANNER_CONTRACT,
+                "canonical_game_set_hash": game_hash, "canonical_game_count": len(game_ids),
+                "canonical_game_ids": sorted(game_ids), "selected_canonical_game_ids": [],
+                "selected_provider_event_ids": [], "markets": [x.strip() for x in markets.split(",") if x.strip()],
+                "regions": [x.strip() for x in regions.split(",") if x.strip()],
+                "maximum_discovery_requests": 0, "maximum_paid_requests": 0,
+                "maximum_total_attempts": 0, "maximum_credits": 0,
+                "budget_guard_error": str(error),
+            }
+        claim_payload = {**claim_base, **plan_payload}
+        _write_create_only(claim, _json_bytes(claim_payload))
         captured = ProviderCapture(
             "SKIPPED_NO_AUTHORIZATION", [], [], [], b"null\n",
             empty_reason="ODDS_NOT_EXPLICITLY_AUTHORIZED_OR_CREDENTIALS_UNAVAILABLE",
+            request_plan=plan_payload,
         )
     else:
         try:
-            if callable(provider) and not hasattr(provider, "capture"):
-                captured = provider(days_from=days_from, markets=markets, regions=regions, odds_format=odds_format)
+            preflight_odds_request_budget(
+                canonical_games=canonical_games, markets=markets, regions=regions,
+                credit_rules=credit_rules)
+            if not hasattr(provider, "discover_events") or not hasattr(provider, "capture_plan"):
+                raise BudgetGuardError("ODDS_PROVIDER_LACKS_GOVERNED_PLAN_INTERFACE")
+            discovery = provider.discover_events(days_from=days_from)  # type: ignore[union-attr]
+            plan, bindings = build_odds_request_plan(
+                events=discovery.events, canonical_games=canonical_games,
+                slate_date=slate_date, markets=markets, regions=regions,
+                credit_rules=credit_rules)
+            claim_payload = {**claim_base, **plan.as_dict()}
+            _write_create_only(claim, _json_bytes(claim_payload))
+            if discovery.classification is not None:
+                captured = discovery
+                captured.request_plan = plan.as_dict()
             else:
-                captured = provider.capture(  # type: ignore[union-attr]
-                    days_from=days_from, markets=markets, regions=regions, odds_format=odds_format)
-        except Exception as error:
+                captured = provider.capture_plan(  # type: ignore[union-attr]
+                    plan=plan, discovery=discovery, odds_format=odds_format)
+                if captured.classification is None and discovery.events and not plan.request_pairs:
+                    captured.classification = "CAPTURED_UNMATCHED"
+                    captured.empty_reason = "NO_UNIQUE_CANONICAL_EVENT_MATCHES"
+            captured.bindings = bindings
+        except BudgetGuardError as error:
+            # Preflight failures make zero provider requests.  Failures after
+            # discovery preserve that single attempt and prohibit paid calls.
+            discovery_capture = locals().get("discovery")
+            attempted = discovery_capture if isinstance(discovery_capture, ProviderCapture) else None
+            plan_payload = plan.as_dict() if plan is not None else {
+                "planner_contract_version": ODDS_REQUEST_PLANNER_CONTRACT,
+                "canonical_game_set_hash": game_hash, "canonical_game_count": len(game_ids),
+                "canonical_game_ids": sorted(game_ids), "selected_canonical_game_ids": [],
+                "selected_provider_event_ids": [], "request_pairs": [],
+                "markets": [x.strip() for x in markets.split(",") if x.strip()],
+                "regions": [x.strip() for x in regions.split(",") if x.strip()],
+                "maximum_discovery_requests": 0 if attempted is None else 1,
+                "maximum_paid_requests": 0,
+                "maximum_total_attempts": 0 if attempted is None else 1,
+                "maximum_credits": None,
+                "authorized_credit_ceiling": 0,
+                "absolute_paid_request_ceiling": NHL_ABSOLUTE_GAME_REQUEST_CEILING,
+                "budget_guard_error": str(error),
+            }
+            claim_payload = {**claim_base, **plan_payload}
+            if not claim.exists():
+                _write_create_only(claim, _json_bytes(claim_payload))
             captured = ProviderCapture(
-                "FAILED_PROVIDER", [], [], [], b"null\n",
+                "SKIPPED_BUDGET_GUARD" if attempted is None else "FAILED_BUDGET_GUARD",
+                list(attempted.events) if attempted else [], [],
+                list(attempted.exchanges) if attempted else [], b"[]\n",
+                error_type=type(error).__name__, error_message=str(error),
+                transport_response_bodies=(list(attempted.transport_response_bodies) if attempted else []),
+                bindings=bindings, request_plan=plan_payload,
+            )
+        except Exception as error:
+            # Unexpected provider failures remain nonblocking, but the exact
+            # zero-paid plan/claim is still durable before finalization.
+            discovery_capture = locals().get("discovery")
+            attempted = discovery_capture if isinstance(discovery_capture, ProviderCapture) else None
+            plan_payload = plan.as_dict() if plan is not None else {
+                "planner_contract_version": ODDS_REQUEST_PLANNER_CONTRACT,
+                "canonical_game_set_hash": game_hash, "canonical_game_count": len(game_ids),
+                "canonical_game_ids": sorted(game_ids), "selected_canonical_game_ids": [],
+                "selected_provider_event_ids": [], "request_pairs": [],
+                "markets": [x.strip() for x in markets.split(",") if x.strip()],
+                "regions": [x.strip() for x in regions.split(",") if x.strip()],
+                "maximum_discovery_requests": 0 if attempted is None else 1,
+                "maximum_paid_requests": 0, "maximum_total_attempts": 0 if attempted is None else 1,
+                "maximum_credits": 0,
+            }
+            if not claim.exists():
+                _write_create_only(claim, _json_bytes({**claim_base, **plan_payload}))
+            captured = ProviderCapture(
+                "FAILED_PROVIDER", list(attempted.events) if attempted else [], [],
+                list(attempted.exchanges) if attempted else [], b"null\n",
                 error_type=type(error).__name__, error_message="provider acquisition failed",
+                transport_response_bodies=(list(attempted.transport_response_bodies) if attempted else []),
+                request_plan=plan_payload,
             )
     request_ended = utc_now()
 
     rows = _market_rows(captured.odds_payload)
-    bindings = _bind_events(captured.events, canonical_games)
+    bindings = captured.bindings or bindings or _bind_events(
+        captured.events, canonical_games, slate_date=slate_date)
     matched = sum(row["binding_status"] == "MATCHED" for row in bindings)
-    unmatched = sum(row["binding_status"] == "UNMATCHED" for row in bindings)
-    ambiguous = sum(row["binding_status"] == "AMBIGUOUS" for row in bindings)
+    unmatched = sum(str(row["binding_status"]).startswith("UNMATCHED") for row in bindings)
+    ambiguous = sum(str(row["binding_status"]).startswith("AMBIGUOUS") for row in bindings)
     raw_market_count = sum(
         len(book.get("markets", []))
         for event in captured.odds_payload
@@ -577,6 +988,12 @@ def capture_odds_observation(
     )
     classification = captured.classification
     empty_reason = captured.empty_reason
+    request_plan = dict(captured.request_plan or {})
+    maximum_attempts = int(request_plan.get("maximum_total_attempts") or 0)
+    if len(captured.exchanges) > maximum_attempts:
+        classification = "FAILED_BUDGET_GUARD"
+        captured.error_type = "REQUEST_COUNT_ACCOUNTING_CONTRADICTION"
+        captured.error_message = "actual provider attempts exceed the immutable request plan"
     if classification is None:
         if not rows:
             classification = "CAPTURED_VALID_EMPTY"
@@ -605,6 +1022,7 @@ def capture_odds_observation(
         "duration_ms": max(0, round((request_ended - request_started).total_seconds() * 1000)),
         "canonical_game_ids": sorted(game_ids), "canonical_game_set_hash": game_hash,
         "first_puck_utc": first_puck,
+        "request_plan": request_plan,
     }
     provider_asof_values = sorted({
         str(market.get("last_update"))
@@ -621,10 +1039,12 @@ def capture_odds_observation(
         "provider_timestamp_or_asof": provider_asof_values,
         "credits_consumed": captured.credits_consumed,
         "credits_remaining": captured.credits_remaining,
+        "credit_accounting": captured.credit_accounting,
+        "request_plan": request_plan,
         "error_type": captured.error_type, "error_message": captured.error_message,
     }
     raw_body = captured.raw_response_bytes or b"null\n"
-    if classification not in {"FAILED_PROVIDER", "FAILED_MALFORMED_RESPONSE"}:
+    if classification not in {"FAILED_PROVIDER", "FAILED_MALFORMED_RESPONSE", "FAILED_BUDGET_GUARD"}:
         try:
             json.loads(raw_body)
         except Exception as error:
@@ -661,11 +1081,22 @@ def capture_odds_observation(
         "raw_market_count": raw_market_count,
         "canonical_matched_event_count": matched,
         "unmatched_event_count": unmatched, "ambiguous_event_count": ambiguous,
+        "duplicate_provider_event_count": sum(
+            row["binding_status"] == "DUPLICATE_PROVIDER_EVENT_ID" for row in bindings),
+        "selected_canonical_game_ids": request_plan.get("selected_canonical_game_ids", []),
+        "selected_provider_event_ids": request_plan.get("selected_provider_event_ids", []),
+        "missing_canonical_game_ids": request_plan.get("missing_canonical_game_ids", sorted(game_ids)),
         "normalized_price_row_count": len(rows),
         "book_count": len({row.get("bookmaker") for row in rows if row.get("bookmaker")}),
         "response_byte_length": len(raw_body), "response_sha256": sha256_bytes(raw_body),
         "logical_request_count": len(captured.exchanges),
         "network_attempt_count": len(captured.exchanges),
+        "discovery_request_count": min(1, len(captured.exchanges)),
+        "paid_event_odds_request_count": max(0, len(captured.exchanges) - 1),
+        "maximum_discovery_requests": request_plan.get("maximum_discovery_requests", 0),
+        "maximum_paid_requests": request_plan.get("maximum_paid_requests", 0),
+        "maximum_total_attempts": request_plan.get("maximum_total_attempts", 0),
+        "maximum_credits": request_plan.get("maximum_credits", 0),
         "network_success_count": sum(
             exchange.status is not None and 200 <= exchange.status < 300
             for exchange in captured.exchanges
@@ -682,11 +1113,13 @@ def capture_odds_observation(
     artifacts = {
         "request_metadata.json": _json_bytes(request_metadata),
         "response_envelope.json": _json_bytes(response_envelope),
+        "request_plan.json": _json_bytes(request_plan),
         "events_response.json": _json_bytes(captured.events),
         "raw_response.json": raw_body,
         "transport_response_bodies.jsonl": _jsonl_bytes(transport_body_rows),
         "normalized_odds.jsonl": _jsonl_bytes(rows),
         "game_binding.jsonl": _jsonl_bytes(bindings),
+        "credit_accounting.jsonl": _jsonl_bytes(captured.credit_accounting),
         "observation_summary.json": _json_bytes(summary),
     }
     for name, body in artifacts.items():
@@ -706,7 +1139,7 @@ def capture_odds_observation(
         compatibility_dir = Path(compatibility_dir)
         _atomic_replace(compatibility_dir / "odds_nhl_playerprops_today.json", raw_body)
         _atomic_replace(compatibility_dir / "events_today.json", _json_bytes(captured.events))
-        if classification in {"CAPTURED_NONEMPTY", "CAPTURED_UNMATCHED"}:
+        if classification == "CAPTURED_NONEMPTY":
             _atomic_replace(compatibility_dir / "odds_latest.json", raw_body)
         _atomic_replace(compatibility_dir / "odds_observation_latest.json", _json_bytes({
             "schema_version": ODDS_CONTRACT,

@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,12 +15,17 @@ from unittest.mock import patch
 from backend.nhl import cli
 from backend.nhl.daily_capture import (
     CanonicalGame,
+    BudgetGuardError,
     HttpExchange,
     ObservationAlreadyClaimed,
     OddsObservationResult,
     ProviderCapture,
     RequestsOddsProvider,
+    NHL_ABSOLUTE_GAME_REQUEST_CEILING,
+    canonical_game_set_hash,
+    build_odds_request_plan,
     capture_odds_observation,
+    derive_odds_credit_bound,
     load_canonical_slate,
     plan_first_puck_phases,
     sha256_bytes,
@@ -79,10 +85,38 @@ class FakeProvider:
         self.calls = 0
         self.lock = threading.Lock()
 
-    def capture(self, **_kwargs) -> ProviderCapture:
+    def discover_events(self, **_kwargs) -> ProviderCapture:
         with self.lock:
             self.calls += 1
-        return self.result
+        if self.result.classification is not None or not self.result.events:
+            return self.result
+        body = json.dumps(self.result.events).encode()
+        return ProviderCapture(
+            None, self.result.events, [], [exchange(body=body)], b"[]\n",
+            transport_response_bodies=[body],
+        )
+
+    def capture_plan(self, *, plan, discovery, odds_format) -> ProviderCapture:
+        if not plan.request_pairs:
+            return ProviderCapture(
+                None, discovery.events, [], discovery.exchanges,
+                discovery.raw_response_bytes if not discovery.events else b"[]\n",
+                transport_response_bodies=discovery.transport_response_bodies,
+                request_plan=plan.as_dict(),
+            )
+        return ProviderCapture(
+            self.result.classification, discovery.events, self.result.odds_payload,
+            [*discovery.exchanges, *self.result.exchanges], self.result.raw_response_bytes,
+            empty_reason=self.result.empty_reason, error_type=self.result.error_type,
+            error_message=self.result.error_message,
+            credits_consumed=self.result.credits_consumed,
+            credits_remaining=self.result.credits_remaining,
+            transport_response_bodies=[
+                *discovery.transport_response_bodies,
+                *self.result.transport_response_bodies,
+            ],
+            request_plan=plan.as_dict(),
+        )
 
 
 class ComprehensiveDailyCaptureTests(unittest.TestCase):
@@ -134,8 +168,8 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
         import requests
         session = requests.Session()
         with patch.object(session, "get", return_value=Response()) as get:
-            result = RequestsOddsProvider("super-secret-api-key", session=session).capture(
-                days_from=1, markets="player_points", regions="us", odds_format="american")
+            result = RequestsOddsProvider("super-secret-api-key", session=session).discover_events(
+                days_from=1)
         get.assert_called_once()
         self.assertFalse(get.call_args.kwargs["allow_redirects"])
         self.assertEqual(result.retry_count, 0)
@@ -161,9 +195,9 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             self.assertEqual(summary["credits_consumed"], 2)
             envelope = json.loads((result.observation_dir / "response_envelope.json").read_text())
             self.assertEqual(envelope["provider_timestamp_or_asof"], ["2026-09-24T18:00:00Z"])
-            transport = json.loads(
-                (result.observation_dir / "transport_response_bodies.jsonl").read_text())
-            self.assertEqual(base64.b64decode(transport["body_base64"]), provider.result.raw_response_bytes)
+            transport = [json.loads(line) for line in
+                         (result.observation_dir / "transport_response_bodies.jsonl").read_text().splitlines()]
+            self.assertEqual(base64.b64decode(transport[-1]["body_base64"]), provider.result.raw_response_bytes)
             self.assertEqual(provider.calls, 1)
 
     def test_successful_empty_exact_body_is_valid_and_complete(self):
@@ -239,13 +273,13 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
         provider = FakeProvider(ProviderCapture(
             None, [provider_event()], payload,
             [exchange(body=json.dumps(payload).encode())], json.dumps(payload).encode()))
-        original_capture = provider.capture
+        original_discover = provider.discover_events
 
-        def slow_capture(**kwargs):
+        def slow_discover(**kwargs):
             time.sleep(0.05)
-            return original_capture(**kwargs)
+            return original_discover(**kwargs)
 
-        provider.capture = slow_capture
+        provider.discover_events = slow_discover
         outcomes: list[object] = []
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -468,6 +502,246 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             self.assertIsNone(build_points_with_market.load_odds_json(missing))
             self.assertIsNone(build_saves_with_market.load_odds_json(missing))
             self.assertIsNone(build_sog_with_market.load_odds_json(missing))
+
+
+class BoundedOddsTopologyTests(unittest.TestCase):
+    class Response:
+        def __init__(self, payload, *, status=200, headers=None):
+            self.content = json.dumps(payload).encode()
+            self.status_code = status
+            self.headers = headers or {"content-type": "application/json"}
+            self.ok = 200 <= status < 300
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    @staticmethod
+    def canonical(count=11):
+        return [CanonicalGame(
+            2026010037 + index,
+            f"2026-09-24T{12 + index:02d}:00:00Z",
+            f"H{index:02d}", f"A{index:02d}",
+            (f"H{index:02d}", f"Home {index}"),
+            (f"A{index:02d}", f"Away {index}"),
+        ) for index in range(count)]
+
+    @staticmethod
+    def event(index, *, event_id=None, start=None, home=None, away=None):
+        return {
+            "id": event_id or f"event-{index}",
+            "home_team": home or f"Home {index}",
+            "away_team": away or f"Away {index}",
+            "commence_time": start or f"2026-09-24T{12 + index:02d}:00:00Z",
+        }
+
+    @staticmethod
+    def odds(event):
+        return {**event, "bookmakers": [{
+            "key": "book", "markets": [{
+                "key": "player_points", "outcomes": [{
+                    "name": "Over", "description": "Player", "price": -110, "point": 0.5,
+                }],
+            }],
+        }]}
+
+    def run_http(self, root, canonical, events, *, phase="EARLY", paid_headers=None,
+                 credit_rules=None, paid_statuses=None):
+        discovery = self.Response(events, headers={
+            "content-type": "application/json", "x-requests-last": "0",
+            "x-requests-remaining": "1000",
+        })
+        plan, _ = build_odds_request_plan(
+            events=events, canonical_games=canonical, slate_date=SLATE,
+            markets="player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
+            regions="us,us2", credit_rules=credit_rules)
+        responses = [discovery]
+        event_by_id = {str(event.get("id")): event for event in events}
+        for index, event_id in enumerate(plan.selected_provider_event_ids):
+            headers = ({"content-type": "application/json", "x-requests-last": "8",
+                        "x-requests-remaining": str(992 - index * 8)}
+                       if paid_headers is None else paid_headers[index])
+            status = 200 if paid_statuses is None else paid_statuses[index]
+            responses.append(self.Response(
+                self.odds(event_by_id[event_id]), status=status, headers=headers))
+        import requests
+        session = requests.Session()
+        with patch.object(session, "get", side_effect=responses) as transport:
+            result = capture_odds_observation(
+                root=Path(root), season=2026, slate_date=SLATE, phase=phase,
+                parent_daily_run_id="bounded-run", canonical_games=canonical,
+                provider=RequestsOddsProvider("secret", session=session), authorized=True,
+                now=datetime(2026, 9, 24, 8, tzinfo=UTC), credit_rules=credit_rules,
+            )
+        return result, transport
+
+    def test_eleven_of_thirty_one_events_are_requested_with_twelve_attempt_ceiling(self):
+        canonical = self.canonical()
+        events = [self.event(index) for index in range(11)] + [
+            self.event(100 + index, home=f"Other Home {index}", away=f"Other Away {index}",
+                       start="2026-09-24T12:30:00Z")
+            for index in range(20)
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            result, transport = self.run_http(temp, canonical, events)
+            self.assertEqual(result.classification, "CAPTURED_NONEMPTY")
+            self.assertEqual(transport.call_count, 12)
+            self.assertEqual(result.summary["paid_event_odds_request_count"], 11)
+            self.assertEqual(result.summary["maximum_total_attempts"], 12)
+            claim = json.loads((Path(temp) / ".claims/season=2026" /
+                                f"slate_date={SLATE}/phase=EARLY.claim.json").read_text())
+            self.assertEqual(claim["canonical_game_set_hash"],
+                             "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3")
+            self.assertEqual(claim["maximum_credits"], 88)
+            self.assertEqual(len(claim["selected_provider_event_ids"]), 11)
+
+    def test_empty_unmatched_and_partial_discovery_never_expand_paid_plan(self):
+        canonical = self.canonical(3)
+        cases = [
+            ([], "CAPTURED_VALID_EMPTY", 0),
+            ([self.event(90, home="No Match", away="No Match 2")], "CAPTURED_UNMATCHED", 0),
+            ([self.event(0), self.event(90, home="No Match", away="No Match 2")],
+             "CAPTURED_NONEMPTY", 1),
+        ]
+        for index, (events, classification, paid) in enumerate(cases):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as temp:
+                result, transport = self.run_http(temp, canonical, events)
+                self.assertEqual(result.classification, classification)
+                self.assertEqual(result.summary["paid_event_odds_request_count"], paid)
+                self.assertEqual(transport.call_count, 1 + paid)
+                self.assertEqual(len(result.summary["missing_canonical_game_ids"]), 3 - paid)
+
+    def test_duplicate_competing_ambiguous_and_time_date_bindings_fail_closed(self):
+        one = self.canonical(1)
+        duplicate = [self.event(0, event_id="same"), self.event(0, event_id="same")]
+        competing = [self.event(0, event_id="one"), self.event(0, event_id="two")]
+        incompatible = [self.event(0, start="2026-09-24T13:00:00Z")]
+        adjacent = [self.event(0, start="2026-09-25T07:05:00Z")]
+        for events, status in [
+            (duplicate, "DUPLICATE_PROVIDER_EVENT_ID"),
+            (competing, "AMBIGUOUS_CANONICAL_COMPETITION"),
+            (incompatible, "UNMATCHED"),
+            (adjacent, "UNMATCHED_OUTSIDE_PACIFIC_SLATE"),
+        ]:
+            plan, bindings = build_odds_request_plan(
+                events=events, canonical_games=one, slate_date=SLATE,
+                markets="a,b,c,d", regions="us,us2")
+            self.assertEqual(plan.maximum_paid_requests, 0)
+            self.assertTrue(all(row["binding_status"] == status for row in bindings))
+
+        ambiguous_games = [
+            CanonicalGame(1, "2026-09-24T12:00:00Z", "H", "A", ("Home",), ("Away",)),
+            CanonicalGame(2, "2026-09-24T12:10:00Z", "H", "A", ("Home",), ("Away",)),
+        ]
+        plan, bindings = build_odds_request_plan(
+            events=[{"id": "both", "home_team": "Home", "away_team": "Away",
+                     "commence_time": "2026-09-24T12:05:00Z"}],
+            canonical_games=ambiguous_games, slate_date=SLATE,
+            markets="a,b,c,d", regions="us,us2")
+        self.assertEqual(plan.maximum_paid_requests, 0)
+        self.assertEqual(bindings[0]["binding_status"], "AMBIGUOUS_MULTIPLE_CANONICAL_GAMES")
+
+    def test_repeated_team_split_squad_binds_by_exact_start_identity(self):
+        canonical = [
+            CanonicalGame(1, "2026-09-24T12:00:00Z", "TOR", "OTT",
+                          ("Toronto",), ("Ottawa",)),
+            CanonicalGame(2, "2026-09-24T16:00:00Z", "TOR", "OTT",
+                          ("Toronto",), ("Ottawa",)),
+        ]
+        events = [
+            {"id": "early", "home_team": "Toronto", "away_team": "Ottawa",
+             "commence_time": "2026-09-24T12:00:00Z"},
+            {"id": "late", "home_team": "Toronto", "away_team": "Ottawa",
+             "commence_time": "2026-09-24T16:00:00Z"},
+        ]
+        plan, bindings = build_odds_request_plan(
+            events=events, canonical_games=canonical, slate_date=SLATE,
+            markets="a,b,c,d", regions="us,us2")
+        self.assertEqual(plan.request_pairs, ((1, "early"), (2, "late")))
+        self.assertTrue(all(row["binding_status"] == "MATCHED" for row in bindings))
+
+    def test_corrupt_slate_and_unknown_credit_formula_make_zero_provider_attempts(self):
+        import requests
+        for canonical, rules in [
+            (self.canonical(NHL_ABSOLUTE_GAME_REQUEST_CEILING + 1), None),
+            (self.canonical(1), {"events_discovery": 0, "event_odds": "UNKNOWN"}),
+        ]:
+            with self.subTest(count=len(canonical), rules=rules), tempfile.TemporaryDirectory() as temp:
+                session = requests.Session()
+                with patch.object(session, "get") as transport:
+                    result = capture_odds_observation(
+                        root=Path(temp), season=2026, slate_date=SLATE, phase="EARLY",
+                        parent_daily_run_id="guard", canonical_games=canonical,
+                        provider=RequestsOddsProvider("secret", session=session), authorized=True,
+                        credit_rules=rules, now=datetime(2026, 9, 24, 8, tzinfo=UTC))
+                transport.assert_not_called()
+                self.assertEqual(result.classification, "SKIPPED_BUDGET_GUARD")
+                self.assertEqual(cli.daily_health_for_odds(requested=True, result=result),
+                                 "READY_WITH_ODDS_WARNING")
+
+    def test_plan_precedes_paid_transport_and_outside_plan_fails_before_transport(self):
+        canonical, events = self.canonical(1), [self.event(0)]
+        plan, _ = build_odds_request_plan(
+            events=events, canonical_games=canonical, slate_date=SLATE,
+            markets="a,b,c,d", regions="us,us2")
+        discovery_body = json.dumps(events).encode()
+        discovery = ProviderCapture(
+            None, events, [], [exchange(body=discovery_body)], b"[]\n",
+            transport_response_bodies=[discovery_body])
+        bad = replace(plan, selected_provider_event_ids=("outside",))
+        import requests
+        session = requests.Session()
+        provider = RequestsOddsProvider("secret", session=session)
+        with patch.object(session, "get") as transport, self.assertRaises(BudgetGuardError):
+            provider.capture_plan(plan=bad, discovery=discovery, odds_format="american")
+        transport.assert_not_called()
+
+        class ClaimCheckingProvider(FakeProvider):
+            def __init__(self, result, claim_path):
+                super().__init__(result)
+                self.claim_path = claim_path
+
+            def capture_plan(self, **kwargs):
+                if not self.claim_path.is_file():
+                    raise AssertionError("paid transport began before claim creation")
+                return super().capture_plan(**kwargs)
+
+        payload = [self.odds(events[0])]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            claim_path = root / ".claims/season=2026" / f"slate_date={SLATE}/phase=EARLY.claim.json"
+            fake = ClaimCheckingProvider(ProviderCapture(
+                None, events, payload, [exchange(body=json.dumps(payload).encode())],
+                json.dumps(payload).encode()), claim_path)
+            result = capture_odds_observation(
+                root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                parent_daily_run_id="claim-order", canonical_games=canonical,
+                provider=fake, authorized=True,
+                markets="a,b,c,d", regions="us,us2",
+                now=datetime(2026, 9, 24, 8, tzinfo=UTC))
+            self.assertEqual(result.classification, "CAPTURED_NONEMPTY")
+
+    def test_credit_formula_and_header_accounting_bounds(self):
+        self.assertEqual(derive_odds_credit_bound(
+            paid_request_count=11,
+            markets=("a", "b", "c", "d"), regions=("us", "us2")), (0, 8, 88))
+        canonical, events = self.canonical(2), [self.event(0), self.event(1)]
+        cases = [
+            ([{"content-type": "application/json"}, {"content-type": "application/json"}],
+             "CAPTURED_NONEMPTY", 2),
+            ([{"content-type": "application/json", "x-requests-last": "bad"},
+              {"content-type": "application/json", "x-requests-last": "8"}],
+             "FAILED_BUDGET_GUARD", 1),
+            ([{"content-type": "application/json", "x-requests-last": "9"},
+              {"content-type": "application/json", "x-requests-last": "8"}],
+             "FAILED_BUDGET_GUARD", 1),
+        ]
+        for index, (headers, classification, paid) in enumerate(cases):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as temp:
+                result, transport = self.run_http(temp, canonical, events, paid_headers=headers)
+                self.assertEqual(result.classification, classification)
+                self.assertEqual(result.summary["paid_event_odds_request_count"], paid)
+                self.assertEqual(transport.call_count, 1 + paid)
 
 
 if __name__ == "__main__":
