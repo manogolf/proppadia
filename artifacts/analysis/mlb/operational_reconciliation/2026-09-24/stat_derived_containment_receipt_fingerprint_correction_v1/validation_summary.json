@@ -1,0 +1,42 @@
+{
+  "contract": "MLB_2026_STAT_DERIVED_CONTAINMENT_RECEIPT_FINGERPRINT_CORRECTION_V1",
+  "validated_at_utc": "2026-09-24T18:35:34Z",
+  "status": "PASS",
+  "required_ancestry": {
+    "eba0964f3647a71db86d861a80ddc2eab8f72723": true
+  },
+  "classifier_version": "MLB_STAT_DERIVED_FAILURE_FINGERPRINT_V2",
+  "installed_wrapper": {
+    "prechange_sha256": "3229ba332c391a7ad019d1c020377dae5539d914fe79227a62ef1cd28456e74c",
+    "postchange_sha256": "09d236d57eeff4576c97eac06c9fb8ad60a24f41e1091e1c3dccea6ead73faef",
+    "syntax": "PASS",
+    "rollback_patch": "PASS",
+    "reviewed_candidate_match": "PASS"
+  },
+  "focused_tests": {
+    "framework": "python_stdlib_unittest",
+    "run": 22,
+    "passed": 22,
+    "failed": 0,
+    "zsh_multios_stream_and_exit_fixture": "PASS"
+  },
+  "retrospective_natural_fixture": {
+    "classification": "UNIQUE_VIOLATION_PLAYER_DERIVED_STATS_PLAYER_GAME",
+    "boundary_found": true,
+    "player_id": 453286,
+    "game_id": 824785,
+    "constraint_name": "player_derived_stats_player_id_game_id_key",
+    "stage_exit_code": 2,
+    "fingerprint_sha256": "51f32d3b48a31d98c938cf14358fb8b97696ed72556d7db6fac2193ebaa51fa6"
+  },
+  "historical_receipt_unchanged": true,
+  "contract_validator": "PASS",
+  "python_compilation": "PASS",
+  "git_diff_check": "PASS",
+  "live_api_calls": 0,
+  "database_connections": 0,
+  "pipeline_runs": 0,
+  "provider_credits_used": 0,
+  "natural_revalidation_status": "PENDING_NEXT_NATURAL_FAILURE",
+  "root_defect_status": "PRESENT_NOT_RESOLVED"
+}

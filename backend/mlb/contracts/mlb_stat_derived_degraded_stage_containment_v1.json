@@ -3,6 +3,27 @@
   "overall_classification": "DEGRADED_STAT_DERIVED_FAILED_INDEPENDENT_STAGES_COMPLETED",
   "known_defect": "POSTPONED_AS_FINAL_ADMISSION_PLUS_UNORDERED_DELETE_INSERT_CTE",
   "failed_stage": "mlb-stat-derived-refresh",
+  "receipt_fingerprint_contract": {
+    "version": "MLB_STAT_DERIVED_FAILURE_FINGERPRINT_V2",
+    "known_failure_classification": "UNIQUE_VIOLATION_PLAYER_DERIVED_STATS_PLAYER_GAME",
+    "stream_capture": {
+      "stdout": "independent complete per-run stage stream, mirrored to existing wrapper stdout",
+      "stderr": "independent complete per-run stage stream, mirrored to existing wrapper stderr",
+      "cross_stream_order": "not invented; canonical output is the length-delimited ordered pair stdout,stderr"
+    },
+    "structured_fields": [
+      "exception_class",
+      "constraint_name",
+      "player_id",
+      "game_id",
+      "database_detail",
+      "stage_exit_code"
+    ],
+    "boundary_detection": "complete unsanitized stage streams before excerpting, sanitization, truncation, or Make-error selection",
+    "receipt_output": "structured fields, stable structured fingerprint, complete stream hashes, canonical stream-pair hash, paths, byte counts, bounded sanitized excerpts",
+    "unknown_nonzero_classification": "UNCLASSIFIED_STAT_DERIVED_NONZERO",
+    "historical_receipts": "retained unchanged under their original classifier"
+  },
   "stages_after_failure": [
     {"sequence": 1, "name": "mlb-check-rolling-integrity", "classification": "TRUE_DATA_DEPENDENCY"},
     {"sequence": 2, "name": "predictions-wide-and-player-prop-capture", "classification": "TRUE_DATA_DEPENDENCY"},

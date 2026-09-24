@@ -1,0 +1,36 @@
+{
+  "contract": "MLB_2026_STAT_DERIVED_CONTAINMENT_RECEIPT_FINGERPRINT_CORRECTION_V1",
+  "run_identity": "local_daily_20260924T180004Z",
+  "mode": "OFFLINE_RETAINED_LOG_FIXTURE_ONLY",
+  "historical_receipt_rewritten": false,
+  "source_evidence": {
+    "stdout_log": "artifacts/ops/mlb_refresh_daily.out.log",
+    "stdout_log_sha256_at_extraction": "9eb9d39f70bec111ea29614f0e24dfdec09e7e027e22bcbc43c0e3b4599544dc",
+    "stderr_log": "artifacts/ops/mlb_refresh_daily.err.log",
+    "stderr_log_sha256_at_extraction": "c9a97b5f3a65dc5c5a76f60770158dc63b2ba67c14a59a6c987979b8e84cddab",
+    "stdout_fixture": "backend/tests/fixtures/mlb_stat_derived_containment_v1/2026-09-24_local_daily_20260924T180004Z.stdout.txt",
+    "stdout_fixture_sha256": "07a93da5fd50a18f99c663f7ebddfe4eeb10523ecac8b87a1e37c3fb0f33b1f7",
+    "stderr_fixture": "backend/tests/fixtures/mlb_stat_derived_containment_v1/2026-09-24_local_daily_20260924T180004Z.stderr.txt",
+    "stderr_fixture_sha256": "47557d1498ca53efd01a685042db75af434d9f35a96337b4846ac0771801945a",
+    "fixture_policy": "minimal byte-exact failure excerpts retained from the natural stdout and the stderr segment after the run boundary"
+  },
+  "corrected_fingerprint": {
+    "classifier_version": "MLB_STAT_DERIVED_FAILURE_FINGERPRINT_V2",
+    "classification": "UNIQUE_VIOLATION_PLAYER_DERIVED_STATS_PLAYER_GAME",
+    "boundary_found": true,
+    "exception_class": "UniqueViolation",
+    "constraint_name": "player_derived_stats_player_id_game_id_key",
+    "player_id": 453286,
+    "game_id": 824785,
+    "gamePk": 824785,
+    "database_detail": "Key (player_id, game_id)=(453286, 824785) already exists.",
+    "stage_exit_code": 2,
+    "fingerprint_sha256": "51f32d3b48a31d98c938cf14358fb8b97696ed72556d7db6fac2193ebaa51fa6",
+    "stdout_sha256": "07a93da5fd50a18f99c663f7ebddfe4eeb10523ecac8b87a1e37c3fb0f33b1f7",
+    "stderr_sha256": "47557d1498ca53efd01a685042db75af434d9f35a96337b4846ac0771801945a",
+    "combined_canonical_output_sha256": "aedb8408ea7b953d90866fc79435ea31f29d26a810007c52c847a93bac059342"
+  },
+  "database_connections": 0,
+  "api_requests": 0,
+  "pipeline_runs": 0
+}

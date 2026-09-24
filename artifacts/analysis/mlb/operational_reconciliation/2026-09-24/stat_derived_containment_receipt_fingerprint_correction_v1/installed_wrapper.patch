@@ -1,0 +1,30 @@
+--- a/proppadia_mlb_refresh_daily.sh
++++ b/proppadia_mlb_refresh_daily.sh
+@@ -1179 +1179,13 @@
+-MLB_STAT_DERIVED_FAILURE_LOG="${MLB_STAT_DERIVED_FAILURE_LOG:-artifacts/ops/mlb_refresh_daily.err.log}"
++MLB_STAT_DERIVED_STREAM_ROOT="artifacts/ops/mlb_stat_derived_stage_output_v1/${MLB_DATE_ET}/${MLB_RUN_TAG}"
++MLB_STAT_DERIVED_STDOUT_LOG="${MLB_STAT_DERIVED_STREAM_ROOT}/stdout.log"
++MLB_STAT_DERIVED_STDERR_LOG="${MLB_STAT_DERIVED_STREAM_ROOT}/stderr.log"
++setopt MULTIOS
++exec {MLB_STAT_DERIVED_LIVE_STDOUT_FD}>&1
++exec {MLB_STAT_DERIVED_LIVE_STDERR_FD}>&2
++mkdir -p "$MLB_STAT_DERIVED_STREAM_ROOT"
++chmod 700 "$MLB_STAT_DERIVED_STREAM_ROOT"
++(
++  umask 077
++  : > "$MLB_STAT_DERIVED_STDOUT_LOG"
++  : > "$MLB_STAT_DERIVED_STDERR_LOG"
++)
+@@ -1187 +1199,3 @@
+-make mlb-stat-derived-refresh
++make mlb-stat-derived-refresh \
++  > "$MLB_STAT_DERIVED_STDOUT_LOG" >&$MLB_STAT_DERIVED_LIVE_STDOUT_FD \
++  2> "$MLB_STAT_DERIVED_STDERR_LOG" 2>&$MLB_STAT_DERIVED_LIVE_STDERR_FD
+@@ -1188,0 +1203,2 @@
++exec {MLB_STAT_DERIVED_LIVE_STDOUT_FD}>&-
++exec {MLB_STAT_DERIVED_LIVE_STDERR_FD}>&-
+@@ -1199,2 +1215,2 @@
+-    --failure-boundary "$MLB_STAT_DERIVED_FAILURE_BOUNDARY" \
+-    --failure-log "$MLB_STAT_DERIVED_FAILURE_LOG" \
++    --failure-stdout-log "$MLB_STAT_DERIVED_STDOUT_LOG" \
++    --failure-stderr-log "$MLB_STAT_DERIVED_STDERR_LOG" \
