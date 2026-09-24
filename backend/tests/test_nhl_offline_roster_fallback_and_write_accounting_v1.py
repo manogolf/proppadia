@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from backend.nhl import cli  # noqa: E402
 from backend.nhl.daily_orchestration import DailyRunRecorder  # noqa: E402
 from backend.nhl.scripts.refresh_players_and_roster_today import (  # noqa: E402
     RosterStatusConflict,
+    _feature_roster_upsert_sql,
     _roster_status_upsert_parts,
     normalize_roster_status_rows,
     upsert_roster_status_from_features,
@@ -23,6 +25,16 @@ from backend.nhl.scripts.refresh_players_and_roster_today import (  # noqa: E402
 
 SLATE = "2026-09-23"
 KEYS = {"game_id", "team_id", "player_id"}
+FEATURE_FALLBACK_CTES = (
+    "source_rows",
+    "source_validation",
+    "normalized",
+    "src_checked",
+    "protected_conflicts",
+    "conflict_guard",
+    "guarded_source",
+    "upserted",
+)
 
 
 class FeatureCursor:
@@ -95,6 +107,63 @@ def test_fallback_source_supplies_typed_active_and_typed_null_roles():
     assert counts["unique_identities"] == 2
     assert counts["exact_rows_collapsed"] == 2
     assert counts["roster_status_upsert_rows"] == 2
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        KEYS,
+        KEYS | {"active_flag"},
+        KEYS | {"line_role"},
+        KEYS | {"pp_unit"},
+        KEYS | {"line_role", "pp_unit"},
+        KEYS | {"active_flag", "line_role", "pp_unit", "asof_ts"},
+    ],
+    ids=(
+        "required-only",
+        "active-flag",
+        "line-role",
+        "pp-unit",
+        "both-role-fields",
+        "all-optional-fields",
+    ),
+)
+def test_feature_fallback_ctes_are_complete_ordered_and_structurally_separated(columns):
+    sql = _feature_roster_upsert_sql(target_columns=columns)
+    offsets = [sql.index(f"{name} AS (") for name in FEATURE_FALLBACK_CTES]
+    assert offsets == sorted(offsets)
+    assert sql.startswith("WITH source_rows AS (")
+    for left, right in zip(FEATURE_FALLBACK_CTES, FEATURE_FALLBACK_CTES[1:]):
+        assert re.search(
+            rf"\n\),\n{re.escape(right)} AS \(",
+            sql[offsets[FEATURE_FALLBACK_CTES.index(left)]:offsets[
+                FEATURE_FALLBACK_CTES.index(right)] + len(right) + 5],
+        ), f"missing structural separator between {left} and {right}"
+    assert re.search(r"\n\)\nSELECT\n", sql[offsets[-1]:])
+
+
+@pytest.mark.parametrize(
+    "columns,selected_aliases",
+    [
+        (KEYS, ()),
+        (KEYS | {"active_flag"}, ("active_flag",)),
+        (KEYS | {"line_role"}, ("line_role",)),
+        (KEYS | {"pp_unit"}, ("pp_unit",)),
+        (KEYS | {"line_role", "pp_unit"}, ("line_role", "pp_unit")),
+    ],
+)
+def test_feature_fallback_schema_variants_use_explicit_available_source_aliases(
+    columns, selected_aliases,
+):
+    sql = _feature_roster_upsert_sql(target_columns=columns)
+    select_clause = sql.split("FROM guarded_source sc", 1)[0].rsplit("SELECT", 1)[-1]
+    assert all(f"sc.{name}" in select_clause for name in ("game_id", "team_id", "player_id"))
+    assert all(f"sc.{name}" in select_clause for name in selected_aliases)
+    for name in {"active_flag", "line_role", "pp_unit"} - set(selected_aliases):
+        assert f"sc.{name}" not in select_clause
+    assert "SELECT *" not in sql.upper()
+    assert "checked.active_flag, checked.line_role, checked.pp_unit" in sql
+    assert "n.active_flag, n.line_role, n.pp_unit" in sql
 
 
 def test_null_fallback_roles_preserve_existing_nonnull_roles():

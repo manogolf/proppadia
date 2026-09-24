@@ -562,6 +562,88 @@ def _feature_roster_source_sql() -> str:
     """
 
 
+def _feature_roster_upsert_sql(*, target_columns: Iterable[str]) -> str:
+    """Build the complete feature-fallback UPSERT with structural CTE separators."""
+    target_columns = frozenset(target_columns)
+    insert_cols, select_cols, update_set = _roster_status_upsert_parts(
+        target_columns=target_columns,
+        source_alias="sc",
+    )
+    conflict_predicate = _roster_conflict_predicate(target_columns, "checked")
+    on_conflict = _on_conflict_sql(update_set)
+    source_sql = _feature_roster_source_sql().strip()
+    ctes = [
+        f"""source_rows AS (
+{source_sql}
+)""",
+        """source_validation AS (
+  SELECT CAST(
+    CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_NATURAL_KEY_INVALID' END
+    AS integer
+  ) AS ok
+  FROM source_rows
+  WHERE game_id IS NULL OR team_id IS NULL OR player_id IS NULL
+)""",
+        """normalized AS (
+  SELECT game_id, team_id, player_id,
+         TRUE::boolean AS active_flag,
+         NULL::text AS line_role,
+         NULL::text AS pp_unit
+  FROM source_rows
+  CROSS JOIN source_validation validation
+  WHERE validation.ok = 1
+  GROUP BY game_id, team_id, player_id
+)""",
+        """src_checked AS (
+  SELECT n.game_id, n.team_id, n.player_id,
+         n.active_flag, n.line_role, n.pp_unit
+  FROM normalized n
+  JOIN nhl.players p ON p.player_id = n.player_id  -- FK guard
+)""",
+        f"""protected_conflicts AS (
+  SELECT checked.game_id, checked.team_id, checked.player_id
+  FROM src_checked checked
+  JOIN nhl.roster_status existing USING (game_id, team_id, player_id)
+  WHERE {conflict_predicate}
+)""",
+        """conflict_guard AS (
+  SELECT CAST(
+    CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_PROTECTED_CONFLICT' END
+    AS integer
+  ) AS ok
+  FROM protected_conflicts
+)""",
+        """guarded_source AS (
+  SELECT checked.game_id, checked.team_id, checked.player_id,
+         checked.active_flag, checked.line_role, checked.pp_unit
+  FROM src_checked checked
+  CROSS JOIN conflict_guard guard
+  WHERE guard.ok = 1
+)""",
+        f"""upserted AS (
+  INSERT INTO nhl.roster_status (
+    {insert_cols}
+  )
+  SELECT
+    {select_cols}
+  FROM guarded_source sc
+  {on_conflict}
+  RETURNING game_id
+)""",
+    ]
+    final_statement = """SELECT
+  (SELECT COUNT(*)::int FROM source_rows) AS source_rows,
+  (SELECT COUNT(*)::int FROM normalized) AS unique_identities,
+  (
+    (SELECT COUNT(*)::int FROM source_rows)
+    - (SELECT COUNT(*)::int FROM normalized)
+  ) AS exact_rows_collapsed,
+  0::int AS complementary_groups_merged,
+  0::int AS conflicting_groups_rejected,
+  (SELECT COUNT(*)::int FROM upserted) AS roster_status_upsert_rows;"""
+    return "WITH " + ",\n".join(ctes) + "\n" + final_statement
+
+
 def upsert_roster_status_from_features(
     cur, slate_date: str, *, target_columns: Iterable[str] | None = None,
 ) -> dict[str, int]:
@@ -569,81 +651,11 @@ def upsert_roster_status_from_features(
     target_columns = (
         frozenset(target_columns) if target_columns is not None else roster_status_columns(cur)
     )
-    insert_cols, select_cols, update_set = _roster_status_upsert_parts(
-        target_columns=target_columns,
-        source_alias="sc",
-    )
-    source_sql = _feature_roster_source_sql()
     source_params = (slate_date, slate_date, slate_date, slate_date)
-    conflict_predicate = _roster_conflict_predicate(target_columns, "checked")
-    on_conflict = _on_conflict_sql(update_set)
-    cur.execute(f"""
-    WITH source_rows AS ({source_sql}),
-    source_validation AS (
-      SELECT CAST(
-        CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_NATURAL_KEY_INVALID' END
-        AS integer
-      ) AS ok
-      FROM source_rows
-      WHERE game_id IS NULL OR team_id IS NULL OR player_id IS NULL
-    ),
-    normalized AS (
-      SELECT game_id, team_id, player_id,
-             TRUE::boolean AS active_flag,
-             NULL::text AS line_role,
-             NULL::text AS pp_unit
-      FROM source_rows
-      CROSS JOIN source_validation validation
-      WHERE validation.ok = 1
-      GROUP BY game_id, team_id, player_id
-    ),
-    src_checked AS (
-      SELECT n.game_id, n.team_id, n.player_id,
-             n.active_flag, n.line_role, n.pp_unit
-      FROM normalized n
-      JOIN nhl.players p ON p.player_id = n.player_id  -- FK guard
-    ),
-    protected_conflicts AS (
-      SELECT checked.game_id, checked.team_id, checked.player_id
-      FROM src_checked checked
-      JOIN nhl.roster_status existing USING (game_id, team_id, player_id)
-      WHERE {conflict_predicate}
-    ),
-    conflict_guard AS (
-      SELECT CAST(
-        CASE WHEN COUNT(*) = 0 THEN '1' ELSE 'ROSTER_STATUS_PROTECTED_CONFLICT' END
-        AS integer
-      ) AS ok
-      FROM protected_conflicts
-    ),
-    guarded_source AS (
-      SELECT checked.game_id, checked.team_id, checked.player_id,
-             checked.active_flag, checked.line_role, checked.pp_unit
-      FROM src_checked checked
-      CROSS JOIN conflict_guard guard
-      WHERE guard.ok = 1
+    cur.execute(
+        _feature_roster_upsert_sql(target_columns=target_columns),
+        source_params,
     )
-    upserted AS (
-      INSERT INTO nhl.roster_status (
-        {insert_cols}
-      )
-      SELECT
-        {select_cols}
-      FROM guarded_source sc
-      {on_conflict}
-      RETURNING game_id
-    )
-    SELECT
-      (SELECT COUNT(*)::int FROM source_rows) AS source_rows,
-      (SELECT COUNT(*)::int FROM normalized) AS unique_identities,
-      (
-        (SELECT COUNT(*)::int FROM source_rows)
-        - (SELECT COUNT(*)::int FROM normalized)
-      ) AS exact_rows_collapsed,
-      0::int AS complementary_groups_merged,
-      0::int AS conflicting_groups_rejected,
-      (SELECT COUNT(*)::int FROM upserted) AS roster_status_upsert_rows;
-    """, source_params)
     row = cur.fetchone()
     if row is None:
         raise RuntimeError("ROSTER_FEATURE_NORMALIZATION_COUNTS_MISSING")
