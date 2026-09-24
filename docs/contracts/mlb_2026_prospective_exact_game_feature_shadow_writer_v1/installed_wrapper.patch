@@ -1,0 +1,15 @@
+--- a/proppadia_mlb_refresh_daily.sh
++++ b/proppadia_mlb_refresh_daily.sh
+@@ -1164,0 +1165,12 @@
++# Prospective exact-player/game feature-state shadow. This runs at the earliest
++# safe natural boundary: current-run schedule and roster inputs exist, while
++# BvP, stat-derived refresh, predictions-wide, and player scoring have not run.
++# It owns no production barrier or consumer; a visible failure stays lane-local.
++set +e
++bin/mlb_exact_game_feature_shadow_daily_hook.sh "$MLB_DATE_ET" "$MLB_RUN_TAG" \
++  "$MLB_WRAPPER_RUN_STARTED_AT_UTC"
++MLB_EXACT_GAME_SHADOW_RC=$?
++set -e
++if [[ "$MLB_EXACT_GAME_SHADOW_RC" -ne 0 ]]; then
++  echo "[$(date -u +%FT%TZ)] WARN exact-game feature shadow failed rc=${MLB_EXACT_GAME_SHADOW_RC}; production stages continue without shadow fallback" >&2
++fi

@@ -1,0 +1,34 @@
+{
+  "contract": "MLB_2026_PROSPECTIVE_EXACT_GAME_FEATURE_SHADOW_WRITER_V1",
+  "validated_at_utc": "2026-09-24T19:03:08Z",
+  "required_ancestry": {
+    "ba114f341491bf4d832463b91717b9ee7b98d78f": "PASS",
+    "eba0964f3647a71db86d861a80ddc2eab8f72723": "PASS",
+    "729e463d02201993fd3b3fd8386c049c853da610": "PASS"
+  },
+  "focused_and_regression_tests": {
+    "command": "PYTHONPATH=. pytest -q backend/mlb/tests/test_mlb_prospective_exact_game_feature_shadow_writer_v1.py backend/mlb/tests/test_mlb_exact_game_stat_derived_foundation_v1.py backend/mlb/tests/test_bvp_inline_daily.py backend/mlb/tests/test_mlb_moneyline_postponed_rescheduled_finality_v1.py backend/tests/test_mlb_stat_derived_degraded_stage_containment_v1.py",
+    "passed": 138,
+    "failed": 0,
+    "skipped": 0
+  },
+  "offline_validator": "PASS",
+  "canonical_compileall": "PASS",
+  "hook_syntax": "PASS",
+  "installed_wrapper_syntax": "PASS",
+  "git_diff_check": "PASS",
+  "read_only_database_verification": {
+    "transaction": "REPEATABLE READ READ ONLY",
+    "migration_relation": "NOT_APPLIED",
+    "player_stats_rows_game_824785": 49,
+    "player_derived_stats_rows_game_824785": 49,
+    "model_training_props_rows_game_824785": 188,
+    "expected_pinned_counts": [49, 49, 188],
+    "result": "UNCHANGED"
+  },
+  "manual_wrapper_runs": 0,
+  "provider_api_requests": 0,
+  "paid_credits": 0,
+  "database_writes": 0,
+  "generated_daily_shadow_evidence": 0
+}

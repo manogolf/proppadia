@@ -1,0 +1,35 @@
+{
+  "contract": "MLB_2026_PROSPECTIVE_EXACT_GAME_FEATURE_SHADOW_WRITER_V1",
+  "installed_wrapper": {
+    "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+    "pre_change_sha256": "09d236d57eeff4576c97eac06c9fb8ad60a24f41e1091e1c3dccea6ead73faef",
+    "post_change_sha256": "3f642baa92a7350b6fae9beeaaba3c26f425b90a688b36795f5258f00be520d2",
+    "change_scope": "one nonblocking shadow hook after roster refresh and before BvP"
+  },
+  "unchanged_existing_surfaces": {
+    "bin/mlb_public_game_moneyline_daily_hook.sh": "ee238957420e6f4b76f7e42418fcb3568c0176cae4f2683c4d2800f688816196",
+    "bin/mlb_bvp_inline_daily_hook.sh": "210420b14cb8041f6c0e89a87041d8c33242a0eb80671100096e582827f4f782",
+    "bin/mlb_predictions_wide_guarded.sh": "61b54c80c943378952e5cc52d3eec1f4c14a8a13b0a4a415860ccd22cdeeb3a3",
+    "backend/mlb/scripts/insert_mlb_stat_derived.py": "670b63d05884dc9eac05cd06b65420c2c6afa1d7ecd312ec3a38bc2ed802e8dd",
+    "backend/mlb/scripts/contain_mlb_stat_derived_failure.py": "1013a685d8c4f26948d46f58895fd366329d5dae6422ff24ae67845d8286b47b",
+    "backend/mlb/season_transition/authority_snapshots/active_selection.json": "c8ffefdb52e76702f6fa4370fee04e402b4cc06f44f1ed680695c904de954356",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist": "a4600884c9a2fd438fb70efa0a615559d33aa8d150dd714e243c95dec4bf26e8"
+  },
+  "production_consumer_search": {
+    "shadow_output_readers": 0,
+    "only_operational_reference": "bin/mlb_exact_game_feature_shadow_daily_hook.sh producer",
+    "production_barriers_satisfied": 0
+  },
+  "effects": {
+    "legacy_data": "NONE",
+    "moneyline": "NONE",
+    "stat_derived_containment": "NONE",
+    "scheduler": "NONE",
+    "model_and_prediction_artifacts": "NONE",
+    "request_and_credit_behavior": "ZERO",
+    "prediction_quality": "NONE",
+    "market_comparison": "NONE",
+    "hypothetical_roi": "NONE"
+  },
+  "separate_unresolved_boundary": "OFFICIAL_FINAL_SOURCE_COUNT_824462_2"
+}

@@ -1,0 +1,70 @@
+{
+  "contract": "MLB_2026_PROSPECTIVE_EXACT_GAME_FEATURE_SHADOW_WRITER_V1",
+  "version": 1,
+  "feature_contract": "MLB_PLAYER_GAME_FEATURE_STATE_V1",
+  "activation_boundary": "AFTER_SUCCESSFUL_ROSTER_REFRESH_BEFORE_BVP_AND_STAT_DERIVED",
+  "supported_phases": ["REGULAR_SEASON", "POSTSEASON"],
+  "identity": ["player_id", "game_pk", "contract_version"],
+  "input_cutoff": "DATABASE_STATEMENT_TIMESTAMP_ESTABLISHING_REPEATABLE_READ_READ_ONLY_SNAPSHOT",
+  "database_transaction": {
+    "isolation": "REPEATABLE READ",
+    "read_only": true,
+    "transaction_id_requested": false,
+    "writes": 0
+  },
+  "storage": {
+    "backend": "IMMUTABLE_CREATE_ONLY_FILE_BACKEND_V1",
+    "root": "artifacts/ops/mlb_exact_game_feature_shadow_v1",
+    "latest_pointer": false,
+    "database_backend": false,
+    "permissions": {"directory": "0700", "file": "0600"}
+  },
+  "admission": {
+    "exact_game_pk_required": true,
+    "exact_player_id_required": true,
+    "scheduled_start_after_cutoff_required": true,
+    "all_observations_at_or_before_cutoff_required": true,
+    "doubleheader_games_separate": true,
+    "date_only_identity_forbidden": true,
+    "max_game_id_forbidden": true,
+    "legacy_daily_aggregate_fallback_forbidden": true,
+    "missing_historical_cutoff_fallback_forbidden": true
+  },
+  "rejection_reason_contract": {
+    "row_reasons": [
+      "TARGET_GAME_IDENTITY_INVALID",
+      "NON_PLAYABLE_SCHEDULE_STATUS",
+      "TARGET_NOT_PREGAME",
+      "TARGET_GAME_STARTED_AT_OR_BEFORE_CUTOFF",
+      "CANONICAL_PHASE_AUTHORITY_REJECTED",
+      "CANONICAL_PHASE_AUTHORITY_CONFLICT",
+      "UNSUPPORTED_TARGET_PHASE",
+      "EXACT_ACTIVE_ROSTER_MISSING",
+      "SOURCE_OBSERVATION_TIME_MISSING",
+      "SOURCE_OBSERVED_POST_CUTOFF",
+      "IMMUTABLE_FEATURE_INPUT_CUTOFF_NOT_RETAINED",
+      "FEATURE_INPUT_CUTOFF_POST_START"
+    ],
+    "hard_fail_conflicts": [
+      "DUPLICATE_EXACT_IDENTITY_CONFLICTING_PAYLOAD",
+      "DUPLICATE_EXACT_TARGET_CONFLICT",
+      "IMMUTABLE_RUN_IDENTITY_CONFLICT",
+      "CURRENT_RUN_IMMUTABLE_SCHEDULE_SOURCE_NOT_UNIQUE"
+    ],
+    "historical_fact_summary_reasons": [
+      "HISTORICAL_GAME_NOT_PLAYABLE_TERMINAL_AT_CUTOFF",
+      "UNSUPPORTED_HISTORICAL_PHASE",
+      "SOURCE_OBSERVATION_TIME_MISSING",
+      "SOURCE_OBSERVED_POST_CUTOFF"
+    ]
+  },
+  "production": {
+    "shadow_only": true,
+    "consumers": [],
+    "barrier": false,
+    "publication": false,
+    "wagering": false,
+    "network_requests": 0,
+    "paid_credits": 0
+  }
+}
