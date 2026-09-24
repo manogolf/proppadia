@@ -48,6 +48,27 @@ Step 2. Run NHL daily pipeline.
 .venv/bin/python -m backend.nhl.cli daily --with-odds
 ```
 
+This is the canonical comprehensive runner. `bin/nhl_ops.sh daily` is its
+wrapper. Git retains removed `backend/nhl/scripts/nhl_all.sh`; the reported
+historical `backend/nhl/scripts/cli.py` has no retained tracked Git object.
+Neither is an independent current implementation.
+Operational slate dates use Pacific Time. Omit `--with-odds` for an explicitly
+odds-free run; no provider request is made in that case. An explicit phase can
+be supplied with `--odds-phase EARLY`, `REFRESH`, or `FINAL_PREGAME`.
+
+Prediction artifacts are made durable before the optional odds observation.
+Odds evidence is append-only under
+`artifacts/operational/nhl/odds_observations/`; mutable files under
+`nhl/site/data/` are compatibility derivatives only. Valid-empty and unmatched
+market responses do not block the run. Provider or malformed-response failures
+produce `READY_WITH_ODDS_WARNING` while retaining independent predictions.
+Roster evidence is stored separately under
+`artifacts/operational/nhl/roster_observations/`.
+
+The first-puck-aware EARLY/REFRESH/FINAL_PREGAME planner is provisional and
+not attached to a LaunchAgent or scheduler. See
+`docs/NHL Comprehensive Daily Capture Contract V1.md`.
+
 Daily archive note:
 - Copies per-slate artifacts into `backend/nhl/exports/odds_history/YYYY-MM-DD/`.
 - Includes `sog_with_market.csv` and raw prediction snapshots (`sog_predictions_wide_calibrated.csv`, plus shadow file when present).

@@ -6,13 +6,13 @@ Inputs
 ------
 --pred       backend/nhl/data/processed/saves_predictions.csv   (wide: p_over_18.5,...)
 --names      exports/train_goalie_saves_v2.csv                  (has full_name, game_date, ids)
---odds-json  nhl/site/data/odds_latest.json                     (optional but recommended)
+--odds-json  explicit immutable observation raw_response.json   (optional)
 --out        nhl/site/data/saves_with_market.csv
 --unmatched  nhl/site/data/unmatched_saves.csv
 
 Env
 ---
-SLATE_DATE=YYYY-MM-DD  (required; Eastern Time date)
+SLATE_DATE=YYYY-MM-DD  (required; Pacific operational date)
 
 Output columns:
 full_name, player_id, game_id, team_id, line, p_over,
@@ -77,7 +77,9 @@ def read_csv_required(path: Path) -> pd.DataFrame:
         die(f"failed reading CSV {path}: {e}")
 
 def load_odds_json(path: Path | None) -> list | dict | None:
-    for p in [path, Path("nhl/site/data/odds_nhl_playerprops_today.json"), Path("nhl/site/data/odds_latest.json")]:
+    # Explicit run-bound input only; mutable compatibility files must never be
+    # an implicit fallback for a new prediction run.
+    for p in ([path] if path is not None else []):
         if p and p.exists():
             try:
                 return json.loads(p.read_text())
@@ -168,7 +170,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pred", required=True)
     ap.add_argument("--names", required=True)
-    ap.add_argument("--odds-json", default="nhl/site/data/odds_latest.json")
+    ap.add_argument("--odds-json", default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--unmatched", required=True)
     args = ap.parse_args()

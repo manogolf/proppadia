@@ -35,6 +35,27 @@ Points preserves every frozen model output, applies the existing ladder gate, an
 
 The installed 900-second observer invokes Points, Saves, and SOG prediction-only lanes before consulting the market-readiness gate. A lane failure is WARN-only and isolated. It cannot create or retry a paid request.
 
+## Comprehensive daily runner integration
+
+The operator-facing comprehensive path remains:
+
+```sh
+.venv/bin/python -m backend.nhl.cli daily --with-odds
+```
+
+Its schedule, roster, feature, and prediction stages are independent of odds.
+Predictions are made durable before the optional governed odds observation and
+market attachment. Omitting `--with-odds` makes no odds-provider request. A
+successful empty or unmatched market observation cannot suppress or erase
+Points, Saves, or SOG outputs, and each market builder accepts only the
+explicit run-bound immutable observation rather than falling back to mutable
+`latest` data.
+
+The append-only odds/roster evidence contracts and the unactivated
+first-puck-aware phase planner are defined in
+`NHL Comprehensive Daily Capture Contract V1.md`. Nothing in that contract
+changes the installed 900-second observer or activates a schedule.
+
 ## Postgame immutable-source binding
 
 Postgame reconciliation resolves existing immutable operational artifacts in

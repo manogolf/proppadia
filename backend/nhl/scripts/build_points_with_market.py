@@ -121,7 +121,8 @@ def melt_preds(pred: pd.DataFrame) -> pd.DataFrame:
     return long
 
 def load_odds_json(path: Path | None):
-    for p in [path, Path("nhl/site/data/odds_nhl_playerprops_today.json"), Path("nhl/site/data/odds_latest.json")]:
+    # Explicit run-bound input only; no stale mutable compatibility fallback.
+    for p in ([path] if path is not None else []):
         if p and p.exists():
             try:
                 return json.loads(p.read_text())
@@ -181,7 +182,7 @@ def main():
     ap = argparse.ArgumentParser(description="Build NHL Points site CSV with market (odds-only or predictions merge).")
     ap.add_argument("--pred", help="backend/nhl/data/processed/points_predictions.csv (optional)")
     ap.add_argument("--names", help="backend/nhl/exports/names_<SLATE>.csv (optional; produced by cli.py export_names_csv)")
-    ap.add_argument("--odds-json", default="nhl/site/data/odds_latest.json", help="odds json path")
+    ap.add_argument("--odds-json", default=None, help="run-bound odds json path")
     ap.add_argument("--events-json", default="", help="(ignored; compat flag)")
     ap.add_argument("--out", required=True, help="output CSV for site: nhl/site/data/points_with_market.csv")
     ap.add_argument("--unmatched", required=True, help="output CSV: unmatched rows when merging preds↔odds")

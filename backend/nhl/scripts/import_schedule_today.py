@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Import NHL schedule for SLATE_DATE (ET) into staging and merge.
+Import NHL schedule for the Pacific SLATE_DATE into staging and merge.
 - Endpoint: https://api-web.nhle.com/v1/schedule/YYYY-MM-DD
-- Interprets the day in America/New_York (ET).
+- Interprets the operational day in America/Los_Angeles.
 - Self-heals: upserts real team rows into nhl.teams and seeds nhl.team_external_ids.
 """
 
@@ -28,8 +28,8 @@ import psycopg
 
 from backend.nhl.official_request_journal import RequestContext, official_get
 
-ET = ZoneInfo("America/New_York")
-DATE = os.getenv("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
+PACIFIC = ZoneInfo("America/Los_Angeles")
+DATE = os.getenv("SLATE_DATE") or dt.datetime.now(PACIFIC).date().isoformat()
 
 DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
 if not DB:
@@ -59,16 +59,16 @@ def _session() -> requests.Session:
     s.mount("https://", HTTPAdapter(max_retries=retry))
     return s
 
-def _to_et_date(iso_utc: str) -> str | None:
+def _to_operational_date(iso_utc: str) -> str | None:
     if not iso_utc:
         return None
     try:
-        return dt.datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(ET).date().isoformat()
+        return dt.datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(PACIFIC).date().isoformat()
     except Exception:
         return None
 
 def fetch_schedule_for_date(date_str: str) -> list[dict]:
-    """Fetch the schedule and keep only games whose start time falls on date_str in ET."""
+    """Keep only games whose start time falls on the Pacific slate date."""
     s = _session()
     candidates = [
         f"{BASE_URL}/{date_str}",
@@ -118,7 +118,7 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
         games_in = data["data"]
         for g in games_in:
             start_iso = g.get("startTimeUTC") or g.get("gameDate")
-            if _to_et_date(start_iso) != date_str:
+            if _to_operational_date(start_iso) != date_str:
                 continue
             gid = g.get("gameId") or g.get("id")
             if gid in seen: 
@@ -134,7 +134,7 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
     else:
         for g in games_in:
             start_iso = g.get("startTimeUTC") or g.get("gameDate")
-            if _to_et_date(start_iso) != date_str:
+            if _to_operational_date(start_iso) != date_str:
                 continue
             gid = g.get("id") or g.get("gamePk") or g.get("gameId")
             if gid in seen:
@@ -419,7 +419,7 @@ def main():
         raise
     if not games:
         health_path = _write_slate_health(DATE, games, "VALID_EMPTY_SLATE", True)
-        print(f"ℹ️ No NHL games for {DATE} (ET)")
+        print(f"ℹ️ No NHL games for {DATE} (PT)")
         print(f"✅ Slate health: {health_path}")
         return
 
@@ -500,7 +500,7 @@ def main():
 
             payload.append({
                 "game_id": gid,
-                "game_date": str(DATE),              # ET date key you’re using
+                "game_date": str(DATE),              # Pacific operational date
                 "start_time_utc": start_iso,         # ISO string
                 "season": season,
                 "game_type": game_type,
@@ -575,7 +575,7 @@ def main():
 
         conn.commit()
         health_path = _write_slate_health(DATE, games, "READY", True)
-        print(f"✅ Upserted {rows} games for {DATE} (ET) (no stage tables)")
+        print(f"✅ Upserted {rows} games for {DATE} (PT) (no stage tables)")
         print(f"✅ Slate health: {health_path}")
 
 

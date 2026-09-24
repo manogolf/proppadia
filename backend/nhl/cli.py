@@ -10,7 +10,7 @@ Commands:
   build-points Build nhl/site/data/points_with_market.csv from latest predictions + odds.
 
 Conventions:
-  - All dates are Eastern Time (ET).
+  - Operational slate dates use America/Los_Angeles.
   - Artifacts:
       exports/                             (SQL exports consumed by models)
       backend/nhl/data/processed/          (model outputs)
@@ -36,9 +36,17 @@ from pathlib import Path
 import pandas as pd
 from typing import Any, Optional, Sequence, Union
 from datetime import datetime, timedelta, timezone
-import requests
 import re
 import psycopg
+import uuid
+
+from backend.nhl.daily_capture import (
+    PHASES,
+    OddsObservationResult,
+    RequestsOddsProvider,
+    capture_odds_observation,
+    load_canonical_slate,
+)
 
 
 # ---------- bootstrap env ----------
@@ -86,6 +94,20 @@ SOG_RECONCILE_MONTHLY_JSON = TMP_DIR / "nhl_sog_base_vs_betonline_monthly.json"
 SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_monthly_publishable.csv"
 SOG_RECONCILE_ROWS_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_rows.csv"
 SOG_RESIDUAL_DATASET_DEFAULT_CSV = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_season_2025.csv"
+ODDS_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "odds_observations"
+ROSTER_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "roster_observations"
+
+DAILY_EXECUTION_GRAPH = (
+    "DATABASE_SANITY",
+    "FULL_LEAGUE_ROSTER_REFRESH",
+    "PRIOR_DATE_OUTCOME_FINALIZATION",
+    "CANONICAL_SCHEDULE_AND_SLATE_VALIDATION",
+    "SLATE_ROSTER_CAPTURE_AND_NORMALIZATION",
+    "FEATURE_AND_PREDICTION_DURABILITY",
+    "OPTIONAL_GOVERNED_ODDS_OBSERVATION",
+    "OPTIONAL_MARKET_ATTACHMENT",
+    "RESEARCH_REFRESH_ARCHIVE_AND_INTEGRITY",
+)
 
 for d in (
     SITE_DIR,
@@ -99,7 +121,9 @@ for d in (
     d.mkdir(parents=True, exist_ok=True)
 
 
-def archive_site_artifacts(slate: str) -> None:
+def archive_site_artifacts(
+    slate: str, *, odds_result: OddsObservationResult | None = None,
+) -> None:
     archive_dir = EXPORTS_ODDS_HISTORY_DIR / slate
     archive_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,9 +136,6 @@ def archive_site_artifacts(slate: str) -> None:
         SITE_DIR / "unmatched_saves.csv",
         SITE_DIR / "points_with_market.csv",
         SITE_DIR / "unmatched_points.csv",
-        SITE_DIR / "odds_latest.json",
-        SITE_DIR / "odds_nhl_playerprops_today.json",
-        SITE_DIR / "events_today.json",
         PROC_DIR / "sog_predictions_wide_calibrated.csv",
         PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv",
         SOG_RECONCILE_MONTHLY_CSV,
@@ -122,6 +143,14 @@ def archive_site_artifacts(slate: str) -> None:
         SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV,
         SOG_RECONCILE_ROWS_CSV,
     ]
+    if odds_result is not None and odds_result.classification.startswith("CAPTURED_"):
+        artifacts.extend([
+            SITE_DIR / "odds_nhl_playerprops_today.json",
+            SITE_DIR / "events_today.json",
+            SITE_DIR / "odds_observation_latest.json",
+        ])
+        if odds_result.classification in {"CAPTURED_NONEMPTY", "CAPTURED_UNMATCHED"}:
+            artifacts.append(SITE_DIR / "odds_latest.json")
     copied: list[str] = []
 
     for src in artifacts:
@@ -188,26 +217,27 @@ def refresh_sog_residual_dataset(*, slate: str) -> None:
         cmd.extend(["--from-date", from_date])
     run(cmd)
 
-# ---------- time helpers (ET) ----------
+# ---------- time helpers (Pacific operational boundary) ----------
+
+def pt_today() -> str:
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
+
+
+def pt_yesterday() -> str:
+    from zoneinfo import ZoneInfo
+    return (datetime.now(ZoneInfo("America/Los_Angeles")) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 def et_today() -> str:
-    try:
-        from zoneinfo import ZoneInfo
-        et = ZoneInfo("America/New_York")
-    except Exception:
-        et = timezone(timedelta(hours=-5))
-    return datetime.now(et).strftime("%Y-%m-%d")
+    """Compatibility alias; NHL operational dates are now Pacific."""
+    return pt_today()
 
 def et_yesterday() -> str:
-    try:
-        from zoneinfo import ZoneInfo
-        et = ZoneInfo("America/New_York")
-        return (datetime.now(et) - timedelta(days=1)).strftime("%Y-%m-%d")
-    except Exception:
-        return (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    """Compatibility alias; NHL operational dates are now Pacific."""
+    return pt_yesterday()
     
 def infer_nhl_season_from_date_yyyy_mm_dd(date_str: str) -> int:
-    # NHL season naming: season is the year the season starts (e.g., 2025-26 => 2025)
+    # NHL season naming is the single starting year.
     y, m, d = (int(x) for x in date_str.split("-"))
     return y if m >= 9 else (y - 1)
 
@@ -688,11 +718,6 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
     run(["psql", db, "--no-psqlrc", "-v", "ON_ERROR_STOP=1", "-c", sql])
     print("✅ SOG rollups refreshed.")
 
-def safe_json(obj, path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2))
-
-
 def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
     """
     Export Denali SOG features for a given slate_date into a CSV used by the SOG scorer.
@@ -843,237 +868,78 @@ def export_names_csv(slate: str) -> Path:
 
 # ---------- odds fetch ----------
 
+
 def fetch_odds(
     days_from: int = 1,
     markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
     regions: str = "us,us2",
     odds_format: str = "american",
-    out_latest: Path = SITE_DIR / "odds_latest.json",
-    out_today: Path = SITE_DIR / "odds_nhl_playerprops_today.json",
-):
-    def _market_chunks(markets_csv: str) -> list[str]:
-        toks = [m.strip() for m in str(markets_csv).split(",") if m.strip()]
-        if not toks:
-            raw = str(markets_csv).strip()
-            return [raw] if raw else []
-        primary = "player_shots_on_goal"
-        alternate = "player_shots_on_goal_alternate"
-        chunks: list[list[str]] = []
-        if primary in toks:
-            chunks.append([primary])
-        if alternate in toks:
-            chunks.append([alternate])
-        rest = [m for m in toks if m not in {primary, alternate}]
-        if rest:
-            chunks.append(rest)
-        if not chunks:
-            chunks = [toks]
-        return [",".join(c) for c in chunks]
-
-    def _merge_event_payload(base_payload: dict, next_payload: dict) -> dict:
-        out = dict(base_payload)
-        base_books = out.get("bookmakers")
-        next_books = next_payload.get("bookmakers")
-        if not isinstance(base_books, list) or not isinstance(next_books, list):
-            return out
-
-        def _book_key(book_obj: dict) -> str:
-            return str(book_obj.get("key") or "").strip()
-
-        by_key: dict[str, dict] = {}
-        ordered_books: list[dict] = []
-        for book in base_books:
-            if not isinstance(book, dict):
-                continue
-            key = _book_key(book)
-            if not key:
-                continue
-            cp = dict(book)
-            markets_list = cp.get("markets")
-            cp["markets"] = list(markets_list) if isinstance(markets_list, list) else []
-            by_key[key] = cp
-            ordered_books.append(cp)
-
-        for book in next_books:
-            if not isinstance(book, dict):
-                continue
-            key = _book_key(book)
-            if not key:
-                continue
-            if key not in by_key:
-                cp = dict(book)
-                markets_list = cp.get("markets")
-                cp["markets"] = list(markets_list) if isinstance(markets_list, list) else []
-                by_key[key] = cp
-                ordered_books.append(cp)
-                continue
-
-            existing = by_key[key]
-            ex_markets = existing.get("markets")
-            if not isinstance(ex_markets, list):
-                ex_markets = []
-                existing["markets"] = ex_markets
-            for m in book.get("markets", []) if isinstance(book.get("markets"), list) else []:
-                if isinstance(m, dict):
-                    ex_markets.append(m)
-
-        out["bookmakers"] = ordered_books
-        return out
-
-    key = os.environ.get("ODDS_API_KEY", "").strip()
-    print(f"[fetch_odds] Using ODDS_API_KEY starting with: {key[:8]!r}")
-    if not key:
-        print("⚠️  ODDS_API_KEY not set — writing empty odds files.")
-        safe_json([], out_today)
-        try:
-            out_latest.write_text(out_today.read_text())
-        except Exception:
-            pass
-        return
-
-    base = "https://api.the-odds-api.com/v4/sports/icehockey_nhl"
-
-    # 1) Fetch events
-    ev_url = f"{base}/events?dateFormat=iso&daysFrom={days_from}&apiKey={key}"
-    print(f"→ Fetching events (daysFrom={days_from}) … {ev_url}")
-    try:
-        r = requests.get(ev_url, timeout=30)
-        print(f"   events status={r.status_code}")
-        r.raise_for_status()
-    except Exception as e:
-        print(f"❌ Failed to fetch events from The Odds API: {e}")
-        safe_json([], out_today)
-        try:
-            out_latest.write_text(out_today.read_text())
-        except Exception:
-            pass
-        return
-
-    try:
-        events = r.json()
-    except Exception as e:
-        print(f"❌ Failed to parse events JSON: {e}")
-        safe_json([], out_today)
-        try:
-            out_latest.write_text(out_today.read_text())
-        except Exception:
-            pass
-        return
-
-    if not isinstance(events, list):
-        print(f"❌ Unexpected events payload type: {type(events)}; writing empty odds.")
-        safe_json([], out_today)
-        try:
-            out_latest.write_text(out_today.read_text())
-        except Exception:
-            pass
-        return
-
-    (SITE_DIR / "events_today.json").write_text(json.dumps(events))
-    print(f"   events_today.json → {len(events)} events")
-
-    # 2) Fetch player props per event
-    market_chunks = _market_chunks(markets)
-    print(f"→ Fetching player props (markets={markets}, regions={regions}) …")
-    print(f"   market call groups: {market_chunks}")
-    all_event_odds: list[dict] = []
-    ok_count = 0
-    fail_no_id = 0
-    fail_http = 0
-    fail_chunks = 0
-
-    for ev in events:
-        eid = ev.get("id")
-        home = ev.get("home_team") or ev.get("homeTeam")
-        away = ev.get("away_team") or ev.get("awayTeam")
-
-        if not eid:
-            fail_no_id += 1
-            print(f"   ⚠️  Event missing id; home={home}, away={away} → appending empty dict")
-            all_event_odds.append({})
-            continue
-
-        merged_event: dict[str, Any] | None = None
-        event_ok = False
-
-        for chunk_idx, chunk_markets in enumerate(market_chunks, start=1):
-            url = (
-                f"{base}/events/{eid}/odds"
-                f"?regions={regions}&markets={chunk_markets}&oddsFormat={odds_format}&apiKey={key}"
-            )
-            last_status = None
-            last_text = None
-            chunk_success = False
-
-            for attempt in (1, 2, 3):
-                try:
-                    rr = requests.get(url, timeout=30)
-                    last_status = rr.status_code
-                    if rr.ok:
-                        try:
-                            j = rr.json()
-                            if isinstance(j, dict):
-                                if merged_event is None:
-                                    merged_event = j
-                                else:
-                                    merged_event = _merge_event_payload(merged_event, j)
-                            chunk_success = True
-                            ok_count += 1
-                            event_ok = True
-                            break
-                        except Exception as e:
-                            print(
-                                f"   ❌ JSON parse error for event {eid} "
-                                f"(group {chunk_idx}/{len(market_chunks)}, attempt {attempt}): {e}"
-                            )
-                    else:
-                        last_text = rr.text[:200]
-                        print(
-                            f"   ⚠️  Odds request failed for event {eid} "
-                            f"(group {chunk_idx}/{len(market_chunks)}, attempt {attempt}) "
-                            f"status={rr.status_code}"
-                        )
-                except Exception as e:
-                    print(
-                        f"   ❌ Exception fetching odds for event {eid} "
-                        f"(group {chunk_idx}/{len(market_chunks)}, attempt {attempt}): {e}"
-                    )
-
-            if not chunk_success:
-                fail_chunks += 1
-                print(
-                    f"   ⚠️  Giving up on event {eid} group {chunk_idx}/{len(market_chunks)}; "
-                    f"last_status={last_status}, snippet={last_text!r}"
-                )
-
-        if not event_ok:
-            fail_http += 1
-            all_event_odds.append({})
-        else:
-            all_event_odds.append(merged_event if isinstance(merged_event, dict) else {})
-
-    # 3) Summary + write files
-    print(
-        f"✅ fetch_odds summary: events={len(events)}, "
-        f"success_chunks={ok_count}, failed_chunks={fail_chunks}, "
-        f"missing_id={fail_no_id}, event_fail={fail_http}"
+    *,
+    slate: str | None = None,
+    season: int | None = None,
+    phase: str = "EARLY",
+    parent_daily_run_id: str | None = None,
+    canonical_games=None,
+    observation_root: Path = ODDS_OBSERVATION_ROOT,
+    compatibility_dir: Path = SITE_DIR,
+) -> OddsObservationResult:
+    """Run one claimed odds observation for the comprehensive daily command."""
+    slate = slate or pt_today()
+    season = season if season is not None else infer_nhl_season_from_date_yyyy_mm_dd(slate)
+    phase = str(phase).upper()
+    if phase not in PHASES:
+        raise ValueError(f"unsupported odds phase: {phase}")
+    if canonical_games is None:
+        slate_root = ROOT / "artifacts" / "operational" / "nhl" / "slates" / slate
+        canonical_games = load_canonical_slate(
+            slate_date=slate,
+            raw_schedule_path=slate_root / "raw_schedule_response.json",
+            slate_health_path=slate_root / "slate_health.json",
+        )
+    parent_daily_run_id = parent_daily_run_id or (
+        f"nhldaily_{slate.replace('-', '')}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
     )
+    key = os.environ.get("ODDS_API_KEY", "").strip()
+    provider = RequestsOddsProvider(key) if key else None
+    result = capture_odds_observation(
+        root=observation_root,
+        season=season,
+        slate_date=slate,
+        phase=phase,
+        parent_daily_run_id=parent_daily_run_id,
+        canonical_games=canonical_games,
+        provider=provider,
+        authorized=bool(key),
+        compatibility_dir=compatibility_dir,
+        days_from=days_from,
+        markets=markets,
+        regions=regions,
+        odds_format=odds_format,
+    )
+    print(
+        f"ODDS_OBSERVATION classification={result.classification} "
+        f"path={result.observation_dir} replayed={str(result.replayed).lower()}"
+    )
+    return result
 
-    # If literally everything failed, prefer an empty array over [ {}, {}, ... ]
-    if ok_count == 0:
-        print("⚠️  No odds succeeded — writing [] instead of list of empty dicts.")
-        safe_json([], out_today)
-    else:
-        safe_json(all_event_odds, out_today)
 
-    try:
-        out_latest.write_text(out_today.read_text())
-    except Exception as e:
-        print(f"⚠️  Failed to mirror odds to odds_latest.json: {e}")
+def run_optional_odds_observation(*, with_odds: bool, **kwargs) -> OddsObservationResult | None:
+    """The single gate through which the comprehensive runner may acquire odds."""
+    return fetch_odds(**kwargs) if with_odds else None
+
+
+def daily_health_for_odds(*, requested: bool,
+                          result: OddsObservationResult | None) -> str:
+    if requested and result is not None and result.classification in {
+        "FAILED_PROVIDER", "FAILED_MALFORMED_RESPONSE", "SKIPPED_NO_AUTHORIZATION"
+    }:
+        return "READY_WITH_ODDS_WARNING"
+    return "READY"
 
 # ---------- builders (CSV for site) ----------
 
-def build_sog(slate: str):
+def build_sog(slate: str, *, odds_json: Path | None = None,
+              events_json: Path | None = None):
     # Always regenerate (or overwrite) names for this slate and use the returned path
     names_csv = export_names_csv(slate)
 
@@ -1098,18 +964,20 @@ def build_sog(slate: str):
     if not names_csv.exists() or names_csv.stat().st_size == 0:
         raise AssertionError(f"[build-sog] expected artifact missing/empty: {names_csv}")
 
-    run(
-        [
+    command = [
             PY,
             SCRIPTS_DIR / "build_sog_with_market.py",
             "--pred",       str(pred_path),
             "--names",      str(names_csv),
-            "--odds-json",  "nhl/site/data/odds_latest.json",
             "--out",        "nhl/site/data/sog_with_market.csv",
             "--unmatched",  "nhl/site/data/unmatched_sog.csv",
             "--slate-date", slate,
-        ],
-    )
+        ]
+    if odds_json is not None:
+        command.extend(["--odds-json", str(odds_json)])
+    if events_json is not None:
+        command.extend(["--events-json", str(events_json)])
+    run(command)
 
     # Postcondition: market merge must produce a non-empty output artifact
     out_csv = SITE_DIR / "sog_with_market.csv"
@@ -1121,34 +989,36 @@ def build_sog(slate: str):
         raise AssertionError(f"[build-sog] expected artifact missing/empty: {unmatched_csv}")
 
 
-def build_saves(slate: str):
+def build_saves(slate: str, *, odds_json: Path | None = None):
     # Ensure names exist (build_saves can be called standalone)
     names_csv = export_names_csv(slate)
 
     pred_path = PROC_DIR / "saves_predictions.csv"
-    run(
-        [
+    command = [
             PY,
             SCRIPTS_DIR / "build_saves_with_market.py",
             "--pred", pred_path,
             "--names", names_csv,
-            "--odds-json", SITE_DIR / "odds_latest.json",
             "--out", SITE_DIR / "saves_with_market.csv",
             "--unmatched", SITE_DIR / "unmatched_saves.csv",
-        ],
-        env={"SLATE_DATE": slate},
-    )
+        ]
+    if odds_json is not None:
+        command.extend(["--odds-json", odds_json])
+    run(command, env={"SLATE_DATE": slate})
 
 
-def build_points(slate: str):
+def build_points(slate: str, *, odds_json: Path | None = None,
+                 events_json: Path | None = None):
     args = [
         PY,
         SCRIPTS_DIR / "build_points_with_market.py",
-        "--odds-json",   SITE_DIR / "odds_latest.json",
-        "--events-json", SITE_DIR / "events_today.json",
         "--out",         SITE_DIR / "points_with_market.csv",
         "--unmatched",   SITE_DIR / "unmatched_points.csv",
     ]
+    if odds_json is not None:
+        args += ["--odds-json", odds_json]
+    if events_json is not None:
+        args += ["--events-json", events_json]
 
     pred_path = PROC_DIR / "points_predictions.csv"
     if pred_path.exists():
@@ -1164,8 +1034,18 @@ def build_points(slate: str):
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
-def cmd_daily(with_odds: bool, morning_only: bool = False):
+def cmd_daily(with_odds: bool, morning_only: bool = False,
+              odds_phase: str = "EARLY"):
     db = require_db_url()
+    odds_phase = str(odds_phase).upper()
+    if odds_phase not in PHASES:
+        raise ValueError(f"unsupported daily phase: {odds_phase}")
+    started_utc = datetime.now(timezone.utc)
+    daily_run_id = os.environ.get("NHL_DAILY_RUN_ID") or (
+        f"nhldaily_{started_utc.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
+    )
+    print(f"NHL_DAILY_RUN_ID={daily_run_id}")
+    print("NHL_DAILY_EXECUTION_GRAPH=" + ">".join(DAILY_EXECUTION_GRAPH))
 
     # DAILY SHOULD MEAN "TODAY" BY DEFAULT.
     #
@@ -1194,8 +1074,8 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
 
     season = infer_nhl_season_from_date_yyyy_mm_dd(yday)
 
-    print(f"SLATE_DATE (ET): {slate}" + (" (honor env)" if honor_env else ""))
-    print(f"YDAY       (ET): {yday}" + (" (honor env)" if honor_env else ""))
+    print(f"SLATE_DATE (PT): {slate}" + (" (honor env)" if honor_env else ""))
+    print(f"YDAY       (PT): {yday}" + (" (honor env)" if honor_env else ""))
 
     # --- Daily artifact dirs (your weekly cleanup automation) ---
     DAILY_EXPORTS_DIR = ROOT / "backend" / "nhl" / "exports" / "daily"
@@ -1343,6 +1223,12 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
     if slate_health.get("completion_status") != "READY":
         raise RuntimeError(f"Unexpected NHL slate completion status for {slate}: {slate_health}")
 
+    canonical_games = load_canonical_slate(
+        slate_date=slate,
+        raw_schedule_path=slate_health_path.parent / "raw_schedule_response.json",
+        slate_health_path=slate_health_path,
+    )
+
     # --- EARLY EXIT: no NHL games on this slate date ---
     no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
     res = sp.run(
@@ -1351,7 +1237,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
     )
     game_count = int((res.stdout or "").strip() or "0")
     if game_count == 0:
-        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps (yday finalization already done).")
+        print(f"ℹ️ No NHL games for {slate} (PT) — skipping scoring/export steps (yday finalization already done).")
         return
     # --- end early exit ---
 
@@ -1361,7 +1247,12 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
     )
     run(
         [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"],
-        env={"SLATE_DATE": slate},
+        env={
+            "SLATE_DATE": slate,
+            "NHL_DAILY_PHASE": odds_phase,
+            "NHL_PARENT_DAILY_RUN_ID": daily_run_id,
+            "NHL_ROSTER_OBSERVATION_ROOT": str(ROSTER_OBSERVATION_ROOT),
+        },
     )
 
     # 2) Seed features for today (SOG + Saves).
@@ -1712,14 +1603,32 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
     else:
         print(f"⚠️ points predictions CSV not found at {points_pred_csv} — skipping points load.")
 
-    # 8) Odds
-    if with_odds:
-        fetch_odds()
+    # 8) Optional governed odds observation. Predictions are already durable;
+    # this stage cannot suppress them or reinterpret zero market matches.
+    odds_result: OddsObservationResult | None = None
+    odds_result = run_optional_odds_observation(
+        with_odds=with_odds,
+        slate=slate,
+        season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+        phase=odds_phase,
+        parent_daily_run_id=daily_run_id,
+        canonical_games=canonical_games,
+    )
 
-    # 9) Build site CSVs
-    build_sog(slate)
-    build_saves(slate)
-    build_points(slate)
+    captured_for_attachment = (
+        odds_result is not None and odds_result.classification.startswith("CAPTURED_")
+    )
+    market_odds_path = (
+        odds_result.observation_dir / "raw_response.json" if captured_for_attachment else None)
+    market_events_path = (
+        odds_result.observation_dir / "events_response.json" if captured_for_attachment else None)
+
+    # 9) Build site CSVs from the run-bound observation only.  With no odds
+    # authorization or a failed observation, builders retain predictions with
+    # no market attachment and never fall back to stale mutable JSON.
+    build_sog(slate, odds_json=market_odds_path, events_json=market_events_path)
+    build_saves(slate, odds_json=market_odds_path)
+    build_points(slate, odds_json=market_odds_path, events_json=market_events_path)
 
     # 9a) Refresh residual dataset + reconcile artifacts used by policy replay/testing.
     dataset_refresh_enabled = _env_bool("NHL_DAILY_SOG_DATASET_REFRESH_ENABLED", default=True)
@@ -1748,7 +1657,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
                 ) from exc
             print(f"⚠️ SOG reconcile refresh failed (continuing): {exc}")
 
-    archive_site_artifacts(slate)
+    archive_site_artifacts(slate, odds_result=odds_result)
 
     # 9b) SOG integrity report (warn-only, except guard-fatal)
     try:
@@ -1786,23 +1695,28 @@ def cmd_daily(with_odds: bool, morning_only: bool = False):
     if sanity_res.stdout:
         print(sanity_res.stdout, end="")
 
-    print("\n✅ Daily pipeline complete. Site data in nhl/site/data/.")
+    health = daily_health_for_odds(requested=with_odds, result=odds_result)
+    print(f"\n✅ Daily pipeline complete. DAILY_HEALTH={health}. Site data in nhl/site/data/.")
 
 # ---------- entrypoint ----------
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="nhl-cli", description="NHL pipelines")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("daily", help="Run full daily pipeline")
     d.add_argument("--with-odds", action="store_true", help="Fetch odds inline")
+    d.add_argument("--odds-phase", choices=PHASES, default=os.environ.get("NHL_DAILY_PHASE", "EARLY"),
+                   help="Governed append-only odds/roster observation phase")
     d.add_argument("--morning-only", action="store_true", help="Prepare stable upstream state only; skip scoring and market-timed work")
 
     fo = sub.add_parser("fetch-odds", help="Fetch odds JSON into nhl/site/data")
     fo.add_argument("--days-from", type=int, default=1)
+    fo.add_argument("--slate", default=os.environ.get("SLATE_DATE") or pt_today())
+    fo.add_argument("--phase", choices=PHASES, default=os.environ.get("NHL_DAILY_PHASE", "EARLY"))
 
     rr = sub.add_parser("refresh-rosters-all", help="Refresh NHL players/rosters for all teams")
-    rr.add_argument("--date", default=os.environ.get("SLATE_DATE") or et_today(), help="YYYY-MM-DD ET context date")
+    rr.add_argument("--date", default=os.environ.get("SLATE_DATE") or et_today(), help="YYYY-MM-DD Pacific context date")
 
     bsog = sub.add_parser("build-sog", help="Build sog_with_market.csv")
     bsog.add_argument("--slate", default=os.environ.get("SLATE_DATE") or et_today())
@@ -1823,12 +1737,19 @@ def main():
     gc.add_argument("key", help="Guard key to clear (e.g., fix_psql_stdout_bytes_vs_str)")
     gc.add_argument("--slate", default="global", help="Slate to clear (default: global)")
 
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: Sequence[str] | None = None):
+    ap = build_arg_parser()
+
+    args = ap.parse_args(argv)
 
     if args.cmd == "daily":
-        cmd_daily(with_odds=args.with_odds, morning_only=args.morning_only)
+        cmd_daily(with_odds=args.with_odds, morning_only=args.morning_only,
+                  odds_phase=args.odds_phase)
     elif args.cmd == "fetch-odds":
-        fetch_odds(days_from=args.days_from)
+        fetch_odds(days_from=args.days_from, slate=args.slate, phase=args.phase)
     elif args.cmd == "refresh-rosters-all":
         run([PY, SCRIPTS_DIR / "refresh_all_team_rosters.py"], env={"SLATE_DATE": args.date})
     elif args.cmd == "guard":

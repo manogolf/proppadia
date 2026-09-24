@@ -6,7 +6,7 @@ Inputs
 ------
 --pred       backend/nhl/data/processed/sog_predictions_wide_calibrated.csv
 --names backend/nhl/exports/names_<SLATE>.csv (recommended; produced by export_names_csv in cli.py)
---odds-json  nhl/site/data/odds_latest.json           (optional but recommended)
+--odds-json  explicit immutable observation raw_response.json   (optional)
 --out        nhl/site/data/sog_with_market.csv
 --unmatched  nhl/site/data/unmatched_sog.csv
 
@@ -490,8 +490,10 @@ COPY (
     return df
 
 def load_odds_json(path: Path | None) -> list | dict | None:
-    # Try explicit path, then standard locations if not present
-    for p in [path, Path("nhl/site/data/odds_nhl_playerprops_today.json"), Path("nhl/site/data/odds_latest.json")]:
+    # An explicit run-bound input is authoritative.  Never fall through to a
+    # stale mutable compatibility file when that input is absent or invalid.
+    candidates = [path] if path is not None else []
+    for p in candidates:
         if p and p.exists():
             try:
                 return json.loads(p.read_text())
@@ -527,8 +529,8 @@ def main():
         required=True,
         help="backend/nhl/exports/names_<SLATE>.csv (produced by cli.py export_names_csv)",
     )
-    ap.add_argument("--odds-json", default="nhl/site/data/odds_latest.json")
-    ap.add_argument("--events-json", default="nhl/site/data/events_today.json")
+    ap.add_argument("--odds-json", default=None)
+    ap.add_argument("--events-json", default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--unmatched", required=True)
     ap.add_argument(
@@ -815,7 +817,7 @@ def main():
     med_prices = None
 
     # NEW: restrict odds to the slate's events
-    events_ids = _load_events_for_slate_ids(Path(args.events_json), slate)
+    events_ids = _load_events_for_slate_ids(Path(args.events_json), slate) if args.events_json else set()
     if odds_raw is not None and events_ids:
         if isinstance(odds_raw, list):
             odds_raw = [e for e in odds_raw if isinstance(e, dict) and e.get("id") in events_ids]

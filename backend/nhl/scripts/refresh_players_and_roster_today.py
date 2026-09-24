@@ -13,13 +13,14 @@ Resilient daily "ensure" step:
           players already exist (or that we can name via API lookup).
 
 Env:
-  SLATE_DATE=YYYY-MM-DD (defaults to ET today)
+  SLATE_DATE=YYYY-MM-DD (defaults to Pacific today)
   SUPABASE_DB_URL / DATABASE_URL
   NHL_FETCH_DISABLE=1  # force offline path
 """
 
 import json
 import os, sys, datetime as dt, re
+from pathlib import Path
 from zoneinfo import ZoneInfo
 import datetime as dt, os, sys
 
@@ -72,10 +73,11 @@ from backend.nhl.player_stage_normalizer import (
     normalize_player_stage_rows,
     normalize_position as _normalize_pos,
 )
+from backend.nhl.daily_capture import CanonicalGame, iso_utc, utc_now, write_roster_observation
 
 # ---------------- Config ----------------
-ET = ZoneInfo("America/New_York")
-SLATE_DATE = os.environ.get("SLATE_DATE") or dt.datetime.now(ET).date().isoformat()
+PACIFIC = ZoneInfo("America/Los_Angeles")
+SLATE_DATE = os.environ.get("SLATE_DATE") or dt.datetime.now(PACIFIC).date().isoformat()
 
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
 if not DB_URL:
@@ -109,6 +111,7 @@ def _session() -> requests.Session:
 
 S = _session()
 ROSTER_RESPONSE_VARIANT_BY_TEAM: dict[str, tuple[str, str]] = {}
+ROSTER_SOURCE_RESPONSES: list[dict] = []
 
 # ---------------- Helpers ----------------
 PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
@@ -439,6 +442,13 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
         )
         resp.raise_for_status()
         j = resp.json() or {}
+        ROSTER_SOURCE_RESPONSES.append({
+            "team": tri,
+            "requested_source_url": url,
+            "resolved_source_url": str(getattr(resp, "url", url)),
+            "observed_at_utc": iso_utc(utc_now()),
+            "payload": j,
+        })
         out: list[dict] = []
         _append_from_section(out, j.get("forwards"), "F")
         _append_from_section(out, j.get("defensemen") or j.get("defense"), "D")
@@ -468,6 +478,13 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
             continue
         resp.raise_for_status()
         j = resp.json() or {}
+        ROSTER_SOURCE_RESPONSES.append({
+            "team": tri,
+            "requested_source_url": url,
+            "resolved_source_url": str(getattr(resp, "url", url)),
+            "observed_at_utc": iso_utc(utc_now()),
+            "payload": j,
+        })
 
         out: list[dict] = []
 
@@ -529,6 +546,7 @@ def main():
             cur.execute("""
                 SELECT
                   g.game_id,
+                  g.start_time_utc,
                   g.home_team_id,
                   g.away_team_id,
                   ht.team AS home_tri,
@@ -594,6 +612,32 @@ def main():
                 if os.environ.get(ENV_REQUIRED) == "1":
                     raise
                 print(f"[warn] NHL API fetch failed: {e}")
+
+        # The immutable observation is source evidence, not a side effect of
+        # database persistence.  Verify and durably bind it before any roster
+        # or player DML so an evidence failure cannot follow a committed write.
+        observation_root = os.environ.get("NHL_ROSTER_OBSERVATION_ROOT", "").strip()
+        if observation_root:
+            if source != "API":
+                raise RuntimeError("ROSTER_OBSERVATION_REQUIRES_OFFICIAL_RESPONSES")
+            canonical_games = [CanonicalGame(
+                game_id=int(game["game_id"]),
+                start_time_utc=iso_utc(game["start_time_utc"]),
+                home_team=str(game["home_tri"]),
+                away_team=str(game["away_tri"]),
+                home_aliases=(str(game["home_tri"]),),
+                away_aliases=(str(game["away_tri"]),),
+            ) for game in games]
+            roster_observation = write_roster_observation(
+                root=Path(observation_root),
+                season=season_start_year_from_date(SLATE_DATE),
+                slate_date=SLATE_DATE,
+                phase=os.environ.get("NHL_DAILY_PHASE", "EARLY"),
+                parent_daily_run_id=os.environ.get("NHL_PARENT_DAILY_RUN_ID", "UNBOUND_DAILY_RUN"),
+                canonical_games=canonical_games,
+                source_responses=ROSTER_SOURCE_RESPONSES,
+            )
+            print(f"ROSTER_OBSERVATION={roster_observation}")
 
         # 3) Decide path & write
         with conn.transaction():
