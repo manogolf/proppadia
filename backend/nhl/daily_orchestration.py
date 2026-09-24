@@ -1,0 +1,294 @@
+"""Run-bound state and append-only receipts for the comprehensive NHL daily job."""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import uuid
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+from zoneinfo import ZoneInfo
+
+from backend.nhl.daily_capture import sha256_file, verify_package
+
+
+UTC = timezone.utc
+PACIFIC = ZoneInfo("America/Los_Angeles")
+RECEIPT_SCHEMA = "NHL_COMPREHENSIVE_DAILY_RUN_RECEIPT_V1"
+LEGACY_SOG_TOI_REASON = (
+    "LEGACY_SOG_SEASON_TOI_UNAVAILABLE_FOR_ROSTER_SKATER_WITHOUT_"
+    "QUALIFYING_SAME_SEASON_SHIFT_HISTORY"
+)
+LANE_NAMES = (
+    "shared_prerequisites",
+    "roster",
+    "legacy_sog",
+    "points",
+    "saves",
+    "cold_start_sog_reference",
+    "odds",
+    "sog_attachment",
+    "points_attachment",
+    "saves_attachment",
+    "research_integrity",
+)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _iso_utc(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _iso_pt(value: datetime) -> str:
+    return value.astimezone(PACIFIC).isoformat()
+
+
+def artifact_identity(path: Path) -> dict[str, Any]:
+    path = Path(path)
+    if not path.is_file():
+        raise RuntimeError(f"CURRENT_RUN_ARTIFACT_MISSING:{path}")
+    return {
+        "path": str(path.resolve()),
+        "sha256": sha256_file(path),
+        "bytes": path.stat().st_size,
+    }
+
+
+def evaluate_legacy_sog_toi_gate(
+    *, population_rows: int, null_5v5: int, null_season_5v5: int,
+    maximum_null_ratio: float = 0.20,
+) -> dict[str, Any]:
+    population_rows = int(population_rows)
+    null_5v5 = int(null_5v5)
+    null_season_5v5 = int(null_season_5v5)
+    if population_rows < 0 or min(null_5v5, null_season_5v5) < 0:
+        raise ValueError("LEGACY_SOG_TOI_COUNTS_NEGATIVE")
+    if max(null_5v5, null_season_5v5) > population_rows:
+        raise ValueError("LEGACY_SOG_TOI_NULL_COUNT_EXCEEDS_POPULATION")
+    ratio = max(null_5v5, null_season_5v5) / population_rows if population_rows else 0.0
+    return {
+        "population_rows": population_rows,
+        "null_szn_toi_per_game_5on5": null_5v5,
+        "null_season_5on5_icetime_per_game": null_season_5v5,
+        "null_ratio": ratio,
+        "maximum_null_ratio": float(maximum_null_ratio),
+        "blocked": population_rows > 0 and ratio > float(maximum_null_ratio),
+        "reason": LEGACY_SOG_TOI_REASON if population_rows > 0 and ratio > float(maximum_null_ratio) else None,
+    }
+
+
+@dataclass
+class LaneResult:
+    name: str
+    blocking: bool
+    status: str = "NOT_STARTED"
+    reason: str | None = None
+    started_at_utc: str | None = None
+    ended_at_utc: str | None = None
+    inputs: list[dict[str, Any]] = field(default_factory=list)
+    outputs: list[dict[str, Any]] = field(default_factory=list)
+    database_rows_written: bool = False
+    database_stage_summary: dict[str, Any] = field(default_factory=dict)
+    provider_requests: int = 0
+    credits_consumed: int | None = 0
+    error_type: str | None = None
+    error_message: str | None = None
+
+
+class DailyRunRecorder:
+    """In-memory run ledger finalized as one create-only package."""
+
+    def __init__(self, *, run_id: str, command: list[str], phase: str,
+                 started_at: datetime | None = None) -> None:
+        self.run_id = run_id
+        self.command = list(command)
+        self.phase = str(phase).upper()
+        self.started_at = started_at or _utc_now()
+        self.ended_at: datetime | None = None
+        self.slate_date: str | None = None
+        self.canonical_season: int | None = None
+        self.canonical_game_ids: list[int] = []
+        self.canonical_game_set_hash: str | None = None
+        self.roster_observation: dict[str, Any] | None = None
+        self.odds_observation: dict[str, Any] | None = None
+        self.children: list[dict[str, Any]] = []
+        self.failure: dict[str, Any] | None = None
+        # Runtime-only continuation state. It is intentionally excluded from
+        # the receipt because it contains live Python objects.
+        self.independent_context: dict[str, Any] | None = None
+        self.lanes = {
+            name: LaneResult(name=name, blocking=name in {"shared_prerequisites", "roster"})
+            for name in LANE_NAMES
+        }
+
+    def lane(self, name: str) -> LaneResult:
+        if name not in self.lanes:
+            raise KeyError(f"UNKNOWN_DAILY_LANE:{name}")
+        return self.lanes[name]
+
+    def start_lane(self, name: str, *, inputs: Iterable[Mapping[str, Any]] = ()) -> None:
+        lane = self.lane(name)
+        if lane.started_at_utc is None:
+            lane.started_at_utc = _iso_utc(_utc_now())
+        lane.status = "RUNNING"
+        lane.inputs.extend(dict(value) for value in inputs)
+
+    def finish_lane(
+        self, name: str, *, status: str = "COMPLETE", reason: str | None = None,
+        outputs: Iterable[Mapping[str, Any]] = (), database_rows_written: bool | None = None,
+        database_stage_summary: Mapping[str, Any] | None = None,
+        provider_requests: int | None = None, credits_consumed: int | None = None,
+    ) -> None:
+        lane = self.lane(name)
+        if lane.started_at_utc is None:
+            lane.started_at_utc = _iso_utc(_utc_now())
+        lane.status = status
+        lane.reason = reason
+        lane.ended_at_utc = _iso_utc(_utc_now())
+        lane.outputs.extend(dict(value) for value in outputs)
+        if database_rows_written is not None:
+            lane.database_rows_written = bool(database_rows_written)
+        if database_stage_summary is not None:
+            lane.database_stage_summary.update(dict(database_stage_summary))
+        if provider_requests is not None:
+            lane.provider_requests = int(provider_requests)
+        if credits_consumed is not None:
+            lane.credits_consumed = int(credits_consumed)
+
+    def fail_lane(self, name: str, error: BaseException, *, blocking: bool | None = None) -> None:
+        lane = self.lane(name)
+        if lane.started_at_utc is None:
+            lane.started_at_utc = _iso_utc(_utc_now())
+        if blocking is not None:
+            lane.blocking = bool(blocking)
+        lane.status = "FAILED_BLOCKING" if lane.blocking else "FAILED_NONBLOCKING"
+        lane.reason = f"{type(error).__name__}:{error}"
+        lane.error_type = type(error).__name__
+        lane.error_message = str(error)
+        lane.ended_at_utc = _iso_utc(_utc_now())
+
+    def record_child(self, value: Mapping[str, Any]) -> None:
+        # Only the explicit bounded contract is admitted to the parent receipt.
+        allowed = {
+            "lane", "command_identity", "exit_status", "duration_ms", "status",
+            "schema_version", "normalizer_counts", "roster_observation",
+            "roster_manifest_sha256", "database_stage_summary",
+        }
+        self.children.append({key: value[key] for key in allowed if key in value})
+
+    def set_canonical(self, *, slate_date: str, season: int,
+                      game_ids: Iterable[int], game_set_hash: str) -> None:
+        self.slate_date = slate_date
+        self.canonical_season = int(season)
+        self.canonical_game_ids = sorted({int(value) for value in game_ids})
+        self.canonical_game_set_hash = game_set_hash
+
+    def classification(self) -> str:
+        if any(lane.status == "FAILED_BLOCKING" for lane in self.lanes.values()):
+            return "FAILED_BLOCKING"
+        warning_statuses = {
+            "BLOCKED_LANE_LOCAL", "FAILED_NONBLOCKING", "COMPLETE_WITH_BOUNDED_LIMITS",
+            "SKIPPED_UPSTREAM_LANE_BLOCKED", "READY_WITH_ODDS_WARNING",
+        }
+        if any(lane.status in warning_statuses for lane in self.lanes.values()):
+            return "READY_WITH_BOUNDED_LANE_WARNING"
+        return "READY"
+
+    def payload(self) -> dict[str, Any]:
+        ended = self.ended_at or _utc_now()
+        return {
+            "schema_version": RECEIPT_SCHEMA,
+            "parent_daily_run_id": self.run_id,
+            "command": self.command,
+            "resolved_phase": self.phase,
+            "started_at_utc": _iso_utc(self.started_at),
+            "started_at_pt": _iso_pt(self.started_at),
+            "ended_at_utc": _iso_utc(ended),
+            "ended_at_pt": _iso_pt(ended),
+            "slate_date": self.slate_date,
+            "canonical_season": self.canonical_season,
+            "canonical_game_ids": self.canonical_game_ids,
+            "canonical_game_set_hash": self.canonical_game_set_hash,
+            "lanes": {name: asdict(self.lanes[name]) for name in LANE_NAMES},
+            "roster_observation": self.roster_observation,
+            "odds_observation": self.odds_observation,
+            "child_summaries": self.children,
+            "failure": self.failure,
+            "final_classification": self.classification(),
+        }
+
+    def finalize(self, root: Path) -> Path:
+        self.ended_at = self.ended_at or _utc_now()
+        root = Path(root)
+        final = root / f"run_id={self.run_id}"
+        staging = root / f".run_id={self.run_id}.{uuid.uuid4().hex}.incomplete"
+        if final.exists():
+            raise RuntimeError(f"DAILY_RUN_RECEIPT_EXISTS:{final}")
+        staging.mkdir(parents=True, exist_ok=False)
+        try:
+            receipt = staging / "parent_receipt.json"
+            receipt.write_text(json.dumps(self.payload(), indent=2, sort_keys=True) + "\n")
+            marker = staging / "RUN_COMPLETE.json"
+            marker.write_text(json.dumps({
+                "schema_version": RECEIPT_SCHEMA,
+                "parent_daily_run_id": self.run_id,
+                "final_classification": self.classification(),
+                "completed_at_utc": _iso_utc(self.ended_at),
+            }, indent=2, sort_keys=True) + "\n")
+            files = sorted(path for path in staging.iterdir() if path.is_file())
+            (staging / "SHA256SUMS").write_text(
+                "".join(f"{sha256_file(path)}  {path.name}\n" for path in files)
+            )
+            verify_package(staging)
+            root.mkdir(parents=True, exist_ok=True)
+            staging.replace(final)
+            return final
+        except Exception:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+
+
+def verify_roster_observation_reuse(
+    path: Path, *, season: int, slate_date: str, phase: str,
+    canonical_game_ids: Iterable[int], canonical_game_set_hash: str,
+) -> dict[str, Any]:
+    """Validate a retained roster package without modifying or relabeling it."""
+    path = Path(path).resolve()
+    manifest_sha256 = verify_package(path)
+    marker_path = path / "RUN_COMPLETE.json"
+    summary_path = path / "observation_summary.json"
+    if not marker_path.is_file() or not summary_path.is_file():
+        raise RuntimeError("ROSTER_REUSE_PACKAGE_INCOMPLETE")
+    marker = json.loads(marker_path.read_text())
+    summary = json.loads(summary_path.read_text())
+    checks = {
+        "complete_marker": marker.get("status") == "COMPLETE",
+        "season": int(summary.get("season", -1)) == int(season),
+        "slate_date": summary.get("slate_date") == slate_date,
+        "phase": str(summary.get("phase", "")).upper() == str(phase).upper(),
+        "canonical_game_set_hash": summary.get("canonical_game_set_hash") == canonical_game_set_hash,
+        "canonical_game_ids": sorted(map(int, summary.get("canonical_game_ids") or []))
+        == sorted({int(value) for value in canonical_game_ids}),
+        "complete_per_game_coverage": summary.get("complete_per_game_coverage") is True,
+        "strictly_prestart": summary.get("strictly_prestart") is True,
+        "zero_conflicts": int(summary.get("conflict_count", -1)) == 0,
+        "no_missing_teams": not summary.get("missing_teams"),
+        "no_unexpected_teams": not summary.get("unexpected_teams"),
+    }
+    failed = sorted(name for name, passed in checks.items() if not passed)
+    if failed:
+        raise RuntimeError(f"ROSTER_REUSE_VALIDATION_FAILED:{','.join(failed)}")
+    return {
+        "path": str(path),
+        "manifest_sha256": manifest_sha256,
+        "source_parent_daily_run_id": summary.get("parent_daily_run_id"),
+        "observation_timestamp_utc": summary.get("observation_timestamp_utc"),
+        "snapshot_row_count": int(summary.get("snapshot_row_count", 0)),
+        "canonical_game_set_hash": canonical_game_set_hash,
+        "reuse_mode": "EXPLICIT_VERIFIED_IMMUTABLE_SOURCE",
+    }

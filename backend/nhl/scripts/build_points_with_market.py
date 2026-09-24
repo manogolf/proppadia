@@ -186,6 +186,10 @@ def main():
     ap.add_argument("--events-json", default="", help="(ignored; compat flag)")
     ap.add_argument("--out", required=True, help="output CSV for site: nhl/site/data/points_with_market.csv")
     ap.add_argument("--unmatched", required=True, help="output CSV: unmatched rows when merging preds↔odds")
+    ap.add_argument(
+        "--strict-current-run", action="store_true",
+        help="Require explicit prediction/name inputs and disable auxiliary mutable name sources.",
+    )
     args = ap.parse_args()
 
     slate = os.environ.get("SLATE_DATE", "").strip()
@@ -198,6 +202,8 @@ def main():
 
     # ---- Mode
     have_preds = bool(args.pred and args.names and Path(args.pred).exists() and Path(args.names).exists())
+    if args.strict_current_run and not have_preds:
+        die("strict current-run mode requires existing --pred and --names artifacts")
 
     if not have_preds:
         # -------- ODDS-ONLY MODE --------
@@ -239,7 +245,7 @@ def main():
     names = names[name_cols].copy()
 
     # ---- Add more name sources if present (union by player_id; keep first seen) ----
-    extra_sources = [
+    extra_sources = [] if args.strict_current_run else [
         Path("exports/train_nhl_points_v2.csv"),
         Path("nhl/site/data/sog_with_market.csv"),
         Path("nhl/site/data/saves_with_market.csv"),

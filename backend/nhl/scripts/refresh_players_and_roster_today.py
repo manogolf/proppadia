@@ -73,7 +73,11 @@ from backend.nhl.player_stage_normalizer import (
     normalize_player_stage_rows,
     normalize_position as _normalize_pos,
 )
-from backend.nhl.daily_capture import CanonicalGame, iso_utc, utc_now, write_roster_observation
+from backend.nhl.daily_capture import (
+    CanonicalGame, canonical_game_set_hash, iso_utc, sha256_file, utc_now,
+    write_roster_observation,
+)
+from backend.nhl.daily_orchestration import verify_roster_observation_reuse
 
 # ---------------- Config ----------------
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -89,6 +93,7 @@ if "?gssencmode=" not in DB_URL and "&gssencmode=" not in DB_URL:
 
 BASE = "https://api-web.nhle.com/v1"
 FETCH_DISABLED = os.environ.get("NHL_FETCH_DISABLE", "0") == "1"
+REUSE_ROSTER_OBSERVATION = os.environ.get("NHL_REUSE_ROSTER_OBSERVATION", "").strip()
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SQL_DIR = os.path.join(ROOT, "backend", "nhl", "sql")
@@ -535,6 +540,8 @@ def _append_from_section(out: list[dict], section: list | None, default_pos: str
 # ---------------- Main ----------------
 def main():
     source = "features-fallback"
+    normalizer_counts: dict[str, int] = {}
+    roster_observation_reference: dict | None = None
     with psycopg.connect(DB_URL, prepare_threshold=None, row_factory=dict_row) as conn:
         try:
             conn.prepare_threshold = None  # type: ignore[attr-defined]
@@ -566,8 +573,54 @@ def main():
         players_stage = []
         roster_rows   = []
 
-        # 2) ONLINE PATH
-        if not FETCH_DISABLED:
+        canonical_games = [CanonicalGame(
+            game_id=int(game["game_id"]),
+            start_time_utc=iso_utc(game["start_time_utc"]),
+            home_team=str(game["home_tri"]),
+            away_team=str(game["away_tri"]),
+            home_aliases=(str(game["home_tri"]),),
+            away_aliases=(str(game["away_tri"]),),
+        ) for game in games]
+
+        # 2a) Explicit immutable reuse path. It validates and loads before any
+        # roster DML, performs no HTTP, and creates no replacement observation.
+        if REUSE_ROSTER_OBSERVATION:
+            season = season_start_year_from_date(SLATE_DATE)
+            game_hash = canonical_game_set_hash(game.game_id for game in canonical_games)
+            roster_observation_reference = verify_roster_observation_reuse(
+                Path(REUSE_ROSTER_OBSERVATION), season=season, slate_date=SLATE_DATE,
+                phase=os.environ.get("NHL_DAILY_PHASE", "EARLY"),
+                canonical_game_ids=[game.game_id for game in canonical_games],
+                canonical_game_set_hash=game_hash,
+            )
+            team_ids = {
+                str(game["home_tri"]).upper(): int(game["home_team_id"])
+                for game in games
+            }
+            team_ids.update({
+                str(game["away_tri"]).upper(): int(game["away_team_id"])
+                for game in games
+            })
+            for raw in (Path(REUSE_ROSTER_OBSERVATION) / "roster_snapshot.jsonl").read_text().splitlines():
+                row = json.loads(raw)
+                team = str(row["team"]).upper()
+                if team not in team_ids:
+                    raise RuntimeError(f"ROSTER_REUSE_TEAM_ID_UNRESOLVED:{team}")
+                players_stage.append({
+                    "player_id": int(row["player_id"]), "team_id": team_ids[team],
+                    "first_name": row.get("first_name"), "last_name": row.get("last_name"),
+                    "position": row.get("position"), "shoots_catches": None, "active": True,
+                })
+                roster_rows.append({
+                    "game_date": SLATE_DATE, "team_id": team_ids[team],
+                    "player_id": int(row["player_id"]), "active_flag": True, "pp_unit": "None",
+                })
+            if not players_stage or not roster_rows:
+                raise RuntimeError("ROSTER_REUSE_SNAPSHOT_EMPTY")
+            source = "REUSED_IMMUTABLE_OBSERVATION"
+
+        # 2b) ONLINE PATH
+        elif not FETCH_DISABLED:
             try:
                 for g in games:
                     for tri, team_id in ((g["home_tri"], g["home_team_id"]),
@@ -617,17 +670,7 @@ def main():
         # database persistence.  Verify and durably bind it before any roster
         # or player DML so an evidence failure cannot follow a committed write.
         observation_root = os.environ.get("NHL_ROSTER_OBSERVATION_ROOT", "").strip()
-        if observation_root:
-            if source != "API":
-                raise RuntimeError("ROSTER_OBSERVATION_REQUIRES_OFFICIAL_RESPONSES")
-            canonical_games = [CanonicalGame(
-                game_id=int(game["game_id"]),
-                start_time_utc=iso_utc(game["start_time_utc"]),
-                home_team=str(game["home_tri"]),
-                away_team=str(game["away_tri"]),
-                home_aliases=(str(game["home_tri"]),),
-                away_aliases=(str(game["away_tri"]),),
-            ) for game in games]
+        if observation_root and source == "API":
             roster_observation = write_roster_observation(
                 root=Path(observation_root),
                 season=season_start_year_from_date(SLATE_DATE),
@@ -638,12 +681,19 @@ def main():
                 source_responses=ROSTER_SOURCE_RESPONSES,
             )
             print(f"ROSTER_OBSERVATION={roster_observation}")
+            roster_observation_reference = {
+                "path": str(roster_observation.resolve()),
+                "manifest_sha256": sha256_file(roster_observation / "SHA256SUMS"),
+                "reuse_mode": "NEW_IMMUTABLE_OBSERVATION",
+            }
+        elif observation_root and source != "REUSED_IMMUTABLE_OBSERVATION":
+            raise RuntimeError("ROSTER_OBSERVATION_REQUIRES_OFFICIAL_RESPONSES")
 
         # 3) Decide path & write
         with conn.transaction():
             with conn.cursor() as cur:
-                if source == "API" and players_stage and roster_rows:
-                    stage_and_upsert_players(cur, players_stage)
+                if source in {"API", "REUSED_IMMUTABLE_OBSERVATION"} and players_stage and roster_rows:
+                    normalizer_counts = stage_and_upsert_players(cur, players_stage)
 
                     roster_rows = _dedupe_roster_rows(roster_rows)
                     cur.execute("""
@@ -689,6 +739,26 @@ def main():
                 total_rs = (row["cnt"] if isinstance(row, dict) else row[0])
                 print(f"Refreshed players & roster_status for {SLATE_DATE} (source={source})")
                 print(f"✅ roster_status rows present for {SLATE_DATE}: {total_rs}")
+
+        print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({
+            "schema_version": "NHL_ROSTER_CHILD_SUMMARY_V1",
+            "status": "COMPLETE",
+            "normalizer_counts": normalizer_counts,
+            "roster_observation": (
+                roster_observation_reference.get("path")
+                if roster_observation_reference else None
+            ),
+            "roster_manifest_sha256": (
+                roster_observation_reference.get("manifest_sha256")
+                if roster_observation_reference else None
+            ),
+            "database_stage_summary": {
+                "source": source,
+                "roster_status_rows_present": int(total_rs),
+                "players_stage_rows": len(players_stage),
+                "roster_stage_rows": len(roster_rows),
+            },
+        }, sort_keys=True, separators=(",", ":")))
 
 if __name__ == "__main__":
     main()

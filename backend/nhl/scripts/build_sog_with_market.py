@@ -539,6 +539,10 @@ def main():
         default=None,
         help="YYYY-MM-DD (ET). If omitted, falls back to SLATE_DATE env.",
     )
+    ap.add_argument(
+        "--pred-only", action="store_true",
+        help="Require explicit --pred input and disable the mutable database spine.",
+    )
 
     args = ap.parse_args()
 
@@ -549,7 +553,9 @@ def main():
     if not slate:
         die("Provide --slate-date YYYY-MM-DD or set SLATE_DATE env (ET).")
 
-    db_url = args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    db_url = None if args.pred_only else (
+        args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    )
     print(f"[sog_with_market] SLATE_DATE (ET) = {slate}")
 
     names_path = Path(args.names)

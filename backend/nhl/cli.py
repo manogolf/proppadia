@@ -39,13 +39,24 @@ from datetime import datetime, timedelta, timezone
 import re
 import psycopg
 import uuid
+import time
 
 from backend.nhl.daily_capture import (
     PHASES,
     OddsObservationResult,
     RequestsOddsProvider,
+    canonical_game_set_hash,
     capture_odds_observation,
     load_canonical_slate,
+    sha256_file,
+    verify_package,
+)
+from backend.nhl.daily_orchestration import (
+    DailyRunRecorder,
+    LEGACY_SOG_TOI_REASON,
+    artifact_identity,
+    evaluate_legacy_sog_toi_gate,
+    verify_roster_observation_reuse,
 )
 
 
@@ -96,6 +107,10 @@ SOG_RECONCILE_ROWS_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_rows.csv"
 SOG_RESIDUAL_DATASET_DEFAULT_CSV = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_season_2025.csv"
 ODDS_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "odds_observations"
 ROSTER_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "roster_observations"
+DAILY_RUN_RECEIPT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "daily_runs"
+
+_ACTIVE_DAILY_RECORDER: DailyRunRecorder | None = None
+_ACTIVE_DAILY_LANE = "shared_prerequisites"
 
 DAILY_EXECUTION_GRAPH = (
     "DATABASE_SANITY",
@@ -123,27 +138,44 @@ for d in (
 
 def archive_site_artifacts(
     slate: str, *, odds_result: OddsObservationResult | None = None,
+    completed_lanes: set[str] | None = None,
 ) -> None:
     archive_dir = EXPORTS_ODDS_HISTORY_DIR / slate
     archive_dir.mkdir(parents=True, exist_ok=True)
 
-    # Keep both publish artifacts and raw prediction snapshots per slate.
-    # This preserves reproducibility for later bakeoff/reconciliation reruns.
-    artifacts = [
-        SITE_DIR / "sog_with_market.csv",
-        SITE_DIR / "unmatched_sog.csv",
-        SITE_DIR / "saves_with_market.csv",
-        SITE_DIR / "unmatched_saves.csv",
-        SITE_DIR / "points_with_market.csv",
-        SITE_DIR / "unmatched_points.csv",
-        PROC_DIR / "sog_predictions_wide_calibrated.csv",
-        PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv",
-        SOG_RECONCILE_MONTHLY_CSV,
-        SOG_RECONCILE_MONTHLY_JSON,
-        SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV,
-        SOG_RECONCILE_ROWS_CSV,
-    ]
-    if odds_result is not None and odds_result.classification.startswith("CAPTURED_"):
+    # The comprehensive runner supplies its completed lane set so a blocked
+    # lane can never archive a stale same-date fixed filename.  Standalone
+    # callers retain the historical all-lanes behavior.
+    standalone_archive = completed_lanes is None
+    if standalone_archive:
+        completed_lanes = {"legacy_sog", "points", "saves"}
+    artifacts: list[Path] = []
+    if "legacy_sog" in completed_lanes:
+        artifacts.extend([
+            SITE_DIR / "sog_with_market.csv",
+            SITE_DIR / "unmatched_sog.csv",
+            SOG_RECONCILE_MONTHLY_CSV,
+            SOG_RECONCILE_MONTHLY_JSON,
+            SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV,
+            SOG_RECONCILE_ROWS_CSV,
+        ])
+        if standalone_archive:
+            artifacts.extend([
+                PROC_DIR / "sog_predictions_wide_calibrated.csv",
+                PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv",
+            ])
+    if "saves" in completed_lanes:
+        artifacts.extend([SITE_DIR / "saves_with_market.csv", SITE_DIR / "unmatched_saves.csv"])
+    if "points" in completed_lanes:
+        artifacts.extend([SITE_DIR / "points_with_market.csv", SITE_DIR / "unmatched_points.csv"])
+    # Odds evidence is already immutable inside odds_result.observation_dir and
+    # is referenced by hash from the parent receipt.  Do not copy mutable
+    # compatibility filenames for comprehensive (explicit lane-set) runs.
+    if (
+        standalone_archive
+        and odds_result is not None
+        and odds_result.classification.startswith("CAPTURED_")
+    ):
         artifacts.extend([
             SITE_DIR / "odds_nhl_playerprops_today.json",
             SITE_DIR / "events_today.json",
@@ -420,9 +452,34 @@ def run(cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True):
     e = os.environ.copy()
     if env:
         e.update(env)
+    started = time.monotonic()
     try:
-        return sp.run(cmd, cwd=str(cwd), env=e, check=check, text=True, capture_output=True)
+        result = sp.run(cmd, cwd=str(cwd), env=e, check=check, text=True, capture_output=True)
+        if _ACTIVE_DAILY_RECORDER is not None:
+            summary: dict[str, Any] = {
+                "lane": _ACTIVE_DAILY_LANE,
+                "command_identity": cmd_for_log,
+                "exit_status": int(result.returncode),
+                "duration_ms": round((time.monotonic() - started) * 1000),
+                "status": "COMPLETE",
+            }
+            for line in (result.stdout or "").splitlines():
+                if line.startswith("NHL_CHILD_SUMMARY_JSON="):
+                    structured = json.loads(line.split("=", 1)[1])
+                    if not isinstance(structured, dict):
+                        raise RuntimeError("NHL_CHILD_SUMMARY_NOT_OBJECT")
+                    summary.update(structured)
+            _ACTIVE_DAILY_RECORDER.record_child(summary)
+        return result
     except sp.CalledProcessError as exc:
+        if _ACTIVE_DAILY_RECORDER is not None:
+            _ACTIVE_DAILY_RECORDER.record_child({
+                "lane": _ACTIVE_DAILY_LANE,
+                "command_identity": cmd_for_log,
+                "exit_status": int(exc.returncode),
+                "duration_ms": round((time.monotonic() - started) * 1000),
+                "status": "FAILED",
+            })
         print(f"[run] COMMAND FAILED: {cmd_for_log}", file=sys.stderr)
         if exc.stdout:
             print("[run] --- stdout ---", file=sys.stderr)
@@ -939,28 +996,31 @@ def daily_health_for_odds(*, requested: bool,
 
 # ---------- builders (CSV for site) ----------
 
+def _require_current_prediction_artifact(
+    path: Path, *, slate: str, expected_sha256: str | None,
+) -> dict[str, Any]:
+    path = Path(path)
+    if not path.is_file() or path.stat().st_size == 0:
+        raise AssertionError(f"current-run prediction artifact missing/empty: {path}")
+    dates = _pred_game_dates(path)
+    if len(dates) != 1 or dates[0] != slate:
+        raise AssertionError(
+            f"current-run prediction slate mismatch: expected {slate}, got {dates} in {path}")
+    identity = artifact_identity(path)
+    if expected_sha256 is not None and identity["sha256"] != expected_sha256:
+        raise AssertionError(f"current-run prediction hash mismatch: {path}")
+    return identity
+
+
 def build_sog(slate: str, *, odds_json: Path | None = None,
-              events_json: Path | None = None):
+              events_json: Path | None = None, pred_path: Path | None = None,
+              expected_pred_sha256: str | None = None):
     # Always regenerate (or overwrite) names for this slate and use the returned path
     names_csv = export_names_csv(slate)
 
-    pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
-
-    if not pred_path.exists() or pred_path.stat().st_size < 200:
-        raise AssertionError(f"[build-sog] missing/empty calibrated predictions: {pred_path}")
-
-    dates = _pred_game_dates(pred_path)
-    if not dates:
-        raise AssertionError(f"[build-sog] predictions CSV has no game_date values: {pred_path}")
-
-    if len(dates) != 1 or dates[0] != slate:
-        raise AssertionError(
-            f"[build-sog] slate mismatch: expected {slate}, got {dates} in {pred_path}. "
-            f"Run daily again; refusing to auto-regenerate."
-        )
-    
-    if not pred_path.exists() or pred_path.stat().st_size == 0:
-        raise AssertionError(f"[build-sog] expected artifact missing/empty: {pred_path}")
+    pred_path = Path(pred_path or (PROC_DIR / "sog_predictions_wide_calibrated.csv"))
+    _require_current_prediction_artifact(
+        pred_path, slate=slate, expected_sha256=expected_pred_sha256)
 
     if not names_csv.exists() or names_csv.stat().st_size == 0:
         raise AssertionError(f"[build-sog] expected artifact missing/empty: {names_csv}")
@@ -973,6 +1033,7 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
             "--out",        "nhl/site/data/sog_with_market.csv",
             "--unmatched",  "nhl/site/data/unmatched_sog.csv",
             "--slate-date", slate,
+            "--pred-only",
         ]
     if odds_json is not None:
         command.extend(["--odds-json", str(odds_json)])
@@ -990,11 +1051,15 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
         raise AssertionError(f"[build-sog] expected artifact missing/empty: {unmatched_csv}")
 
 
-def build_saves(slate: str, *, odds_json: Path | None = None):
+def build_saves(slate: str, *, odds_json: Path | None = None,
+                pred_path: Path | None = None,
+                expected_pred_sha256: str | None = None):
     # Ensure names exist (build_saves can be called standalone)
     names_csv = export_names_csv(slate)
 
-    pred_path = PROC_DIR / "saves_predictions.csv"
+    pred_path = Path(pred_path or (PROC_DIR / "saves_predictions.csv"))
+    _require_current_prediction_artifact(
+        pred_path, slate=slate, expected_sha256=expected_pred_sha256)
     command = [
             PY,
             SCRIPTS_DIR / "build_saves_with_market.py",
@@ -1009,21 +1074,24 @@ def build_saves(slate: str, *, odds_json: Path | None = None):
 
 
 def build_points(slate: str, *, odds_json: Path | None = None,
-                 events_json: Path | None = None):
+                 events_json: Path | None = None, pred_path: Path | None = None,
+                 expected_pred_sha256: str | None = None):
     args = [
         PY,
         SCRIPTS_DIR / "build_points_with_market.py",
         "--out",         SITE_DIR / "points_with_market.csv",
         "--unmatched",   SITE_DIR / "unmatched_points.csv",
+        "--strict-current-run",
     ]
     if odds_json is not None:
         args += ["--odds-json", odds_json]
     if events_json is not None:
         args += ["--events-json", events_json]
 
-    pred_path = PROC_DIR / "points_predictions.csv"
-    if pred_path.exists():
-        args += ["--pred", pred_path]
+    pred_path = Path(pred_path or (PROC_DIR / "points_predictions.csv"))
+    _require_current_prediction_artifact(
+        pred_path, slate=slate, expected_sha256=expected_pred_sha256)
+    args += ["--pred", pred_path]
 
     # Only include names if we actually have them (and don't assume location)
     names_path = export_names_csv(slate)
@@ -1032,19 +1100,271 @@ def build_points(slate: str, *, odds_json: Path | None = None,
 
     run(args)
 
+
+def _reference_cold_start_sog(recorder: DailyRunRecorder, slate: str) -> None:
+    root = ROOT / "artifacts" / "operational" / "nhl" / "sog_prediction_only"
+    season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+    recorder.start_lane("cold_start_sog_reference")
+    packages = sorted((root / f"season={season}" / f"slate_date={slate}").glob(
+        "phase=*/run_id=*/SHA256SUMS"))
+    statuses = sorted((root / "status" / slate).glob("prediction_*.json"))
+    try:
+        outputs = [{
+            "path": str(path.parent.resolve()),
+            "manifest_sha256": verify_package(path.parent),
+        } for path in packages]
+        if statuses:
+            outputs.append(artifact_identity(statuses[-1]))
+        recorder.finish_lane(
+            "cold_start_sog_reference",
+            status="REFERENCED_EXTERNAL_OWNER" if outputs else "NOT_AVAILABLE_EXTERNAL_OWNER",
+            reason="PREDICTION_ONLY_OBSERVER_OWNS_COLD_START_SOG",
+            outputs=outputs,
+        )
+    except Exception as error:
+        recorder.fail_lane("cold_start_sog_reference", error, blocking=False)
+
+
+def _run_independent_daily_lanes(
+    *, recorder: DailyRunRecorder, db: str, slate: str, with_odds: bool,
+    odds_phase: str, daily_run_id: str, canonical_games,
+    saves_export_ready: bool, points_export_ready: bool,
+    legacy_sog_prediction: dict[str, Any] | None,
+) -> None:
+    """Run lane-local scoring, acquisition, attachment, and integrity stages."""
+    global _ACTIVE_DAILY_LANE
+    prediction_identities: dict[str, dict[str, Any]] = {}
+    prediction_run_dir = PROC_DIR / "daily_runs" / daily_run_id
+    prediction_run_dir.mkdir(parents=True, exist_ok=True)
+
+    if saves_export_ready:
+        recorder.start_lane("saves")
+        _ACTIVE_DAILY_LANE = "saves"
+        try:
+            recorder.lane("saves").inputs.append(artifact_identity(
+                EXPORTS_DIR / "train_goalie_saves_v2.csv"))
+            saves_model_dir = MODELS_DIR / "latest" / "goalie_saves"
+            if not saves_model_dir.exists():
+                raise RuntimeError(f"SAVES_MODEL_MISSING:{saves_model_dir}")
+            saves_pred_csv = prediction_run_dir / "saves_predictions.csv"
+            run([
+                PY, SCRIPTS_DIR / "score_nhl_props.py",
+                "--model-dir", saves_model_dir,
+                "--csv", EXPORTS_DIR / "train_goalie_saves_v2.csv",
+                "--feature-json", "backend/nhl/features/feature_metadata_nhl.json",
+                "--feature-key", "goalie_saves",
+                "--line", "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5",
+                "--out", saves_pred_csv,
+            ])
+            prediction_identities["saves"] = _require_current_prediction_artifact(
+                saves_pred_csv, slate=slate, expected_sha256=None)
+            run([
+                PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                "--pred-csv", saves_pred_csv, "--project", "nhl",
+                "--prop", "goalie_saves", "--model-family", "phoenix",
+                "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
+            ])
+            recorder.finish_lane(
+                "saves", outputs=[prediction_identities["saves"]],
+                database_rows_written=True)
+        except Exception as error:
+            recorder.fail_lane("saves", error, blocking=False)
+    else:
+        recorder.finish_lane(
+            "saves", status="FAILED_NONBLOCKING", reason="SAVES_FEATURE_EXPORT_FAILED")
+
+    if points_export_ready:
+        recorder.start_lane("points")
+        _ACTIVE_DAILY_LANE = "points"
+        try:
+            recorder.lane("points").inputs.append(artifact_identity(
+                EXPORTS_DIR / "train_nhl_points_v2.csv"))
+            points_pred_csv = prediction_run_dir / "points_predictions.csv"
+            run([
+                PY, SCRIPTS_DIR / "score_points_phoenix.py",
+                "--features-csv", EXPORTS_DIR / "train_nhl_points_v2.csv",
+                "--model-root", MODELS_DIR / "latest" / "points",
+                "--out", points_pred_csv,
+            ])
+            prediction_identities["points"] = _require_current_prediction_artifact(
+                points_pred_csv, slate=slate, expected_sha256=None)
+            run([
+                PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                "--pred-csv", points_pred_csv, "--project", "nhl",
+                "--prop", "player_points", "--model-family", "phoenix",
+                "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
+            ])
+            recorder.finish_lane(
+                "points", outputs=[prediction_identities["points"]],
+                database_rows_written=True)
+        except Exception as error:
+            recorder.fail_lane("points", error, blocking=False)
+    else:
+        recorder.finish_lane(
+            "points", status="FAILED_NONBLOCKING", reason="POINTS_FEATURE_EXPORT_FAILED")
+
+    _reference_cold_start_sog(recorder, slate)
+
+    recorder.start_lane("odds", inputs=[{
+        "canonical_game_set_hash": recorder.canonical_game_set_hash,
+        "canonical_game_count": len(recorder.canonical_game_ids),
+        "authorized": bool(with_odds),
+    }])
+    _ACTIVE_DAILY_LANE = "odds"
+    odds_result: OddsObservationResult | None = None
+    try:
+        odds_result = run_optional_odds_observation(
+            with_odds=with_odds, slate=slate,
+            season=infer_nhl_season_from_date_yyyy_mm_dd(slate), phase=odds_phase,
+            parent_daily_run_id=daily_run_id, canonical_games=canonical_games)
+        if odds_result is None:
+            recorder.finish_lane("odds", status="SKIPPED_NOT_REQUESTED")
+        else:
+            summary = odds_result.summary
+            recorder.odds_observation = {
+                "path": str(odds_result.observation_dir.resolve()),
+                "manifest_sha256": odds_result.manifest_sha256,
+                "classification": odds_result.classification,
+                "request_plan_path": str((odds_result.observation_dir / "request_plan.json").resolve()),
+                "request_plan_sha256": sha256_file(odds_result.observation_dir / "request_plan.json"),
+                "network_attempt_count": int(summary.get("network_attempt_count", 0)),
+                "credits_consumed": summary.get("credits_consumed"),
+                "maximum_credits": summary.get("maximum_credits"),
+            }
+            odds_health = daily_health_for_odds(requested=with_odds, result=odds_result)
+            recorder.finish_lane(
+                "odds", status=("READY_WITH_ODDS_WARNING" if odds_health != "READY" else odds_result.classification),
+                reason=(odds_result.classification if odds_health != "READY" else None),
+                outputs=[recorder.odds_observation],
+                provider_requests=int(summary.get("network_attempt_count", 0)),
+                credits_consumed=summary.get("credits_consumed"),
+            )
+    except Exception as error:
+        recorder.fail_lane("odds", error, blocking=False)
+
+    captured = bool(
+        odds_result is not None and odds_result.classification.startswith("CAPTURED_"))
+    odds_path = odds_result.observation_dir / "raw_response.json" if captured else None
+    events_path = odds_result.observation_dir / "events_response.json" if captured else None
+
+    attachment_specs = [
+        ("sog_attachment", "legacy_sog", legacy_sog_prediction, build_sog),
+        ("saves_attachment", "saves", prediction_identities.get("saves"), build_saves),
+        ("points_attachment", "points", prediction_identities.get("points"), build_points),
+    ]
+    for attachment_lane, prediction_lane, identity, builder in attachment_specs:
+        if identity is None or recorder.lane(prediction_lane).status != "COMPLETE":
+            recorder.finish_lane(
+                attachment_lane, status="SKIPPED_UPSTREAM_LANE_BLOCKED",
+                reason=f"{prediction_lane.upper()}_CURRENT_RUN_ARTIFACT_UNAVAILABLE")
+            continue
+        attachment_inputs = [identity]
+        if captured and recorder.odds_observation is not None:
+            attachment_inputs.append(recorder.odds_observation)
+        recorder.start_lane(attachment_lane, inputs=attachment_inputs)
+        _ACTIVE_DAILY_LANE = attachment_lane
+        try:
+            kwargs: dict[str, Any] = {
+                "odds_json": odds_path,
+                "pred_path": Path(identity["path"]),
+                "expected_pred_sha256": identity["sha256"],
+            }
+            if attachment_lane in {"sog_attachment", "points_attachment"}:
+                kwargs["events_json"] = events_path
+            builder(slate, **kwargs)
+            prefix = {"sog_attachment": "sog", "saves_attachment": "saves", "points_attachment": "points"}[attachment_lane]
+            outputs = [
+                artifact_identity(SITE_DIR / f"{prefix}_with_market.csv"),
+                artifact_identity(SITE_DIR / f"unmatched_{prefix}.csv"),
+            ]
+            recorder.finish_lane(attachment_lane, outputs=outputs)
+        except Exception as error:
+            recorder.fail_lane(attachment_lane, error, blocking=False)
+
+    recorder.start_lane("research_integrity")
+    _ACTIVE_DAILY_LANE = "research_integrity"
+    research_warnings: list[str] = []
+    if recorder.lane("legacy_sog").status == "COMPLETE":
+        for label, callback in (
+            ("SOG_RESIDUAL_REFRESH", lambda: refresh_sog_residual_dataset(slate=slate)),
+            ("SOG_RECONCILIATION_REFRESH", lambda: refresh_sog_reconcile_artifacts(to_date=slate)),
+        ):
+            try:
+                callback()
+            except Exception as error:
+                research_warnings.append(f"{label}:{type(error).__name__}:{error}")
+        try:
+            run([
+                PY, SCRIPTS_DIR / "sog_integrity_report.py", "--slate-date", slate,
+                "--feature-key", "shots_on_goal_denali", "--db-toi-check",
+                "--db-toi-source", "nhl.skater_game_logs_raw", "--db-toi-days-back", "30",
+            ])
+        except Exception as error:
+            research_warnings.append(f"SOG_INTEGRITY:{type(error).__name__}:{error}")
+    else:
+        research_warnings.append("LEGACY_SOG_RESEARCH_SKIPPED_BLOCKED_LANE")
+
+    completed_lanes = {
+        prediction_lane
+        for attachment_lane, prediction_lane in (
+            ("sog_attachment", "legacy_sog"),
+            ("points_attachment", "points"),
+            ("saves_attachment", "saves"),
+        )
+        if recorder.lane(attachment_lane).status == "COMPLETE"
+    }
+    archive_site_artifacts(slate, odds_result=odds_result, completed_lanes=completed_lanes)
+    sanity = f"""
+    WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '{slate}')
+    SELECT 'games_today' AS which, COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}'
+    UNION ALL SELECT 'roster_rows_today', COUNT(*) FROM nhl.roster_status r WHERE r.game_id IN (SELECT game_id FROM g)
+    UNION ALL SELECT 'preds_sog', COUNT(*) FROM nhl.predictions p WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'shots_on_goal'
+    UNION ALL SELECT 'preds_saves', COUNT(*) FROM nhl.predictions p WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'goalie_saves'
+    UNION ALL SELECT 'preds_points', COUNT(*) FROM nhl.predictions p WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'player_points';
+    """
+    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", sanity])
+    recorder.finish_lane(
+        "research_integrity",
+        status="COMPLETE_WITH_BOUNDED_LIMITS" if research_warnings else "COMPLETE",
+        reason=";".join(research_warnings) if research_warnings else None,
+    )
+    _ACTIVE_DAILY_LANE = "shared_prerequisites"
+
+
+def _refresh_all_team_rosters_for_daily(
+    *, slate: str, reuse_roster_observation: Path | None,
+) -> bool:
+    """Run the broad roster fetch unless explicit immutable reuse forbids it."""
+    if reuse_roster_observation is not None:
+        print("ℹ️ explicit roster observation reuse: full-team roster fetch skipped")
+        return False
+    try:
+        run([PY, SCRIPTS_DIR / "refresh_all_team_rosters.py"], env={"SLATE_DATE": slate})
+    except Exception as error:
+        print(f"⚠️ full-team roster refresh failed/skipped (continuing): {error}")
+    return True
+
+
+def _roster_refresh_environment(
+    *, slate_date: str, reuse_roster_observation: Path | None,
+) -> dict[str, str]:
+    environment = {"SLATE_DATE": slate_date}
+    if reuse_roster_observation is not None:
+        environment["NHL_FETCH_DISABLE"] = "1"
+    return environment
+
+
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
-def cmd_daily(with_odds: bool, morning_only: bool = False,
-              odds_phase: str = "EARLY"):
+def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
+                    daily_run_id: str, recorder: DailyRunRecorder,
+                    reuse_roster_observation: Path | None = None):
+    global _ACTIVE_DAILY_LANE
     db = require_db_url()
     odds_phase = str(odds_phase).upper()
     if odds_phase not in PHASES:
         raise ValueError(f"unsupported daily phase: {odds_phase}")
-    started_utc = datetime.now(timezone.utc)
-    daily_run_id = os.environ.get("NHL_DAILY_RUN_ID") or (
-        f"nhldaily_{started_utc.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
-    )
     print(f"NHL_DAILY_RUN_ID={daily_run_id}")
     print("NHL_DAILY_EXECUTION_GRAPH=" + ">".join(DAILY_EXECUTION_GRAPH))
 
@@ -1074,6 +1394,9 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     os.environ["YDAY"] = yday
 
     season = infer_nhl_season_from_date_yyyy_mm_dd(yday)
+    recorder.slate_date = slate
+    recorder.canonical_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+    recorder.start_lane("shared_prerequisites")
 
     print(f"SLATE_DATE (PT): {slate}" + (" (honor env)" if honor_env else ""))
     print(f"YDAY       (PT): {yday}" + (" (honor env)" if honor_env else ""))
@@ -1088,12 +1411,10 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     # 0) DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
 
-    # 0b) Full-league roster/player refresh (all teams, not slate-limited)
-    # Non-fatal: if upstream NHL API is flaky, keep daily slate pipeline running.
-    try:
-        run([PY, SCRIPTS_DIR / "refresh_all_team_rosters.py"], env={"SLATE_DATE": slate})
-    except Exception as e:
-        print(f"⚠️ full-team roster refresh failed/skipped (continuing): {e}")
+    # 0b) Full-league roster/player refresh (all teams, not slate-limited).
+    # Explicit roster reuse prohibits a second roster-provider acquisition.
+    _refresh_all_team_rosters_for_daily(
+        slate=slate, reuse_roster_observation=reuse_roster_observation)
 
     # ============================================================
     # PHASE A: Finalize YDAY into raw/history FIRST (the guardrail)
@@ -1101,7 +1422,11 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
 
     # A1) Pull yesterday logs + shiftcharts into stage (safe even if yday had no games)
     run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
-    run([PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env={"SLATE_DATE": yday})
+    run(
+        [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"],
+        env=_roster_refresh_environment(
+            slate_date=yday, reuse_roster_observation=reuse_roster_observation),
+    )
     run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"],        env={"SLATE_DATE": yday})
     run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
 
@@ -1219,6 +1544,12 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     if slate_health.get("slate_date") != slate or not slate_health.get("downstream_ready"):
         raise RuntimeError(f"NHL slate not downstream-ready for {slate}: {slate_health}")
     if slate_health.get("completion_status") == "VALID_EMPTY_SLATE":
+        recorder.set_canonical(
+            slate_date=slate,
+            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+            game_ids=[],
+            game_set_hash=canonical_game_set_hash([]),
+        )
         print(f"ℹ️ Valid empty NHL slate for {slate} — skipping scoring/export steps.")
         return
     if slate_health.get("completion_status") != "READY":
@@ -1228,6 +1559,13 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
         slate_date=slate,
         raw_schedule_path=slate_health_path.parent / "raw_schedule_response.json",
         slate_health_path=slate_health_path,
+    )
+    game_hash = canonical_game_set_hash(game.game_id for game in canonical_games)
+    recorder.set_canonical(
+        slate_date=slate,
+        season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+        game_ids=[game.game_id for game in canonical_games],
+        game_set_hash=game_hash,
     )
 
     # --- EARLY EXIT: no NHL games on this slate date ---
@@ -1242,19 +1580,55 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
         return
     # --- end early exit ---
 
-    run(
-        [PY, SCRIPTS_DIR / "import_roster_today.py"],
-        env={"SLATE_DATE": slate, "SKIP_ROSTER_STATUS": "1", "SKIP_PLAYERS": "1"},
-    )
-    run(
-        [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"],
-        env={
-            "SLATE_DATE": slate,
-            "NHL_DAILY_PHASE": odds_phase,
-            "NHL_PARENT_DAILY_RUN_ID": daily_run_id,
-            "NHL_ROSTER_OBSERVATION_ROOT": str(ROSTER_OBSERVATION_ROOT),
-        },
-    )
+    recorder.finish_lane("shared_prerequisites", database_rows_written=True)
+    recorder.start_lane("roster", inputs=[{
+        "canonical_game_set_hash": game_hash,
+        "reuse_requested": reuse_roster_observation is not None,
+    }])
+    _ACTIVE_DAILY_LANE = "roster"
+    roster_env = {
+        "SLATE_DATE": slate,
+        "NHL_DAILY_PHASE": odds_phase,
+        "NHL_PARENT_DAILY_RUN_ID": daily_run_id,
+        "NHL_ROSTER_OBSERVATION_ROOT": str(ROSTER_OBSERVATION_ROOT),
+    }
+    if reuse_roster_observation is not None:
+        reuse_reference = verify_roster_observation_reuse(
+            reuse_roster_observation,
+            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+            slate_date=slate,
+            phase=odds_phase,
+            canonical_game_ids=[game.game_id for game in canonical_games],
+            canonical_game_set_hash=game_hash,
+        )
+        recorder.roster_observation = reuse_reference
+        roster_env["NHL_REUSE_ROSTER_OBSERVATION"] = str(reuse_roster_observation.resolve())
+        roster_env["NHL_FETCH_DISABLE"] = "1"
+    else:
+        run(
+            [PY, SCRIPTS_DIR / "import_roster_today.py"],
+            env={"SLATE_DATE": slate, "SKIP_ROSTER_STATUS": "1", "SKIP_PLAYERS": "1"},
+        )
+    roster_result = run(
+        [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env=roster_env)
+    structured = next((child for child in reversed(recorder.children)
+                       if child.get("schema_version") == "NHL_ROSTER_CHILD_SUMMARY_V1"), None)
+    if structured:
+        if recorder.roster_observation is None and structured.get("roster_observation"):
+            recorder.roster_observation = {
+                "path": structured["roster_observation"],
+                "manifest_sha256": structured.get("roster_manifest_sha256"),
+                "reuse_mode": "NEW_IMMUTABLE_OBSERVATION",
+            }
+        recorder.finish_lane(
+            "roster", status="REUSED" if reuse_roster_observation else "COMPLETE",
+            outputs=[recorder.roster_observation] if recorder.roster_observation else [],
+            database_rows_written=True,
+            database_stage_summary=structured.get("database_stage_summary") or {},
+        )
+    else:
+        raise RuntimeError("ROSTER_CHILD_SUMMARY_MISSING")
+    _ACTIVE_DAILY_LANE = "shared_prerequisites"
 
     # 2) Seed features for today (SOG + Saves).
     run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",    vars={"slate_date": slate})
@@ -1292,21 +1666,31 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     n = int(row["n"])
     null_5v5 = int(row["null_5v5"])
     null_season_5v5 = int(row["null_season_5v5"])
+    sog_gate = evaluate_legacy_sog_toi_gate(
+        population_rows=n, null_5v5=null_5v5,
+        null_season_5v5=null_season_5v5)
+    null_ratio = sog_gate["null_ratio"]
 
     # Allow a couple misses (callups), but not systemic failure. During the
     # morning-only preparation boundary this is a SOG-lane prerequisite, not a
     # reason to suppress independently viable Points/Saves exports.
-    sog_prerequisite_blocked = n > 0 and (
-        null_5v5 > 0.20 * n or null_season_5v5 > 0.20 * n
-    )
-    if sog_prerequisite_blocked and not morning_only:
-        raise AssertionError(f"[SOG] season TOI features missing too often for {slate}: {row}")
+    sog_prerequisite_blocked = bool(sog_gate["blocked"])
+    recorder.start_lane("legacy_sog", inputs=[{
+        "slate_date": slate,
+        "population_rows": n,
+        "null_szn_toi_per_game_5on5": null_5v5,
+        "null_season_5on5_icetime_per_game": null_season_5v5,
+        "null_ratio": null_ratio,
+        "maximum_null_ratio": 0.20,
+    }])
     if sog_prerequisite_blocked:
         print(
             "SOG_PREREQUISITE_BLOCKED_LANE_LOCAL "
             f"slate={slate} n={n} null_5v5={null_5v5} "
             f"null_season_5v5={null_season_5v5}"
         )
+        recorder.finish_lane(
+            "legacy_sog", status="BLOCKED_LANE_LOCAL", reason=LEGACY_SOG_TOI_REASON)
 
     # After seed_sog_features_for_slate + pairings fills
 
@@ -1327,18 +1711,68 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     if not sog_prerequisite_blocked:
         export_sog_denali_features(db, slate, sog_feat_path)
 
-    # 4b) Saves / Points exporters
-    saves_csv  = psql_stdout(SQL_DIR / "export_saves_from_denali.sql", vars={"slate_date": slate})
-    points_csv = psql_stdout(SQL_DIR / "export_points.sql",            vars={"slate_date": slate})
-    (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
-    (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
+    # 4b) Saves / Points exporters are independent lane inputs.
+    saves_export_ready = points_export_ready = False
+    try:
+        saves_csv = psql_stdout(SQL_DIR / "export_saves_from_denali.sql", vars={"slate_date": slate})
+        (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
+        saves_export_ready = True
+    except Exception as error:
+        recorder.fail_lane("saves", error, blocking=False)
+    try:
+        points_csv = psql_stdout(SQL_DIR / "export_points.sql", vars={"slate_date": slate})
+        (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
+        points_export_ready = True
+    except Exception as error:
+        recorder.fail_lane("points", error, blocking=False)
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
 
     if morning_only:
+        if not sog_prerequisite_blocked:
+            recorder.finish_lane(
+                "legacy_sog", status="PREREQUISITES_READY",
+                reason="MORNING_ONLY_SCORING_NOT_RUN")
+        for lane_name in ("points", "saves"):
+            if recorder.lane(lane_name).status != "FAILED_NONBLOCKING":
+                recorder.finish_lane(
+                    lane_name, status="PREREQUISITES_READY",
+                    reason="MORNING_ONLY_SCORING_NOT_RUN")
+        recorder.finish_lane(
+            "cold_start_sog_reference", status="NOT_INVOKED_EXTERNAL_OWNER",
+            reason="PREDICTION_ONLY_OBSERVER_OWNS_COLD_START_SOG")
+        recorder.finish_lane("odds", status="SKIPPED_MORNING_ONLY")
+        for lane_name in ("sog_attachment", "points_attachment", "saves_attachment"):
+            recorder.finish_lane(lane_name, status="SKIPPED_MORNING_ONLY")
+        recorder.finish_lane("research_integrity", status="SKIPPED_MORNING_ONLY")
         print("✅ Morning-only boundary reached: stable upstream state prepared; scoring, markets, candidates, and uploads skipped.")
         return
 
-    calibrated_pred_path = PROC_DIR / "sog_predictions_wide_calibrated.csv"
+    if sog_prerequisite_blocked:
+        _run_independent_daily_lanes(
+            recorder=recorder, db=db, slate=slate, with_odds=with_odds,
+            odds_phase=odds_phase, daily_run_id=daily_run_id,
+            canonical_games=canonical_games,
+            saves_export_ready=saves_export_ready,
+            points_export_ready=points_export_ready,
+            legacy_sog_prediction=None,
+        )
+        return
+
+    prediction_run_dir = PROC_DIR / "daily_runs" / daily_run_id
+    prediction_run_dir.mkdir(parents=True, exist_ok=True)
+    calibrated_pred_path = prediction_run_dir / "sog_predictions_wide_calibrated.csv"
+    recorder.independent_context = {
+        "db": db,
+        "slate": slate,
+        "with_odds": with_odds,
+        "odds_phase": odds_phase,
+        "daily_run_id": daily_run_id,
+        "canonical_games": canonical_games,
+        "saves_export_ready": saves_export_ready,
+        "points_export_ready": points_export_ready,
+        "legacy_sog_prediction": None,
+    }
+    _ACTIVE_DAILY_LANE = "legacy_sog"
     sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
     if sog_scorer == "poisson_baseline":
         run(
@@ -1391,7 +1825,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     shadow_enabled = _env_bool("NHL_SOG_DEFENSE_SHADOW_ENABLED", default=shadow_default)
     shadow_required = _env_bool("NHL_SOG_DEFENSE_SHADOW_REQUIRED", default=False)
     if shadow_enabled and sog_scorer == "poisson_baseline":
-        shadow_pred_path = PROC_DIR / "sog_predictions_wide_defense_surprise_shadow.csv"
+        shadow_pred_path = prediction_run_dir / "sog_predictions_wide_defense_surprise_shadow.csv"
         shadow_cmd = [
             PY,
             SCRIPTS_DIR / "score_sog_poisson_defense_surprise_shadow.py",
@@ -1526,6 +1960,9 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
                 ) from exc
             print(f"⚠️ segmented SOG calibration failed; continuing with ordinal output: {exc}")
 
+    legacy_sog_identity = _require_current_prediction_artifact(
+        calibrated_pred_path, slate=slate, expected_sha256=None)
+
     # 5b) Load SOG into nhl.predictions
     run(
         [
@@ -1540,164 +1977,148 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
             "--feature-hash", sog_feature_hash,
         ]
     )
-    # 6) Score + load Saves
-    saves_model_dir = MODELS_DIR / "latest" / "goalie_saves"
-    if saves_model_dir.exists():
-        run(
-            [
-                PY,
-                SCRIPTS_DIR / "score_nhl_props.py",
-                "--model-dir",    saves_model_dir,
-                "--csv",          EXPORTS_DIR / "train_goalie_saves_v2.csv",
-                "--feature-json", "backend/nhl/features/feature_metadata_nhl.json",
-                "--feature-key",  "goalie_saves",
-                "--line",         "18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5",
-                "--out",          PROC_DIR / "saves_predictions.csv",
-            ]
-        )
-        saves_pred_csv = PROC_DIR / "saves_predictions.csv"
-        if saves_pred_csv.exists():
-            run(
-            [
-                PY,
-                SCRIPTS_DIR / "load_nhl_predictions_generic.py",
-                "--pred-csv", str(saves_pred_csv),
-                "--project",  "nhl",
-                "--prop",     "goalie_saves",
-                "--model-family", "phoenix",
-                "--model-version", "phoenix_v2",
-                "--feature-hash", "phoenix_v2",
-            ]
-        )
-
-        else:
-            print(f"⚠️ saves_predictions.csv not found at {saves_pred_csv} — skipping saves load.")
-    else:
-        print(f"⚠️  No saves models at {saves_model_dir} — skipping saves scoring.")
-
-    # 7) Score points (Phoenix) + load
-    run(
-        [
-            PY,
-            SCRIPTS_DIR / "score_points_phoenix.py",
-            "--features-csv", EXPORTS_DIR / "train_nhl_points_v2.csv",
-            "--model-root",   MODELS_DIR / "latest" / "points",
-            "--out",          PROC_DIR / "points_predictions.csv",
-        ]
-    )
-
-    points_pred_csv = PROC_DIR / "points_predictions.csv"
-    if points_pred_csv.exists():
-        run(
-        [
-            PY,
-            SCRIPTS_DIR / "load_nhl_predictions_generic.py",
-            "--pred-csv", str(points_pred_csv),
-            "--project",  "nhl",
-            "--prop",     "player_points",
-            "--model-family", "phoenix",
-            "--model-version", "phoenix_v2",
-            "--feature-hash", "phoenix_v2",
-        ]
-    )
-
-    else:
-        print(f"⚠️ points predictions CSV not found at {points_pred_csv} — skipping points load.")
-
-    # 8) Optional governed odds observation. Predictions are already durable;
-    # this stage cannot suppress them or reinterpret zero market matches.
-    odds_result: OddsObservationResult | None = None
-    odds_result = run_optional_odds_observation(
-        with_odds=with_odds,
-        slate=slate,
-        season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
-        phase=odds_phase,
-        parent_daily_run_id=daily_run_id,
+    recorder.finish_lane(
+        "legacy_sog", outputs=[legacy_sog_identity], database_rows_written=True)
+    _run_independent_daily_lanes(
+        recorder=recorder, db=db, slate=slate, with_odds=with_odds,
+        odds_phase=odds_phase, daily_run_id=daily_run_id,
         canonical_games=canonical_games,
+        saves_export_ready=saves_export_ready,
+        points_export_ready=points_export_ready,
+        legacy_sog_prediction=legacy_sog_identity,
     )
+    return
 
-    captured_for_attachment = (
-        odds_result is not None and odds_result.classification.startswith("CAPTURED_")
+
+def cmd_daily(with_odds: bool, morning_only: bool = False,
+              odds_phase: str = "EARLY",
+              reuse_roster_observation: Path | None = None):
+    """Run the comprehensive daily graph and always finalize a parent receipt."""
+    global _ACTIVE_DAILY_RECORDER, _ACTIVE_DAILY_LANE
+    odds_phase = str(odds_phase).upper()
+    started = datetime.now(timezone.utc)
+    daily_run_id = os.environ.get("NHL_DAILY_RUN_ID") or (
+        f"nhldaily_{started.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
     )
-    market_odds_path = (
-        odds_result.observation_dir / "raw_response.json" if captured_for_attachment else None)
-    market_events_path = (
-        odds_result.observation_dir / "events_response.json" if captured_for_attachment else None)
+    command = [str(PY), "-m", "backend.nhl.cli", "daily"]
+    if with_odds:
+        command.append("--with-odds")
+    if morning_only:
+        command.append("--morning-only")
+    command.extend(["--odds-phase", odds_phase])
+    if reuse_roster_observation is not None:
+        reuse_roster_observation = Path(reuse_roster_observation).resolve()
+        command.extend(["--reuse-roster-observation", str(reuse_roster_observation)])
 
-    # 9) Build site CSVs from the run-bound observation only.  With no odds
-    # authorization or a failed observation, builders retain predictions with
-    # no market attachment and never fall back to stale mutable JSON.
-    build_sog(slate, odds_json=market_odds_path, events_json=market_events_path)
-    build_saves(slate, odds_json=market_odds_path)
-    build_points(slate, odds_json=market_odds_path, events_json=market_events_path)
-
-    # 9a) Refresh residual dataset + reconcile artifacts used by policy replay/testing.
-    dataset_refresh_enabled = _env_bool("NHL_DAILY_SOG_DATASET_REFRESH_ENABLED", default=True)
-    dataset_refresh_required = _env_bool("NHL_DAILY_SOG_DATASET_REFRESH_REQUIRED", default=False)
-    if dataset_refresh_enabled:
-        try:
-            refresh_sog_residual_dataset(slate=slate)
-            print("✅ SOG residual dataset refreshed.")
-        except Exception as exc:
-            if dataset_refresh_required:
-                raise RuntimeError(
-                    "SOG residual dataset refresh failed with NHL_DAILY_SOG_DATASET_REFRESH_REQUIRED=1."
-                ) from exc
-            print(f"⚠️ SOG residual dataset refresh failed (continuing): {exc}")
-
-    reconcile_enabled = _env_bool("NHL_DAILY_RECONCILE_ENABLED", default=True)
-    reconcile_required = _env_bool("NHL_DAILY_RECONCILE_REQUIRED", default=False)
-    if reconcile_enabled:
-        try:
-            refresh_sog_reconcile_artifacts(to_date=slate)
-            print("✅ SOG reconcile artifacts refreshed.")
-        except Exception as exc:
-            if reconcile_required:
-                raise RuntimeError(
-                    "SOG reconcile refresh failed with NHL_DAILY_RECONCILE_REQUIRED=1."
-                ) from exc
-            print(f"⚠️ SOG reconcile refresh failed (continuing): {exc}")
-
-    archive_site_artifacts(slate, odds_result=odds_result)
-
-    # 9b) SOG integrity report (warn-only, except guard-fatal)
+    recorder = DailyRunRecorder(
+        run_id=daily_run_id, command=command, phase=odds_phase, started_at=started)
+    _ACTIVE_DAILY_RECORDER = recorder
+    _ACTIVE_DAILY_LANE = "shared_prerequisites"
+    pending_error: BaseException | None = None
+    receipt_path: Path | None = None
     try:
-        run(
-            [
-                PY,
-                SCRIPTS_DIR / "sog_integrity_report.py",
-                "--slate-date", slate,
-                "--feature-key", "shots_on_goal_denali",
-                "--db-toi-check",
-                "--db-toi-source", "nhl.skater_game_logs_raw",
-                "--db-toi-days-back", "30",
-            ]
-        )
-    except SystemExit as e:
-        # Preserve guard semantics: die(..., code=2) should stop the pipeline
-        if getattr(e, "code", None) == 2:
-            raise
-        print(f"⚠️ sog_integrity_report exited (continuing): {e}")
-    except Exception as e:
-        # Non-guard failures remain warn-only
-        print(f"⚠️ sog_integrity_report failed (continuing): {e}")
+        # Reuse is an explicit pre-execution contract. Validate against the
+        # retained canonical slate before DB access, roster DML, or any provider.
+        if reuse_roster_observation is not None:
+            preflight_slate = et_today()
+            slate_root = ROOT / "artifacts" / "operational" / "nhl" / "slates" / preflight_slate
+            preflight_games = load_canonical_slate(
+                slate_date=preflight_slate,
+                raw_schedule_path=slate_root / "raw_schedule_response.json",
+                slate_health_path=slate_root / "slate_health.json",
+            )
+            preflight_hash = canonical_game_set_hash(game.game_id for game in preflight_games)
+            recorder.set_canonical(
+                slate_date=preflight_slate,
+                season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
+                game_ids=[game.game_id for game in preflight_games],
+                game_set_hash=preflight_hash,
+            )
+            recorder.roster_observation = verify_roster_observation_reuse(
+                reuse_roster_observation,
+                season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
+                slate_date=preflight_slate,
+                phase=odds_phase,
+                canonical_game_ids=[game.game_id for game in preflight_games],
+                canonical_game_set_hash=preflight_hash,
+            )
+        _cmd_daily_impl(
+            with_odds=with_odds, morning_only=morning_only,
+            odds_phase=odds_phase, daily_run_id=daily_run_id,
+            recorder=recorder, reuse_roster_observation=reuse_roster_observation)
+        if recorder.lane("shared_prerequisites").status == "RUNNING":
+            recorder.finish_lane("shared_prerequisites")
+        if recorder.lane("shared_prerequisites").status == "COMPLETE":
+            for lane in recorder.lanes.values():
+                if lane.status == "NOT_STARTED":
+                    recorder.finish_lane(
+                        lane.name, status="SKIPPED_VALID_EMPTY_SLATE",
+                        reason="NO_CANONICAL_GAMES")
+    except BaseException as error:
+        failed_lane = _ACTIVE_DAILY_LANE
+        recorder.failure = {
+            "lane": failed_lane,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+        }
+        # Once shared inputs, roster state, and the independent feature exports
+        # are proven, any legacy-SOG exception is lane-local. Continue from the
+        # captured context instead of allowing it to terminate Points/Saves/odds.
+        if (
+            failed_lane == "legacy_sog"
+            and recorder.independent_context is not None
+            and recorder.lane("shared_prerequisites").status == "COMPLETE"
+            and recorder.lane("roster").status in {"COMPLETE", "REUSED"}
+        ):
+            recorder.fail_lane("legacy_sog", error, blocking=False)
+            try:
+                _run_independent_daily_lanes(
+                    recorder=recorder, **recorder.independent_context)
+            except BaseException as continuation_error:
+                pending_error = continuation_error
+                recorder.fail_lane(
+                    "shared_prerequisites",
+                    RuntimeError(
+                        "INDEPENDENT_CONTINUATION_INTEGRITY_FAILED:"
+                        f"{type(continuation_error).__name__}:{continuation_error}"
+                    ),
+                    blocking=True,
+                )
+                recorder.failure = {
+                    "lane": _ACTIVE_DAILY_LANE,
+                    "error_type": type(continuation_error).__name__,
+                    "error_message": str(continuation_error),
+                }
+        else:
+            pending_error = error
+            active = recorder.lane(failed_lane)
+            if active.blocking:
+                recorder.fail_lane(active.name, error, blocking=True)
+            else:
+                recorder.fail_lane(active.name, error, blocking=False)
+                recorder.fail_lane(
+                    "shared_prerequisites",
+                    RuntimeError(
+                        f"UNCONTAINED_LANE_EXCEPTION:{active.name}:"
+                        f"{type(error).__name__}:{error}"
+                    ),
+                    blocking=True,
+                )
+    finally:
+        receipt_root = Path(os.environ.get(
+            "NHL_DAILY_RECEIPT_ROOT", str(DAILY_RUN_RECEIPT_ROOT)))
+        try:
+            receipt_path = recorder.finalize(receipt_root)
+            print(
+                f"NHL_DAILY_RECEIPT={receipt_path} "
+                f"classification={recorder.classification()}")
+        finally:
+            _ACTIVE_DAILY_RECORDER = None
+            _ACTIVE_DAILY_LANE = "shared_prerequisites"
+    if pending_error is not None:
+        raise pending_error
+    return receipt_path
 
-    # 11) Sanity counts (for slate games)
-    sanity = f"""
-    WITH g AS (SELECT game_id FROM nhl.games WHERE game_date = DATE '{slate}')
-    SELECT 'games_today'            AS which, COUNT(*) FROM nhl.games         WHERE game_date = DATE '{slate}'
-    UNION ALL SELECT 'roster_rows_today', COUNT(*) FROM nhl.roster_status r   WHERE r.game_id IN (SELECT game_id FROM g)
-    UNION ALL SELECT 'preds_sog',         COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'shots_on_goal'
-    UNION ALL SELECT 'preds_saves',       COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'goalie_saves'
-    UNION ALL SELECT 'preds_points',      COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g) AND p.prop = 'player_points'
-    UNION ALL SELECT 'predictions_total', COUNT(*) FROM nhl.predictions p     WHERE p.game_id IN (SELECT game_id FROM g);
-    """
-    sanity_res = run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", sanity])
-    if sanity_res.stdout:
-        print(sanity_res.stdout, end="")
-
-    health = daily_health_for_odds(requested=with_odds, result=odds_result)
-    print(f"\n✅ Daily pipeline complete. DAILY_HEALTH={health}. Site data in nhl/site/data/.")
 
 # ---------- entrypoint ----------
 
@@ -1710,6 +2131,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     d.add_argument("--odds-phase", choices=PHASES, default=os.environ.get("NHL_DAILY_PHASE", "EARLY"),
                    help="Governed append-only odds/roster observation phase")
     d.add_argument("--morning-only", action="store_true", help="Prepare stable upstream state only; skip scoring and market-timed work")
+    d.add_argument(
+        "--reuse-roster-observation", type=Path, default=None,
+        help="Explicit verified immutable roster package to reuse; validation failure stops before DB/provider access.",
+    )
 
     fo = sub.add_parser("fetch-odds", help="Fetch odds JSON into nhl/site/data")
     fo.add_argument("--days-from", type=int, default=1)
@@ -1748,7 +2173,8 @@ def main(argv: Sequence[str] | None = None):
 
     if args.cmd == "daily":
         cmd_daily(with_odds=args.with_odds, morning_only=args.morning_only,
-                  odds_phase=args.odds_phase)
+                  odds_phase=args.odds_phase,
+                  reuse_roster_observation=args.reuse_roster_observation)
     elif args.cmd == "fetch-odds":
         fetch_odds(days_from=args.days_from, slate=args.slate, phase=args.phase)
     elif args.cmd == "refresh-rosters-all":
