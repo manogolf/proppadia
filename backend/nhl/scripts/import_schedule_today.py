@@ -41,6 +41,7 @@ if "?gssencmode=" not in DB and "&gssencmode=" not in DB:
 
 BASE_URL = os.getenv("NHL_API_BASE", "https://api-web.nhle.com") + "/v1/schedule"
 HEALTH_ROOT = Path(os.getenv("NHL_SLATE_HEALTH_ROOT", "artifacts/operational/nhl/slates"))
+DB_ACTION_ACCOUNTING_PATH = os.getenv("NHL_DB_ACTION_ACCOUNTING_PATH")
 LAST_FETCH_EVIDENCE: dict = {}
 
 
@@ -154,7 +155,11 @@ def fetch_schedule_for_date(date_str: str) -> list[dict]:
 
 def _write_slate_health(date_str: str, games: list[dict], completion_status: str,
                         downstream_ready: bool, error: str | None = None) -> Path:
-    """Atomically publish date-bound source evidence and the completion gate."""
+    """Atomically publish date-bound evidence under the configured artifact root.
+
+    Ordinary daily imports retain the shared date-root default. Reconciliation
+    supplies a unique run-scoped root through NHL_SLATE_HEALTH_ROOT.
+    """
     dest = HEALTH_ROOT / date_str
     dest.mkdir(parents=True, exist_ok=True)
     raw = LAST_FETCH_EVIDENCE.get("raw_source")
@@ -201,6 +206,89 @@ def _write_slate_health(date_str: str, games: list[dict], completion_status: str
     tmp.write_text(json.dumps(health, indent=2, sort_keys=True) + "\n")
     tmp.replace(health_path)
     return health_path
+
+
+def _same_db_value(left, right) -> bool:
+    """Equality for DB values where NULL and timezone-normalized timestamps matter."""
+    if left is None or right is None:
+        return left is right
+    if isinstance(left, dt.datetime) and isinstance(right, dt.datetime):
+        if left.tzinfo is not None and right.tzinfo is not None:
+            return left.astimezone(dt.timezone.utc) == right.astimezone(dt.timezone.utc)
+    return left == right
+
+
+def _apply_accounted_game_rows(cur, payload: list[dict], team_codes: dict[int, str]) -> dict:
+    """Apply exact game rows in key order and classify actual INSERT/UPDATE/NOOP.
+
+    Existing keys are row-locked and updated only when projected values differ.
+    Missing keys use plain INSERT: a concurrent insert conflicts and aborts the
+    enclosing transaction instead of being misclassified as an update.
+    """
+    ordered = sorted(payload, key=lambda row: int(row["game_id"]))
+    ids = [int(row["game_id"]) for row in ordered]
+    if len(ids) != len(set(ids)):
+        raise RuntimeError("duplicate canonical game key in schedule payload")
+    cur.execute(
+        """SELECT game_id, game_date, start_time_utc, season, game_type,
+                  home_team_code, away_team_code, home_team_id, away_team_id, status
+             FROM nhl.games WHERE game_id = ANY(%s) ORDER BY game_id FOR UPDATE""",
+        (ids,),
+    )
+    columns = [description[0] for description in cur.description]
+    before = {int(row[0]): dict(zip(columns, row)) for row in cur.fetchall()}
+    counts = {"inserted": 0, "updated": 0, "unchanged_noop": 0, "deleted": 0}
+    for row in ordered:
+        gid = int(row["game_id"])
+        expected = {
+            "game_id": gid, "game_date": dt.date.fromisoformat(row["game_date"]),
+            "start_time_utc": dt.datetime.fromisoformat(row["start_time_utc"].replace("Z", "+00:00")) if row["start_time_utc"] else None,
+            "season": row["season"], "game_type": row["game_type"],
+            "home_team_code": team_codes[int(row["home_team_id"])],
+            "away_team_code": team_codes[int(row["away_team_id"])],
+            "home_team_id": int(row["home_team_id"]), "away_team_id": int(row["away_team_id"]),
+        }
+        old = before.get(gid)
+        if old is not None:
+            expected["status"] = row["status"] if row["status"] is not None else old["status"]
+            if all(_same_db_value(old[key], value) for key, value in expected.items()):
+                counts["unchanged_noop"] += 1
+                continue
+            cur.execute(
+                """UPDATE nhl.games SET game_date=%s, start_time_utc=%s, season=%s,
+                       game_type=%s, home_team_code=%s, away_team_code=%s,
+                       home_team_id=%s, away_team_id=%s, status=%s
+                     WHERE game_id=%s""",
+                (expected["game_date"], expected["start_time_utc"], expected["season"],
+                 expected["game_type"], expected["home_team_code"], expected["away_team_code"],
+                 expected["home_team_id"], expected["away_team_id"], expected["status"], gid),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError(f"locked canonical game update count mismatch for {gid}")
+            counts["updated"] += 1
+        else:
+            cur.execute(
+                """INSERT INTO nhl.games
+                     (game_id, game_date, start_time_utc, season, game_type,
+                      home_team_code, away_team_code, home_team_id, away_team_id, status)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (gid, expected["game_date"], expected["start_time_utc"], expected["season"],
+                 expected["game_type"], expected["home_team_code"], expected["away_team_code"],
+                 expected["home_team_id"], expected["away_team_id"], row["status"]),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError(f"canonical game insert count mismatch for {gid}")
+            counts["inserted"] += 1
+    return {"status": "MEASURED_TRANSACTIONAL", **counts, "rows_considered": len(ordered)}
+
+
+def _write_db_action_accounting(accounting: dict) -> None:
+    if DB_ACTION_ACCOUNTING_PATH:
+        path = Path(DB_ACTION_ACCOUNTING_PATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(accounting, sort_keys=True, indent=2) + "\n")
+        tmp.replace(path)
 
 def get_schedule(date_str: str) -> list[dict]:
     """
@@ -510,70 +598,26 @@ def main():
             })
             rows += 1
 
-        # 4) Upsert directly into base using jsonb_to_recordset + join teams (no stage tables)
-        cur.execute(
-            """
-            WITH src AS (
-              SELECT *
-              FROM jsonb_to_recordset(%s::jsonb) AS s(
-                game_id       bigint,
-                game_date     date,
-                start_time_utc text,
-                season        int,
-                game_type     int,
-                home_team_id  int,
-                away_team_id  int,
-                status        text
-              )
-            )
-            INSERT INTO nhl.games (
-              game_id,
-              game_date,
-              start_time_utc,
-              season,
-              game_type,
-              home_team_code,
-              away_team_code,
-              home_team_id,
-              away_team_id,
-              status
-            )
-            SELECT
-              s.game_id,
-              s.game_date,
-              NULLIF(s.start_time_utc, '')::timestamptz,
-              s.season,
-              s.game_type,
-              th.team AS home_team_code,
-              ta.team AS away_team_code,
-              s.home_team_id,
-              s.away_team_id,
-              s.status
-            FROM src s
-            JOIN nhl.teams th ON th.team_id = s.home_team_id
-            JOIN nhl.teams ta ON ta.team_id = s.away_team_id
-            WHERE th.team IS NOT NULL
-              AND ta.team IS NOT NULL
-            ON CONFLICT (game_id) DO UPDATE
-              SET game_date      = EXCLUDED.game_date,
-                  start_time_utc = EXCLUDED.start_time_utc,
-                  season         = EXCLUDED.season,
-                  game_type      = EXCLUDED.game_type,
-                  home_team_code = EXCLUDED.home_team_code,
-                  away_team_code = EXCLUDED.away_team_code,
-                  home_team_id   = EXCLUDED.home_team_id,
-                  away_team_id   = EXCLUDED.away_team_id,
-                  status         = COALESCE(EXCLUDED.status, nhl.games.status)
-            """,
-            (json.dumps(payload),)
-        )
-
-        if cur.rowcount != len(payload):
-            error = f"canonical write count mismatch: expected={len(payload)} stored={cur.rowcount}"
-            _write_slate_health(DATE, games, "PARTIAL", False, error)
-            raise RuntimeError(error)
+        # Classify exact game actions under row locks. Missing-key races fail the
+        # transaction instead of being silently reclassified by ON CONFLICT.
+        team_ids = sorted({int(row[key]) for row in payload
+                           for key in ("home_team_id", "away_team_id")})
+        cur.execute("SELECT team_id, team FROM nhl.teams WHERE team_id = ANY(%s)", (team_ids,))
+        team_codes = {int(team_id): team for team_id, team in cur.fetchall()}
+        if set(team_codes) != set(team_ids) or any(value is None for value in team_codes.values()):
+            raise RuntimeError("canonical schedule references missing team code")
+        game_actions = _apply_accounted_game_rows(cur, payload, team_codes)
 
         conn.commit()
+        _write_db_action_accounting({
+            "contract": "NHL_DB_ACTION_ACCOUNTING_V1",
+            "transaction_status": "COMMITTED",
+            "tables": {"nhl.games": game_actions},
+            "unaccounted_writes": {
+                "nhl.teams": "UNKNOWN: _ensure_teams_exist uses conflict upserts without action ledger",
+                "nhl.team_external_ids": "UNKNOWN: _ensure_team_mappings uses conflict upserts without action ledger",
+            },
+        })
         health_path = _write_slate_health(DATE, games, "READY", True)
         print(f"✅ Upserted {rows} games for {DATE} (PT) (no stage tables)")
         print(f"✅ Slate health: {health_path}")

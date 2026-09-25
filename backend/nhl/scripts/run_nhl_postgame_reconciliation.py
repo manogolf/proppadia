@@ -79,6 +79,10 @@ DEFAULT_OPERATIONAL_ROOT = ROOT / "artifacts/operational/nhl"
 SCRIPTS = ROOT / "backend/nhl/scripts"
 SQL = ROOT / "backend/nhl/sql"
 FINAL_STATES = {"FINAL", "OFF"}
+SEP24_PLAYER_IDENTITY_SLATE = "2026-09-24"
+SEP24_PLAYER_IDENTITY_ID = 8481749
+SEP24_PLAYER_IDENTITY_GAME_IDS = list(range(2026010037, 2026010048))
+SEP24_PLAYER_IDENTITY_GAME_HASH = "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3"
 
 REQUEST_RUN_RECEIPTS = {
     "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6": {
@@ -121,8 +125,39 @@ REQUEST_RUN_RECEIPTS = {
 }
 
 
-def _receipt(run_id: str, *, role: str, slate_date: str) -> dict[str, object]:
+def _receipt(
+    run_id: str, *, role: str, slate_date: str,
+    output_root: Path = DEFAULT_OUTPUT,
+) -> dict[str, object]:
     receipt = REQUEST_RUN_RECEIPTS.get(run_id)
+    if (receipt is None and role == "PLAYER_IDENTITY_RESPONSE_SOURCE"
+            and slate_date == SEP24_PLAYER_IDENTITY_SLATE):
+        path = _acquisition_receipt_path(output_root, slate_date, run_id)
+        if not path.is_file():
+            raise RuntimeError(f"REQUEST_RUN_RECEIPT_NOT_ALLOWLISTED:{run_id}")
+        payload = json.loads(path.read_text())
+        if (payload.get("contract_version") != "NHL_PLAYER_IDENTITY_ACQUISITION_V1"
+                or payload.get("status") != "COMPLETE"
+                or payload.get("run_id") != run_id
+                or payload.get("slate_date") != SEP24_PLAYER_IDENTITY_SLATE
+                or payload.get("canonical_game_set_hash") != SEP24_PLAYER_IDENTITY_GAME_HASH
+                or payload.get("game_ids") != SEP24_PLAYER_IDENTITY_GAME_IDS
+                or payload.get("player_id") != SEP24_PLAYER_IDENTITY_ID
+                or payload.get("endpoint_identity") != {
+                    "slate_date": SEP24_PLAYER_IDENTITY_SLATE,
+                    "player_id": SEP24_PLAYER_IDENTITY_ID,
+                }):
+            raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_RECEIPT_SCOPE_INVALID")
+        receipt = {
+            "roles": ["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+            "slate_date": SEP24_PLAYER_IDENTITY_SLATE,
+            "player_id": SEP24_PLAYER_IDENTITY_ID,
+            "journal_sha256": payload.get("journal_sha256"),
+            "tree_fingerprint": payload.get("tree_fingerprint"),
+            "object_sha256": payload.get("object_sha256"),
+            "index_sha256": payload.get("index_sha256"),
+            "response_set_sha256": payload.get("response_set_sha256"),
+        }
     if receipt is None:
         raise RuntimeError(f"REQUEST_RUN_RECEIPT_NOT_ALLOWLISTED:{run_id}")
     if role not in receipt["roles"] or receipt["slate_date"] != slate_date:
@@ -378,6 +413,120 @@ def authority_roster_acquisition(
         "database_requests": 0, "database_writes": 0,
         "player_landing_requests": 0, "shift_chart_requests": 0,
         "play_by_play_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+    }
+    receipt_path = _acquisition_receipt_path(output_root, slate_date, run_id)
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(receipt_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.write(descriptor, (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return {**receipt, "receipt_path": str(receipt_path)}
+
+
+def player_identity_acquisition(
+    *, slate_date: str, player_id: int, source_binding: dict[str, object],
+    output_root: Path,
+) -> dict[str, object]:
+    """Retain one authorized Sep 24 player landing as a typed source receipt."""
+    game_ids = sorted(int(value) for value in source_binding["game_ids"])
+    if (slate_date != SEP24_PLAYER_IDENTITY_SLATE
+            or int(player_id) != SEP24_PLAYER_IDENTITY_ID
+            or game_ids != SEP24_PLAYER_IDENTITY_GAME_IDS
+            or canonical_game_set_hash(game_ids) != SEP24_PLAYER_IDENTITY_GAME_HASH):
+        raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_SCOPE_INVALID")
+
+    started = datetime.now(timezone.utc)
+    run_id = (f"nhlpostgameid_{slate_date.replace('-', '')}_"
+              f"{started.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}")
+    request_root = output_root / "request_runs" / slate_date / run_id
+    journal = request_root / "official_request_journal.jsonl"
+    cache = request_root / "preserved_responses"
+    identity = {"slate_date": slate_date, "player_id": SEP24_PLAYER_IDENTITY_ID}
+    env_values = {
+        ENV_REQUIRED: "1", ENV_RUN_ID: run_id, ENV_JOURNAL: str(journal),
+        ENV_CACHE: str(cache), ENV_SLATE: slate_date,
+        ENV_GAME_HASH: SEP24_PLAYER_IDENTITY_GAME_HASH,
+        ENV_GAME_IDS: ",".join(str(value) for value in game_ids),
+        ENV_AUTHORIZED_PLAYER_LOOKUP_IDS: str(SEP24_PLAYER_IDENTITY_ID),
+    }
+    for key in (ENV_SOURCE_CACHE, ENV_SOURCE_RUN_ID, ENV_SOURCE_JOURNAL_SHA256,
+                ENV_RESPONSE_SOURCE_LEDGER):
+        os.environ.pop(key, None)
+    os.environ.update(env_values)
+    context = RequestContext.from_env(required=True)
+    if context.authorized_player_lookup_ids != frozenset({SEP24_PLAYER_IDENTITY_ID}):
+        raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_AUTHORIZATION_INVALID")
+
+    response = official_get(
+        f"https://api-web.nhle.com/v1/player/{SEP24_PLAYER_IDENTITY_ID}/landing",
+        timeout=10, stage="PLAYER_IDENTITY_ACQUISITION",
+        endpoint_family="PLAYER_LANDING", identity=identity,
+        max_attempts=1, retry_statuses=(), preserve_response=True,
+        reuse_preserved=False,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    returned_id = payload.get("playerId") or payload.get("id")
+    if returned_id is None or int(returned_id) != SEP24_PLAYER_IDENTITY_ID:
+        raise RuntimeError(
+            f"PLAYER_LANDING_IDENTITY_MISMATCH:{SEP24_PLAYER_IDENTITY_ID}:{returned_id}")
+    authoritative_player_name(payload.get("firstName"), payload.get("lastName"))
+
+    accounting = summarize_journal(
+        journal, run_id=run_id, expected_game_hash=SEP24_PLAYER_IDENTITY_GAME_HASH)
+    expected_accounting = {
+        "total_logical_requests": 1, "total_network_attempts": 1,
+        "successful_responses": 1, "failed_attempts": 0,
+        "retries": 0, "fallback_attempts": 0, "cache_reuse_events": 0,
+        "allowed_redirects": 0, "odds_api_requests": 0, "paid_credits": 0,
+    }
+    if any(accounting.get(key) != value for key, value in expected_accounting.items()):
+        raise RuntimeError(f"PLAYER_IDENTITY_REQUEST_ACCOUNTING_MISMATCH:{accounting}")
+
+    token = sha256_bytes(json.dumps(
+        {"endpoint_family": "PLAYER_LANDING", "identity": identity},
+        sort_keys=True, separators=(",", ":")).encode())
+    index = cache / "index" / f"{token}.json"
+    if not index.is_file():
+        raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_INDEX_MISSING")
+    metadata = json.loads(index.read_text())
+    object_path = cache / "objects" / str(metadata.get("object_name") or "")
+    if not object_path.is_file():
+        raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_OBJECT_MISSING")
+    body = object_path.read_bytes()
+    object_sha256 = sha256_bytes(body)
+    if (metadata.get("endpoint_family") != "PLAYER_LANDING"
+            or metadata.get("identity") != identity
+            or metadata.get("response_sha256") != object_sha256
+            or int(metadata.get("response_bytes") or -1) != len(body)):
+        raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_CACHE_BINDING_INVALID")
+    if (len(list((cache / "index").glob("*.json"))) != 1
+            or len(list((cache / "objects").glob("*.json"))) != 1):
+        raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_CACHE_CARDINALITY_INVALID")
+    verify_payload_identity("PLAYER_LANDING", identity, body)
+    index_sha256 = _sha256_file(index)
+    claim = {
+        "endpoint_family": "PLAYER_LANDING", "resource_identity": identity,
+        "index_sha256": index_sha256, "object_sha256": object_sha256,
+        "response_bytes": len(body),
+    }
+    receipt = {
+        "contract_version": "NHL_PLAYER_IDENTITY_ACQUISITION_V1",
+        "status": "COMPLETE", "run_id": run_id, "slate_date": slate_date,
+        "game_ids": SEP24_PLAYER_IDENTITY_GAME_IDS,
+        "canonical_game_set_hash": SEP24_PLAYER_IDENTITY_GAME_HASH,
+        "player_id": SEP24_PLAYER_IDENTITY_ID, "endpoint_identity": identity,
+        "request_accounting": accounting, "journal_sha256": _sha256_file(journal),
+        "tree_fingerprint": request_run_tree_fingerprint(
+            request_root, repository_root=ROOT),
+        "object_sha256": object_sha256, "index_sha256": index_sha256,
+        "response_bytes": len(body),
+        "response_set_sha256": sha256_bytes(json.dumps(
+            [claim], sort_keys=True, separators=(",", ":")).encode()),
+        "database_requests": 0, "database_writes": 0,
+        "other_player_lookups": 0, "bookmaker_requests": 0, "paid_credits": 0,
     }
     receipt_path = _acquisition_receipt_path(output_root, slate_date, run_id)
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -989,12 +1138,15 @@ def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_autho
     return official, boxes, requests_made
 
 
-def _run(command: list[str], slate_date: str, dsn: str) -> None:
+def _run(command: list[str], slate_date: str, dsn: str,
+         extra_env: dict[str, str] | None = None) -> None:
     env = os.environ.copy()
     # Some retained collectors prefer DATABASE_URL while others prefer
     # SUPABASE_DB_URL.  Resolve both to the already validated DSN so a literal
     # shell-style alias from an env file cannot leak into a child process.
     env.update({"SLATE_DATE": slate_date, "SUPABASE_DB_URL": dsn, "DATABASE_URL": dsn})
+    if extra_env:
+        env.update(extra_env)
     if env.get(ENV_REQUIRED) == "1":
         # Fail before spawning a network-capable child if the shared governed
         # context is absent, inconsistent, or has been partially overwritten.
@@ -1235,9 +1387,14 @@ def governed_collectors(
     identity_partition: dict[str, object] | None = None,
     games: pd.DataFrame | None = None, skaters: pd.DataFrame | None = None,
     goalies: pd.DataFrame | None = None,
-) -> None:
+    request_root: Path | None = None,
+) -> dict[str, object]:
     python = str(ROOT / ".venv/bin/python")
-    _run([python, str(SCRIPTS / "import_schedule_today.py")], slate_date, dsn)
+    schedule_root = request_root / "schedule_source" if request_root else None
+    accounting_path = request_root / "schedule_database_actions.json" if request_root else None
+    schedule_env = schedule_artifact_environment(request_root) if request_root else None
+    _run([python, str(SCRIPTS / "import_schedule_today.py")], slate_date, dsn,
+         extra_env=schedule_env)
     _run([python, str(SCRIPTS / "refresh_players_and_roster_today.py")], slate_date, dsn)
     if inventory is not None and identity_partition is not None:
         prepare_participant_identities(
@@ -1257,6 +1414,51 @@ def governed_collectors(
     refresh = SCRIPTS / "refresh.sql"
     if refresh.is_file():
         _run(["psql", dsn, "-v", "ON_ERROR_STOP=1", "-f", str(refresh)], slate_date, dsn)
+    schedule_actions = None
+    schedule_health = None
+    if request_root is not None:
+        if accounting_path and accounting_path.is_file():
+            schedule_actions = json.loads(accounting_path.read_text())
+        health_path = schedule_root / slate_date / "slate_health.json" if schedule_root else None
+        if health_path and health_path.is_file():
+            schedule_health = {
+                "path": str(health_path),
+                "sha256": hashlib.sha256(health_path.read_bytes()).hexdigest(),
+            }
+    unknown_reason = (
+        "child collector or SQL writer has no transaction-bound action ledger; "
+        "processed-row counts do not distinguish insert/update/no-op/delete"
+    )
+    unmeasured_tables = [
+        "nhl.teams", "nhl.team_external_ids", "nhl.players", "nhl.roster_status",
+        "nhl.player_external_ids", "nhl.import_players_stage",
+        "nhl.import_skater_logs_stage", "nhl.import_goalie_logs_stage",
+        "nhl.skater_game_logs_raw", "nhl.goalie_game_logs_raw",
+        "nhl.shiftcharts_raw", "nhl.shiftcharts_shifts",
+        "nhl.shiftcharts_pairings_game", "nhl.game_manpower_segments",
+    ]
+    tables = {
+        "nhl.games": (schedule_actions or {}).get("tables", {}).get("nhl.games", {
+            "status": "UNKNOWN", "reason": "schedule importer action receipt missing"}),
+        **{relation: {"status": "UNKNOWN", "reason": unknown_reason}
+           for relation in unmeasured_tables},
+    }
+    return {
+        "contract": "NHL_RECONCILIATION_DATABASE_ACTION_ACCOUNTING_V1",
+        "scope": "governed collector writes for this reconciliation run",
+        "schedule_import": schedule_actions,
+        "schedule_health_artifact": schedule_health,
+        "tables": tables,
+        "deleted": {"status": "UNKNOWN", "reason": "no complete transaction-bound delete ledger across child collectors"},
+    }
+
+
+def schedule_artifact_environment(request_root: Path) -> dict[str, str]:
+    """Return child overrides that isolate schedule output to one run identity."""
+    return {
+        "NHL_SLATE_HEALTH_ROOT": str(request_root / "schedule_source"),
+        "NHL_DB_ACTION_ACCOUNTING_PATH": str(request_root / "schedule_database_actions.json"),
+    }
 
 
 def main() -> int:
@@ -1266,6 +1468,7 @@ def main() -> int:
     mode.add_argument("--local-input-preflight", action="store_true")
     mode.add_argument("--database-identity-preflight", action="store_true")
     mode.add_argument("--authority-roster-acquisition", action="store_true")
+    mode.add_argument("--player-identity-acquisition", action="store_true")
     mode.add_argument("--staging-set-preflight", action="store_true")
     mode.add_argument("--correct-staging-set", action="store_true")
     mode.add_argument("--execute", action="store_true")
@@ -1376,6 +1579,33 @@ def main() -> int:
         try:
             source_binding = resolve_operational_sources(
                 slate_date=slate_date, operational_root=args.operational_root)
+            if args.player_identity_acquisition:
+                typed_sources = _parse_response_source_specs(args.response_source)
+                if (slate_date != SEP24_PLAYER_IDENTITY_SLATE
+                        or args.authorized_player_lookup_id != [SEP24_PLAYER_IDENTITY_ID]
+                        or set(typed_sources) != {
+                            "AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}):
+                    raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_ARGUMENT_SCOPE_INVALID")
+                if args.lineage_request_run_id or args.reuse_request_run_id:
+                    raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_UNRELATED_LINEAGE_FORBIDDEN")
+                authority = _binding_from_acquisition(
+                    output_root=args.output_root,
+                    run_id=typed_sources["AUTHORITY_RESPONSE_SOURCE"],
+                    role="AUTHORITY_RESPONSE_SOURCE", slate_date=slate_date,
+                    game_ids=source_binding["game_ids"], teams=source_binding["team_codes"])
+                roster = _binding_from_acquisition(
+                    output_root=args.output_root,
+                    run_id=typed_sources["ROSTER_RESPONSE_SOURCE"],
+                    role="ROSTER_RESPONSE_SOURCE", slate_date=slate_date,
+                    game_ids=source_binding["game_ids"], teams=source_binding["team_codes"])
+                inventory = local_conditional_lookup_inventory(authority, roster)
+                if SEP24_PLAYER_IDENTITY_ID not in set(inventory["participant_ids"]):
+                    raise RuntimeError("PLAYER_IDENTITY_ACQUISITION_ID_NOT_ON_FROZEN_SLATE")
+                result = player_identity_acquisition(
+                    slate_date=slate_date, player_id=args.authorized_player_lookup_id[0],
+                    source_binding=source_binding, output_root=args.output_root)
+                print(json.dumps(result, indent=2, sort_keys=True))
+                return 0
             if args.authority_roster_acquisition:
                 for key in (ENV_SOURCE_CACHE, ENV_SOURCE_RUN_ID,
                             ENV_SOURCE_JOURNAL_SHA256, ENV_RESPONSE_SOURCE_LEDGER):
@@ -1387,8 +1617,15 @@ def main() -> int:
                 return 0
             if slate_date != "2026-09-20" and args.response_source:
                 typed_sources = _parse_response_source_specs(args.response_source)
-                if set(typed_sources) != {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}:
+                if (not {"AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE"}
+                        <= set(typed_sources)
+                        or set(typed_sources) - {
+                            "AUTHORITY_RESPONSE_SOURCE", "ROSTER_RESPONSE_SOURCE",
+                            "PLAYER_IDENTITY_RESPONSE_SOURCE"}):
                     raise RuntimeError("FRESH_DATE_AUTHORITY_AND_ROSTER_SOURCES_REQUIRED")
+                if ("PLAYER_IDENTITY_RESPONSE_SOURCE" in typed_sources
+                        and slate_date != SEP24_PLAYER_IDENTITY_SLATE):
+                    raise RuntimeError("PLAYER_IDENTITY_RESPONSE_SOURCE_DATE_NOT_ALLOWLISTED")
                 if args.lineage_request_run_id:
                     raise RuntimeError("FRESH_DATE_FAILED_ANCESTOR_RECEIPTS_NOT_DECLARED")
                 authority_binding = _binding_from_acquisition(
@@ -1401,11 +1638,37 @@ def main() -> int:
                     run_id=typed_sources["ROSTER_RESPONSE_SOURCE"],
                     role="ROSTER_RESPONSE_SOURCE", slate_date=slate_date,
                     game_ids=source_binding["game_ids"], teams=source_binding["team_codes"])
-                response_source_ledger = build_typed_response_source_ledger(
-                    [authority_binding, roster_binding])
+                source_bindings = [authority_binding, roster_binding]
+                if "PLAYER_IDENTITY_RESPONSE_SOURCE" in typed_sources:
+                    player_receipt = _receipt(
+                        typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+                        role="PLAYER_IDENTITY_RESPONSE_SOURCE", slate_date=slate_date,
+                        output_root=args.output_root)
+                    player_binding = verify_player_identity_response_run(
+                        args.output_root / "request_runs" / slate_date /
+                        typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+                        expected_run_id=typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
+                        slate_date=slate_date, game_ids=source_binding["game_ids"],
+                        expected_player_id=int(player_receipt["player_id"]),
+                        repository_root=ROOT,
+                        expected_journal_sha256=str(player_receipt["journal_sha256"]),
+                        expected_tree_fingerprint=str(player_receipt["tree_fingerprint"]),
+                        expected_object_sha256=str(player_receipt["object_sha256"]),
+                        expected_index_sha256=str(player_receipt["index_sha256"]),
+                    )
+                    if int(player_receipt["player_id"]) != SEP24_PLAYER_IDENTITY_ID:
+                        raise RuntimeError("PLAYER_IDENTITY_RESPONSE_SOURCE_ID_NOT_ALLOWLISTED")
+                    if player_binding["response_set_sha256"] != player_receipt[
+                            "response_set_sha256"]:
+                        raise RuntimeError("PLAYER_IDENTITY_RESPONSE_SET_RECEIPT_MISMATCH")
+                    preserved_player_provenance = preserved_player_provenance_from_binding(
+                        player_binding)
+                    source_bindings.append(player_binding)
+                response_source_ledger = build_typed_response_source_ledger(source_bindings)
                 conditional_inventory = local_conditional_lookup_inventory(
                     authority_binding, roster_binding)
-                preserved_player_provenance = []
+                if preserved_player_provenance is None:
+                    preserved_player_provenance = []
                 games_count = len(source_binding["game_ids"])
                 teams_count = len(source_binding["team_codes"])
                 base_logical = 3 + 6 * games_count + teams_count
@@ -1415,8 +1678,10 @@ def main() -> int:
                     "base_logical_operations": base_logical,
                     "authority_source_reuse_events": 3 + 4 * games_count,
                     "roster_source_reuse_events": teams_count,
-                    "player_identity_source_reuse_events": 0,
-                    "preserved_response_reuses": source_reuses,
+                    "player_identity_source_reuse_events":
+                        len(preserved_player_provenance),
+                    "preserved_response_reuses": source_reuses +
+                        len(preserved_player_provenance),
                     "required_shift_pbp_network_operations": 2 * games_count,
                     "conditional_player_lookup_network_operations":
                         "REQUIRES_DATABASE_IDENTITY_PREFLIGHT",
@@ -1429,8 +1694,7 @@ def main() -> int:
                     "slate_date": slate_date,
                     "canonical_game_set_hash": authority_binding["canonical_game_set_hash"],
                     "response_sources": [
-                        _public_response_source(authority_binding),
-                        _public_response_source(roster_binding),
+                        *[_public_response_source(value) for value in source_bindings],
                     ],
                     "failed_ancestors": [],
                     "out_of_band_diagnostic_requests": [],
@@ -1466,7 +1730,7 @@ def main() -> int:
                     raise RuntimeError("DUPLICATE_LINEAGE_REQUEST_RUN_ID")
                 source_receipt = _receipt(
                     typed_sources["AUTHORITY_RESPONSE_SOURCE"], role="AUTHORITY_RESPONSE_SOURCE",
-                    slate_date=slate_date)
+                    slate_date=slate_date, output_root=args.output_root)
                 prior_root = (args.output_root / "request_runs" / slate_date /
                               typed_sources["AUTHORITY_RESPONSE_SOURCE"])
                 authority_binding = verify_preserved_response_run(
@@ -1478,7 +1742,7 @@ def main() -> int:
                 )
                 roster_receipt = _receipt(
                     typed_sources["ROSTER_RESPONSE_SOURCE"], role="ROSTER_RESPONSE_SOURCE",
-                    slate_date=slate_date)
+                    slate_date=slate_date, output_root=args.output_root)
                 roster_binding = verify_roster_response_run(
                     args.output_root / "request_runs" / slate_date /
                     typed_sources["ROSTER_RESPONSE_SOURCE"],
@@ -1491,7 +1755,8 @@ def main() -> int:
                 )
                 player_receipt = _receipt(
                     typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
-                    role="PLAYER_IDENTITY_RESPONSE_SOURCE", slate_date=slate_date)
+                    role="PLAYER_IDENTITY_RESPONSE_SOURCE", slate_date=slate_date,
+                    output_root=args.output_root)
                 player_binding = verify_player_identity_response_run(
                     args.output_root / "request_runs" / slate_date /
                     typed_sources["PLAYER_IDENTITY_RESPONSE_SOURCE"],
@@ -1588,9 +1853,15 @@ def main() -> int:
                     }],
                 }
         except RuntimeError as error:
-            print(json.dumps({"status": "FAILED_CLOSED_LOCAL_INPUT", "failure": str(error),
-                              "database_requests": 0, "external_requests": 0,
-                              "bookmaker_requests": 0, "paid_credits": 0},
+            acquisition_failed = args.player_identity_acquisition
+            print(json.dumps({
+                "status": ("FAILED_CLOSED_PLAYER_IDENTITY_ACQUISITION"
+                           if acquisition_failed else "FAILED_CLOSED_LOCAL_INPUT"),
+                "failure": str(error), "database_requests": 0, "database_writes": 0,
+                "external_requests": ("SEE_PARTIAL_REQUEST_JOURNAL"
+                                      if acquisition_failed else 0),
+                "request_run_created": ("MAY_BE_PARTIAL" if acquisition_failed else False),
+                "bookmaker_requests": 0, "paid_credits": 0},
                              indent=2, sort_keys=True))
             return 5
     if args.local_input_preflight:
@@ -1743,7 +2014,8 @@ def main() -> int:
                 collector=lambda: governed_collectors(
                     dsn, slate_date, inventory=conditional_inventory,
                     identity_partition=identity_partition, games=expected_games,
-                    skaters=expected_skaters, goalies=expected_goalies),
+                    skaters=expected_skaters, goalies=expected_goalies,
+                    request_root=request_root),
                 observed_at=datetime.now(timezone.utc).isoformat(),
                 request_journal=Path(context_values[ENV_JOURNAL]),
                 request_accounting_factory=lambda: summarize_journal(

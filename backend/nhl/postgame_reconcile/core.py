@@ -825,8 +825,11 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         return destination, "IDEMPOTENT_EXISTING_ZERO_INSERTS"
     if existing:
         raise RuntimeError("CONFLICTING_RETAINED_OUTCOME")
-    if collector is not None:
-        collector()
+    database_action_accounting = collector() if collector is not None else {
+        "contract": "NHL_RECONCILIATION_DATABASE_ACTION_ACCOUNTING_V1",
+        "status": "UNKNOWN",
+        "reason": "no transactional collector action ledger supplied",
+    }
     grades = (grade_operational_sources(source_binding, canonical, games, skaters, goalies, observed_at)
               if source_binding is not None else
               grade_catchup(prediction_root, canonical, games, skaters, goalies))
@@ -861,6 +864,7 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             "sog_status": ("PROSPECTIVE_FINAL_PREGAME_GRADED_BY_CONTRACT_ARM" if source_binding else "NO_SEPTEMBER_19_PREDICTION_GRADE"),
             "strict_prior_update_status": "COMPLETE_AFTER_ALL_FINAL_AND_COLLECTOR_SUCCESS",
             "odds_api_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
+            "database_action_accounting": database_action_accounting,
         }
         if request_accounting is not None:
             summary["official_request_accounting"] = request_accounting
@@ -870,6 +874,9 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             (staging / "official_request_accounting.json").write_text(
                 json.dumps(request_accounting, indent=2, sort_keys=True) + "\n"
             )
+        (staging / "database_action_accounting.json").write_text(
+            json.dumps(database_action_accounting, indent=2, sort_keys=True) + "\n"
+        )
         if source_binding is not None:
             (staging / "source_bindings.json").write_text(
                 json.dumps(source_binding, indent=2, sort_keys=True) + "\n"
@@ -914,6 +921,7 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         (staging / "RUN_COMPLETE.json").write_text(json.dumps({
             "status": "COMPLETE", "substantive_identity": identity,
             "completed_at_utc": observed_at,
+            "database_action_accounting_sha256": _sha(staging / "database_action_accounting.json"),
         }, indent=2, sort_keys=True) + "\n")
         os.replace(staging, destination)
     except BaseException:

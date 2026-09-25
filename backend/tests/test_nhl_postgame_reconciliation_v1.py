@@ -157,6 +157,23 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(summary["bookmaker_requests"], 0)
         self.assertEqual(summary["paid_credits"], 0)
 
+    def test_database_action_accounting_is_retained_in_package_and_manifest(self):
+        ledger = {
+            "contract": "NHL_RECONCILIATION_DATABASE_ACTION_ACCOUNTING_V1",
+            "tables": {"nhl.games": {"status": "MEASURED_TRANSACTIONAL", "inserted": 1,
+                                      "updated": 2, "unchanged_noop": 3, "deleted": 0}},
+        }
+        destination, _ = self.publish(collector=lambda: ledger)
+        summary = json.loads((destination / "summary.json").read_text())
+        retained = json.loads((destination / "database_action_accounting.json").read_text())
+        self.assertEqual(summary["database_action_accounting"], ledger)
+        self.assertEqual(retained, ledger)
+        manifest = (destination / "SHA256SUMS").read_text()
+        self.assertIn("database_action_accounting.json", manifest)
+        completion = json.loads((destination / "RUN_COMPLETE.json").read_text())
+        self.assertEqual(completion["database_action_accounting_sha256"],
+                         hashlib.sha256((destination / "database_action_accounting.json").read_bytes()).hexdigest())
+
     def test_unfinished_game_fails_before_collector(self):
         called = []
         with self.assertRaisesRegex(RuntimeError, "NOT_OFFICIAL_FINAL"):
