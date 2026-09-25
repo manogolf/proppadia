@@ -1,19 +1,26 @@
 {
-  "status": "PASS",
+  "status": "PASS_OFFLINE",
   "required_ancestry_commit": "79383ce7584226000f3cafffed95260c9f8d85c7",
   "required_ancestry_present": true,
   "deterministic_tests": {
     "command": "PYTHONPATH=. python3 -m pytest -q backend/mlb/tests/test_mlb_migration_ledger_bootstrap_v1.py backend/mlb/tests/test_mlb_exact_game_stat_derived_foundation_v1.py backend/mlb/tests/test_mlb_stat_derived_root_loader_correction_v1.py backend/mlb/tests/test_mlb_canonical_phase_migration_activation_preflight_v1.py backend/mlb/tests/test_mlb_prospective_exact_game_feature_shadow_writer_v1.py backend/mlb/tests/test_mlb_2026_provider_event_game_identity_hardening_v1.py backend/tests/test_mlb_stat_derived_degraded_stage_containment_v1.py backend/mlb/tests/test_public_game_prediction_hardening_v1.py",
-    "passed": 179,
+    "passed": 180,
     "failed": 0,
     "skipped": 0
   },
   "static_validation": {
     "python_compile": "PASS",
     "authorization_schema_json": "PASS",
-    "git_diff_check": "PASS"
+    "git_diff_check": "PASS",
+    "plan_mode_deterministic": true,
+    "postgresql_runtime_predicate_test": "NOT RUN; DATABASE CONNECTION PROHIBITED BY TASK"
   },
   "exact_game_migration_sha256": "15893ea94b02c13ce0d5d7797a4bc546df250fee06b36e66ef8531525d1f897d",
+  "bootstrap_sql_bytes_changed": false,
+  "authorization_artifact_created": false,
+  "database_connections_or_mutations": "NONE",
+  "natural_wrapper_schedule_containment_changes": "NONE",
+  "sql_predicate_validation_method": "STATIC_CATALOG_DEFINITION_CONTRACT_AND_VALUE_CASES; NO POSTGRESQL RUNTIME CLAIM",
   "operational_execution": "NOT RUN",
   "database_api_pipeline_effects": "ZERO",
   "legacy_effect": "NONE",

@@ -23,6 +23,8 @@ Both records belong in the same future serializable transaction. The bootstrap r
 
 The runner defaults to `plan`; `inspect`, `plan`, and `verify` are non-mutating. `apply` requires a single-use artifact, exact target identity, matching committed bytes, expected absent object set, no Supabase internal migration ledger, a clean precondition, bounded timeouts, the task advisory lock and one serializable transaction. There is no continue-anyway mode.
 
+The runner validates the database-rendered checksum constraint with the exact POSIX expression `^[0-9a-f]{64}$`; it does not interpret regex character classes as `LIKE` wildcards. Regression tests exercise the catalog-definition contract and valid/invalid values. PostgreSQL SQL execution was not run because this correction task prohibits database connections.
+
 The authorization artifact is a contract only. No operational artifact is included. The offline regression fixture reproduces an absent `supabase_migrations.schema_migrations` relation, absent project ledger, and ordinary migration mode; its result is `BLOCKED_MIGRATION_GOVERNANCE_UNPROVEN`.
 
 ## Rollback

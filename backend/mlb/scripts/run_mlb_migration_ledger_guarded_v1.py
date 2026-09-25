@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,19 @@ from backend.mlb.migration_ledger_bootstrap_v1 import (
     AuthorizationV1, BOOTSTRAP_SQL, EXACT_SQL, EXACT_SHA256, LEDGER, RUNNER_VERSION,
     EXPECTED_LEGACY_RELATIONS, TASK_ADVISORY_LOCK, GovernanceError, build_plan, canonical, file_sha256,
 )
+
+LEDGER_SHA256_PATTERN = "^[0-9a-f]{64}$"
+
+
+def checksum_constraint_pattern(definition: Any) -> str | None:
+    """Extract the SHA check expression from PostgreSQL's rendered constraint definition."""
+    if not isinstance(definition, str):
+        return None
+    normalized = re.sub(r"\s+", " ", definition.strip()).lower()
+    expected = "check ((migration_sha256 ~ '^[0-9a-f]{64}$'::text))"
+    if normalized != expected:
+        return None
+    return LEDGER_SHA256_PATTERN
 
 
 def target_identity(connection: Any) -> str:
@@ -174,11 +188,12 @@ class PsycopgBackend:
           JOIN pg_namespace n ON n.oid=p.pronamespace
           WHERE n.nspname='mlb' AND p.proname='reject_schema_migration_ledger_v1_mutation'""")
         if self.cur.fetchone() != ("postgres", False): return False
-        self.cur.execute("""SELECT count(*) FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid
+        self.cur.execute("""SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid
           JOIN pg_namespace n ON n.oid=r.relnamespace WHERE n.nspname='mlb'
-          AND r.relname='schema_migration_ledger_v1' AND c.contype='c'
-          AND pg_get_constraintdef(c.oid) ILIKE '%migration_sha256%[0-9a-f]%64%'""")
-        if self.cur.fetchone()[0] != 1: return False
+          AND r.relname='schema_migration_ledger_v1' AND c.contype='c'""")
+        constraint_definitions = [row[0] for row in self.cur.fetchall()]
+        if not any(checksum_constraint_pattern(definition) == LEDGER_SHA256_PATTERN
+                   for definition in constraint_definitions): return False
         self.cur.execute("SELECT has_table_privilege('postgres','mlb.schema_migration_ledger_v1','SELECT'), has_table_privilege('postgres','mlb.schema_migration_ledger_v1','INSERT')")
         if self.cur.fetchone() != (True, True): return False
         self.cur.execute("""SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,

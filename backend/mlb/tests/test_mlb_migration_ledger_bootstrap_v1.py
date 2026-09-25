@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,9 @@ from backend.mlb.migration_ledger_bootstrap_v1 import (
 )
 from backend.mlb.scripts.validate_mlb_schema_migration_preflight_v1 import (
     false_ready_regression_fixture, validate,
+)
+from backend.mlb.scripts.run_mlb_migration_ledger_guarded_v1 import (
+    LEDGER_SHA256_PATTERN, checksum_constraint_pattern,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -96,6 +100,29 @@ def test_bootstrap_sql_contract_is_project_owned_bounded_and_transaction_neutral
     assert "BEFORE UPDATE OR DELETE OR TRUNCATE" in sql and "REVOKE ALL" in sql and "GRANT SELECT, INSERT" in sql
     assert "OWNER TO postgres" in sql and "auth." not in sql and "realtime." not in sql and "storage." not in sql
     assert EXACT_SHA256 not in sql
+
+
+def test_postgres_checksum_constraint_query_contract_accepts_only_lowercase_sha256():
+    # Fixture mirrors pg_get_constraintdef output. No PostgreSQL server is used here.
+    definition = "CHECK ((migration_sha256 ~ '^[0-9a-f]{64}$'::text))"
+    pattern = checksum_constraint_pattern(definition)
+    assert pattern == LEDGER_SHA256_PATTERN
+    matcher = re.compile(pattern).fullmatch
+    predicate = lambda value: isinstance(value, str) and matcher(value) is not None
+    assert predicate("a" * 64)
+    assert predicate("0123456789abcdef" * 4)
+    for invalid in ("A" * 64, "g" * 64, "a" * 63, "a" * 65, "", None):
+        assert not predicate(invalid)
+
+    assert checksum_constraint_pattern("CHECK (migration_sha256 LIKE '%[0-9a-f]%')") is None
+    assert checksum_constraint_pattern("CHECK (migration_sha256 ~ '^[A-F0-9]{64}$')") is None
+    assert checksum_constraint_pattern("CHECK ((migration_sha256 ~ '^[0-9a-f]{64}$'::text) OR true)") is None
+    runner_source = (ROOT / "backend/mlb/scripts/run_mlb_migration_ledger_guarded_v1.py").read_text()
+    assert "pg_get_constraintdef(c.oid)" in runner_source
+    assert "checksum_constraint_pattern(definition)" in runner_source
+    assert "ILIKE" not in runner_source and "LIKE '%[0-9a-f]%'" not in runner_source
+    bootstrap_sql = BOOTSTRAP_SQL.read_text()
+    assert "migration_sha256 text NOT NULL CHECK (migration_sha256 ~ '^[0-9a-f]{64}$')" in bootstrap_sql
 
 
 def test_plan_is_two_records_ordered_and_exact_migration_bytes_are_pinned():
