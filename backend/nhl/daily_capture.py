@@ -799,6 +799,7 @@ def capture_odds_observation(
     parent_daily_run_id: str, canonical_games: Sequence[CanonicalGame],
     provider: RequestsOddsProvider | Callable[..., ProviderCapture] | None,
     authorized: bool, compatibility_dir: Path | None = None,
+    latest_pointer_path: Path | None = None,
     invocation_id: str | None = None, now: datetime | None = None,
     days_from: int = 1,
     markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
@@ -1145,7 +1146,9 @@ def capture_odds_observation(
         _atomic_replace(compatibility_dir / "events_today.json", _json_bytes(captured.events))
         if classification == "CAPTURED_NONEMPTY":
             _atomic_replace(compatibility_dir / "odds_latest.json", raw_body)
-        _atomic_replace(compatibility_dir / "odds_observation_latest.json", _json_bytes({
+        pointer_path = (Path(latest_pointer_path) if latest_pointer_path is not None else
+                        compatibility_dir / "odds_observation_latest.json")
+        _atomic_replace(pointer_path, _json_bytes({
             "schema_version": ODDS_CONTRACT,
             "semantics": "LATEST_ATTEMPT_POINTER; odds_latest.json remains latest nonempty",
             "observation_dir": str(final), "classification": classification,

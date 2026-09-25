@@ -121,11 +121,13 @@ class FakeProvider:
 
 class ComprehensiveDailyCaptureTests(unittest.TestCase):
     def capture(self, root: Path, provider: FakeProvider, *, phase: str = "EARLY",
-                now: datetime | None = None, compatibility: Path | None = None) -> OddsObservationResult:
+                now: datetime | None = None, compatibility: Path | None = None,
+                latest_pointer_path: Path | None = None) -> OddsObservationResult:
         return capture_odds_observation(
             root=root, season=2026, slate_date=SLATE, phase=phase,
             parent_daily_run_id="daily-run-1", canonical_games=games(), provider=provider,
             authorized=True, compatibility_dir=compatibility,
+            latest_pointer_path=latest_pointer_path,
             invocation_id=f"invocation-{phase}",
             now=now or datetime(2026, 9, 24, 18, tzinfo=UTC),
         )
@@ -199,6 +201,59 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
                          (result.observation_dir / "transport_response_bodies.jsonl").read_text().splitlines()]
             self.assertEqual(base64.b64decode(transport[-1]["body_base64"]), provider.result.raw_response_bytes)
             self.assertEqual(provider.calls, 1)
+
+    def test_run_scoped_latest_pointer_leaves_default_pointer_untouched(self):
+        payload = [market_event()]
+        provider = FakeProvider(ProviderCapture(
+            None, [provider_event()], payload,
+            [exchange(body=json.dumps(payload).encode())],
+            (json.dumps(payload) + "\n").encode(), credits_consumed=2, credits_remaining=498,
+        ))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            compatibility = root / "site"
+            compatibility.mkdir()
+            default_pointer = compatibility / "odds_observation_latest.json"
+            default_pointer.write_text('{"retained":"sentinel"}\n')
+            before = default_pointer.read_bytes()
+            run_pointer = root / "daily-run-1" / "odds_observation_latest.json"
+            result = self.capture(root / "observations", provider,
+                                  compatibility=compatibility,
+                                  latest_pointer_path=run_pointer)
+            self.assertEqual(default_pointer.read_bytes(), before)
+            self.assertTrue(run_pointer.is_file())
+            pointer = json.loads(run_pointer.read_text())
+            self.assertEqual(pointer["observation_dir"], str(result.observation_dir))
+            self.assertTrue((compatibility / "odds_latest.json").is_file())
+
+    def test_cli_latest_pointer_override_must_be_run_scoped(self):
+        games_fixture = games()
+        common = {"slate": SLATE, "season": 2026, "phase": "REFRESH",
+                  "canonical_games": games_fixture}
+        with patch.dict("os.environ", {"NHL_ODDS_LATEST_POINTER_PATH": "/tmp/elsewhere/odds_observation_latest.json"}), \
+             patch("backend.nhl.cli.RequestsOddsProvider", return_value=object()), \
+             patch("backend.nhl.cli.capture_odds_observation") as capture:
+            with self.assertRaisesRegex(ValueError, "MUST_BE_RUN_SCOPED"):
+                cli.fetch_odds(parent_daily_run_id="daily-run-1", **common)
+            capture.assert_not_called()
+
+    def test_cli_forwards_run_scoped_latest_pointer_override(self):
+        common = {"slate": SLATE, "season": 2026, "phase": "REFRESH",
+                  "canonical_games": games()}
+        run_id = "daily-run-1"
+        with tempfile.TemporaryDirectory() as temp:
+            pointer = Path(temp) / run_id / "odds_observation_latest.json"
+            result = SimpleNamespace(
+                classification="CAPTURED_VALID_EMPTY", observation_dir=Path(temp) / "observation",
+                replayed=False, summary={}, manifest_sha256="fixture-hash",
+            )
+            with patch.dict("os.environ", {
+                    "NHL_ODDS_LATEST_POINTER_PATH": str(pointer),
+                    "ODDS_API_KEY": "fixture-key"}), \
+                 patch("backend.nhl.cli.RequestsOddsProvider", return_value=object()), \
+                 patch("backend.nhl.cli.capture_odds_observation", return_value=result) as capture:
+                cli.fetch_odds(parent_daily_run_id=run_id, **common)
+            self.assertEqual(capture.call_args.kwargs["latest_pointer_path"], pointer)
 
     def test_successful_empty_exact_body_is_valid_and_complete(self):
         provider = FakeProvider(ProviderCapture(

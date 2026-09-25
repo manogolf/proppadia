@@ -1029,6 +1029,15 @@ def fetch_odds(
     )
     key = os.environ.get("ODDS_API_KEY", "").strip()
     provider = RequestsOddsProvider(key) if key else None
+    latest_pointer_path = None
+    configured_pointer = os.environ.get("NHL_ODDS_LATEST_POINTER_PATH")
+    if configured_pointer:
+        latest_pointer_path = Path(configured_pointer).expanduser()
+        default_pointer = (Path(compatibility_dir) / "odds_observation_latest.json").resolve()
+        if (latest_pointer_path.name != "odds_observation_latest.json"
+                or latest_pointer_path.resolve() == default_pointer
+                or parent_daily_run_id not in latest_pointer_path.parts):
+            raise ValueError("NHL_ODDS_LATEST_POINTER_PATH_MUST_BE_RUN_SCOPED")
     result = capture_odds_observation(
         root=observation_root,
         season=season,
@@ -1039,6 +1048,7 @@ def fetch_odds(
         provider=provider,
         authorized=bool(key),
         compatibility_dir=compatibility_dir,
+        latest_pointer_path=latest_pointer_path,
         days_from=days_from,
         markets=markets,
         regions=regions,
