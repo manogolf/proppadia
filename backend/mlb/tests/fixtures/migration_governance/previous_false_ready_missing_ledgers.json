@@ -1,0 +1,14 @@
+{
+  "mode": "ordinary",
+  "supabase_internal_ledger_present": false,
+  "project_ledger_exists": false,
+  "ledger_relation": null,
+  "ledger_owner": null,
+  "ledger_definition_sha256": null,
+  "can_select": false,
+  "can_insert": false,
+  "expected_absent_objects_verified": false,
+  "target_identity": "fixture-only",
+  "migration_ids": [],
+  "migration_sha256s": []
+}

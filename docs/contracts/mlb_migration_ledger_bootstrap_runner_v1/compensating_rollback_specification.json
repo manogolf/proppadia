@@ -1,0 +1,19 @@
+{
+  "contract": "MLB_PROJECT_OWNED_APPEND_ONLY_LEDGER_V1",
+  "status": "PREPARED_NOT_EXECUTED",
+  "rollback_migration_id": "MLB_20260924_PLAYER_GAME_FEATURE_STATE_V1_COMPENSATING_ROLLBACK",
+  "migration_kind": "COMPENSATING_ROLLBACK",
+  "parent_migration_id": "MLB_20260924_PLAYER_GAME_FEATURE_STATE_V1",
+  "sha256": "computed_from_separately_committed_compensating_migration_bytes",
+  "allowed_objects": [
+    "mlb.player_game_feature_state_v1",
+    "mlb.reject_player_game_feature_state_v1_mutation",
+    "mlb.player_game_feature_state_v1_append_only",
+    "mlb.idx_player_game_feature_state_v1_game",
+    "mlb.idx_player_game_feature_state_v1_cutoff"
+  ],
+  "ledger_behavior": "append one compensation record; retain bootstrap and original exact-game records and the ledger",
+  "legacy_relations_mutated": [],
+  "guarded_runner_behavior": "new separately authorized transaction, same target binding and bounded locking; verify original record, drop only allowlisted exact-game objects, verify legacy hashes/counts, append compensation record, commit atomically",
+  "failed_transaction": "roll back schema reversal and compensation record"
+}

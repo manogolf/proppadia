@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "MLB_MIGRATION_AUTHORIZATION_ARTIFACT_V1",
+  "title": "Single-use authorization for MLB ledger bootstrap and empty exact-game schema activation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation_id", "target_database_identity", "bootstrap", "exact", "expected_pre_state", "expected_created_objects", "expected_zero_row_relations", "issued_at_utc", "expires_at_utc", "allowed_runner_version", "nonce", "authorization_statement", "artifact_sha256"],
+  "properties": {
+    "operation_id": {"const": "MLB_2026_PROJECT_MIGRATION_LEDGER_BOOTSTRAP_AND_EXACT_GAME_SCHEMA_ACTIVATION_V1"},
+    "target_database_identity": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bootstrap": {"$ref": "#/$defs/record", "properties": {"migration_id": {"const": "MLB_20260924_SCHEMA_MIGRATION_LEDGER_V1"}, "migration_kind": {"const": "BOOTSTRAP"}}, "required": ["migration_id", "migration_sha256", "migration_kind", "description", "parent_migration_id"]},
+    "exact": {"$ref": "#/$defs/record", "properties": {"migration_id": {"const": "MLB_20260924_PLAYER_GAME_FEATURE_STATE_V1"}, "migration_sha256": {"const": "15893ea94b02c13ce0d5d7797a4bc546df250fee06b36e66ef8531525d1f897d"}, "migration_kind": {"const": "SCHEMA"}, "parent_migration_id": {"const": "MLB_20260924_SCHEMA_MIGRATION_LEDGER_V1"}}, "required": ["migration_id", "migration_sha256", "migration_kind", "description", "parent_migration_id"]},
+    "expected_pre_state": {"type": "object", "required": ["absent_objects", "present_objects", "legacy_state_hashes", "legacy_counts", "migration_ids_absent", "migration_sha256s_absent"], "properties": {"absent_objects": {"const": ["mlb.schema_migration_ledger_v1", "mlb.player_game_feature_state_v1"]}, "present_objects": {"type": "array", "items": {"type": "string"}}, "legacy_state_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, "legacy_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}, "migration_ids_absent": {"const": ["MLB_20260924_SCHEMA_MIGRATION_LEDGER_V1", "MLB_20260924_PLAYER_GAME_FEATURE_STATE_V1"]}, "migration_sha256s_absent": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}, "additionalProperties": false},
+    "expected_created_objects": {"type": "array", "uniqueItems": true, "items": {"type": "string"}, "minItems": 1},
+    "expected_zero_row_relations": {"const": ["mlb.player_game_feature_state_v1"]},
+    "issued_at_utc": {"type": "string", "format": "date-time"}, "expires_at_utc": {"type": "string", "format": "date-time"},
+    "allowed_runner_version": {"const": "MLB_MIGRATION_LEDGER_GUARDED_RUNNER_V1"},
+    "nonce": {"type": "string", "minLength": 24, "maxLength": 200},
+    "authorization_statement": {"type": "string", "minLength": 20, "maxLength": 2000},
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {"record": {"type": "object", "additionalProperties": false, "required": ["migration_id", "migration_sha256", "migration_kind", "description", "parent_migration_id"], "properties": {"migration_id": {"type": "string"}, "migration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "migration_kind": {"type": "string"}, "description": {"type": "string", "minLength": 1, "maxLength": 1000}, "parent_migration_id": {"type": ["string", "null"]}}}}
+}

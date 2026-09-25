@@ -1,0 +1,19 @@
+{
+  "contract": "MLB_PROJECT_OWNED_APPEND_ONLY_LEDGER_V1",
+  "package": "MLB_2026_MIGRATION_LEDGER_BOOTSTRAP_AND_RUNNER_V1",
+  "required_ancestry": "79383ce7584226000f3cafffed95260c9f8d85c7",
+  "bootstrap_migration_id": "MLB_20260924_SCHEMA_MIGRATION_LEDGER_V1",
+  "exact_game_migration_id": "MLB_20260924_PLAYER_GAME_FEATURE_STATE_V1",
+  "exact_game_migration_sha256": "15893ea94b02c13ce0d5d7797a4bc546df250fee06b36e66ef8531525d1f897d",
+  "transaction": "one SERIALIZABLE transaction, two distinct ordered ledger records",
+  "append_only": true,
+  "failed_activation_rolls_back_ledger_and_records": true,
+  "ordinary_mode_requires_project_ledger": true,
+  "supabase_internal_migration_ledgers_rejected": true,
+  "authorization_artifact_created": false,
+  "operational_execution": "NOT RUN",
+  "legacy_effect": "NONE",
+  "exact_game_schema": "NOT APPLIED",
+  "stat_derived_retry": "BLOCKED",
+  "api_database_pipeline_effects": "ZERO"
+}
