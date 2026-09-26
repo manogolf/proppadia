@@ -5,8 +5,12 @@ import fcntl
 import hashlib
 import json
 import math
+import re
+import unicodedata
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
@@ -20,7 +24,21 @@ POLICY_C_FIXTURE = ROOT/"artifacts/analysis/model_development/nhl_season_2025_sa
 GAME_TYPES = {1: "PRESEASON", 2: "REGULAR_SEASON", 3: "POSTSEASON"}
 RUN_TYPES = {"MIDDAY", "FINAL_PREGAME"}
 POLICY_STATUS = "P_M_SHADOW_ONLY_C_U_E_UNAUTHORIZED"
-STARTER_LABEL = "MARKET_LISTED_STARTER_UNCONFIRMED"
+STARTER_LABEL = "SOURCE_PREGAME_STARTER"
+ELIGIBLE_STARTER_STATES = {"STARTER_PROJECTED", "STARTER_CONFIRMED"}
+NHL_COM_PROJECTED_LINEUP_SOURCE = "NHL_COM_PROJECTED_LINEUP"
+DEFAULT_AUTHORIZED_STARTER_SOURCES = (NHL_COM_PROJECTED_LINEUP_SOURCE,)
+STARTER_EVIDENCE_MAX_AGE = timedelta(hours=24)
+STARTER_EVIDENCE_COLUMNS = {
+    "canonical_season", "slate_date", "game_id", "team", "goalie_id", "goalie_status",
+    "source", "source_record_id", "source_timestamp_utc", "capture_timestamp_utc",
+    "raw_payload_sha256",
+}
+NHL_COM_ARTICLE_COLUMNS = {
+    "article_url", "article_published_date", "article_published_at_utc",
+    "article_game_date", "article_home_team", "article_away_team", "article_team", "goalie_name",
+    "designation_text",
+}
 IDENTITY_COLUMNS = [
     "canonical_season", "slate_date", "game_id", "goalie_id", "goalie_name", "team",
     "opponent", "scheduled_start_time_utc", "game_type_code", "feature_cutoff_timestamp_utc",
@@ -190,17 +208,244 @@ def policy_c_selection(quotes: pd.DataFrame, population: pd.DataFrame) -> tuple[
             elif len(winners)!=1: decision,selected,reason="BLOCKED",None,"MULTIPLE_LISTED_GOALIES_AMBIGUOUS"
             else: decision,selected,reason="SELECTED",int(winners.iloc[0].goalie_id),"POLICY_C_UNIQUE_TOP_MULTIBOOK"
         rows.append({"game_id":key[0],"team":key[1],"policy":"C_MULTIPLE_BOOKS_UNIQUE_GOALIE_AGREEMENT","decision":decision,
-                     "selected_goalie_id":selected,"starter_state_label":STARTER_LABEL if selected is not None else None,"reason":reason,
+                     "selected_goalie_id":selected,"starter_state_label":"MARKET_LISTED_GOALIE_ONLY" if selected is not None else None,"reason":reason,
                      "listed_goalie_count":int(len(s)),"maximum_distinct_book_support":0 if s.empty else int(s.distinct_book_support.max())})
     return pd.DataFrame(rows),support
 
 
+def _normalized_person_name(value: Any) -> str:
+    folded = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode().casefold()
+    return " ".join(re.findall(r"[a-z0-9]+", folded))
+
+
+def _prepare_nhl_com_projected_article(row: pd.Series, *, game: pd.Series,
+                                       team: str, goalies: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
+    """Validate one already-captured NHL.com article assertion and bind its goalie name."""
+    missing = NHL_COM_ARTICLE_COLUMNS - set(row.index)
+    if missing:
+        return None, "NHL_COM_ARTICLE_SCHEMA_INCOMPLETE"
+    parsed = urlparse(str(row.article_url))
+    if parsed.scheme != "https" or parsed.hostname not in {"nhl.com", "www.nhl.com"} or not parsed.path.startswith("/news/"):
+        return None, "NHL_COM_ARTICLE_URL_INVALID"
+    article_id = parsed.path.rstrip("/").rsplit("/", 1)[-1]
+    if not article_id or str(row.source_record_id).strip("/") != article_id:
+        return None, "NHL_COM_ARTICLE_ID_MISMATCH"
+    if str(row.goalie_status).upper() != "PROJECTED":
+        return None, "NHL_COM_ONLY_PROJECTED_STATUS_ALLOWED"
+    if str(row.article_game_date) != str(game.slate_date):
+        return None, "NHL_COM_ARTICLE_GAME_DATE_MISMATCH"
+    if str(row.article_home_team) != str(game.home_team) or str(row.article_away_team) != str(game.away_team):
+        return None, "NHL_COM_ARTICLE_GAME_MISMATCH"
+    if str(row.article_team) != team or team not in {str(game.home_team), str(game.away_team)}:
+        return None, "NHL_COM_ARTICLE_TEAM_MISMATCH"
+    name = str(row.goalie_name).strip()
+    designation = str(row.designation_text).strip()
+    normalized_name = _normalized_person_name(name)
+    normalized_designation = _normalized_person_name(designation)
+    if not normalized_name or normalized_name not in normalized_designation:
+        return None, "NHL_COM_STARTER_NOT_NAMED_IN_DESIGNATION"
+    # Require explicit starter language; a goalie heading or roster listing alone is insufficient.
+    if not re.search(r"\b(?:will|would|expected to|projected to|is set to|should|could)\s+start\b|\bwill get the start\b|\bstarting (?:goalie|goaltender)\b", designation, re.I):
+        return None, "NHL_COM_STARTER_NOT_EXPLICITLY_DESIGNATED"
+    published_date = str(row.article_published_date).strip() if pd.notna(row.article_published_date) else ""
+    published_at = str(row.article_published_at_utc).strip() if pd.notna(row.article_published_at_utc) else ""
+    if published_date and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published_date):
+        return None, "NHL_COM_PUBLICATION_DATE_INVALID"
+    if published_at:
+        parsed_published = pd.to_datetime(published_at, utc=True, errors="coerce")
+        if pd.isna(parsed_published):
+            return None, "NHL_COM_PUBLICATION_TIMESTAMP_INVALID"
+        published_date_from_timestamp = parsed_published.strftime("%Y-%m-%d")
+        if published_date and published_date != published_date_from_timestamp:
+            return None, "NHL_COM_PUBLICATION_DATE_TIMESTAMP_CONFLICT"
+        row = row.copy()
+        row["source_timestamp_utc"] = parsed_published.isoformat().replace("+00:00", "Z")
+    elif pd.notna(row.get("source_timestamp_utc")) and str(row.get("source_timestamp_utc")).strip():
+        # Do not manufacture precision from a date-only NHL.com publication field.
+        return None, "NHL_COM_UNDECLARED_SOURCE_TIMESTAMP"
+    candidates = goalies[(pd.to_numeric(goalies.game_id, errors="coerce") == int(game.game_id)) &
+                         goalies.team.astype(str).eq(team)].copy()
+    matches = candidates[candidates.goalie_name.map(_normalized_person_name).eq(normalized_name)]
+    ids = pd.to_numeric(matches.goalie_id, errors="coerce").dropna().astype(int).unique()
+    if len(ids) == 0:
+        return None, "NHL_COM_GOALIE_NAME_NOT_BOUND"
+    if len(ids) != 1 or len(matches) != 1:
+        return None, "NHL_COM_GOALIE_NAME_AMBIGUOUS"
+    row = row.copy()
+    row["goalie_id"] = int(ids[0])
+    row["goalie_status"] = "PROJECTED"
+    row["_nhl_com_article"] = True
+    return row, None
+
+
+def qualify_starter_evidence(*, games: pd.DataFrame, goalies: pd.DataFrame,
+                             evidence: pd.DataFrame | None, run_timestamp_utc: str,
+                             authorized_sources: tuple[str, ...] = DEFAULT_AUTHORIZED_STARTER_SOURCES,
+                             max_age: timedelta = STARTER_EVIDENCE_MAX_AGE) -> pd.DataFrame:
+    """Fail-closed team starter resolution with preserved source/capture provenance.
+
+    Only explicitly authorized PROJECTED or CONFIRMED events with both timestamps
+    strictly pregame and no more than ``max_age`` old can establish a starter.
+    The default source allowlist is empty until a real source contract is integrated.
+    """
+    run_time = parse_utc(run_timestamp_utc)
+    candidates = []
+    for row in games.itertuples():
+        for team, side in ((str(row.home_team), "HOME"), (str(row.away_team), "AWAY")):
+            candidates.append({"game_id": int(row.game_id), "team": team,
+                               "scheduled_start_time_utc": row.scheduled_start_time_utc,
+                               "game_side": side})
+    teams = pd.DataFrame(candidates)
+    if evidence is None:
+        evidence = pd.DataFrame(columns=sorted(STARTER_EVIDENCE_COLUMNS))
+    missing = STARTER_EVIDENCE_COLUMNS - set(evidence.columns)
+    if not evidence.empty and missing:
+        raise ValueError(f"STARTER_EVIDENCE_SCHEMA_INCOMPLETE:{sorted(missing)}")
+    if not evidence.empty:
+        if not pd.to_numeric(evidence.canonical_season, errors="coerce").eq(2026).all():
+            raise RuntimeError("STARTER_EVIDENCE_SEASON_MISMATCH")
+        if not evidence.slate_date.astype(str).eq(str(games.slate_date.iloc[0])).all():
+            raise RuntimeError("STARTER_EVIDENCE_SLATE_MISMATCH")
+        if evidence.raw_payload_sha256.astype(str).str.fullmatch(r"[0-9a-f]{64}").eq(False).any():
+            raise RuntimeError("STARTER_EVIDENCE_PAYLOAD_HASH_INVALID")
+
+    result = []
+    for team_row in teams.itertuples():
+        selected = evidence[(pd.to_numeric(evidence.game_id, errors="coerce") == team_row.game_id) &
+                            evidence.team.astype(str).eq(team_row.team)] if not evidence.empty else evidence
+        base = {"game_id": team_row.game_id, "team": team_row.team,
+                "scheduled_start_time_utc": team_row.scheduled_start_time_utc,
+                "selected_starter_goalie_id": None, "starter_source": None,
+                "starter_evidence_status": None,
+                "starter_source_record_id": None, "starter_source_timestamp_utc": None,
+                "starter_capture_timestamp_utc": None, "starter_source_url": None,
+                "starter_source_published_date": None, "starter_source_published_at_utc": None,
+                "starter_source_content_sha256": None, "starter_designation_text": None}
+        if selected.empty:
+            base.update(starter_identity_state="STARTER_UNKNOWN_MISSING_EVIDENCE", starter_reason="NO_SOURCE_EVIDENCE")
+            result.append(base); continue
+        authorized = selected[selected.source.astype(str).isin(set(authorized_sources))]
+        if authorized.empty:
+            base.update(starter_identity_state="STARTER_UNKNOWN_UNAUTHORIZED_SOURCE", starter_reason="SOURCE_NOT_AUTHORIZED")
+            result.append(base); continue
+        prepared, rejected = [], []
+        for _, source_row in authorized.iterrows():
+            if str(source_row.source) == NHL_COM_PROJECTED_LINEUP_SOURCE:
+                game_match = games[pd.to_numeric(games.game_id, errors="coerce").eq(team_row.game_id)]
+                if len(game_match) != 1:
+                    rejected.append("NHL_COM_ARTICLE_GAME_MISMATCH"); continue
+                normalized, error = _prepare_nhl_com_projected_article(
+                    source_row, game=game_match.iloc[0], team=team_row.team, goalies=goalies)
+                if error:
+                    rejected.append(error); continue
+                prepared.append(normalized)
+            else:
+                source_row = source_row.copy()
+                source_row["_nhl_com_article"] = False
+                prepared.append(source_row)
+        if not prepared:
+            base.update(starter_identity_state="STARTER_UNKNOWN_INVALID_SOURCE_EVIDENCE",
+                        starter_reason=rejected[0] if rejected else "NO_VALID_SOURCE_EVIDENCE")
+            result.append(base); continue
+        valid_status = pd.DataFrame(prepared)
+        valid_status = valid_status[valid_status.goalie_status.astype(str).str.upper().isin(["PROJECTED", "CONFIRMED"])].copy()
+        if valid_status.empty:
+            base.update(starter_identity_state="STARTER_UNKNOWN_NO_ELIGIBLE_STATUS", starter_reason="NO_PROJECTED_OR_CONFIRMED_EVENT")
+            result.append(base); continue
+        valid_status["_source_time"] = pd.to_datetime(valid_status.source_timestamp_utc, utc=True, errors="coerce")
+        valid_status["_capture_time"] = pd.to_datetime(valid_status.capture_timestamp_utc, utc=True, errors="coerce")
+        valid_status["_nhl_com_article"] = valid_status["_nhl_com_article"].fillna(False).astype(bool)
+        starts = pd.to_datetime(team_row.scheduled_start_time_utc, utc=True, errors="coerce")
+        article_source_time_ok = (valid_status["_nhl_com_article"] &
+            (valid_status["_source_time"].isna() |
+             ((valid_status["_source_time"] < starts) &
+              (valid_status["_source_time"] <= valid_status["_capture_time"]) &
+              (valid_status["_source_time"] <= run_time))))
+        generic_source_time_ok = (~valid_status["_nhl_com_article"] & valid_status["_source_time"].notna() &
+            (valid_status["_source_time"] < starts) & (valid_status["_source_time"] <= run_time))
+        valid_time = (valid_status["_capture_time"].notna() & (valid_status["_capture_time"] < starts) &
+                      (valid_status["_capture_time"] <= run_time) &
+                      (article_source_time_ok | generic_source_time_ok))
+        age_capture_ok = (run_time - valid_status["_capture_time"]) <= max_age
+        age_source_ok = (run_time - valid_status["_source_time"]) <= max_age
+        timely = age_capture_ok & (valid_status["_nhl_com_article"] | age_source_ok)
+        if not valid_time.any():
+            base.update(starter_identity_state="STARTER_UNKNOWN_INVALID_TIMING", starter_reason="MISSING_FUTURE_OR_POSTSTART_TIMESTAMP")
+            result.append(base); continue
+        fresh = valid_status[valid_time & timely].copy()
+        if fresh.empty:
+            base.update(starter_identity_state="STARTER_UNKNOWN_STALE_EVIDENCE", starter_reason="EVIDENCE_EXCEEDS_MAX_AGE")
+            result.append(base); continue
+        # Resolve latest event within each source. Distinct fresh source decisions
+        # must agree; absent certified source precedence, disagreement is conflict.
+        fresh["_event_time"] = fresh["_source_time"].where(fresh["_source_time"].notna(), fresh["_capture_time"])
+        fresh = fresh.sort_values(["source", "_event_time", "_capture_time"])
+        latest_times = fresh.groupby("source", sort=True)["_event_time"].max().rename("_latest_event_time")
+        latest = fresh.merge(latest_times, on="source", how="inner")
+        latest = latest[latest["_event_time"].eq(latest["_latest_event_time"])].drop(columns="_latest_event_time")
+        goalie_ids = pd.to_numeric(latest.goalie_id, errors="coerce").dropna().astype(int).unique()
+        if len(goalie_ids) != 1:
+            base.update(starter_identity_state="STARTER_UNKNOWN_CONFLICTING_EVIDENCE", starter_reason="AUTHORIZED_SOURCES_DISAGREE")
+            result.append(base); continue
+        goalie_id = int(goalie_ids[0])
+        statuses = set(latest.goalie_status.astype(str).str.upper())
+        if len(statuses) != 1:
+            base.update(starter_identity_state="STARTER_UNKNOWN_CONFLICTING_EVIDENCE", starter_reason="AUTHORIZED_SOURCES_DISAGREE_ON_STATUS")
+            result.append(base); continue
+        starter_status = statuses.pop()
+        eligible = goalies[(pd.to_numeric(goalies.game_id, errors="coerce") == team_row.game_id) &
+                           (pd.to_numeric(goalies.goalie_id, errors="coerce") == goalie_id) &
+                           goalies.team.astype(str).eq(team_row.team)]
+        if len(eligible) != 1:
+            base.update(starter_identity_state="STARTER_UNKNOWN_IDENTITY_MISMATCH", starter_reason="STARTER_NOT_UNIQUELY_BOUND_TO_TEAM_POPULATION")
+            result.append(base); continue
+        selected_row = latest[pd.to_numeric(latest.goalie_id, errors="coerce").eq(goalie_id)].sort_values(["_event_time", "_capture_time"]).iloc[-1]
+        base.update(selected_starter_goalie_id=goalie_id, starter_source=str(selected_row.source),
+                    starter_source_record_id=str(selected_row.source_record_id),
+                    starter_source_timestamp_utc=None if pd.isna(selected_row["_source_time"]) else selected_row["_source_time"].isoformat().replace("+00:00", "Z"),
+                    starter_capture_timestamp_utc=selected_row["_capture_time"].isoformat().replace("+00:00", "Z"),
+                    starter_source_url=selected_row.get("article_url") if bool(selected_row["_nhl_com_article"]) else None,
+                    starter_source_published_date=selected_row.get("article_published_date") if bool(selected_row["_nhl_com_article"]) else None,
+                    starter_source_published_at_utc=selected_row.get("article_published_at_utc") if bool(selected_row["_nhl_com_article"]) else None,
+                    starter_source_content_sha256=str(selected_row.raw_payload_sha256),
+                    starter_designation_text=selected_row.get("designation_text") if bool(selected_row["_nhl_com_article"]) else None,
+                    starter_evidence_status=starter_status,
+                    starter_identity_state=f"STARTER_{starter_status}",
+                    starter_reason=f"AUTHORIZED_FRESH_PREGAME_{starter_status}")
+        result.append(base)
+    return pd.DataFrame(result)
+
+
+def apply_starter_gate(selected: pd.DataFrame, starter_states: pd.DataFrame) -> pd.DataFrame:
+    """Apply source starter identity to market rows and retain agreement diagnostically."""
+    out = selected.merge(starter_states, on=["game_id", "team"], how="left", validate="one_to_one")
+    for index, row in out.iterrows():
+        if row.starter_identity_state not in ELIGIBLE_STARTER_STATES:
+            if row.decision == "SELECTED":
+                out.at[index, "decision"] = "BLOCKED"
+                out.at[index, "selected_goalie_id"] = pd.NA
+                out.at[index, "starter_state_label"] = None
+                out.at[index, "reason"] = row.starter_reason
+        elif row.decision == "SELECTED" and int(row.selected_goalie_id) != int(row.selected_starter_goalie_id):
+            out.at[index, "starter_market_agreement"] = "DISAGREES_MARKET_DIAGNOSTIC_ONLY"
+            out.at[index, "decision"] = "BLOCKED"
+            out.at[index, "selected_goalie_id"] = pd.NA
+            out.at[index, "starter_state_label"] = None
+            out.at[index, "reason"] = "MARKET_LISTED_GOALIE_DIFFERS_FROM_SOURCE_PREGAME_STARTER"
+        elif row.decision == "SELECTED":
+            out.at[index, "starter_market_agreement"] = "AGREES_MARKET_DIAGNOSTIC_ONLY"
+            out.at[index, "starter_state_label"] = f"SOURCE_{row.starter_evidence_status}_STARTER"
+            out.at[index, "reason"] = "POLICY_C_AND_SOURCE_PREGAME_STARTER_AGREE"
+    return out
+
+
 def _market_view(quotes: pd.DataFrame, selected: pd.DataFrame, shadow_run_id: str) -> pd.DataFrame:
-    chosen=selected[selected.decision.eq("SELECTED")][["game_id","team","selected_goalie_id"]].rename(columns={"selected_goalie_id":"goalie_id"})
+    chosen=selected[selected.decision.eq("SELECTED")][["game_id","team","selected_goalie_id","starter_evidence_status"]].rename(columns={"selected_goalie_id":"goalie_id"})
+    chosen["starter_state_label"] = "SOURCE_" + chosen.starter_evidence_status.astype(str) + "_STARTER"
     q=_latest_qualified(quotes).merge(chosen,on=["game_id","team","goalie_id"],how="inner")
     rows=[]
     for key,g in q.groupby(["game_id","goalie_id","line"],sort=True):
-        row={"run_id":shadow_run_id,"game_id":key[0],"goalie_id":key[1],"line":float(key[2]),"starter_state_label":STARTER_LABEL,
+        row={"run_id":shadow_run_id,"game_id":key[0],"goalie_id":key[1],"line":float(key[2]),"starter_state_label":str(g.starter_state_label.iloc[0]),
              "sportsbooks":"|".join(sorted(set(g.sportsbook.astype(str)))),"distinct_book_count":int(g.sportsbook.nunique()),
              "market_evidence_sha256":digest(g.sort_values(["sportsbook","side","raw_price"]).to_dict("records"))}
         for side in ["OVER","UNDER"]:
@@ -226,7 +471,9 @@ def make_run_id(slate_date: str, run_timestamp_utc: str, run_type: str) -> str:
 
 def run_shadow(*, game_spine_csv: Path, game_spine_manifest: Path, goalie_inputs_csv: Path, goalie_inputs_manifest: Path,
                quote_run_dir: Path, output_root: Path, slate_date: str, run_timestamp_utc: str, run_type: str,
-               pre_scoring_population: str="COMPLETE_SCORER_ELIGIBLE", candidate_policy_json: Path|None=None) -> Path:
+               pre_scoring_population: str="COMPLETE_SCORER_ELIGIBLE", candidate_policy_json: Path|None=None,
+               starter_evidence: pd.DataFrame | None = None,
+               authorized_starter_sources: tuple[str, ...] = DEFAULT_AUTHORIZED_STARTER_SOURCES) -> Path:
     if pre_scoring_population!="COMPLETE_SCORER_ELIGIBLE": raise RuntimeError("PRE_SCORING_MARKET_FILTER_FORBIDDEN")
     if candidate_policy_json is not None: raise RuntimeError("SAVES_CANDIDATE_POLICY_UNAUTHORIZED")
     identity=verify_frozen_identity(); parity=verify_historical_parity(); amendment=verify_operational_amendment()
@@ -250,8 +497,13 @@ def run_shadow(*, game_spine_csv: Path, game_spine_manifest: Path, goalie_inputs
     identity_part=goalies[["game_id","goalie_id","goalie_name","team","opponent","game_type_code","scheduled_start_time_utc"]]
     predictions=predictions.merge(identity_part,on=["game_id","goalie_id"],validate="many_to_one")
     predictions.insert(0,"run_id",run_id);predictions["prediction_semantics"]=identity["operational_amendment"]["semantic_contract"]
+    starter_states=qualify_starter_evidence(games=games,goalies=goalies,evidence=starter_evidence,
+        run_timestamp_utc=run_timestamp_utc,authorized_sources=authorized_starter_sources)
+    predictions=predictions.merge(starter_states.drop(columns=["scheduled_start_time_utc"]),on=["game_id","team"],how="left",validate="many_to_one")
+    predictions["prediction_eligible"]=(predictions.starter_identity_state.isin(ELIGIBLE_STARTER_STATES) &
+        pd.to_numeric(predictions.goalie_id,errors="coerce").eq(pd.to_numeric(predictions.selected_starter_goalie_id,errors="coerce")))
     predictions["export_status"]="SHADOW_PREDICTION_EXPORT";predictions["market_qualified"]=False
-    selected,support=policy_c_selection(quotes,goalies);view=_market_view(quotes,selected,run_id)
+    selected,support=policy_c_selection(quotes,goalies);selected=apply_starter_gate(selected,starter_states);view=_market_view(quotes,selected,run_id)
     qualified=predictions.merge(view,on=["run_id","game_id","goalie_id","line"],how="inner",suffixes=("","_market"))
     if not qualified.empty:
         check=predictions.merge(qualified[["game_id","goalie_id","line","prob_over"]],on=["game_id","goalie_id","line"],suffixes=("_p","_m"))
@@ -259,17 +511,21 @@ def run_shadow(*, game_spine_csv: Path, game_spine_manifest: Path, goalie_inputs
         keys=pd.MultiIndex.from_frame(qualified[["game_id","goalie_id","line"]]);pkeys=pd.MultiIndex.from_frame(predictions[["game_id","goalie_id","line"]]);predictions.loc[pkeys.isin(keys),"market_qualified"]=True
     staging.mkdir(parents=True,exist_ok=False)
     for src,name in [(game_spine_csv,"canonical_game_spine.csv"),(goalie_inputs_csv,"source_goalie_inputs.csv")]: (staging/name).write_bytes(src.read_bytes())
+    raw_starter_evidence = starter_evidence if starter_evidence is not None else pd.DataFrame(columns=sorted(STARTER_EVIDENCE_COLUMNS))
+    raw_starter_evidence.to_csv(staging/"starter_source_evidence.csv",index=False)
+    starter_states.to_csv(staging/"starter_identity_decisions.csv",index=False)
     amended=goalies.copy();amended["start_prob"]=1.0;amended.to_csv(staging/"operational_goalie_inputs.csv",index=False)
     predictions.to_csv(staging/"complete_prediction_population.csv",index=False);qualified.to_csv(staging/"market_qualified_population.csv",index=False)
     quotes.to_csv(staging/"book_level_quote_evidence.csv",index=False);view.to_csv(staging/"derived_market_view.csv",index=False)
     selected.to_csv(staging/"policy_c_team_game_decisions.csv",index=False);support.to_csv(staging/"goalie_book_support.csv",index=False)
     for name in ["candidate_population.csv","upload_population.csv","execution_population.csv"]: pd.DataFrame(columns=["run_id","reason"]).to_csv(staging/name,index=False)
-    sentinel={"schema_version":"nhl_saves_shadow_sentinel_v1","status":"PASS","checks":{"parent_hashes":"PASS","population_before_market_gate":"PASS","quote_coverage":"VISIBLE","multiple_goalies":"VISIBLE_IN_POLICY_LEDGER","multibook":"FAIL_CLOSED_BY_POLICY_C","alias_and_timing":"FAIL_CLOSED_BY_CAPTURE","batch_preprocessing_drift":"PASS_FULL_POPULATION","start_prob_constant_one":"PASS","actual_starter_leakage":"PASS","mutable_dependency":"PASS","season_slate_game_type":"PASS"},"population":{"goalies":len(goalies),"predictions_P":len(predictions),"market_rows_M":len(qualified),"team_games_selected":int(selected.decision.eq("SELECTED").sum())}}
+    starter_ready=bool(starter_states.starter_identity_state.isin(ELIGIBLE_STARTER_STATES).all())
+    sentinel={"schema_version":"nhl_saves_shadow_sentinel_v1","status":"PASS_SHADOW_ONLY_POLICY_GATES_CLOSED" if starter_ready else "BLOCKED_STARTER_PROVENANCE","checks":{"parent_hashes":"PASS","population_before_market_gate":"PASS","quote_coverage":"VISIBLE","multiple_goalies":"VISIBLE_IN_POLICY_LEDGER","multibook":"FAIL_CLOSED_BY_POLICY_C","alias_and_timing":"FAIL_CLOSED_BY_CAPTURE","batch_preprocessing_drift":"PASS_FULL_POPULATION","start_prob_constant_one":"PASS","actual_starter_leakage":"PASS","pregame_starter_provenance":"PASS" if starter_ready else "BLOCKED","mutable_dependency":"PASS","season_slate_game_type":"PASS"},"population":{"goalies":len(goalies),"predictions_P":len(predictions),"prediction_eligible":int(predictions.prediction_eligible.sum()),"market_rows_M":len(qualified),"team_games_selected":int(selected.decision.eq("SELECTED").sum())}}
     (staging/"saves_live_failure_sentinel.json").write_text(json.dumps(sentinel,indent=2,sort_keys=True)+"\n")
     metadata={"schema_version":"nhl_saves_shadow_run_v1","run_id":run_id,"canonical_season":2026,"slate_date":slate_date,"run_type":run_type,"run_timestamp_utc":iso(parse_utc(run_timestamp_utc)),
               "scoring_order":["complete_scorer_eligible_population","identity_validation","constant_start_prob_1","complete_batch_preprocessing","score_all_predictions","policy_c_market_gate"],
-              "prediction_semantics":identity["operational_amendment"]["semantic_contract"],"starter_state_label":STARTER_LABEL,"policy_status":POLICY_STATUS,
-              "P":len(predictions),"M":len(qualified),"C":0,"U":0,"E":0,"G":0,"historical_parity":parity,"operational_amendment":amendment,
+              "prediction_semantics":identity["operational_amendment"]["semantic_contract"],"starter_state_label":STARTER_LABEL,"starter_readiness":"READY_PROJECTED_OR_CONFIRMED" if starter_ready else "BLOCKED_NO_AUTHORIZED_FRESH_PREGAME_STARTER_EVIDENCE","starter_evidence_max_age_hours":STARTER_EVIDENCE_MAX_AGE.total_seconds()/3600,"policy_status":POLICY_STATUS,
+              "P":len(predictions),"P_eligible":int(predictions.prediction_eligible.sum()),"M":len(qualified),"C":0,"U":0,"E":0,"G":0,"historical_parity":parity,"operational_amendment":amendment,
               "model_artifact_sha256":identity["model_artifact_sha256"],"coefficient_sha256":identity["coefficient_sha256"],"operational_wrapper_sha256":sha256_file(Path(__file__)),"quote_run_id":qmeta["run_id"],"quote_run_manifest_sha256":sha256_file(quote_run_dir/"SHA256SUMS")}
     (staging/"run_metadata.json").write_text(json.dumps(metadata,indent=2,sort_keys=True)+"\n");(staging/"RUN_COMPLETE.json").write_text(json.dumps({"run_id":run_id,"status":"COMPLETE"},sort_keys=True)+"\n")
     write_manifest(staging,complete_only=True);staging.rename(dest);return dest

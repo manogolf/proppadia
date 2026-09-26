@@ -50,6 +50,16 @@ def fixture(tmp_path: Path, game_type: int=1):
     return games_path,goalies_path,parent,quote,base
 
 
+def starter_evidence(status="CONFIRMED"):
+    rows=[]
+    for game_id,team,goalie_id in [(9001,"AAA",101),(9001,"BBB",102),(9002,"CCC",201),(9002,"DDD",202)]:
+        rows.append({"canonical_season":2026,"slate_date":"2026-09-20","game_id":game_id,
+            "team":team,"goalie_id":goalie_id,"goalie_status":status,"source":"fixture-authority",
+            "source_record_id":f"confirmed-{game_id}","source_timestamp_utc":"2026-09-20T19:30:00Z",
+            "capture_timestamp_utc":"2026-09-20T19:31:00Z","raw_payload_sha256":"a"*64})
+    return pd.DataFrame(rows)
+
+
 def test_historical_byte_parity_and_bounded_start_amendment():
     assert shadow.verify_historical_parity()["status"]=="EXACT_BYTE_PARITY"
     result=shadow.verify_operational_amendment()
@@ -60,16 +70,27 @@ def test_historical_byte_parity_and_bounded_start_amendment():
 
 def test_full_population_scores_before_exact_policy_c_gate(tmp_path):
     games,goalies,parent,quote,source=fixture(tmp_path)
-    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY")
+    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence(),authorized_starter_sources=("fixture-authority",))
     meta=json.loads((run/"run_metadata.json").read_text());assert meta["P"]==52 and meta["C"]==meta["U"]==meta["E"]==0
     p=pd.read_csv(run/"complete_prediction_population.csv");m=pd.read_csv(run/"market_qualified_population.csv")
     assert p.start_prob_operational_input.eq(1).all() and p.export_status.eq("SHADOW_PREDICTION_EXPORT").all()
-    assert len(m)==2 and set(m.goalie_id)=={101,201};assert m.prob_over.equals(p.merge(m[["game_id","goalie_id","line"]],on=["game_id","goalie_id","line"]).prob_over)
+    assert len(m)==2 and set(m.goalie_id)=={101,201};assert p.loc[p.goalie_id.eq(101),"prediction_eligible"].all();assert m.prob_over.equals(p.merge(m[["game_id","goalie_id","line"]],on=["game_id","goalie_id","line"]).prob_over)
     decisions=pd.read_csv(run/"policy_c_team_game_decisions.csv")
     assert decisions.loc[(decisions.game_id==9001)&(decisions.team=="AAA"),"selected_goalie_id"].iloc[0]==101
     assert decisions.loc[(decisions.game_id==9001)&(decisions.team=="BBB"),"reason"].iloc[0]=="INSUFFICIENT_MULTIBOOK_AGREEMENT"
     with pytest.raises(RuntimeError,match="PRE_SCORING_MARKET_FILTER_FORBIDDEN"):
         shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"other",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",pre_scoring_population="MARKET_FILTERED")
+
+
+def test_projected_starter_is_prediction_eligible_and_keeps_projected_lineage(tmp_path):
+    games,goalies,parent,quote,_=fixture(tmp_path)
+    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence("PROJECTED"),authorized_starter_sources=("fixture-authority",))
+    metadata=json.loads((run/"run_metadata.json").read_text())
+    predictions=pd.read_csv(run/"complete_prediction_population.csv")
+    assert metadata["starter_readiness"] == "READY_PROJECTED_OR_CONFIRMED"
+    assert predictions.loc[predictions.goalie_id.eq(101),"prediction_eligible"].all()
+    assert predictions.loc[predictions.goalie_id.eq(101),"starter_identity_state"].eq("STARTER_PROJECTED").all()
+    assert predictions.loc[predictions.goalie_id.eq(101),"starter_evidence_status"].eq("PROJECTED").all()
 
 
 def test_capture_rejects_alias_ambiguity_post_start_unavailable_and_unknown_type(tmp_path):
@@ -93,7 +114,7 @@ def test_actual_state_rejected_from_prediction_and_nonstarter_not_loss(tmp_path)
     polluted=pd.read_csv(goalies);polluted["actual_start_flag"]=True;bad=tmp_path/"polluted.csv";polluted.to_csv(bad,index=False);bad_manifest=manifest(tmp_path,bad,name="BAD_SHA256SUMS")
     with pytest.raises(RuntimeError,match="ACTUAL_OR_STARTER_STATE_LEAKAGE"):
         shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=bad,goalie_inputs_manifest=bad_manifest,quote_run_dir=quote,output_root=tmp_path/"bad",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY")
-    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"good",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY")
+    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"good",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence(),authorized_starter_sources=("fixture-authority",))
     outcomes=pd.DataFrame([{"canonical_season":2026,"slate_date":"2026-09-20","game_id":9001,"goalie_id":101,"actual_start_flag":False,"goalie_participation_state":"RELIEF_APPEARANCE","official_saves":7,"outcome_source_timestamp_utc":"2026-09-21T03:00:00Z"},{"canonical_season":2026,"slate_date":"2026-09-20","game_id":9002,"goalie_id":201,"actual_start_flag":True,"goalie_participation_state":"STARTED","official_saves":26,"outcome_source_timestamp_utc":"2026-09-21T03:00:00Z"}])
     op=tmp_path/"outcomes.csv";outcomes.to_csv(op,index=False);grade=shadow.grade_shadow(shadow_run_dir=run,outcomes_csv=op,output_root=tmp_path/"grades")
     scored=pd.read_csv(grade/"shadow_grades.csv")
@@ -103,7 +124,7 @@ def test_actual_state_rejected_from_prediction_and_nonstarter_not_loss(tmp_path)
 
 def test_preseason_has_no_numeric_evaluation_targets(tmp_path):
     games,goalies,parent,quote,_=fixture(tmp_path,game_type=1)
-    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY")
+    run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence(),authorized_starter_sources=("fixture-authority",))
     outcomes=pd.DataFrame([{"canonical_season":2026,"slate_date":"2026-09-20","game_id":9001,"goalie_id":101,"actual_start_flag":True,"goalie_participation_state":"STARTED","official_saves":30,"outcome_source_timestamp_utc":"2026-09-21T03:00:00Z"},{"canonical_season":2026,"slate_date":"2026-09-20","game_id":9002,"goalie_id":201,"actual_start_flag":True,"goalie_participation_state":"STARTED","official_saves":26,"outcome_source_timestamp_utc":"2026-09-21T03:00:00Z"}])
     op=tmp_path/"outcomes.csv";outcomes.to_csv(op,index=False);grade=shadow.grade_shadow(shadow_run_dir=run,outcomes_csv=op,output_root=tmp_path/"grades")
     metadata=json.loads((grade/"grade_metadata.json").read_text());assert metadata["preseason_numeric_targets"]==0
@@ -149,6 +170,8 @@ def test_no_usable_market_is_valid_zero_m_shadow_run(tmp_path):
     quote=capture_run(payload_json=empty,games_csv=games,goalies_csv=goalies,parent_manifest=parent,output_root=tmp_path/"empty_quotes",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY")
     run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY")
     metadata=json.loads((run/"run_metadata.json").read_text());assert metadata["P"]==52 and metadata["M"]==0
+    assert metadata["P_eligible"]==0 and metadata["starter_readiness"]=="BLOCKED_NO_AUTHORIZED_FRESH_PREGAME_STARTER_EVIDENCE"
+    assert json.loads((run/"saves_live_failure_sentinel.json").read_text())["status"]=="BLOCKED_STARTER_PROVENANCE"
     decisions=pd.read_csv(run/"policy_c_team_game_decisions.csv");assert decisions.reason.eq("NO_SAVES_MARKET").all()
 
 
