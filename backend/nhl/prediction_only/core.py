@@ -23,6 +23,7 @@ from backend.nhl.points_shadow.core import (
     IDENTITY_PATH as POINTS_IDENTITY_PATH,
     PLAYER_IDENTITY_COLUMNS,
     _validate_inputs as validate_points_inputs,
+    construct_coherent_ladders,
     evaluate_ladder_coherence,
     score_frozen as score_points,
     verify_fixed_input_parity as verify_points_parity,
@@ -169,7 +170,7 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
             return old, disposition or "IDEMPOTENT_EXISTING_ZERO_INSERTS"
         validate_points_inputs(games, players, slate_date, observation)
         parity, identity = verify_points_parity(), verify_points_identity()
-        raw = score_points(players, identity)
+        raw = construct_coherent_ladders(score_points(players, identity))
         ladder = evaluate_ladder_coherence(raw, identity)
         predictions = raw.merge(players[PLAYER_IDENTITY_COLUMNS], on=["game_id", "player_id"], validate="many_to_one")
         predictions = predictions.merge(
@@ -190,7 +191,8 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
         predictions["prediction_identity"] = predictions.apply(
             lambda row: digest({"run_id": run_id, "game_id": int(row.game_id),
                                 "player_id": int(row.player_id), "line": float(row.line),
-                                "model_version": identity["model_version"]}), axis=1)
+                                "model_version": identity["model_version"],
+                                "probability_construction": row.probability_construction}), axis=1)
         exclusions = ladder.loc[~ladder.ladder_coherence_decision.isin(ELIGIBLE_LADDER_STATES)].copy()
         input_exclusions = pd.DataFrame(
             players.attrs.get("input_exclusions", []),
@@ -226,6 +228,8 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                 "candidate_rows": 0, "provider_event_dependency": "NONE",
                 "bookmaker_credential_access": False, "market_requests": 0, "paid_credits": 0,
                 "model_fixture_status": parity["status"], "status": "COMPLETE_PREDICTION_ONLY",
+                "points_probability_construction": "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1",
+                "points_line_meanings": {"0.5": "P(points>=1)", "1.5": "P(points>=2)", "2.5": "P(points>=3)"},
                 "first_eligible_live_date": PROSPECTIVE_NOT_BEFORE,
             }
             (staging / "run_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")

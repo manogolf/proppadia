@@ -119,6 +119,52 @@ def score_frozen(features: pd.DataFrame, identity: dict[str, Any] | None = None)
     return pd.DataFrame(rows, columns=["player_id", "game_id", "line", "prob_over", "model"])
 
 
+def construct_coherent_ladders(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Project independent line-model scores onto one coherent exceedance ladder.
+
+    Lines 0.5, 1.5 and 2.5 mean P(points >= 1), P(points >= 2), and
+    P(points >= 3), respectively.  The frozen binary models remain untouched;
+    their values are retained as ``raw_prob_over`` and the operational
+    probability is the equal-weight least-squares non-increasing projection.
+    """
+    required = {"game_id", "player_id", "line", "prob_over"}
+    missing = required - set(predictions)
+    if missing:
+        raise ValueError(f"POINTS_LADDER_INPUT_MISSING:{sorted(missing)}")
+    out = predictions.copy()
+    if "raw_prob_over" in out:
+        raise ValueError("POINTS_RAW_PROBABILITY_ALREADY_PRESENT")
+    out["raw_prob_over"] = pd.to_numeric(out.prob_over, errors="coerce")
+    out["probability_construction"] = "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1"
+    line_order = (0.5, 1.5, 2.5)
+    for (game_id, player_id), indices in out.groupby(["game_id", "player_id"], sort=False).groups.items():
+        group = out.loc[indices]
+        if len(group) != 3 or set(pd.to_numeric(group.line, errors="coerce")) != set(line_order):
+            raise ValueError(f"POINTS_INCOMPLETE_LADDER:{game_id}:{player_id}")
+        if group.line.duplicated().any():
+            raise ValueError(f"POINTS_DUPLICATE_LADDER_LINE:{game_id}:{player_id}")
+        values_by_line = dict(zip(group.line.astype(float), group.raw_prob_over))
+        values = [float(values_by_line[line]) for line in line_order]
+        if not np.isfinite(values).all() or any(value < 0.0 or value > 1.0 for value in values):
+            raise ValueError(f"POINTS_INVALID_LADDER_PROBABILITY:{game_id}:{player_id}")
+        # PAVA for a non-increasing sequence, pooling adjacent violating blocks.
+        blocks: list[list[float | int]] = []
+        for value in values:
+            blocks.append([value, 1])
+            while len(blocks) > 1 and blocks[-2][0] < blocks[-1][0]:
+                right = blocks.pop()
+                left = blocks.pop()
+                weight = int(left[1]) + int(right[1])
+                blocks.append([
+                    (float(left[0]) * int(left[1]) + float(right[0]) * int(right[1])) / weight,
+                    weight,
+                ])
+        projected = [float(value) for mean, count in blocks for value in [mean] * int(count)]
+        projected_by_line = dict(zip(line_order, projected))
+        out.loc[indices, "prob_over"] = group.line.astype(float).map(projected_by_line).to_numpy()
+    return out
+
+
 def verify_fixed_input_parity() -> dict[str, Any]:
     identity = verify_frozen_identity()
     input_path, output_path = ROOT / identity["fixed_input"]["path"], ROOT / identity["fixed_output"]["path"]
@@ -320,7 +366,7 @@ def run_shadow(
     quote_capture = pd.to_datetime(quotes.capture_timestamp_utc, utc=True, errors="coerce")
     if quote_capture.isna().any() or (quote_capture > parse_utc(run_timestamp_utc)).any():
         raise RuntimeError("QUOTE_CAPTURE_AFTER_DECLARED_RUN_TIMESTAMP")
-    raw = score_frozen(players, identity)
+    raw = construct_coherent_ladders(score_frozen(players, identity))
     ladder = evaluate_ladder_coherence(raw, identity)
     player_fields = players[PLAYER_IDENTITY_COLUMNS].copy()
     predictions = raw.merge(player_fields, on=["game_id", "player_id"], how="left", validate="many_to_one")
@@ -336,7 +382,7 @@ def run_shadow(
     predictions["coefficient_sha256"] = predictions.line.map(lambda x: identity["models"][str(float(x))]["coefficient_sha256"])
     predictions["feature_order_sha256"] = predictions.line.map(lambda x: identity["models"][str(float(x))]["feature_order_sha256"])
     predictions["player_game_identity"] = predictions.apply(lambda r: digest({"season": 2026, "slate_date": slate_date, "game_id": int(r.game_id), "player_id": int(r.player_id), "run_id": run_id}), axis=1)
-    predictions["prediction_identity"] = predictions.apply(lambda r: digest({"player_game_identity": r.player_game_identity, "line": float(r.line), "side": "OVER", "model_hash": r.model_joblib_sha256}), axis=1)
+    predictions["prediction_identity"] = predictions.apply(lambda r: digest({"player_game_identity": r.player_game_identity, "line": float(r.line), "side": "OVER", "model_hash": r.model_joblib_sha256, "probability_construction": r.probability_construction}), axis=1)
     market = _market_view(quotes, run_id)
     eligible_decisions = {"PASS_LADDER_COHERENCE", "WARNING_MINOR_LADDER_INCOHERENCE"}
     market_population = predictions[predictions.ladder_coherence_decision.isin(eligible_decisions)].merge(market, on=["run_id", "game_id", "player_id", "line"], how="inner", validate="one_to_one")
@@ -357,7 +403,7 @@ def run_shadow(
     if blocked_leak:
         raise RuntimeError("BLOCKED_LADDER_ENTERED_MARKET_POPULATION")
     populations = pd.DataFrame([
-        {"population_code": "P", "population": "PREDICTION", "rows": len(predictions), "eligible": True, "reason": "RAW_FROZEN_OUTPUT_RETAINED"},
+        {"population_code": "P", "population": "PREDICTION", "rows": len(predictions), "eligible": True, "reason": "FROZEN_LINE_MODELS_WITH_COHERENT_EXCEEDANCE_CONSTRUCTION"},
         {"population_code": "M", "population": "MARKET_QUALIFIED", "rows": len(market_population), "eligible": True, "reason": "COHERENCE_ELIGIBLE_AND_BOUND_QUOTE"},
         {"population_code": "C", "population": "CANDIDATE", "rows": 0, "eligible": False, "reason": POLICY_STATUS},
         {"population_code": "U", "population": "UPLOAD", "rows": 0, "eligible": False, "reason": POLICY_STATUS},
@@ -402,6 +448,8 @@ def run_shadow(
             "player_input_sha256": sha256_file(player_inputs_csv), "player_input_manifest_sha256": sha256_file(player_inputs_manifest),
             "quote_run_id": quote_meta["run_id"], "quote_manifest_sha256": sha256_file(quote_run_dir / "SHA256SUMS"),
             "frozen_identity_sha256": sha256_file(IDENTITY_PATH), "scorer_parity": parity,
+            "probability_construction": "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1",
+            "line_event_mapping": {"0.5": "P(points>=1)", "1.5": "P(points>=2)", "2.5": "P(points>=3)"},
             "ladder_counts": {str(key): int(value) for key, value in ladder.ladder_coherence_decision.value_counts().items()},
             "population_counts": {row.population_code: int(row.rows) for row in populations.itertuples()},
             "candidate_policy_status": POLICY_STATUS, "recommendations_generated": 0,
