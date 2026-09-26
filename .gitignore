@@ -110,5 +110,10 @@ backend/nhl/data/external/rosters/
 backend/nhl/data/external/missing_players.csv
 backend/nhl/data/external/roster_names.csv
 backend/nhl/site/data/raw/gamecenter/*.json
+# NHL daily capture and attachment builder runtime outputs.
+nhl/site/data/ambiguous_saves_alias_matches.csv
+nhl/site/data/odds_observation_latest.json
+nhl/site/data/points_attachment_integrity.json
+nhl/site/data/saves_attachment_integrity.json
 nhl_daily_LAST_FAIL.txt
 nhl_daily_STATUS.txt
