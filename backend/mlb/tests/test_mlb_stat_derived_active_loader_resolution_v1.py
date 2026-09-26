@@ -16,6 +16,51 @@ import pytest
 from backend.mlb.scripts import insert_mlb_stat_derived as active
 
 
+class _StreakCursor:
+    def __init__(self, row, last_game_date=None):
+        self.row = row
+        self.last_game_date = last_game_date
+        self.sql = None
+        self.params = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, sql, params):
+        self.sql = sql
+        self.params = params
+        if self.last_game_date is not None and self.last_game_date >= params[2]:
+            self.row = None
+
+    def fetchone(self):
+        return self.row
+
+
+class _StreakConnection:
+    def __init__(self, row, last_game_date=None):
+        self.cursor_value = _StreakCursor(row, last_game_date)
+
+    def cursor(self):
+        return self.cursor_value
+
+
+def test_streak_profile_lookup_requires_a_strictly_prior_last_game_date():
+    conn = _StreakConnection(("hot", 3))
+    assert active._get_streak(conn, 453286, "hits", "2026-09-25") == ("hot", 3)
+    assert "last_game_date < %s::date" in conn.cursor_value.sql
+    assert conn.cursor_value.params == ("453286", "hits", "2026-09-25")
+
+
+@pytest.mark.parametrize("profile_last_game_date", ["2026-09-25", "2026-09-26"])
+def test_streak_profile_lookup_rejects_same_day_or_future_profile(profile_last_game_date):
+    conn = _StreakConnection(("hot", 3), profile_last_game_date)
+    assert active._get_streak(conn, 453286, "hits", "2026-09-25") == (None, None)
+    assert "last_game_date < %s::date" in conn.cursor_value.sql
+
+
 def _game(game_pk, official_date, detailed, coded, status_code, **relationships):
     return {
         "gamePk": game_pk,

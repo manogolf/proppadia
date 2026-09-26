@@ -355,7 +355,19 @@ def _get_positions_by_date(conn, game_date: str) -> Dict[int, str]:
     return out
 
 
-def _get_streak(conn, player_id: int, prop_type: str) -> Tuple[Optional[str], Optional[int]]:
+def _get_streak(
+    conn,
+    player_id: int,
+    prop_type: str,
+    before_game_date: str,
+) -> Tuple[Optional[str], Optional[int]]:
+    """Read only a streak snapshot whose last game is strictly pre-target.
+
+    ``player_streak_profiles`` is a mutable player-level current-state table,
+    not a game-keyed feature ledger.  Its last_game_date is the only retained
+    temporal anchor, so missing or same/later-date anchors are not eligible.
+    """
+    target_date = date.fromisoformat(str(before_game_date)[:10]).isoformat()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -364,9 +376,10 @@ def _get_streak(conn, player_id: int, prop_type: str) -> Tuple[Optional[str], Op
             WHERE CAST(player_id AS TEXT) = %s
               AND prop_type = %s
               AND prop_source = 'mlb_api'
+              AND last_game_date < %s::date
             LIMIT 1
             """,
-            (str(player_id), prop_type),
+            (str(player_id), prop_type, target_date),
         )
         row = cur.fetchone()
         if not row:
@@ -1907,7 +1920,9 @@ def run(
                                 else:
                                     under_count += 1
 
-                                streak_type, streak_count = _get_streak(conn, pid, prop_type)
+                                streak_type, streak_count = _get_streak(
+                                    conn, pid, prop_type, operational_date
+                                )
                                 now_iso = datetime.utcnow().isoformat()
                                 row = {
                                     "id": str(uuid.uuid4()),

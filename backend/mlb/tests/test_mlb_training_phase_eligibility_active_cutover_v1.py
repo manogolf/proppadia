@@ -130,20 +130,16 @@ class TrainingPhaseActiveCutoverTests(unittest.TestCase):
             seen.append(("time", [int(value) for value in frame["game_id"]]))
             return frame.copy()
 
-        def derived(_sb, frame: pd.DataFrame, _features):
-            seen.append(("derived", [int(value) for value in frame["game_id"]]))
-            return frame.copy()
-
         rows = [
-            {"game_id": self.regular.game_pk, "outcome": "win", "line": 1, "prop_value": 1},
-            {"game_id": self.preseason.game_pk, "outcome": "loss", "line": 1, "prop_value": 1},
+            {"game_id": self.regular.game_pk, "outcome": "win", "line": 1, "prop_value": 1,
+             "feature_as_of_utc": "2026-09-24T18:00:00Z", "target_game_start_utc": "2026-09-24T20:00:00Z"},
+            {"game_id": self.preseason.game_pk, "outcome": "loss", "line": 1, "prop_value": 1,
+             "feature_as_of_utc": "2026-09-24T18:00:00Z", "target_game_start_utc": "2026-09-24T20:00:00Z"},
         ]
         with patch.object(model_trainer, "_fetch_base_rows_pg", return_value=rows), patch.object(
             model_trainer, "_verified_phase_authority", return_value=self.stub
         ), patch.object(
             model_trainer, "_add_time_features", side_effect=time_features
-        ), patch.object(
-            model_trainer, "_merge_derived_features", side_effect=derived
         ), patch.object(
             model_trainer, "build_pipeline", side_effect=AssertionError("FIT_PATH_REACHED")
         ):
@@ -155,12 +151,12 @@ class TrainingPhaseActiveCutoverTests(unittest.TestCase):
             seen,
             [
                 ("time", [self.regular.game_pk]),
-                ("derived", [self.regular.game_pk]),
             ],
         )
 
     def test_missing_authority_stops_before_feature_aggregation(self) -> None:
-        rows = [{"game_id": 999999999, "outcome": "win", "line": 1, "prop_value": 1}]
+        rows = [{"game_id": 999999999, "outcome": "win", "line": 1, "prop_value": 1,
+                 "feature_as_of_utc": "2026-09-24T18:00:00Z", "target_game_start_utc": "2026-09-24T20:00:00Z"}]
         forbidden = AssertionError("FEATURE_OR_FIT_PATH_REACHED")
         with patch.object(model_trainer, "_fetch_base_rows_pg", return_value=rows), patch.object(
             model_trainer, "_verified_phase_authority", return_value=self.stub
@@ -173,6 +169,32 @@ class TrainingPhaseActiveCutoverTests(unittest.TestCase):
         ):
             with self.assertRaises(EligibilityGateBlocked):
                 model_trainer._fetch_base_and_merge(None, "hits", 365, 100, ["feature"])
+
+    def test_mtp_row_for_824784_without_temporal_cutoff_fails_before_phase_or_features(self) -> None:
+        rows = [{"game_id": 824784, "player_id": 453286, "prop_source": "mlb_api",
+                 "outcome": "win", "line": 1.5, "prop_value": 2}]
+        forbidden = AssertionError("PHASE_OR_FEATURE_PATH_REACHED")
+        with patch.object(model_trainer, "_fetch_base_rows_pg", return_value=rows), patch.object(
+            model_trainer, "_verified_phase_authority", side_effect=forbidden
+        ), patch.object(model_trainer, "_add_time_features", side_effect=forbidden):
+            with self.assertRaisesRegex(
+                RuntimeError, "TRAINING_MTP_TEMPORAL_PROVENANCE_MISSING"
+            ):
+                model_trainer._fetch_base_and_merge(None, "hits", 365, 100, ["streak_count"])
+
+    def test_mtp_row_with_cutoff_at_or_after_game_start_fails_closed(self) -> None:
+        for feature_cutoff in ("2026-09-24T20:00:00Z", "2026-09-24T21:00:00Z"):
+            with self.subTest(feature_cutoff=feature_cutoff):
+                with self.assertRaisesRegex(
+                    RuntimeError, "TRAINING_MTP_CUTOFF_NOT_STRICTLY_PRIOR:824784"
+                ):
+                    model_trainer._require_strict_prior_training_cutoffs(
+                        pd.DataFrame([{
+                            "game_id": 824784,
+                            "feature_as_of_utc": feature_cutoff,
+                            "target_game_start_utc": "2026-09-24T20:00:00Z",
+                        }])
+                    )
 
     def test_view_authority_failure_cannot_fall_back(self) -> None:
         class Query:

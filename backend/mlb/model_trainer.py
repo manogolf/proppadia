@@ -611,6 +611,41 @@ def _fetch_base_rows_pg(prop_type: str, since_date: str, limit: int) -> List[Dic
     return pg_fetchall(sql, (prop_type, since_date, int(limit)))
 
 
+def _require_strict_prior_training_cutoffs(frame: pd.DataFrame) -> None:
+    """Fail closed unless every MTP feature row has a row-bound UTC cutoff.
+
+    The legacy MTP schema has no such fields, so its synthetic outcome rows
+    cannot be used as strict-prior training examples.  In particular, a phase
+    or game-date check does not prove when the feature snapshot was observed.
+    """
+    required = ("feature_as_of_utc", "target_game_start_utc")
+    missing = [field for field in required if field not in frame.columns]
+    if missing:
+        raise RuntimeError(
+            "TRAINING_MTP_TEMPORAL_PROVENANCE_MISSING:" + ",".join(missing)
+        )
+
+    for index, row in frame.iterrows():
+        parsed = {}
+        for field in required:
+            try:
+                value = pd.Timestamp(row[field])
+            except Exception as exc:
+                raise RuntimeError(
+                    f"TRAINING_MTP_TEMPORAL_PROVENANCE_INVALID:{index}:{field}"
+                ) from exc
+            if pd.isna(value) or value.tzinfo is None:
+                raise RuntimeError(
+                    f"TRAINING_MTP_TEMPORAL_PROVENANCE_INVALID:{index}:{field}"
+                )
+            parsed[field] = value.tz_convert("UTC")
+        if parsed["feature_as_of_utc"] >= parsed["target_game_start_utc"]:
+            game_id = row.get("game_id")
+            raise RuntimeError(
+                f"TRAINING_MTP_CUTOFF_NOT_STRICTLY_PRIOR:{game_id}:{index}"
+            )
+
+
 def _fetch_base_and_merge(sb: Optional[Client], prop_type: str, days_back: int, limit: int, feat_cols: List[str]) -> pd.DataFrame:
     """Fallback: model_training_props + join derived features by (player_id, game_id)."""
     since_date = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
@@ -636,6 +671,8 @@ def _fetch_base_and_merge(sb: Optional[Client], prop_type: str, days_back: int, 
         print(f"[trainer] source=fallback:base empty prop={prop_type}")
         return df
 
+    _require_strict_prior_training_cutoffs(df)
+
     gated = _apply_active_training_phase_gate(
         df,
         source_identity=(
@@ -644,10 +681,12 @@ def _fetch_base_and_merge(sb: Optional[Client], prop_type: str, days_back: int, 
         ),
     )
     df = _preserve_training_evidence(_add_time_features(gated), gated)
-    df = _preserve_training_evidence(
-        _merge_derived_features(sb, df, feat_cols),
-        gated,
-    )
+    # Do not join player_derived_stats here: it is a legacy daily relation and
+    # its rolling windows can include the target game.  Strict-prior feature
+    # values must already be present on the row bound to the validated cutoff.
+    for feature in feat_cols:
+        if feature not in df.columns:
+            df[feature] = np.nan
     print(f"[trainer] source=fallback:base+merge prop={prop_type} rows={len(df)}")
     return df
 
