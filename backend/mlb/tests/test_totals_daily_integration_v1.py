@@ -156,12 +156,78 @@ def test_partial_grading_appends_only_official_final(monkeypatch, tmp_path):
     assert repeat["new_outcome_rows"]==0 and len(outcomes_for_date(connection,"2026-08-06"))==1
 
 
-def test_ambiguous_official_final_sources_remain_fatal(monkeypatch, tmp_path):
-    pred=tmp_path/"p.sqlite3";connection=connect_ledger(pred);add_prediction(connection,"2026-08-06",1)
-    market=tmp_path/"m.sqlite3";connect_market_ledger(market)
-    monkeypatch.setattr(grader,"official_final",lambda *_:(_ for _ in ()).throw(RuntimeError("OFFICIAL_FINAL_SOURCE_COUNT_1_2")))
-    with pytest.raises(RuntimeError,match="OFFICIAL_FINAL_SOURCE_COUNT_1_2"):
-        grader.run("2026-08-06",tmp_path/"out",pred,market,allow_partial=True)
+def test_official_final_rejects_conflicting_final_score_sources(monkeypatch, tmp_path):
+    source_dir=tmp_path/"artifacts/analysis/mlb/player_stats_completeness/2026-09-20/game_824462/sources"
+    source_dir.mkdir(parents=True)
+    for index,score in enumerate((1,2)):
+        (source_dir/f"game_824462_live_feed_{index}.json").write_text(
+            json.dumps(_official_feed(824462,home_runs=score)))
+    monkeypatch.setattr(grader,"ROOT",tmp_path)
+    monkeypatch.setattr(grader,"OFFICIAL_ROOT",tmp_path/"artifacts/analysis/mlb/player_stats_completeness")
+    with pytest.raises(RuntimeError,match="OFFICIAL_FINAL_SOURCE_CONFLICT_824462_2"):
+        grader.official_final("2026-09-20",824462)
+
+
+def _official_feed(game_pk: int, *, away_runs: int = 9, home_runs: int = 1):
+    return {
+        "gamePk": game_pk,
+        "gameData": {
+            "datetime": {"officialDate": "2026-09-20"},
+            "status": {"abstractGameState": "Final", "detailedState": "Final",
+                       "codedGameState": "F", "statusCode": "F"},
+        },
+        "liveData": {
+            "linescore": {
+                "teams": {"away": {"runs": away_runs}, "home": {"runs": home_runs}},
+                "innings": [{"num": n, "away": {"runs": 1 if n == 9 else 0},
+                             "home": {"runs": 0}} for n in range(1, 10)],
+            },
+            "plays": {"allPlays": [{"playEvents": [{"pitchData": {"breaks": {
+                "spinDirection": 216, "spinRate": 2059,
+            }}}]}]},
+        },
+    }
+
+
+def test_official_final_reconciles_pitch_tracking_revisions_at_game_identity(monkeypatch, tmp_path):
+    source_dir=tmp_path/"artifacts/analysis/mlb/player_stats_completeness/2026-09-20/game_824462/sources"
+    source_dir.mkdir(parents=True)
+    first=_official_feed(824462)
+    second=json.loads(json.dumps(first))
+    second["liveData"]["plays"]["allPlays"][0]["playEvents"][0]["pitchData"]["breaks"].update(
+        {"spinDirection":223,"spinRate":2099})
+    for payload in (first,second):
+        raw=json.dumps(payload,sort_keys=True).encode()
+        digest=hashlib.sha256(raw).hexdigest()
+        (source_dir/f"game_824462_live_feed_{digest}.json").write_bytes(raw)
+    monkeypatch.setattr(grader,"ROOT",tmp_path)
+    monkeypatch.setattr(grader,"OFFICIAL_ROOT",tmp_path/"artifacts/analysis/mlb/player_stats_completeness")
+
+    result=grader.official_final("2026-09-20",824462)
+
+    assert result["official_final_total"]==10
+    assert result["regulation_nine_total"]==1
+    assert result["official_source_equivalence_count"]==2
+    assert len(result["official_equivalent_source_hashes"])==2
+    assert result["official_source_hash"]==min(result["official_equivalent_source_hashes"])
+
+
+@pytest.mark.parametrize("change", [
+    lambda feed: feed["liveData"]["linescore"]["teams"]["home"].update({"runs":2}),
+    lambda feed: feed["gameData"]["datetime"].update({"officialDate":"2026-09-21"}),
+    lambda feed: feed["gameData"]["status"].update({"codedGameState":"D","statusCode":"D"}),
+])
+def test_official_final_still_fails_closed_on_conflicting_terminal_facts(monkeypatch,tmp_path,change):
+    source_dir=tmp_path/"artifacts/analysis/mlb/player_stats_completeness/2026-09-20/game_824462/sources"
+    source_dir.mkdir(parents=True)
+    feeds=[_official_feed(824462),_official_feed(824462)]
+    change(feeds[1])
+    for index,payload in enumerate(feeds):
+        (source_dir/f"game_824462_live_feed_{index}.json").write_text(json.dumps(payload))
+    monkeypatch.setattr(grader,"ROOT",tmp_path)
+    monkeypatch.setattr(grader,"OFFICIAL_ROOT",tmp_path/"artifacts/analysis/mlb/player_stats_completeness")
+    with pytest.raises(RuntimeError):
+        grader.official_final("2026-09-20",824462)
 
 
 def test_shadow_contract_has_no_public_ev_or_wager_authority():

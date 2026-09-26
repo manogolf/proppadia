@@ -26,6 +26,7 @@ from backend.mlb.totals_predictions.phase_gating_v1 import (
     verified_totals_phase_authority,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
+from backend.mlb.public_game_predictions.finality_v1 import classify_playable_terminal
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LEDGER = ROOT / "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3"
@@ -48,18 +49,72 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def official_final(game_date: str, game_id: int) -> dict[str, Any]:
     paths = sorted((OFFICIAL_ROOT / game_date / f"game_{game_id}" / "sources").glob(f"game_{game_id}_live_feed_*.json"))
-    if len(paths) != 1:
+    if not paths:
         raise RuntimeError(f"OFFICIAL_FINAL_SOURCE_COUNT_{game_id}_{len(paths)}")
-    path = paths[0]; raw = path.read_bytes(); payload = json.loads(raw)
-    if payload.get("gameData", {}).get("status", {}).get("abstractGameState") != "Final":
-        raise RuntimeError(f"GAME_NOT_OFFICIALLY_FINAL_{game_id}")
-    linescore = payload["liveData"]["linescore"]
-    final_total = int(linescore["teams"]["away"]["runs"]) + int(linescore["teams"]["home"]["runs"])
-    regulation = sum(int(inn.get("away", {}).get("runs") or 0) + int(inn.get("home", {}).get("runs") or 0)
-                     for inn in linescore.get("innings", []) if int(inn.get("num", 0)) <= 9)
-    return {"official_final_total": final_total, "regulation_nine_total": regulation,
-            "official_source_path": str(path.relative_to(ROOT)), "official_source_hash": hashlib.sha256(raw).hexdigest(),
-            "official_status": payload["gameData"]["status"].get("detailedState")}
+    candidates: list[dict[str, Any]] = []
+    for path in paths:
+        raw = path.read_bytes()
+        try:
+            payload = json.loads(raw)
+            if int(payload.get("gamePk")) != game_id:
+                raise ValueError("GAME_PK_MISMATCH")
+            game_data = payload.get("gameData") or {}
+            official_date = str((game_data.get("datetime") or {}).get("officialDate") or "")
+            if official_date != game_date:
+                raise ValueError("OFFICIAL_DATE_MISMATCH")
+            status = game_data.get("status") or {}
+            finality = classify_playable_terminal(status)
+            if not finality.accepted:
+                raise RuntimeError(f"GAME_NOT_OFFICIALLY_FINAL_{game_id}_{finality.classification}")
+            linescore = payload["liveData"]["linescore"]
+            away_runs = int(linescore["teams"]["away"]["runs"])
+            home_runs = int(linescore["teams"]["home"]["runs"])
+            if "innings" not in linescore:
+                raise ValueError("FINAL_INNING_BREAKDOWN_MISSING")
+            regulation = sum(
+                int(inn.get("away", {}).get("runs") or 0)
+                + int(inn.get("home", {}).get("runs") or 0)
+                for inn in linescore["innings"] if int(inn.get("num", 0)) <= 9
+            )
+        except RuntimeError:
+            raise
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"OFFICIAL_FINAL_SOURCE_INVALID_{game_id}_{path.name}_{exc}") from exc
+        candidates.append({
+            "path": path,
+            "hash": hashlib.sha256(raw).hexdigest(),
+            "official_date": official_date,
+            "status": finality.fields,
+            "away_runs": away_runs,
+            "home_runs": home_runs,
+            "regulation_nine_total": regulation,
+        })
+
+    # Multiple retained byte snapshots are one source identity only when the
+    # complete official finality/date/scoring facts used by this grader agree.
+    # Pitch-tracking or other non-grading feed revisions remain preserved and
+    # are listed in the result; conflicting grading facts still fail closed.
+    outcome_signatures = {
+        (
+            candidate["official_date"],
+            tuple(sorted(candidate["status"].items())),
+            candidate["away_runs"], candidate["home_runs"],
+            candidate["regulation_nine_total"],
+        )
+        for candidate in candidates
+    }
+    if len(outcome_signatures) != 1:
+        raise RuntimeError(f"OFFICIAL_FINAL_SOURCE_CONFLICT_{game_id}_{len(outcome_signatures)}")
+    selected = min(candidates, key=lambda item: (item["hash"], item["path"].name))
+    return {
+        "official_final_total": selected["away_runs"] + selected["home_runs"],
+        "regulation_nine_total": selected["regulation_nine_total"],
+        "official_source_path": str(selected["path"].relative_to(ROOT)),
+        "official_source_hash": selected["hash"],
+        "official_status": selected["status"]["detailed_state"],
+        "official_source_equivalence_count": len(candidates),
+        "official_equivalent_source_hashes": sorted(item["hash"] for item in candidates),
+    }
 
 
 def crps(expected_total: float, actual: int) -> float:
