@@ -1,0 +1,45 @@
+{
+  "artifact": "rolling_result_avg_7_null_rows.json",
+  "artifact_bytes": 226708,
+  "artifact_sha256": "d654068bd85b4666d1e6562fc1ce34ce9d21a2ad43935fb6037c0a8aa1c4de44",
+  "captured_at_utc": "2026-09-26T21:19:27.431593+00:00",
+  "contract": "MLB_ROLLING_NULL_ATTRIBUTION_V1",
+  "database_access": "REPEATABLE_READ_READ_ONLY",
+  "date_range_inclusive": [
+    "2026-09-17",
+    "2026-09-26"
+  ],
+  "eligibility_source": {
+    "path": "backend/mlb/scripts/check_mlb_rolling_integrity.py",
+    "sha256": "4af156f6d8c0d0b4a7290661b3ca7b7f025ac768be3d29f31454f31cc94a5f4b"
+  },
+  "null_row_count": 581,
+  "null_row_identity_key": [
+    "mtp_id",
+    "game_id",
+    "player_id",
+    "prop_type"
+  ],
+  "null_row_unique_identity_count": 581,
+  "null_rows_by_eligibility": {
+    "NO_PLAYER_DAILY_FEATURE_ROW": 581
+  },
+  "summary": {
+    "population": 23098,
+    "all_nonnull": 22517,
+    "all_null": 581,
+    "required_rows": 22085,
+    "required_nonnull": 22085,
+    "required_null": 0,
+    "excluded": 1013,
+    "exclusions": {
+      "NO_PLAYER_DAILY_FEATURE_ROW": 631,
+      "AMBIGUOUS_PLAYER_DAILY_FEATURE_ROWS": 0,
+      "NO_EXACT_PLAYER_GAME_DAY": 138,
+      "AMBIGUOUS_EXACT_GAME_DAY": 244,
+      "PROP_SPECIFIC_D7_VALUE_UNAVAILABLE": 0,
+      "UNMAPPED_PROP_TYPE": 0
+    },
+    "coverage_percent": 100.0
+  }
+}

@@ -12,7 +12,9 @@ from backend.mlb.markets.full_game_total_capture_v1 import connect_ledger as con
 from backend.mlb.scripts import grade_mlb_totals_prospective_shadow_v1 as grader
 from backend.mlb.scripts import run_mlb_totals_prospective_shadow_daily_v1 as daily
 from backend.mlb.scripts import run_mlb_totals_prospective_shadow_v1 as shadow
+from backend.mlb.scripts import attach_mlb_totals_shadow_existing_markets_v1 as market_attachment
 from backend.mlb.scripts.attach_mlb_totals_shadow_existing_markets_v1 import run as attach_markets
+from backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1 import StubAuthority, record
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     append_prediction_with_context, connect_ledger, counts, outcomes_for_date, payload_hash, rows_for_date,
 )
@@ -43,6 +45,10 @@ def add_prediction(connection, game_date, game_pk):
     return row
 
 
+def _phase_authority(*game_pks: int) -> StubAuthority:
+    return StubAuthority({game_pk: record(game_pk, "R", "REGULAR_SEASON") for game_pk in game_pks})
+
+
 def test_auto_window_0530_is_primary_and_0830_or_later_retries_missing():
     assert daily.resolve_mode("auto", "2026-08-07T12:30:00Z") == daily.PRIMARY_SCORE
     assert daily.resolve_mode("auto", "2026-08-07T15:30:00Z") == daily.SCORE_MISSING
@@ -52,8 +58,8 @@ def test_auto_window_0530_is_primary_and_0830_or_later_retries_missing():
 
 def test_daily_0830_scores_and_later_runs_retry_missing(monkeypatch, tmp_path):
     today = datetime.now(ZoneInfo("America/New_York")).date().isoformat(); calls=[]
-    monkeypatch.setattr(daily,"score",lambda *args:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
-    monkeypatch.setattr(daily,"attach_markets",lambda *args:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
+    monkeypatch.setattr(daily,"score",lambda *args,**kwargs:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
+    monkeypatch.setattr(daily,"attach_markets",lambda *args,**kwargs:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
     monkeypatch.setattr(daily,"grade",lambda *args,**kwargs:pytest.fail("no pending grade dates expected"))
     result=daily.run(today,"2000-01-01","auto","2026-08-07T15:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
     assert result["resolved_mode"]==daily.SCORE_MISSING and calls==[("score",today),("markets",today)]
@@ -64,16 +70,17 @@ def test_daily_0830_scores_and_later_runs_retry_missing(monkeypatch, tmp_path):
 
 def test_daily_0530_is_primary_scoring_pass(monkeypatch, tmp_path):
     today=datetime.now(ZoneInfo("America/New_York")).date().isoformat(); calls=[]
-    monkeypatch.setattr(daily,"score",lambda *args:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
-    monkeypatch.setattr(daily,"attach_markets",lambda *args:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
+    monkeypatch.setattr(daily,"score",lambda *args,**kwargs:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
+    monkeypatch.setattr(daily,"attach_markets",lambda *args,**kwargs:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
     result=daily.run(today,"2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
     assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score",today),("markets",today)]
 
 
 def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch, tmp_path):
     ledger=tmp_path/"p.sqlite3";connection=connect_ledger(ledger);add_prediction(connection,"2026-08-07",10)
+    monkeypatch.setattr(shadow,"verified_totals_phase_authority",lambda:_phase_authority(10))
     monkeypatch.setattr(shadow,"fetch_hydrated_schedule",lambda *_:({},"2026-08-07T15:00:00Z","b"*64))
-    monkeypatch.setattr(shadow,"normalize_schedule",lambda *_:[{"game_pk":10}])
+    monkeypatch.setattr(shadow,"normalize_schedule",lambda *_:[{"game_pk":10,"game_date":"2026-08-07"}])
     monkeypatch.setattr(shadow,"build_history",lambda :{})
     monkeypatch.setattr(shadow,"dynamic_environment",lambda *_:{})
     monkeypatch.setattr(shadow,"market_inventory",lambda *_:([],[]))
@@ -82,8 +89,9 @@ def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch
     assert result["new_rows"]==0 and result["attempts"][0]["context_action"]=="EXISTING_CONTEXT_NOT_RECONSTRUCTED"
 
 
-def test_market_unavailable_does_not_block_or_mutate_prediction(tmp_path):
+def test_market_unavailable_does_not_block_or_mutate_prediction(monkeypatch,tmp_path):
     pred=tmp_path/"p.sqlite3";connection=connect_ledger(pred);row=add_prediction(connection,"2026-08-07",10)
+    monkeypatch.setattr(market_attachment,"verified_totals_phase_authority",lambda:_phase_authority(10))
     market=tmp_path/"m.sqlite3";connect_market_ledger(market)
     before=rows_for_date(connection,"2026-08-07")
     result=attach_markets("2026-08-07",tmp_path/"out",pred,market)
@@ -144,6 +152,7 @@ def test_list_inventory_is_unique_and_does_not_access_outcomes_or_public_surface
 def test_partial_grading_appends_only_official_final(monkeypatch, tmp_path):
     pred=tmp_path/"p.sqlite3";connection=connect_ledger(pred);add_prediction(connection,"2026-08-06",1);add_prediction(connection,"2026-08-06",2)
     market=tmp_path/"m.sqlite3";connect_market_ledger(market)
+    monkeypatch.setattr(grader,"verified_totals_phase_authority",lambda:_phase_authority(1,2))
     def final(_date,game):
         if game==2: raise RuntimeError("GAME_NOT_OFFICIALLY_FINAL_2")
         return {"official_final_total":9,"regulation_nine_total":9,"official_source_path":"official.json",
