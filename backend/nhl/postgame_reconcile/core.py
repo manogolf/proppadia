@@ -134,7 +134,8 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
                 "model_version", "prediction_identity", "scheduled_start_time_utc",
                 "game_type_code", "market_qualified", "price"}
     if lane == "POINTS":
-        required |= {"prediction_eligible", "ladder_coherence_decision"}
+        required |= {"prediction_eligible", "ladder_coherence_decision",
+                     "probability_construction"}
     else:
         required |= {"starter_state", "selected_starter", "prediction_semantics"}
     _require_columns(frame, required, lane)
@@ -191,11 +192,14 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
     if lane == "SAVES" and frame.selected_starter.fillna(False).astype(bool).any():
         raise RuntimeError("IMMUTABLE_SAVES_UNAUTHORIZED_PREGAME_STARTER_SELECTION")
     for row in frame.itertuples(index=False):
-        identity = prediction_only_digest({
+        identity_payload = {
             "run_id": row.run_id, "game_id": int(row.game_id),
             id_column: int(getattr(row, id_column)), "line": float(row.line),
             "model_version": row.model_version,
-        })
+        }
+        if lane == "POINTS":
+            identity_payload["probability_construction"] = row.probability_construction
+        identity = prediction_only_digest(identity_payload)
         if identity != row.prediction_identity:
             raise RuntimeError(f"IMMUTABLE_{lane}_PREDICTION_IDENTITY_MISMATCH")
     population = frame[["game_id", id_column]].drop_duplicates()
