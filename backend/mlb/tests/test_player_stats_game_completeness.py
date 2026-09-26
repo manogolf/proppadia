@@ -29,7 +29,7 @@ def test_exact_id_binding_not_name():assert c.compare([off(1)],[loc(2)])[0]['dec
 def test_date_only_matching_refused():
  x=loc();x['game_id']=11;assert c.compare([off()],[x])[0]['decision']=='MISSING_OFFICIAL_PARTICIPANTS'
 def test_terminal_rain_is_final():
- games=[{'gamePk':824807,'gameType':'R','season':2026,'status':{'abstractGameState':'Final','codedGameState':'F','detailedState':'Completed Early: Rain'}}];assert _final_games(games,require_regular_season=True)==[(824807,'R')]
+ games=[{'gamePk':824807,'gameType':'R','season':2026,'status':{'abstractGameState':'Final','codedGameState':'F','detailedState':'Completed Early: Rain','statusCode':'FR'}}];assert _final_games(games,require_regular_season=True)==[(824807,'R')]
 def test_nonfinal_is_not_selected():assert _final_games([{'gamePk':1,'gameType':'R','season':2026,'status':{'detailedState':'In Progress'}}],require_regular_season=False)==[]
 def test_parser_includes_zero_pa_substitute(monkeypatch):
  monkeypatch.setattr(c,'role',lambda p:('OTHER_SUBSTITUTE',''));feed={'gameData':{'game':{'pk':10},'teams':{'away':{'id':1,'abbreviation':'A'},'home':{'id':2,'abbreviation':'H'}}},'liveData':{'boxscore':{'teams':{'away':{'players':{'ID1':{'person':{'id':1,'fullName':'p'},'stats':{'batting':{'plateAppearances':0}},'position':{'abbreviation':'LF'}}}},'home':{'players':{}}}}}};assert len(c.participant_rows(feed))==1

@@ -21,6 +21,9 @@ UNKNOWN_STATUS = "UNKNOWN_STATUS"
 _ACCEPTED = {
     ("Final", "Final", "F", "F"),
     ("Final", "Game Over", "O", "O"),
+    # MLB's official abbreviated-game terminal tuple.  This is a completed
+    # game with official statistics, not a postponement or suspension.
+    ("Final", "Completed Early: Rain", "F", "FR"),
 }
 _NONPLAYABLE_DETAILS = {
     "postponed",
