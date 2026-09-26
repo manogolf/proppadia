@@ -924,7 +924,7 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         (staging / "SHA256SUMS").write_text("".join(f"{_sha(path)}  {path.name}\n" for path in manifest_files))
         (staging / "RUN_COMPLETE.json").write_text(json.dumps({
             "status": "COMPLETE", "substantive_identity": identity,
-            "completed_at_utc": observed_at,
+            "completed_at_utc": datetime.now(timezone.utc).isoformat(),
             "database_action_accounting_sha256": _sha(staging / "database_action_accounting.json"),
         }, indent=2, sort_keys=True) + "\n")
         os.replace(staging, destination)

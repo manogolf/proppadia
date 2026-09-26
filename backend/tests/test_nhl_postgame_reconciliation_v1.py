@@ -157,6 +157,17 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(summary["bookmaker_requests"], 0)
         self.assertEqual(summary["paid_credits"], 0)
 
+    def test_outcome_observation_and_package_completion_timestamps_are_distinct(self):
+        completed = pd.Timestamp("2026-09-26T18:17:00Z").to_pydatetime()
+        with patch("backend.nhl.postgame_reconcile.core.datetime") as clock:
+            clock.now.return_value = completed
+            destination, _ = self.publish(observed_at="2026-09-26T18:16:00.590400Z")
+        outcomes = pd.read_csv(destination / "canonical_game_outcomes.csv")
+        completion = json.loads((destination / "RUN_COMPLETE.json").read_text())
+        self.assertEqual(outcomes.outcome_source_timestamp_utc.iloc[0],
+                         "2026-09-26T18:16:00.590400Z")
+        self.assertEqual(completion["completed_at_utc"], "2026-09-26T18:17:00+00:00")
+
     def test_database_action_accounting_is_retained_in_package_and_manifest(self):
         ledger = {
             "contract": "NHL_RECONCILIATION_DATABASE_ACTION_ACCOUNTING_V1",
