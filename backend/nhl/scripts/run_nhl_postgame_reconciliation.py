@@ -49,6 +49,10 @@ from backend.nhl.official_request_journal import (
     verify_player_identity_response_run,
     verify_roster_response_run,
 )
+from backend.nhl.daily_orchestration import (
+    redact_sensitive_text,
+    safe_called_process_error,
+)
 from backend.nhl.postgame_reconcile.core import (
     build_outcomes,
     reconciliation_lock,
@@ -1151,7 +1155,10 @@ def _run(command: list[str], slate_date: str, dsn: str,
         # Fail before spawning a network-capable child if the shared governed
         # context is absent, inconsistent, or has been partially overwritten.
         RequestContext.from_env(required=True)
-    subprocess.run(command, cwd=ROOT, env=env, check=True)
+    try:
+        subprocess.run(command, cwd=ROOT, env=env, check=True)
+    except subprocess.CalledProcessError as error:
+        raise safe_called_process_error(error, command) from None
 
 
 def _promote_stage(dsn: str, slate_date: str) -> None:
@@ -1532,7 +1539,7 @@ def main() -> int:
         except Exception as error:
             print(json.dumps({
                 "status": "FAILED_CLOSED_STAGING_SOURCE_VALIDATION",
-                "failure": f"{type(error).__name__}:{error}",
+                "failure": redact_sensitive_text(f"{type(error).__name__}:{error}"),
                 "request_run_created": False, "database_transactions": 0,
                 "database_writes": 0, "external_requests": 0,
                 "bookmaker_requests": 0, "paid_credits": 0,
@@ -1558,7 +1565,7 @@ def main() -> int:
         except Exception as error:
             print(json.dumps({
                 "status": "FAILED_CLOSED_STAGING_SET",
-                "failure": f"{type(error).__name__}:{error}",
+                "failure": redact_sensitive_text(f"{type(error).__name__}:{error}"),
                 "request_run_created": False,
                 "database_writes": 0 if args.staging_set_preflight else "ROLLED_BACK",
                 "external_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
@@ -1857,7 +1864,7 @@ def main() -> int:
             print(json.dumps({
                 "status": ("FAILED_CLOSED_PLAYER_IDENTITY_ACQUISITION"
                            if acquisition_failed else "FAILED_CLOSED_LOCAL_INPUT"),
-                "failure": str(error), "database_requests": 0, "database_writes": 0,
+                "failure": redact_sensitive_text(error), "database_requests": 0, "database_writes": 0,
                 "external_requests": ("SEE_PARTIAL_REQUEST_JOURNAL"
                                       if acquisition_failed else 0),
                 "request_run_created": ("MAY_BE_PARTIAL" if acquisition_failed else False),
@@ -1909,7 +1916,7 @@ def main() -> int:
         except Exception as error:
             print(json.dumps({
                 "status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
-                "failure": f"{type(error).__name__}:{error}",
+                "failure": redact_sensitive_text(f"{type(error).__name__}:{error}"),
                 "request_run_created": False, "database_writes": 0,
                 "external_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
             }, indent=2, sort_keys=True))
@@ -2034,7 +2041,7 @@ def main() -> int:
         }, indent=2, sort_keys=True))
         return 0
     except RuntimeError as error:
-        message = str(error)
+        message = redact_sensitive_text(error)
         print(json.dumps({"status": "FAILED_CLOSED", "failure": message,
                           "bookmaker_requests": 0, "paid_credits": 0}, indent=2, sort_keys=True))
         if "NOT_OFFICIAL_FINAL" in message:
@@ -2048,7 +2055,7 @@ def main() -> int:
         return 5
     except Exception as error:
         print(json.dumps({"status": "FAILED_CLOSED",
-                          "failure": f"{type(error).__name__}:{error}",
+                          "failure": redact_sensitive_text(f"{type(error).__name__}:{error}"),
                           "bookmaker_requests": 0, "paid_credits": 0},
                          indent=2, sort_keys=True))
         return 5

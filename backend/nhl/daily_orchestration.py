@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -44,6 +45,40 @@ LANE_NAMES = (
     "saves_attachment",
     "research_integrity",
 )
+
+_URI_CREDENTIAL_RE = re.compile(
+    r"\bpostgres(?:ql)?(?:\+[a-z0-9]+)?:\/\/[^\s'\"<>]+", re.I
+)
+
+
+def redact_sensitive_text(value: object) -> str:
+    """Remove PostgreSQL connection URIs before diagnostic text reaches logs/receipts."""
+    return _URI_CREDENTIAL_RE.sub("<redacted-db-uri>", str(value))
+
+
+def safe_called_process_error(error: BaseException, command: Iterable[object] | None = None):
+    """Copy subprocess failure metadata with command and streams safe to serialize."""
+    import subprocess
+
+    if not isinstance(error, subprocess.CalledProcessError):
+        return RuntimeError(redact_sensitive_text(error))
+    safe_command = redact_sensitive_text(
+        " ".join(str(part) for part in (command if command is not None else error.cmd))
+    )
+
+    def safe_stream(stream):
+        if stream is None:
+            return None
+        if isinstance(stream, bytes):
+            return redact_sensitive_text(stream.decode("utf-8", errors="replace")).encode("utf-8")
+        return redact_sensitive_text(stream)
+
+    return subprocess.CalledProcessError(
+        error.returncode,
+        safe_command,
+        output=safe_stream(error.output),
+        stderr=safe_stream(error.stderr),
+    )
 
 
 def _utc_now() -> datetime:
@@ -187,9 +222,9 @@ class DailyRunRecorder:
         if blocking is not None:
             lane.blocking = bool(blocking)
         lane.status = "FAILED_BLOCKING" if lane.blocking else "FAILED_NONBLOCKING"
-        lane.reason = f"{type(error).__name__}:{error}"
+        lane.reason = redact_sensitive_text(f"{type(error).__name__}:{error}")
         lane.error_type = type(error).__name__
-        lane.error_message = str(error)
+        lane.error_message = redact_sensitive_text(error)
         lane.ended_at_utc = _iso_utc(_utc_now())
 
     def record_child(self, value: Mapping[str, Any]) -> None:

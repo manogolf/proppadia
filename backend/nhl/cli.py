@@ -56,6 +56,8 @@ from backend.nhl.daily_orchestration import (
     LEGACY_SOG_TOI_REASON,
     artifact_identity,
     evaluate_legacy_sog_toi_gate,
+    redact_sensitive_text,
+    safe_called_process_error,
     verify_roster_observation_reuse,
 )
 from backend.nhl.prediction_lineage import (
@@ -552,13 +554,15 @@ def run(
                 write_capable or summary.get("database_write_capable"))
             _ACTIVE_DAILY_RECORDER.record_child(summary)
         print(f"[run] COMMAND FAILED: {cmd_for_log}", file=sys.stderr)
-        if exc.stdout:
+        safe_stdout = redact_sensitive_text(exc.stdout) if exc.stdout else ""
+        safe_stderr = redact_sensitive_text(exc.stderr) if exc.stderr else ""
+        if safe_stdout:
             print("[run] --- stdout ---", file=sys.stderr)
-            print(exc.stdout, file=sys.stderr)
-        if exc.stderr:
+            print(safe_stdout, file=sys.stderr)
+        if safe_stderr:
             print("[run] --- stderr ---", file=sys.stderr)
-            print(exc.stderr, file=sys.stderr)
-        raise
+            print(safe_stderr, file=sys.stderr)
+        raise safe_called_process_error(exc, cmd) from None
 
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = os.environ.get(name)
@@ -585,7 +589,8 @@ _SENSITIVE_ENV_KEY_RE = re.compile(
 
 
 def _redact_token_for_log(token: str) -> str:
-    redacted = _URL_CRED_RE.sub(r"\1***\3", token)
+    redacted = redact_sensitive_text(token)
+    redacted = _URL_CRED_RE.sub(r"\1***\3", redacted)
     if "=" in redacted:
         key, value = redacted.split("=", 1)
         if _SENSITIVE_ENV_KEY_RE.search(key):
@@ -638,7 +643,10 @@ def run_psql_file_to_path(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
-        sp.run(cmd, env=_psql_env(), check=True, stdout=f)
+        try:
+            sp.run(cmd, env=_psql_env(), check=True, stdout=f)
+        except sp.CalledProcessError as exc:
+            raise safe_called_process_error(exc, cmd) from None
 
 def run_psql(sql: str) -> str:
     import os
@@ -649,7 +657,10 @@ def run_psql(sql: str) -> str:
         raise RuntimeError("Missing SUPABASE_DB_URL (or DATABASE_URL)")
 
     cmd = ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
-    p = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    try:
+        p = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        raise safe_called_process_error(exc, cmd) from None
     return p.stdout
 
 def psql_one_row(db_url: str, sql: str) -> dict:
@@ -736,22 +747,24 @@ def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     )
 
     if res.returncode != 0:
-        print("psql FAILED:", " ".join(cmd), file=sys.stderr)
+        print("psql FAILED:", _format_cmd_for_log(cmd), file=sys.stderr)
         if res.stderr:
             try:
-                print(res.stderr.decode("utf-8", errors="replace").strip(), file=sys.stderr)
+                print(redact_sensitive_text(
+                    res.stderr.decode("utf-8", errors="replace").strip()), file=sys.stderr)
             except Exception:
-                print(str(res.stderr)[:2000], file=sys.stderr)
+                print(redact_sensitive_text(str(res.stderr)[:2000]), file=sys.stderr)
 
         # show tail of stdout too (COPY can emit partial output)
         if res.stdout:
             try:
                 tail = b"\n".join(res.stdout.splitlines()[-30:]).decode("utf-8", errors="replace")
-                print("psql stdout tail:\n" + tail, file=sys.stderr)
+                print("psql stdout tail:\n" + redact_sensitive_text(tail), file=sys.stderr)
             except Exception:
                 pass
 
-        raise sp.CalledProcessError(res.returncode, cmd, output=res.stdout, stderr=res.stderr)
+        error = sp.CalledProcessError(res.returncode, cmd, output=res.stdout, stderr=res.stderr)
+        raise safe_called_process_error(error, cmd) from None
 
     return res.stdout
 
@@ -1513,7 +1526,7 @@ def _run_independent_daily_lanes(
         except AttachmentIntegrityError as error:
             recorder.finish_lane(
                 attachment_lane, status="FAILED_NONBLOCKING_INTEGRITY",
-                reason=f"{type(error).__name__}:{error}")
+                reason=redact_sensitive_text(f"{type(error).__name__}:{error}"))
         except Exception as error:
             recorder.fail_lane(attachment_lane, error, blocking=False)
 
@@ -1530,9 +1543,11 @@ def _run_independent_daily_lanes(
         except AttachmentIntegrityError as error:
             recorder.finish_lane(
                 attachment_lane, status="FAILED_NONBLOCKING_INTEGRITY",
-                reason=f"RESEARCH_INTEGRITY:{type(error).__name__}:{error}")
+                reason=redact_sensitive_text(
+                    f"RESEARCH_INTEGRITY:{type(error).__name__}:{error}"))
             research_warnings.append(
-                f"{attachment_lane.upper()}_INTEGRITY:{type(error).__name__}:{error}")
+                redact_sensitive_text(
+                    f"{attachment_lane.upper()}_INTEGRITY:{type(error).__name__}:{error}"))
     if recorder.lane("legacy_sog").status == "COMPLETE":
         for label, callback in (
             ("SOG_RESIDUAL_REFRESH", lambda: refresh_sog_residual_dataset(slate=slate)),
@@ -1541,7 +1556,8 @@ def _run_independent_daily_lanes(
             try:
                 callback()
             except Exception as error:
-                research_warnings.append(f"{label}:{type(error).__name__}:{error}")
+                research_warnings.append(redact_sensitive_text(
+                    f"{label}:{type(error).__name__}:{error}"))
         try:
             run([
                 PY, SCRIPTS_DIR / "sog_integrity_report.py", "--slate-date", slate,
@@ -1549,7 +1565,8 @@ def _run_independent_daily_lanes(
                 "--db-toi-source", "nhl.skater_game_logs_raw", "--db-toi-days-back", "30",
             ])
         except Exception as error:
-            research_warnings.append(f"SOG_INTEGRITY:{type(error).__name__}:{error}")
+            research_warnings.append(redact_sensitive_text(
+                f"SOG_INTEGRITY:{type(error).__name__}:{error}"))
     else:
         research_warnings.append("LEGACY_SOG_RESEARCH_SKIPPED_BLOCKED_LANE")
 
@@ -1590,7 +1607,8 @@ def _refresh_all_team_rosters_for_daily(
     try:
         run([PY, SCRIPTS_DIR / "refresh_all_team_rosters.py"], env={"SLATE_DATE": slate})
     except Exception as error:
-        print(f"⚠️ full-team roster refresh failed/skipped (continuing): {error}")
+        print("⚠️ full-team roster refresh failed/skipped (continuing): "
+              + redact_sensitive_text(error))
     return True
 
 
@@ -2311,7 +2329,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
         recorder.failure = {
             "lane": failed_lane,
             "error_type": type(error).__name__,
-            "error_message": str(error),
+            "error_message": redact_sensitive_text(error),
         }
         # Once shared inputs, roster state, and the independent feature exports
         # are proven, any legacy-SOG exception is lane-local. Continue from the
@@ -2339,10 +2357,14 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
                 recorder.failure = {
                     "lane": _ACTIVE_DAILY_LANE,
                     "error_type": type(continuation_error).__name__,
-                    "error_message": str(continuation_error),
+                    "error_message": redact_sensitive_text(continuation_error),
                 }
         else:
-            pending_error = error
+            pending_error = (
+                safe_called_process_error(error)
+                if isinstance(error, sp.CalledProcessError)
+                else RuntimeError(redact_sensitive_text(error))
+            )
             active = recorder.lane(failed_lane)
             if active.blocking:
                 recorder.fail_lane(active.name, error, blocking=True)
