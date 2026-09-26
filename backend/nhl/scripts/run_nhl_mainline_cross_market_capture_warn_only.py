@@ -17,6 +17,9 @@ import pandas as pd
 import psycopg
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
+from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
+from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
+from backend.nhl.daily_capture import load_canonical_slate
 from backend.nhl.scripts.nhl_prediction_only_common import observe as observe_independent_prediction_only
 from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import observe as observe_sog_prediction_only
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
@@ -24,6 +27,7 @@ from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
+DEFAULT_OUTCOME_ROOT = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
 MORNING_ROOT = ROOT / "artifacts/operational/nhl/morning"
 
 
@@ -70,26 +74,93 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def export_inputs(dsn: str, slate_date: str, directory: Path) -> tuple[Path, Path, pd.DataFrame]:
+def validate_history_score_source(
+    history: pd.DataFrame,
+    schedule: pd.DataFrame,
+) -> None:
+    """Fail closed unless history goals match the frozen final-score contract."""
+    if history.empty:
+        return
+
+    required = {
+        "canonical_season", "game_id", "home_team_id", "away_team_id",
+        "scheduled_start_time_utc", "game_status", "final_home_goals",
+        "final_away_goals", "score_source", "score_status",
+        "score_identity_qualified", "score_observed_at_utc",
+    }
+    missing = sorted(required - set(history.columns))
+    if missing:
+        raise ValueError(f"CROSS_MARKET_OFFICIAL_FINAL_SCORE_FIELDS_MISSING:{','.join(missing)}")
+    if history.duplicated(["canonical_season", "game_id"]).any():
+        raise ValueError("CROSS_MARKET_DUPLICATE_FINAL_SCORE_IDENTITY")
+    if not history.score_source.astype(str).eq("OFFICIAL_NHL_FINAL_SCORE").all():
+        raise ValueError("CROSS_MARKET_TRAINING_COMPATIBLE_FINAL_SCORE_SOURCE_REQUIRED")
+    if not history.score_status.astype(str).eq("QUALIFIED").all():
+        raise ValueError("CROSS_MARKET_UNQUALIFIED_FINAL_SCORE")
+    identity_qualified = history.score_identity_qualified.astype("string").str.lower().eq("true")
+    if not identity_qualified.all():
+        raise ValueError("CROSS_MARKET_FINAL_SCORE_IDENTITY_CONFLICT")
+    if not history.game_status.astype(str).str.upper().isin({"FINAL", "OFF"}).all():
+        raise ValueError("CROSS_MARKET_GAME_NOT_OFFICIAL_FINAL")
+
+    home = pd.to_numeric(history.final_home_goals, errors="coerce")
+    away = pd.to_numeric(history.final_away_goals, errors="coerce")
+    if (home.isna() | away.isna() | home.lt(0) | away.lt(0)).any():
+        raise ValueError("CROSS_MARKET_FINAL_SCORE_MISSING_OR_INVALID")
+    if home.eq(away).any():
+        raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_DECISIVE")
+
+    observed = pd.to_datetime(history.score_observed_at_utc, utc=True, errors="coerce")
+    target_starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce")
+    if observed.isna().any() or target_starts.isna().any() or target_starts.empty:
+        raise ValueError("CROSS_MARKET_SCORE_OR_TARGET_TIMING_MISSING")
+    if observed.max() >= target_starts.min():
+        raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_OBSERVED_BEFORE_TARGET")
+    for side in ("home", "away"):
+        expected = pd.to_numeric(history[f"{side}_team_id"], errors="coerce")
+        outcome = pd.to_numeric(history[f"score_{side}_team_id"], errors="coerce")
+        if expected.isna().any() or outcome.isna().any() or not expected.eq(outcome).all():
+            raise ValueError(f"CROSS_MARKET_FINAL_SCORE_{side.upper()}_IDENTITY_MISMATCH")
+    scheduled = pd.to_datetime(history.scheduled_start_time_utc, utc=True, errors="coerce")
+    target_start = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce").min()
+    if scheduled.isna().any() or not scheduled.lt(target_start).all():
+        raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_STRICT_PRIOR")
+
+
+def export_inputs(dsn: str, slate_date: str, directory: Path, *,
+                  canonical_schedule: pd.DataFrame | None = None,
+                  outcome_root: Path = DEFAULT_OUTCOME_ROOT) -> tuple[Path, Path, pd.DataFrame]:
     with psycopg.connect(dsn) as connection:
-        schedule = pd.read_sql_query("""
-            SELECT season AS canonical_season, game_date::text AS slate_date, game_id,
-                   game_date::text AS game_date, start_time_utc AS scheduled_start_time_utc,
-                   home_team_id, home_team_code AS home_team, away_team_id,
-                   away_team_code AS away_team, upper(coalesce(status,'SCHEDULED')) AS game_status,
-                   game_type AS game_type_code
-            FROM nhl.games WHERE season=2026 AND game_date=%s::date
-            ORDER BY start_time_utc,game_id
-        """, connection, params=(slate_date,))
+        if canonical_schedule is None:
+            schedule = pd.read_sql_query("""
+                SELECT season AS canonical_season, game_date::text AS slate_date, game_id,
+                       game_date::text AS game_date, start_time_utc AS scheduled_start_time_utc,
+                       home_team_id, home_team_code AS home_team, away_team_id,
+                       away_team_code AS away_team, upper(coalesce(status,'SCHEDULED')) AS game_status,
+                       game_type AS game_type_code
+                FROM nhl.games WHERE season=2026 AND game_date=%s::date
+                ORDER BY start_time_utc,game_id
+            """, connection, params=(slate_date,))
+        else:
+            schedule = canonical_schedule.copy()
+            if not schedule.slate_date.astype(str).eq(slate_date).all():
+                raise ValueError("CANONICAL_SCHEDULE_SLATE_DATE_MISMATCH")
+        if schedule.empty:
+            history_cutoff = None
+        else:
+            history_cutoff = pd.to_datetime(
+                schedule.scheduled_start_time_utc, utc=True, errors="raise"
+            ).min()
         history = pd.read_sql_query("""
             WITH team_totals AS (
               SELECT g.season AS canonical_season,g.game_id,g.game_date,g.start_time_utc,
                      g.home_team_id,g.home_team_code,g.away_team_id,g.away_team_code,
                      g.status,g.game_type,l.team_id,
-                     sum(coalesce(l.goals,0))::int AS goals,
+                     count(*)::int AS skater_rows,
+                     count(DISTINCT l.player_id)::int AS distinct_skater_players,
                      sum(coalesce(l.shots_on_goal,0))::int AS shots
               FROM nhl.games g JOIN nhl.skater_game_logs_raw l USING(game_id)
-              WHERE g.season=2026 AND g.game_date < %s::date AND lower(g.status)='final'
+              WHERE g.season=2026 AND g.game_type=2 AND g.start_time_utc < %s::timestamptz
               GROUP BY g.season,g.game_id,g.game_date,g.start_time_utc,g.home_team_id,
                        g.home_team_code,g.away_team_id,g.away_team_code,g.status,g.game_type,l.team_id
             )
@@ -97,12 +168,54 @@ def export_inputs(dsn: str, slate_date: str, directory: Path) -> tuple[Path, Pat
                    h.game_date::text AS game_date,h.start_time_utc AS scheduled_start_time_utc,
                    h.home_team_id,h.home_team_code AS home_team,h.away_team_id,
                    h.away_team_code AS away_team,upper(h.status) AS game_status,h.game_type AS game_type_code,
-                   h.goals AS final_home_goals,a.goals AS final_away_goals,
-                   h.shots AS final_home_shots,a.shots AS final_away_shots
+                   h.shots AS final_home_shots,a.shots AS final_away_shots,
+                   h.skater_rows AS final_home_skater_rows,
+                   h.distinct_skater_players AS final_home_distinct_skater_players,
+                   a.skater_rows AS final_away_skater_rows,
+                   a.distinct_skater_players AS final_away_distinct_skater_players
             FROM team_totals h JOIN team_totals a USING(game_id)
             WHERE h.team_id=h.home_team_id AND a.team_id=a.away_team_id
             ORDER BY h.start_time_utc,h.game_id
-        """, connection, params=(slate_date,))
+        """, connection, params=(history_cutoff,))
+    if not history.empty:
+        for side in ("home", "away"):
+            rows = pd.to_numeric(history[f"final_{side}_skater_rows"], errors="coerce")
+            players = pd.to_numeric(
+                history[f"final_{side}_distinct_skater_players"], errors="coerce"
+            )
+            if rows.isna().any() or players.isna().any() or not players.eq(rows).all():
+                raise ValueError(f"CROSS_MARKET_SKATER_SHOTS_INCOMPLETE:{side.upper()}")
+        source = load_official_outcomes(outcome_root)
+        if source.empty:
+            raise ValueError("CROSS_MARKET_OFFICIAL_OUTCOME_EVIDENCE_MISSING")
+        else:
+            candidate_ids = set(history.game_id.astype(int))
+            source_ids = set(source.game_id.astype(int))
+            missing_outcomes = sorted(candidate_ids - source_ids)
+            if missing_outcomes:
+                raise ValueError(
+                    "CROSS_MARKET_OFFICIAL_OUTCOME_EVIDENCE_MISSING:"
+                    + ",".join(map(str, missing_outcomes[:20]))
+                )
+            history["scheduled_start_time_utc"] = pd.to_datetime(
+                history.scheduled_start_time_utc, utc=True, errors="raise"
+            )
+            history = history.drop(columns=["game_status"], errors="ignore")
+            source["scheduled_start_time_utc"] = pd.to_datetime(
+                source.scheduled_start_time_utc, utc=True, errors="raise"
+            )
+            history = history.merge(
+                source,
+                on=["canonical_season", "game_id", "game_type_code",
+                    "scheduled_start_time_utc", "home_team_id", "away_team_id"],
+                how="inner", validate="one_to_one",
+            )
+            if history.empty:
+                raise ValueError("CROSS_MARKET_OFFICIAL_OUTCOME_EVIDENCE_MISSING")
+        if not history.empty:
+            history["score_home_team_id"] = history.home_team_id
+            history["score_away_team_id"] = history.away_team_id
+            validate_history_score_source(history, schedule)
     directory.mkdir(parents=True, exist_ok=False)
     schedule_path, history_path = directory / "schedule.csv", directory / "history.csv"
     schedule.to_csv(schedule_path, index=False)
@@ -197,7 +310,9 @@ def record_morning_not_ready(root: Path, slate: str, reason: str) -> Path:
     return status
 
 
-def observe(root: Path, slate: str, requested: str, force: bool, dsn: str) -> Path:
+def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
+            canonical_raw_path: Path | None = None,
+            canonical_health_path: Path | None = None) -> Path:
     """One WARN-only entry; --force is the existing explicit operator override.
 
     Claims are immutable request intents, not assertions that a charge occurred.
@@ -216,7 +331,22 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str) -> Pa
             if not dsn:
                 raise RuntimeError("SUPABASE_DB_URL_MISSING")
             input_dir = root / "runtime_inputs" / slate / stamp
-            schedule_path, history_path, schedule = export_inputs(dsn, slate, input_dir)
+            if (canonical_raw_path is None) != (canonical_health_path is None):
+                raise ValueError("BOTH_CANONICAL_SLATE_PATHS_REQUIRED")
+            canonical_schedule = None
+            if canonical_raw_path is not None and canonical_health_path is not None:
+                health = json.loads(canonical_health_path.read_text())
+                canonical_games = load_canonical_slate(
+                    slate_date=slate, raw_schedule_path=canonical_raw_path,
+                    slate_health_path=canonical_health_path,
+                )
+                canonical_schedule = adapt_canonical_slate(
+                    canonical_games, json.loads(canonical_raw_path.read_text()),
+                    slate_date=slate, canonical_season=int(health["canonical_season"]),
+                )
+            schedule_path, history_path, schedule = export_inputs(
+                dsn, slate, input_dir, canonical_schedule=canonical_schedule,
+            )
             phase, reason = phase_for(schedule, utc_now(), requested, force)
             result.update(canonical_games=len(schedule), phase=phase, gate_reason=reason)
             claims_dir = root / "paid_attempt_claims" / slate
@@ -276,6 +406,8 @@ def main() -> int:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--env-file", type=Path, default=ROOT / "backend/.env")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--canonical-slate-raw", type=Path)
+    parser.add_argument("--canonical-slate-health", type=Path)
     args = parser.parse_args()
     load_env(args.env_file)
     now = utc_now()
@@ -292,7 +424,8 @@ def main() -> int:
             status_path = record_morning_not_ready(args.output_root, slate, reason)
         else:
             status_path = observe(args.output_root, slate, args.phase, args.force,
-                                  os.environ.get("SUPABASE_DB_URL", "").strip())
+                                  os.environ.get("SUPABASE_DB_URL", "").strip(),
+                                  args.canonical_slate_raw, args.canonical_slate_health)
         print(status_path)
     except Exception as error:
         # Lock/claim/status failures never permit acquisition; remain WARN-only.
