@@ -29,6 +29,7 @@ TASK_ADVISORY_LOCK = (20260924, 15893)
 EXPECTED_LEGACY_RELATIONS = (
     "mlb.game_info", "mlb.player_stats", "mlb.model_training_props", "mlb.player_derived_stats",
 )
+EXACT_GAMEPK_PROVEN_RELATIONS = frozenset(("mlb.game_info", "mlb.player_stats", "mlb.model_training_props"))
 
 
 class GovernanceError(RuntimeError):
@@ -132,22 +133,36 @@ class AuthorizationV1:
         if (not valid_sha(self.target_database_identity) or len(self.nonce) < 24
                 or not self.authorization_statement.strip() or len(self.authorization_statement) > 2000):
             raise GovernanceError("AUTHORIZATION_ARTIFACT_FIELDS_INVALID")
-        if set(self.expected_pre_state) != {"absent_objects", "present_objects", "legacy_state_hashes", "legacy_counts", "migration_ids_absent", "migration_sha256s_absent"}:
+        if set(self.expected_pre_state) != {"postgres_server_version_num", "absent_objects", "present_objects", "legacy_relation_definition_hashes", "legacy_game_pk_evidence", "migration_ids_absent", "migration_sha256s_absent"}:
             raise GovernanceError("AUTHORIZATION_SCOPE_TOO_BROAD_OR_PRESTATE_INVALID")
+        if not isinstance(self.expected_pre_state["postgres_server_version_num"], int) or self.expected_pre_state["postgres_server_version_num"] < 10000:
+            raise GovernanceError("AUTHORIZATION_POSTGRES_VERSION_INVALID")
         plan = build_plan()
         if (self.bootstrap != plan.bootstrap or self.exact != plan.exact
                 or set(self.expected_created_objects) != set(plan.objects)
                 or set(self.expected_pre_state.get("absent_objects", ())) != {LEDGER, "mlb.player_game_feature_state_v1"}
-                or set(self.expected_pre_state.get("present_objects", ())) - set(self.expected_pre_state.get("legacy_state_hashes", {}))):
+                or set(self.expected_pre_state.get("present_objects", ())) - set(self.expected_pre_state.get("legacy_relation_definition_hashes", {}))):
             raise GovernanceError("AUTHORIZATION_SCOPE_TOO_BROAD_OR_INPUT_HASH_MISMATCH")
         if set(self.expected_pre_state.get("migration_ids_absent", ())) != {BOOTSTRAP_ID, EXACT_ID}:
             raise GovernanceError("AUTHORIZATION_MIGRATION_ID_PRESTATE_MISMATCH")
         if set(self.expected_pre_state.get("migration_sha256s_absent", ())) != {plan.bootstrap.migration_sha256, plan.exact.migration_sha256}:
             raise GovernanceError("AUTHORIZATION_MIGRATION_CHECKSUM_PRESTATE_MISMATCH")
-        legacy_hashes = self.expected_pre_state.get("legacy_state_hashes", {})
-        legacy_counts = self.expected_pre_state.get("legacy_counts", {})
-        if set(legacy_hashes) != set(legacy_counts) or not set(legacy_hashes).issubset(EXPECTED_LEGACY_RELATIONS):
+        definition_hashes = self.expected_pre_state.get("legacy_relation_definition_hashes", {})
+        game_evidence = self.expected_pre_state.get("legacy_game_pk_evidence", {})
+        if (set(definition_hashes) != set(game_evidence)
+                or set(definition_hashes) != set(EXPECTED_LEGACY_RELATIONS)
+                or any(set(v) != {"824785", "824784"} for v in game_evidence.values())):
             raise GovernanceError("AUTHORIZATION_LEGACY_SCOPE_INVALID")
+        for relation, by_game in game_evidence.items():
+            label = ("EXACT_GAMEPK_PROVEN" if relation in EXACT_GAMEPK_PROVEN_RELATIONS
+                     else "PHYSICAL_GAME_ID_EQUALS_REQUESTED_VALUE_ONLY")
+            for evidence in by_game.values():
+                if (not isinstance(evidence, Mapping) or not isinstance(evidence.get("count"), int)
+                        or evidence["count"] < 0 or not valid_sha(evidence.get("sha256"))
+                        or not evidence.get("index") or evidence.get("explain_used_index") is not True
+                        or evidence.get("exact_game_identity_proven") is not (relation in EXACT_GAMEPK_PROVEN_RELATIONS)
+                        or evidence.get("identity_evidence_label") != label):
+                    raise GovernanceError("AUTHORIZATION_LEGACY_EVIDENCE_INVALID")
         if self.exact.migration_sha256 != EXACT_SHA256:
             raise GovernanceError("EXACT_MIGRATION_SHA_MISMATCH")
         if self.expected_zero_row_relations != ("mlb.player_game_feature_state_v1",):
@@ -168,8 +183,8 @@ class PreflightV1:
     existing_migration_ids: tuple[str, ...]
     existing_migration_hashes: Mapping[str, str]
     target_database_identity: str
-    legacy_state_hashes: Mapping[str, str]
-    legacy_counts: Mapping[str, int]
+    legacy_relation_definition_hashes: Mapping[str, str]
+    legacy_game_pk_evidence: Mapping[str, Mapping[str, Any]]
 
     def readiness(self, authorization: AuthorizationV1 | None = None) -> str:
         if self.internal_ledger_present:
@@ -238,7 +253,7 @@ class BackendV1(Protocol):
     def apply_exact_schema(self) -> None: ...
     def validate_exact_empty(self) -> bool: ...
     def validate_ledger_records(self, records: tuple[LedgerRecordV1, LedgerRecordV1]) -> bool: ...
-    def validate_legacy(self, hashes: Mapping[str, str], counts: Mapping[str, int]) -> bool: ...
+    def validate_legacy(self, definition_hashes: Mapping[str, str], game_evidence: Mapping[str, Any]) -> bool: ...
     def commit(self) -> None: ...
     def rollback(self) -> None: ...
 
@@ -270,7 +285,7 @@ class GuardedRunnerV1:
             backend.insert_record(authorization.exact)
             if not backend.validate_ledger_records((authorization.bootstrap, authorization.exact)):
                 raise GovernanceError("TWO_RECORD_LEDGER_ASSERTION_FAILED")
-            if not backend.validate_legacy(preflight.legacy_state_hashes, preflight.legacy_counts):
+            if not backend.validate_legacy(preflight.legacy_relation_definition_hashes, preflight.legacy_game_pk_evidence):
                 raise GovernanceError("LEGACY_BOUNDARY_MISMATCH")
             backend.commit()
             used.add(authorization.nonce)
