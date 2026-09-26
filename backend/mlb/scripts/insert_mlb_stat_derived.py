@@ -8,15 +8,19 @@ using psycopg + DATABASE_URL/SUPABASE_DB_URL (no Supabase JS credentials).
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
+import os
 import random
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import requests
+import backend.mlb.identity.playable_terminal_v1 as playable_terminal_contract
 
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
@@ -29,6 +33,11 @@ from backend.mlb.season_transition.canonical_phase_v1 import (
     canonical_phase_record,
 )
 from backend.mlb.season_transition.contract_v1 import normalize_source_game_type
+from backend.mlb.identity.playable_terminal_v1 import (
+    PLAYABLE_TERMINAL,
+    classify_playable_terminal,
+    reconcile_schedule_by_game_pk,
+)
 from backend.shared.db.pg import pg_connect
 
 
@@ -294,7 +303,9 @@ def _fetch_json(url: str) -> Dict[str, Any]:
     return r.json()
 
 
-def _fetch_schedule(date_iso: str) -> Tuple[List[Dict[str, Any]], str]:
+def _fetch_schedule(
+    date_iso: str, *, include_payload: bool = False
+) -> Tuple[List[Dict[str, Any]], str] | Tuple[List[Dict[str, Any]], str, bytes]:
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_iso}"
     response = requests.get(url, timeout=25)
     response.raise_for_status()
@@ -302,12 +313,21 @@ def _fetch_schedule(date_iso: str) -> Tuple[List[Dict[str, Any]], str]:
     js = response.json()
     dates = js.get("dates") or []
     if not dates:
-        return [], hashlib.sha256(raw).hexdigest()
-    return (dates[0] or {}).get("games", []) or [], hashlib.sha256(raw).hexdigest()
+        result = ([], hashlib.sha256(raw).hexdigest())
+    else:
+        result = ((dates[0] or {}).get("games", []) or [], hashlib.sha256(raw).hexdigest())
+    return (*result, raw) if include_payload else result
 
 
-def _fetch_live_feed(game_id: int) -> Dict[str, Any]:
-    return _fetch_json(f"https://statsapi.mlb.com/api/v1.1/game/{game_id}/feed/live")
+def _fetch_live_feed(
+    game_id: int, *, include_payload: bool = False
+) -> Dict[str, Any] | Tuple[Dict[str, Any], bytes]:
+    response = requests.get(
+        f"https://statsapi.mlb.com/api/v1.1/game/{game_id}/feed/live", timeout=25
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return (payload, response.content) if include_payload else payload
 
 
 def _fetch_boxscore(game_id: int) -> Dict[str, Any]:
@@ -532,6 +552,41 @@ def _backfill_player_stats_at_bats(
         return int(cur.rowcount or 0)
 
 
+class ActiveLoaderFinalityError(RuntimeError):
+    """The active loader has no safe exact-game candidate set."""
+
+
+def _row_mapping(cursor: Any, row: Any) -> Dict[str, Any]:
+    if isinstance(row, dict):
+        return dict(row)
+    columns = [item[0] for item in (cursor.description or ())]
+    return dict(zip(columns, row))
+
+
+def _validate_legacy_derived_candidates(candidates: List[Dict[str, Any]]) -> None:
+    """Reject ambiguity before the legacy daily writer can mutate anything.
+
+    A legacy daily row is admissible only when that player has exactly one
+    exact game on the day.  The candidate query enforces this; this Python
+    boundary independently rejects duplicate exact or daily identities before
+    locking, deletion, or insertion.
+    """
+    exact_keys: Set[Tuple[int, int]] = set()
+    daily_keys: Set[Tuple[int, str]] = set()
+    for row in candidates:
+        try:
+            exact = (int(row["player_id"]), int(row["game_id"]))
+            daily = (exact[0], str(row["game_date"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("LEGACY_DERIVED_CANDIDATE_IDENTITY_INVALID") from exc
+        if exact in exact_keys:
+            raise RuntimeError(f"LEGACY_DERIVED_DUPLICATE_EXACT_KEY:{exact[0]}:{exact[1]}")
+        if daily in daily_keys:
+            raise RuntimeError(f"LEGACY_DERIVED_DUPLICATE_DAILY_KEY:{daily[0]}:{daily[1]}")
+        exact_keys.add(exact)
+        daily_keys.add(daily)
+
+
 def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
     agg_metric_exprs: List[str] = []
     for metric in ROLLING_METRICS:
@@ -552,18 +607,20 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
         + [f"AVG(d.{m}) OVER w15 AS d15_{m}" for m in ROLLING_METRICS]
         + [f"AVG(d.{m}) OVER w30 AS d30_{m}" for m in ROLLING_METRICS]
     )
-    insert_cols = ",\n                ".join(
-        ["player_id", "game_id", "game_date", "team", "is_home", "updated_at"]
+    candidate_columns = (
+        ["player_id", "game_id", "game_date", "team", "is_home"]
         + [f"d7_{m}" for m in ROLLING_METRICS]
         + [f"d15_{m}" for m in ROLLING_METRICS]
         + [f"d30_{m}" for m in ROLLING_METRICS]
     )
-    select_cols = ",\n                ".join(
-        ["t.player_id", "t.game_id", "t.game_date", "t.team", "t.is_home", "now()"]
+    candidate_select_cols = ",\n                ".join(
+        ["t.player_id", "t.game_id", "t.game_date", "t.team", "t.is_home"]
         + [f"t.d7_{m}" for m in ROLLING_METRICS]
         + [f"t.d15_{m}" for m in ROLLING_METRICS]
         + [f"t.d30_{m}" for m in ROLLING_METRICS]
     )
+    insert_cols = ", ".join(candidate_columns + ["updated_at"])
+    insert_values = ", ".join([f"%({column})s" for column in candidate_columns] + ["now()"])
     update_cols = ",\n                ".join(
         ["game_id = EXCLUDED.game_id", "team = EXCLUDED.team", "is_home = EXCLUDED.is_home", "updated_at = now()"]
         + [f"d7_{m} = EXCLUDED.d7_{m}" for m in ROLLING_METRICS]
@@ -578,10 +635,21 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             WHERE game_date >= %s::date
               AND game_date <= %s::date
         ),
+        single_game_days AS (
+            SELECT
+               ps.player_id,
+               ps.game_date::date AS game_date,
+               array_agg(DISTINCT ps.game_id ORDER BY ps.game_id) AS exact_game_ids
+            FROM mlb.player_stats ps
+            JOIN target_players tp
+              ON tp.player_id = ps.player_id
+            GROUP BY ps.player_id, ps.game_date
+            HAVING COUNT(DISTINCT ps.game_id) = 1
+        ),
         daily AS (
             SELECT
                ps.player_id,
-               MAX(ps.game_id)::bigint AS game_id,
+               (sgd.exact_game_ids)[1]::bigint AS game_id,
                ps.game_date::date AS game_date,
                MAX(NULLIF(ps.team, '')) AS team,
                bool_or(COALESCE(ps.is_home, false)) AS is_home,
@@ -589,7 +657,10 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             FROM mlb.player_stats ps
             JOIN target_players tp
               ON tp.player_id = ps.player_id
-            GROUP BY ps.player_id, ps.game_date
+            JOIN single_game_days sgd
+              ON sgd.player_id = ps.player_id
+             AND sgd.game_date = ps.game_date::date
+            GROUP BY ps.player_id, ps.game_date, sgd.exact_game_ids
         ),
         rolled AS (
             SELECT
@@ -610,42 +681,100 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             FROM rolled
             WHERE game_date >= %s::date
               AND game_date <= %s::date
-        ),
-        purged_conflicts AS (
-            DELETE FROM mlb.player_derived_stats p
-            USING target t
-            WHERE p.player_id = t.player_id
-              AND (
-                    (p.game_id = t.game_id AND p.game_date IS DISTINCT FROM t.game_date)
-                 OR (p.game_date = t.game_date AND p.game_id IS DISTINCT FROM t.game_id)
-              )
-            RETURNING 1
-        ),
-        upserted AS (
-            INSERT INTO mlb.player_derived_stats (
-                {insert_cols}
-            )
-            SELECT
-                {select_cols}
-            FROM target t
-            ON CONFLICT (player_id, game_date)
-            DO UPDATE SET
-                {update_cols}
-            RETURNING 1
         )
-        SELECT COUNT(*)::int AS n FROM upserted
+        SELECT
+            {candidate_select_cols}
+        FROM target t
+        ORDER BY t.player_id, t.game_id
     """
     with conn.cursor() as cur:
         cur.execute(sql, (from_date, to_date, from_date, to_date))
-        row = cur.fetchone()
-        if isinstance(row, dict):
-            return int(row.get("n") or 0)
-        return int((row or [0])[0] or 0)
+        candidates = [_row_mapping(cur, row) for row in cur.fetchall()]
+
+    # No mutation is possible before the whole target-date candidate population
+    # is known and its exact and legacy-daily identities are unambiguous.
+    _validate_legacy_derived_candidates(candidates)
+    if not candidates:
+        return 0
+
+    keys_json = json.dumps([
+        {"player_id": int(row["player_id"]), "game_id": int(row["game_id"]), "game_date": str(row["game_date"])}
+        for row in candidates
+    ], sort_keys=True, separators=(",", ":"))
+    incoming_cte = """
+        WITH incoming AS (
+            SELECT
+                (item->>'player_id')::bigint AS player_id,
+                (item->>'game_id')::bigint AS game_id,
+                (item->>'game_date')::date AS game_date
+            FROM jsonb_array_elements(%s::jsonb) AS item
+        )
+    """
+    lock_sql = incoming_cte + """
+        SELECT p.player_id, p.game_id
+        FROM mlb.player_derived_stats p
+        JOIN incoming i ON i.player_id = p.player_id
+          AND (i.game_id = p.game_id OR i.game_date = p.game_date)
+        ORDER BY p.player_id, p.game_id
+        FOR UPDATE
+    """
+    delete_sql = incoming_cte + """
+        DELETE FROM mlb.player_derived_stats p
+        USING incoming i
+        WHERE p.player_id = i.player_id
+          AND (
+                (p.game_id = i.game_id AND p.game_date IS DISTINCT FROM i.game_date)
+             OR (p.game_date = i.game_date AND p.game_id IS DISTINCT FROM i.game_id)
+          )
+    """
+    insert_sql = f"""
+        INSERT INTO mlb.player_derived_stats ({insert_cols})
+        VALUES ({insert_values})
+        ON CONFLICT (player_id, game_id)
+        DO UPDATE SET
+            {update_cols}
+        WHERE (
+            player_derived_stats.game_date,
+            player_derived_stats.team,
+            player_derived_stats.is_home,
+            {", ".join(f"player_derived_stats.d7_{m}" for m in ROLLING_METRICS)},
+            {", ".join(f"player_derived_stats.d15_{m}" for m in ROLLING_METRICS)},
+            {", ".join(f"player_derived_stats.d30_{m}" for m in ROLLING_METRICS)}
+        ) IS DISTINCT FROM (
+            EXCLUDED.game_date,
+            EXCLUDED.team,
+            EXCLUDED.is_home,
+            {", ".join(f"EXCLUDED.d7_{m}" for m in ROLLING_METRICS)},
+            {", ".join(f"EXCLUDED.d15_{m}" for m in ROLLING_METRICS)},
+            {", ".join(f"EXCLUDED.d30_{m}" for m in ROLLING_METRICS)}
+        )
+    """
+    writes = 0
+    with conn.cursor() as cur:
+        # Ordered statements deliberately replace the legacy sibling
+        # DELETE/INSERT CTE.  The transaction held by run() rolls all of these
+        # statements back if any lock, delete, insert, or validation fails.
+        cur.execute(lock_sql, (keys_json,))
+        cur.fetchall()
+        cur.execute(delete_sql, (keys_json,))
+        for candidate in candidates:
+            cur.execute(insert_sql, candidate)
+            writes += int(cur.rowcount or 0)
+    return writes
 
 
 def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -> int:
     sql = """
-        WITH src AS (
+        WITH single_game_days AS (
+            -- player_derived_stats is legacy daily evidence.  A player with
+            -- multiple exact gamePks on one date (a doubleheader) has no
+            -- unambiguous daily legacy row for model_training_props to join.
+            SELECT ps.player_id, ps.game_date::date AS game_date
+            FROM mlb.player_stats ps
+            GROUP BY ps.player_id, ps.game_date::date
+            HAVING COUNT(DISTINCT ps.game_id) = 1
+        ),
+        src AS (
             SELECT
                 mt.id,
                 CASE
@@ -673,6 +802,9 @@ def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -
             JOIN mlb.player_derived_stats pds
               ON pds.player_id = mt.player_id
              AND pds.game_date = mt.game_date
+            JOIN single_game_days sgd
+              ON sgd.player_id = mt.player_id
+             AND sgd.game_date = mt.game_date
             WHERE mt.game_date >= %s::date
               AND mt.game_date <= %s::date
               AND mt.prop_source = 'mlb_api'
@@ -985,6 +1117,7 @@ def _normalize_training_row_team_fields(row: Dict[str, Any]) -> None:
 
 
 def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool = False) -> int:
+    """Persist synthetic historical outcome/training rows, never predictions."""
     _normalize_training_row_team_fields(row)
     extra_insert_col = ", game_type" if include_game_type else ""
     extra_insert_val = ", %(game_type)s" if include_game_type else ""
@@ -1141,18 +1274,38 @@ def _infer_team_starter_ids(
     return {int(best["player_id"])}, "max_outs"
 
 
-def _final_games(
+def _resolved_final_game_entries(
     schedule: List[Dict[str, Any]],
     *,
     require_regular_season: bool,
-) -> List[Tuple[int, str]]:
-    out: List[Tuple[int, str]] = []
-    for g in schedule:
-        status = g.get("status", {}) or {}
-        # MLB uses terminal detailed states such as "Completed Early: Rain".
-        # Abstract/coded final state is authoritative; exact detailed text is not.
-        if status.get("abstractGameState") != "Final" and status.get("codedGameState") != "F":
+) -> List[Tuple[int, str, Dict[str, Any]]]:
+    """Resolve complete, exact-game final candidates before mutation.
+
+    Explicit non-playable values outrank an abstract ``Final`` label.  The
+    shared reconciliation retains a reschedule relationship by gamePk and
+    refuses ambiguous or conflicting appearances rather than guessing from a
+    requested calendar date.
+    """
+    payload = {"dates": [{"games": schedule}]}
+    out: List[Tuple[int, str, Dict[str, Any]]] = []
+    seen: Set[int] = set()
+    for decision in reconcile_schedule_by_game_pk(payload):
+        if decision.decision == "REJECTED_NONPLAYABLE":
             continue
+        if decision.decision != "FETCH_PLAYABLE_FINAL" or decision.selected is None:
+            raise ActiveLoaderFinalityError(
+                f"ACTIVE_FINALITY_CANDIDATE_UNRESOLVED:{decision.game_pk}:{decision.reason}"
+            )
+        selected = decision.selected
+        if selected.status.classification != PLAYABLE_TERMINAL:
+            raise ActiveLoaderFinalityError(
+                f"ACTIVE_FINALITY_CANDIDATE_NOT_PLAYABLE:{decision.game_pk}"
+            )
+        g = dict(selected.raw)
+        game_pk = int(selected.game_pk)
+        if game_pk in seen:
+            raise ActiveLoaderFinalityError(f"ACTIVE_FINALITY_DUPLICATE_GAME_PK:{game_pk}")
+        seen.add(game_pk)
         classification = normalize_source_game_type(
             g.get("gameType"),
             season=g.get("season"),
@@ -1165,11 +1318,171 @@ def _final_games(
             "POSTSEASON",
         }:
             continue
-        try:
-            out.append((int(g["gamePk"]), game_type))
-        except Exception:
-            continue
+        out.append((game_pk, game_type, g))
     return out
+
+
+def _final_games(
+    schedule: List[Dict[str, Any]],
+    *,
+    require_regular_season: bool,
+) -> List[Tuple[int, str]]:
+    """Compatibility projection of the validated active candidate set."""
+    return [
+        (game_pk, game_type)
+        for game_pk, game_type, _ in _resolved_final_game_entries(
+            schedule,
+            require_regular_season=require_regular_season,
+        )
+    ]
+
+
+def _validate_terminal_feed_for_candidate(
+    game_id: int,
+    schedule_game: Dict[str, Any],
+    live_feed: Dict[str, Any],
+) -> None:
+    """Require the live payload to confirm the selected exact schedule fact."""
+    try:
+        feed_game_pk = int(live_feed.get("gamePk"))
+    except (TypeError, ValueError) as exc:
+        raise ActiveLoaderFinalityError("ACTIVE_TERMINAL_FEED_GAME_PK_MISSING") from exc
+    if feed_game_pk != int(game_id):
+        raise ActiveLoaderFinalityError(
+            f"ACTIVE_TERMINAL_FEED_GAME_PK_MISMATCH:{game_id}:{feed_game_pk}"
+        )
+    decision = classify_playable_terminal((live_feed.get("gameData") or {}).get("status") or {})
+    if decision.classification != PLAYABLE_TERMINAL:
+        raise ActiveLoaderFinalityError(
+            f"ACTIVE_TERMINAL_FEED_NOT_PLAYABLE:{game_id}:{decision.classification}"
+        )
+    schedule_date = str(schedule_game.get("officialDate") or "")
+    feed_date = str(((live_feed.get("gameData") or {}).get("datetime") or {}).get("officialDate") or "")
+    if not schedule_date or not feed_date or schedule_date != feed_date:
+        raise ActiveLoaderFinalityError(
+            f"ACTIVE_TERMINAL_FEED_OPERATIONAL_DATE_MISMATCH:{game_id}"
+        )
+
+
+def _stat_derived_evidence_dir(run_identity: str, requested_date: str) -> Path:
+    root = Path(
+        os.environ.get(
+            "MLB_STAT_DERIVED_EVIDENCE_ROOT",
+            str(Path(__file__).resolve().parents[3] / "artifacts/ops/mlb_stat_derived_natural_run_evidence_v1"),
+        )
+    )
+    safe_run = re.sub(r"[^A-Za-z0-9_.-]+", "_", run_identity).strip("._")[:96] or "run"
+    return root / safe_run / requested_date
+
+
+def _write_immutable_evidence_file(path: Path, payload: bytes) -> None:
+    """Publish one private evidence file without replacing prior evidence."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for directory in (path.parent.parent, path.parent):
+        try:
+            directory.chmod(0o700)
+        except OSError:
+            pass
+    if path.exists():
+        raise RuntimeError(f"STAT_DERIVED_EVIDENCE_COLLISION:{path}")
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # Hard-link publication is atomic and fails if another writer already
+        # published this immutable path; unlike replace(), it never overwrites.
+        os.link(temporary, path)
+        temporary.unlink()
+        path.chmod(0o600)
+    except Exception:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _new_training_row_counts() -> Dict[str, Any]:
+    return {
+        "candidate_rows": 0,
+        "admitted_rows": 0,
+        "quarantined_rows": 0,
+        "written_rows": 0,
+        "unchanged_rows": 0,
+        "rejection_reasons": {},
+        "row_semantics": "SYNTHETIC_MODEL_TRAINING_OUTCOME_ROWS_NOT_PREGAME_PREDICTIONS",
+    }
+
+
+def _quarantine_training_candidate(counts: Dict[str, Any], reason: str) -> None:
+    counts["quarantined_rows"] += 1
+    reasons = counts["rejection_reasons"]
+    reasons[reason] = int(reasons.get(reason, 0)) + 1
+
+
+def _validate_game_row_count_reconciliation(game_receipts: Dict[int, Dict[str, Any]]) -> None:
+    for game_pk, receipt in game_receipts.items():
+        for relation in ("game_info", "player_stats", "model_training_props"):
+            rows = receipt[relation]
+            if rows["candidate_rows"] != rows["admitted_rows"] + rows["quarantined_rows"]:
+                raise RuntimeError(
+                    f"STAT_DERIVED_ROW_COUNT_CANDIDATE_RECONCILIATION:{relation}:{game_pk}"
+                )
+            if rows["admitted_rows"] != rows["written_rows"] + rows["unchanged_rows"]:
+                raise RuntimeError(
+                    f"STAT_DERIVED_ROW_COUNT_WRITE_RECONCILIATION:{relation}:{game_pk}"
+                )
+
+
+def _schedule_decision_records(
+    schedule: List[Dict[str, Any]],
+    selected_game_pks: Set[int],
+    processed_game_pks: Set[int],
+    *,
+    require_regular_season: bool,
+) -> List[Dict[str, Any]]:
+    payload = {"dates": [{"games": schedule}]}
+    records: List[Dict[str, Any]] = []
+    for decision in reconcile_schedule_by_game_pk(payload):
+        record = decision.as_dict()
+        game_pk = int(decision.game_pk)
+        in_scope = False
+        if decision.decision == "FETCH_PLAYABLE_FINAL" and decision.selected is not None:
+            game = dict(decision.selected.raw)
+            phase = normalize_source_game_type(
+                game.get("gameType"),
+                season=game.get("season"),
+                source="MLB_STATSAPI",
+                source_round=game.get("seriesDescription"),
+            ).phase
+            in_scope = not require_regular_season or phase in {"REGULAR_SEASON", "POSTSEASON"}
+        if decision.decision == "REJECTED_NONPLAYABLE":
+            record["loader_decision"] = "REJECTED"
+            record["loader_reason"] = decision.reason
+        elif decision.decision != "FETCH_PLAYABLE_FINAL" or decision.selected is None:
+            record["loader_decision"] = "FAIL_CLOSED"
+            record["loader_reason"] = decision.reason
+        elif not in_scope:
+            record["loader_decision"] = "REJECTED"
+            record["loader_reason"] = "OUT_OF_SCOPE_GAME_TYPE" if require_regular_season else "NOT_SELECTED"
+        elif game_pk not in selected_game_pks:
+            record["loader_decision"] = "REJECTED"
+            record["loader_reason"] = "MAX_GAMES_PER_DATE_LIMIT"
+        elif game_pk not in processed_game_pks:
+            record["loader_decision"] = "REJECTED"
+            record["loader_reason"] = "NOT_PROCESSED"
+        else:
+            record["loader_decision"] = "SELECTED_FOR_PROCESSING"
+            record["loader_reason"] = "PLAYABLE_TERMINAL_EXACT_GAME_PK"
+        records.append(record)
+    return records
 
 
 def run(
@@ -1186,6 +1499,17 @@ def run(
     end = _parse_date(to_date)
     if start > end:
         raise ValueError(f"from-date must be <= to-date ({from_date} > {to_date})")
+
+    invocation_started = datetime.now(timezone.utc)
+    run_identity = (
+        os.environ.get("MLB_RUN_TAG")
+        or os.environ.get("MLB_RUN_IDENTITY")
+        or f"stat-derived-{invocation_started.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:10]}"
+    )
+    runtime_loader_path = Path(__file__).resolve()
+    runtime_finality_path = Path(playable_terminal_contract.__file__).resolve()
+    runtime_loader_sha256 = hashlib.sha256(runtime_loader_path.read_bytes()).hexdigest()
+    runtime_finality_sha256 = hashlib.sha256(runtime_finality_path.read_bytes()).hexdigest()
 
     attempted_upserts = 0
     applied_upserts = 0
@@ -1213,6 +1537,14 @@ def run(
         for d in _daterange(start, end):
             d_iso = d.isoformat()
             print(f"\n📅 Processing {d_iso} ...")
+            evidence_dir: Optional[Path] = None
+            schedule_path: Optional[Path] = None
+            schedule: Optional[List[Dict[str, Any]]] = None
+            schedule_sha256 = ""
+            game_receipts: Dict[int, Dict[str, Any]] = {}
+            uncapped_final_games: List[int] = []
+            final_games: List[int] = []
+            date_committed = False
             try:
                 if skip_existing_dates and _date_has_mlb_api_rows(conn, d_iso):
                     has_negative_lines = _date_has_negative_lines(conn, d_iso)
@@ -1241,29 +1573,134 @@ def run(
                         print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
                         continue
 
-                schedule, schedule_sha256 = _fetch_schedule(d_iso)
-                final_games_meta = _final_games(
-                    schedule,
-                    require_regular_season=require_regular_season,
-                )
+                schedule, schedule_sha256, schedule_payload = _fetch_schedule(d_iso, include_payload=True)
+                schedule_observed_at_utc = datetime.now(timezone.utc).isoformat()
+                evidence_dir = _stat_derived_evidence_dir(run_identity, d_iso)
+                schedule_path = evidence_dir / f"schedule_{d_iso}.json"
+                _write_immutable_evidence_file(schedule_path, schedule_payload)
+                if hashlib.sha256(schedule_path.read_bytes()).hexdigest() != schedule_sha256:
+                    raise RuntimeError("STAT_DERIVED_SCHEDULE_EVIDENCE_HASH_MISMATCH")
+                try:
+                    final_game_entries = _resolved_final_game_entries(
+                        schedule,
+                        require_regular_season=require_regular_season,
+                    )
+                except ActiveLoaderFinalityError as finality_error:
+                    rejected_decisions = _schedule_decision_records(
+                        schedule, set(), set(), require_regular_season=require_regular_season
+                    )
+                    for decision_record in rejected_decisions:
+                        if decision_record.get("decision") == "FETCH_PLAYABLE_FINAL":
+                            decision_record["loader_decision"] = "REJECTED"
+                            decision_record["loader_reason"] = "NOT_PROCESSED_DUE_TO_FAIL_CLOSED_SCHEDULE"
+                        decision_record["schedule_source"] = {
+                            "path": str(schedule_path), "sha256": schedule_sha256,
+                            "observed_at_utc": schedule_observed_at_utc,
+                        }
+                    failure_receipt = {
+                        "contract": "MLB_STAT_DERIVED_NATURAL_RUN_EVIDENCE_V1",
+                        "run_identity": run_identity,
+                        "requested_date": d_iso,
+                        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+                        "runtime": {
+                            "loader_path": str(runtime_loader_path),
+                            "loader_sha256_at_start": runtime_loader_sha256,
+                            "finality_contract_path": str(runtime_finality_path),
+                            "finality_contract_version": playable_terminal_contract.CONTRACT_VERSION,
+                            "finality_contract_sha256_at_start": runtime_finality_sha256,
+                        },
+                        "schedule_source": {
+                            "path": str(schedule_path), "sha256": schedule_sha256,
+                            "observed_at_utc": schedule_observed_at_utc,
+                        },
+                        "game_decisions": rejected_decisions,
+                        "transaction_status": "NOT_STARTED_FAIL_CLOSED_FINALITY",
+                        "error": f"{type(finality_error).__name__}: {finality_error}",
+                        "database_writes": {"committed": 0},
+                    }
+                    _write_immutable_evidence_file(
+                        evidence_dir / "receipt.json",
+                        (json.dumps(failure_receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
+                    )
+                    raise
+                final_games_meta = [(game_id, game_type) for game_id, game_type, _ in final_game_entries]
                 final_games = [gid for gid, _ in final_games_meta]
                 game_type_by_game_id = {gid: gtype for gid, gtype in final_games_meta}
-                schedule_by_game_id = {
-                    _to_int(g.get("gamePk")): g for g in schedule if _to_int(g.get("gamePk")) is not None
-                }
+                schedule_by_game_id = {game_id: game for game_id, _, game in final_game_entries}
+                uncapped_final_games = list(final_games)
                 if max_games_per_date > 0:
                     final_games = final_games[:max_games_per_date]
+                game_receipts: Dict[int, Dict[str, Any]] = {
+                    gid: {
+                        "game_pk": gid,
+                        "schedule_appearance": schedule_by_game_id[gid],
+                        "decision": "SELECTED_FOR_PROCESSING",
+                        "reason": "PLAYABLE_TERMINAL_EXACT_GAME_PK",
+                        "sources": {
+                            "schedule": {
+                                "path": str(schedule_path), "sha256": schedule_sha256,
+                                "observed_at_utc": schedule_observed_at_utc,
+                            }
+                        },
+                        "game_info": {
+                            "candidate_rows": 0, "admitted_rows": 0, "quarantined_rows": 0,
+                            "written_rows": 0, "unchanged_rows": 0, "rejection_reasons": {},
+                        },
+                        "player_stats": {
+                            "candidate_rows": 0, "admitted_rows": 0, "quarantined_rows": 0,
+                            "written_rows": 0, "unchanged_rows": 0, "rejection_reasons": {},
+                        },
+                        "model_training_props": _new_training_row_counts(),
+                    }
+                    for gid in uncapped_final_games
+                }
+                for gid in set(uncapped_final_games) - set(final_games):
+                    game_receipts[gid]["decision"] = "REJECTED"
+                    game_receipts[gid]["reason"] = "MAX_GAMES_PER_DATE_LIMIT"
+                # Confirm the complete selected exact-game set against the
+                # terminal live authority before the date transaction writes
+                # even minimal game facts.  Retain the verified payload for
+                # the later row extraction so this is not a duplicate fetch.
+                validated_live_by_game_id: Dict[int, Dict[str, Any]] = {}
+                for gid in final_games:
+                    selected_schedule_game = schedule_by_game_id.get(gid)
+                    if selected_schedule_game is None:
+                        raise ActiveLoaderFinalityError(
+                            f"ACTIVE_FINALITY_SELECTED_SCHEDULE_MISSING:{gid}"
+                        )
+                    selected_live, live_payload = _fetch_live_feed(gid, include_payload=True)
+                    live_observed_at_utc = datetime.now(timezone.utc).isoformat()
+                    _validate_terminal_feed_for_candidate(gid, selected_schedule_game, selected_live)
+                    validated_live_by_game_id[gid] = selected_live
+                    live_path = evidence_dir / f"live_feed_game_{gid}.json"
+                    _write_immutable_evidence_file(live_path, live_payload)
+                    if hashlib.sha256(live_path.read_bytes()).hexdigest() != _sha256_bytes(live_payload):
+                        raise RuntimeError(f"STAT_DERIVED_LIVE_FEED_EVIDENCE_HASH_MISMATCH:{gid}")
+                    game_receipts[gid]["sources"]["live_feed"] = {
+                        "path": str(live_path), "sha256": _sha256_bytes(live_payload),
+                        "observed_at_utc": live_observed_at_utc,
+                    }
                 for gid in final_games:
                     sg = schedule_by_game_id.get(gid)
                     if sg is None:
                         continue
-                    game_info_upserts += _upsert_game_info_min(
+                    info_counts = game_receipts[gid]["game_info"]
+                    info_counts["candidate_rows"] += 1
+                    info_counts["admitted_rows"] += 1
+                    info_written = _upsert_game_info_min(
                         conn,
                         sg,
                         d_iso,
                         source_sha256=schedule_sha256,
                     )
+                    game_info_upserts += info_written
+                    info_counts["written_rows"] += info_written
+                    if not info_written:
+                        info_counts["unchanged_rows"] += 1
                 existing_games = _existing_game_ids(conn, final_games)
+                for gid in set(final_games) - set(existing_games):
+                    game_receipts[gid]["decision"] = "REJECTED"
+                    game_receipts[gid]["reason"] = "GAME_INFO_PARENT_MISSING"
 
                 missing_for_date = len(final_games) - len(existing_games)
                 if missing_for_date > 0:
@@ -1272,19 +1709,39 @@ def run(
                         print(f"   skipped games missing game_info: {missing_for_date}")
                 if not quiet:
                     print(f"   final games: {len(existing_games)}")
-                pos_map = _get_positions_by_date(conn, d_iso)
+                # A requested schedule date can contain a later playable
+                # makeup appearance.  Position evidence and legacy rolling
+                # refreshes must follow the accepted exact game's official
+                # operational date, never the request date.
+                pos_maps_by_operational_date: Dict[str, Dict[int, str]] = {}
+                affected_operational_dates: Set[str] = set()
                 before_attempted = attempted_upserts
                 before_applied = applied_upserts
                 before_player_stats = player_stats_upserts
+                before_at_bats_backfilled = at_bats_backfilled
                 before_player_derived = player_derived_upserts
                 before_rolling_sync = rolling_sync_updates
 
                 for game_id in final_games:
                     if game_id not in existing_games:
                         continue
+                    sg = schedule_by_game_id[game_id]
                     game_type = game_type_by_game_id.get(game_id) or None
-                    live = _fetch_live_feed(game_id)
+                    live = validated_live_by_game_id[game_id]
                     box = _fetch_boxscore(game_id)
+                    operational_date = str(sg.get("officialDate") or "")
+                    try:
+                        _parse_date(operational_date)
+                    except Exception as exc:
+                        raise ActiveLoaderFinalityError(
+                            f"ACTIVE_ACCEPTED_OPERATIONAL_DATE_INVALID:{game_id}"
+                        ) from exc
+                    affected_operational_dates.add(operational_date)
+                    if operational_date not in pos_maps_by_operational_date:
+                        pos_maps_by_operational_date[operational_date] = _get_positions_by_date(
+                            conn, operational_date
+                        )
+                    pos_map = pos_maps_by_operational_date[operational_date]
 
                     home_team = (live.get("gameData", {}).get("teams", {}) or {}).get("home", {}) or {}
                     away_team = (live.get("gameData", {}).get("teams", {}) or {}).get("away", {}) or {}
@@ -1325,14 +1782,18 @@ def run(
                         opp_encoded = str(opp_id) if opp_id is not None else None
 
                         for _, p in players_map.items():
+                            player_counts = game_receipts[game_id]["player_stats"]
+                            player_counts["candidate_rows"] += 1
                             person = p.get("person") or {}
                             stats = p.get("stats") or {}
                             pid_raw = person.get("id")
                             if pid_raw is None:
+                                _quarantine_training_candidate(player_counts, "PLAYER_ID_MISSING")
                                 continue
                             try:
                                 pid = int(pid_raw)
                             except Exception:
+                                _quarantine_training_candidate(player_counts, "PLAYER_ID_INVALID")
                                 continue
                             pname = person.get("fullName") or f"player_{pid}"
 
@@ -1350,6 +1811,7 @@ def run(
                                     starter_inferred_flags += 1
 
                             if not (has_bat or is_pitch):
+                                _quarantine_training_candidate(player_counts, "NO_BATTING_OR_PITCHING_STATS")
                                 continue
 
                             if at_bats_only:
@@ -1357,13 +1819,19 @@ def run(
                                 if raw_ab is None:
                                     raw_ab = bat.get("at_bats")
                                 if raw_ab is None:
+                                    _quarantine_training_candidate(player_counts, "AT_BATS_VALUE_MISSING")
                                     continue
-                                at_bats_backfilled += _backfill_player_stats_at_bats(
+                                player_counts["admitted_rows"] += 1
+                                backfilled = _backfill_player_stats_at_bats(
                                     conn,
                                     player_id=pid,
                                     game_id=game_id,
                                     at_bats=_stat_int(raw_ab),
                                 )
+                                at_bats_backfilled += backfilled
+                                player_counts["written_rows"] += backfilled
+                                if not backfilled:
+                                    player_counts["unchanged_rows"] += 1
                                 continue
 
                             # Ensure FK parent exists before writing player_stats rows.
@@ -1378,12 +1846,13 @@ def run(
                                 has_placeholder_col=player_ids_has_placeholder,
                             )
 
-                            player_stats_upserts += _upsert_player_stats_row(
+                            player_counts["admitted_rows"] += 1
+                            stats_written = _upsert_player_stats_row(
                                 conn,
                                 _extract_player_stats_row(
                                     player_id=pid,
                                     game_id=game_id,
-                                    game_date=d_iso,
+                                    game_date=operational_date,
                                     team_abbr=team_abbr,
                                     opponent_abbr=opp_abbr,
                                     is_home=bool(is_home),
@@ -1392,6 +1861,10 @@ def run(
                                     is_starter=bool(is_starter),
                                 ),
                             )
+                            player_stats_upserts += stats_written
+                            player_counts["written_rows"] += stats_written
+                            if not stats_written:
+                                player_counts["unchanged_rows"] += 1
 
                             prop_types: List[str] = []
                             if has_bat:
@@ -1401,14 +1874,19 @@ def run(
                             prop_types = sorted(set(prop_types))
 
                             for prop_type in prop_types:
+                                training_counts = game_receipts[game_id]["model_training_props"]
+                                training_counts["candidate_rows"] += 1
                                 is_batter_prop = prop_type in BATTER_PROP_TYPES
                                 if (not is_starter) and (not is_batter_prop):
+                                    _quarantine_training_candidate(training_counts, "ROLE_NOT_ELIGIBLE")
                                     continue
                                 if is_batter_prop and not _should_include(pid, game_id, prop_type, batter_sample_ratio):
+                                    _quarantine_training_candidate(training_counts, "SAMPLE_RATIO_EXCLUDED")
                                     continue
 
                                 result = _extract_stat_for_prop(stats, prop_type)
                                 if result is None:
+                                    _quarantine_training_candidate(training_counts, "STAT_VALUE_MISSING")
                                     continue
 
                                 seed = _hash01(f"line-{pid}-{game_id}-{prop_type}")
@@ -1421,6 +1899,7 @@ def run(
                                 over_under = "over" if _hash01(f"ou-{pid}-{game_id}-{prop_type}") < 0.5 else "under"
                                 outcome = _determine_outcome(float(result), float(line), over_under)
                                 if outcome not in {"win", "loss"}:
+                                    _quarantine_training_candidate(training_counts, "SYNTHETIC_OUTCOME_NOT_DECISIVE")
                                     continue
 
                                 if over_under == "over":
@@ -1452,7 +1931,7 @@ def run(
                                     "updated_at": now_iso,
                                     "prop_source": "mlb_api",
                                     "was_correct": outcome == "win",
-                                    "game_date": d_iso,
+                                    "game_date": operational_date,
                                     "game_time": game_time,
                                     "game_day_of_week": dow,
                                     "time_of_day_bucket": tod,
@@ -1461,11 +1940,13 @@ def run(
                                     "game_type": game_type,
                                 }
                                 try:
-                                    applied_upserts += _upsert_training_row(
+                                    training_counts["admitted_rows"] += 1
+                                    training_written = _upsert_training_row(
                                         conn,
                                         row,
                                         include_game_type=mtp_has_game_type,
                                     )
+                                    applied_upserts += training_written
                                 except Exception as upsert_exc:
                                     # Last-chance guard for legacy mtp_team_text_numeric constraint.
                                     # Keep the row and continue date processing by coercing team text
@@ -1482,22 +1963,166 @@ def run(
                                         if _to_int(row.get("opponent_team_id")) is not None
                                         else None
                                     )
-                                    applied_upserts += _upsert_training_row(
+                                    training_written = _upsert_training_row(
                                         conn,
                                         row,
                                         include_game_type=mtp_has_game_type,
                                     )
+                                    applied_upserts += training_written
                                     if not quiet:
                                         print(
                                             "⚠️ recovered mtp_team_text_numeric row"
                                             f" game_id={game_id} player_id={pid} prop={prop_type}"
                                         )
                                 attempted_upserts += 1
+                                training_counts["written_rows"] += training_written
+                                if not training_written:
+                                    training_counts["unchanged_rows"] += 1
 
-                player_derived_upserts += _refresh_player_derived_stats(conn, d_iso, d_iso)
-                rolling_sync_updates += _sync_training_rows_rolling_result_avg(conn, d_iso, d_iso)
+                for operational_date in sorted(affected_operational_dates):
+                    player_derived_upserts += _refresh_player_derived_stats(
+                        conn, operational_date, operational_date
+                    )
+                    rolling_sync_updates += _sync_training_rows_rolling_result_avg(
+                        conn, operational_date, operational_date
+                    )
+
+                _validate_game_row_count_reconciliation(game_receipts)
+                if hashlib.sha256(runtime_loader_path.read_bytes()).hexdigest() != runtime_loader_sha256:
+                    raise RuntimeError("STAT_DERIVED_RUNTIME_LOADER_CHANGED_DURING_RUN")
+                if hashlib.sha256(runtime_finality_path.read_bytes()).hexdigest() != runtime_finality_sha256:
+                    raise RuntimeError("STAT_DERIVED_FINALITY_CONTRACT_CHANGED_DURING_RUN")
+                training_totals = {
+                    key: sum(
+                        int(item["model_training_props"].get(key, 0))
+                        for item in game_receipts.values()
+                    )
+                    for key in (
+                        "candidate_rows", "admitted_rows", "quarantined_rows",
+                        "written_rows", "unchanged_rows",
+                    )
+                }
+                rejection_totals: Dict[str, int] = {}
+                for item in game_receipts.values():
+                    for reason, count in item["model_training_props"]["rejection_reasons"].items():
+                        rejection_totals[reason] = rejection_totals.get(reason, 0) + int(count)
+                row_totals_by_relation: Dict[str, Any] = {}
+                for relation in ("game_info", "player_stats", "model_training_props"):
+                    totals = {
+                        key: sum(
+                            int(item[relation].get(key, 0)) for item in game_receipts.values()
+                        )
+                        for key in (
+                            "candidate_rows", "admitted_rows", "quarantined_rows",
+                            "written_rows", "unchanged_rows",
+                        )
+                    }
+                    reasons: Dict[str, int] = {}
+                    for item in game_receipts.values():
+                        for reason, count in item[relation].get("rejection_reasons", {}).items():
+                            reasons[reason] = reasons.get(reason, 0) + int(count)
+                    if totals["candidate_rows"] != totals["admitted_rows"] + totals["quarantined_rows"]:
+                        raise RuntimeError(f"STAT_DERIVED_TOTAL_CANDIDATE_RECONCILIATION:{relation}")
+                    if totals["admitted_rows"] != totals["written_rows"] + totals["unchanged_rows"]:
+                        raise RuntimeError(f"STAT_DERIVED_TOTAL_WRITE_RECONCILIATION:{relation}")
+                    row_totals_by_relation[relation] = {**totals, "rejection_reasons": reasons}
+                decision_records = _schedule_decision_records(
+                    schedule,
+                    set(uncapped_final_games),
+                    set(final_games),
+                    require_regular_season=require_regular_season,
+                )
+                for decision_record in decision_records:
+                    decision_record["schedule_source"] = {
+                        "path": str(schedule_path), "sha256": schedule_sha256,
+                        "observed_at_utc": schedule_observed_at_utc,
+                    }
+                    try:
+                        selected_pk = int(decision_record.get("game_pk") or 0)
+                    except (TypeError, ValueError):
+                        selected_pk = 0
+                    if selected_pk in game_receipts:
+                        game_receipts[selected_pk]["schedule_decision"] = decision_record
+                    if selected_pk in final_games and selected_pk not in existing_games:
+                        decision_record["loader_decision"] = "REJECTED"
+                        decision_record["loader_reason"] = "GAME_INFO_PARENT_MISSING"
+                schedule_rejection_reasons: Dict[str, int] = {}
+                for decision_record in decision_records:
+                    if decision_record.get("loader_decision") == "REJECTED":
+                        reason = str(decision_record.get("loader_reason") or "UNSPECIFIED")
+                        schedule_rejection_reasons[reason] = schedule_rejection_reasons.get(reason, 0) + 1
+                schedule_counts = {
+                    "candidate_games": len(decision_records),
+                    "admitted_games": sum(
+                        1 for item in decision_records
+                        if item.get("loader_decision") == "SELECTED_FOR_PROCESSING"
+                        and int(item.get("game_pk") or 0) in existing_games
+                    ),
+                    "quarantined_games": sum(
+                        1 for item in decision_records if item.get("loader_decision") == "REJECTED"
+                    ),
+                    "rejection_reasons": schedule_rejection_reasons,
+                }
+                if schedule_counts["candidate_games"] != (
+                    schedule_counts["admitted_games"] + schedule_counts["quarantined_games"]
+                ):
+                    raise RuntimeError("STAT_DERIVED_SCHEDULE_DECISION_COUNT_RECONCILIATION")
+
+                receipt = {
+                    "contract": "MLB_STAT_DERIVED_NATURAL_RUN_EVIDENCE_V1",
+                    "run_identity": run_identity,
+                    "requested_date": d_iso,
+                    "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "runtime": {
+                        "loader_path": str(runtime_loader_path),
+                        "loader_sha256_at_start_and_commit": runtime_loader_sha256,
+                        "finality_contract_path": str(runtime_finality_path),
+                        "finality_contract_version": playable_terminal_contract.CONTRACT_VERSION,
+                        "finality_contract_sha256_at_start_and_commit": runtime_finality_sha256,
+                    },
+                    "schedule_source": {
+                        "path": str(schedule_path), "sha256": schedule_sha256,
+                        "observed_at_utc": schedule_observed_at_utc,
+                    },
+                    "schedule_game_counts": schedule_counts,
+                    "game_decisions": decision_records,
+                    "processed_games": [game_receipts[key] for key in sorted(game_receipts)],
+                    "row_counts_by_relation": row_totals_by_relation,
+                    "model_training_props_totals": {
+                        **training_totals, "rejection_reasons": rejection_totals,
+                        "scope": "synthetic outcome/training row candidates from boxscore statistics",
+                    },
+                    "player_derived_stats_semantics": "LEGACY_DAILY_EVIDENCE_NOT_EXACT_GAME_FEATURE_STATE",
+                    "transaction_status": "COMMITTED_AFTER_COUNT_RECONCILIATION",
+                    "database_writes": {
+                        "game_info": sum(
+                            int(item["game_info"]["written_rows"])
+                            for item in game_receipts.values()
+                        ),
+                        "player_stats": sum(
+                            int(item["player_stats"]["written_rows"])
+                            for item in game_receipts.values()
+                        ),
+                        "model_training_props": training_totals["written_rows"],
+                        "player_stats_at_bats_backfilled": at_bats_backfilled - before_at_bats_backfilled,
+                        "player_derived_stats_legacy_daily": player_derived_upserts - before_player_derived,
+                        "rolling_result_avg_7": rolling_sync_updates - before_rolling_sync,
+                    },
+                }
+                receipt_path = evidence_dir / "receipt.json"
 
                 conn.commit()
+                date_committed = True
+                _write_immutable_evidence_file(
+                    receipt_path,
+                    (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
+                )
+                print(
+                    "🧾 stat-derived natural receipt: "
+                    f"{receipt_path} | model_training_props synthetic outcome/training rows "
+                    f"candidate={training_totals['candidate_rows']} admitted={training_totals['admitted_rows']} "
+                    f"quarantined={training_totals['quarantined_rows']} written={training_totals['written_rows']}"
+                )
                 print(
                     f"✅ {d_iso} done | attempted: {attempted_upserts - before_attempted} "
                     f"| applied: {applied_upserts - before_applied} "
@@ -1508,7 +2133,97 @@ def run(
                 )
             except Exception as e:
                 failed_dates += 1
-                conn.rollback()
+                if not date_committed:
+                    conn.rollback()
+                failed_receipt_path = evidence_dir / "receipt.json" if evidence_dir else None
+                if (
+                    schedule is not None
+                    and schedule_path is not None
+                    and evidence_dir is not None
+                    and not (failed_receipt_path and failed_receipt_path.exists())
+                ):
+                    try:
+                        observed_game_counts_before_failure = copy.deepcopy(game_receipts)
+                        failed_decisions = _schedule_decision_records(
+                            schedule,
+                            set(uncapped_final_games),
+                            set(final_games),
+                            require_regular_season=require_regular_season,
+                        )
+                        failure_reason = (
+                            f"EVIDENCE_PUBLICATION_FAILED_AFTER_COMMIT:{type(e).__name__}"
+                            if date_committed
+                            else f"STAGE_FAILED_ROLLED_BACK:{type(e).__name__}"
+                        )
+                        for decision_record in failed_decisions:
+                            if date_committed and decision_record.get("loader_decision") == "SELECTED_FOR_PROCESSING":
+                                decision_record["loader_decision"] = "COMMITTED"
+                                decision_record["loader_reason"] = failure_reason
+                            elif decision_record.get("loader_decision") in {
+                                "SELECTED_FOR_PROCESSING", "FAIL_CLOSED"
+                            }:
+                                decision_record["loader_decision"] = "REJECTED"
+                                decision_record["loader_reason"] = failure_reason
+                            decision_record["schedule_source"] = {
+                                "path": str(schedule_path), "sha256": schedule_sha256,
+                                "observed_at_utc": schedule_observed_at_utc,
+                            }
+                        failed_games = []
+                        for game_pk in sorted(game_receipts):
+                            item = game_receipts[game_pk]
+                            item["decision"] = "REJECTED" if not date_committed else "COMMITTED"
+                            item["reason"] = failure_reason
+                            if not date_committed:
+                                for relation in ("game_info", "player_stats", "model_training_props"):
+                                    counts = item[relation]
+                                    observed_candidates = int(counts.get("candidate_rows", 0))
+                                    counts["attempted_statement_rows_before_rollback"] = int(
+                                        counts.get("written_rows", 0)
+                                    )
+                                    counts["candidate_rows"] = observed_candidates
+                                    counts["admitted_rows"] = 0
+                                    counts["quarantined_rows"] = observed_candidates
+                                    counts["written_rows"] = 0
+                                    counts["unchanged_rows"] = 0
+                                    counts["rejection_reasons"] = {failure_reason: observed_candidates}
+                            failed_games.append(item)
+                        failure_receipt = {
+                            "contract": "MLB_STAT_DERIVED_NATURAL_RUN_EVIDENCE_V1",
+                            "run_identity": run_identity,
+                            "requested_date": d_iso,
+                            "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+                            "runtime": {
+                                "loader_path": str(runtime_loader_path),
+                                "loader_sha256_at_start": runtime_loader_sha256,
+                                "finality_contract_path": str(runtime_finality_path),
+                                "finality_contract_version": playable_terminal_contract.CONTRACT_VERSION,
+                                "finality_contract_sha256_at_start": runtime_finality_sha256,
+                            },
+                            "schedule_source": {
+                                "path": str(schedule_path), "sha256": schedule_sha256,
+                                "observed_at_utc": schedule_observed_at_utc,
+                            },
+                            "game_decisions": failed_decisions,
+                            "processed_games": failed_games,
+                            "observed_game_counts_before_failure": observed_game_counts_before_failure,
+                            "player_derived_stats_semantics": "LEGACY_DAILY_EVIDENCE_NOT_EXACT_GAME_FEATURE_STATE",
+                            "transaction_status": (
+                                "COMMITTED_EVIDENCE_PUBLICATION_FAILED"
+                                if date_committed
+                                else "ROLLED_BACK"
+                            ),
+                            "error": f"{type(e).__name__}: {e}",
+                            "database_writes": {
+                                "committed": date_committed,
+                                "per_game_row_counts": failed_games if date_committed else [],
+                            },
+                        }
+                        _write_immutable_evidence_file(
+                            failed_receipt_path,
+                            (json.dumps(failure_receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
+                        )
+                    except Exception as evidence_error:
+                        print(f"⚠️ Could not persist stat-derived failure receipt: {evidence_error}")
                 print(f"❌ Crash during processDate({d_iso}): {type(e).__name__}: {e}")
 
     print("\n🎯 Over/Under Pick Distribution:")
