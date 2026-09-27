@@ -4,6 +4,34 @@
   "experiment_start_date": "2026-08-24",
   "integrity_reconciliations": [
     {
+      "authorized_change": "reconcile active package hash bindings after the approved canonical phase gate and operational wrapper instrumentation",
+      "contract_version": "HITS05_ACTIVE_PACKAGE_HASH_RECONCILIATION_V1",
+      "effective_date": "2026-09-27",
+      "frozen_experiment_contract_changed": false,
+      "runtime_behavior_changed": false,
+      "previous_bindings_preserved": true,
+      "provenance": {
+        "repository_phase_gate_commit": "19aff40e2b316b44a8c354709a5fe8655c37c77e",
+        "installed_wrapper_prior_snapshot_sha256": "7df06cfc8084653f2ab4f4e18fc8a6f6fc19188686a92a0016cb6097fa08d43a",
+        "installed_wrapper_snapshot_path": "artifacts/analysis/mlb/operational_reconciliation/2026-09-18/bvp_inline_consolidation_v1/daily_wrapper.authorized-postchange.installation-evidence.txt",
+        "installed_wrapper_delta_scope": [
+          "exact-game feature shadow hook before BvP",
+          "explicit AUTOMATIC_DAILY_WRAPPER authority argument for BvP",
+          "stat-derived bounded stdout/stderr receipt and failure containment",
+          "rolling-integrity fail-closed continuation to independent Totals hooks"
+        ]
+      },
+      "bindings": [
+        {"path": "backend/mlb/scripts/attach_mlb_hits05_full_board_markets_v1.py", "previous_sha256": "45f0df553d1b1d8b4a1fbd18c81adb0f25cefd57057a87755960e46d0aa1570c", "sha256": "8b3ac7e2f99488ce4a2d3beeb5ab720538708d715e9a9b52eb3607a9da3da463"},
+        {"path": "backend/mlb/scripts/grade_mlb_hits05_full_board_shadow_v1.py", "previous_sha256": "10fe78f8618f5b5ae9daab25f03b6535fa20577f18551fd62e64d70dc666d96a", "sha256": "dfdb580baa3b47bff513b1181660668665565189e4ca7b1f69cab6887ddf2bf2"},
+        {"path": "backend/mlb/scripts/report_mlb_hits05_full_board_shadow_v1.py", "previous_sha256": "9720d6deb74f7c80c2daddd4f4b5b6f9b57a333d973ae25407c8b11744df0a92", "sha256": "d9e42f866207b9d393d589e0393ac811afb23de8a4d783a689dc87b8fed12301"},
+        {"path": "backend/mlb/scripts/run_mlb_hits05_full_board_shadow_daily_v1.py", "previous_sha256": "576f0b5e7a3516cc4d61788fbd2957229ee10e3f283dc0ef3a0bd1b7dd56468e", "sha256": "4e7407b0ba3a4fc4b0adb03b742f0c905e6e72b2e52ee5a983fb6b8bc602a5b4"},
+        {"path": "backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py", "previous_sha256": "a54591711d7c1a7c17cad0412ced8252082b92b5d1c1cb22f61a93680a74da02", "sha256": "0f0457849f302011a2e77f9c0de5f4b15014885fdb74f64a5f0836f8dbf3abab"},
+        {"path": "backend/mlb/tests/test_hits05_full_board_shadow_v1.py", "previous_sha256": "c696e5dbda779f17b53b2e09111d182f28398ee160b2efc4ecc69b303b2db014", "sha256": "0b6877a4f6d97e47e1b8fba25c049b0ce605126196e1ce70b98aad097608ecf4"},
+        {"path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh", "previous_sha256": "10ee0b9f85a5529f51c13237aef8d6c6325c5cfab2ae51093e6b3c977015059f", "sha256": "572ea9971bf43390dee30fd1f31b83191cd73f7e941910fcfc0e67c9362cbcb6"}
+      ]
+    },
+    {
       "authorized_change": "versioned substantive outcome idempotency with legacy row/hash preservation",
       "contract_version": "HITS05_SUBSTANTIVE_OUTCOME_IDEMPOTENCY_V2",
       "effective_date": "2026-09-12",
@@ -33,25 +61,35 @@
     },
     {
       "path": "backend/mlb/scripts/attach_mlb_hits05_full_board_markets_v1.py",
-      "sha256": "45f0df553d1b1d8b4a1fbd18c81adb0f25cefd57057a87755960e46d0aa1570c"
+      "sha256": "8b3ac7e2f99488ce4a2d3beeb5ab720538708d715e9a9b52eb3607a9da3da463",
+      "active_package_previous_sha256": "45f0df553d1b1d8b4a1fbd18c81adb0f25cefd57057a87755960e46d0aa1570c",
+      "active_package_change_provenance": "approved canonical phase gate, commit 19aff40e2b316b44a8c354709a5fe8655c37c77e"
     },
     {
       "path": "backend/mlb/scripts/grade_mlb_hits05_full_board_shadow_v1.py",
-      "sha256": "10fe78f8618f5b5ae9daab25f03b6535fa20577f18551fd62e64d70dc666d96a",
+      "sha256": "dfdb580baa3b47bff513b1181660668665565189e4ca7b1f69cab6887ddf2bf2",
+      "active_package_previous_sha256": "10fe78f8618f5b5ae9daab25f03b6535fa20577f18551fd62e64d70dc666d96a",
       "previous_sha256": "5beeb35202ee0397375319a541aac6fd516dc33b250b4d0c7482d257779ee7ba",
+      "active_package_change_provenance": "approved canonical phase gate, commit 19aff40e2b316b44a8c354709a5fe8655c37c77e",
       "change_provenance": "authoritative timestamps separated from filesystem mtime and verification metadata"
     },
     {
       "path": "backend/mlb/scripts/report_mlb_hits05_full_board_shadow_v1.py",
-      "sha256": "9720d6deb74f7c80c2daddd4f4b5b6f9b57a333d973ae25407c8b11744df0a92"
+      "sha256": "d9e42f866207b9d393d589e0393ac811afb23de8a4d783a689dc87b8fed12301",
+      "active_package_previous_sha256": "9720d6deb74f7c80c2daddd4f4b5b6f9b57a333d973ae25407c8b11744df0a92",
+      "active_package_change_provenance": "approved canonical phase gate, commit 19aff40e2b316b44a8c354709a5fe8655c37c77e"
     },
     {
       "path": "backend/mlb/scripts/run_mlb_hits05_full_board_shadow_daily_v1.py",
-      "sha256": "576f0b5e7a3516cc4d61788fbd2957229ee10e3f283dc0ef3a0bd1b7dd56468e"
+      "sha256": "4e7407b0ba3a4fc4b0adb03b742f0c905e6e72b2e52ee5a983fb6b8bc602a5b4",
+      "active_package_previous_sha256": "576f0b5e7a3516cc4d61788fbd2957229ee10e3f283dc0ef3a0bd1b7dd56468e",
+      "active_package_change_provenance": "approved canonical phase gate, commit 19aff40e2b316b44a8c354709a5fe8655c37c77e"
     },
     {
       "path": "backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py",
-      "sha256": "a54591711d7c1a7c17cad0412ced8252082b92b5d1c1cb22f61a93680a74da02"
+      "sha256": "0f0457849f302011a2e77f9c0de5f4b15014885fdb74f64a5f0836f8dbf3abab",
+      "active_package_previous_sha256": "a54591711d7c1a7c17cad0412ced8252082b92b5d1c1cb22f61a93680a74da02",
+      "active_package_change_provenance": "approved canonical phase gate, commit 19aff40e2b316b44a8c354709a5fe8655c37c77e"
     },
     {
       "path": "backend/mlb/scripts/validate_mlb_hits05_full_board_shadow_v1.py",
@@ -61,8 +99,10 @@
     },
     {
       "path": "backend/mlb/tests/test_hits05_full_board_shadow_v1.py",
-      "sha256": "c696e5dbda779f17b53b2e09111d182f28398ee160b2efc4ecc69b303b2db014",
+      "sha256": "0b6877a4f6d97e47e1b8fba25c049b0ce605126196e1ce70b98aad097608ecf4",
+      "active_package_previous_sha256": "c696e5dbda779f17b53b2e09111d182f28398ee160b2efc4ecc69b303b2db014",
       "previous_sha256": "1a8aafc89ee12c37ff1c3e57d7f7940030cbc704c70b50857c08ccd1110d7a85",
+      "active_package_change_provenance": "approved canonical phase gate, commit 19aff40e2b316b44a8c354709a5fe8655c37c77e",
       "change_provenance": "synthetic idempotency and fail-closed conflict regression coverage"
     },
     {
@@ -108,7 +148,10 @@
     },
     {
       "path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
-      "sha256": "10ee0b9f85a5529f51c13237aef8d6c6325c5cfab2ae51093e6b3c977015059f",
+      "sha256": "572ea9971bf43390dee30fd1f31b83191cd73f7e941910fcfc0e67c9362cbcb6",
+      "active_package_previous_sha256": "10ee0b9f85a5529f51c13237aef8d6c6325c5cfab2ae51093e6b3c977015059f",
+      "previous_sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
+      "active_package_change_provenance": "user-authorized exact-game shadow, stat-derived containment, and rolling-integrity continuation changes; complete delta retained against 2026-09-18 wrapper evidence snapshot",
       "authority_propagation_previous_sha256": "7df06cfc8084653f2ab4f4e18fc8a6f6fc19188686a92a0016cb6097fa08d43a",
       "inline_acquisition_previous_sha256": "96b371f3b8d52cd73c9950b031829e7e7c3d49edf8d90857a81e9afab261038b",
       "installation": "installed_daily_wrapper",
