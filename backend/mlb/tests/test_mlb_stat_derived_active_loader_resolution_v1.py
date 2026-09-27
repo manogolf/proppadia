@@ -170,6 +170,60 @@ def test_game_info_fails_closed_without_accepted_official_date():
     assert conn.cursor_value.calls == []
 
 
+def test_skip_guard_rejects_stale_824785_rows_when_only_postponed_appearance_is_accepted():
+    stale = [{
+        "game_id": 824785,
+        "player_id": 453286,
+        "mtp_date": "2026-09-22",
+        "exact_player_game_rows": 1,
+        "player_stats_min_date": "2026-09-23",
+        "player_stats_max_date": "2026-09-23",
+        "game_info_rows": 1,
+        "game_info_min_date": "2026-09-22",
+        "game_info_max_date": "2026-09-22",
+    }]
+    matches, reasons = active._existing_mlb_api_rows_match_accepted_dates(stale, {})
+    assert not matches
+    assert reasons == ["GAME_PK_NOT_IN_ACCEPTED_PLAYABLE_APPEARANCES"]
+
+
+def test_skip_guard_requires_mtp_player_stats_and_game_info_exact_official_date():
+    accepted = {824785: "2026-09-23"}
+    valid = [{
+        "game_id": 824785,
+        "player_id": 453286,
+        "mtp_date": "2026-09-23",
+        "exact_player_game_rows": 1,
+        "player_stats_min_date": "2026-09-23",
+        "player_stats_max_date": "2026-09-23",
+        "game_info_rows": 1,
+        "game_info_min_date": "2026-09-23",
+        "game_info_max_date": "2026-09-23",
+    }]
+    assert active._existing_mlb_api_rows_match_accepted_dates(valid, accepted) == (True, [])
+
+    stale_training = copy.deepcopy(valid)
+    stale_training[0]["mtp_date"] = "2026-09-22"
+    assert active._existing_mlb_api_rows_match_accepted_dates(stale_training, accepted) == (
+        False, ["MODEL_TRAINING_DATE_DIFFERS_FROM_OFFICIAL_DATE"]
+    )
+
+    stale_parent = copy.deepcopy(valid)
+    stale_parent[0]["game_info_min_date"] = "2026-09-22"
+    stale_parent[0]["game_info_max_date"] = "2026-09-22"
+    assert active._existing_mlb_api_rows_match_accepted_dates(stale_parent, accepted) == (
+        False, ["GAME_INFO_DATE_DIFFERS_FROM_OFFICIAL_DATE"]
+    )
+
+
+def test_existing_date_skip_occurs_only_after_schedule_and_finality_selection():
+    source = inspect.getsource(active.run)
+    assert source.index("_fetch_schedule(d_iso") < source.index("_date_has_mlb_api_rows(conn, d_iso)")
+    assert source.index("_resolved_final_game_entries(") < source.index(
+        "_date_has_mlb_api_rows(conn, d_iso)"
+    )
+
+
 def test_active_admission_fails_closed_for_unknown_or_conflicting_finality():
     incomplete = _game(824785, "2026-09-23", "Final", "F", "")
     with pytest.raises(active.ActiveLoaderFinalityError, match="ACTIVE_FINALITY_CANDIDATE_UNRESOLVED"):

@@ -407,6 +407,67 @@ def _date_has_mlb_api_rows(conn, game_date: str) -> bool:
         return cur.fetchone() is not None
 
 
+def _existing_mlb_api_rows_match_accepted_dates(
+    rows: Sequence[Dict[str, Any]], accepted_dates: Dict[int, str]
+) -> Tuple[bool, List[str]]:
+    """Require every existing training key/date to match exact accepted games."""
+    reasons: set[str] = set()
+    if not rows:
+        return False, ["NO_EXISTING_ROWS_TO_VERIFY"]
+    for row in rows:
+        game_id = _to_int(row.get("game_id"))
+        expected_date = accepted_dates.get(game_id) if game_id is not None else None
+        if expected_date is None:
+            reasons.add("GAME_PK_NOT_IN_ACCEPTED_PLAYABLE_APPEARANCES")
+            continue
+        if str(row.get("mtp_date"))[:10] != expected_date:
+            reasons.add("MODEL_TRAINING_DATE_DIFFERS_FROM_OFFICIAL_DATE")
+        if int(row.get("exact_player_game_rows") or 0) != 1:
+            reasons.add("EXACT_PLAYER_GAME_ROW_MISSING_OR_AMBIGUOUS")
+        elif (
+            str(row.get("player_stats_min_date"))[:10] != expected_date
+            or str(row.get("player_stats_max_date"))[:10] != expected_date
+        ):
+            reasons.add("PLAYER_STATS_DATE_DIFFERS_FROM_OFFICIAL_DATE")
+        if (
+            int(row.get("game_info_rows") or 0) != 1
+            or str(row.get("game_info_min_date"))[:10] != expected_date
+            or str(row.get("game_info_max_date"))[:10] != expected_date
+        ):
+            reasons.add("GAME_INFO_DATE_DIFFERS_FROM_OFFICIAL_DATE")
+    return not reasons, sorted(reasons)
+
+
+def _date_mlb_api_rows_match_accepted_dates(
+    conn, game_date: str, accepted_dates: Dict[int, str]
+) -> Tuple[bool, List[str]]:
+    """Read-only gate for date skipping, keyed by exact gamePk and player."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT mt.game_id, mt.player_id,
+                   mt.game_date::date AS mtp_date,
+                   COUNT(ps.game_id)::int AS exact_player_game_rows,
+                   MIN(ps.game_date::date) AS player_stats_min_date,
+                   MAX(ps.game_date::date) AS player_stats_max_date,
+                   COUNT(gi.game_id)::int AS game_info_rows,
+                   MIN(gi.game_date::date) AS game_info_min_date,
+                   MAX(gi.game_date::date) AS game_info_max_date
+            FROM mlb.model_training_props mt
+            LEFT JOIN mlb.player_stats ps
+              ON ps.game_id = mt.game_id AND ps.player_id = mt.player_id
+            LEFT JOIN mlb.game_info gi ON gi.game_id = mt.game_id
+            WHERE mt.game_date = %s::date
+              AND mt.prop_source = 'mlb_api'
+            GROUP BY mt.game_id, mt.player_id, mt.game_date::date
+            ORDER BY mt.game_id, mt.player_id
+            """,
+            (game_date,),
+        )
+        rows = cur.fetchall()
+    return _existing_mlb_api_rows_match_accepted_dates(rows, accepted_dates)
+
+
 def _date_has_negative_lines(conn, game_date: str) -> bool:
     with conn.cursor() as cur:
         cur.execute(
@@ -1566,33 +1627,6 @@ def run(
             final_games: List[int] = []
             date_committed = False
             try:
-                if skip_existing_dates and _date_has_mlb_api_rows(conn, d_iso):
-                    has_negative_lines = _date_has_negative_lines(conn, d_iso)
-                    has_player_stats = _date_has_player_stats_rows(conn, d_iso)
-                    has_player_derived = _date_has_player_derived_rows(conn, d_iso)
-                    has_missing_game_abbr = _date_has_missing_game_info_abbr(conn, d_iso)
-                    if (
-                        has_negative_lines
-                        or (not has_player_stats)
-                        or (not has_player_derived)
-                        or has_missing_game_abbr
-                    ):
-                        if not quiet:
-                            repair_reasons: List[str] = []
-                            if has_negative_lines:
-                                repair_reasons.append("negative mlb_api lines")
-                            if not has_player_stats:
-                                repair_reasons.append("missing player_stats")
-                            if not has_player_derived:
-                                repair_reasons.append("missing player_derived_stats")
-                            if has_missing_game_abbr:
-                                repair_reasons.append("missing game_info team abbr")
-                            print(f"🔧 {d_iso} reprocessing | repairing {', '.join(repair_reasons)}")
-                    else:
-                        skipped_dates += 1
-                        print(f"⏭️  {d_iso} skipped | mlb_api rows already present")
-                        continue
-
                 schedule, schedule_sha256, schedule_payload = _fetch_schedule(d_iso, include_payload=True)
                 schedule_observed_at_utc = datetime.now(timezone.utc).isoformat()
                 evidence_dir = _stat_derived_evidence_dir(run_identity, d_iso)
@@ -1647,6 +1681,39 @@ def run(
                 final_games = [gid for gid, _ in final_games_meta]
                 game_type_by_game_id = {gid: gtype for gid, gtype in final_games_meta}
                 schedule_by_game_id = {game_id: game for game_id, _, game in final_game_entries}
+                if skip_existing_dates and _date_has_mlb_api_rows(conn, d_iso):
+                    accepted_official_dates = {
+                        game_id: str(game.get("officialDate") or "")
+                        for game_id, _, game in final_game_entries
+                    }
+                    rows_match, identity_reasons = _date_mlb_api_rows_match_accepted_dates(
+                        conn, d_iso, accepted_official_dates
+                    )
+                    has_negative_lines = _date_has_negative_lines(conn, d_iso)
+                    has_player_stats = _date_has_player_stats_rows(conn, d_iso)
+                    has_player_derived = _date_has_player_derived_rows(conn, d_iso)
+                    has_missing_game_abbr = _date_has_missing_game_info_abbr(conn, d_iso)
+                    repair_reasons = list(identity_reasons)
+                    if has_negative_lines:
+                        repair_reasons.append("negative mlb_api lines")
+                    if not has_player_stats:
+                        repair_reasons.append("missing player_stats")
+                    if not has_player_derived:
+                        repair_reasons.append("missing player_derived_stats")
+                    if has_missing_game_abbr:
+                        repair_reasons.append("missing game_info team abbr")
+                    if rows_match and not repair_reasons:
+                        skipped_dates += 1
+                        if not quiet:
+                            print(
+                                f"⏭️  {d_iso} skipped | exact game/player dates match accepted officialDate"
+                            )
+                        continue
+                    if not quiet:
+                        print(
+                            f"🔧 {d_iso} reprocessing | existing-row mismatch: "
+                            f"{', '.join(repair_reasons or ['exact identity check failed'])}"
+                        )
                 uncapped_final_games = list(final_games)
                 if max_games_per_date > 0:
                     final_games = final_games[:max_games_per_date]
