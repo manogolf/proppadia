@@ -328,6 +328,14 @@ def _verify_cross_market_identities(moneyline: pd.DataFrame, puck: pd.DataFrame)
 
 def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> dict[str, Any]:
     """Resolve and fully validate immutable local inputs without I/O outside disk."""
+    cross_pattern = (operational_root / "cross_market_shadow" / "season=2026" /
+                     f"slate_date={slate_date}" / "run_type=FINAL_PREGAME" / "state=*")
+    cross_runs = sorted(cross_pattern.parent.glob(cross_pattern.name))
+    if len(cross_runs) > 1:
+        raise RuntimeError(f"IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:{len(cross_runs)}")
+    # Preserve the established validation order for an existing card: its
+    # manifest is checked before any other source cardinality is considered.
+    cross_manifest = _verify_manifest(cross_runs[0]) if cross_runs else {}
     sog = _one_run(
         operational_root / "sog_prediction_only" / "season=2026" / f"slate_date={slate_date}"
         / "phase=FINAL_PREGAME" / "run_id=*", "SOG_FINAL_PREGAME",
@@ -340,13 +348,9 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
     sog_spine = pd.read_csv(sog / "canonical_game_spine.csv").rename(columns={"game_type": "game_type_code"})
     sog_spine = _local_spine(sog_spine, slate_date)
 
-    cross_pattern = (operational_root / "cross_market_shadow" / "season=2026" /
-                     f"slate_date={slate_date}" / "run_type=FINAL_PREGAME" / "state=*")
-    cross_runs = sorted(cross_pattern.parent.glob(cross_pattern.name))
     activation = json.loads(CROSS_MARKET_ACTIVATION_PATH.read_text())
     cross, cross_resolution = _select_cross_market_final_run(
         runs=cross_runs, schedule=sog_spine, activation=activation)
-    cross_manifest: dict[str, str] = {}
     cross_observed: pd.Timestamp | None = None
     retained_schedule_source: dict[str, str] | None = None
     if cross is None:
@@ -364,7 +368,6 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
         moneyline = pd.DataFrame()
         puck = pd.DataFrame()
     else:
-        cross_manifest = _verify_manifest(cross)
         status = json.loads((cross / "daily_execution_status.json").read_text())
         if (status.get("slate_date") != slate_date or status.get("run_type") != "FINAL_PREGAME"
                 or cross.name != f"state={status.get('substantive_state_sha256')}"):
