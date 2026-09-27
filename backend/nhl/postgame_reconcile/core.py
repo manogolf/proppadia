@@ -15,6 +15,7 @@ from typing import Any, Callable
 import pandas as pd
 
 from backend.nhl.cross_market_shadow.core import (
+    ACTIVATION_PATH as CROSS_MARKET_ACTIVATION_PATH,
     FEATURES as CROSS_MARKET_FEATURES,
     PARAMETER_PATH as MONEYLINE_PARAMETER_PATH,
     PUCK_PARAMETER_PATH,
@@ -109,6 +110,74 @@ def _one_run(pattern: Path, label: str) -> Path:
     if len(runs) != 1:
         raise RuntimeError(f"IMMUTABLE_{label}_RUN_CARDINALITY:{len(runs)}")
     return runs[0]
+
+
+def _select_cross_market_final_run(*, runs: list[Path], schedule: pd.DataFrame,
+                                  activation: dict[str, Any]) -> tuple[Path | None, dict[str, Any]]:
+    """Require a final card only when the lane is active for this slate.
+
+    A preseason slate is explicitly non-evaluation for Moneyline/Puck Line, so
+    no FINAL_PREGAME card is required. Outside preseason, a disabled lane may
+    also have no card. An active lane retains the exact-one invariant.
+    """
+    if len(runs) > 1:
+        raise RuntimeError(f"IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:{len(runs)}")
+    if len(runs) == 1:
+        return runs[0], {"status": "REQUIRED_CARD_PRESENT"}
+    game_types = pd.to_numeric(schedule.game_type_code, errors="coerce")
+    if game_types.isna().any() or not game_types.isin([1, 2, 3]).all():
+        raise RuntimeError("IMMUTABLE_CROSS_MARKET_GAME_TYPE_UNRESOLVED")
+    if game_types.eq(1).all():
+        return None, {"status": "NOT_REQUIRED_PRESEASON", "reason": "PRESEASON_NON_EVALUATION"}
+    if activation.get("capture_enabled") is False:
+        return None, {"status": "NOT_REQUIRED_LANE_INACTIVE", "reason": "CAPTURE_DISABLED"}
+    raise RuntimeError("IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0")
+
+
+def _attach_retained_schedule_codes(schedule: pd.DataFrame, *, path: Path,
+                                   slate_date: str) -> tuple[pd.DataFrame, str]:
+    """Bind team codes from the retained official slate response by exact game identity."""
+    payload = json.loads(path.read_text())
+    rows = [game for day in payload.get("gameWeek", [])
+            if str(day.get("date")) == slate_date for game in day.get("games", [])]
+    by_id: dict[int, dict[str, Any]] = {}
+    for game in rows:
+        try:
+            game_id = int(game["id"])
+            home_id = int(game["homeTeam"]["id"])
+            away_id = int(game["awayTeam"]["id"])
+            game_type = int(game["gameType"])
+            start = pd.to_datetime(game["startTimeUTC"], utc=True)
+            home_code = str(game["homeTeam"]["abbrev"]).upper()
+            away_code = str(game["awayTeam"]["abbrev"]).upper()
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_IDENTITY_INCOMPLETE") from error
+        if game_id in by_id:
+            raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_DUPLICATE_GAME")
+        by_id[game_id] = {"home_team_id": home_id, "away_team_id": away_id,
+                          "game_type_code": game_type,
+                          "scheduled_start_time_utc": start,
+                          "home_team": home_code, "away_team": away_code}
+    expected = set(schedule.game_id.astype(int))
+    if set(by_id) != expected:
+        raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_GAME_SET_MISMATCH")
+    bound = schedule.copy()
+    for column in ("home_team_id", "away_team_id", "game_type_code"):
+        source_values = {game_id: values[column] for game_id, values in by_id.items()}
+        if any(int(getattr(row, column)) != int(source_values[int(row.game_id)])
+               for row in bound.itertuples(index=False)):
+            raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_IDENTITY_CONFLICT")
+    source_starts = {game_id: values["scheduled_start_time_utc"]
+                     for game_id, values in by_id.items()}
+    bound_starts = pd.to_datetime(bound.scheduled_start_time_utc, utc=True)
+    if any(start != source_starts[int(game_id)]
+           for game_id, start in zip(bound.game_id.astype(int), bound_starts)):
+        raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_START_CONFLICT")
+    bound["home_team"] = bound.game_id.astype(int).map({
+        game_id: values["home_team"] for game_id, values in by_id.items()})
+    bound["away_team"] = bound.game_id.astype(int).map({
+        game_id: values["away_team"] for game_id, values in by_id.items()})
+    return bound, _sha(path)
 
 
 def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
@@ -259,34 +328,6 @@ def _verify_cross_market_identities(moneyline: pd.DataFrame, puck: pd.DataFrame)
 
 def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> dict[str, Any]:
     """Resolve and fully validate immutable local inputs without I/O outside disk."""
-    cross = _one_run(
-        operational_root / "cross_market_shadow" / "season=2026" / f"slate_date={slate_date}"
-        / "run_type=FINAL_PREGAME" / "state=*", "CROSS_MARKET_FINAL_PREGAME",
-    )
-    cross_manifest = _verify_manifest(cross)
-    status = json.loads((cross / "daily_execution_status.json").read_text())
-    if (status.get("slate_date") != slate_date or status.get("run_type") != "FINAL_PREGAME"
-            or cross.name != f"state={status.get('substantive_state_sha256')}"):
-        raise RuntimeError("IMMUTABLE_CROSS_MARKET_RUN_IDENTITY_MISMATCH")
-    schedule = pd.read_csv(cross / "schedule_event_identity.csv").rename(
-        columns={"game_type_code": "game_type_code"})
-    schedule = _local_spine(schedule, slate_date)
-    moneyline = pd.read_csv(cross / "v2_immutable_predictions.csv")
-    puck = pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv")
-    common = {"canonical_season", "slate_date", "game_id", "scheduled_start_time_utc",
-              "home_team_id", "away_team_id", "home_team", "away_team",
-              "prediction_creation_time_utc", "substantive_prediction_sha256"} | set(CROSS_MARKET_FEATURES)
-    _require_columns(moneyline, common, "MONEYLINE")
-    _require_columns(puck, common, "PUCK_LINE")
-    ids = set(schedule.game_id.astype(int))
-    for label, frame in (("MONEYLINE", moneyline), ("PUCK_LINE", puck)):
-        if frame.game_id.duplicated().any() or set(frame.game_id.astype(int)) != ids:
-            raise RuntimeError(f"IMMUTABLE_{label}_GAME_IDENTITY_CONFLICT")
-        if not frame.slate_date.astype(str).eq(slate_date).all():
-            raise RuntimeError(f"IMMUTABLE_{label}_SLATE_DATE_MISMATCH")
-        _pregame(frame, "prediction_creation_time_utc", schedule)
-    _verify_cross_market_identities(moneyline, puck)
-
     sog = _one_run(
         operational_root / "sog_prediction_only" / "season=2026" / f"slate_date={slate_date}"
         / "phase=FINAL_PREGAME" / "run_id=*", "SOG_FINAL_PREGAME",
@@ -298,6 +339,56 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
         raise RuntimeError("IMMUTABLE_SOG_RUN_IDENTITY_MISMATCH")
     sog_spine = pd.read_csv(sog / "canonical_game_spine.csv").rename(columns={"game_type": "game_type_code"})
     sog_spine = _local_spine(sog_spine, slate_date)
+
+    cross_pattern = (operational_root / "cross_market_shadow" / "season=2026" /
+                     f"slate_date={slate_date}" / "run_type=FINAL_PREGAME" / "state=*")
+    cross_runs = sorted(cross_pattern.parent.glob(cross_pattern.name))
+    activation = json.loads(CROSS_MARKET_ACTIVATION_PATH.read_text())
+    cross, cross_resolution = _select_cross_market_final_run(
+        runs=cross_runs, schedule=sog_spine, activation=activation)
+    cross_manifest: dict[str, str] = {}
+    cross_observed: pd.Timestamp | None = None
+    retained_schedule_source: dict[str, str] | None = None
+    if cross is None:
+        # SOG's immutable, manifest-verified canonical spine supplies the slate
+        # identity. No Moneyline/Puck Line prediction or market evidence is
+        # invented when their preseason/non-active card is absent.
+        retained_schedule_path = operational_root / "slates" / slate_date / "raw_schedule_response.json"
+        if not retained_schedule_path.is_file():
+            raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_SOURCE_MISSING")
+        schedule, retained_schedule_hash = _attach_retained_schedule_codes(
+            sog_spine, path=retained_schedule_path, slate_date=slate_date)
+        retained_schedule_source = {
+            "path": str(retained_schedule_path), "sha256": retained_schedule_hash,
+        }
+        moneyline = pd.DataFrame()
+        puck = pd.DataFrame()
+    else:
+        cross_manifest = _verify_manifest(cross)
+        status = json.loads((cross / "daily_execution_status.json").read_text())
+        if (status.get("slate_date") != slate_date or status.get("run_type") != "FINAL_PREGAME"
+                or cross.name != f"state={status.get('substantive_state_sha256')}"):
+            raise RuntimeError("IMMUTABLE_CROSS_MARKET_RUN_IDENTITY_MISMATCH")
+        schedule = pd.read_csv(cross / "schedule_event_identity.csv")
+        schedule = _local_spine(schedule, slate_date)
+        moneyline = pd.read_csv(cross / "v2_immutable_predictions.csv")
+        puck = pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv")
+        common = {"canonical_season", "slate_date", "game_id", "scheduled_start_time_utc",
+                  "home_team_id", "away_team_id", "home_team", "away_team",
+                  "prediction_creation_time_utc", "substantive_prediction_sha256"} | set(CROSS_MARKET_FEATURES)
+        _require_columns(moneyline, common, "MONEYLINE")
+        _require_columns(puck, common, "PUCK_LINE")
+        ids = set(schedule.game_id.astype(int))
+        for label, frame in (("MONEYLINE", moneyline), ("PUCK_LINE", puck)):
+            if frame.game_id.duplicated().any() or set(frame.game_id.astype(int)) != ids:
+                raise RuntimeError(f"IMMUTABLE_{label}_GAME_IDENTITY_CONFLICT")
+            if not frame.slate_date.astype(str).eq(slate_date).all():
+                raise RuntimeError(f"IMMUTABLE_{label}_SLATE_DATE_MISMATCH")
+            _pregame(frame, "prediction_creation_time_utc", schedule)
+        _verify_cross_market_identities(moneyline, puck)
+        cross_observed = pd.to_datetime(status["run_timestamp_utc"], utc=True)
+
+    ids = set(schedule.game_id.astype(int))
     spine_fields = ["game_id", "scheduled_start_time_utc", "home_team_id", "away_team_id"]
     left = schedule[spine_fields].copy(); right = sog_spine[spine_fields].copy()
     for frame in (left, right):
@@ -364,8 +455,7 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
 
     observed = pd.to_datetime(sog_meta["prediction_timestamp_utc"], utc=True)
     first_puck = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True).min()
-    cross_observed = pd.to_datetime(status["run_timestamp_utc"], utc=True)
-    if observed >= first_puck or cross_observed >= first_puck:
+    if observed >= first_puck or (cross_observed is not None and cross_observed >= first_puck):
         raise RuntimeError("IMMUTABLE_SOURCE_OBSERVED_AFTER_FIRST_PUCK")
     return {
         "contract_version": "NHL_POSTGAME_LOCAL_SOURCE_BINDING_V1", "slate_date": slate_date,
@@ -374,8 +464,16 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
                              | set(schedule.away_team.astype(str))),
         "canonical_game_set_hash": _hash_bytes(json.dumps(sorted(ids), separators=(",", ":")).encode()),
         "first_puck_utc": first_puck.isoformat(),
-        "cross_market": {"run": str(cross), "manifest_sha256": _sha(cross / "SHA256SUMS"),
-                         "files": cross_manifest, "observed_at_utc": cross_observed.isoformat(),
+        "canonical_schedule_source": retained_schedule_source or {
+            "path": str(cross / "schedule_event_identity.csv"),
+            "sha256": cross_manifest.get("schedule_event_identity.csv"),
+        },
+        "cross_market": {"run": str(cross) if cross is not None else None,
+                         "status": cross_resolution["status"],
+                         "reason": cross_resolution.get("reason"),
+                         "manifest_sha256": _sha(cross / "SHA256SUMS") if cross is not None else None,
+                         "files": cross_manifest,
+                         "observed_at_utc": cross_observed.isoformat() if cross_observed is not None else None,
                          "moneyline_rows": len(moneyline), "puck_line_rows": len(puck)},
         "sog": {"run": str(sog), "manifest_sha256": _sha(sog / "SHA256SUMS"),
                 "files": sog_manifest, "observed_at_utc": observed.isoformat(),
@@ -729,15 +827,23 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
 def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataFrame,
                               games: pd.DataFrame, skaters: pd.DataFrame,
                               goalies: pd.DataFrame, observed_at: str) -> dict[str, pd.DataFrame]:
-    cross = Path(source_binding["cross_market"]["run"])
-    moneyline = _pregame(pd.read_csv(cross / "v2_immutable_predictions.csv"),
-                         "prediction_creation_time_utc", schedule)
-    puck = _pregame(pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv"),
-                    "prediction_creation_time_utc", schedule)
     outcome_columns = ["game_id", "official_full_game_winner", "official_final_home_goals",
                        "official_final_away_goals"]
-    moneyline = moneyline.merge(games[outcome_columns], on="game_id", validate="one_to_one")
-    puck = puck.merge(games[outcome_columns], on="game_id", validate="one_to_one")
+    cross_binding = source_binding["cross_market"]
+    if cross_binding["run"] is None:
+        empty_columns = ["canonical_season", "slate_date", "game_id",
+                         "grading_status", "regular_season_evaluation_target",
+                         *outcome_columns[1:]]
+        moneyline = pd.DataFrame(columns=empty_columns)
+        puck = pd.DataFrame(columns=empty_columns)
+    else:
+        cross = Path(cross_binding["run"])
+        moneyline = _pregame(pd.read_csv(cross / "v2_immutable_predictions.csv"),
+                             "prediction_creation_time_utc", schedule)
+        puck = _pregame(pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv"),
+                        "prediction_creation_time_utc", schedule)
+        moneyline = moneyline.merge(games[outcome_columns], on="game_id", validate="one_to_one")
+        puck = puck.merge(games[outcome_columns], on="game_id", validate="one_to_one")
     for frame in (moneyline, puck):
         frame["grading_status"] = "PRESEASON_NON_EVALUATION"
         frame["regular_season_evaluation_target"] = pd.NA

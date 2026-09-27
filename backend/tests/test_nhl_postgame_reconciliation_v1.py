@@ -18,6 +18,7 @@ from backend.nhl.official_request_journal import (
 )
 
 from backend.nhl.postgame_reconcile.core import (
+    _select_cross_market_final_run,
     _grade_points,
     _grade_saves,
     publish_reconciliation,
@@ -217,6 +218,49 @@ class PostgameReconciliationTest(unittest.TestCase):
                 raise RuntimeError("fixture")
         with reconciliation_lock(self.out, SLATE):
             self.assertTrue(True)
+
+    def test_preseason_without_cross_market_card_is_not_required(self):
+        schedule = pd.DataFrame({"game_type_code": [1, 1]})
+        selected, status = _select_cross_market_final_run(
+            runs=[], schedule=schedule, activation={"capture_enabled": True})
+        self.assertIsNone(selected)
+        self.assertEqual(status["status"], "NOT_REQUIRED_PRESEASON")
+
+    def test_inactive_cross_market_without_card_is_not_required(self):
+        schedule = pd.DataFrame({"game_type_code": [2, 2]})
+        selected, status = _select_cross_market_final_run(
+            runs=[], schedule=schedule, activation={"capture_enabled": False})
+        self.assertIsNone(selected)
+        self.assertEqual(status["status"], "NOT_REQUIRED_LANE_INACTIVE")
+
+    def test_active_cross_market_accepts_exactly_one_card(self):
+        schedule = pd.DataFrame({"game_type_code": [2]})
+        card = Path("fixture-state-card")
+        selected, status = _select_cross_market_final_run(
+            runs=[card], schedule=schedule, activation={"capture_enabled": True})
+        self.assertEqual(selected, card)
+        self.assertEqual(status["status"], "REQUIRED_CARD_PRESENT")
+
+    def test_active_cross_market_without_card_fails_closed(self):
+        schedule = pd.DataFrame({"game_type_code": [2]})
+        with self.assertRaisesRegex(
+                RuntimeError, "IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0"):
+            _select_cross_market_final_run(
+                runs=[], schedule=schedule, activation={"capture_enabled": True})
+
+    def test_multiple_cross_market_cards_fail_closed_even_for_preseason(self):
+        schedule = pd.DataFrame({"game_type_code": [1]})
+        with self.assertRaisesRegex(
+                RuntimeError, "IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:2"):
+            _select_cross_market_final_run(
+                runs=[Path("card-a"), Path("card-b")], schedule=schedule,
+                activation={"capture_enabled": True})
+
+    def test_unknown_game_type_does_not_qualify_for_missing_card_exception(self):
+        schedule = pd.DataFrame({"game_type_code": [pd.NA]})
+        with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_CROSS_MARKET_GAME_TYPE_UNRESOLVED"):
+            _select_cross_market_final_run(
+                runs=[], schedule=schedule, activation={"capture_enabled": False})
 
     def test_parent_day_filters_seven_day_response_with_requested_date_in_middle(self):
         payload = {"gameWeek": [
