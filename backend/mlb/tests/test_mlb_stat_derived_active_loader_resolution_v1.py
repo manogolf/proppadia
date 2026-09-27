@@ -109,6 +109,67 @@ def test_active_admission_uses_exact_game_pk_for_postponed_makeup_and_doublehead
     assert sibling_receipt["operational_date"] == "2026-09-23"
 
 
+class _GameInfoCursor:
+    def __init__(self, available):
+        self.available = available
+        self.calls = []
+        self.params = []
+        self.rowcount = 1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, sql, params=None):
+        self.calls.append(sql)
+        self.params.append(params)
+
+    def fetchall(self):
+        return [{"column_name": name} for name in self.available]
+
+    def fetchone(self):
+        return None
+
+
+class _GameInfoConnection:
+    def __init__(self, available):
+        self.cursor_value = _GameInfoCursor(available)
+
+    def cursor(self):
+        return self.cursor_value
+
+
+@pytest.mark.parametrize("phase_schema", [False, True])
+def test_game_info_uses_official_date_and_replaces_stale_conflict_date(phase_schema):
+    phase_columns = set(active.PHASE_STORAGE_COLUMNS) | {"game_type_source_sha256"}
+    available = phase_columns if phase_schema else set()
+    conn = _GameInfoConnection(available)
+    game = _game(824785, "2026-09-23", "Final", "F", "F")
+    # The UTC timestamp falls on the prior date, as with the postponed/makeup
+    # boundary; accepted operational day must come from officialDate.
+    game["gameDate"] = "2026-09-22T23:45:00Z"
+    assert active._upsert_game_info_min(
+        conn, game, source_sha256=("a" * 64 if phase_schema else "")
+    ) == 1
+    insert_sql = conn.cursor_value.calls[-1]
+    row = conn.cursor_value.params[-1]
+    assert row["game_date"] == "2026-09-23"
+    assert "game_date = EXCLUDED.game_date" in insert_sql
+    if not phase_schema:
+        assert "game_info.game_date IS DISTINCT FROM EXCLUDED.game_date" in insert_sql
+
+
+def test_game_info_fails_closed_without_accepted_official_date():
+    conn = _GameInfoConnection(set())
+    game = _game(824785, "2026-09-23", "Final", "F", "F")
+    del game["officialDate"]
+    with pytest.raises(active.ActiveLoaderFinalityError, match="ACTIVE_GAME_INFO_OFFICIAL_DATE_INVALID:824785"):
+        active._upsert_game_info_min(conn, game)
+    assert conn.cursor_value.calls == []
+
+
 def test_active_admission_fails_closed_for_unknown_or_conflicting_finality():
     incomplete = _game(824785, "2026-09-23", "Final", "F", "")
     with pytest.raises(active.ActiveLoaderFinalityError, match="ACTIVE_FINALITY_CANDIDATE_UNRESOLVED"):
@@ -286,7 +347,7 @@ class _TrainingCursor:
             field: params.get(field)
             for field in (
                 "prop_value", "line", "over_under", "outcome", "status", "was_correct",
-                "game_time", "game_day_of_week", "time_of_day_bucket", "streak_type",
+                "game_date", "game_time", "game_day_of_week", "time_of_day_bucket", "streak_type",
                 "streak_count", "team", "opponent", "team_id", "opponent_team_id",
                 "opponent_encoded", "is_home", "game_type",
             )
@@ -357,6 +418,26 @@ def test_mtp_fake_backend_replay_is_idempotent_and_keeps_824785_824784_distinct(
     assert logical_rows[(453286, 824785, "hits", "mlb_api")] != logical_rows[
         (453286, 824784, "hits", "mlb_api")
     ]
+
+
+def test_mtp_conflict_replaces_stale_calendar_date_for_exact_game_key():
+    row = _training_row(824785, "win")
+    prior = copy.deepcopy(row)
+    prior["game_date"] = "2026-09-22"
+    logical_rows = {
+        (453286, 824785, "hits", "mlb_api"): {
+            field: prior.get(field)
+            for field in (
+                "prop_value", "line", "over_under", "outcome", "status", "was_correct",
+                "game_date", "game_time", "game_day_of_week", "time_of_day_bucket", "streak_type",
+                "streak_count", "team", "opponent", "team_id", "opponent_team_id",
+                "opponent_encoded", "is_home", "game_type",
+            )
+        }
+    }
+    conn = _TrainingConnection(logical_rows)
+    assert active._upsert_training_row(conn, row) == 1
+    assert logical_rows[(453286, 824785, "hits", "mlb_api")]["game_date"] == "2026-09-23"
 
 
 def test_natural_evidence_source_files_are_hash_bound_private_and_non_overwriting(tmp_path):

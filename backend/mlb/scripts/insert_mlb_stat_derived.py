@@ -852,7 +852,6 @@ def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -
 def _upsert_game_info_min(
     conn,
     game: Dict[str, Any],
-    fallback_date_iso: str,
     *,
     source_sha256: str = "",
 ) -> int:
@@ -865,18 +864,23 @@ def _upsert_game_info_min(
     away_team = ((teams.get("away") or {}).get("team") or {})
 
     game_time: Optional[datetime] = None
-    game_date_val: Optional[str] = None
+    # The accepted schedule appearance's officialDate is the operational day.
+    # gameDate is a UTC timestamp and can fall on the prior calendar day for a
+    # rescheduled game. Never substitute the requested slate/fallback date.
+    official_date = game.get("officialDate")
+    try:
+        game_date_val = date.fromisoformat(str(official_date)).isoformat()
+    except (TypeError, ValueError):
+        raise ActiveLoaderFinalityError(
+            f"ACTIVE_GAME_INFO_OFFICIAL_DATE_INVALID:{game_id}"
+        ) from None
     raw_game_date = game.get("gameDate")
     if raw_game_date:
         try:
             parsed = datetime.fromisoformat(str(raw_game_date).replace("Z", "+00:00"))
             game_time = parsed.replace(tzinfo=None)
-            game_date_val = parsed.date().isoformat()
         except Exception:
             game_time = None
-            game_date_val = None
-    if not game_date_val:
-        game_date_val = fallback_date_iso
 
     home_team_id = _to_int(home_team.get("id"))
     away_team_id = _to_int(away_team.get("id"))
@@ -967,7 +971,7 @@ def _upsert_game_info_min(
                 )
                 ON CONFLICT (game_id) DO UPDATE SET
                     game_time = COALESCE(game_info.game_time, EXCLUDED.game_time),
-                    game_date = COALESCE(game_info.game_date, EXCLUDED.game_date),
+                    game_date = EXCLUDED.game_date,
                     home_team_id = COALESCE(game_info.home_team_id, EXCLUDED.home_team_id),
                     away_team_id = COALESCE(game_info.away_team_id, EXCLUDED.away_team_id),
                     home_team_abbr = COALESCE(game_info.home_team_abbr, EXCLUDED.home_team_abbr),
@@ -1011,14 +1015,14 @@ def _upsert_game_info_min(
             ON CONFLICT (game_id)
             DO UPDATE SET
                 game_time = COALESCE(game_info.game_time, EXCLUDED.game_time),
-                game_date = COALESCE(game_info.game_date, EXCLUDED.game_date),
+                game_date = EXCLUDED.game_date,
                 home_team_id = COALESCE(game_info.home_team_id, EXCLUDED.home_team_id),
                 away_team_id = COALESCE(game_info.away_team_id, EXCLUDED.away_team_id),
                 home_team_abbr = COALESCE(game_info.home_team_abbr, EXCLUDED.home_team_abbr),
                 away_team_abbr = COALESCE(game_info.away_team_abbr, EXCLUDED.away_team_abbr)
             WHERE (
                 game_info.game_time IS NULL
-                OR game_info.game_date IS NULL
+                OR game_info.game_date IS DISTINCT FROM EXCLUDED.game_date
                 OR game_info.home_team_id IS NULL
                 OR game_info.away_team_id IS NULL
                 OR game_info.home_team_abbr IS NULL
@@ -1170,6 +1174,7 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                 status = EXCLUDED.status,
                 updated_at = EXCLUDED.updated_at,
                 was_correct = EXCLUDED.was_correct,
+                game_date = EXCLUDED.game_date,
                 game_time = EXCLUDED.game_time,
                 game_day_of_week = EXCLUDED.game_day_of_week,
                 time_of_day_bucket = EXCLUDED.time_of_day_bucket,
@@ -1182,6 +1187,7 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                 model_training_props.outcome,
                 model_training_props.status,
                 model_training_props.was_correct,
+                model_training_props.game_date,
                 model_training_props.game_time,
                 model_training_props.game_day_of_week,
                 model_training_props.time_of_day_bucket,
@@ -1200,6 +1206,7 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                 EXCLUDED.outcome,
                 EXCLUDED.status,
                 EXCLUDED.was_correct,
+                EXCLUDED.game_date,
                 EXCLUDED.game_time,
                 EXCLUDED.game_day_of_week,
                 EXCLUDED.time_of_day_bucket,
@@ -1703,7 +1710,6 @@ def run(
                     info_written = _upsert_game_info_min(
                         conn,
                         sg,
-                        d_iso,
                         source_sha256=schedule_sha256,
                     )
                     game_info_upserts += info_written
