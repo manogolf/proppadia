@@ -7,7 +7,7 @@ import unicodedata as ud
 import pandas as pd
 
 from backend.nhl.attachment_integrity import AttachmentIntegrityError, validate_odds_observation
-from backend.nhl.daily_capture import sha256_file
+from backend.nhl.daily_capture import canonical_game_set_hash, sha256_file
 
 
 # ------------------ small helpers ------------------
@@ -197,6 +197,9 @@ def main():
     ap.add_argument("--expected-pred-sha256", default=None)
     ap.add_argument("--odds-observation-dir", default=None)
     ap.add_argument("--expected-odds-manifest-sha256", default=None)
+    ap.add_argument("--odds-season", type=int, default=None)
+    ap.add_argument("--odds-phase", default=None)
+    ap.add_argument("--odds-replayed", action="store_true")
     args = ap.parse_args()
 
     slate = os.environ.get("SLATE_DATE", "").strip()
@@ -330,6 +333,11 @@ def main():
                 expected_manifest_sha256=args.expected_odds_manifest_sha256,
                 expected_parent_daily_run_id=args.parent_run_id,
                 expected_slate_date=slate,
+                expected_season=args.odds_season,
+                expected_phase=args.odds_phase,
+                expected_game_set_hash=canonical_game_set_hash(
+                    pd.to_numeric(pred_wide["game_id"], errors="raise").astype(int)),
+                replayed=args.odds_replayed,
             )
 
     # Metrics

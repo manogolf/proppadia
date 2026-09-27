@@ -1166,7 +1166,9 @@ def build_saves(slate: str, *, odds_json: Path | None = None,
                 expected_pred_sha256: str | None = None,
                 parent_daily_run_id: str | None = None,
                 odds_observation_dir: Path | None = None,
-                expected_odds_manifest_sha256: str | None = None):
+                expected_odds_manifest_sha256: str | None = None,
+                odds_phase: str | None = None,
+                odds_replayed: bool = False):
     # Ensure names exist (build_saves can be called standalone)
     names_csv = export_names_csv(slate)
 
@@ -1196,6 +1198,13 @@ def build_saves(slate: str, *, odds_json: Path | None = None,
             "--expected-odds-manifest-sha256",
             str(expected_odds_manifest_sha256 or ""),
         ])
+        command.extend([
+            "--odds-season", str(infer_nhl_season_from_date_yyyy_mm_dd(slate)),
+        ])
+        if odds_phase is not None:
+            command.extend(["--odds-phase", str(odds_phase)])
+        if odds_replayed:
+            command.append("--odds-replayed")
     run(command, env={"SLATE_DATE": slate})
 
 
@@ -1204,7 +1213,9 @@ def build_points(slate: str, *, odds_json: Path | None = None,
                  expected_pred_sha256: str | None = None,
                  parent_daily_run_id: str | None = None,
                  odds_observation_dir: Path | None = None,
-                 expected_odds_manifest_sha256: str | None = None):
+                 expected_odds_manifest_sha256: str | None = None,
+                 odds_phase: str | None = None,
+                 odds_replayed: bool = False):
     args = [
         PY,
         SCRIPTS_DIR / "build_points_with_market.py",
@@ -1236,7 +1247,12 @@ def build_points(slate: str, *, odds_json: Path | None = None,
         args += [
             "--odds-observation-dir", str(odds_observation_dir),
             "--expected-odds-manifest-sha256", str(expected_odds_manifest_sha256 or ""),
+            "--odds-season", str(infer_nhl_season_from_date_yyyy_mm_dd(slate)),
         ]
+        if odds_phase is not None:
+            args += ["--odds-phase", str(odds_phase)]
+        if odds_replayed:
+            args.append("--odds-replayed")
 
     run(args)
 
@@ -1434,6 +1450,10 @@ def _run_independent_daily_lanes(
                 expected_manifest_sha256=odds_result.manifest_sha256,
                 expected_parent_daily_run_id=daily_run_id,
                 expected_slate_date=slate,
+                expected_season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                expected_phase=odds_phase,
+                expected_game_set_hash=recorder.canonical_game_set_hash,
+                replayed=odds_result.replayed,
             )
         except AttachmentIntegrityError as error:
             odds_integrity_error = error
@@ -1472,6 +1492,8 @@ def _run_independent_daily_lanes(
                         odds_result.observation_dir if captured and odds_result else None),
                     "expected_odds_manifest_sha256": (
                         odds_result.manifest_sha256 if captured and odds_result else None),
+                    "odds_phase": odds_phase,
+                    "odds_replayed": bool(odds_result and odds_result.replayed),
                 })
             if attachment_lane == "points_attachment":
                 kwargs.update({
@@ -1480,6 +1502,8 @@ def _run_independent_daily_lanes(
                         odds_result.observation_dir if captured and odds_result else None),
                     "expected_odds_manifest_sha256": (
                         odds_result.manifest_sha256 if captured and odds_result else None),
+                    "odds_phase": odds_phase,
+                    "odds_replayed": bool(odds_result and odds_result.replayed),
                 })
             builder(slate, **kwargs)
             prefix = {"sog_attachment": "sog", "saves_attachment": "saves", "points_attachment": "points"}[attachment_lane]

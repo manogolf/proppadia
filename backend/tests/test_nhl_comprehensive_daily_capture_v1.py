@@ -33,6 +33,10 @@ from backend.nhl.daily_capture import (
     verify_package,
     write_roster_observation,
 )
+from backend.nhl.attachment_integrity import (
+    AttachmentIntegrityError,
+    validate_odds_observation,
+)
 
 
 UTC = timezone.utc
@@ -322,6 +326,73 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             with self.assertRaises(ObservationAlreadyClaimed):
                 self.capture(root, provider, phase="REFRESH")
             self.assertEqual(provider.calls, 1)
+
+    def test_replay_requires_same_game_set_and_preserves_source_parent_lineage(self):
+        provider = FakeProvider(ProviderCapture(
+            None, [], [], [exchange(body=b"[]")], b"[]", empty_reason="NO_EVENTS"))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            original = self.capture(root, provider)
+            replayed = capture_odds_observation(
+                root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                parent_daily_run_id="daily-run-2", canonical_games=games(),
+                provider=provider, authorized=True,
+            )
+            self.assertTrue(replayed.replayed)
+            self.assertEqual(replayed.observation_dir, original.observation_dir)
+            self.assertEqual(provider.calls, 1)
+
+            lineage = validate_odds_observation(
+                observation_dir=replayed.observation_dir,
+                odds_json=replayed.observation_dir / "raw_response.json",
+                expected_manifest_sha256=replayed.manifest_sha256,
+                expected_parent_daily_run_id="daily-run-2",
+                expected_slate_date=SLATE, expected_season=2026,
+                expected_phase="EARLY",
+                expected_game_set_hash=canonical_game_set_hash(g.game_id for g in games()),
+                replayed=replayed.replayed,
+            )
+            self.assertTrue(lineage["odds_observation_replayed"])
+            self.assertEqual(
+                lineage["odds_observation_source_parent_daily_run_id"], "daily-run-1")
+
+            with self.assertRaisesRegex(
+                    AttachmentIntegrityError, "ODDS_OBSERVATION_PARENT_RUN_MISMATCH"):
+                validate_odds_observation(
+                    observation_dir=replayed.observation_dir,
+                    odds_json=replayed.observation_dir / "raw_response.json",
+                    expected_manifest_sha256=replayed.manifest_sha256,
+                    expected_parent_daily_run_id="daily-run-2",
+                    expected_slate_date=SLATE, expected_season=2026,
+                    expected_phase="EARLY",
+                    expected_game_set_hash=canonical_game_set_hash(
+                        g.game_id for g in games()),
+                    replayed=False,
+                )
+
+            changed_games = [CanonicalGame(
+                2026010038, "2026-09-24T23:00:00Z", "NJD", "NYR",
+                ("NJD", "New Jersey Devils"), ("NYR", "New York Rangers"),
+            )]
+            with self.assertRaises(ObservationAlreadyClaimed):
+                capture_odds_observation(
+                    root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                    parent_daily_run_id="daily-run-3", canonical_games=changed_games,
+                    provider=provider, authorized=True,
+                )
+            self.assertEqual(provider.calls, 1)
+
+            with self.assertRaisesRegex(
+                    AttachmentIntegrityError, "ODDS_OBSERVATION_GAME_SET_MISMATCH"):
+                validate_odds_observation(
+                    observation_dir=replayed.observation_dir,
+                    odds_json=replayed.observation_dir / "raw_response.json",
+                    expected_manifest_sha256=replayed.manifest_sha256,
+                    expected_parent_daily_run_id="daily-run-2",
+                    expected_slate_date=SLATE, expected_season=2026,
+                    expected_phase="EARLY", expected_game_set_hash="wrong-game-set",
+                    replayed=True,
+                )
 
     def test_two_concurrent_invocations_cannot_make_two_paid_calls(self):
         payload = [market_event()]

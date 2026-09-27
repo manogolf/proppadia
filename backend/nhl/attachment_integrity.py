@@ -100,6 +100,8 @@ def prediction_rows(path: Path, *, lane: str) -> pd.DataFrame:
 def validate_odds_observation(
     *, observation_dir: Path, odds_json: Path, expected_manifest_sha256: str,
     expected_parent_daily_run_id: str, expected_slate_date: str,
+    expected_season: int | None = None, expected_phase: str | None = None,
+    expected_game_set_hash: str | None = None, replayed: bool = False,
 ) -> dict[str, Any]:
     observation_dir = Path(observation_dir).resolve()
     odds_json = Path(odds_json).resolve()
@@ -117,16 +119,28 @@ def validate_odds_observation(
     if not summary_path.is_file() or not marker_path.is_file():
         raise AttachmentIntegrityError("ODDS_OBSERVATION_NOT_COMPLETE")
     summary = json.loads(summary_path.read_text())
-    if summary.get("parent_daily_run_id") != expected_parent_daily_run_id:
+    source_parent_daily_run_id = summary.get("parent_daily_run_id")
+    if (source_parent_daily_run_id != expected_parent_daily_run_id
+            and not replayed):
         raise AttachmentIntegrityError("ODDS_OBSERVATION_PARENT_RUN_MISMATCH")
     if summary.get("slate_date") != expected_slate_date:
         raise AttachmentIntegrityError("ODDS_OBSERVATION_SLATE_MISMATCH")
+    if (expected_season is not None
+            and int(summary.get("season", -1)) != int(expected_season)):
+        raise AttachmentIntegrityError("ODDS_OBSERVATION_SEASON_MISMATCH")
+    if expected_phase is not None and summary.get("phase") != expected_phase:
+        raise AttachmentIntegrityError("ODDS_OBSERVATION_PHASE_MISMATCH")
+    if (expected_game_set_hash is not None
+            and summary.get("canonical_game_set_hash") != expected_game_set_hash):
+        raise AttachmentIntegrityError("ODDS_OBSERVATION_GAME_SET_MISMATCH")
     if not str(summary.get("classification", "")).startswith("CAPTURED_"):
         raise AttachmentIntegrityError("ODDS_OBSERVATION_NOT_CAPTURED")
     return {
         "odds_observation_path": str(observation_dir),
         "odds_observation_manifest_sha256": manifest_sha256,
         "odds_raw_response_sha256": sha256_file(odds_json),
+        "odds_observation_replayed": bool(replayed),
+        "odds_observation_source_parent_daily_run_id": source_parent_daily_run_id,
     }
 
 

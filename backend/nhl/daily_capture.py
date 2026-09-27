@@ -776,17 +776,20 @@ def build_odds_request_plan(
     return plan, bindings
 
 
-def _existing_observation(day_root: Path, phase: str) -> OddsObservationResult | None:
+def _existing_observation(
+    day_root: Path, phase: str, expected_game_set_hash: str,
+) -> OddsObservationResult | None:
     if not day_root.is_dir():
         return None
-    for directory in sorted(day_root.glob("observation=*")):
+    for directory in sorted(day_root.glob("observation=*"), reverse=True):
         summary_path = directory / "observation_summary.json"
         complete = (directory / "RUN_COMPLETE.json").is_file()
         attempted = (directory / "ATTEMPT_COMPLETE.json").is_file()
         if not summary_path.is_file() or not (complete or attempted):
             continue
         summary = json.loads(summary_path.read_text())
-        if summary.get("phase") == phase:
+        if (summary.get("phase") == phase
+                and summary.get("canonical_game_set_hash") == expected_game_set_hash):
             return OddsObservationResult(
                 classification=str(summary["classification"]), observation_dir=directory,
                 summary=summary, manifest_sha256=verify_package(directory), replayed=True,
@@ -811,12 +814,12 @@ def capture_odds_observation(
         raise ValueError(f"unsupported odds phase: {phase}")
     observed = (now or utc_now()).astimezone(UTC)
     day_root = Path(root) / f"season={int(season)}" / f"slate_date={slate_date}"
-    existing = _existing_observation(day_root, phase)
+    game_ids = [game.game_id for game in canonical_games]
+    game_hash = canonical_game_set_hash(game_ids)
+    existing = _existing_observation(day_root, phase, game_hash)
     if existing is not None:
         return existing
 
-    game_ids = [game.game_id for game in canonical_games]
-    game_hash = canonical_game_set_hash(game_ids)
     first_puck = min((game.start_time_utc for game in canonical_games), default=None)
     invocation_id = invocation_id or f"nhldailyodds_{observed.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
     stable_id = sha256_bytes(
@@ -831,7 +834,7 @@ def capture_odds_observation(
     # The lease is acquired before discovery, while the immutable acquisition
     # claim is created only after discovery has fixed the exact paid plan.
     if claim.exists():
-        existing = _existing_observation(day_root, phase)
+        existing = _existing_observation(day_root, phase, game_hash)
         if existing is not None:
             return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}")
@@ -845,7 +848,7 @@ def capture_odds_observation(
     try:
         _write_create_only(lease, _json_bytes(lease_payload))
     except FileExistsError as error:
-        existing = _existing_observation(day_root, phase)
+        existing = _existing_observation(day_root, phase, game_hash)
         if existing is not None:
             return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}") from error
