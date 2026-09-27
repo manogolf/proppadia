@@ -23,6 +23,16 @@ _ROLLING_SOURCE_BY_PROP = {
     "walks_allowed": "d7_walks_allowed", "runs_rbis": "d7_runs_rbis", "rbis": "d7_rbis",
 }
 
+_PROP_SPECIFIC_D7_UNAVAILABLE_REASON = "prop_specific_d7_unavailable"
+_MTP_EXCLUSION_REASON_KEYS = (
+    "no_player_daily_feature_row",
+    "ambiguous_daily_feature_rows",
+    "no_exact_player_game_day",
+    "ambiguous_exact_game_day",
+    _PROP_SPECIFIC_D7_UNAVAILABLE_REASON,
+    "unmapped_prop_type",
+)
+
 
 def _mtp_rolling_source_ctes() -> str:
     prop_case = "CASE mt.prop_type\n" + "\n".join(
@@ -129,6 +139,13 @@ def _pct(numerator: int, denominator: int) -> float:
     return round((100.0 * numerator) / float(denominator), 2)
 
 
+def _format_mtp_exclusion_counts(exclusions: Dict[str, int]) -> str:
+    missing = [key for key in _MTP_EXCLUSION_REASON_KEYS if key not in exclusions]
+    if missing:
+        raise RuntimeError(f"ROLLING_COVERAGE_REASON_MISSING:{','.join(missing)}")
+    return "/".join(str(int(exclusions[key])) for key in _MTP_EXCLUSION_REASON_KEYS)
+
+
 def _fetch_pds_coverage(from_date: str, to_date: str) -> Dict[str, Any]:
     row = pg_fetchone(
         """
@@ -202,7 +219,7 @@ FROM seq
 
 def _fetch_mtp_coverage(from_date: str, to_date: str) -> Dict[str, Any]:
     row = pg_fetchone(
-        _mtp_rolling_source_ctes() + """
+        _mtp_rolling_source_ctes() + f"""
 SELECT
   COUNT(*)::int AS rows_total,
   COUNT(*) FILTER (WHERE feature_class = 'FEATURE_REQUIRED')::int AS required_rows,
@@ -213,7 +230,7 @@ SELECT
   COUNT(*) FILTER (WHERE feature_class = 'AMBIGUOUS_PLAYER_DAILY_FEATURE_ROWS')::int AS ambiguous_daily_feature_rows,
   COUNT(*) FILTER (WHERE feature_class = 'NO_EXACT_PLAYER_GAME_DAY')::int AS no_exact_player_game_day,
   COUNT(*) FILTER (WHERE feature_class = 'AMBIGUOUS_EXACT_GAME_DAY')::int AS ambiguous_exact_game_day,
-  COUNT(*) FILTER (WHERE feature_class = 'PROP_SPECIFIC_D7_VALUE_UNAVAILABLE')::int AS prop_specific_d7_unavailable,
+  COUNT(*) FILTER (WHERE feature_class = 'PROP_SPECIFIC_D7_VALUE_UNAVAILABLE')::int AS {_PROP_SPECIFIC_D7_UNAVAILABLE_REASON},
   COUNT(*) FILTER (WHERE feature_class = 'UNMAPPED_PROP_TYPE')::int AS unmapped_prop_type
 FROM classified_mtp
 """,
@@ -228,7 +245,7 @@ FROM classified_mtp
         "ambiguous_daily_feature_rows": _to_int(row, "ambiguous_daily_feature_rows"),
         "no_exact_player_game_day": _to_int(row, "no_exact_player_game_day"),
         "ambiguous_exact_game_day": _to_int(row, "ambiguous_exact_game_day"),
-        "prop_specific_d7_unavailable": _to_int(row, "prop_specific_d7_unavailable"),
+        _PROP_SPECIFIC_D7_UNAVAILABLE_REASON: _to_int(row, _PROP_SPECIFIC_D7_UNAVAILABLE_REASON),
         "unmapped_prop_type": _to_int(row, "unmapped_prop_type"),
     }
     not_required_rows = _to_int(row, "not_required_rows")
@@ -236,6 +253,7 @@ FROM classified_mtp
         raise RuntimeError("ROLLING_COVERAGE_CLASSIFICATION_COUNT_MISMATCH")
     if sum(exclusions.values()) != not_required_rows:
         raise RuntimeError("ROLLING_COVERAGE_EXCLUSION_COUNT_MISMATCH")
+    _format_mtp_exclusion_counts(exclusions)
     if d7_nonnull + required_null != required_rows:
         raise RuntimeError("ROLLING_COVERAGE_REQUIRED_ROW_COUNT_MISMATCH")
     return {
@@ -381,12 +399,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"mtp_cov_d7={mtp_cov['d7_pct']:.2f}% mtp_required_null={mtp_cov['required_null']} "
             f"mtp_not_required={mtp_cov['not_required_rows']} "
             f"mtp_excluded(no_pds/ambig_pds/no_game/multi_game/no_prop_d7/unmapped)="
-            f"{mtp_cov['not_required_by_reason']['no_player_daily_feature_row']}/"
-            f"{mtp_cov['not_required_by_reason']['ambiguous_daily_feature_rows']}/"
-            f"{mtp_cov['not_required_by_reason']['no_exact_player_game_day']}/"
-            f"{mtp_cov['not_required_by_reason']['ambiguous_exact_game_day']}/"
-            f"{mtp_cov['not_required_by_reason']['prop_specific_d7_value_unavailable']}/"
-            f"{mtp_cov['not_required_by_reason']['unmapped_prop_type']} "
+            f"{_format_mtp_exclusion_counts(mtp_cov['not_required_by_reason'])} "
             f"pds_changed(d7/d15/d30)={pds_move['changed_d7']}/{pds_move['changed_d15']}/{pds_move['changed_d30']} "
             f"mtp_changed_d7={mtp_move['changed_rows']}"
         )
