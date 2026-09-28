@@ -159,6 +159,50 @@
             "away": 110,
             "home": 147
           }
+        },
+        {
+          "gameDate": "2026-09-25T20:10:00Z",
+          "gameDate_ET_diagnostic": "2026-09-25T16:10:00-04:00",
+          "gamePk": 823489,
+          "gameType": "R",
+          "officialDate": "2026-09-25",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json",
+          "relationships": {},
+          "season": "2026",
+          "sha256": "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646",
+          "status": {
+            "abstractGameState": "Live",
+            "codedGameState": "P",
+            "detailedState": "Warmup",
+            "reason": null,
+            "statusCode": "PW"
+          },
+          "teams": {
+            "away": 110,
+            "home": 147
+          }
+        },
+        {
+          "gameDate": "2026-09-25T20:10:00Z",
+          "gameDate_ET_diagnostic": "2026-09-25T16:10:00-04:00",
+          "gamePk": 823489,
+          "gameType": "R",
+          "officialDate": "2026-09-25",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {},
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 110,
+            "home": 147
+          }
         }
       ]
     },
@@ -321,6 +365,50 @@
             "away": 112,
             "home": 111
           }
+        },
+        {
+          "gameDate": "2026-09-25T17:05:00Z",
+          "gameDate_ET_diagnostic": "2026-09-25T13:05:00-04:00",
+          "gamePk": 824703,
+          "gameType": "R",
+          "officialDate": "2026-09-25",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json",
+          "relationships": {},
+          "season": "2026",
+          "sha256": "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 112,
+            "home": 111
+          }
+        },
+        {
+          "gameDate": "2026-09-25T17:05:00Z",
+          "gameDate_ET_diagnostic": "2026-09-25T13:05:00-04:00",
+          "gamePk": 824703,
+          "gameType": "R",
+          "officialDate": "2026-09-25",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {},
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 112,
+            "home": 111
+          }
         }
       ]
     },
@@ -370,6 +458,28 @@
             "away": 112,
             "home": 111
           }
+        },
+        {
+          "gameDate": "2026-09-27T19:05:00Z",
+          "gameDate_ET_diagnostic": "2026-09-27T15:05:00-04:00",
+          "gamePk": 824705,
+          "gameType": "R",
+          "officialDate": "2026-09-27",
+          "path": "artifacts/ops/mlb_stat_derived_natural_run_evidence_v1/stat-derived-20260928T180616Z-de63fa77c6/2026-09-27/live_feed_game_824705.json",
+          "relationships": {},
+          "season": "2026",
+          "sha256": "92d9a08671fc90bb0bc3345183a06ea8882e6a0f9a7a5cdfe59030bc85ece1bc",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 112,
+            "home": 111
+          }
         }
       ],
       "gamePk": 824705,
@@ -395,11 +505,33 @@
             "away": 112,
             "home": 111
           }
+        },
+        {
+          "gameDate": "2026-09-27T19:05:00Z",
+          "gameDate_ET_diagnostic": "2026-09-27T15:05:00-04:00",
+          "gamePk": 824705,
+          "gameType": "R",
+          "officialDate": "2026-09-27",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {},
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 112,
+            "home": 111
+          }
         }
       ]
     },
     {
-      "classification": "MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING",
+      "classification": "RESOLVED_POSTPONEMENT_RESCHEDULE",
       "feed_appearances": [
         {
           "gameDate": "2026-09-23T17:35:00Z",
@@ -645,6 +777,206 @@
             "away": 141,
             "home": 110
           }
+        },
+        {
+          "gameDate": "2026-09-22T22:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-22T18:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json",
+          "relationships": {
+            "rescheduleDate": "2026-09-23T17:35:00Z",
+            "rescheduleGameDate": "2026-09-23"
+          },
+          "season": "2026",
+          "sha256": "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "D",
+            "detailedState": "Postponed",
+            "reason": "Rain",
+            "statusCode": "DR"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-23T17:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-23T13:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json",
+          "relationships": {
+            "rescheduledFrom": "2026-09-22T22:35:00Z",
+            "rescheduledFromDate": "2026-09-22"
+          },
+          "season": "2026",
+          "sha256": "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-22T22:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-22T18:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json",
+          "relationships": {
+            "rescheduleDate": "2026-09-23T17:35:00Z",
+            "rescheduleGameDate": "2026-09-23"
+          },
+          "season": "2026",
+          "sha256": "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "D",
+            "detailedState": "Postponed",
+            "reason": "Rain",
+            "statusCode": "DR"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-23T17:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-23T13:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json",
+          "relationships": {
+            "rescheduledFrom": "2026-09-22T22:35:00Z",
+            "rescheduledFromDate": "2026-09-22"
+          },
+          "season": "2026",
+          "sha256": "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-22T22:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-22T18:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {
+            "rescheduleDate": "2026-09-23T17:35:00Z",
+            "rescheduleGameDate": "2026-09-23"
+          },
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "D",
+            "detailedState": "Postponed",
+            "reason": "Rain",
+            "statusCode": "DR"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-23T17:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-23T13:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {
+            "rescheduledFrom": "2026-09-22T22:35:00Z",
+            "rescheduledFromDate": "2026-09-22"
+          },
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-22T22:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-22T18:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {
+            "rescheduleDate": "2026-09-23T17:35:00Z",
+            "rescheduleGameDate": "2026-09-23"
+          },
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "D",
+            "detailedState": "Postponed",
+            "reason": "Rain",
+            "statusCode": "DR"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
+        },
+        {
+          "gameDate": "2026-09-23T17:35:00Z",
+          "gameDate_ET_diagnostic": "2026-09-23T13:35:00-04:00",
+          "gamePk": 824785,
+          "gameType": "R",
+          "officialDate": "2026-09-23",
+          "path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json",
+          "relationships": {
+            "rescheduledFrom": "2026-09-22T22:35:00Z",
+            "rescheduledFromDate": "2026-09-22"
+          },
+          "season": "2026",
+          "sha256": "45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "reason": null,
+            "statusCode": "F"
+          },
+          "teams": {
+            "away": 141,
+            "home": 110
+          }
         }
       ]
     }
@@ -653,7 +985,7 @@
   "date_semantics": {
     "application_et_handling": "Existing market helpers convert UTC timestamps to America/New_York for operational market date; stat-derived loader compares feed datetime.officialDate directly to authority operational_date.",
     "close_path": "V2 copies StatsAPI officialDate as-is and compares source officialDate values; it does not convert gameDate to obtain an authoritative date.",
-    "conclusion": "No timezone-conversion defect found; all four cases are multiple official-date appearances lacking a retained transition relationship."
+    "conclusion": "No timezone-conversion defect found. Retained schedule history resolves 824785 by explicit postponement/reschedule identity; 823489, 824703, and 824705 remain unresolved because the searched retained schedule appearances contain no matching transition relationship evidence."
   },
   "feed_gap_search_roots": [
     {
@@ -6595,8 +6927,13 @@
     },
     "v2_retained_live_feed_evidence": {
       "path": "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v2/retained_live_feed_evidence.jsonl",
-      "records": 277,
-      "sha256": "254b272e642038b697981dbdebd8e4d0cee5c8087d42f2b67fd917da5b71e6a1"
+      "records": 304,
+      "sha256": "e905bea18d989e4b5c55cf27c5e664fae9c9caf83db146d4f681aa6ed3466c6b"
+    },
+    "v2_retained_schedule_relationship_evidence": {
+      "path": "docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v2/retained_schedule_relationship_evidence.jsonl",
+      "records": 7,
+      "sha256": "8521aef01585adb444df6cc87f2380456de2cb89ccf4fea36d1012c21d443b1d"
     }
   }
 }

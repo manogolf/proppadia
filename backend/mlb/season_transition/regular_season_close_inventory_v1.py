@@ -396,7 +396,10 @@ def classify_authoritative_game(
     relationship_values: dict[str, Any] = dict(authority_record.schedule_relationships)
     for obs in ordered:
         for field in RELATIONSHIP_FIELDS:
-            if field in obs.game:
+            # StatsAPI commonly emits null relationship keys on the opposite
+            # schedule appearance; null means “not asserted”, not a conflicting
+            # identity value. Preserve non-empty values from either appearance.
+            if field in obs.game and obs.game[field] not in (None, ""):
                 observed_relationship_values[field].add(canonical_json_bytes(obs.game[field]))
                 relationship_values[field] = obs.game[field]
     if any(len(values) > 1 for values in observed_relationship_values.values()):

@@ -10,7 +10,8 @@ from typing import Any
 
 from backend.mlb.season_transition import regular_season_close_inventory_v1 as v1
 from backend.mlb.season_transition.regular_season_close_inventory_v2 import (
-    EVIDENCE, EVIDENCE_ROOTS, PACKAGE as V2_PACKAGE, sha256 as file_sha256,
+    EVIDENCE, SCHEDULE_EVIDENCE, EVIDENCE_ROOTS, PACKAGE as V2_PACKAGE,
+    _load_pinned_schedules, sha256 as file_sha256,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import load_v1_authority
 
@@ -54,12 +55,9 @@ def _appearance(game: dict[str, Any], *, path: str, digest: str,
     }
 
 
-def _schedule_game(payload: dict[str, Any], game_pk: int) -> dict[str, Any] | None:
-    for day in payload.get("dates", []):
-        for game in day.get("games", []):
-            if game.get("gamePk") == game_pk:
-                return game
-    return None
+def _schedule_games(payload: dict[str, Any], game_pk: int) -> list[dict[str, Any]]:
+    return [game for day in payload.get("dates", []) for game in day.get("games", [])
+            if game.get("gamePk") == game_pk]
 
 
 def build_report() -> dict[str, Any]:
@@ -70,6 +68,7 @@ def build_report() -> dict[str, Any]:
                                v1.DEFAULT_DISPOSITION_SUPPLEMENT_MANIFEST_PATH),
         root=ROOT,
     )
+    _, added_schedules = _load_pinned_schedules()
     feed_manifest_path = V2_PACKAGE / EVIDENCE
     feed_manifest = [json.loads(line) for line in feed_manifest_path.read_text().splitlines() if line]
     by_conflict: dict[int, list[dict[str, Any]]] = {pk: [] for pk in CONFLICTS}
@@ -95,20 +94,25 @@ def build_report() -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
     for pk in CONFLICTS:
         schedule = []
-        for obs in observations.get(pk, []):
+        all_schedule_observations = [*observations.get(pk, []), *added_schedules.get(pk, [])]
+        for obs in all_schedule_observations:
             path = ROOT / obs.source_path
             raw_payload = json.loads(path.read_text())
-            game = _schedule_game(raw_payload, pk)
-            if game is None:
+            games = _schedule_games(raw_payload, pk)
+            if not games:
                 raise v1.CloseInventoryError(f"FORENSIC_SCHEDULE_GAMEPK_NOT_FOUND:{pk}:{obs.source_path}")
-            key = (obs.source_path, obs.source_sha256)
-            if not any((x["path"], x["sha256"]) == key for x in schedule):
+            for game in games:
                 schedule.append(_appearance(game, path=obs.source_path, digest=obs.source_sha256))
         feeds = by_conflict[pk]
         official_dates = {x["officialDate"] for x in [*schedule, *feeds] if x["officialDate"]}
-        category = ("MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING"
-                    if len(official_dates) > 1 and not any(x["relationships"] for x in [*schedule, *feeds])
-                    else "UNRESOLVED")
+        relationships = [x["relationships"] for x in [*schedule, *feeds]]
+        relationship_fields = {key for rel in relationships for key, value in rel.items()
+                               if value not in (None, "")}
+        complete_reschedule = {"rescheduleDate", "rescheduleGameDate",
+                               "rescheduledFrom", "rescheduledFromDate"} <= relationship_fields
+        category = ("RESOLVED_POSTPONEMENT_RESCHEDULE" if complete_reschedule
+                    else "MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING"
+                    if len(official_dates) > 1 else "UNRESOLVED")
         cases.append({"gamePk": pk, "classification": category,
                       "schedule_appearances": sorted(schedule, key=lambda x: (x["path"], x["sha256"])),
                       "feed_appearances": sorted(feeds, key=lambda x: (x["path"], x["sha256"]))})
@@ -145,7 +149,7 @@ def build_report() -> dict[str, Any]:
         "date_semantics": {
             "close_path": "V2 copies StatsAPI officialDate as-is and compares source officialDate values; it does not convert gameDate to obtain an authoritative date.",
             "application_et_handling": "Existing market helpers convert UTC timestamps to America/New_York for operational market date; stat-derived loader compares feed datetime.officialDate directly to authority operational_date.",
-            "conclusion": "No timezone-conversion defect found; all four cases are multiple official-date appearances lacking a retained transition relationship.",
+            "conclusion": "No timezone-conversion defect found. Retained schedule history resolves 824785 by explicit postponement/reschedule identity; 823489, 824703, and 824705 remain unresolved because the searched retained schedule appearances contain no matching transition relationship evidence.",
         },
         "source_manifests": {
             "v1_phase_retained_manifest": {"path": v1.DEFAULT_SOURCE_MANIFEST_PATH.relative_to(ROOT).as_posix(),
@@ -154,11 +158,17 @@ def build_report() -> dict[str, Any]:
                 "sha256": file_sha256(ROOT / v1.DEFAULT_DISPOSITION_SUPPLEMENT_MANIFEST_PATH)},
             "v2_retained_live_feed_evidence": {"path": str(feed_manifest_path.relative_to(ROOT)),
                 "sha256": file_sha256(feed_manifest_path), "records": len(feed_manifest)},
+            "v2_retained_schedule_relationship_evidence": {
+                "path": str((V2_PACKAGE / SCHEDULE_EVIDENCE).relative_to(ROOT)),
+                "sha256": file_sha256(V2_PACKAGE / SCHEDULE_EVIDENCE),
+                "records": len(_load_pinned_schedules()[0])},
         },
         "conflict_cases": cases,
         "feed_gap_search_roots": root_search,
         "feed_gaps": gaps,
-        "integrity_passed": all(c["classification"] == "MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING" for c in cases)
+        "integrity_passed": all(c["classification"] in {
+                "MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING",
+                "RESOLVED_POSTPONEMENT_RESCHEDULE"} for c in cases)
             and all(g["classification"] == "RETAINED_SOURCE_GAP" for g in gaps),
     }
 
@@ -169,9 +179,11 @@ def validate_report() -> dict[str, Any]:
     stored = json.loads(stored_path.read_text())
     checks = {
         "deterministic_report": rebuilt == stored,
-        "four_conflicts_classified": len(rebuilt["conflict_cases"]) == 4 and all(
-            c["classification"] == "MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING"
-            for c in rebuilt["conflict_cases"]),
+        "four_conflicts_classified": len(rebuilt["conflict_cases"]) == 4 and
+            rebuilt["conflict_cases"][-1]["classification"] == "RESOLVED_POSTPONEMENT_RESCHEDULE" and
+            all(c["classification"] in {"MULTIPLE_OFFICIAL_APPEARANCES_RELATIONSHIP_MISSING",
+                                        "RESOLVED_POSTPONEMENT_RESCHEDULE"}
+                for c in rebuilt["conflict_cases"]),
         "sixteen_gaps_absent": len(rebuilt["feed_gaps"]) == 16 and all(
             g["classification"] == "RETAINED_SOURCE_GAP" for g in rebuilt["feed_gaps"]),
         "no_timezone_defect": "No timezone-conversion defect" in rebuilt["date_semantics"]["conclusion"],

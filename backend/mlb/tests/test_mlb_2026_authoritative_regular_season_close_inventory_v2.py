@@ -20,9 +20,10 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
         recon = summary["reconciliation"]
         self.assertEqual(recon["prior_blockers"], 88)
         self.assertEqual(recon["exact_gamepk_live_feed_ids"], 72)
-        self.assertEqual(recon["accepted_final_from_blockers"], 68)
-        self.assertEqual(recon["unresolved"], 20)
-        self.assertEqual(len(summary["unresolved_game_pks"]), 20)
+        self.assertEqual(recon["accepted_terminal_from_blockers"], 69)
+        self.assertEqual(recon["unresolved"], 19)
+        self.assertNotIn(824785, summary["unresolved_game_pks"])
+        self.assertEqual(len(summary["unresolved_game_pks"]), 19)
 
     def test_versioned_package_rebuild_is_valid(self) -> None:
         report = validate_package()
