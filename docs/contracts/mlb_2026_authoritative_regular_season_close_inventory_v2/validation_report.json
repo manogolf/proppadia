@@ -1,0 +1,137 @@
+{
+  "checks": {
+    "all_population_rows_have_disposition": true,
+    "blocker_reconciliation_accounts_for_all_88": true,
+    "inventory_rebuild_deterministic": true,
+    "manifest_rebuild_deterministic": true,
+    "postseason_excluded": true,
+    "regular_season_population_2430": true,
+    "unique_gamepk_population": true
+  },
+  "contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_INVENTORY_RECONCILIATION_V2",
+  "disposition_counts": {
+    "AUTHORITATIVELY_CANCELLED": 0,
+    "FINAL": 2384,
+    "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 25,
+    "SCHEDULED_NOT_FINAL": 0,
+    "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
+    "UNRESOLVED_IDENTITY_OR_STATUS": 20
+  },
+  "exact_unresolved_game_pks": [
+    822841,
+    823086,
+    823168,
+    823327,
+    823410,
+    823489,
+    823490,
+    823492,
+    823894,
+    824060,
+    824223,
+    824301,
+    824625,
+    824703,
+    824705,
+    824710,
+    824784,
+    824785,
+    824868,
+    824951
+  ],
+  "integrity_passed": true,
+  "population_counts": {
+    "conflicting": 0,
+    "duplicate_identities": 0,
+    "missing": 0,
+    "preseason_game_pks": 489,
+    "regular_season_game_pks": 2430,
+    "total_classified_game_pks": 2919,
+    "unknown": 0
+  },
+  "reconciliation": {
+    "accepted_final_from_blockers": 68,
+    "exact_gamepk_live_feed_ids": 72,
+    "live_feed_evidence_records": 277,
+    "prior_blockers": 88,
+    "required_evidence_by_unresolved_game_pk": {
+      "822841": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823086": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823168": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823327": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823410": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823489": [
+        "Immutable StatsAPI schedule response for exact gamePk documenting the date transition and relationship fields, with gameType=R and final status."
+      ],
+      "823490": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823492": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "823894": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824060": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824223": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824301": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824625": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824703": [
+        "Immutable StatsAPI schedule response for exact gamePk documenting the date transition and relationship fields, with gameType=R and final status."
+      ],
+      "824705": [
+        "Immutable StatsAPI schedule response for exact gamePk documenting the date transition and relationship fields, with gameType=R and final status."
+      ],
+      "824710": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824784": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824785": [
+        "Immutable StatsAPI schedule response for exact gamePk documenting the date transition and relationship fields, with gameType=R and final status."
+      ],
+      "824868": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ],
+      "824951": [
+        "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
+        "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status."
+      ]
+    },
+    "unresolved": 20
+  }
+}
