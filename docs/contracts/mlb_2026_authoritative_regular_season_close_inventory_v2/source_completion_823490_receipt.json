@@ -1,0 +1,33 @@
+{
+  "schema_version": "MLB_STATSAPI_SINGLE_FEED_CAPTURE_RECEIPT_V1",
+  "game_pk": 823490,
+  "request": {
+    "method": "GET",
+    "url": "https://statsapi.mlb.com/api/v1.1/game/823490/feed/live",
+    "parameters": {
+      "gamePk": 823490
+    },
+    "request_count": 1,
+    "redirects_followed": false,
+    "retries": 0
+  },
+  "retrieved_at_utc": "2026-09-28T19:40:06.388382Z",
+  "http_status": 200,
+  "byte_count": 198713,
+  "sha256": "33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b",
+  "raw_response_path": "artifacts/analysis/mlb/player_stats_completeness/2026-09-28/game_823490/sources/game_823490_live_feed_33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b.json",
+  "validation": {
+    "game_pk": 823490,
+    "game_type": "R",
+    "season": 2026,
+    "official_date": "2026-09-27",
+    "away_team_id": 110,
+    "home_team_id": 147,
+    "abstract_game_state": "Final",
+    "coded_game_state": "C",
+    "status_code": "CR",
+    "detailed_state": "Cancelled: Rain",
+    "disposition": "UNRESOLVED_IDENTITY_OR_STATUS",
+    "reason": "STATUS_NOT_RECOGNIZED_BY_FROZEN_CLOSE_CONTRACT"
+  }
+}

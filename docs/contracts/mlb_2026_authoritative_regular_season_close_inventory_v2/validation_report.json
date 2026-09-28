@@ -33,12 +33,12 @@
   "reconciliation": {
     "accepted_terminal_from_blockers": 87,
     "additional_relationship_feed_ids": 0,
-    "exact_gamepk_live_feed_ids": 72,
-    "live_feed_evidence_records": 304,
+    "exact_gamepk_live_feed_ids": 73,
+    "live_feed_evidence_records": 305,
     "prior_blockers": 88,
     "required_evidence_by_unresolved_game_pk": {
       "823490": [
-        "Retained authoritative exact-gamePk schedule appearance or live feed documenting gameType=R, season=2026, matching teams, and an allowed terminal disposition (Final or an allowed cancellation/postponement/resumption outcome)."
+        "An authoritative exact-gamePk status observation that satisfies a disposition explicitly recognized by the frozen close contract (Final, the supported cancellation tuple, or an already supported reschedule/resumption relationship). The retained feed reports Cancelled: Rain with statusCode=CR, which the frozen cancellation tuple does not recognize."
       ]
     },
     "retained_schedule_evidence_records": 1657,

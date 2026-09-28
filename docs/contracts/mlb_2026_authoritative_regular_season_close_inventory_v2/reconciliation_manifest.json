@@ -11,16 +11,18 @@
     "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
     "UNRESOLVED_IDENTITY_OR_STATUS": 1
   },
-  "inventory_sha256": "ec04b12cae940dc0f67d3f88019c969f2ab0aca406c753be8e4932a3f155adc5",
-  "manifest_sha256": "2f5ddbdc9dc622624f586b94b2f1fe13442b13e24946801539a4f02a110f4d6b",
+  "inventory_sha256": "8b5a1e35928abe773f1366f95e994dbfdb43c50bb23004b95a8a5677fbe4e05e",
+  "manifest_sha256": "bce37130d24d46279b872c01e2777a4749c27f482d39de3adc80e6365b3f37ad",
   "population_size": 2430,
   "prior_inventory_manifest_sha256": "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59",
   "retained_live_feed_evidence_path": "retained_live_feed_evidence.jsonl",
-  "retained_live_feed_evidence_records": 304,
-  "retained_live_feed_evidence_sha256": "e905bea18d989e4b5c55cf27c5e664fae9c9caf83db146d4f681aa6ed3466c6b",
+  "retained_live_feed_evidence_records": 305,
+  "retained_live_feed_evidence_sha256": "3bdb80e3ac6605f728f33e3a7b39e5cf5d0e29c0d3ec217e9c9193c091312c73",
   "retained_schedule_relationship_evidence_path": "retained_schedule_relationship_evidence.jsonl",
   "retained_schedule_relationship_evidence_records": 1657,
   "retained_schedule_relationship_evidence_sha256": "5d6bcb04760e1117be6682ae9011f2423cc1f5e2bdf05f25d957f31422f8fec5",
+  "source_completion_receipt_path": "source_completion_823490_receipt.json",
+  "source_completion_receipt_sha256": "5c58342007168a87ae492e850a01434302fbeb190ca5c2ed19a7a211d025a49d",
   "unresolved_game_pks": [
     823490
   ]

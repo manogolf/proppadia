@@ -20,6 +20,7 @@ EVIDENCE = "retained_live_feed_evidence.jsonl"
 SCHEDULE_EVIDENCE = "retained_schedule_relationship_evidence.jsonl"
 MANIFEST = "reconciliation_manifest.json"
 REPORT = "validation_report.json"
+SOURCE_COMPLETION_RECEIPT = "source_completion_823490_receipt.json"
 EVIDENCE_ROOTS = (
     "artifacts/analysis/mlb/player_stats_completeness",
     "artifacts/ops/mlb_stat_derived_natural_run_evidence_v1",
@@ -177,17 +178,22 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         else:
             reason = ";".join(evidence_conflicts) or classified["disposition_reason"]
             transition_conflicts[game_pk] = reason
-            row = by_pk[game_pk]
+            row = classified
             row["close_disposition"] = "UNRESOLVED_IDENTITY_OR_STATUS"
             row["disposition_reason"] = reason
-            if observations:
+            if "UNKNOWN_AUTHORITATIVE_STATUS" in classified["disposition_reason"]:
                 row["required_evidence"] = [
-                    "One consistent authoritative playable terminal feed for this exact gamePk, with gameType=R, season=2026, matching teams, officialDate, final status, and result."
+                    "An authoritative exact-gamePk status observation that satisfies a disposition explicitly recognized by the frozen close contract (Final, the supported cancellation tuple, or an already supported reschedule/resumption relationship). The retained feed reports Cancelled: Rain with statusCode=CR, which the frozen cancellation tuple does not recognize."
+                ]
+            elif observations:
+                row["required_evidence"] = [
+                    "A retained authoritative status for this exact gamePk with gameType=R, season=2026, matching teams, officialDate, and a disposition explicitly recognized by the frozen close contract."
                 ]
             else:
                 row["required_evidence"] = [
                     "Retained authoritative exact-gamePk schedule appearance or live feed documenting gameType=R, season=2026, matching teams, and an allowed terminal disposition (Final or an allowed cancellation/postponement/resumption outcome)."
                 ]
+            by_pk[game_pk] = row
     unresolved = sorted(set(transition_conflicts))
     rows = [by_pk[r["game_pk"]] for r in rows]
     counts = {key: sum(r["close_disposition"] == key for r in rows)
@@ -234,6 +240,8 @@ def manifest(rows: list[dict[str, Any]], summary: dict[str, Any]) -> dict[str, A
         "retained_schedule_relationship_evidence_path": SCHEDULE_EVIDENCE,
         "retained_schedule_relationship_evidence_sha256": sha256(PACKAGE / SCHEDULE_EVIDENCE),
         "retained_schedule_relationship_evidence_records": summary["reconciliation"]["retained_schedule_evidence_records"],
+        "source_completion_receipt_path": SOURCE_COMPLETION_RECEIPT,
+        "source_completion_receipt_sha256": sha256(PACKAGE / SOURCE_COMPLETION_RECEIPT),
         "disposition_counts": summary["disposition_counts"],
         "unresolved_game_pks": summary["unresolved_game_pks"],
         "inventory_sha256": hashlib.sha256(b"".join(v1.canonical_json_bytes(r)+b"\n" for r in rows)).hexdigest(),

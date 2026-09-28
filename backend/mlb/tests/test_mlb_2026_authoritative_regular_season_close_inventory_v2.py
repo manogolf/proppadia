@@ -5,6 +5,7 @@ import unittest
 
 from backend.mlb.season_transition.regular_season_close_inventory_v2 import (
     EVIDENCE, PACKAGE, RETAINED_RELATIONSHIP_FEED_SHA256,
+    SOURCE_COMPLETION_RECEIPT,
     build_inventory, validate_package,
 )
 
@@ -21,7 +22,7 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
         _, summary = build_inventory()
         recon = summary["reconciliation"]
         self.assertEqual(recon["prior_blockers"], 88)
-        self.assertEqual(recon["exact_gamepk_live_feed_ids"], 72)
+        self.assertEqual(recon["exact_gamepk_live_feed_ids"], 73)
         self.assertEqual(recon["accepted_terminal_from_blockers"], 87)
         self.assertEqual(recon["unresolved"], 1)
         self.assertNotIn(824785, summary["unresolved_game_pks"])
@@ -64,6 +65,25 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
             )
         self.assertEqual(by_pk[823490]["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
         self.assertIsNone(by_pk[823490]["final_outcome"])
+
+    def test_823490_statsapi_completion_is_pinned_but_contract_fails_closed(self) -> None:
+        rows, _ = build_inventory()
+        row = next(row for row in rows if row["game_pk"] == 823490)
+        self.assertEqual(row["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
+        self.assertIn("UNKNOWN_AUTHORITATIVE_STATUS", row["disposition_reason"])
+        self.assertIsNone(row["final_outcome"])
+        status_evidence = row["authoritative_status_evidence"]
+        self.assertTrue(any(
+            artifact["sha256"]
+            == "33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b"
+            for group in status_evidence
+            for artifact in group["source_artifacts"]
+        ))
+        receipt = json.loads((PACKAGE / SOURCE_COMPLETION_RECEIPT).read_text())
+        self.assertEqual(receipt["http_status"], 200)
+        self.assertEqual(receipt["request"]["request_count"], 1)
+        self.assertEqual(receipt["validation"]["status_code"], "CR")
+        self.assertEqual(receipt["validation"]["disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
 
     def test_824785_relationship_feed_remains_hash_pinned(self) -> None:
         records = [json.loads(line) for line in (PACKAGE / EVIDENCE).read_text().splitlines()]
