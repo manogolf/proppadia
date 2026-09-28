@@ -6,8 +6,11 @@ import unittest
 from backend.mlb.season_transition.regular_season_close_inventory_v2 import (
     EVIDENCE, PACKAGE, RETAINED_RELATIONSHIP_FEED_SHA256,
     SOURCE_COMPLETION_RECEIPT,
+    _apply_v2_rain_cancellation_interpretation,
     build_inventory, validate_package,
 )
+from backend.mlb.season_transition import regular_season_close_inventory_v1 as v1
+from backend.mlb.season_transition.game_phase_authority_v1 import load_v1_authority
 
 
 class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
@@ -23,10 +26,10 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
         recon = summary["reconciliation"]
         self.assertEqual(recon["prior_blockers"], 88)
         self.assertEqual(recon["exact_gamepk_live_feed_ids"], 73)
-        self.assertEqual(recon["accepted_terminal_from_blockers"], 87)
-        self.assertEqual(recon["unresolved"], 1)
+        self.assertEqual(recon["accepted_terminal_from_blockers"], 88)
+        self.assertEqual(recon["unresolved"], 0)
         self.assertNotIn(824785, summary["unresolved_game_pks"])
-        self.assertEqual(summary["unresolved_game_pks"], [823490])
+        self.assertEqual(summary["unresolved_game_pks"], [])
 
     def test_exact_date_conflict_cases_use_terminal_feed_played_date(self) -> None:
         rows, _ = build_inventory()
@@ -63,15 +66,24 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
                 by_pk[game_pk]["disposition_source_artifact"]["source_kind"],
                 "STATSAPI_SCHEDULE_RESPONSE",
             )
-        self.assertEqual(by_pk[823490]["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
-        self.assertIsNone(by_pk[823490]["final_outcome"])
+        self.assertEqual(by_pk[823490]["close_disposition"], "AUTHORITATIVELY_CANCELLED")
+        self.assertNotIn("final_outcome", by_pk[823490])
+        self.assertNotIn("played_official_date", by_pk[823490])
 
-    def test_823490_statsapi_completion_is_pinned_but_contract_fails_closed(self) -> None:
+    def test_823490_rain_cancellation_is_accepted_but_not_played(self) -> None:
         rows, _ = build_inventory()
         row = next(row for row in rows if row["game_pk"] == 823490)
-        self.assertEqual(row["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
-        self.assertIn("UNKNOWN_AUTHORITATIVE_STATUS", row["disposition_reason"])
-        self.assertIsNone(row["final_outcome"])
+        self.assertEqual(row["close_disposition"], "AUTHORITATIVELY_CANCELLED")
+        self.assertNotIn("final_outcome", row)
+        self.assertNotIn("played_official_date", row)
+        interpretation = row["v2_contract_interpretation"]
+        self.assertTrue(any(
+            item["raw_status"]["statusCode"] == "CR"
+            and item["raw_status"]["detailedState"] == "Cancelled: Rain"
+            and item["source_sha256"]
+            == "33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b"
+            for item in interpretation
+        ))
         status_evidence = row["authoritative_status_evidence"]
         self.assertTrue(any(
             artifact["sha256"]
@@ -83,7 +95,70 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
         self.assertEqual(receipt["http_status"], 200)
         self.assertEqual(receipt["request"]["request_count"], 1)
         self.assertEqual(receipt["validation"]["status_code"], "CR")
-        self.assertEqual(receipt["validation"]["disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
+        self.assertEqual(receipt["validation"]["disposition"], "AUTHORITATIVELY_CANCELLED")
+
+    def test_unknown_cancellation_evidence_stays_unresolved(self) -> None:
+        rows, _ = build_inventory()
+        row = next(row for row in rows if row["game_pk"] == 823490)
+        artifact = next(
+            artifact
+            for group in row["authoritative_status_evidence"]
+            for artifact in group["source_artifacts"]
+            if artifact["sha256"]
+            == "33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b"
+        )
+        source = v1.SourceObservation(
+            artifact["path"], artifact["sha256"],
+            v1._normalize_live_feed_game(json.loads((v1.REPO_ROOT / artifact["path"]).read_text())),
+            "STATSAPI_LIVE_GAME_FEED",
+        )
+        changed = dict(source.game)
+        changed["status"] = {**changed["status"], "reason": "Weather"}
+        unknown = v1.SourceObservation(
+            source.source_path, source.source_sha256, changed,
+            source.source_kind, source.observation_timestamp_utc)
+        adapted, _ = _apply_v2_rain_cancellation_interpretation(823490, [unknown])
+        authority = next(r for r in load_v1_authority(root=v1.REPO_ROOT).records
+                         if r.game_pk == 823490)
+        classified = v1.classify_authoritative_game(authority, adapted)
+        self.assertEqual(classified["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
+        self.assertIn("UNKNOWN_AUTHORITATIVE_STATUS", classified["disposition_reason"])
+
+    def test_conflicting_final_and_rain_cancellation_stays_unresolved(self) -> None:
+        rows, _ = build_inventory()
+        row = next(row for row in rows if row["game_pk"] == 823490)
+        artifact = next(
+            artifact
+            for group in row["authoritative_status_evidence"]
+            for artifact in group["source_artifacts"]
+            if artifact["sha256"]
+            == "33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b"
+        )
+        source = v1.SourceObservation(
+            artifact["path"], artifact["sha256"],
+            v1._normalize_live_feed_game(json.loads((v1.REPO_ROOT / artifact["path"]).read_text())),
+            "STATSAPI_LIVE_GAME_FEED",
+        )
+        final_game = dict(source.game)
+        final_game["status"] = {
+            "abstractGameState": "Final", "codedGameState": "F",
+            "statusCode": "F", "detailedState": "Final",
+        }
+        final_game["teams"] = {
+            "away": {"team": {"id": 110}, "score": 2},
+            "home": {"team": {"id": 147}, "score": 1},
+        }
+        conflicting = v1.SourceObservation(
+            "synthetic_conflicting_terminal", "0" * 64, final_game,
+            "STATSAPI_LIVE_GAME_FEED",
+        )
+        adapted, _ = _apply_v2_rain_cancellation_interpretation(
+            823490, [source, conflicting])
+        authority = next(r for r in load_v1_authority(root=v1.REPO_ROOT).records
+                         if r.game_pk == 823490)
+        classified = v1.classify_authoritative_game(authority, adapted)
+        self.assertEqual(classified["close_disposition"], "UNRESOLVED_IDENTITY_OR_STATUS")
+        self.assertIn("CONFLICTING_TERMINAL_STATUS", classified["disposition_reason"])
 
     def test_824785_relationship_feed_remains_hash_pinned(self) -> None:
         records = [json.loads(line) for line in (PACKAGE / EVIDENCE).read_text().splitlines()]

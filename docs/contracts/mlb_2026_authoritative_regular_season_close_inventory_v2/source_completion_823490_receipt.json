@@ -27,7 +27,7 @@
     "coded_game_state": "C",
     "status_code": "CR",
     "detailed_state": "Cancelled: Rain",
-    "disposition": "UNRESOLVED_IDENTITY_OR_STATUS",
-    "reason": "STATUS_NOT_RECOGNIZED_BY_FROZEN_CLOSE_CONTRACT"
+    "disposition": "AUTHORITATIVELY_CANCELLED",
+    "reason": "V2_EXACT_RETAINED_RAIN_CANCELLATION_TUPLE; NOT_PLAYED; NO_OUTCOME"
   }
 }

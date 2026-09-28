@@ -15,17 +15,20 @@ in `retained_live_feed_evidence.jsonl` or
 existing retention locations. Their hashes and the interpretation rule are
 recorded in `reconciliation_manifest.json`.
 
-The deterministic result accepts 87 of the prior 88 blockers and leaves only
-823490 unresolved. Fifteen of the 16 former feed gaps have retained exact-gamePk
+The deterministic result accepts all 88 prior blockers. Fifteen of the 16 former feed gaps have retained exact-gamePk
 regular-season schedule appearances with `Final` status and scores; 823490 has
-one retained live-feed capture but no status accepted by the frozen contract.
+one retained live-feed capture reporting an authoritative cancellation.
 The single GET receipt is in `source_completion_823490_receipt.json`; its
 198,713-byte raw response is retained at the receipt's hash-addressed path. The
 feed confirms exact gamePk 823490, `gameType=R`, season 2026, and teams 110/147,
-but reports `Final / C / CR / Cancelled: Rain`. The frozen cancellation tuple
-does not recognize status code `CR` or the detailed state `Cancelled: Rain`,
-so V2 preserves the evidence and leaves the game unresolved without broadening
-the close contract. For 823489, 824703, and 824705, matching exact gamePk,
+but reports `Final / C / CR / Cancelled: Rain`. V2 now narrowly recognizes this
+receipt-pinned source tuple (and its matching schedule form `Final / C / CR /
+Cancelled`, reason `Rain`) as `AUTHORITATIVELY_CANCELLED`, distinct from `FINAL`.
+This is terminal for close accounting only: no played date, score, final
+outcome, or game result is created. The adapter requires exact gamePk 823490,
+`gameType=R`, season 2026, teams 110/147, reason `Rain`, and the pinned feed
+SHA-256. Unknown or conflicting cancellation evidence remains unresolved. The
+V1 package and phase authority are unchanged. For 823489, 824703, and 824705, matching exact gamePk,
 `gameType=R`, season 2026, stable away/home teams, and one consistent playable
 terminal feed link the schedule appearances despite differing `officialDate`
 values in older captures. The terminal feed's `officialDate` is recorded as

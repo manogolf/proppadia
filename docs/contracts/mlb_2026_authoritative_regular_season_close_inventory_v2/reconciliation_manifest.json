@@ -4,17 +4,18 @@
   "contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_INVENTORY_RECONCILIATION_V2",
   "date_transition_interpretation": "Exact gamePk plus gameType=R, season=2026, matching away/home teams, and one consistent authoritative playable terminal outcome link schedule appearances to a single game. officialDate changes alone do not conflict; a terminal live feed's officialDate is played_official_date.",
   "disposition_counts": {
-    "AUTHORITATIVELY_CANCELLED": 0,
+    "AUTHORITATIVELY_CANCELLED": 1,
     "FINAL": 2401,
     "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 27,
     "SCHEDULED_NOT_FINAL": 0,
     "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
-    "UNRESOLVED_IDENTITY_OR_STATUS": 1
+    "UNRESOLVED_IDENTITY_OR_STATUS": 0
   },
-  "inventory_sha256": "8b5a1e35928abe773f1366f95e994dbfdb43c50bb23004b95a8a5677fbe4e05e",
-  "manifest_sha256": "bce37130d24d46279b872c01e2777a4749c27f482d39de3adc80e6365b3f37ad",
+  "inventory_sha256": "c8d2509226332d7a1767366853a73c8bdd0280a98293a9b19a6564757372329b",
+  "manifest_sha256": "768859751763bac0c8af370aa376fcdc9f29aaa4b74596e6845a7cca263e410d",
   "population_size": 2430,
   "prior_inventory_manifest_sha256": "87f0ce8782fb5d5f9d2c2738e5483d3891a514ad16fcd37e2d2f7835411c5e59",
+  "rain_cancellation_interpretation": "V2 maps only the receipt-pinned exact 823490 StatsAPI tuple Final/C/CR/Cancelled: Rain (schedule detailedState Cancelled), reason Rain, gameType R, season 2026, teams 110/147, and the pinned feed SHA-256 to AUTHORITATIVELY_CANCELLED. This is terminal close accounting only: never FINAL, played, or scored. Unknown or conflicting status/identity evidence remains unresolved.",
   "retained_live_feed_evidence_path": "retained_live_feed_evidence.jsonl",
   "retained_live_feed_evidence_records": 305,
   "retained_live_feed_evidence_sha256": "3bdb80e3ac6605f728f33e3a7b39e5cf5d0e29c0d3ec217e9c9193c091312c73",
@@ -22,8 +23,6 @@
   "retained_schedule_relationship_evidence_records": 1657,
   "retained_schedule_relationship_evidence_sha256": "5d6bcb04760e1117be6682ae9011f2423cc1f5e2bdf05f25d957f31422f8fec5",
   "source_completion_receipt_path": "source_completion_823490_receipt.json",
-  "source_completion_receipt_sha256": "5c58342007168a87ae492e850a01434302fbeb190ca5c2ed19a7a211d025a49d",
-  "unresolved_game_pks": [
-    823490
-  ]
+  "source_completion_receipt_sha256": "5f3649281ea93e9aee256ce9a55c6912cb7a193ede0510599458b53178cd768a",
+  "unresolved_game_pks": []
 }

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,78 @@ RETAINED_RELATIONSHIP_GAME_PK = 824785
 RETAINED_RELATIONSHIP_FEED_SHA256 = (
     "61bdfdaae620c95da70b0e0940d854d8a789a0e1ef2e0e5bb325b7de41d8406b"
 )
+RAIN_CANCELLATION_GAME_PK = 823490
+RAIN_CANCELLATION_TEAMS = (110, 147)
+RAIN_CANCELLATION_SOURCE_SHA256 = (
+    "33df6c93eded854287295ffb3fc5b716e6c57e5444d3224d52a205f497ada82b"
+)
+
+
+def _apply_v2_rain_cancellation_interpretation(
+    game_pk: int, observations: list[v1.SourceObservation],
+) -> tuple[list[v1.SourceObservation], list[dict[str, Any]]]:
+    """Normalize only the receipt-pinned 823490 rain cancellation for V1 classification.
+
+    StatsAPI's authoritative `CR` / `Cancelled: Rain` variant is equivalent to
+    the already-supported V1 cancellation terminal (`C` / `Cancelled`) only
+    for this exact retained game identity and exact known source status tuple.
+    The source observation itself remains immutable and hash-pinned.
+    """
+    adapted: list[v1.SourceObservation] = []
+    interpretations: list[dict[str, Any]] = []
+    for observation in observations:
+        game = dict(observation.game)
+        status = dict(game.get("status") or {})
+        teams = game.get("teams") or {}
+        pair = tuple((((teams.get(side) or {}).get("team") or {}).get("id"))
+                     for side in ("away", "home"))
+        exact_rain_cancel = (
+            game_pk == RAIN_CANCELLATION_GAME_PK
+            and int(game.get("gamePk") or 0) == RAIN_CANCELLATION_GAME_PK
+            and game.get("gameType") == "R"
+            and str(game.get("season")) == "2026"
+            and pair == RAIN_CANCELLATION_TEAMS
+            and (
+                (observation.source_kind == "STATSAPI_LIVE_GAME_FEED"
+                 and observation.source_sha256 == RAIN_CANCELLATION_SOURCE_SHA256
+                 and status.get("detailedState") == "Cancelled: Rain")
+                or (observation.source_kind == "STATSAPI_SCHEDULE_RESPONSE"
+                    and status.get("detailedState") == "Cancelled")
+            )
+            and status.get("abstractGameState") == "Final"
+            and status.get("codedGameState") == "C"
+            and status.get("statusCode") == "CR"
+            and status.get("detailedState") in {"Cancelled", "Cancelled: Rain"}
+            and status.get("reason") == "Rain"
+        )
+        if exact_rain_cancel:
+            raw_status = {key: status.get(key) for key in (
+                "abstractGameState", "codedGameState", "statusCode",
+                "detailedState", "reason")}
+            status["statusCode"] = "C"
+            status["detailedState"] = "Cancelled"
+            game["status"] = status
+            adapted.append(replace(observation, game=game))
+            interpretations.append({
+                "source_path": observation.source_path,
+                "source_sha256": observation.source_sha256,
+                "raw_status": raw_status,
+                "normalized_contract_status": {
+                    key: status.get(key) for key in (
+                        "abstractGameState", "codedGameState", "statusCode",
+                        "detailedState", "reason")
+                },
+                "rationale": (
+                    "V2 recognizes the exact retained StatsAPI Final/C/CR/"
+                    "Cancelled: Rain (or schedule Cancelled)/Rain tuple for "
+                    "gamePk 823490 as AUTHORITATIVELY_CANCELLED. This is a "
+                    "terminal cancellation, not a played game; no score, "
+                    "final outcome, or played date is created."
+                ),
+            })
+        else:
+            adapted.append(observation)
+    return adapted, interpretations
 
 
 def sha256(path: Path) -> str:
@@ -128,7 +201,10 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         observations = feeds.get(game_pk, [])
         prior = [*schedule_observations.get(game_pk, []), *retained_schedules.get(game_pk, [])]
         merged = v1._deduplicate_observations([*prior, *observations])
-        classified = v1.classify_authoritative_game(authority[game_pk], merged)
+        classified_observations, cancellation_interpretations = (
+            _apply_v2_rain_cancellation_interpretation(game_pk, merged))
+        classified = v1.classify_authoritative_game(
+            authority[game_pk], classified_observations)
         # Exact gamePk, regular-season type/season, stable teams, and one
         # consistent terminal outcome establish identity across appearances.
         # officialDate changes alone are not contradictory: the terminal
@@ -140,8 +216,9 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             if (int(g.get("gamePk") or 0) != game_pk or g.get("gameType") != "R"
                     or int(g.get("season") or 0) != 2026):
                 raise v1.CloseInventoryError(f"V2_FEED_IDENTITY_INVALID:{game_pk}")
-        terminal_feeds = [o for o in observations
-                          if v1._terminal_kind(v1._status(o.game)) == "FINAL"]
+        terminal_feeds = [o for o in classified_observations
+                          if o.source_kind == "STATSAPI_LIVE_GAME_FEED"
+                          and v1._terminal_kind(v1._status(o.game)) in {"FINAL", "CANCELLED"}]
         identity_sources = [*schedules, *(o.game for o in observations)]
         team_pairs = set()
         incomplete_team_identity = False
@@ -165,15 +242,23 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 evidence_conflicts.append("MULTIPLE_INCOMPATIBLE_TERMINAL_FEED_OUTCOMES")
         accepted = not evidence_conflicts and classified["close_disposition"] in {
             "FINAL", "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
-            "SUSPENDED_RESUMED_IDENTITY_RESOLVED"}
+            "SUSPENDED_RESUMED_IDENTITY_RESOLVED", "AUTHORITATIVELY_CANCELLED"}
+        if classified["close_disposition"] == "AUTHORITATIVELY_CANCELLED":
+            if cancellation_interpretations:
+                classified["v2_contract_interpretation"] = cancellation_interpretations
+            # Cancellation is terminal for close accounting, but is not a played game.
+            classified.pop("played_official_date", None)
+            classified.pop("final_outcome", None)
         if accepted:
             final_dates = {str(o.game.get("officialDate")) for o in terminal_feeds
+                           if classified["close_disposition"] != "AUTHORITATIVELY_CANCELLED"
                            if o.game.get("officialDate")}
             if len(final_dates) > 1:
                 evidence_conflicts.append("CONFLICTING_TERMINAL_OFFICIAL_DATE")
                 accepted = False
         if accepted:
-            classified["played_official_date"] = next(iter(final_dates), None)
+            if classified["close_disposition"] != "AUTHORITATIVELY_CANCELLED":
+                classified["played_official_date"] = next(iter(final_dates), None)
             by_pk[game_pk] = classified
         else:
             reason = ";".join(evidence_conflicts) or classified["disposition_reason"]
@@ -210,7 +295,7 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             "accepted_terminal_from_blockers": sum(
                 by_pk[pk]["close_disposition"] in {
                     "FINAL", "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
-                    "SUSPENDED_RESUMED_IDENTITY_RESOLVED"} for pk in blocker_ids),
+                    "SUSPENDED_RESUMED_IDENTITY_RESOLVED", "AUTHORITATIVELY_CANCELLED"} for pk in blocker_ids),
             "unresolved": len(unresolved),
             "live_feed_evidence_records": len(evidence_records),
             "retained_schedule_evidence_records": len(schedule_records),
@@ -230,6 +315,14 @@ def manifest(rows: list[dict[str, Any]], summary: dict[str, Any]) -> dict[str, A
             "and one consistent authoritative playable terminal outcome link "
             "schedule appearances to a single game. officialDate changes alone "
             "do not conflict; a terminal live feed's officialDate is played_official_date."
+        ),
+        "rain_cancellation_interpretation": (
+            "V2 maps only the receipt-pinned exact 823490 StatsAPI tuple "
+            "Final/C/CR/Cancelled: Rain (schedule detailedState Cancelled), "
+            "reason Rain, gameType R, season 2026, teams 110/147, and the "
+            "pinned feed SHA-256 to AUTHORITATIVELY_CANCELLED. This is "
+            "terminal close accounting only: never FINAL, played, or scored. "
+            "Unknown or conflicting status/identity evidence remains unresolved."
         ),
         "authority_contract": v1.CONTRACT_NAME,
         "authority_manifest_sha256": summary["authority"]["source_manifest_sha256"],
@@ -251,10 +344,17 @@ def manifest(rows: list[dict[str, Any]], summary: dict[str, Any]) -> dict[str, A
 
 
 def initialize_package() -> dict[str, Any]:
-    """Pin bounded retained feeds and schedule appearances for the blocker set."""
+    """Rebuild from the committed bounded source ledger, pinning hashes again."""
     prior = json.loads((v1.DEFAULT_PACKAGE_PATH / "scheduled_not_final_game_pks.json").read_text())
     blocker_ids = {int(value) for value in prior}
     evidence_ids = blocker_ids | {RETAINED_RELATIONSHIP_GAME_PK}
+    pinned_feed_paths = {
+        row["path"] for row in _read_jsonl(PACKAGE / EVIDENCE)
+    } if (PACKAGE / EVIDENCE).exists() else set()
+    pinned_schedule_pairs = {
+        (row["path"], int(row["game_pk"]))
+        for row in _read_jsonl(PACKAGE / SCHEDULE_EVIDENCE)
+    } if (PACKAGE / SCHEDULE_EVIDENCE).exists() else set()
     records: dict[str, dict[str, Any]] = {}
     for retained_root in EVIDENCE_ROOTS:
         base = ROOT / retained_root
@@ -269,6 +369,8 @@ def initialize_package() -> dict[str, Any]:
                 continue
             if game_pk in evidence_ids:
                 rel = path.relative_to(ROOT).as_posix()
+                if rel not in pinned_feed_paths:
+                    continue
                 digest = sha256(path)
                 if digest == RETAINED_RELATIONSHIP_FEED_SHA256 and game_pk != RETAINED_RELATIONSHIP_GAME_PK:
                     raise v1.CloseInventoryError("V2_824785_FEED_GAMEPK_MISMATCH")
@@ -298,6 +400,8 @@ def initialize_package() -> dict[str, Any]:
         relative = path.relative_to(ROOT).as_posix()
         digest = sha256(path)
         for pk in sorted(matched):
+            if (relative, pk) not in pinned_schedule_pairs:
+                continue
             schedule_records_by_key[(relative, pk)] = {
                 "path": relative, "sha256": digest, "game_pk": pk}
     schedule_records = [schedule_records_by_key[key]

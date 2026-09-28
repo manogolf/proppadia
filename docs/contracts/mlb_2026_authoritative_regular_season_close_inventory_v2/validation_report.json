@@ -10,16 +10,14 @@
   },
   "contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_INVENTORY_RECONCILIATION_V2",
   "disposition_counts": {
-    "AUTHORITATIVELY_CANCELLED": 0,
+    "AUTHORITATIVELY_CANCELLED": 1,
     "FINAL": 2401,
     "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED": 27,
     "SCHEDULED_NOT_FINAL": 0,
     "SUSPENDED_RESUMED_IDENTITY_RESOLVED": 1,
-    "UNRESOLVED_IDENTITY_OR_STATUS": 1
+    "UNRESOLVED_IDENTITY_OR_STATUS": 0
   },
-  "exact_unresolved_game_pks": [
-    823490
-  ],
+  "exact_unresolved_game_pks": [],
   "integrity_passed": true,
   "population_counts": {
     "conflicting": 0,
@@ -31,17 +29,13 @@
     "unknown": 0
   },
   "reconciliation": {
-    "accepted_terminal_from_blockers": 87,
+    "accepted_terminal_from_blockers": 88,
     "additional_relationship_feed_ids": 0,
     "exact_gamepk_live_feed_ids": 73,
     "live_feed_evidence_records": 305,
     "prior_blockers": 88,
-    "required_evidence_by_unresolved_game_pk": {
-      "823490": [
-        "An authoritative exact-gamePk status observation that satisfies a disposition explicitly recognized by the frozen close contract (Final, the supported cancellation tuple, or an already supported reschedule/resumption relationship). The retained feed reports Cancelled: Rain with statusCode=CR, which the frozen cancellation tuple does not recognize."
-      ]
-    },
+    "required_evidence_by_unresolved_game_pk": {},
     "retained_schedule_evidence_records": 1657,
-    "unresolved": 1
+    "unresolved": 0
   }
 }
