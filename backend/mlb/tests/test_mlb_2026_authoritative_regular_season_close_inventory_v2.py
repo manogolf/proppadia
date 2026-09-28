@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+import io
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from backend.mlb.season_transition.regular_season_close_inventory_v2 import (
     EVIDENCE, PACKAGE, RETAINED_RELATIONSHIP_FEED_SHA256,
     SOURCE_COMPLETION_RECEIPT,
     _apply_v2_rain_cancellation_interpretation,
-    build_inventory, validate_package,
+    build_inventory, validate_close_readiness_package, validate_package,
 )
+from backend.mlb.scripts import prepare_mlb_2026_regular_season_close_v1 as close_command
 from backend.mlb.season_transition import regular_season_close_inventory_v1 as v1
 from backend.mlb.season_transition.game_phase_authority_v1 import load_v1_authority
 
@@ -171,6 +175,18 @@ class RegularSeasonCloseInventoryV2Tests(unittest.TestCase):
     def test_versioned_package_rebuild_is_valid(self) -> None:
         report = validate_package()
         self.assertTrue(report["integrity_passed"], report["checks"])
+        self.assertEqual(report["population_counts"]["regular_season_game_pks"], 2430)
+
+    def test_current_close_checker_uses_pinned_v2_and_reports_ready_check_only(self) -> None:
+        with patch("sys.argv", ["prepare_mlb_2026_regular_season_close_v1"]), redirect_stdout(io.StringIO()):
+            self.assertEqual(close_command.main(), 0)
+        report = validate_close_readiness_package()
+        self.assertEqual(report["decision"], "REGULAR_SEASON_CLOSE_READY")
+        self.assertTrue(report["close_ready"])
+        self.assertTrue(report["check_only"])
+        self.assertFalse(report["close_package_created"])
+        self.assertEqual(report["close_blocker_game_pks"], [])
+        self.assertTrue(report["823490_cancellation_nonplayed_check"])
         self.assertEqual(report["population_counts"]["regular_season_game_pks"], 2430)
 
 

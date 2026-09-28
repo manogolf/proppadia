@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Check the one provenance-bound 2026 regular-season close inventory.
+"""Check the pinned V2 2026 regular-season close inventory.
 
 This command has no caller-supplied inventory, authorization token, execution
-mode, or package writer.  A successful future check still performs no close.
+mode, or package writer. A successful readiness check still performs no close.
+The historical `_v1` filename is retained for compatibility; its authority
+input is the explicitly pinned V2 reconciliation package.
 """
 
 from __future__ import annotations
@@ -10,9 +12,9 @@ from __future__ import annotations
 import json
 import sys
 
-from backend.mlb.season_transition.regular_season_close_inventory_v1 import (
-    CloseInventoryError,
-    validate_close_inventory_package,
+from backend.mlb.season_transition.regular_season_close_inventory_v1 import CloseInventoryError
+from backend.mlb.season_transition.regular_season_close_inventory_v2 import (
+    validate_close_readiness_package,
 )
 
 
@@ -21,7 +23,7 @@ def main() -> int:
         print("CLOSE_CHECK_ACCEPTS_NO_CALLER_ARGUMENTS", file=sys.stderr)
         return 2
     try:
-        report = validate_close_inventory_package()
+        report = validate_close_readiness_package()
     except CloseInventoryError as exc:
         print(json.dumps({"decision": "REGULAR_SEASON_CLOSE_BLOCKED", "error": str(exc)}, indent=2, sort_keys=True))
         return 2

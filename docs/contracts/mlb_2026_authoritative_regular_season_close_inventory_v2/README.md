@@ -4,6 +4,11 @@ This is a reconciliation package only. It does not perform season closure,
 create a close package, access a database, or make a network request during
 build or validation.
 
+The check-only close-readiness entrypoint remains
+`backend/mlb/scripts/prepare_mlb_2026_regular_season_close_v1.py` for command
+compatibility, but now validates this V2 package and its pinned reconciliation
+manifest rather than the intentionally incomplete V1 inventory.
+
 The population is the unchanged, hash-verified V1 game-phase authority:
 2,430 exact regular-season gamePks (`gameType=R`) and 489 preseason games.
 V2 reevaluates the prior 88-game blocker ledger against V1 schedule evidence,

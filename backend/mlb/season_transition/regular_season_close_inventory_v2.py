@@ -28,6 +28,9 @@ EVIDENCE_ROOTS = (
 )
 SCHEDULE_ROOT = "artifacts/ops/mlb_public_game_moneyline_history_schedules"
 CONTRACT = "MLB_2026_REGULAR_SEASON_CLOSE_INVENTORY_RECONCILIATION_V2"
+EXPECTED_RECONCILIATION_MANIFEST_SHA256 = (
+    "768859751763bac0c8af370aa376fcdc9f29aaa4b74596e6845a7cca263e410d"
+)
 RETAINED_RELATIONSHIP_GAME_PK = 824785
 RETAINED_RELATIONSHIP_FEED_SHA256 = (
     "61bdfdaae620c95da70b0e0940d854d8a789a0e1ef2e0e5bb325b7de41d8406b"
@@ -425,6 +428,8 @@ def validate_package() -> dict[str, Any]:
     stored = (PACKAGE / INVENTORY).read_bytes()
     stored_manifest = json.loads((PACKAGE / MANIFEST).read_text())
     rebuilt_manifest = manifest(rows, summary)
+    if rebuilt_manifest.get("manifest_sha256") != EXPECTED_RECONCILIATION_MANIFEST_SHA256:
+        raise v1.CloseInventoryError("V2_PINNED_RECONCILIATION_MANIFEST_MISMATCH")
     authority = load_v1_authority(root=ROOT)
     expected_pks = {r.game_pk for r in authority.records if r.season_phase == "REGULAR_SEASON"}
     row_pks = [r["game_pk"] for r in rows]
@@ -443,4 +448,41 @@ def validate_package() -> dict[str, Any]:
               "disposition_counts": summary["disposition_counts"],
               "exact_unresolved_game_pks": summary["unresolved_game_pks"],
               "reconciliation": summary["reconciliation"]}
+    return report
+
+
+def validate_close_readiness_package() -> dict[str, Any]:
+    """Check close readiness against the pinned, offline V2 inventory only."""
+    report = validate_package()
+    rows = _read_jsonl(PACKAGE / INVENTORY)
+    close_blockers = sorted(
+        int(row["game_pk"])
+        for row in rows
+        if row.get("close_disposition") not in v1.CLOSE_COMPLETE_DISPOSITIONS
+    )
+    cancellation_rows = [row for row in rows if row["game_pk"] == RAIN_CANCELLATION_GAME_PK]
+    cancellation_valid = (
+        len(cancellation_rows) == 1
+        and cancellation_rows[0].get("close_disposition") == "AUTHORITATIVELY_CANCELLED"
+        and "final_outcome" not in cancellation_rows[0]
+        and "played_official_date" not in cancellation_rows[0]
+    )
+    report.update({
+        "close_ready": bool(
+            report["integrity_passed"]
+            and report["population_counts"]["regular_season_game_pks"] == 2430
+            and not close_blockers
+            and cancellation_valid
+        ),
+        "close_blocker_game_pks": close_blockers,
+        "823490_cancellation_nonplayed_check": cancellation_valid,
+        "decision": "REGULAR_SEASON_CLOSE_READY" if (
+            report["integrity_passed"]
+            and report["population_counts"]["regular_season_game_pks"] == 2430
+            and not close_blockers
+            and cancellation_valid
+        ) else "REGULAR_SEASON_CLOSE_BLOCKED",
+        "check_only": True,
+        "close_package_created": False,
+    })
     return report
