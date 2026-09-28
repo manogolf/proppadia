@@ -24,7 +24,12 @@ EVIDENCE_ROOTS = (
     "artifacts/analysis/mlb/player_stats_completeness",
     "artifacts/ops/mlb_stat_derived_natural_run_evidence_v1",
 )
+SCHEDULE_ROOT = "artifacts/ops/mlb_public_game_moneyline_history_schedules"
 CONTRACT = "MLB_2026_REGULAR_SEASON_CLOSE_INVENTORY_RECONCILIATION_V2"
+RETAINED_RELATIONSHIP_GAME_PK = 824785
+RETAINED_RELATIONSHIP_FEED_SHA256 = (
+    "61bdfdaae620c95da70b0e0940d854d8a789a0e1ef2e0e5bb325b7de41d8406b"
+)
 
 
 def sha256(path: Path) -> str:
@@ -44,10 +49,10 @@ def _load_pinned_feeds() -> tuple[list[dict[str, Any]], dict[int, list[v1.Source
     if not evidence_path.exists():
         raise v1.CloseInventoryError("V2_RETAINED_EVIDENCE_MANIFEST_MISSING")
     records = _read_jsonl(evidence_path)
-    blockers = set(json.loads((v1.DEFAULT_PACKAGE_PATH / v1.INVENTORY_FILENAME).read_text().splitlines()[0])["game_pk"] for _ in [])
     # The exact blocker ledger is pinned by V1's validation report, not reconstructed from dates.
-    blockers = set(json.loads((v1.DEFAULT_PACKAGE_PATH / "scheduled_not_final_game_pks.json").read_text()))
-    authority = {r.game_pk: r for r in load_v1_authority(root=ROOT).records}
+    blockers = {int(value) for value in json.loads(
+        (v1.DEFAULT_PACKAGE_PATH / "scheduled_not_final_game_pks.json").read_text())}
+    allowed_ids = blockers | {RETAINED_RELATIONSHIP_GAME_PK}
     grouped: dict[int, list[v1.SourceObservation]] = {}
     for record in records:
         relative = record["path"]
@@ -59,7 +64,7 @@ def _load_pinned_feeds() -> tuple[list[dict[str, Any]], dict[int, list[v1.Source
         payload = json.loads(path.read_text())
         game = v1._normalize_live_feed_game(payload)
         game_pk = int(game.get("gamePk") or 0)
-        if game_pk != int(record["game_pk"]) or game_pk not in blockers:
+        if game_pk != int(record["game_pk"]) or game_pk not in allowed_ids:
             raise v1.CloseInventoryError(f"V2_RETAINED_EVIDENCE_GAMEPK_MISMATCH:{relative}")
         grouped.setdefault(game_pk, []).append(v1.SourceObservation(
             relative, record["sha256"], game, "STATSAPI_LIVE_GAME_FEED",
@@ -74,14 +79,20 @@ def _load_pinned_schedules() -> tuple[list[dict[str, Any]], dict[int, list[v1.So
     blockers = {int(value) for value in json.loads(
         (v1.DEFAULT_PACKAGE_PATH / "scheduled_not_final_game_pks.json").read_text())}
     grouped: dict[int, list[v1.SourceObservation]] = {}
+    loaded_sources: dict[str, tuple[str, dict[str, Any]]] = {}
     for record in records:
         relative = record["path"]
         if not relative.startswith("artifacts/ops/mlb_public_game_moneyline_history_schedules/"):
             raise v1.CloseInventoryError("V2_SCHEDULE_EVIDENCE_PATH_OUTSIDE_RETAINED_ROOT")
-        path = ROOT / relative
-        if sha256(path) != record["sha256"]:
+        if relative not in loaded_sources:
+            path = ROOT / relative
+            digest = sha256(path)
+            if digest != record["sha256"]:
+                raise v1.CloseInventoryError(f"V2_RETAINED_SCHEDULE_HASH_MISMATCH:{relative}")
+            loaded_sources[relative] = (digest, json.loads(path.read_text()))
+        digest, payload = loaded_sources[relative]
+        if digest != record["sha256"]:
             raise v1.CloseInventoryError(f"V2_RETAINED_SCHEDULE_HASH_MISMATCH:{relative}")
-        payload = json.loads(path.read_text())
         matches = [game for day in payload.get("dates", []) for game in day.get("games", [])
                    if int(game.get("gamePk") or 0) == int(record["game_pk"])]
         if not matches or int(record["game_pk"]) not in blockers:
@@ -90,7 +101,7 @@ def _load_pinned_schedules() -> tuple[list[dict[str, Any]], dict[int, list[v1.So
             if game.get("gameType") != "R" or str(game.get("season")) != "2026":
                 raise v1.CloseInventoryError(f"V2_SCHEDULE_IDENTITY_INVALID:{record['game_pk']}")
             grouped.setdefault(int(record["game_pk"]), []).append(v1.SourceObservation(
-                relative, record["sha256"], game, "STATSAPI_SCHEDULE_RESPONSE", None))
+                relative, digest, game, "STATSAPI_SCHEDULE_RESPONSE", None))
     return records, grouped
 
 
@@ -108,59 +119,76 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         root=ROOT,
     )
     found = set(feeds)
-    if not found <= blocker_ids:
+    if not found <= (blocker_ids | {RETAINED_RELATIONSHIP_GAME_PK}):
         raise v1.CloseInventoryError("V2_FEED_NOT_IN_BLOCKER_LEDGER")
     by_pk = {row["game_pk"]: row for row in rows}
     transition_conflicts: dict[int, str] = {}
-    for game_pk, observations in feeds.items():
+    for game_pk in sorted(blocker_ids):
+        observations = feeds.get(game_pk, [])
         prior = [*schedule_observations.get(game_pk, []), *retained_schedules.get(game_pk, [])]
         merged = v1._deduplicate_observations([*prior, *observations])
         classified = v1.classify_authoritative_game(authority[game_pk], merged)
-        # A feed is admissible only if it is exact identity and agrees with retained schedule identity.
+        # Exact gamePk, regular-season type/season, stable teams, and one
+        # consistent terminal outcome establish identity across appearances.
+        # officialDate changes alone are not contradictory: the terminal
+        # playable feed's officialDate is the played date, while every retained
+        # schedule appearance remains in the row's evidence history.
         schedules = [o.game for o in merged if o.source_kind == "STATSAPI_SCHEDULE_RESPONSE"]
         for obs in observations:
             g = obs.game
             if (int(g.get("gamePk") or 0) != game_pk or g.get("gameType") != "R"
                     or int(g.get("season") or 0) != 2026):
                 raise v1.CloseInventoryError(f"V2_FEED_IDENTITY_INVALID:{game_pk}")
-            for sched in schedules:
-                for field in ("officialDate",):
-                    if sched.get(field) and g.get(field) and sched[field] != g[field]:
-                        transition_conflicts[game_pk] = "OFFICIAL_DATE_CHANGED_WITHOUT_RETAINED_TRANSITION_RELATIONSHIP"
-                if sched.get("teams") and g.get("teams"):
-                    for side in ("away", "home"):
-                        schedule_side = sched["teams"].get(side) or {}
-                        schedule_team = (schedule_side.get("team") or {}).get("id")
-                        feed_team = (g["teams"].get(side) or {}).get("team", {}).get("id")
-                        if schedule_team is not None and feed_team is not None and schedule_team != feed_team:
-                            raise v1.CloseInventoryError(f"V2_FEED_SCHEDULE_TEAMS_CONFLICT:{game_pk}:{side}")
-        if classified["close_disposition"] not in {
-                "FINAL", "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
-                "SUSPENDED_RESUMED_IDENTITY_RESOLVED"}:
-            raise v1.CloseInventoryError(f"V2_BLOCKER_FEED_NOT_ACCEPTED_FINAL:{game_pk}:{classified['disposition_reason']}")
-        if classified["close_disposition"] in {
-                "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
-                "SUSPENDED_RESUMED_IDENTITY_RESOLVED"}:
-            transition_conflicts.pop(game_pk, None)
-        if game_pk in transition_conflicts and classified["close_disposition"] not in {
-                "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
-                "SUSPENDED_RESUMED_IDENTITY_RESOLVED"}:
-            classified["close_disposition"] = "UNRESOLVED_IDENTITY_OR_STATUS"
-            classified["disposition_reason"] = transition_conflicts[game_pk]
-            classified["required_evidence"] = [
-                "Immutable StatsAPI schedule response for exact gamePk documenting the date transition and relationship fields, with gameType=R and final status."
-            ]
-        by_pk[game_pk] = classified
-    missing = sorted(blocker_ids - found)
-    unresolved = sorted(set(missing) | set(transition_conflicts))
-    for game_pk in missing:
-        row = by_pk[game_pk]
-        row["close_disposition"] = "UNRESOLVED_IDENTITY_OR_STATUS"
-        row["disposition_reason"] = "NO_RETAINED_EXACT_GAMEPK_LIVE_FEED_OR_POSTSEASON_TERMINAL_SCHEDULE_EVIDENCE"
-        row["required_evidence"] = [
-            "Immutable StatsAPI schedule response with exact gamePk, gameType=R, authoritative status and any transition relationship; or",
-            "Immutable StatsAPI live-feed response with exact gamePk, gameType=R, season=2026, officialDate, teams, and final/cancelled status.",
-        ]
+        terminal_feeds = [o for o in observations
+                          if v1._terminal_kind(v1._status(o.game)) == "FINAL"]
+        identity_sources = [*schedules, *(o.game for o in observations)]
+        team_pairs = set()
+        incomplete_team_identity = False
+        for source in identity_sources:
+            teams = source.get("teams") or {}
+            pair = tuple(((teams.get(side) or {}).get("team") or {}).get("id")
+                         for side in ("away", "home"))
+            if all(value is not None for value in pair):
+                team_pairs.add(pair)
+            else:
+                incomplete_team_identity = True
+        evidence_conflicts: list[str] = []
+        if incomplete_team_identity:
+            evidence_conflicts.append("INCOMPLETE_AWAY_HOME_TEAM_IDENTITY")
+        if len(team_pairs) > 1:
+            evidence_conflicts.append("CONFLICTING_AWAY_HOME_TEAM_IDENTITY")
+        if len(terminal_feeds) > 1:
+            outcomes = {json.dumps(v1._score_outcome(o.game), sort_keys=True)
+                        for o in terminal_feeds}
+            if len(outcomes) != 1:
+                evidence_conflicts.append("MULTIPLE_INCOMPATIBLE_TERMINAL_FEED_OUTCOMES")
+        accepted = not evidence_conflicts and classified["close_disposition"] in {
+            "FINAL", "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
+            "SUSPENDED_RESUMED_IDENTITY_RESOLVED"}
+        if accepted:
+            final_dates = {str(o.game.get("officialDate")) for o in terminal_feeds
+                           if o.game.get("officialDate")}
+            if len(final_dates) > 1:
+                evidence_conflicts.append("CONFLICTING_TERMINAL_OFFICIAL_DATE")
+                accepted = False
+        if accepted:
+            classified["played_official_date"] = next(iter(final_dates), None)
+            by_pk[game_pk] = classified
+        else:
+            reason = ";".join(evidence_conflicts) or classified["disposition_reason"]
+            transition_conflicts[game_pk] = reason
+            row = by_pk[game_pk]
+            row["close_disposition"] = "UNRESOLVED_IDENTITY_OR_STATUS"
+            row["disposition_reason"] = reason
+            if observations:
+                row["required_evidence"] = [
+                    "One consistent authoritative playable terminal feed for this exact gamePk, with gameType=R, season=2026, matching teams, officialDate, final status, and result."
+                ]
+            else:
+                row["required_evidence"] = [
+                    "Retained authoritative exact-gamePk schedule appearance or live feed documenting gameType=R, season=2026, matching teams, and an allowed terminal disposition (Final or an allowed cancellation/postponement/resumption outcome)."
+                ]
+    unresolved = sorted(set(transition_conflicts))
     rows = [by_pk[r["game_pk"]] for r in rows]
     counts = {key: sum(r["close_disposition"] == key for r in rows)
               for key in sorted(v1.DISPOSITIONS)}
@@ -170,11 +198,13 @@ def build_inventory() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         "scheduled_not_final_game_pks": [],
         "unresolved_game_pks": unresolved,
         "reconciliation": {
-            "prior_blockers": len(blocker_ids), "exact_gamepk_live_feed_ids": len(found),
+            "prior_blockers": len(blocker_ids),
+            "exact_gamepk_live_feed_ids": len(found & blocker_ids),
+            "additional_relationship_feed_ids": len(found - blocker_ids),
             "accepted_terminal_from_blockers": sum(
                 by_pk[pk]["close_disposition"] in {
                     "FINAL", "POSTPONED_RESCHEDULED_IDENTITY_RESOLVED",
-                    "SUSPENDED_RESUMED_IDENTITY_RESOLVED"} for pk in found),
+                    "SUSPENDED_RESUMED_IDENTITY_RESOLVED"} for pk in blocker_ids),
             "unresolved": len(unresolved),
             "live_feed_evidence_records": len(evidence_records),
             "retained_schedule_evidence_records": len(schedule_records),
@@ -189,6 +219,12 @@ def manifest(rows: list[dict[str, Any]], summary: dict[str, Any]) -> dict[str, A
     evidence_hash = sha256(evidence_path)
     body = {
         "contract_name": CONTRACT, "population_size": len(rows),
+        "date_transition_interpretation": (
+            "Exact gamePk plus gameType=R, season=2026, matching away/home teams, "
+            "and one consistent authoritative playable terminal outcome link "
+            "schedule appearances to a single game. officialDate changes alone "
+            "do not conflict; a terminal live feed's officialDate is played_official_date."
+        ),
         "authority_contract": v1.CONTRACT_NAME,
         "authority_manifest_sha256": summary["authority"]["source_manifest_sha256"],
         "prior_inventory_manifest_sha256": v1.EXPECTED_CLOSE_INVENTORY_MANIFEST_SHA256,
@@ -207,9 +243,10 @@ def manifest(rows: list[dict[str, Any]], summary: dict[str, Any]) -> dict[str, A
 
 
 def initialize_package() -> dict[str, Any]:
-    """Pin the exact retained feed files for the prior 88-game blocker set."""
+    """Pin bounded retained feeds and schedule appearances for the blocker set."""
     prior = json.loads((v1.DEFAULT_PACKAGE_PATH / "scheduled_not_final_game_pks.json").read_text())
     blocker_ids = {int(value) for value in prior}
+    evidence_ids = blocker_ids | {RETAINED_RELATIONSHIP_GAME_PK}
     records: dict[str, dict[str, Any]] = {}
     for retained_root in EVIDENCE_ROOTS:
         base = ROOT / retained_root
@@ -222,36 +259,44 @@ def initialize_package() -> dict[str, Any]:
                 game_pk = int(game.get("gamePk") or 0)
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 continue
-            if game_pk in blocker_ids:
+            if game_pk in evidence_ids:
                 rel = path.relative_to(ROOT).as_posix()
-                records[rel] = {"path": rel, "sha256": sha256(path), "game_pk": game_pk}
+                digest = sha256(path)
+                if digest == RETAINED_RELATIONSHIP_FEED_SHA256 and game_pk != RETAINED_RELATIONSHIP_GAME_PK:
+                    raise v1.CloseInventoryError("V2_824785_FEED_GAMEPK_MISMATCH")
+                records[rel] = {"path": rel, "sha256": digest, "game_pk": game_pk}
+    if not any(row["sha256"] == RETAINED_RELATIONSHIP_FEED_SHA256
+               and row["game_pk"] == RETAINED_RELATIONSHIP_GAME_PK
+               for row in records.values()):
+        raise v1.CloseInventoryError("V2_824785_FINAL_FEED_EVIDENCE_MISSING")
     ordered = [records[key] for key in sorted(records)]
     _write_jsonl(PACKAGE / EVIDENCE, ordered)
-    schedule_path = (ROOT / "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-25/"
-        "20260925T233007404254Z_2026-08-05_2026-09-25_a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646.json")
-    schedule_hash = sha256(schedule_path)
-    if schedule_hash != "a7c5b937133ed4aede23bf21f024705209466657ab8b51e396002a94df4a1646":
-        raise v1.CloseInventoryError("V2_EXPECTED_SCHEDULE_SOURCE_HASH_MISMATCH")
-    schedule_payload = json.loads(schedule_path.read_text())
-    target_pks = {823489, 824703, 824705, 824785}
-    schedule_records = [{"path": schedule_path.relative_to(ROOT).as_posix(),
-                         "sha256": schedule_hash, "game_pk": pk}
-                        for pk in sorted(target_pks)
-                        if any(int(g.get("gamePk") or 0) == pk
-                               for d in schedule_payload.get("dates", [])
-                               for g in d.get("games", []))]
-    if not {823489, 824703, 824785} <= {record["game_pk"] for record in schedule_records}:
+    target_pks = evidence_ids
+    schedule_records_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    schedule_root = ROOT / SCHEDULE_ROOT
+    for path in sorted(schedule_root.rglob("*.json")):
+        if path.name.endswith(".selection.json"):
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        matched = {int(game.get("gamePk") or 0)
+                   for day in payload.get("dates", [])
+                   for game in day.get("games", [])
+                   if int(game.get("gamePk") or 0) in target_pks}
+        if not matched:
+            continue
+        relative = path.relative_to(ROOT).as_posix()
+        digest = sha256(path)
+        for pk in sorted(matched):
+            schedule_records_by_key[(relative, pk)] = {
+                "path": relative, "sha256": digest, "game_pk": pk}
+    schedule_records = [schedule_records_by_key[key]
+                        for key in sorted(schedule_records_by_key)]
+    if not {823489, 824703, 824705, 824785} <= {
+            record["game_pk"] for record in schedule_records}:
         raise v1.CloseInventoryError("V2_EXPECTED_SCHEDULE_GAMEPK_SET_MISMATCH")
-    latest_path = (ROOT / "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-09-28/"
-        "20260928T180006302795Z_2026-08-05_2026-09-28_45633f9e64db49fe8c4b635330109d431997f14990007f92aee26dcd67453443.json")
-    latest_payload = json.loads(latest_path.read_text())
-    latest_hash = sha256(latest_path)
-    for pk in sorted(target_pks):
-        if not any(int(g.get("gamePk") or 0) == pk
-                   for d in latest_payload.get("dates", []) for g in d.get("games", [])):
-            raise v1.CloseInventoryError(f"V2_EXPECTED_LATEST_SCHEDULE_GAMEPK_MISSING:{pk}")
-        schedule_records.append({"path": latest_path.relative_to(ROOT).as_posix(),
-                                 "sha256": latest_hash, "game_pk": pk})
     _write_jsonl(PACKAGE / SCHEDULE_EVIDENCE, schedule_records)
     rows, summary = build_inventory()
     _write_jsonl(PACKAGE / INVENTORY, rows)
