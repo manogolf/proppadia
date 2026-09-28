@@ -54,3 +54,23 @@ To rebuild/validate offline:
 The `--build` option refreshes the pinned manifest from the documented bounded
 retained roots and rebuilds the generated package. The default validator only
 checks hashes and deterministic reconstruction against the pinned evidence.
+
+## Separate regular-season close operation
+
+`backend.mlb.scripts.close_mlb_2026_regular_season` is separate from the
+readiness checker. Its default invocation is a read-only plan and publishes
+nothing. The close document contains the exact 2,430 V2 inventory rows and
+binds the authority manifest, inventory bytes, and reconciliation manifest by
+SHA-256. `AUTHORITATIVELY_CANCELLED` is retained as a terminal accounting
+disposition; 823490 has no played date or outcome, and postseason rows are not
+included.
+
+Publication requires both `--execute` and a separately reviewed JSON
+authorization with schema `MLB_2026_REGULAR_SEASON_CLOSE_AUTHORIZATION_V1`,
+`authorizes_close: true`, non-empty `authorization_id` and `authorized_by`,
+and an `input_binding` exactly matching the three hashes and 2,430 count shown
+by the plan command. No authorization artifact is included in this package.
+The default output is write-once: publication is atomic and refuses to replace
+an existing close artifact, including on repeat invocation. The operation is
+file-only; it makes no database or network request and does not activate phase
+authority.
