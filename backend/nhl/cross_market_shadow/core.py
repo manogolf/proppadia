@@ -6,6 +6,7 @@ import json
 import math
 import re
 import fcntl
+import unicodedata
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -317,7 +318,17 @@ def build_puck_line_predictions(moneyline_predictions: pd.DataFrame) -> pd.DataF
 
 
 def normalize_name(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]", "", str(value).lower())
+    folded = unicodedata.normalize("NFKD", str(value).lower())
+    unaccented = "".join(character for character in folded if not unicodedata.combining(character))
+    return re.sub(r"[^a-z0-9]", "", unaccented)
+
+
+def team_name_normalization_flag(value: Any) -> str:
+    raw = str(value)
+    return (
+        "UNICODE_DIACRITICS_FOLDED"
+        if unicodedata.normalize("NFKD", raw) != raw else "NONE"
+    )
 
 
 def team_code(value: Any) -> str | None:
@@ -341,6 +352,12 @@ def normalize_markets(envelope: dict[str, Any], schedule: pd.DataFrame) -> tuple
         event_id = str(event.get("id") or "")
         commence = pd.to_datetime(event.get("commence_time"), utc=True, errors="coerce")
         home_code, away_code = team_code(event.get("home_team")), team_code(event.get("away_team"))
+        normalization_flags = sorted({
+            flag for flag in (
+                team_name_normalization_flag(event.get("home_team", "")),
+                team_name_normalization_flag(event.get("away_team", "")),
+            ) if flag != "NONE"
+        })
         candidates = schedule[
             schedule.home_team.eq(home_code) & schedule.away_team.eq(away_code)
             & schedule.scheduled_start_time_utc.sub(commence).abs().le(pd.Timedelta(minutes=15))
@@ -350,8 +367,14 @@ def normalize_markets(envelope: dict[str, Any], schedule: pd.DataFrame) -> tuple
         binding_rows.append({
             "provider_event_id": event_id, "participant_home_raw": event.get("home_team"),
             "participant_away_raw": event.get("away_team"), "normalized_home_team": home_code,
-            "normalized_away_team": away_code, "provider_commence_time_utc": event.get("commence_time"),
+            "normalized_away_team": away_code,
+            "team_name_normalization": ",".join(normalization_flags) or "NONE",
+            "provider_commence_time_utc": event.get("commence_time"),
             "candidate_games": len(candidates), "binding_status": status,
+            "binding_reason": (
+                "ORDERED_TEAM_PAIR_AND_START_TIME_MATCH" if len(candidates) == 1
+                else "NO_UNIQUE_CANONICAL_CANDIDATE"
+            ),
             "canonical_game_id": int(game.game_id) if game is not None else pd.NA,
         })
         for book in event.get("bookmakers") or []:
@@ -413,8 +436,9 @@ def normalize_markets(envelope: dict[str, Any], schedule: pd.DataFrame) -> tuple
     ]
     binding_columns = [
         "provider_event_id", "participant_home_raw", "participant_away_raw",
-        "normalized_home_team", "normalized_away_team", "provider_commence_time_utc",
-        "candidate_games", "binding_status", "canonical_game_id",
+        "normalized_home_team", "normalized_away_team", "team_name_normalization",
+        "provider_commence_time_utc", "candidate_games", "binding_status",
+        "binding_reason", "canonical_game_id",
     ]
     raw_columns = [
         "provider_event_id", "sportsbook_key", "sportsbook_name", "provider_market_key",
