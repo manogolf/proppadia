@@ -328,11 +328,15 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             self.assertEqual(provider.calls, 1)
 
     def test_replay_requires_same_game_set_and_preserves_source_parent_lineage(self):
+        payload = [market_event()]
         provider = FakeProvider(ProviderCapture(
-            None, [], [], [exchange(body=b"[]")], b"[]", empty_reason="NO_EVENTS"))
+            None, [provider_event()], payload,
+            [exchange(body=json.dumps(payload).encode())],
+            (json.dumps(payload) + "\n").encode()))
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             original = self.capture(root, provider)
+            original_manifest = verify_package(original.observation_dir)
             replayed = capture_odds_observation(
                 root=root, season=2026, slate_date=SLATE, phase="EARLY",
                 parent_daily_run_id="daily-run-2", canonical_games=games(),
@@ -340,6 +344,7 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             )
             self.assertTrue(replayed.replayed)
             self.assertEqual(replayed.observation_dir, original.observation_dir)
+            self.assertEqual(replayed.manifest_sha256, original_manifest)
             self.assertEqual(provider.calls, 1)
 
             lineage = validate_odds_observation(
@@ -393,6 +398,91 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
                     expected_phase="EARLY", expected_game_set_hash="wrong-game-set",
                     replayed=True,
                 )
+
+    def test_failed_provider_attempt_is_preserved_and_later_invocation_is_fresh(self):
+        failed = FakeProvider(ProviderCapture(
+            "FAILED_PROVIDER", [], [],
+            [exchange(status=None, body=b"null\n")], b"null\n",
+            error_type="ConnectionError", error_message="provider transport failed"))
+        payload = [market_event()]
+        successful = FakeProvider(ProviderCapture(
+            None, [provider_event()], payload,
+            [exchange(body=json.dumps(payload).encode())],
+            (json.dumps(payload) + "\n").encode()))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            first = self.capture(root, failed)
+            first_manifest = verify_package(first.observation_dir)
+            first_attempt_bytes = (first.observation_dir / "observation_summary.json").read_bytes()
+            self.assertEqual(first.classification, "FAILED_PROVIDER")
+            self.assertTrue((first.observation_dir / "ATTEMPT_COMPLETE.json").exists())
+
+            second = capture_odds_observation(
+                root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                parent_daily_run_id="daily-run-retry", canonical_games=games(),
+                provider=successful, authorized=True,
+                invocation_id="invocation-retry",
+                now=datetime(2026, 9, 24, 18, 1, tzinfo=UTC),
+            )
+            self.assertEqual(second.classification, "CAPTURED_NONEMPTY")
+            self.assertFalse(second.replayed)
+            self.assertNotEqual(second.observation_dir, first.observation_dir)
+            self.assertNotEqual(second.summary["invocation_id"], first.summary["invocation_id"])
+            self.assertEqual(second.summary["attempt_number"], 2)
+            self.assertEqual(successful.calls, 1)
+
+            self.assertEqual(verify_package(first.observation_dir), first_manifest)
+            self.assertEqual(
+                (first.observation_dir / "observation_summary.json").read_bytes(),
+                first_attempt_bytes)
+            replay = self.capture(root, FakeProvider(ProviderCapture(None, [], [], [], b"[]")))
+            self.assertTrue(replay.replayed)
+            self.assertEqual(replay.observation_dir, second.observation_dir)
+
+    def test_successful_capture_with_different_market_set_is_not_replayed(self):
+        payload = [market_event()]
+        first_provider = FakeProvider(ProviderCapture(
+            None, [provider_event()], payload,
+            [exchange(body=json.dumps(payload).encode())],
+            (json.dumps(payload) + "\n").encode()))
+        second_provider = FakeProvider(ProviderCapture(
+            None, [provider_event()], payload,
+            [exchange(body=json.dumps(payload).encode())],
+            (json.dumps(payload) + "\n").encode()))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            first = self.capture(root, first_provider)
+            second = capture_odds_observation(
+                root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                parent_daily_run_id="daily-run-expanded-markets", canonical_games=games(),
+                provider=second_provider, authorized=True,
+                invocation_id="invocation-expanded-markets",
+                now=datetime(2026, 9, 24, 18, 2, tzinfo=UTC),
+                markets="h2h,player_points", regions="us,us2",
+            )
+            self.assertFalse(second.replayed)
+            self.assertNotEqual(second.observation_dir, first.observation_dir)
+            self.assertEqual(second.summary["attempt_number"], 2)
+            self.assertEqual(second_provider.calls, 1)
+
+    def test_attachment_builders_receive_the_fresh_observation_paths(self):
+        captured = OddsObservationResult(
+            classification="CAPTURED_NONEMPTY",
+            observation_dir=Path("/immutable/obs-2"), summary={},
+            manifest_sha256="fresh-manifest", replayed=False,
+        )
+        self.assertEqual(cli._attachment_market_inputs("sog_attachment", captured), {
+            "odds_json": Path("/immutable/obs-2/raw_response.json"),
+            "events_json": Path("/immutable/obs-2/events_response.json"),
+        })
+        self.assertEqual(cli._attachment_market_inputs("saves_attachment", captured), {
+            "odds_json": Path("/immutable/obs-2/raw_response.json"),
+        })
+        self.assertEqual(cli._attachment_market_inputs("points_attachment", captured), {
+            "odds_json": Path("/immutable/obs-2/raw_response.json"),
+            "events_json": Path("/immutable/obs-2/events_response.json"),
+        })
+        self.assertEqual(cli._attachment_market_inputs("sog_attachment", None), {})
 
     def test_two_concurrent_invocations_cannot_make_two_paid_calls(self):
         payload = [market_event()]

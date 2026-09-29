@@ -777,8 +777,14 @@ def build_odds_request_plan(
 
 
 def _existing_observation(
-    day_root: Path, phase: str, expected_game_set_hash: str,
+    day_root: Path, phase: str, expected_game_set_hash: str, *,
+    markets: str, regions: str, days_from: int, odds_format: str,
 ) -> OddsObservationResult | None:
+    """Return the latest reusable capture for the exact governed request.
+
+    Failed attempts and captures without usable prices are evidence, not replay
+    results.  A later invocation may create a new immutable attempt for them.
+    """
     if not day_root.is_dir():
         return None
     for directory in sorted(day_root.glob("observation=*"), reverse=True):
@@ -790,11 +796,96 @@ def _existing_observation(
         summary = json.loads(summary_path.read_text())
         if (summary.get("phase") == phase
                 and summary.get("canonical_game_set_hash") == expected_game_set_hash):
+            # Only the newest matching observation governs replay.  In
+            # particular, a later failed attempt must not silently fall back
+            # to an older success and make that failure appear successful.
+            if summary.get("classification") != "CAPTURED_NONEMPTY":
+                return None
+            metadata_path = directory / "request_metadata.json"
+            if not metadata_path.is_file():
+                return None
+            metadata = json.loads(metadata_path.read_text())
+            requested = metadata.get("sanitized_request_parameters") or {}
+            expected_markets = sorted({x.strip() for x in markets.split(",") if x.strip()})
+            expected_regions = sorted({x.strip() for x in regions.split(",") if x.strip()})
+            observed_markets = sorted({
+                x.strip() for x in str(requested.get("markets") or "").split(",") if x.strip()
+            })
+            observed_regions = sorted({
+                x.strip() for x in str(requested.get("regions") or "").split(",") if x.strip()
+            })
+            if (observed_markets != expected_markets
+                    or observed_regions != expected_regions
+                    or requested.get("days_from") != int(days_from)
+                    or requested.get("odds_format") != odds_format):
+                return None
             return OddsObservationResult(
                 classification=str(summary["classification"]), observation_dir=directory,
                 summary=summary, manifest_sha256=verify_package(directory), replayed=True,
             )
     return None
+
+
+def _next_phase_attempt_paths(
+    claim_root: Path, *, phase: str, expected_game_set_hash: str,
+    day_root: Path,
+) -> tuple[int, Path, Path]:
+    """Choose a create-only claim/lease identity after validating prior attempts."""
+    base = f"phase={phase}"
+    claim_paths = [claim_root / f"{base}.claim.json"]
+    claim_paths.extend(sorted(claim_root.glob(f"{base}.retry-*.claim.json")))
+    attempts: list[int] = []
+    for claim_path in claim_paths:
+        if not claim_path.exists():
+            continue
+        try:
+            claim = json.loads(claim_path.read_text())
+        except Exception as error:
+            raise ObservationAlreadyClaimed("ODDS_PRIOR_CLAIM_UNREADABLE") from error
+        if claim.get("canonical_game_set_hash") != expected_game_set_hash:
+            raise ObservationAlreadyClaimed("ODDS_PHASE_GAME_SET_MISMATCH")
+        if claim_path.name == f"{base}.claim.json":
+            attempt = 1
+        else:
+            match = re.fullmatch(rf"{re.escape(base)}\.retry-(\d+)\.claim\.json", claim_path.name)
+            if match is None:
+                raise ObservationAlreadyClaimed("ODDS_PRIOR_CLAIM_NAME_INVALID")
+            attempt = int(match.group(1))
+        observation_name = claim.get("observation_name")
+        prior_dir = day_root / str(observation_name or "")
+        if (not observation_name or not prior_dir.is_dir()
+                or not ((prior_dir / "ATTEMPT_COMPLETE.json").is_file()
+                        or (prior_dir / "RUN_COMPLETE.json").is_file())):
+            raise ObservationAlreadyClaimed("ODDS_PRIOR_CLAIM_INCOMPLETE")
+        verify_package(prior_dir)
+        attempts.append(attempt)
+
+    # A lease without a matching claim means a previous invocation may have
+    # stopped between acquisition and immutable planning.  Do not guess that
+    # it is safe to issue another provider request.
+    lease_paths = [claim_root / f"{base}.lease.json"]
+    lease_paths.extend(sorted(claim_root.glob(f"{base}.retry-*.lease.json")))
+    claimed_attempts = set(attempts)
+    for lease_path in lease_paths:
+        if not lease_path.exists():
+            continue
+        if lease_path.name == f"{base}.lease.json":
+            attempt = 1
+        else:
+            match = re.fullmatch(rf"{re.escape(base)}\.retry-(\d+)\.lease\.json", lease_path.name)
+            if match is None:
+                raise ObservationAlreadyClaimed("ODDS_PRIOR_LEASE_NAME_INVALID")
+            attempt = int(match.group(1))
+        if attempt not in claimed_attempts:
+            raise ObservationAlreadyClaimed("ODDS_PRIOR_LEASE_INCOMPLETE")
+
+    next_attempt = max(attempts, default=0) + 1
+    suffix = "" if next_attempt == 1 else f".retry-{next_attempt}"
+    return (
+        next_attempt,
+        claim_root / f"{base}{suffix}.claim.json",
+        claim_root / f"{base}{suffix}.lease.json",
+    )
 
 
 def capture_odds_observation(
@@ -816,25 +907,29 @@ def capture_odds_observation(
     day_root = Path(root) / f"season={int(season)}" / f"slate_date={slate_date}"
     game_ids = [game.game_id for game in canonical_games]
     game_hash = canonical_game_set_hash(game_ids)
-    existing = _existing_observation(day_root, phase, game_hash)
+    existing = _existing_observation(
+        day_root, phase, game_hash, markets=markets, regions=regions,
+        days_from=days_from, odds_format=odds_format)
     if existing is not None:
         return existing
 
     first_puck = min((game.start_time_utc for game in canonical_games), default=None)
+    claim_root = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}"
+    attempt_number, claim, lease = _next_phase_attempt_paths(
+        claim_root, phase=phase, expected_game_set_hash=game_hash, day_root=day_root)
     invocation_id = invocation_id or f"nhldailyodds_{observed.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
     stable_id = sha256_bytes(
-        f"{season}|{slate_date}|{phase}|{parent_daily_run_id}|{invocation_id}|{game_hash}".encode()
+        f"{season}|{slate_date}|{phase}|{attempt_number}|{parent_daily_run_id}|{invocation_id}|{game_hash}".encode()
     )[:16]
     observation_name = f"observation={observed.strftime('%Y%m%dT%H%M%S.%fZ')}_{stable_id}"
     final = day_root / observation_name
     staging = day_root / f".{observation_name}.incomplete"
-    claim_root = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}"
-    claim = claim_root / f"phase={phase}.claim.json"
-    lease = claim_root / f"phase={phase}.lease.json"
     # The lease is acquired before discovery, while the immutable acquisition
     # claim is created only after discovery has fixed the exact paid plan.
     if claim.exists():
-        existing = _existing_observation(day_root, phase, game_hash)
+        existing = _existing_observation(
+            day_root, phase, game_hash, markets=markets, regions=regions,
+            days_from=days_from, odds_format=odds_format)
         if existing is not None:
             return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}")
@@ -842,13 +937,16 @@ def capture_odds_observation(
         "schema_version": ODDS_REQUEST_PLANNER_CONTRACT, "season": int(season),
         "slate_date": slate_date, "phase": phase, "invocation_id": invocation_id,
         "lease_timestamp_utc": iso_utc(observed),
-        "authorization": "AT_MOST_ONE_DISCOVERY_THEN_IMMUTABLE_PLAN",
-        "stale_or_failed_claim_policy": "FAIL_CLOSED_NO_AUTOMATIC_RETRY",
+        "attempt_number": attempt_number,
+        "authorization": "ONE_DISCOVERY_THEN_IMMUTABLE_PLAN_PER_GOVERNED_ATTEMPT",
+        "stale_or_failed_claim_policy": "PRESERVE_FAILED_ATTEMPT_ALLOW_NEW_GOVERNED_INVOCATION",
     }
     try:
         _write_create_only(lease, _json_bytes(lease_payload))
     except FileExistsError as error:
-        existing = _existing_observation(day_root, phase, game_hash)
+        existing = _existing_observation(
+            day_root, phase, game_hash, markets=markets, regions=regions,
+            days_from=days_from, odds_format=odds_format)
         if existing is not None:
             return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}") from error
@@ -861,7 +959,8 @@ def capture_odds_observation(
         "observation_name": observation_name, "claim_timestamp_utc": iso_utc(observed),
         "canonical_game_set_hash": game_hash, "canonical_game_count": len(game_ids),
         "canonical_game_ids": sorted(game_ids),
-        "stale_or_failed_claim_policy": "FAIL_CLOSED_NO_AUTOMATIC_RETRY",
+        "attempt_number": attempt_number,
+        "stale_or_failed_claim_policy": "PRESERVE_FAILED_ATTEMPT_ALLOW_NEW_GOVERNED_INVOCATION",
     }
 
     staging.mkdir(parents=True, exist_ok=False)
@@ -1020,6 +1119,7 @@ def capture_odds_observation(
     request_metadata = {
         "schema_version": ODDS_CONTRACT, "season": int(season), "slate_date": slate_date,
         "phase": phase, "invocation_id": invocation_id, "parent_daily_run_id": parent_daily_run_id,
+        "attempt_number": attempt_number,
         "endpoint_family": "THE_ODDS_API_NHL_PLAYER_PROPS",
         "sanitized_request_parameters": {
             "days_from": int(days_from), "markets": markets,
@@ -1081,6 +1181,7 @@ def capture_odds_observation(
         "schema_version": ODDS_CONTRACT, "season": int(season), "slate_date": slate_date,
         "observation_timestamp_utc": iso_utc(observed), "observation_timestamp_pt": iso_pt(observed),
         "phase": phase, "invocation_id": invocation_id, "parent_daily_run_id": parent_daily_run_id,
+        "attempt_number": attempt_number,
         "classification": classification, "valid_empty_reason": empty_reason,
         "canonical_game_ids": sorted(game_ids), "canonical_game_count": len(game_ids),
         "canonical_game_set_hash": game_hash, "first_puck_utc": first_puck,

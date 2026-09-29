@@ -1079,6 +1079,18 @@ def run_optional_odds_observation(*, with_odds: bool, **kwargs) -> OddsObservati
     return fetch_odds(**kwargs) if with_odds else None
 
 
+def _attachment_market_inputs(
+    attachment_lane: str, odds_result: OddsObservationResult | None,
+) -> dict[str, Path]:
+    """Bind attachment inputs only to the current immutable captured package."""
+    if odds_result is None or not odds_result.classification.startswith("CAPTURED_"):
+        return {}
+    inputs = {"odds_json": odds_result.observation_dir / "raw_response.json"}
+    if attachment_lane in {"sog_attachment", "points_attachment"}:
+        inputs["events_json"] = odds_result.observation_dir / "events_response.json"
+    return inputs
+
+
 def daily_health_for_odds(*, requested: bool,
                           result: OddsObservationResult | None) -> str:
     if requested and result is not None and result.classification in {
@@ -1439,7 +1451,6 @@ def _run_independent_daily_lanes(
     captured = bool(
         odds_result is not None and odds_result.classification.startswith("CAPTURED_"))
     odds_path = odds_result.observation_dir / "raw_response.json" if captured else None
-    events_path = odds_result.observation_dir / "events_response.json" if captured else None
     odds_lineage: dict[str, Any] = {}
     odds_integrity_error: AttachmentIntegrityError | None = None
     if captured and odds_result is not None and odds_path is not None:
@@ -1479,12 +1490,10 @@ def _run_independent_daily_lanes(
             if prediction_lane in {"saves", "points"} and odds_integrity_error is not None:
                 raise odds_integrity_error
             kwargs: dict[str, Any] = {
-                "odds_json": odds_path,
                 "pred_path": Path(identity["path"]),
                 "expected_pred_sha256": identity["sha256"],
             }
-            if attachment_lane in {"sog_attachment", "points_attachment"}:
-                kwargs["events_json"] = events_path
+            kwargs.update(_attachment_market_inputs(attachment_lane, odds_result))
             if attachment_lane == "saves_attachment":
                 kwargs.update({
                     "parent_daily_run_id": daily_run_id,
