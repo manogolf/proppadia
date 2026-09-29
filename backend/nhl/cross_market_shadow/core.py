@@ -597,7 +597,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     history = normalize_game_types(pd.read_csv(history_csv))
     if not schedule.slate_date.astype(str).eq(slate_date).all():
         raise ValueError("SLATE_DATE_MISMATCH")
-    if run_type not in {"MIDDAY", "FINAL_PREGAME"}:
+    if run_type not in {"MIDDAY", "FINAL_PREGAME", "REFRESH"}:
         raise ValueError("RUN_TYPE_INVALID")
     if canary_mode and (
         not schedule.game_type_code.eq(1).all()
@@ -633,6 +633,10 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "coverage": coverage.drop(columns=["observation_timestamp_utc"], errors="ignore").astype(str).to_dict("records"),
         "run_type": run_type,
     }
+    # Manual intraday refreshes are observations, not idempotent reruns. Keep
+    # identical market payloads captured at different times as distinct states.
+    if run_type == "REFRESH":
+        substantive["capture_identity_timestamp_utc"] = parse_utc(run_timestamp_utc).isoformat()
     substantive_hash = digest_value(substantive)
     destination = root / f"season={SEASON}" / f"slate_date={slate_date}" / f"run_type={run_type}" / f"state={substantive_hash}"
     if destination.is_dir():

@@ -216,6 +216,13 @@ def export_inputs(dsn: str, slate_date: str, directory: Path, *,
             history["score_home_team_id"] = history.home_team_id
             history["score_away_team_id"] = history.away_team_id
             validate_history_score_source(history, schedule)
+    else:
+        # Before the first regular-season final, the strict-prior query is
+        # legitimately empty. Keep its typed schema compatible with the V2
+        # predictor instead of treating an empty history as malformed input.
+        for column in ("final_home_goals", "final_away_goals"):
+            if column not in history:
+                history[column] = pd.Series(dtype="float64")
     directory.mkdir(parents=True, exist_ok=False)
     schedule_path, history_path = directory / "schedule.csv", directory / "history.csv"
     schedule.to_csv(schedule_path, index=False)
@@ -239,6 +246,19 @@ def phase_for(schedule: pd.DataFrame, now: datetime, requested: str, force: bool
     if local.hour == 12 and local.minute <= 30:
         return "MIDDAY", "LOCAL_MIDDAY_WINDOW"
     return None, f"OUTSIDE_CAPTURE_WINDOW_FIRST_START_IN_{minutes:.1f}_MINUTES"
+
+
+def prior_capture_suppression(
+    phase: str, *, existing: bool, prior_claim: bool, prior_paid: bool, force: bool,
+) -> str | None:
+    """Scheduler phases are idempotent; explicit REFRESH is append-only."""
+    if phase == "REFRESH" or force:
+        return None
+    if existing:
+        return "NOOP_ALREADY_CAPTURED"
+    if prior_claim or prior_paid:
+        return "NOOP_PAID_ATTEMPT_ALREADY_EXISTS"
+    return None
 
 
 @contextlib.contextmanager
@@ -362,11 +382,14 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
                     prior = json.loads(path.read_text())
                     if prior.get("phase") == phase and int(prior.get("live_calls", 0)) > 0:
                         prior_paid.append(path)
-                if existing and not force:
-                    result.update(status="NOOP_ALREADY_CAPTURED", existing_states=len(existing))
-                elif (prior_claims or prior_paid) and not force:
-                    result.update(status="NOOP_PAID_ATTEMPT_ALREADY_EXISTS",
-                                  operator_review_required_for_retry=True)
+                suppression = prior_capture_suppression(
+                    phase, existing=bool(existing), prior_claim=bool(prior_claims),
+                    prior_paid=bool(prior_paid), force=force,
+                )
+                if suppression == "NOOP_ALREADY_CAPTURED":
+                    result.update(status=suppression, existing_states=len(existing))
+                elif suppression == "NOOP_PAID_ATTEMPT_ALREADY_EXISTS":
+                    result.update(status=suppression, operator_review_required_for_retry=True)
                 else:
                     claim = claims_dir / f"{phase}_{stamp}.claim.json"
                     durable_json(claim, {"contract_version": "NHL_PAID_ATTEMPT_CLAIM_V1",
@@ -402,7 +425,7 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--slate-date", default="today")
-    parser.add_argument("--phase", choices=["AUTO", "MIDDAY", "FINAL_PREGAME"], default="AUTO")
+    parser.add_argument("--phase", choices=["AUTO", "MIDDAY", "FINAL_PREGAME", "REFRESH"], default="AUTO")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--env-file", type=Path, default=ROOT / "backend/.env")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_ROOT)
@@ -416,8 +439,11 @@ def main() -> int:
         # All odds-independent predictions run before the market-readiness gate.
         # Their immutable status records remain lane-local and never authorize a
         # request, candidate, upload, execution, or retry.
+        # Prediction-only observers retain their scheduler phases; REFRESH is
+        # a market-snapshot mode, not a new scoring/prediction phase.
+        observer_phase = "AUTO" if args.phase == "REFRESH" else args.phase
         observe_prediction_only_lanes(
-            slate, args.phase, os.environ.get("SUPABASE_DB_URL", "").strip(), now,
+            slate, observer_phase, os.environ.get("SUPABASE_DB_URL", "").strip(), now,
         )
         ready, reason = morning_capture_allowed(slate)
         if not ready:
