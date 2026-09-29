@@ -141,6 +141,10 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
         self.assertEqual(args.cmd, "daily")
         self.assertTrue(args.with_odds)
         self.assertEqual(args.odds_phase, "EARLY")
+        explicit_replay = cli.build_arg_parser().parse_args([
+            "daily", "--with-odds", "--reuse-odds-observation", "/immutable/package",
+        ])
+        self.assertEqual(explicit_replay.reuse_odds_observation, Path("/immutable/package"))
         graph = cli.DAILY_EXECUTION_GRAPH
         self.assertLess(graph.index("SLATE_ROSTER_CAPTURE_AND_NORMALIZATION"),
                         graph.index("FEATURE_AND_PREDICTION_DURABILITY"))
@@ -307,7 +311,7 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             self.assertTrue((result.observation_dir / "ATTEMPT_COMPLETE.json").exists())
             self.assertEqual(result.summary["credits_consumed"], None)
 
-    def test_replay_and_concurrent_claim_protection_make_one_provider_call(self):
+    def test_each_default_invocation_is_fresh_and_claim_collisions_fail_closed(self):
         payload = [market_event()]
         provider = FakeProvider(ProviderCapture(
             None, [provider_event()], payload,
@@ -316,18 +320,21 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             root = Path(temp)
             first = self.capture(root, provider)
             second = self.capture(root, provider)
-            self.assertTrue(second.replayed)
-            self.assertEqual(first.observation_dir, second.observation_dir)
-            self.assertEqual(provider.calls, 1)
+            third = self.capture(root, provider)
+            self.assertFalse(second.replayed)
+            self.assertFalse(third.replayed)
+            self.assertNotEqual(first.observation_dir, second.observation_dir)
+            self.assertNotEqual(second.observation_dir, third.observation_dir)
+            self.assertEqual(provider.calls, 3)
 
             claim = root / ".claims" / "season=2026" / f"slate_date={SLATE}" / "phase=REFRESH.claim.json"
             claim.parent.mkdir(parents=True, exist_ok=True)
             claim.write_text("{}\n")
             with self.assertRaises(ObservationAlreadyClaimed):
                 self.capture(root, provider, phase="REFRESH")
-            self.assertEqual(provider.calls, 1)
+            self.assertEqual(provider.calls, 3)
 
-    def test_replay_requires_same_game_set_and_preserves_source_parent_lineage(self):
+    def test_explicit_replay_requires_exact_package_and_preserves_source_parent_lineage(self):
         payload = [market_event()]
         provider = FakeProvider(ProviderCapture(
             None, [provider_event()], payload,
@@ -341,11 +348,21 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
                 root=root, season=2026, slate_date=SLATE, phase="EARLY",
                 parent_daily_run_id="daily-run-2", canonical_games=games(),
                 provider=provider, authorized=True,
+                reuse_observation_dir=original.observation_dir,
             )
             self.assertTrue(replayed.replayed)
-            self.assertEqual(replayed.observation_dir, original.observation_dir)
+            self.assertEqual(replayed.observation_dir, original.observation_dir.resolve())
             self.assertEqual(replayed.manifest_sha256, original_manifest)
             self.assertEqual(provider.calls, 1)
+
+            with self.assertRaisesRegex(ValueError, "REQUEST_PARAMETERS_MISMATCH"):
+                capture_odds_observation(
+                    root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                    parent_daily_run_id="daily-run-3", canonical_games=games(),
+                    provider=None, authorized=False,
+                    reuse_observation_dir=original.observation_dir,
+                    markets="h2h,player_points",
+                )
 
             lineage = validate_odds_observation(
                 observation_dir=replayed.observation_dir,
@@ -399,6 +416,14 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
                     replayed=True,
                 )
 
+            with self.assertRaisesRegex(ValueError, "OUTSIDE_EXPECTED_SLATE_ROOT"):
+                capture_odds_observation(
+                    root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                    parent_daily_run_id="daily-run-3", canonical_games=games(),
+                    provider=None, authorized=False,
+                    reuse_observation_dir=Path(temp),
+                )
+
     def test_failed_provider_attempt_is_preserved_and_later_invocation_is_fresh(self):
         failed = FakeProvider(ProviderCapture(
             "FAILED_PROVIDER", [], [],
@@ -435,9 +460,15 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             self.assertEqual(
                 (first.observation_dir / "observation_summary.json").read_bytes(),
                 first_attempt_bytes)
-            replay = self.capture(root, FakeProvider(ProviderCapture(None, [], [], [], b"[]")))
+            replay = capture_odds_observation(
+                root=root, season=2026, slate_date=SLATE, phase="EARLY",
+                parent_daily_run_id="daily-run-replay", canonical_games=games(),
+                provider=None, authorized=False,
+                reuse_observation_dir=second.observation_dir,
+            )
             self.assertTrue(replay.replayed)
-            self.assertEqual(replay.observation_dir, second.observation_dir)
+            self.assertEqual(replay.observation_dir, second.observation_dir.resolve())
+            self.assertEqual(successful.calls, 1)
 
     def test_successful_capture_with_different_market_set_is_not_replayed(self):
         payload = [market_event()]

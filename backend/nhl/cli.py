@@ -1023,6 +1023,7 @@ def fetch_odds(
     canonical_games=None,
     observation_root: Path = ODDS_OBSERVATION_ROOT,
     compatibility_dir: Path = SITE_DIR,
+    reuse_observation_dir: Path | None = None,
 ) -> OddsObservationResult:
     """Run one claimed odds observation for the comprehensive daily command."""
     slate = slate or pt_today()
@@ -1066,6 +1067,7 @@ def fetch_odds(
         markets=markets,
         regions=regions,
         odds_format=odds_format,
+        reuse_observation_dir=reuse_observation_dir,
     )
     print(
         f"ODDS_OBSERVATION classification={result.classification} "
@@ -1298,6 +1300,7 @@ def _run_independent_daily_lanes(
     odds_phase: str, daily_run_id: str, canonical_games,
     saves_export_ready: bool, points_export_ready: bool,
     legacy_sog_prediction: dict[str, Any] | None,
+    reuse_odds_observation: Path | None = None,
 ) -> None:
     """Run lane-local scoring, acquisition, attachment, and integrity stages."""
     global _ACTIVE_DAILY_LANE
@@ -1422,7 +1425,8 @@ def _run_independent_daily_lanes(
         odds_result = run_optional_odds_observation(
             with_odds=with_odds, slate=slate,
             season=infer_nhl_season_from_date_yyyy_mm_dd(slate), phase=odds_phase,
-            parent_daily_run_id=daily_run_id, canonical_games=canonical_games)
+            parent_daily_run_id=daily_run_id, canonical_games=canonical_games,
+            reuse_observation_dir=reuse_odds_observation)
         if odds_result is None:
             recorder.finish_lane("odds", status="SKIPPED_NOT_REQUESTED")
         else:
@@ -1659,7 +1663,8 @@ def _roster_refresh_environment(
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
 def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                     daily_run_id: str, recorder: DailyRunRecorder,
-                    reuse_roster_observation: Path | None = None):
+                    reuse_roster_observation: Path | None = None,
+                    reuse_odds_observation: Path | None = None):
     global _ACTIVE_DAILY_LANE
     db = require_db_url()
     odds_phase = str(odds_phase).upper()
@@ -2058,6 +2063,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
             saves_export_ready=saves_export_ready,
             points_export_ready=points_export_ready,
             legacy_sog_prediction=None,
+            reuse_odds_observation=reuse_odds_observation,
         )
         return
 
@@ -2074,6 +2080,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "saves_export_ready": saves_export_ready,
         "points_export_ready": points_export_ready,
         "legacy_sog_prediction": None,
+        "reuse_odds_observation": reuse_odds_observation,
     }
     _ACTIVE_DAILY_LANE = "legacy_sog"
     sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
@@ -2289,13 +2296,15 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         saves_export_ready=saves_export_ready,
         points_export_ready=points_export_ready,
         legacy_sog_prediction=legacy_sog_identity,
+        reuse_odds_observation=reuse_odds_observation,
     )
     return
 
 
 def cmd_daily(with_odds: bool, morning_only: bool = False,
               odds_phase: str = "EARLY",
-              reuse_roster_observation: Path | None = None):
+              reuse_roster_observation: Path | None = None,
+              reuse_odds_observation: Path | None = None):
     """Run the comprehensive daily graph and always finalize a parent receipt."""
     global _ACTIVE_DAILY_RECORDER, _ACTIVE_DAILY_LANE
     odds_phase = str(odds_phase).upper()
@@ -2312,6 +2321,11 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     if reuse_roster_observation is not None:
         reuse_roster_observation = Path(reuse_roster_observation).resolve()
         command.extend(["--reuse-roster-observation", str(reuse_roster_observation)])
+    if reuse_odds_observation is not None:
+        if not with_odds:
+            raise ValueError("--reuse-odds-observation requires --with-odds")
+        reuse_odds_observation = Path(reuse_odds_observation).resolve()
+        command.extend(["--reuse-odds-observation", str(reuse_odds_observation)])
 
     recorder = DailyRunRecorder(
         run_id=daily_run_id, command=command, phase=odds_phase, started_at=started)
@@ -2322,7 +2336,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     try:
         # Reuse is an explicit pre-execution contract. Validate against the
         # retained canonical slate before DB access, roster DML, or any provider.
-        if reuse_roster_observation is not None:
+        if reuse_roster_observation is not None or reuse_odds_observation is not None:
             preflight_slate = et_today()
             slate_root = ROOT / "artifacts" / "operational" / "nhl" / "slates" / preflight_slate
             preflight_games = load_canonical_slate(
@@ -2337,18 +2351,29 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
                 game_ids=[game.game_id for game in preflight_games],
                 game_set_hash=preflight_hash,
             )
-            recorder.roster_observation = verify_roster_observation_reuse(
-                reuse_roster_observation,
-                season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
-                slate_date=preflight_slate,
-                phase=odds_phase,
-                canonical_game_ids=[game.game_id for game in preflight_games],
-                canonical_game_set_hash=preflight_hash,
-            )
+            if reuse_roster_observation is not None:
+                recorder.roster_observation = verify_roster_observation_reuse(
+                    reuse_roster_observation,
+                    season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
+                    slate_date=preflight_slate,
+                    phase=odds_phase,
+                    canonical_game_ids=[game.game_id for game in preflight_games],
+                    canonical_game_set_hash=preflight_hash,
+                )
+            if reuse_odds_observation is not None:
+                capture_odds_observation(
+                    root=ODDS_OBSERVATION_ROOT,
+                    season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
+                    slate_date=preflight_slate, phase=odds_phase,
+                    parent_daily_run_id=daily_run_id,
+                    canonical_games=preflight_games, provider=None, authorized=False,
+                    reuse_observation_dir=reuse_odds_observation,
+                )
         _cmd_daily_impl(
             with_odds=with_odds, morning_only=morning_only,
             odds_phase=odds_phase, daily_run_id=daily_run_id,
-            recorder=recorder, reuse_roster_observation=reuse_roster_observation)
+            recorder=recorder, reuse_roster_observation=reuse_roster_observation,
+            reuse_odds_observation=reuse_odds_observation)
         if recorder.lane("shared_prerequisites").status == "RUNNING":
             recorder.finish_lane("shared_prerequisites")
         if recorder.lane("shared_prerequisites").status == "COMPLETE":
@@ -2442,6 +2467,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--reuse-roster-observation", type=Path, default=None,
         help="Explicit verified immutable roster package to reuse; validation failure stops before DB/provider access.",
     )
+    d.add_argument(
+        "--reuse-odds-observation", type=Path, default=None,
+        help="Explicit immutable odds observation package to reuse instead of a fresh provider capture.",
+    )
 
     fo = sub.add_parser("fetch-odds", help="Fetch odds JSON into nhl/site/data")
     fo.add_argument("--days-from", type=int, default=1)
@@ -2481,7 +2510,8 @@ def main(argv: Sequence[str] | None = None):
     if args.cmd == "daily":
         cmd_daily(with_odds=args.with_odds, morning_only=args.morning_only,
                   odds_phase=args.odds_phase,
-                  reuse_roster_observation=args.reuse_roster_observation)
+                  reuse_roster_observation=args.reuse_roster_observation,
+                  reuse_odds_observation=args.reuse_odds_observation)
     elif args.cmd == "fetch-odds":
         fetch_odds(days_from=args.days_from, slate=args.slate, phase=args.phase)
     elif args.cmd == "refresh-rosters-all":

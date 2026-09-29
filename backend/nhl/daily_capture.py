@@ -776,54 +776,39 @@ def build_odds_request_plan(
     return plan, bindings
 
 
-def _existing_observation(
-    day_root: Path, phase: str, expected_game_set_hash: str, *,
-    markets: str, regions: str, days_from: int, odds_format: str,
-) -> OddsObservationResult | None:
-    """Return the latest reusable capture for the exact governed request.
-
-    Failed attempts and captures without usable prices are evidence, not replay
-    results.  A later invocation may create a new immutable attempt for them.
-    """
-    if not day_root.is_dir():
-        return None
-    for directory in sorted(day_root.glob("observation=*"), reverse=True):
-        summary_path = directory / "observation_summary.json"
-        complete = (directory / "RUN_COMPLETE.json").is_file()
-        attempted = (directory / "ATTEMPT_COMPLETE.json").is_file()
-        if not summary_path.is_file() or not (complete or attempted):
-            continue
-        summary = json.loads(summary_path.read_text())
-        if (summary.get("phase") == phase
-                and summary.get("canonical_game_set_hash") == expected_game_set_hash):
-            # Only the newest matching observation governs replay.  In
-            # particular, a later failed attempt must not silently fall back
-            # to an older success and make that failure appear successful.
-            if summary.get("classification") != "CAPTURED_NONEMPTY":
-                return None
-            metadata_path = directory / "request_metadata.json"
-            if not metadata_path.is_file():
-                return None
-            metadata = json.loads(metadata_path.read_text())
-            requested = metadata.get("sanitized_request_parameters") or {}
-            expected_markets = sorted({x.strip() for x in markets.split(",") if x.strip()})
-            expected_regions = sorted({x.strip() for x in regions.split(",") if x.strip()})
-            observed_markets = sorted({
-                x.strip() for x in str(requested.get("markets") or "").split(",") if x.strip()
-            })
-            observed_regions = sorted({
-                x.strip() for x in str(requested.get("regions") or "").split(",") if x.strip()
-            })
-            if (observed_markets != expected_markets
-                    or observed_regions != expected_regions
-                    or requested.get("days_from") != int(days_from)
-                    or requested.get("odds_format") != odds_format):
-                return None
-            return OddsObservationResult(
-                classification=str(summary["classification"]), observation_dir=directory,
-                summary=summary, manifest_sha256=verify_package(directory), replayed=True,
-            )
-    return None
+def _explicit_observation(
+    observation_dir: Path, *, day_root: Path, phase: str,
+    expected_game_set_hash: str, markets: str, regions: str,
+    days_from: int, odds_format: str,
+) -> OddsObservationResult:
+    """Validate and load only the immutable package explicitly selected by an operator."""
+    directory = Path(observation_dir).resolve()
+    expected_root = Path(day_root).resolve()
+    if directory.parent != expected_root:
+        raise ValueError("ODDS_REPLAY_OUTSIDE_EXPECTED_SLATE_ROOT")
+    if not (directory / "RUN_COMPLETE.json").is_file():
+        raise ValueError("ODDS_REPLAY_PACKAGE_NOT_COMPLETE")
+    manifest_sha256 = verify_package(directory)
+    summary = json.loads((directory / "observation_summary.json").read_text())
+    if summary.get("classification") != "CAPTURED_NONEMPTY":
+        raise ValueError("ODDS_REPLAY_PACKAGE_NOT_NONEMPTY_CAPTURE")
+    if summary.get("phase") != phase or summary.get("canonical_game_set_hash") != expected_game_set_hash:
+        raise ValueError("ODDS_REPLAY_PHASE_OR_GAME_SET_MISMATCH")
+    metadata_path = directory / "request_metadata.json"
+    if not metadata_path.is_file():
+        raise ValueError("ODDS_REPLAY_REQUEST_METADATA_MISSING")
+    metadata = json.loads(metadata_path.read_text())
+    requested = metadata.get("sanitized_request_parameters") or {}
+    split = lambda value: sorted({part.strip() for part in str(value or "").split(",") if part.strip()})
+    if (split(requested.get("markets")) != split(markets)
+            or split(requested.get("regions")) != split(regions)
+            or requested.get("days_from") != int(days_from)
+            or requested.get("odds_format") != odds_format):
+        raise ValueError("ODDS_REPLAY_REQUEST_PARAMETERS_MISMATCH")
+    return OddsObservationResult(
+        classification="CAPTURED_NONEMPTY", observation_dir=directory,
+        summary=summary, manifest_sha256=manifest_sha256, replayed=True,
+    )
 
 
 def _next_phase_attempt_paths(
@@ -899,6 +884,7 @@ def capture_odds_observation(
     markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
     regions: str = "us,us2", odds_format: str = "american",
     credit_rules: Mapping[str, Any] | None = None,
+    reuse_observation_dir: Path | None = None,
 ) -> OddsObservationResult:
     phase = str(phase).upper()
     if phase not in PHASES:
@@ -907,11 +893,11 @@ def capture_odds_observation(
     day_root = Path(root) / f"season={int(season)}" / f"slate_date={slate_date}"
     game_ids = [game.game_id for game in canonical_games]
     game_hash = canonical_game_set_hash(game_ids)
-    existing = _existing_observation(
-        day_root, phase, game_hash, markets=markets, regions=regions,
-        days_from=days_from, odds_format=odds_format)
-    if existing is not None:
-        return existing
+    if reuse_observation_dir is not None:
+        return _explicit_observation(
+            reuse_observation_dir, day_root=day_root, phase=phase,
+            expected_game_set_hash=game_hash, markets=markets, regions=regions,
+            days_from=days_from, odds_format=odds_format)
 
     first_puck = min((game.start_time_utc for game in canonical_games), default=None)
     claim_root = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}"
@@ -927,11 +913,6 @@ def capture_odds_observation(
     # The lease is acquired before discovery, while the immutable acquisition
     # claim is created only after discovery has fixed the exact paid plan.
     if claim.exists():
-        existing = _existing_observation(
-            day_root, phase, game_hash, markets=markets, regions=regions,
-            days_from=days_from, odds_format=odds_format)
-        if existing is not None:
-            return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}")
     lease_payload = {
         "schema_version": ODDS_REQUEST_PLANNER_CONTRACT, "season": int(season),
@@ -944,11 +925,6 @@ def capture_odds_observation(
     try:
         _write_create_only(lease, _json_bytes(lease_payload))
     except FileExistsError as error:
-        existing = _existing_observation(
-            day_root, phase, game_hash, markets=markets, regions=regions,
-            days_from=days_from, odds_format=odds_format)
-        if existing is not None:
-            return existing
         raise ObservationAlreadyClaimed(f"ODDS_PHASE_ALREADY_CLAIMED:{slate_date}:{phase}") from error
 
     claim_base = {
