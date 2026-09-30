@@ -15,8 +15,15 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 from .shot_prior import (
     CHALLENGER_NAME, POLICY_VERSION, build_shot_prior_challenger,
+)
+from .moneyline_challenger import (
+    CHALLENGER_NAME as MONEYLINE_CHALLENGER_NAME,
+    POLICY_VERSION as MONEYLINE_FEATURE_POLICY_VERSION,
+    build_challenger_predictions as build_moneyline_challenger,
+    make_ledger as make_moneyline_challenger_ledger,
 )
 
 
@@ -67,6 +74,15 @@ TEAM_NAMES = {
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _binary_ece(actual: pd.Series, probability: pd.Series) -> float:
+    frame = pd.DataFrame({"actual": pd.to_numeric(actual), "probability": pd.to_numeric(probability)})
+    frame["bin"] = pd.cut(frame.probability, bins=np.linspace(0, 1, 11), include_lowest=True)
+    return float(sum(
+        len(group) / len(frame) * abs(group.actual.mean() - group.probability.mean())
+        for _, group in frame.groupby("bin", observed=False) if len(group)
+    )) if len(frame) else float("nan")
 
 
 def parse_utc(value: Any) -> pd.Timestamp:
@@ -718,6 +734,36 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
             "provider_response": [],
         }
     quotes, bindings, raw_observations = normalize_markets(envelope, schedule)
+    moneyline_challenger_predictions = pd.DataFrame()
+    moneyline_challenger_provenance = pd.DataFrame()
+    moneyline_challenger_ledger = pd.DataFrame(columns=["game_id", "outcome_status"])
+    if len(puck_v2_predictions):
+        moneyline_challenger_predictions, moneyline_challenger_provenance, _ = build_moneyline_challenger(
+            predictions, challenger_input, puck_v2_provenance, prior_source,
+            prior_team_source_sha256=prior_source_hash,
+            prior_outcome_source_sha256=prior_outcome_hash,
+            schedule_source_sha256=sha256(schedule_csv),
+            history_source_sha256=sha256(history_csv),
+            odds_source_sha256=sha256(odds_json) if odds_json else "NO_MARKET",
+        )
+        moneyline_challenger_ledger = make_moneyline_challenger_ledger(
+            moneyline_challenger_predictions, quotes,
+        )
+        moneyline_challenger_ledger["slate_date"] = slate_date
+        moneyline_challenger_ledger["market_observation_timestamp_utc"] = envelope.get("capture_timestamp_utc")
+        v2_by_game = predictions.set_index("game_id")
+        moneyline_challenger_ledger["v2_side"] = moneyline_challenger_ledger.game_id.map(v2_by_game.model_favored_team)
+        moneyline_challenger_ledger["v2_home_win_probability"] = moneyline_challenger_ledger.game_id.map(v2_by_game.v2_home_win_probability)
+        moneyline_challenger_ledger["v2_probability"] = moneyline_challenger_ledger.v2_home_win_probability
+        moneyline_challenger_ledger["challenger_side"] = moneyline_challenger_ledger.challenger_favored_team
+        moneyline_challenger_ledger["probability_delta"] = moneyline_challenger_ledger.probability_delta_challenger_minus_v2
+        moneyline_challenger_ledger["current_history_depth_home"] = moneyline_challenger_ledger.game_id.map(
+            puck_v2_provenance.set_index("game_id").current_home_games
+        )
+        moneyline_challenger_ledger["current_history_depth_away"] = moneyline_challenger_ledger.game_id.map(
+            puck_v2_provenance.set_index("game_id").current_away_games
+        )
+        moneyline_challenger_ledger["outcome_status"] = "PENDING_OFFICIAL_RECONCILIATION"
     if len(puck_v2_predictions):
         standard = quotes[
             quotes.qualification_status.eq("PREGAME_QUALIFIED")
@@ -775,6 +821,19 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "predictions": sorted(predictions.substantive_prediction_sha256.astype(str)),
         "puck_predictions": sorted(puck_predictions.substantive_prediction_sha256.astype(str)),
         "puck_v2_predictions": sorted(puck_v2_predictions.substantive_prediction_sha256.astype(str)) if len(puck_v2_predictions) else [],
+        "moneyline_challenger_predictions": sorted(
+            moneyline_challenger_predictions.apply(lambda row: digest_value({
+                "game_id": int(row.game_id), "model_version": MONEYLINE_CHALLENGER_NAME,
+                "feature_policy_version": MONEYLINE_FEATURE_POLICY_VERSION,
+                "features": {feature: row[feature] for feature in [
+                    "diff_std_goal_diff_pg", "diff_r10_goal_diff_pg",
+                    "diff_prior_blended_shot_diff_pg", "diff_days_rest",
+                    "home_back_to_back", "away_back_to_back",
+                    "shrunk_prior_finishing_residual_gap",
+                ]}, "probability": float(row.challenger_home_win_probability),
+                "parameter_sha256": row.model_parameter_sha256,
+            }), axis=1).astype(str)
+        ) if len(moneyline_challenger_predictions) else [],
         "markets": quotes.sort_values(["game_id", "sportsbook_key", "market_type", "side_orientation"], na_position="last")[[
             "provider_event_id", "game_id", "sportsbook_key", "market_type", "side_orientation", "point",
             "american_price", "source_update_timestamp_utc", "qualification_status",
@@ -799,6 +858,10 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         puck_v2_predictions.to_csv(destination / "puck_line_v2_shot_prior_challenger_predictions.csv", index=False)
         puck_v2_provenance.to_csv(destination / "puck_line_v2_shot_prior_feature_provenance.csv", index=False)
         ledger.to_csv(destination / "puck_line_v2_shot_prior_prospective_ledger.csv", index=False)
+    if len(moneyline_challenger_predictions):
+        moneyline_challenger_predictions.to_csv(destination / "moneyline_shot_finishing_challenger_v3_predictions.csv", index=False)
+        moneyline_challenger_provenance.to_csv(destination / "moneyline_shot_finishing_challenger_v3_feature_provenance.csv", index=False)
+        moneyline_challenger_ledger.to_csv(destination / "moneyline_shot_finishing_challenger_v3_ledger.csv", index=False)
     timing.to_csv(destination / "strict_prior_timing_audit.csv", index=False)
     (destination / "raw_market_response.json").write_text(canonical_json(envelope) + "\n")
     raw_observations.to_csv(destination / "raw_market_observations.csv", index=False)
@@ -818,6 +881,9 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "puck_line_v1_predictions_created": len(puck_predictions),
         "puck_line_v2_shot_prior_predictions_created": len(puck_v2_predictions),
         "puck_line_v2_shot_prior_feature_policy": POLICY_VERSION if len(puck_v2_predictions) else None,
+        "moneyline_shot_finishing_challenger_v3_predictions_created": len(moneyline_challenger_predictions),
+        "moneyline_shot_finishing_challenger_v3_model": MONEYLINE_CHALLENGER_NAME if len(moneyline_challenger_predictions) else None,
+        "moneyline_shot_finishing_challenger_v3_feature_policy": MONEYLINE_FEATURE_POLICY_VERSION if len(moneyline_challenger_predictions) else None,
         "puck_line_v1_v2_class_changes": int(ledger.drop_duplicates("game_id").class_changed.sum()) if len(ledger) else 0,
         "puck_line_v1_v2_mean_absolute_probability_delta": float(pd.concat([
             ledger.drop_duplicates("game_id")[f"{label}_probability_delta_v2_minus_v1"].abs()
@@ -876,6 +942,80 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     moneyline["log_loss_contribution"] = -np.log(moneyline.probability_assigned_to_outcome.clip(1e-15, 1 - 1e-15))
     moneyline["grading_timestamp_utc"] = parse_utc(grading_time_utc).isoformat()
     moneyline["financial_claim"] = "NONE_SHADOW_ONLY"
+    moneyline_challenger = pd.DataFrame()
+    moneyline_paired = pd.DataFrame()
+    moneyline_challenger_path = run_dir / "moneyline_shot_finishing_challenger_v3_predictions.csv"
+    if moneyline_challenger_path.is_file():
+        challenger_predictions = pd.read_csv(moneyline_challenger_path)
+        moneyline_challenger = challenger_predictions.merge(
+            outcomes, on=["canonical_season", "game_id"], how="inner", validate="one_to_one"
+        )
+        challenger_provenance_path = run_dir / "moneyline_shot_finishing_challenger_v3_feature_provenance.csv"
+        if challenger_provenance_path.is_file():
+            challenger_provenance = pd.read_csv(challenger_provenance_path)
+            keep = ["game_id", "current_home_games", "current_away_games", "shrunk_finishing_residual_gap"]
+            moneyline_challenger = moneyline_challenger.merge(
+                challenger_provenance[keep], on="game_id", how="left", validate="one_to_one"
+            )
+        moneyline_challenger["actual_home_win"] = moneyline_challenger.actual_winner.eq("HOME").astype(int)
+        moneyline_challenger["challenger_favored_side"] = np.where(
+            moneyline_challenger.challenger_favored_team.eq(moneyline_challenger.home_team), "HOME", "AWAY"
+        )
+        moneyline_challenger["correct"] = moneyline_challenger.challenger_favored_side.eq(
+            moneyline_challenger.actual_winner
+        )
+        moneyline_challenger["probability_assigned_to_outcome"] = np.where(
+            moneyline_challenger.actual_home_win.eq(1),
+            moneyline_challenger.challenger_home_win_probability,
+            moneyline_challenger.challenger_away_win_probability,
+        )
+        moneyline_challenger["brier_contribution"] = (
+            moneyline_challenger.challenger_home_win_probability - moneyline_challenger.actual_home_win
+        ) ** 2
+        moneyline_challenger["log_loss_contribution"] = -np.log(
+            moneyline_challenger.probability_assigned_to_outcome.clip(1e-15, 1 - 1e-15)
+        )
+        moneyline_challenger["grading_timestamp_utc"] = parse_utc(grading_time_utc).isoformat()
+        moneyline_challenger["financial_claim"] = "NONE_SHADOW_ONLY"
+        moneyline_paired = moneyline[[
+            "canonical_season", "game_id", "actual_winner", "correct",
+            "brier_contribution", "log_loss_contribution", "v2_home_win_probability",
+        ]].merge(moneyline_challenger[[
+            "canonical_season", "game_id", "correct", "brier_contribution",
+            "log_loss_contribution", "challenger_home_win_probability", "side_changed",
+        ]], on=["canonical_season", "game_id"], how="inner", validate="one_to_one",
+           suffixes=("_v2", "_challenger"))
+        moneyline_paired["side_changed"] = moneyline_paired.side_changed.astype(bool)
+        moneyline_paired["same_official_outcome_evidence"] = True
+        moneyline_challenger["accuracy_contribution"] = moneyline_challenger.correct.astype(int)
+        moneyline_challenger["history_depth_games"] = moneyline_challenger[[
+            "current_home_games", "current_away_games",
+        ]].max(axis=1)
+        moneyline_challenger["history_depth_bucket"] = pd.cut(
+            moneyline_challenger.history_depth_games, bins=[-1, 1, 3, 5, 10, float("inf")],
+            labels=["0_1", "2_3", "4_5", "6_10", "OVER_10"],
+        ).astype("string")
+        moneyline_challenger["finishing_gap_bucket"] = pd.cut(
+            moneyline_challenger.shrunk_prior_finishing_residual_gap,
+            bins=[-float("inf"), -.1, 0, .1, float("inf")],
+            labels=["BELOW_MINUS_0_1", "MINUS_0_1_TO_0", "0_TO_0_1", "ABOVE_0_1"],
+        ).astype("string")
+        moneyline_segment_rows = []
+        for dimension in ("history_depth_bucket", "finishing_gap_bucket"):
+            for segment, sub in moneyline_challenger.groupby(dimension, dropna=False, observed=False):
+                if not len(sub):
+                    continue
+                y = sub.actual_home_win.astype(int)
+                p = sub.challenger_home_win_probability.astype(float)
+                moneyline_segment_rows.append({
+                    "segment_dimension": dimension, "segment": str(segment), "games": len(sub),
+                    "brier": float(sub.brier_contribution.mean()),
+                    "log_loss": float(sub.log_loss_contribution.mean()),
+                    "accuracy": float(sub.correct.mean()),
+                    "auc": float(roc_auc_score(y, p)) if y.nunique() == 2 else None,
+                    "ece": _binary_ece(sub.actual_home_win, sub.challenger_home_win_probability),
+                })
+        moneyline_segments = pd.DataFrame(moneyline_segment_rows)
     comparison = references[
         references.qualification_status.eq("PREGAME_QUALIFIED")
         & references.market_type.eq("FULL_GAME_MONEYLINE")
@@ -1044,6 +1184,7 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     substantive = {
         "run_manifest": sha256(run_dir / "SHA256SUMS"),
         "outcomes": outcomes.sort_values("game_id")[sorted(required)].astype(str).to_dict("records"),
+        "grading_contract_version": "MONEYLINE_V3_BRIER_LOGLOSS_AUC_ACCURACY_ECE_V2",
     }
     grade_hash = digest_value(substantive)
     destination = grade_root / run_dir.name / f"grade={grade_hash}"
@@ -1053,6 +1194,10 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     destination.mkdir(parents=True, exist_ok=False)
     outcomes.to_csv(destination / "canonical_outcomes.csv", index=False)
     moneyline.to_csv(destination / "graded_moneyline_shadow_results.csv", index=False)
+    if len(moneyline_challenger):
+        moneyline_challenger.to_csv(destination / "graded_moneyline_shot_finishing_challenger_v3_results.csv", index=False)
+        moneyline_paired.to_csv(destination / "graded_moneyline_v2_vs_shot_finishing_challenger_v3_paired.csv", index=False)
+        moneyline_segments.to_csv(destination / "graded_moneyline_shot_finishing_challenger_v3_segments.csv", index=False)
     comparison.to_csv(destination / "graded_moneyline_market_comparison.csv", index=False)
     puck.to_csv(destination / "graded_puck_line_market_results.csv", index=False)
     puck_model.to_csv(destination / "graded_puck_line_model_results.csv", index=False)
@@ -1067,6 +1212,19 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
         "moneyline_correct": int(moneyline.correct.sum()),
         "moneyline_brier": moneyline.brier_contribution.mean() if len(moneyline) else None,
         "moneyline_log_loss": moneyline.log_loss_contribution.mean() if len(moneyline) else None,
+        "moneyline_challenger_v3_games_graded": len(moneyline_challenger),
+        "moneyline_challenger_v3_correct": int(moneyline_challenger.correct.sum()) if len(moneyline_challenger) else 0,
+        "moneyline_challenger_v3_brier": moneyline_challenger.brier_contribution.mean() if len(moneyline_challenger) else None,
+        "moneyline_challenger_v3_log_loss": moneyline_challenger.log_loss_contribution.mean() if len(moneyline_challenger) else None,
+        "moneyline_challenger_v3_auc": float(roc_auc_score(
+            moneyline_challenger.actual_home_win, moneyline_challenger.challenger_home_win_probability
+        )) if len(moneyline_challenger) and moneyline_challenger.actual_home_win.nunique() == 2 else None,
+        "moneyline_challenger_v3_accuracy": float(moneyline_challenger.correct.mean()) if len(moneyline_challenger) else None,
+        "moneyline_challenger_v3_ece": _binary_ece(
+            moneyline_challenger.actual_home_win, moneyline_challenger.challenger_home_win_probability
+        ) if len(moneyline_challenger) else None,
+        "moneyline_v2_v3_side_changes": int(moneyline_paired.side_changed.sum()) if len(moneyline_paired) else 0,
+        "moneyline_v2_v3_paired_games": len(moneyline_paired),
         "puck_line_model_games_graded": len(puck_model),
         "puck_line_model_correct": int(puck_model.correct.sum()),
         "puck_line_model_brier": puck_model.brier_contribution.mean() if len(puck_model) else None,
@@ -1100,6 +1258,10 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
             "graded_puck_line_v2_shot_prior_games": 0,
             "graded_puck_line_v2_shot_prior_brier": None,
             "graded_puck_line_v2_shot_prior_log_loss": None,
+            "moneyline_shot_finishing_challenger_v3_predictions_created": 0,
+            "graded_moneyline_shot_finishing_challenger_v3_games": 0,
+            "graded_moneyline_shot_finishing_challenger_v3_brier": None,
+            "graded_moneyline_shot_finishing_challenger_v3_log_loss": None,
             "integrity_warnings": ["NO_CAPTURE_RUN_FOR_SLATE"], "edge_claim": "NONE",
         }
     latest = statuses[-1]
@@ -1117,6 +1279,8 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
         "moneyline_games_books_captured": f"{latest['moneyline_games_captured']}/{latest['moneyline_books_captured']}",
         "puck_line_games_books_captured": f"{latest['puck_line_games_captured']}/{latest['puck_line_books_captured']}",
         "puck_line_v2_shot_prior_predictions_created": latest.get("puck_line_v2_shot_prior_predictions_created", 0),
+        "moneyline_shot_finishing_challenger_v3_predictions_created": latest.get(
+            "moneyline_shot_finishing_challenger_v3_predictions_created", 0),
         "puck_line_v1_v2_class_changes": latest.get("puck_line_v1_v2_class_changes", 0),
         "puck_line_v1_v2_mean_absolute_probability_delta": latest.get("puck_line_v1_v2_mean_absolute_probability_delta"),
         "sog_games_covered": int(coverage.sog_strict_prior_available.sum()),
@@ -1134,5 +1298,11 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
         "graded_puck_line_v2_shot_prior_games": best.get("puck_line_v2_shot_prior_games_graded", 0) if best else 0,
         "graded_puck_line_v2_shot_prior_brier": best.get("puck_line_v2_shot_prior_brier") if best else None,
         "graded_puck_line_v2_shot_prior_log_loss": best.get("puck_line_v2_shot_prior_log_loss") if best else None,
+        "graded_moneyline_shot_finishing_challenger_v3_games": best.get(
+            "moneyline_challenger_v3_games_graded", 0) if best else 0,
+        "graded_moneyline_shot_finishing_challenger_v3_brier": best.get(
+            "moneyline_challenger_v3_brier") if best else None,
+        "graded_moneyline_shot_finishing_challenger_v3_log_loss": best.get(
+            "moneyline_challenger_v3_log_loss") if best else None,
         "integrity_warnings": [], "edge_claim": "NONE_SMALL_SAMPLE_SHADOW_ONLY",
     }

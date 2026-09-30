@@ -1,0 +1,103 @@
+{
+  "coefficients": {
+    "away_back_to_back": 0.13019756330667728,
+    "diff_days_rest": 0.095913150441204,
+    "diff_prior_blended_shot_diff_pg": 0.3116627609449167,
+    "diff_r10_goal_diff_pg": -0.10601594758329265,
+    "diff_std_goal_diff_pg": 0.1928343438787041,
+    "home_back_to_back": -0.06922119056391479,
+    "shrunk_prior_finishing_residual_gap": 0.18400462200823758
+  },
+  "feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_prior_blended_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back",
+    "shrunk_prior_finishing_residual_gap"
+  ],
+  "feature_policy_version": "NHL_MONEYLINE_PRIOR_STRENGTH_POLICY_V1",
+  "finishing_weight": 0.5,
+  "fit_population_note": "All 1,312 certified 2024 regular-season outcomes; differs from frozen V2's 701-game 2023 fit because complete strict-prior preceding-season shot/finishing inputs are available beginning with 2024.",
+  "frozen_v2_parameter_sha256": "8f8189cb1e503c37e4e5dd8a038158e894209370d0045ec3694d713bb3fc22db",
+  "heldout_source_spine_sha256": "0c80ae9fbd3319db0b558a060a5c4c437798cadd61dac0ba015a48635712cf2c",
+  "imputation_medians": {
+    "away_back_to_back": 0.0,
+    "diff_days_rest": 0.0,
+    "diff_prior_blended_shot_diff_pg": -0.036862990810359264,
+    "diff_r10_goal_diff_pg": -0.0999999999999996,
+    "diff_std_goal_diff_pg": 0.0,
+    "home_back_to_back": 0.0,
+    "shrunk_prior_finishing_residual_gap": -0.003374101940860807
+  },
+  "intercept": 0.26612360106182165,
+  "model_configuration": {
+    "C": 1.0,
+    "family": "logistic_regression",
+    "fit_intercept": true,
+    "max_iter": 1000,
+    "penalty": "l2",
+    "random_state": 20260713,
+    "solver": "liblinear",
+    "tol": 0.0001
+  },
+  "model_version": "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3",
+  "parameter_content_sha256": "0e30321917111bb22d44151be5ba6ee1a83b760fdab677323940924f544fe526",
+  "policy": {
+    "franchise_mapping": {
+      "ARI": "UTA",
+      "UTA": "UTA"
+    },
+    "history_contract": "same-season type-2 final games with scheduled start strictly earlier than target; preceding season type-2 final only",
+    "prior_finishing_weight": 0.5,
+    "shot_prior_weights_by_current_games": {
+      "0-3": 1.0,
+      "4-5": 0.75,
+      "6-10": 0.5,
+      ">10": 0.0
+    }
+  },
+  "policy_sha256": "9697dffdc66d6ea2bd3f1c52403601027bd10894ace74854aa39659014269591",
+  "preprocessing": "fit-only median imputation then StandardScaler",
+  "prior_season": 2024,
+  "production_promotion": false,
+  "standardization_means": {
+    "away_back_to_back": 0.2111280487804878,
+    "diff_days_rest": 0.20198170731707318,
+    "diff_prior_blended_shot_diff_pg": -0.07443694198021736,
+    "diff_r10_goal_diff_pg": -0.016024245063879197,
+    "diff_std_goal_diff_pg": 0.002761790689134611,
+    "home_back_to_back": 0.09222560975609756,
+    "shrunk_prior_finishing_residual_gap": 1.3539305178355568e-18
+  },
+  "standardization_scales": {
+    "away_back_to_back": 0.40810904890559796,
+    "diff_days_rest": 1.1730831690961205,
+    "diff_prior_blended_shot_diff_pg": 4.676966056194181,
+    "diff_r10_goal_diff_pg": 1.4070556376504793,
+    "diff_std_goal_diff_pg": 1.1225468537676617,
+    "home_back_to_back": 0.28934416645443806,
+    "shrunk_prior_finishing_residual_gap": 0.1968492752564412
+  },
+  "strict_prior": true,
+  "training_game_ids_sha256": "c5cfdbac9cfcb9b545fb1f2c5fb031ca80c4f9091091dd288b1d25ff5fb119e5",
+  "training_matrix_sha256": "6d403519ad4d4910de107cf97f2d281461854e12c1222d51b3441d09356eeb9d",
+  "training_outcome_contract": "corrected certified regular-season type-2 final home-winner target",
+  "training_rows": 1312,
+  "training_season": 2024,
+  "training_source_spine_sha256": {
+    "2023": "dfaf507014c9a0153dc5cb2b6cfe7643197bd1fe3d3dd472e4a03ba74522055d",
+    "2024": "90988e9c7110d1c7569848c98995841740593e40ae103a88a49331b4b5bf2c4e"
+  },
+  "training_v2_feature_matrix_sha256": "63adc75f949bc6d60b531bc083f331a6cc11355a7bd2662de62a7919829d7f90",
+  "training_v2_feature_spine_sha256": "02cbebe71176943942aa2a68b2a572210dfce06029cd32f4225e9962fa50fb65",
+  "v2_feature_order": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ]
+}
