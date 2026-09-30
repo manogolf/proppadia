@@ -32,6 +32,7 @@ import sys
 import subprocess
 import subprocess as sp
 import shutil
+import tempfile
 from pathlib import Path
 import pandas as pd
 from typing import Any, Optional, Sequence, Union
@@ -118,6 +119,7 @@ SOG_RECONCILE_MONTHLY_JSON = TMP_DIR / "nhl_sog_base_vs_betonline_monthly.json"
 SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_monthly_publishable.csv"
 SOG_RECONCILE_ROWS_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_rows.csv"
 SOG_RESIDUAL_DATASET_DEFAULT_CSV = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_season_2025.csv"
+SOG_RECONCILE_DATASET_PATH = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_reconcile.csv"
 ODDS_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "odds_observations"
 ROSTER_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "roster_observations"
 DAILY_RUN_RECEIPT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "daily_runs"
@@ -223,17 +225,45 @@ def refresh_sog_reconcile_artifacts(*, to_date: str) -> None:
     """Refresh row-level SOG reconcile artifacts used by backtests/replays."""
     from_date = (os.environ.get("NHL_SOG_RECONCILE_FROM_DATE") or "2025-10-07").strip()
     to_date = str(to_date).strip() or et_today()
-    dataset_csv = (
-        os.environ.get("NHL_SOG_RECONCILE_DATASET_CSV")
-        or os.environ.get("NHL_SOG_DATASET_CSV")
-        or str(SOG_RESIDUAL_DATASET_DEFAULT_CSV)
-    ).strip()
+    dataset_csv = (os.environ.get("NHL_SOG_RECONCILE_DATASET_CSV")
+                   or str(SOG_RECONCILE_DATASET_PATH)).strip()
+    seasons = range(
+        infer_nhl_season_from_date_yyyy_mm_dd(from_date),
+        infer_nhl_season_from_date_yyyy_mm_dd(to_date) + 1,
+    )
+    combined: list[pd.DataFrame] = []
+    with tempfile.TemporaryDirectory(prefix="nhl_sog_reconcile_") as temp_dir:
+        for season in seasons:
+            season_path = Path(temp_dir) / f"season_{season}.csv"
+            command = [
+                PY, SCRIPTS_DIR / "build_sog_poisson_residual_dataset.py",
+                "--season", str(season), "--from-date", from_date,
+                "--to-date", to_date, "--out-csv", season_path,
+            ]
+            run(command)
+            if season_path.is_file() and season_path.stat().st_size:
+                try:
+                    frame = pd.read_csv(season_path)
+                except pd.errors.EmptyDataError:
+                    continue
+                if not frame.empty:
+                    combined.append(frame)
+    dataset = pd.concat(combined, ignore_index=True) if combined else pd.DataFrame()
+    if not dataset.empty:
+        if dataset.duplicated(["game_id", "player_id"]).any():
+            raise RuntimeError("SOG_RECONCILE_SEASON_DATASET_DUPLICATE_GAME_PLAYER")
+        dataset = dataset.sort_values(["game_date", "player_id", "game_id"])
+    target = Path(dataset_csv)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    dataset.to_csv(target, index=False)
     run(
         [
             PY,
             SCRIPTS_DIR / "reconcile_sog_base_vs_betonline_by_month.py",
             "--dataset-csv",
-            dataset_csv,
+            target,
+            "--observation-root",
+            ROOT / "artifacts" / "operational" / "nhl" / "odds_observations",
             "--from-date",
             from_date,
             "--to-date",
@@ -253,10 +283,9 @@ def refresh_sog_residual_dataset(*, slate: str) -> None:
     season = infer_nhl_season_from_date_yyyy_mm_dd(str(slate))
     from_date = (os.environ.get("NHL_SOG_DATASET_FROM_DATE") or "").strip()
     to_date = str(slate).strip() or et_today()
-    out_csv = (
-        os.environ.get("NHL_SOG_DATASET_CSV")
-        or str(SOG_RESIDUAL_DATASET_DEFAULT_CSV)
-    ).strip()
+    out_csv = (os.environ.get("NHL_SOG_DATASET_CSV")
+               or str(SOG_RESIDUAL_DATASET_DEFAULT_CSV.with_name(
+                   f"sog_poisson_residual_dataset_season_{season}.csv"))).strip()
     cmd: list[str] = [
         str(PY),
         str(SCRIPTS_DIR / "build_sog_poisson_residual_dataset.py"),

@@ -8,6 +8,11 @@ from typing import Any
 
 import pandas as pd
 
+from backend.nhl.official_request_journal import (
+    canonical_game_set_hash,
+    request_run_tree_fingerprint,
+)
+
 
 FINAL_STATES = {"FINAL", "OFF"}
 
@@ -54,20 +59,129 @@ def _verify_preserved_request(package: Path, outcome_root: Path, slate_date: str
                               game_ids: set[int]) -> list[dict[str, Any]]:
     journal_path = package / "official_request_journal.jsonl"
     rows = [json.loads(line) for line in journal_path.read_text().splitlines() if line.strip()]
-    schedule = [row for row in rows if row.get("endpoint_family") == "SCHEDULE"
-                and row.get("resource_identity", {}).get("slate_date") == slate_date
-                and row.get("event_kind") == "NETWORK_ATTEMPT"
-                and row.get("authority_boundary")
-                and row.get("http_status") == 200
-                and row.get("final_disposition") == "SUCCESS"
-                and row.get("response_preserved")]
-    successful_boxes = [row for row in rows if row.get("endpoint_family") == "BOXSCORE"
-                        and row.get("resource_identity", {}).get("slate_date") == slate_date
-                        and row.get("event_kind") == "NETWORK_ATTEMPT"
-                        and row.get("authority_boundary")
-                        and row.get("http_status") == 200
-                        and row.get("final_disposition") == "SUCCESS"
-                        and row.get("response_preserved")]
+    def valid_direct(row: dict[str, Any]) -> bool:
+        return bool(
+            row.get("event_kind") == "NETWORK_ATTEMPT"
+            and row.get("authority_boundary")
+            and row.get("http_status") == 200
+            and row.get("final_disposition") == "SUCCESS"
+            and row.get("response_preserved")
+        )
+
+    def valid_reuse(row: dict[str, Any]) -> bool:
+        return bool(
+            row.get("event_kind") == "PRESERVED_RESPONSE_REUSE"
+            and row.get("cross_run_reuse")
+            and row.get("source_role") == "AUTHORITY_RESPONSE_SOURCE"
+            and row.get("source_run_id")
+            and row.get("source_journal_sha256")
+            and row.get("source_response_index_sha256")
+            and row.get("source_response_object_sha256") == row.get("response_sha256")
+            and row.get("http_status") == 200
+            and row.get("final_disposition") == "PRESERVED_RESPONSE_REUSE"
+            and row.get("response_preserved")
+        )
+
+    candidates = [row for row in rows if row.get("endpoint_family") in {"SCHEDULE", "BOXSCORE"}
+                  and row.get("resource_identity", {}).get("slate_date") == slate_date
+                  and (valid_direct(row) or valid_reuse(row))]
+    unique_candidates: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in candidates:
+        key = (str(row["endpoint_family"]), json.dumps(
+            row.get("resource_identity") or {}, sort_keys=True, separators=(",", ":")))
+        previous = unique_candidates.get(key)
+        if previous is not None and previous.get("response_sha256") != row.get("response_sha256"):
+            raise ValueError("CROSS_MARKET_OFFICIAL_REQUEST_RESPONSE_CONFLICT")
+        unique_candidates.setdefault(key, row)
+    selected_candidate_ids = {id(row) for row in unique_candidates.values()}
+    rows = [row for row in rows if row.get("endpoint_family") not in {"SCHEDULE", "BOXSCORE"}
+            or id(row) in selected_candidate_ids]
+    candidates = list(unique_candidates.values())
+    reused = [row for row in candidates if valid_reuse(row)]
+    if reused:
+        source_ids = {str(row["source_run_id"]) for row in reused}
+        if len(source_ids) != 1:
+            raise ValueError("CROSS_MARKET_OFFICIAL_REQUEST_RUN_MISMATCH")
+        source_id = next(iter(source_ids))
+        receipt_path = outcome_root / "acquisition_receipts" / slate_date / f"{source_id}.json"
+        source_root = outcome_root / "request_runs" / slate_date / source_id
+        try:
+            receipt = json.loads(receipt_path.read_text())
+            if (receipt.get("contract_version") != "NHL_AUTHORITY_ROSTER_ACQUISITION_V1"
+                    or receipt.get("status") != "COMPLETE"
+                    or receipt.get("run_id") != source_id
+                    or receipt.get("slate_date") != slate_date
+                    or set(map(int, receipt.get("game_ids") or [])) != game_ids):
+                raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_SOURCE_RECEIPT_INVALID")
+            source_journal_path = source_root / "official_request_journal.jsonl"
+            source_cache = source_root / "preserved_responses"
+            if (not source_journal_path.is_file() or not source_cache.is_dir()
+                    or _sha256(source_journal_path) != receipt.get("journal_sha256")
+                    or request_run_tree_fingerprint(
+                        source_root, repository_root=outcome_root.parents[3]
+                    ) != receipt.get("tree_fingerprint")):
+                raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_SOURCE_INVALID")
+            source_rows = [json.loads(line) for line in source_journal_path.read_text().splitlines()
+                           if line.strip()]
+            if any(row.get("run_id") != source_id for row in source_rows):
+                raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_SOURCE_INVALID")
+            expected_hash = canonical_game_set_hash(game_ids)
+            expected_resources = {
+                ("SCHEDULE", json.dumps({"slate_date": slate_date}, sort_keys=True,
+                                         separators=(",", ":"))),
+                *(('BOXSCORE', json.dumps(
+                    {"slate_date": slate_date, "game_id": gid}, sort_keys=True,
+                    separators=(",", ":"))) for gid in sorted(game_ids)),
+            }
+            source_responses = {}
+            for source_row in source_rows:
+                family = source_row.get("endpoint_family")
+                identity = source_row.get("resource_identity") or {}
+                resource = (family, json.dumps(identity, sort_keys=True, separators=(",", ":")))
+                if resource not in expected_resources:
+                    continue
+                if (source_row.get("canonical_game_set_hash") != expected_hash
+                        or not source_row.get("authority_boundary")
+                        or source_row.get("event_kind") != "NETWORK_ATTEMPT"
+                        or source_row.get("final_disposition") != "SUCCESS"
+                        or source_row.get("http_status") != 200
+                        or not source_row.get("response_preserved")):
+                    continue
+                token = hashlib.sha256(json.dumps(
+                    {"endpoint_family": family, "identity": identity},
+                    sort_keys=True, separators=(",", ":"),
+                ).encode()).hexdigest()
+                index_path = source_cache / "index" / f"{token}.json"
+                if not index_path.is_file():
+                    continue
+                index = json.loads(index_path.read_text())
+                obj_path = source_cache / "objects" / str(index.get("object_name") or "")
+                if (index.get("endpoint_family") != family or index.get("identity") != identity
+                        or not obj_path.is_file() or _sha256(obj_path) != source_row.get("response_sha256")
+                        or index.get("response_sha256") != source_row.get("response_sha256")):
+                    continue
+                source_responses[resource] = {
+                    "object_sha256": _sha256(obj_path),
+                    "index_sha256": _sha256(index_path),
+                    "response_bytes": obj_path.stat().st_size,
+                }
+            if set(source_responses) != expected_resources:
+                raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_SOURCE_INVALID")
+            for row in reused:
+                identity_key = (row["endpoint_family"], json.dumps(
+                    row["resource_identity"], sort_keys=True, separators=(",", ":")))
+                source_response = source_responses.get(identity_key)
+                if (source_response is None
+                        or source_response["object_sha256"] != row.get("source_response_object_sha256")
+                        or source_response["index_sha256"] != row.get("source_response_index_sha256")):
+                    raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_REUSE_MISMATCH")
+        except (OSError, KeyError, TypeError, ValueError, RuntimeError) as error:
+            if isinstance(error, ValueError) and str(error).startswith("CROSS_MARKET_"):
+                raise
+            raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_SOURCE_INVALID") from error
+
+    schedule = [row for row in candidates if row.get("endpoint_family") == "SCHEDULE"]
+    successful_boxes = [row for row in candidates if row.get("endpoint_family") == "BOXSCORE"]
     boxes = {int(row.get("resource_identity", {}).get("game_id", -1)): row
              for row in successful_boxes}
     if (len(schedule) != 1 or len(successful_boxes) != len(game_ids)
@@ -77,10 +191,14 @@ def _verify_preserved_request(package: Path, outcome_root: Path, slate_date: str
     if len(run_ids) != 1 or not next(iter(run_ids)):
         raise ValueError("CROSS_MARKET_OFFICIAL_REQUEST_RUN_MISMATCH")
     request_root = outcome_root / "request_runs" / slate_date / next(iter(run_ids))
-    cache = request_root / "preserved_responses"
-    if not cache.is_dir():
-        raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_CACHE_MISSING")
     for row in [schedule[0], *boxes.values()]:
+        row_request_root = (
+            outcome_root / "request_runs" / slate_date / str(row["source_run_id"])
+            if valid_reuse(row) else request_root
+        )
+        cache = row_request_root / "preserved_responses"
+        if not cache.is_dir():
+            raise ValueError("CROSS_MARKET_OFFICIAL_RESPONSE_CACHE_MISSING")
         identity = row.get("resource_identity") or {}
         token = hashlib.sha256(json.dumps(
             {"endpoint_family": row["endpoint_family"], "identity": identity},
@@ -173,18 +291,19 @@ def load_official_outcomes(outcome_root: Path) -> pd.DataFrame:
             package, outcome_root, slate_date, set(outcomes.game_id.astype(int)),
         )
         schedule_row = next(row for row in journal if row.get("endpoint_family") == "SCHEDULE"
-                            and row.get("final_disposition") == "SUCCESS")
+                            and row.get("final_disposition") in {"SUCCESS", "PRESERVED_RESPONSE_REUSE"})
         identity = schedule_row["resource_identity"]
         token = hashlib.sha256(json.dumps(
             {"endpoint_family": "SCHEDULE", "identity": identity},
             sort_keys=True, separators=(",", ":"),
         ).encode()).hexdigest()
-        index = json.loads((outcome_root / "request_runs" / slate_date /
-                             str(schedule_row["run_id"]) / "preserved_responses" /
+        schedule_cache = (outcome_root / "request_runs" / slate_date /
+                          str(schedule_row.get("source_run_id") or schedule_row["run_id"]) /
+                          "preserved_responses")
+        index = json.loads((schedule_cache /
                              "index" / f"{token}.json").read_text())
-        raw_payload = json.loads((outcome_root / "request_runs" / slate_date /
-                                  str(schedule_row["run_id"]) / "preserved_responses" /
-                                  "objects" / str(index["object_name"])).read_text())
+        raw_payload = json.loads((schedule_cache / "objects" /
+                                  str(index["object_name"])).read_text())
         official = _official_schedule_games(raw_payload, slate_date)
         joined = slate.merge(outcomes, on=["canonical_season", "slate_date", "game_id",
                                            "game_type_code", "home_team_id", "away_team_id"],
@@ -220,12 +339,13 @@ def load_official_outcomes(outcome_root: Path) -> pd.DataFrame:
                 raise ValueError("CROSS_MARKET_OFFICIAL_OUTCOME_NOT_QUALIFIED")
             completion = json.loads((package / "RUN_COMPLETE.json").read_text())
             completed_at = pd.to_datetime(completion.get("completed_at_utc"), utc=True, errors="coerce")
-            if pd.isna(completed_at) or observed != completed_at:
+            if pd.isna(completed_at) or observed > completed_at:
                 raise ValueError("CROSS_MARKET_OUTCOME_CAPTURE_TIMESTAMP_MISMATCH")
             request_ends = pd.to_datetime(
                 [request.get("request_end_utc") for request in journal
                  if request.get("resource_identity", {}).get("game_id") in (None, gid)
-                 and request.get("final_disposition") == "SUCCESS"],
+                 and request.get("caller_stage") == "POSTGAME_AUTHORITY"
+                 and request.get("final_disposition") in {"SUCCESS", "PRESERVED_RESPONSE_REUSE"}],
                 utc=True, errors="coerce",
             )
             if request_ends.isna().any() or observed < request_ends.max():
@@ -243,12 +363,12 @@ def load_official_outcomes(outcome_root: Path) -> pd.DataFrame:
                 "outcome_artifact": str(package / "canonical_game_outcomes.csv"),
                 "outcome_artifact_sha256": _sha256(package / "canonical_game_outcomes.csv"),
                 "outcome_request_journal": str(package / "official_request_journal.jsonl"),
-                "official_request_run_id": str(schedule_row["run_id"]),
+                "official_request_run_id": str(
+                    schedule_row.get("source_run_id") or schedule_row["run_id"]),
                 "official_score_endpoint": f"/v1/schedule/{slate_date}",
                 "official_schedule_response_sha256": str(schedule_row["response_sha256"]),
                 "official_schedule_response_path": str(
-                    outcome_root / "request_runs" / slate_date / str(schedule_row["run_id"])
-                    / "preserved_responses" / "objects" / str(index["object_name"])
+                    schedule_cache / "objects" / str(index["object_name"])
                 ),
             })
     return pd.DataFrame(records, columns=columns)

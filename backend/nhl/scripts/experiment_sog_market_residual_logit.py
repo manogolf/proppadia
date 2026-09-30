@@ -168,6 +168,7 @@ def _load_market_rows(
     from_date: str | None,
     to_date: str | None,
     bookmaker_key: str,
+    observation_root: Path | None = None,
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for day_dir in sorted(odds_root.glob("20??-??-??")):
@@ -239,6 +240,49 @@ def _load_market_rows(
                                     "market_key": market_key,
                                 }
                             )
+    if observation_root is not None and Path(observation_root).is_dir():
+        from backend.nhl.daily_capture import verify_package
+
+        for slate_root in sorted(Path(observation_root).glob("season=*/slate_date=20??-??-??")):
+            day = slate_root.name.split("=", 1)[1]
+            if (from_date and day < str(from_date)) or (to_date and day > str(to_date)):
+                continue
+            for observation in sorted(slate_root.glob("observation=*")):
+                raw_path = observation / "raw_response.json"
+                complete_path = observation / "RUN_COMPLETE.json"
+                if not raw_path.is_file() or not complete_path.is_file():
+                    continue
+                try:
+                    verify_package(observation)
+                    complete = json.loads(complete_path.read_text())
+                    events = json.loads(raw_path.read_text())
+                except (OSError, ValueError, json.JSONDecodeError):
+                    continue
+                if (complete.get("classification") not in {"CAPTURED_NONEMPTY", "CAPTURED_EMPTY"}
+                        or not isinstance(events, list)):
+                    continue
+                for event in events:
+                    for book in event.get("bookmakers", []) or []:
+                        if str(book.get("key", "")).strip() != bookmaker_key:
+                            continue
+                        for market in book.get("markets", []) or []:
+                            market_key = str(market.get("key", "")).strip()
+                            if market_key not in SHOT_MARKETS:
+                                continue
+                            for outcome in market.get("outcomes", []) or []:
+                                if not isinstance(outcome, dict) or _outcome_side(outcome) != "over":
+                                    continue
+                                name = _pick_market_player_name(outcome)
+                                line = pd.to_numeric(outcome.get("point"), errors="coerce")
+                                price = pd.to_numeric(outcome.get("price"), errors="coerce")
+                                key = _short_key(_norm_name(name)) if name else ""
+                                if not key or pd.isna(line) or pd.isna(price):
+                                    continue
+                                rows.append({
+                                    "game_date": day, "player_key": key,
+                                    "line": float(line), "price_over": float(price),
+                                    "bookmaker": bookmaker_key, "market_key": market_key,
+                                })
     if not rows:
         return pd.DataFrame(
             columns=["game_date", "player_key", "line", "price_over", "bookmaker", "market_key", "p_mkt"]
@@ -308,9 +352,11 @@ def _prepare_matched(
     bookmaker_key: str,
     from_date: str | None,
     to_date: str | None,
+    observation_root: Path | None = None,
 ) -> pd.DataFrame:
     feats = _load_feature_rows(dataset_csv, from_date, to_date)
-    market = _load_market_rows(odds_root, from_date, to_date, bookmaker_key)
+    market = _load_market_rows(
+        odds_root, from_date, to_date, bookmaker_key, observation_root=observation_root)
     df = market.merge(feats, on=["game_date", "player_key"], how="inner")
     df = df[df["line"].isin(list(LINES.keys()))].copy()
     for line, threshold in LINES.items():

@@ -354,6 +354,11 @@ def main() -> None:
         default="backend/nhl/data/analysis/sog_poisson_residual_dataset_season_2025.csv",
     )
     ap.add_argument("--odds-root", default="backend/nhl/exports/odds_history")
+    ap.add_argument(
+        "--observation-root",
+        default="artifacts/operational/nhl/odds_observations",
+        help="Immutable governed odds observation packages to include in historical quote matching.",
+    )
     ap.add_argument("--bookmaker", default="betonlineag")
     ap.add_argument("--from-date", default="2025-10-07")
     ap.add_argument("--to-date", default=None)
@@ -379,6 +384,7 @@ def main() -> None:
         bookmaker_key=str(args.bookmaker),
         from_date=args.from_date,
         to_date=args.to_date,
+        observation_root=Path(args.observation_root),
     )
     if matched.empty:
         raise SystemExit("No matched market+feature rows found.")

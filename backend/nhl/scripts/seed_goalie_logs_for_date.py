@@ -236,6 +236,7 @@ def upsert_rows(conn, rows: List[Tuple[int,int,str,Optional[int],Optional[int],O
       (player_id, game_id, game_date, saves, shots_faced, toi_minutes)
     VALUES (%s,%s,%s,%s,%s,%s)
     ON CONFLICT (player_id, game_id) DO UPDATE SET
+      game_date   = EXCLUDED.game_date,
       saves       = EXCLUDED.saves,
       shots_faced = EXCLUDED.shots_faced,
       toi_minutes = EXCLUDED.toi_minutes

@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import hashlib
 import json
+import shutil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +14,10 @@ from backend.nhl.cross_market_shadow.canonical_slate_adapter import (
 )
 from backend.nhl.daily_capture import CanonicalGame
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
+from backend.nhl.official_request_journal import (
+    canonical_game_set_hash,
+    request_run_tree_fingerprint,
+)
 from backend.nhl.scripts import run_nhl_mainline_cross_market_capture_warn_only as capture
 
 
@@ -333,7 +338,8 @@ class OfficialOutcomeArtifactTest(unittest.TestCase):
         ))
         (package / "RUN_COMPLETE.json").write_text(json.dumps({
             "status": "COMPLETE", "substantive_identity": "fixture_identity",
-            "completed_at_utc": "2026-09-24T03:30:00Z",
+            # Official outcome observation precedes final package completion.
+            "completed_at_utc": "2026-09-24T03:31:00Z",
         }))
 
     def test_loads_final_zero_goal_outcome_from_preserved_official_evidence(self):
@@ -348,6 +354,68 @@ class OfficialOutcomeArtifactTest(unittest.TestCase):
             self.assertEqual(result.iloc[0].score_source, "OFFICIAL_NHL_FINAL_SCORE")
             self.assertEqual(result.iloc[0].official_score_endpoint, "/v1/schedule/2026-09-24")
             self.assertEqual(len(result.iloc[0].official_schedule_response_sha256), 64)
+            self.assertTrue(Path(result.iloc[0].official_schedule_response_path).is_file())
+
+    def test_loads_completed_prior_outcome_from_verified_cross_run_authority_reuse(self):
+        with tempfile.TemporaryDirectory(prefix="nhl_cross_run_outcome_reuse_") as tmp:
+            root = Path(tmp)
+            self.create_artifact(root)
+            package = root / self.slate_date / "reconciliation=fixture"
+            source_id = "fixture_run"
+            source_root = root / "request_runs" / self.slate_date / source_id
+            source_journal = source_root / "official_request_journal.jsonl"
+            shutil.copyfile(package / "official_request_journal.jsonl", source_journal)
+            source_rows = [json.loads(line) for line in source_journal.read_text().splitlines()]
+            for row in source_rows:
+                row["canonical_game_set_hash"] = canonical_game_set_hash([self.game_id])
+                row["caller_stage"] = "POSTGAME_AUTHORITY"
+                row["response_bytes"] = (source_root / "preserved_responses" / "objects" /
+                                         f"{row['response_sha256']}.json").stat().st_size
+            source_journal.write_text("".join(json.dumps(row) + "\n" for row in source_rows))
+            source_sha = hashlib.sha256(source_journal.read_bytes()).hexdigest()
+            tree_sha = request_run_tree_fingerprint(
+                source_root, repository_root=root.parents[3]
+            )
+            receipt_dir = root / "acquisition_receipts" / self.slate_date
+            receipt_dir.mkdir(parents=True)
+            (receipt_dir / f"{source_id}.json").write_text(json.dumps({
+                "contract_version": "NHL_AUTHORITY_ROSTER_ACQUISITION_V1",
+                "status": "COMPLETE", "run_id": source_id,
+                "slate_date": self.slate_date, "game_ids": [self.game_id],
+                "journal_sha256": source_sha, "tree_fingerprint": tree_sha,
+            }))
+
+            reuse_rows = []
+            for row in source_rows:
+                identity = row["resource_identity"]
+                token = hashlib.sha256(json.dumps(
+                    {"endpoint_family": row["endpoint_family"], "identity": identity},
+                    sort_keys=True, separators=(",", ":"),
+                ).encode()).hexdigest()
+                index_path = source_root / "preserved_responses" / "index" / f"{token}.json"
+                row.update({
+                    "run_id": "reconciliation_run", "event_kind": "PRESERVED_RESPONSE_REUSE",
+                    "cross_run_reuse": True, "source_role": "AUTHORITY_RESPONSE_SOURCE",
+                    "source_run_id": source_id, "source_journal_sha256": source_sha,
+                    "source_response_index_sha256": hashlib.sha256(index_path.read_bytes()).hexdigest(),
+                    "source_response_object_sha256": row["response_sha256"],
+                    "final_disposition": "PRESERVED_RESPONSE_REUSE",
+                    "request_end_utc": "2026-09-24T03:20:00Z",
+                })
+                reuse_rows.append(row)
+            journal_path = package / "official_request_journal.jsonl"
+            journal_path.write_text("".join(json.dumps(row) + "\n" for row in reuse_rows))
+            files = ["canonical_admitted_slate.csv", "canonical_game_outcomes.csv",
+                     "official_request_journal.jsonl", "summary.json"]
+            (package / "SHA256SUMS").write_text("".join(
+                f"{hashlib.sha256((package / name).read_bytes()).hexdigest()}  {name}\n"
+                for name in files
+            ))
+
+            result = load_official_outcomes(root)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(int(result.iloc[0].game_id), self.game_id)
+            self.assertEqual(result.iloc[0].official_request_run_id, source_id)
             self.assertTrue(Path(result.iloc[0].official_schedule_response_path).is_file())
 
     def test_nonfinal_official_response_is_rejected(self):
