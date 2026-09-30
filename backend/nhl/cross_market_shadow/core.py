@@ -15,6 +15,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from .shot_prior import (
+    CHALLENGER_NAME, POLICY_VERSION, build_shot_prior_challenger,
+)
 
 
 HERE = Path(__file__).resolve().parent
@@ -40,6 +43,11 @@ MAX_REQUESTS_PER_RUN = 1
 MAX_ESTIMATED_CREDITS_PER_RUN = 4
 MARKETS = ("h2h", "spreads")
 REGIONS = ("us", "us2")
+PRIOR_SOURCE_DIR = Path(__file__).resolve().parents[3] / "artifacts" / "analysis" / "model_development"
+PRIOR_TEAM_SOURCE = PRIOR_SOURCE_DIR / "nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1" / "2026-09-15" / "season_2025_team_game_source.csv"
+PRIOR_TEAM_MANIFEST = PRIOR_TEAM_SOURCE.parent / "SHA256SUMS"
+PRIOR_OUTCOME_SOURCE = PRIOR_SOURCE_DIR / "nhl_cross_market_game_state_bridge_v1" / "2026-09-15" / "season_2025_outcome_spine.parquet"
+PRIOR_OUTCOME_MANIFEST = PRIOR_OUTCOME_SOURCE.parent / "SHA256SUMS"
 
 TEAM_NAMES = {
     "anaheimducks": "ANA", "bostonbruins": "BOS", "buffalosabres": "BUF",
@@ -98,6 +106,56 @@ def load_puck_parameters() -> dict[str, Any]:
     if parameters.get("classes") != ["AWAY_BY_2_PLUS", "ONE_GOAL_GAME", "HOME_BY_2_PLUS"]:
         raise RuntimeError("PUCK_LINE_CLASS_IDENTITY_MISMATCH")
     return parameters
+
+
+def _verified_manifest_entry(manifest: Path, artifact: Path, expected: str) -> None:
+    if not manifest.is_file() or sha256(manifest) == "":
+        raise RuntimeError("SHOT_PRIOR_MANIFEST_MISSING")
+    entries = {name: digest for digest, name in (
+        line.split("  ", 1) for line in manifest.read_text().splitlines() if "  " in line
+    )}
+    actual = entries.get(artifact.name)
+    if actual != expected or sha256(artifact) != expected:
+        raise RuntimeError(f"SHOT_PRIOR_PINNED_SOURCE_MISMATCH:{artifact.name}")
+
+
+def load_verified_2025_shot_prior() -> tuple[pd.DataFrame, str, str]:
+    """Load the certified, pinned 2025 regular-season shot/outcome spine."""
+    source_hash = "99fa6f7ab39a00f6aca2b6f2a11b22932a261fac3d8584703732615d38277af7"
+    outcome_hash = "b8b51274837c413ae8d957da93180ba6528a530f1b5e3670503011411133ef43"
+    _verified_manifest_entry(PRIOR_TEAM_MANIFEST, PRIOR_TEAM_SOURCE, source_hash)
+    _verified_manifest_entry(PRIOR_OUTCOME_MANIFEST, PRIOR_OUTCOME_SOURCE, outcome_hash)
+    shots = pd.read_csv(PRIOR_TEAM_SOURCE)
+    outcomes = pd.read_parquet(PRIOR_OUTCOME_SOURCE)
+    qualified = outcomes[
+        outcomes.identity_match.astype(str).str.lower().eq("true")
+        & outcomes.final_state_qualified.astype(str).str.lower().eq("true")
+        & outcomes.decisive_score_qualified.astype(str).str.lower().eq("true")
+        & outcomes.outcome_qualified.astype(str).str.lower().eq("true")
+    ]
+    joined = shots.merge(
+        qualified[["game_id", "canonical_season", "game_date", "start_time_utc",
+                   "home_team", "away_team", "final_home_goals", "final_away_goals"]],
+        on=["game_id", "canonical_season"],
+        how="inner", validate="one_to_one", suffixes=("", "_outcome"),
+    )
+    starts_match = pd.to_datetime(joined.start_time_utc, utc=True).eq(
+        pd.to_datetime(joined.start_time_utc_outcome, utc=True)
+    )
+    dates_match = pd.to_datetime(joined.game_date).dt.date.eq(
+        pd.to_datetime(joined.game_date_outcome).dt.date
+    )
+    identity_ok = (
+        joined.home_team_code.astype(str).str.upper().eq(joined.home_team.astype(str).str.upper())
+        & joined.away_team_code.astype(str).str.upper().eq(joined.away_team.astype(str).str.upper())
+        & starts_match & dates_match
+    )
+    if len(shots) != 1312 or len(joined) != 1312 or not identity_ok.all():
+        raise RuntimeError("SHOT_PRIOR_2025_OUTCOME_JOIN_INCOMPLETE_OR_IDENTITY_CONFLICT")
+    if not pd.to_numeric(joined.game_type, errors="coerce").eq(2).all():
+        raise RuntimeError("SHOT_PRIOR_2025_NON_REGULAR_SEASON_SOURCE")
+    joined["database_game_status"] = "FINAL"
+    return joined, source_hash, outcome_hash
 
 
 def load_activation() -> dict[str, Any]:
@@ -630,6 +688,27 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         raise RuntimeError("PRESEASON_CANARY_SCOPE_VIOLATION")
     predictions, timing = build_v2_predictions(schedule, history, run_timestamp_utc)
     puck_predictions = build_puck_line_predictions(predictions)
+    puck_v2_predictions = pd.DataFrame()
+    puck_v2_provenance = pd.DataFrame()
+    if schedule.game_type_code.eq(2).any():
+        prior_source, prior_source_hash, prior_outcome_hash = load_verified_2025_shot_prior()
+        challenger_input, puck_v2_provenance = build_shot_prior_challenger(
+            schedule, history, predictions, prior_source,
+            prior_source_sha256=prior_source_hash,
+            prior_outcome_sha256=prior_outcome_hash,
+        )
+        puck_v2_predictions = build_puck_line_predictions(challenger_input)
+        puck_v2_predictions["control_name"] = CHALLENGER_NAME
+        puck_v2_predictions["feature_policy_version"] = POLICY_VERSION
+        puck_v2_predictions["control_model_sha256"] = load_puck_parameters()["model_sha256"]
+        puck_v2_predictions["substantive_prediction_sha256"] = puck_v2_predictions.apply(
+            lambda row: digest_value({
+                "game_id": int(row.game_id), "canonical_season": int(row.canonical_season),
+                "feature_policy_version": POLICY_VERSION,
+                "features": {feature: row[feature] for feature in FEATURES},
+                "control_model_sha256": row.control_model_sha256,
+            }), axis=1,
+        )
     if odds_json:
         envelope = json.loads(odds_json.read_text())
     else:
@@ -639,6 +718,51 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
             "provider_response": [],
         }
     quotes, bindings, raw_observations = normalize_markets(envelope, schedule)
+    if len(puck_v2_predictions):
+        standard = quotes[
+            quotes.qualification_status.eq("PREGAME_QUALIFIED")
+            & quotes.market_type.eq("STANDARD_PUCK_LINE")
+        ].copy()
+        market_columns = [c for c in ["game_id", "side_orientation", "point", "american_price", "source_update_timestamp_utc", "sportsbook_key"] if c in standard]
+        ledger = puck_v2_predictions.merge(
+            puck_predictions[["game_id", "away_by_2_plus_probability", "one_goal_game_probability", "home_by_2_plus_probability"]].rename(columns={
+                "away_by_2_plus_probability": "v1_away_by_2_plus_probability",
+                "one_goal_game_probability": "v1_one_goal_game_probability",
+                "home_by_2_plus_probability": "v1_home_by_2_plus_probability",
+            }), on="game_id", validate="one_to_one",
+        )
+        ledger = ledger.merge(standard[market_columns], on="game_id", how="left", validate="one_to_many")
+        ledger["market_observation_timestamp_utc"] = envelope.get("capture_timestamp_utc")
+        ledger["v1_selected_class"] = ledger[[
+            "v1_away_by_2_plus_probability", "v1_one_goal_game_probability", "v1_home_by_2_plus_probability"
+        ]].idxmax(axis=1).map({
+            "v1_away_by_2_plus_probability": "AWAY_BY_2_PLUS",
+            "v1_one_goal_game_probability": "ONE_GOAL_GAME",
+            "v1_home_by_2_plus_probability": "HOME_BY_2_PLUS",
+        })
+        ledger["v2_selected_class"] = ledger[[
+            "away_by_2_plus_probability", "one_goal_game_probability", "home_by_2_plus_probability"
+        ]].idxmax(axis=1).map({
+            "away_by_2_plus_probability": "AWAY_BY_2_PLUS",
+            "one_goal_game_probability": "ONE_GOAL_GAME",
+            "home_by_2_plus_probability": "HOME_BY_2_PLUS",
+        })
+        ledger["class_changed"] = ledger.v1_selected_class.ne(ledger.v2_selected_class)
+        provenance_columns = ["game_id", "v1_diff_std_shot_diff_pg", "diff_std_shot_diff_pg"]
+        ledger = ledger.merge(
+            puck_v2_provenance[provenance_columns].rename(columns={
+                "v1_diff_std_shot_diff_pg": "v1_shot_control_value",
+                "diff_std_shot_diff_pg": "v2_shot_challenger_value",
+            }), on="game_id", validate="many_to_one",
+        )
+        for label in ("away_by_2_plus", "one_goal_game", "home_by_2_plus"):
+            ledger[f"{label}_probability_delta_v2_minus_v1"] = (
+                ledger[f"{label}_probability"] - ledger[f"v1_{label}_probability"]
+            )
+        ledger["outcome_status"] = "PENDING_OFFICIAL_RECONCILIATION"
+        ledger["wager_recommendation"] = "NONE_SHADOW_ONLY"
+    else:
+        ledger = pd.DataFrame(columns=["game_id", "outcome_status"])
     price_references = build_price_references(root, quotes, SEASON, slate_date)
     read_optional = lambda path: pd.read_csv(path) if path else None
     coverage = _coverage(
@@ -650,6 +774,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "schedule": schedule.sort_values("game_id")[["game_id", "scheduled_start_time_utc", "home_team", "away_team", "game_type_code"]].astype(str).to_dict("records"),
         "predictions": sorted(predictions.substantive_prediction_sha256.astype(str)),
         "puck_predictions": sorted(puck_predictions.substantive_prediction_sha256.astype(str)),
+        "puck_v2_predictions": sorted(puck_v2_predictions.substantive_prediction_sha256.astype(str)) if len(puck_v2_predictions) else [],
         "markets": quotes.sort_values(["game_id", "sportsbook_key", "market_type", "side_orientation"], na_position="last")[[
             "provider_event_id", "game_id", "sportsbook_key", "market_type", "side_orientation", "point",
             "american_price", "source_update_timestamp_utc", "qualification_status",
@@ -670,6 +795,10 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     schedule.to_csv(destination / "schedule_event_identity.csv", index=False)
     predictions.to_csv(destination / "v2_immutable_predictions.csv", index=False)
     puck_predictions.to_csv(destination / "puck_line_v1_immutable_predictions.csv", index=False)
+    if len(puck_v2_predictions):
+        puck_v2_predictions.to_csv(destination / "puck_line_v2_shot_prior_challenger_predictions.csv", index=False)
+        puck_v2_provenance.to_csv(destination / "puck_line_v2_shot_prior_feature_provenance.csv", index=False)
+        ledger.to_csv(destination / "puck_line_v2_shot_prior_prospective_ledger.csv", index=False)
     timing.to_csv(destination / "strict_prior_timing_audit.csv", index=False)
     (destination / "raw_market_response.json").write_text(canonical_json(envelope) + "\n")
     raw_observations.to_csv(destination / "raw_market_observations.csv", index=False)
@@ -687,6 +816,13 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "run_timestamp_utc": parse_utc(run_timestamp_utc).isoformat(), "substantive_state_sha256": substantive_hash,
         "scheduled_games": len(schedule), "v2_predictions_created": len(predictions),
         "puck_line_v1_predictions_created": len(puck_predictions),
+        "puck_line_v2_shot_prior_predictions_created": len(puck_v2_predictions),
+        "puck_line_v2_shot_prior_feature_policy": POLICY_VERSION if len(puck_v2_predictions) else None,
+        "puck_line_v1_v2_class_changes": int(ledger.drop_duplicates("game_id").class_changed.sum()) if len(ledger) else 0,
+        "puck_line_v1_v2_mean_absolute_probability_delta": float(pd.concat([
+            ledger.drop_duplicates("game_id")[f"{label}_probability_delta_v2_minus_v1"].abs()
+            for label in ("away_by_2_plus", "one_goal_game", "home_by_2_plus")
+        ]).mean()) if len(ledger) else None,
         "moneyline_games_captured": int(qualified.loc[qualified.market_type.eq("FULL_GAME_MONEYLINE"), "game_id"].nunique()) if len(qualified) else 0,
         "moneyline_books_captured": int(qualified.loc[qualified.market_type.eq("FULL_GAME_MONEYLINE"), "sportsbook_key"].nunique()) if len(qualified) else 0,
         "puck_line_games_captured": int(qualified.loc[qualified.market_type.eq("STANDARD_PUCK_LINE"), "game_id"].nunique()) if len(qualified) else 0,
@@ -824,6 +960,87 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     ]
     puck_model["log_loss_contribution"] = -np.log(puck_model.probability_assigned_to_outcome.clip(1e-15, 1 - 1e-15))
     puck_model["financial_claim"] = "NONE_SHADOW_ONLY"
+    puck_v2_model = pd.DataFrame()
+    paired = pd.DataFrame()
+    challenger_path = run_dir / "puck_line_v2_shot_prior_challenger_predictions.csv"
+    if challenger_path.is_file():
+        candidate_predictions = pd.read_csv(challenger_path)
+        puck_v2_model = candidate_predictions.merge(
+            outcomes, on=["canonical_season", "game_id"], how="inner", validate="one_to_one"
+        )
+        provenance_path = run_dir / "puck_line_v2_shot_prior_feature_provenance.csv"
+        provenance = pd.read_csv(provenance_path)
+        puck_v2_model = puck_v2_model.merge(
+            provenance[["game_id", "current_home_games", "current_away_games", "home_prior_weight", "away_prior_weight"]],
+            on="game_id", how="left", validate="one_to_one",
+        )
+        v2_margin = puck_v2_model.final_home_goals - puck_v2_model.final_away_goals
+        puck_v2_model["actual_margin_class"] = np.select(
+            [v2_margin <= -2, v2_margin >= 2],
+            ["AWAY_BY_2_PLUS", "HOME_BY_2_PLUS"], default="ONE_GOAL_GAME",
+        )
+        puck_v2_model["probability_assigned_to_outcome"] = [
+            row[class_probability[row.actual_margin_class]] for _, row in puck_v2_model.iterrows()
+        ]
+        puck_v2_model["predicted_margin_class"] = puck_v2_model[[
+            "away_by_2_plus_probability", "one_goal_game_probability", "home_by_2_plus_probability",
+        ]].idxmax(axis=1).map({
+            "away_by_2_plus_probability": "AWAY_BY_2_PLUS",
+            "one_goal_game_probability": "ONE_GOAL_GAME",
+            "home_by_2_plus_probability": "HOME_BY_2_PLUS",
+        })
+        puck_v2_model["correct"] = puck_v2_model.predicted_margin_class.eq(puck_v2_model.actual_margin_class)
+        puck_v2_model["brier_contribution"] = [
+            sum((float(row[column]) - int(label == row.actual_margin_class)) ** 2
+                for label, column in class_probability.items())
+            for _, row in puck_v2_model.iterrows()
+        ]
+        puck_v2_model["log_loss_contribution"] = -np.log(
+            puck_v2_model.probability_assigned_to_outcome.clip(1e-15, 1 - 1e-15)
+        )
+        puck_v2_model["financial_claim"] = "NONE_SHADOW_ONLY"
+        paired = puck_model[["canonical_season", "game_id", "actual_margin_class", "predicted_margin_class", "brier_contribution", "log_loss_contribution", "correct"]].merge(
+            puck_v2_model[["canonical_season", "game_id", "predicted_margin_class", "brier_contribution", "log_loss_contribution", "correct"]],
+            on=["canonical_season", "game_id"], how="inner", validate="one_to_one", suffixes=("_v1", "_v2"),
+        )
+        paired["class_changed"] = paired.predicted_margin_class_v1.ne(paired.predicted_margin_class_v2)
+        side_depth = pd.concat([
+            provenance[["game_id", "current_home_games", "home_prior_weight"]].rename(columns={"current_home_games": "current_games", "home_prior_weight": "prior_weight"}),
+            provenance[["game_id", "current_away_games", "away_prior_weight"]].rename(columns={"current_away_games": "current_games", "away_prior_weight": "prior_weight"}),
+        ], ignore_index=True).merge(
+            puck_v2_model[["game_id", "brier_contribution", "log_loss_contribution", "correct"]],
+            on="game_id", how="inner", validate="many_to_one",
+        )
+        side_depth["history_depth_bucket"] = pd.cut(
+            side_depth.current_games, bins=[-1, 3, 5, 10, float("inf")],
+            labels=["0_3", "4_5", "6_10", "OVER_10"],
+        ).astype("string")
+        side_depth["prior_weight_bucket"] = side_depth.prior_weight.map({1.0: "1.00", .75: "0.75", .5: "0.50", 0.0: "0.00"})
+        segment_rows = []
+        for dimension in ("history_depth_bucket", "prior_weight_bucket"):
+            for key, group in side_depth.groupby(dimension, dropna=False):
+                confidence = puck_v2_model.set_index("game_id").loc[group.game_id].copy()
+                if isinstance(confidence, pd.Series):
+                    confidence = confidence.to_frame().T
+                confidence["confidence"] = confidence[[
+                    "away_by_2_plus_probability", "one_goal_game_probability", "home_by_2_plus_probability",
+                ]].max(axis=1)
+                confidence["top_label_correct"] = confidence.predicted_margin_class.eq(confidence.actual_margin_class)
+                bins = pd.cut(confidence.confidence, bins=np.linspace(0, 1, 11), include_lowest=True)
+                ece = 0.0
+                for _, calibration_bin in confidence.groupby(bins, observed=False):
+                    if len(calibration_bin):
+                        ece += len(calibration_bin) / len(confidence) * abs(
+                            calibration_bin.top_label_correct.mean() - calibration_bin.confidence.mean()
+                        )
+                segment_rows.append({
+                    "segment_dimension": dimension, "segment": str(key),
+                    "side_observations": len(group), "games": group.game_id.nunique(),
+                    "multiclass_brier": group.brier_contribution.mean(),
+                    "log_loss": group.log_loss_contribution.mean(),
+                    "class_accuracy": group.correct.mean(), "top_label_ece": ece,
+                })
+        challenger_segments = pd.DataFrame(segment_rows)
     substantive = {
         "run_manifest": sha256(run_dir / "SHA256SUMS"),
         "outcomes": outcomes.sort_values("game_id")[sorted(required)].astype(str).to_dict("records"),
@@ -839,6 +1056,10 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     comparison.to_csv(destination / "graded_moneyline_market_comparison.csv", index=False)
     puck.to_csv(destination / "graded_puck_line_market_results.csv", index=False)
     puck_model.to_csv(destination / "graded_puck_line_model_results.csv", index=False)
+    if len(puck_v2_model):
+        puck_v2_model.to_csv(destination / "graded_puck_line_v2_shot_prior_model_results.csv", index=False)
+        paired.to_csv(destination / "graded_puck_line_v1_v2_paired_results.csv", index=False)
+        challenger_segments.to_csv(destination / "graded_puck_line_v2_shot_prior_segments.csv", index=False)
     (destination / "grading_status.json").write_text(json.dumps({
         "mode": "SHADOW_RESEARCH_ONLY", "graded_games": len(moneyline),
         "source_run_dir": str(run_dir),
@@ -850,6 +1071,11 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
         "puck_line_model_correct": int(puck_model.correct.sum()),
         "puck_line_model_brier": puck_model.brier_contribution.mean() if len(puck_model) else None,
         "puck_line_model_log_loss": puck_model.log_loss_contribution.mean() if len(puck_model) else None,
+        "puck_line_v2_shot_prior_games_graded": len(puck_v2_model),
+        "puck_line_v2_shot_prior_correct": int(puck_v2_model.correct.sum()) if len(puck_v2_model) else 0,
+        "puck_line_v2_shot_prior_brier": puck_v2_model.brier_contribution.mean() if len(puck_v2_model) else None,
+        "puck_line_v2_shot_prior_log_loss": puck_v2_model.log_loss_contribution.mean() if len(puck_v2_model) else None,
+        "puck_line_v1_v2_class_changes": int(paired.class_changed.sum()) if len(paired) else 0,
         "puck_line_market_observations_graded": len(puck), "wagers_placed": 0,
     }, indent=2, sort_keys=True) + "\n")
     write_manifest(destination)
@@ -868,6 +1094,12 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
             "final_games_awaiting_grading": 0, "graded_moneyline_record": "0-0",
             "graded_moneyline_brier": None, "graded_moneyline_log_loss": None,
             "graded_puck_line_market_observations": 0,
+            "puck_line_v2_shot_prior_predictions_created": 0,
+            "puck_line_v1_v2_class_changes": 0,
+            "puck_line_v1_v2_mean_absolute_probability_delta": None,
+            "graded_puck_line_v2_shot_prior_games": 0,
+            "graded_puck_line_v2_shot_prior_brier": None,
+            "graded_puck_line_v2_shot_prior_log_loss": None,
             "integrity_warnings": ["NO_CAPTURE_RUN_FOR_SLATE"], "edge_claim": "NONE",
         }
     latest = statuses[-1]
@@ -884,6 +1116,9 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
         "v2_predictions_created": latest["v2_predictions_created"],
         "moneyline_games_books_captured": f"{latest['moneyline_games_captured']}/{latest['moneyline_books_captured']}",
         "puck_line_games_books_captured": f"{latest['puck_line_games_captured']}/{latest['puck_line_books_captured']}",
+        "puck_line_v2_shot_prior_predictions_created": latest.get("puck_line_v2_shot_prior_predictions_created", 0),
+        "puck_line_v1_v2_class_changes": latest.get("puck_line_v1_v2_class_changes", 0),
+        "puck_line_v1_v2_mean_absolute_probability_delta": latest.get("puck_line_v1_v2_mean_absolute_probability_delta"),
         "sog_games_covered": int(coverage.sog_strict_prior_available.sum()),
         "points_games_covered": int(coverage.points_strict_prior_available.sum()),
         "saves_games_covered": int(coverage.saves_strict_prior_available.sum()),
@@ -896,5 +1131,8 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
         "graded_moneyline_brier": best["moneyline_brier"] if best else None,
         "graded_moneyline_log_loss": best["moneyline_log_loss"] if best else None,
         "graded_puck_line_market_observations": best["puck_line_market_observations_graded"] if best else 0,
+        "graded_puck_line_v2_shot_prior_games": best.get("puck_line_v2_shot_prior_games_graded", 0) if best else 0,
+        "graded_puck_line_v2_shot_prior_brier": best.get("puck_line_v2_shot_prior_brier") if best else None,
+        "graded_puck_line_v2_shot_prior_log_loss": best.get("puck_line_v2_shot_prior_log_loss") if best else None,
         "integrity_warnings": [], "edge_claim": "NONE_SMALL_SAMPLE_SHADOW_ONLY",
     }
