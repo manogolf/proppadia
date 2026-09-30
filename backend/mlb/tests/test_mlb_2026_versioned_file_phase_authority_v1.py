@@ -121,7 +121,7 @@ class VersionedFilePhaseAuthorityTest(unittest.TestCase):
         return hashlib.sha256(path.read_bytes()).hexdigest()
 
     def test_v1_descriptor_and_all_rows_are_byte_identical(self) -> None:
-        authority = HashedProposalAuthority()
+        authority = load_v1_authority()
         self.assertEqual(authority.metadata.snapshot_descriptor_sha256, EXPECTED_V1_DESCRIPTOR_SHA256)
         self.assertEqual(authority.metadata.proposal_count, 2919)
         self.assertEqual(hashlib.sha256(self.v1_proposal.read_bytes()).hexdigest(), EXPECTED_PROPOSAL_SHA256)
