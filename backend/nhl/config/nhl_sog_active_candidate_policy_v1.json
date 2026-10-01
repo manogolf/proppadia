@@ -1,0 +1,16 @@
+{
+  "policy_name": "NHL_SOG_STEP4A_DEFAULT_DAILY_POLICY",
+  "policy_version": "v1_lineage",
+  "effective_date": "2026-10-01",
+  "source_study": "Documented active-policy thresholds in docs/NHL SOG Command Deck.md, section Line Moved (Pass/Fail).",
+  "source_artifact": "tmp/nhl_sog_walkforward_summary.json (missing; thresholds preserved from last-known operational record)",
+  "restoration_note": "Frozen active policy. Optimizer outputs are research proposals and must not overwrite this file.",
+  "thresholds_for_next_slate": {
+    "over:1.5": {"min_ev": 0.03, "min_gap": 0.04},
+    "over:2.5": {"min_ev": 0.03, "min_gap": 0.0},
+    "over:3.5": {"min_ev": 0.03, "min_gap": 0.0},
+    "under:1.5": {"min_ev": 0.03, "min_gap": 0.02},
+    "under:2.5": {"min_ev": 0.03, "min_gap": 0.08},
+    "under:3.5": {"min_ev": 0.03, "min_gap": 0.04}
+  }
+}

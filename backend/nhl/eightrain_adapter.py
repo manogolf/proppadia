@@ -67,6 +67,21 @@ def american_probability(value: Any) -> float:
     raise ValueError("WIN_PERCENT_FORMAT_INVALID")
 
 
+def parse_win_probability(value: Any) -> float:
+    """Parse decimal probability, plain American odds, or d-suffixed fair odds."""
+    raw = str(value).strip()
+    if raw.endswith("d"):
+        raw = raw[:-1]
+        probability = american_probability(raw)
+    elif re.fullmatch(r"(?:0?\.\d+|1(?:\.0+)?)", raw):
+        probability = float(raw)
+        if not 0 < probability < 1:
+            raise ValueError("WIN_PERCENT_FORMAT_INVALID")
+    else:
+        probability = american_probability(raw)
+    return probability
+
+
 def normalize_player_name(value: Any) -> str:
     raw = unicodedata.normalize("NFKD", str(value or ""))
     return re.sub(r"[^a-z0-9]+", " ", raw.encode("ascii", "ignore").decode().lower()).strip()
@@ -297,9 +312,7 @@ def validate_upload(df: pd.DataFrame, *, spec: dict, team_codes: set[str],
             if market not in stat_bets or side not in stat_bets[market] or str(row["SELECTOR"]) not in player_codes or not valid_point: raise ValueError("PROP_ROW_INVALID")
         else:
             raise ValueError("UPLOAD_SECTION_INVALID")
-        value = str(row["WIN %"])
-        if not re.fullmatch(r"[+-]?\d+", value) or abs(int(value)) < 100:
-            raise ValueError("WIN_PERCENT_FORMAT_INVALID")
+        parse_win_probability(row["WIN %"])
     keycols = UPLOAD_COLUMNS[:4] + ["SECTION", "MARKET", "SELECTOR", "POINT", "SIDE"]
     if df.duplicated(keycols).any():
         raise ValueError("DUPLICATE_UPLOAD_KEY")
@@ -315,7 +328,7 @@ def validate_upload(df: pd.DataFrame, *, spec: dict, team_codes: set[str],
         if sides != expected:
             pair_failures += 1
             continue
-        pair_probability = sum(american_probability(v) for v in group["WIN %"])
+        pair_probability = sum(parse_win_probability(v) for v in group["WIN %"])
         if not math.isclose(pair_probability, 1.0, abs_tol=0.02):
             probability_pair_failures += 1
     if pair_failures:

@@ -38,7 +38,7 @@ CMD
       ;;
     candidates)
       cat <<'CMD'
-SLATE=$(date +%F) && .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
+SLATE=$(date +%F) && .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --segment-min-model-prob under:1.5=0.65 --segment-max-price under:1.5=100 --segment-min-ev-override over:2.5=0.15 --segment-min-gap-override over:2.5=0.07 --segment-min-ev-override under:2.5=0.19 --segment-min-gap-override under:2.5=0.10 --segment-max-price over:3.5=130 --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
 CMD
       ;;
     eight-rain-export)
@@ -49,8 +49,8 @@ SLATE=$(date +%F)
 .venv/bin/python backend/nhl/scripts/refresh_nhl_8rain_catalog.py
 PROP_ARGS=()
 CARD="tmp/cards/nhl_sog_card_${SLATE}.csv"
-if [ -f tmp/nhl_sog_walkforward_summary.json ] && [ -f nhl/site/data/sog_with_market.csv ]; then
-  .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "$CARD" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json"
+if [ -f backend/nhl/config/nhl_sog_active_candidate_policy_v1.json ] && [ -f nhl/site/data/sog_with_market.csv ]; then
+  .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "$CARD" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --segment-min-model-prob under:1.5=0.65 --segment-max-price under:1.5=100 --segment-min-ev-override over:2.5=0.15 --segment-min-gap-override over:2.5=0.07 --segment-min-ev-override under:2.5=0.19 --segment-min-gap-override under:2.5=0.10 --segment-max-price over:3.5=130
   if [ -s "$CARD" ]; then PROP_ARGS=(--props-csv "$CARD" --prop-market shots_on_goal --names-csv "backend/nhl/exports/daily/names/names_${SLATE}.csv"); fi
 else
   echo "SOG candidate export skipped: current policy or date-bound SOG market view absent; no thresholds inferred."
@@ -70,7 +70,7 @@ CMD
       ;;
     walkforward)
       cat <<'CMD'
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_summary.json
+.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_research_summary.json
 CMD
       ;;
     odds-backfill-sog)
@@ -98,7 +98,7 @@ description_for() {
     eight-rain-export) echo "Refresh current 8rain catalog, select internal candidates when current policy exists, build and validate the thin 11-column dry CSV" ;;
     bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
-    walkforward) echo "Refresh threshold policy JSON from row report" ;;
+    walkforward) echo "Generate research threshold proposal without activating it" ;;
     odds-backfill-sog) echo "Backfill OddsAPI SOG-only historical files" ;;
     vite) echo "Run frontend Vite dev server" ;;
     *) return 1 ;;

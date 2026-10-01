@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 
 DEFAULT_MATCHUP_HISTORY_CSV = "backend/nhl/data/analysis/sog_poisson_residual_dataset_season_2025.csv"
+DEFAULT_POLICY_JSON = "backend/nhl/config/nhl_sog_active_candidate_policy_v1.json"
 
 
 def prob_to_fair_american(p: float) -> int | None:
@@ -390,7 +391,7 @@ def _attach_matchup_confirmation(
 def main() -> None:
     ap = argparse.ArgumentParser(description="Select live NHL SOG candidates from sog_with_market.csv")
     ap.add_argument("--market-csv", default="nhl/site/data/sog_with_market.csv")
-    ap.add_argument("--policy-json", default="tmp/nhl_sog_walkforward_summary.json")
+    ap.add_argument("--policy-json", default=DEFAULT_POLICY_JSON)
     ap.add_argument("--game-date", default="", help="YYYY-MM-DD (defaults to latest in market CSV)")
     ap.add_argument(
         "--min-train-wilson-lb",
@@ -556,7 +557,9 @@ def main() -> None:
     if not market_csv.exists():
         raise SystemExit(f"market csv not found: {market_csv}")
     if not policy_json.exists():
-        raise SystemExit(f"policy json not found: {policy_json}")
+        raise SystemExit(
+            f"active candidate policy not found: {policy_json}; refusing optimizer or alternate-policy fallback"
+        )
 
     policy = _load_policy(policy_json)
     if not policy:

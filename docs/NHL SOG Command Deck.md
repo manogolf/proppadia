@@ -126,7 +126,7 @@ SLATE=$(date +%F)
 ```bash
 SLATE=$(date +%F)
 .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
-  --policy-json tmp/nhl_sog_walkforward_summary.json \
+  --policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --game-date "$SLATE" \
   --min-train-wilson-lb 0.50 \
   --segment-disable over:3.5 \
@@ -171,7 +171,7 @@ SLATE=$(date +%F)
   --as-of-date "$SLATE" \
   --window-days 30 \
   --min-train-rows-per-segment 25 \
-  --fallback-policy-json tmp/nhl_sog_walkforward_summary.json \
+  --fallback-policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --out-json "tmp/analysis/cards_shadow/nhl_sog_policy_${SLATE}_4d_recency30.json"
 
 .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
@@ -198,7 +198,7 @@ Wager-history reconciliation note:
 ```bash
 SLATE=2026-03-14
 .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
-  --policy-json tmp/nhl_sog_walkforward_summary.json \
+  --policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --game-date "$SLATE" \
   --segment-disable over:1.5 \
   --segment-disable over:2.5 \
@@ -552,7 +552,7 @@ PYTHONPATH=. .venv/bin/python backend/nhl/scripts/build_sog_with_market.py \
 
 PYTHONPATH=. .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --market-csv "tmp/analysis/arm_bakeoff/${SLATE}/defense_raw/sog_with_market_defense_raw.csv" \
-  --policy-json tmp/nhl_sog_walkforward_summary.json \
+  --policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --game-date "$SLATE" \
   --out-csv "tmp/analysis/arm_bakeoff/${SLATE}/defense_raw/nhl_sog_card_defense_raw.csv" \
   --out-json "tmp/analysis/arm_bakeoff/${SLATE}/defense_raw/nhl_sog_card_defense_raw_summary.json" \
@@ -689,7 +689,7 @@ Rules:
   - `gap = model_side_prob - market_side_prob >= min_gap(segment)`
   - `ev = (model_side_prob / market_side_prob) - 1 >= min_ev(segment)`
 
-Current active policy from `tmp/nhl_sog_walkforward_summary.json`:
+Current frozen active policy from `backend/nhl/config/nhl_sog_active_candidate_policy_v1.json`:
 - `min_ev = 3%` for all segments.
 - `min_gap` by segment:
   - `over:1.5 = 4%`
@@ -715,7 +715,7 @@ Examples:
 2. Re-optimize walk-forward thresholds from row report.
 
 ```bash
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --objective expected_roi --objective-slippage-cents 5 --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_summary.json
+.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --objective expected_roi --objective-slippage-cents 5 --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_research_summary.json
 ```
 
 ## Output Paths
@@ -731,7 +731,8 @@ Examples:
 - Anchored reevaluation rows: `tmp/analysis/anchored_reconcile/anchored_reconcile_rows.csv`
 - Model vs fade summary: `tmp/analysis/nhl_model_vs_fade_summary.json`
 - Model vs fade by segment: `tmp/analysis/nhl_model_vs_fade_by_segment.csv`
-- Walk-forward policy: `tmp/nhl_sog_walkforward_summary.json`
+- Frozen active policy: `backend/nhl/config/nhl_sog_active_candidate_policy_v1.json`
+- Research optimizer output: `tmp/nhl_sog_walkforward_research_summary.json`
 - Reconciliation rows: `tmp/nhl_sog_base_vs_betonline_rows.csv`
 - Reconciliation monthly summary: `tmp/nhl_sog_base_vs_betonline_monthly.csv`
 
@@ -763,7 +764,7 @@ The printed command refreshes catalogs, runs the existing SOG candidate
 selector only when its policy and date-bound market view exist, exports the
 reference lanes and any selected SOG candidates, validates the CSV, and writes
 a lineage report. It does not run daily scoring or upload externally. If
-`tmp/nhl_sog_walkforward_summary.json` is missing, it reports and skips SOG
+`backend/nhl/config/nhl_sog_active_candidate_policy_v1.json` is missing, it reports and skips SOG
 candidate rows rather than deriving new thresholds. Points and Saves only feed
 the adapter when their internal candidate populations are nonempty and the
 catalog mapping is unambiguous.
