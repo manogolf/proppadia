@@ -11,6 +11,7 @@ Usage:
   bin/nhl_ops.sh copy <id>
   bin/nhl_ops.sh export [path]
   bin/nhl_ops.sh ids
+  bin/nhl_ops.sh show eight-rain-export
 
 Notes:
 - This tool prints commands. It does not execute them.
@@ -38,6 +39,23 @@ CMD
     candidates)
       cat <<'CMD'
 SLATE=$(date +%F) && .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
+CMD
+      ;;
+    eight-rain-export)
+      cat <<'CMD'
+set -euo pipefail
+SLATE=$(date +%F)
+: "${NHL_CROSS_MARKET_PACKAGE:?Set to today's immutable cross-market REFRESH/FINAL_PREGAME package directory}"
+.venv/bin/python backend/nhl/scripts/refresh_nhl_8rain_catalog.py
+PROP_ARGS=()
+CARD="tmp/cards/nhl_sog_card_${SLATE}.csv"
+if [ -f tmp/nhl_sog_walkforward_summary.json ] && [ -f nhl/site/data/sog_with_market.csv ]; then
+  .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "$CARD" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json"
+  if [ -s "$CARD" ]; then PROP_ARGS=(--props-csv "$CARD" --prop-market shots_on_goal --names-csv "backend/nhl/exports/daily/names/names_${SLATE}.csv"); fi
+else
+  echo "SOG candidate export skipped: current policy or date-bound SOG market view absent; no thresholds inferred."
+fi
+.venv/bin/python backend/nhl/scripts/export_nhl_8rain_upload.py --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir artifacts/operational/nhl/8rain_catalog/current --date "$SLATE" --out-csv "backend/nhl/data/processed/nhl_8rain_upload_${SLATE}.csv" --report-json "backend/nhl/data/processed/nhl_8rain_upload_${SLATE}_lineage.json" "${PROP_ARGS[@]}"
 CMD
       ;;
     bakeoff-trigger)
@@ -77,6 +95,7 @@ description_for() {
     daily) echo "Run NHL daily pipeline" ;;
     denali-upload) echo "Build full SOG book-upload CSV" ;;
     candidates) echo "Build policy-selected candidate upload CSV + dated card files" ;;
+    eight-rain-export) echo "Refresh current 8rain catalog, select internal candidates when current policy exists, build and validate the thin 11-column dry CSV" ;;
     bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
     walkforward) echo "Refresh threshold policy JSON from row report" ;;
@@ -91,6 +110,7 @@ ids=(
   daily
   denali-upload
   candidates
+  eight-rain-export
   bakeoff-trigger
   reconcile
   walkforward

@@ -735,6 +735,39 @@ Examples:
 - Reconciliation rows: `tmp/nhl_sog_base_vs_betonline_rows.csv`
 - Reconciliation monthly summary: `tmp/nhl_sog_base_vs_betonline_monthly.csv`
 
+## 8rain Station Export (Two Layers)
+
+The candidate card remains the rich internal layer. Keep its selection policy,
+model context, market fields, and run artifacts there. The 8rain adapter is the
+thin upload layer and writes exactly:
+
+`LEAGUE,DATE,HOME,AWAY,DOUBLEHEADER,SECTION,MARKET,SELECTOR,POINT,SIDE,WIN %`
+
+Refresh the public NHL model-spec, team, and player catalogs before preparing an
+operational CSV. Catalog responses and hashes are retained under
+`artifacts/operational/nhl/8rain_catalog/`. The adapter uses catalog market and
+player codes and maps NHL team abbreviations to the current 8rain team codes.
+It emits only Moneyline V2 and Puck Line V1 reference predictions plus
+policy-selected prop candidates; challenger rows stay in their separately
+identified shadow artifacts. A lineage JSON sits beside the thin CSV because
+the 11-column upload has no model-version field.
+
+For each slate, set `NHL_CROSS_MARKET_PACKAGE` to that slate's immutable
+REFRESH or FINAL_PREGAME cross-market package, then copy and run:
+
+```bash
+bin/nhl_ops.sh show eight-rain-export
+```
+
+The printed command refreshes catalogs, runs the existing SOG candidate
+selector only when its policy and date-bound market view exist, exports the
+reference lanes and any selected SOG candidates, validates the CSV, and writes
+a lineage report. It does not run daily scoring or upload externally. If
+`tmp/nhl_sog_walkforward_summary.json` is missing, it reports and skips SOG
+candidate rows rather than deriving new thresholds. Points and Saves only feed
+the adapter when their internal candidate populations are nonempty and the
+catalog mapping is unambiguous.
+
 ## Source Control Noise Control (Local Only)
 
 Use this when tracked run-artifact files keep showing in VS Code `Changes`.

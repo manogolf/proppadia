@@ -18,11 +18,17 @@ Output columns match the book-upload schema:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+
+from backend.nhl.eightrain_adapter import (
+    UPLOAD_COLUMNS, fair_american, load_catalogs, normalize_player_name, resolve_catalog_dir,
+    validate_upload,
+)
 
 
 def get_db_conn():
@@ -47,6 +53,22 @@ def fetch_games(conn, game_ids: list[int]) -> pd.DataFrame:
     WHERE game_id = ANY(%s::bigint[])
     """
     return pd.read_sql(sql, conn, params=(list(game_ids),))
+
+
+def fetch_player_identities(conn, game_ids: list[int], player_ids: list[int]) -> pd.DataFrame:
+    if not game_ids or not player_ids:
+        return pd.DataFrame(columns=["game_id", "player_id", "player_name", "team_code"])
+    sql = """
+    SELECT DISTINCT ON (r.game_id, r.player_id)
+      r.game_id::bigint AS game_id, r.player_id::bigint AS player_id,
+      p.full_name::text AS player_name, t.team::text AS team_code
+    FROM nhl.roster_status r
+    JOIN nhl.players p ON p.player_id = r.player_id
+    JOIN nhl.teams t ON t.team_id = r.team_id
+    WHERE r.game_id = ANY(%s::bigint[]) AND r.player_id = ANY(%s::bigint[])
+    ORDER BY r.game_id, r.player_id, r.asof_ts DESC
+    """
+    return pd.read_sql(sql, conn, params=(list(game_ids), list(player_ids)))
 
 
 def prob_to_fair_american(p: float) -> Optional[int]:
@@ -144,7 +166,13 @@ def main() -> None:
         default=[],
         help="Player ID to drop from output (repeatable). Useful for known unmapped IDs in destination tool.",
     )
+    ap.add_argument(
+        "--catalog-dir", type=Path,
+        default=Path("artifacts/operational/nhl/8rain_catalog/current"),
+        help="Retained current model_spec.json, teams.json, and players.json catalog bundle",
+    )
     args = ap.parse_args()
+    args.catalog_dir = resolve_catalog_dir(args.catalog_dir)
 
     candidates_csv = Path(args.candidates_csv)
     out_csv = Path(args.out_csv)
@@ -179,17 +207,23 @@ def main() -> None:
             raise SystemExit("No rows remain after availability filter.")
 
     with get_db_conn() as conn:
-        games = fetch_games(conn, sorted(df["game_id"].unique().tolist()))
+        game_ids = sorted(df["game_id"].unique().tolist())
+        games = fetch_games(conn, game_ids)
+        players = fetch_player_identities(conn, game_ids, sorted(df["player_id"].unique().tolist()))
 
     if games.empty:
         raise SystemExit("No nhl.games rows found for candidate game_ids.")
 
     merged = df.merge(games, on="game_id", how="left")
+    merged = merged.merge(players, on=["game_id", "player_id"], how="left", validate="many_to_one")
     merged = merged.dropna(subset=["game_date_y", "home_team_code", "away_team_code"]).copy()
     if merged.empty:
         raise SystemExit("No rows remained after joining game metadata.")
 
+    spec, team_map, player_map, allowed_bets = load_catalogs(args.catalog_dir)
     rows: list[dict] = []
+    unmapped_players: list[int] = []
+    unmapped_teams: set[str] = set()
     dropped_prob = 0
     dropped_fair_odds = 0
     for _, row in merged.iterrows():
@@ -210,30 +244,35 @@ def main() -> None:
                 f"player_id={row['player_id']} game_id={row['game_id']} line={row['line']} p={p}"
             )
 
-        date_str = pd.to_datetime(row["game_date_y"]).strftime("%Y%m%d")
-        rows.append(
-            {
-                "LEAGUE": "NHL",
-                "DATE": date_str,
-                "HOME": row["home_team_code"],
-                "AWAY": row["away_team_code"],
-                "DOUBLEHEADER": "",
-                "SECTION": "player_prop",
-                "MARKET": "player-shots_onGoal-ou",
-                "SELECTOR": int(row["player_id"]),
-                "POINT": float(row["line"]),
-                "SIDE": str(row["model_pick"]),
-                "WIN %": int(fair),
-            }
+        home_abbr = str(row["home_team_code"]).upper()
+        away_abbr = str(row["away_team_code"]).upper()
+        if home_abbr not in team_map or away_abbr not in team_map:
+            unmapped_teams.update(x for x in (home_abbr, away_abbr) if x not in team_map)
+            continue
+        selector = player_map.get((normalize_player_name(row.get("player_name")),
+                                   team_map.get(str(row.get("team_code") or "").upper(), "")))
+        if not selector:
+            unmapped_players.append(int(row["player_id"]))
+            continue
+        p_over = float(row["p_over"]) if "p_over" in row and pd.notna(row["p_over"]) else (
+            p if str(row["model_pick"]) == "over" else 1.0 - p
         )
+        for side, side_prob in (("over", p_over), ("under", 1.0 - p_over)):
+            rows.append({
+                "LEAGUE": "nhl", "DATE": pd.to_datetime(row["game_date_y"]).strftime("%Y-%m-%d"),
+                "HOME": team_map[home_abbr], "AWAY": team_map[away_abbr],
+                "DOUBLEHEADER": "0", "SECTION": "player_prop", "MARKET": "shots_on_goal",
+                "SELECTOR": selector, "POINT": float(row["line"]), "SIDE": side,
+                "WIN %": fair_american(side_prob),
+            })
 
     if not rows:
         raise SystemExit("No output rows generated.")
 
-    out = pd.DataFrame(rows)
-    bad_sides = sorted(set(out["SIDE"].dropna().unique()) - {"over", "under"})
-    if bad_sides:
-        raise SystemExit(f"Invalid SIDE values produced: {bad_sides}")
+    out = pd.DataFrame(rows, columns=UPLOAD_COLUMNS)
+    team_codes = {str(r.get("code", "")) for r in json.loads((args.catalog_dir / "teams.json").read_text()).get("data", [])}
+    player_codes = {str(r.get("code", "")) for r in json.loads((args.catalog_dir / "players.json").read_text()).get("data", []) if r.get("code")}
+    validate_upload(out, spec=spec, team_codes=team_codes, player_codes=player_codes)
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_csv, index=False)
@@ -245,6 +284,8 @@ def main() -> None:
         f"(max_fair_favorite={int(args.max_fair_favorite)}, skip={bool(args.skip_fair_odds_cap)})"
     )
     print(f"[candidate_book_upload] output rows={len(out)}")
+    print(f"[candidate_book_upload] unmapped_player_ids={sorted(set(unmapped_players))}")
+    print(f"[candidate_book_upload] unmapped_team_abbreviations={sorted(unmapped_teams)}")
     print(f"[candidate_book_upload] dates={sorted(out['DATE'].unique().tolist())}")
     print(f"[candidate_book_upload] wrote {out_csv}")
 
