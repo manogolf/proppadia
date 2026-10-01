@@ -81,7 +81,7 @@ def main() -> None:
 
     export_classification = classify_export_date(
         args.date,
-        current_date=datetime.now(ZoneInfo("America/Los_Angeles")).date(),
+        current_date=datetime.now(ZoneInfo("America/New_York")).date(),
         test_only=args.test_only,
     )
     if args.test_only and args.report_json is None:

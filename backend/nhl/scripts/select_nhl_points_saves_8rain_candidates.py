@@ -573,7 +573,7 @@ def main() -> None:
     parser.add_argument("--saves-policy", type=Path, default=DEFAULT_POLICIES["saves"])
     args = parser.parse_args()
 
-    today = datetime.now(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
     require_current_slate(args.slate_date, current_date=today)
     catalog_dir = Path(args.catalog_dir)
     spec, team_map, player_map, allowed_bets = load_catalogs(catalog_dir)

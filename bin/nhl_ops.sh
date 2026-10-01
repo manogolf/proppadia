@@ -11,10 +11,11 @@ Usage:
   bin/nhl_ops.sh copy <id>
   bin/nhl_ops.sh export [path]
   bin/nhl_ops.sh ids
+  bin/nhl_ops.sh eight-rain-export --package <immutable-package-dir>
   bin/nhl_ops.sh show eight-rain-export
 
 Notes:
-- This tool prints commands. It does not execute them.
+- Most entries print commands; eight-rain-export runs the governed export directly.
 - Run from repo root.
 USAGE
 }
@@ -43,16 +44,7 @@ CMD
       ;;
 eight-rain-export)
       cat <<'CMD'
-set -euo pipefail
-SLATE=$(TZ=America/New_York date +%F)
-: "${NHL_CROSS_MARKET_PACKAGE:?Set to today's immutable cross-market REFRESH/FINAL_PREGAME package directory}"
-.venv/bin/python backend/nhl/scripts/refresh_nhl_8rain_catalog.py
-CATALOG=$(ls -dt artifacts/operational/nhl/8rain_catalog/retrieval=* | head -n 1)
-OBSERVATION=$(find artifacts/operational/nhl/odds_observations -type d -path "*/slate_date=${SLATE}/observation=*" | sort | tail -n 1)
-COMBINED="tmp/cards/nhl_8rain_raw_props_${SLATE}.csv"
-.venv/bin/python backend/nhl/scripts/select_nhl_points_saves_8rain_candidates.py --mode raw --slate-date "$SLATE" --names-csv "backend/nhl/exports/daily/names/names_${SLATE}.csv" --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --odds-observation-dir "$OBSERVATION" --out-dir "tmp/cards/nhl_8rain_raw_${SLATE}" --combined-props-csv "$COMBINED"
-EXPORT_DIR="artifacts/operational/nhl/8rain_uploads/${SLATE}"
-.venv/bin/python backend/nhl/scripts/export_nhl_8rain_upload.py --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --date "$SLATE" --props-csv "$COMBINED" --immutable-output-dir "$EXPORT_DIR"
+bin/nhl_ops.sh eight-rain-export --package "${NHL_CROSS_MARKET_PACKAGE:?Pass the immutable current-slate package with --package}"
 CMD
       ;;
     bakeoff-trigger)
@@ -92,7 +84,7 @@ description_for() {
     daily) echo "Run NHL daily pipeline" ;;
     denali-upload) echo "Build full SOG book-upload CSV" ;;
     candidates) echo "Build policy-selected candidate upload CSV + dated card files" ;;
-    eight-rain-export) echo "Refresh live catalog, export all valid mappable reference predictions without candidate policy filters, and validate a current-slate five-lane CSV for manual upload" ;;
+    eight-rain-export) echo "Directly build, validate, and report one immutable current-slate raw reference export for the supplied cross-market package" ;;
     bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
     walkforward) echo "Generate research threshold proposal without activating it" ;;
@@ -144,6 +136,10 @@ copy_to_clipboard() {
 
 cmd="${1:-list}"
 case "$cmd" in
+  eight-rain-export)
+    shift
+    exec .venv/bin/python backend/nhl/scripts/run_nhl_8rain_export.py "$@"
+    ;;
   list)
     print_table
     ;;
